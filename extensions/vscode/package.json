@@ -1,0 +1,24 @@
+{
+  "name": "xr-vscode",
+  "displayName": "XR — trustworthy agent",
+  "description": "Status-bar cost meter + 'Ask XR' on selection, talking to your local XR daemon.",
+  "version": "0.1.0",
+  "publisher": "rrrtx",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["AI", "Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "xr.ask", "title": "Ask XR about selection" },
+      { "command": "xr.openDashboard", "title": "XR: Open Dashboard" }
+    ],
+    "configuration": {
+      "title": "XR",
+      "properties": {
+        "xr.daemonUrl": { "type": "string", "default": "http://127.0.0.1:7842" },
+        "xr.token": { "type": "string", "default": "" }
+      }
+    }
+  }
+}
