@@ -231,7 +231,7 @@ What XR **does** do is **minimize blast radius** with deterministic guardrails �
 
 <br/>
 
-## 📂 Project structure
+## 📂 Project structure:
 
 ```
 xr/
