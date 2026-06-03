@@ -2,6 +2,8 @@
 
 <br/>
 
+<img src="assets/avatar.png" alt="XR — cybernetic guardian avatar" width="200"/>
+
 # ⚡ XR
 
 ### The AI agent you can actually trust.
