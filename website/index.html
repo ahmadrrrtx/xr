@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>XR — the AI agent you can actually trust · by rrrtx</title>
+<meta name="description" content="XR is a secure, self-hosted, BYOK AI agent. A hard spend ceiling the model can't override, reliable local models, non-regressive skills, and a tamper-evident audit log. The agent OpenClaw users migrate to."/>
+<meta property="og:title" content="XR — the AI agent you can actually trust"/>
+<meta property="og:description" content="Secure · self-hosted · BYOK · spend-capped · non-regressive · tamper-evident. by rrrtx"/>
+<meta property="og:image" content="assets/avatar.png"/>
+<meta name="theme-color" content="#05070d"/>
+<link rel="icon" href="assets/logo.png"/>
+<style>
+  :root{
+    --bg:#05070d; --bg2:#070b13; --ink:#eaf1f9; --dim:#8b9bb0; --faint:#46566c;
+    --cyan:#22e0ff; --teal:#19f0c8; --violet:#9a6bff; --green:#34e2a0;
+    --amber:#ffc24b; --red:#ff5a6a;
+    --glass:rgba(255,255,255,.045); --glass2:rgba(255,255,255,.022); --edge:rgba(255,255,255,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);overflow-x:hidden;
+    font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  code,.mono{font-family:ui-monospace,"SF Mono",Menlo,"Cascadia Code",Consolas,monospace}
+  a{color:var(--cyan);text-decoration:none}
+  img{max-width:100%}
+  ::selection{background:rgba(34,224,255,.25)}
+
+  /* animated ambient bg */
+  .orb{position:fixed;border-radius:50%;filter:blur(130px);z-index:0;pointer-events:none;animation:float 18s ease-in-out infinite}
+  .orb.a{width:620px;height:620px;background:#0c6cff;top:-220px;left:-160px;opacity:.32}
+  .orb.b{width:540px;height:540px;background:#9a3bff;top:28%;right:-180px;opacity:.22;animation-delay:-6s}
+  .orb.c{width:500px;height:500px;background:#12d6c0;bottom:-180px;left:28%;opacity:.14;animation-delay:-12s}
+  @keyframes float{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,-30px)}}
+  .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.28;
+    background-image:linear-gradient(rgba(120,160,220,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,160,220,.05) 1px,transparent 1px);
+    background-size:54px 54px;mask-image:radial-gradient(circle at 50% 0%,#000,transparent 72%)}
+  .wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 22px}
+
+  /* reveal on scroll */
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  /* nav */
+  nav{position:sticky;top:0;z-index:20;backdrop-filter:blur(16px);background:rgba(5,7,13,.55);border-bottom:1px solid var(--edge)}
+  nav .row{display:flex;align-items:center;gap:16px;height:66px}
+  nav .logo{width:32px;height:32px;border-radius:9px}
+  nav .brand{font-weight:800;letter-spacing:3px;font-size:18px}
+  nav .brand b{background:linear-gradient(90deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+  nav .links{margin-left:auto;display:flex;gap:24px;font-size:14px}
+  nav .links a{color:var(--dim)} nav .links a:hover{color:var(--ink)}
+  @media(max-width:760px){nav .links{display:none}}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 19px;border-radius:11px;font-weight:700;font-size:14px;
+    color:#03121a;background:linear-gradient(135deg,var(--cyan),var(--teal));box-shadow:0 0 28px rgba(34,224,255,.32);
+    transition:transform .2s,box-shadow .2s;cursor:pointer;border:0}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 0 40px rgba(34,224,255,.5)}
+  .btn.ghost{background:var(--glass);color:var(--ink);border:1px solid var(--edge);box-shadow:none}
+  .btn.ghost:hover{border-color:rgba(34,224,255,.4)}
+
+  /* hero */
+  .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:46px;align-items:center;padding:78px 0 64px}
+  @media(max-width:860px){.hero{grid-template-columns:1fr;text-align:center}.hero .art{order:-1}}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:2px;color:var(--cyan);
+    border:1px solid var(--edge);background:var(--glass);padding:7px 14px;border-radius:99px;margin-bottom:24px}
+  .pill .d{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:blink 2s infinite}
+  @keyframes blink{50%{opacity:.4}}
+  h1{font-size:clamp(40px,6.2vw,66px);line-height:1.03;letter-spacing:-2px;font-weight:850}
+  h1 .grad{background:linear-gradient(90deg,var(--cyan),var(--violet) 70%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lead{color:var(--dim);font-size:18px;margin:22px 0 28px;max-width:540px}
+  @media(max-width:860px){.lead{margin-inline:auto}}
+  .chips{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:30px}
+  @media(max-width:860px){.chips{justify-content:center}}
+  .chip{font-size:12px;font-weight:600;padding:6px 13px;border-radius:8px;background:var(--glass);border:1px solid var(--edge);color:var(--dim)}
+  .cta{display:flex;gap:13px;flex-wrap:wrap;margin-bottom:18px}
+  @media(max-width:860px){.cta{justify-content:center}}
+  .installline{display:inline-flex;align-items:center;gap:12px;background:#0a0f17;border:1px solid var(--edge);
+    border-radius:11px;padding:11px 16px;font-size:14px}
+  .installline code{color:var(--cyan)} .installline .cp{cursor:pointer;color:var(--dim);font-size:12px;border:1px solid var(--edge);border-radius:7px;padding:3px 9px}
+  .installline .cp:hover{color:var(--ink)}
+  .art{position:relative;display:grid;place-items:center}
+  .art .ring{position:absolute;width:min(440px,92%);aspect-ratio:1;border-radius:50%;
+    background:radial-gradient(circle,rgba(34,224,255,.18),transparent 62%);animation:pulse 4s ease-in-out infinite}
+  @keyframes pulse{50%{transform:scale(1.06);opacity:.7}}
+  .art img{position:relative;width:min(420px,90%);border-radius:50%;filter:drop-shadow(0 0 70px rgba(34,224,255,.35))}
+
+  .stats{display:flex;gap:30px;flex-wrap:wrap;justify-content:center;padding:8px 0 8px}
+  .stat{text-align:center}
+  .stat b{display:block;font-size:30px;font-weight:850;background:linear-gradient(90deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .stat span{color:var(--dim);font-size:12px;letter-spacing:1px;text-transform:uppercase}
+
+  section{padding:66px 0;position:relative}
+  .eyebrow{font-size:12px;letter-spacing:3px;color:var(--cyan);text-transform:uppercase;margin-bottom:11px;font-weight:700}
+  h2{font-size:clamp(28px,4.2vw,42px);letter-spacing:-1px;font-weight:830;margin-bottom:13px}
+  .sub{color:var(--dim);max-width:660px;margin-bottom:36px}
+
+  .bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+  .card{position:relative;background:linear-gradient(180deg,var(--glass),var(--glass2));border:1px solid var(--edge);
+    border-radius:18px;padding:24px;backdrop-filter:blur(12px);transition:transform .25s,border-color .25s,box-shadow .25s}
+  .card:hover{transform:translateY(-5px);border-color:rgba(34,224,255,.35);box-shadow:0 18px 50px rgba(0,0,0,.5)}
+  .card .ic{font-size:27px;margin-bottom:13px;display:block;filter:drop-shadow(0 0 10px rgba(34,224,255,.4))}
+  .card h3{font-size:17px;margin-bottom:8px}
+  .card p{color:var(--dim);font-size:14px}
+  .card code{color:var(--cyan);font-size:12.5px}
+  .c2{grid-column:span 2}.c3{grid-column:span 3}
+  @media(max-width:860px){.c2,.c3{grid-column:span 6}}
+
+  /* terminal demo */
+  .term{background:#0a0f17;border:1px solid var(--edge);border-radius:16px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+  .term .bar{display:flex;align-items:center;gap:7px;padding:13px 16px;border-bottom:1px solid var(--edge);background:rgba(255,255,255,.02)}
+  .term .bar i{width:11px;height:11px;border-radius:50%;display:block}
+  .term .bar .r{background:#ff5f57}.term .bar .y{background:#febc2e}.term .bar .g{background:#28c840}
+  .term .bar span{margin-left:10px;color:var(--faint);font-size:12px}
+  .term pre{padding:20px;font-size:13.5px;line-height:1.8;overflow-x:auto;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .t-dim{color:var(--faint)} .t-c{color:var(--cyan)} .t-v{color:var(--violet)} .t-g{color:var(--green)} .t-a{color:var(--amber)}
+
+  /* steps */
+  .steps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  @media(max-width:860px){.steps{grid-template-columns:1fr 1fr}}@media(max-width:520px){.steps{grid-template-columns:1fr}}
+  .step{background:var(--glass);border:1px solid var(--edge);border-radius:16px;padding:22px;position:relative}
+  .step .n{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-weight:850;color:#03121a;
+    background:linear-gradient(135deg,var(--cyan),var(--violet));margin-bottom:14px}
+  .step h4{font-size:15px;margin-bottom:6px}.step p{color:var(--dim);font-size:13px}
+
+  /* cheatsheet */
+  .sheet{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  @media(max-width:720px){.sheet{grid-template-columns:1fr}}
+  .cmd{background:var(--glass);border:1px solid var(--edge);border-radius:12px;padding:13px 16px;display:flex;flex-direction:column;gap:3px;transition:border-color .2s}
+  .cmd:hover{border-color:rgba(34,224,255,.35)}
+  .cmd code{color:var(--cyan);font-size:13.5px;font-weight:600}.cmd span{color:var(--dim);font-size:12.5px}
+
+  .tablewrap{overflow-x:auto;border:1px solid var(--edge);border-radius:16px}
+  table{width:100%;border-collapse:collapse;font-size:14px;min-width:580px}
+  th,td{padding:14px 16px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06)}
+  th{color:var(--dim);font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase}
+  td.c{text-align:center;font-size:16px} tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:rgba(255,255,255,.02)}
+  .yes{color:var(--green)}.no{color:var(--red)}.mid{color:var(--amber)}
+  .xrcol{background:rgba(34,224,255,.04)}
+
+  /* migration banner */
+  .banner{background:linear-gradient(135deg,rgba(255,90,106,.08),rgba(154,107,255,.08));border:1px solid var(--edge);
+    border-radius:20px;padding:34px;display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+  .banner h3{font-size:22px;margin-bottom:6px}.banner p{color:var(--dim);font-size:14px;max-width:560px}
+  .banner .btn{margin-left:auto}@media(max-width:760px){.banner .btn{margin-left:0}}
+
+  footer{border-top:1px solid var(--edge);padding:46px 0;text-align:center;color:var(--faint);font-size:13px}
+  footer .fbadge{display:inline-flex;align-items:center;gap:9px;font-weight:700;color:var(--ink);background:var(--glass);
+    border:1px solid var(--edge);padding:9px 17px;border-radius:99px;margin-bottom:16px}
+  footer .glow{text-shadow:0 0 26px rgba(34,224,255,.5);font-size:16px}
+  .flinks{display:flex;gap:20px;justify-content:center;margin:14px 0;flex-wrap:wrap}
+  .flinks a{color:var(--dim)}
+</style>
+</head>
+<body>
+<div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+<div class="grid-bg"></div>
+
+<!-- NAV -->
+<nav><div class="wrap row">
+  <img class="logo" src="assets/logo.png" alt="XR logo"/>
+  <span class="brand"><b>XR</b></span>
+  <div class="links">
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="#commands">Commands</a>
+    <a href="#compare">Compare</a>
+    <a href="#install">Install</a>
+    <a href="#faq">FAQ</a>
+  </div>
+  <a class="btn ghost" href="dashboard.html" style="margin-right:8px">📊 Dashboard</a>
+  <a class="btn ghost" href="https://github.com/ahmadrrrtx/xr">★ Star on GitHub</a>
+</div></nav>
+
+<!-- HERO -->
+<header class="wrap hero">
+  <div>
+    <span class="pill"><span class="d"></span> ⚡ BY RRRTX · OPEN SOURCE · MIT</span>
+    <h1>The AI agent you can <span class="grad">actually trust.</span></h1>
+    <p class="lead">Secure, self-hosted, BYOK. A hard spend ceiling the model can't override, reliable local models, skills that never forget — and a tamper-evident audit log to <em>prove</em> it.</p>
+    <div class="chips">
+      <span class="chip">BYOK · $0 to run</span><span class="chip">local-first</span>
+      <span class="chip">spend-capped</span><span class="chip">non-regressive</span><span class="chip">tamper-evident</span>
+    </div>
+    <div class="cta">
+      <a class="btn" href="#install">⚡ Get started</a>
+      <a class="btn ghost" href="MIGRATION.html">🛡️ Migrate from OpenClaw</a>
+    </div>
+    <div class="installline">
+      <code id="ic">bun add -g @rrrtx/xr</code>
+      <span class="cp" onclick="navigator.clipboard.writeText('bun add -g @rrrtx/xr');this.textContent='copied ✓'">copy</span>
+    </div>
+  </div>
+  <div class="art"><div class="ring"></div><img src="assets/avatar.png" alt="XR cybernetic guardian avatar"/></div>
+</header>
+
+<!-- STATS -->
+<div class="wrap stats reveal">
+  <div class="stat"><b>124</b><span>tests passing</span></div>
+  <div class="stat"><b>1</b><span>runtime dep</span></div>
+  <div class="stat"><b>$0</b><span>to run</span></div>
+  <div class="stat"><b>3</b><span>OS supported</span></div>
+  <div class="stat"><b>100%</b><span>local-capable</span></div>
+</div>
+
+<!-- FEATURES -->
+<section id="features"><div class="wrap reveal">
+  <div class="eyebrow">Why XR</div>
+  <h2>Five things no other agent ships together.</h2>
+  <p class="sub">Every popular agent bolts security on later. In XR it <em>is</em> the architecture.</p>
+  <div class="bento">
+    <div class="card c2"><span class="ic">💰</span><h3>Cost Governor</h3><p>A hard per-task spend/token ceiling enforced in code. It pauses and asks before it can breach your budget — no silent $8 burns.</p></div>
+    <div class="card c2"><span class="ic">🧠</span><h3>Non-Regressive Skills</h3><p>Verified runs are frozen as immutable baselines. Any update that breaks a past win is auto-rolled-back. The agent can't forget what worked.</p></div>
+    <div class="card c2"><span class="ic">🖥️</span><h3>Local-Model Reliability</h3><p>Grammar-forced tool-calls make even a 3B local model emit valid output, with deterministic auto-repair as a backstop.</p></div>
+    <div class="card c3"><span class="ic">🔒</span><h3>Provable Security</h3><p><code>xr test --attacks</code> runs an injection corpus and prints a publishable block-rate. Plus an egress allow-list, approval gates, and a SHA-256 hash-chained audit log you can verify.</p></div>
+    <div class="card c3"><span class="ic">🛡️</span><h3>Self-Healing &amp; BYOK</h3><p>Updates auto-rollback if a self-test fails. Keys live in your environment / OS keychain — XR ships none, stores none, costs nothing to run.</p></div>
+  </div>
+</div></section>
+
+<!-- HOW IT WORKS -->
+<section id="how"><div class="wrap reveal">
+  <div class="eyebrow">How it works</div>
+  <h2>Goal in. Result out. Safely.</h2>
+  <p class="sub">XR runs the universal agent loop — but every step passes through a deterministic security spine.</p>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><h4>Observe</h4><p>Loads your trusted task + relevant code from the local RAG index. Untrusted data never touches the planner.</p></div>
+    <div class="step"><div class="n">2</div><h4>Think</h4><p>Picks a model (BYOK / local), grammar-forces a valid tool-call, checks it against your budget.</p></div>
+    <div class="step"><div class="n">3</div><h4>Gate</h4><p>Least-privilege + egress allow-list + approval for risky actions (CLI, phone button, or voice).</p></div>
+    <div class="step"><div class="n">4</div><h4>Act &amp; Log</h4><p>Runs the tool, records it in the tamper-evident hash chain, loops until done.</p></div>
+  </div>
+  <div class="term" style="margin-top:28px">
+    <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>xr — agent run</span></div>
+<pre><span class="t-dim"># one task, fully guarded — capped at 10 cents</span>
+<span class="t-g">$</span> xr --budget 0.10 <span class="t-v">"add install steps to the README"</span>
+  ▸ think   <span class="t-dim">planning · qwen2.5 (local) · 💰 0.4k tok / $0.25 cap</span>
+  ▸ tool    ⚙ read_file(README.md)              <span class="t-g">✓</span>
+  ▸ tool    ⚙ write_file(README.md)             <span class="t-a">⏸ needs approval</span>
+            <span class="t-g">[a]pprove</span>  [r]eview  [d]eny
+  ▸ act     ⚙ write_file(README.md)             <span class="t-g">✓ applied</span>
+  <span class="t-g">✓ done in 3 steps · 💰 1.1k tok ≈ $0.0009 · audit #9cf3e2a880</span></pre>
+  </div>
+  <p style="text-align:center;margin-top:22px"><a class="btn ghost" href="dashboard.html">📊 See the live dashboard →</a></p>
+</div></section>
+
+<!-- COMMANDS -->
+<section id="commands"><div class="wrap reveal">
+  <div class="eyebrow">Cheatsheet</div>
+  <h2>Every command.</h2>
+  <p class="sub">One brain, many ways to drive it — terminal, dashboard, phone, voice.</p>
+  <div class="sheet">
+    <div class="cmd"><code>xr "task"</code><span>Run a task (Agent mode)</span></div>
+    <div class="cmd"><code>xr --mode plan|ask "task"</code><span>Read-only modes (least-privilege)</span></div>
+    <div class="cmd"><code>xr --budget 0.50 "task"</code><span>Hard USD spend ceiling</span></div>
+    <div class="cmd"><code>xr --max-tokens 50000 "task"</code><span>Hard token ceiling</span></div>
+    <div class="cmd"><code>xr --dry-run "task"</code><span>Simulate — write nothing, run nothing</span></div>
+    <div class="cmd"><code>xr --provider groq --model …</code><span>Use any BYOK provider</span></div>
+    <div class="cmd"><code>xr serve</code><span>📊 Local dashboard (127.0.0.1)</span></div>
+    <div class="cmd"><code>xr telegram</code><span>📱 Secure phone remote (✅/❌ buttons)</span></div>
+    <div class="cmd"><code>xr voice</code><span>🎙️ Local voice stack (Whisper/Kokoro)</span></div>
+    <div class="cmd"><code>xr skills</code><span>📚 11 pre-built signed skills</span></div>
+    <div class="cmd"><code>xr index / xr memory</code><span>🧠 Local RAG + project memory</span></div>
+    <div class="cmd"><code>xr mcp</code><span>🔌 MCP tool ecosystem</span></div>
+    <div class="cmd"><code>xr cron "every mon 9am: audit"</code><span>⏰ Natural-language scheduler</span></div>
+    <div class="cmd"><code>xr test --attacks</code><span>🔒 Injection benchmark</span></div>
+    <div class="cmd"><code>xr verify-log</code><span>Verify tamper-evident audit chain</span></div>
+    <div class="cmd"><code>xr export</code><span>📄 Signed, shareable audit report</span></div>
+    <div class="cmd"><code>xr doctor</code><span>Full system health check</span></div>
+    <div class="cmd"><code>xr --help</code><span>Show all commands</span></div>
+  </div>
+</div></section>
+
+<!-- COMPARE -->
+<section id="compare"><div class="wrap reveal">
+  <div class="eyebrow">XR vs the field</div>
+  <h2>The moat is the combination.</h2>
+  <p class="sub">No single competitor has the security spine + cost governor + non-regressive skills together.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Capability</th><th class="c xrcol">XR</th><th class="c">OpenClaw</th><th class="c">Hermes</th><th class="c">Claude&nbsp;Code</th></tr></thead>
+    <tbody>
+    <tr><td>Hard spend ceiling (code-enforced)</td><td class="c xrcol yes">✓</td><td class="c no">✗</td><td class="c no">✗</td><td class="c no">✗</td></tr>
+    <tr><td>Local-model reliability (GBNF)</td><td class="c xrcol yes">✓</td><td class="c no">✗</td><td class="c no">✗</td><td class="c no">✗</td></tr>
+    <tr><td>Non-regressive skills</td><td class="c xrcol yes">✓</td><td class="c no">✗</td><td class="c mid">~</td><td class="c no">✗</td></tr>
+    <tr><td>Injection benchmark (runnable)</td><td class="c xrcol yes">✓</td><td class="c no">✗</td><td class="c no">✗</td><td class="c no">✗</td></tr>
+    <tr><td>Tamper-evident audit log</td><td class="c xrcol yes">✓</td><td class="c no">✗</td><td class="c no">✗</td><td class="c no">✗</td></tr>
+    <tr><td>BYOK + $0 to run</td><td class="c xrcol yes">✓</td><td class="c mid">~</td><td class="c mid">~</td><td class="c no">✗</td></tr>
+    <tr><td>Egress allow-list (anti-exfil)</td><td class="c xrcol yes">✓</td><td class="c no">✗</td><td class="c no">✗</td><td class="c mid">~</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<!-- MIGRATION BANNER -->
+<section><div class="wrap reveal">
+  <div class="banner">
+    <div>
+      <h3>🛡️ Coming from OpenClaw?</h3>
+      <p>135k+ exposed instances, 138+ CVEs, a compromised skill marketplace. XR closes that attack surface by default — egress allow-list, 127.0.0.1-only, signed local skills, tamper-evident audit. Switch in ~10 minutes.</p>
+    </div>
+    <a class="btn" href="MIGRATION.html">Read the migration guide →</a>
+  </div>
+</div></section>
+
+<!-- INSTALL -->
+<section id="install"><div class="wrap reveal">
+  <div class="eyebrow">Get started · runs on Linux · macOS · Windows</div>
+  <h2>Up and running in 2 minutes.</h2>
+  <p class="sub">Needs <a href="https://bun.sh">Bun</a>. A local model via Ollama is free — or bring your own key.</p>
+  <div class="term">
+    <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>install</span></div>
+<pre><span class="t-dim"># 1 — install globally, then `xr` works anywhere</span>
+<span class="t-g">$</span> bun add -g @rrrtx/xr        <span class="t-dim"># or: npm i -g @rrrtx/xr</span>
+
+<span class="t-dim"># 2 — run a task on a local model ($0)</span>
+<span class="t-g">$</span> xr <span class="t-v">"summarize and improve my README"</span>
+
+<span class="t-dim"># 3 — bring a cloud key (never stored by XR)</span>
+<span class="t-g">$</span> GROQ_API_KEY=… xr --provider groq <span class="t-v">"list files"</span>
+
+<span class="t-dim"># …or one command, whole agent + dashboard</span>
+<span class="t-g">$</span> docker compose up</pre>
+  </div>
+</div></section>
+
+<!-- SECURITY -->
+<section id="security"><div class="wrap reveal">
+  <div class="eyebrow">Security model — honest</div>
+  <h2>Blast-radius reduction you can measure.</h2>
+  <p class="sub">XR does <b>not</b> claim to be "unhackable" — prompt injection is unsolved industry-wide. It makes a successful attack nearly useless, and lets you prove it.</p>
+  <div class="bento">
+    <div class="card c3"><span class="ic">🚪</span><h3>Egress allow-list</h3><p>The agent can't reach a domain you didn't approve — kills most exfiltration, including cloud metadata endpoints.</p></div>
+    <div class="card c3"><span class="ic">✋</span><h3>Approval gates</h3><p>Write / delete / shell / send need explicit approval — fail-closed on timeout. Dangerous shell is blocked before the model is even trusted.</p></div>
+    <div class="card c3"><span class="ic">🪪</span><h3>Tamper-evident audit</h3><p>SHA-256 hash-chained log (git's trick). <code>xr verify-log</code> detects any change — $0, offline, private. No blockchain needed.</p></div>
+    <div class="card c3"><span class="ic">🧪</span><h3>Provability</h3><p><code>xr test --attacks</code> publishes a reproducible block-rate. We measure security instead of marketing it.</p></div>
+  </div>
+</div></section>
+
+<!-- FAQ -->
+<section id="faq"><div class="wrap reveal">
+  <div class="eyebrow">FAQ</div>
+  <h2>Questions, answered.</h2>
+  <div class="sheet" style="grid-template-columns:1fr;gap:14px;max-width:820px">
+    <details class="cmd" style="cursor:pointer">
+      <summary style="color:var(--ink);font-weight:600;font-size:15px">Does it run on Windows, macOS, and Linux?</summary>
+      <span style="margin-top:8px">Yes — all three. XR is built on Bun (cross-platform) with SQLite built in. There's also a single-container Docker option that runs anywhere.</span>
+    </details>
+    <details class="cmd" style="cursor:pointer">
+      <summary style="color:var(--ink);font-weight:600;font-size:15px">Is it really free? What does it cost to run?</summary>
+      <span style="margin-top:8px">XR itself is MIT and ships no API keys. With a local model (Ollama) it costs <b>$0</b>. With a cloud key, you pay only your provider's usage — and the Cost Governor caps it.</span>
+    </details>
+    <details class="cmd" style="cursor:pointer">
+      <summary style="color:var(--ink);font-weight:600;font-size:15px">How do I use it — is it one command like OpenClaw/Hermes?</summary>
+      <span style="margin-top:8px">Yes. <code>bun add -g @rrrtx/xr</code> once, then <code>xr "your task"</code> from anywhere. Every feature is an <code>xr &lt;command&gt;</code> — serve, telegram, voice, etc.</span>
+    </details>
+    <details class="cmd" style="cursor:pointer">
+      <summary style="color:var(--ink);font-weight:600;font-size:15px">Do my keys or code ever leave my machine?</summary>
+      <span style="margin-top:8px">No. Keys live in your OS keychain / environment — XR ships and stores none. The dashboard binds to 127.0.0.1 only. With a local model, nothing leaves your machine at all.</span>
+    </details>
+    <details class="cmd" style="cursor:pointer">
+      <summary style="color:var(--ink);font-weight:600;font-size:15px">Is XR "unhackable"?</summary>
+      <span style="margin-top:8px">No — and we'll never claim that. Prompt injection is unsolved industry-wide. XR <b>minimizes blast radius</b> (egress allow-list, approval gates, least-privilege) and lets you <b>measure</b> it with <code>xr test --attacks</code>.</span>
+    </details>
+    <details class="cmd" style="cursor:pointer">
+      <summary style="color:var(--ink);font-weight:600;font-size:15px">Which models / providers does it support?</summary>
+      <span style="margin-top:8px">Any OpenAI-compatible provider — Ollama (local), Groq, OpenAI, OpenRouter, Together, DeepSeek, and more. BYOK: bring whichever key you want.</span>
+    </details>
+  </div>
+</div></section>
+
+<!-- FOOTER -->
+<footer><div class="wrap">
+  <div class="fbadge"><img src="assets/logo.png" width="20" style="border-radius:6px" alt=""/> built by rrrtx</div>
+  <p class="glow">If OpenClaw made your security team nervous, XR is the migration.</p>
+  <div class="flinks">
+    <a href="https://github.com/ahmadrrrtx/xr">GitHub</a>
+    <a href="MIGRATION.html">Migration guide</a>
+    <a href="#commands">Commands</a>
+    <a href="https://github.com/ahmadrrrtx">@ahmadrrrtx</a>
+  </div>
+  <p>MIT © Muhammad Ahmad · your keys · your model · your rules</p>
+</div></footer>
+
+<script>
+  // scroll reveal
+  const io=new IntersectionObserver((es)=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in')}),{threshold:.12});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+</body>
+</html>

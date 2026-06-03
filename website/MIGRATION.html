@@ -1,0 +1,91 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>OpenClaw → XR Migration Guide · by rrrtx</title><link rel="icon" href="assets/logo.png"/>
+<style>
+:root{--bg:#05070d;--ink:#eaf1f9;--dim:#8b9bb0;--cyan:#22e0ff;--violet:#9a6bff;--green:#34e2a0;--red:#ff5a6a;--edge:rgba(255,255,255,.1)}
+body{background:var(--bg);color:var(--ink);font:16px/1.7 ui-sans-serif,system-ui,sans-serif;margin:0}
+.wrap{max-width:880px;margin:0 auto;padding:40px 22px 80px}
+.top{position:sticky;top:0;background:rgba(5,7,13,.7);backdrop-filter:blur(12px);border-bottom:1px solid var(--edge);padding:14px 22px;display:flex;align-items:center;gap:12px}
+.top img{width:28px;height:28px;border-radius:7px}.top a{color:var(--cyan);text-decoration:none;font-weight:700;letter-spacing:2px}
+h1{font-size:34px;letter-spacing:-1px;margin:18px 0;background:linear-gradient(90deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:24px;margin:34px 0 12px;border-bottom:1px solid var(--edge);padding-bottom:8px}
+h3{font-size:18px;margin:24px 0 10px;color:var(--cyan)}
+a{color:var(--cyan)} code{background:#0a0f17;border:1px solid var(--edge);border-radius:5px;padding:1px 6px;font-size:13.5px;color:var(--cyan);font-family:ui-monospace,Menlo,monospace}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--edge);padding:9px 12px;text-align:left}th{color:var(--dim);font-size:12px;text-transform:uppercase}
+blockquote{border-left:3px solid var(--cyan);margin:16px 0;padding:8px 16px;background:rgba(34,224,255,.05);color:var(--dim)}
+ul{padding-left:22px}li{margin:5px 0}hr{border:0;border-top:1px solid var(--edge);margin:30px 0}
+p{color:#cdd8e6}
+</style></head><body>
+<div class="top"><img src="assets/logo.png" alt=""/><a href="index.html">← XR</a></div>
+<div class="wrap"><p>&lt;div align="center"&gt;</p>
+<h1>🛡️ OpenClaw → XR Migration Guide</h1>
+<h3>Switch to a self-hosted agent that closes the attack surface OpenClaw left open.</h3>
+<p>*BYOK · local-first · spend-capped · tamper-evident · by rrrtx*</p>
+<p>&lt;/div&gt;</p>
+<hr/>
+<h2>Why you're here</h2>
+<p>OpenClaw is brilliant and moves fast — but its growth came with a documented security crisis:</p>
+<ul><li><b>135,000+ publicly exposed instances</b> (SecurityScorecard, Feb 2026), <b>~63% with no gateway authentication</b> at all.</li><li><b>138+ CVEs tracked</b> in the first months of 2026, including a one-click RCE and multiple <b>CVSS 9.9</b> privilege-escalation / command-execution flaws.</li><li><b>800–1,184 malicious "skills"</b> flooded the ClawHub marketplace (up to ~20% of it), many delivering infostealer malware.</li><li>The root cause is structural: a <b>default "allow-all" permission model</b> on an agent that can run shell, read/write files, and reach the network.</li></ul>
+<blockquote>The standard hardening advice — *"bind the gateway to 127.0.0.1, never 0.0.0.0; add egress control; encrypt credentials; vet every skill; gate risky actions"* — describes <b>exactly how XR works by default.</b> XR is the architecture you'd have to bolt onto OpenClaw, shipped from line one.</blockquote>
+<p><b>This is not an anti-OpenClaw piece.</b> If your OpenClaw is patched and properly bound, it's usable. This guide is for people who want those guarantees to be *the default*, not a 2–4 hour hardening checklist they have to maintain forever.</p>
+<hr/>
+<h2>The core difference</h2>
+<table><tr><th></th><th>OpenClaw (default)</th><th>XR (default)</th></tr><tr><td>Gateway binding</td><td>Public-capable; 63% exposed in the wild</td><td><b>127.0.0.1 only</b>, token-authed, opt-in (<code>xr serve</code>)</td></tr><tr><td>Permission model</td><td>"allow-all"</td><td><b>Least-privilege per mode</b> + explicit approval gates</td></tr><tr><td>Network egress</td><td>Open</td><td><b>Egress allow-list</b> — can't reach a domain you didn't approve</td></tr><tr><td>Risky actions</td><td>Often auto-run</td><td><b>Approval gate</b> (CLI / phone button / voice-confirm), fail-closed</td></tr><tr><td>Credentials</td><td><code>.env</code> plaintext by default</td><td><b>BYOK</b> in OS keychain; redacted from logs</td></tr><tr><td>Skill supply chain</td><td>Open marketplace (malicious skills found)</td><td><b>Signed, local markdown skills</b>; no remote marketplace install</td></tr><tr><td>Audit</td><td>—</td><td><b>Tamper-evident SHA-256 hash-chained log</b> (<code>xr verify-log</code>)</td></tr><tr><td>Cost control</td><td>Metered, no hard cap</td><td><b>Hard spend ceiling enforced in code</b></td></tr><tr><td>Self-improvement</td><td>Can drift / regress</td><td><b>Non-regressive skills</b> — verified wins are frozen, updates auto-rollback on regression</td></tr><tr><td>Prove it's safe</td><td>—</td><td><b><code>xr test --attacks</code></b> publishes a reproducible injection block-rate</td></tr></table><hr/>
+<h2>CVE-by-CVE: what bit OpenClaw, and why XR's design prevents the class</h2>
+<blockquote>XR makes <b>no</b> "unhackable" claim — prompt injection is unsolved industry-wide. The point below is *architectural blast-radius reduction*: XR removes the <b>default conditions</b> that let these become criticals.</blockquote>
+<table><tr><th>OpenClaw CVE</th><th>Class</th><th>How XR's architecture prevents the class</th></tr><tr><td><b>CVE-2026-25253</b> (8.8, 1-click RCE via exposed gateway / token exfil)</td><td>Exposed gateway</td><td>XR's daemon binds <b>127.0.0.1 only</b>, is <b>token-authed</b>, and is <b>opt-in</b>. There is no public gateway to pivot through.</td></tr><tr><td><b>CVE-2026-32922 / 32025</b> (9.9 / auth) (token-scope / WebSocket origin bypass)</td><td>Auth/scope bypass</td><td>No internet-facing control plane by default; local token; no remote owner context.</td></tr><tr><td><b>CVE-2026-26322 / GHSA-56f2 / 43526</b> (SSRF → internal network / metadata)</td><td>SSRF / exfil</td><td><b>Egress allow-list</b> blocks any host you didn't approve — incl. <code>169.254.169.254</code>. An SSRF that can't leave the allow-list can't reach cloud metadata.</td></tr><tr><td><b>CVE-2026-24763 / 25157 / 28363 / 22179 / 32056</b> (command injection / allowlist bypass / RCE)</td><td>Shell exec</td><td><code>shell</code> is <b>approval-gated</b> *and* dangerous patterns (<code>rm -rf</code>, <code>curl …</td><td>bash</code>, etc.) are <b>blocked before approval is even asked</b>. Ask/Plan modes have no shell at all.</td></tr><tr><td><b>CVE-2026-27183</b> (shell approval bypass)</td><td>Approval bypass</td><td>Approval is <b>deterministic code in the loop</b>, not a model decision; <b>fail-closed on timeout</b>.</td></tr><tr><td><b>CVE-2026-26329 / 32846 / 43533</b> (path traversal / arbitrary file read)</td><td>Path escape</td><td>Every file tool <b>rejects paths that escape the working directory</b> (<code>..</code>, absolute paths).</td></tr><tr><td><b>CVE-2026-44114</b> (workspace dotenv overrides runtime env)</td><td>Secret/env tampering</td><td>Secrets come from <b>your environment / keychain</b>, not workspace files; config is schema-validated.</td></tr><tr><td><b>CVE-2026-45004</b> (arbitrary code via <code>setup-api.js</code> from cwd)</td><td>Untrusted code load</td><td>XR loads no executable code from the workspace; skills are <b>inert markdown SOPs</b>, not Node modules.</td></tr><tr><td><b>824–1,184 malicious ClawHub skills</b></td><td>Supply chain</td><td>XR has <b>no remote skill marketplace</b>. Skills are local, signed markdown; learned skills are <b>frozen + non-regressive</b>.</td></tr><tr><td>Prompt injection (e.g. <b>CVE-2026-30741</b>)</td><td>Injection</td><td>Untrusted content is <b>scanned</b>, dangerous *actions* are <b>policy-blocked regardless of model output</b>, and egress is allow-listed — so a successful injection has a tiny blast radius. Run <code>xr test --attacks</code> to see the block-rate.</td></tr></table>*(Sources: jgamblin/OpenClawCVEs, cyberdesserts, sangfor, skywork, blink — Feb–May 2026.)*
+<hr/>
+<h2>Migrate in ~10 minutes</h2>
+<h3>1. Install</h3>
+``<code>bash
+git clone https://github.com/ahmadrrrtx/xr
+cd xr &amp;&amp; bun install
+bun test            # 124 tests should pass
+</code>`<code>
+<h3>2. Point it at your model (BYOK — you keep your keys)</h3>
+</code>`<code>bash
+<h1>local &amp; free (recommended): just have Ollama running</h1>
+bun run src/index.ts doctor
+<h1>or bring a cloud key</h1>
+export GROQ_API_KEY=...      # never stored by XR; read from your env
+</code>`<code>
+<h3>3. Set your guardrails (these are XR's defaults, but make them yours)</h3>
+</code>~/.xr/config.json<code>:
+</code>`<code>json
+{
+  "budget": { "perTaskUsd": 0.25, "perTaskTokens": 250000 },
+  "security": {
+    "egressAllowlist": ["api.github.com", "registry.npmjs.org"],
+    "requireApproval": ["write_file", "delete", "shell", "send"]
+  }
+}
+</code>`<code>
+<h3>4. Run a task — safely</h3>
+</code>`<code>bash
+<h1>dry-run first: see every change, write nothing</h1>
+bun run src/index.ts --dry-run "summarize and improve the README"
+<h1>real run, capped at 10 cents</h1>
+bun run src/index.ts --budget 0.10 "summarize and improve the README"
+</code>`<code>
+<h3>5. Prove it's safe (the part OpenClaw can't do)</h3>
+</code>`<code>bash
+bun run src/index.ts test --attacks          # block-rate report
+bun run src/index.ts verify-log              # audit chain intact?
+bun run src/index.ts export                  # signed report you can share
+</code>`<code>
+<h3>6. Map your OpenClaw workflow</h3>
+<table><tr><th>OpenClaw thing</th><th>XR equivalent</th></tr><tr><td>Telegram control</td><td></code>xr telegram<code> — same convenience, but <b>user-id allow-list</b> + ✅/❌ approval buttons</td></tr><tr><td>Skills (ClawHub)</td><td></code>xr skills<code> — 11 built-in signed skills; write your own as markdown SOPs</td></tr><tr><td>Cron jobs</td><td></code>xr cron "every monday 9am: run security audit"<code></td></tr><tr><td>Always-on / gateway</td><td></code>xr serve<code> — dashboard on <b>127.0.0.1 only</b></td></tr><tr><td>MCP tools</td><td></code>xr mcp<code> — consumed with approval + egress + audit wrappers</td></tr><tr><td>Voice</td><td></code>xr voice<code> — local Whisper/Kokoro, voice-confirm for risky actions</td></tr></table><hr/>
+<h2>What you keep, what you gain, what you give up</h2>
+<p><b>Keep:</b> autonomy, Telegram, cron, skills, MCP, voice, local-first, $0 to run.
+<b>Gain:</b> spend ceiling you can't blow, egress allow-list, approval gates, tamper-evident audit, non-regressive skills, a runnable injection benchmark.
+<b>Give up:</b> a giant open skill marketplace (by design — that's the part that got compromised) and a public gateway (also by design).</p>
+<hr/>
+<h2>Honest limitations</h2>
+<ul><li>XR is <b>not "unhackable."</b> No agent is. It minimizes blast radius and lets you *measure* it.</li><li>The "100% valid tool-calls" guarantee applies to <b>llama.cpp / Ollama / vLLM</b> (GBNF grammar) and to cloud providers via <b>native JSON mode</b>; everything else falls back to <b>deterministic auto-repair</b> (very high, not 100%).</li><li>XR is solo-maintained and pre-1.0. It's lean on purpose — fewer features, fewer attack surfaces.</li></ul>
+<hr/>
+<p>&lt;div align="center"&gt;</p>
+<p><b>If OpenClaw made your security team nervous, XR is the migration.</b></p>
+<p></code>git clone<code> · </code>bun test<code> · </code>xr test --attacks` — then decide.</p>
+<p>*by <a href="https://github.com/ahmadrrrtx">@ahmadrrrtx</a>*</p>
+<p>&lt;/div&gt;</p></div></body></html>
