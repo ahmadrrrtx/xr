@@ -1,0 +1,37 @@
+{
+  "name": "@rrrtx/xr",
+  "version": "0.1.0",
+  "description": "XR — the AI agent you can actually trust. BYOK, local-first, voice + mobile, spend-capped, tamper-evident. by rrrtx",
+  "type": "module",
+  "bin": {
+    "xr": "./src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun run --watch src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "ai-agent",
+    "byok",
+    "local-llm",
+    "ollama",
+    "prompt-injection",
+    "secure-agent",
+    "cli",
+    "rrrtx"
+  ],
+  "author": "Muhammad Ahmad (@ahmadrrrtx)",
+  "license": "MIT",
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

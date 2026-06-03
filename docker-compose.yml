@@ -1,0 +1,22 @@
+# XR — one-command run. Whole agent + dashboard in a container.
+# Pairs with a local Ollama (host) for $0 local inference.
+services:
+  xr:
+    build: .
+    container_name: xr
+    # Bind ONLY to localhost on the host — never expose the dashboard publicly.
+    ports:
+      - "127.0.0.1:7842:7842"
+    volumes:
+      - xr-data:/data
+    environment:
+      # BYO keys (optional) — local Ollama needs none.
+      - XR_OLLAMA=${XR_OLLAMA:-http://host.docker.internal:11434}
+      # - GROQ_API_KEY=...
+      # - XR_TELEGRAM_TOKEN=...   XR_TELEGRAM_ALLOWED=...
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  xr-data:
