@@ -1,0 +1,285 @@
+/**
+ * XR — dashboard HTML (Block 5, elite redesign).
+ * Design language: dark glassmorphism + ambient color orbs + neon-glow accents
+ * + bento grid + animated SVG data-viz + micro-interactions. Self-contained
+ * (inline CSS/SVG, no external assets → offline & sandbox-safe).
+ */
+export function dashboardHtml(token: string): string {
+  return PAGE.replace("__TOKEN__", token);
+}
+
+const PAGE = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>XR — Control Center</title>
+<style>
+  :root{
+    --bg:#05070d; --ink:#eaf1f9; --dim:#7d8fa6; --faint:#4a5a70;
+    --cyan:#22e0ff; --teal:#19f0c8; --violet:#9a6bff; --pink:#ff5db8;
+    --green:#34e2a0; --amber:#ffc24b; --red:#ff5a6a;
+    --glass:rgba(255,255,255,.045); --edge:rgba(255,255,255,.10);
+    --glass2:rgba(255,255,255,.025);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);overflow-x:hidden;
+    font:14px/1.55 ui-monospace,'SF Mono',Menlo,'Cascadia Code',Consolas,monospace;
+    -webkit-font-smoothing:antialiased}
+  /* ambient color orbs that the glass distorts */
+  .orb{position:fixed;border-radius:50%;filter:blur(90px);opacity:.5;z-index:0;pointer-events:none}
+  .orb.a{width:520px;height:520px;background:#0c6cff;top:-160px;left:-120px;opacity:.35}
+  .orb.b{width:480px;height:480px;background:#9a3bff;bottom:-180px;right:-100px;opacity:.30}
+  .orb.c{width:420px;height:420px;background:#12d6c0;top:40%;left:55%;opacity:.18}
+  .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.35;
+    background-image:linear-gradient(rgba(120,160,220,.06) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(120,160,220,.06) 1px,transparent 1px);
+    background-size:46px 46px;
+    mask-image:radial-gradient(circle at 50% 30%,#000 0%,transparent 75%)}
+  .wrap{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:26px 22px 60px}
+
+  header{display:flex;align-items:center;gap:16px;margin-bottom:24px}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:900;
+    color:#031018;background:linear-gradient(135deg,var(--cyan),var(--teal));
+    box-shadow:0 0 28px rgba(34,224,255,.45);font-size:18px;letter-spacing:-1px}
+  .brand .name{font-weight:800;letter-spacing:3px;font-size:20px}
+  .brand .name b{background:linear-gradient(90deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .brand .tag{color:var(--dim);font-size:11px;letter-spacing:.5px}
+  .live{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--green);
+    background:var(--glass);border:1px solid var(--edge);padding:7px 13px;border-radius:99px;backdrop-filter:blur(10px)}
+  .live .pulse{width:8px;height:8px;border-radius:50%;background:var(--green);
+    box-shadow:0 0 0 0 rgba(52,226,160,.7);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,226,160,.55)}70%{box-shadow:0 0 0 10px rgba(52,226,160,0)}100%{box-shadow:0 0 0 0 rgba(52,226,160,0)}}
+
+  .bento{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}
+  .card{position:relative;background:linear-gradient(180deg,var(--glass),var(--glass2));
+    border:1px solid var(--edge);border-radius:18px;padding:20px;backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);overflow:hidden;transition:transform .25s,border-color .25s,box-shadow .25s}
+  .card::before{content:"";position:absolute;inset:0;border-radius:18px;padding:1px;
+    background:linear-gradient(135deg,rgba(255,255,255,.18),transparent 40%);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.6}
+  .card:hover{transform:translateY(-3px);border-color:rgba(34,224,255,.35);
+    box-shadow:0 14px 40px rgba(0,0,0,.45),0 0 0 1px rgba(34,224,255,.12)}
+  .card h3{margin:0 0 14px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);
+    display:flex;align-items:center;gap:9px;font-weight:700}
+  .card h3 .ic{filter:drop-shadow(0 0 6px rgba(34,224,255,.5))}
+  .c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}
+  .c6{grid-column:span 6}.c7{grid-column:span 7}.c8{grid-column:span 8}.c12{grid-column:span 12}
+  @media(max-width:1000px){.c3,.c4,.c5{grid-column:span 6}.c6,.c7,.c8{grid-column:span 12}}
+  @media(max-width:620px){.c3,.c4,.c5,.c6{grid-column:span 12}}
+
+  .big{font-size:34px;font-weight:800;letter-spacing:-1px;line-height:1.05}
+  .glow-cyan{text-shadow:0 0 22px rgba(34,224,255,.55)}
+  .glow-green{text-shadow:0 0 22px rgba(52,226,160,.5)}
+  .sub{color:var(--dim);font-size:12px;margin-top:4px}
+  .unit{font-size:14px;color:var(--dim);font-weight:600}
+
+  .track{height:9px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:14px;position:relative}
+  .track>i{position:absolute;inset:0 auto 0 0;border-radius:99px;
+    background:linear-gradient(90deg,var(--cyan),var(--violet));box-shadow:0 0 16px rgba(34,224,255,.5);
+    transition:width .8s cubic-bezier(.2,.8,.2,1)}
+
+  .spark{display:flex;align-items:flex-end;gap:4px;height:54px;margin-top:16px}
+  .spark>span{flex:1;border-radius:3px 3px 0 0;min-height:3px;
+    background:linear-gradient(180deg,var(--cyan),rgba(34,224,255,.15));transition:height .6s ease}
+
+  .kvs{display:grid;grid-template-columns:1fr auto;gap:9px 14px;margin-top:14px}
+  .kvs .lab{color:var(--dim)}
+  .kvs b{font-weight:700;text-align:right}
+
+  .chip{font-size:11px;font-weight:700;padding:3px 10px;border-radius:7px;display:inline-flex;align-items:center;gap:6px}
+  .chip.ok{color:var(--green);background:rgba(52,226,160,.12);border:1px solid rgba(52,226,160,.25)}
+  .chip.bad{color:var(--red);background:rgba(255,90,106,.12);border:1px solid rgba(255,90,106,.25)}
+  .chip.warn{color:var(--amber);background:rgba(255,194,75,.12);border:1px solid rgba(255,194,75,.25)}
+
+  .list{margin-top:6px;max-height:270px;overflow:auto}
+  .list::-webkit-scrollbar{width:7px}.list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:99px}
+  .item{display:flex;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+  .item:last-child{border-bottom:0}
+  .dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .cat{color:var(--dim);width:182px;flex:0 0 auto;font-size:12px}
+  .desc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .time{color:var(--faint);font-size:11px}
+  .hash{color:var(--faint);font-size:11px;margin-left:auto}
+  .muted{color:var(--dim)}
+  .mrow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+  .mrow:last-child{border-bottom:0}
+  footer{margin-top:30px;color:var(--faint);font-size:11px;text-align:center;letter-spacing:.4px}
+  .shield{display:inline-block;vertical-align:-2px}
+</style>
+</head>
+<body>
+<div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+<div class="grid-bg"></div>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="mark">XR</div>
+      <div>
+        <div class="name"><b>XR</b> CONTROL CENTER</div>
+        <div class="tag">the AI agent you can actually trust · by rrrtx</div>
+      </div>
+    </div>
+    <div class="live"><span class="pulse" id="pulse"></span><span id="health">connecting…</span></div>
+  </header>
+
+  <div class="bento">
+
+    <!-- COST COCKPIT -->
+    <section class="card c5">
+      <h3><span class="ic">💰</span> Cost Cockpit</h3>
+      <div class="big glow-cyan"><span id="cost-usd">$0.0000</span></div>
+      <div class="sub" id="cost-tok">0 tokens · this machine</div>
+      <div class="track"><i id="cost-bar" style="width:0%"></i></div>
+      <div class="sub" id="cost-cap" style="margin-top:8px"></div>
+      <div class="spark" id="cost-spark"></div>
+    </section>
+
+    <!-- SECURITY POSTURE -->
+    <section class="card c4">
+      <h3><span class="ic">🛡️</span> Security Posture</h3>
+      <div style="display:flex;align-items:center;gap:20px">
+        <svg viewBox="0 0 130 130" width="118" height="118">
+          <defs>
+            <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#22e0ff"/><stop offset="1" stop-color="#34e2a0"/>
+            </linearGradient>
+            <filter id="glow"><feGaussianBlur stdDeviation="3.2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <circle cx="65" cy="65" r="52" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="11"/>
+          <circle id="sec-arc" cx="65" cy="65" r="52" fill="none" stroke="url(#g1)" stroke-width="11"
+            stroke-linecap="round" stroke-dasharray="327" stroke-dashoffset="327"
+            transform="rotate(-90 65 65)" filter="url(#glow)" style="transition:stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1)"/>
+          <text id="sec-score" x="65" y="60" text-anchor="middle" fill="#eaf1f9" font-size="30" font-weight="800">--</text>
+          <text x="65" y="80" text-anchor="middle" fill="#7d8fa6" font-size="10" letter-spacing="2">SCORE</text>
+        </svg>
+        <div>
+          <div class="sub">injection block-rate</div>
+          <div class="big glow-green" id="sec-rate">--</div>
+          <div class="sub" id="sec-line"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AUDIT INTEGRITY -->
+    <section class="card c3">
+      <h3><span class="ic">🔒</span> Audit Integrity</h3>
+      <div class="big" id="audit-status" style="font-size:26px">checking…</div>
+      <div class="sub" id="audit-count">0 entries</div>
+      <div class="kvs">
+        <span class="lab">hash chain</span><b id="audit-chain" class="chip ok">verifying</b>
+        <span class="lab">skills learned</span><b id="kv-skills">0</b>
+        <span class="lab">frozen baselines</span><b id="kv-frozen">0</b>
+        <span class="lab">RAG chunks</span><b id="kv-rag">0</b>
+      </div>
+    </section>
+
+    <!-- INJECTION LAB -->
+    <section class="card c7">
+      <h3><span class="ic">🔬</span> Injection Test Lab <span id="lab-badge" class="chip ok" style="margin-left:auto">--</span></h3>
+      <div class="list" id="att-list"></div>
+    </section>
+
+    <!-- PROJECT + COST BY MODEL -->
+    <section class="card c5">
+      <h3><span class="ic">📦</span> Project</h3>
+      <div class="big" id="proj-name" style="font-size:24px">—</div>
+      <div class="kvs">
+        <span class="lab">files indexed</span><b id="proj-files">0</b>
+        <span class="lab">frameworks</span><b id="proj-fw">—</b>
+        <span class="lab">test coverage</span><b id="proj-tests">—</b>
+      </div>
+      <h3 style="margin-top:20px"><span class="ic">📊</span> Cost by Model</h3>
+      <div id="by-model"></div>
+    </section>
+
+    <!-- AUDIT EXPLORER -->
+    <section class="card c7">
+      <h3><span class="ic">📜</span> Audit Explorer <span class="muted" style="margin-left:auto;font-size:11px;letter-spacing:0">tamper-evident · hash-chained</span></h3>
+      <div class="list" id="audit-list"></div>
+    </section>
+
+  </div>
+  <footer>🔐 127.0.0.1 only · token-authed · read-mostly · every state change is approval-gated & recorded in the hash chain</footer>
+</div>
+
+<script>
+const TOKEN="__TOKEN__";
+const H={headers:{authorization:"Bearer "+TOKEN}};
+const $=id=>document.getElementById(id);
+const money=n=>"$"+Number(n||0).toFixed(4);
+const k=n=>n>=1000?(n/1000).toFixed(1)+"k":String(Math.round(n||0));
+async function get(p){try{const r=await fetch(p,H);return r.ok?await r.json():null}catch(e){return null}}
+
+async function load(){
+  const health=await get("/api/health");
+  $("health").textContent=health?"LIVE":"OFFLINE";
+  $("pulse").style.background=health?"var(--green)":"var(--red)";
+
+  const ov=await get("/api/overview");
+  if(ov){
+    $("proj-name").textContent=ov.project;
+    $("proj-files").textContent=ov.ragChunks?ov.fingerprint.files:ov.fingerprint.files;
+    $("proj-fw").textContent=(ov.fingerprint.frameworks||[]).join(", ")||"—";
+    $("proj-tests").textContent=ov.fingerprint.hasTests?"detected":"none";
+    $("audit-count").textContent=ov.audit.count+" entries";
+    const intact=ov.audit.chain.valid;
+    $("audit-status").textContent=intact?"✓ INTACT":"✗ BROKEN";
+    $("audit-status").style.color=intact?"var(--green)":"var(--red)";
+    const ac=$("audit-chain");ac.textContent=intact?"verified":"BROKEN";ac.className="chip "+(intact?"ok":"bad");
+    $("kv-skills").textContent=ov.skills.learned;$("kv-frozen").textContent=ov.skills.frozen;$("kv-rag").textContent=ov.ragChunks;
+    window.__cap=ov.budget;
+  }
+
+  const cost=await get("/api/cost");
+  if(cost){
+    $("cost-usd").textContent=money(cost.totalUsd);
+    $("cost-tok").textContent=k(cost.totalTokens)+" tokens · this machine";
+    const cap=(window.__cap&&window.__cap.perTaskUsd)||0.25;
+    const pct=Math.min(100,(cost.totalUsd/cap)*100);
+    const bar=$("cost-bar");bar.style.width=pct+"%";
+    bar.style.background=pct>85?"linear-gradient(90deg,var(--amber),var(--red))":"linear-gradient(90deg,var(--cyan),var(--violet))";
+    $("cost-cap").textContent="per-task cap "+money(cap)+"  ·  "+pct.toFixed(0)+"% used";
+    const sp=$("cost-spark");sp.innerHTML="";
+    const rec=(cost.recent||[]).slice().reverse();const mx=Math.max(1,...rec.map(r=>r.tokens||0));
+    (rec.length?rec:[{tokens:0}]).forEach(r=>{const s=document.createElement("span");s.style.height=((r.tokens||0)/mx*100)+"%";sp.appendChild(s)});
+    const bm=$("by-model");bm.innerHTML="";
+    (cost.byModel||[]).forEach(m=>{const d=document.createElement("div");d.className="mrow";
+      d.innerHTML='<span>'+m.model+'</span><span class="muted">'+k(m.tokens)+' · '+money(m.usd)+'</span>';bm.appendChild(d)});
+    if(!(cost.byModel||[]).length)bm.innerHTML='<div class="muted" style="padding:10px 0">no spend yet — run a task</div>';
+  }
+
+  const sec=await get("/api/security");
+  if(sec){
+    const pct=Math.round(sec.rate*100);
+    $("sec-rate").textContent=pct+"%";$("sec-line").textContent=sec.blocked+" / "+sec.total+" attacks blocked";
+    const arc=$("sec-arc"),C=327;arc.style.strokeDashoffset=C-(C*sec.rate);$("sec-score").textContent=pct;
+    const lb=$("lab-badge");lb.textContent=sec.blocked+"/"+sec.total;lb.className="chip "+(pct>=90?"ok":pct>=70?"warn":"bad");
+    const list=$("att-list");list.innerHTML="";
+    (sec.outcomes||[]).forEach(o=>{const d=document.createElement("div");d.className="item";
+      d.innerHTML='<span class="dot" style="background:'+(o.blocked?"var(--green)":"var(--red)")+';box-shadow:0 0 8px '+(o.blocked?"rgba(52,226,160,.7)":"rgba(255,90,106,.7)")+'"></span>'
+        +'<span class="cat">'+o.category+'</span><span class="desc">'+o.description+'</span>'
+        +'<span class="chip '+(o.blocked?"ok":"bad")+'" style="margin-left:auto">'+(o.blocked?"blocked":"ALLOWED")+'</span>';
+      list.appendChild(d)});
+  }
+
+  const aud=await get("/api/audit?limit=40");
+  if(aud){
+    const list=$("audit-list");list.innerHTML="";
+    (aud.entries||[]).forEach(e=>{const t=new Date(e.created_at).toLocaleTimeString();
+      const d=document.createElement("div");d.className="item";
+      d.innerHTML='<span class="time">'+t+'</span><span class="desc">'+e.event+'</span>'
+        +'<span class="hash" title="'+e.hash+'">#'+e.hash.slice(0,10)+'</span>';
+      list.appendChild(d)});
+    if(!(aud.entries||[]).length)list.innerHTML='<div class="muted" style="padding:10px 0">no activity yet</div>';
+  }
+}
+load();setInterval(load,4000);
+</script>
+</body>
+</html>`;
