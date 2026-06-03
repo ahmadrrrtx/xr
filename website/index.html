@@ -186,8 +186,8 @@
       <a class="btn ghost" href="MIGRATION.html">🛡️ Migrate from OpenClaw</a>
     </div>
     <div class="installline">
-      <code id="ic">bun add -g @rrrtx/xr</code>
-      <span class="cp" onclick="navigator.clipboard.writeText('bun add -g @rrrtx/xr');this.textContent='copied ✓'">copy</span>
+      <code id="ic">git clone https://github.com/ahmadrrrtx/xr</code>
+      <span class="cp" onclick="navigator.clipboard.writeText('git clone https://github.com/ahmadrrrtx/xr && cd xr && bun install');this.textContent='copied ✓'">copy</span>
     </div>
   </div>
   <div class="art"><div class="ring"></div><img src="assets/avatar.png" alt="XR cybernetic guardian avatar"/></div>
@@ -305,11 +305,13 @@
   <p class="sub">Needs <a href="https://bun.sh">Bun</a>. A local model via Ollama is free — or bring your own key.</p>
   <div class="term">
     <div class="bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>install</span></div>
-<pre><span class="t-dim"># 1 — install globally, then `xr` works anywhere</span>
-<span class="t-g">$</span> bun add -g @rrrtx/xr        <span class="t-dim"># or: npm i -g @rrrtx/xr</span>
+<pre><span class="t-dim"># 1 — clone &amp; install (needs Bun)</span>
+<span class="t-g">$</span> git clone https://github.com/ahmadrrrtx/xr
+<span class="t-g">$</span> cd xr &amp;&amp; bun install
 
 <span class="t-dim"># 2 — run a task on a local model ($0)</span>
-<span class="t-g">$</span> xr <span class="t-v">"summarize and improve my README"</span>
+<span class="t-g">$</span> bun run src/index.ts <span class="t-v">"summarize and improve my README"</span>
+<span class="t-dim">    # tip: alias xr="bun run $(pwd)/src/index.ts"  → then just `xr "task"`</span>
 
 <span class="t-dim"># 3 — bring a cloud key (never stored by XR)</span>
 <span class="t-g">$</span> GROQ_API_KEY=… xr --provider groq <span class="t-v">"list files"</span>
@@ -347,7 +349,7 @@
     </details>
     <details class="cmd" style="cursor:pointer">
       <summary style="color:var(--ink);font-weight:600;font-size:15px">How do I use it — is it one command like OpenClaw/Hermes?</summary>
-      <span style="margin-top:8px">Yes. <code>bun add -g @rrrtx/xr</code> once, then <code>xr "your task"</code> from anywhere. Every feature is an <code>xr &lt;command&gt;</code> — serve, telegram, voice, etc.</span>
+      <span style="margin-top:8px">Yes. Today: <code>git clone</code> + <code>bun install</code>, then <code>bun run src/index.ts "task"</code> (add a shell alias <code>xr</code> for one-word use). An npm package <code>@rrrtx/xr</code> for <code>bun add -g</code> is coming soon. Every feature is an <code>xr &lt;command&gt;</code> — serve, telegram, voice, etc.</span>
     </details>
     <details class="cmd" style="cursor:pointer">
       <summary style="color:var(--ink);font-weight:600;font-size:15px">Do my keys or code ever leave my machine?</summary>
