@@ -1,6 +1,6 @@
 {
   "name": "@rrrtx/xr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "XR — the AI agent you can actually trust. BYOK, local-first, voice + mobile, spend-capped, tamper-evident. by rrrtx",
   "type": "module",
   "bin": {
