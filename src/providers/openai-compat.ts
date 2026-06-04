@@ -4,7 +4,7 @@
  * PURE BYOK: the key comes from the user's environment, never from us.
  *
  * Phase 2: applies per-model capability profiles —
- *   - local models → GBNF grammar (Ollama `format`) for 100% valid tool calls
+ *   - local models → GBNF grammar (Ollama `format`) for 100% valid tool calls.
  *   - cloud models → native JSON object mode
  *   - everything → deterministic auto-repair as a final safety net.
  */
