@@ -1,290 +1,335 @@
-<div align="center">
+![XR — cybernetic guardian avatar](https://raw.githubusercontent.com/ahmadrrrtx/xr/main/assets/avatar.png)
 
-<br/>
+# ⚡ XR — The AI Agent You Can Actually Trust
 
-<img src="assets/avatar.png" alt="XR — cybernetic guardian avatar" width="200"/>
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `JARVIS-level control`**
 
-# ⚡ XR
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
+[![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
+[![Tests](https://img.shields.io/badge/tests-124%20passing-34e2a0?style=flat-square)](https://bun.sh)
+[![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 
-### The AI agent you can actually trust.
-
-**`BYOK`&nbsp;·&nbsp;`local-first`&nbsp;·&nbsp;`spend-capped`&nbsp;·&nbsp;`non-regressive`&nbsp;·&nbsp;`tamper-evident`**
-
-<br/>
-
-<!-- ░░░ badges ░░░ -->
-![status](https://img.shields.io/badge/status-feature--complete-00d2ff?style=for-the-badge)
-![tests](https://img.shields.io/badge/tests-124%20passing-34e2a0?style=for-the-badge)
-![license](https://img.shields.io/badge/license-MIT-9a6bff?style=for-the-badge)
-
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)
-![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)
-![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)
-![deps](https://img.shields.io/badge/runtime%20deps-1-success?style=flat-square)
-![PRs welcome](https://img.shields.io/badge/PRs-welcome-ff5db8?style=flat-square)
-
-<br/>
-
-<!-- ░░░ the rrrtx tag, hehe ░░░ -->
-[![by rrrtx](https://img.shields.io/badge/%E2%9A%A1_by-rrrtx-000000?style=for-the-badge&labelColor=00d2ff)](https://github.com/ahmadrrrtx)
-
-<br/>
+---
 
 > **You bring the key. We ship none.**
-> XR runs on _your_ provider API key or _your_ local model — it costs **us $0 to maintain** and **you $0 to trust.**
-
-<br/>
-
-🛡️ **Coming from OpenClaw?** → **[Read the Migration Guide »](./MIGRATION.md)**
-
-</div>
+> XR runs on *your* provider API key or *your* local model — it costs **us $0 to maintain** and **you $0 to trust.**
 
 ---
 
-## 📑 Table of contents
+## 🚀 Install in 30 Seconds
 
-- [Why XR exists](#-why-xr-exists)
-- [The 5 things that make XR different](#-the-5-things-that-make-xr-different)
-- [XR vs the field](#-xr-vs-the-field)
-- [Quick start](#-quick-start)
-- [Every command](#-every-command)
-- [Architecture](#-architecture)
-- [Security model (honest)](#-security-model-honest)
-- [Project structure](#-project-structure)
-- [Roadmap & status](#-roadmap--status)
-- [License](#-license)
+```bash
+# One command. Any OS. That's it.
+curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
+```
+
+Windows PowerShell:
+```powershell
+iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
+```
+
+Then just type:
+```bash
+xr "hello, who are you"
+```
+
+Or run the interactive setup wizard:
+```bash
+xr --onboard
+```
 
 ---
 
-## 🎯 Why XR exists
+## ✨ What Makes XR Different
 
-Personal AI agents exploded in 2026 — and then people started leaving them. The pattern in the data is loud and consistent:
+| Feature | XR | Claude Code | OpenClaw | Hermes |
+|---|---|---|---|---|
+| **One-command install** | ✅ `curl\|bash` | ✅ | ✅ | ✅ |
+| **Full TUI (slash commands, history)** | ✅ | ✅ | ⚠️ | ✅ |
+| **JARVIS computer control (screenshots)** | ✅ | ❌ | ❌ | ❌ |
+| **System control (volume, clipboard, apps)** | ✅ | ❌ | ⚠️ | ⚠️ |
+| **Hard spend ceiling (code-enforced)** | ✅ | ❌ | ❌ | ❌ |
+| **Tamper-evident audit log (SHA-256 chain)** | ✅ | ❌ | ❌ | ❌ |
+| **Injection benchmark (runnable block-rate)** | ✅ | ❌ | ❌ | ❌ |
+| **Egress allow-list (anti-exfil)** | ✅ | ❌ | ❌ | ⚠️ |
+| **Non-regressive skills (auto-rollback)** | ✅ | ❌ | ❌ | ✅ |
+| **Self-improving (learns from experience)** | ✅ | ❌ | ❌ | ✅ |
+| **Docker sandbox for shell commands** | ✅ | ❌ | ⚠️ | ✅ |
+| **Voice control (wake word → STT → TTS)** | ✅ | ❌ | ✅ | ✅ |
+| **BYOK + $0 to run** | ✅ | ❌ | ⚠️ | ✅ |
+| **Cross-platform (Win/Mac/Linux/Termux)** | ✅ | ✅ | ✅ | ✅ |
 
-| 😩 What users actually complain about | 🛡️ XR's answer |
-|---|---|
-| 💸 **Unpredictable token bills** (same task varies up to 30×) | A **hard spend ceiling enforced in code** — the model literally can't exceed it |
-| 🖥️ **"Local models don't work agentically"** | **Grammar-forced tool-calls** → valid output even on a 3B local model |
-| 🤖 **Self-improvement that drifts & forgets** | **Non-regressive skills** — verified wins are frozen, regressions auto-roll-back |
-| 🔓 **Security nightmares** (plaintext keys, prompt injection, 135k+ exposed instances) | **Secure-by-architecture** + a runnable injection benchmark |
-| 🔧 **Breaks every single update** | **Self-healing config + transactional auto-rollback updates** |
+---
 
-> **XR's thesis:** _security and reliability are the architecture — not a feature you bolt on later._
+## 🎯 Core Features
 
-<br/>
+### 🧠 JARVIS-Level Computer Control
+```bash
+xr --computer "open Safari and search for AI agents"
+```
+XR sees your screen via screenshots, reasons about what's on it, and takes actions — click, type, scroll, open apps — just like you would. It's the difference between *asking* an agent to do something and *showing* it what to do.
 
-## 🚀 The 5 things that make XR different
+### 💰 Cost Governor — Enforced in Code
+```bash
+xr --budget 0.10 "write me a full React app"
+```
+The agent **literally cannot exceed your budget**. It's not a suggestion — `checkBeforeStep()` runs before every model call and blocks if the next step would breach the ceiling.
 
-<table>
-<tr>
-<td width="50%" valign="top">
+### 🛡️ Provable Security
+```bash
+xr test --attacks --json   # → signed publishable block-rate report
+```
+Runs a 10-attack corpus through the deterministic defenses and prints a publishable block-rate with SHA-256 signature. No marketing — real numbers.
 
-### 💰 Cost Governor
-A **hard** per-task spend/token ceiling enforced in deterministic code. XR **pauses and asks** before the next step would breach your budget — it can't silently burn $8.
-
-</td>
-<td width="50%" valign="top">
+### 🔒 Tamper-Evident Audit Log
+```bash
+xr verify-log              # → "✓ Audit chain intact (N entries)"
+```
+SHA-256 hash chain (git's trick, $0, offline, private). Any tampering is detected and reported. Redacts API keys before storage.
 
 ### 🧠 Non-Regressive Skills
-Self-improvement that **can't forget a win.** Verified-good action sequences are **frozen as immutable baselines**; any update that breaks one is **auto-rolled-back.** No other agent ships this.
+Every successful verified task can be frozen as an immutable baseline. Any update that breaks a past win is **auto-rolled-back**. The agent cannot forget what worked.
 
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
+### 🔄 Self-Improving
+After every successful task, XR analyzes what it did. If verifiable and complex enough, it creates a skill that improves during use. Cross-session memory via SQLite FTS5 search.
 
-### 🖥️ Local-Model Reliability
-**GBNF grammar-forced tool-calls** make weak local models emit valid output, with per-model profiles + deterministic **auto-repair** as a backstop.
+### 🐳 Docker Sandbox
+Shell commands run in an isolated container by default (optional). Dropped capabilities, no network, memory-limited. The `rm -rf /` and `curl | bash` attacks are structurally impossible.
 
-</td>
-<td width="50%" valign="top">
-
-### 🔒 Provable Security
-**`xr test --attacks`** runs an injection corpus and prints a **publishable block-rate.** Plus an egress allow-list, approval gates, and a **tamper-evident hash-chained audit log.**
-
-</td>
-</tr>
-<tr>
-<td colspan="2" valign="top">
-
-### 🛡️ Self-Healing & BYOK
-Updates that **auto-rollback** if a self-test fails. Keys live in **your environment / OS keychain** — XR ships none, stores none, costs nothing to run.
-
-</td>
-</tr>
-</table>
-
-<br/>
-
-## ⚔️ XR vs the field
-
-| Capability | XR | OpenClaw | Hermes | Claude Code |
-|---|:---:|:---:|:---:|:---:|
-| Hard spend ceiling (code-enforced) | ✅ | ❌ | ❌ | ❌ |
-| Local-model reliability (GBNF) | ✅ | ❌ | ❌ | ❌ |
-| Non-regressive skills | ✅ | ❌ | ⚠️ drifts | ❌ |
-| Injection benchmark (runnable) | ✅ | ❌ | ❌ | ❌ |
-| Tamper-evident audit log | ✅ | ❌ | ❌ | ❌ |
-| BYOK + $0 to run | ✅ | ⚠️ | ⚠️ | ❌ |
-| Egress allow-list (anti-exfil) | ✅ | ❌ | ❌ | ⚠️ |
-| Approval gate for risky actions | ✅ | ⚠️ | ❌ | ⚠️ |
-
-> The moat is the **combination.** No single competitor has columns 1 + 3 + 4 together.
-
-<br/>
-
-## ⚡ Quick start
-
+### 🎙️ Voice Control
 ```bash
-# 1. requires Bun  →  https://bun.sh
-git clone https://github.com/ahmadrrrtx/xr
-cd xr && bun install
-
-# 2. sanity check (124 tests)
-bun test
-
-# 3. health: config + provider + tamper-evident audit chain
-bun run src/index.ts doctor
-
-# 4. run a task on a LOCAL model ($0), capped + dry-run first
-bun run src/index.ts --dry-run "summarize and improve the README"
-bun run src/index.ts --budget 0.10 "summarize and improve the README"
-
-# 5. bring your own cloud key (never stored by XR)
-GROQ_API_KEY=... bun run src/index.ts --provider groq --model llama-3.3-70b "list files and explain them"
+xr --voice
 ```
+Wake word → Whisper STT → agent → Kokoro TTS. Local by default. Say "Hey XR, open Safari and check my calendar."
 
-**One-command container:**
-```bash
-docker compose up      # whole agent + dashboard, bound to 127.0.0.1 only
-```
+### 📱 Multi-Channel
+- **CLI** — full TUI with streaming + slash commands
+- **Telegram** — ✅/❌ approval buttons, user allow-list
+- **Dashboard** — 127.0.0.1:7842 with live audit, cost cockpit, security posture
 
-<br/>
+---
 
-## 🧰 Every command
+## 📋 Every Command
 
 | Command | What it does |
 |---|---|
-| `xr "task"` | Run a task (Agent mode) |
-| `xr --mode plan\|ask "task"` | Read-only modes (least-privilege) |
-| `xr --budget 0.50 "task"` | Hard **USD** spend ceiling for this task |
-| `xr --max-tokens 50000 "task"` | Hard **token** ceiling |
-| `xr --dry-run "task"` | Simulate everything — write nothing, run nothing |
-| `xr --provider <id> --model <m>` | Use any BYOK provider (Ollama, Groq, OpenAI, …) |
-| `xr serve` | 📊 Local dashboard on **127.0.0.1** (token-authed) |
-| `xr telegram` | 📱 Secure phone remote (allow-list + ✅/❌ buttons) |
-| `xr voice` | 🎙️ Local voice stack (Whisper → agent → Kokoro) |
-| `xr skills` | 📚 List the 11 pre-built signed skills |
-| `xr index` / `xr memory` | 🧠 Local RAG index + project memory |
-| `xr mcp` | 🔌 MCP tool ecosystem (approval + egress wrapped) |
-| `xr cron "every mon 9am: audit"` | ⏰ Natural-language scheduler |
-| `xr test --attacks [--json]` | 🔒 Injection benchmark (signed report with `--json`) |
-| `xr verify-log` | Verify the tamper-evident audit chain |
-| `xr export` | 📄 Write a signed, shareable audit report |
-| `xr doctor` | Full system health check |
+| `xr "task"` | Run a task (default: agent mode) |
+| `xr --tui` | Interactive terminal UI (Claude Code-style) |
+| `xr --onboard` | 5-minute setup wizard |
+| `xr --computer "task"` | JARVIS GUI automation |
+| `xr --mode plan "task"` | Read-only analysis |
+| `xr --mode ask "task"` | Q&A only |
+| `xr --budget 0.50 "task"` | Hard USD ceiling |
+| `xr --max-steps 30 "task"` | Max agent steps |
+| `xr --dry-run "task"` | Simulate — touch nothing |
+| `xr --provider groq "task"` | Use specific provider |
+| `xr doctor` | System health + audit chain |
+| `xr test --attacks` | Security benchmark (block-rate) |
+| `xr verify-log` | Verify tamper-evident chain |
+| `xr skills` | List available skills |
+| `xr index` | Index project for local RAG |
+| `xr memory` | Project memory + RAG status |
+| `xr cost` | Lifetime cost by model |
+| `xr serve` | Local dashboard (127.0.0.1:7842) |
+| `xr telegram` | Secure phone remote |
+| `xr voice` | Voice stack check |
+| `xr sandbox` | Docker sandbox status |
+| `xr export` | Signed audit report |
 
-<br/>
+**Slash commands (inside TUI):** `/ask`, `/plan`, `/mode`, `/model`, `/budget`, `/doctor`, `/attacks`, `/skills`, `/index`, `/memory`, `/cost`, `/verify-log`, `/export`, `/shell`, `/exit`, `/help`
+
+---
 
 ## 🏗️ Architecture
 
 ```
-                         ┌──────── INTERFACES ────────┐
-                         │  CLI · Dashboard · Telegram │
-                         │           · Voice           │
-                         └──────────────┬──────────────┘
-                                        │  (trusted user input)
-                          ┌─────────────▼─────────────┐
-                          │     AGENT CORE  (loop)     │
-                          │   Observe → Think → Act    │
-                          └───┬──────────┬─────────┬───┘
-            ┌─────────────────┘          │         └──────────────────┐
-   ┌────────▼────────┐      ┌────────────▼──────────┐     ┌───────────▼─────────┐
-   │  COST GOVERNOR  │      │     POLICY ENGINE      │     │  RELIABILITY HARNESS│
-   │ hard ceiling 💰 │      │ least-priv · approval  │     │ GBNF grammar 🖥️     │
-   └─────────────────┘      │ egress allow-list 🔒   │     │ auto-repair         │
-                            └───────────┬────────────┘     └─────────────────────┘
-                                        ▼
-                         ┌──────────────────────────────┐
-                         │   STATE (SQLite + files)       │
-                         │  memory · skills · cost        │
-                         │  TAMPER-EVIDENT AUDIT LOG 🛡️   │
-                         └────────────────────────────────┘
+┌──────── INTERFACES ────────────────────────────────────────┐
+│  CLI (TUI + streaming) · Dashboard · Telegram · Voice     │
+└──────────────────────┬────────────────────────────────────┘
+                       │
+┌──────────────────────▼────────────────────────────────────┐
+│ AGENT LOOP — Observe → Think → Act                        │
+│ • Cost Governor (hard ceiling, enforced before each step) │
+│ • Policy Engine (egress allow-list + approval gates)      │
+│ • GBNF Grammar (100% valid tool-calls on local models)    │
+│ • Auto-Repair (validation sandwich: grammar → repair → Z) │
+└──────┬───────────────────┬───────────────────┬─────────────┘
+       │                   │                   │
+  ┌────▼────┐        ┌────▼────┐        ┌────▼────┐
+  │ Tools   │        │ Memory  │        │ Skills  │
+  │ File    │        │ RAG     │        │ Auto-   │
+  │ Web     │        │ FTS5    │        │ learn   │
+  │ Shell   │        │ Cross-  │        │ Non-    │
+  │ System  │        │ session │        │ regress │
+  │ (JARVIS)│        │         │        │         │
+  └─────────┘        └─────────┘        └─────────┘
+                       │
+              ┌────────▼────────┐
+              │ STATE (SQLite)   │
+              │ Sessions        │
+              │ Tamper-evident  │
+              │   audit chain   │
+              │ Skills/baselines│
+              │ Cost events     │
+              │ Schedules       │
+              └─────────────────┘
 ```
 
-**Stack:** TypeScript (strict) · Bun runtime · SQLite (Drizzle-style raw) · **1 runtime dependency (`zod`)** · ~4,700 lines · 124 tests.
+**Stack:** TypeScript (strict) · Bun runtime · SQLite · **1 runtime dep (`zod`)** · ~6,000 lines · 124 tests
 
-<br/>
+---
 
-## 🔐 Security model (honest)
+## 🔐 Security Model (Honest)
 
-> ⚠️ **XR does not claim to be "unhackable."** Prompt injection is an unsolved class of vulnerability industry-wide — even Anthropic, OpenAI, and Google say so.
+> ⚠️ **XR does not claim to be "unhackable."** Prompt injection is unsolved industry-wide. What XR does is **minimize blast radius** and let you **measure it**.
 
-What XR **does** do is **minimize blast radius** with deterministic guardrails — and let you **prove it**:
+- **Egress allow-list** — agent can't reach a domain you didn't approve
+- **Approval gates** — write/delete/shell need explicit approval, fail-closed on timeout
+- **Docker sandbox** — shell runs in isolated container, dropped capabilities
+- **Secret redaction** — API keys redacted before audit log storage
+- **Path escape prevention** — every file tool rejects `../` escapes (tested)
+- **Tamper-evident chain** — SHA-256 hash chain, `xr verify-log` detects any change
+- **`xr test --attacks`** — publishes a reproducible block-rate you can verify
 
-- 🚪 **Egress allow-list** — the agent can't reach a domain you didn't approve (kills most exfiltration, incl. cloud metadata).
-- ✋ **Approval gates** — write/delete/shell/send require explicit approval (CLI / phone button / voice-confirm), **fail-closed on timeout**.
-- 🔑 **BYOK + keychain** — secrets never in config files; redacted from logs.
-- 🧱 **Least-privilege per mode** — Ask/Plan modes literally have no shell/write tools.
-- 🪪 **Tamper-evident audit** — SHA-256 hash-chained log; `xr verify-log` detects any change.
-- 🧪 **Provability** — `xr test --attacks` publishes a reproducible block-rate. We considered blockchain for tamper-proofing and chose **hash chains** instead: same guarantee, but **$0, offline, and private.**
+---
 
-**Honest caveat on "100% valid tool-calls":** the grammar guarantee applies to **llama.cpp / Ollama / vLLM** (GBNF) and to cloud providers via **native JSON mode**; everything else uses **deterministic auto-repair** (very high, not literally 100%).
+## 🛡️ Coming from OpenClaw?
 
-<br/>
+**135,000+ exposed instances. 138+ CVEs. 800+ malicious skills.**
 
-## 📂 Project structure:
+XR closes that attack surface by default — egress allow-list, 127.0.0.1-only, signed local skills, tamper-evident audit, hard spend ceiling, Docker sandbox shell. Switch in ~10 minutes.
+
+👉 **[Read the full Migration Guide →](MIGRATION.md)**
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# Install (one command, any OS)
+curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
+
+# Run a task on a LOCAL model ($0)
+bun run src/index.ts "list files and explain them"
+
+# With a cloud key (never stored by XR)
+GROQ_API_KEY=sk-... bun run src/index.ts "build me a portfolio website"
+
+# Hard budget ceiling
+bun run src/index.ts --budget 0.25 "write me a full REST API"
+
+# Interactive TUI (Claude Code-style)
+bun run src/index.ts --tui
+
+# JARVIS computer control
+bun run src/index.ts --computer "open Safari and search for flights"
+
+# One-command Docker (everything included)
+docker compose up
+```
+
+**Add shell alias:**
+```bash
+echo "alias xr='bun run $(pwd)/src/index.ts'" >> ~/.bashrc
+source ~/.bashrc
+# Now just type: xr "your task"
+```
+
+---
+
+## 🧰 System Requirements
+
+- **OS:** Linux, macOS, Windows (PowerShell/Git Bash), Android (Termux)
+- **Runtime:** Bun 1.0+ (or npm as fallback)
+- **LLM:** Ollama (local, free) or any OpenAI-compatible API key
+- **RAM:** 4GB minimum (8GB recommended for local models)
+- **Storage:** ~100MB for XR + whatever your model needs
+
+---
+
+## 📂 Project Structure
 
 ```
 xr/
 ├── src/
-│   ├── core/          # agent loop (Observe→Think→Act) + shared types
-│   ├── config/        # self-healing, schema-validated config
-│   ├── state/         # SQLite + tamper-evident hash-chained audit log
-│   ├── providers/     # BYOK adapter + factory (Ollama/Groq/OpenAI/…)
-│   ├── cost/          # 💰 governor · pricing · estimator
-│   ├── reliability/   # 🖥️ GBNF grammar · auto-repair · model profiles
-│   ├── skills/        # 🧠 verifier · non-regressive engine · loader
-│   ├── memory/        # 📚 embeddings · local RAG · context compaction
-│   ├── security/      # 🔒 attack corpus · guard · injection lab
-│   ├── update/        # 🛡️ self-healing transactional updates
-│   ├── tools/         # read/write/shell/web — egress + approval gated
-│   ├── daemon/        # 📊 localhost dashboard (server + UI)
-│   ├── telegram/      # 📱 auth · commands · render · bot
-│   ├── voice/         # 🎙️ stt · tts · wake · pipeline
-│   ├── mcp/           # 🔌 MCP client (untrusted tools, safely wrapped)
-│   ├── automation/    # ⏰ cron scheduler · webhooks
-│   ├── export/        # 📄 signed audit report
-│   ├── i18n/          # 🌍 EN · Urdu · Arabic · Spanish (RTL-aware)
-│   └── index.ts       # ⭐ CLI entry — parses & dispatches all commands
-├── skills/            # 11 pre-built signed markdown skills
-├── extensions/vscode/ # status-bar cost + security meter
-├── test/              # 14 files · 124 tests · 294 assertions
-├── Dockerfile · docker-compose.yml · .github/workflows/ci.yml
-└── MIGRATION.md       # 🛡️ OpenClaw → XR migration guide
+│   ├── index.ts              # CLI entry point
+│   ├── core/                 # Agent loop, types
+│   │   ├── agent.ts          # Observe → Think → Act loop
+│   │   └── types.ts          # Shared TypeScript types
+│   ├── config/               # Zod-validated config with migrations
+│   ├── cost/                 # Cost Governor + pricing table
+│   ├── security/             # Guard, injection corpus, test lab
+│   │   ├── guard.ts          # Deterministic policy engine
+│   │   ├── attacks.ts        # 10-attack injection corpus
+│   │   └── lab.ts            # Publishable block-rate reporter
+│   ├── tools/                # All tool implementations
+│   │   ├── files.ts          # read/write with path safety
+│   │   ├── system.ts         # Shell (sandboxed + approval)
+│   │   ├── web.ts            # Fetch/search (egress-gated)
+│   │   └── egress.ts         # URL allow-list gate
+│   ├── computer/             # JARVIS computer control
+│   │   ├── index.ts          # Screenshot → action loop
+│   │   ├── system-control.ts # Cross-platform OS tools
+│   │   └── sandbox.ts        # Docker container isolation
+│   ├── voice/                # STT + TTS + wake word
+│   │   ├── stt.ts            # Whisper (local or cloud)
+│   │   └── tts.ts            # Kokoro (local or cloud)
+│   ├── memory/               # RAG + FTS5 cross-session memory
+│   │   ├── rag.ts            # Local RAG index
+│   │   ├── embed.ts          # Ollama embeddings + lexical fallback
+│   │   └── compact.ts        # Context window management
+│   ├── skills/               # Non-regressive skills
+│   │   ├── loader.ts         # Markdown SOP loader
+│   │   ├── engine.ts         # Freezing + regression guard
+│   │   ├── verifier.ts       # Objective verifiers
+│   │   └── autolearn.ts      # Hermes-style auto-learning
+│   ├── state/                # SQLite state + audit chain
+│   │   └── db.ts             # Sessions, audit log, cost events
+│   ├── providers/            # LLM provider abstraction
+│   ├── reliability/          # GBNF grammar + auto-repair
+│   ├── daemon/               # Local dashboard (127.0.0.1:7842)
+│   ├── telegram/             # Secure phone remote
+│   ├── automation/           # Cron scheduler (natural language)
+│   ├── export/               # Signed audit reports
+│   ├── update/               # Self-healing updates
+│   ├── interfaces/           # CLI UI + onboarding wizard
+│   └── mcp/                  # MCP tool ecosystem
+├── skills/                   # Pre-built signed skills (markdown SOPs)
+├── test/                     # 124 passing tests
+├── docs/                     # Planning + research docs
+├── install.sh                # One-command Linux/macOS installer
+├── install.ps1               # One-command Windows installer
+├── Dockerfile                # Single-container deploy
+└── docker-compose.yml        # One-command full stack
 ```
 
-<br/>
+---
 
-## 🗺️ Roadmap & status
+## 🛠️ Development
 
-**Feature-complete (Blocks 0–9):**
+```bash
+git clone https://github.com/ahmadrrrtx/xr
+cd xr && bun install
+bun test            # 124 tests
+bun run src/index.ts doctor   # System health
+bun run src/index.ts --tui    # Interactive UI
+```
 
-`✅ Engine` `✅ Cost Governor` `✅ Local Reliability` `✅ Non-Regressive Skills` `✅ Memory/RAG` `✅ Dashboard` `✅ Telegram` `✅ Voice` `✅ MCP + Cron + Webhooks` `✅ Docker/i18n/Export/CI`
+---
 
-**Next:** open-source the attack bench · third-party audit · launch (r/netsec → r/LocalLLaMA → Dev.to → Show HN).
+## ⚠️ Honest Limitations
 
-<br/>
+- **Prompt injection**: unsolved industry-wide. XR minimizes blast radius, publishes a block-rate, but cannot claim immunity
+- **Local models**: weak models (<3B params) may produce invalid tool calls without GBNF grammar (use Ollama with grammar mode)
+- **Voice**: requires Whisper server (local or cloud) and optional TTS server
+- **Computer use**: requires a screenshot tool (`screencapture` on macOS, `scrot`/`gnome-screenshot` on Linux, .NET on Windows)
 
-## 📜 License
+---
 
-MIT © [Muhammad Ahmad (**@ahmadrrrtx**)](https://github.com/ahmadrrrtx)
+## 📄 License
 
-<div align="center">
-<br/>
+MIT — by [Muhammad Ahmad (@ahmadrrrtx)](https://github.com/ahmadrrrtx)
 
-**If OpenClaw made your security team nervous, XR is the migration.**
-
-[![by rrrtx](https://img.shields.io/badge/%E2%9A%A1_built_by-rrrtx-000000?style=for-the-badge&labelColor=00d2ff)](https://github.com/ahmadrrrtx)
-
-<sub>your keys · your model · your rules</sub>
-
-</div>
+**Use XR. Trust it. Improve it.**
