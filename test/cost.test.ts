@@ -42,9 +42,10 @@ test("local (ollama) pricing is free", () => {
   expect(p.outPerMTok).toBe(0);
 });
 
-test("groq 70b has nonzero pricing", () => {
+test("groq 70b is free tier", () => {
   const p = priceFor("groq", "llama-3.3-70b");
-  expect(p.outPerMTok).toBeGreaterThan(0);
+  expect(p.inPerMTok).toBe(0);
+  expect(p.outPerMTok).toBe(0);
 });
 
 test("AGENT LOOP: a tiny token ceiling stops the run (the headline guarantee)", async () => {
