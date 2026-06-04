@@ -2,13 +2,17 @@
  * XR — config loader.
  * Schema-validated, versioned, self-healing: never crashes on bad config.
  * (TRD §3.4 / "Never Breaks" doctrine rule #6.)
+ * 
+ * Now with FULL provider support: Ollama, Groq, Google Gemini, DeepSeek,
+ * Together, OpenRouter, Cerebras, Mistral, OpenAI, Anthropic Claude,
+ * Cohere, and AWS Bedrock.
  */
 import { z } from "zod";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
-export const CONFIG_VERSION = 1;
+export const CONFIG_VERSION = 2; // Bumped for provider additions
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -27,7 +31,9 @@ const ConfigSchema = z.object({
     .default({}),
   security: z
     .object({
-      egressAllowlist: z.array(z.string()).default([]),
+      // Sensible defaults so web tools work out-of-the-box without leaving a hole.
+      // Users can tighten this to their own allow-list in config.json.
+      egressAllowlist: z.array(z.string()).default(["searx.be", "api.github.com", "registry.npmjs.org", "pypi.org", "crates.io"]),
       requireApproval: z
         .array(z.string())
         .default(["write_file", "delete", "shell", "send"]),
@@ -35,10 +41,23 @@ const ConfigSchema = z.object({
     .default({}),
   providers: z
     .object({
-      // provider id -> { baseUrl, keyEnv }
+      // OpenAI-compatible provider overrides
       ollama: z
         .object({ baseUrl: z.string().default("http://localhost:11434/v1") })
         .default({}),
+      groq: z
+        .object({ baseUrl: z.string().default("https://api.groq.com/openai/v1") })
+        .default({}),
+      together: z
+        .object({ baseUrl: z.string().default("https://api.together.xyz/v1") })
+        .default({}),
+      openrouter: z
+        .object({ baseUrl: z.string().default("https://openrouter.ai/api/v1") })
+        .default({}),
+      deepseek: z
+        .object({ baseUrl: z.string().default("https://api.deepseek.com/v1") })
+        .default({}),
+      // Native providers don't need baseUrl (use their own API endpoints)
     })
     .passthrough()
     .default({}),
@@ -59,6 +78,8 @@ const ConfigSchema = z.object({
       events: z.array(z.string()).default(["task.done", "security", "budget.pause"]),
     })
     .default({}),
+  // Auto-select free provider when available
+  preferFreeProviders: z.boolean().default(true),
 });
 
 export type XRConfig = z.infer<typeof ConfigSchema>;
@@ -72,8 +93,14 @@ function ensureHome(): void {
 
 /** Ordered migrations: key = from-version, transforms raw object. */
 const MIGRATIONS: Record<number, (raw: any) => any> = {
-  // 0 -> 1: example placeholder for future use
+  // 0 -> 1: example placeholder
   0: (raw) => ({ ...raw, version: 1 }),
+  // 1 -> 2: add provider-specific settings, preferFreeProviders
+  1: (raw) => ({
+    ...raw,
+    version: 2,
+    preferFreeProviders: raw.preferFreeProviders ?? true,
+  }),
 };
 
 function migrate(raw: any): any {
@@ -128,4 +155,29 @@ export function loadConfig(): { config: XRConfig; warnings: string[] } {
 
 export function configPath(): string {
   return CONFIG_PATH;
+}
+
+/** Get environment status for all known providers */
+export function getProviderEnvStatus(): Array<{ id: string; label: string; hasKey: boolean; tier: string }> {
+  const providers = [
+    { id: "ollama", label: "Ollama (Local)", keyEnv: null, tier: "free" },
+    { id: "groq", label: "Groq", keyEnv: "GROQ_API_KEY", tier: "free" },
+    { id: "google", label: "Google Gemini", keyEnv: "GOOGLE_API_KEY", tier: "free" },
+    { id: "deepseek", label: "DeepSeek", keyEnv: "DEEPSEEK_API_KEY", tier: "free" },
+    { id: "anthropic", label: "Anthropic Claude", keyEnv: "ANTHROPIC_API_KEY", tier: "premium" },
+    { id: "openai", label: "OpenAI (GPT)", keyEnv: "OPENAI_API_KEY", tier: "premium" },
+    { id: "mistral", label: "Mistral AI", keyEnv: "MISTRAL_API_KEY", tier: "cheap" },
+    { id: "cohere", label: "Cohere", keyEnv: "COHERE_API_KEY", tier: "premium" },
+    { id: "together", label: "Together AI", keyEnv: "TOGETHER_API_KEY", tier: "cheap" },
+    { id: "openrouter", label: "OpenRouter", keyEnv: "OPENROUTER_API_KEY", tier: "cheap" },
+    { id: "cerebras", label: "Cerebras", keyEnv: "CEREBRAS_API_KEY", tier: "cheap" },
+    { id: "bedrock", label: "AWS Bedrock", keyEnv: "AWS_ACCESS_KEY_ID", tier: "premium" },
+  ];
+
+  return providers.map(p => ({
+    id: p.id,
+    label: p.label,
+    hasKey: p.keyEnv ? Boolean(process.env[p.keyEnv]) : false, // Ollama doesn't need a key
+    tier: p.tier,
+  }));
 }
