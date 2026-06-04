@@ -1,5 +1,5 @@
 /**
- * XR — Computer Use: JARVIS-Level OS Control
+ * XR — Computer Use: yJARVIS-Level OS Control
  * 
  * Implements the observe → reason → act loop for full GUI automation.
  * This is what makes XR truly Jarvis-like: it can see your screen,
