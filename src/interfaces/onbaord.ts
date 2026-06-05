@@ -1,180 +1,173 @@
 /**
- * XR — Professional Onboarding Experience
- * 
- * Secure, hardware-aware, and user-friendly.
+ * XR v0.5 — Local-first onboarding.
+ *
+ * Configures local-only, BYOK cloud, or hybrid mode with deterministic local
+ * model recommendation and optional Ollama model download.
  */
+import { mkdirSync } from "node:fs";
+import { loadConfig, XR_HOME, configPath, saveConfig } from "../config/config.ts";
+import { knownProviders, PRESETS } from "../providers/factory.ts";
+import { banner, info, ok, warn, ask, confirm, password, colors as C } from "./cli.ts";
+import { detectHardwareSpecs, formatHardwareSummary } from "../local/hardware.ts";
+import { recommendLocalModel } from "../local/recommend.ts";
+import { ollamaStatus, pullOllamaModel, testOllamaModel } from "../local/ollama.ts";
+import { setSecret, preferredSecretBackend } from "../security/secrets.ts";
 
-import { existsSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
-import { totalmem, platform } from "node:os";
-import { join } from "node:path";
-import { spawnSync } from "node:child_process";
-import { loadConfig, XR_HOME, configPath } from "../config/config.ts";
-import { knownProviders } from "../providers/factory.ts";
-import { isLocal } from "../cost/pricing.ts";
-import { 
-  banner, info, ok, warn, ask, confirm, password, colors as C 
-} from "./cli.ts";
-
-/**
- * Detect hardware and environment
- */
-async function detectEnvironment() {
-  const os = platform();
-  const ramGb = Math.floor(totalmem() / (1024 * 1024 * 1024));
-  
-  const ollamaRunning = await (async () => {
-    try {
-      const res = await fetch("http://localhost:11434/api/tags");
-      return res.ok;
-    } catch {
-      return false;
-    }
-  })();
-
-  return { os, ramGb, ollamaRunning };
+function defaultCloudModel(provider: string): string {
+  return PRESETS[provider]?.defaultModel ?? "gpt-4o-mini";
 }
 
-/**
- * Recommend a model based on RAM
- */
-function recommendLocalModel(ramGb: number): string {
-  if (ramGb >= 32) return "qwen2.5:32b";
-  if (ramGb >= 16) return "qwen2.5:14b";
-  if (ramGb >= 8) return "qwen2.5:7b";
-  return "qwen2.5:3b";
-}
+async function configureLocal(downloadPrompt = true): Promise<{ model: string; reason: string; installed: boolean }> {
+  info("  Inspecting this machine for local model support...");
+  const specs = detectHardwareSpecs();
+  const rec = recommendLocalModel(specs);
+  const status = await ollamaStatus(rec.model.id);
 
-/**
- * Pull a model via Ollama
- */
-function pullModel(model: string) {
-  console.log(`\n  ${C.cyan("Downloading " + model + "...")}`);
-  console.log(`  ${C.dim("This may take a few minutes depending on your internet speed.")}`);
-  
-  const result = spawnSync("ollama", ["pull", model], { stdio: "inherit" });
-  
-  if (result.status === 0) {
-    ok(`  Model ${model} is ready.`);
-    return true;
-  } else {
-    warn(`  Failed to download model. You can run 'ollama pull ${model}' manually later.`);
-    return false;
+  console.log(`  Hardware: ${C.dim(formatHardwareSummary(specs))}`);
+  console.log(`  Recommended: ${C.green(rec.model.id)} ${C.dim(`(${rec.model.label})`)}`);
+  console.log(`  Requirements: ${C.dim(`${rec.model.minRamGb}GB RAM min / ${rec.model.recommendedRamGb}GB recommended, ~${rec.model.estimatedDiskGb}GB disk`)}`);
+  console.log(`  Why: ${C.dim(rec.reason)}`);
+
+  let model = rec.model.id;
+  if (!await confirm(`  Use ${model} as your local model?`, true)) {
+    model = await ask("  Enter Ollama model id", { default: model });
   }
+
+  let installed = status.models.includes(model);
+  if (!status.installed) {
+    warn("  Ollama is not installed. XR will not run installer scripts automatically.");
+    console.log(`  Install it from ${C.cyan("https://ollama.com")}, then run ${C.cyan("xr models install")}.`);
+  } else if (!status.running) {
+    warn("  Ollama CLI exists, but the local server is not running.");
+    console.log(`  Start it with ${C.cyan("ollama serve")}, then run ${C.cyan("xr models install")}.`);
+  } else if (!installed && downloadPrompt && await confirm(`  Download ${model} now with 'ollama pull'?`, true)) {
+    installed = await pullOllamaModel(model);
+    if (!installed) warn(`  Could not download ${model}. You can retry later with 'xr models install ${model}'.`);
+  } else if (installed) {
+    ok(`  ${model} is already downloaded.`);
+  }
+
+  if (installed && await confirm("  Test the local model now?", true)) {
+    const res = await testOllamaModel(model);
+    if (res.ok) ok(`  Local model responded in ${res.latencyMs}ms.`);
+    else warn(`  Local model test failed: ${res.detail}`);
+  }
+
+  return { model, reason: rec.reason, installed };
 }
 
-/**
- * Main Onboarding Flow
- */
+/** Main Onboarding Flow */
 export async function runOnboarding(): Promise<void> {
   banner();
-  console.log(`  ${C.bold("Welcome to XR.")} Let's get your AI operating system ready.`);
-  console.log(`  This wizard will configure your providers, security, and models.\n`);
+  console.log(`  ${C.bold("Welcome to XR v0.5.")} Let's configure local-first intelligence.\n`);
 
-  const env = await detectEnvironment();
-  
-  // 1. Choose Mode
   console.log(`${C.bold("Step 1: Choose your Operating Mode")}`);
-  console.log(`  [1] ${C.bold("Local-only")} (Private, free, uses your hardware)`);
-  console.log(`  [2] ${C.bold("BYOK")} (Cloud-scale, bring your own API keys)`);
-  console.log(`  [3] ${C.bold("Hybrid")} (Recommended: Local for simple tasks, Cloud for complex ones)`);
-  
+  console.log(`  [1] ${C.bold("Local-only")}  private, free, no cloud API keys required`);
+  console.log(`  [2] ${C.bold("BYOK cloud")}  use your provider keys, local optional`);
+  console.log(`  [3] ${C.bold("Hybrid")}      cloud when configured, local fallback when needed`);
+
   const modeChoice = await ask("  Select mode", { default: "3" });
-  const isHybrid = modeChoice === "3";
   const isLocalOnly = modeChoice === "1";
-  const isBYOK = modeChoice === "2" || isHybrid;
+  const isCloudOnly = modeChoice === "2";
+  const isHybrid = !isLocalOnly && !isCloudOnly;
 
   let providerId = "ollama";
   let model = "qwen2.5:7b";
-  const apiKeys: Record<string, string> = {};
+  let localModel = "qwen2.5:7b";
+  let localReason = "Default local model.";
+  let localEnabled = false;
 
-  // 2. Configure Providers
-  console.log(`\n${C.bold("Step 2: Provider Configuration")}`);
-
-  if (isLocalOnly || isHybrid) {
-    info(`  Detecting local environment...`);
-    if (env.ollamaRunning) {
-      ok(`  Ollama is running on this machine.`);
-    } else {
-      warn(`  Ollama is not detected. XR uses Ollama for local models.`);
-      console.log(`  Please install it first: ${C.cyan("https://ollama.ai")}`);
-    }
-    
-    const recModel = recommendLocalModel(env.ramGb);
-    console.log(`  Recommended model for your ${env.ramGb}GB RAM: ${C.green(recModel)}`);
-    
-    if (await confirm(`  Would you like to use ${recModel} as your local default?`, true)) {
-      model = recModel;
+  console.log(`\n${C.bold("Step 2: Local Model")}`);
+  if (isLocalOnly || isHybrid || await confirm("  Configure a local fallback model too?", true)) {
+    const local = await configureLocal(true);
+    localModel = local.model;
+    localReason = local.reason;
+    localEnabled = true;
+    if (isLocalOnly) {
       providerId = "ollama";
-      
-      if (env.ollamaRunning && await confirm(`  Download ${model} now?`, true)) {
-        pullModel(model);
-      }
+      model = localModel;
     }
   }
 
-  if (isBYOK) {
-    console.log(`\n  Select cloud providers to enable (e.g., anthropic, openai):`);
-    const selectedProviders = await ask("  Providers", { default: isHybrid ? "anthropic" : "openai" });
-    
-    for (const p of selectedProviders.split(",").map(s => s.trim())) {
-      if (knownProviders().includes(p)) {
-        const key = await password(`  Enter API key for ${C.bold(p)}:`);
-        if (key) {
-          apiKeys[p] = key;
-          // Set as default if BYOK only
-          if (!isLocalOnly && !isHybrid) {
-            providerId = p;
-            model = p === "anthropic" ? "claude-3-5-sonnet-latest" : "gpt-4o";
-          }
+  console.log(`\n${C.bold("Step 3: Cloud Providers (BYOK)")}`);
+  const apiKeys: Record<string, string> = {};
+  if (!isLocalOnly) {
+    console.log(`  Supported: ${knownProviders().filter((p) => p !== "ollama").join(", ")}`);
+    const selectedProviders = await ask("  Providers to configure (comma-separated, blank to skip)", { default: isHybrid ? "" : "openai" });
+
+    for (const p of selectedProviders.split(",").map((s) => s.trim()).filter(Boolean)) {
+      if (!knownProviders().includes(p) || p === "ollama") {
+        warn(`  Unknown or non-cloud provider skipped: ${p}`);
+        continue;
+      }
+      const preset = PRESETS[p];
+      if (!preset.apiKeyEnv) continue;
+      const key = await password(`  Enter API key for ${C.bold(p)}:`);
+      if (key) {
+        apiKeys[preset.apiKeyEnv] = key;
+        if (providerId === "ollama" && !isLocalOnly) {
+          providerId = p;
+          model = defaultCloudModel(p);
         }
       }
     }
+
+    if (!Object.keys(apiKeys).length && !localEnabled) {
+      warn("  No cloud keys and no local model were configured. XR will default to local Ollama.");
+      providerId = "ollama";
+      model = localModel;
+      localEnabled = true;
+    }
+  } else {
+    console.log(`  ${C.dim("Skipped. Local-only mode needs no API keys.")}`);
   }
 
-  // 3. Spend Caps
-  console.log(`\n${C.bold("Step 3: Security & Budget")}`);
-  const spendCap = await ask("  Set a hard spend cap per task in USD", { default: "0.25" });
-  const approvalMode = await confirm("  Require manual approval for all file writes?", true);
+  console.log(`\n${C.bold("Step 4: Security & Budget")}`);
+  const spendCap = await ask("  Hard spend cap per cloud task in USD", { default: isLocalOnly ? "0" : "0.25" });
+  const approvalMode = await confirm("  Require manual approval for file writes/shell/send?", true);
 
-  // 4. Save Config
-  info(`\n  Finalizing configuration...`);
-  
-  if (!existsSync(XR_HOME)) mkdirSync(XR_HOME, { recursive: true });
+  info(`\n  Saving configuration...`);
+  mkdirSync(XR_HOME, { recursive: true });
 
   const { config } = loadConfig();
   config.defaults.provider = providerId;
   config.defaults.model = model;
-  config.budget.perTaskUsd = parseFloat(spendCap);
-  config.security.requireApproval = approvalMode 
-    ? ["write_file", "delete", "shell", "send"] 
-    : ["delete", "shell", "send"];
+  config.budget.perTaskUsd = Number.isFinite(parseFloat(spendCap)) ? parseFloat(spendCap) : 0.25;
+  config.security.requireApproval = approvalMode ? ["write_file", "delete", "shell", "send"] : ["delete", "shell", "send"];
 
-  // Secure Key Storage Fallback
-  const envPath = join(XR_HOME, ".env");
-  let envContent = "";
-  for (const [p, key] of Object.entries(apiKeys)) {
-    const envVar = p.toUpperCase() + "_API_KEY";
-    envContent += `${envVar}=${key}\n`;
-    process.env[envVar] = key;
-  }
-  
-  if (envContent) {
-    writeFileSync(envPath, envContent);
-    try {
-      chmodSync(envPath, 0o600); // User read/write only
-      ok(`  API keys stored securely in ${C.dim(envPath)} (chmod 600)`);
-    } catch {
-      warn(`  Stored keys in ${C.dim(envPath)}. Please ensure this file is protected.`);
-    }
+  config.localModels.enabled = localEnabled;
+  config.localModels.runtime = "ollama";
+  config.localModels.selected = localModel;
+  config.localModels.recommended = localModel;
+  config.localModels.recommendationReason = localReason;
+  config.localModels.routing = isLocalOnly ? "local-only" : localEnabled ? (isHybrid ? "hybrid" : "cloud-first") : "cloud-first";
+
+  if (isLocalOnly) {
+    config.defaults.fallbackProvider = undefined;
+    config.defaults.fallbackModel = undefined;
+  } else if (localEnabled) {
+    config.defaults.fallbackProvider = "ollama";
+    config.defaults.fallbackModel = localModel;
   }
 
-  writeFileSync(configPath(), JSON.stringify(config, null, 2));
+  let secretBackend = preferredSecretBackend();
+  for (const [envName, key] of Object.entries(apiKeys)) {
+    secretBackend = setSecret(envName, key);
+    process.env[envName] = key;
+  }
+  if (Object.keys(apiKeys).length) {
+    if (secretBackend === "file") warn(`  Secure OS secret store not available; keys saved to ${XR_HOME}/.env with chmod 600.`);
+    else ok(`  API keys saved in ${secretBackend}.`);
+  }
 
-  // 5. Ready
+  saveConfig(config);
+
   console.log(`\n  ${C.green(C.bold("✓ Setup Complete!"))}`);
-  console.log(`  XR is now configured to use ${C.bold(providerId)} with ${C.bold(model)}.`);
+  console.log(`  Primary: ${C.bold(config.defaults.provider)} / ${C.bold(config.defaults.model)}`);
+  if (config.defaults.fallbackProvider) console.log(`  Fallback: ${C.bold(config.defaults.fallbackProvider)} / ${C.bold(config.defaults.fallbackModel ?? localModel)}`);
   console.log(`\n  ${C.bold("Next steps:")}`);
-  console.log(`  - Run ${C.cyan('xr "hello"')} to test your setup.`);
-  console.log(`  - Run ${C.cyan('xr doctor')} to check system health.`);
+  console.log(`  - ${C.cyan("xr models")} to see local model health.`);
+  console.log(`  - ${C.cyan("xr doctor")} to verify providers and local runtime.`);
+  console.log(`  - ${C.cyan('xr "hello"')} to test your setup.`);
   console.log(`\n  ${C.dim("Config saved to: " + configPath())}\n`);
 }
