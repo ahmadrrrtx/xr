@@ -272,7 +272,7 @@ function execKey(keys: string[]): ActionResult {
 
 // ── Public entry point ─────────────────────────────────────────────────────
 
-export function execute(action: Action): ActionResult {
+export async function execute(action: Action): Promise<ActionResult> {
   try {
     switch (action.type) {
       case "app":    return execApp(action.name);
@@ -287,6 +287,11 @@ export function execute(action: Action): ActionResult {
       case "click":  return execClick(action.x, action.y, action.button);
       case "scroll": return execScroll(action.direction, action.amount);
       case "key":    return execKey(action.keys);
+      case "browser": {
+        // Lazy-imported so this file works even when playwright isn't installed.
+        const { executeBrowserAction } = await import("./browser.ts");
+        return await executeBrowserAction(action);
+      }
     }
   } catch (e) {
     return fail(`executor crashed: ${(e as Error).message}`);
