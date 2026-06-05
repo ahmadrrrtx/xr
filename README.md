@@ -2,14 +2,15 @@
 
 # ⚡ XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `local model intelligence` · `spend-capped` · `tamper-evident`**
+**`BYOK` · `local-first` · `local model intelligence` · `spend-capped` · `tamper-evident` · `safe computer control` · `multi-step planner` · `plan memory`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![Tests](https://img.shields.io/badge/tests-124%20passing-34e2a0?style=flat-square)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/tests-165%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
+[![Version](https://img.shields.io/badge/version-v0.8.2-22e0ff?style=flat-square)](#)
 
 ---
 
@@ -21,538 +22,598 @@
 ## 🚀 Install in 30 Seconds
 
 ```bash
-# One command. Any OS. That's it.
+# Linux / macOS / Termux
 curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
 ```
 
-Windows PowerShell:
 ```powershell
+# Windows
 iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 ```
 
-Then just type:
 ```bash
-xr "hello, who are you"
-```
-
-Local-first setup:
-```bash
-xr onboarding          # choose Local-only or Hybrid
-xr models recommend    # inspect hardware and pick a model
-xr models install      # download the recommended Ollama model
-xr models test         # smoke-test local inference
-```
-
-Or run the interactive onboarding:
-```bash
+# First-time setup wizard (picks provider, model, budget)
 xr onboarding
+```
+
+After install:
+
+```bash
+xr "build me a hello-world TypeScript project with tests"
+xr doctor                         # check everything is healthy
+xr serve                          # open the local dashboard at 127.0.0.1:7842
 ```
 
 ---
 
 ## ✨ What Makes XR Different
 
-| Feature | XR | Claude Code | OpenClaw | Hermes |
-|---|---|---|---|---|
-| **One-command install** | ✅ `curl\|bash` | ✅ | ✅ | ✅ |
-| **Full TUI (slash commands, history)** | ✅ | ✅ | ⚠️ | ✅ |
-| **JARVIS computer control (screenshots)** | ✅ | ❌ | ❌ | ❌ |
-| **System control (volume, clipboard, apps)** | ✅ | ❌ | ⚠️ | ⚠️ |
-| **Hard spend ceiling (code-enforced)** | ✅ | ❌ | ❌ | ❌ |
-| **Tamper-evident audit log (SHA-256 chain)** | ✅ | ❌ | ❌ | ❌ |
-| **Injection benchmark (runnable block-rate)** | ✅ | ❌ | ❌ | ❌ |
-| **Egress allow-list (anti-exfil)** | ✅ | ❌ | ❌ | ⚠️ |
-| **Non-regressive skills (auto-rollback)** | ✅ | ❌ | ❌ | ✅ |
-| **Self-improving (learns from experience)** | ✅ | ❌ | ❌ | ✅ |
-| **Docker sandbox for shell commands** | ✅ | ❌ | ⚠️ | ✅ |
-| **Voice control (wake word → STT → TTS)** | ✅ | ❌ | ✅ | ✅ |
-| **BYOK + $0 to run** | ✅ | ❌ | ⚠️ | ✅ |
-| **Cross-platform (Win/Mac/Linux/Termux)** | ✅ | ✅ | ✅ | ✅ |
+| | Most AI agents | **XR** |
+|---|---|---|
+| **Provider** | locked to vendor | BYOK — any of 12+ providers, or **fully local** via Ollama |
+| **Cost** | "soft" warnings | **hard ceiling enforced in code** (`checkBeforeStep()`) |
+| **Security** | trust us | **deterministic injection benchmark**, signed block-rate report |
+| **Audit** | scrollback only | **SHA-256 hash chain** — tamper-evident, offline, free |
+| **Computer Control** | wild west | **safe-by-construction** — classify → preview → approve → audit |
+| **Multi-step planner** | hidden prompts | **typed Action[] schema** validated with Zod, every step previewed |
+| **Browser automation** | none / hardcoded | **Playwright backend** — DOM selectors, opt-in, lazy-loaded |
+| **Plan memory** | none | **cached deterministic plans** — second run skips the LLM |
+| **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, no telemetry |
+| **Voice** | cloud STT | **local Whisper + Kokoro** by default, push-to-talk |
 
 ---
 
 ## 🎯 Core Features
 
-
-### 🧠 Local Model Intelligence (v0.5)
-```bash
-xr models recommend      # detect RAM/VRAM/CPU/disk and explain the recommendation
-xr models install        # pull the recommended Ollama model and save it
-xr models set qwen2.5:7b # choose local-only / hybrid / cloud-first routing
-xr models test           # verify Ollama + selected model respond
-```
-XR now detects your hardware, recommends a practical Ollama model, optionally downloads it, saves the selected model in config, and uses it as the default or deterministic cloud fallback. Local-only mode works with no API keys. Hybrid/cloud-first mode can use cloud providers when configured and fall back to local when the primary provider fails.
-
-### 🔬 Research Mode (v0.7)
-```bash
-xr research "best budget laptops for software development"   # quick
-xr research deep "compare Ollama vs cloud providers"          # deeper
-xr research plan "is RISC-V ready for laptops?"               # plan only
-xr research export                                            # → signed markdown report
-```
-XR's research mode is **source-first, not answer-first**. It builds a research plan,
-searches the web (egress-gated), ranks and de-duplicates sources by a transparent
-trust heuristic, fetches the top pages, extracts citation-tied evidence notes, detects
-contradictions, and synthesizes a structured report — **short answer + executive summary
-+ full report + open questions + sources table**.
-
-It will **never fabricate a source or fake certainty**:
-- Every note is tied to a source id (`[s1]`) and tagged `fact` / `inference` / `opinion`.
-- A note is only marked **verified** when XR actually fetched the page — snippet-only
-  notes are flagged `unverified` and their confidence is downgraded.
-- If search is unavailable, XR says so and refuses to invent an answer.
-- Research uses the **same provider routing, local fallback, and spend caps** as the rest
-  of XR — token/$ spend is always shown, never silent. Reports are SHA-256 signed.
-
-`quick` = fewer sources / faster · `deep` = more sources / richer synthesis. Reports are
-saved to `~/.xr/research/` as markdown + a machine-readable JSON sidecar. Voice/chat flows
-auto-route to research when you say *"research…", "investigate…", "compare…"*.
-
-> Requires a search host (default SearXNG `searx.be`) to be on your egress allow-list.
-> `xr doctor` reports research health. Set `XR_SEARXNG` to use your own instance.
-
-### 🧠 JARVIS-Level Computer Control
-```bash
-xr --computer "open Safari and search for AI agents"
-```
-XR sees your screen via screenshots, reasons about what's on it, and takes actions — click, type, scroll, open apps — just like you would. It's the difference between *asking* an agent to do something and *showing* it what to do.
-
-### 🖥 Safe Computer Control (v0.8)
-A deterministic, explicit automation layer for real workflows. Every action is **classified**, **previewed**, and **approved** before it runs — and the whole subsystem is **off by default**.
+### 🖥 Safe Computer Control (v0.8 + v0.8.1 + v0.8.2)
+The killer feature of XR — your AI can actually control the computer, and you can actually trust it.
 
 ```bash
-xr control start                              # opt-in, writes config.control.enabled = true
-xr control status                             # capabilities + missing deps
-xr control test                               # dry-run a representative plan (executes nothing)
-xr control app   "Visual Studio Code"         # launch an app
-xr control open  "https://github.com/ahmadrrrtx/xr"
-xr control type  "hello from xr"              # types into the focused window
-xr control click "640,480" --double
-xr control key   "cmd+tab"                    # any combo
-xr control scroll down 5
-xr control stop                               # hard-disable
+xr control start                              # opt-in (off by default)
+xr control plan "open github.com and search for ahmadrrrtx" --yes
 ```
 
-**Safety model**
+Four execution layers, all enforced in code:
+1. **Action schema** — every action is a typed, Zod-validated `Action` variant. Garbage cannot reach the OS.
+2. **Risk classifier** — pure function returns `safe | sensitive | destructive`. Single source of truth.
+3. **Approval gate** — safe runs immediately; sensitive prompts; destructive *always* prompts (even with `--yes`).
+4. **Hash-chained audit** — every plan, exec, denial, memory hit is appended to the tamper-evident log.
 
-- **Safe** actions (move/scroll/focus) run immediately.
-- **Sensitive** actions (open/type/click/key/app) prompt — `--yes` skips that prompt only for these.
-- **Destructive** actions (shell-like text, `Enter`, `Shift+Delete`, `file://`, executables, `javascript:`, sensitive=true) **always** prompt, even with `--yes`.
-- `--dry-run` previews a plan and executes nothing.
-- `--step` confirms every single action.
-- `XR_CONTROL_DISABLED=1` or `xr control stop` hard-disables the entire subsystem.
-- Every plan, execution, denial, and disable event is appended to the tamper-evident audit log. Sensitive text is redacted before storage.
+Approvals work from **both** the CLI prompt **and** the dashboard "Approve / Deny" buttons — whichever responds first wins.
 
-**Platform notes**
+### 🧭 Multi-Step Planner (v0.8.1)
+Type or speak a natural-language task; XR's planner LLM emits a validated `Action[]` plan. You preview it (dry-run default), then approve to execute.
 
-| OS | Built-in | Recommended install |
-|----|----------|---------------------|
-| macOS | `osascript`, `open` | `brew install cliclick` for mouse move/click |
-| Linux (X11) | — | `sudo apt install xdotool wmctrl xdg-utils` |
-| Windows | PowerShell (built-in) | — |
+```bash
+xr control plan "fill the contact form on example.com"               # dry-run
+xr control plan "fill the contact form on example.com" --step        # confirm each
+xr control plan "fill the contact form on example.com" --yes         # auto-approve sensitive
+```
 
-`xr doctor` reports computer-control health alongside the other systems.
+The planner cannot smuggle dangerous actions: every emitted action is re-classified before execution.
+
+### 🌐 Browser Automation (Playwright, v0.8.1)
+First-class browser variant in the Action schema. DOM selectors instead of brittle coordinates.
+
+```bash
+xr control browser status                   # check Playwright availability
+xr control browser install                  # one-shot: install + chromium (~150 MB)
+xr control browser close                    # close the session
+```
+
+Browser ops are inherently safer than desktop ops (selectors are deterministic). `submit`, sensitive `fill`, `javascript:` and executable `goto` targets are auto-classified destructive.
 
 ### 🧠 Plan Memory (v0.8.2)
-Successful computer-control plans get cached deterministically. The next time you run the same task, XR skips the LLM entirely — zero cost, instant response, same safety pipeline.
+Successful plans get cached deterministically. The next time you run the same task, XR skips the LLM entirely — zero cost, instant response, **same safety pipeline.**
 
 ```bash
-xr control plan "open github notifications" --yes  # first run: LLM plans
-xr control plan "open github notifications" --yes  # next run: ⚡ recalled from memory
+xr control plan "open github notifications" --yes   # first run: LLM plans (~$0.002)
+xr control plan "open github notifications" --yes   # next run: ⚡ recalled, $0.00
 xr control memory list                              # see what XR remembers
+xr control memory show "open github notifications"  # inspect actions
 xr control memory forget "open github notifications"
 xr control memory clear                             # forget everything
 ```
 
-**Safety gates** (refuses to memoize):
+**Hard safety gates** (refuses to memoize):
 - Plans with `sensitive: true` actions (passwords / secrets)
 - Plans with destructive actions (form submits, `Enter`, `file://`, executables)
-- Failed or partial runs (dry-run, denial, error)
+- Failed, dry-run, or partial runs
 - Plans longer than 20 actions
 
-Recalled plans are **re-validated and re-classified** on every hit — schema drift or newly-destructive actions silently invalidate the cache so the LLM plans fresh.
+**Recall re-validates everything**: cached actions are re-parsed against the current Zod schema and re-classified. Schema drift or newly-destructive actions silently invalidate the cache so the planner falls back to the LLM.
+
+### 🧠 Local Model Intelligence (v0.5)
+```bash
+xr models recommend         # auto-detects RAM/CPU → picks the right Ollama model
+xr models install            # one-click download
+xr models test               # smoke test
+```
+Hybrid routing: cloud for hard tasks, local for cheap ones, with automatic fallback when the budget is exhausted.
+
+### 🔬 Research Mode (v0.7)
+```bash
+xr research "compare Rust vs Go for embedded development"
+xr research deep "best self-hosted alternatives to Cloudflare Tunnel"
+xr research plan "topic"      # generate a structured research plan
+xr research export            # export latest report to markdown
+```
+Source-first, multi-search-engine, deduplicated, with inline citations.
+
+### 🤖 JARVIS-Level Vision Loop
+```bash
+xr --computer "open Safari and search for AI agents"
+```
+Vision-driven screenshot → LLM reasons → action loop. Different from `xr control` — this is for *open-ended* tasks where the planner doesn't know the steps in advance.
 
 ### 💰 Cost Governor — Enforced in Code
 ```bash
 xr --budget 0.10 "write me a full React app"
 ```
-The agent **literally cannot exceed your budget**. It's not a suggestion — `checkBeforeStep()` runs before every model call and blocks if the next step would breach the ceiling.
+The agent **literally cannot exceed your budget**. `checkBeforeStep()` runs before every model call and blocks if the next step would breach the ceiling.
 
 ### 🛡️ Provable Security
 ```bash
 xr test --attacks --json   # → signed publishable block-rate report
 ```
-Runs a 10-attack corpus through the deterministic defenses and prints a publishable block-rate with SHA-256 signature. No marketing — real numbers.
+Runs a deterministic prompt-injection attack corpus and prints the block-rate with SHA-256 signature.
 
 ### 🔒 Tamper-Evident Audit Log
 ```bash
 xr verify-log              # → "✓ Audit chain intact (N entries)"
 ```
-SHA-256 hash chain (git's trick, $0, offline, private). Any tampering is detected and reported. Redacts API keys before storage.
+SHA-256 hash chain (git's trick, $0, offline). Every control event, every tool call, every approval is in the chain. Any tampering is detected.
 
 ### 🧠 Non-Regressive Skills
-Every successful verified task can be frozen as an immutable baseline. Any update that breaks a past win is **auto-rolled-back**. The agent cannot forget what worked.
-
-### 🔄 Self-Improving
-After every successful task, XR analyzes what it did. If verifiable and complex enough, it creates a skill that improves during use. Cross-session memory via SQLite FTS5 search.
+Every successful verified task can be frozen as an immutable baseline. Any update that breaks a past win is **auto-rolled-back**.
 
 ### 🐳 Docker Sandbox
-Shell commands run in an isolated container by default (optional). Dropped capabilities, no network, memory-limited. The `rm -rf /` and `curl | bash` attacks are structurally impossible.
+Shell commands optionally run in an isolated container with dropped capabilities and no network.
 
 ### 🎙️ Voice Control
 ```bash
-xr --voice
+xr voice start                              # wake word → STT → agent → TTS
+xr speak "hello world"
+xr listen
 ```
-Wake word → Whisper STT → agent → Kokoro TTS. Local by default. Say "Hey XR, open Safari and check my calendar."
+Voice commands route through the **same** safety pipeline as the CLI — voice can never bypass approvals. Recognized control intents:
+- *"Open the app Safari"* → `app`
+- *"Go to https://example.com"* → `open`
+- *"Type this message: hello"* → `type`
+- *"Press cmd+tab"* → `key`
+- *"Focus the Chrome window"* → `focus`
+- *"Scroll down"* → `scroll`
+
+### 📊 Dashboard (v0.8.1)
+```bash
+xr serve                    # opens 127.0.0.1:7842
+```
+- Cost cockpit (live)
+- Security posture (injection block-rate)
+- Audit explorer (with hash chain)
+- **Computer Control** panel with:
+  - Capability matrix (kbd / mouse / launcher / browser)
+  - Pending approvals with Approve/Deny buttons
+  - Live event stream
+  - 🧠 Remembered plans list with per-row forget + clear-all
 
 ### 📱 Multi-Channel
 - **CLI** — full TUI with streaming + slash commands
 - **Telegram** — ✅/❌ approval buttons, user allow-list
-- **Dashboard** — 127.0.0.1:7842 with live audit, cost cockpit, security posture
+- **Dashboard** — 127.0.0.1:7842 with live audit, cost cockpit, security posture, computer control
 
 ---
 
 ## 📋 Every Command
 
-| Command | What it does |
-|---|---|
 ### Core
 
-| Command | What it does |
-|---|---|
-| `xr "task"` | Run a task (default: agent mode) |
-| `xr onboarding` | Interactive setup wizard |
-| `xr config` | View current configuration |
-| `xr doctor` | System health + audit chain + research/voice/budget check |
-| `xr reset` | Factory reset (deletes config & db) |
-| `xr cost` | Lifetime cost & token summary |
-| `xr skills` | List learned skills + frozen baselines |
-| `xr verify-log` | Verify the tamper-evident audit chain |
-| `xr test` / `xr --attacks` | Run the prompt-injection block-rate benchmark (`--json` for signed report) |
+```bash
+xr "your task"                            # run a task (default: agent mode)
+xr "..." --mode plan                      # plan mode (no side effects)
+xr "..." --mode ask                       # ask mode (read-only)
+xr "..." --budget 0.25                    # hard $ ceiling for this task
+xr "..." --provider openai --model gpt-4o # override provider + model
+xr "..." --dry-run                        # simulate everything
+xr "..." --max-steps 20                   # safety rail
+xr "..." --json                           # JSON output
+```
 
-### Flags
+### Computer Control (v0.8 → v0.8.2)
 
-| Flag | What it does |
-|---|---|
-| `--tui` | Interactive terminal UI |
-| `--computer "task"` | JARVIS GUI / desktop automation |
-| `--voice` | Start voice interaction |
-| `--mode plan\|ask\|agent` | Operation mode (plan/ask are read-only) |
-| `--provider <id>` `--model <id>` | Override provider / model |
-| `--budget <usd>` | Hard per-task USD ceiling |
-| `--max-tokens <n>` `--max-steps <n>` | Per-task token / step ceilings |
-| `--dry-run` | Simulate side effects, touch nothing |
-| `--json` | Machine-readable output (where supported) |
-| `--help` | Show help |
+```bash
+# Setup
+xr control status                         # show capabilities + missing deps
+xr control test                           # dry-run a self-test plan
+xr control start                          # enable in config
+xr control stop                           # disable completely
+
+# Single actions
+xr control app   "Visual Studio Code"     # launch an app
+xr control open  "https://example.com"    # open a URL or path
+xr control type  "hello world"            # type into focused window
+xr control click "640,480" [--right|--double]
+xr control move  "640,480"
+xr control scroll <up|down|left|right> [n]
+xr control key   "ctrl+c"                 # any combo
+xr control focus "Chrome"                 # focus an existing window
+
+# Multi-step (planner)
+xr control plan  "open github and search for ahmadrrrtx"    # dry-run default
+xr control plan  "..." --step                               # confirm each step
+xr control plan  "..." --yes                                # auto-approve sensitive
+xr control plan  "..." --no-memory                          # skip cache + don't store
+cat plan.json | xr control run                              # run pre-built JSON plan
+
+# Browser (Playwright, opt-in)
+xr control browser status
+xr control browser install
+xr control browser close
+
+# Memory (v0.8.2)
+xr control memory list
+xr control memory show <baseline-id | task>
+xr control memory forget <baseline-id | task>
+xr control memory clear
+
+# Disable everything
+xr control stop
+XR_CONTROL_DISABLED=1 xr control ...      # env override (always wins)
+```
+
+### Vision-loop computer use
+
+```bash
+xr --computer "open browser, search for X, summarize the top result"
+```
 
 ### Providers & local models
 
-| Command | What it does |
-|---|---|
-| `xr providers` | List providers + key status (subcommands: `list`, `add`, `set`, `test`, `remove`) |
-| `xr models` | Local model status (default) |
-| `xr models list` | List supported Ollama local models |
-| `xr models recommend` | Detect RAM/VRAM/CPU/disk and recommend a model |
-| `xr models install [id]` | Download/configure an Ollama model |
-| `xr models set [id]` | Select local model + routing (`local-only`/`hybrid`/`cloud-first`) |
-| `xr models test [id]` | Smoke-test local inference |
-| `xr models remove [id]` (alias `rm`) | Remove an Ollama model |
+```bash
+xr providers                              # list with key/no-key status
+xr providers add groq                     # interactive add (secure prompt)
+xr providers set ollama qwen2.5:7b        # set default
+
+xr models                                 # local model status
+xr models recommend                       # auto-detect hardware → suggest model
+xr models install [id]                    # download & configure Ollama model
+xr models test [id]                       # smoke test
+```
 
 ### Budget
 
-| Command | What it does |
-|---|---|
-| `xr budget` (or `status`) | View spend caps + usage |
-| `xr budget set <amount>` | Set monthly spend cap (USD) |
-| `xr budget reset` | Reset recorded spending |
-| `xr budget history` | Spend history by model |
+```bash
+xr budget                                 # status (cap, spend, remaining)
+xr budget set 5                           # set monthly cap (USD)
+xr budget history                         # spend by model
+xr budget reset                           # zero the current period
+xr cost                                   # lifetime cost summary
+```
+
+### Research (v0.7)
+
+```bash
+xr research "topic"                       # quick research
+xr research deep "topic"                  # multi-source deep dive
+xr research plan "topic"                  # generate a research plan
+xr research export                        # latest report → markdown
+```
 
 ### Voice
 
-| Command | What it does |
-|---|---|
-| `xr voice` (or `status`) | Voice stack status |
-| `xr voice test` | STT→TTS loopback test |
-| `xr voice start` / `stop` | Start/stop interactive voice mode |
-| `xr speak "text"` | Make XR speak text |
-| `xr listen` | Capture one voice command |
-
-### 🔬 Research (v0.7)
-
-| Command | What it does |
-|---|---|
-| `xr research "topic"` | Source-first research (quick depth) |
-| `xr research quick "topic"` | Fast: fewer sources, faster summary |
-| `xr research deep "topic"` | Deeper: more sources, richer synthesis |
-| `xr research plan "topic"` | Generate research questions + strategy only |
-| `xr research status [id]` | Show current/most-recent session |
-| `xr research sources [id]` | List collected sources + trust |
-| `xr research summarize [id]` | (Re)synthesize a report from collected notes |
-| `xr research export [id] [path]` | Write report → markdown (+ JSON sidecar), signed |
-| `xr research list` | Recent research sessions |
-
-Research flags: `--provider`, `--model`, `--budget <usd>` (per-research ceiling for cloud).
-
-> **Note on roadmap commands:** `xr serve` (dashboard), `xr telegram`, `xr index`/`xr memory`
-> (RAG), `xr sandbox`, `xr export`, `xr mcp`, and `xr cron` correspond to subsystems that exist
-> in the codebase but are **not yet wired into the CLI dispatcher** — they are slated for a
-> follow-up release. The commands in the tables above are the ones implemented and verified today.
-
----
-
-## 🏗️ Architecture
-
-```
-┌──────── INTERFACES ────────────────────────────────────────┐
-│  CLI (TUI + streaming) · Dashboard · Telegram · Voice     │
-└──────────────────────┬────────────────────────────────────┘
-                       │
-┌──────────────────────▼────────────────────────────────────┐
-│ AGENT LOOP — Observe → Think → Act                        │
-│ • Cost Governor (hard ceiling, enforced before each step) │
-│ • Policy Engine (egress allow-list + approval gates)      │
-│ • GBNF Grammar (100% valid tool-calls on local models)    │
-│ • Auto-Repair (validation sandwich: grammar → repair → Z) │
-└──────┬───────────────────┬───────────────────┬─────────────┘
-       │                   │                   │
-  ┌────▼────┐        ┌────▼────┐        ┌────▼────┐
-  │ Tools   │        │ Memory  │        │ Skills  │
-  │ File    │        │ RAG     │        │ Auto-   │
-  │ Web     │        │ FTS5    │        │ learn   │
-  │ Shell   │        │ Cross-  │        │ Non-    │
-  │ System  │        │ session │        │ regress │
-  │ (JARVIS)│        │         │        │         │
-  └─────────┘        └─────────┘        └─────────┘
-                       │
-              ┌────────▼────────┐
-              │ STATE (SQLite)   │
-              │ Sessions        │
-              │ Tamper-evident  │
-              │   audit chain   │
-              │ Skills/baselines│
-              │ Cost events     │
-              │ Research        │
-              │   sessions      │
-              │ Schedules       │
-              └─────────────────┘
+```bash
+xr voice                                  # show voice stack status
+xr voice test                             # mic → STT → TTS loopback
+xr voice start                            # interactive PTT loop
+xr voice stop
+xr speak "text"
+xr listen                                 # capture a single command
 ```
 
-**Stack:** TypeScript (strict) · Bun runtime · SQLite · **1 runtime dep (`zod`)** · 134 tests (133 passing)
-
-### 🔬 Research Mode — under the hood (`src/research/`)
-
-Research is a **clean, self-contained module**, decoupled from provider auth, budget, voice,
-and control. Every layer takes its inputs explicitly and returns plain data, so the workflow
-is **deterministic, repeatable, and testable**. It *reuses* XR's existing systems instead of
-forking them — same provider routing + local fallback, same spend caps, same egress
-allow-list, same tamper-evident audit log.
-
-```
-topic
-  │  (engine.ts orchestrates the whole flow, persisting after every step)
-  ├─ 1. plan        makePlan()         → objective, research questions, queries, strategy
-  ├─ 2. search      WebSearchCapability → raw hits per query (egress-gated SearXNG)
-  ├─ 3. rank        rankSources()      → trust-scored, de-duplicated Source[]
-  ├─ 4. fetch       fetch top sources  → full page text (best effort)
-  ├─ 5. extract     extractFromSource  → Notes (each cited + verified-flagged)
-  ├─ 6. synthesize  synthesize()       → short answer, summary, report, contradictions
-  └─ export         renderReport()     → signed markdown (+ JSON sidecar)
-```
-
-| File | Responsibility | Key exports |
-|------|----------------|-------------|
-| `research/types.ts` | Data model + depth budgets | `ResearchSession`, `Source`, `Note`, `Synthesis`, `DEPTH_BUDGETS` |
-| `research/search.ts` | Egress-gated search/fetch capability | `WebSearchCapability`, `SearchCapability`, `parseSearxOutput` |
-| `research/ranking.ts` | Deterministic trust scoring + dedupe | `scoreDomain`, `rankSources`, `domainOf` |
-| `research/llm.ts` | Tools-free structured LLM call + JSON repair | `structuredCall`, `extractJson` |
-| `research/plan.ts` | Plan generation (+ deterministic fallback) | `makePlan`, `fallbackPlan`, `queriesFromPlan` |
-| `research/extract.ts` | Per-source evidence extraction | `extractFromSource` |
-| `research/synthesize.ts` | Synthesis + contradiction detection | `synthesize`, `fallbackSynthesis` |
-| `research/report.ts` | Citation-aware markdown rendering + signing | `renderReport`, `verifyReport` |
-| `research/budget.ts` | Adapts `CostGovernor` to the engine | `GovernedResearchBudget`, `LocalResearchBudget` |
-| `research/engine.ts` | The orchestrator (the flow above) | `runResearch`, `summarizeExisting`, `newSession` |
-| `research/cli.ts` | `xr research …` command handlers | `handleResearchCommand` |
-
-**Integrity guarantees (enforced in code, covered by `test/research.test.ts`):**
-
-- **Source-first, not answer-first** — sources are collected before any conclusion.
-- **Citation-aware** — every note references a `sourceId`; the report cites `[s1]`, `[s2]`.
-- **No fake verification** — a note is `verified` **only** if the page was actually *fetched*;
-  snippet-only notes are flagged `unverified` and their confidence is downgraded.
-- **Honest uncertainty** — facts / inference / opinion are distinguished; contradictions and
-  open questions are surfaced, not hidden.
-- **Deterministic ranking** — trust comes from transparent domain heuristics, never an LLM.
-- **No silent spend** — token/$ usage is metered and shown; over a cap, research stops
-  gracefully with partial results saved.
-- **Graceful degradation** — if search is unavailable, XR says so and produces an honest
-  "no conclusion" report instead of inventing an answer.
-- **Tamper-evident reports** — each markdown report carries a SHA-256 signature (`verifyReport`).
-
-Depth budgets (`DEPTH_BUDGETS` in `research/types.ts`):
-
-| depth | queries | results/query | max sources | fetched | questions |
-|-------|---------|---------------|-------------|---------|-----------|
-| quick | 3       | 5             | 8           | 3       | 3         |
-| deep  | 6       | 6             | 16          | 8       | 6         |
-
-Reports are saved to `~/.xr/research/` as `<id>-<slug>.md` + a `.json` sidecar. Voice/chat
-flows auto-route to research when you say *"research…", "investigate…", "compare…"*. Requires
-a search host (default SearXNG `searx.be`, override `XR_SEARXNG`) on the egress allow-list;
-`xr doctor` reports research readiness. See `docs/research/RESEARCH-MODE-v0.7.md` for the
-full design.
-
----
-
-## 🔐 Security Model (Honest)
-
-> ⚠️ **XR does not claim to be "unhackable."** Prompt injection is unsolved industry-wide. What XR does is **minimize blast radius** and let you **measure it**.
-
-- **Egress allow-list** — agent can't reach a domain you didn't approve
-- **Approval gates** — write/delete/shell need explicit approval, fail-closed on timeout
-- **Docker sandbox** — shell runs in isolated container, dropped capabilities
-- **Secret redaction** — API keys redacted before audit log storage
-- **Path escape prevention** — every file tool rejects `../` escapes (tested)
-- **Tamper-evident chain** — SHA-256 hash chain, `xr verify-log` detects any change
-- **`xr test --attacks`** — publishes a reproducible block-rate you can verify
-
----
-
-## 🛡️ Coming from OpenClaw?
-
-**135,000+ exposed instances. 138+ CVEs. 800+ malicious skills.**
-
-XR closes that attack surface by default — egress allow-list, 127.0.0.1-only, signed local skills, tamper-evident audit, hard spend ceiling, Docker sandbox shell. Switch in ~10 minutes.
-
-👉 **[Read the full Migration Guide →](MIGRATION.md)**
-
----
-
-## 🚀 Quick Start
+### Dashboard
 
 ```bash
-# Install (one command, any OS)
-curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
-
-# Run a task on a LOCAL model ($0)
-bun run src/index.ts "list files and explain them"
-
-# With a cloud key (never stored by XR)
-GROQ_API_KEY=sk-... bun run src/index.ts "build me a portfolio website"
-
-# Hard budget ceiling
-bun run src/index.ts --budget 0.25 "write me a full REST API"
-
-# Interactive TUI (Claude Code-style)
-bun run src/index.ts --tui
-
-# JARVIS computer control
-bun run src/index.ts --computer "open Safari and search for flights"
-
-# One-command Docker (everything included)
-docker compose up
+xr serve                                  # http://127.0.0.1:7842/dashboard?token=...
+xr serve --port 8000 --token mytoken
 ```
 
-**Add shell alias:**
+### Skills + Memory (project)
+
 ```bash
-echo "alias xr='bun run $(pwd)/src/index.ts'" >> ~/.bashrc
-source ~/.bashrc
-# Now just type: xr "your task"
+xr skills                                 # list learned skills
+xr index                                  # build local RAG index
+xr memory                                 # project memory status
+```
+
+### System
+
+```bash
+xr doctor                                 # full health check (config, provider,
+                                          #  local model, audit chain, voice,
+                                          #  computer control, budget, sandbox)
+xr verify-log                             # verify tamper-evident audit chain
+xr config                                 # show config.json
+xr reset                                  # factory reset (deletes config + db)
+xr test --attacks                         # run injection benchmark
+xr --tui                                  # interactive terminal UI
+```
+
+### Flags (any command)
+
+| Flag | Meaning |
+|---|---|
+| `--mode <agent\|plan\|ask>` | execution mode |
+| `--provider <id>` | override provider |
+| `--model <id>` | override model |
+| `--budget <usd>` | hard $ ceiling |
+| `--max-tokens <n>` | per-task token cap |
+| `--max-steps <n>` | loop safety rail |
+| `--dry-run` | simulate everything |
+| `--json` | machine-readable output |
+| `--yes`, `-y` | auto-approve sensitive (NEVER destructive) |
+| `--step` | confirm every step (control / plan) |
+| `--no-memory` | skip plan cache (control only) |
+
+---
+
+## 🔐 Security & Safety Model
+
+### Computer-Control safety gates (always on)
+
+| Action class | Behavior |
+|---|---|
+| **safe** (move, scroll, focus) | runs immediately |
+| **sensitive** (open, type, click, key, app, browser fill) | prompts unless `--yes` |
+| **destructive** (shell-like text, `Enter`, `Shift+Del`, `file://`, executable URLs, `submit`, sensitive fill) | **always** prompts — ignores `--yes` |
+
+### Approval surfaces (both work simultaneously)
+- CLI prompt — appears in the terminal that issued the command
+- Dashboard buttons — appears in the 🖥️ panel; whoever answers first wins
+
+### Disable switches
+- `xr control stop` — sets `config.control.enabled = false`
+- `XR_CONTROL_DISABLED=1` env var — always wins, even over config
+
+### Memory safety (v0.8.2)
+- Caches only **fully successful** auto-mode plans
+- Refuses plans containing `sensitive: true` or destructive actions
+- Recall **re-validates + re-classifies** every action — schema drift or risk escalation invalidates the entry
+- `xr control memory list/show/forget/clear` give full user visibility
+
+### Secret handling
+- Never stored in plaintext when an OS-backed store is available:
+  - macOS Keychain (`security`)
+  - Linux Secret Service (`secret-tool`)
+- File fallback at `~/.xr/.env` with `chmod 600`
+- Audit log auto-redacts `sk-…`, `Bearer …`, and any `sensitive: true` value
+
+### Audit log
+- Append-only, SHA-256 hash-chained
+- Every entry: control plan, execution, denial, memory store/hit/forget, agent tool call, security event, budget pause
+- Verify with `xr verify-log`
+
+---
+
+## 🗺️ Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              User (CLI · TUI · Voice · Telegram)         │
+└─────────────────────────┬────────────────────────────────┘
+                          │
+                ┌─────────▼──────────┐
+                │   src/index.ts     │  command router
+                └─────────┬──────────┘
+                          │
+        ┌─────────────────┼─────────────────────┐
+        │                 │                     │
+┌───────▼─────┐  ┌────────▼───────┐  ┌──────────▼──────────┐
+│  Agent loop │  │ Control layer  │  │   Daemon (xr serve) │
+│  core/      │  │ control/       │  │   daemon/           │
+└──┬────────┬─┘  └─┬────────────┬─┘  └──────────┬──────────┘
+   │        │     │            │               │
+   │  ┌─────▼──┐  │       ┌────▼─────┐    ┌────▼────────┐
+   │  │ Tools  │◄─┘       │ Planner  │    │ Dashboard   │
+   │  │tools/  │          │ Memory   │    │ /api/control│
+   │  └────────┘          │ Browser  │    └─────────────┘
+   │                      │ Executor │
+   │                      └──────────┘
+   │
+┌──▼─────────┐  ┌──────────────┐  ┌─────────────┐
+│ Providers  │  │ Cost gov.    │  │ State / DB  │
+│ providers/ │  │ cost/        │  │ state/ +    │
+│ (12+ BYOK) │  │ + budget mgr │  │ memory/     │
+└────────────┘  └──────────────┘  └─────────────┘
+                                          │
+                                  ┌───────▼──────┐
+                                  │ SQLite (WAL) │
+                                  │ + hash chain │
+                                  └──────────────┘
+```
+
+### Repo layout
+```
+src/
+  ├── core/             # agent loop + shared types
+  ├── providers/        # 12+ BYOK adapters (OpenAI-compat + native)
+  ├── local/            # Ollama hardware detection + recommendation
+  ├── cost/             # spend cap, governor, pricing, manager
+  ├── security/         # injection attack corpus, guards, secrets
+  ├── reliability/      # JSON repair, model profiles, GBNF grammar
+  ├── skills/           # non-regressive skill engine
+  ├── memory/           # RAG + project fingerprint
+  ├── computer/         # vision-loop computer use (xr --computer)
+  ├── control/          # ✨ v0.8 safe control layer (xr control)
+  │     ├── types.ts        # Action schema (Zod)
+  │     ├── classify.ts     # risk classifier (pure)
+  │     ├── adapter.ts      # OS + dep detection
+  │     ├── executor.ts     # the ONLY file that touches the OS
+  │     ├── service.ts      # classify → approve → execute pipeline
+  │     ├── audit.ts        # redacting audit wrapper
+  │     ├── approvals.ts    # CLI ↔ dashboard race queue
+  │     ├── planner.ts      # NL → Action[] (memory-first)
+  │     ├── browser.ts      # lazy Playwright backend
+  │     ├── memory.ts       # ✨ v0.8.2 plan memory
+  │     └── cli.ts          # xr control … subcommands
+  ├── tools/            # agent tools (files, web, system, control)
+  ├── voice/            # STT/TTS/wake word, voice→control router
+  ├── research/         # v0.7 research mode
+  ├── daemon/           # xr serve (127.0.0.1 dashboard)
+  ├── interfaces/       # CLI helpers, onboarding, TUI
+  └── index.ts          # main router
+test/                   # 165+ tests, all platforms
 ```
 
 ---
 
-## 🧰 System Requirements
+## 🧪 Tests
 
-- **OS:** Linux, macOS, Windows (PowerShell/Git Bash), Android (Termux)
-- **Runtime:** Bun 1.0+ (or npm as fallback)
-- **LLM:** Ollama (local, free) or supported BYOK cloud providers
-- **RAM:** 4GB minimum (8GB+ recommended for local 7B models; 16GB+ for 14B)
-- **Storage:** ~100MB for XR + ~2.5–20GB per downloaded local model
-
----
-
-## 📂 Project Structure
-
-```
-xr/
-├── src/
-│   ├── index.ts              # CLI entry point
-│   ├── core/                 # Agent loop, types
-│   │   ├── agent.ts          # Observe → Think → Act loop
-│   │   └── types.ts          # Shared TypeScript types
-│   ├── config/               # Zod-validated config with migrations
-│   ├── cost/                 # Cost Governor + pricing table
-│   ├── security/             # Guard, injection corpus, test lab
-│   │   ├── guard.ts          # Deterministic policy engine
-│   │   ├── attacks.ts        # 10-attack injection corpus
-│   │   └── lab.ts            # Publishable block-rate reporter
-│   ├── tools/                # All tool implementations
-│   │   ├── files.ts          # read/write with path safety
-│   │   ├── system.ts         # Shell (sandboxed + approval)
-│   │   ├── web.ts            # Fetch/search (egress-gated)
-│   │   └── egress.ts         # URL allow-list gate
-│   ├── computer/             # JARVIS computer control
-│   │   ├── index.ts          # Screenshot → action loop
-│   │   ├── system-control.ts # Cross-platform OS tools
-│   │   └── sandbox.ts        # Docker container isolation
-│   ├── voice/                # STT + TTS + wake word
-│   │   ├── stt.ts            # Whisper (local or cloud)
-│   │   └── tts.ts            # Kokoro (local or cloud)
-│   ├── memory/               # RAG + FTS5 cross-session memory
-│   │   ├── rag.ts            # Local RAG index
-│   │   ├── embed.ts          # Ollama embeddings + lexical fallback
-│   │   └── compact.ts        # Context window management
-│   ├── skills/               # Non-regressive skills
-│   │   ├── loader.ts         # Markdown SOP loader
-│   │   ├── engine.ts         # Freezing + regression guard
-│   │   ├── verifier.ts       # Objective verifiers
-│   │   └── autolearn.ts      # Hermes-style auto-learning
-│   ├── state/                # SQLite state + audit chain
-│   │   └── db.ts             # Sessions, audit log, cost events
-│   ├── providers/            # LLM provider abstraction
-│   ├── reliability/          # GBNF grammar + auto-repair
-│   ├── daemon/               # Local dashboard (127.0.0.1:7842)
-│   ├── telegram/             # Secure phone remote
-│   ├── automation/           # Cron scheduler (natural language)
-│   ├── export/               # Signed audit reports
-│   ├── update/               # Self-healing updates
-│   ├── interfaces/           # CLI UI + onboarding wizard
-│   └── mcp/                  # MCP tool ecosystem
-├── skills/                   # Pre-built signed skills (markdown SOPs)
-├── test/                     # 124 passing tests
-├── docs/                     # Planning + research docs
-├── install.sh                # One-command Linux/macOS installer
-├── install.ps1               # One-command Windows installer
-├── Dockerfile                # Single-container deploy
-└── docker-compose.yml        # One-command full stack
+```bash
+bun test                              # full suite
+bun test test/control.test.ts         # v0.8 safety pipeline
+bun test test/control-plan.test.ts    # v0.8.1 planner + browser + approvals
+bun test test/control-memory.test.ts  # v0.8.2 memory layer
 ```
 
 ---
 
-## 🛠️ Development
+## 🌐 Platform Notes
+
+| OS | Built-in deps | Recommended install for full computer control |
+|----|---------------|------------------------------------------------|
+| **macOS** | `osascript`, `open` | `brew install cliclick` (for mouse move/click) |
+| **Linux (X11)** | — | `sudo apt install xdotool wmctrl xdg-utils` |
+| **Linux (Wayland)** | — | synthetic input blocked by Wayland — XR refuses gracefully |
+| **Windows** | PowerShell (built-in) | — |
+
+For **browser automation** on any platform:
+```bash
+xr control browser install   # ~150 MB chromium
+```
+
+---
+
+## 📦 Configuration
+
+Config lives at `~/.xr/config.json` (auto-created on first run). Schema is versioned and self-healing — invalid keys never crash XR.
+
+```jsonc
+{
+  "version": 6,
+  "defaults": { "mode": "agent", "provider": "ollama", "model": "qwen2.5:7b" },
+  "budget": { "perTaskUsd": 0.25, "perTaskTokens": 250000 },
+  "security": {
+    "egressAllowlist": ["searx.be", "api.github.com", "registry.npmjs.org"],
+    "requireApproval": ["write_file", "delete", "shell", "send"]
+  },
+  "localModels": { "runtime": "ollama", "enabled": true, "routing": "hybrid" },
+  "control": {
+    "enabled": false,            // opt-in via `xr control start`
+    "defaultMode": "auto",
+    "stepDelayMs": 250,
+    "memory": {
+      "enabled": true,           // plan cache (v0.8.2)
+      "maxEntries": 500
+    }
+  }
+}
+```
+
+### Env overrides
+| Variable | Effect |
+|---|---|
+| `XR_HOME` | override config dir (default `~/.xr`) |
+| `XR_CONTROL_DISABLED=1` | hard-disable computer control |
+| `XR_BROWSER_HEADLESS=1` | run Playwright headless |
+| `XR_STT_URL` / `XR_TTS_URL` | voice endpoints |
+| `XR_SEARXNG` | research search backend |
+| `XR_WAKE_WORD=true` | enable wake-word listening |
+| `GROQ_API_KEY`, `OPENAI_API_KEY`, … | BYOK provider keys |
+
+---
+
+## 🔧 Quick Recipes
+
+**Use Groq for free, fast inference:**
+```bash
+xr providers add groq          # paste key (stored in OS keychain if available)
+xr providers set groq llama-3.3-70b-versatile
+```
+
+**Fully offline (local model only):**
+```bash
+xr models install qwen2.5:7b
+xr providers set ollama qwen2.5:7b
+```
+
+**Automate a repeatable web workflow with zero ongoing cost:**
+```bash
+xr control start
+xr control browser install
+xr control plan "log into example.com and download the latest report" --yes
+# First run uses LLM. Every subsequent run: ⚡ recalled from memory.
+```
+
+**Watch live what XR is doing across all surfaces:**
+```bash
+# Terminal 1
+xr serve                                      # dashboard at 127.0.0.1:7842
+
+# Terminal 2
+xr "build me a CRUD app and run the tests"   # see every step in the dashboard
+
+# Optionally answer approvals from the dashboard instead of the terminal.
+```
+
+---
+
+## 🛡️ Why Trust XR
+
+- **Open source** — every line of safety code is auditable in this repo
+- **Local-first** — no telemetry, no analytics, no remote config
+- **BYOK** — your key, your tokens, your bills
+- **Hard caps** — the agent cannot exceed your budget; the planner cannot bypass approvals
+- **Hash-chained audit** — tampering is detectable, `xr verify-log` proves it
+- **Disable anything** — config flags + env overrides for every subsystem
+- **Tested** — 165+ tests including the entire safety pipeline
+
+---
+
+## 🗺️ Roadmap (post-v0.8.2)
+
+- 📊 Telemetry-free **usage analytics** export (CSV / JSON) — opt-in
+- 🔌 **MCP server** mode (XR as an MCP host for other agents)
+- 🌳 Multi-account profiles (`xr profile use work`)
+- 🧪 **Browser test recorder** — record a workflow once → save as a memory entry
+- ☁️ Sync remembered plans across machines via your own Git repo (no cloud)
+- 🪟 **Wayland** synthetic input via `ydotool` integration
+
+---
+
+## 🤝 Contributing
 
 ```bash
 git clone https://github.com/ahmadrrrtx/xr
 cd xr && bun install
-bun test            # 124 tests
-bun run src/index.ts doctor   # System health
-bun run src/index.ts --tui    # Interactive UI
+bun test                  # all tests must pass
+bun run typecheck         # 0 errors required
 ```
 
----
-
-## ⚠️ Honest Limitations
-
-- **Prompt injection**: unsolved industry-wide. XR minimizes blast radius, publishes a block-rate, but cannot claim immunity
-- **Local runtime**: v0.5 implements Ollama only. Other local runtimes can be added behind the same abstraction later.
-- **Local models**: recommendations are deterministic heuristics based on RAM/VRAM/CPU/disk, not ML benchmarking. Small models can be slower or less reliable for complex agent tasks.
-- **Voice**: requires Whisper server (local or cloud) and optional TTS server
-- **Computer use**: requires a screenshot tool (`screencapture` on macOS, `scrot`/`gnome-screenshot` on Linux, .NET on Windows)
+Open issues + PRs welcome. Big things to help with:
+- Wayland support for `xr control`
+- More browser-action verbs (download, upload, screenshot regions)
+- Provider adapters for new model APIs
+- Translations of the onboarding wizard
 
 ---
 
-## 📄 License
+## 📜 License
 
-MIT — by [Muhammad Ahmad (@ahmadrrrtx)](https://github.com/ahmadrrrtx)
+MIT © [Muhammad Ahmad (@ahmadrrrtx)](https://github.com/ahmadrrrtx)
 
-**Use XR. Trust it. Improve it.**
+---
+
+<p align="center">
+<b>XR — the AI agent you can actually trust.</b><br>
+<sub>by rrrtx · BYOK · local-first · spend-capped · tamper-evident</sub>
+</p>
