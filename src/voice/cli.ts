@@ -79,7 +79,12 @@ export async function handleVoiceCommand(argv: string[], store: Store): Promise<
       const text = await session.listenForCommand();
       if (text) {
         console.log(C.cyan(`You: ${text}`));
-        
+
+        // v0.8 — first chance to handle the text as a safe computer-control
+        // command.  Voice never bypasses the approval gate; the service still
+        // enforces step/auto/destructive rules.
+        if (await tryHandleControlByVoice(text, store)) continue;
+
         const routed = routeVoiceCommand(text);
         if (routed) {
           console.log(C.dim(`Routing to action: ${routed.action} with args: ${routed.args}`));
@@ -113,4 +118,46 @@ export async function handleListen(): Promise<void> {
   } else {
     warn("No speech detected.");
   }
+}
+
+/**
+ * v0.8 — minimal intent parser for voice → computer-control.  Recognized
+ * patterns are routed through the safety pipeline (every action is classified
+ * and approved like a manual `xr control …` call).  Returns true if the text
+ * was handled.
+ */
+async function tryHandleControlByVoice(text: string, store: Store): Promise<boolean> {
+  const t = text.trim();
+  const { runAction } = await import("../control/service.ts");
+  const opts = { mode: "auto" as const, autoApproveSensitive: false, delayMs: 0 };
+
+  let m: RegExpMatchArray | null;
+
+  if ((m = t.match(/^(?:open|launch|start)\s+(?:the\s+)?app\s+(.+)$/i))) {
+    await runAction(store, { type: "app", name: m[1].trim() }, opts);
+    return true;
+  }
+  if ((m = t.match(/^(?:go to|open|visit|navigate to)\s+(https?:\/\/\S+)\s*$/i))) {
+    await runAction(store, { type: "open", target: m[1] }, opts);
+    return true;
+  }
+  if ((m = t.match(/^type(?:\s+this\s+message)?[:\s]+(.+)$/i))) {
+    await runAction(store, { type: "type", text: m[1] }, opts);
+    return true;
+  }
+  if ((m = t.match(/^press\s+(.+)$/i))) {
+    const keys = m[1].split(/[+\s]+/).filter(Boolean);
+    await runAction(store, { type: "key", keys }, opts);
+    return true;
+  }
+  if ((m = t.match(/^focus\s+(?:on\s+)?(?:the\s+)?(.+)\s+window$/i))) {
+    await runAction(store, { type: "focus", name: m[1] }, opts);
+    return true;
+  }
+  if (/^scroll\s+(up|down|left|right)\b/i.test(t)) {
+    const dir = t.match(/^scroll\s+(up|down|left|right)/i)![1].toLowerCase() as any;
+    await runAction(store, { type: "scroll", direction: dir, amount: 3 }, opts);
+    return true;
+  }
+  return false;
 }
