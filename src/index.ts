@@ -65,7 +65,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--tui") args.tui = true;
     else if (a === "--computer") args.computer = true;
     else if (a === "--voice") args.voice = true;
-    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models", "budget", "cost"].includes(a)) {
+    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "speak", "listen", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models", "budget", "cost"].includes(a)) {
       args.command = a;
     } else {
       rest.push(a);
@@ -95,6 +95,9 @@ ${C.bold("Commands")}
   xr budget                 view spend caps and usage
   xr budget set <amount>    set monthly spend cap (USD)
   xr budget reset           reset current monthly spending
+  xr voice                  voice control (status, test, start, stop)
+  xr speak "text"           make XR speak text
+  xr listen                 capture a single voice command
   xr reset                  factory reset (deletes config & db)
   xr verify-log             verify tamper-evident audit log
   xr skills                 list all available skills
@@ -196,6 +199,10 @@ async function cmdDoctor(store: Store, args: Args): Promise<void> {
   const chain = store.verifyChain();
   console.log(`  audit chain ...... ${chain.valid ? C.green(`✓ intact (${store.auditCount()} entries)`) : C.red(`✗ BROKEN at #${chain.brokenAt}`)}`);
   console.log(`  skills ........... ${C.green(`✓ ${store.skillCount()} learned · ${store.frozenCount()} frozen baselines`)}`);
+
+  const { checkVoiceStack } = await import("./voice/index.ts");
+  const v = checkVoiceStack();
+  console.log(`  voice stack ...... ${v.stt && v.tts ? C.green("✓ operational") : C.yellow("⚠ degraded")} ${C.dim(`(STT:${v.stt ? "✓" : "✗"}, TTS:${v.tts ? "✓" : "✗"})`)}`);
 
   const budgetManager = new BudgetManager(store);
   const status = await budgetManager.getStatus();
@@ -348,6 +355,25 @@ async function main(): Promise<void> {
 
     if (args.command === "budget") {
       await cmdBudget(store, argv.slice(1));
+      return;
+    }
+
+    if (args.command === "voice") {
+      const { handleVoiceCommand } = await import("./voice/cli.ts");
+      await handleVoiceCommand(argv.slice(1), store);
+      return;
+    }
+
+    if (args.command === "speak") {
+      const { handleSpeak } = await import("./voice/cli.ts");
+      const text = args.task || "Hello, I am XR.";
+      await handleSpeak(text);
+      return;
+    }
+
+    if (args.command === "listen") {
+      const { handleListen } = await import("./voice/cli.ts");
+      await handleListen();
       return;
     }
 
