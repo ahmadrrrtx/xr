@@ -19,11 +19,12 @@
 import { confirm, colors as C } from "../interfaces/cli.ts";
 import { loadConfig } from "../config/config.ts";
 import type { Store } from "../state/db.ts";
-import { ActionSchema, type Action, type ActionResult, type ControlOptions, type RiskAssessment } from "./types.ts";
+import { ActionSchema, type Action, type ActionResult, type ControlOptions, type RiskAssessment, type Plan } from "./types.ts";
 import { classify } from "./classify.ts";
 import { execute } from "./executor.ts";
 import { detectCapabilities, isControlReady } from "./adapter.ts";
 import { auditPlanned, auditExecuted, auditDenied, auditDisabled } from "./audit.ts";
+import { approvals } from "./approvals.ts";
 
 // ── Disable switch ──────────────────────────────────────────────────────────
 
@@ -57,6 +58,13 @@ function describe(action: Action): string {
       ? `${action.button}-click ${C.bold(action.target)}`
       : `${action.button}-click at (${C.bold(String(action.x))}, ${C.bold(String(action.y))})`;
     case "move":   return `Move cursor to (${action.x}, ${action.y})`;
+    case "browser": {
+      const sel = action.selector ? ` ${C.bold(action.selector.slice(0, 60))}` : "";
+      const val = action.sensitive
+        ? ` ${C.dim("«sensitive»")}`
+        : action.value ? ` ${C.dim('"' + action.value.slice(0, 40) + '"')}` : "";
+      return `Browser ${C.bold(action.op)}${sel}${val}`;
+    }
     case "scroll": return `Scroll ${C.bold(action.direction)} ×${action.amount}`;
     case "key":    return `Press ${C.bold(action.keys.join("+"))}`;
   }
@@ -72,21 +80,55 @@ function badge(risk: RiskAssessment): string {
 
 // ── Approval gate ───────────────────────────────────────────────────────────
 
+/**
+ * Approval gate. Sensitive/destructive actions race the CLI prompt against
+ * the dashboard queue — first one to answer wins. This lets the user approve
+ * from either surface without changing flags.
+ */
 async function shouldApprove(
+  action: Action,
   risk: RiskAssessment,
+  preview: string,
   opts: ControlOptions,
 ): Promise<boolean> {
   if (opts.mode === "dry-run") return false;          // never executes
-  if (opts.mode === "step") return await confirm("   Run this step?", true);
+  if (opts.mode === "step") {
+    // Step mode: every action prompts, regardless of risk.
+    return await raceApproval(action, risk, preview, "   Run this step?", true);
+  }
   // mode === "auto"
   if (risk.level === "safe") return true;
   if (risk.level === "sensitive" && opts.autoApproveSensitive) return true;
-  // sensitive without --yes, OR destructive (always): prompt.
   const prompt = risk.level === "destructive"
     ? "   This is a DESTRUCTIVE action. Proceed?"
     : "   Approve this action?";
-  // Destructive defaults to NO; sensitive defaults to YES (familiar pattern).
-  return await confirm(prompt, risk.level !== "destructive");
+  return await raceApproval(action, risk, preview, prompt, risk.level !== "destructive");
+}
+
+/**
+ * Show the prompt on the CLI AND post to the dashboard queue. Whichever
+ * surface answers first wins; the other is silently cancelled.
+ */
+async function raceApproval(
+  action: Action,
+  risk: RiskAssessment,
+  preview: string,
+  prompt: string,
+  defaultYes: boolean,
+): Promise<boolean> {
+  const pending = approvals.request(action, risk, preview);
+
+  // CLI side
+  const cli = (async () => {
+    const answer = await confirm(prompt, defaultYes);
+    pending.resolve(answer); // closes the dashboard prompt too
+    return answer;
+  })();
+
+  // Dashboard side (only resolves if the dashboard answers first)
+  const dash = pending.promise;
+
+  return await Promise.race([cli, dash]);
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
@@ -132,7 +174,8 @@ export async function runAction(
 
   // 4. Audit plan + preview
   auditPlanned(store, action, risk);
-  console.log(`  ${badge(risk)} ${describe(action)} ${C.dim("— " + risk.reason)}`);
+  const preview = describe(action);
+  console.log(`  ${badge(risk)} ${preview} ${C.dim("— " + risk.reason)}`);
 
   // 5. Approve
   if (opts.mode === "dry-run") {
@@ -141,7 +184,7 @@ export async function runAction(
     return { action, risk, result };
   }
 
-  const approved = await shouldApprove(risk, opts);
+  const approved = await shouldApprove(action, risk, preview, opts);
   if (!approved) {
     auditDenied(store, action, risk);
     const result: ActionResult = { ok: false, skipped: true, message: "denied by user" };
@@ -161,7 +204,7 @@ export async function runAction(
   }
 
   // 6. Execute
-  const result = execute(action);
+  const result = await execute(action);
   auditExecuted(store, action, risk, result);
 
   if (opts.delayMs && opts.delayMs > 0) {
@@ -189,4 +232,27 @@ export async function runPlan(
     }
   }
   return out;
+}
+
+/**
+ * Run a typed Plan (from the planner) with a one-shot preview + audit event.
+ * This is the recommended entry point for the agent tool and the dashboard.
+ */
+export async function runTypedPlan(
+  store: Store,
+  plan: Plan,
+  opts: ControlOptions,
+): Promise<RunResult[]> {
+  store.audit("control.plan.proposed", {
+    task: plan.task,
+    rationale: plan.rationale ?? null,
+    steps: plan.actions.length,
+  });
+
+  if (plan.rationale) {
+    console.log(C.dim(`  plan: ${plan.rationale}`));
+  }
+  console.log(C.dim(`  ${plan.actions.length} step(s) — mode: ${opts.mode}`));
+
+  return await runPlan(store, plan.actions, opts);
 }
