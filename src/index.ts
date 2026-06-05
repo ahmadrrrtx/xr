@@ -87,7 +87,10 @@ ${C.bold("Commands")}
   xr doctor                 system health + audit chain check
   xr config                 view current configuration
   xr providers              list, add, or set AI providers
-  xr models                 view current model defaults
+  xr models                 local model status
+  xr models recommend       auto-detect hardware + recommend a model
+  xr models install [id]    download/configure an Ollama model
+  xr models test [id]       run local model smoke test
   xr reset                  factory reset (deletes config & db)
   xr verify-log             verify tamper-evident audit log
   xr skills                 list all available skills
@@ -117,6 +120,16 @@ async function cmdDoctor(store: Store, args: Args): Promise<void> {
   const provider = buildProvider(config, { provider: args.provider, model: args.model });
   const h = await provider.health();
   console.log(`  provider ......... ${h.ok ? C.green + "✓ " + provider.label : C.red + "✗ " + provider.label} ${C.dim}(${h.detail ?? ""}${h.latencyMs ? " " + h.latencyMs + "ms" : ""})${C.reset}`);
+
+  try {
+    const { ollamaStatus } = await import("./local/ollama.ts");
+    const localModel = config.localModels.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
+    const ls = await ollamaStatus(localModel);
+    const pulled = ls.models.includes(localModel);
+    const localOk = ls.installed && ls.running && pulled;
+    console.log(`  local model ...... ${localOk ? C.green + "✓ " + localModel : C.yellow + "⚠ " + localModel} ${C.dim}(${ls.installed ? "ollama installed" : "ollama missing"}, ${ls.running ? "server running" : "server stopped"}, ${pulled ? "model pulled" : "model missing"})${C.reset}`);
+    console.log(`  local routing .... ${C.cyan(config.localModels.routing)} ${config.localModels.enabled ? C.green + "enabled" : C.dim("disabled")}${C.reset}`);
+  } catch { /* skip */ }
   
   const chain = store.verifyChain();
   console.log(`  audit chain ...... ${chain.valid ? C.green + "✓ intact (" + store.auditCount() + " entries)" : C.red + "✗ BROKEN at #" + chain.brokenAt}${C.reset}`);
@@ -188,14 +201,8 @@ async function main(): Promise<void> {
     }
 
     if (args.command === "models") {
-      banner();
-      const { config } = loadConfig();
-      console.log(`${C.bold("Current Default Model")}`);
-      console.log(`  Provider: ${C.cyan(config.defaults.provider)}`);
-      console.log(`  Model:    ${C.green(config.defaults.model)}`);
-      if (config.defaults.provider === "ollama") {
-        console.log(`\n${C.dim("Use 'ollama list' to see all pulled local models.")}`);
-      }
+      const { handleModelsCommand } = await import("./interfaces/models.ts");
+      await handleModelsCommand(argv.slice(1));
       return;
     }
 
