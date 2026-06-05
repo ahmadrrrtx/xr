@@ -15,8 +15,13 @@
 
 import { SpeechToText } from "./stt.ts";
 import { TextToSpeech } from "./tts.ts";
+import { VoiceHardware } from "./hardware.ts";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+
+// ── Wake Word Detection (lightweight, local) ──────────────────────────────────
+// ... (rest of the existing code)
+
 
 // ── Wake Word Detection (lightweight, local) ──────────────────────────────────
 // Uses a simple energy-based detector as fallback when Porcupine isn't available
@@ -97,6 +102,7 @@ export interface VoiceSessionOptions {
 export class VoiceSession {
   private stt: SpeechToText;
   private tts: TextToSpeech;
+  private hw: VoiceHardware;
   private wakeWord: WakeWordDetector | null = null;
   private sessionActive = false;
   private persona: "calm" | "fast" | "detailed";
@@ -105,6 +111,7 @@ export class VoiceSession {
   constructor(opts: VoiceSessionOptions = {}) {
     this.stt = opts.stt ?? new SpeechToText();
     this.tts = opts.tts ?? new TextToSpeech({ persona: opts.persona ?? "calm" });
+    this.hw = new VoiceHardware();
     this.wakeWord = opts.wakeWord ?? null;
     this.sessionActive = false;
     this.persona = opts.persona ?? "calm";
@@ -117,38 +124,40 @@ export class VoiceSession {
   
   private wakeDetected(): void {
     console.log("[Voice] Wake word detected — listening…");
-    // Small beep/confirmation tone could play here
   }
   
   async listenForCommand(): Promise<string | null> {
-    // In real implementation: capture audio from mic
-    // For now: record for up to 10 seconds
-    // 
-    // Implementation using node-audio-recording or bun-native audio:
-    // const audio = await captureAudio({ durationMs: 10000, sampleRate: 16000 });
-    // const result = await this.stt.transcribe(audio, "audio/webm");
-    // 
-    // The full implementation:
-    // 1. Uses node wave-player or similar for audio I/O
-    // 2. Records in chunks (VAD = voice activity detection)
-    // 3. Sends to STT when speech detected
-    return null; // placeholder
-  }
-  
-  async speak(text: string): Promise<void> {
-    this.tts.setPersona(this.persona);
-    const result = await this.tts.speak(text);
-    
-    if (result.audio) {
-      // Play audio — in real implementation:
-      // await playAudio(result.audio)
-      console.log(`[Voice] Speaking: ${result.spokenText.slice(0, 80)}…`);
-    } else {
-      console.log(`[Voice] ${result.spokenText.slice(0, 80)}…`);
+    try {
+      console.log("[Voice] Listening... (Speak now)");
+      const audio = await this.hw.record(7000); // Record up to 7 seconds
+      const result = await this.stt.transcribe(audio);
+      if (result.ok && result.text) {
+        return result.text.trim();
+      }
+      return null;
+    } catch (e) {
+      console.error(`[Voice] Error listening: ${(e as Error).message}`);
+      return null;
     }
   }
   
-  async processVoiceInput(audioData: Uint8Array, mimeType = "audio/webm"): Promise<string> {
+  async speak(text: string): Promise<void> {
+    try {
+      this.tts.setPersona(this.persona);
+      const result = await this.tts.speak(text);
+      
+      if (result.ok && result.audio) {
+        await this.hw.play(result.audio);
+        console.log(`[Voice] Spoken: ${result.spokenText.slice(0, 80)}…`);
+      } else {
+        console.log(`[Voice] ${result.spokenText.slice(0, 80)}…`);
+      }
+    } catch (e) {
+      console.error(`[Voice] Error speaking: ${(e as Error).message}`);
+    }
+  }
+  
+  async processVoiceInput(audioData: Uint8Array, mimeType = "audio/wav"): Promise<string> {
     const result = await this.stt.transcribe(audioData, mimeType);
     if (!result.ok) {
       return `Sorry, I didn't catch that. (${result.detail})`;
