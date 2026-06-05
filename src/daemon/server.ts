@@ -24,6 +24,7 @@ import { isDisabled, runTypedPlan } from "../control/service.ts";
 import { planActions } from "../control/planner.ts";
 import { browserStatus } from "../control/browser.ts";
 import { buildProvider } from "../providers/factory.ts";
+import { listRemembered, forgetPlan, clearAllMemory } from "../control/memory.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -166,15 +167,41 @@ export function makeHandler(store: Store, token: string) {
       // we keep it as preview-only by design. The user runs the plan from
       // their terminal (or via the agent).
       try {
-        const body = await req.json() as { task?: string };
+        const body = await req.json() as { task?: string; noMemory?: boolean };
         if (!body?.task) return json({ error: "expected { task: string }" }, 400);
         const provider = buildProvider(config, {});
-        const result = await planActions(provider, body.task);
+        const result = await planActions(provider, body.task, { store, noMemory: body.noMemory === true });
         if ("error" in result) return json({ error: result.error }, 422);
-        return json({ plan: result.plan });
+        return json({ plan: result.plan, source: result.source });
       } catch (e) {
         return json({ error: (e as Error).message }, 400);
       }
+    }
+
+    // ── v0.8.2: Plan memory ──────────────────────────────────────────────
+
+    if (path === "/api/control/memory") {
+      return json({
+        enabled: config.control?.memory?.enabled !== false,
+        entries: listRemembered(store).map((e) => ({
+          baselineId: e.baselineId,
+          skillId: e.skillId,
+          task: e.task,
+          steps: e.actions.length,
+          hits: e.hits,
+          rememberedAt: e.rememberedAt,
+        })),
+      });
+    }
+
+    if (path.startsWith("/api/control/memory/") && req.method === "DELETE") {
+      const key = decodeURIComponent(path.slice("/api/control/memory/".length));
+      if (key === "*" || key === "all") {
+        const n = clearAllMemory(store);
+        return json({ ok: true, removed: n });
+      }
+      const r = forgetPlan(store, key);
+      return json({ ok: r.ok, reason: r.reason }, r.ok ? 200 : 404);
     }
 
     return json({ error: "not found" }, 404);
