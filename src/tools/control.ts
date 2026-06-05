@@ -54,27 +54,30 @@ export const computerControlTool: Tool = {
     // If the agent is in dry-run, force the planner's execution into dry-run too.
     const effectiveMode: ControlOptions["mode"] = ctx.dryRun ? "dry-run" : mode;
 
-    // Reuse the same provider the agent is using.
-    const { config } = loadConfig();
-    const provider = buildProvider(config, {});
-    const planned = await planActions(provider, task);
-    if ("error" in planned) {
-      ctx.audit("computer_control.plan_error", { task, error: planned.error });
-      return { ok: false, output: `planner failed: ${planned.error}` };
-    }
-    if (planned.plan.actions.length === 0) {
-      return { ok: true, output: planned.plan.rationale ?? "planner returned an empty plan (nothing to do)" };
-    }
-
     // Open a store handle scoped to this tool call. Sharing the agent's
     // store would require plumbing — we keep audit isolation simple.
     const store = new Store();
     try {
-      const opts: ControlOptions = {
+      // Reuse the same provider the agent is using. Pass the store so the
+      // planner can consult memory before billing an LLM call.
+      const { config } = loadConfig();
+      const provider = buildProvider(config, {});
+      const memoryEnabled = config.control?.memory?.enabled !== false;
+      const planned = await planActions(provider, task, { store, noMemory: !memoryEnabled });
+      if ("error" in planned) {
+        ctx.audit("computer_control.plan_error", { task, error: planned.error });
+        return { ok: false, output: `planner failed: ${planned.error}` };
+      }
+      if (planned.plan.actions.length === 0) {
+        return { ok: true, output: planned.plan.rationale ?? "planner returned an empty plan (nothing to do)" };
+      }
+
+      const opts = {
         mode: effectiveMode,
         autoApproveSensitive: false, // agent path NEVER auto-approves; the human decides.
         delayMs: 250,
-      };
+        memory: memoryEnabled,
+      } as ControlOptions & { memory?: boolean };
       const results = await runTypedPlan(store, planned.plan, opts);
       const okCount  = results.filter((r) => r.result.ok && !r.result.skipped).length;
       const skipped  = results.filter((r) => r.result.skipped).length;
@@ -87,12 +90,14 @@ export const computerControlTool: Tool = {
         executed: okCount,
         skipped,
         failed,
+        source: planned.source, // "memory" or "llm"
       });
 
-      const summary = `computer_control: ${okCount} executed · ${skipped} skipped · ${failed} failed (mode: ${effectiveMode}). ` +
+      const sourceTag = planned.source === "memory" ? " [recalled from memory, no LLM cost]" : "";
+      const summary = `computer_control${sourceTag}: ${okCount} executed · ${skipped} skipped · ${failed} failed (mode: ${effectiveMode}). ` +
         `plan rationale: ${planned.plan.rationale ?? "(none)"}.` +
         (failed ? ` last error: ${results.find((r) => !r.result.ok && !r.result.skipped)?.result.message ?? ""}` : "");
-      return { ok: failed === 0, output: summary, data: { plan: planned.plan, results: results.map((r) => ({ ok: r.result.ok, skipped: r.result.skipped, message: r.result.message })) } };
+      return { ok: failed === 0, output: summary, data: { plan: planned.plan, source: planned.source, results: results.map((r) => ({ ok: r.result.ok, skipped: r.result.skipped, message: r.result.message })) } };
     } finally {
       store.close();
     }
