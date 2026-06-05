@@ -12,6 +12,7 @@ import {
   system_volumeTool, system_screenshotTool, system_notifyTool,
   system_batteryTool, system_mediaTool, system_trashTool, system_wifiTool
 } from "../computer/system-control.ts";
+import { computerControlTool } from "./control.ts";
 
 const ALL: Tool[] = [
   // File operations
@@ -27,6 +28,8 @@ const ALL: Tool[] = [
   checkPackageTool,
   // JARVIS system control (cross-platform)
   ...SYSTEM_TOOLS,
+  // v0.8.1 — safe multi-step computer control (planner-driven)
+  computerControlTool,
 ];
 
 // Read-only tools — safe in plan/ask modes (no state change, no exec, no system access)
