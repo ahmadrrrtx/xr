@@ -84,7 +84,7 @@ function printHelp(): void {
 ${C.bold("Usage")}  xr "your task"           run a task (default: agent mode)
   xr --mode plan "task"     plan-only mode (read-only)
   xr --mode ask "task"      Q&A mode (read-only)
-  xr --onboard              interactive setup wizard (5 min → ready)
+  xr onboarding             interactive setup wizard (5 min → ready)
   xr --tui                  interactive terminal UI (Claude Code-style)
   xr --computer "task"      JARVIS GUI control (screenshots + actions)
   xr --voice                voice stack check (STT/TTS/wake word)
@@ -97,7 +97,12 @@ ${C.bold("Model & Provider")}
   xr --dry-run "task"          simulate everything, touch nothing
 
 ${C.bold("Commands")}
+  xr onboarding                start the onboarding wizard
+  xr config                    view current configuration
+  xr providers                 list all supported AI providers
+  xr models                    view current model defaults
   xr doctor                    system health + audit chain check
+  xr reset                     factory reset (deletes config & db)
   xr test --attacks            injection benchmark (block-rate report)
   xr verify-log               verify tamper-evident audit log
   xr skills                   list all available skills
@@ -166,6 +171,15 @@ async function main(): Promise<void> {
   const store = new Store();
   
   try {
+    // ── First-run Auto Onboarding ──────────────────────────────────────────
+    const { existsSync } = await import("node:fs");
+    if (!existsSync(configPath()) && !args.onboard && !args.help && args.command !== "onboard") {
+      const { runOnboarding } = await import("./interfaces/onboard.ts");
+      await runOnboarding();
+      // After onboarding, we might want to continue with the task or just stop.
+      // For a better UX, if they provided a task, we'll continue after setup.
+      if (!args.task && !args.command) return; 
+    }
     // ── Special Commands ────────────────────────────────────────────────────
     if (args.attacks || args.command === "test") {
       const report = runLab({ egressAllowlist: loadConfig().config.security.egressAllowlist });
@@ -197,9 +211,53 @@ async function main(): Promise<void> {
       return;
     }
     
-    if (args.onboard) {
+    if (args.onboard || args.command === "onboard" || args.command === "onboarding") {
       const { runOnboarding } = await import("./interfaces/onboard.ts");
       await runOnboarding();
+      return;
+    }
+
+    if (args.command === "reset") {
+      const { confirm } = await import("./interfaces/cli.ts");
+      const { unlinkSync, existsSync } = await import("node:fs");
+      const confirmed = await confirm("Are you sure you want to reset XR? This will delete your config and local database.", false);
+      if (confirmed) {
+        if (existsSync(configPath())) unlinkSync(configPath());
+        const dbPath = join(XR_HOME, "xr.db");
+        if (existsSync(dbPath)) unlinkSync(dbPath);
+        const envPath = join(XR_HOME, ".env");
+        if (existsSync(envPath)) unlinkSync(envPath);
+        console.log("XR has been reset.");
+      }
+      return;
+    }
+
+    if (args.command === "config") {
+      console.log(`Config path: ${configPath()}`);
+      const { readFileSync } = await import("node:fs");
+      console.log(readFileSync(configPath(), "utf8"));
+      return;
+    }
+
+    if (args.command === "providers") {
+      banner();
+      console.log(`${C.bold("Available Providers")}`);
+      for (const p of knownProviders()) {
+        const status = isLocal(p) ? C.green("local") : C.cyan("cloud");
+        console.log(`  - ${p.padEnd(15)} [${status}]`);
+      }
+      return;
+    }
+
+    if (args.command === "models") {
+      banner();
+      const { config } = loadConfig();
+      console.log(`${C.bold("Current Default Model")}`);
+      console.log(`  Provider: ${config.defaults.provider}`);
+      console.log(`  Model:    ${config.defaults.model}`);
+      if (config.defaults.provider === "ollama") {
+        console.log(`\n${C.dim("Use 'ollama list' to see all pulled local models.")}`);
+      }
       return;
     }
     
