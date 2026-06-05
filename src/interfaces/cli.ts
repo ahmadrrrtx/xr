@@ -1,8 +1,8 @@
 /**
- * XR — terminal UI helpers (banner, colored output, approval prompt).
- * No heavy TUI deps yet (keeping the dependency tree tiny — TRD dep policy).
+ * XR — professional terminal UI helpers.
  */
 import type { ApprovalRequest } from "../core/types.ts";
+import { createInterface } from "node:readline";
 
 const C = {
   cyan: (s: string) => `\x1b[36m${s}\x1b[0m`,
@@ -11,6 +11,7 @@ const C = {
   red: (s: string) => `\x1b[31m${s}\x1b[0m`,
   dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
   bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
+  reset: "\x1b[0m",
 };
 
 export function banner(): void {
@@ -20,10 +21,6 @@ export function banner(): void {
    █░█ █▀▄   ${C.dim("the AI agent you can actually trust · by rrrtx")}
 `),
   );
-}
-
-export function say(line: string): void {
-  console.log(line);
 }
 
 export function info(line: string): void {
@@ -38,40 +35,60 @@ export function ok(line: string): void {
   console.log(C.green("✓ " + line));
 }
 
-/** Read one line from stdin. */
+/** Read one line from stdin with a prompt. */
 async function readLine(promptText: string): Promise<string> {
-  process.stdout.write(promptText);
-  for await (const line of (console as any)) {
-    return String(line).trim();
-  }
-  return "";
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(promptText, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
 }
 
-/** 
- * Ask a question and get a string response.
- */
+/** Ask a question and get a string response. */
 export async function ask(promptText: string, options?: { default?: string }): Promise<string> {
   const suffix = options?.default ? ` ${C.dim(`(${options.default})`)}` : "";
-  const result = await readLine(`${C.cyan(promptText)}${suffix} `);
-  return result || options?.default || "";
+  return await readLine(`${C.cyan(promptText)}${suffix} `) || options?.default || "";
 }
 
-/**
- * Masked input for sensitive keys.
- */
+/** Masked input for sensitive keys using Node's readline and a custom stream. */
 export async function password(promptText: string): Promise<string> {
-  // Since perfect terminal masking is tricky without dependencies in Bun,
-  // we use a simple approach: warn the user.
-  process.stdout.write(C.cyan(promptText) + " " + C.dim("(input visible) ") );
-  for await (const line of (console as any)) {
-    return String(line).trim();
-  }
-  return "";
+  const { Writable } = await import("node:stream");
+  
+  const mutableStdout = new Writable({
+    write: function(chunk, encoding, callback) {
+      if (!(this as any).muted) {
+        process.stdout.write(chunk, encoding);
+      }
+      callback();
+    }
+  });
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: mutableStdout,
+    terminal: true
+  });
+
+  process.stdout.write(C.cyan(promptText) + " ");
+  (mutableStdout as any).muted = true;
+
+  return new Promise((resolve) => {
+    rl.question("", (answer) => {
+      (mutableStdout as any).muted = false;
+      console.log(); // New line after entry
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
 }
 
-/**
- * Yes/No confirmation.
- */
+/** Yes/No confirmation. */
 export async function confirm(promptText: string, defaultYes = true): Promise<boolean> {
   const suffix = defaultYes ? " [Y/n]" : " [y/N]";
   const result = await readLine(`${C.cyan(promptText)}${C.dim(suffix)} `);
@@ -79,29 +96,15 @@ export async function confirm(promptText: string, defaultYes = true): Promise<bo
   return result.toLowerCase().startsWith("y");
 }
 
-/**
- * Over-budget prompt (the Cost Governor moment).
- * Returns extra budget to add, or null to stop.
- */
-export async function overBudgetPrompt(
-  meter: string,
-  reason: string,
-): Promise<{ usd?: number; tokens?: number } | null> {
+/** Interactive approval prompt. */
+export async function approvePrompt(req: ApprovalRequest): Promise<boolean> {
   console.log("");
-  console.log(C.amber("⏸ PAUSED — budget guard"));
-  console.log("   " + meter);
-  console.log("   " + C.dim(reason));
-  console.log(`   ${C.amber("[c]")}ontinue (raise ceiling)   ${C.amber("[s]")}top here`);
-  const ans = (await readLine(C.amber("   ? "))).toLowerCase();
-  if (ans === "c" || ans === "continue") {
-    const amt = (await readLine(C.cyan("   raise spend ceiling by $ (default 0.25): "))).trim();
-    const usd = Number(amt) || 0.25;
-    console.log(C.green(`   → ceiling raised by $${usd}`));
-    // Also grant a generous token headroom so token-capped tasks can continue.
-    return { usd, tokens: 250_000 };
-  }
-  console.log(C.red("   → stopping"));
-  return null;
+  console.log(C.amber(`🔒 ACTION REQUIRES APPROVAL`));
+  console.log(`   tool:   ${C.bold(req.tool)}`);
+  console.log(`   reason: ${req.reason}`);
+  const ans = (await confirm("   Approve this action?", true));
+  console.log(ans ? C.green("   → approved") : C.red("   → denied"));
+  return ans;
 }
 
 export { C as colors };
