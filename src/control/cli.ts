@@ -13,6 +13,7 @@ import { isDisabled, runAction, runPlan, runTypedPlan } from "./service.ts";
 import type { Action, ControlOptions, ExecutionMode } from "./types.ts";
 import { planActions } from "./planner.ts";
 import { browserStatus, shutdownBrowser } from "./browser.ts";
+import { listRemembered, forgetPlan, clearAllMemory, fingerprintTask } from "./memory.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { spawnSync } from "node:child_process";
 
@@ -22,6 +23,7 @@ interface ParsedFlags {
   mode: ExecutionMode;
   yes: boolean;
   delayMs: number;
+  noMemory: boolean;
   rest: string[];
 }
 
@@ -29,6 +31,7 @@ function parseFlags(argv: string[]): ParsedFlags {
   let mode: ExecutionMode = "auto";
   let yes = false;
   let delayMs = 250;
+  let noMemory = false;
   const rest: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -36,9 +39,10 @@ function parseFlags(argv: string[]): ParsedFlags {
     else if (a === "--step") mode = "step";
     else if (a === "--yes" || a === "-y") yes = true;
     else if (a === "--delay") delayMs = Math.max(0, Number(argv[++i]) || 0);
+    else if (a === "--no-memory") noMemory = true;
     else rest.push(a);
   }
-  return { mode, yes, delayMs, rest };
+  return { mode, yes, delayMs, noMemory, rest };
 }
 
 function makeOpts(flags: ParsedFlags): ControlOptions {
@@ -218,13 +222,14 @@ function finish(success: boolean, msg: string): void {
 
 async function cmdPlan(store: Store, flags: ParsedFlags): Promise<void> {
   const task = flags.rest.join(" ").trim();
-  if (!task) { warn(`usage: xr control plan "<task>"  [--dry-run|--step|--yes]`); return; }
+  if (!task) { warn(`usage: xr control plan "<task>"  [--dry-run|--step|--yes] [--no-memory]`); return; }
   banner();
   console.log(C.bold(`🧭 Planning: ${task}`));
 
   const { config } = loadConfig();
   const provider = buildProvider(config, {});
-  const planned = await planActions(provider, task);
+  const memoryEnabled = config.control?.memory?.enabled !== false && !flags.noMemory;
+  const planned = await planActions(provider, task, { store, noMemory: !memoryEnabled });
   if ("error" in planned) {
     warn(`planner failed: ${planned.error}`);
     return;
@@ -235,8 +240,15 @@ async function cmdPlan(store: Store, flags: ParsedFlags): Promise<void> {
     return;
   }
 
+  // Show source so the user knows when LLM cost was spent vs cached.
+  if (planned.source === "memory") {
+    console.log(C.green(`  ⚡ recalled from memory — no LLM call`));
+  } else {
+    console.log(C.dim(`  ✓ planned via ${provider.label}`));
+  }
+
   // Default to dry-run for `plan` unless user passed an explicit flag.
-  const opts: ControlOptions = makeOpts({ ...flags, mode: flags.mode === "auto" ? "dry-run" : flags.mode });
+  const opts = { ...makeOpts({ ...flags, mode: flags.mode === "auto" ? "dry-run" : flags.mode }), memory: memoryEnabled };
   const results = await runTypedPlan(store, plan, opts);
 
   const okCount = results.filter((r) => r.result.ok && !r.result.skipped).length;
@@ -246,6 +258,8 @@ async function cmdPlan(store: Store, flags: ParsedFlags): Promise<void> {
   console.log(C.dim(`  → ${okCount} executed · ${skipped} skipped · ${failed} failed`));
   if (opts.mode === "dry-run") {
     info(`Dry-run only. Re-run with "xr control plan \\"${task}\\" --yes" or "--step" to execute.`);
+  } else if (okCount === plan.actions.length && memoryEnabled && planned.source === "llm") {
+    info(`Remembered. Next time you run this task XR will skip the LLM.`);
   }
 }
 
@@ -279,6 +293,65 @@ async function readAllStdin(): Promise<string> {
 }
 
 // ── browser subcommands ───────────────────────────────────────────────────
+
+// ── memory subcommands ────────────────────────────────────────────────────
+
+async function cmdMemory(store: Store, flags: ParsedFlags): Promise<void> {
+  const sub = flags.rest[0];
+
+  if (!sub || sub === "list") {
+    banner();
+    console.log(C.bold("🧠 Remembered Computer-Control Plans"));
+    const entries = listRemembered(store);
+    if (!entries.length) {
+      info("nothing remembered yet — successful plans get cached automatically.");
+      return;
+    }
+    for (const e of entries) {
+      const when = new Date(e.rememberedAt).toISOString().replace("T", " ").slice(0, 19);
+      console.log(`  ${C.cyan(e.baselineId)} ${C.dim("·")} ${C.bold(e.task)} ${C.dim(`(${e.actions.length} steps · ${e.hits} hits · ${when})`)}`);
+    }
+    console.log("");
+    info(`use "xr control memory show <id>" to inspect, or "forget <id|task>" to delete.`);
+    return;
+  }
+
+  if (sub === "show") {
+    const key = flags.rest.slice(1).join(" ").trim();
+    if (!key) { warn(`usage: xr control memory show <baseline-id|task>`); return; }
+    const all = listRemembered(store);
+    const match = all.find((e) => e.baselineId === key || e.skillId === key || e.task === key)
+      ?? all.find((e) => e.skillId === fingerprintTask(key));
+    if (!match) { warn(`no remembered plan matches: ${key}`); return; }
+    banner();
+    console.log(C.bold("🧠 ") + match.task);
+    console.log(C.dim(`  ${match.baselineId} · ${match.actions.length} steps · ${match.hits} hits`));
+    console.log("");
+    for (let i = 0; i < match.actions.length; i++) {
+      console.log(`  ${C.dim(String(i + 1).padStart(2) + ".")} ${JSON.stringify(match.actions[i])}`);
+    }
+    return;
+  }
+
+  if (sub === "forget") {
+    const key = flags.rest.slice(1).join(" ").trim();
+    if (!key) { warn(`usage: xr control memory forget <baseline-id|task>`); return; }
+    const res = forgetPlan(store, key);
+    if (res.ok) ok(res.reason); else warn(res.reason);
+    return;
+  }
+
+  if (sub === "clear") {
+    const { confirm } = await import("../interfaces/cli.ts");
+    const yes = flags.yes || await confirm("Forget ALL remembered control plans?", false);
+    if (!yes) { info("cancelled."); return; }
+    const n = clearAllMemory(store);
+    ok(`forgot ${n} entr${n === 1 ? "y" : "ies"}.`);
+    return;
+  }
+
+  warn(`unknown memory subcommand: ${sub}. Use list, show, forget, or clear.`);
+}
 
 async function cmdBrowser(store: Store, flags: ParsedFlags): Promise<void> {
   const sub = flags.rest[0];
@@ -348,11 +421,18 @@ ${C.bold("Browser")}
   xr control browser install                install playwright + chromium
   xr control browser close                  close the active browser session
 
+${C.bold("Memory")}
+  xr control memory list                    list remembered plans
+  xr control memory show <id|task>          inspect a remembered plan
+  xr control memory forget <id|task>        delete one entry
+  xr control memory clear                   forget everything (asks confirmation)
+
 ${C.bold("Flags (any subcommand)")}
   --dry-run         show the plan, execute nothing
   --step            confirm every single action
   --yes, -y         auto-approve SENSITIVE actions only
                     (destructive actions always prompt)
+  --no-memory       skip memory recall + don't remember this plan
   --delay <ms>      pause between actions in a plan
 
 ${C.bold("Disable everything")}
@@ -382,6 +462,7 @@ export async function handleControlCommand(argv: string[], store: Store): Promis
   if (sub === "plan")    return cmdPlan(store, flags);
   if (sub === "run")     return cmdRun(store, flags);
   if (sub === "browser") return cmdBrowser(store, flags);
+  if (sub === "memory")  return cmdMemory(store, flags);
 
   warn(`unknown subcommand: ${sub}`);
   printHelp();
