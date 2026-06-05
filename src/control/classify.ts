@@ -124,5 +124,59 @@ export function classify(action: Action): RiskAssessment {
         reversible: true,
       };
     }
+
+    case "browser": {
+      // Browser ops are usually safer than desktop ops (DOM selectors are
+      // deterministic), but submit/upload/sensitive-fill are always destructive.
+      if (action.sensitive) {
+        return {
+          level: "destructive",
+          reason: "browser fill of a sensitive value (password / secret)",
+          reversible: false,
+        };
+      }
+      if (action.op === "submit") {
+        return {
+          level: "destructive",
+          reason: `submits form ${action.selector ?? "(current)"}`,
+          reversible: false,
+        };
+      }
+      if (action.op === "press" && action.value && /^(enter|return)$/i.test(action.value)) {
+        return {
+          level: "destructive",
+          reason: "browser Enter key commonly submits forms",
+          reversible: false,
+        };
+      }
+      if (action.op === "goto") {
+        const t = (action.value ?? "").trim();
+        if (DANGEROUS_OPEN.some((re) => re.test(t))) {
+          return {
+            level: "destructive",
+            reason: `browser navigation to "${t.slice(0, 80)}" can execute code`,
+            reversible: false,
+          };
+        }
+        return {
+          level: "sensitive",
+          reason: `navigates browser to ${t.slice(0, 80)}`,
+          reversible: true,
+        };
+      }
+      if (action.op === "fill" || action.op === "type" || action.op === "click") {
+        return {
+          level: "sensitive",
+          reason: `browser ${action.op} ${action.selector ?? ""}`,
+          reversible: true,
+        };
+      }
+      // wait / screenshot / extract / close — informational.
+      return {
+        level: "safe",
+        reason: `browser ${action.op} is read-only`,
+        reversible: true,
+      };
+    }
   }
 }
