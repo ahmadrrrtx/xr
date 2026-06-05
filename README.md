@@ -153,6 +153,25 @@ xr control stop                               # hard-disable
 
 `xr doctor` reports computer-control health alongside the other systems.
 
+### 🧠 Plan Memory (v0.8.2)
+Successful computer-control plans get cached deterministically. The next time you run the same task, XR skips the LLM entirely — zero cost, instant response, same safety pipeline.
+
+```bash
+xr control plan "open github notifications" --yes  # first run: LLM plans
+xr control plan "open github notifications" --yes  # next run: ⚡ recalled from memory
+xr control memory list                              # see what XR remembers
+xr control memory forget "open github notifications"
+xr control memory clear                             # forget everything
+```
+
+**Safety gates** (refuses to memoize):
+- Plans with `sensitive: true` actions (passwords / secrets)
+- Plans with destructive actions (form submits, `Enter`, `file://`, executables)
+- Failed or partial runs (dry-run, denial, error)
+- Plans longer than 20 actions
+
+Recalled plans are **re-validated and re-classified** on every hit — schema drift or newly-destructive actions silently invalidate the cache so the LLM plans fresh.
+
 ### 💰 Cost Governor — Enforced in Code
 ```bash
 xr --budget 0.10 "write me a full React app"
