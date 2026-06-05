@@ -119,7 +119,7 @@ Wake word → Whisper STT → agent → Kokoro TTS. Local by default. Say "Hey X
 | `xr --tui` | Interactive terminal UI (Claude Code-style) |
 | `xr onboarding` | Professional 5-minute setup wizard |
 | `xr config` | View current configuration |
-| `xr providers` | List all supported AI providers |
+| `xr providers` | Manage AI providers (list, set, add, test) |
 | `xr models` | View current model defaults |
 | `xr doctor` | System health + audit chain check |
 | `xr reset` | Factory reset (deletes config & db) |
