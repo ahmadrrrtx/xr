@@ -12,7 +12,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
-export const CONFIG_VERSION = 2; // Bumped for provider additions
+export const CONFIG_VERSION = 3; // Bumped for fallback and custom providers
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -21,6 +21,8 @@ const ConfigSchema = z.object({
       mode: z.enum(["agent", "plan", "ask"]).default("agent"),
       provider: z.string().default("ollama"),
       model: z.string().default("qwen2.5:7b"),
+      fallbackProvider: z.string().optional(),
+      fallbackModel: z.string().optional(),
     })
     .default({}),
   budget: z
@@ -100,6 +102,16 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
     ...raw,
     version: 2,
     preferFreeProviders: raw.preferFreeProviders ?? true,
+  }),
+  // 2 -> 3: add fallback settings
+  2: (raw) => ({
+    ...raw,
+    version: 3,
+    defaults: {
+      ...raw.defaults,
+      fallbackProvider: raw.defaults?.fallbackProvider ?? "ollama",
+      fallbackModel: raw.defaults?.fallbackModel ?? "qwen2.5:7b",
+    },
   }),
 };
 
