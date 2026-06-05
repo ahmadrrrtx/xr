@@ -8,21 +8,22 @@
  * Cohere, and AWS Bedrock.
  */
 import { z } from "zod";
-import { homedir } from "node:os";
+import { homedir, platform } from "node:os";
 import { join } from "node:path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
-export const CONFIG_VERSION = 3; // Bumped for fallback and custom providers
+export const CONFIG_VERSION = 4; // Bumped for XR v0.5 local model intelligence
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
   defaults: z
     .object({
       mode: z.enum(["agent", "plan", "ask"]).default("agent"),
-      provider: z.string().default("ollama"),
-      model: z.string().default("qwen2.5:7b"),
-      fallbackProvider: z.string().optional(),
-      fallbackModel: z.string().optional(),
+      provider: z.string().regex(/^[a-z0-9_-]+$/i).default("ollama"),
+      model: z.string().min(1).max(200).default("qwen2.5:7b"),
+      fallbackProvider: z.string().regex(/^[a-z0-9_-]+$/i).optional(),
+      fallbackModel: z.string().min(1).max(200).optional(),
     })
     .default({}),
   budget: z
@@ -45,23 +46,34 @@ const ConfigSchema = z.object({
     .object({
       // OpenAI-compatible provider overrides
       ollama: z
-        .object({ baseUrl: z.string().default("http://localhost:11434/v1") })
+        .object({ baseUrl: z.string().url().refine((v) => v.startsWith("http://") || v.startsWith("https://"), "must be http(s)").default("http://localhost:11434/v1") })
         .default({}),
       groq: z
-        .object({ baseUrl: z.string().default("https://api.groq.com/openai/v1") })
+        .object({ baseUrl: z.string().url().default("https://api.groq.com/openai/v1") })
         .default({}),
       together: z
-        .object({ baseUrl: z.string().default("https://api.together.xyz/v1") })
+        .object({ baseUrl: z.string().url().default("https://api.together.xyz/v1") })
         .default({}),
       openrouter: z
-        .object({ baseUrl: z.string().default("https://openrouter.ai/api/v1") })
+        .object({ baseUrl: z.string().url().default("https://openrouter.ai/api/v1") })
         .default({}),
       deepseek: z
-        .object({ baseUrl: z.string().default("https://api.deepseek.com/v1") })
+        .object({ baseUrl: z.string().url().default("https://api.deepseek.com/v1") })
         .default({}),
       // Native providers don't need baseUrl (use their own API endpoints)
     })
     .passthrough()
+    .default({}),
+  localModels: z
+    .object({
+      runtime: z.literal("ollama").default("ollama"),
+      enabled: z.boolean().default(false),
+      selected: z.string().min(1).max(200).optional(),
+      recommended: z.string().min(1).max(200).optional(),
+      recommendationReason: z.string().max(1000).optional(),
+      installedAt: z.string().datetime().optional(),
+      routing: z.enum(["local-only", "hybrid", "cloud-first"]).default("hybrid"),
+    })
     .default({}),
   // Block 8: MCP servers to consume tools from.
   mcpServers: z
@@ -113,6 +125,18 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       fallbackModel: raw.defaults?.fallbackModel ?? "qwen2.5:7b",
     },
   }),
+  // 3 -> 4: add local model intelligence config
+  3: (raw) => ({
+    ...raw,
+    version: 4,
+    localModels: raw.localModels ?? {
+      runtime: "ollama",
+      enabled: raw.defaults?.provider === "ollama" || raw.defaults?.fallbackProvider === "ollama",
+      selected: raw.defaults?.provider === "ollama" ? raw.defaults?.model : raw.defaults?.fallbackModel,
+      recommended: raw.defaults?.fallbackModel ?? "qwen2.5:7b",
+      routing: raw.defaults?.provider === "ollama" ? "local-only" : "hybrid",
+    },
+  }),
 };
 
 function migrate(raw: any): any {
@@ -132,17 +156,7 @@ function migrate(raw: any): any {
 export function loadConfig(): { config: XRConfig; warnings: string[] } {
   ensureHome();
   
-  // Load API keys from .env if present
-  const envPath = join(XR_HOME, ".env");
-  if (existsSync(envPath)) {
-    const content = readFileSync(envPath, "utf8");
-    for (const line of content.split("\n")) {
-      const [key, ...val] = line.split("=");
-      if (key && val.length > 0) {
-        process.env[key.trim()] = val.join("=").trim();
-      }
-    }
-  }
+  loadLocalSecrets();
 
   const warnings: string[] = [];
 
@@ -180,6 +194,70 @@ export function loadConfig(): { config: XRConfig; warnings: string[] } {
 
 export function configPath(): string {
   return CONFIG_PATH;
+}
+
+export function saveConfig(config: XRConfig): void {
+  ensureHome();
+  writeFileSync(CONFIG_PATH, JSON.stringify(ConfigSchema.parse(config), null, 2));
+}
+
+const PROVIDER_KEY_ENVS = [
+  "GROQ_API_KEY",
+  "GOOGLE_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "MISTRAL_API_KEY",
+  "COHERE_API_KEY",
+  "TOGETHER_API_KEY",
+  "OPENROUTER_API_KEY",
+  "CEREBRAS_API_KEY",
+  "AWS_ACCESS_KEY_ID",
+];
+
+function hasCommand(cmd: string): boolean {
+  const res = spawnSync(process.platform === "win32" ? "where" : "command", process.platform === "win32" ? [cmd] : ["-v", cmd], {
+    stdio: "ignore",
+    shell: process.platform !== "win32",
+    timeout: 1500,
+  });
+  return res.status === 0;
+}
+
+function getOsSecret(name: string): string | undefined {
+  if (platform() === "darwin" && hasCommand("security")) {
+    const res = spawnSync("security", ["find-generic-password", "-a", name, "-s", "xr", "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    if (res.status === 0 && res.stdout.trim()) return res.stdout.trim();
+  }
+  if (platform() === "linux" && hasCommand("secret-tool")) {
+    const res = spawnSync("secret-tool", ["lookup", "application", "xr", "name", name], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    if (res.status === 0 && res.stdout.trim()) return res.stdout.trim();
+  }
+  return undefined;
+}
+
+function loadLocalSecrets(): void {
+  // Backward-compatible file fallback. Keys are loaded into process.env so
+  // provider adapters never need to know where the secret came from.
+  const envPath = join(XR_HOME, ".env");
+  if (existsSync(envPath)) {
+    try { chmodSync(envPath, 0o600); } catch {}
+    const content = readFileSync(envPath, "utf8");
+    for (const line of content.split("\n")) {
+      const [key, ...val] = line.split("=");
+      if (key && val.length > 0 && !process.env[key.trim()]) {
+        process.env[key.trim()] = val.join("=").trim();
+      }
+    }
+  }
+
+  // OS-backed secrets if available (macOS Keychain / Linux Secret Service).
+  for (const envName of PROVIDER_KEY_ENVS) {
+    if (!process.env[envName]) {
+      const value = getOsSecret(envName);
+      if (value) process.env[envName] = value;
+    }
+  }
 }
 
 /** Get environment status for all known providers */
