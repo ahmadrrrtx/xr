@@ -112,7 +112,7 @@ describe("runAction(dry-run)", () => {
       // Force-enable for this temp config by writing a minimal config file.
       const { saveConfig, loadConfig } = await import("../src/config/config.ts");
       const { config } = loadConfig();
-      config.control = { enabled: true, defaultMode: "auto", stepDelayMs: 0 };
+      config.control = { enabled: true, defaultMode: "auto", stepDelayMs: 0, memory: { enabled: true, maxEntries: 500 } };
       saveConfig(config);
 
       const result = await runAction(
