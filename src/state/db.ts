@@ -106,6 +106,14 @@ export class Store {
         usd REAL NOT NULL,
         created_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS budget_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        monthly_cap REAL NOT NULL,
+        daily_cap REAL,
+        warnings_enabled INTEGER NOT NULL DEFAULT 1,
+        auto_fallback INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
       -- Block 8: scheduled tasks (cron).
       CREATE TABLE IF NOT EXISTS schedules (
         id TEXT PRIMARY KEY,
@@ -414,6 +422,57 @@ export class Store {
         `INSERT INTO cost_events (session_id,provider,model,in_tokens,out_tokens,usd,created_at) VALUES (?,?,?,?,?,?,?)`,
       )
       .run(sessionId, provider, model, inTokens, outTokens, usd, Date.now());
+  }
+
+  clearCosts(): void {
+    this.db.query(`DELETE FROM cost_events`).run();
+  }
+
+  // ---- Budget Management ----
+
+  getBudgetConfig(): { monthly_cap: number; daily_cap: number | null; warnings_enabled: boolean; auto_fallback: boolean } | null {
+    const row = this.db.query<{ monthly_cap: number; daily_cap: number | null; warnings_enabled: number; auto_fallback: number }, []>(
+      `SELECT * FROM budget_config WHERE id = 1`,
+    ).get();
+    if (!row) return null;
+    return {
+      monthly_cap: row.monthly_cap,
+      daily_cap: row.daily_cap,
+      warnings_enabled: Boolean(row.warnings_enabled),
+      auto_fallback: Boolean(row.auto_fallback),
+    };
+  }
+
+  setBudgetConfig(config: { monthly_cap: number; daily_cap?: number; warnings_enabled?: boolean; auto_fallback?: boolean }): void {
+    const current = this.getBudgetConfig();
+    if (!current) {
+      this.db.query(
+        `INSERT INTO budget_config (id, monthly_cap, daily_cap, warnings_enabled, auto_fallback, created_at) VALUES (1, ?, ?, ?, ?, ?)`,
+      ).run(
+        config.monthly_cap,
+        config.daily_cap ?? null,
+        config.warnings_enabled ?? 1,
+        config.auto_fallback ?? 1,
+        Date.now()
+      );
+    } else {
+      this.db.query(
+        `UPDATE budget_config SET monthly_cap=?, daily_cap=?, warnings_enabled=?, auto_fallback=?, created_at=? WHERE id=1`,
+      ).run(
+        config.monthly_cap,
+        config.daily_cap ?? current.daily_cap,
+        config.warnings_enabled !== undefined ? (config.warnings_enabled ? 1 : 0) : current.warnings_enabled ? 1 : 0,
+        config.auto_fallback !== undefined ? (config.auto_fallback ? 1 : 0) : current.auto_fallback ? 1 : 0,
+        Date.now()
+      );
+    }
+  }
+
+  getSpendForPeriod(startMs: number): number {
+    const row = this.db.query<{ total: number }, [number]>(
+      `SELECT COALESCE(SUM(usd), 0) total FROM cost_events WHERE created_at >= ?`,
+    ).get(startMs);
+    return row?.total ?? 0;
   }
 
   // ---- Block 8: schedules ----
