@@ -86,7 +86,7 @@ ${C.bold("Usage")}  xr "your task"           run a task (default: agent mode)
 ${C.bold("Commands")}
   xr doctor                 system health + audit chain check
   xr config                 view current configuration
-  xr providers              list all supported AI providers
+  xr providers              list, add, or set AI providers
   xr models                 view current model defaults
   xr reset                  factory reset (deletes config & db)
   xr verify-log             verify tamper-evident audit log
@@ -182,12 +182,8 @@ async function main(): Promise<void> {
     }
 
     if (args.command === "providers") {
-      banner();
-      console.log(`${C.bold("Available Providers")}`);
-      for (const p of knownProviders()) {
-        const status = isLocal(p) ? C.green("local") : C.cyan("cloud");
-        console.log(`  - ${p.padEnd(15)} [${status}]`);
-      }
+      const { handleProvidersCommand } = await import("./interfaces/providers.ts");
+      await handleProvidersCommand(argv.slice(1));
       return;
     }
 
