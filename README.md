@@ -117,6 +117,42 @@ xr --computer "open Safari and search for AI agents"
 ```
 XR sees your screen via screenshots, reasons about what's on it, and takes actions — click, type, scroll, open apps — just like you would. It's the difference between *asking* an agent to do something and *showing* it what to do.
 
+### 🖥 Safe Computer Control (v0.8)
+A deterministic, explicit automation layer for real workflows. Every action is **classified**, **previewed**, and **approved** before it runs — and the whole subsystem is **off by default**.
+
+```bash
+xr control start                              # opt-in, writes config.control.enabled = true
+xr control status                             # capabilities + missing deps
+xr control test                               # dry-run a representative plan (executes nothing)
+xr control app   "Visual Studio Code"         # launch an app
+xr control open  "https://github.com/ahmadrrrtx/xr"
+xr control type  "hello from xr"              # types into the focused window
+xr control click "640,480" --double
+xr control key   "cmd+tab"                    # any combo
+xr control scroll down 5
+xr control stop                               # hard-disable
+```
+
+**Safety model**
+
+- **Safe** actions (move/scroll/focus) run immediately.
+- **Sensitive** actions (open/type/click/key/app) prompt — `--yes` skips that prompt only for these.
+- **Destructive** actions (shell-like text, `Enter`, `Shift+Delete`, `file://`, executables, `javascript:`, sensitive=true) **always** prompt, even with `--yes`.
+- `--dry-run` previews a plan and executes nothing.
+- `--step` confirms every single action.
+- `XR_CONTROL_DISABLED=1` or `xr control stop` hard-disables the entire subsystem.
+- Every plan, execution, denial, and disable event is appended to the tamper-evident audit log. Sensitive text is redacted before storage.
+
+**Platform notes**
+
+| OS | Built-in | Recommended install |
+|----|----------|---------------------|
+| macOS | `osascript`, `open` | `brew install cliclick` for mouse move/click |
+| Linux (X11) | — | `sudo apt install xdotool wmctrl xdg-utils` |
+| Windows | PowerShell (built-in) | — |
+
+`xr doctor` reports computer-control health alongside the other systems.
+
 ### 💰 Cost Governor — Enforced in Code
 ```bash
 xr --budget 0.10 "write me a full React app"
