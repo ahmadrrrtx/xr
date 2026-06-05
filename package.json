@@ -1,6 +1,6 @@
 {
   "name": "@rrrtx/xr",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "XR \u2014 local-first AI operating system / agent platform. BYOK, local models, spend-capped, tamper-evident. by rrrtx",
   "type": "module",
   "bin": {
@@ -26,6 +26,9 @@
   "license": "MIT",
   "dependencies": {
     "zod": "^3.23.8"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.47.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
