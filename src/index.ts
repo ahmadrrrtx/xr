@@ -17,6 +17,7 @@ import { Store } from "./state/db.ts";
 import { buildProvider, knownProviders } from "./providers/factory.ts";
 import { runAgent } from "./core/agent.ts";
 import { priceFor, isLocal } from "./cost/pricing.ts";
+import { BudgetManager } from "./cost/manager.ts";
 import { runLab } from "./security/lab.ts";
 import { loadSkills } from "./skills/loader.ts";
 import { join, basename } from "node:path";
@@ -64,7 +65,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--tui") args.tui = true;
     else if (a === "--computer") args.computer = true;
     else if (a === "--voice") args.voice = true;
-    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models"].includes(a)) {
+    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models", "budget", "cost"].includes(a)) {
       args.command = a;
     } else {
       rest.push(a);
@@ -91,6 +92,9 @@ ${C.bold("Commands")}
   xr models recommend       auto-detect hardware + recommend a model
   xr models install [id]    download/configure an Ollama model
   xr models test [id]       run local model smoke test
+  xr budget                 view spend caps and usage
+  xr budget set <amount>    set monthly spend cap (USD)
+  xr budget reset           reset current monthly spending
   xr reset                  factory reset (deletes config & db)
   xr verify-log             verify tamper-evident audit log
   xr skills                 list all available skills
@@ -106,6 +110,62 @@ ${C.bold("Flags")}
   --model [id]              override model
   --dry-run                 simulate everything, touch nothing
 `);
+}
+
+// ── Budget Command Handler ─────────────────────────────────────────────────────
+async function cmdBudget(store: Store, argv: string[]): Promise<void> {
+  const manager = new BudgetManager(store);
+  const sub = argv[0];
+
+  if (!sub || sub === "status") {
+    const status = await manager.getStatus();
+    const cfg = await manager.getConfig();
+    banner();
+    console.log(`${C.bold("💰 Budget Status")}`);
+    console.log(`  Monthly Cap ...... ${C.green(`$${status.monthlyCap.toFixed(2)}`)}`);
+    console.log(`  Monthly Spend .... ${C.dim(`$${status.monthlySpend.toFixed(4)}`)}`);
+    console.log(`  Remaining ....... ${C.cyan(`$${status.remainingMonthly.toFixed(4)}`)}`);
+    console.log(`  Usage ............ ${status.percentUsed > 90 ? C.red : status.percentUsed > 70 ? C.yellow : C.green}(${status.percentUsed.toFixed(1)}%)`);
+    if (status.dailyCap !== null) {
+      console.log(`  Daily Cap ........ ${C.green(`$${status.dailyCap.toFixed(2)}`)}`);
+      console.log(`  Daily Spend ...... ${C.dim(`$${status.dailySpend.toFixed(4)}`)}`);
+    }
+    console.log(`\n  Auto-fallback .... ${cfg.auto_fallback ? C.green("enabled") : C.red("disabled")}`);
+    console.log(`  Warnings ........ ${cfg.warnings_enabled ? C.green("enabled") : C.red("disabled")}`);
+    return;
+  }
+
+  if (sub === "set") {
+    const amount = Number(argv[1]);
+    if (isNaN(amount)) {
+      console.log(C.red(`Usage: xr budget set <amount>`));
+      return;
+    }
+    await manager.setMonthlyCap(amount);
+    ok(`Monthly cap updated to $${amount.toFixed(2)}`);
+    return;
+  }
+
+  if (sub === "reset") {
+    const { confirm } = await import("./interfaces/cli.ts");
+    if (await confirm("Reset all recorded spending for the current period?", false)) {
+      await manager.resetSpending();
+      ok("Spending history reset.");
+    }
+    return;
+  }
+
+  if (sub === "history") {
+    const summary = store.costSummary();
+    banner();
+    console.log(`${C.bold("📜 Spend History (by model)")}`);
+    for (const m of summary.byModel) {
+      console.log(`  ${C.cyan(m.model.padEnd(20))} ${C.green(`$${m.usd.toFixed(4)}`)} ${C.dim(`(${m.tokens.toLocaleString()} tokens)`)}`);
+    }
+    return;
+  }
+
+  console.log(C.yellow(`Unknown budget command: ${sub}. Use status, set, reset, or history.`));
 }
 
 // ── Doctor Command ─────────────────────────────────────────────────────────────
@@ -136,6 +196,11 @@ async function cmdDoctor(store: Store, args: Args): Promise<void> {
   const chain = store.verifyChain();
   console.log(`  audit chain ...... ${chain.valid ? C.green(`✓ intact (${store.auditCount()} entries)`) : C.red(`✗ BROKEN at #${chain.brokenAt}`)}`);
   console.log(`  skills ........... ${C.green(`✓ ${store.skillCount()} learned · ${store.frozenCount()} frozen baselines`)}`);
+
+  const budgetManager = new BudgetManager(store);
+  const status = await budgetManager.getStatus();
+  const budgetStatus = status.isOverBudget ? C.red("✗ exhausted") : status.isNearCap ? C.yellow("⚠ near cap") : C.green("✓ healthy");
+  console.log(`  global budget .... ${budgetStatus} ${C.dim(`($${status.monthlySpend.toFixed(2)} / $${status.monthlyCap.toFixed(2)})`)}`);
   
   // Sandbox check
   try {
@@ -162,8 +227,6 @@ async function main(): Promise<void> {
     const { existsSync } = await import("node:fs");
 
     // ── First-run Auto Onboarding ──────────────────────────────────────────
-    // Only auto-onboard before a normal task. Management commands like
-    // `xr models recommend` and `xr doctor` must work on a clean install.
     if (!existsSync(configPath()) && !args.onboard && !args.command && args.task) {
       const { runOnboarding } = await import("./interfaces/onboard.ts");
       await runOnboarding();
@@ -283,6 +346,11 @@ async function main(): Promise<void> {
       return;
     }
 
+    if (args.command === "budget") {
+      await cmdBudget(store, argv.slice(1));
+      return;
+    }
+
     // ── Default: Run Agent Task ────────────────────────────────────────────
     if (!args.task && !args.command) {
       printHelp();
@@ -290,8 +358,23 @@ async function main(): Promise<void> {
     }
     
     const { config } = loadConfig();
-    const providerId = args.provider ?? config.defaults.provider;
+    let providerId = args.provider ?? config.defaults.provider;
     const model = args.model ?? config.defaults.model;
+    
+    // ROUTING: Global budget check for cloud providers.
+    if (!isLocal(providerId)) {
+      const budgetManager = new BudgetManager(store);
+      const status = await budgetManager.getStatus();
+      const budgetCfg = await budgetManager.getConfig();
+      
+      if (status.isOverBudget && budgetCfg.auto_fallback) {
+        const localModel = config.localModels.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
+        warn(`Global budget exhausted ($${status.monthlySpend.toFixed(2)} / $${status.monthlyCap.toFixed(2)}).`);
+        warn(`Automatically falling back to local model: ${localModel}`);
+        providerId = "ollama";
+      }
+    }
+
     const provider = buildProvider(config, { provider: providerId, model });
     
     const budget = {
