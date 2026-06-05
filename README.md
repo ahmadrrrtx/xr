@@ -161,47 +161,87 @@ Wake word → Whisper STT → agent → Kokoro TTS. Local by default. Say "Hey X
 
 | Command | What it does |
 |---|---|
+### Core
+
+| Command | What it does |
+|---|---|
 | `xr "task"` | Run a task (default: agent mode) |
-| `xr --tui` | Interactive terminal UI (Claude Code-style) |
-| `xr onboarding` | Professional 5-minute setup wizard |
+| `xr onboarding` | Interactive setup wizard |
 | `xr config` | View current configuration |
-| `xr providers` | Manage AI providers (list, set, add, test) |
-| `xr models` | Local model status |
-| `xr models list` | List supported Ollama local models |
-| `xr models recommend` | Detect hardware and recommend a local model |
-| `xr models install [id]` | Download/configure an Ollama model |
-| `xr models remove [id]` | Remove an Ollama model |
-| `xr models set [id]` | Select local model and routing mode |
-| `xr models test [id]` | Smoke-test local inference |
-| `xr doctor` | System health + audit chain check |
+| `xr doctor` | System health + audit chain + research/voice/budget check |
 | `xr reset` | Factory reset (deletes config & db) |
-| `xr --computer "task"` | JARVIS GUI automation |
-| `xr --mode plan "task"` | Read-only analysis |
-| `xr --mode ask "task"` | Q&A only |
-| `xr --budget 0.50 "task"` | Hard USD ceiling |
-| `xr --max-steps 30 "task"` | Max agent steps |
-| `xr --dry-run "task"` | Simulate — touch nothing |
-| `xr test --attacks` | Security benchmark (block-rate) |
-| `xr verify-log` | Verify tamper-evident chain |
-| `xr skills` | List available skills |
-| `xr index` | Index project for local RAG |
-| `xr memory` | Project memory + RAG status |
-| `xr cost` | Lifetime cost by model |
-| `xr serve` | Local dashboard (127.0.0.1:7842) |
-| `xr telegram` | Secure phone remote |
-| `xr voice` | Voice stack check |
-| `xr sandbox` | Docker sandbox status |
-| `xr export` | Signed audit report |
-| `xr research "topic"` | Source-first research (quick) |
-| `xr research deep "topic"` | Deeper multi-source research |
-| `xr research plan "topic"` | Generate a research plan |
-| `xr research status` | Show current/most-recent session |
-| `xr research sources` | List collected sources + trust |
-| `xr research summarize` | (Re)synthesize a report from notes |
-| `xr research export` | Write the report to markdown (+ json) |
+| `xr cost` | Lifetime cost & token summary |
+| `xr skills` | List learned skills + frozen baselines |
+| `xr verify-log` | Verify the tamper-evident audit chain |
+| `xr test` / `xr --attacks` | Run the prompt-injection block-rate benchmark (`--json` for signed report) |
+
+### Flags
+
+| Flag | What it does |
+|---|---|
+| `--tui` | Interactive terminal UI |
+| `--computer "task"` | JARVIS GUI / desktop automation |
+| `--voice` | Start voice interaction |
+| `--mode plan\|ask\|agent` | Operation mode (plan/ask are read-only) |
+| `--provider <id>` `--model <id>` | Override provider / model |
+| `--budget <usd>` | Hard per-task USD ceiling |
+| `--max-tokens <n>` `--max-steps <n>` | Per-task token / step ceilings |
+| `--dry-run` | Simulate side effects, touch nothing |
+| `--json` | Machine-readable output (where supported) |
+| `--help` | Show help |
+
+### Providers & local models
+
+| Command | What it does |
+|---|---|
+| `xr providers` | List providers + key status (subcommands: `list`, `add`, `set`, `test`, `remove`) |
+| `xr models` | Local model status (default) |
+| `xr models list` | List supported Ollama local models |
+| `xr models recommend` | Detect RAM/VRAM/CPU/disk and recommend a model |
+| `xr models install [id]` | Download/configure an Ollama model |
+| `xr models set [id]` | Select local model + routing (`local-only`/`hybrid`/`cloud-first`) |
+| `xr models test [id]` | Smoke-test local inference |
+| `xr models remove [id]` (alias `rm`) | Remove an Ollama model |
+
+### Budget
+
+| Command | What it does |
+|---|---|
+| `xr budget` (or `status`) | View spend caps + usage |
+| `xr budget set <amount>` | Set monthly spend cap (USD) |
+| `xr budget reset` | Reset recorded spending |
+| `xr budget history` | Spend history by model |
+
+### Voice
+
+| Command | What it does |
+|---|---|
+| `xr voice` (or `status`) | Voice stack status |
+| `xr voice test` | STT→TTS loopback test |
+| `xr voice start` / `stop` | Start/stop interactive voice mode |
+| `xr speak "text"` | Make XR speak text |
+| `xr listen` | Capture one voice command |
+
+### 🔬 Research (v0.7)
+
+| Command | What it does |
+|---|---|
+| `xr research "topic"` | Source-first research (quick depth) |
+| `xr research quick "topic"` | Fast: fewer sources, faster summary |
+| `xr research deep "topic"` | Deeper: more sources, richer synthesis |
+| `xr research plan "topic"` | Generate research questions + strategy only |
+| `xr research status [id]` | Show current/most-recent session |
+| `xr research sources [id]` | List collected sources + trust |
+| `xr research summarize [id]` | (Re)synthesize a report from collected notes |
+| `xr research export [id] [path]` | Write report → markdown (+ JSON sidecar), signed |
 | `xr research list` | Recent research sessions |
 
-**Slash commands (inside TUI):** `/ask`, `/plan`, `/mode`, `/model`, `/budget`, `/doctor`, `/attacks`, `/skills`, `/index`, `/memory`, `/cost`, `/verify-log`, `/export`, `/shell`, `/exit`, `/help`
+Research flags: `--provider`, `--model`, `--budget <usd>` (per-research ceiling for cloud).
+
+> **Note on roadmap commands:** `xr serve` (dashboard), `xr telegram`, `xr index`/`xr memory`
+> (RAG), `xr sandbox`, `xr export`, `xr mcp`, and `xr cron` correspond to subsystems that exist
+> in the codebase but are **not yet wired into the CLI dispatcher** — they are slated for a
+> follow-up release. The commands in the tables above are the ones implemented and verified today.
 
 ---
 
@@ -236,11 +276,75 @@ Wake word → Whisper STT → agent → Kokoro TTS. Local by default. Say "Hey X
               │   audit chain   │
               │ Skills/baselines│
               │ Cost events     │
+              │ Research        │
+              │   sessions      │
               │ Schedules       │
               └─────────────────┘
 ```
 
-**Stack:** TypeScript (strict) · Bun runtime · SQLite · **1 runtime dep (`zod`)** · ~6,000 lines · 124 tests
+**Stack:** TypeScript (strict) · Bun runtime · SQLite · **1 runtime dep (`zod`)** · 134 tests (133 passing)
+
+### 🔬 Research Mode — under the hood (`src/research/`)
+
+Research is a **clean, self-contained module**, decoupled from provider auth, budget, voice,
+and control. Every layer takes its inputs explicitly and returns plain data, so the workflow
+is **deterministic, repeatable, and testable**. It *reuses* XR's existing systems instead of
+forking them — same provider routing + local fallback, same spend caps, same egress
+allow-list, same tamper-evident audit log.
+
+```
+topic
+  │  (engine.ts orchestrates the whole flow, persisting after every step)
+  ├─ 1. plan        makePlan()         → objective, research questions, queries, strategy
+  ├─ 2. search      WebSearchCapability → raw hits per query (egress-gated SearXNG)
+  ├─ 3. rank        rankSources()      → trust-scored, de-duplicated Source[]
+  ├─ 4. fetch       fetch top sources  → full page text (best effort)
+  ├─ 5. extract     extractFromSource  → Notes (each cited + verified-flagged)
+  ├─ 6. synthesize  synthesize()       → short answer, summary, report, contradictions
+  └─ export         renderReport()     → signed markdown (+ JSON sidecar)
+```
+
+| File | Responsibility | Key exports |
+|------|----------------|-------------|
+| `research/types.ts` | Data model + depth budgets | `ResearchSession`, `Source`, `Note`, `Synthesis`, `DEPTH_BUDGETS` |
+| `research/search.ts` | Egress-gated search/fetch capability | `WebSearchCapability`, `SearchCapability`, `parseSearxOutput` |
+| `research/ranking.ts` | Deterministic trust scoring + dedupe | `scoreDomain`, `rankSources`, `domainOf` |
+| `research/llm.ts` | Tools-free structured LLM call + JSON repair | `structuredCall`, `extractJson` |
+| `research/plan.ts` | Plan generation (+ deterministic fallback) | `makePlan`, `fallbackPlan`, `queriesFromPlan` |
+| `research/extract.ts` | Per-source evidence extraction | `extractFromSource` |
+| `research/synthesize.ts` | Synthesis + contradiction detection | `synthesize`, `fallbackSynthesis` |
+| `research/report.ts` | Citation-aware markdown rendering + signing | `renderReport`, `verifyReport` |
+| `research/budget.ts` | Adapts `CostGovernor` to the engine | `GovernedResearchBudget`, `LocalResearchBudget` |
+| `research/engine.ts` | The orchestrator (the flow above) | `runResearch`, `summarizeExisting`, `newSession` |
+| `research/cli.ts` | `xr research …` command handlers | `handleResearchCommand` |
+
+**Integrity guarantees (enforced in code, covered by `test/research.test.ts`):**
+
+- **Source-first, not answer-first** — sources are collected before any conclusion.
+- **Citation-aware** — every note references a `sourceId`; the report cites `[s1]`, `[s2]`.
+- **No fake verification** — a note is `verified` **only** if the page was actually *fetched*;
+  snippet-only notes are flagged `unverified` and their confidence is downgraded.
+- **Honest uncertainty** — facts / inference / opinion are distinguished; contradictions and
+  open questions are surfaced, not hidden.
+- **Deterministic ranking** — trust comes from transparent domain heuristics, never an LLM.
+- **No silent spend** — token/$ usage is metered and shown; over a cap, research stops
+  gracefully with partial results saved.
+- **Graceful degradation** — if search is unavailable, XR says so and produces an honest
+  "no conclusion" report instead of inventing an answer.
+- **Tamper-evident reports** — each markdown report carries a SHA-256 signature (`verifyReport`).
+
+Depth budgets (`DEPTH_BUDGETS` in `research/types.ts`):
+
+| depth | queries | results/query | max sources | fetched | questions |
+|-------|---------|---------------|-------------|---------|-----------|
+| quick | 3       | 5             | 8           | 3       | 3         |
+| deep  | 6       | 6             | 16          | 8       | 6         |
+
+Reports are saved to `~/.xr/research/` as `<id>-<slug>.md` + a `.json` sidecar. Voice/chat
+flows auto-route to research when you say *"research…", "investigate…", "compare…"*. Requires
+a search host (default SearXNG `searx.be`, override `XR_SEARXNG`) on the egress allow-list;
+`xr doctor` reports research readiness. See `docs/research/RESEARCH-MODE-v0.7.md` for the
+full design.
 
 ---
 
