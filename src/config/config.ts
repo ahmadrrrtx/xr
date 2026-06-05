@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-export const CONFIG_VERSION = 4; // Bumped for XR v0.5 local model intelligence
+export const CONFIG_VERSION = 5; // Bumped for XR v0.8 computer control
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -94,6 +94,16 @@ const ConfigSchema = z.object({
     .default({}),
   // Auto-select free provider when available
   preferFreeProviders: z.boolean().default(true),
+  // v0.8: Computer control (safe desktop automation).  Disabled by default —
+  // the user must opt in via `xr control start` or by setting `enabled: true`.
+  control: z
+    .object({
+      enabled: z.boolean().default(false),
+      defaultMode: z.enum(["auto", "step", "dry-run"]).default("auto"),
+      /** ms between actions in a plan; gives the user time to cancel. */
+      stepDelayMs: z.number().int().min(0).max(10_000).default(250),
+    })
+    .default({}),
 });
 
 export type XRConfig = z.infer<typeof ConfigSchema>;
@@ -136,6 +146,12 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       recommended: raw.defaults?.fallbackModel ?? "qwen2.5:7b",
       routing: raw.defaults?.provider === "ollama" ? "local-only" : "hybrid",
     },
+  }),
+  // 4 -> 5: add v0.8 computer control block (off by default — opt-in).
+  4: (raw) => ({
+    ...raw,
+    version: 5,
+    control: raw.control ?? { enabled: false, defaultMode: "auto", stepDelayMs: 250 },
   }),
 };
 
