@@ -101,6 +101,14 @@ export class VoicePipeline {
     }
 
     this.deps.store.audit("voice.command", { text: command });
+
+    // v0.7: route investigation/comparison intents to research mode (source-first).
+    const { routeVoiceCommand } = await import("./index.ts");
+    const routed = routeVoiceCommand(command);
+    if (routed?.action === "research") {
+      return this.runVoiceResearch(routed.args || command);
+    }
+
     const { config } = loadConfig();
     const providerId = config.defaults.provider;
     const model = config.defaults.model;
@@ -123,6 +131,62 @@ export class VoicePipeline {
     const reply = result.finalMessage || `Done. ${result.meter ?? ""}`;
     await this.say(reply);
     return { handled: true, reply };
+  }
+
+  /**
+   * v0.7: run research mode from voice and speak back the short answer.
+   * Uses the same engine, routing, and spend caps as the CLI research command.
+   */
+  private async runVoiceResearch(topic: string): Promise<{ handled: boolean; reply: string }> {
+    await this.say(`Researching ${topic}. Let me gather some sources.`);
+    try {
+      const { config } = loadConfig();
+      const providerId = config.defaults.provider;
+      const model = config.defaults.model;
+      const provider = buildProvider(config, {});
+
+      const { WebSearchCapability } = await import("../research/search.ts");
+      const { GovernedResearchBudget, LocalResearchBudget } = await import("../research/budget.ts");
+      const { runResearch } = await import("../research/engine.ts");
+
+      const toolCtx = {
+        cwd: process.cwd(),
+        approve: async () => false,
+        audit: (event: string, detail: Record<string, unknown>) => this.deps.store.audit(event, detail),
+        egressAllowlist: config.security.egressAllowlist,
+        dryRun: false,
+      };
+
+      const budget: import("../research/engine.ts").ResearchBudgetGuard = isLocal(providerId)
+        ? new LocalResearchBudget()
+        : new GovernedResearchBudget(
+            this.deps.store,
+            { maxUsd: config.budget.perTaskUsd, maxTokens: config.budget.perTaskTokens },
+            priceFor(providerId, model),
+          );
+
+      const session = await runResearch(
+        {
+          provider,
+          store: this.deps.store,
+          search: new WebSearchCapability(toolCtx),
+          budget,
+          say: () => {},
+          audit: (event: string, detail: Record<string, unknown>) => this.deps.store.audit(event, detail),
+        },
+        { topic, depth: "quick" },
+      );
+
+      const reply = session.synthesis
+        ? `${session.synthesis.shortAnswer} I checked ${session.sources.length} sources. Say "research export" for the full report.`
+        : `I couldn't gather enough verified sources on ${topic}.`;
+      await this.say(reply);
+      return { handled: true, reply };
+    } catch (e) {
+      const reply = `Research failed: ${(e as Error).message}`;
+      await this.say(reply);
+      return { handled: true, reply };
+    }
   }
 
   /**
