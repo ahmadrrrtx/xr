@@ -119,6 +119,19 @@ function migrate(raw: any): any {
  */
 export function loadConfig(): { config: XRConfig; warnings: string[] } {
   ensureHome();
+  
+  // Load API keys from .env if present
+  const envPath = join(XR_HOME, ".env");
+  if (existsSync(envPath)) {
+    const content = readFileSync(envPath, "utf8");
+    for (const line of content.split("\n")) {
+      const [key, ...val] = line.split("=");
+      if (key && val.length > 0) {
+        process.env[key.trim()] = val.join("=").trim();
+      }
+    }
+  }
+
   const warnings: string[] = [];
 
   if (!existsSync(CONFIG_PATH)) {
