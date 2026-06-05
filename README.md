@@ -2,7 +2,7 @@
 
 # ⚡ XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `JARVIS-level control`**
+**`BYOK` · `local-first` · `local model intelligence` · `spend-capped` · `tamper-evident`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
@@ -35,6 +35,14 @@ Then just type:
 xr "hello, who are you"
 ```
 
+Local-first setup:
+```bash
+xr onboarding          # choose Local-only or Hybrid
+xr models recommend    # inspect hardware and pick a model
+xr models install      # download the recommended Ollama model
+xr models test         # smoke-test local inference
+```
+
 Or run the interactive onboarding:
 ```bash
 xr onboarding
@@ -64,6 +72,16 @@ xr onboarding
 ---
 
 ## 🎯 Core Features
+
+
+### 🧠 Local Model Intelligence (v0.5)
+```bash
+xr models recommend      # detect RAM/VRAM/CPU/disk and explain the recommendation
+xr models install        # pull the recommended Ollama model and save it
+xr models set qwen2.5:7b # choose local-only / hybrid / cloud-first routing
+xr models test           # verify Ollama + selected model respond
+```
+XR now detects your hardware, recommends a practical Ollama model, optionally downloads it, saves the selected model in config, and uses it as the default or deterministic cloud fallback. Local-only mode works with no API keys. Hybrid/cloud-first mode can use cloud providers when configured and fall back to local when the primary provider fails.
 
 ### 🧠 JARVIS-Level Computer Control
 ```bash
@@ -120,7 +138,13 @@ Wake word → Whisper STT → agent → Kokoro TTS. Local by default. Say "Hey X
 | `xr onboarding` | Professional 5-minute setup wizard |
 | `xr config` | View current configuration |
 | `xr providers` | Manage AI providers (list, set, add, test) |
-| `xr models` | View current model defaults |
+| `xr models` | Local model status |
+| `xr models list` | List supported Ollama local models |
+| `xr models recommend` | Detect hardware and recommend a local model |
+| `xr models install [id]` | Download/configure an Ollama model |
+| `xr models remove [id]` | Remove an Ollama model |
+| `xr models set [id]` | Select local model and routing mode |
+| `xr models test [id]` | Smoke-test local inference |
 | `xr doctor` | System health + audit chain check |
 | `xr reset` | Factory reset (deletes config & db) |
 | `xr --computer "task"` | JARVIS GUI automation |
@@ -246,9 +270,9 @@ source ~/.bashrc
 
 - **OS:** Linux, macOS, Windows (PowerShell/Git Bash), Android (Termux)
 - **Runtime:** Bun 1.0+ (or npm as fallback)
-- **LLM:** Ollama (local, free) or any OpenAI-compatible API key
-- **RAM:** 4GB minimum (8GB recommended for local models)
-- **Storage:** ~100MB for XR + whatever your model needs
+- **LLM:** Ollama (local, free) or supported BYOK cloud providers
+- **RAM:** 4GB minimum (8GB+ recommended for local 7B models; 16GB+ for 14B)
+- **Storage:** ~100MB for XR + ~2.5–20GB per downloaded local model
 
 ---
 
@@ -325,7 +349,8 @@ bun run src/index.ts --tui    # Interactive UI
 ## ⚠️ Honest Limitations
 
 - **Prompt injection**: unsolved industry-wide. XR minimizes blast radius, publishes a block-rate, but cannot claim immunity
-- **Local models**: weak models (<3B params) may produce invalid tool calls without GBNF grammar (use Ollama with grammar mode)
+- **Local runtime**: v0.5 implements Ollama only. Other local runtimes can be added behind the same abstraction later.
+- **Local models**: recommendations are deterministic heuristics based on RAM/VRAM/CPU/disk, not ML benchmarking. Small models can be slower or less reliable for complex agent tasks.
 - **Voice**: requires Whisper server (local or cloud) and optional TTS server
 - **Computer use**: requires a screenshot tool (`screencapture` on macOS, `scrot`/`gnome-screenshot` on Linux, .NET on Windows)
 
