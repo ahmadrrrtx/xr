@@ -198,6 +198,17 @@ const VOICE_COMMANDS: Array<{
     action: "doctor", description: "Run system health check"
   },
   {
+    // v0.7: research mode triggers — must precede the generic "search/find".
+    patterns: [
+      /research (.*)/i,
+      /investigate (.*)/i,
+      /compare (.*)/i,
+      /(?:do|run) (?:a |some )?(?:deep )?research (?:on |about )?(.*)/i,
+      /(?:make|write|give) me a (?:brief|report)(?: on| about)? (.*)/i,
+    ],
+    action: "research", description: "Deep research with sources"
+  },
+  {
     patterns: [/search (for )?(.*)/i, /look up (.*)/i, /find (.*)/i],
     action: "search", description: "Web search"
   },
