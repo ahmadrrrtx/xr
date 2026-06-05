@@ -50,8 +50,8 @@ export interface WakeWordResult {
 // This is a lightweight fallback that listens for any sound above threshold
 export class WakeWordDetector {
   private threshold: number;
-  private listening = false;
-  private onWake: (() => void) | null = null;
+  private listening = false; 
+  onWake: (() => void) | null = null;
   
   constructor(opts: WakeWordOptions = {}) {
     this.threshold = opts.sensitivity ?? 0.3;
