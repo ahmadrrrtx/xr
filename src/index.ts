@@ -468,6 +468,30 @@ async function main(): Promise<void> {
       return;
     }
 
+    // v0.8.1 — local dashboard ("xr serve")
+    if (args.command === "serve") {
+      const { serve } = await import("./daemon/server.ts");
+      const start = argv.indexOf("serve");
+      const sub = argv.slice(start + 1);
+      let port = 7842;
+      let token: string | undefined;
+      for (let i = 0; i < sub.length; i++) {
+        if (sub[i] === "--port") port = Number(sub[++i]) || port;
+        else if (sub[i] === "--token") token = sub[++i];
+      }
+      const handle = serve({ port, token, store });
+      banner();
+      ok(`dashboard live → http://127.0.0.1:${handle.port}/dashboard?token=${handle.token}`);
+      info("press Ctrl+C to stop.");
+      // Keep alive until the process is signalled.
+      await new Promise<void>((resolve) => {
+        const stop = () => { handle.stop(); resolve(); };
+        process.on("SIGINT", stop);
+        process.on("SIGTERM", stop);
+      });
+      return;
+    }
+
     // ── Default: Run Agent Task ────────────────────────────────────────────
     if (!args.task && !args.command) {
       printHelp();
