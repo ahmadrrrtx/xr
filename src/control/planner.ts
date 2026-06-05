@@ -14,6 +14,8 @@
 
 import type { Provider, Message } from "../core/types.ts";
 import { ActionSchema, type Action, type Plan } from "./types.ts";
+import type { Store } from "../state/db.ts";
+import { recallPlan } from "./memory.ts";
 
 const SYSTEM_PROMPT = `You are XR's Computer-Control Planner.
 
@@ -63,7 +65,14 @@ Output JSON now.`;
 interface PlanOptions {
   /** Hard cap on actions (defaults to 10). */
   maxActions?: number;
+  /** Store handle for memory recall. Omit to skip memory entirely. */
+  store?: Store;
+  /** If true, skip memory recall even when a store is provided. */
+  noMemory?: boolean;
 }
+
+/** Source of the returned plan — useful for cost tracking and UX. */
+export type PlanSource = "memory" | "llm";
 
 /** Find the first {...} block in a model reply — tolerant of code fences. */
 function extractJson(text: string): string | null {
@@ -103,16 +112,38 @@ function parsePlan(raw: string, task: string, maxActions: number): { plan: Plan 
 /**
  * Produce a Plan from a natural-language task.
  *
- * Uses provider.chat() with NO tools — the model just emits JSON. We treat
- * any non-conforming output as a planner error (caller decides what to do).
+ * Order of operations:
+ *   1. If `opts.store` is provided and `opts.noMemory` is not set, ask the
+ *      memory cache. A hit returns immediately with `source = "memory"` —
+ *      zero LLM cost, deterministic, still subject to safety re-validation
+ *      inside recallPlan().
+ *   2. Otherwise call the provider with a JSON-only prompt, validate the
+ *      returned actions, and return `source = "llm"`.
+ *
+ * The planner NEVER executes — service.ts decides what runs.
  */
 export async function planActions(
   provider: Provider,
   task: string,
   opts: PlanOptions = {},
-): Promise<{ plan: Plan } | { error: string }> {
-  const maxActions = Math.max(1, Math.min(20, opts.maxActions ?? 10));
+): Promise<{ plan: Plan; source: PlanSource } | { error: string }> {
+  // 1. Memory recall (cheap, deterministic).
+  if (opts.store && !opts.noMemory) {
+    const hit = recallPlan(opts.store, task);
+    if (hit) {
+      return {
+        plan: {
+          task: hit.task,
+          actions: hit.actions,
+          rationale: `recalled from memory (${hit.hits} hit${hit.hits === 1 ? "" : "s"}, ${hit.actions.length} step${hit.actions.length === 1 ? "" : "s"})`,
+        },
+        source: "memory",
+      };
+    }
+  }
 
+  // 2. LLM fallback.
+  const maxActions = Math.max(1, Math.min(20, opts.maxActions ?? 10));
   const messages: Message[] = [
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: `Task: ${task}\n\nReturn the JSON plan now.` },
@@ -125,7 +156,9 @@ export async function planActions(
     return { error: `planner provider error: ${(e as Error).message}` };
   }
 
-  return parsePlan(turn.message ?? "", task, maxActions);
+  const parsed = parsePlan(turn.message ?? "", task, maxActions);
+  if ("error" in parsed) return parsed;
+  return { plan: parsed.plan, source: "llm" };
 }
 
 /** Exposed for tests + dashboard preview. */
