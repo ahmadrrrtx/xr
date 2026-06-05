@@ -12,7 +12,7 @@
  * The XR_HOME/config.json can override any preset.
  */
 import type { XRConfig } from "../config/config.ts";
-import type { Provider } from "../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool } from "../core/types.ts";
 import { OpenAICompatProvider } from "./openai-compat.ts";
 import { 
   AnthropicProvider, 
@@ -169,8 +169,29 @@ export function buildProvider(
   config: XRConfig,
   override?: { provider?: string; model?: string },
 ): Provider {
-  const id = override?.provider ?? config.defaults.provider;
-  const model = override?.model ?? config.defaults.model;
+  const primaryId = override?.provider ?? config.defaults.provider;
+  const primaryModel = override?.model ?? config.defaults.model;
+  
+  const primary = buildSingleProvider(config, primaryId, primaryModel);
+
+  // If fallback is configured and different from primary, wrap it.
+  const fallbackId = config.defaults.fallbackProvider;
+  const fallbackModel = config.defaults.fallbackModel;
+
+  if (fallbackId && fallbackId !== primaryId) {
+    try {
+      const fallback = buildSingleProvider(config, fallbackId, fallbackModel ?? primaryModel);
+      return new FallbackProvider(primary, fallback);
+    } catch {
+      return primary; // Fail gracefully: just use primary if fallback can't be built
+    }
+  }
+
+  return primary;
+}
+
+/** Internal: build one specific provider without fallback logic. */
+function buildSingleProvider(config: XRConfig, id: string, model: string): Provider {
   const preset = PRESETS[id];
 
   if (!preset) {
@@ -208,6 +229,38 @@ export function buildProvider(
     model,
     apiKeyEnv: preset.apiKeyEnv,
   });
+}
+
+/** 
+ * Wrapper that automatically tries a secondary provider if the primary fails.
+ */
+class FallbackProvider implements Provider {
+  constructor(
+    public primary: Provider,
+    public fallback: Provider,
+  ) {}
+
+  get id() { return this.primary.id; }
+  get label() { return this.primary.label; }
+
+  async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
+    try {
+      return await this.primary.chat(messages, tools);
+    } catch (e) {
+      // Don't log if it's just a health check or similar, but here it's a real chat.
+      console.warn(`\x1b[33m! Primary provider (${this.primary.id}) failed: ${(e as Error).message}. Falling back to ${this.fallback.id}...\x1b[0m`);
+      
+      // Update the turn to indicate which provider was actually used if we had that in the type.
+      // For now, we just proceed.
+      return await this.fallback.chat(messages, tools);
+    }
+  }
+
+  async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
+    const h = await this.primary.health();
+    if (h.ok) return h;
+    return await this.fallback.health();
+  }
 }
 
 /** Build a native (non-OpenAI-compatible) provider */
