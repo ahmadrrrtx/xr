@@ -204,6 +204,44 @@ const PAGE = `<!doctype html>
       <div class="list" id="audit-list"></div>
     </section>
 
+    <!-- COMPUTER CONTROL (v0.8.1) -->
+    <section class="card c12" id="ctrl-card">
+      <h3>
+        <span class="ic">🖥️</span> Computer Control
+        <span id="ctrl-state" class="chip warn" style="margin-left:auto">checking…</span>
+      </h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div>
+          <div class="sub">Capabilities</div>
+          <div class="kvs" id="ctrl-caps">
+            <span class="lab">platform</span><b id="ctrl-os">—</b>
+            <span class="lab">keyboard</span><b id="ctrl-kbd">—</b>
+            <span class="lab">mouse</span><b id="ctrl-mouse">—</b>
+            <span class="lab">launcher</span><b id="ctrl-launcher">—</b>
+            <span class="lab">browser (playwright)</span><b id="ctrl-browser">—</b>
+          </div>
+          <div class="sub" style="margin-top:18px">Plan a task (preview only)</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <input id="ctrl-task" placeholder='e.g. open github.com and search for "ahmadrrrtx"'
+              style="flex:1;background:rgba(255,255,255,.05);border:1px solid var(--edge);color:var(--ink);
+                     border-radius:9px;padding:9px 12px;font:inherit;outline:none" />
+            <button id="ctrl-plan-btn"
+              style="background:linear-gradient(135deg,var(--cyan),var(--violet));color:#031018;border:0;
+                     border-radius:9px;padding:9px 16px;font-weight:700;cursor:pointer;font:inherit">Plan</button>
+          </div>
+          <pre id="ctrl-plan-out" class="muted" style="margin-top:10px;max-height:160px;overflow:auto;
+            font-size:11px;background:rgba(0,0,0,.25);padding:10px;border-radius:9px;
+            border:1px solid var(--edge);white-space:pre-wrap;display:none"></pre>
+        </div>
+        <div>
+          <div class="sub">Pending approvals <span id="ctrl-pending-count" class="muted">(0)</span></div>
+          <div class="list" id="ctrl-pending" style="max-height:200px;margin-top:8px"></div>
+          <div class="sub" style="margin-top:18px">Recent control events</div>
+          <div class="list" id="ctrl-events" style="max-height:200px;margin-top:8px"></div>
+        </div>
+      </div>
+    </section>
+
   </div>
   <footer>🔐 127.0.0.1 only · token-authed · read-mostly · every state change is approval-gated & recorded in the hash chain</footer>
 </div>
@@ -278,7 +316,104 @@ async function load(){
       list.appendChild(d)});
     if(!(aud.entries||[]).length)list.innerHTML='<div class="muted" style="padding:10px 0">no activity yet</div>';
   }
+
+  // ── Computer Control (v0.8.1) ────────────────────────────────────────────
+  const cs = await get("/api/control/status");
+  if (cs) {
+    const st = $("ctrl-state");
+    if (cs.enabled) { st.textContent = "enabled"; st.className = "chip ok"; }
+    else { st.textContent = "disabled"; st.className = "chip bad"; st.title = cs.disabledReason || ""; }
+    $("ctrl-os").textContent = cs.capabilities.os;
+    const yn = (b) => b ? '<span style="color:var(--green)">✓</span>' : '<span style="color:var(--red)">✗</span>';
+    $("ctrl-kbd").innerHTML = yn(cs.capabilities.tools.keyboard);
+    $("ctrl-mouse").innerHTML = yn(cs.capabilities.tools.mouse);
+    $("ctrl-launcher").innerHTML = yn(cs.capabilities.tools.launcher);
+    $("ctrl-browser").innerHTML = cs.browser?.installed
+      ? '<span style="color:var(--green)">✓ installed</span>' + (cs.browser.active ? ' <span class="muted">· session open</span>' : '')
+      : '<span style="color:var(--amber)">not installed</span>';
+  }
+
+  const pend = await get("/api/control/pending");
+  if (pend) {
+    const list = $("ctrl-pending"); list.innerHTML = "";
+    $("ctrl-pending-count").textContent = "(" + (pend.pending || []).length + ")";
+    (pend.pending || []).forEach((p) => {
+      const ageS = Math.round((Date.now() - p.createdAt) / 1000);
+      const riskColor = p.risk.level === "destructive" ? "var(--red)"
+        : p.risk.level === "sensitive" ? "var(--amber)" : "var(--green)";
+      const row = document.createElement("div");
+      row.className = "item";
+      row.style.flexWrap = "wrap";
+      row.innerHTML =
+        '<span class="dot" style="background:' + riskColor + '"></span>' +
+        '<span class="desc"><b>' + p.risk.level + '</b> · ' + escapeHtml(stripAnsi(p.preview)) + '</span>' +
+        '<span class="time">' + ageS + 's</span>' +
+        '<div style="margin-left:auto;display:flex;gap:6px">' +
+          '<button class="btn-approve" data-id="' + p.id + '" style="background:rgba(52,226,160,.15);color:var(--green);border:1px solid rgba(52,226,160,.35);padding:4px 10px;border-radius:7px;font-weight:700;cursor:pointer;font:inherit">Approve</button>' +
+          '<button class="btn-deny"    data-id="' + p.id + '" style="background:rgba(255,90,106,.15);color:var(--red);border:1px solid rgba(255,90,106,.35);padding:4px 10px;border-radius:7px;font-weight:700;cursor:pointer;font:inherit">Deny</button>' +
+        '</div>' +
+        '<div class="muted" style="flex-basis:100%;font-size:11px;margin-top:4px">why: ' + escapeHtml(p.risk.reason) + '</div>';
+      list.appendChild(row);
+    });
+    if (!(pend.pending || []).length) list.innerHTML = '<div class="muted" style="padding:10px 0">no pending approvals</div>';
+    list.querySelectorAll(".btn-approve").forEach((b) => b.addEventListener("click", () => answer(b.dataset.id, true)));
+    list.querySelectorAll(".btn-deny").forEach((b) => b.addEventListener("click", () => answer(b.dataset.id, false)));
+  }
+
+  const ev = await get("/api/control/events?limit=20");
+  if (ev) {
+    const list = $("ctrl-events"); list.innerHTML = "";
+    (ev.events || []).forEach((e) => {
+      const t = new Date(e.created_at).toLocaleTimeString();
+      const eventColor = e.event === "control.exec" ? "var(--green)"
+        : e.event === "control.denied" ? "var(--red)"
+        : e.event === "control.disabled" ? "var(--dim)" : "var(--cyan)";
+      let detailObj = {}; try { detailObj = JSON.parse(e.detail); } catch (_) {}
+      const action = detailObj.action ? (detailObj.action.type || "?") : "";
+      const meta = detailObj.risk ? (" · " + detailObj.risk) : (detailObj.ok === false ? " · failed" : "");
+      const row = document.createElement("div");
+      row.className = "item";
+      row.innerHTML = '<span class="time">' + t + '</span>'
+        + '<span class="dot" style="background:' + eventColor + '"></span>'
+        + '<span class="desc">' + e.event + ' <span class="muted">' + action + meta + '</span></span>';
+      list.appendChild(row);
+    });
+    if (!(ev.events || []).length) list.innerHTML = '<div class="muted" style="padding:10px 0">no control events yet</div>';
+  }
 }
+
+async function answer(id, approved) {
+  await fetch("/api/control/approve", {
+    method: "POST",
+    headers: { "content-type": "application/json", "authorization": "Bearer " + TOKEN },
+    body: JSON.stringify({ id, approved }),
+  });
+  load(); // refresh immediately
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function stripAnsi(s) { return String(s).replace(/\\x1b\\[[0-9;]*m/g, "").replace(/\u001b\[[0-9;]*m/g, ""); }
+
+document.addEventListener("click", async (ev) => {
+  if (ev.target && ev.target.id === "ctrl-plan-btn") {
+    const task = (document.getElementById("ctrl-task")).value.trim();
+    const out = document.getElementById("ctrl-plan-out");
+    if (!task) return;
+    out.style.display = "block";
+    out.textContent = "planning…";
+    const res = await fetch("/api/control/plan", {
+      method: "POST",
+      headers: { "content-type": "application/json", "authorization": "Bearer " + TOKEN },
+      body: JSON.stringify({ task }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.error) { out.textContent = "error: " + data.error; return; }
+    out.textContent = JSON.stringify(data.plan, null, 2);
+  }
+});
+
 load();setInterval(load,4000);
 </script>
 </body>
