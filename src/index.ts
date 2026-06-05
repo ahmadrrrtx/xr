@@ -114,12 +114,13 @@ async function cmdDoctor(store: Store, args: Args): Promise<void> {
   const { config, warnings } = loadConfig();
   
   console.log(`${C.bold("System Health Check")}`);
-  console.log(`  config ........... ${warnings.length ? C.yellow + "⚠ " + warnings.length + " warning(s)" : C.green + "✓ valid"}${C.reset}`);
-  for (const w of warnings) console.log(`    ${C.dim}${w}${C.reset}`);
+  console.log(`  config ........... ${warnings.length ? C.yellow(`⚠ ${warnings.length} warning(s)`) : C.green("✓ valid")}`);
+  for (const w of warnings) console.log(`    ${C.dim(w)}`);
   
   const provider = buildProvider(config, { provider: args.provider, model: args.model });
   const h = await provider.health();
-  console.log(`  provider ......... ${h.ok ? C.green + "✓ " + provider.label : C.red + "✗ " + provider.label} ${C.dim}(${h.detail ?? ""}${h.latencyMs ? " " + h.latencyMs + "ms" : ""})${C.reset}`);
+  const providerStatus = h.ok ? C.green(`✓ ${provider.label}`) : C.red(`✗ ${provider.label}`);
+  console.log(`  provider ......... ${providerStatus} ${C.dim(`(${h.detail ?? ""}${h.latencyMs ? " " + h.latencyMs + "ms" : ""})`)}`);
 
   try {
     const { ollamaStatus } = await import("./local/ollama.ts");
@@ -127,19 +128,21 @@ async function cmdDoctor(store: Store, args: Args): Promise<void> {
     const ls = await ollamaStatus(localModel);
     const pulled = ls.models.includes(localModel);
     const localOk = ls.installed && ls.running && pulled;
-    console.log(`  local model ...... ${localOk ? C.green + "✓ " + localModel : C.yellow + "⚠ " + localModel} ${C.dim}(${ls.installed ? "ollama installed" : "ollama missing"}, ${ls.running ? "server running" : "server stopped"}, ${pulled ? "model pulled" : "model missing"})${C.reset}`);
-    console.log(`  local routing .... ${C.cyan(config.localModels.routing)} ${config.localModels.enabled ? C.green + "enabled" : C.dim("disabled")}${C.reset}`);
+    const localStatus = localOk ? C.green(`✓ ${localModel}`) : C.yellow(`⚠ ${localModel}`);
+    console.log(`  local model ...... ${localStatus} ${C.dim(`(${ls.installed ? "ollama installed" : "ollama missing"}, ${ls.running ? "server running" : "server stopped"}, ${pulled ? "model pulled" : "model missing"})`)}`);
+    console.log(`  local routing .... ${C.cyan(config.localModels.routing)} ${config.localModels.enabled ? C.green("enabled") : C.dim("disabled")}`);
   } catch { /* skip */ }
   
   const chain = store.verifyChain();
-  console.log(`  audit chain ...... ${chain.valid ? C.green + "✓ intact (" + store.auditCount() + " entries)" : C.red + "✗ BROKEN at #" + chain.brokenAt}${C.reset}`);
-  console.log(`  skills ........... ${C.green}✓ ${store.skillCount()} learned · ${store.frozenCount()} frozen baselines${C.reset}`);
+  console.log(`  audit chain ...... ${chain.valid ? C.green(`✓ intact (${store.auditCount()} entries)`) : C.red(`✗ BROKEN at #${chain.brokenAt}`)}`);
+  console.log(`  skills ........... ${C.green(`✓ ${store.skillCount()} learned · ${store.frozenCount()} frozen baselines`)}`);
   
   // Sandbox check
   try {
     const { sandboxStatus } = await import("./computer/sandbox.ts");
     const sb = sandboxStatus();
-    console.log(`  sandbox .......... ${sb.available ? C.green + "✓ Docker available" : C.yellow + "⚠ no Docker (local exec)"}${sb.imagePulled ? " (image pulled)" : ""}${C.reset}`);
+    const sandbox = sb.available ? C.green("✓ Docker available") : C.yellow("⚠ no Docker (local exec)");
+    console.log(`  sandbox .......... ${sandbox}${sb.imagePulled ? " (image pulled)" : ""}`);
   } catch { /* skip */ }
 }
 
@@ -159,10 +162,11 @@ async function main(): Promise<void> {
     const { existsSync } = await import("node:fs");
 
     // ── First-run Auto Onboarding ──────────────────────────────────────────
-    if (!existsSync(configPath()) && !args.onboard && args.command !== "onboarding" && args.command !== "onboard") {
+    // Only auto-onboard before a normal task. Management commands like
+    // `xr models recommend` and `xr doctor` must work on a clean install.
+    if (!existsSync(configPath()) && !args.onboard && !args.command && args.task) {
       const { runOnboarding } = await import("./interfaces/onboard.ts");
       await runOnboarding();
-      if (!args.task && !args.command) return; 
     }
 
     // ── Special Commands ────────────────────────────────────────────────────
@@ -213,10 +217,10 @@ async function main(): Promise<void> {
         return;
       }
       banner();
-      console.log(`${C.bold}${C.yellow}🔒 Injection Test Lab${C.reset}`);
+      console.log(C.bold(C.yellow("🔒 Injection Test Lab")));
       for (const o of report.outcomes) {
-        const tag = o.blocked ? C.green + "✓ blocked" : C.red + "✗ ALLOWED";
-        console.log(`  ${tag} ${C.dim + o.category.padEnd(22)} ${o.description}${C.reset}`);
+        const tag = o.blocked ? C.green("✓ blocked") : C.red("✗ ALLOWED");
+        console.log(`  ${tag} ${C.dim(o.category.padEnd(22))} ${o.description}`);
       }
       return;
     }
@@ -229,7 +233,7 @@ async function main(): Promise<void> {
     
     if (args.computer) {
       if (!args.task) {
-        console.log(`${C.yellow}Usage: xr --computer "task"${C.reset}`);
+        console.log(C.yellow(`Usage: xr --computer "task"`));
         return;
       }
       const { runComputerUse } = await import("./computer/index.ts");
@@ -241,8 +245,8 @@ async function main(): Promise<void> {
         task: args.task,
         maxSteps: args.maxSteps ?? 20,
         onStep: (step, action, res) => {
-          const icon = res.success ? C.green + "✓" : C.red + "✗";
-          console.log(`  ${C.dim}step ${step}${C.reset} ${icon} ${C.cyan}${action.type}${C.reset}`);
+          const icon = res.success ? C.green("✓") : C.red("✗");
+          console.log(`  ${C.dim(`step ${step}`)} ${icon} ${C.cyan(action.type)}`);
         },
       });
       ok(result);
@@ -264,18 +268,18 @@ async function main(): Promise<void> {
     if (args.command === "skills") {
       banner();
       const skills = loadSkills(join(XR_HOME, "skills"));
-      console.log(`${C.bold}🧠 Skills (${skills.length})${C.reset}`);
+      console.log(C.bold(`🧠 Skills (${skills.length})`));
       for (const s of skills) {
-        console.log(`  ${C.cyan + s.id.padEnd(20)} ${C.dim}v${s.version}${C.reset}`);
+        console.log(`  ${C.cyan(s.id.padEnd(20))} ${C.dim(`v${s.version}`)}`);
       }
       return;
     }
 
     if (args.command === "cost") {
       const c = store.costSummary();
-      console.log(`${C.bold}💰 Cost Summary${C.reset}`);
-      console.log(`  total USD ....... ${C.green}$${c.totalUsd.toFixed(6)}${C.reset}`);
-      console.log(`  total tokens .... ${C.dim}${c.totalTokens.toLocaleString()}${C.reset}`);
+      console.log(C.bold("💰 Cost Summary"));
+      console.log(`  total USD ....... ${C.green(`$${c.totalUsd.toFixed(6)}`)}`);
+      console.log(`  total tokens .... ${C.dim(c.totalTokens.toLocaleString())}`);
       return;
     }
 
@@ -320,6 +324,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
-  console.error(`${C.red}fatal:${C.reset}`, e);
+  console.error(C.red("fatal:"), e);
   process.exit(1);
 });
