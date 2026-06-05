@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-export const CONFIG_VERSION = 5; // Bumped for XR v0.8 computer control
+export const CONFIG_VERSION = 6; // Bumped for XR v0.8.2 control memory
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -102,6 +102,14 @@ const ConfigSchema = z.object({
       defaultMode: z.enum(["auto", "step", "dry-run"]).default("auto"),
       /** ms between actions in a plan; gives the user time to cancel. */
       stepDelayMs: z.number().int().min(0).max(10_000).default(250),
+      // v0.8.2 — plan memory (cache successful plans to skip the LLM next time).
+      memory: z
+        .object({
+          enabled: z.boolean().default(true),
+          /** Maximum entries to keep (oldest pruned on overflow — informational). */
+          maxEntries: z.number().int().min(1).max(10_000).default(500),
+        })
+        .default({}),
     })
     .default({}),
 });
@@ -152,6 +160,15 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
     ...raw,
     version: 5,
     control: raw.control ?? { enabled: false, defaultMode: "auto", stepDelayMs: 250 },
+  }),
+  // 5 -> 6: add v0.8.2 control.memory block (on by default; gated by safety).
+  5: (raw) => ({
+    ...raw,
+    version: 6,
+    control: {
+      ...(raw.control ?? { enabled: false, defaultMode: "auto", stepDelayMs: 250 }),
+      memory: raw.control?.memory ?? { enabled: true, maxEntries: 500 },
+    },
   }),
 };
 
