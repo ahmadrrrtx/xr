@@ -18,6 +18,12 @@ import { runLab } from "../security/lab.ts";
 import { fingerprint } from "../memory/rag.ts";
 import { basename } from "node:path";
 import { dashboardHtml } from "./dashboard.ts";
+import { approvals } from "../control/approvals.ts";
+import { detectCapabilities } from "../control/adapter.ts";
+import { isDisabled, runTypedPlan } from "../control/service.ts";
+import { planActions } from "../control/planner.ts";
+import { browserStatus } from "../control/browser.ts";
+import { buildProvider } from "../providers/factory.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -109,6 +115,66 @@ export function makeHandler(store: Store, token: string) {
 
     if (path === "/api/sessions") {
       return json({ sessions: store.recentSessions(50) });
+    }
+
+    // ── v0.8.1: Computer Control endpoints ────────────────────────────────
+
+    if (path === "/api/control/status") {
+      const kill = isDisabled();
+      const caps = detectCapabilities();
+      const browser = browserStatus();
+      return json({
+        enabled: !kill.disabled,
+        disabledReason: kill.reason ?? null,
+        capabilities: caps,
+        browser,
+        pending: approvals.list().length,
+      });
+    }
+
+    if (path === "/api/control/events") {
+      const limit = Math.min(200, Number(url.searchParams.get("limit") ?? 50));
+      // Reuse the audit log — every control event is already there with a
+      // consistent prefix. We filter and return the most recent N.
+      const all = store.recentAudit(limit * 4); // overscan to compensate for filtering
+      const events = all
+        .filter((e) => e.event.startsWith("control.") || e.event.startsWith("computer_control."))
+        .slice(0, limit);
+      return json({ events });
+    }
+
+    if (path === "/api/control/pending") {
+      return json({ pending: approvals.list() });
+    }
+
+    if (path === "/api/control/approve" && req.method === "POST") {
+      try {
+        const body = await req.json() as { id?: string; approved?: boolean };
+        if (typeof body?.id !== "string" || typeof body?.approved !== "boolean") {
+          return json({ error: "expected { id: string, approved: boolean }" }, 400);
+        }
+        const handled = approvals.answer(body.id, body.approved);
+        return json({ ok: handled });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
+    }
+
+    if (path === "/api/control/plan" && req.method === "POST") {
+      // Plan-only (preview), never executes from the dashboard.
+      // Execution from the dashboard would bypass the CLI approval surface;
+      // we keep it as preview-only by design. The user runs the plan from
+      // their terminal (or via the agent).
+      try {
+        const body = await req.json() as { task?: string };
+        if (!body?.task) return json({ error: "expected { task: string }" }, 400);
+        const provider = buildProvider(config, {});
+        const result = await planActions(provider, body.task);
+        if ("error" in result) return json({ error: result.error }, 422);
+        return json({ plan: result.plan });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
     }
 
     return json({ error: "not found" }, 404);
