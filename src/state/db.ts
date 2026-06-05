@@ -120,6 +120,16 @@ export class Store {
         spec TEXT NOT NULL,            -- JSON Schedule
         created_at INTEGER NOT NULL
       );
+      -- v0.7: research sessions (full ResearchSession persisted as JSON).
+      CREATE TABLE IF NOT EXISTS research_sessions (
+        id TEXT PRIMARY KEY,
+        topic TEXT NOT NULL,
+        depth TEXT NOT NULL,
+        status TEXT NOT NULL,
+        data TEXT NOT NULL,            -- JSON ResearchSession
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
   }
 
@@ -473,6 +483,62 @@ export class Store {
       `SELECT COALESCE(SUM(usd), 0) total FROM cost_events WHERE created_at >= ?`,
     ).get(startMs);
     return row?.total ?? 0;
+  }
+
+  // ---- v0.7: research sessions ----
+
+  /** Insert or update a research session (stored as a JSON blob + columns). */
+  saveResearch(id: string, topic: string, depth: string, status: string, dataJson: string): void {
+    const now = Date.now();
+    const exists = this.db
+      .query<{ c: number }, [string]>(`SELECT COUNT(*) c FROM research_sessions WHERE id=?`)
+      .get(id);
+    if (exists && exists.c > 0) {
+      this.db
+        .query(`UPDATE research_sessions SET topic=?, depth=?, status=?, data=?, updated_at=? WHERE id=?`)
+        .run(topic, depth, status, dataJson, now, id);
+    } else {
+      this.db
+        .query(
+          `INSERT INTO research_sessions (id,topic,depth,status,data,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`,
+        )
+        .run(id, topic, depth, status, dataJson, now, now);
+    }
+  }
+
+  getResearch(id: string): { id: string; data: string } | null {
+    return (
+      this.db
+        .query<{ id: string; data: string }, [string]>(`SELECT id,data FROM research_sessions WHERE id=?`)
+        .get(id) ?? null
+    );
+  }
+
+  /** Most recently updated research session (the "current" one for status/sources). */
+  latestResearch(): { id: string; data: string } | null {
+    return (
+      this.db
+        .query<{ id: string; data: string }, []>(
+          `SELECT id,data FROM research_sessions ORDER BY updated_at DESC LIMIT 1`,
+        )
+        .get() ?? null
+    );
+  }
+
+  listResearch(limit = 20): Array<{ id: string; topic: string; depth: string; status: string; updated_at: number }> {
+    return this.db
+      .query<{ id: string; topic: string; depth: string; status: string; updated_at: number }, [number]>(
+        `SELECT id,topic,depth,status,updated_at FROM research_sessions ORDER BY updated_at DESC LIMIT ?`,
+      )
+      .all(limit);
+  }
+
+  researchCount(): number {
+    return (
+      this.db
+        .query<{ c: number }, []>(`SELECT COUNT(*) c FROM research_sessions`)
+        .get()?.c ?? 0
+    );
   }
 
   // ---- Block 8: schedules ----
