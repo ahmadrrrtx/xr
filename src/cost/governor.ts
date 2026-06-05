@@ -1,12 +1,4 @@
-/**
- * XR — Cost Governor.
- * A hard, deterministic spend ceiling the agent PHYSICALLY cannot exceed.
- * Live token + USD meter, pre-flight estimation, and a pause-and-ask gate.
- *
- * This is the headline differentiator: "XR literally cannot spend more than
- * you allow." Enforced in code — the model can never override it.
- * (TRD §3.1)
- */
+import { BudgetManager, BudgetCheckResult } from "./manager.ts";
 
 export interface Budget {
   /** Hard ceiling in USD for this task (0 or undefined = local/free, no $ cap). */
@@ -29,8 +21,8 @@ export interface CostSnapshot {
 }
 
 export type GovernorDecision =
-  | { allow: true }
-  | { allow: false; reason: string; snapshot: CostSnapshot };
+  | { allow: true; warning?: string }
+  | { allow: false; reason: string; snapshot: CostSnapshot; suggestLocal?: boolean };
 
 export class CostGovernor {
   private inTokens = 0;
@@ -41,6 +33,7 @@ export class CostGovernor {
   constructor(
     private budget: Budget,
     private pricing: Pricing,
+    private budgetManager: BudgetManager,
   ) {}
 
   /** Record real usage after a model call. */
@@ -70,16 +63,26 @@ export class CostGovernor {
   checkBeforeStep(): GovernorDecision {
     const snap = this.snapshot();
 
-    // Already over a ceiling? (defensive — should be caught earlier)
-    if (this.overBudget()) {
-      return { allow: false, reason: "budget ceiling reached", snapshot: snap };
-    }
-
-    // Estimate the next step from the average so far (fallback to a small guess).
+    // 1. Global Budget Check
     const avgTokens = this.steps > 0 ? snap.totalTokens / this.steps : 2000;
     const estTokens = Math.max(avgTokens, 500);
     const estUsd =
       this.steps > 0 ? snap.usd / this.steps : (estTokens / 1_000_000) * this.pricing.outPerMTok;
+
+    const globalCheck = this.budgetManager.checkBudget(estUsd);
+    if (!globalCheck.allow) {
+      return { 
+        allow: false, 
+        reason: globalCheck.reason, 
+        snapshot: snap,
+        suggestLocal: globalCheck.suggestLocal 
+      };
+    }
+
+    // 2. Per-Task Budget Check
+    if (this.overBudget()) {
+      return { allow: false, reason: "per-task budget ceiling reached", snapshot: snap };
+    }
 
     if (
       this.budget.maxTokens !== undefined &&
@@ -87,7 +90,7 @@ export class CostGovernor {
     ) {
       return {
         allow: false,
-        reason: `next step (~${Math.round(estTokens)} tok) would exceed token ceiling (${this.budget.maxTokens})`,
+        reason: `next step (~${Math.round(estTokens)} tok) would exceed per-task token ceiling (${this.budget.maxTokens})`,
         snapshot: snap,
       };
     }
@@ -98,11 +101,15 @@ export class CostGovernor {
     ) {
       return {
         allow: false,
-        reason: `next step (~$${estUsd.toFixed(4)}) would exceed spend ceiling ($${this.budget.maxUsd})`,
+        reason: `next step (~$${estUsd.toFixed(4)}) would exceed per-task spend ceiling ($${this.budget.maxUsd})`,
         snapshot: snap,
       };
     }
-    return { allow: true };
+
+    return { 
+      allow: true, 
+      warning: globalCheck.warning 
+    };
   }
 
   overBudget(): boolean {
