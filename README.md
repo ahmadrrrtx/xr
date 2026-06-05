@@ -83,6 +83,34 @@ xr models test           # verify Ollama + selected model respond
 ```
 XR now detects your hardware, recommends a practical Ollama model, optionally downloads it, saves the selected model in config, and uses it as the default or deterministic cloud fallback. Local-only mode works with no API keys. Hybrid/cloud-first mode can use cloud providers when configured and fall back to local when the primary provider fails.
 
+### 🔬 Research Mode (v0.7)
+```bash
+xr research "best budget laptops for software development"   # quick
+xr research deep "compare Ollama vs cloud providers"          # deeper
+xr research plan "is RISC-V ready for laptops?"               # plan only
+xr research export                                            # → signed markdown report
+```
+XR's research mode is **source-first, not answer-first**. It builds a research plan,
+searches the web (egress-gated), ranks and de-duplicates sources by a transparent
+trust heuristic, fetches the top pages, extracts citation-tied evidence notes, detects
+contradictions, and synthesizes a structured report — **short answer + executive summary
++ full report + open questions + sources table**.
+
+It will **never fabricate a source or fake certainty**:
+- Every note is tied to a source id (`[s1]`) and tagged `fact` / `inference` / `opinion`.
+- A note is only marked **verified** when XR actually fetched the page — snippet-only
+  notes are flagged `unverified` and their confidence is downgraded.
+- If search is unavailable, XR says so and refuses to invent an answer.
+- Research uses the **same provider routing, local fallback, and spend caps** as the rest
+  of XR — token/$ spend is always shown, never silent. Reports are SHA-256 signed.
+
+`quick` = fewer sources / faster · `deep` = more sources / richer synthesis. Reports are
+saved to `~/.xr/research/` as markdown + a machine-readable JSON sidecar. Voice/chat flows
+auto-route to research when you say *"research…", "investigate…", "compare…"*.
+
+> Requires a search host (default SearXNG `searx.be`) to be on your egress allow-list.
+> `xr doctor` reports research health. Set `XR_SEARXNG` to use your own instance.
+
 ### 🧠 JARVIS-Level Computer Control
 ```bash
 xr --computer "open Safari and search for AI agents"
@@ -164,6 +192,14 @@ Wake word → Whisper STT → agent → Kokoro TTS. Local by default. Say "Hey X
 | `xr voice` | Voice stack check |
 | `xr sandbox` | Docker sandbox status |
 | `xr export` | Signed audit report |
+| `xr research "topic"` | Source-first research (quick) |
+| `xr research deep "topic"` | Deeper multi-source research |
+| `xr research plan "topic"` | Generate a research plan |
+| `xr research status` | Show current/most-recent session |
+| `xr research sources` | List collected sources + trust |
+| `xr research summarize` | (Re)synthesize a report from notes |
+| `xr research export` | Write the report to markdown (+ json) |
+| `xr research list` | Recent research sessions |
 
 **Slash commands (inside TUI):** `/ask`, `/plan`, `/mode`, `/model`, `/budget`, `/doctor`, `/attacks`, `/skills`, `/index`, `/memory`, `/cost`, `/verify-log`, `/export`, `/shell`, `/exit`, `/help`
 
