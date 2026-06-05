@@ -9,8 +9,12 @@ import type { Store } from "../state/db.ts";
 import { banner, ok, warn, info, colors as C } from "../interfaces/cli.ts";
 import { loadConfig, saveConfig } from "../config/config.ts";
 import { detectCapabilities, isControlReady } from "./adapter.ts";
-import { isDisabled, runAction, runPlan } from "./service.ts";
+import { isDisabled, runAction, runPlan, runTypedPlan } from "./service.ts";
 import type { Action, ControlOptions, ExecutionMode } from "./types.ts";
+import { planActions } from "./planner.ts";
+import { browserStatus, shutdownBrowser } from "./browser.ts";
+import { buildProvider } from "../providers/factory.ts";
+import { spawnSync } from "node:child_process";
 
 // ── flag helpers ────────────────────────────────────────────────────────────
 
@@ -210,6 +214,110 @@ function finish(success: boolean, msg: string): void {
   else warn(msg);
 }
 
+// ── plan / run (multi-step) ────────────────────────────────────────────────
+
+async function cmdPlan(store: Store, flags: ParsedFlags): Promise<void> {
+  const task = flags.rest.join(" ").trim();
+  if (!task) { warn(`usage: xr control plan "<task>"  [--dry-run|--step|--yes]`); return; }
+  banner();
+  console.log(C.bold(`🧭 Planning: ${task}`));
+
+  const { config } = loadConfig();
+  const provider = buildProvider(config, {});
+  const planned = await planActions(provider, task);
+  if ("error" in planned) {
+    warn(`planner failed: ${planned.error}`);
+    return;
+  }
+  const plan = planned.plan;
+  if (plan.actions.length === 0) {
+    info(plan.rationale ?? "planner returned an empty plan");
+    return;
+  }
+
+  // Default to dry-run for `plan` unless user passed an explicit flag.
+  const opts: ControlOptions = makeOpts({ ...flags, mode: flags.mode === "auto" ? "dry-run" : flags.mode });
+  const results = await runTypedPlan(store, plan, opts);
+
+  const okCount = results.filter((r) => r.result.ok && !r.result.skipped).length;
+  const skipped = results.filter((r) => r.result.skipped).length;
+  const failed = results.filter((r) => !r.result.ok && !r.result.skipped).length;
+  console.log("");
+  console.log(C.dim(`  → ${okCount} executed · ${skipped} skipped · ${failed} failed`));
+  if (opts.mode === "dry-run") {
+    info(`Dry-run only. Re-run with "xr control plan \\"${task}\\" --yes" or "--step" to execute.`);
+  }
+}
+
+async function cmdRun(store: Store, flags: ParsedFlags): Promise<void> {
+  // Read a JSON Action[] from stdin and execute through the safety pipeline.
+  const stdin = await readAllStdin();
+  if (!stdin.trim()) {
+    warn(`usage: cat plan.json | xr control run [--dry-run|--step|--yes]`);
+    return;
+  }
+  let parsed: any;
+  try { parsed = JSON.parse(stdin); } catch (e) {
+    warn(`invalid JSON: ${(e as Error).message}`);
+    return;
+  }
+  const actions: unknown[] = Array.isArray(parsed) ? parsed
+    : Array.isArray(parsed?.actions) ? parsed.actions
+    : [];
+  if (!actions.length) {
+    warn("no actions found in input (expected JSON array, or { actions: [...] })");
+    return;
+  }
+  await runPlan(store, actions, makeOpts(flags));
+}
+
+async function readAllStdin(): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  let data = "";
+  for await (const chunk of process.stdin as any) data += chunk;
+  return data;
+}
+
+// ── browser subcommands ───────────────────────────────────────────────────
+
+async function cmdBrowser(store: Store, flags: ParsedFlags): Promise<void> {
+  const sub = flags.rest[0];
+  if (!sub || sub === "status") {
+    const s = browserStatus();
+    banner();
+    console.log(C.bold("🌐 Browser Backend (Playwright)"));
+    console.log(`  installed ........ ${s.installed ? C.green("✓ yes") : C.red("✗ no")} ${s.reason ? C.dim(`(${s.reason})`) : ""}`);
+    console.log(`  active session ... ${s.active ? C.green("✓ open") : C.dim("(none)")}`);
+    if (s.url) console.log(`  current url ...... ${C.cyan(s.url)}`);
+    if (!s.installed) {
+      console.log("");
+      info(`Install with: xr control browser install`);
+    }
+    return;
+  }
+  if (sub === "install") {
+    banner();
+    console.log(C.bold("📦 Installing Playwright + Chromium…"));
+    info("This downloads ~150 MB and takes 1–2 minutes.");
+    // Use bun if available, otherwise npm. Always at the project root.
+    const hasBun = spawnSync("bun", ["--version"], { stdio: "ignore" }).status === 0;
+    const pmInstall = hasBun ? ["bun", ["add", "playwright"]] : ["npm", ["install", "playwright"]];
+    const r1 = spawnSync(pmInstall[0] as string, pmInstall[1] as string[], { stdio: "inherit" });
+    if (r1.status !== 0) { warn("playwright install failed"); return; }
+    const r2 = spawnSync("npx", ["playwright", "install", "chromium"], { stdio: "inherit" });
+    if (r2.status !== 0) { warn("chromium install failed"); return; }
+    ok("Playwright + Chromium installed.");
+    info(`Try: xr control plan "open github.com and search for ahmadrrrtx" --yes`);
+    return;
+  }
+  if (sub === "close") {
+    await shutdownBrowser();
+    ok("browser closed");
+    return;
+  }
+  warn(`unknown browser subcommand: ${sub}. Use status, install, or close.`);
+}
+
 function printHelp(): void {
   banner();
   console.log(`${C.bold("xr control")} — safe, explicit computer automation
@@ -229,6 +337,16 @@ ${C.bold("Actions")}
   xr control scroll <up|down|left|right> [n]
   xr control key   "<ctrl+c>"               press a key combo
   xr control focus "<window>"               focus an existing window
+
+${C.bold("Multi-step")}
+  xr control plan  "<task>"                 LLM plans → preview (dry-run default)
+  xr control plan  "<task>" --yes           plan and execute (with approvals)
+  cat plan.json | xr control run            execute a pre-built JSON plan
+
+${C.bold("Browser")}
+  xr control browser status                 check Playwright availability
+  xr control browser install                install playwright + chromium
+  xr control browser close                  close the active browser session
 
 ${C.bold("Flags (any subcommand)")}
   --dry-run         show the plan, execute nothing
@@ -260,7 +378,10 @@ export async function handleControlCommand(argv: string[], store: Store): Promis
   if (sub === "move")   return cmdMove(store, flags);
   if (sub === "scroll") return cmdScroll(store, flags);
   if (sub === "key")    return cmdKey(store, flags);
-  if (sub === "focus")  return cmdFocus(store, flags);
+  if (sub === "focus")   return cmdFocus(store, flags);
+  if (sub === "plan")    return cmdPlan(store, flags);
+  if (sub === "run")     return cmdRun(store, flags);
+  if (sub === "browser") return cmdBrowser(store, flags);
 
   warn(`unknown subcommand: ${sub}`);
   printHelp();
