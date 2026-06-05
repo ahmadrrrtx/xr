@@ -9,6 +9,7 @@ import {
   XR_HOME, 
   getProviderEnvStatus 
 } from "../config/config.ts";
+import { setSecret, removeSecret } from "../security/secrets.ts";
 import { 
   knownProviders, 
   PRESETS, 
@@ -117,14 +118,13 @@ async function addProviderKey(target?: string) {
   const key = await password(`Enter API key for ${id}:`);
   if (!key) return;
 
-  // Save to .env
-  const envPath = join(XR_HOME, ".env");
-  let content = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
-  const lines = content.split("\n").filter(l => l.trim() && !l.startsWith(`${preset.apiKeyEnv}=`));
-  lines.push(`${preset.apiKeyEnv}=${key}`);
-  
-  writeFileSync(envPath, lines.join("\n") + "\n");
-  ok(`API key for ${id} saved to ${envPath}`);
+  const backend = setSecret(preset.apiKeyEnv, key);
+  process.env[preset.apiKeyEnv] = key;
+  if (backend === "file") {
+    warn(`Secure OS secret store not available; key saved to ${join(XR_HOME, ".env")} with chmod 600.`);
+  } else {
+    ok(`API key for ${id} saved in ${backend}.`);
+  }
 }
 
 async function removeProviderKey(target?: string) {
@@ -137,13 +137,7 @@ async function removeProviderKey(target?: string) {
     return;
   }
 
-  const envPath = join(XR_HOME, ".env");
-  if (!existsSync(envPath)) return;
-
-  let content = readFileSync(envPath, "utf8");
-  const lines = content.split("\n").filter(l => l.trim() && !l.startsWith(`${preset.apiKeyEnv}=`));
-  
-  writeFileSync(envPath, lines.join("\n") + "\n");
+  removeSecret(preset.apiKeyEnv);
   ok(`API key for ${id} removed.`);
 }
 
