@@ -25,6 +25,7 @@ import { execute } from "./executor.ts";
 import { detectCapabilities, isControlReady } from "./adapter.ts";
 import { auditPlanned, auditExecuted, auditDenied, auditDisabled } from "./audit.ts";
 import { approvals } from "./approvals.ts";
+import { rememberPlan } from "./memory.ts";
 
 // ── Disable switch ──────────────────────────────────────────────────────────
 
@@ -237,11 +238,16 @@ export async function runPlan(
 /**
  * Run a typed Plan (from the planner) with a one-shot preview + audit event.
  * This is the recommended entry point for the agent tool and the dashboard.
+ *
+ * After the plan finishes, if EVERY step actually executed and succeeded AND
+ * the run wasn't a dry-run / partial, we attempt to remember the plan so the
+ * next call with the same task hits memory and skips the LLM. All gates live
+ * in memory.ts — service.ts only decides whether memory is *allowed*.
  */
 export async function runTypedPlan(
   store: Store,
   plan: Plan,
-  opts: ControlOptions,
+  opts: ControlOptions & { memory?: boolean },
 ): Promise<RunResult[]> {
   store.audit("control.plan.proposed", {
     task: plan.task,
@@ -254,5 +260,18 @@ export async function runTypedPlan(
   }
   console.log(C.dim(`  ${plan.actions.length} step(s) — mode: ${opts.mode}`));
 
-  return await runPlan(store, plan.actions, opts);
+  const results = await runPlan(store, plan.actions, opts);
+
+  // Memory gate: only when the caller explicitly enabled it AND every action
+  // was actually executed AND succeeded. Dry-run, denials, and failures
+  // disqualify the plan from being remembered.
+  const memoryAllowed = opts.memory !== false && opts.mode === "auto";
+  const allExecuted = results.length === plan.actions.length
+    && results.every((r) => r.result.ok && !r.result.skipped);
+
+  if (memoryAllowed && allExecuted) {
+    rememberPlan(store, { task: plan.task, plan, allowMemory: true });
+  }
+
+  return results;
 }
