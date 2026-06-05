@@ -1,14 +1,14 @@
 /**
  * XR — Professional Onboarding Experience
  * 
- * Philosophy: Sensible defaults, hardware-aware recommendations,
- * and security-first configuration.
+ * Secure, hardware-aware, and user-friendly.
  */
 
-import { existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
 import { totalmem, platform } from "node:os";
 import { join } from "node:path";
-import { loadConfig, XR_HOME, configPath, type XRConfig } from "../config/config.ts";
+import { spawnSync } from "node:child_process";
+import { loadConfig, XR_HOME, configPath } from "../config/config.ts";
 import { knownProviders } from "../providers/factory.ts";
 import { isLocal } from "../cost/pricing.ts";
 import { 
@@ -45,6 +45,24 @@ function recommendLocalModel(ramGb: number): string {
 }
 
 /**
+ * Pull a model via Ollama
+ */
+function pullModel(model: string) {
+  console.log(`\n  ${C.cyan("Downloading " + model + "...")}`);
+  console.log(`  ${C.dim("This may take a few minutes depending on your internet speed.")}`);
+  
+  const result = spawnSync("ollama", ["pull", model], { stdio: "inherit" });
+  
+  if (result.status === 0) {
+    ok(`  Model ${model} is ready.`);
+    return true;
+  } else {
+    warn(`  Failed to download model. You can run 'ollama pull ${model}' manually later.`);
+    return false;
+  }
+}
+
+/**
  * Main Onboarding Flow
  */
 export async function runOnboarding(): Promise<void> {
@@ -56,7 +74,7 @@ export async function runOnboarding(): Promise<void> {
   
   // 1. Choose Mode
   console.log(`${C.bold("Step 1: Choose your Operating Mode")}`);
-  console.log(`  [1] ${C.bold("Local-first")} (Private, free, uses your hardware)`);
+  console.log(`  [1] ${C.bold("Local-only")} (Private, free, uses your hardware)`);
   console.log(`  [2] ${C.bold("BYOK")} (Cloud-scale, bring your own API keys)`);
   console.log(`  [3] ${C.bold("Hybrid")} (Recommended: Local for simple tasks, Cloud for complex ones)`);
   
@@ -78,7 +96,7 @@ export async function runOnboarding(): Promise<void> {
       ok(`  Ollama is running on this machine.`);
     } else {
       warn(`  Ollama is not detected. XR uses Ollama for local models.`);
-      console.log(`  Download it at: ${C.cyan("https://ollama.ai")}`);
+      console.log(`  Please install it first: ${C.cyan("https://ollama.ai")}`);
     }
     
     const recModel = recommendLocalModel(env.ramGb);
@@ -87,12 +105,15 @@ export async function runOnboarding(): Promise<void> {
     if (await confirm(`  Would you like to use ${recModel} as your local default?`, true)) {
       model = recModel;
       providerId = "ollama";
+      
+      if (env.ollamaRunning && await confirm(`  Download ${model} now?`, true)) {
+        pullModel(model);
+      }
     }
   }
 
   if (isBYOK) {
-    console.log(`\n  Select cloud providers to enable (comma separated):`);
-    console.log(`  ${C.dim("Known: " + knownProviders().filter(p => !isLocal(p)).join(", "))}`);
+    console.log(`\n  Select cloud providers to enable (e.g., anthropic, openai):`);
     const selectedProviders = await ask("  Providers", { default: isHybrid ? "anthropic" : "openai" });
     
     for (const p of selectedProviders.split(",").map(s => s.trim())) {
@@ -118,7 +139,9 @@ export async function runOnboarding(): Promise<void> {
   // 4. Save Config
   info(`\n  Finalizing configuration...`);
   
-  const config = loadConfig().config;
+  if (!existsSync(XR_HOME)) mkdirSync(XR_HOME, { recursive: true });
+
+  const { config } = loadConfig();
   config.defaults.provider = providerId;
   config.defaults.model = model;
   config.budget.perTaskUsd = parseFloat(spendCap);
@@ -126,21 +149,25 @@ export async function runOnboarding(): Promise<void> {
     ? ["write_file", "delete", "shell", "send"] 
     : ["delete", "shell", "send"];
 
-  // Note: For now we write keys to a .env file in XR_HOME for security (separate from config.json)
+  // Secure Key Storage Fallback
   const envPath = join(XR_HOME, ".env");
   let envContent = "";
   for (const [p, key] of Object.entries(apiKeys)) {
     const envVar = p.toUpperCase() + "_API_KEY";
     envContent += `${envVar}=${key}\n`;
-    process.env[envVar] = key; // Set for current session
+    process.env[envVar] = key;
   }
   
   if (envContent) {
     writeFileSync(envPath, envContent);
-    ok(`  API keys securely stored in ${C.dim(envPath)}`);
+    try {
+      chmodSync(envPath, 0o600); // User read/write only
+      ok(`  API keys stored securely in ${C.dim(envPath)} (chmod 600)`);
+    } catch {
+      warn(`  Stored keys in ${C.dim(envPath)}. Please ensure this file is protected.`);
+    }
   }
 
-  if (!existsSync(XR_HOME)) mkdirSync(XR_HOME, { recursive: true });
   writeFileSync(configPath(), JSON.stringify(config, null, 2));
 
   // 5. Ready
@@ -149,6 +176,5 @@ export async function runOnboarding(): Promise<void> {
   console.log(`\n  ${C.bold("Next steps:")}`);
   console.log(`  - Run ${C.cyan('xr "hello"')} to test your setup.`);
   console.log(`  - Run ${C.cyan('xr doctor')} to check system health.`);
-  console.log(`  - Run ${C.cyan('xr --help')} to see all commands.`);
   console.log(`\n  ${C.dim("Config saved to: " + configPath())}\n`);
 }
