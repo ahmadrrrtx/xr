@@ -85,16 +85,13 @@ export class VoicePipeline {
   }
 
   /**
-   * Process ONE captured utterance end-to-end. Returns a transcript of what
-   * was done (for logging / display). Exposed for tests.
+   * Process a text command end-to-end.
+   * Same logic as processUtterance but skips the STT step.
    */
-  async processUtterance(audio: Uint8Array): Promise<{ handled: boolean; reply: string }> {
-    const stt = await this.deps.stt.transcribe(audio);
-    if (!stt.ok || !stt.text) return { handled: false, reply: "" };
-
-    let command = stt.text;
+  async processText(text: string): Promise<{ handled: boolean; reply: string }> {
+    let command = text;
     if (this.deps.requireWake) {
-      const wake = detectWake(stt.text);
+      const wake = detectWake(text);
       if (!wake.triggered) return { handled: false, reply: "" };
       command = wake.command;
     }
@@ -126,5 +123,15 @@ export class VoicePipeline {
     const reply = result.finalMessage || `Done. ${result.meter ?? ""}`;
     await this.say(reply);
     return { handled: true, reply };
+  }
+
+  /**
+   * Process ONE captured utterance end-to-end. Returns a transcript of what
+   * was done (for logging / display). Exposed for tests.
+   */
+  async processUtterance(audio: Uint8Array): Promise<{ handled: boolean; reply: string }> {
+    const stt = await this.deps.stt.transcribe(audio);
+    if (!stt.ok || !stt.text) return { handled: false, reply: "" };
+    return this.processText(stt.text);
   }
 }
