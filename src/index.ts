@@ -65,7 +65,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--tui") args.tui = true;
     else if (a === "--computer") args.computer = true;
     else if (a === "--voice") args.voice = true;
-    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "speak", "listen", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models", "budget", "cost", "research"].includes(a) && !args.command) {
+    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "speak", "listen", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models", "budget", "cost", "research", "control"].includes(a) && !args.command) {
       args.command = a;
     } else {
       rest.push(a);
@@ -126,6 +126,7 @@ ${C.bold("Commands")}
   xr voice                  voice control (status, test, start, stop)
   xr speak "text"           make XR speak text
   xr listen                 capture a single voice command
+  xr control                safe computer control (v0.8) — see "xr control help"
   xr reset                  factory reset (deletes config & db)
   xr verify-log             verify tamper-evident audit log
   xr skills                 list all available skills
@@ -237,6 +238,24 @@ async function cmdDoctor(store: Store, args: Args): Promise<void> {
   const budgetStatus = status.isOverBudget ? C.red("✗ exhausted") : status.isNearCap ? C.yellow("⚠ near cap") : C.green("✓ healthy");
   console.log(`  global budget .... ${budgetStatus} ${C.dim(`($${status.monthlySpend.toFixed(2)} / $${status.monthlyCap.toFixed(2)})`)}`);
   
+  // v0.8 — computer control health
+  try {
+    const { detectCapabilities } = await import("./control/adapter.ts");
+    const { isDisabled } = await import("./control/service.ts");
+    const caps = detectCapabilities();
+    const kill = isDisabled();
+    const ready = caps.tools.launcher && caps.tools.keyboard;
+    const tag = kill.disabled
+      ? C.dim(`✓ disabled (${kill.reason})`)
+      : ready
+        ? C.green("✓ ready")
+        : C.yellow("⚠ partial");
+    console.log(`  computer control . ${tag} ${C.dim(`(${caps.os}, kbd:${caps.tools.keyboard ? "✓" : "✗"}, mouse:${caps.tools.mouse ? "✓" : "✗"}, launcher:${caps.tools.launcher ? "✓" : "✗"})`)}`);
+    if (!kill.disabled && caps.missing.length) {
+      for (const m of caps.missing) console.log(`    ${C.dim(m)}`);
+    }
+  } catch { /* skip */ }
+
   // Sandbox check
   try {
     const { sandboxStatus } = await import("./computer/sandbox.ts");
@@ -438,6 +457,14 @@ async function main(): Promise<void> {
     if (args.command === "listen") {
       const { handleListen } = await import("./voice/cli.ts");
       await handleListen();
+      return;
+    }
+
+    // v0.8 — safe computer control surface.
+    if (args.command === "control") {
+      const { handleControlCommand } = await import("./control/cli.ts");
+      const start = argv.indexOf("control");
+      await handleControlCommand(argv.slice(start + 1), store);
       return;
     }
 
