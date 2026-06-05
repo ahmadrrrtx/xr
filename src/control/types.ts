@@ -61,6 +61,30 @@ export const ActionSchema = z.discriminatedUnion("type", [
     /** Bring an existing window/app to the front. */
     name: z.string().min(1).max(200),
   }),
+  // ── Browser automation (Playwright backend, opt-in) ─────────────────────
+  z.object({
+    type: z.literal("browser"),
+    op: z.enum([
+      "goto",      // navigate to URL
+      "click",     // click a CSS/text selector
+      "fill",      // fill an input with a value
+      "type",      // type into focused element
+      "press",     // press a key inside the page
+      "wait",      // wait for selector to appear (ms timeout)
+      "submit",    // submit a form (selector or current form)
+      "screenshot",// capture page screenshot to a temp path
+      "extract",   // read innerText of a selector
+      "close",     // close the browser context
+    ]),
+    /** CSS selector OR `text=` Playwright selector. Required for most ops. */
+    selector: z.string().min(1).max(500).optional(),
+    /** Value for fill/type/press/goto/wait. */
+    value: z.string().max(4000).optional(),
+    /** If true, the value is a sensitive secret — never logged in plaintext. */
+    sensitive: z.boolean().optional(),
+    /** Timeout in ms for wait/click/fill (default 5000). */
+    timeoutMs: z.number().int().min(100).max(60_000).optional(),
+  }),
 ]);
 
 export type Action = z.infer<typeof ActionSchema>;
@@ -103,6 +127,19 @@ export interface ActionResult {
   message: string;
   /** True if the executor skipped the action because of dry-run / denial. */
   skipped?: boolean;
+}
+
+/**
+ * A multi-step plan: a typed task with an ordered list of Actions.
+ * Produced by the planner LLM, executed by the service.
+ */
+export interface Plan {
+  /** The original natural-language task. */
+  task: string;
+  /** Ordered actions to take. Validated before any execution. */
+  actions: Action[];
+  /** Free-form rationale from the planner (shown to the user, never executed). */
+  rationale?: string;
 }
 
 export interface ControlCapabilities {
