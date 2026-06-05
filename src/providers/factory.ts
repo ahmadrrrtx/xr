@@ -53,7 +53,7 @@ export const PRESETS: Record<string, ProviderPreset> = {
     baseUrl: "http://localhost:11434/v1",
     apiKeyEnv: undefined,
     defaultModel: "qwen2.5:7b",
-    knownModels: ["llama3.1:8b", "llama3.1:70b", "mistral:7b", "codellama:7b", "qwen2.5:7b", "qwen2.5:14b", "gemma2:9b", "phi3:3.8b"],
+    knownModels: ["qwen2.5:3b", "phi3:mini", "qwen2.5:7b", "llama3.1:8b", "qwen2.5:14b", "qwen2.5:32b", "mistral:7b", "codellama:7b", "gemma2:9b"],
     local: true,
   },
 
@@ -171,16 +171,32 @@ export function buildProvider(
 ): Provider {
   const primaryId = override?.provider ?? config.defaults.provider;
   const primaryModel = override?.model ?? config.defaults.model;
-  
-  const primary = buildSingleProvider(config, primaryId, primaryModel);
 
-  // If fallback is configured and different from primary, wrap it.
-  const fallbackId = config.defaults.fallbackProvider;
-  const fallbackModel = config.defaults.fallbackModel;
+  const localSelected = config.localModels?.selected ?? config.defaults.fallbackModel ?? PRESETS.ollama.defaultModel!;
+  const localEnabled = Boolean(config.localModels?.enabled && localSelected);
+  const routing = config.localModels?.routing ?? "hybrid";
 
-  if (fallbackId && fallbackId !== primaryId) {
+  // Local-only means XR must work with no API keys. Force Ollama primary unless
+  // the caller explicitly overrides provider/model for this one invocation.
+  const effectivePrimaryId = !override?.provider && localEnabled && routing === "local-only" ? "ollama" : primaryId;
+  const effectivePrimaryModel = !override?.model && effectivePrimaryId === "ollama" && localEnabled ? localSelected : primaryModel;
+
+  const primary = buildSingleProvider(config, effectivePrimaryId, effectivePrimaryModel);
+
+  // Deterministic fallback order:
+  // 1. Explicit config fallback wins.
+  // 2. Hybrid/cloud-first with local enabled falls back to selected Ollama model.
+  // 3. Local-only has no fallback by default (avoid surprise cloud use).
+  let fallbackId = config.defaults.fallbackProvider;
+  let fallbackModel = config.defaults.fallbackModel;
+  if (localEnabled && effectivePrimaryId !== "ollama" && (routing === "hybrid" || routing === "cloud-first")) {
+    fallbackId = "ollama";
+    fallbackModel = localSelected;
+  }
+
+  if (fallbackId && fallbackId !== effectivePrimaryId) {
     try {
-      const fallback = buildSingleProvider(config, fallbackId, fallbackModel ?? primaryModel);
+      const fallback = buildSingleProvider(config, fallbackId, fallbackModel ?? effectivePrimaryModel);
       return new FallbackProvider(primary, fallback);
     } catch {
       return primary; // Fail gracefully: just use primary if fallback can't be built
@@ -241,7 +257,7 @@ class FallbackProvider implements Provider {
   ) {}
 
   get id() { return this.primary.id; }
-  get label() { return this.primary.label; }
+  get label() { return `${this.primary.label} → fallback ${this.fallback.label}`; }
 
   async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
     try {
