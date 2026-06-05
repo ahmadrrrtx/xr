@@ -41,38 +41,42 @@ export function ok(line: string): void {
 /** Read one line from stdin. */
 async function readLine(promptText: string): Promise<string> {
   process.stdout.write(promptText);
-  for await (const line of console as any) {
+  for await (const line of (console as any)) {
+    return String(line).trim();
+  }
+  return "";
+}
+
+/** 
+ * Ask a question and get a string response.
+ */
+export async function ask(promptText: string, options?: { default?: string }): Promise<string> {
+  const suffix = options?.default ? ` ${C.dim(`(${options.default})`)}` : "";
+  const result = await readLine(`${C.cyan(promptText)}${suffix} `);
+  return result || options?.default || "";
+}
+
+/**
+ * Masked input for sensitive keys.
+ */
+export async function password(promptText: string): Promise<string> {
+  // Since perfect terminal masking is tricky without dependencies in Bun,
+  // we use a simple approach: warn the user.
+  process.stdout.write(C.cyan(promptText) + " " + C.dim("(input visible) ") );
+  for await (const line of (console as any)) {
     return String(line).trim();
   }
   return "";
 }
 
 /**
- * Interactive approval prompt. Shows a diff/preview, then asks.
- * Default-deny on empty/unknown input ("Never Breaks" rule #3: fail closed).
+ * Yes/No confirmation.
  */
-export async function approvePrompt(req: ApprovalRequest): Promise<boolean> {
-  console.log("");
-  console.log(C.amber(`🔒 ACTION REQUIRES APPROVAL`));
-  console.log(`   tool:   ${C.bold(req.tool)}`);
-  console.log(`   reason: ${req.reason}`);
-  if (req.preview) {
-    console.log(C.dim("   ── preview ───────────────────────────"));
-    for (const l of req.preview.split("\n").slice(0, 40)) {
-      if (l.startsWith("+")) console.log("   " + C.green(l));
-      else if (l.startsWith("-")) console.log("   " + C.red(l));
-      else console.log("   " + C.dim(l));
-    }
-    console.log(C.dim("   ──────────────────────────────────────"));
-  }
-  const ans = (await readLine(C.amber("   [a]pprove / [d]eny ? "))).toLowerCase();
-  const approved = ans === "a" || ans === "approve" || ans === "y" || ans === "yes";
-  console.log(approved ? C.green("   → approved") : C.red("   → denied"));
-  return approved;
-}
-
-export async function ask(promptText: string): Promise<string> {
-  return readLine(C.cyan(promptText));
+export async function confirm(promptText: string, defaultYes = true): Promise<boolean> {
+  const suffix = defaultYes ? " [Y/n]" : " [y/N]";
+  const result = await readLine(`${C.cyan(promptText)}${C.dim(suffix)} `);
+  if (!result) return defaultYes;
+  return result.toLowerCase().startsWith("y");
 }
 
 /**
