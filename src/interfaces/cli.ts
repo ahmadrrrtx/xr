@@ -97,11 +97,26 @@ export async function confirm(promptText: string, defaultYes = true): Promise<bo
   return result.toLowerCase().startsWith("y");
 }
 
+/** Budget overrun prompt: fail closed unless the user explicitly raises the cap. */
+export async function overBudgetPrompt(
+  meter: string,
+  reason: string,
+): Promise<{ usd?: number; tokens?: number } | null> {
+  console.log(C.amber(`💰 BUDGET CHECK: ${reason}`));
+  console.log(C.dim(`   Current meter: ${meter}`));
 
-/** Budget overrun prompt: fail closed unless the user explicitly continues. */
-export async function overBudgetPrompt(message: string): Promise<boolean> {
-  console.log(C.amber(`💰 BUDGET CHECK: ${message}`));
-  return await confirm("   Continue anyway?", false);
+  const raise = await confirm("   Raise the per-task budget for this run?", false);
+  if (!raise) return null;
+
+  const usd = await ask("   Extra USD budget to add (blank = 0)", { default: "0" });
+  const tokens = await ask("   Extra token budget to add (blank = 0)", { default: "0" });
+
+  const extra = {
+    usd: Number.parseFloat(usd) || 0,
+    tokens: Number.parseInt(tokens, 10) || 0,
+  };
+
+  return extra.usd > 0 || extra.tokens > 0 ? extra : null;
 }
 
 /** Interactive approval prompt. */
