@@ -39,6 +39,7 @@ import {
   ShieldCheck,
   TrendingUp,
   Layers3,
+  Search,
 } from "lucide-react";
 
 // ─── Animation Helpers ────────────────────────────────────────────────────────
@@ -487,6 +488,7 @@ function ComparisonSection() {
     { name: "Self-improving (learns from experience)", xr: true, claude: false, openclaw: false, hermes: true },
     { name: "Docker sandbox for shell commands", xr: true, claude: false, openclaw: "partial", hermes: true },
     { name: "Voice control (wake word → STT → TTS)", xr: true, claude: false, openclaw: true, hermes: true },
+    { name: "Research mode (source-first, citation-aware)", xr: true, claude: "partial", openclaw: false, hermes: false },
     { name: "BYOK + $0 to run", xr: true, claude: false, openclaw: "partial", hermes: true },
     { name: "Cross-platform (Win/Mac/Linux/Termux)", xr: true, claude: true, openclaw: true, hermes: true },
   ];
@@ -741,6 +743,13 @@ function FeaturesSection() {
       color: "#F59E0B",
       title: "Voice Control",
       description: "Wake word → speech-to-text → model → text-to-speech. Works on macOS (say command) and Windows (SAPI).",
+    },
+    {
+      icon: Search,
+      color: "#22D3EE",
+      title: "Research Mode (v0.7)",
+      description:
+        "Source-first, citation-aware research. XR plans, searches, ranks sources by trust, fetches pages, extracts cited evidence, flags contradictions, and exports a signed report. Never fakes a source or fakes certainty.",
     },
     {
       icon: Globe,
