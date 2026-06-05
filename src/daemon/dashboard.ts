@@ -238,6 +238,13 @@ const PAGE = `<!doctype html>
           <div class="list" id="ctrl-pending" style="max-height:200px;margin-top:8px"></div>
           <div class="sub" style="margin-top:18px">Recent control events</div>
           <div class="list" id="ctrl-events" style="max-height:200px;margin-top:8px"></div>
+
+          <div class="sub" style="margin-top:18px">
+            🧠 Remembered plans <span id="ctrl-mem-count" class="muted">(0)</span>
+            <button id="ctrl-mem-clear" style="float:right;background:rgba(255,90,106,.1);color:var(--red);
+              border:1px solid rgba(255,90,106,.25);padding:2px 8px;border-radius:6px;font-size:11px;cursor:pointer;font:inherit">clear all</button>
+          </div>
+          <div class="list" id="ctrl-mem" style="max-height:160px;margin-top:8px"></div>
         </div>
       </div>
     </section>
@@ -367,7 +374,10 @@ async function load(){
       const t = new Date(e.created_at).toLocaleTimeString();
       const eventColor = e.event === "control.exec" ? "var(--green)"
         : e.event === "control.denied" ? "var(--red)"
-        : e.event === "control.disabled" ? "var(--dim)" : "var(--cyan)";
+        : e.event === "control.disabled" ? "var(--dim)"
+        : e.event === "control.memory.hit" ? "var(--violet)"
+        : e.event === "control.memory.stored" ? "var(--teal)"
+        : "var(--cyan)";
       let detailObj = {}; try { detailObj = JSON.parse(e.detail); } catch (_) {}
       const action = detailObj.action ? (detailObj.action.type || "?") : "";
       const meta = detailObj.risk ? (" · " + detailObj.risk) : (detailObj.ok === false ? " · failed" : "");
@@ -380,7 +390,50 @@ async function load(){
     });
     if (!(ev.events || []).length) list.innerHTML = '<div class="muted" style="padding:10px 0">no control events yet</div>';
   }
+
+  // 🧠 Remembered plans
+  const mem = await get("/api/control/memory");
+  if (mem) {
+    $("ctrl-mem-count").textContent = "(" + (mem.entries || []).length + ")";
+    const list = $("ctrl-mem"); list.innerHTML = "";
+    if (!mem.enabled) {
+      list.innerHTML = '<div class="muted" style="padding:10px 0">memory disabled in config</div>';
+    } else if (!(mem.entries || []).length) {
+      list.innerHTML = '<div class="muted" style="padding:10px 0">nothing remembered yet</div>';
+    } else {
+      (mem.entries || []).slice(0, 8).forEach((m) => {
+        const row = document.createElement("div");
+        row.className = "item";
+        row.innerHTML =
+          '<span class="dot" style="background:var(--violet)"></span>'
+          + '<span class="desc"><b>' + escapeHtml(m.task) + '</b> '
+          + '<span class="muted">· ' + m.steps + ' steps · ' + m.hits + ' hit' + (m.hits === 1 ? "" : "s") + '</span></span>'
+          + '<button class="btn-forget" data-id="' + m.baselineId + '" style="margin-left:auto;background:rgba(255,90,106,.1);color:var(--red);border:1px solid rgba(255,90,106,.25);padding:2px 8px;border-radius:6px;font-size:11px;cursor:pointer;font:inherit">forget</button>';
+        list.appendChild(row);
+      });
+      list.querySelectorAll(".btn-forget").forEach((b) => b.addEventListener("click", () => forgetMem(b.dataset.id)));
+    }
+  }
 }
+
+async function forgetMem(id) {
+  await fetch("/api/control/memory/" + encodeURIComponent(id), {
+    method: "DELETE",
+    headers: { "authorization": "Bearer " + TOKEN },
+  });
+  load();
+}
+
+document.addEventListener("click", async (ev) => {
+  if (ev.target && ev.target.id === "ctrl-mem-clear") {
+    if (!confirm("Forget ALL remembered control plans?")) return;
+    await fetch("/api/control/memory/all", {
+      method: "DELETE",
+      headers: { "authorization": "Bearer " + TOKEN },
+    });
+    load();
+  }
+});
 
 async function answer(id, approved) {
   await fetch("/api/control/approve", {
