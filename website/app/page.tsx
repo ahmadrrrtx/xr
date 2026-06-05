@@ -304,7 +304,7 @@ function HeroSection() {
         >
           <span className="badge">
             <span style={{ color: "#00FF88" }}>⚡</span>
-            v0.2 JARVIS Edition · 124 tests passing · MIT Licensed
+            v0.5 Local Model Intelligence · MIT Licensed
           </span>
         </motion.div>
 
@@ -381,10 +381,10 @@ function HeroSection() {
           style={{ color: "#94A3B8" }}
         >
           <strong style={{ color: "#F8FAFC" }}>
-            12 AI providers · Zero-cost defaults · Hard spend ceiling
+            Local model auto-detection · BYOK cloud fallback · Hard spend ceiling
           </strong>
           <br />
-          JARVIS computer control · Voice · Tamper-evident audit · Self-improving
+          Ollama local mode · Hybrid routing · Tamper-evident audit
         </motion.p>
 
         {/* BYOK tagline */}
@@ -395,7 +395,7 @@ function HeroSection() {
           className="text-base font-medium mb-10"
           style={{ color: "#00D4FF" }}
         >
-          BYOK — you bring your key, we ship nothing.
+          Local-first + BYOK — use no key, or bring your own.
         </motion.p>
 
         {/* Stats row */}
@@ -602,10 +602,10 @@ function PillarsSection() {
       icon: Lock,
       color: "#00D4FF",
       bg: "rgba(0, 212, 255, 0.08)",
-      title: "BYOK — You Bring the Key",
-      tagline: "We ship nothing.",
+      title: "Local-first + BYOK",
+      tagline: "No key required for local mode.",
       description:
-        "XR runs on YOUR API key or YOUR local model. It costs us $0 to maintain and you $0 to trust. No vendor lock-in, no surprise bills, no data leaving your infrastructure.",
+        "XR runs on your local Ollama model or your provider API key. v0.5 detects RAM/VRAM/CPU/disk, recommends a model, downloads it with approval, and keeps cloud fallback deterministic.",
       highlight: "$0 to trust",
     },
     {
@@ -746,7 +746,7 @@ function FeaturesSection() {
       icon: Globe,
       color: "#A855F7",
       title: "Multi-Provider Support",
-      description: "Claude, GPT-4, Gemini, Llama, Mistral, Grok, DeepSeek, Cerebras, and more — swap anytime.",
+      description: "Ollama, Claude, GPT, Gemini, Mistral, DeepSeek, Cerebras, OpenRouter, Groq, Together, Cohere, and Bedrock — swap anytime.",
     },
     {
       icon: Eye,
@@ -863,18 +863,18 @@ function ProvidersSection() {
   const inView = useInView(ref, { once: true, margin: "-100px" });
 
   const providers = [
+    { name: "Ollama Local", short: "Ollama", color: "#8000FF" },
     { name: "Anthropic Claude", short: "Claude", color: "#FF6B6B" },
-    { name: "OpenAI GPT-4", short: "GPT-4", color: "#10A37F" },
+    { name: "OpenAI", short: "OpenAI", color: "#10A37F" },
     { name: "Google Gemini", short: "Gemini", color: "#4285F4" },
-    { name: "Meta Llama (Ollama)", short: "Llama", color: "#8000FF" },
-    { name: "Mistral AI", short: "Mistral", color: "#FF500F" },
-    { name: "xAI Grok", short: "Grok", color: "#000000" },
-    { name: "DeepSeek", short: "DeepSeek", color: "#0066FF" },
-    { name: "Cerebras", short: "Cerebras", color: "#00AAFF" },
-    { name: "Nous Research", short: "Nous", color: "#9333EA" },
-    { name: "OpenRouter", short: "OpenRouter", color: "#00D4FF" },
-    { name: "Fireworks AI", short: "Fireworks", color: "#FF4500" },
     { name: "Groq", short: "Groq", color: "#00E676" },
+    { name: "DeepSeek", short: "DeepSeek", color: "#0066FF" },
+    { name: "Together AI", short: "Together", color: "#9333EA" },
+    { name: "OpenRouter", short: "Router", color: "#00D4FF" },
+    { name: "Cerebras", short: "Cerebras", color: "#00AAFF" },
+    { name: "Mistral AI", short: "Mistral", color: "#FF500F" },
+    { name: "Cohere", short: "Cohere", color: "#14B8A6" },
+    { name: "AWS Bedrock", short: "Bedrock", color: "#F59E0B" },
   ];
 
   return (
@@ -900,7 +900,7 @@ function ProvidersSection() {
             Use <span className="text-gradient-cyan">any model</span>
           </h2>
           <p className="text-lg max-w-xl mx-auto" style={{ color: "#94A3B8" }}>
-            12+ AI providers supported. Bring your own key. Swap anytime with one command.
+            Ollama local models plus supported BYOK cloud providers. Swap anytime with one command.
           </p>
         </motion.div>
 
@@ -940,7 +940,7 @@ function ProvidersSection() {
           className="text-center text-sm mt-8"
           style={{ color: "#475569" }}
         >
-          Plus: Azure OpenAI, OpenAI-compatible endpoints, and any Ollama model.
+          Plus: provider base URL overrides for OpenAI-compatible services and any valid Ollama model ID.
         </motion.p>
       </div>
     </section>
@@ -968,7 +968,9 @@ function InstallSection() {
         { text: "# One command. Any OS. That's it.", type: "comment" },
         { text: 'curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash', type: "command" },
         { text: "", type: "blank" },
-        { text: "# Then just type:", type: "comment" },
+        { text: "# First run: choose Local-only or Hybrid", type: "comment" },
+        { text: "xr onboarding", type: "command" },
+        { text: "xr models recommend", type: "command" },
         { text: 'xr "hello, who are you"', type: "command" },
         { text: "", type: "blank" },
         { text: "# Interactive TUI (Claude Code-style)", type: "comment" },
@@ -983,7 +985,8 @@ function InstallSection() {
       optional: [
         { text: "# Optional: Free local AI with Ollama", type: "comment" },
         { text: "curl -fsSL https://ollama.ai/install.sh | bash", type: "command" },
-        { text: "ollama pull qwen2.5:7b && ollama serve", type: "command" },
+        { text: "xr models install", type: "command" },
+        { text: "xr models test", type: "command" },
       ],
       note: "Works on Ubuntu, Debian, Fedora, Arch, and more.",
     },
@@ -1000,7 +1003,8 @@ function InstallSection() {
         { text: "xr --tui", type: "command" },
         { text: "", type: "blank" },
         { text: "# Optional: Free local AI", type: "comment" },
-        { text: "brew install ollama && ollama pull llama3:8b", type: "command" },
+        { text: "brew install ollama", type: "command" },
+        { text: "xr models install", type: "command" },
       ],
       optional: [],
       note: "Works on Intel and Apple Silicon Macs. Voice TTS uses built-in \"say\".",
@@ -1016,7 +1020,8 @@ function InstallSection() {
         { text: "xr providers # See all AI providers", type: "command" },
         { text: "", type: "blank" },
         { text: "# Optional: Ollama", type: "comment" },
-        { text: "irm https://ollama.ai/install.ps1 | iex", type: "command" },
+        { text: "irm https://ollama.com/install.ps1 | iex", type: "command" },
+        { text: "xr models install", type: "command" },
       ],
       optional: [],
       note: "PowerShell 5.1+. Voice TTS uses built-in SAPI.",
@@ -1455,7 +1460,7 @@ function FAQSection() {
     },
     {
       q: "Can I run XR completely offline?",
-      a: "Yes! XR supports Ollama for local model inference. Once you pull a model (e.g., llama3, qwen2.5), XR runs entirely offline with zero API costs. You can use a local Ollama server alongside cloud providers, or switch completely to local-only mode.",
+      a: "Yes. XR v0.5 supports Ollama for local inference. Onboarding can inspect your RAM/VRAM/CPU/disk, recommend a model, download it with your approval, and configure local-only or hybrid fallback routing.",
     },
     {
       q: "How does the audit log work?",
@@ -1471,7 +1476,7 @@ function FAQSection() {
     },
     {
       q: "What providers are supported?",
-      a: "XR supports: Anthropic (Claude), OpenAI (GPT-4/o), Google (Gemini), Meta (Llama via Ollama), Mistral, xAI (Grok), DeepSeek, Cerebras, Nous Research, OpenRouter, Fireworks AI, Groq, Azure OpenAI, and any OpenAI-compatible API endpoint.",
+      a: "XR supports the providers implemented in the repo: Ollama, Groq, DeepSeek, Google Gemini, Together AI, OpenRouter, Cerebras, Mistral, OpenAI, Anthropic, Cohere, and AWS Bedrock.",
     },
     {
       q: "How do I update XR?",
