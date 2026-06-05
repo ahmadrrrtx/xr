@@ -13,6 +13,7 @@ import type {
 import { getTool, toolsForMode } from "../tools/registry.ts";
 import type { Store } from "../state/db.ts";
 import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
+import { BudgetManager } from "../cost/manager.ts";
 import { compact } from "../memory/compact.ts";
 
 export interface AgentDeps {
@@ -53,10 +54,14 @@ export async function runAgent(
 ): Promise<AgentResult> {
   const { provider, store, cwd, say } = deps;
   const maxSteps = deps.maxSteps ?? 12;
+  
+  const budgetManager = new BudgetManager(store);
   const governor = new CostGovernor(
     deps.budget ?? {},
     deps.pricing ?? { inPerMTok: 0, outPerMTok: 0 },
+    budgetManager,
   );
+  
   const sessionId = `s_${randomUUID().slice(0, 8)}`;
   store.createSession(sessionId, task.slice(0, 80), mode);
   store.audit("session.start", { task, mode, provider: provider.id }, sessionId);
@@ -79,8 +84,18 @@ export async function runAgent(
     for (; stepIdx < maxSteps; stepIdx++) {
       // COST GOVERNOR: pre-flight check. The agent cannot exceed the ceiling.
       const decision = governor.checkBeforeStep();
+      
+      if (decision.warning) {
+        say(`\x1b[33m⚠ ${decision.warning}\x1b[0m`);
+      }
+
       if (!decision.allow) {
         store.audit("budget.pause", { reason: decision.reason, snapshot: decision.snapshot }, sessionId);
+        
+        if (decision.suggestLocal) {
+          say(`\x1b[33m⚠ Cloud budget exhausted. If you have a local model, consider using it.\x1b[0m`);
+        }
+
         const extra = deps.onOverBudget
           ? await deps.onOverBudget(governor.meter(), decision.reason)
           : null;
@@ -106,14 +121,12 @@ export async function runAgent(
       const turn = await provider.chat(compacted, tools);
       if (turn.usage) {
         governor.record(turn.usage.inTokens, turn.usage.outTokens);
-        const before = governor.snapshot().usd;
         // Persist a per-step cost event for the Cost Cockpit (best-effort).
         try {
           const stepUsd =
             (turn.usage.inTokens / 1_000_000) * (deps.pricing?.inPerMTok ?? 0) +
             (turn.usage.outTokens / 1_000_000) * (deps.pricing?.outPerMTok ?? 0);
           store.recordCost(sessionId, provider.id, provider.label, turn.usage.inTokens, turn.usage.outTokens, stepUsd);
-          void before;
         } catch {
           /* cost logging is best-effort */
         }
