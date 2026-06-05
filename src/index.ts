@@ -65,7 +65,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--tui") args.tui = true;
     else if (a === "--computer") args.computer = true;
     else if (a === "--voice") args.voice = true;
-    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "speak", "listen", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models", "budget", "cost"].includes(a)) {
+    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "speak", "listen", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models", "budget", "cost", "research"].includes(a) && !args.command) {
       args.command = a;
     } else {
       rest.push(a);
@@ -74,6 +74,30 @@ function parseArgs(argv: string[]): Args {
   
   args.task = rest.join(" ").trim();
   return args;
+}
+
+/**
+ * Remove recognized CLI flags (and their values) from an argv slice so a
+ * subcommand handler sees only its positional args. Value-taking flags consume
+ * the following token.
+ */
+function stripFlags(tokens: string[]): string[] {
+  const valueFlags = new Set([
+    "--mode", "--provider", "--model", "--budget",
+    "--max-tokens", "--max-steps",
+  ]);
+  const boolFlags = new Set([
+    "--dry-run", "--json", "--attacks", "--tui", "--computer", "--voice",
+    "--onboard", "--help", "-h",
+  ]);
+  const out: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (valueFlags.has(t)) { i++; continue; }
+    if (boolFlags.has(t)) continue;
+    out.push(t);
+  }
+  return out;
 }
 
 function printHelp(): void {
@@ -95,6 +119,10 @@ ${C.bold("Commands")}
   xr budget                 view spend caps and usage
   xr budget set <amount>    set monthly spend cap (USD)
   xr budget reset           reset current monthly spending
+  xr research "topic"       source-first research (quick)
+  xr research deep "topic"  deeper multi-source research
+  xr research plan "topic"  generate a research plan
+  xr research export        export the latest report to markdown
   xr voice                  voice control (status, test, start, stop)
   xr speak "text"           make XR speak text
   xr listen                 capture a single voice command
@@ -215,6 +243,28 @@ async function cmdDoctor(store: Store, args: Args): Promise<void> {
     const sb = sandboxStatus();
     const sandbox = sb.available ? C.green("✓ Docker available") : C.yellow("⚠ no Docker (local exec)");
     console.log(`  sandbox .......... ${sandbox}${sb.imagePulled ? " (image pulled)" : ""}`);
+  } catch { /* skip */ }
+
+  // Research mode health (v0.7): is web search reachable via the egress allow-list?
+  try {
+    let searxHost: string;
+    try {
+      searxHost = new URL(process.env.XR_SEARXNG ?? "https://searx.be").hostname.toLowerCase();
+    } catch {
+      searxHost = (process.env.XR_SEARXNG ?? "https://searx.be").replace(/^https?:\/\//, "").replace(/[:/].*$/, "").toLowerCase();
+    }
+    const allow = config.security.egressAllowlist ?? [];
+    const searchOk = allow.some(
+      (d) => searxHost === d.toLowerCase() || searxHost.endsWith("." + d.toLowerCase()),
+    );
+    const count = store.researchCount();
+    const status = searchOk
+      ? C.green(`✓ search ready (${searxHost})`)
+      : C.yellow(`⚠ search host "${searxHost}" not allow-listed`);
+    console.log(`  research ......... ${status} ${C.dim(`(${count} session(s) stored)`)}`);
+    if (!searchOk) {
+      console.log(`    ${C.dim(`add "${searxHost}" to security.egressAllowlist to enable live source collection`)}`);
+    }
   } catch { /* skip */ }
 }
 
@@ -355,6 +405,20 @@ async function main(): Promise<void> {
 
     if (args.command === "budget") {
       await cmdBudget(store, argv.slice(1));
+      return;
+    }
+
+    if (args.command === "research") {
+      const { handleResearchCommand } = await import("./research/cli.ts");
+      // Pass the args AFTER `research`, stripped of recognized flags (and their
+      // values) which parseArgs already captured into `args`.
+      const start = argv.indexOf("research");
+      const researchArgs = stripFlags(argv.slice(start + 1));
+      await handleResearchCommand(researchArgs, store, {
+        provider: args.provider,
+        model: args.model,
+        budget: args.budget,
+      });
       return;
     }
 
