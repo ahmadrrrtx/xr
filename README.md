@@ -35,9 +35,9 @@ Then just type:
 xr "hello, who are you"
 ```
 
-Or run the interactive setup wizard:
+Or run the interactive onboarding:
 ```bash
-xr --onboard
+xr onboarding
 ```
 
 ---
@@ -117,15 +117,18 @@ Wake word → Whisper STT → agent → Kokoro TTS. Local by default. Say "Hey X
 |---|---|
 | `xr "task"` | Run a task (default: agent mode) |
 | `xr --tui` | Interactive terminal UI (Claude Code-style) |
-| `xr --onboard` | 5-minute setup wizard |
+| `xr onboarding` | Professional 5-minute setup wizard |
+| `xr config` | View current configuration |
+| `xr providers` | List all supported AI providers |
+| `xr models` | View current model defaults |
+| `xr doctor` | System health + audit chain check |
+| `xr reset` | Factory reset (deletes config & db) |
 | `xr --computer "task"` | JARVIS GUI automation |
 | `xr --mode plan "task"` | Read-only analysis |
 | `xr --mode ask "task"` | Q&A only |
 | `xr --budget 0.50 "task"` | Hard USD ceiling |
 | `xr --max-steps 30 "task"` | Max agent steps |
 | `xr --dry-run "task"` | Simulate — touch nothing |
-| `xr --provider groq "task"` | Use specific provider |
-| `xr doctor` | System health + audit chain |
 | `xr test --attacks` | Security benchmark (block-rate) |
 | `xr verify-log` | Verify tamper-evident chain |
 | `xr skills` | List available skills |
