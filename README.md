@@ -2,15 +2,15 @@
 
 # ⚡ XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `local model intelligence` · `spend-capped` · `tamper-evident` · `safe computer control` · `multi-step planner` · `plan memory`**
+**`BYOK` · `local-first` · `local model intelligence` · `spend-capped` · `tamper-evident` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![Tests](https://img.shields.io/badge/tests-165%20passing-34e2a0?style=flat-square)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/tests-196%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-v0.8.2-22e0ff?style=flat-square)](#)
+[![Version](https://img.shields.io/badge/version-v0.9.0-22e0ff?style=flat-square)](#)
 
 ---
 
@@ -122,6 +122,48 @@ xr control memory clear                             # forget everything
 - Plans longer than 20 actions
 
 **Recall re-validates everything**: cached actions are re-parsed against the current Zod schema and re-classified. Schema drift or newly-destructive actions silently invalidate the cache so the planner falls back to the LLM.
+
+> **Plan memory ≠ durable memory.** Plan memory caches *control plans*; durable memory (below) stores *your* preferences, projects and facts.
+
+### 🧠 Durable Memory (v0.9)
+
+XR remembers your preferences, projects, and long-term facts — **only what you explicitly ask it to.** No silent auto-save, no hidden background capture. Everything is local-first, inspectable, editable, and permanently deletable.
+
+```bash
+xr memory add "I prefer TypeScript and Bun" --category preference
+xr memory add "this project is called XR" --category project --scope xr
+xr memory list                              # see everything XR remembers
+xr memory recall "what do I prefer?"        # exactly what chat/voice will surface
+xr memory search "bun"                      # keyword search
+xr memory edit  mem_ab12 "prefer Bun + Zod" # change an entry
+xr memory remove mem_ab12                   # forget one entry (permanent)
+xr memory clear                             # forget everything (asks first)
+xr memory export memories.json              # take your memory with you
+xr memory import memories.json              # merge a bundle (dedupes)
+```
+
+In chat and voice it's conversational:
+
+```text
+"Remember I prefer TypeScript and Bun"        → saved as a preference
+"Remember this project is called XR"          → saved as project context
+"What do you know about my preferences?"      → reads them back
+"Forget this note"                            → deletes it
+"Don't remember my email"                     → a do-not-remember rule
+```
+
+**Categories (namespaces):** `preference` · `project` · `workflow` · `fact` · `exclusion`
+
+**How recall works:** when you run a task, XR surfaces *only the few entries relevant to that task* (deterministic lexical scoring above a relevance floor) as one clearly-labelled reference block — never every memory on every prompt. `exclusion` rules are never surfaced and actively block matching content from ever being stored.
+
+**Short-term ≠ long-term:** ephemeral conversation recaps live in a separate `session_summaries` store (`xr memory summaries`) and never leak into durable memory.
+
+**Privacy & control**
+- Local-first: stored in `~/.xr/xr.db`, never synced anywhere by default.
+- Explicit by default: only what you ask is stored.
+- Disable entirely: `memory.enabled: false` in config, or `XR_MEMORY_DISABLED=1`.
+- Logs/telemetry never contain raw memory content — only ids and counts.
+- Research findings are saved only on request: `xr research remember [id]`.
 
 ### 🧠 Local Model Intelligence (v0.5)
 ```bash
@@ -317,12 +359,28 @@ xr serve                                  # http://127.0.0.1:7842/dashboard?toke
 xr serve --port 8000 --token mytoken
 ```
 
-### Skills + Memory (project)
+### Skills + RAG (project)
 
 ```bash
 xr skills                                 # list learned skills
-xr index                                  # build local RAG index
-xr memory                                 # project memory status
+xr index                                  # build local RAG index of the project
+```
+
+### Durable Memory (v0.9)
+
+```bash
+xr memory                                 # status + counts by category
+xr memory list [--scope s] [--category c] [--json]
+xr memory add "<text>" [--category preference|project|workflow|fact|exclusion]
+                       [--scope <s>] [--tag <t>] [--importance 1-5]
+xr memory edit <id> ["<new text>"] [--category c] [--scope s] [--importance n]
+xr memory remove <id>                     # forget one entry (permanent)
+xr memory search "<text>"                 # keyword search
+xr memory recall "<text>"                 # what chat/voice would surface
+xr memory export [path]                   # JSON bundle (stdout if no path)
+xr memory import <path>                   # merge a bundle (dedupes)
+xr memory clear [--scope s] [-y]          # forget everything / one scope
+xr memory summaries [clear]               # conversation recaps (separate store)
 ```
 
 ### System
@@ -441,7 +499,15 @@ src/
   ├── security/         # injection attack corpus, guards, secrets
   ├── reliability/      # JSON repair, model profiles, GBNF grammar
   ├── skills/           # non-regressive skill engine
-  ├── memory/           # RAG + project fingerprint
+  ├── memory/           # durable memory (v0.9) + RAG + project fingerprint
+  │     ├── types.ts        # categories, sources, MemoryEntry vocabulary
+  │     ├── store.ts        # ✨ v0.9 write rules · recall · import/export
+  │     ├── intent.ts       # NL "remember/forget/what do you know" parser
+  │     ├── inject.ts       # recalled memory → one labelled prompt block
+  │     ├── cli.ts          # ✨ v0.9 `xr memory …` handlers
+  │     ├── rag.ts          # local RAG index + codebase fingerprint
+  │     ├── embed.ts        # Ollama embeddings + lexical fallback
+  │     └── compact.ts      # context compaction (spend cap)
   ├── computer/         # vision-loop computer use (xr --computer)
   ├── control/          # ✨ v0.8 safe control layer (xr control)
   │     ├── types.ts        # Action schema (Zod)
@@ -472,7 +538,8 @@ test/                   # 165+ tests, all platforms
 bun test                              # full suite
 bun test test/control.test.ts         # v0.8 safety pipeline
 bun test test/control-plan.test.ts    # v0.8.1 planner + browser + approvals
-bun test test/control-memory.test.ts  # v0.8.2 memory layer
+bun test test/control-memory.test.ts  # v0.8.2 plan-memory layer
+bun test test/memory-v09.test.ts      # v0.9 durable memory (store, intent, recall)
 ```
 
 ---
@@ -499,7 +566,7 @@ Config lives at `~/.xr/config.json` (auto-created on first run). Schema is versi
 
 ```jsonc
 {
-  "version": 6,
+  "version": 7,
   "defaults": { "mode": "agent", "provider": "ollama", "model": "qwen2.5:7b" },
   "budget": { "perTaskUsd": 0.25, "perTaskTokens": 250000 },
   "security": {
@@ -507,12 +574,18 @@ Config lives at `~/.xr/config.json` (auto-created on first run). Schema is versi
     "requireApproval": ["write_file", "delete", "shell", "send"]
   },
   "localModels": { "runtime": "ollama", "enabled": true, "routing": "hybrid" },
+  "memory": {                    // durable memory (v0.9)
+    "enabled": true,            // master switch (or env XR_MEMORY_DISABLED=1)
+    "autoSuggest": true,        // offer to remember "remember …" phrases (asks first)
+    "injectInChat": true,       // surface relevant memory into chat/research prompts
+    "recallLimit": 5            // max entries surfaced into any single prompt
+  },
   "control": {
     "enabled": false,            // opt-in via `xr control start`
     "defaultMode": "auto",
     "stepDelayMs": 250,
     "memory": {
-      "enabled": true,           // plan cache (v0.8.2)
+      "enabled": true,           // plan cache (v0.8.2) — NOT durable memory
       "maxEntries": 500
     }
   }
@@ -579,13 +652,16 @@ xr "build me a CRUD app and run the tests"   # see every step in the dashboard
 
 ---
 
-## 🗺️ Roadmap (post-v0.8.2)
+## 🗺️ Roadmap (post-v0.9)
 
+- 🧠 **Semantic memory recall** — embeddings-based retrieval (the recall layer is already pluggable)
+- 🧠 **Memory summarization** — fold old/low-importance entries into compact forms (with approval)
+- 🖥️ **Dashboard memory viewer** — browse/edit memory in `xr serve`
+- 👥 **Team/workspace memory** — shared scopes for collaborators
+- ☁️ Optional cross-device memory sync via your own Git repo (no cloud)
 - 📊 Telemetry-free **usage analytics** export (CSV / JSON) — opt-in
 - 🔌 **MCP server** mode (XR as an MCP host for other agents)
 - 🌳 Multi-account profiles (`xr profile use work`)
-- 🧪 **Browser test recorder** — record a workflow once → save as a memory entry
-- ☁️ Sync remembered plans across machines via your own Git repo (no cloud)
 - 🪟 **Wayland** synthetic input via `ydotool` integration
 
 ---
