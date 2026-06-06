@@ -12,8 +12,6 @@
  * - Premium: Anthropic Claude, OpenAI GPT, Mistral, Cohere (json_mode)
  * - Cheap: Together, OpenRouter, Cerebras, AWS Bedrock
  */
-import type { ModelProfile } from "../core/types.ts";
-
 export interface ProviderProfile {
   /** How to enforce structure. */
   structure: "grammar" | "json_mode" | "text";
@@ -24,6 +22,9 @@ export interface ProviderProfile {
   /** Default max tokens for this provider */
   defaultMaxTokens?: number;
 }
+
+/** Back-compat alias used by the provider adapters. */
+export type ModelProfile = ProviderProfile;
 
 /**
  * Get the capability profile for a provider/model combination.
