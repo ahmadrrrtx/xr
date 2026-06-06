@@ -721,7 +721,7 @@ export class Store {
     };
   }
 
-  setBudgetConfig(config: { monthly_cap: number; daily_cap?: number; warnings_enabled?: boolean; auto_fallback?: boolean }): void {
+  setBudgetConfig(config: { monthly_cap: number; daily_cap?: number | null; warnings_enabled?: boolean; auto_fallback?: boolean }): void {
     const current = this.getBudgetConfig();
     if (!current) {
       this.db.query(
