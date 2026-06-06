@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-export const CONFIG_VERSION = 6; // Bumped for XR v0.8.2 control memory
+export const CONFIG_VERSION = 7; // Bumped for XR v0.9 durable memory system
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -94,6 +94,21 @@ const ConfigSchema = z.object({
     .default({}),
   // Auto-select free provider when available
   preferFreeProviders: z.boolean().default(true),
+  // v0.9 — durable memory system (long-term preferences, project context,
+  // facts). Local-first and EXPLICIT by default: XR only stores what the user
+  // asks it to. `autoSuggest` offers to remember things found in chat/voice,
+  // but still requires user confirmation — never a silent auto-save.
+  memory: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** Offer to remember "remember …" phrases in chat/voice (asks first). */
+      autoSuggest: z.boolean().default(true),
+      /** Inject relevant memory into chat/research prompts (conservative). */
+      injectInChat: z.boolean().default(true),
+      /** Max entries surfaced into any single prompt. */
+      recallLimit: z.number().int().min(0).max(20).default(5),
+    })
+    .default({}),
   // v0.8: Computer control (safe desktop automation).  Disabled by default —
   // the user must opt in via `xr control start` or by setting `enabled: true`.
   control: z
@@ -170,6 +185,17 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       memory: raw.control?.memory ?? { enabled: true, maxEntries: 500 },
     },
   }),
+  // 6 -> 7: add v0.9 durable memory block (explicit, local-first by default).
+  6: (raw) => ({
+    ...raw,
+    version: 7,
+    memory: raw.memory ?? {
+      enabled: true,
+      autoSuggest: true,
+      injectInChat: true,
+      recallLimit: 5,
+    },
+  }),
 };
 
 function migrate(raw: any): any {
@@ -227,6 +253,20 @@ export function loadConfig(): { config: XRConfig; warnings: string[] } {
 
 export function configPath(): string {
   return CONFIG_PATH;
+}
+
+/**
+ * Is the durable memory system enabled? A hard global off-switch via the
+ * `XR_MEMORY_DISABLED=1` env var always wins (privacy escape hatch), otherwise
+ * the config flag decides. Never throws.
+ */
+export function isMemoryEnabled(): boolean {
+  if (process.env.XR_MEMORY_DISABLED === "1") return false;
+  try {
+    return loadConfig().config.memory.enabled;
+  } catch {
+    return true;
+  }
 }
 
 export function saveConfig(config: XRConfig): void {
