@@ -107,6 +107,12 @@ const ConfigSchema = z.object({
       injectInChat: z.boolean().default(true),
       /** Max entries surfaced into any single prompt. */
       recallLimit: z.number().int().min(0).max(20).default(5),
+      /**
+       * Use embeddings-based semantic recall (Ollama nomic-embed-text) with an
+       * automatic lexical fallback. Set false to force deterministic lexical
+       * recall everywhere.
+       */
+      semanticRecall: z.boolean().default(true),
     })
     .default({}),
   // v0.8: Computer control (safe desktop automation).  Disabled by default —
