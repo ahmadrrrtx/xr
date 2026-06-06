@@ -128,7 +128,7 @@ export class BedrockProvider implements Provider {
     } catch {
       // Fall back to basic auth for testing
       const creds = Buffer.from(`${this.accessKey}:${this.secretKey}`).toString("base64");
-      return `Basic ${btoacreds}`;
+      return `Basic ${creds}`;
     }
   }
 
