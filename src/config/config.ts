@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-export const CONFIG_VERSION = 7; // Bumped for XR v0.9 durable memory system
+export const CONFIG_VERSION = 8; // Bumped for XR 1.0 plugin ecosystem
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -140,6 +140,25 @@ const ConfigSchema = z.object({
         .default({}),
     })
     .default({}),
+  // XR 1.0 — plugin ecosystem. Local-first and explicit by design. The plugin
+  // SYSTEM is always available (so `xr plugins …` works), but whether enabled
+  // plugins are LOADED into the agent's tool list is governed here.
+  plugins: z
+    .object({
+      /** Load enabled plugins' tools into the agent. Set false to hard-disable. */
+      enabled: z.boolean().default(true),
+      /**
+       * Require entrypoint hash to match the value recorded at install. When
+       * true (default), a tampered/changed plugin is refused as "untrusted".
+       */
+      requireTrust: z.boolean().default(true),
+      /**
+       * Permissions XR will never grant to any plugin, regardless of manifest /
+       * user approval (enterprise policy hook). Empty by default.
+       */
+      deniedPermissions: z.array(z.string()).default([]),
+    })
+    .default({}),
 });
 
 export type XRConfig = z.infer<typeof ConfigSchema>;
@@ -207,6 +226,16 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       autoSuggest: true,
       injectInChat: true,
       recallLimit: 5,
+    },
+  }),
+  // 7 -> 8: add XR 1.0 plugin ecosystem block (enabled, trust-checked).
+  7: (raw) => ({
+    ...raw,
+    version: 8,
+    plugins: raw.plugins ?? {
+      enabled: true,
+      requireTrust: true,
+      deniedPermissions: [],
     },
   }),
 };
