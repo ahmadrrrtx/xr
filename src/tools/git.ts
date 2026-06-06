@@ -26,7 +26,7 @@ function gitExec(args: string[], cwd: string, timeout = 10000): string {
 
 function execGitAsync(args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve) => {
-    const proc = spawn("git", args, { cwd, timeout: 15000, maxBuffer: 1024 * 1024 });
+    const proc = spawn("git", args, { cwd, timeout: 15000 });
     let stdout = "";
     let stderr = "";
     proc.stdout?.on("data", (d) => { stdout += d.toString(); });
