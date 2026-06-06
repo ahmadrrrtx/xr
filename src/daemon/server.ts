@@ -25,6 +25,8 @@ import { planActions } from "../control/planner.ts";
 import { browserStatus } from "../control/browser.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { listRemembered, forgetPlan, clearAllMemory } from "../control/memory.ts";
+import { MemoryStore } from "../memory/store.ts";
+import { isMemoryEnabled } from "../config/config.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -201,6 +203,45 @@ export function makeHandler(store: Store, token: string) {
         return json({ ok: true, removed: n });
       }
       const r = forgetPlan(store, key);
+      return json({ ok: r.ok, reason: r.reason }, r.ok ? 200 : 404);
+    }
+
+    // ── v0.9: durable memory viewer ──────────────────────────────────────
+    //
+    // Read + delete only — the dashboard NEVER adds or edits memory (those
+    // stay CLI-only by design, to keep the write surface narrow). `exclusion`
+    // entries (private do-not-remember rules) are intentionally NOT returned,
+    // and the audit log only ever records ids/counts, never content.
+
+    if (path === "/api/memory") {
+      const mem = new MemoryStore(store);
+      // exclusions are filtered by list()'s default; we expose the rest.
+      const entries = mem.list().map((e) => ({
+        id: e.id,
+        category: e.category,
+        content: e.content,
+        scope: e.scope,
+        source: e.source,
+        tags: e.tags,
+        importance: e.importance,
+        updatedAt: e.updatedAt,
+      }));
+      return json({
+        enabled: isMemoryEnabled(),
+        count: mem.count(),
+        stats: mem.stats(),
+        entries,
+      });
+    }
+
+    if (path.startsWith("/api/memory/") && req.method === "DELETE") {
+      const key = decodeURIComponent(path.slice("/api/memory/".length));
+      const mem = new MemoryStore(store);
+      if (key === "*" || key === "all") {
+        const n = mem.clear();
+        return json({ ok: true, removed: n });
+      }
+      const r = mem.remove(key);
       return json({ ok: r.ok, reason: r.reason }, r.ok ? 200 : 404);
     }
 
