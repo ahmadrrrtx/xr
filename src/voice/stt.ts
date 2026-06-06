@@ -39,7 +39,7 @@ export class SpeechToText {
     this.backend = opts.backend ?? "http";
     this.baseUrl = (opts.baseUrl ?? process.env.XR_STT_URL ?? "http://localhost:8080").replace(/\/$/, "");
     this.model = opts.model ?? process.env.XR_STT_MODEL ?? "whisper-1";
-    this.apiKey = opts.apiKeyEnv ? process.env[opts.apiKeyEnv] : (process.env.GROQ_API_KEY ?? "");
+    this.apiKey = (opts.apiKeyEnv ? process.env[opts.apiKeyEnv] : process.env.GROQ_API_KEY) ?? "";
     this.injectedFetch = opts.fetchFn;
   }
 
