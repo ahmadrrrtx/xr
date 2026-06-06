@@ -50,7 +50,7 @@ export class AutoLearner {
   analyzeAndLearn(
     task: string,
     result: string,
-    steps: Array<{ tool: string; args: Record; success: boolean }>,
+    steps: Array<{ tool: string; args: Record<string, unknown>; success: boolean }>,
     success: boolean,
     userApproved?: boolean
   ): { learned: boolean; skillId?: string; reason: string } {
@@ -137,7 +137,7 @@ export class AutoLearner {
   private deriveVerifier(
     task: string,
     result: string,
-    steps: Array<{ tool: string; args: Record; success: boolean }>
+    steps: Array<{ tool: string; args: Record<string, unknown>; success: boolean }>
   ): VerifierSpec | null {
     // File write → file_nonempty verifier
     const writeStep = steps.find(s => s.tool === "write_file" && s.success);
