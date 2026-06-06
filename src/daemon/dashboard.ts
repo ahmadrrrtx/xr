@@ -440,8 +440,7 @@ async function load(){
     const st = $("mem-state");
     st.textContent = umem.enabled ? "enabled" : "disabled";
     st.className = "chip " + (umem.enabled ? "ok" : "warn");
-    $("mem-count").textContent = umem.count || 0;
-    const sv = $("mem-stats"); sv.innerHTML = '<span class="lab">entries</span><b id="mem-count">' + (umem.count || 0) + '</b>';
+    const sv = $("mem-stats"); sv.innerHTML = '<span class="lab">entries</span><b>' + (umem.count || 0) + '</b>';
     (umem.stats || []).forEach((s) => {
       if (s.category === "exclusion") return;
       sv.innerHTML += '<span class="lab">' + escapeHtml(s.category) + '</span><b>' + s.c + '</b>';
