@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![Tests](https://img.shields.io/badge/tests-212%20passing-34e2a0?style=flat-square)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/tests-219%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v0.9.0-22e0ff?style=flat-square)](#)
@@ -157,6 +157,14 @@ In chat and voice it's conversational:
 **How recall works:** when you run a task, XR surfaces *only the few entries relevant to that task* as one clearly-labelled reference block — never every memory on every prompt. `exclusion` rules are never surfaced and actively block matching content from ever being stored.
 
 **Semantic recall (v0.9):** retrieval uses **embeddings** (local Ollama `nomic-embed-text`) for meaning-based matching, with an automatic, dimension-safe **lexical fallback** so it works even with no embedding model — fully offline, never crashes. Embeddings are cached per entry and computed lazily on first recall (or warmed with `xr memory reindex`). Force deterministic keyword scoring with `xr memory recall "…" --lexical`, or disable globally with `memory.semanticRecall: false`.
+
+**Summarization (v0.9):** keep long-lived memory tidy with `xr memory summarize` — it folds **old, low-importance** entries (per category/scope) into compact digests. It's a two-phase, **approval-first** flow: it *proposes* what would fold, then asks before changing anything (`--dry-run` to preview, `-y` to skip the prompt). Deterministic, and `exclusion` rules are never folded.
+
+```bash
+xr memory summarize --dry-run               # preview the proposal, change nothing
+xr memory summarize --days 60 --max-importance 2   # tune the criteria
+xr memory summarize -y                       # apply (folds old notes → digests)
+```
 
 **Short-term ≠ long-term:** ephemeral conversation recaps live in a separate `session_summaries` store (`xr memory summaries`) and never leak into durable memory.
 
@@ -384,6 +392,7 @@ xr memory remove <id>                     # forget one entry (permanent)
 xr memory search "<text>"                 # keyword search
 xr memory recall "<text>" [--lexical]     # what chat/voice would surface (semantic by default)
 xr memory reindex                         # pre-compute embeddings (warms semantic recall)
+xr memory summarize [--days N] [--max-importance n] [--dry-run] [-y]  # fold old notes → digests
 xr memory export [path]                   # JSON bundle (stdout if no path)
 xr memory import <path>                   # merge a bundle (dedupes)
 xr memory clear [--scope s] [-y]          # forget everything / one scope
@@ -664,8 +673,9 @@ xr "build me a CRUD app and run the tests"   # see every step in the dashboard
 
 - ✅ ~~Semantic memory recall~~ — **shipped in v0.9** (embeddings + lexical fallback)
 - ✅ ~~Dashboard memory viewer~~ — **shipped in v0.9** (read + forget in `xr serve`)
-- 🧠 **Memory summarization** — fold old/low-importance entries into compact forms (with approval)
+- ✅ ~~Memory summarization~~ — **shipped in v0.9** (`xr memory summarize`, approval-first)
 - 👥 **Team/workspace memory** — shared scopes for collaborators
+- 🧠 LLM-paraphrased summaries (current digests are deterministic concatenations)
 - ☁️ Optional cross-device memory sync via your own Git repo (no cloud)
 - 📊 Telemetry-free **usage analytics** export (CSV / JSON) — opt-in
 - 🔌 **MCP server** mode (XR as an MCP host for other agents)
