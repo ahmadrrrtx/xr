@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
-  "version": "0.9.0",
-  "description": "XR \u2014 local-first AI operating system / agent platform. BYOK, local models, spend-capped, tamper-evident. by rrrtx",
+  "version": "1.0.0",
+  "description": "XR \u2014 local-first AI operating system / agent platform. BYOK, local models, spend-capped, tamper-evident, plugin ecosystem. by rrrtx",
   "type": "module",
   "bin": {
     "xr": "./src/index.ts"
