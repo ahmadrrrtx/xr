@@ -94,6 +94,13 @@ const ConfigSchema = z.object({
     .default({}),
   // Auto-select free provider when available
   preferFreeProviders: z.boolean().default(true),
+  // Voice interaction settings (opt-in; STT/TTS endpoints come from env).
+  voice: z
+    .object({
+      /** Keep listening continuously (wake-word) vs push-to-talk. */
+      alwaysListen: z.boolean().default(false),
+    })
+    .default({}),
   // v0.9 — durable memory system (long-term preferences, project context,
   // facts). Local-first and EXPLICIT by default: XR only stores what the user
   // asks it to. `autoSuggest` offers to remember things found in chat/voice,
