@@ -97,3 +97,78 @@ test("dashboard html embeds the token and has no external assets", () => {
   expect(html).not.toMatch(/<script[^>]+src=/i);
   expect(html).not.toMatch(/<link[^>]+href=/i);
 });
+
+// ── v0.9: durable memory endpoints ──────────────────────────────────────────
+
+import { MemoryStore } from "../src/memory/store.ts";
+
+test("memory endpoint requires the token (401 without it)", async () => {
+  const h = makeHandler(store, TOKEN);
+  expect((await h(req("/api/memory", false))).status).toBe(401);
+});
+
+test("memory endpoint lists entries but hides exclusions", async () => {
+  const mem = new MemoryStore(store);
+  mem.add({ content: "I prefer TypeScript and Bun", category: "preference" });
+  mem.add({ content: "project is XR", category: "project", scope: "xr" });
+  mem.add({ content: "my home address", category: "exclusion" });
+
+  const h = makeHandler(store, TOKEN);
+  const j: any = await (await h(req("/api/memory"))).json();
+  expect(j.enabled).toBe(true);
+  expect(j.count).toBe(3); // total stored (incl. exclusion)
+  // but the entries array NEVER includes exclusions:
+  expect(j.entries.length).toBe(2);
+  expect(j.entries.every((e: any) => e.category !== "exclusion")).toBe(true);
+  expect(j.entries[0]).toHaveProperty("content");
+  expect(j.entries[0]).toHaveProperty("importance");
+});
+
+test("memory DELETE removes a single entry", async () => {
+  const mem = new MemoryStore(store);
+  const a = mem.add({ content: "delete me", category: "fact" });
+  const h = makeHandler(store, TOKEN);
+  const res = await h(
+    new Request(`http://127.0.0.1:7842/api/memory/${a.entry!.id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${TOKEN}` },
+    }),
+  );
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as any).ok).toBe(true);
+  expect(mem.count()).toBe(0);
+});
+
+test("memory DELETE all clears everything", async () => {
+  const mem = new MemoryStore(store);
+  mem.add({ content: "a", category: "fact" });
+  mem.add({ content: "b", category: "preference" });
+  const h = makeHandler(store, TOKEN);
+  const res = await h(
+    new Request("http://127.0.0.1:7842/api/memory/all", {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${TOKEN}` },
+    }),
+  );
+  const j: any = await res.json();
+  expect(j.ok).toBe(true);
+  expect(j.removed).toBe(2);
+  expect(mem.count()).toBe(0);
+});
+
+test("memory DELETE of a missing id 404s", async () => {
+  const h = makeHandler(store, TOKEN);
+  const res = await h(
+    new Request("http://127.0.0.1:7842/api/memory/nope_missing", {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${TOKEN}` },
+    }),
+  );
+  expect(res.status).toBe(404);
+});
+
+test("dashboard html includes the durable memory viewer", () => {
+  const html = dashboardHtml(TOKEN);
+  expect(html).toContain("Durable Memory");
+  expect(html).toContain("/api/memory");
+});
