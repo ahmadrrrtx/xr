@@ -7,7 +7,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![Tests](https://img.shields.io/badge/tests-196%20passing-34e2a0?style=flat-square)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/tests-203%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v0.9.0-22e0ff?style=flat-square)](#)
@@ -238,6 +238,10 @@ xr serve                    # opens 127.0.0.1:7842
   - Pending approvals with Approve/Deny buttons
   - Live event stream
   - 🧠 Remembered plans list with per-row forget + clear-all
+- **🧠 Durable Memory** panel (v0.9):
+  - Live view of saved preferences, projects & facts (category-colored, importance stars)
+  - Per-entry forget + clear-all (read-only otherwise — add/edit stay CLI-only)
+  - Do-not-remember (`exclusion`) rules are never shown in the browser
 
 ### 📱 Multi-Channel
 - **CLI** — full TUI with streaming + slash commands
