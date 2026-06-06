@@ -489,6 +489,7 @@ function ComparisonSection() {
     { name: "Docker sandbox for shell commands", xr: true, claude: false, openclaw: "partial", hermes: true },
     { name: "Voice control (wake word → STT → TTS)", xr: true, claude: false, openclaw: true, hermes: true },
     { name: "Research mode (source-first, citation-aware)", xr: true, claude: "partial", openclaw: false, hermes: false },
+    { name: "Permission-based plugin ecosystem (sandboxed)", xr: true, claude: false, openclaw: "partial", hermes: false },
     { name: "BYOK + $0 to run", xr: true, claude: false, openclaw: "partial", hermes: true },
     { name: "Cross-platform (Win/Mac/Linux/Termux)", xr: true, claude: true, openclaw: true, hermes: true },
   ];
@@ -794,6 +795,12 @@ function FeaturesSection() {
       description: "Full terminal UI with slash commands, history, and context. Claude Code-style experience.",
     },
     {
+      icon: Layers3,
+      color: "#22C55E",
+      title: "Plugin Ecosystem",
+      description: "Permission-based, sandboxed, audited plugins. Capabilities only for what you grant — never bypassing budget, egress, memory, or security.",
+    },
+    {
       icon: MessageSquare,
       color: "#14B8A6",
       title: "Telegram Bot",
@@ -996,6 +1003,11 @@ function InstallSection() {
         { text: "# Durable memory (v0.9) — remembers only what you ask", type: "comment" },
         { text: 'xr memory add "I prefer TypeScript and Bun" --category preference', type: "command" },
         { text: 'xr memory list             # inspect everything · edit/remove anytime', type: "command" },
+        { text: "", type: "blank" },
+        { text: "# Plugins (1.0) — permission-based, sandboxed, audited", type: "comment" },
+        { text: "xr plugins install ./plugins/github   # shows permissions, asks first", type: "command" },
+        { text: "xr plugins enable github              # explicit, conscious step", type: "command" },
+        { text: "xr plugin github repo ahmadrrrtx/xr   # run a plugin command", type: "command" },
         { text: "", type: "blank" },
         { text: "# Hard budget ceiling — literally cannot exceed", type: "comment" },
         { text: "xr --budget 0.25 \"build a full REST API\"", type: "command" },
