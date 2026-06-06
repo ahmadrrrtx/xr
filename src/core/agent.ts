@@ -47,6 +47,8 @@ export interface AgentDeps {
     enabled: boolean;
     /** Max entries to surface. */
     recallLimit?: number;
+    /** Use embeddings-based semantic recall (with lexical fallback). */
+    semantic?: boolean;
   };
 }
 
@@ -97,10 +99,13 @@ export async function runAgent(
     try {
       const memStore = new MemoryStore(store);
       const scope = projectScopeFromCwd(cwd);
-      const recalled = memStore.recall(task, {
-        scope,
-        k: deps.memory.recallLimit ?? 5,
-      });
+      const recallOpts = { scope, k: deps.memory.recallLimit ?? 5 };
+      // Semantic recall (embeddings) when enabled — it internally falls back to
+      // lexical if no embedding model is reachable, so it's always safe.
+      const recalled =
+        deps.memory.semantic === false
+          ? memStore.recall(task, recallOpts)
+          : await memStore.recallSemantic(task, recallOpts);
       const block = buildMemoryBlock(recalled);
       if (block) {
         messages.push({ role: "system", content: block });
