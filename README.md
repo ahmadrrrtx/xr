@@ -192,6 +192,27 @@ xr research export            # export latest report to markdown
 ```
 Source-first, multi-search-engine, deduplicated, with inline citations.
 
+### 🧩 Plugin Ecosystem (1.0)
+```bash
+xr plugins install ./plugins/github   # shows permissions, asks to approve
+xr plugins enable github              # explicit, conscious step
+xr plugin github repo ahmadrrrtx/xr   # run a plugin command
+```
+XR gains new integrations and skills through **plugins**, not by editing core
+code. Plugins are **local-first, permission-based, and sandboxed by design**:
+
+- A plugin only ever sees a frozen **host** — never the database, raw config,
+  `process.env`, `fetch`, or `node:fs`.
+- A capability (`net`, `fs`, `secrets`, `memory`, `provider`, …) exists **only**
+  for a permission you explicitly granted.
+- Plugins **inherit and cannot bypass** the egress allow-list, spend caps,
+  memory rules, and the tamper-evident audit log.
+- The entrypoint is hashed at install; a tampered plugin is refused as
+  `untrusted`. A broken plugin is isolated — **XR core never goes down**.
+- Plugin tools reach the agent as `plugin.<id>.<name>` and are approval-gated.
+
+Full spec, permission model, and a writing guide: **[docs/PLUGINS.md](docs/PLUGINS.md)**.
+
 ### 🤖 JARVIS-Level Vision Loop
 ```bash
 xr --computer "open Safari and search for AI agents"
@@ -354,6 +375,25 @@ xr research deep "topic"                  # multi-source deep dive
 xr research plan "topic"                  # generate a research plan
 xr research export                        # latest report → markdown
 ```
+
+### Plugins (1.0)
+
+```bash
+xr plugins                                # list installed plugins + status
+xr plugins inspect ./plugins/hello        # manifest + permissions (no code runs)
+xr plugins install ./plugins/hello        # install a local plugin (asks to approve)
+xr plugins enable hello                   # enable (separate, conscious step)
+xr plugins permissions hello              # what can this plugin access?
+xr plugin hello greet rrrtx               # run a command a plugin contributes
+xr plugins update hello [path]            # update (rejects NEW permission asks)
+xr plugins disable hello                  # disable cleanly
+xr plugins remove hello                   # uninstall + delete files
+xr plugins doctor                         # per-plugin health
+```
+
+Flags: `--yes/-y`, `--enable`, `--grant net,secrets`, `--json`. See
+[docs/PLUGINS.md](docs/PLUGINS.md) for the manifest spec, permission model, and
+how to write a plugin.
 
 ### Voice
 
