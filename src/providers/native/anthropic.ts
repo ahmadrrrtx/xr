@@ -21,10 +21,10 @@ interface AnthropicMessage {
   content: string | AnthropicContent[];
 }
 
-interface AnthropicContent {
-  type: "text";
-  text: string;
-}
+type AnthropicContent =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: "tool_result"; tool_use_id: string; content: string };
 
 interface AnthropicTool {
   name: string;
