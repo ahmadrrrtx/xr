@@ -13,5 +13,7 @@
     "resolveJsonModule": true,
     "types": ["bun-types"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "//exclude": "tui2.ts is unfinished, unused scaffolding (the active TUI is tui.ts). Excluded from typecheck until it is wired up or removed.",
+  "exclude": ["src/interfaces/tui2.ts"]
 }
