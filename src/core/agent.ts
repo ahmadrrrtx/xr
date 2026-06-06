@@ -15,6 +15,8 @@ import type { Store } from "../state/db.ts";
 import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
 import { BudgetManager } from "../cost/manager.ts";
 import { compact } from "../memory/compact.ts";
+import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { buildMemoryBlock } from "../memory/inject.ts";
 
 export interface AgentDeps {
   provider: Provider;
@@ -36,6 +38,16 @@ export interface AgentDeps {
   egressAllowlist?: string[];
   /** Dry-run: simulate side effects, never write/execute. */
   dryRun?: boolean;
+  /**
+   * v0.9 — durable memory recall. When enabled, the agent injects relevant
+   * saved memory as a single system message before the first turn. Conservative
+   * by design (only entries above the relevance floor). Off → no injection.
+   */
+  memory?: {
+    enabled: boolean;
+    /** Max entries to surface. */
+    recallLimit?: number;
+  };
 }
 
 export interface AgentResult {
@@ -76,7 +88,34 @@ export async function runAgent(
     dryRun: deps.dryRun ?? false,
   };
 
-  const messages: Message[] = [{ role: "user", content: task }];
+  const messages: Message[] = [];
+
+  // v0.9 — conservative memory recall: surface only entries relevant to the
+  // task (global + this project's scope). Never silent: the injected block is
+  // clearly labelled as reference, and the recall is audited (no raw content).
+  if (deps.memory?.enabled) {
+    try {
+      const memStore = new MemoryStore(store);
+      const scope = projectScopeFromCwd(cwd);
+      const recalled = memStore.recall(task, {
+        scope,
+        k: deps.memory.recallLimit ?? 5,
+      });
+      const block = buildMemoryBlock(recalled);
+      if (block) {
+        messages.push({ role: "system", content: block });
+        store.audit(
+          "memory.recall",
+          { count: recalled.length, ids: recalled.map((e) => e.id) },
+          sessionId,
+        );
+      }
+    } catch {
+      /* memory recall is best-effort — never block a task on it */
+    }
+  }
+
+  messages.push({ role: "user", content: task });
   let finalMessage = "";
   let stepIdx = 0;
 
