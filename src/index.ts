@@ -582,6 +582,7 @@ async function main(): Promise<void> {
       memory: {
         enabled: config.memory.enabled && config.memory.injectInChat && process.env.XR_MEMORY_DISABLED !== "1",
         recallLimit: config.memory.recallLimit,
+        semantic: config.memory.semanticRecall,
       },
     });
     
