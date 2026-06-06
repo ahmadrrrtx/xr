@@ -65,7 +65,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === "--tui") args.tui = true;
     else if (a === "--computer") args.computer = true;
     else if (a === "--voice") args.voice = true;
-    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "speak", "listen", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models", "budget", "cost", "research", "control"].includes(a) && !args.command) {
+    else if (["doctor", "verify-log", "test", "skills", "index", "memory", "serve", "telegram", "voice", "speak", "listen", "mcp", "cron", "export", "sandbox", "reset", "config", "providers", "models", "budget", "cost", "research", "control", "plugins", "plugin"].includes(a) && !args.command) {
       args.command = a;
     } else {
       rest.push(a);
@@ -130,6 +130,9 @@ ${C.bold("Commands")}
   xr reset                  factory reset (deletes config & db)
   xr verify-log             verify tamper-evident audit log
   xr skills                 list all available skills
+  xr plugins                manage plugins (list, install, enable, inspect …)
+  xr plugins install <path> install a local plugin (shows permissions first)
+  xr plugin <id> <cmd>      run a command a plugin contributes
   xr index                  index project for local RAG memory
   xr memory                 durable memory (preferences, projects, facts)
   xr memory list            inspect everything XR remembers
@@ -307,6 +310,12 @@ async function cmdDoctor(store: Store, args: Args): Promise<void> {
     if (!enabled) {
       console.log(`    ${C.dim('set memory.enabled=true in config.json (or unset XR_MEMORY_DISABLED)')}`);
     }
+  } catch { /* skip */ }
+
+  // XR 1.0 — plugin ecosystem health (installed/enabled/broken counts).
+  try {
+    const { pluginDoctorLine } = await import("./plugins/cli.ts");
+    console.log(`  plugins .......... ${await pluginDoctorLine(store)}`);
   } catch { /* skip */ }
 }
 
@@ -512,6 +521,23 @@ async function main(): Promise<void> {
       return;
     }
 
+    // XR 1.0 — plugin ecosystem.  `xr plugins …` manages plugins; `xr plugin
+    // <id> <cmd>` runs a command a plugin contributes (sugar for
+    // `xr plugins run <id> <cmd>`).
+    if (args.command === "plugins") {
+      const { handlePluginsCommand } = await import("./plugins/cli.ts");
+      const start = argv.indexOf("plugins");
+      await handlePluginsCommand(argv.slice(start + 1), store);
+      return;
+    }
+    if (args.command === "plugin") {
+      const { handlePluginsCommand } = await import("./plugins/cli.ts");
+      const start = argv.indexOf("plugin");
+      // Rewrite `plugin <id> <cmd> …` → `run <id> <cmd> …`.
+      await handlePluginsCommand(["run", ...argv.slice(start + 1)], store);
+      return;
+    }
+
     // v0.8.1 — local dashboard ("xr serve")
     if (args.command === "serve") {
       const { serve } = await import("./daemon/server.ts");
@@ -566,7 +592,18 @@ async function main(): Promise<void> {
       maxUsd: isLocal(providerId) ? undefined : (args.budget ?? config.budget.perTaskUsd),
       maxTokens: args.maxTokens ?? config.budget.perTaskTokens,
     };
-    
+
+    // XR 1.0 — load enabled plugins and surface their tools to the agent. Fully
+    // isolated: a broken plugin is skipped and the agent still runs.
+    let extraTools: import("./core/types.ts").Tool[] = [];
+    try {
+      const { PluginManager } = await import("./plugins/manager.ts");
+      const pm = new PluginManager(store, process.cwd(), config);
+      await pm.loadEnabled();
+      extraTools = pm.pluginTools();
+      if (extraTools.length) info(`loaded ${extraTools.length} plugin tool(s)`);
+    } catch { /* plugins are optional — never block a task on them */ }
+
     const result = await runAgent(args.task, args.mode, {
       provider,
       store,
@@ -584,6 +621,7 @@ async function main(): Promise<void> {
         recallLimit: config.memory.recallLimit,
         semantic: config.memory.semanticRecall,
       },
+      extraTools,
     });
     
     console.log();
