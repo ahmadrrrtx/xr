@@ -1,0 +1,14 @@
+{
+  "id": "github",
+  "name": "GitHub",
+  "version": "1.0.0",
+  "author": "rrrtx",
+  "description": "Reference integration plugin: look up public GitHub repositories. Demonstrates permissioned access (net + optional secrets) through the XR host — egress-gated and audited.",
+  "type": "integration",
+  "entrypoint": "index.ts",
+  "permissions": ["net", "secrets"],
+  "dependencies": [],
+  "compatibility": ">=1.0.0 <2.0.0",
+  "apiVersion": 1,
+  "homepage": "https://github.com/ahmadrrrtx/xr"
+}
