@@ -30,7 +30,7 @@ import { Store } from "../state/db.ts";
 import { loadSkills } from "../skills/loader.ts";
 import { runLab } from "../security/lab.ts";
 import { approvePrompt, overBudgetPrompt } from "./cli.ts";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 
 // ── ANSI Escape Helpers ───────────────────────────────────────────────────────
 const C = {
@@ -326,9 +326,14 @@ const SLASH_COMMANDS: SlashCommand[] = [
       const { buildAuditReport } = await import("../export/report.ts");
       const { randomUUID } = await import("node:crypto");
       console.log(`${C.yellow}Building audit report…${C.reset}`);
-      const report = await buildAuditReport(ctx.store);
-      const outPath = join(ctx.cwd, `xr-audit-${randomUUID().slice(0, 8)}.json`);
-      await import("node:fs").then(m => m.writeFileSync(outPath, JSON.stringify(report, null, 2)));
+      const report = buildAuditReport({
+        project: basename(ctx.cwd),
+        chainValid: ctx.store.verifyChain().valid,
+        entries: ctx.store.recentAudit(1000),
+        totalUsd: ctx.store.costSummary().totalUsd,
+      });
+      const outPath = join(ctx.cwd, `xr-audit-${randomUUID().slice(0, 8)}.md`);
+      await import("node:fs").then(m => m.writeFileSync(outPath, report.markdown));
       console.log(`${C.green}✓ Report saved: ${outPath}${C.reset}`);
     }
   },
