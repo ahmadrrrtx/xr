@@ -22,6 +22,8 @@ export interface MemoryRow {
   importance: number;
   created_at: number;
   updated_at: number;
+  /** v0.9: cached embedding (JSON number[]) or NULL when not yet embedded. */
+  embedding: string | null;
 }
 
 /** v0.9: a session summary row (kept separate from long-term memory). */
@@ -164,7 +166,8 @@ export class Store {
         tags TEXT NOT NULL DEFAULT '', -- comma-separated
         importance INTEGER NOT NULL DEFAULT 3,  -- 1..5
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        embedding TEXT                 -- v0.9: JSON number[] or NULL (semantic recall cache)
       );
       CREATE INDEX IF NOT EXISTS idx_user_memory_scope ON user_memory(scope);
       CREATE INDEX IF NOT EXISTS idx_user_memory_category ON user_memory(category);
@@ -177,6 +180,20 @@ export class Store {
         created_at INTEGER NOT NULL
       );
     `);
+
+    // v0.9 semantic recall: ensure the embedding column exists on DBs created
+    // before this version (CREATE TABLE IF NOT EXISTS won't add it). Idempotent
+    // and fail-soft — an older SQLite or an already-present column is fine.
+    try {
+      const cols = this.db
+        .query<{ name: string }, []>(`PRAGMA table_info(user_memory)`)
+        .all();
+      if (!cols.some((c) => c.name === "embedding")) {
+        this.db.exec(`ALTER TABLE user_memory ADD COLUMN embedding TEXT`);
+      }
+    } catch {
+      /* never block startup on a migration probe */
+    }
   }
 
   // ---- v0.9: durable user memory ----
@@ -189,12 +206,14 @@ export class Store {
     source: string;
     tags: string;
     importance: number;
+    /** v0.9: optional precomputed embedding (number[]); stored as JSON. */
+    embedding?: number[] | null;
   }): void {
     const now = Date.now();
     this.db
       .query(
-        `INSERT INTO user_memory (id,category,content,scope,source,tags,importance,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO user_memory (id,category,content,scope,source,tags,importance,created_at,updated_at,embedding)
+         VALUES (?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         row.id,
@@ -206,7 +225,15 @@ export class Store {
         row.importance,
         now,
         now,
+        row.embedding && row.embedding.length ? JSON.stringify(row.embedding) : null,
       );
+  }
+
+  /** v0.9: cache/refresh the embedding for a memory entry. */
+  setMemoryEmbedding(id: string, embedding: number[] | null): void {
+    this.db
+      .query(`UPDATE user_memory SET embedding=? WHERE id=?`)
+      .run(embedding && embedding.length ? JSON.stringify(embedding) : null, id);
   }
 
   /** Find an existing entry with identical (scope, category, content). */
@@ -280,9 +307,14 @@ export class Store {
   ): boolean {
     const cur = this.getMemory(id);
     if (!cur) return false;
+    // If content or tags change, the cached embedding is stale → clear it so
+    // semantic recall re-embeds lazily on next use. (Keeps recall accurate.)
+    const textChanged =
+      (patch.content !== undefined && patch.content !== cur.content) ||
+      (patch.tags !== undefined && patch.tags !== cur.tags);
     this.db
       .query(
-        `UPDATE user_memory SET content=?, category=?, scope=?, tags=?, importance=?, updated_at=? WHERE id=?`,
+        `UPDATE user_memory SET content=?, category=?, scope=?, tags=?, importance=?, updated_at=?, embedding=? WHERE id=?`,
       )
       .run(
         patch.content ?? cur.content,
@@ -291,6 +323,7 @@ export class Store {
         patch.tags ?? cur.tags,
         patch.importance ?? cur.importance,
         Date.now(),
+        textChanged ? null : cur.embedding,
         id,
       );
     return true;
