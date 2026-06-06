@@ -61,7 +61,9 @@ export interface ComputerResult {
 }
 
 function detectOS(): "linux" | "macos" | "windows" {
-  const u = Deno?.build?.os ?? process.platform;
+  // Cross-runtime: prefer Deno's build info if present, else Node's platform.
+  const denoOs = (globalThis as any).Deno?.build?.os as string | undefined;
+  const u = denoOs ?? process.platform;
   if (u === "linux") return "linux";
   if (u === "darwin") return "macos";
   return "windows";
