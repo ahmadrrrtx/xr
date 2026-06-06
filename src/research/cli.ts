@@ -227,6 +227,44 @@ function doExport(store: Store, id: string | undefined, outPath: string | undefi
   console.log(`  signature .. ${C.dim(sha256.slice(0, 16) + "…")}`);
 }
 
+/**
+ * v0.9 — save a finished research finding into durable memory (explicit).
+ * Stores the short answer (or topic) as a `fact`, tagged `research`, so future
+ * chats can recall it. Never automatic — the user runs this on purpose.
+ */
+async function doRemember(store: Store, id: string | undefined): Promise<void> {
+  const session = loadSession(store, id);
+  banner();
+  if (!session) {
+    info("No research session found to remember.");
+    return;
+  }
+  const { isMemoryEnabled } = await import("../config/config.ts");
+  if (!isMemoryEnabled()) {
+    warn("Memory is disabled. Enable it in config to save research findings.");
+    return;
+  }
+  const { MemoryStore } = await import("../memory/store.ts");
+  const mem = new MemoryStore(store);
+  const finding =
+    session.synthesis?.shortAnswer?.trim() ||
+    `Researched "${session.topic}" (${session.sources.length} sources).`;
+  const content = `${session.topic}: ${finding}`;
+  const res = mem.add({
+    content: content.slice(0, 1000),
+    category: "fact",
+    source: "research",
+    tags: ["research", session.depth],
+    importance: 3,
+  });
+  if (!res.ok) warn(`not saved: ${res.reason}`);
+  else if (res.duplicate) info("already in memory — no duplicate created.");
+  else {
+    ok(`saved to memory ${C.dim(res.entry!.id)}`);
+    info(`recall later with:  xr memory recall "${session.topic}"`);
+  }
+}
+
 function doList(store: Store): void {
   banner();
   const rows = store.listResearch(20);
@@ -277,6 +315,8 @@ export async function handleResearchCommand(
       return doSummarize(store, argv[1], override);
     case "export":
       return doExport(store, argv[1], argv[2]);
+    case "remember":
+      return doRemember(store, argv[1]);
     case "list":
       return doList(store);
     case "help":
@@ -305,6 +345,7 @@ function printResearchHelp(): void {
   console.log(`  xr research sources [id]       list collected sources + trust`);
   console.log(`  xr research summarize [id]     (re)synthesize a report from notes`);
   console.log(`  xr research export [id] [path] write report to markdown (+ json)`);
+  console.log(`  xr research remember [id]     save this finding to durable memory`);
   console.log(`  xr research list               recent research sessions\n`);
   console.log(`${C.bold("Flags")}`);
   console.log(`  --provider [id]   override provider   --model [id]   override model`);
