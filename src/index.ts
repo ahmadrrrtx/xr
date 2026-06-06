@@ -131,7 +131,10 @@ ${C.bold("Commands")}
   xr verify-log             verify tamper-evident audit log
   xr skills                 list all available skills
   xr index                  index project for local RAG memory
-  xr memory                 project memory + RAG status
+  xr memory                 durable memory (preferences, projects, facts)
+  xr memory list            inspect everything XR remembers
+  xr memory add "..."       remember something explicitly
+  xr memory remove <id>     forget one entry  ·  xr memory clear  (forget all)
   xr cost                   lifetime cost summary
   xr serve                  local dashboard (127.0.0.1:7842)
 
@@ -283,6 +286,26 @@ async function cmdDoctor(store: Store, args: Args): Promise<void> {
     console.log(`  research ......... ${status} ${C.dim(`(${count} session(s) stored)`)}`);
     if (!searchOk) {
       console.log(`    ${C.dim(`add "${searxHost}" to security.egressAllowlist to enable live source collection`)}`);
+    }
+  } catch { /* skip */ }
+
+  // v0.9 memory health: enabled?, entry count, category breakdown.
+  try {
+    const { MemoryStore } = await import("./memory/store.ts");
+    const { isMemoryEnabled } = await import("./config/config.ts");
+    const mem = new MemoryStore(store);
+    const enabled = isMemoryEnabled();
+    const count = mem.count();
+    const stats = mem.stats();
+    const breakdown = stats.length
+      ? stats.map((s) => `${s.category}:${s.c}`).join(", ")
+      : "empty";
+    const status = enabled
+      ? C.green(`✓ enabled (${count} entr${count === 1 ? "y" : "ies"})`)
+      : C.yellow("⚠ disabled");
+    console.log(`  memory ........... ${status} ${C.dim(`(${breakdown})`)}`);
+    if (!enabled) {
+      console.log(`    ${C.dim('set memory.enabled=true in config.json (or unset XR_MEMORY_DISABLED)')}`);
     }
   } catch { /* skip */ }
 }
@@ -460,6 +483,27 @@ async function main(): Promise<void> {
       return;
     }
 
+    // v0.9 — durable memory system.
+    if (args.command === "memory") {
+      const { handleMemoryCommand } = await import("./memory/cli.ts");
+      const start = argv.indexOf("memory");
+      await handleMemoryCommand(argv.slice(start + 1), store);
+      return;
+    }
+
+    // Local RAG index (codebase fingerprint + chunk index).
+    if (args.command === "index") {
+      const root = process.cwd();
+      const project = basename(root) || "project";
+      banner();
+      console.log(C.bold(`🔎 Indexing project for local RAG: ${C.cyan(project)}`));
+      const fp = fingerprint(root);
+      info(`${fp.files} file(s) · ${Object.keys(fp.languages).length} language(s)${fp.frameworks.length ? " · " + fp.frameworks.join(", ") : ""}`);
+      const n = await indexProject(store, root, project);
+      ok(`indexed ${n} chunk(s). Query with the agent or "xr memory".`);
+      return;
+    }
+
     // v0.8 — safe computer control surface.
     if (args.command === "control") {
       const { handleControlCommand } = await import("./control/cli.ts");
@@ -535,6 +579,10 @@ async function main(): Promise<void> {
       egressAllowlist: config.security.egressAllowlist,
       dryRun: args.dryRun,
       maxSteps: args.maxSteps ?? 12,
+      memory: {
+        enabled: config.memory.enabled && config.memory.injectInChat && process.env.XR_MEMORY_DISABLED !== "1",
+        recallLimit: config.memory.recallLimit,
+      },
     });
     
     console.log();
