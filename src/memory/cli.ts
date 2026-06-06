@@ -30,14 +30,17 @@ interface Flags {
   importance?: number;
   json: boolean;
   yes: boolean;
+  /** Force deterministic lexical recall (skip embeddings). */
+  lexical: boolean;
   rest: string[];
 }
 
 function parseFlags(argv: string[]): Flags {
-  const f: Flags = { tags: [], json: false, yes: false, rest: [] };
+  const f: Flags = { tags: [], json: false, yes: false, lexical: false, rest: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--scope") f.scope = argv[++i];
+    if (a === "--lexical") f.lexical = true;
+    else if (a === "--scope") f.scope = argv[++i];
     else if (a === "--category" || a === "-c") {
       const c = argv[++i];
       if (c && isCategory(c)) f.category = c;
@@ -219,25 +222,47 @@ function cmdSearch(mem: MemoryStore, f: Flags): void {
   for (const e of results) printEntry(e);
 }
 
-function cmdRecall(mem: MemoryStore, f: Flags): void {
+async function cmdRecall(mem: MemoryStore, f: Flags): Promise<void> {
   const q = f.rest.join(" ").trim();
   if (!q) {
-    warn('usage: xr memory recall "<text>"');
+    warn('usage: xr memory recall "<text>" [--lexical]');
     return;
   }
-  const results = mem.recall(q, { scope: f.scope });
+  // Mirror chat behaviour: semantic by default, lexical when forced.
+  const results = f.lexical
+    ? mem.recall(q, { scope: f.scope })
+    : await mem.recallSemantic(q, { scope: f.scope });
   if (f.json) {
     console.log(JSON.stringify(results, null, 2));
     return;
   }
   banner();
   console.log(C.bold(`🧠 Recall "${q}" (${results.length})`));
-  info("this is exactly what XR would surface in chat/voice for that query.");
+  info(
+    `this is exactly what XR would surface in chat/voice for that query (${f.lexical ? "lexical" : "semantic"}).`,
+  );
   if (!results.length) {
     info("nothing relevant — XR would inject no memory for this.");
     return;
   }
   for (const e of results) printEntry(e);
+}
+
+/** Pre-compute embeddings for every entry (warms the semantic-recall cache). */
+async function cmdReindex(mem: MemoryStore): Promise<void> {
+  banner();
+  console.log(C.bold("🧠 Re-embedding memory for semantic recall…"));
+  const res = await mem.reindexEmbeddings();
+  if (res.embedded === 0 && res.total === 0) {
+    info("nothing to index — memory is empty.");
+    return;
+  }
+  ok(`embedded ${res.embedded}/${res.total} entr${res.total === 1 ? "y" : "ies"}.`);
+  if (res.fallback > 0) {
+    info(
+      `${res.fallback} used the lexical fallback (no embedding model reachable) — recall still works.`,
+    );
+  }
 }
 
 function cmdExport(mem: MemoryStore, f: Flags): void {
@@ -319,7 +344,9 @@ ${C.bold("Inspect")}
   xr memory                          status + counts by category
   xr memory list [--scope s] [--category c] [--json]
   xr memory search "<text>"          keyword search
-  xr memory recall "<text>"          show exactly what chat/voice would surface
+  xr memory recall "<text>" [--lexical]  show exactly what chat/voice would surface
+                                     (semantic by default; --lexical forces keyword scoring)
+  xr memory reindex                  pre-compute embeddings (warms semantic recall)
 
 ${C.bold("Write")}
   xr memory add "<text>" [--category preference|project|workflow|fact|exclusion]
@@ -364,6 +391,7 @@ export async function handleMemoryCommand(argv: string[], store: Store): Promise
   if (sub === "remove" || sub === "rm" || sub === "forget") return cmdRemove(mem, flags);
   if (sub === "search") return cmdSearch(mem, flags);
   if (sub === "recall") return cmdRecall(mem, flags);
+  if (sub === "reindex") return cmdReindex(mem);
   if (sub === "export") return cmdExport(mem, flags);
   if (sub === "import") return cmdImport(mem, flags);
   if (sub === "clear") return cmdClear(mem, flags);
