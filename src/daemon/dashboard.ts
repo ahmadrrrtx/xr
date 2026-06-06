@@ -249,6 +249,25 @@ const PAGE = `<!doctype html>
       </div>
     </section>
 
+    <section class="card c12" id="memory-card">
+      <h3>
+        <span class="ic">🧠</span> Durable Memory
+        <span id="mem-state" class="chip ok" style="margin-left:auto">checking…</span>
+      </h3>
+      <div class="kvs" id="mem-stats" style="margin-bottom:10px">
+        <span class="lab">entries</span><b id="mem-count">0</b>
+      </div>
+      <div class="sub" style="margin-top:6px">
+        Saved preferences, project context &amp; facts — only what you asked XR to remember.
+        <button id="mem-clear" style="float:right;background:rgba(255,90,106,.1);color:var(--red);
+          border:1px solid rgba(255,90,106,.25);padding:2px 8px;border-radius:6px;font-size:11px;cursor:pointer;font:inherit">clear all</button>
+      </div>
+      <div class="list" id="mem-list" style="max-height:240px;margin-top:10px"></div>
+      <div class="sub muted" style="margin-top:10px;font-size:11px">
+        Read-only viewer · add/edit from the CLI: <code>xr memory add "…"</code> · do-not-remember rules are hidden here.
+      </div>
+    </section>
+
   </div>
   <footer>🔐 127.0.0.1 only · token-authed · read-mostly · every state change is approval-gated & recorded in the hash chain</footer>
 </div>
@@ -414,6 +433,51 @@ async function load(){
       list.querySelectorAll(".btn-forget").forEach((b) => b.addEventListener("click", () => forgetMem(b.dataset.id)));
     }
   }
+
+  // ── v0.9 durable memory viewer ──────────────────────────────────────────
+  const umem = await get("/api/memory");
+  if (umem) {
+    const st = $("mem-state");
+    st.textContent = umem.enabled ? "enabled" : "disabled";
+    st.className = "chip " + (umem.enabled ? "ok" : "warn");
+    $("mem-count").textContent = umem.count || 0;
+    const sv = $("mem-stats"); sv.innerHTML = '<span class="lab">entries</span><b id="mem-count">' + (umem.count || 0) + '</b>';
+    (umem.stats || []).forEach((s) => {
+      if (s.category === "exclusion") return;
+      sv.innerHTML += '<span class="lab">' + escapeHtml(s.category) + '</span><b>' + s.c + '</b>';
+    });
+    const list = $("mem-list"); list.innerHTML = "";
+    if (!umem.enabled) {
+      list.innerHTML = '<div class="muted" style="padding:10px 0">memory disabled — enable with memory.enabled in config</div>';
+    } else if (!(umem.entries || []).length) {
+      list.innerHTML = '<div class="muted" style="padding:10px 0">nothing remembered yet — try <code>xr memory add "I prefer TypeScript"</code></div>';
+    } else {
+      const catColor = { preference: "var(--green)", project: "var(--cyan)", workflow: "var(--amber)", fact: "var(--violet)" };
+      (umem.entries || []).slice(0, 40).forEach((m) => {
+        const row = document.createElement("div");
+        row.className = "item";
+        const stars = "\\u2605".repeat(m.importance) + "\\u2606".repeat(5 - m.importance);
+        row.innerHTML =
+          '<span class="dot" style="background:' + (catColor[m.category] || "var(--violet)") + '"></span>'
+          + '<span class="desc">' + escapeHtml(m.content) + ' '
+          + '<span class="muted">· ' + escapeHtml(m.category) + ' · ' + escapeHtml(m.scope)
+          + (m.tags && m.tags.length ? ' · ' + escapeHtml(m.tags.join(",")) : "")
+          + ' · <span title="importance">' + stars + '</span></span></span>'
+          + '<button class="btn-mem-forget" data-id="' + m.id + '" style="margin-left:auto;background:rgba(255,90,106,.1);color:var(--red);border:1px solid rgba(255,90,106,.25);padding:2px 8px;border-radius:6px;font-size:11px;cursor:pointer;font:inherit">forget</button>';
+        list.appendChild(row);
+      });
+      list.querySelectorAll(".btn-mem-forget").forEach((b) => b.addEventListener("click", () => forgetMemoryEntry(b.dataset.id)));
+    }
+  }
+}
+
+async function forgetMemoryEntry(id) {
+  if (!confirm("Permanently forget this memory entry?")) return;
+  await fetch("/api/memory/" + encodeURIComponent(id), {
+    method: "DELETE",
+    headers: { "authorization": "Bearer " + TOKEN },
+  });
+  load();
 }
 
 async function forgetMem(id) {
@@ -428,6 +492,14 @@ document.addEventListener("click", async (ev) => {
   if (ev.target && ev.target.id === "ctrl-mem-clear") {
     if (!confirm("Forget ALL remembered control plans?")) return;
     await fetch("/api/control/memory/all", {
+      method: "DELETE",
+      headers: { "authorization": "Bearer " + TOKEN },
+    });
+    load();
+  }
+  if (ev.target && ev.target.id === "mem-clear") {
+    if (!confirm("Permanently delete ALL durable memory? This cannot be undone.")) return;
+    await fetch("/api/memory/all", {
       method: "DELETE",
       headers: { "authorization": "Bearer " + TOKEN },
     });
