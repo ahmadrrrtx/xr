@@ -129,7 +129,8 @@ export async function runAgent(
       // COST GOVERNOR: pre-flight check. The agent cannot exceed the ceiling.
       const decision = governor.checkBeforeStep();
       
-      if (decision.warning) {
+      // `warning` only exists on the allow:true branch of the union.
+      if (decision.allow && decision.warning) {
         say(`\x1b[33m⚠ ${decision.warning}\x1b[0m`);
       }
 
