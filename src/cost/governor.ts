@@ -33,7 +33,14 @@ export class CostGovernor {
   constructor(
     private budget: Budget,
     private pricing: Pricing,
-    private budgetManager: BudgetManager,
+    /**
+     * Global budget manager. OPTIONAL: when omitted the governor still enforces
+     * the per-task token/USD ceilings (its headline guarantee) but skips the
+     * global monthly/daily cap check. This keeps the governor usable standalone
+     * (e.g. in unit tests or any caller that has no Store) without weakening the
+     * per-task ceiling in any way.
+     */
+    private budgetManager?: BudgetManager,
   ) {}
 
   /** Record real usage after a model call. */
@@ -69,7 +76,11 @@ export class CostGovernor {
     const estUsd =
       this.steps > 0 ? snap.usd / this.steps : (estTokens / 1_000_000) * this.pricing.outPerMTok;
 
-    const globalCheck = this.budgetManager.checkBudget(estUsd);
+    // Global cap check only runs when a budget manager was provided. When it is
+    // absent we fall through to the per-task ceilings below (still enforced).
+    const globalCheck: BudgetCheckResult = this.budgetManager
+      ? this.budgetManager.checkBudget(estUsd)
+      : { allow: true };
     if (!globalCheck.allow) {
       return { 
         allow: false, 
