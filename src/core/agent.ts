@@ -50,6 +50,14 @@ export interface AgentDeps {
     /** Use embeddings-based semantic recall (with lexical fallback). */
     semantic?: boolean;
   };
+  /**
+   * XR 1.0 — extra tools contributed by enabled plugins. They are merged into
+   * the mode's tool list (agent mode only) and resolved alongside core tools.
+   * Each is already namespaced + approval-gated by the plugin manager, so they
+   * inherit the same approval/egress/audit context as core tools and cannot
+   * bypass any safety gate.
+   */
+  extraTools?: Tool[];
 }
 
 export interface AgentResult {
@@ -80,7 +88,13 @@ export async function runAgent(
   store.createSession(sessionId, task.slice(0, 80), mode);
   store.audit("session.start", { task, mode, provider: provider.id }, sessionId);
 
-  const tools: Tool[] = toolsForMode(mode);
+  // Core tools for this mode, plus any plugin-contributed tools. Plugin tools
+  // are only offered in agent mode (plan/ask stay read-only by design) and are
+  // already namespaced + approval-gated by the plugin manager.
+  const coreTools: Tool[] = toolsForMode(mode);
+  const extraTools: Tool[] = mode === "agent" ? deps.extraTools ?? [] : [];
+  const tools: Tool[] = [...coreTools, ...extraTools];
+  const extraToolMap = new Map(extraTools.map((t) => [t.name, t]));
   const toolCtx = {
     cwd,
     approve: deps.approve,
@@ -194,7 +208,7 @@ export async function runAgent(
 
       // ACT: execute each requested tool call.
       for (const call of turn.toolCalls) {
-        const tool = getTool(call.tool);
+        const tool = getTool(call.tool) ?? extraToolMap.get(call.tool);
         if (!tool || !tools.some((t) => t.name === call.tool)) {
           // Fail closed: unknown / not-allowed tool in this mode.
           const msg = `tool "${call.tool}" is not available in ${mode} mode`;
