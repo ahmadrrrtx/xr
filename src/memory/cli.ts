@@ -32,14 +32,23 @@ interface Flags {
   yes: boolean;
   /** Force deterministic lexical recall (skip embeddings). */
   lexical: boolean;
+  /** summarize: only fold entries older than N days. */
+  days?: number;
+  /** summarize: only fold entries with importance <= this. */
+  maxImportance?: number;
+  /** summarize: preview only, change nothing. */
+  dryRun: boolean;
   rest: string[];
 }
 
 function parseFlags(argv: string[]): Flags {
-  const f: Flags = { tags: [], json: false, yes: false, lexical: false, rest: [] };
+  const f: Flags = { tags: [], json: false, yes: false, lexical: false, dryRun: false, rest: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--lexical") f.lexical = true;
+    else if (a === "--dry-run" || a === "--preview") f.dryRun = true;
+    else if (a === "--days") f.days = Number(argv[++i]);
+    else if (a === "--max-importance") f.maxImportance = Number(argv[++i]);
     else if (a === "--scope") f.scope = argv[++i];
     else if (a === "--category" || a === "-c") {
       const c = argv[++i];
@@ -265,6 +274,66 @@ async function cmdReindex(mem: MemoryStore): Promise<void> {
   }
 }
 
+/**
+ * Tier 3 — fold OLD, LOW-IMPORTANCE entries into compact summaries.
+ * Always shows the proposal and asks for confirmation before changing anything
+ * (unless --yes). --dry-run previews only.
+ */
+async function cmdSummarize(mem: MemoryStore, f: Flags): Promise<void> {
+  const { planSummarization, applySummarization } = await import("./summarize.ts");
+  const plan = planSummarization(mem, {
+    scope: f.scope,
+    olderThanDays: f.days,
+    maxImportance: f.maxImportance,
+  });
+
+  banner();
+  console.log(C.bold("🧠 Memory Summarization"));
+  info(
+    `criteria: older than ${f.days ?? 30} day(s) · importance ≤ ${f.maxImportance ?? 2}${f.scope ? ` · scope=${f.scope}` : ""}`,
+  );
+
+  if (f.json) {
+    console.log(JSON.stringify(plan, null, 2));
+    return;
+  }
+
+  if (plan.totalSummaries === 0) {
+    info("nothing to summarize — no large enough groups of old, low-importance entries.");
+    return;
+  }
+
+  console.log(
+    `\n  Proposed: fold ${C.cyan(String(plan.totalFolded))} entr${plan.totalFolded === 1 ? "y" : "ies"} into ${C.cyan(String(plan.totalSummaries))} summary entr${plan.totalSummaries === 1 ? "y" : "ies"}.\n`,
+  );
+  for (const g of plan.groups) {
+    console.log(`  ${colorCat(g.category)} ${C.dim(`[${g.scope}]`)} — folds ${g.folds.length}:`);
+    console.log(`    ${C.green("＋")} ${g.summary.slice(0, 160)}${g.summary.length > 160 ? "…" : ""}`);
+    for (const e of g.folds.slice(0, 6)) {
+      console.log(`    ${C.red("－")} ${C.dim(e.id)} ${e.content.slice(0, 90)}`);
+    }
+    if (g.folds.length > 6) console.log(`    ${C.dim(`… and ${g.folds.length - 6} more`)}`);
+    console.log("");
+  }
+
+  if (f.dryRun) {
+    info("dry-run — nothing changed. Re-run without --dry-run to apply.");
+    return;
+  }
+
+  const proceed = f.yes || (await confirm("Apply this summarization? (folded entries are deleted)", false));
+  if (!proceed) {
+    info("cancelled — nothing changed.");
+    return;
+  }
+
+  const res = applySummarization(mem, plan);
+  ok(`created ${res.created} summary(ies) · removed ${res.removed} entr${res.removed === 1 ? "y" : "ies"}.`);
+  if (res.skipped > 0) {
+    warn(`${res.skipped} entr${res.skipped === 1 ? "y" : "ies"} kept (their summary could not be stored).`);
+  }
+}
+
 function cmdExport(mem: MemoryStore, f: Flags): void {
   const bundle = mem.export();
   const json = JSON.stringify(bundle, null, 2);
@@ -355,6 +424,11 @@ ${C.bold("Write")}
   xr memory remove <id>              forget one entry (permanent)
   xr memory clear [--scope s] [-y]   forget everything / one scope (permanent)
 
+${C.bold("Maintain")}
+  xr memory summarize [--days N] [--max-importance n] [--scope s] [--dry-run] [-y]
+                                     fold OLD, low-importance entries into compact
+                                     summaries (proposes first, asks to apply)
+
 ${C.bold("Portability")}
   xr memory export [path]            JSON bundle (stdout if no path)
   xr memory import <path>            merge a JSON bundle (dedupes)
@@ -392,6 +466,7 @@ export async function handleMemoryCommand(argv: string[], store: Store): Promise
   if (sub === "search") return cmdSearch(mem, flags);
   if (sub === "recall") return cmdRecall(mem, flags);
   if (sub === "reindex") return cmdReindex(mem);
+  if (sub === "summarize") return cmdSummarize(mem, flags);
   if (sub === "export") return cmdExport(mem, flags);
   if (sub === "import") return cmdImport(mem, flags);
   if (sub === "clear") return cmdClear(mem, flags);
