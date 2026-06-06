@@ -11,6 +11,27 @@ import { XR_HOME } from "../config/config.ts";
 
 const GENESIS = "xr-genesis";
 
+/** v0.9: a row in the durable user-memory table. */
+export interface MemoryRow {
+  id: string;
+  category: string;
+  content: string;
+  scope: string;
+  source: string;
+  tags: string;
+  importance: number;
+  created_at: number;
+  updated_at: number;
+}
+
+/** v0.9: a session summary row (kept separate from long-term memory). */
+export interface SummaryRow {
+  id: string;
+  scope: string;
+  summary: string;
+  created_at: number;
+}
+
 export class Store {
   private db: Database;
 
@@ -130,7 +151,221 @@ export class Store {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      -- v0.9: durable, user-controlled memory (long-term facts, preferences,
+      -- project & workflow memory, do-not-remember rules). Distinct from the
+      -- RAG-coupled \`memory\` table above: every row here is EXPLICITLY created,
+      -- editable and deletable by the user, with full provenance.
+      CREATE TABLE IF NOT EXISTS user_memory (
+        id TEXT PRIMARY KEY,
+        category TEXT NOT NULL,        -- preference|project|workflow|fact|exclusion
+        content TEXT NOT NULL,
+        scope TEXT NOT NULL,           -- "global" or a project key
+        source TEXT NOT NULL,          -- user|chat|voice|research|import
+        tags TEXT NOT NULL DEFAULT '', -- comma-separated
+        importance INTEGER NOT NULL DEFAULT 3,  -- 1..5
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_memory_scope ON user_memory(scope);
+      CREATE INDEX IF NOT EXISTS idx_user_memory_category ON user_memory(category);
+      -- v0.9: session summaries — kept SEPARATE from long-term memory so the
+      -- agent never confuses ephemeral conversation recaps with durable facts.
+      CREATE TABLE IF NOT EXISTS session_summaries (
+        id TEXT PRIMARY KEY,
+        scope TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
     `);
+  }
+
+  // ---- v0.9: durable user memory ----
+
+  insertMemory(row: {
+    id: string;
+    category: string;
+    content: string;
+    scope: string;
+    source: string;
+    tags: string;
+    importance: number;
+  }): void {
+    const now = Date.now();
+    this.db
+      .query(
+        `INSERT INTO user_memory (id,category,content,scope,source,tags,importance,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+      )
+      .run(
+        row.id,
+        row.category,
+        row.content,
+        row.scope,
+        row.source,
+        row.tags,
+        row.importance,
+        now,
+        now,
+      );
+  }
+
+  /** Find an existing entry with identical (scope, category, content). */
+  findMemoryByContent(
+    scope: string,
+    category: string,
+    content: string,
+  ): MemoryRow | null {
+    return (
+      this.db
+        .query<MemoryRow, [string, string, string]>(
+          `SELECT * FROM user_memory WHERE scope=? AND category=? AND content=? LIMIT 1`,
+        )
+        .get(scope, category, content) ?? null
+    );
+  }
+
+  getMemory(id: string): MemoryRow | null {
+    return (
+      this.db
+        .query<MemoryRow, [string]>(`SELECT * FROM user_memory WHERE id=?`)
+        .get(id) ?? null
+    );
+  }
+
+  /** Resolve a partial id prefix to entries (CLI convenience). */
+  findMemoryByPrefix(prefix: string): MemoryRow[] {
+    return this.db
+      .query<MemoryRow, [string]>(
+        `SELECT * FROM user_memory WHERE id LIKE ? ORDER BY updated_at DESC`,
+      )
+      .all(prefix + "%");
+  }
+
+  /**
+   * List memory. With a scope, returns global + that scope. Excludes the
+   * \`exclusion\` category unless explicitly requested.
+   */
+  listMemory(
+    opts: { scope?: string; category?: string; includeExclusions?: boolean } = {},
+  ): MemoryRow[] {
+    const clauses: string[] = [];
+    const params: string[] = [];
+    if (opts.scope) {
+      clauses.push(`(scope='global' OR scope=?)`);
+      params.push(opts.scope);
+    }
+    if (opts.category) {
+      clauses.push(`category=?`);
+      params.push(opts.category);
+    } else if (!opts.includeExclusions) {
+      clauses.push(`category!='exclusion'`);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    return this.db
+      .query<MemoryRow, string[]>(
+        `SELECT * FROM user_memory ${where} ORDER BY importance DESC, updated_at DESC`,
+      )
+      .all(...params);
+  }
+
+  updateMemory(
+    id: string,
+    patch: Partial<{
+      content: string;
+      category: string;
+      scope: string;
+      tags: string;
+      importance: number;
+    }>,
+  ): boolean {
+    const cur = this.getMemory(id);
+    if (!cur) return false;
+    this.db
+      .query(
+        `UPDATE user_memory SET content=?, category=?, scope=?, tags=?, importance=?, updated_at=? WHERE id=?`,
+      )
+      .run(
+        patch.content ?? cur.content,
+        patch.category ?? cur.category,
+        patch.scope ?? cur.scope,
+        patch.tags ?? cur.tags,
+        patch.importance ?? cur.importance,
+        Date.now(),
+        id,
+      );
+    return true;
+  }
+
+  deleteMemory(id: string): boolean {
+    const r = this.db.query(`DELETE FROM user_memory WHERE id=?`).run(id);
+    return ((r as any).changes ?? 0) > 0;
+  }
+
+  /** Clear memory. With a scope, only that scope; otherwise everything. */
+  clearMemory(scope?: string): number {
+    if (scope) {
+      const r = this.db.query(`DELETE FROM user_memory WHERE scope=?`).run(scope);
+      return (r as any).changes ?? 0;
+    }
+    const r = this.db.query(`DELETE FROM user_memory`).run();
+    return (r as any).changes ?? 0;
+  }
+
+  userMemoryCount(): number {
+    return (
+      this.db
+        .query<{ c: number }, []>(`SELECT COUNT(*) c FROM user_memory`)
+        .get()?.c ?? 0
+    );
+  }
+
+  userMemoryStats(): Array<{ category: string; c: number }> {
+    return this.db
+      .query<{ category: string; c: number }, []>(
+        `SELECT category, COUNT(*) c FROM user_memory GROUP BY category ORDER BY c DESC`,
+      )
+      .all();
+  }
+
+  // ---- v0.9: session summaries (separate from long-term memory) ----
+
+  insertSessionSummary(id: string, scope: string, summary: string): void {
+    this.db
+      .query(
+        `INSERT INTO session_summaries (id,scope,summary,created_at) VALUES (?,?,?,?)`,
+      )
+      .run(id, scope, summary, Date.now());
+  }
+
+  listSessionSummaries(scope?: string, limit = 20): SummaryRow[] {
+    if (scope) {
+      return this.db
+        .query<SummaryRow, [string, number]>(
+          `SELECT * FROM session_summaries WHERE scope=? ORDER BY created_at DESC LIMIT ?`,
+        )
+        .all(scope, limit);
+    }
+    return this.db
+      .query<SummaryRow, [number]>(
+        `SELECT * FROM session_summaries ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all(limit);
+  }
+
+  deleteSessionSummary(id: string): boolean {
+    const r = this.db.query(`DELETE FROM session_summaries WHERE id=?`).run(id);
+    return ((r as any).changes ?? 0) > 0;
+  }
+
+  clearSessionSummaries(scope?: string): number {
+    if (scope) {
+      const r = this.db
+        .query(`DELETE FROM session_summaries WHERE scope=?`)
+        .run(scope);
+      return (r as any).changes ?? 0;
+    }
+    const r = this.db.query(`DELETE FROM session_summaries`).run();
+    return (r as any).changes ?? 0;
   }
 
   // ---- sessions ----
