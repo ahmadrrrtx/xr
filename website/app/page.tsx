@@ -735,8 +735,8 @@ function FeaturesSection() {
     {
       icon: Database,
       color: "#00FF88",
-      title: "Persistent Memory",
-      description: "Layered memory across sessions — user profiles, agent context, and skill files all stored locally.",
+      title: "Durable Memory (v0.9)",
+      description: "Remembers your preferences, projects, and facts — only what you explicitly ask. Local-first, inspectable, editable, and deletable. No silent capture.",
     },
     {
       icon: Mic,
@@ -992,6 +992,10 @@ function InstallSection() {
         { text: "xr control start", type: "command" },
         { text: 'xr control open "https://github.com/ahmadrrrtx/xr"', type: "command" },
         { text: 'xr control test            # dry-runs a plan — executes nothing', type: "command" },
+        { text: "", type: "blank" },
+        { text: "# Durable memory (v0.9) — remembers only what you ask", type: "comment" },
+        { text: 'xr memory add "I prefer TypeScript and Bun" --category preference', type: "command" },
+        { text: 'xr memory list             # inspect everything · edit/remove anytime', type: "command" },
         { text: "", type: "blank" },
         { text: "# Hard budget ceiling — literally cannot exceed", type: "comment" },
         { text: "xr --budget 0.25 \"build a full REST API\"", type: "command" },
