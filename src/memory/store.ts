@@ -7,8 +7,11 @@
  *
  * Design principles:
  *   • Explicit by default — entries are only created when the user asks.
- *   • Deterministic & testable — recall uses the existing lexical vector + a
- *     conservative relevance floor (no model call required).
+ *   • Deterministic & testable — the synchronous `recall()` uses a lexical
+ *     vector + a conservative relevance floor (no model call required).
+ *   • Optional semantics — `recallSemantic()` upgrades retrieval to embeddings
+ *     (Ollama nomic-embed-text) with an automatic, dimension-safe fallback to
+ *     lexical scoring, so it ALWAYS works — even fully offline.
  *   • Privacy first — `exclusion` rules block matching content from being
  *     stored, and exclusions are never surfaced as recall.
  *   • Fail soft — bad input is validated and rejected with a clear reason,
@@ -17,7 +20,7 @@
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import type { MemoryRow, Store } from "../state/db.ts";
-import { lexicalVector, cosine } from "./embed.ts";
+import { lexicalVector, cosine, embed, sameSpace } from "./embed.ts";
 import {
   GLOBAL_SCOPE,
   clampImportance,
@@ -242,6 +245,89 @@ export class MemoryStore {
       .map((s) => s.e);
   }
 
+  /**
+   * SEMANTIC RECALL (v0.9 #4) — embeddings-based retrieval with safe fallback.
+   *
+   * Behaviour:
+   *   1. Embed the query once (Ollama nomic-embed-text; lexical fallback if no
+   *      embedding model is reachable).
+   *   2. For each candidate, use its CACHED embedding. If an entry has none yet
+   *      (older row, or never embedded), embed it now and cache it — so the cost
+   *      is paid once, lazily.
+   *   3. Score by cosine. If a candidate's stored vector lives in a DIFFERENT
+   *      space than the query (e.g. one is an Ollama vector, the other a lexical
+   *      fallback), fall back to lexical-on-both-sides for THAT pair so cosine
+   *      stays meaningful — never a crash, never a garbage score.
+   *
+   * Same conservative contract as `recall()`: exclusions excluded, relevance
+   * floor enforced, importance as a gentle tiebreaker, capped at `k`.
+   *
+   * This never throws: any embedding failure degrades to lexical scoring.
+   */
+  async recallSemantic(
+    query: string,
+    opts: { scope?: string; k?: number; floor?: number } = {},
+  ): Promise<MemoryEntry[]> {
+    const k = opts.k ?? 5;
+    const floor = opts.floor ?? RECALL_FLOOR;
+    const q = (query ?? "").trim();
+    if (!q) return [];
+
+    // Raw rows so we can read + write the cached embedding column.
+    const rows = this.store
+      .listMemory({ scope: opts.scope }) // exclusions already filtered
+      .filter((r) => r.category !== "exclusion");
+    if (rows.length === 0) return [];
+
+    let qvec: number[];
+    try {
+      qvec = await embed(q);
+    } catch {
+      // Total embedding failure → behave exactly like lexical recall.
+      return this.recall(q, opts);
+    }
+
+    const scored: Array<{ row: MemoryRow; sim: number; score: number }> = [];
+    for (const row of rows) {
+      const text = `${row.content} ${(row.tags || "").split(",").join(" ")}`.trim();
+
+      // Resolve (and lazily cache) this entry's embedding.
+      let stored: number[] | null = null;
+      if (row.embedding) {
+        try {
+          stored = JSON.parse(row.embedding);
+        } catch {
+          stored = null;
+        }
+      }
+      if (!stored || !stored.length) {
+        try {
+          stored = await embed(text);
+          this.store.setMemoryEmbedding(row.id, stored);
+        } catch {
+          stored = null;
+        }
+      }
+
+      let sim: number;
+      if (stored && stored.length && sameSpace(stored, qvec)) {
+        sim = cosine(qvec, stored);
+      } else {
+        // Mixed spaces or no vector → lexical on both sides (meaningful + safe).
+        sim = cosine(lexicalVector(q), lexicalVector(text));
+      }
+
+      const score = sim + (row.importance - 3) * 0.0125;
+      scored.push({ row, sim, score });
+    }
+
+    return scored
+      .filter((s) => s.sim >= floor)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, k)
+      .map((s) => rowToEntry(s.row));
+  }
+
   // ── exclusions (do-not-remember) ──────────────────────────────────────
 
   /** Returns the matching exclusion phrase, or null if content is allowed. */
@@ -304,6 +390,34 @@ export class MemoryStore {
     }
     this.store.audit("memory.import", { added, skipped, errors });
     return { added, skipped, errors };
+  }
+
+  // ── semantic index maintenance ────────────────────────────────────────
+
+  /**
+   * (Re)compute and cache embeddings for every entry (incl. exclusions, so
+   * dedupe/scope are consistent). Returns counts. Fail-soft: an entry whose
+   * embedding call fails is left for lazy embedding on next recall.
+   */
+  async reindexEmbeddings(): Promise<{ total: number; embedded: number; fallback: number }> {
+    const rows = this.store.listMemory({ includeExclusions: true });
+    let embedded = 0;
+    let fallback = 0;
+    for (const row of rows) {
+      const text = `${row.content} ${(row.tags || "").split(",").join(" ")}`.trim();
+      try {
+        const vec = await embed(text);
+        // A lexical-fallback vector has the fixed fallback dimensionality; we
+        // still cache it (recall handles mixed spaces), but report it so users
+        // know whether a real embedding model was used.
+        if (vec.length === 256) fallback++;
+        this.store.setMemoryEmbedding(row.id, vec);
+        embedded++;
+      } catch {
+        /* leave for lazy embedding */
+      }
+    }
+    return { total: rows.length, embedded, fallback };
   }
 
   // ── helpers ───────────────────────────────────────────────────────────
