@@ -80,6 +80,10 @@ export async function handleVoiceCommand(argv: string[], store: Store): Promise<
       if (text) {
         console.log(C.cyan(`You: ${text}`));
 
+        // v0.9 — memory voice commands ("remember …", "forget …", "what do
+        // you know …"). Explicit + spoken-back; never a silent auto-save.
+        if (await tryHandleMemoryByVoice(text, store, session)) continue;
+
         // v0.8 — first chance to handle the text as a safe computer-control
         // command.  Voice never bypasses the approval gate; the service still
         // enforces step/auto/destructive rules.
@@ -118,6 +122,69 @@ export async function handleListen(): Promise<void> {
   } else {
     warn("No speech detected.");
   }
+}
+
+/**
+ * v0.9 — voice → durable memory. Uses the shared NL intent parser so chat and
+ * voice behave identically. Honours the global memory off-switch. Returns true
+ * if the text was a memory command (handled + spoken back).
+ */
+async function tryHandleMemoryByVoice(
+  text: string,
+  store: Store,
+  session: VoiceSession,
+): Promise<boolean> {
+  const { isMemoryEnabled } = await import("../config/config.ts");
+  if (!isMemoryEnabled()) return false;
+
+  const { parseMemoryIntent } = await import("../memory/intent.ts");
+  const { MemoryStore, projectScopeFromCwd } = await import("../memory/store.ts");
+  const intent = parseMemoryIntent(text);
+  if (intent.kind === "none") return false;
+
+  const mem = new MemoryStore(store);
+  const scope = projectScopeFromCwd(process.cwd());
+
+  if (intent.kind === "add") {
+    const res = mem.add({
+      content: intent.content,
+      category: intent.category,
+      scope: intent.category === "project" ? scope : undefined,
+      source: "voice",
+    });
+    if (!res.ok) await session.speak(`I could not save that. ${res.reason}.`);
+    else if (res.duplicate) await session.speak("I already remembered that.");
+    else if (intent.category === "exclusion")
+      await session.speak("Understood. I will not remember that.");
+    else await session.speak("Got it. I'll remember that.");
+    return true;
+  }
+
+  if (intent.kind === "forget") {
+    const matches = mem.search(intent.query, { scope });
+    if (!matches.length) {
+      await session.speak("I have no note matching that.");
+      return true;
+    }
+    for (const m of matches) mem.remove(m.id);
+    await session.speak(
+      `Forgotten ${matches.length} note${matches.length === 1 ? "" : "s"}.`,
+    );
+    return true;
+  }
+
+  // recall
+  const results = mem.recall(intent.query || "preferences", { scope });
+  if (!results.length) {
+    await session.speak("I don't have anything saved that's relevant.");
+    return true;
+  }
+  const spoken = results
+    .slice(0, 4)
+    .map((e) => e.content)
+    .join(". ");
+  await session.speak(`Here's what I remember. ${spoken}.`);
+  return true;
 }
 
 /**
