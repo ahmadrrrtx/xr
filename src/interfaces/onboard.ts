@@ -12,7 +12,6 @@ import { detectHardwareSpecs, formatHardwareSummary } from "../local/hardware.ts
 import { recommendLocalModel } from "../local/recommend.ts";
 import { ollamaStatus, pullOllamaModel, testOllamaModel } from "../local/ollama.ts";
 import { setSecret, preferredSecretBackend } from "../security/secrets.ts";
-import { Store } from "../state/db.ts";
 
 function defaultCloudModel(provider: string): string {
   return PRESETS[provider]?.defaultModel ?? "gpt-4o-mini";
@@ -125,12 +124,6 @@ export async function runOnboarding(): Promise<void> {
 
   console.log(`\n${C.bold("Step 4: Security & Budget")}`);
   const spendCap = await ask("  Hard spend cap per cloud task in USD", { default: isLocalOnly ? "0" : "0.25" });
-  
-  // v0.6 Global Budget additions
-  const monthlyCap = await ask("  Global monthly spend cap in USD", { default: isLocalOnly ? "0" : "10.0" });
-  const autoFallback = await confirm("  Automatically switch to local model when budget is exhausted?", true);
-  const warningsEnabled = await confirm("  Enable budget warnings (50%, 80%, 95%)?", true);
-  
   const approvalMode = await confirm("  Require manual approval for file writes/shell/send?", true);
 
   info(`\n  Saving configuration...`);
@@ -168,14 +161,6 @@ export async function runOnboarding(): Promise<void> {
   }
 
   saveConfig(config);
-  
-  // Initialize global budget in DB
-  const store = new Store();
-  store.setBudgetConfig({
-    monthly_cap: Number.isFinite(parseFloat(monthlyCap)) ? parseFloat(monthlyCap) : 10.0,
-    auto_fallback: autoFallback,
-    warnings_enabled: warningsEnabled,
-  });
 
   console.log(`\n  ${C.green(C.bold("✓ Setup Complete!"))}`);
   console.log(`  Primary: ${C.bold(config.defaults.provider)} / ${C.bold(config.defaults.model)}`);
