@@ -10,7 +10,7 @@
 [![Tests](https://img.shields.io/badge/tests-219%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-v0.9.0-22e0ff?style=flat-square)](#)
+[![Version](https://img.shields.io/badge/version-v1.0.0-22e0ff?style=flat-square)](#)
 
 ---
 
@@ -46,6 +46,18 @@ xr serve                          # open the local dashboard at 127.0.0.1:7842
 
 ---
 
+## 🏛️ v1.0 Foundation Runtime: The AI OS Kernel
+
+XR has evolved from a modular agent script into a **True AI Operating System**. The v1.0 Foundation Runtime introduces a hardened kernel that ensures stability, security, and infinite extensibility.
+
+- **Service Container (DI)**: A lightweight dependency injection system that manages services (Agent, Budget, Provider, Plugins) with a strictly controlled lifecycle.
+- **Lifecycle Management**: Formal `Bootstrap` $\rightarrow$ `Start` $\rightarrow$ `Stop` sequence ensuring all subsystems are healthy before the agent takes the wheel.
+- **Specialized Store Architecture**: The monolithic database has been decomposed into specialized, isolated stores (Session, Audit, Memory, Cost, Skill), preventing state corruption and enabling independent scaling.
+- **Command Registry**: Decoupled CLI commands. Adding a new system capability no longer requires modifying the core router.
+- **Event-Driven Core**: An internal Event Bus allowing decoupled services to communicate asynchronously without tight coupling.
+
+---
+
 ## ✨ What Makes XR Different
 
 | | Most AI agents | **XR** |
@@ -60,12 +72,13 @@ xr serve                          # open the local dashboard at 127.0.0.1:7842
 | **Plan memory** | none | **cached deterministic plans** — second run skips the LLM |
 | **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, no telemetry |
 | **Voice** | cloud STT | **local Whisper + Kokoro** by default, push-to-talk |
+| **Runtime** | procedural script | **AI OS Kernel** with DI and Lifecycle management |
 
 ---
 
 ## 🎯 Core Features
 
-### 🖥 Safe Computer Control (v0.8 + v0.8.1 + v0.8.2)
+### 🖥 Safe Computer Control (v0.8 → v0.8.2)
 The killer feature of XR — your AI can actually control the computer, and you can actually trust it.
 
 ```bash
@@ -260,6 +273,7 @@ Voice commands route through the **same** safety pipeline as the CLI — voice c
 ### 📊 Dashboard (v0.8.1)
 ```bash
 xr serve                    # opens 127.0.0.1:7842
+xr serve --port 8000 --token mytoken
 ```
 - Cost cockpit (live)
 - Security posture (injection block-rate)
@@ -293,7 +307,7 @@ xr "..." --budget 0.25                    # hard $ ceiling for this task
 xr "..." --provider openai --model gpt-4o # override provider + model
 xr "..." --dry-run                        # simulate everything
 xr "..." --max-steps 20                   # safety rail
-xr "..." --json                           # JSON output
+xr "..." --json                           # machine-readable output
 ```
 
 ### Computer Control (v0.8 → v0.8.2)
@@ -516,46 +530,50 @@ xr --tui                                  # interactive terminal UI
 └─────────────────────────┬────────────────────────────────┘
                           │
                 ┌─────────▼──────────┐
-                │   src/index.ts     │  command router
+                │  XR Runtime Kernel │  The OS Orchestrator
                 └─────────┬──────────┘
                           │
         ┌─────────────────┼─────────────────────┐
         │                 │                     │
 ┌───────▼─────┐  ┌────────▼───────┐  ┌──────────▼──────────┐
-│  Agent loop │  │ Control layer  │  │   Daemon (xr serve) │
-│  core/      │  │ control/       │  │   daemon/           │
-└──┬────────┬─┘  └─┬────────────┬─┘  └──────────┬──────────┘
-   │        │     │            │               │
-   │  ┌─────▼──┐  │       ┌────▼─────┐    ┌────▼────────┐
-   │  │ Tools  │◄─┘       │ Planner  │    │ Dashboard   │
-   │  │tools/  │          │ Memory   │    │ /api/control│
-   │  └────────┘          │ Browser  │    └─────────────┘
-   │                      │ Executor │
-   │                      └──────────┘
-   │
-┌──▼─────────┐  ┌──────────────┐  ┌─────────────┐
-│ Providers  │  │ Cost gov.    │  │ State / DB  │
-│ providers/ │  │ cost/        │  │ state/ +    │
-│ (12+ BYOK) │  │ + budget mgr │  │ memory/     │
-└────────────┘  └──────────────┘  └─────────────┘
-                                          │
-                                  ┌───────▼──────┐
-                                  │ SQLite (WAL) │
-                                  │ + hash chain │
-                                  └──────────────┘
+│  DI Container │  │  Event Bus     │  │  Command Registry   │
+│  (Services)  │  │  (Async Comms) │  │  (Extensible CLI)   │
+└───────┬─────┘  └────────┬───────┘  └──────────┬──────────┘
+        │                 │                     │
+        └─────────┬───────┴─────────────────────┘
+                  │
+    ┌─────────────▼────────────────────────────────────┐
+    │               Services Layer                     │
+    │  (Agent · Budget · Provider · Plugin · Config)   │
+    └─────────────┬────────────────────────────────────┘
+                  │
+    ┌─────────────▼────────────────────────────────────┐
+    │              Storage Layer (Specialized)         │
+    │ (Session · Audit · Memory · Cost · Skill Store)  │
+    └─────────────┬────────────────────────────────────┘
+                  │
+          ┌───────▼──────┐
+          │  SQLite (WAL) │
+          │  + hash chain │
+          └──────────────┘
 ```
 
 ### Repo layout
 ```
 src/
-  ├── core/             # agent loop + shared types
-  ├── providers/        # 12+ BYOK adapters (OpenAI-compat + native)
-  ├── local/            # Ollama hardware detection + recommendation
-  ├── cost/             # spend cap, governor, pricing, manager
-  ├── security/         # injection attack corpus, guards, secrets
-  ├── reliability/      # JSON repair, model profiles, GBNF grammar
-  ├── skills/           # non-regressive skill engine
-  ├── memory/           # durable memory (v0.9) + RAG + project fingerprint
+  ├── core/             # 🧠 The Kernel: Runtime, DI Container, Lifecycle, Event Bus
+  ├── services/         # 🛠️ Managed Services: Agent, Provider, Budget, Plugin, Config
+  ├── commands/         # ⌨️ Decoupled CLI Commands: run, doctor, config, budget
+  ├── state/            # 💾 Storage Layer
+  │     ├── store.ts        # Base store abstraction
+  │     └── stores/         # Specialized Stores: Audit, Session, Cost, Memory, etc.
+  ├── providers/        # 🔌 12+ BYOK adapters (OpenAI-compat + native)
+  ├── local/            # 💻 Ollama hardware detection + recommendation
+  ├── cost/             # 💰 Spend cap, governor, pricing, manager
+  ├── security/         # 🛡️ Injection attack corpus, guards, secrets
+  ├── reliability/      # 🛠️ JSON repair, model profiles, GBNF grammar
+  ├── skills/           # 🎓 Non-regressive skill engine
+  ├── memory/           # 🧠 Durable memory (v0.9) + RAG + project fingerprint
   │     ├── types.ts        # categories, sources, MemoryEntry vocabulary
   │     ├── store.ts        # ✨ v0.9 write rules · recall · import/export
   │     ├── intent.ts       # NL "remember/forget/what do you know" parser
@@ -564,8 +582,8 @@ src/
   │     ├── rag.ts          # local RAG index + codebase fingerprint
   │     ├── embed.ts        # Ollama embeddings + lexical fallback
   │     └── compact.ts      # context compaction (spend cap)
-  ├── computer/         # vision-loop computer use (xr --computer)
-  ├── control/          # ✨ v0.8 safe control layer (xr control)
+  ├── computer/         # 👁️ Vision-loop computer use (xr --computer)
+  ├── control/          # 🕹️ ✨ v0.8 safe control layer (xr control)
   │     ├── types.ts        # Action schema (Zod)
   │     ├── classify.ts     # risk classifier (pure)
   │     ├── adapter.ts      # OS + dep detection
@@ -577,13 +595,13 @@ src/
   │     ├── browser.ts      # lazy Playwright backend
   │     ├── memory.ts       # ✨ v0.8.2 plan memory
   │     └── cli.ts          # xr control … subcommands
-  ├── tools/            # agent tools (files, web, system, control)
-  ├── voice/            # STT/TTS/wake word, voice→control router
-  ├── research/         # v0.7 research mode
-  ├── daemon/           # xr serve (127.0.0.1 dashboard)
-  ├── interfaces/       # CLI helpers, onboarding, TUI
-  └── index.ts          # main router
-test/                   # 165+ tests, all platforms
+  ├── tools/            # 🛠️ Agent tools (files, web, system, control)
+  ├── voice/            # 🎙️ STT/TTS/wake word, voice→control router
+  ├── research/         # 🔬 v0.7 research mode
+  ├── daemon/           # 🖥️ xr serve (127.0.0.1 dashboard)
+  ├── interfaces/       # 🎨 CLI helpers, onboarding, TUI
+  └── index.ts          # 🚀 Thin bootstrap loader for the Runtime
+test/                   # 🧪 165+ tests, all platforms
 ```
 
 ---
@@ -622,7 +640,7 @@ Config lives at `~/.xr/config.json` (auto-created on first run). Schema is versi
 
 ```jsonc
 {
-  "version": 7,
+  "version": 8,
   "defaults": { "mode": "agent", "provider": "ollama", "model": "qwen2.5:7b" },
   "budget": { "perTaskUsd": 0.25, "perTaskTokens": 250000 },
   "security": {
@@ -645,6 +663,11 @@ Config lives at `~/.xr/config.json` (auto-created on first run). Schema is versi
       "enabled": true,           // plan cache (v0.8.2) — NOT durable memory
       "maxEntries": 500
     }
+  },
+  "plugins": {
+    "enabled": true,
+    "requireTrust": true,
+    "deniedPermissions": []
   }
 }
 ```
@@ -697,30 +720,41 @@ xr "build me a CRUD app and run the tests"   # see every step in the dashboard
 
 ---
 
-## 🛡️ Why Trust XR
+## 🔐 Security & Safety Model
 
-- **Open source** — every line of safety code is auditable in this repo
-- **Local-first** — no telemetry, no analytics, no remote config
-- **BYOK** — your key, your tokens, your bills
-- **Hard caps** — the agent cannot exceed your budget; the planner cannot bypass approvals
-- **Hash-chained audit** — tampering is detectable, `xr verify-log` proves it
-- **Disable anything** — config flags + env overrides for every subsystem
-- **Tested** — 165+ tests including the entire safety pipeline
+### Computer-Control safety gates (always on)
 
----
+| Action class | Behavior |
+|---|---|
+| **safe** (move, scroll, focus) | runs immediately |
+| **sensitive** (open, type, click, key, app, browser fill) | prompts unless `--yes` |
+| **destructive** (shell-like text, `Enter`, `Shift+Del`, `file://`, executable URLs, `submit`, sensitive fill) | **always** prompts — ignores `--yes` |
 
-## 🗺️ Roadmap (post-v0.9)
+### Approval surfaces (both work simultaneously)
+- CLI prompt — appears in the terminal that issued the command
+- Dashboard buttons — appears in the 🖥️ panel; whoever answers first wins
 
-- ✅ ~~Semantic memory recall~~ — **shipped in v0.9** (embeddings + lexical fallback)
-- ✅ ~~Dashboard memory viewer~~ — **shipped in v0.9** (read + forget in `xr serve`)
-- ✅ ~~Memory summarization~~ — **shipped in v0.9** (`xr memory summarize`, approval-first)
-- 👥 **Team/workspace memory** — shared scopes for collaborators
-- 🧠 LLM-paraphrased summaries (current digests are deterministic concatenations)
-- ☁️ Optional cross-device memory sync via your own Git repo (no cloud)
-- 📊 Telemetry-free **usage analytics** export (CSV / JSON) — opt-in
-- 🔌 **MCP server** mode (XR as an MCP host for other agents)
-- 🌳 Multi-account profiles (`xr profile use work`)
-- 🪟 **Wayland** synthetic input via `ydotool` integration
+### Disable switches
+- `xr control stop` — sets `config.control.enabled = false`
+- `XR_CONTROL_DISABLED=1` env var — always wins, even over config
+
+### Memory safety (v0.8.2)
+- Caches only **fully successful** auto-mode plans
+- Refuses plans containing `sensitive: true` or destructive actions
+- Recall **re-validates + re-classifies** every action — schema drift or risk escalation invalidates the entry
+- `xr control memory list/show/forget/clear` give full user visibility
+
+### Secret handling
+- Never stored in plaintext when an OS-backed store is available:
+  - macOS Keychain (`security`)
+  - Linux Secret Service (`secret-tool`)
+- File fallback at `~/.xr/.env` with `chmod 600`
+- Audit log auto-redacts `sk-…`, `Bearer …`, and any `sensitive: true` value
+
+### Audit log
+- Append-only, SHA-256 hash-chained
+- Every entry: control plan, execution, denial, memory store/hit/forget, agent tool call, security event, budget pause
+- Verify with `xr verify-log`
 
 ---
 
