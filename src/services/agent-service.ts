@@ -1,0 +1,100 @@
+/**
+ * XR — Agent Service
+ * Orchestrates the reasoning-action loop for the AI agent.
+ */
+
+import { Container } from "../core/container.ts";
+import { LifecycleHook } from "../core/lifecycle.ts";
+import { runAgent, type AgentDeps, type AgentResult } from "../core/agent.ts";
+import { ProviderService } from "./provider-service.ts";
+import { BudgetService } from "./budget-service.ts";
+import { ConfigService } from "./config-service.ts";
+import { PluginService } from "./plugin-service.ts";
+import { SessionStore } from "../state/stores/session-store.ts";
+import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
+import { CostStore } from "../state/stores/cost-store.ts";
+import { pricingFor } from "../cost/pricing.ts";
+import type { Mode, Provider } from "../core/types.ts";
+
+export class AgentService implements LifecycleHook {
+  private container: Container;
+
+  constructor(container: Container) {
+    this.container = container;
+  }
+
+  /**
+   * Execute a task using the agent loop.
+   */
+  async runTask(
+    task: string,
+    mode: Mode,
+    overrides: {
+      provider?: string;
+      model?: string;
+      budget?: number;
+      maxTokens?: number;
+      maxSteps?: number;
+      dryRun?: boolean;
+      json?: boolean;
+    } = {},
+  ): Promise<AgentResult> {
+    const configService = this.container.resolve<ConfigService>("config");
+    const providerService = this.container.resolve<ProviderService>("providers");
+    const budgetService = this.container.resolve<BudgetService>("budget");
+    const pluginService = this.container.resolve<PluginService>("plugins");
+    const sessionStore = this.container.resolve<SessionStore>("sessionStore");
+    const memoryStore = this.container.resolve<UserMemoryStore>("userMemoryStore");
+    const costStore = this.container.resolve<CostStore>("costStore");
+
+    const config = configService.get();
+    const provider = providerService.getProvider({
+      provider: overrides.provider,
+      model: overrides.model,
+    });
+
+    // Determine pricing for this provider
+    const pricing = pricingFor(provider.id, (overrides.model ?? config.defaults.model));
+
+    const budget = {
+      maxUsd: overrides.budget ?? config.budget.perTaskUsd,
+      maxTokens: overrides.maxTokens ?? config.budget.perTaskTokens,
+    };
+
+    const deps: AgentDeps = {
+      provider,
+      store: sessionStore as any, // Agent expects the monolithic Store, will need refactor in agent.ts
+      cwd: process.cwd(),
+      say: (line: string) => console.log(line),
+      approve: async (req) => {
+        // This should ideally be handled by a UI service
+        return true; // Placeholder for now, logic will be in the CLI command
+      },
+      onOverBudget: async (meter, reason) => {
+        return null; // Default to stop
+      },
+      budget,
+      pricing,
+      maxSteps: overrides.maxSteps ?? 12,
+      egressAllowlist: config.security.egressAllowlist,
+      dryRun: overrides.dryRun,
+      memory: {
+        enabled: config.memory.enabled && config.memory.injectInChat,
+        recallLimit: config.memory.recallLimit,
+        semantic: config.memory.semanticRecall,
+      },
+      extraTools: pluginService.getPluginTools(),
+    };
+
+    // Overriding some deps that need specific store instances
+    (deps as any).memoryStore = memoryStore;
+    (deps as any).costStore = costStore;
+    (deps as any).auditStore = this.container.resolve<any>("auditStore");
+
+    return await runAgent(task, mode, deps);
+  }
+
+  async onInit(): Promise<void> {}
+  async onStart(): Promise<void> {}
+  async onStop(): Promise<void> {}
+}
