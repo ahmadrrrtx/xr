@@ -19,29 +19,45 @@
 
 ---
 
-## 🚀 Install in 30 Seconds
+## 🚀 Install XR
+
+The bootstrapper installs the XR core and then launches the resumable setup wizard. Optional local AI, voice, browser automation and desktop control packs are opt-in.
 
 ```bash
-# Linux / macOS / Termux
+# Linux / macOS / Termux / WSL
 curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
 ```
 
 ```powershell
-# Windows
+# Windows PowerShell
 iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 ```
 
 ```bash
-# First-time setup wizard (picks provider, model, budget)
-xr onboarding
+# Re-run safely any time
+xr install                         # setup wizard
+xr doctor                          # health check
+xr repair                          # safe repair
+xr update                          # update with rollback guard
+xr status                          # component status
+```
+
+Install modes:
+
+```bash
+xr install --mode minimal          # core only
+xr install --mode local            # local/free via Ollama where available
+xr install --mode byok             # cloud keys you own
+xr install --mode hybrid           # cloud primary + local fallback
+xr install --mode full             # asks for all optional packs
 ```
 
 After install:
 
 ```bash
-xr "build me a hello-world TypeScript project with tests"
-xr doctor                         # check everything is healthy
-xr serve                          # open the local dashboard at 127.0.0.1:7842
+xr models recommend
+xr models install                  # optional local model pull
+xr "hello"
 ```
 
 ---
