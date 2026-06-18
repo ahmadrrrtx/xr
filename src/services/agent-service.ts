@@ -13,7 +13,7 @@ import { PluginService } from "./plugin-service.ts";
 import { SessionStore } from "../state/stores/session-store.ts";
 import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
 import { CostStore } from "../state/stores/cost-store.ts";
-import { pricingFor } from "../cost/pricing.ts";
+import { priceFor } from "../cost/pricing.ts";
 import type { Mode, Provider } from "../core/types.ts";
 
 export class AgentService implements LifecycleHook {
@@ -54,7 +54,7 @@ export class AgentService implements LifecycleHook {
     });
 
     // Determine pricing for this provider
-    const pricing = pricingFor(provider.id, (overrides.model ?? config.defaults.model));
+    const pricing = priceFor(provider.id, (overrides.model ?? config.defaults.model));
 
     const budget = {
       maxUsd: overrides.budget ?? config.budget.perTaskUsd,
@@ -63,7 +63,10 @@ export class AgentService implements LifecycleHook {
 
     const deps: AgentDeps = {
       provider,
-      store: sessionStore as any, // Agent expects the monolithic Store, will need refactor in agent.ts
+      sessionStore,
+      auditStore: this.container.resolve<any>("auditStore"),
+      costStore,
+      userMemoryStore: memoryStore,
       cwd: process.cwd(),
       say: (line: string) => console.log(line),
       approve: async (req) => {
@@ -85,11 +88,6 @@ export class AgentService implements LifecycleHook {
       },
       extraTools: pluginService.getPluginTools(),
     };
-
-    // Overriding some deps that need specific store instances
-    (deps as any).memoryStore = memoryStore;
-    (deps as any).costStore = costStore;
-    (deps as any).auditStore = this.container.resolve<any>("auditStore");
 
     return await runAgent(task, mode, deps);
   }
