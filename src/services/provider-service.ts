@@ -3,7 +3,8 @@
  * Manages LLM providers, handles routing, fallback, and health checks.
  */
 
-import { Provider, ProviderPreset, buildProvider, PRESETS, knownProviders } from "../providers/factory.ts";
+import { ProviderPreset, buildProvider, PRESETS, knownProviders } from "../providers/factory.ts";
+import type { Provider } from "../core/types.ts";
 import { ConfigService } from "./config-service.ts";
 import { Container } from "../core/container.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
