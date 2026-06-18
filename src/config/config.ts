@@ -2,10 +2,11 @@
  * XR — config loader.
  * Schema-validated, versioned, self-healing: never crashes on bad config.
  * (TRD §3.4 / "Never Breaks" doctrine rule #6.)
- * 
+ *
  * Now with FULL provider support: Ollama, Groq, Google Gemini, DeepSeek,
  * Together, OpenRouter, Cerebras, Mistral, OpenAI, Anthropic Claude,
- * Cohere, and AWS Bedrock.
+ * Cohere, xAI, Perplexity, Fireworks, SambaNova, Hugging Face, LM Studio,
+ * Jan, LocalAI, vLLM, AWS Bedrock, and custom OpenAI-compatible endpoints.
  */
 import { z } from "zod";
 import { homedir, platform } from "node:os";
@@ -13,8 +14,9 @@ import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { getSecret } from "../security/secrets.ts";
+import { PRESETS } from "../providers/presets.ts";
 
-export const CONFIG_VERSION = 8; // Bumped for XR 1.0 plugin ecosystem
+export const CONFIG_VERSION = 9; // Bumped for Stage 3 Universal Provider Engine
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -64,6 +66,46 @@ const ConfigSchema = z.object({
       // Native providers don't need baseUrl (use their own API endpoints)
     })
     .passthrough()
+    .default({}),
+  // ── Stage 3: Universal Provider Engine ─────────────────────────────────────
+  providerEngine: z
+    .object({
+      routingStrategy: z
+        .enum([
+          "primary",
+          "localFirst",
+          "cloudFirst",
+          "hybrid",
+          "cheapest",
+          "fastest",
+        ])
+        .default("hybrid"),
+      customProviders: z
+        .array(
+          z.object({
+            id: z.string().regex(/^[a-z0-9_-]+$/i),
+            label: z.string(),
+            baseUrl: z.string().url(),
+            apiKeyEnv: z.string().optional(),
+            defaultModel: z.string(),
+            headers: z.record(z.string()).optional(),
+            capabilities: z
+              .object({
+                chat: z.boolean().default(true),
+                reasoning: z.boolean().default(false),
+                vision: z.boolean().default(false),
+                embeddings: z.boolean().default(false),
+                toolUse: z.boolean().default(false),
+                jsonMode: z.boolean().default(false),
+                functionCalling: z.boolean().default(false),
+                streaming: z.boolean().default(false),
+              })
+              .default({}),
+          }),
+        )
+        .default([]),
+      providerCapabilities: z.record(z.any()).default({}),
+    })
     .default({}),
   localModels: z
     .object({
@@ -239,6 +281,25 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       deniedPermissions: [],
     },
   }),
+  // 8 -> 9: Stage 3 Universal Provider Engine — routing, custom providers, capabilities.
+  8: (raw) => {
+    const oldRouting = raw.localModels?.routing ?? "hybrid";
+    const routingStrategy =
+      oldRouting === "local-only"
+        ? "localFirst"
+        : oldRouting === "cloud-first"
+        ? "cloudFirst"
+        : "hybrid";
+    return {
+      ...raw,
+      version: 9,
+      providerEngine: {
+        routingStrategy,
+        customProviders: [],
+        providerCapabilities: {},
+      },
+    };
+  },
 };
 
 function migrate(raw: any): any {
@@ -257,7 +318,7 @@ function migrate(raw: any): any {
  */
 export function loadConfig(): { config: XRConfig; warnings: string[] } {
   ensureHome();
-  
+
   loadLocalSecrets();
 
   const warnings: string[] = [];
@@ -329,6 +390,11 @@ const PROVIDER_KEY_ENVS = [
   "OPENROUTER_API_KEY",
   "CEREBRAS_API_KEY",
   "AWS_ACCESS_KEY_ID",
+  "XAI_API_KEY",
+  "PERPLEXITY_API_KEY",
+  "FIREWORKS_API_KEY",
+  "SAMBANOVA_API_KEY",
+  "HF_API_KEY",
 ];
 
 function hasCommand(cmd: string): boolean {
@@ -377,27 +443,12 @@ function loadLocalSecrets(): void {
   }
 }
 
-/** Get environment status for all known providers */
+/** Get environment status for all known providers (driven from presets). */
 export function getProviderEnvStatus(): Array<{ id: string; label: string; hasKey: boolean; tier: string }> {
-  const providers = [
-    { id: "ollama", label: "Ollama (Local)", keyEnv: null, tier: "free" },
-    { id: "groq", label: "Groq", keyEnv: "GROQ_API_KEY", tier: "free" },
-    { id: "google", label: "Google Gemini", keyEnv: "GOOGLE_API_KEY", tier: "free" },
-    { id: "deepseek", label: "DeepSeek", keyEnv: "DEEPSEEK_API_KEY", tier: "free" },
-    { id: "anthropic", label: "Anthropic Claude", keyEnv: "ANTHROPIC_API_KEY", tier: "premium" },
-    { id: "openai", label: "OpenAI (GPT)", keyEnv: "OPENAI_API_KEY", tier: "premium" },
-    { id: "mistral", label: "Mistral AI", keyEnv: "MISTRAL_API_KEY", tier: "cheap" },
-    { id: "cohere", label: "Cohere", keyEnv: "COHERE_API_KEY", tier: "premium" },
-    { id: "together", label: "Together AI", keyEnv: "TOGETHER_API_KEY", tier: "cheap" },
-    { id: "openrouter", label: "OpenRouter", keyEnv: "OPENROUTER_API_KEY", tier: "cheap" },
-    { id: "cerebras", label: "Cerebras", keyEnv: "CEREBRAS_API_KEY", tier: "cheap" },
-    { id: "bedrock", label: "AWS Bedrock", keyEnv: "AWS_ACCESS_KEY_ID", tier: "premium" },
-  ];
-
-  return providers.map(p => ({
+  return Object.values(PRESETS).map((p) => ({
     id: p.id,
     label: p.label,
-    hasKey: p.keyEnv ? Boolean(process.env[p.keyEnv]) : false, // Ollama doesn't need a key
+    hasKey: p.apiKeyEnv ? Boolean(process.env[p.apiKeyEnv]) : true,
     tier: p.tier,
   }));
 }
