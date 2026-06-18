@@ -3,8 +3,16 @@
  * Handles monthly/daily spend caps and usage accounting.
  * (TRD §3.1 / Spend Cap & Governance)
  */
-import { CostStore } from "../state/stores/cost-store.ts";
+import type { BudgetConfig } from "../state/stores/cost-store.ts";
 import { colors as C } from "../interfaces/cli.ts";
+
+
+export interface BudgetStore {
+  getBudgetConfig(): { monthly_cap: number; daily_cap: number | null; warnings_enabled: boolean; auto_fallback: boolean } | null;
+  setBudgetConfig(config: Partial<BudgetConfig> & { monthly_cap?: number }): void;
+  getSpendForPeriod(startMs: number): number;
+  clearCosts(): void;
+}
 
 export interface BudgetStatus {
   monthlySpend: number;
@@ -23,7 +31,7 @@ export type BudgetCheckResult =
   | { allow: false; reason: string; suggestLocal: boolean };
 
 export class BudgetManager {
-  constructor(private store: CostStore) {}
+  constructor(private store: BudgetStore) {}
 
   /**
    * Get the current global budget configuration.
