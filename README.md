@@ -2,14 +2,14 @@
 
 # ⚡ XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `local model intelligence` · `spend-capped` · `tamper-evident` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory`**
+**`BYOK` · `local-first` · `local model intelligence` · `spend-capped` · `tamper-evident` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
 [![Tests](https://img.shields.io/badge/tests-219%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows%20%C2%B7%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0.0-22e0ff?style=flat-square)](#)
 
 ---
@@ -67,7 +67,7 @@ xr "hello"
 XR has evolved from a modular agent script into a **True AI Operating System**. The v1.0 Foundation Runtime introduces a hardened kernel that ensures stability, security, and infinite extensibility.
 
 - **Service Container (DI)**: A lightweight dependency injection system that manages services (Agent, Budget, Provider, Plugins) with a strictly controlled lifecycle.
-- **Lifecycle Management**: Formal `Bootstrap` $\rightarrow$ `Start` $\rightarrow$ `Stop` sequence ensuring all subsystems are healthy before the agent takes the wheel.
+- **Lifecycle Management**: Formal `Bootstrap` → `Start` → `Stop` sequence ensuring all subsystems are healthy before the agent takes the wheel.
 - **Specialized Store Architecture**: The monolithic database has been decomposed into specialized, isolated stores (Session, Audit, Memory, Cost, Skill), preventing state corruption and enabling independent scaling.
 - **Command Registry**: Decoupled CLI commands. Adding a new system capability no longer requires modifying the core router.
 - **Event-Driven Core**: An internal Event Bus allowing decoupled services to communicate asynchronously without tight coupling.
@@ -78,7 +78,7 @@ XR has evolved from a modular agent script into a **True AI Operating System**. 
 
 | | Most AI agents | **XR** |
 |---|---|---|
-| **Provider** | locked to vendor | BYOK — any of 12+ providers, or **fully local** via Ollama |
+| **Provider** | locked to vendor | BYOK — **any of 20+ providers**, or **fully local** via Ollama, LM Studio, vLLM, LocalAI, Jan |
 | **Cost** | "soft" warnings | **hard ceiling enforced in code** (`checkBeforeStep()`) |
 | **Security** | trust us | **deterministic injection benchmark**, signed block-rate report |
 | **Audit** | scrollback only | **SHA-256 hash chain** — tamper-evident, offline, free |
@@ -374,17 +374,75 @@ XR_CONTROL_DISABLED=1 xr control ...      # env override (always wins)
 xr --computer "open browser, search for X, summarize the top result"
 ```
 
-### Providers & local models
+### 🌐 Universal Provider Engine (Stage 3)
+
+XR's provider engine is a **first-class runtime subsystem**. It supports 20+
+hosted and local providers, custom OpenAI-compatible endpoints, automatic
+routing, health checks, and secure key management — all through a single clean
+abstraction.
+
+**Supported providers out of the box:**
+
+- **Free cloud:** Groq, Google Gemini, DeepSeek, Cerebras
+- **Cheap cloud:** OpenRouter, Together AI, Mistral AI, Fireworks, SambaNova, Hugging Face
+- **Premium:** OpenAI, Anthropic Claude, Cohere, xAI (Grok), Perplexity
+- **Enterprise:** AWS Bedrock
+- **Local / self-hosted:** Ollama, LM Studio, Jan, LocalAI, vLLM
+- **Custom:** any OpenAI-compatible endpoint you define
+
+**Provider commands:**
 
 ```bash
-xr providers                              # list with key/no-key status
-xr providers add groq                     # interactive add (secure prompt)
-xr providers set ollama qwen2.5:7b        # set default
+xr providers list                          # all providers, key status, capabilities
+xr providers status                        # active provider, routing, health
+xr providers test                         # health-check ALL registered providers
+xr providers test <id>                     # test one provider (auth + connectivity + model)
+xr providers set <id> [model]              # switch active provider + optional model
+xr providers add                           # interactive wizard: custom endpoint
+xr providers remove <id>                   # remove a custom provider
+xr providers refresh                       # re-sync custom providers from config
+```
 
+**Provider routing strategies** (set in config or override per task):
+
+```bash
+xr "task" --strategy localFirst           # prefer local, fallback to cloud
+xr "task" --strategy cloudFirst           # prefer cloud, fallback to local
+xr "task" --strategy cheapest             # lowest-cost available provider
+xr "task" --strategy hybrid               # primary + local fallback (default)
+```
+
+**Provider override for a single task:**
+
+```bash
+xr "task" --provider openai --model gpt-4o
+xr "task" --provider anthropic --model claude-3-5-sonnet-20241022
+xr "task" --provider ollama --model qwen2.5:14b
+xr "task" --provider openrouter --model anthropic/claude-3.5-sonnet
+```
+
+**Custom endpoint example (e.g., LM Studio, vLLM, enterprise proxy):**
+
+```bash
+xr providers add
+# → prompts for ID, label, base URL (http://localhost:1234/v1), model, API key
+xr providers set my-proxy llama-3-8b
+xr providers test my-proxy
+```
+
+Key management is **secure by default**: OS-backed stores (macOS Keychain,
+Linux Secret Service, Windows DPAPI) are used when available. File fallback is
+chmod 600. Keys are **never** printed in diagnostics or logs.
+
+### Local Models
+
+```bash
 xr models                                 # local model status
 xr models recommend                       # auto-detect hardware → suggest model
 xr models install [id]                    # download & configure Ollama model
 xr models test [id]                       # smoke test
+xr models set <id>                        # select and configure routing
+xr models remove <id>                     # remove a pulled model
 ```
 
 ### Budget
@@ -453,351 +511,128 @@ xr index                                  # build local RAG index of the project
 ### Durable Memory (v0.9)
 
 ```bash
-xr memory                                 # status + counts by category
-xr memory list [--scope s] [--category c] [--json]
-xr memory add "<text>" [--category preference|project|workflow|fact|exclusion]
-                       [--scope <s>] [--tag <t>] [--importance 1-5]
-xr memory edit <id> ["<new text>"] [--category c] [--scope s] [--importance n]
-xr memory remove <id>                     # forget one entry (permanent)
-xr memory search "<text>"                 # keyword search
-xr memory recall "<text>" [--lexical]     # what chat/voice would surface (semantic by default)
-xr memory reindex                         # pre-compute embeddings (warms semantic recall)
-xr memory summarize [--days N] [--max-importance n] [--dry-run] [-y]  # fold old notes → digests
-xr memory export [path]                   # JSON bundle (stdout if no path)
-xr memory import <path>                   # merge a bundle (dedupes)
-xr memory clear [--scope s] [-y]          # forget everything / one scope
-xr memory summaries [clear]               # conversation recaps (separate store)
+xr memory add "note" --category preference
+xr memory list
+xr memory search "keyword"
+xr memory recall "what do I prefer?"
+xr memory edit <id> "new text"
+xr memory remove <id>
+xr memory clear                           # asks first
+xr memory export bundle.json
+xr memory import bundle.json
+xr memory summarize --dry-run             # preview old → digests
+xr memory reindex                         # warm embedding cache
 ```
 
-### System
+### Config & Utilities
 
 ```bash
-xr doctor                                 # full health check (config, provider,
-                                          #  local model, audit chain, voice,
-                                          #  computer control, budget, sandbox)
-xr verify-log                             # verify tamper-evident audit chain
-xr config                                 # show config.json
-xr reset                                  # factory reset (deletes config + db)
-xr test --attacks                         # run injection benchmark
-xr --tui                                  # interactive terminal UI
+xr config                                 # dump current config (sanitized)
+xr config edit                            # open in $EDITOR
+xr repair                                 # fix permissions, reinstall deps
+xr status                                 # system check
+xr doctor                                 # full health check + provider matrix
+xr doctor --json                          # machine-readable health report
+xr update                                 # update with rollback guard
+xr reset [--hard]                         # wipe config + database (backup first)
 ```
-
-### Flags (any command)
-
-| Flag | Meaning |
-|---|---|
-| `--mode <agent\|plan\|ask>` | execution mode |
-| `--provider <id>` | override provider |
-| `--model <id>` | override model |
-| `--budget <usd>` | hard $ ceiling |
-| `--max-tokens <n>` | per-task token cap |
-| `--max-steps <n>` | loop safety rail |
-| `--dry-run` | simulate everything |
-| `--json` | machine-readable output |
-| `--yes`, `-y` | auto-approve sensitive (NEVER destructive) |
-| `--step` | confirm every step (control / plan) |
-| `--no-memory` | skip plan cache (control only) |
 
 ---
 
-## 🔐 Security & Safety Model
+## 🛠️ Architecture
 
-### Computer-Control safety gates (always on)
-
-| Action class | Behavior |
-|---|---|
-| **safe** (move, scroll, focus) | runs immediately |
-| **sensitive** (open, type, click, key, app, browser fill) | prompts unless `--yes` |
-| **destructive** (shell-like text, `Enter`, `Shift+Del`, `file://`, executable URLs, `submit`, sensitive fill) | **always** prompts — ignores `--yes` |
-
-### Approval surfaces (both work simultaneously)
-- CLI prompt — appears in the terminal that issued the command
-- Dashboard buttons — appears in the 🖥️ panel; whoever answers first wins
-
-### Disable switches
-- `xr control stop` — sets `config.control.enabled = false`
-- `XR_CONTROL_DISABLED=1` env var — always wins, even over config
-
-### Memory safety (v0.8.2)
-- Caches only **fully successful** auto-mode plans
-- Refuses plans containing `sensitive: true` or destructive actions
-- Recall **re-validates + re-classifies** every action — schema drift or risk escalation invalidates the entry
-- `xr control memory list/show/forget/clear` give full user visibility
-
-### Secret handling
-- Never stored in plaintext when an OS-backed store is available:
-  - macOS Keychain (`security`)
-  - Linux Secret Service (`secret-tool`)
-- File fallback at `~/.xr/.env` with `chmod 600`
-- Audit log auto-redacts `sk-…`, `Bearer …`, and any `sensitive: true` value
-
-### Audit log
-- Append-only, SHA-256 hash-chained
-- Every entry: control plan, execution, denial, memory store/hit/forget, agent tool call, security event, budget pause
-- Verify with `xr verify-log`
+```text
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   CLI /      │     │  Dashboard   │     │   Telegram   │
+│   Voice      │     │  (127.0.0.1) │     │   Webhook    │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │
+       └────────────────────┼────────────────────┘
+                            │
+              ┌─────────────▼─────────────┐
+              │    Command Registry         │
+              │    (runtime dispatch)       │
+              └─────────────┬─────────────┘
+                            │
+         ┌──────────────────┼──────────────────┐
+         │                  │                  │
+   ┌─────▼─────┐   ┌───────▼───────┐   ┌──────▼──────┐
+   │  Agent    │   │  Provider     │   │   Budget    │
+   │  Service  │   │  Engine       │   │  Service    │
+   │           │   │  (routing)    │   │             │
+   │  ┌─────┐  │   │               │   │             │
+   │  │ LLM │◄─┼───┼──►20+ providers│   │             │
+   │  │Loop │  │   │  local/cloud   │   │  ┌──────┐  │
+   │  └──┬──┘  │   │  custom/BYOK   │   │  │Spend │  │
+   │     │     │   │  fallback      │   │  │Cap   │  │
+   │  ┌──▼──┐  │   │  health check  │   │  └──────┘  │
+   │  │Tools│  │   └───────────────┘   └──────────────┘
+   │  └─────┘  │
+   └───────────┘
+         │
+   ┌─────▼──────┐
+   │  Stores     │
+   │  (SQLite)   │
+   │  session    │
+   │  audit      │
+   │  memory     │
+   │  cost       │
+   │  skill      │
+   └─────────────┘
+```
 
 ---
 
-## 🗺️ Architecture
+## 🏗️ Project Structure
 
-```
-┌──────────────────────────────────────────────────────────┐
-│              User (CLI · TUI · Voice · Telegram)         │
-└─────────────────────────┬────────────────────────────────┘
-                          │
-                ┌─────────▼──────────┐
-                │  XR Runtime Kernel │  The OS Orchestrator
-                └─────────┬──────────┘
-                          │
-        ┌─────────────────┼─────────────────────┐
-        │                 │                     │
-┌───────▼─────┐  ┌────────▼───────┐  ┌──────────▼──────────┐
-│  DI Container │  │  Event Bus     │  │  Command Registry   │
-│  (Services)  │  │  (Async Comms) │  │  (Extensible CLI)   │
-└───────┬─────┘  └────────┬───────┘  └──────────┬──────────┘
-        │                 │                     │
-        └─────────┬───────┴─────────────────────┘
-                  │
-    ┌─────────────▼────────────────────────────────────┐
-    │               Services Layer                     │
-    │  (Agent · Budget · Provider · Plugin · Config)   │
-    └─────────────┬────────────────────────────────────┘
-                  │
-    ┌─────────────▼────────────────────────────────────┐
-    │              Storage Layer (Specialized)         │
-    │ (Session · Audit · Memory · Cost · Skill Store)  │
-    └─────────────┬────────────────────────────────────┘
-                  │
-          ┌───────▼──────┐
-          │  SQLite (WAL) │
-          │  + hash chain │
-          └──────────────┘
-```
-
-### Repo layout
-```
+```text
 src/
-  ├── core/             # 🧠 The Kernel: Runtime, DI Container, Lifecycle, Event Bus
-  ├── services/         # 🛠️ Managed Services: Agent, Provider, Budget, Plugin, Config
-  ├── commands/         # ⌨️ Decoupled CLI Commands: run, doctor, config, budget
-  ├── state/            # 💾 Storage Layer
-  │     ├── store.ts        # Base store abstraction
-  │     └── stores/         # Specialized Stores: Audit, Session, Cost, Memory, etc.
-  ├── providers/        # 🔌 12+ BYOK adapters (OpenAI-compat + native)
-  ├── local/            # 💻 Ollama hardware detection + recommendation
-  ├── cost/             # 💰 Spend cap, governor, pricing, manager
-  ├── security/         # 🛡️ Injection attack corpus, guards, secrets
-  ├── reliability/      # 🛠️ JSON repair, model profiles, GBNF grammar
-  ├── skills/           # 🎓 Non-regressive skill engine
-  ├── memory/           # 🧠 Durable memory (v0.9) + RAG + project fingerprint
-  │     ├── types.ts        # categories, sources, MemoryEntry vocabulary
-  │     ├── store.ts        # ✨ v0.9 write rules · recall · import/export
-  │     ├── intent.ts       # NL "remember/forget/what do you know" parser
-  │     ├── inject.ts       # recalled memory → one labelled prompt block
-  │     ├── cli.ts          # ✨ v0.9 `xr memory …` handlers
-  │     ├── rag.ts          # local RAG index + codebase fingerprint
-  │     ├── embed.ts        # Ollama embeddings + lexical fallback
-  │     └── compact.ts      # context compaction (spend cap)
-  ├── computer/         # 👁️ Vision-loop computer use (xr --computer)
-  ├── control/          # 🕹️ ✨ v0.8 safe control layer (xr control)
-  │     ├── types.ts        # Action schema (Zod)
-  │     ├── classify.ts     # risk classifier (pure)
-  │     ├── adapter.ts      # OS + dep detection
-  │     ├── executor.ts     # the ONLY file that touches the OS
-  │     ├── service.ts      # classify → approve → execute pipeline
-  │     ├── audit.ts        # redacting audit wrapper
-  │     ├── approvals.ts    # CLI ↔ dashboard race queue
-  │     ├── planner.ts      # NL → Action[] (memory-first)
-  │     ├── browser.ts      # lazy Playwright backend
-  │     ├── memory.ts       # ✨ v0.8.2 plan memory
-  │     └── cli.ts          # xr control … subcommands
-  ├── tools/            # 🛠️ Agent tools (files, web, system, control)
-  ├── voice/            # 🎙️ STT/TTS/wake word, voice→control router
-  ├── research/         # 🔬 v0.7 research mode
-  ├── daemon/           # 🖥️ xr serve (127.0.0.1 dashboard)
-  ├── interfaces/       # 🎨 CLI helpers, onboarding, TUI
-  └── index.ts          # 🚀 Thin bootstrap loader for the Runtime
-test/                   # 🧪 165+ tests, all platforms
+  core/          # runtime, DI, lifecycle, command registry, event bus
+  providers/     # 🌐 Universal Provider Engine
+    presets.ts       # 20+ provider metadata definitions
+    registry.ts      # dynamic provider registry + custom provider sync
+    routing.ts       # localFirst/cloudFirst/cheapest/hybrid strategies
+    health.ts        # auth-safe health checks + full provider matrix
+    capabilities.ts  # typed capability schema (vision, tool-use, streaming, …)
+    openai-compat.ts # universal adapter for any OpenAI-compatible endpoint
+    custom.ts        # thin wrapper for user-defined custom providers
+    factory.ts       # backward-compatible facade (preserves all old exports)
+    native/          # non-OpenAI adapters (Anthropic, Google, Mistral, Cohere, Bedrock, Cerebras)
+  services/      # provider-service, agent-service, budget-service, plugin-service, config-service
+  commands/      # CLI command implementations (run, install, providers, doctor, …)
+  config/        # schema-validated, versioned config loader (v9) with migrations
+  install/       # system.ts — platform detection, wizard, health checks
+  security/      # secrets.ts — OS-backed keychain / secret-tool / DPAPI + file fallback
+  interfaces/    # CLI UI helpers (ask, confirm, password, colors)
+  local/         # hardware detection, Ollama integration, model registry
+  state/         # specialized stores (session, audit, memory, cost, user-memory)
+  automation/    # Playwright / browser automation
+  computer/      # desktop control primitives (mouse, keyboard, window)
+  plugins/       # plugin system loader, sandbox, permission gate
+  voice/         # STT / TTS pipeline
+  cost/          # pricing tables, spend tracking
+  reliability/   # grammar, profiles, repair — deterministic output shaping
+  …
 ```
 
 ---
 
-## 🧪 Tests
+## 🧪 Testing
 
 ```bash
-bun test                              # full suite
-bun test test/control.test.ts         # v0.8 safety pipeline
-bun test test/control-plan.test.ts    # v0.8.1 planner + browser + approvals
-bun test test/control-memory.test.ts  # v0.8.2 plan-memory layer
-bun test test/memory-v09.test.ts      # v0.9 durable memory (store, intent, recall)
+bun test                         # run the full test suite
+bun run typecheck                # TypeScript strict check (zero errors)
+bun run dev                      # watch mode for development
 ```
 
 ---
 
-## 🌐 Platform Notes
+## 📝 License
 
-| OS | Built-in deps | Recommended install for full computer control |
-|----|---------------|------------------------------------------------|
-| **macOS** | `osascript`, `open` | `brew install cliclick` (for mouse move/click) |
-| **Linux (X11)** | — | `sudo apt install xdotool wmctrl xdg-utils` |
-| **Linux (Wayland)** | — | synthetic input blocked by Wayland — XR refuses gracefully |
-| **Windows** | PowerShell (built-in) | — |
-
-For **browser automation** on any platform:
-```bash
-xr control browser install   # ~150 MB chromium
-```
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-## 📦 Configuration
+**XR is not a chatbot. XR is an AI Operating System.**
 
-Config lives at `~/.xr/config.json` (auto-created on first run). Schema is versioned and self-healing — invalid keys never crash XR.
-
-```jsonc
-{
-  "version": 8,
-  "defaults": { "mode": "agent", "provider": "ollama", "model": "qwen2.5:7b" },
-  "budget": { "perTaskUsd": 0.25, "perTaskTokens": 250000 },
-  "security": {
-    "egressAllowlist": ["searx.be", "api.github.com", "registry.npmjs.org"],
-    "requireApproval": ["write_file", "delete", "shell", "send"]
-  },
-  "localModels": { "runtime": "ollama", "enabled": true, "routing": "hybrid" },
-  "memory": {                    // durable memory (v0.9)
-    "enabled": true,            // master switch (or env XR_MEMORY_DISABLED=1)
-    "autoSuggest": true,        // offer to remember "remember …" phrases (asks first)
-    "injectInChat": true,       // surface relevant memory into chat/research prompts
-    "recallLimit": 5,           // max entries surfaced into any single prompt
-    "semanticRecall": true      // embeddings-based recall (auto lexical fallback)
-  },
-  "control": {
-    "enabled": false,            // opt-in via `xr control start`
-    "defaultMode": "auto",
-    "stepDelayMs": 250,
-    "memory": {
-      "enabled": true,           // plan cache (v0.8.2) — NOT durable memory
-      "maxEntries": 500
-    }
-  },
-  "plugins": {
-    "enabled": true,
-    "requireTrust": true,
-    "deniedPermissions": []
-  }
-}
-```
-
-### Env overrides
-| Variable | Effect |
-|---|---|
-| `XR_HOME` | override config dir (default `~/.xr`) |
-| `XR_CONTROL_DISABLED=1` | hard-disable computer control |
-| `XR_BROWSER_HEADLESS=1` | run Playwright headless |
-| `XR_STT_URL` / `XR_TTS_URL` | voice endpoints |
-| `XR_SEARXNG` | research search backend |
-| `XR_WAKE_WORD=true` | enable wake-word listening |
-| `GROQ_API_KEY`, `OPENAI_API_KEY`, … | BYOK provider keys |
-
----
-
-## 🔧 Quick Recipes
-
-**Use Groq for free, fast inference:**
-```bash
-xr providers add groq          # paste key (stored in OS keychain if available)
-xr providers set groq llama-3.3-70b-versatile
-```
-
-**Fully offline (local model only):**
-```bash
-xr models install qwen2.5:7b
-xr providers set ollama qwen2.5:7b
-```
-
-**Automate a repeatable web workflow with zero ongoing cost:**
-```bash
-xr control start
-xr control browser install
-xr control plan "log into example.com and download the latest report" --yes
-# First run uses LLM. Every subsequent run: ⚡ recalled from memory.
-```
-
-**Watch live what XR is doing across all surfaces:**
-```bash
-# Terminal 1
-xr serve                                      # dashboard at 127.0.0.1:7842
-
-# Terminal 2
-xr "build me a CRUD app and run the tests"   # see every step in the dashboard
-
-# Optionally answer approvals from the dashboard instead of the terminal.
-```
-
----
-
-## 🔐 Security & Safety Model
-
-### Computer-Control safety gates (always on)
-
-| Action class | Behavior |
-|---|---|
-| **safe** (move, scroll, focus) | runs immediately |
-| **sensitive** (open, type, click, key, app, browser fill) | prompts unless `--yes` |
-| **destructive** (shell-like text, `Enter`, `Shift+Del`, `file://`, executable URLs, `submit`, sensitive fill) | **always** prompts — ignores `--yes` |
-
-### Approval surfaces (both work simultaneously)
-- CLI prompt — appears in the terminal that issued the command
-- Dashboard buttons — appears in the 🖥️ panel; whoever answers first wins
-
-### Disable switches
-- `xr control stop` — sets `config.control.enabled = false`
-- `XR_CONTROL_DISABLED=1` env var — always wins, even over config
-
-### Memory safety (v0.8.2)
-- Caches only **fully successful** auto-mode plans
-- Refuses plans containing `sensitive: true` or destructive actions
-- Recall **re-validates + re-classifies** every action — schema drift or risk escalation invalidates the entry
-- `xr control memory list/show/forget/clear` give full user visibility
-
-### Secret handling
-- Never stored in plaintext when an OS-backed store is available:
-  - macOS Keychain (`security`)
-  - Linux Secret Service (`secret-tool`)
-- File fallback at `~/.xr/.env` with `chmod 600`
-- Audit log auto-redacts `sk-…`, `Bearer …`, and any `sensitive: true` value
-
-### Audit log
-- Append-only, SHA-256 hash-chained
-- Every entry: control plan, execution, denial, memory store/hit/forget, agent tool call, security event, budget pause
-- Verify with `xr verify-log`
-
----
-
-## 🤝 Contributing
-
-```bash
-git clone https://github.com/ahmadrrrtx/xr
-cd xr && bun install
-bun test                  # all tests must pass
-bun run typecheck         # 0 errors required
-```
-
-Open issues + PRs welcome. Big things to help with:
-- Wayland support for `xr control`
-- More browser-action verbs (download, upload, screenshot regions)
-- Provider adapters for new model APIs
-- Translations of the onboarding wizard
-
----
-
-## 📜 License
-
-MIT © [Muhammad Ahmad (@ahmadrrrtx)](https://github.com/ahmadrrrtx)
-
----
-
-<p align="center">
-<b>XR — the AI agent you can actually trust.</b><br>
-<sub>by rrrtx · BYOK · local-first · spend-capped · tamper-evident</sub>
-</p>
+> Built by [@ahmadrrrtx](https://github.com/ahmadrrrtx) · Stage 3: Universal Provider Engine
