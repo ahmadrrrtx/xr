@@ -4,6 +4,8 @@
  */
 
 import { BaseStore } from "../store.ts";
+import type { MemoryEntry, MemoryCategory, MemorySource } from "../../memory/types.ts";
+import { lexicalVector, cosine, embed, sameSpace } from "../../memory/embed.ts";
 
 export interface UserMemoryRow {
   id: string;
@@ -24,6 +26,22 @@ export interface SummaryRow {
   summary: string;
   created_at: number;
 }
+
+function rowToEntry(row: UserMemoryRow): MemoryEntry {
+  return {
+    id: row.id,
+    category: row.category as MemoryCategory,
+    content: row.content,
+    scope: row.scope,
+    source: row.source as MemorySource,
+    tags: row.tags ? row.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+    importance: row.importance,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const RECALL_FLOOR = 0.12;
 
 export class UserMemoryStore extends BaseStore {
   constructor() {
@@ -216,6 +234,63 @@ export class UserMemoryStore extends BaseStore {
         `SELECT category, COUNT(*) c FROM user_memory GROUP BY category ORDER BY c DESC`,
       )
       .all();
+  }
+
+
+  recall(query: string, opts: { scope?: string; k?: number; floor?: number } = {}): MemoryEntry[] {
+    const q = (query ?? "").trim();
+    if (!q) return [];
+    const k = opts.k ?? 5;
+    const floor = opts.floor ?? RECALL_FLOOR;
+    const candidates = this.listMemory({ scope: opts.scope });
+    if (!candidates.length) return [];
+    const qv = lexicalVector(q);
+    return candidates
+      .map((row) => {
+        const sim = cosine(qv, lexicalVector(`${row.content} ${(row.tags || "").split(",").join(" ")}`));
+        const score = sim + (row.importance - 3) * 0.0125;
+        return { row, sim, score };
+      })
+      .filter((s) => s.sim >= floor)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, k)
+      .map((s) => rowToEntry(s.row));
+  }
+
+  async recallSemantic(query: string, opts: { scope?: string; k?: number; floor?: number } = {}): Promise<MemoryEntry[]> {
+    const q = (query ?? "").trim();
+    if (!q) return [];
+    const k = opts.k ?? 5;
+    const floor = opts.floor ?? RECALL_FLOOR;
+    const rows = this.listMemory({ scope: opts.scope }).filter((r) => r.category !== "exclusion");
+    if (!rows.length) return [];
+    let qvec: number[];
+    try { qvec = await embed(q); } catch { return this.recall(q, opts); }
+    const scored: Array<{ row: UserMemoryRow; sim: number; score: number }> = [];
+    for (const row of rows) {
+      const text = `${row.content} ${(row.tags || "").split(",").join(" ")}`.trim();
+      let stored: number[] | null = null;
+      if (row.embedding) {
+        try { stored = JSON.parse(row.embedding); } catch { stored = null; }
+      }
+      if (!stored?.length) {
+        try {
+          stored = await embed(text);
+          this.setMemoryEmbedding(row.id, stored);
+        } catch {
+          stored = null;
+        }
+      }
+      const sim = stored?.length && sameSpace(stored, qvec)
+        ? cosine(qvec, stored)
+        : cosine(lexicalVector(q), lexicalVector(text));
+      scored.push({ row, sim, score: sim + (row.importance - 3) * 0.0125 });
+    }
+    return scored
+      .filter((s) => s.sim >= floor)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, k)
+      .map((s) => rowToEntry(s.row));
   }
 
   insertSessionSummary(id: string, scope: string, summary: string): void {
