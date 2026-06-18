@@ -12,6 +12,7 @@ import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { getSecret } from "../security/secrets.ts";
 
 export const CONFIG_VERSION = 8; // Bumped for XR 1.0 plugin ecosystem
 
@@ -366,10 +367,11 @@ function loadLocalSecrets(): void {
     }
   }
 
-  // OS-backed secrets if available (macOS Keychain / Linux Secret Service).
+  // OS-backed secrets if available (macOS Keychain / Linux Secret Service / Windows DPAPI),
+  // then file fallback through the shared secret helper.
   for (const envName of PROVIDER_KEY_ENVS) {
     if (!process.env[envName]) {
-      const value = getOsSecret(envName);
+      const value = getSecret(envName) ?? getOsSecret(envName);
       if (value) process.env[envName] = value;
     }
   }
