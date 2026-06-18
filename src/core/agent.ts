@@ -15,6 +15,7 @@ import type { SessionStore } from "../state/stores/session-store.ts";
 import type { AuditStore } from "../state/stores/audit-store.ts";
 import type { CostStore } from "../state/stores/cost-store.ts";
 import type { UserMemoryStore } from "../state/stores/user-memory-store.ts";
+import type { Store } from "../state/db.ts";
 import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
 import { BudgetManager } from "../cost/manager.ts";
 import { compact } from "../memory/compact.ts";
@@ -23,10 +24,12 @@ import { buildMemoryBlock } from "../memory/inject.ts";
 
 export interface AgentDeps {
   provider: Provider;
-  sessionStore: SessionStore;
-  auditStore: AuditStore;
-  costStore: CostStore;
-  userMemoryStore: UserMemoryStore;
+  /** Legacy monolithic store (kept for older CLI/test call-sites during the runtime-store migration). */
+  store?: Store;
+  sessionStore?: SessionStore;
+  auditStore?: AuditStore;
+  costStore?: CostStore;
+  userMemoryStore?: UserMemoryStore;
   cwd: string;
   /** UI hook: stream a line to the user. */
   say(line: string): void;
@@ -74,7 +77,14 @@ export async function runAgent(
   mode: Mode,
   deps: AgentDeps,
 ): Promise<AgentResult> {
-  const { provider, sessionStore, auditStore, costStore, userMemoryStore, cwd, say } = deps;
+  const { provider, cwd, say } = deps;
+  const sessionStore = deps.sessionStore ?? deps.store;
+  const auditStore = deps.auditStore ?? deps.store;
+  const costStore = deps.costStore ?? deps.store;
+  const userMemoryStore = deps.userMemoryStore ?? deps.store;
+  if (!sessionStore || !auditStore || !costStore) {
+    throw new Error("Agent requires session/audit/cost stores");
+  }
   const maxSteps = deps.maxSteps ?? 12;
   
   const budgetManager = new BudgetManager(costStore);
@@ -107,16 +117,17 @@ export async function runAgent(
     try {
       const scope = projectScopeFromCwd(cwd);
       const recallOpts = { scope, k: deps.memory.recallLimit ?? 5 };
-      const recalled =
-        deps.memory.semantic === false
-          ? userMemoryStore.recall(task, recallOpts) // This might need update if recall takes different args now
-          : await userMemoryStore.recallSemantic(task, recallOpts);
+      const recalled = userMemoryStore && "recallSemantic" in userMemoryStore
+        ? (deps.memory.semantic === false
+          ? userMemoryStore.recall(task, recallOpts)
+          : await userMemoryStore.recallSemantic(task, recallOpts))
+        : [];
       const block = buildMemoryBlock(recalled);
       if (block) {
         messages.push({ role: "system", content: block });
         auditStore.audit(
           "memory.recall",
-          { count: recalled.length, ids: recalled.map((e) => e.id) },
+          { count: recalled.length, ids: recalled.map((e: { id: string }) => e.id) },
           sessionId,
         );
       }
