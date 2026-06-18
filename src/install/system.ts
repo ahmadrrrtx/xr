@@ -613,6 +613,38 @@ export async function runInstallWizard(args: string[] = []): Promise<void> {
         config.defaults.provider = firstProvider;
         config.defaults.model = providerDefaultModel(firstProvider);
       }
+
+      // Stage 3: custom OpenAI-compatible endpoint onboarding
+      if (await confirm("Add a custom OpenAI-compatible endpoint (e.g., LM Studio, vLLM, enterprise proxy)?", false)) {
+        const id = await ask("Custom provider ID (short, lowercase, no spaces)", { default: "custom" });
+        const label = await ask("Provider label", { default: id });
+        const baseUrl = await ask("Base URL (must end in /v1 for OpenAI compat)", { default: "http://localhost:8080/v1" });
+        const defaultModel = await ask("Default model name", { default: "llama" });
+        const useKey = await confirm("Does this endpoint require an API key?", false);
+        let apiKeyEnv: string | undefined;
+        if (useKey) {
+          apiKeyEnv = await ask("Environment variable name for the key", { default: `${id.toUpperCase().replace(/[^A-Z0-9_]/g, "_")}_API_KEY` });
+          const key = await password(`Enter API key for ${id}:`);
+          if (key) {
+            const backend = setSecret(apiKeyEnv, key);
+            process.env[apiKeyEnv] = key;
+            ok(`Saved ${id} key in ${backend}.`);
+          }
+        }
+        config.providerEngine.customProviders = config.providerEngine.customProviders ?? [];
+        config.providerEngine.customProviders.push({
+          id,
+          label,
+          baseUrl,
+          defaultModel,
+          apiKeyEnv,
+          capabilities: { chat: true },
+        });
+        if (!firstProvider) {
+          config.defaults.provider = id;
+          config.defaults.model = defaultModel;
+        }
+      }
     }
     const cap = isTTY && !opts.yes ? await ask("Hard spend cap per cloud task in USD", { default: mode === "byok" ? "0.25" : "0.10" }) : (mode === "byok" ? "0.25" : "0.10");
     const parsed = Math.max(0, Math.min(100, Number.parseFloat(cap) || 0));
