@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * XR — The AI Agent You Can Actually Trust
- * Stage 2 CLI bootstrap.
+ * Stage 3 CLI bootstrap.
  */
 
 import { XRRuntime } from "./core/runtime.ts";
@@ -9,6 +9,7 @@ import { RunAgentCommand } from "./commands/run-agent.ts";
 import { DoctorCommand } from "./commands/doctor.ts";
 import { ConfigCommand } from "./commands/config.ts";
 import { BudgetCommand } from "./commands/budget.ts";
+import { ProvidersCommand } from "./commands/providers.ts";
 import {
   ControlCommand,
   InstallCommand,
@@ -62,6 +63,7 @@ function registerCommands(runtime: XRRuntime): void {
   runtime.commands.register(new ResetCommand());
   runtime.commands.register(new ConfigCommand());
   runtime.commands.register(new BudgetCommand());
+  runtime.commands.register(new ProvidersCommand());
   runtime.commands.register(new ModelsCommand());
   runtime.commands.register(new VoiceCommand());
   runtime.commands.register(new ControlCommand());
@@ -77,8 +79,15 @@ async function main(): Promise<void> {
     await runtime.bootstrap();
     await runtime.start();
 
-    const argv = process.argv.slice(2).filter((a) => a !== "--from-bootstrap");
-    if (argv.length === 0 || argv[0] === "help" || argv[0] === "--help" || argv[0] === "-h") {
+    const argv = process.argv
+      .slice(2)
+      .filter((a) => a !== "--from-bootstrap");
+    if (
+      argv.length === 0 ||
+      argv[0] === "help" ||
+      argv[0] === "--help" ||
+      argv[0] === "-h"
+    ) {
       banner();
       console.log(`${C.bold("Usage")}`);
       console.log(`  xr install                setup wizard`);
@@ -86,6 +95,9 @@ async function main(): Promise<void> {
       console.log(`  xr status                 component status`);
       console.log(`  xr repair                 safe repair`);
       console.log(`  xr update                 update with rollback guard`);
+      console.log(`  xr providers list         show all providers and keys`);
+      console.log(`  xr providers set <id>     set active provider`);
+      console.log(`  xr providers test         test provider health`);
       console.log(`  xr models recommend       local model recommendation`);
       console.log(`  xr models install         pull local model with approval`);
       console.log(`  xr voice setup            voice prerequisites`);
@@ -97,7 +109,8 @@ async function main(): Promise<void> {
 
     const commandName = argv[0];
     const args = argv.slice(1);
-    if (runtime.commands.get(commandName)) await runtime.executeCommand(commandName, args, process.cwd());
+    if (runtime.commands.get(commandName))
+      await runtime.executeCommand(commandName, args, process.cwd());
     else await runtime.executeCommand("run", argv, process.cwd());
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -107,8 +120,17 @@ async function main(): Promise<void> {
   } finally {
     await runtime.shutdown();
     const c = runtime.container;
-    for (const name of ["legacyStore", "sessionStore", "auditStore", "memoryStore", "costStore", "userMemoryStore"]) {
-      try { c.resolve<{ close(): void }>(name).close(); } catch {}
+    for (const name of [
+      "legacyStore",
+      "sessionStore",
+      "auditStore",
+      "memoryStore",
+      "costStore",
+      "userMemoryStore",
+    ]) {
+      try {
+        c.resolve<{ close(): void }>(name).close();
+      } catch {}
     }
   }
 }
