@@ -1,208 +1,173 @@
 #!/usr/bin/env bash
-# XR — One-Command Installer
-# Supports: Linux, macOS, Windows (Git Bash / WSL)
+# XR Stage 2 — safe bootstrapper for Linux, macOS, Termux, Git Bash/WSL.
 # Usage: curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
-set -e
+set -Eeuo pipefail
 
-VERSION="0.2.0"
+VERSION="1.0.0"
 REPO="ahmadrrrtx/xr"
-INSTALL_URL="https://raw.githubusercontent.com/${REPO}/main/install.sh"
+BRANCH="main"
+TARGET_DIR="${XR_HOME:-$HOME/.xr-agent}"
+YES=0
+ALLOW_SYSTEM=0
+MODE=""
 
-# ── Colors ──────────────────────────────────────────────────────────────────
-RED='\033[0;31m'; GRN='\033[0;32m'; YEL='\033[1;33m'; BLU='\033[0;34m'
-CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RST='\033[0m'
+for arg in "$@"; do
+  case "$arg" in
+    -y|--yes) YES=1 ;;
+    --allow-system) ALLOW_SYSTEM=1 ;;
+    --mode=*) MODE="${arg#--mode=}" ;;
+    --minimal) MODE="minimal" ;;
+    --local) MODE="local" ;;
+    --byok) MODE="byok" ;;
+    --hybrid) MODE="hybrid" ;;
+    --full) MODE="full" ;;
+  esac
+done
 
-log() { echo -e "${CYAN}▸${RST} $*"; }
-ok()  { echo -e "${GRN}✓${RST} $*"; }
-warn(){ echo -e "${YEL}!${RST} $*"; }
-die() { echo -e "${RED}✗${RST} $*" >&2; exit 1; }
+if [ "${1:-}" = "--mode" ] && [ -n "${2:-}" ]; then MODE="$2"; fi
 
-hr() { echo -e "${DIM}$(printf '─%.0s' $(seq 1 60))${RST}"; }
+RED='\033[0;31m'; GRN='\033[0;32m'; YEL='\033[1;33m'; CYN='\033[0;36m'; BLD='\033[1m'; DIM='\033[2m'; RST='\033[0m'
+log(){ printf "%b\n" "${CYN}▸${RST} $*"; }
+ok(){ printf "%b\n" "${GRN}✓${RST} $*"; }
+warn(){ printf "%b\n" "${YEL}!${RST} $*"; }
+die(){ printf "%b\n" "${RED}✗${RST} $*" >&2; exit 1; }
+is_tty(){ [ -t 0 ] && [ -t 1 ]; }
 
-# ── Platform Detection ───────────────────────────────────────────────────────
-detect_os() {
-  case "$(uname -s)" in
-    Linux*)     echo "linux";;
-    Darwin*)    echo "macos";;
-    MINGW*|MSYS*|CYGWIN*) echo "windows";;
-    *)          echo "unknown";;
+prompt_yes(){
+  local question="$1" default="${2:-n}"
+  if [ "$YES" = "1" ]; then [ "$default" = "y" ]; return $?; fi
+  if ! is_tty; then return 1; fi
+  local suffix="[y/N]"; [ "$default" = "y" ] && suffix="[Y/n]"
+  printf "%b " "${CYN}${question}${RST} ${DIM}${suffix}${RST}"
+  read -r ans || true
+  ans="${ans:-$default}"
+  [[ "$ans" =~ ^[Yy] ]]
+}
+
+os_name(){
+  if [ -n "${TERMUX_VERSION:-}" ] || [[ "${PREFIX:-}" == *com.termux* ]]; then echo termux; return; fi
+  case "$(uname -s 2>/dev/null || echo unknown)" in
+    Darwin*) echo macos ;;
+    Linux*) echo linux ;;
+    MINGW*|MSYS*|CYGWIN*) echo windows ;;
+    *) echo unknown ;;
   esac
 }
 
-detect_arch() {
-  case "$(uname -m)" in
-    x86_64)    echo "x64";;
-    aarch64|arm64) echo "arm64";;
-    armv7l)    echo "arm";;
-    *)         echo "x64";;
+arch_name(){
+  case "$(uname -m 2>/dev/null || echo unknown)" in
+    x86_64|amd64) echo x64 ;;
+    arm64|aarch64) echo arm64 ;;
+    arm*) echo arm ;;
+    *) echo unknown ;;
   esac
 }
 
-require_command() {
-  command -v "$1" >/dev/null 2>&1 || {
-    die "Missing required command: $1. Install it first, then re-run this installer."
-  }
-}
-
-# ── Bun Install ──────────────────────────────────────────────────────────────
-install_bun() {
-  if command -v bun >/dev/null 2>&1; then
-    local ver=$(bun --version 2>/dev/null | head -n1)
-    log "Bun already installed: ${ver}"
-    return 0
-  fi
-  log "Installing Bun runtime…"
-  
-  local os=$(detect_os)
-  case "$os" in
-    linux|macos)
-      require_command curl
+ensure_bun(){
+  if command -v bun >/dev/null 2>&1; then ok "Bun $(bun --version)"; return; fi
+  warn "Bun is required to run XR."
+  log "Bun install is user-level. It downloads from https://bun.sh or your Termux package repository."
+  if ! prompt_yes "Install Bun now?" y; then die "Install Bun from https://bun.sh and rerun this installer."; fi
+  case "$(os_name)" in
+    termux)
+      command -v pkg >/dev/null 2>&1 || die "Termux pkg not found. Install Bun manually."
+      pkg install -y bun || die "Bun install failed."
+      ;;
+    macos|linux)
+      command -v curl >/dev/null 2>&1 || die "curl is required to install Bun."
       curl -fsSL https://bun.sh/install | bash
+      export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
+      export PATH="$BUN_INSTALL/bin:$PATH"
       ;;
     windows)
-      curl -fsSL https://bun.sh/install | bash 2>/dev/null || {
-        warn "On Windows: install Bun via 'npm i -g bun' or https://bun.sh"
-        log "Continuing with npm fallback…"
-        require_command npm
-        npm install -g bun 2>/dev/null || true
-      }
+      if command -v npm >/dev/null 2>&1; then npm install -g bun; else die "Use install.ps1 on Windows or install Bun manually."; fi
       ;;
+    *) die "Unsupported OS for automatic Bun install." ;;
   esac
-  
-  # Source shell config
-  for rc in ~/.bashrc ~/.zshrc ~/.config/fish/config.fish; do
-    [ -f "$rc" ] && source "$rc" 2>/dev/null && break
-  done
-  
-  if command -v bun >/dev/null 2>&1; then
-    ok "Bun installed: $(bun --version)"
-  else
-    warn "Bun not in PATH. Add to your shell config: export BUN_INSTALL=\"\$HOME/.bun\""
-    warn "Then: export PATH=\"\$BUN_INSTALL/bin:\$PATH\""
-  fi
+  command -v bun >/dev/null 2>&1 || die "Bun installed but is not on PATH. Open a new terminal or add ~/.bun/bin to PATH."
+  ok "Bun $(bun --version)"
 }
 
-# ── Git Clone / Update ───────────────────────────────────────────────────────
-install_xr() {
-  local target_dir="${XR_HOME:-$HOME/.xr-agent}"
-  
-  if [ -d "$target_dir/.git" ]; then
-    log "XR already installed at ${target_dir} — updating…"
-    cd "$target_dir"
-    git pull origin main 2>/dev/null || git pull 2>/dev/null || true
-  else
-    log "Cloning XR repository…"
-    require_command git
-    git clone https://github.com/ahmadrrrtx/xr "$target_dir"
-    cd "$target_dir"
-  fi
-  
-  log "Installing dependencies…"
-  if command -v bun >/dev/null 2>&1; then
-    bun install 2>/dev/null || bun install
-  elif command -v npm >/dev/null 2>&1; then
-    npm install 2>/dev/null || npm install
-  else
-    die "Neither Bun nor npm found. Please install Bun first."
-  fi
-  
-  # Run tests quickly
-  if command -v bun >/dev/null 2>&1; then
-    log "Running quick sanity check…"
-    bun test --bail 2>/dev/null | head -5 || true
-  fi
-  
-  ok "XR installed successfully!"
-  echo ""
-  echo -e "${BOLD}Next steps:${RST}"
-  echo ""
-  echo -e "  ${GRN}1.${RST} ${BOLD}Quick start:${RST}   bun run src/index.ts doctor"
-  echo -e "  ${GRN}2.${RST} ${BOLD}Run a task:${RST}     bun run src/index.ts \"list files and explain them\""
-  echo -e "  ${GRN}3.${RST} ${BOLD}Local model:${RST}    # Install Ollama then: XR_PROVIDER=ollama bun run src/index.ts \"hi\""
-  echo -e "  ${GRN}4.${RST} ${BOLD}Cloud model:${RST}    GROQ_API_KEY=sk-... bun run src/index.ts \"hi\""
-  echo ""
-  echo -e "${DIM}Tip: add ${BOLD}alias xr='bun run $target_dir/src/index.ts'${RST} to your ~/.bashrc or ~/.zshrc${DIM}"
-  echo -e "Then just type: xr \"your task\"${RST}"
-  echo ""
-  
-  # Try to detect and suggest provider
-  if command -v ollama >/dev/null 2>&1; then
-    ok "Ollama detected — XR will use it for free local inference."
-  elif [ -n "$GROQ_API_KEY" ]; then
-    ok "GROQ_API_KEY found — XR will use Groq cloud inference."
-  elif [ -n "$ANTHROPIC_API_KEY" ]; then
-    ok "ANTHROPIC_API_KEY found — XR will use Claude."
-  else
-    warn "No LLM provider detected. Options:"
-    warn "  • Ollama (local, free): curl -fsSL https://ollama.ai/install.sh | bash"
-    warn "  • Groq: get a key at https://console.groq.com"
-    warn "  • Anthropic: get a key at https://console.anthropic.com"
-  fi
-}
-
-# ── Shell Alias Setup ────────────────────────────────────────────────────────
-setup_alias() {
-  local target_dir="${XR_HOME:-$HOME/.xr-agent}"
-  local alias_line="alias xr='bun run $target_dir/src/index.ts'"
-  local rc_file=""
-  
-  if [ -f "$HOME/.zshrc" ]; then rc_file="$HOME/.zshrc"
-  elif [ -f "$HOME/.bashrc" ]; then rc_file="$HOME/.bashrc"
-  elif [ -f "$HOME/.config/fish/config.fish" ]; then rc_file="$HOME/.config/fish/config.fish"
-  fi
-  
-  if [ -n "$rc_file" ]; then
-    if ! grep -q "alias xr=" "$rc_file" 2>/dev/null; then
-      echo "" >> "$rc_file"
-      echo "# XR — AI Agent (installed $(date '+%Y-%m-%d'))" >> "$rc_file"
-      echo "$alias_line" >> "$rc_file"
-      ok "Added 'xr' alias to ${rc_file}"
-      ok "Run: source ${rc_file} && xr doctor"
+fetch_repo(){
+  if [ -d "$TARGET_DIR/.git" ]; then
+    log "Existing XR checkout found at $TARGET_DIR"
+    if command -v git >/dev/null 2>&1; then
+      (cd "$TARGET_DIR" && git fetch --quiet origin "$BRANCH" && git pull --ff-only origin "$BRANCH") || warn "Git update failed; continuing with existing checkout."
     else
-      ok "'xr' alias already configured in ${rc_file}"
+      warn "Git missing; cannot update existing checkout."
     fi
+    return
+  fi
+  if [ -e "$TARGET_DIR" ] && [ "$(find "$TARGET_DIR" -mindepth 1 -maxdepth 1 2>/dev/null | head -n 1)" ]; then
+    die "$TARGET_DIR exists and is not an XR git checkout. Set XR_HOME to a different directory."
+  fi
+  mkdir -p "$(dirname "$TARGET_DIR")"
+  if command -v git >/dev/null 2>&1; then
+    log "Cloning XR into $TARGET_DIR"
+    git clone --branch "$BRANCH" "https://github.com/$REPO.git" "$TARGET_DIR"
   else
-    log "Add this to your shell config to enable 'xr' command:"
-    echo ""
-    echo -e "  ${CYAN}${alias_line}${RST}"
-    echo ""
+    command -v curl >/dev/null 2>&1 || die "Need git or curl to download XR."
+    command -v tar >/dev/null 2>&1 || die "Need tar to unpack XR."
+    log "Git not found. Downloading source archive instead. Updates will require rerunning the installer."
+    tmp="$(mktemp -d)"
+    curl -fsSL "https://github.com/$REPO/archive/refs/heads/$BRANCH.tar.gz" -o "$tmp/xr.tar.gz"
+    mkdir -p "$TARGET_DIR"
+    tar -xzf "$tmp/xr.tar.gz" -C "$tmp"
+    cp -R "$tmp/xr-$BRANCH/." "$TARGET_DIR/"
+    rm -rf "$tmp"
   fi
 }
 
-# ── Main ─────────────────────────────────────────────────────────────────────
-main() {
-  clear
-  echo ""
-  echo -e "${BOLD}${CYAN}  ▀▄▀ █▀█   XR — The AI Agent You Can Actually Trust  ${RST}"
-  echo -e "${DIM}  █░█ █▀▄   by @ahmadrrrtx · v${VERSION}${RST}"
-  echo ""
-  hr
-  
-  local os=$(detect_os)
-  log "Detected: ${os}/$(detect_arch)"
-  
-  echo ""
-  log "Installing XR — BYOK · local-first · spend-capped · tamper-evident"
-  echo ""
-  
-  # Step 1: Ensure Bun
-  if ! command -v bun >/dev/null 2>&1; then
-    log "Bun not found — installing…"
-    install_bun
-  else
-    log "Bun found: $(bun --version 2>/dev/null | head -n1)"
-  fi
-  
-  # Step 2: Clone/install XR
-  install_xr
-  
-  # Step 3: Setup alias
-  setup_alias
-  
-  hr
-  echo ""
-  ok "XR is ready. Run: xr doctor"
-  echo ""
+install_deps(){
+  log "Installing XR package dependencies"
+  (cd "$TARGET_DIR" && bun install) || die "Dependency install failed. Run: cd '$TARGET_DIR' && bun install"
+  ok "Dependencies installed"
+}
+
+install_launcher(){
+  local bin_dir="$HOME/.local/bin"
+  mkdir -p "$bin_dir"
+  local bun_bin
+  bun_bin="$(command -v bun)"
+  cat > "$bin_dir/xr" <<EOF
+#!/usr/bin/env bash
+exec "$bun_bin" run "$TARGET_DIR/src/index.ts" "\$@"
+EOF
+  chmod +x "$bin_dir/xr"
+  ok "Installed launcher: $bin_dir/xr"
+  case ":$PATH:" in *":$bin_dir:"*) ;; *)
+    local rc=""
+    [ -n "${ZSH_VERSION:-}" ] && rc="$HOME/.zshrc"
+    [ -z "$rc" ] && [ -f "$HOME/.zshrc" ] && rc="$HOME/.zshrc"
+    [ -z "$rc" ] && rc="$HOME/.bashrc"
+    if is_tty && prompt_yes "Add $bin_dir to PATH in $rc?" y; then
+      touch "$rc"
+      if ! grep -q "XR launcher" "$rc" 2>/dev/null; then
+        printf '\n# XR launcher\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc"
+      fi
+      ok "PATH updated. Restart your terminal or run: source $rc"
+    else
+      warn "Add this to PATH if xr is not found: export PATH=\"$bin_dir:\$PATH\""
+    fi
+  esac
+}
+
+main(){
+  printf "\n%b\n" "${BLD}${CYN}  ▀▄▀ █▀█   XR Stage 2 Installer v$VERSION${RST}"
+  printf "%b\n\n" "${DIM}  OS: $(os_name)/$(arch_name) · Target: $TARGET_DIR${RST}"
+  log "This will download XR from GitHub, install Bun dependencies, and create an xr launcher."
+  log "Optional Ollama, voice, browser and desktop-control packs are handled later by xr install prompts."
+  if ! prompt_yes "Continue?" y; then die "Cancelled."; fi
+  ensure_bun
+  fetch_repo
+  install_deps
+  install_launcher
+  cmd=("$HOME/.local/bin/xr" install --from-bootstrap)
+  [ -n "$MODE" ] && cmd+=(--mode "$MODE")
+  [ "$YES" = "1" ] && cmd+=(--yes)
+  [ "$ALLOW_SYSTEM" = "1" ] && cmd+=(--allow-system)
+  "${cmd[@]}" || warn "XR installed, but setup wizard reported issues. Run: xr doctor"
+  printf "\n%b\n" "${GRN}✓ XR bootstrap complete.${RST} Run: ${BLD}xr doctor${RST}"
 }
 
 main "$@"
