@@ -1,26 +1,40 @@
 {
-  "name": "@rrrtx/xr",
+  "name": "@rrtx/xr",
   "version": "1.0.0",
-  "description": "XR \u2014 local-first AI operating system / agent platform. BYOK, local models, spend-capped, tamper-evident, plugin ecosystem. by rrrtx",
+  "description": "XR — local-first AI operating system / agent platform. BYOK, local models, spend-capped, tamper-evident, plugin ecosystem.",
   "type": "module",
   "bin": {
-    "xr": "./src/index.ts"
+    "xr": "./bin/xr.cjs"
   },
+  "files": [
+    "bin",
+    "src",
+    "plugins",
+    "skills",
+    "assets",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "install.sh",
+    "install.ps1"
+  ],
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "xr": "bun run src/index.ts"
   },
   "keywords": [
     "ai-agent",
+    "ai-os",
     "byok",
     "local-llm",
     "ollama",
     "prompt-injection",
     "secure-agent",
     "cli",
-    "rrrtx"
+    "rrtx"
   ],
   "author": "Muhammad Ahmad (@ahmadrrrtx)",
   "license": "MIT",
