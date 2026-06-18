@@ -33,8 +33,8 @@ export class Container {
       return this.services.get(id);
     }
 
-    if (this.factories.has(id)) {
-      const factory = this.factories.get(id);
+    const factory = this.factories.get(id);
+    if (factory) {
       const instance = factory();
       this.services.set(id, instance);
       return instance;
