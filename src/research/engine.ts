@@ -1,226 +1,159 @@
-/**
- * XR — research engine (orchestrator).
- *
- * Executes the deterministic research flow end to end:
- *   1. plan      → research questions + queries
- *   2. search    → collect raw hits (egress-gated)
- *   3. rank      → trust-score + dedupe → Source[]
- *   4. fetch     → pull full text for the top sources (best effort)
- *   5. extract   → notes per source (each cited + verified-flagged)
- *   6. synthesize→ short answer, summary, report, contradictions, open questions
- *
- * The engine is integration-aware but stays decoupled:
- *   - Provider is injected (routing/fallback happens in the caller).
- *   - Search capability is injected (egress allow-list enforced there).
- *   - Budget is enforced via an injected guard; the engine NEVER spends silently.
- *   - Progress is streamed via `say` (UX: visible progress).
- *
- * Every step persists the session, so `xr research status/sources/summarize`
- * always have something to show even if a later step fails.
- */
+/** XR Stage 7 — Research Engine orchestrator. */
 import { randomUUID } from "node:crypto";
 import type { Provider } from "../core/types.ts";
 import type { Store } from "../state/db.ts";
 import type { StructuredCallDeps } from "./llm.ts";
 import type { SearchCapability } from "./search.ts";
-import type {
-  ResearchSession,
-  ResearchDepth,
-  Source,
-  Note,
-} from "./types.ts";
+import { extractUrls } from "./search.ts";
+import type { ResearchSession, ResearchDepth, ResearchMode, Note, Source, RefreshRecord } from "./types.ts";
 import { DEPTH_BUDGETS } from "./types.ts";
 import { makePlan, queriesFromPlan } from "./plan.ts";
-import { rankSources } from "./ranking.ts";
-import { extractFromSource } from "./extract.ts";
+import { rankSources, domainOf, freshnessFromHeaders, freshnessFromText, scoreDomain } from "./ranking.ts";
+import { deterministicExtract, extractFromSource } from "./extract.ts";
 import { synthesize } from "./synthesize.ts";
 
-export interface ResearchBudgetGuard {
-  /** Called before each model/search step. Return false to stop gracefully. */
-  allow(): boolean;
-  /** Record token usage so the meter stays accurate. */
-  record(inTokens: number, outTokens: number): void;
-  /** Human-readable meter string for display + report. */
-  meter(): string;
-  /** Reason the last allow() returned false (for the user). */
-  reason(): string;
-}
+export interface ResearchBudgetGuard { allow(): boolean; record(inTokens: number, outTokens: number): void; meter(): string; reason(): string; }
+export interface ResearchEngineDeps { provider: Provider; store: Store; search: SearchCapability; budget: ResearchBudgetGuard; say(line: string): void; audit?(event: string, detail: Record<string, unknown>): void; }
+export interface RunOptions { topic: string; depth?: ResearchDepth; mode?: ResearchMode; liveSourcesOnly?: boolean; tags?: string[]; projectId?: string; }
 
-export interface ResearchEngineDeps {
-  provider: Provider;
-  store: Store;
-  search: SearchCapability;
-  budget: ResearchBudgetGuard;
-  /** Stream progress to the user. */
-  say(line: string): void;
-  /** Audit hook (tamper-evident log). */
-  audit?(event: string, detail: Record<string, unknown>): void;
-}
-
-export interface RunOptions {
-  topic: string;
-  depth: ResearchDepth;
-}
-
-/** Create a fresh, empty session record. */
-export function newSession(topic: string, depth: ResearchDepth): ResearchSession {
+export function newSession(topic: string, depth: ResearchDepth = "quick", mode: ResearchMode = depth): ResearchSession {
   const now = Date.now();
-  return {
-    id: `r_${randomUUID().slice(0, 8)}`,
-    topic: topic.trim(),
-    depth,
-    status: "planning",
-    sources: [],
-    notes: [],
-    contradictions: [],
-    createdAt: now,
-    updatedAt: now,
-  };
+  return { id: `r_${randomUUID().slice(0, 8)}`, topic: topic.trim(), query: topic.trim(), mode, depth, status: "planning", sources: [], sourceSets: [], evidence: [], notes: [], claims: [], contradictions: [], reportVersions: [], refreshHistory: [], tags: [], liveSourcesOnly: false, createdAt: now, updatedAt: now };
 }
 
-function persist(deps: ResearchEngineDeps, s: ResearchSession): void {
-  s.updatedAt = Date.now();
-  deps.store.saveResearch(s.id, s.topic, s.depth, s.status, JSON.stringify(s));
-}
+function persist(deps: ResearchEngineDeps, s: ResearchSession): void { s.updatedAt = Date.now(); deps.store.saveResearch(s.id, s.topic, s.depth, s.status, JSON.stringify(s)); }
 
-/** Run the full research pipeline. Returns the (persisted) session. */
 export async function runResearch(deps: ResearchEngineDeps, opts: RunOptions): Promise<ResearchSession> {
-  const { say } = deps;
-  const budgetCfg = DEPTH_BUDGETS[opts.depth];
-  const session = newSession(opts.topic, opts.depth);
-  deps.audit?.("research.start", { id: session.id, topic: session.topic, depth: session.depth });
+  const depth = opts.depth ?? (opts.mode === "deep" ? "deep" : "quick");
+  const mode = opts.mode ?? depth;
+  const budgetCfg = DEPTH_BUDGETS[depth];
+  const session = newSession(opts.topic, depth, mode);
+  session.liveSourcesOnly = Boolean(opts.liveSourcesOnly);
+  session.tags = opts.tags ?? [];
+  session.projectId = opts.projectId;
+  deps.audit?.("research.start", { id: session.id, topic: session.topic, mode, depth });
   persist(deps, session);
 
-  const llm: StructuredCallDeps = {
-    provider: deps.provider,
-    onUsage: (i, o) => deps.budget.record(i, o),
-  };
-
-  // Warn early if search isn't available — research is source-first, so this matters.
+  const llm: StructuredCallDeps = { provider: deps.provider, onUsage: (i, o) => deps.budget.record(i, o) };
   const searchReady = deps.search.available();
-  if (!searchReady) {
-    say(`⚠ Web search is not available (no search host on the egress allow-list).`);
-    say(`  XR will still plan, but cannot collect live sources. Add a SearXNG host to fix this.`);
-  }
+  if (!searchReady) deps.say(`⚠ Web search is unavailable. Add XR_SEARXNG host to egress allow-list.`);
 
-  // ── 1. PLAN ────────────────────────────────────────────────────────────────
   if (!deps.budget.allow()) return stop(deps, session);
   session.status = "planning";
-  say(`▸ planning (${opts.depth}) · ${deps.budget.meter()}`);
-  session.plan = await makePlan(llm, session.topic, budgetCfg);
-  say(`  ✓ ${session.plan.questions.length} research question(s)`);
+  deps.say(`▸ planning (${mode}/${depth}) · ${deps.budget.meter()}`);
+  session.plan = await makePlan(llm, session.topic, budgetCfg, mode);
   persist(deps, session);
 
-  // ── 2. SEARCH ────────────────────────────────────────────────────────────
-  session.status = "searching";
-  const queries = queriesFromPlan(session.plan, budgetCfg.maxQueries);
+  session.status = "discovering";
   const hitsByQuery: Array<{ query: string; hits: { title: string; url: string; snippet: string }[] }> = [];
-
   if (searchReady) {
-    for (const query of queries) {
+    for (const query of queriesFromPlan(session.plan, budgetCfg.maxQueries)) {
       if (!deps.budget.allow()) return stop(deps, session);
-      say(`▸ searching "${query}"`);
+      deps.say(`▸ searching "${query}"`);
       const resp = await deps.search.search(query, budgetCfg.resultsPerQuery);
-      if (resp.unavailableReason) {
-        say(`  ⚠ ${resp.unavailableReason}`);
-      } else {
-        say(`  ✓ ${resp.hits.length} hit(s)`);
-      }
+      if (resp.unavailableReason) deps.say(`  ⚠ ${resp.unavailableReason}`); else deps.say(`  ✓ ${resp.hits.length} hit(s)`);
       hitsByQuery.push({ query, hits: resp.hits });
       deps.audit?.("research.search", { id: session.id, query, hits: resp.hits.length });
     }
   }
 
-  // ── 3. RANK ──────────────────────────────────────────────────────────────
+  const directUrls = extractUrls(session.topic);
+  for (const url of directUrls) hitsByQuery.unshift({ query: "direct-url", hits: [{ title: domainOf(url) || url, url, snippet: `User supplied URL: ${url}` }] });
+
   session.status = "ranking";
-  session.sources = rankSources(hitsByQuery, budgetCfg.maxSources);
-  say(`▸ ranked ${session.sources.length} source(s) by trust`);
+  session.sources = rankSources(hitsByQuery, budgetCfg.maxSources, 1, session.topic);
+  session.sourceSets = [{ id: `set_${randomUUID().slice(0, 6)}`, name: "ranked", sourceIds: session.sources.map((s) => s.id), createdAt: Date.now() }];
+  deps.say(`▸ ranked ${session.sources.length} source(s)`);
   persist(deps, session);
 
-  // ── 4. FETCH (best-effort, top sources only) ──────────────────────────────
-  const toFetch = session.sources.slice(0, budgetCfg.maxFetched);
-  for (const src of toFetch) {
-    if (!deps.budget.allow()) break; // stop fetching but keep what we have
-    say(`▸ fetching [${src.id}] ${src.domain}`);
-    const r = await deps.search.fetch(src.url);
-    if (r.ok && r.text && r.text.trim()) {
-      src.fetched = true;
-      src.content = r.text;
-      say(`  ✓ fetched ${r.text.length} chars`);
-    } else {
-      say(`  ⚠ could not fetch (${r.reason ?? "unknown"}) — snippet only`);
-    }
-    deps.audit?.("research.fetch", { id: session.id, source: src.id, ok: src.fetched });
-  }
+  session.status = "fetching";
+  await fetchTopSources(deps, session, budgetCfg.maxFetched);
   persist(deps, session);
 
-  // ── 5. EXTRACT ────────────────────────────────────────────────────────────
   session.status = "extracting";
   const notes: Note[] = [];
   for (const src of session.sources) {
     if (!deps.budget.allow()) break;
-    // Only spend extraction budget on fetched sources + the top snippet-only ones.
+    if (session.liveSourcesOnly && !src.fetched) continue;
     if (!src.fetched && session.sources.indexOf(src) >= budgetCfg.maxFetched + 2) continue;
-    say(`▸ extracting notes from [${src.id}] ${src.domain}`);
-    const got = await extractFromSource(llm, session.topic, src);
-    if (got.length) say(`  ✓ ${got.length} note(s)`);
+    deps.say(`▸ extracting evidence from [${src.id}] ${src.domain}`);
+    let got = await extractFromSource(llm, session.topic, src, budgetCfg.maxEvidencePerSource);
+    if (!got.length) got = deterministicExtract(session.topic, src, Math.min(3, budgetCfg.maxEvidencePerSource));
     notes.push(...got);
+    deps.say(`  ✓ ${got.length} evidence block(s)`);
   }
   session.notes = notes;
-  say(`▸ collected ${notes.length} note(s) (${notes.filter((n) => n.verified).length} verified)`);
+  session.evidence = notes;
+  deps.say(`▸ evidence ledger: ${notes.length} block(s), ${notes.filter((n) => n.verified).length} verified`);
   persist(deps, session);
 
-  // ── 6. SYNTHESIZE ─────────────────────────────────────────────────────────
+  session.status = "checking";
   session.status = "synthesizing";
-  say(`▸ synthesizing · ${deps.budget.meter()}`);
   if (deps.budget.allow()) {
-    const { synthesis, contradictions } = await synthesize(
-      llm,
-      session.topic,
-      session.plan.objective,
-      session.sources,
-      session.notes,
-    );
+    const { synthesis, contradictions, claims } = await synthesize(llm, session.topic, session.plan.objective, session.sources, session.notes);
     session.synthesis = synthesis;
+    session.summary = synthesis;
+    session.finalReport = synthesis.report;
     session.contradictions = contradictions;
-    if (contradictions.length) say(`  ⚠ ${contradictions.length} contradiction(s) detected`);
-  } else {
-    say(`  ⏸ budget reached before synthesis — partial results saved.`);
-  }
+    session.claims = claims;
+    if (contradictions.length) deps.say(`  ⚠ ${contradictions.length} contradiction(s) detected`);
+  } else deps.say(`  ⏸ budget reached before synthesis — partial results saved.`);
 
   session.status = session.synthesis ? "done" : "stopped";
   session.meter = deps.budget.meter();
-  deps.audit?.("research.done", { id: session.id, sources: session.sources.length, notes: session.notes.length });
+  session.lastRefreshedAt = Date.now();
+  deps.audit?.("research.done", { id: session.id, sources: session.sources.length, evidence: session.evidence.length, contradictions: session.contradictions.length });
   persist(deps, session);
   return session;
 }
 
-/** Re-synthesize from already-collected sources/notes (the `summarize` command). */
 export async function summarizeExisting(deps: ResearchEngineDeps, session: ResearchSession): Promise<ResearchSession> {
-  const llm: StructuredCallDeps = {
-    provider: deps.provider,
-    onUsage: (i, o) => deps.budget.record(i, o),
-  };
-  deps.say(`▸ re-synthesizing from ${session.notes.length} note(s)…`);
-  const { synthesis, contradictions } = await synthesize(
-    llm,
-    session.topic,
-    session.plan?.objective ?? session.topic,
-    session.sources,
-    session.notes,
-  );
-  session.synthesis = synthesis;
-  session.contradictions = contradictions;
-  session.status = "done";
-  session.meter = deps.budget.meter();
+  const llm: StructuredCallDeps = { provider: deps.provider, onUsage: (i, o) => deps.budget.record(i, o) };
+  deps.say(`▸ re-synthesizing from ${session.notes.length} evidence block(s)…`);
+  const { synthesis, contradictions, claims } = await synthesize(llm, session.topic, session.plan?.objective ?? session.topic, session.sources, session.notes);
+  session.synthesis = synthesis; session.summary = synthesis; session.finalReport = synthesis.report; session.contradictions = contradictions; session.claims = claims; session.status = "done"; session.meter = deps.budget.meter();
   persist(deps, session);
   return session;
 }
 
-function stop(deps: ResearchEngineDeps, s: ResearchSession): ResearchSession {
-  deps.say(`⏸ stopped — ${deps.budget.reason()}`);
-  s.status = "stopped";
-  s.meter = deps.budget.meter();
-  persist(deps, s);
-  return s;
+export async function refreshResearch(deps: ResearchEngineDeps, session: ResearchSession): Promise<ResearchSession> {
+  const previousUpdatedAt = session.updatedAt;
+  session.status = "refreshing";
+  persist(deps, session);
+  const before = new Map(session.sources.map((s) => [s.id, `${s.metadata.lastVerifiedAt ?? 0}:${s.metadata.contentLength ?? 0}:${s.freshness.lastModified ?? ""}`]));
+  await fetchTopSources(deps, session, session.sources.length);
+  const changedSources = session.sources.filter((s) => before.get(s.id) !== `${s.metadata.lastVerifiedAt ?? 0}:${s.metadata.contentLength ?? 0}:${s.freshness.lastModified ?? ""}`).map((s) => s.id);
+  const record: RefreshRecord = { id: `ref_${randomUUID().slice(0, 8)}`, refreshedAt: Date.now(), previousUpdatedAt, sourcesChecked: session.sources.length, changedSources, notesAdded: 0, status: "done", message: changedSources.length ? `${changedSources.length} source(s) changed or reverified` : "sources reverified; no material changes detected" };
+  session.refreshHistory.push(record);
+  session.lastRefreshedAt = record.refreshedAt;
+  session.status = "done";
+  persist(deps, session);
+  return session;
 }
+
+async function fetchTopSources(deps: ResearchEngineDeps, session: ResearchSession, maxFetched: number): Promise<void> {
+  for (const src of session.sources.slice(0, maxFetched)) {
+    if (!deps.budget.allow()) break;
+    deps.say(`▸ fetching [${src.id}] ${src.domain}`);
+    const r = await deps.search.fetch(src.url);
+    if (r.ok && r.text?.trim()) {
+      src.fetched = true; src.verified = true; src.content = r.text; src.fetchError = undefined;
+      const fresh = freshnessFromHeaders(r.lastModified, `${src.title} ${src.snippet} ${r.text}`);
+      src.freshness = fresh; src.quality = Number(Math.max(src.quality, src.trust * 0.45 + src.relevance * 0.3 + fresh.score * 0.25).toFixed(3));
+      src.metadata = { ...src.metadata, canonicalUrl: r.canonicalUrl, fetchedAt: Date.now(), lastVerifiedAt: Date.now(), httpStatus: r.status, contentType: r.contentType, contentLength: r.bytes ?? r.text.length, lastModified: r.lastModified } as any;
+      deps.say(`  ✓ fetched ${r.text.length} chars · freshness ${fresh.label}`);
+    } else {
+      src.fetched = false; src.verified = false; src.fetchError = r.reason ?? "unknown"; src.freshness = freshnessFromText(`${src.title} ${src.snippet}`); deps.say(`  ⚠ ${src.fetchError}`);
+    }
+    deps.audit?.("research.fetch", { id: session.id, source: src.id, ok: src.fetched });
+  }
+}
+
+export function sourceFromUrl(url: string, foundVia = "direct-url"): Source | null {
+  const domain = domainOf(url); if (!domain) return null;
+  const scored = scoreDomain(domain);
+  const now = Date.now();
+  return { id: "s0", title: domain, url, domain, snippet: `Direct URL: ${url}`, foundVia, type: scored.type, trust: scored.trust, relevance: 1, freshness: freshnessFromText(url), quality: scored.trust, trustReason: scored.reason, rankingReason: "direct user-supplied URL", fetched: false, verified: false, metadata: { title: domain, url, domain, type: scored.type, snippet: "direct", foundVia, discoveredAt: now }, collectedAt: now };
+}
+
+function stop(deps: ResearchEngineDeps, s: ResearchSession): ResearchSession { deps.say(`⏸ stopped — ${deps.budget.reason()}`); s.status = "stopped"; s.meter = deps.budget.meter(); persist(deps, s); return s; }
