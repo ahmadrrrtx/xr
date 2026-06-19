@@ -13,6 +13,8 @@ import { PluginService } from "./plugin-service.ts";
 import { SessionStore } from "../state/stores/session-store.ts";
 import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
 import { CostStore } from "../state/stores/cost-store.ts";
+import { Store } from "../state/db.ts";
+import { MemoryStore } from "../memory/store.ts";
 import { priceFor } from "../cost/pricing.ts";
 import type { Mode, Provider } from "../core/types.ts";
 
@@ -48,6 +50,12 @@ export class AgentService implements LifecycleHook {
     const costStore = this.container.resolve<CostStore>("costStore");
 
     const config = configService.get();
+
+    // Stage 6 — the canonical memory engine, backed by the same Store the rest
+    // of the system uses, so CLI / TUI / voice / dashboard / agent all share ONE
+    // memory. (The legacy UserMemoryStore stays registered for backward compat.)
+    const legacyStore = this.container.resolve<Store>("legacyStore");
+    const engine = new MemoryStore(legacyStore);
     const provider = providerService.getProvider({
       provider: overrides.provider,
       model: overrides.model,
@@ -85,6 +93,11 @@ export class AgentService implements LifecycleHook {
         enabled: config.memory.enabled && config.memory.injectInChat,
         recallLimit: config.memory.recallLimit,
         semantic: config.memory.semanticRecall,
+      },
+      memoryStore: engine,
+      sessionSummary: {
+        enabled: config.memory.enabled && config.memory.saveSessionSummaries,
+        minTurns: config.memory.sessionSummaryMinTurns,
       },
       extraTools: pluginService.getPluginTools(),
     };
