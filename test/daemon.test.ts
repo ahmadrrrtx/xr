@@ -91,8 +91,10 @@ test("unknown route 404s (authed)", async () => {
 test("dashboard html embeds the token and has no external assets", () => {
   const html = dashboardHtml(TOKEN);
   expect(html).toContain(TOKEN);
-  expect(html).toContain("Cost Cockpit");
+  // Stable Stage 5/6 dashboard copy (rendered statically, not via JS).
+  expect(html).toContain("Control Center");
   expect(html).toContain("Security Posture");
+  expect(html).toContain("Audit Log");
   // No external script/style/link tags (sandbox-safe, offline).
   expect(html).not.toMatch(/<script[^>]+src=/i);
   expect(html).not.toMatch(/<link[^>]+href=/i);
@@ -169,6 +171,7 @@ test("memory DELETE of a missing id 404s", async () => {
 
 test("dashboard html includes the durable memory viewer", () => {
   const html = dashboardHtml(TOKEN);
-  expect(html).toContain("Durable Memory");
+  // Stage 6 — the memory panel now shows health cards + search + the viewer.
+  expect(html).toContain("Search Memory");
   expect(html).toContain("/api/memory");
 });
