@@ -82,7 +82,10 @@ export interface AgentResult {
   sessionId: string;
   finalMessage: string;
   steps: number;
-  stopped: "done" | "max_steps" | "error" | "budget";
+  stopped: "done" | "max_steps" | "error" | "budget" | "approval";
+  /** Optional token counters for richer UIs when a caller/provider supplies them. */
+  inputTokens?: number;
+  outputTokens?: number;
   /** Final cost meter string. */
   meter?: string;
 }
