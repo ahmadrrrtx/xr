@@ -9,7 +9,7 @@
 
 # XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `polished UI layer` · `offline-capable` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `polished UI layer` · `offline-capable` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-6%20Memory%20Engine-00FF88?style=flat-square)](#stage-6--the-memory-engine)
+[![Stage](https://img.shields.io/badge/stage-7%20Research%20Engine-00FF88?style=flat-square)](#-stage-7--the-research-engine)
 
 </div>
 
@@ -44,7 +44,7 @@ iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 ```bash
 # After install — first time setup
 xr onboarding        # guided setup wizard (incl. memory toggle)
-xr doctor            # full health check (incl. memory health)
+xr doctor            # full health check (incl. memory + research health)
 xr "hello, XR"       # run your first task
 xr --tui             # open interactive terminal UI
 xr serve             # start local dashboard + chat in browser
@@ -68,6 +68,7 @@ xr serve             # start local dashboard + chat in browser
 | **Durable memory** | silent auto-save, creepy | **explicit-by-default** — XR only remembers what you ask; live "remember this?" with consent |
 | **Memory recall** | injects everything, opaque | **explainable** — shows match-% + why; conservative floor, never floods the prompt |
 | **Memory hygiene** | grows forever | **TTL/expiry + prune + access tracking** — see what's stale, delete permanently |
+| **Research** | answer-first summaries | **source-first Research Engine** — live discovery, trust/freshness ranking, evidence ledger, claims, contradictions, signed reports |
 | **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, no telemetry |
 | **Voice** | cloud STT | **local Whisper + Kokoro** by default, push-to-talk |
 | **Runtime** | procedural script | **AI OS Kernel** with DI and Lifecycle management |
@@ -310,6 +311,82 @@ The dashboard Memory panel now includes **health cards** (total / expired / neve
 
 ---
 
+## 🔬 Stage 7 — The Research Engine
+
+Stage 7 turns XR from a chat wrapper into a **source-first research system**. XR gathers sources before forming conclusions, tracks where every claim came from, marks uncertainty, detects contradictions, and exports signed research artifacts.
+
+### Research principles
+
+- **Source-first, not answer-first** — sources are discovered, ranked, fetched, and checked before synthesis.
+- **No fabricated citations** — reports only cite collected source IDs like `[s1]`; unknown source IDs are stripped.
+- **Evidence ledger** — every evidence block tracks source, quote, claim kind, confidence, strength, verification state, and extraction time.
+- **Claim ledger** — supported, weak, unverified, and contested claims are tracked separately from prose.
+- **Contradiction log** — disagreements are surfaced instead of hidden.
+- **Freshness-aware** — sources track `Last-Modified` or apparent dates, freshness labels, last verification, and refresh history.
+- **Safe live web** — default egress allow-list remains fail-closed; broad public fetch requires explicit `--allow-public-web`.
+- **Auditable exports** — Markdown reports are signed with a SHA-256 footer and paired with a JSON sidecar.
+
+### Research commands
+
+```bash
+# Run research
+xr research "topic"                         # quick research
+xr research quick "topic"                   # fast source-first pass
+xr research deep "topic"                    # deeper source discovery + synthesis
+xr research compare "A vs B"                # comparison workflow + matrix
+xr research factcheck "claim"               # verify a claim against sources
+xr research briefing "topic"                # briefing-style deep report
+
+# Inspect the workflow
+xr research plan "topic"                    # collaborative research plan
+xr research status [id]                     # session status
+xr research sources [id]                    # source list + trust/freshness
+xr research evidence [id]                   # evidence ledger + quotes
+xr research claims [id]                     # claim ledger
+xr research contradictions [id]             # contradiction log
+xr research list                            # recent research sessions
+
+# Maintain and export
+xr research summarize [id]                  # regenerate synthesis from evidence
+xr research refresh [id]                    # re-check sources and refresh changed evidence
+xr research export [id] [path]              # signed Markdown + JSON sidecar
+xr research remember [id]                   # explicitly save finding to durable memory
+```
+
+### Live research safety
+
+By default, XR can search through the configured SearXNG host and fetch only allow-listed domains. To fetch public web pages returned by search, opt in explicitly:
+
+```bash
+xr research deep "Gemini Deep Research MCP support" --allow-public-web
+xr research deep "topic" --allow-public-web --live-sources-only
+```
+
+`--allow-public-web` still blocks localhost, private IP ranges, link-local addresses, unsafe redirects, non-HTTP(S) URLs, and oversized responses.
+
+### Research data model
+
+Every `ResearchSession` stores:
+
+- `id`, `topic`, `query`, `mode`, `status`, `createdAt`, `updatedAt`
+- `plan` with research questions, search queries, strategy, source requirements
+- ranked `sources` with trust, relevance, quality, type, freshness, last verification
+- `evidence` / `notes` with quotes, claim kind, confidence, strength, verified flag
+- `claims`, `contradictions`, `summary`, `finalReport`
+- `reportVersions`, `refreshHistory`, optional `comparison`
+- `tags`, `projectId`, `lastRefreshedAt`, `exportPath`
+
+### Doctor integration
+
+```bash
+xr doctor
+xr doctor --json
+```
+
+Doctor now includes Research Engine health: total sessions, latest session state, and next inspection commands.
+
+---
+
 ## 🏛️ v1.0 Foundation Runtime — AI OS Kernel
 
 XR has evolved into a **True AI Operating System**. The v1.0 kernel introduces:
@@ -394,16 +471,21 @@ xr models test [model]        # local inference smoke test
 
 Supported local runtimes: **Ollama** (auto-install) · LM Studio · llama.cpp · Jan · LocalAI · vLLM · GPT4All · KoboldCPP · Text Generation WebUI · SGLang · any OpenAI-compatible endpoint.
 
-### 🔬 Research Mode (v0.7)
+### 🔬 Research Engine (Stage 7)
 
 ```bash
 xr research "compare Rust vs Go for embedded development"
-xr research deep "best self-hosted alternatives to Cloudflare Tunnel"
-xr research plan "topic"   # generate a structured research plan
-xr research export         # export latest report to markdown
+xr research deep "best self-hosted alternatives to Cloudflare Tunnel" --allow-public-web
+xr research compare "OpenAI Deep Research vs Gemini Deep Research"
+xr research factcheck "Gemini Deep Research supports MCP servers"
+xr research evidence      # inspect evidence ledger
+xr research claims        # inspect claim ledger
+xr research contradictions
+xr research refresh       # re-check source freshness
+xr research export        # signed Markdown + JSON sidecar
 ```
 
-Source-first, multi-engine, deduplicated, with inline citations.
+See [Stage 7 — The Research Engine](#-stage-7--the-research-engine) for the full workflow: live source discovery, trust/freshness ranking, evidence extraction, contradiction detection, comparison matrices, refresh history, and signed reports.
 
 ### 🧩 Plugin Ecosystem (v1.0)
 
@@ -526,7 +608,7 @@ xr/
 │   │   ├── help.ts       # xr help [topic]
 │   │   ├── budget.ts
 │   │   ├── config.ts
-│   │   ├── doctor.ts     # includes memory health (Stage 6)
+│   │   ├── doctor.ts     # includes memory + research health
 │   │   └── ...
 │   ├── daemon/           # local server
 │   │   ├── server.ts     # xr serve — dashboard + chat + API
@@ -538,7 +620,7 @@ xr/
 │   ├── control/          # computer control, planner
 │   ├── local/            # local AI runtime manager
 │   ├── plugins/          # plugin sandbox
-│   ├── research/         # research mode
+│   ├── research/         # Stage 7 Research Engine
 │   ├── cost/             # budget governor
 │   └── config/           # configuration
 ├── bin/                  # CLI entry point
@@ -587,6 +669,12 @@ xr memory clear
 
 # Research
 xr research "topic"
+xr research deep "topic" --allow-public-web
+xr research compare "A vs B"
+xr research factcheck "claim"
+xr research evidence
+xr research refresh
+xr research export
 
 # Computer control (opt-in)
 xr control start
@@ -629,7 +717,8 @@ xr help memory                       # memory engine guide
 | Stage 4 | Local AI Runtime | ✅ Done |
 | Stage 5 | User Interfaces | ✅ Done |
 | **Stage 6** | **Memory Engine** | ✅ **Done** |
-| Stage 7 | Multi-Agent + Collaboration | 🔜 Next |
+| **Stage 7** | **Research Engine** | ✅ **Done** |
+| Stage 8 | Multi-Agent + Collaboration | 🔜 Next |
 
 ---
 
