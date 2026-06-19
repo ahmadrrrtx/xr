@@ -1,113 +1,127 @@
 /**
- * XR — Provider Management Interface
+ * XR Stage 5 — Provider Management Interface
+ *
+ * Redesigned for Stage 5:
+ *  - Uses new layout/theme system
+ *  - StepTracker for batch provider test
+ *  - Table output for provider list
+ *  - Better empty states and error messages
+ *  - Explicit security notes in key management
+ *  - No API keys ever printed to terminal
  */
-import { writeFileSync, existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { 
-  loadConfig, 
-  configPath, 
-  XR_HOME, 
-  getProviderEnvStatus 
-} from "../config/config.ts";
+
+import { writeFileSync } from "node:fs";
+import { loadConfig, configPath, XR_HOME, getProviderEnvStatus } from "../config/config.ts";
 import { setSecret, removeSecret } from "../security/secrets.ts";
-import { 
-  knownProviders, 
-  PRESETS, 
-  buildProvider 
-} from "../providers/factory.ts";
-import { 
-  banner, info, ok, warn, ask, confirm, password, colors as C 
-} from "./cli.ts";
+import { knownProviders, PRESETS, buildProvider } from "../providers/factory.ts";
+import { banner, info, ok, warn, ask, confirm, password, colors as C } from "./cli.ts";
+import { StepTracker } from "../ui/spinner.ts";
+import { xrCyan, xrGreen, xrAmber, xrRed, xrDim, xrBold, SYM } from "../ui/theme.ts";
+import { section, kv, divider, table, emptyState, notify, badge } from "../ui/layout.ts";
 
 export async function handleProvidersCommand(args: string[]): Promise<void> {
-  const sub = args[0] || "list";
+  const sub    = args[0] ?? "list";
   const target = args[1];
 
   switch (sub) {
-    case "list":
-      await listProviders();
-      break;
-    case "set":
-      await setProvider(target);
-      break;
-    case "add":
-      await addProviderKey(target);
-      break;
-    case "remove":
-      await removeProviderKey(target);
-      break;
-    case "test":
-      await testProviders();
-      break;
+    case "list":   await listProviders();           break;
+    case "set":    await setProvider(target);       break;
+    case "add":    await addProviderKey(target);    break;
+    case "remove": await removeProviderKey(target); break;
+    case "test":   await testProviders();           break;
+    case "status": await listProviders();           break;
     default:
-      warn(`Unknown providers subcommand: ${sub}`);
-      console.log(`Usage: xr providers [list|set|add|remove|test]`);
+      warn(`Unknown subcommand: ${sub}`);
+      console.log(`  ${xrDim("Usage: xr providers list|set|add|remove|test")}`);
   }
 }
 
-async function listProviders() {
+// ── List Providers ────────────────────────────────────────────────────────────
+
+async function listProviders(): Promise<void> {
   banner();
   const status = getProviderEnvStatus();
   const { config } = loadConfig();
 
-  console.log(`${C.bold("Available Providers")}`);
-  console.log(`${C.dim("Primary:")} ${C.green(config.defaults.provider)} ${C.dim("(" + config.defaults.model + ")")}`);
-  if (config.defaults.fallbackProvider) {
-    console.log(`${C.dim("Fallback:")} ${C.yellow(config.defaults.fallbackProvider)} ${C.dim("(" + (config.defaults.fallbackModel || "default") + ")")}`);
-  }
+  section("Provider Status");
   console.log();
 
-  for (const p of status) {
-    const isDefault = p.id === config.defaults.provider;
-    const isFallback = p.id === config.defaults.fallbackProvider;
-    const marker = isDefault ? C.green(" ● ") : isFallback ? C.yellow(" ○ ") : "   ";
-    
-    const keyStatus = p.hasKey ? C.green("configured") : (PRESETS[p.id]?.kind === "local" ? C.dim("local") : C.red("missing key"));
-    
-    console.log(`${marker}${C.bold(p.id.padEnd(12))} ${C.dim(p.tier.padEnd(8))} ${keyStatus.padEnd(20)} ${C.dim(p.label)}`);
+  kv("Primary",  config.defaults.provider + " / " + config.defaults.model, "ok");
+  if (config.defaults.fallbackProvider) {
+    kv("Fallback", config.defaults.fallbackProvider + " / " + (config.defaults.fallbackModel ?? "default"), "dim");
   }
-  console.log(`\n${C.green("●")} Primary  ${C.yellow("○")} Fallback`);
+  kv("Routing",  (config.localModels as any)?.routing ?? "hybrid", "cyan");
+  console.log();
+
+  // Table
+  table(
+    ["", "Provider", "Tier", "Status", "Description"],
+    status.map(p => {
+      const isPrimary  = p.id === config.defaults.provider;
+      const isFallback = p.id === config.defaults.fallbackProvider;
+      const marker     = isPrimary ? xrGreen("●") : isFallback ? xrAmber("○") : " ";
+      const keyStatus  = p.hasKey ? xrGreen("configured")
+                       : PRESETS[p.id]?.kind === "local" ? xrDim("local (no key)")
+                       : xrRed("missing key");
+      return [marker, xrBold(p.id), xrDim(p.tier), keyStatus, xrDim(p.label)];
+    }),
+    { widths: [3, 14, 10, 18, 30] },
+  );
+
+  console.log();
+  console.log(`  ${xrGreen("●")} Primary  ${xrAmber("○")} Fallback  ${xrDim("  Tip: xr providers test — test all live")}`);
+  console.log();
 }
 
-async function setProvider(target?: string) {
-  const { config } = loadConfig();
-  const providers = knownProviders();
+// ── Set Provider ──────────────────────────────────────────────────────────────
 
-  console.log(`${C.bold("Switch Default Provider")}`);
-  const id = target || await ask("Select provider ID", { default: config.defaults.provider });
-  
+async function setProvider(target?: string): Promise<void> {
+  banner();
+  section("Switch Provider");
+
+  const { config } = loadConfig();
+  const providers  = knownProviders();
+
+  const id = target ?? await ask("Select provider ID", { default: config.defaults.provider });
   if (!providers.includes(id)) {
     warn(`Unknown provider: ${id}`);
+    console.log(`  ${xrDim("Available:")} ${providers.join(", ")}`);
     return;
   }
 
-  const preset = PRESETS[id];
-  const model = await ask(`Select model for ${id}`, { default: preset.defaultModel });
+  const preset = PRESETS[id]!;
+  const model  = await ask(`Model for ${xrCyan(id)}`, { default: preset.defaultModel });
 
   config.defaults.provider = id;
-  config.defaults.model = model;
+  config.defaults.model    = model;
 
-  const useFallback = await confirm("Configure a fallback provider?", true);
-  if (useFallback) {
-    const fid = await ask("Select fallback provider ID", { default: "ollama" });
+  if (await confirm("Configure a fallback provider?", true)) {
+    const fid = await ask("Fallback provider ID", { default: "ollama" });
     if (providers.includes(fid)) {
       config.defaults.fallbackProvider = fid;
-      config.defaults.fallbackModel = await ask(`Select model for fallback ${fid}`, { default: PRESETS[fid].defaultModel });
+      config.defaults.fallbackModel    = await ask(`Model for fallback ${xrCyan(fid)}`, { default: PRESETS[fid]?.defaultModel });
     }
   } else {
     config.defaults.fallbackProvider = undefined;
-    config.defaults.fallbackModel = undefined;
+    config.defaults.fallbackModel    = undefined;
   }
 
   writeFileSync(configPath(), JSON.stringify(config, null, 2));
-  ok(`Default provider set to ${C.bold(id)} (${model})`);
+  ok(`Provider set to ${xrCyan(id)} / ${xrDim(model)}`);
 }
 
-async function addProviderKey(target?: string) {
-  const status = getProviderEnvStatus();
-  
-  console.log(`${C.bold("Add Provider API Key")}`);
-  const id = target || await ask("Provider ID");
+// ── Add Provider Key ──────────────────────────────────────────────────────────
+
+async function addProviderKey(target?: string): Promise<void> {
+  banner();
+  section("Add Provider API Key");
+
+  console.log(`  ${SYM.secure} ${xrDim("Keys are stored in your OS keychain or encrypted file.")}`);
+  console.log(`  ${SYM.secure} ${xrDim("Keys are redacted from all audit logs.")}`);
+  console.log(`  ${SYM.secure} ${xrDim("Keys are never sent anywhere except the provider's API.")}`);
+  console.log();
+
+  const id     = target ?? await ask("Provider ID");
   const preset = PRESETS[id];
 
   if (!preset || !preset.apiKeyEnv) {
@@ -115,21 +129,25 @@ async function addProviderKey(target?: string) {
     return;
   }
 
-  const key = await password(`Enter API key for ${id}:`);
-  if (!key) return;
+  const key = await password(`API key for ${xrBold(id)}:`);
+  if (!key) { warn("No key entered."); return; }
 
   const backend = setSecret(preset.apiKeyEnv, key);
   process.env[preset.apiKeyEnv] = key;
+
   if (backend === "file") {
-    warn(`Secure OS secret store not available; key saved to ${join(XR_HOME, ".env")} with chmod 600.`);
+    warn(`OS keychain not available — key saved to ${XR_HOME}/.env (chmod 600).`);
   } else {
-    ok(`API key for ${id} saved in ${backend}.`);
+    ok(`API key for ${xrCyan(id)} saved in ${backend}.`);
   }
 }
 
-async function removeProviderKey(target?: string) {
-  console.log(`${C.bold("Remove Provider API Key")}`);
-  const id = target || await ask("Provider ID");
+// ── Remove Provider Key ───────────────────────────────────────────────────────
+
+async function removeProviderKey(target?: string): Promise<void> {
+  section("Remove Provider API Key");
+
+  const id     = target ?? await ask("Provider ID");
   const preset = PRESETS[id];
 
   if (!preset || !preset.apiKeyEnv) {
@@ -137,29 +155,64 @@ async function removeProviderKey(target?: string) {
     return;
   }
 
+  if (!await confirm(`Remove API key for ${xrCyan(id)}?`, false)) return;
+
   removeSecret(preset.apiKeyEnv);
-  ok(`API key for ${id} removed.`);
+  delete process.env[preset.apiKeyEnv];
+  ok(`API key for ${xrCyan(id)} removed.`);
 }
 
-async function testProviders() {
+// ── Test Providers ────────────────────────────────────────────────────────────
+
+async function testProviders(): Promise<void> {
   banner();
+  section("Provider Health Tests");
+
   const { config } = loadConfig();
-  const providers = getProviderEnvStatus().filter(p => p.hasKey || PRESETS[p.id]?.kind === "local");
+  const candidates = getProviderEnvStatus().filter(
+    p => p.hasKey || PRESETS[p.id]?.kind === "local"
+  );
 
-  console.log(`${C.bold("Testing Provider Health...")}\n`);
+  if (!candidates.length) {
+    emptyState("configured providers", "Run: xr providers add <id>");
+    return;
+  }
 
-  for (const p of providers) {
-    process.stdout.write(`  ${p.id.padEnd(12)} ... `);
+  const tracker = new StepTracker();
+  for (const p of candidates) {
+    tracker.addStep(p.id, p.id.padEnd(14) + " " + xrDim(p.label));
+  }
+  tracker.start();
+
+  const results: { id: string; ok: boolean; ms?: number; detail?: string }[] = [];
+
+  for (const p of candidates) {
+    tracker.setStatus(p.id, "running");
     try {
-      const provider = buildProvider(config, { provider: p.id, model: PRESETS[p.id].defaultModel });
-      const h = await provider.health();
-      if (h.ok) {
-        console.log(`${C.green("ONLINE")} ${C.dim("(" + (h.latencyMs || "?") + "ms)")}`);
-      } else {
-        console.log(`${C.red("OFFLINE")} ${C.dim(h.detail || "unknown error")}`);
-      }
+      const provider = buildProvider(config, { provider: p.id, model: PRESETS[p.id]?.defaultModel });
+      const h        = await provider.health();
+      results.push({ id: p.id, ok: h.ok, ms: h.latencyMs, detail: h.detail });
+      tracker.setStatus(p.id, h.ok ? "done" : "error", h.ok ? `${h.latencyMs ?? "?"}ms` : h.detail ?? "offline");
     } catch (e) {
-      console.log(`${C.red("ERROR")} ${C.dim((e as Error).message)}`);
+      results.push({ id: p.id, ok: false, detail: (e as Error).message });
+      tracker.setStatus(p.id, "error", (e as Error).message.slice(0, 50));
     }
   }
+
+  tracker.finish();
+  console.log();
+
+  const passed = results.filter(r => r.ok).length;
+  const failed = results.filter(r => !r.ok).length;
+
+  if (failed === 0) {
+    ok(`All ${passed} providers online.`);
+  } else {
+    warn(`${passed} online, ${failed} offline.`);
+    for (const r of results.filter(r => !r.ok)) {
+      console.log(`  ${SYM.error} ${xrRed(r.id)} ${xrDim(r.detail ?? "")}`);
+    }
+    console.log(`  ${xrDim("Tip: xr providers add <id> to configure a missing key.")}`);
+  }
+  console.log();
 }
