@@ -155,36 +155,59 @@ export class VoiceHardware {
     const sampleRate = opts.sampleRate ?? 16000;
     const channels = opts.channels ?? 1;
     const seconds = (durationMs / 1000).toFixed(2);
-    const path = tempWavPath();
+    const attempts: Array<{ label: string; cmd: string; args: string[]; timeoutMs: number }> = [];
 
-    try {
-      if (commandExists("ffmpeg")) {
-        const args = ["-hide_banner", "-loglevel", "error", "-y"];
-        if (process.platform === "darwin") {
-          args.push("-f", "avfoundation", "-i", opts.inputDevice && opts.inputDevice !== "default" ? opts.inputDevice : ":0");
-        } else if (process.platform === "win32") {
-          args.push("-f", "dshow", "-i", opts.inputDevice && opts.inputDevice !== "default" ? `audio=${opts.inputDevice}` : "audio=default");
-        } else {
-          args.push("-f", "alsa", "-i", opts.inputDevice && opts.inputDevice !== "default" ? opts.inputDevice : "default");
-        }
-        args.push("-t", seconds, "-ac", String(channels), "-ar", String(sampleRate), "-acodec", "pcm_s16le", path);
-        await spawnChecked("ffmpeg", args, durationMs + 7000);
-      } else if (process.platform === "linux" && commandExists("arecord")) {
-        const args = ["-q", "-d", String(Math.ceil(durationMs / 1000)), "-f", "S16_LE", "-r", String(sampleRate), "-c", String(channels), "-t", "wav"];
-        if (opts.inputDevice && opts.inputDevice !== "default") args.push("-D", opts.inputDevice);
-        args.push(path);
-        await spawnChecked("arecord", args, durationMs + 5000);
-      } else if (commandExists("rec")) {
-        await spawnChecked("rec", ["-q", "-r", String(sampleRate), "-c", String(channels), "-b", "16", path, "trim", "0", seconds], durationMs + 5000);
+    if (commandExists("ffmpeg")) {
+      const args = ["-hide_banner", "-loglevel", "error", "-y"];
+      if (process.platform === "darwin") {
+        args.push("-f", "avfoundation", "-i", opts.inputDevice && opts.inputDevice !== "default" ? opts.inputDevice : ":0");
+      } else if (process.platform === "win32") {
+        args.push("-f", "dshow", "-i", opts.inputDevice && opts.inputDevice !== "default" ? `audio=${opts.inputDevice}` : "audio=default");
       } else {
-        throw new Error("No recording utility found. Install ffmpeg, SoX, or arecord.");
+        args.push("-f", "alsa", "-i", opts.inputDevice && opts.inputDevice !== "default" ? opts.inputDevice : "default");
       }
-
-      if (!existsSync(path)) throw new Error("recording did not produce a WAV file");
-      return new Uint8Array(readFileSync(path));
-    } finally {
-      cleanup(path);
+      attempts.push({
+        label: "ffmpeg",
+        cmd: "ffmpeg",
+        args: [...args, "-t", seconds, "-ac", String(channels), "-ar", String(sampleRate), "-acodec", "pcm_s16le", "__OUT__"],
+        timeoutMs: durationMs + 7000,
+      });
     }
+
+    if (process.platform === "linux" && commandExists("arecord")) {
+      const args = ["-q", "-d", String(Math.ceil(durationMs / 1000)), "-f", "S16_LE", "-r", String(sampleRate), "-c", String(channels), "-t", "wav"];
+      if (opts.inputDevice && opts.inputDevice !== "default") args.push("-D", opts.inputDevice);
+      attempts.push({ label: "arecord", cmd: "arecord", args: [...args, "__OUT__"], timeoutMs: durationMs + 5000 });
+    }
+
+    if (commandExists("rec")) {
+      attempts.push({
+        label: "rec",
+        cmd: "rec",
+        args: ["-q", "-r", String(sampleRate), "-c", String(channels), "-b", "16", "__OUT__", "trim", "0", seconds],
+        timeoutMs: durationMs + 5000,
+      });
+    }
+
+    if (!attempts.length) throw new Error("No recording utility found. Install ffmpeg, SoX, or arecord.");
+
+    const errors: string[] = [];
+    for (const attempt of attempts) {
+      const path = tempWavPath();
+      try {
+        await spawnChecked(attempt.cmd, attempt.args.map((a) => a === "__OUT__" ? path : a), attempt.timeoutMs);
+        if (!existsSync(path)) throw new Error("recording did not produce a WAV file");
+        const bytes = new Uint8Array(readFileSync(path));
+        if (bytes.length < 44) throw new Error("recording was empty");
+        return bytes;
+      } catch (e) {
+        errors.push(`${attempt.label}: ${(e as Error).message}`);
+      } finally {
+        cleanup(path);
+      }
+    }
+
+    throw new Error(`Recording failed with all available tools: ${errors.join("; ")}`);
   }
 
   play(audio: Uint8Array, opts: PlayOptions = {}): PlaybackHandle {
