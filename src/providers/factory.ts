@@ -31,15 +31,17 @@ export { PRESETS } from "./presets.ts";
 
 function registerBuiltins(): void {
   // Local providers (OpenAI-compatible)
-  const localPresets = ["ollama", "lmstudio", "jan", "localai", "vllm"];
+  const localPresets = ["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang"];
   for (const id of localPresets) {
     const preset = PRESETS[id];
     if (!preset) continue;
-    registry.register(preset, (_config, model, _preset) => {
+    registry.register(preset, (config, model, _preset) => {
+      const cfgProvider = (config.providers as any)?.[id];
+      const cfgRuntime = (config.localModels as any)?.runtimes?.[id];
       return new OpenAICompatProvider({
         id: preset.id,
         label: preset.label,
-        baseUrl: preset.baseUrl!,
+        baseUrl: cfgRuntime?.baseUrl ?? cfgProvider?.baseUrl ?? preset.baseUrl!,
         model,
         apiKeyEnv: preset.apiKeyEnv,
       });
@@ -143,7 +145,7 @@ export function providersByTier(
 /** Get the best FREE provider that's currently configured/available. */
 export function suggestFreeProvider(config: XRConfig): string {
   // Local first: zero cost, no key needed
-  for (const id of ["ollama", "lmstudio", "jan", "localai", "vllm"]) {
+  for (const id of ["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang"]) {
     const preset = PRESETS[id];
     if (preset && preset.kind === "local") return id;
   }
