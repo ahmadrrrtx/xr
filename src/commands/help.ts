@@ -77,7 +77,12 @@ export function showHelp(topic?: string): void {
   const memCmds = [
     ['xr memory add "prefer TypeScript"', "save a preference to memory"],
     ["xr memory list",                   "show all saved memories"],
-    ["xr memory delete <id>",            "delete a specific memory"],
+    ["xr memory recall \"query\"",        "what XR would surface + why"],
+    ["xr memory search \"text\"",         "keyword search"],
+    ["xr memory health",                 "memory health (expired, unused)"],
+    ["xr memory remove <id>",            "delete a specific memory"],
+    ["xr memory prune",                  "delete expired entries"],
+    ["xr memory export | import",        "portable JSON bundle"],
     ['xr research "AI agents 2026"',     "run a research job"],
     ["xr plugins list",                  "list installed plugins"],
     ["xr plugins install ./plugin",      "install a plugin (shows permissions)"],
@@ -201,13 +206,29 @@ function showTopicHelp(topic: string): void {
 
   if (t === "memory") {
     banner();
-    console.log(`  ${xrBold("XR Memory")}\n`);
-    console.log(`  XR remembers ${xrGreen("only what you explicitly tell it to")}.\n`);
+    console.log(`  ${xrBold("XR Memory — Stage 6")}\n`);
+    console.log(`  XR remembers ${xrGreen("only what you explicitly tell it to")}. Durable, local-first, inspectable.\n`);
+    console.log(`  ${xrBold("Write")}`);
     console.log(`  ${xrCyan('xr memory add "prefer TypeScript" --category preference')}`);
-    console.log(`  ${xrCyan("xr memory list")}`);
-    console.log(`  ${xrCyan("xr memory delete <id>")}`);
-    console.log(`  ${xrCyan("xr memory clear")}`);
+    console.log(`  ${xrCyan('xr memory add "tmp note" --ttl 3600')}      ${xrDim("(expires after 1h)")}`);
+    console.log(`  ${xrCyan("xr memory edit <id> \"new text\"")}`);
+    console.log(`  ${xrCyan("xr memory remove <id>")}            ${xrDim("(permanent)")}`);
+    console.log(`  ${xrCyan("xr memory clear [--scope s]")}`);
     console.log();
+    console.log(`  ${xrBold("Inspect")}`);
+    console.log(`  ${xrCyan("xr memory list [--category c] [--scope s]")}`);
+    console.log(`  ${xrCyan('xr memory recall "query"')}         ${xrDim("(shows match % + why)")}`);
+    console.log(`  ${xrCyan('xr memory search "text"')}`);
+    console.log(`  ${xrCyan("xr memory health")}                 ${xrDim("(expired, never-recalled)")}`);
+    console.log();
+    console.log(`  ${xrBold("Maintain / Portability")}`);
+    console.log(`  ${xrCyan("xr memory prune")}                  ${xrDim("(delete expired)")}`);
+    console.log(`  ${xrCyan("xr memory summarize [--days 30]")}`);
+    console.log(`  ${xrCyan("xr memory export [path]")}          ${xrDim("/")} ${xrCyan("xr memory import <path>")}`);
+    console.log();
+    console.log(`  ${xrBold("Categories")}: preference · project · workflow · fact · exclusion`);
+    console.log();
+    console.log(`  ${xrDim("Disable anytime: set \"memory.enabled\": false, or XR_MEMORY_DISABLED=1")}`);
     console.log(`  ${xrDim("View in dashboard:")} ${xrCyan("xr serve")} ${xrDim("→")} ${xrCyan("Memory panel")}`);
     console.log();
     return;
