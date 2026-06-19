@@ -66,11 +66,30 @@ export class ModelsCommand implements Command {
 export class VoiceCommand implements Command {
   name = "voice";
   description = "voice status/setup/start/test";
-  usage = "xr voice [setup|status|test|start|stop]";
+  usage = "xr voice [setup|status|devices|test|start|stop|config]";
   async execute(ctx: CommandContext): Promise<void> {
-    if (ctx.args[0] === "setup") return await installComponent("voice", { yes: ctx.args.includes("--yes"), allowSystem: ctx.args.includes("--allow-system") });
     const { handleVoiceCommand } = await import("../voice/cli.ts");
     await handleVoiceCommand(ctx.args, legacyStore(ctx));
+  }
+}
+
+export class SpeakCommand implements Command {
+  name = "speak";
+  description = "speak text once using XR voice TTS";
+  usage = "xr speak <text>";
+  async execute(ctx: CommandContext): Promise<void> {
+    const { handleSpeak } = await import("../voice/cli.ts");
+    await handleSpeak(ctx.args.join(" "));
+  }
+}
+
+export class ListenCommand implements Command {
+  name = "listen";
+  description = "listen once and print the transcript";
+  usage = "xr listen";
+  async execute(): Promise<void> {
+    const { handleListen } = await import("../voice/cli.ts");
+    await handleListen();
   }
 }
 
