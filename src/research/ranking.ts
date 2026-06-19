@@ -81,7 +81,8 @@ export function freshnessFromHeaders(lastModified?: string, fallbackText = "", n
 }
 
 export function rankSources(hitsByQuery: Array<{ query: string; hits: SearchHit[] }>, maxSources: number, idStart = 1, topic = ""): Source[] {
-  const byUrl = new Map<string, Source>();
+  const seenUrls = new Set<string>();
+  const byDomain = new Map<string, Source>();
   const topicTerms = terms(topic);
   let idx = idStart;
 
@@ -91,7 +92,9 @@ export function rankSources(hitsByQuery: Array<{ query: string; hits: SearchHit[
       const domain = domainOf(url);
       if (!url || !domain) continue;
       const key = canonicalKey(url);
-      const prior = byUrl.get(key);
+      if (seenUrls.has(key)) continue;
+      seenUrls.add(key);
+
       const scored = scoreDomain(domain);
       const rel = relevance(`${hit.title} ${hit.snippet} ${query}`, topicTerms, query);
       const fresh = freshnessFromText(`${hit.title} ${hit.snippet}`);
@@ -117,28 +120,22 @@ export function rankSources(hitsByQuery: Array<{ query: string; hits: SearchHit[
         metadata: { title: hit.title || domain, url, domain, type: scored.type, snippet: (hit.snippet ?? "").slice(0, 700), foundVia: query, discoveredAt: Date.now() },
         collectedAt: Date.now(),
       };
-      if (!prior || source.quality > prior.quality) {
-        byUrl.set(key, prior ? { ...source, id: prior.id } : source);
-        if (!prior) idx++;
+
+      // Keep one best source per domain for broad source diversity and to avoid
+      // one high-SEO site dominating the evidence base. The richer candidate
+      // wins, but the first stable id is retained until final re-numbering.
+      const prior = byDomain.get(domain);
+      if (!prior) {
+        byDomain.set(domain, source);
+        idx++;
+      } else if (source.quality > prior.quality || (source.quality === prior.quality && source.snippet.length > prior.snippet.length)) {
+        byDomain.set(domain, { ...source, id: prior.id });
       }
     }
   }
 
-  const ranked = Array.from(byUrl.values()).sort((a, b) => b.quality - a.quality || b.trust - a.trust);
-  return diversify(ranked, maxSources).map((s, i) => ({ ...s, id: `s${idStart + i}` }));
-}
-
-function diversify(sources: Source[], max: number): Source[] {
-  const domains = new Map<string, number>();
-  const out: Source[] = [];
-  for (const s of sources) {
-    const count = domains.get(s.domain) ?? 0;
-    if (count >= 2) continue;
-    domains.set(s.domain, count + 1);
-    out.push(s);
-    if (out.length >= max) break;
-  }
-  return out;
+  const ranked = Array.from(byDomain.values()).sort((a, b) => b.quality - a.quality || b.trust - a.trust);
+  return ranked.slice(0, maxSources).map((s, i) => ({ ...s, id: `s${idStart + i}` }));
 }
 
 function terms(s: string): string[] { return s.toLowerCase().split(/[^a-z0-9]+/).filter((x) => x.length > 2).slice(0, 20); }
