@@ -62,7 +62,7 @@ async function listProviders() {
     const isFallback = p.id === config.defaults.fallbackProvider;
     const marker = isDefault ? C.green(" ● ") : isFallback ? C.yellow(" ○ ") : "   ";
     
-    const keyStatus = p.hasKey ? C.green("configured") : (PRESETS[p.id]?.local ? C.dim("local") : C.red("missing key"));
+    const keyStatus = p.hasKey ? C.green("configured") : (PRESETS[p.id]?.kind === "local" ? C.dim("local") : C.red("missing key"));
     
     console.log(`${marker}${C.bold(p.id.padEnd(12))} ${C.dim(p.tier.padEnd(8))} ${keyStatus.padEnd(20)} ${C.dim(p.label)}`);
   }
@@ -144,7 +144,7 @@ async function removeProviderKey(target?: string) {
 async function testProviders() {
   banner();
   const { config } = loadConfig();
-  const providers = getProviderEnvStatus().filter(p => p.hasKey || PRESETS[p.id]?.local);
+  const providers = getProviderEnvStatus().filter(p => p.hasKey || PRESETS[p.id]?.kind === "local");
 
   console.log(`${C.bold("Testing Provider Health...")}\n`);
 
