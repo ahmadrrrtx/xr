@@ -176,13 +176,15 @@ function doStatus(store: Store, id?: string): void {
   console.log(`${C.bold("🔬 Research status")}`);
   console.log(`  session .......... ${C.cyan(session.id)}`);
   console.log(`  topic ............ ${session.topic}`);
-  console.log(`  mode ............. ${session.depth}`);
+  console.log(`  mode ............. ${session.mode ?? session.depth} (${session.depth})`);
   console.log(`  status ........... ${statusColor(session.status)}`);
   console.log(`  plan ............. ${session.plan ? C.green(`✓ ${session.plan.questions.length} questions`) : C.dim("—")}`);
   console.log(`  sources .......... ${C.cyan(String(session.sources.length))} ${C.dim(`(fetched ${session.sources.filter((s) => s.fetched).length})`)}`);
   console.log(`  notes ............ ${C.cyan(String(session.notes.length))} ${C.dim(`(verified ${session.notes.filter((n) => n.verified).length})`)}`);
+  console.log(`  claims ........... ${session.claims?.length ? C.cyan(String(session.claims.length)) : C.dim("0")}`);
   console.log(`  contradictions ... ${session.contradictions.length ? C.yellow(String(session.contradictions.length)) : C.dim("0")}`);
   console.log(`  synthesis ........ ${session.synthesis ? C.green("✓") : C.dim("—")}`);
+  if (session.lastRefreshedAt) console.log(`  refreshed ........ ${C.dim(new Date(session.lastRefreshedAt).toISOString())}`);
   if (session.exportPath) console.log(`  exported ......... ${C.dim(session.exportPath)}`);
   if (session.meter) console.log(`  spend ............ ${C.dim(session.meter.replace(/\x1b\[[0-9;]*m/g, ""))}`);
 }
@@ -196,6 +198,63 @@ function doSources(store: Store, id?: string): void {
   }
   console.log(`${C.bold("📚 Sources")} ${C.dim(`(${session.sources.length}) · session ${session.id}`)}\n`);
   console.log(renderSourcesList(session.sources, C));
+}
+
+function doEvidence(store: Store, id?: string): void {
+  const session = loadSession(store, id);
+  banner();
+  if (!session) {
+    info("No research session found.");
+    return;
+  }
+  console.log(`${C.bold("🧾 Evidence ledger")} ${C.dim(`(${session.notes.length}) · session ${session.id}`)}\n`);
+  if (!session.notes.length) {
+    info("No evidence collected yet.");
+    return;
+  }
+  for (const n of session.notes) {
+    const verified = n.verified ? C.green("verified") : C.yellow("unverified");
+    console.log(`  ${C.cyan(`[${n.id}]`)} ${C.dim(`[${n.sourceId}]`)} ${n.kind ?? n.claim}/${n.confidence}/${n.strength ?? "weak"} · ${verified}`);
+    console.log(`    ${n.text}`);
+    if (n.quote) console.log(`    ${C.dim(`quote: “${n.quote}”`)}`);
+  }
+}
+
+function doClaims(store: Store, id?: string): void {
+  const session = loadSession(store, id);
+  banner();
+  if (!session) {
+    info("No research session found.");
+    return;
+  }
+  console.log(`${C.bold("✅ Claim ledger")} ${C.dim(`(${session.claims?.length ?? 0}) · session ${session.id}`)}\n`);
+  if (!session.claims?.length) {
+    info("No claims generated yet. Run: xr research summarize");
+    return;
+  }
+  for (const cl of session.claims) {
+    const status = cl.status === "contested" ? C.yellow(cl.status) : cl.status === "supported" ? C.green(cl.status) : C.dim(cl.status);
+    console.log(`  ${status} ${cl.kind}/${cl.confidence} ${cl.sourceIds.map((sid) => `[${sid}]`).join("")}`);
+    console.log(`    ${cl.text}`);
+  }
+}
+
+function doContradictions(store: Store, id?: string): void {
+  const session = loadSession(store, id);
+  banner();
+  if (!session) {
+    info("No research session found.");
+    return;
+  }
+  console.log(`${C.bold("⚠ Contradictions")} ${C.dim(`(${session.contradictions.length}) · session ${session.id}`)}\n`);
+  if (!session.contradictions.length) {
+    info("No contradictions detected in this session.");
+    return;
+  }
+  for (const c of session.contradictions) {
+    console.log(`  ${C.yellow(c.severity)} ${C.bold(c.topic)} ${C.dim(c.sourceIds.map((sid) => `[${sid}]`).join(" vs "))}`);
+    console.log(`    ${c.description}`);
+  }
 }
 
 async function doSummarize(store: Store, id: string | undefined, override: { provider?: string; model?: string }): Promise<void> {
@@ -240,6 +299,8 @@ function doExport(store: Store, id: string | undefined, outPath: string | undefi
   writeFileSync(jsonPath, JSON.stringify(session, null, 2), "utf8");
 
   session.exportPath = finalPath;
+  session.reportVersions = session.reportVersions ?? [];
+  session.reportVersions.push({ id: `rep_${Date.now().toString(36)}`, format: "markdown", path: finalPath, sha256, createdAt: Date.now() });
   store.saveResearch(session.id, session.topic, session.depth, session.status, JSON.stringify(session));
 
   ok(`report exported`);
@@ -369,6 +430,14 @@ export async function handleResearchCommand(
       return doStatus(store, parsed.args[1]);
     case "sources":
       return doSources(store, parsed.args[1]);
+    case "evidence":
+    case "notes":
+      return doEvidence(store, parsed.args[1]);
+    case "claims":
+      return doClaims(store, parsed.args[1]);
+    case "contradictions":
+    case "contradiction":
+      return doContradictions(store, parsed.args[1]);
     case "summarize":
       return doSummarize(store, parsed.args[1], parsed.override);
     case "export":
@@ -418,6 +487,9 @@ function printResearchHelp(): void {
   console.log(`  xr research plan "topic"       generate research questions + strategy`);
   console.log(`  xr research status [id]        show current/most-recent session`);
   console.log(`  xr research sources [id]       list collected sources + trust`);
+  console.log(`  xr research evidence [id]      show evidence ledger + quotes`);
+  console.log(`  xr research claims [id]        show claim ledger`);
+  console.log(`  xr research contradictions [id] show contradiction log`);
   console.log(`  xr research summarize [id]     (re)synthesize a report from notes`);
   console.log(`  xr research export [id] [path] write report to markdown (+ json)`);
   console.log(`  xr research refresh [id]       re-check source freshness`);
