@@ -470,12 +470,18 @@ async function setupVoice(opts: InstallOptions): Promise<void> {
     if (await approved("Install ffmpeg with the platform package manager?", false, opts, true)) await installFfmpeg();
   } else ok("ffmpeg detected.");
   const { config } = loadConfig();
+  config.voice.enabled = false;
+  config.voice.mode = "push-to-talk";
   config.voice.alwaysListen = false;
+  config.voice.allowCloudStt = false;
+  config.voice.allowCloudTts = false;
+  config.voice.sttBackend = config.voice.sttBackend ?? "auto";
+  config.voice.ttsBackend = config.voice.ttsBackend ?? "auto";
   saveConfigSafely(config, "voice-pack");
-  info("XR voice currently uses XR_STT_URL/XR_TTS_URL endpoints or installed local tools when wired by the voice service.");
-  info("This pack does not enable always-listening or microphone capture. Start explicitly with: xr voice start");
-  if (!process.env.XR_STT_URL) info("Set XR_STT_URL for STT service, or install/run whisper.cpp yourself under ~/.xr/components/whisper.cpp.");
-  if (!process.env.XR_TTS_URL) info("Set XR_TTS_URL for TTS service, or install/run Piper yourself under ~/.xr/components/piper.");
+  info("XR voice is installed but disabled. Push-to-talk is the safe default.");
+  info("Start explicitly with: xr voice start. Configure with: xr voice setup.");
+  if (!process.env.XR_STT_URL) info("For offline STT install Whisper/whisper.cpp, or configure a local OpenAI-compatible STT endpoint.");
+  if (!process.env.XR_TTS_URL) info("For offline TTS install Piper/Kokoro/espeak, or configure a local TTS endpoint.");
 }
 
 async function installFfmpeg(): Promise<void> {
