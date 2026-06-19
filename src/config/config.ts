@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import { getSecret } from "../security/secrets.ts";
 import { PRESETS } from "../providers/presets.ts";
 
-export const CONFIG_VERSION = 9; // Bumped for Stage 3 Universal Provider Engine
+export const CONFIG_VERSION = 10; // Stage 4 Local AI runtime manager
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -109,13 +109,42 @@ const ConfigSchema = z.object({
     .default({}),
   localModels: z
     .object({
-      runtime: z.literal("ollama").default("ollama"),
+      runtime: z.enum(["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang", "custom-openai"]).default("ollama"),
+      provider: z.string().regex(/^[a-z0-9_-]+$/i).default("ollama"),
       enabled: z.boolean().default(false),
       selected: z.string().min(1).max(200).optional(),
       recommended: z.string().min(1).max(200).optional(),
       recommendationReason: z.string().max(1000).optional(),
       installedAt: z.string().datetime().optional(),
       routing: z.enum(["local-only", "hybrid", "cloud-first"]).default("hybrid"),
+      useCase: z.enum(["general", "coding", "reasoning", "summarization", "research", "embeddings", "voice"]).default("general"),
+      runtimes: z.record(z.object({
+        providerId: z.string().optional(),
+        baseUrl: z.string().url().optional(),
+        installed: z.boolean().optional(),
+        running: z.boolean().optional(),
+        configured: z.boolean().optional(),
+        healthy: z.boolean().optional(),
+        lastCheckedAt: z.string().optional(),
+        detail: z.string().optional(),
+      })).default({}),
+      installed: z.array(z.object({
+        id: z.string(),
+        runtime: z.string(),
+        providerId: z.string(),
+        model: z.string(),
+        family: z.array(z.string()).default([]),
+        source: z.string().default("unknown"),
+        sizeGb: z.number().optional(),
+        quantization: z.string().optional(),
+        downloaded: z.boolean().default(false),
+        configured: z.boolean().default(false),
+        healthy: z.boolean().default(false),
+        baseUrl: z.string().optional(),
+        installedAt: z.string().optional(),
+        lastCheckedAt: z.string().optional(),
+        detail: z.string().optional(),
+      })).default([]),
     })
     .default({}),
   // Block 8: MCP servers to consume tools from.
@@ -300,6 +329,24 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       },
     };
   },
+  // 9 -> 10: Stage 4 Local AI runtime manager — broaden local runtimes and model registry.
+  9: (raw) => {
+    const runtime = raw.localModels?.runtime ?? "ollama";
+    const provider = runtime === "ollama" ? "ollama" : runtime;
+    return {
+      ...raw,
+      version: 10,
+      localModels: {
+        ...(raw.localModels ?? {}),
+        runtime,
+        provider: raw.localModels?.provider ?? provider,
+        useCase: raw.localModels?.useCase ?? "general",
+        runtimes: raw.localModels?.runtimes ?? {},
+        installed: raw.localModels?.installed ?? [],
+      },
+    };
+  },
+
 };
 
 function migrate(raw: any): any {
