@@ -32,6 +32,9 @@ export class DoctorCommand implements Command {
     const mem = new MemoryStore(store);
     const memHealth = mem.health();
     const memEnabled = isMemoryEnabled();
+    const researchRows = store.listResearch(5);
+    const researchCount = store.researchCount();
+    const latestResearch = researchRows[0];
 
     if (json) {
       // Build combined JSON output including provider health
@@ -65,6 +68,15 @@ export class DoctorCommand implements Command {
           detail: (e as Error).message,
         });
       }
+
+      // Stage 7 — research health check.
+      checks.push({
+        id: "research",
+        label: "Research engine",
+        state: researchCount >= 0 ? "ok" : "warn",
+        detail: `${researchCount} sessions${latestResearch ? `; latest ${latestResearch.status} (${latestResearch.depth})` : ""}`,
+        remediation: latestResearch?.status === "stopped" || latestResearch?.status === "error" ? "Inspect with: xr research status" : undefined,
+      });
 
       // Stage 6 — memory health check.
       checks.push({
@@ -118,6 +130,17 @@ export class DoctorCommand implements Command {
       }
     } catch (e) {
       warn(`Provider health check failed: ${(e as Error).message}`);
+    }
+
+    // Stage 7 — research health.
+    console.log("");
+    console.log(C.bold("Research Engine"));
+    console.log(`  sessions ....... ${C.green(`✓ ${researchCount}`)}`);
+    if (latestResearch) {
+      console.log(`  latest ......... ${C.dim(`${latestResearch.id} · ${latestResearch.status} · ${latestResearch.topic}`)}`);
+      console.log(`  inspect ........ ${C.dim("xr research status  ·  xr research sources  ·  xr research refresh")}`);
+    } else {
+      console.log(`  start .......... ${C.dim('xr research "your topic"')}`);
     }
 
     // Stage 6 — memory health.
