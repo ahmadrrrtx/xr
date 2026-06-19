@@ -9,7 +9,7 @@
 
 # XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `polished UI layer` · `offline-capable` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `polished UI layer` · `offline-capable` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-7%20Research%20Engine-00FF88?style=flat-square)](#-stage-7--the-research-engine)
+[![Stage](https://img.shields.io/badge/stage-8%20Voice%20Stack-00FF88?style=flat-square)](#-stage-8--the-voice-stack)
 
 </div>
 
@@ -43,8 +43,9 @@ iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 
 ```bash
 # After install — first time setup
-xr onboarding        # guided setup wizard (incl. memory toggle)
-xr doctor            # full health check (incl. memory + research health)
+xr onboarding        # guided setup wizard (incl. memory + optional voice)
+xr doctor            # full health check (incl. memory + research + voice health)
+xr voice setup       # optional local-first voice setup
 xr "hello, XR"       # run your first task
 xr --tui             # open interactive terminal UI
 xr serve             # start local dashboard + chat in browser
@@ -70,7 +71,7 @@ xr serve             # start local dashboard + chat in browser
 | **Memory hygiene** | grows forever | **TTL/expiry + prune + access tracking** — see what's stale, delete permanently |
 | **Research** | answer-first summaries | **source-first Research Engine** — live discovery, trust/freshness ranking, evidence ledger, claims, contradictions, signed reports |
 | **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, no telemetry |
-| **Voice** | cloud STT | **local Whisper + Kokoro** by default, push-to-talk |
+| **Voice** | silent cloud listener | **Stage 8 Voice Stack** — disabled by default, push-to-talk default, local Whisper/Piper/Kokoro/system adapters, explicit cloud consent |
 | **Runtime** | procedural script | **AI OS Kernel** with DI and Lifecycle management |
 
 ---
@@ -387,6 +388,100 @@ Doctor now includes Research Engine health: total sessions, latest session state
 
 ---
 
+
+## 🎙️ Stage 8 — The Voice Stack
+
+Stage 8 gives XR a **privacy-respecting voice interface**: talk to XR naturally, hear XR respond, interrupt it, and safely trigger XR actions by voice. It is designed as a first-class subsystem, not a toy chatbot mode.
+
+### Voice principles
+
+- **Disabled by default** — XR never silently turns on your microphone.
+- **Push-to-talk by default** — wake-word and always-listen modes are opt-in.
+- **Local-first** — prefers local Whisper / whisper.cpp STT and Piper / Kokoro / system TTS.
+- **Explicit cloud consent** — Groq/OpenAI STT only run when cloud audio is explicitly allowed.
+- **Safe computer control** — voice actions still pass through XR's risk classifier, preview, approval, and audit layers.
+- **Interruption-aware** — `stop`, `cancel`, `repeat`, `say again`, `mute voice`, and barge-in are handled directly.
+- **Private transcripts** — voice history is not persisted unless you choose `local-private` transcript policy.
+- **Text fallback** — missing microphones, speakers, STT, or TTS degrade safely back to text mode.
+
+### Voice commands
+
+```bash
+xr voice status              # privacy, mode, STT/TTS, device health
+xr voice setup               # guided optional setup
+xr voice devices             # list microphones and speakers
+xr voice test                # record → VAD → STT → TTS loopback
+xr voice start               # push-to-talk voice loop
+xr voice start --wake-word   # opt-in wake-word transcript gating
+xr voice start --always-listen # explicit confirmation required
+xr voice stop                # disable voice and always-listen
+xr voice config --stt whisper-cli --tts piper
+xr speak "hello from XR"     # speak text once
+xr listen                    # listen once and print transcript
+```
+
+### Supported local-first adapters
+
+| Layer | Backends |
+|---|---|
+| Microphone | `ffmpeg`, `arecord`, `rec` |
+| Speaker | `ffplay`, `afplay`, `aplay`, `paplay`, `play`, PowerShell |
+| STT | `auto`, local HTTP, `whisper-cli`, `whispercpp`, explicit `groq` / `openai`, `disabled` |
+| TTS | `auto`, local HTTP, `piper`, `kokoro-cli`, `system`, `say`, `espeak`, PowerShell, `disabled` |
+| VAD | local energy VAD now; Silero/openWakeWord-compatible extension points |
+| Wake | transcript-side wake phrase now; external openWakeWord-compatible extension point |
+
+### Voice config
+
+```jsonc
+// ~/.xr/config.json
+{
+  "voice": {
+    "enabled": false,
+    "mode": "push-to-talk",
+    "inputDevice": "default",
+    "outputDevice": "default",
+    "sttBackend": "auto",
+    "sttModel": "base.en",
+    "ttsBackend": "auto",
+    "ttsVoice": "default",
+    "wakeWord": "hey xr",
+    "pushToTalkKey": "enter",
+    "alwaysListen": false,
+    "interruptionPolicy": "barge-in",
+    "confirmationPolicy": "always-risky",
+    "transcriptPolicy": "session",
+    "fallbackTextMode": true,
+    "allowCloudStt": false,
+    "allowCloudTts": false
+  }
+}
+```
+
+### Voice can safely trigger XR capabilities
+
+Voice can route to:
+
+- `open app`, `open website`, `type text`, `click`, `scroll`, `press`, `focus window`
+- research requests: “research local-first voice assistants”
+- memory: “remember I prefer short answers” / “what do you remember about TypeScript?”
+- provider/model switching: “switch provider to ollama”, “switch model to qwen2.5:7b”
+- budget questions: “what is my budget?”
+- normal XR agent tasks
+
+High-risk actions still require confirmation. Unknown or unsafe states fail closed.
+
+### Doctor integration
+
+```bash
+xr doctor
+xr doctor --json
+```
+
+Doctor includes Voice Stack health: capture tools, playback tools, device count, STT/TTS adapter status, mode, and privacy posture.
+
+---
+
 ## 🏛️ v1.0 Foundation Runtime — AI OS Kernel
 
 XR has evolved into a **True AI Operating System**. The v1.0 kernel introduces:
@@ -608,7 +703,7 @@ xr/
 │   │   ├── help.ts       # xr help [topic]
 │   │   ├── budget.ts
 │   │   ├── config.ts
-│   │   ├── doctor.ts     # includes memory + research health
+│   │   ├── doctor.ts     # includes memory + research + voice health
 │   │   └── ...
 │   ├── daemon/           # local server
 │   │   ├── server.ts     # xr serve — dashboard + chat + API
@@ -621,6 +716,7 @@ xr/
 │   ├── local/            # local AI runtime manager
 │   ├── plugins/          # plugin sandbox
 │   ├── research/         # Stage 7 Research Engine
+│   ├── voice/            # Stage 8 Voice Stack
 │   ├── cost/             # budget governor
 │   └── config/           # configuration
 ├── bin/                  # CLI entry point
@@ -676,6 +772,16 @@ xr research evidence
 xr research refresh
 xr research export
 
+# Voice (Stage 8, opt-in)
+xr voice status
+xr voice setup
+xr voice devices
+xr voice test
+xr voice start                         # push-to-talk
+xr voice start --wake-word             # opt-in wake phrase
+xr speak "hello"
+xr listen
+
 # Computer control (opt-in)
 xr control start
 xr control plan "open browser and go to github.com"
@@ -718,7 +824,8 @@ xr help memory                       # memory engine guide
 | Stage 5 | User Interfaces | ✅ Done |
 | **Stage 6** | **Memory Engine** | ✅ **Done** |
 | **Stage 7** | **Research Engine** | ✅ **Done** |
-| Stage 8 | Multi-Agent + Collaboration | 🔜 Next |
+| **Stage 8** | **Voice Stack** | ✅ **Done** |
+| Stage 9 | Multi-Agent + Collaboration | 🔜 Next |
 
 ---
 
