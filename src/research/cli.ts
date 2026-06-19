@@ -31,6 +31,8 @@ import { runResearch, summarizeExisting, type ResearchEngineDeps } from "./engin
 import { makePlan } from "./plan.ts";
 import { DEPTH_BUDGETS } from "./types.ts";
 import { renderReport, renderSourcesList, renderTerminalSummary } from "./report.ts";
+import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { isMemoryEnabled } from "../config/config.ts";
 
 /** Build engine deps with the same routing/budget logic the agent uses. */
 function buildEngine(
@@ -108,6 +110,24 @@ async function doRun(store: Store, topic: string, depth: ResearchDepth, override
   const { deps, providerId, model } = buildEngine(store, override, override.budget);
   console.log(`${C.bold("🔬 Research")} ${C.cyan(`(${depth})`)} · ${C.dim(`${providerId}/${model}`)}`);
   console.log(`${C.dim("topic:")} ${topic}\n`);
+
+  // Stage 6 — surface relevant durable memory so research starts with the
+  // user's known context (preferences, prior facts). Conservative: only shown,
+  // never injected silently, and only when memory is enabled.
+  if (isMemoryEnabled()) {
+    try {
+      const mem = new MemoryStore(store);
+      const scope = projectScopeFromCwd(process.cwd());
+      const recalled = mem.recall(topic, { scope, k: 4 });
+      if (recalled.length) {
+        console.log(`${C.dim("relevant memory:")}`);
+        for (const e of recalled) console.log(`  ${C.dim(`• (${e.category}) ${e.content}`)}`);
+        console.log();
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
 
   const session = await runResearch(deps, { topic, depth });
 
