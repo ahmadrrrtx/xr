@@ -120,7 +120,11 @@ export class SpeechToText {
     const cpp = this.whisperCppCommand();
     if (cpp) return { backend: "whispercpp", available: true, detail: `${cpp} found` };
     if (process.env.XR_STT_URL) return { backend: "http", available: true, detail: `HTTP STT at ${this.baseUrl}` };
-    return { backend: "http", available: true, detail: `HTTP STT at ${this.baseUrl}` };
+    return {
+      backend: "auto",
+      available: false,
+      detail: "No local STT found. Install whisper CLI / whisper.cpp, or configure XR_STT_URL for a local STT endpoint.",
+    };
   }
 
   private async transcribeHttp(backend: VoiceSttBackend, audio: Uint8Array, mime: string): Promise<SttResult> {
