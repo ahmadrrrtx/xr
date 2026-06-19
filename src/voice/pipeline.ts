@@ -15,9 +15,10 @@ import { SpeechToText } from "./stt.ts";
 import { TextToSpeech } from "./tts.ts";
 import { detectWake, parseConfirmation } from "./wake.ts";
 import { runAgent } from "../core/agent.ts";
-import { loadConfig } from "../config/config.ts";
+import { loadConfig, isMemoryEnabled } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
+import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
 import type { ApprovalRequest } from "../core/types.ts";
 
 export interface VoiceDeps {
@@ -114,6 +115,11 @@ export class VoicePipeline {
     const model = config.defaults.model;
     const provider = buildProvider(config, {});
 
+    // Stage 6 — the canonical memory engine, so voice recall matches
+    // CLI/TUI/dashboard exactly (explainable, access-tracked, expiry-aware).
+    const memoryEngine = new MemoryStore(this.deps.store);
+    const memEnabled = isMemoryEnabled();
+
     const result = await runAgent(command, "agent", {
       store: this.deps.store,
       provider,
@@ -126,6 +132,16 @@ export class VoicePipeline {
       },
       pricing: priceFor(providerId, model),
       egressAllowlist: config.security.egressAllowlist,
+      memory: {
+        enabled: memEnabled && config.memory.injectInChat,
+        recallLimit: config.memory.recallLimit,
+        semantic: config.memory.semanticRecall,
+      },
+      memoryStore: memoryEngine,
+      sessionSummary: {
+        enabled: memEnabled && config.memory.saveSessionSummaries,
+        minTurns: config.memory.sessionSummaryMinTurns,
+      },
     });
 
     const reply = result.finalMessage || `Done. ${result.meter ?? ""}`;
