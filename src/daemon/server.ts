@@ -34,6 +34,7 @@ import { buildProvider, knownProviders, PRESETS } from "../providers/factory.ts"
 import { getProviderEnvStatus } from "../config/config.ts";
 import { listRemembered, forgetPlan, clearAllMemory } from "../control/memory.ts";
 import { MemoryStore } from "../memory/store.ts";
+import type { Message } from "../core/types.ts";
 
 export interface DaemonOptions {
   port?:   number;
@@ -129,7 +130,7 @@ export function makeHandler(store: Store, token: string) {
     // ── Chat Streaming API ────────────────────────────────────────────────
     if (path === "/api/chat" && method === "POST") {
       try {
-        const body = await req.json() as { message?: string; history?: Array<{role:string;content:string}> };
+        const body = await req.json() as { message?: string; history?: Array<{role:"system"|"user"|"assistant"|"tool";content:string}> };
         if (!body?.message) return json({ error: "expected { message: string }" }, 400);
 
         const provider = buildProvider(config, {});
@@ -152,26 +153,18 @@ export function makeHandler(store: Store, token: string) {
             try {
               // Build messages array
               const history = (body.history ?? []).slice(-10);
-              const messages = [
+              const messages: Message[] = [
                 ...history,
                 { role: "user", content: body.message! },
               ];
 
-              // Stream the response
+              // Providers expose a one-turn chat API here; dashboard streams the
+              // final message as one SSE payload when provider-level streaming is
+              // unavailable.
               let fullText = "";
-              const result = await provider.chat(messages, {
-                onToken: (tok: string) => {
-                  fullText += tok;
-                  send({ delta: tok });
-                },
-                store,
-                cwd: process.cwd(),
-              });
-
-              if (!fullText && result?.content) {
-                fullText = result.content;
-                send({ text: fullText });
-              }
+              const result = await provider.chat(messages, []);
+              fullText = result.message ?? "";
+              if (fullText) send({ text: fullText });
 
               // Audit the exchange (content capped; no secrets expected in chat)
               store.audit("chat.message", {
