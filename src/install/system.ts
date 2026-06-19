@@ -15,6 +15,7 @@ import { XR_HOME, configPath, loadConfig, saveConfig, type XRConfig } from "../c
 import { detectHardwareSpecs, formatHardwareSummary } from "../local/hardware.ts";
 import { recommendLocalModel } from "../local/recommend.ts";
 import { ollamaStatus, pullOllamaModel, testOllamaModel } from "../local/ollama.ts";
+import { detectAllRuntimes, detectRuntime } from "../local/runtimes.ts";
 import { validateOllamaModelId } from "../local/registry.ts";
 import { knownProviders, PRESETS } from "../providers/factory.ts";
 import { preferredSecretBackend, setSecret } from "../security/secrets.ts";
@@ -226,11 +227,15 @@ export async function probeHealth(opts: InstallOptions = {}): Promise<HealthChec
   }
 
   const { config } = loadConfig();
-  const selectedModel = config.localModels.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
-  const ollama = await ollamaStatus(selectedModel);
-  checks.push({ id: "ollama-cli", label: "Ollama CLI", state: ollama.installed ? "ok" : (config.localModels.enabled ? "fail" : "warn"), detail: ollama.installed ? "installed" : "missing", remediation: "Run xr models install after installing Ollama from https://ollama.com." });
-  checks.push({ id: "ollama-server", label: "Ollama server", state: ollama.running ? "ok" : (config.localModels.enabled ? "warn" : "skip"), detail: ollama.running ? "running" : "not running", remediation: "Start Ollama, then rerun xr doctor." });
-  checks.push({ id: "local-model", label: "Local model", state: ollama.models.includes(selectedModel) ? "ok" : (config.localModels.enabled ? "warn" : "skip"), detail: selectedModel, remediation: `Run xr models install ${selectedModel}.` });
+  const localCfg: any = config.localModels;
+  const selectedRuntime = localCfg.runtime ?? "ollama";
+  const selectedModel = localCfg.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
+  const runtimeStatus = await detectRuntime(selectedRuntime);
+  const allLocal = await detectAllRuntimes();
+  const readyLocal = allLocal.filter((r) => r.healthy).map((r) => r.id).join(", ") || "none";
+  checks.push({ id: "local-runtime", label: "Local AI runtime", state: runtimeStatus.healthy ? "ok" : (localCfg.enabled ? "warn" : "skip"), detail: `${runtimeStatus.label}: ${runtimeStatus.detail}`, remediation: runtimeStatus.healthy ? undefined : "Run xr models runtimes, then start/configure a local runtime or run xr models install." });
+  checks.push({ id: "local-runtimes-detected", label: "Detected local runtimes", state: readyLocal === "none" ? "warn" : "ok", detail: readyLocal, remediation: readyLocal === "none" ? "Install/start Ollama, LM Studio, Jan, llama.cpp, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, or SGLang." : undefined });
+  checks.push({ id: "local-model", label: "Local model", state: runtimeStatus.models.includes(selectedModel) ? "ok" : (localCfg.enabled ? "warn" : "skip"), detail: `${selectedRuntime}/${selectedModel}`, remediation: `Run xr models install ${selectedModel} or xr models set ${selectedRuntime} <model>.` });
 
   const secretBackend = preferredSecretBackend();
   checks.push({ id: "secrets", label: "Secret store", state: secretBackend === "file" ? "warn" : "ok", detail: secretBackend, remediation: secretBackend === "file" ? `Keys fall back to ${join(XR_HOME, ".env")} with chmod 600. Install OS secret tooling for stronger storage.` : undefined });
@@ -638,7 +643,7 @@ export async function runInstallWizard(args: string[] = []): Promise<void> {
           baseUrl,
           defaultModel,
           apiKeyEnv,
-          capabilities: { chat: true },
+          capabilities: { chat: true, reasoning: false, vision: false, embeddings: false, toolUse: false, jsonMode: false, functionCalling: false, streaming: false },
         });
         if (!firstProvider) {
           config.defaults.provider = id;
