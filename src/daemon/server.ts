@@ -173,11 +173,10 @@ export function makeHandler(store: Store, token: string) {
                 send({ text: fullText });
               }
 
-              // Audit the exchange
-              store.logAudit({
-                event:   "chat.message",
-                input:   body.message!.slice(0, 200),
-                output:  fullText.slice(0, 200),
+              // Audit the exchange (content capped; no secrets expected in chat)
+              store.audit("chat.message", {
+                input:  body.message!.slice(0, 200),
+                output: fullText.slice(0, 200),
               });
 
               send({ done: true });
@@ -306,7 +305,7 @@ export function makeHandler(store: Store, token: string) {
           return json({ error: "expected { id: string, approved: boolean }" }, 400);
         }
         const handled = approvals.answer(body.id, body.approved);
-        store.logAudit({ event: `control.approve.${body.approved ? "granted" : "denied"}`, id: body.id });
+        store.audit(`control.approve.${body.approved ? "granted" : "denied"}`, { id: body.id });
         return json({ ok: handled });
       } catch (e) {
         return json({ error: (e as Error).message }, 400);
@@ -346,7 +345,7 @@ export function makeHandler(store: Store, token: string) {
       const key = decodeURIComponent(path.slice("/api/control/memory/".length));
       if (key === "*" || key === "all") {
         const n = clearAllMemory(store);
-        store.logAudit({ event: "control.memory.clear_all", removed: n });
+        store.audit("control.memory.clear_all", { removed: n });
         return json({ ok: true, removed: n });
       }
       const r = forgetPlan(store, key);
@@ -365,14 +364,34 @@ export function makeHandler(store: Store, token: string) {
         source:     e.source,
         tags:       e.tags,
         importance: e.importance,
+        expiresAt:  e.expiresAt ?? null,
         updatedAt:  e.updatedAt,
       }));
       return json({
         enabled: isMemoryEnabled(),
         count:   mem.count(),
         stats:   mem.stats(),
+        health:  mem.health(),
         entries,
       });
+    }
+
+    // Stage 6 — memory health snapshot for the dashboard / doctor.
+    if (path === "/api/memory/health") {
+      const mem = new MemoryStore(store);
+      return json({ enabled: isMemoryEnabled(), ...mem.health() });
+    }
+
+    // Stage 6 — keyword memory search (?q=...).
+    if (path === "/api/memory/search") {
+      const q = (url.searchParams.get("q") ?? "").trim();
+      if (!q) return json({ results: [] });
+      const mem = new MemoryStore(store);
+      const results = mem.search(q).map(e => ({
+        id: e.id, category: e.category, content: e.content,
+        scope: e.scope, tags: e.tags, importance: e.importance,
+      }));
+      return json({ query: q, results });
     }
 
     if (path.startsWith("/api/memory/") && method === "DELETE") {
@@ -380,11 +399,11 @@ export function makeHandler(store: Store, token: string) {
       const mem = new MemoryStore(store);
       if (key === "*" || key === "all") {
         const n = mem.clear();
-        store.logAudit({ event: "memory.clear_all", removed: n });
+        store.audit("memory.clear_all", { removed: n });
         return json({ ok: true, removed: n });
       }
       const r = mem.remove(key);
-      store.logAudit({ event: "memory.delete", id: key, ok: r.ok });
+      store.audit("memory.delete", { id: key, ok: r.ok });
       return json({ ok: r.ok, reason: r.reason }, r.ok ? 200 : 404);
     }
 
