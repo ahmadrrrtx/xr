@@ -42,6 +42,33 @@ export interface MemoryEntry {
   importance: number;
   createdAt: number;
   updatedAt: number;
+  /**
+   * Stage 6 — when this entry was last surfaced by recall (null = never).
+   * Powers recency-based hygiene ("show stale memory", "prune untouched").
+   */
+  lastAccessedAt?: number | null;
+  /** Stage 6 — how many times recall has surfaced this entry. */
+  accessCount?: number;
+  /**
+   * Stage 6 — retention/expiry. Epoch-ms after which the entry is eligible for
+   * pruning and excluded from recall. null/undefined = never expires.
+   */
+  expiresAt?: number | null;
+}
+
+/**
+ * Stage 6 — an explainable recall hit. Lets XR (and the user) see WHY a memory
+ * was surfaced: the raw similarity, the importance-adjusted score, and a
+ * human-readable reason. Retrieval is never a black box.
+ */
+export interface RecallHit {
+  entry: MemoryEntry;
+  /** Raw similarity to the query (0..1, lexical or embedding cosine). */
+  sim: number;
+  /** Importance-adjusted score used for ranking. */
+  score: number;
+  /** Human-readable reason this entry was surfaced. */
+  reason: string;
 }
 
 /** The portable export format (stable across versions). */
@@ -68,3 +95,27 @@ export function clampImportance(n: unknown): number {
   if (!Number.isFinite(x)) return 3;
   return Math.min(5, Math.max(1, x));
 }
+
+/**
+ * Stage 6 — convert a time-to-live in ms to an absolute `expiresAt` epoch-ms.
+ * Returns null when there is no TTL (entry never expires). `now` is overridable
+ * for deterministic tests.
+ */
+export function ttlToExpiresAt(ttlMs?: number | null, now: number = Date.now()): number | null {
+  if (ttlMs === null || ttlMs === undefined) return null;
+  const ms = Number(ttlMs);
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  return now + ms;
+}
+
+/**
+ * Stage 6 — is an entry expired at `now`? Entries with no `expiresAt` never
+ * expire. `now` is overridable for deterministic tests.
+ */
+export function isExpired(entry: { expiresAt?: number | null }, now: number = Date.now()): boolean {
+  const e = entry.expiresAt;
+  return typeof e === "number" && Number.isFinite(e) && e <= now;
+}
+
+/** Default relevance floor for recall (conservative: weak hits are dropped). */
+export const RECALL_FLOOR = 0.12;
