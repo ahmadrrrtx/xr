@@ -574,7 +574,7 @@ async function renderFullStatus(ctx: TUIContext): Promise<void> {
   kv("All-time spent",   `$${cost.totalUsd.toFixed(6)}`);
   kv("Session tokens",   state.sessionTokens.toLocaleString());
   kv("All-time tokens",  cost.totalTokens.toLocaleString());
-  if (state.budget > 0) kv("Budget ceiling", `$${state.budget.toFixed(2)}`, "amber");
+  if (state.budget > 0) kv("Budget ceiling", `$${state.budget.toFixed(2)}`, "warn");
 
   divider("Local AI");
   const local: any = config.localModels;
