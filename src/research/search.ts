@@ -5,6 +5,8 @@
  * real research runs the user can explicitly pass --allow-public-web, which only
  * permits http(s) public web hosts and blocks localhost/private/link-local IPs.
  */
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import type { ToolContext } from "../core/types.ts";
 import { webSearchTool, fetchUrlTool } from "../tools/web.ts";
 import { htmlToText, hostAllowed } from "../tools/egress.ts";
@@ -175,7 +177,8 @@ async function directPublicFetch(
   } catch {
     return { ok: false, reason: "invalid url" };
   }
-  if (!isPublicHost(u.hostname)) return { ok: false, reason: "blocked private/local host" };
+  const hostCheck = await assertPublicHostname(u.hostname);
+  if (!hostCheck.ok) return { ok: false, reason: hostCheck.reason };
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -188,8 +191,15 @@ async function directPublicFetch(
         Accept: "text/html,text/plain,application/xhtml+xml,application/json;q=0.8,*/*;q=0.5",
       },
     });
+    const finalUrl = new URL(res.url);
+    const finalHostCheck = await assertPublicHostname(finalUrl.hostname);
+    if (!finalHostCheck.ok) return { ok: false, status: res.status, reason: `blocked redirect: ${finalHostCheck.reason}` };
     const contentType = res.headers.get("content-type") ?? "";
     const lastModified = res.headers.get("last-modified") ?? undefined;
+    const len = Number(res.headers.get("content-length") ?? "0");
+    if (Number.isFinite(len) && len > maxChars * 8) {
+      return { ok: false, status: res.status, contentType, lastModified, reason: `content too large (${len} bytes)` };
+    }
     if (!res.ok) return { ok: false, status: res.status, contentType, lastModified, reason: `http ${res.status}` };
     const raw = await res.text();
     const text = contentType.includes("html") ? htmlToText(raw) : raw.replace(/\s+/g, " ").trim();
@@ -203,20 +213,46 @@ async function directPublicFetch(
   }
 }
 
-function isPublicHost(hostname: string): boolean {
-  const h = hostname.toLowerCase();
-  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local")) return false;
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) return isPublicIPv4(h);
-  if (h === "0.0.0.0" || h === "::1" || h.startsWith("[")) return false;
-  return true;
+async function assertPublicHostname(hostname: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local")) return { ok: false, reason: "blocked local hostname" };
+  const directIp = isIP(h);
+  if (directIp) return isPublicIp(h) ? { ok: true } : { ok: false, reason: "blocked private/local IP" };
+
+  try {
+    const records = await lookup(h, { all: true, verbatim: true });
+    if (!records.length) return { ok: false, reason: "DNS lookup returned no addresses" };
+    for (const r of records) {
+      if (!isPublicIp(r.address)) return { ok: false, reason: `DNS resolves to private/local IP (${r.address})` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: `DNS lookup failed: ${(e as Error).message}` };
+  }
+}
+
+function isPublicIp(ip: string): boolean {
+  return isIP(ip) === 4 ? isPublicIPv4(ip) : isPublicIPv6(ip);
 }
 
 function isPublicIPv4(ip: string): boolean {
   const p = ip.split(".").map(Number);
   if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
-  if (p[0] === 10 || p[0] === 127 || p[0] === 0) return false;
+  if (p[0] === 0 || p[0] === 10 || p[0] === 127) return false;
+  if (p[0] === 100 && p[1] >= 64 && p[1] <= 127) return false; // carrier-grade NAT
+  if (p[0] === 169 && p[1] === 254) return false;
   if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return false;
   if (p[0] === 192 && p[1] === 168) return false;
-  if (p[0] === 169 && p[1] === 254) return false;
+  if (p[0] === 198 && (p[1] === 18 || p[1] === 19)) return false;
+  if (p[0] >= 224) return false;
+  return true;
+}
+
+function isPublicIPv6(ip: string): boolean {
+  const h = ip.toLowerCase();
+  if (h === "::" || h === "::1") return false;
+  if (h.startsWith("fc") || h.startsWith("fd")) return false; // unique local
+  if (h.startsWith("fe8") || h.startsWith("fe9") || h.startsWith("fea") || h.startsWith("feb")) return false; // link-local
+  if (h.startsWith("ff")) return false; // multicast
   return true;
 }
