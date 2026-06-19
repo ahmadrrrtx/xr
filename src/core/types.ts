@@ -37,6 +37,8 @@ export interface ToolContext {
 export interface ApprovalRequest {
   tool: string;
   reason: string;
+  /** Optional tool arguments for transparent approval prompts. */
+  args?: Record<string, unknown>;
   /** A human-readable preview (e.g. a diff). */
   preview?: string;
 }
