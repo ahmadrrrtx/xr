@@ -51,7 +51,7 @@ export function shapeForPersona(text: string, persona: VoicePersona): string {
     return first.slice(0, 220);
   }
   if (persona === "detailed") return t.slice(0, 1800);
-  return t.length > 650 ? t.slice(0, 650) + "…" : t;
+  return t.length > 600 ? t.slice(0, 600) + "…" : t;
 }
 
 export function ttsFromSettings(settings: VoiceSettings, fetchFn?: typeof fetch): TextToSpeech {
