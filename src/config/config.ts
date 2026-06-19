@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import { getSecret } from "../security/secrets.ts";
 import { PRESETS } from "../providers/presets.ts";
 
-export const CONFIG_VERSION = 10; // Stage 4 Local AI runtime manager
+export const CONFIG_VERSION = 11; // Stage 6 Memory Engine
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -173,10 +173,10 @@ const ConfigSchema = z.object({
       alwaysListen: z.boolean().default(false),
     })
     .default({}),
-  // v0.9 — durable memory system (long-term preferences, project context,
-  // facts). Local-first and EXPLICIT by default: XR only stores what the user
-  // asks it to. `autoSuggest` offers to remember things found in chat/voice,
-  // but still requires user confirmation — never a silent auto-save.
+  // v0.9 / Stage 6 — durable memory system (long-term preferences, project
+  // context, facts). Local-first and EXPLICIT by default: XR only stores what
+  // the user asks it to. `autoSuggest` offers to remember things found in
+  // chat/voice, but still requires user confirmation — never a silent auto-save.
   memory: z
     .object({
       enabled: z.boolean().default(true),
@@ -192,6 +192,20 @@ const ConfigSchema = z.object({
        * recall everywhere.
        */
       semanticRecall: z.boolean().default(true),
+      /**
+       * Stage 6 — auto-prune entries older than this many days at opportune
+       * moments (e.g. on `xr doctor`). 0 = never auto-expire (explicit only).
+       * This NEVER deletes high-importance (>=4) or exclusion rules.
+       */
+      autoExpireDays: z.number().int().min(0).max(3650).default(0),
+      /**
+       * Stage 6 — fold finished conversations into compact session summaries
+       * (kept in a SEPARATE store, never confused with long-term facts). Off
+       * by default so XR is never noisy/creepy.
+       */
+      saveSessionSummaries: z.boolean().default(false),
+      /** Stage 6 — minimum user/assistant turns before a summary is saved. */
+      sessionSummaryMinTurns: z.number().int().min(2).max(100).default(6),
     })
     .default({}),
   // v0.8: Computer control (safe desktop automation).  Disabled by default —
@@ -346,6 +360,17 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       },
     };
   },
+  // 10 -> 11: Stage 6 Memory Engine — retention, session summaries, explainable recall.
+  10: (raw) => ({
+    ...raw,
+    version: 11,
+    memory: {
+      ...(raw.memory ?? {}),
+      autoExpireDays: raw.memory?.autoExpireDays ?? 0,
+      saveSessionSummaries: raw.memory?.saveSessionSummaries ?? false,
+      sessionSummaryMinTurns: raw.memory?.sessionSummaryMinTurns ?? 6,
+    },
+  }),
 
 };
 
