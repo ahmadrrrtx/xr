@@ -55,10 +55,11 @@ async function configureLocal(
   console.log();
 
   // Hardware summary
-  kv("RAM",       specs.ramGb + "GB");
+  kv("RAM",       specs.totalRamGb + "GB");
   kv("CPU cores", String(specs.cpuCores));
-  if (specs.gpuVramGb) kv("GPU VRAM", specs.gpuVramGb + "GB");
-  kv("Suitability", specs.suitability?.label ?? "—", specs.suitability?.level === "high" ? "ok" : "warn");
+  const maxGpuVram = Math.max(0, ...specs.gpus.map((g) => g.vramGb ?? 0));
+  if (maxGpuVram) kv("GPU VRAM", maxGpuVram + "GB");
+  kv("Suitability", `${specs.tier} — ${specs.suitability.reason}`, specs.tier === "heavy" || specs.tier === "medium" ? "ok" : "warn");
 
   console.log();
   console.log(`  ${xrBold("Recommended model:")} ${xrCyan(rec.model.id)} ${xrDim("(" + rec.model.label + ")")}`);
@@ -267,7 +268,7 @@ export async function runOnboarding(): Promise<void> {
   if (config.defaults.fallbackProvider) {
     kv("Fallback", config.defaults.fallbackProvider + " / " + (config.defaults.fallbackModel ?? localModel), "dim");
   }
-  kv("Budget ceiling",   `$${config.budget.perTaskUsd}`, "amber");
+  kv("Budget ceiling",   `$${config.budget.perTaskUsd}`, "warn");
   kv("Config saved to",  configPath(),                    "dim");
 
   console.log();
