@@ -685,8 +685,21 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <!-- ════════ MEMORY ════════ -->
       <div class="panel" id="panel-memory">
         <div class="section-header">
-          <div><div class="section-title">Memory</div><div class="section-sub">Durable memory — only what you asked XR to remember</div></div>
+          <div><div class="section-title">Memory</div><div class="section-sub">Durable memory — only what you asked XR to remember. Inspectable & deletable.</div></div>
           <button class="btn btn-danger" onclick="clearMemory()" style="font-size:12px">Clear All</button>
+        </div>
+        <div class="grid grid-3 mb-4">
+          <div class="card"><div class="card-header"><div class="card-title">Total Entries</div><span class="card-icon">🧠</span></div><div class="card-value" id="mem-h-total">0</div><div class="card-sub" id="mem-h-enabled">checking…</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Expired</div><span class="card-icon">⌛</span></div><div class="card-value" id="mem-h-expired">0</div><div class="card-sub" id="mem-h-expired-sub">eligible to prune</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Never Recalled</div><span class="card-icon">💤</span></div><div class="card-value" id="mem-h-never">0</div><div class="card-sub">untouched memory</div></div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><div class="card-title">Search Memory</div></div>
+          <div style="display:flex;gap:8px">
+            <input id="mem-search" placeholder='e.g. "prefer typescript" or "project"' style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--sans)" onkeydown="if(event.key==='Enter')doMemSearch()"/>
+            <button class="btn btn-primary" onclick="doMemSearch()">Search</button>
+          </div>
+          <div id="mem-search-results" style="margin-top:10px"></div>
         </div>
         <div class="card">
           <div class="card-header">
@@ -944,7 +957,7 @@ async function loadDashboard() {
       document.getElementById("d-audit-val").className    = "card-value " + (auditOk ? "val-green" : "val-red");
       document.getElementById("d-audit-entries").textContent = (d.audit?.count ?? 0) + " entries";
       document.getElementById("d-skills").textContent     = (d.skills?.learned ?? 0) + "";
-      document.getElementById("d-skills-sub").textContent = `${d.skills?.learned ?? 0} learned / ${d.skills?.frozen ?? 0} frozen`;
+      document.getElementById("d-skills-sub").textContent = (d.skills?.learned ?? 0) + " learned / " + (d.skills?.frozen ?? 0) + " frozen";
       // Topbar chips
       document.getElementById("chip-audit-label").textContent = auditOk ? "Audit OK" : "Audit BROKEN";
       document.getElementById("chip-audit").className = "status-chip " + (auditOk ? "ok" : "err");
@@ -1097,6 +1110,13 @@ async function loadMemory() {
   try {
     const mem = await api("/api/memory");
     document.getElementById("mem-count").textContent = mem.count ?? 0;
+    // Stage 6 — health cards.
+    const h = mem.health ?? {};
+    document.getElementById("mem-h-total").textContent = h.total ?? mem.count ?? 0;
+    document.getElementById("mem-h-enabled").textContent = mem.enabled ? "enabled" : "disabled";
+    document.getElementById("mem-h-enabled").style.color = mem.enabled ? "var(--green)" : "var(--red)";
+    document.getElementById("mem-h-expired").textContent = h.expired ?? 0;
+    document.getElementById("mem-h-never").textContent = h.neverAccessed ?? 0;
     const entries = mem.entries ?? [];
     if (!entries.length) {
       document.getElementById("mem-list").innerHTML =
@@ -1108,13 +1128,29 @@ async function loadMemory() {
     document.getElementById("mem-list").innerHTML = entries.map(e =>
       \`<div class="mem-item">
          <div class="mem-cat">\${e.category ?? "general"}</div>
-         <div class="mem-content">\${e.content}</div>
+         <div class="mem-content">\${e.content}\${e.expiresAt ? '<div style="font-size:10px;color:var(--amber);margin-top:2px">⌛ expires '+new Date(e.expiresAt).toLocaleDateString()+'</div>' : ''}</div>
          <div class="mem-del" onclick="deleteMemory('\${e.id}')">✕</div>
        </div>\`
     ).join("");
   } catch(e) {
     document.getElementById("mem-list").innerHTML =
       "<div class='muted' style='font-size:12px'>Memory not available</div>";
+  }
+}
+
+// Stage 6 — live memory search.
+async function doMemSearch() {
+  const q = (document.getElementById("mem-search")?.value ?? "").trim();
+  const out = document.getElementById("mem-search-results");
+  if (!q) { if (out) out.innerHTML = ""; return; }
+  try {
+    const r = await api("/api/memory/search?q=" + encodeURIComponent(q));
+    const results = r.results ?? [];
+    out.innerHTML = results.length
+      ? results.map(e => \`<div class="mem-item"><div class="mem-cat">\${e.category}</div><div class="mem-content">\${e.content}</div></div>\`).join("")
+      : '<div class="muted" style="font-size:12px;padding:6px 0">No matches.</div>';
+  } catch(e) {
+    out.innerHTML = '<div class="muted" style="font-size:12px;padding:6px 0">Search failed: '+e.message+'</div>';
   }
 }
 
