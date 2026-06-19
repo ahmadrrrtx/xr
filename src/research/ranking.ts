@@ -1,142 +1,153 @@
-/**
- * XR — deterministic source ranking + dedupe (v0.7).
- *
- * Ranking is PURE and DETERMINISTIC: given the same inputs it always produces
- * the same scores. We do NOT ask an LLM to rank sources — that would be neither
- * repeatable nor auditable. Instead we use transparent heuristics and expose a
- * human-readable reason for every score (UX rule: source transparency).
- *
- * Trust is a heuristic prior on source QUALITY, not a claim of correctness.
- * It is intentionally conservative: unknown domains get a neutral-low score,
- * never a high one.
- */
-import type { Source } from "./types.ts";
+/** XR Stage 7 — deterministic source ranking, freshness and quality scoring. */
+import type { Source, SourceFreshness, SourceType } from "./types.ts";
 import type { SearchHit } from "./search.ts";
 
-/** High-trust domain families (suffix match). Curated + conservative. */
-const HIGH_TRUST: Array<{ suffix: string; reason: string }> = [
-  { suffix: ".gov", reason: "government source" },
-  { suffix: ".edu", reason: "academic source" },
-  { suffix: "wikipedia.org", reason: "encyclopedic, cited" },
-  { suffix: "arxiv.org", reason: "preprint research" },
-  { suffix: "nature.com", reason: "peer-reviewed journal" },
-  { suffix: "ieee.org", reason: "standards body / journal" },
-  { suffix: "acm.org", reason: "academic / standards body" },
-  { suffix: "who.int", reason: "international institution" },
-  { suffix: "nih.gov", reason: "medical institution" },
-  { suffix: "github.com", reason: "primary source / code" },
-  { suffix: "developer.mozilla.org", reason: "authoritative docs" },
+const HIGH_TRUST: Array<{ suffix: string; type: SourceType; reason: string }> = [
+  { suffix: ".gov", type: "official", reason: "government / official domain" },
+  { suffix: ".edu", type: "academic", reason: "academic institution" },
+  { suffix: "who.int", type: "official", reason: "international institution" },
+  { suffix: "nih.gov", type: "official", reason: "medical institution" },
+  { suffix: "un.org", type: "official", reason: "international institution" },
+  { suffix: "oecd.org", type: "official", reason: "international institution" },
+  { suffix: "worldbank.org", type: "official", reason: "international institution" },
+  { suffix: "sec.gov", type: "official", reason: "regulatory filing source" },
+  { suffix: "github.com", type: "primary", reason: "primary code/release source" },
+  { suffix: "docs.github.com", type: "docs", reason: "official docs" },
+  { suffix: "developer.mozilla.org", type: "docs", reason: "authoritative developer docs" },
+  { suffix: "arxiv.org", type: "academic", reason: "research/preprint repository" },
+  { suffix: "nature.com", type: "academic", reason: "scientific journal" },
+  { suffix: "science.org", type: "academic", reason: "scientific journal" },
+  { suffix: "ieee.org", type: "academic", reason: "standards/research body" },
+  { suffix: "acm.org", type: "academic", reason: "research/professional body" },
 ];
 
-/** Medium-trust domain families. */
-const MEDIUM_TRUST: Array<{ suffix: string; reason: string }> = [
-  { suffix: "stackoverflow.com", reason: "community Q&A, voted" },
-  { suffix: "reuters.com", reason: "established news" },
-  { suffix: "apnews.com", reason: "established news" },
-  { suffix: "bbc.com", reason: "established news" },
-  { suffix: "theverge.com", reason: "tech press" },
-  { suffix: "arstechnica.com", reason: "tech press" },
-  { suffix: "techcrunch.com", reason: "tech press" },
-  { suffix: ".org", reason: "non-profit / org" },
-  { suffix: "medium.com", reason: "blog platform (mixed quality)" },
+const MEDIUM_TRUST: Array<{ suffix: string; type: SourceType; reason: string }> = [
+  { suffix: "wikipedia.org", type: "reference", reason: "secondary reference; verify with cited sources" },
+  { suffix: "reuters.com", type: "news", reason: "established news wire" },
+  { suffix: "apnews.com", type: "news", reason: "established news wire" },
+  { suffix: "bbc.com", type: "news", reason: "established news organization" },
+  { suffix: "theverge.com", type: "news", reason: "tech press" },
+  { suffix: "arstechnica.com", type: "news", reason: "tech press" },
+  { suffix: "techcrunch.com", type: "news", reason: "tech press" },
+  { suffix: "stackoverflow.com", type: "community", reason: "community Q&A; verify details" },
+  { suffix: ".org", type: "reference", reason: "organization domain; mixed authority" },
 ];
 
-/** Low-trust signals (suffix or substring). Penalized, never excluded outright. */
-const LOW_TRUST: Array<{ needle: string; reason: string }> = [
-  { needle: "pinterest.", reason: "low-information aggregator" },
-  { needle: "quora.com", reason: "unverified user answers" },
-  { needle: "reddit.com", reason: "user forum (anecdotal)" },
-  { needle: "facebook.com", reason: "social media" },
-  { needle: "twitter.com", reason: "social media" },
-  { needle: "x.com", reason: "social media" },
-  { needle: "blogspot.", reason: "personal blog" },
-  { needle: "wordpress.com", reason: "personal blog" },
+const LOW_TRUST: Array<{ needle: string; type: SourceType; reason: string }> = [
+  { needle: "reddit.com", type: "community", reason: "user forum/anecdotal" },
+  { needle: "quora.com", type: "community", reason: "unverified user answers" },
+  { needle: "facebook.com", type: "community", reason: "social media" },
+  { needle: "twitter.com", type: "community", reason: "social media" },
+  { needle: "x.com", type: "community", reason: "social media" },
+  { needle: "pinterest.", type: "unknown", reason: "low-information aggregator" },
+  { needle: "medium.com", type: "blog", reason: "blog platform; mixed quality" },
+  { needle: "blogspot.", type: "blog", reason: "personal blog" },
+  { needle: "wordpress.com", type: "blog", reason: "personal blog" },
 ];
 
 export function domainOf(url: string): string {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return "";
-  }
+  try { return new URL(url).hostname.toLowerCase().replace(/^www\./, ""); } catch { return ""; }
 }
 
-/** Score a single domain. Returns 0..1 trust + a reason. Pure + deterministic. */
-export function scoreDomain(domain: string): { trust: number; reason: string } {
-  if (!domain) return { trust: 0.2, reason: "no/invalid domain" };
+export function scoreDomain(domain: string): { trust: number; type: SourceType; reason: string } {
+  if (!domain) return { trust: 0.2, type: "unknown", reason: "no/invalid domain" };
+  for (const x of HIGH_TRUST) if (domain === x.suffix.replace(/^\./, "") || domain.endsWith(x.suffix)) return { trust: 0.9, type: x.type, reason: x.reason };
+  for (const x of LOW_TRUST) if (domain.includes(x.needle)) return { trust: 0.25, type: x.type, reason: x.reason };
+  for (const x of MEDIUM_TRUST) if (domain === x.suffix.replace(/^\./, "") || domain.endsWith(x.suffix)) return { trust: 0.62, type: x.type, reason: x.reason };
+  return { trust: 0.42, type: "unknown", reason: "unrecognized domain (treat with caution)" };
+}
 
-  for (const { suffix, reason } of HIGH_TRUST) {
-    if (domain === suffix.replace(/^\./, "") || domain.endsWith(suffix)) {
-      return { trust: 0.9, reason };
+export function freshnessFromText(text: string, now = Date.now()): SourceFreshness {
+  const found = [...text.matchAll(/\b(20[0-3]\d|19\d\d)\b/g)].map((m) => Number(m[1])).filter(Boolean);
+  const year = found.length ? Math.max(...found) : undefined;
+  if (!year) return { checkedAt: now, score: 0.45, label: "unknown", reason: "no publication/update date detected" };
+  const ageDays = Math.max(0, (new Date().getUTCFullYear() - year) * 365);
+  const score = ageDays <= 370 ? 0.95 : ageDays <= 1100 ? 0.7 : 0.35;
+  const label = score >= 0.9 ? "fresh" : score >= 0.6 ? "recent" : "stale";
+  return { checkedAt: now, apparentDate: String(year), ageDays, score, label, reason: `detected apparent year ${year}` };
+}
+
+export function freshnessFromHeaders(lastModified?: string, fallbackText = "", now = Date.now()): SourceFreshness {
+  if (lastModified) {
+    const t = Date.parse(lastModified);
+    if (Number.isFinite(t)) {
+      const ageDays = Math.max(0, Math.round((now - t) / 86_400_000));
+      const score = ageDays <= 45 ? 1 : ageDays <= 365 ? 0.82 : ageDays <= 1095 ? 0.58 : 0.28;
+      const label = score >= 0.9 ? "fresh" : score >= 0.6 ? "recent" : "stale";
+      return { checkedAt: now, lastModified, ageDays, score, label, reason: `Last-Modified header ${lastModified}` };
     }
   }
-  for (const { needle, reason } of LOW_TRUST) {
-    if (domain.includes(needle)) return { trust: 0.25, reason };
-  }
-  for (const { suffix, reason } of MEDIUM_TRUST) {
-    if (domain.endsWith(suffix)) return { trust: 0.6, reason };
-  }
-  // Unknown domain: neutral-low. We never assume an unknown source is reliable.
-  return { trust: 0.4, reason: "unrecognized domain (treat with caution)" };
+  return freshnessFromText(fallbackText, now);
 }
 
-/**
- * Build ranked, de-duplicated Source[] from raw search hits.
- *
- * - Dedupe by domain (keep the highest-snippet-length hit per domain) AND by url.
- * - Score by domain trust, with a small bonus for snippet richness.
- * - Sort by trust desc, stable.
- * - Truncate to maxSources.
- */
-export function rankSources(
-  hitsByQuery: Array<{ query: string; hits: SearchHit[] }>,
-  maxSources: number,
-  idStart = 1,
-): Source[] {
-  const seenUrls = new Set<string>();
-  const byDomain = new Map<string, Source>();
+export function rankSources(hitsByQuery: Array<{ query: string; hits: SearchHit[] }>, maxSources: number, idStart = 1, topic = ""): Source[] {
+  const byUrl = new Map<string, Source>();
+  const topicTerms = terms(topic);
   let idx = idStart;
 
   for (const { query, hits } of hitsByQuery) {
     for (const hit of hits) {
       const url = (hit.url ?? "").trim();
-      if (!url || seenUrls.has(url)) continue;
       const domain = domainOf(url);
-      if (!domain) continue;
-      seenUrls.add(url);
-
-      const { trust, reason } = scoreDomain(domain);
-      // Snippet-richness bonus: longer, content-bearing snippets rank a touch higher.
-      const richness = Math.min(0.08, (hit.snippet?.length ?? 0) / 2500);
-      const finalTrust = Math.min(1, Number((trust + richness).toFixed(3)));
-
-      const candidate: Source = {
+      if (!url || !domain) continue;
+      const key = canonicalKey(url);
+      const prior = byUrl.get(key);
+      const scored = scoreDomain(domain);
+      const rel = relevance(`${hit.title} ${hit.snippet} ${query}`, topicTerms, query);
+      const fresh = freshnessFromText(`${hit.title} ${hit.snippet}`);
+      const snippetBonus = Math.min(0.06, (hit.snippet?.length ?? 0) / 5000);
+      const trust = clamp(scored.trust + snippetBonus);
+      const quality = clamp(trust * 0.5 + rel * 0.3 + fresh.score * 0.2);
+      const source: Source = {
         id: `s${idx}`,
         title: hit.title || domain,
         url,
         domain,
-        snippet: (hit.snippet ?? "").slice(0, 500),
+        snippet: (hit.snippet ?? "").slice(0, 700),
         foundVia: query,
-        trust: finalTrust,
-        trustReason: reason,
+        type: scored.type,
+        trust,
+        relevance: rel,
+        freshness: fresh,
+        quality,
+        trustReason: scored.reason,
+        rankingReason: `quality=${quality.toFixed(2)} = trust ${trust.toFixed(2)}, relevance ${rel.toFixed(2)}, freshness ${fresh.score.toFixed(2)}`,
         fetched: false,
+        verified: false,
+        metadata: { title: hit.title || domain, url, domain, type: scored.type, snippet: (hit.snippet ?? "").slice(0, 700), foundVia: query, discoveredAt: Date.now() },
         collectedAt: Date.now(),
       };
-
-      const existing = byDomain.get(domain);
-      if (!existing) {
-        byDomain.set(domain, candidate);
-        idx++;
-      } else if ((candidate.snippet?.length ?? 0) > (existing.snippet?.length ?? 0)) {
-        // Prefer the richer snippet from the same domain, but keep the first id.
-        byDomain.set(domain, { ...candidate, id: existing.id });
+      if (!prior || source.quality > prior.quality) {
+        byUrl.set(key, prior ? { ...source, id: prior.id } : source);
+        if (!prior) idx++;
       }
     }
   }
 
-  const ranked = Array.from(byDomain.values()).sort((a, b) => b.trust - a.trust);
-
-  // Re-assign clean sequential ids after sorting so the source list reads s1..sN
-  // in trust order — easier to reference in the report.
-  return ranked.slice(0, maxSources).map((s, i) => ({ ...s, id: `s${idStart + i}` }));
+  const ranked = Array.from(byUrl.values()).sort((a, b) => b.quality - a.quality || b.trust - a.trust);
+  return diversify(ranked, maxSources).map((s, i) => ({ ...s, id: `s${idStart + i}` }));
 }
+
+function diversify(sources: Source[], max: number): Source[] {
+  const domains = new Map<string, number>();
+  const out: Source[] = [];
+  for (const s of sources) {
+    const count = domains.get(s.domain) ?? 0;
+    if (count >= 2) continue;
+    domains.set(s.domain, count + 1);
+    out.push(s);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+function terms(s: string): string[] { return s.toLowerCase().split(/[^a-z0-9]+/).filter((x) => x.length > 2).slice(0, 20); }
+function relevance(text: string, topicTerms: string[], query: string): number {
+  const t = text.toLowerCase();
+  const base = topicTerms.length ? topicTerms.filter((x) => t.includes(x)).length / topicTerms.length : 0.5;
+  const qterms = terms(query);
+  const q = qterms.length ? qterms.filter((x) => t.includes(x)).length / qterms.length : 0.5;
+  return clamp(base * 0.55 + q * 0.45);
+}
+function canonicalKey(url: string): string { try { const u = new URL(url); u.hash = ""; return `${u.hostname}${u.pathname}${u.search}`.toLowerCase(); } catch { return url.toLowerCase(); } }
+function clamp(n: number): number { return Number(Math.max(0, Math.min(1, n)).toFixed(3)); }
