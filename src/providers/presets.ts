@@ -6,7 +6,7 @@
 import type { ProviderCapabilities } from "./capabilities.ts";
 
 export type ProviderKind = "hosted" | "local" | "custom";
-export type CostTier = "free" | "cheap" | "premium" | "enterprise";
+export type CostTier = "free" | "cheap" | "premium" | "enterprise" | "custom";
 
 export interface ProviderPreset {
   id: string;
@@ -110,6 +110,77 @@ export const PRESETS: Record<string, ProviderPreset> = {
     description: "High-throughput local inference server with OpenAI-compatible API.",
     docsUrl: "https://docs.vllm.ai",
   },
+  llamacpp: {
+    id: "llamacpp",
+    label: "llama.cpp server (Local)",
+    kind: "local",
+    tier: "free",
+    baseUrl: "http://localhost:8080/v1",
+    apiKeyEnv: undefined,
+    authType: "none",
+    defaultModel: "local-model",
+    knownModels: [],
+    capabilities: caps({ jsonMode: true, streaming: true, embeddings: true }),
+    description: "llama-server OpenAI-compatible local endpoint.",
+    docsUrl: "https://github.com/ggml-org/llama.cpp",
+  },
+  gpt4all: {
+    id: "gpt4all",
+    label: "GPT4All (Local)",
+    kind: "local",
+    tier: "free",
+    baseUrl: "http://localhost:4891/v1",
+    apiKeyEnv: undefined,
+    authType: "none",
+    defaultModel: "local-model",
+    knownModels: [],
+    capabilities: caps({ streaming: true }),
+    description: "GPT4All local API server.",
+    docsUrl: "https://github.com/nomic-ai/gpt4all",
+  },
+  koboldcpp: {
+    id: "koboldcpp",
+    label: "KoboldCPP (Local)",
+    kind: "local",
+    tier: "free",
+    baseUrl: "http://localhost:5001/v1",
+    apiKeyEnv: undefined,
+    authType: "none",
+    defaultModel: "local-model",
+    knownModels: [],
+    capabilities: caps({ streaming: true }),
+    description: "KoboldCPP OpenAI-compatible local endpoint.",
+    docsUrl: "https://github.com/LostRuins/koboldcpp",
+  },
+  textgenwebui: {
+    id: "textgenwebui",
+    label: "Text Generation WebUI (Local)",
+    kind: "local",
+    tier: "free",
+    baseUrl: "http://localhost:5000/v1",
+    apiKeyEnv: undefined,
+    authType: "none",
+    defaultModel: "local-model",
+    knownModels: [],
+    capabilities: caps({ streaming: true }),
+    description: "oobabooga Text Generation WebUI OpenAI-compatible API.",
+    docsUrl: "https://github.com/oobabooga/text-generation-webui",
+  },
+  sglang: {
+    id: "sglang",
+    label: "SGLang (Local)",
+    kind: "local",
+    tier: "free",
+    baseUrl: "http://localhost:30000/v1",
+    apiKeyEnv: undefined,
+    authType: "none",
+    defaultModel: "local-model",
+    knownModels: [],
+    capabilities: caps({ jsonMode: true, streaming: true }),
+    description: "SGLang OpenAI-compatible local server.",
+    docsUrl: "https://github.com/sgl-project/sglang",
+  },
+
 
   // ── FREE CLOUD TIER ─────────────────────────────────────────────────────────
   groq: {
