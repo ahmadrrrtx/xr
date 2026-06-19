@@ -19,7 +19,7 @@ import type { Store } from "../state/db.ts";
 import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
 import { BudgetManager } from "../cost/manager.ts";
 import { compact } from "../memory/compact.ts";
-import { projectScopeFromCwd } from "../memory/store.ts";
+import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
 import { buildMemoryBlock } from "../memory/inject.ts";
 
 export interface AgentDeps {
@@ -48,7 +48,7 @@ export interface AgentDeps {
   /** Dry-run: simulate side effects, never write/execute. */
   dryRun?: boolean;
   /**
-   * v0.9 — durable memory recall.
+   * v0.9 / Stage 6 — durable memory recall.
    */
   memory?: {
     enabled: boolean;
@@ -56,6 +56,21 @@ export interface AgentDeps {
     recallLimit?: number;
     /** Use embeddings-based semantic recall. */
     semantic?: boolean;
+  };
+  /**
+   * Stage 6 — the canonical memory engine. When provided, the agent recalls
+   * through it (explainable, access-tracked, expiry-aware). Falls back to
+   * `userMemoryStore` for older call-sites.
+   */
+  memoryStore?: MemoryStore;
+  /**
+   * Stage 6 — optionally fold a finished conversation into a compact session
+   * summary (kept in a SEPARATE store, never confused with long-term facts).
+   */
+  sessionSummary?: {
+    enabled: boolean;
+    /** Minimum user/assistant turns before a summary is saved. */
+    minTurns?: number;
   };
   /**
    * XR 1.0 — extra tools contributed by enabled plugins.
@@ -116,29 +131,55 @@ export async function runAgent(
   if (deps.memory?.enabled) {
     try {
       const scope = projectScopeFromCwd(cwd);
-      const recallOpts = { scope, k: deps.memory.recallLimit ?? 5 };
-      const recalled = userMemoryStore && "recallSemantic" in userMemoryStore
+      const limit = deps.memory.recallLimit ?? 5;
+      // Stage 6 — prefer the canonical engine; fall back to the legacy store.
+      const engine: MemoryStore | undefined =
+        deps.memoryStore ??
+        (userMemoryStore && "recallSemantic" in userMemoryStore
+          ? (userMemoryStore as unknown as MemoryStore)
+          : undefined);
+      const hits = engine
         ? (deps.memory.semantic === false
-          ? userMemoryStore.recall(task, recallOpts)
-          : await userMemoryStore.recallSemantic(task, recallOpts))
+          ? engine.recallExplain(task, { scope, k: limit })
+          : await engine.recallSemanticExplain(task, { scope, k: limit }))
         : [];
+      const recalled = hits.map((h) => h.entry);
       const block = buildMemoryBlock(recalled);
       if (block) {
         messages.push({ role: "system", content: block });
         auditStore.audit(
           "memory.recall",
-          { count: recalled.length, ids: recalled.map((e: { id: string }) => e.id) },
+          {
+            count: recalled.length,
+            ids: recalled.map((e) => e.id),
+            scores: hits.map((h) => ({ id: h.entry.id, sim: Math.round(h.sim * 100) })),
+          },
           sessionId,
         );
       }
     } catch {
-      /* best-effort */
+      /* best-effort: recall must never break a run */
     }
   }
 
   messages.push({ role: "user", content: task });
   let finalMessage = "";
   let stepIdx = 0;
+
+  // Stage 6 — fold the finished conversation into a compact session summary.
+  // Best-effort, separate store, never throws, never confuses with long-term
+  // memory. Only fires when the caller opted in.
+  const maybeSaveSessionSummary = (): void => {
+    if (!deps.sessionSummary?.enabled || !deps.memoryStore) return;
+    try {
+      const scope = projectScopeFromCwd(cwd);
+      deps.memoryStore.saveSessionSummary(scope, messages, {
+        minTurns: deps.sessionSummary.minTurns,
+      });
+    } catch {
+      /* best-effort */
+    }
+  };
 
   try {
     for (; stepIdx < maxSteps; stepIdx++) {
@@ -197,6 +238,8 @@ export async function runAgent(
 
       if (turn.done && turn.toolCalls.length === 0) {
         finalMessage = turn.message;
+        // Stage 6 — optionally fold the conversation into a session summary.
+        maybeSaveSessionSummary();
         sessionStore.endSession(sessionId, "done");
         auditStore.audit("session.done", { steps: stepIdx + 1, snapshot: governor.snapshot() }, sessionId);
         return { sessionId, finalMessage, steps: stepIdx + 1, stopped: "done", meter: governor.meter() };
