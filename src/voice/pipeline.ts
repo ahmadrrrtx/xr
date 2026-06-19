@@ -15,8 +15,8 @@ import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
 import { MemoryStore } from "../memory/store.ts";
 import type { ApprovalRequest } from "../core/types.ts";
-import { getVoiceSettings, appendTranscript, markVoiceUsed } from "./settings.ts";
-import type { VoiceSettings } from "./types.ts";
+import { appendTranscript, markVoiceUsed } from "./settings.ts";
+import { defaultVoiceSettings, type VoiceSettings } from "./types.ts";
 import { handleDeterministicVoiceIntent, parseVoiceIntent } from "./intents.ts";
 
 export interface VoiceDeps {
@@ -37,7 +37,7 @@ export class VoicePipeline {
   private settings: VoiceSettings;
 
   constructor(private deps: VoiceDeps) {
-    this.settings = deps.settings ?? getVoiceSettings();
+    this.settings = deps.settings ?? defaultVoiceSettings();
   }
 
   bargeIn(): void {
