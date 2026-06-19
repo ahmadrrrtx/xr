@@ -195,6 +195,17 @@ export async function runOnboarding(): Promise<void> {
   console.log();
   console.log(`  ${xrDim("Approval mode:")} ${approvalMode ? xrGreen("on — you approve every risky action") : xrAmber("off — auto-approve (not recommended)")}`);
 
+  // Stage 6 — memory preferences. Always explicit, local-first by default.
+  console.log();
+  console.log(`  ${xrDim("Memory:")} ${xrGreen("XR only remembers what you explicitly ask.")} ${xrDim("Nothing is auto-saved.")}`);
+  const memOn = await confirm("  Enable durable memory (remember preferences/projects on request)?", true);
+  const memSuggest = memOn
+    ? await confirm("  Offer to remember things found in chat/voice (asks each time)?", true)
+    : false;
+  const memInject = memOn
+    ? await confirm("  Inject relevant memory into prompts when useful (conservative)?", true)
+    : false;
+
   // ── Save ──────────────────────────────────────────────────────────────────
   section("Step 4 of 4  —  Saving Configuration");
   console.log();
@@ -208,6 +219,11 @@ export async function runOnboarding(): Promise<void> {
   config.security.requireApproval = approvalMode
     ? ["write_file", "delete", "shell", "send"]
     : ["delete", "shell", "send"];
+
+  // Stage 6 — durable memory preferences from onboarding.
+  config.memory.enabled = memOn;
+  config.memory.autoSuggest = memSuggest;
+  config.memory.injectInChat = memInject;
 
   config.localModels.enabled            = localEnabled;
   config.localModels.runtime            = "ollama";
