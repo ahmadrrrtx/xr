@@ -5,7 +5,7 @@ import type { Store } from "../state/db.ts";
 import type { StructuredCallDeps } from "./llm.ts";
 import type { SearchCapability } from "./search.ts";
 import { extractUrls } from "./search.ts";
-import type { ResearchSession, ResearchDepth, ResearchMode, Note, Source, RefreshRecord } from "./types.ts";
+import type { ResearchSession, ResearchDepth, ResearchMode, Note, Source, RefreshRecord, ComparisonOutput } from "./types.ts";
 import { DEPTH_BUDGETS } from "./types.ts";
 import { makePlan, queriesFromPlan } from "./plan.ts";
 import { rankSources, domainOf, freshnessFromHeaders, freshnessFromText, scoreDomain } from "./ranking.ts";
@@ -96,6 +96,7 @@ export async function runResearch(deps: ResearchEngineDeps, opts: RunOptions): P
     session.finalReport = synthesis.report;
     session.contradictions = contradictions;
     session.claims = claims;
+    if (session.mode === "compare") session.comparison = buildComparison(session);
     if (contradictions.length) deps.say(`  ⚠ ${contradictions.length} contradiction(s) detected`);
   } else deps.say(`  ⏸ budget reached before synthesis — partial results saved.`);
 
@@ -120,10 +121,48 @@ export async function refreshResearch(deps: ResearchEngineDeps, session: Researc
   const previousUpdatedAt = session.updatedAt;
   session.status = "refreshing";
   persist(deps, session);
-  const before = new Map(session.sources.map((s) => [s.id, `${s.metadata.lastVerifiedAt ?? 0}:${s.metadata.contentLength ?? 0}:${s.freshness.lastModified ?? ""}`]));
+
+  const llm: StructuredCallDeps = { provider: deps.provider, onUsage: (i, o) => deps.budget.record(i, o) };
+  const before = new Map(session.sources.map((s) => [s.id, `${s.metadata.lastModified ?? ""}:${s.metadata.contentLength ?? 0}:${s.fetchError ?? ""}:${s.fetched}`]));
   await fetchTopSources(deps, session, session.sources.length);
-  const changedSources = session.sources.filter((s) => before.get(s.id) !== `${s.metadata.lastVerifiedAt ?? 0}:${s.metadata.contentLength ?? 0}:${s.freshness.lastModified ?? ""}`).map((s) => s.id);
-  const record: RefreshRecord = { id: `ref_${randomUUID().slice(0, 8)}`, refreshedAt: Date.now(), previousUpdatedAt, sourcesChecked: session.sources.length, changedSources, notesAdded: 0, status: "done", message: changedSources.length ? `${changedSources.length} source(s) changed or reverified` : "sources reverified; no material changes detected" };
+  const changedSources = session.sources
+    .filter((s) => before.get(s.id) !== `${s.metadata.lastModified ?? ""}:${s.metadata.contentLength ?? 0}:${s.fetchError ?? ""}:${s.fetched}`)
+    .map((s) => s.id);
+
+  let notesAdded = 0;
+  if (changedSources.length) {
+    const keep = session.notes.filter((n) => !changedSources.includes(n.sourceId));
+    const refreshed: Note[] = [];
+    for (const src of session.sources.filter((s) => changedSources.includes(s.id))) {
+      if (!deps.budget.allow()) break;
+      let got = await extractFromSource(llm, session.topic, src, DEPTH_BUDGETS[session.depth].maxEvidencePerSource);
+      if (!got.length) got = deterministicExtract(session.topic, src, 3);
+      refreshed.push(...got);
+    }
+    notesAdded = refreshed.length;
+    session.notes = [...keep, ...refreshed];
+    session.evidence = session.notes;
+    if (session.notes.length && deps.budget.allow()) {
+      const { synthesis, contradictions, claims } = await synthesize(llm, session.topic, session.plan?.objective ?? session.topic, session.sources, session.notes);
+      session.synthesis = synthesis;
+      session.summary = synthesis;
+      session.finalReport = synthesis.report;
+      session.contradictions = contradictions;
+      session.claims = claims;
+      if (session.mode === "compare") session.comparison = buildComparison(session);
+    }
+  }
+
+  const record: RefreshRecord = {
+    id: `ref_${randomUUID().slice(0, 8)}`,
+    refreshedAt: Date.now(),
+    previousUpdatedAt,
+    sourcesChecked: session.sources.length,
+    changedSources,
+    notesAdded,
+    status: "done",
+    message: changedSources.length ? `${changedSources.length} source(s) changed; ${notesAdded} evidence block(s) refreshed` : "sources reverified; no material changes detected",
+  };
   session.refreshHistory.push(record);
   session.lastRefreshedAt = record.refreshedAt;
   session.status = "done";
@@ -154,6 +193,36 @@ export function sourceFromUrl(url: string, foundVia = "direct-url"): Source | nu
   const scored = scoreDomain(domain);
   const now = Date.now();
   return { id: "s0", title: domain, url, domain, snippet: `Direct URL: ${url}`, foundVia, type: scored.type, trust: scored.trust, relevance: 1, freshness: freshnessFromText(url), quality: scored.trust, trustReason: scored.reason, rankingReason: "direct user-supplied URL", fetched: false, verified: false, metadata: { title: domain, url, domain, type: scored.type, snippet: "direct", foundVia, discoveredAt: now }, collectedAt: now };
+}
+
+function buildComparison(session: ResearchSession): ComparisonOutput {
+  const subjects = parseSubjects(session.topic);
+  const criteria = session.plan?.questions.map((q) => q.text).slice(0, 6) ?? ["Evidence", "Risks", "Freshness"];
+  const matrix = criteria.map((criterion) => {
+    const row: Record<string, string> = { criterion };
+    for (const subject of subjects) {
+      const hits = session.notes
+        .filter((n) => n.text.toLowerCase().includes(subject.toLowerCase()))
+        .slice(0, 3)
+        .map((n) => `${n.text} [${n.sourceId}]`);
+      row[subject] = hits.length ? hits.join(" ") : "No direct evidence found.";
+    }
+    return row;
+  });
+  return {
+    id: `cmp_${randomUUID().slice(0, 8)}`,
+    subjects,
+    criteria,
+    matrix,
+    verdict: session.synthesis?.shortAnswer ?? "Comparison generated from evidence ledger; inspect source citations for confidence.",
+    createdAt: Date.now(),
+  };
+}
+
+function parseSubjects(topic: string): string[] {
+  const parts = topic.split(/\s+vs\.?\s+|\s+versus\s+|\s+compared\s+to\s+/i).map((s) => s.trim()).filter(Boolean);
+  if (parts.length >= 2) return parts.slice(0, 4);
+  return ["Option A", "Option B"];
 }
 
 function stop(deps: ResearchEngineDeps, s: ResearchSession): ResearchSession { deps.say(`⏸ stopped — ${deps.budget.reason()}`); s.status = "stopped"; s.meter = deps.budget.meter(); persist(deps, s); return s; }
