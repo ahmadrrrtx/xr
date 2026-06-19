@@ -1,312 +1,148 @@
-/**
- * XR — Voice Control System
- * 
- * Makes XR a true JARVIS: wake word → STT → agent → TTS
- * 
- * Architecture:
- * - Wake word detection (Porcupine / openwakeword) for low-power listening
- * - STT via Whisper (local via Ollama, or Groq free Whisper API)
- * - Agent processes the command
- * - TTS via Kokoro / Piper (local) or cloud TTS
- * - Voice confirmation for risky actions (approval via voice)
- * 
- * Privacy: everything stays local unless the user explicitly opts into cloud STT
- */
-
-import { SpeechToText } from "./stt.ts";
-import { TextToSpeech } from "./tts.ts";
+/** XR Stage 8 — Voice Stack public API. */
+import { SpeechToText, sttFromSettings } from "./stt.ts";
+import { TextToSpeech, ttsFromSettings } from "./tts.ts";
 import { VoiceHardware } from "./hardware.ts";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { VoicePipeline } from "./pipeline.ts";
+import { getVoiceSettings } from "./settings.ts";
+import { VoiceActivityDetector } from "./vad.ts";
+import { detectWake } from "./wake.ts";
+import type { Store } from "../state/db.ts";
+import type { VoiceHealthCheck, VoiceSettings } from "./types.ts";
+import { defaultVoiceSettings } from "./types.ts";
 
-// ── Wake Word Detection (lightweight, local) ──────────────────────────────────
-// ... (rest of the existing code)
-
-
-// ── Wake Word Detection (lightweight, local) ──────────────────────────────────
-// Uses a simple energy-based detector as fallback when Porcupine isn't available
-// For production, use Porcupine (Picovoice) or openwakeword
-
-export interface WakeWordOptions {
-  // Path to Porcupine .pnml model (optional)
-  porcupineModel?: string;
-  porcupineKeyword?: string;
-  // Sensitivity (0-1)
-  sensitivity?: number;
-  // Callback when wake word detected
-  onWake?: () => void;
-  // Audio device (default: system default)
-  audioDevice?: string;
-}
-
-export interface WakeWordResult {
-  detected: boolean;
-  keyword?: string;
-  timestamp: number;
-}
-
-// Simple energy-based wake word detection
-// For actual wake word detection, use Porcupine or openwakeword
-// This is a lightweight fallback that listens for any sound above threshold
-export class WakeWordDetector {
-  private threshold: number;
-  private listening = false; 
-  onWake: (() => void) | null = null;
-  
-  constructor(opts: WakeWordOptions = {}) {
-    this.threshold = opts.sensitivity ?? 0.3;
-    this.onWake = opts.onWake ?? null;
-  }
-  
-  start(): void {
-    this.listening = true;
-    // In a real implementation, this would:
-    // 1. Open audio stream (microphone)
-    // 2. Monitor RMS energy levels
-    // 3. When energy exceeds threshold + matches keyword pattern → call onWake()
-    // 
-    // For Bun/Node, you'd use a library like node-audio-recording or
-    // call out to a small C utility for low-latency audio capture
-    //
-    // The full implementation uses:
-    // - Porcupine (Picovoice): https://github.com/Picovoice/porcupine
-    // - openwakeword: https://github.com/dscrivner/openwakeword
-    // Both are small, fast, and run entirely on CPU
-  }
-  
-  stop(): void {
-    this.listening = false;
-  }
-  
-  isListening(): boolean {
-    return this.listening;
-  }
-  
-  // Trigger wake word manually (for testing)
-  trigger(): void {
-    if (this.onWake) this.onWake();
-  }
-}
-
-// ── Voice Session ─────────────────────────────────────────────────────────────
 export interface VoiceSessionOptions {
+  store?: Store;
   stt?: SpeechToText;
   tts?: TextToSpeech;
-  wakeWord?: WakeWordDetector;
-  model?: string;
-  persona?: "calm" | "fast" | "detailed";
-  // Callback when agent responds with text
+  hardware?: VoiceHardware;
+  settings?: VoiceSettings;
   onResponse?: (text: string) => Promise<void>;
 }
 
 export class VoiceSession {
+  private settings: VoiceSettings;
   private stt: SpeechToText;
   private tts: TextToSpeech;
   private hw: VoiceHardware;
-  private wakeWord: WakeWordDetector | null = null;
-  private sessionActive = false;
-  private persona: "calm" | "fast" | "detailed";
-  private onResponse: ((text: string) => Promise<void>) | null = null;
-  
-  constructor(opts: VoiceSessionOptions = {}) {
-    this.stt = opts.stt ?? new SpeechToText();
-    this.tts = opts.tts ?? new TextToSpeech({ persona: opts.persona ?? "calm" });
-    this.hw = new VoiceHardware();
-    this.wakeWord = opts.wakeWord ?? null;
-    this.sessionActive = false;
-    this.persona = opts.persona ?? "calm";
-    this.onResponse = opts.onResponse ?? null;
-    
-    if (this.wakeWord) {
-      this.wakeWord.onWake = () => this.wakeDetected();
-    }
+  private vad: VoiceActivityDetector;
+
+  constructor(private opts: VoiceSessionOptions = {}) {
+    this.settings = opts.settings ?? getVoiceSettings();
+    this.stt = opts.stt ?? sttFromSettings(this.settings);
+    this.tts = opts.tts ?? ttsFromSettings(this.settings);
+    this.hw = opts.hardware ?? new VoiceHardware();
+    this.vad = new VoiceActivityDetector(this.settings);
   }
-  
-  private wakeDetected(): void {
-    console.log("[Voice] Wake word detected — listening…");
-  }
-  
-  async listenForCommand(): Promise<string | null> {
+
+  async listenForCommand(durationMs?: number): Promise<string | null> {
     try {
-      console.log("[Voice] Listening... (Speak now)");
-      const audio = await this.hw.record(7000); // Record up to 7 seconds
-      const result = await this.stt.transcribe(audio);
-      if (result.ok && result.text) {
-        return result.text.trim();
+      console.log("[Voice] Listening…");
+      const audio = await this.hw.recordWav({ durationMs: durationMs ?? this.settings.endpointing.maxUtteranceMs, inputDevice: this.settings.inputDevice });
+      const vad = this.vad.analyze(audio);
+      if (!vad.speech) {
+        console.log(`[Voice] No speech detected (${vad.reason}).`);
+        return null;
       }
+      const result = await this.stt.transcribe(audio);
+      if (result.ok && result.text) return result.text.trim();
+      console.log(`[Voice] STT failed: ${result.detail ?? "unknown error"}`);
       return null;
     } catch (e) {
       console.error(`[Voice] Error listening: ${(e as Error).message}`);
       return null;
     }
   }
-  
+
   async speak(text: string): Promise<void> {
-    try {
-      this.tts.setPersona(this.persona);
-      const result = await this.tts.speak(text);
-      
-      if (result.ok && result.audio) {
-        await this.hw.play(result.audio);
-        console.log(`[Voice] Spoken: ${result.spokenText.slice(0, 80)}…`);
-      } else {
-        console.log(`[Voice] ${result.spokenText.slice(0, 80)}…`);
-      }
-    } catch (e) {
-      console.error(`[Voice] Error speaking: ${(e as Error).message}`);
+    const result = await this.tts.speak(text);
+    if (result.ok && result.audio) {
+      const handle = this.hw.play(result.audio, { outputDevice: this.settings.outputDevice });
+      await handle.done;
+    } else {
+      console.log(`[Voice] ${result.spokenText}`);
     }
+    await this.opts.onResponse?.(result.spokenText);
   }
-  
+
   async processVoiceInput(audioData: Uint8Array, mimeType = "audio/wav"): Promise<string> {
     const result = await this.stt.transcribe(audioData, mimeType);
-    if (!result.ok) {
-      return `Sorry, I didn't catch that. (${result.detail})`;
-    }
+    if (!result.ok) return `Sorry, I didn't catch that. (${result.detail})`;
     return result.text.trim();
   }
-  
-  startListening(): void {
-    if (this.wakeWord) {
-      this.wakeWord.start();
-      console.log("[Voice] Wake word listening started. Say 'Hey XR' to activate.");
-    } else {
-      console.log("[Voice] Continuous listening mode (no wake word — press Ctrl+C to stop).");
-    }
-    this.sessionActive = true;
-  }
-  
-  stopListening(): void {
-    if (this.wakeWord) this.wakeWord.stop();
-    this.sessionActive = false;
+
+  makePipeline(store: Store): VoicePipeline {
+    return new VoicePipeline({
+      store,
+      stt: this.stt,
+      tts: this.tts,
+      settings: this.settings,
+      play: (audio) => this.hw.play(audio, { outputDevice: this.settings.outputDevice }),
+      listen: () => this.hw.recordWav({ durationMs: this.settings.endpointing.maxUtteranceMs, inputDevice: this.settings.inputDevice }),
+      requireWake: this.settings.mode === "wake-word" || this.settings.mode === "always-listen",
+    });
   }
 }
 
-// ── Voice Command Router ──────────────────────────────────────────────────────
-// Maps voice commands to XR actions with fuzzy matching
-
-const VOICE_COMMANDS: Array<{
-  patterns: RegExp[];
-  action: string;
-  description: string;
-}> = [
-  {
-    patterns: [/who are you/i, /what are you/i, /tell me about yourself/i],
-    action: "identity", description: "Introduce XR"
-  },
-  {
-    patterns: [/doctor/i, /check system/i, /health check/i],
-    action: "doctor", description: "Run system health check"
-  },
-  {
-    // v0.7: research mode triggers — must precede the generic "search/find".
-    patterns: [
-      /research (.*)/i,
-      /investigate (.*)/i,
-      /compare (.*)/i,
-      /(?:do|run) (?:a |some )?(?:deep )?research (?:on |about )?(.*)/i,
-      /(?:make|write|give) me a (?:brief|report)(?: on| about)? (.*)/i,
-    ],
-    action: "research", description: "Deep research with sources"
-  },
-  {
-    patterns: [/search (for )?(.*)/i, /look up (.*)/i, /find (.*)/i],
-    action: "search", description: "Web search"
-  },
-  {
-    patterns: [/open (.*)/i, /launch (.*)/i],
-    action: "open_app", description: "Open application"
-  },
-  {
-    patterns: [/write (.*)/i, /create (.*)/i, /make (.*)/i],
-    action: "write_file", description: "Create file"
-  },
-  {
-    patterns: [/explain (.*)/i, /what does (.*) do/i],
-    action: "explain", description: "Explain code/concept"
-  },
-  {
-    patterns: [/test (.*)/i, /run (.*)/i],
-    action: "run_test", description: "Run test"
-  },
-  {
-    patterns: [/commit (.*)/i, /git (.*)/i],
-    action: "git", description: "Git operations"
-  },
-  {
-    patterns: [/stop/i, /cancel/i, /abort/i],
-    action: "stop", description: "Stop current task"
-  },
-];
-
-export function routeVoiceCommand(text: string): { action: string; args: string } | null {
-  for (const cmd of VOICE_COMMANDS) {
-    for (const pattern of cmd.patterns) {
-      const match = text.match(pattern);
-      if (match) {
-        // Extract the key argument from the command
-        const args = match[match.length - 1] ?? text;
-        return { action: cmd.action, args };
-      }
-    }
-  }
-  return null; // Treat as general task
+export function getVoiceConfig(): VoiceSettings {
+  return { ...defaultVoiceSettings(), ...getVoiceSettings() };
 }
 
-// ── Voice Config ───────────────────────────────────────────────────────────────
-export function getVoiceConfig(): {
-  sttUrl: string;
-  ttsUrl: string;
-  whisperModel: string;
-  ttsVoice: string;
-  wakeWordEnabled: boolean;
-} {
-  return {
-    sttUrl: process.env.XR_STT_URL ?? "http://localhost:8080",
-    ttsUrl: process.env.XR_TTS_URL ?? "http://localhost:8081",
-    whisperModel: process.env.XR_STT_MODEL ?? "whisper-1",
-    ttsVoice: process.env.XR_TTS_VOICE ?? "kokoro",
-    wakeWordEnabled: process.env.XR_WAKE_WORD === "true",
-  };
-}
-
-export function checkVoiceStack(): {
+export function checkVoiceStack(settings = getVoiceSettings()): {
   stt: boolean;
   tts: boolean;
   wakeWord: boolean;
   details: string[];
+  checks: VoiceHealthCheck[];
 } {
-  const details: string[] = [];
-  
-  // Check STT (Whisper server)
-  const sttUrl = process.env.XR_STT_URL ?? "http://localhost:8080";
-  let sttOk = false;
-  try {
-    const http = require("http");
-    const req = http.request(`${sttUrl}/v1/audio/transcriptions`, { method: "HEAD", timeout: 3000 }, () => { sttOk = true; });
-    req.on("error", () => { sttOk = false; });
-    req.end();
-  } catch { sttOk = false; }
-  if (sttOk) details.push("STT (Whisper): ✓"); else details.push("STT: ✗ (set XR_STT_URL or run Whisper server)");
-  
-  // Check TTS
-  const ttsUrl = process.env.XR_TTS_URL ?? "http://localhost:8081";
-  let ttsOk = false;
-  try {
-    const http = require("http");
-    const req = http.request(`${ttsUrl}/tts`, { method: "HEAD", timeout: 3000 }, () => { ttsOk = true; });
-    req.on("error", () => { ttsOk = false; });
-    req.end();
-  } catch { ttsOk = false; }
-  if (ttsOk) details.push("TTS (Kokoro): ✓"); else details.push("TTS: ✗ (set XR_TTS_URL or run Kokoro server)");
-  
-  // Check wake word deps
-  const hasPorcupine = existsSync(join(process.cwd(), "node_modules", "@picovoice", "porcupine"));
-  const hasOpenWakeWord = existsSync(join(process.cwd(), "node_modules", "openwakeword"));
-  if (hasPorcupine || hasOpenWakeWord) {
-    details.push("Wake word: ✓ (Porcupine/openwakeword)");
-  } else {
-    details.push("Wake word: ✗ (energy-based fallback active)");
-  }
-  
-  return { stt: sttOk, tts: ttsOk, wakeWord: hasPorcupine || hasOpenWakeWord, details };
+  const hw = new VoiceHardware();
+  const stt = sttFromSettings(settings).describe();
+  const tts = ttsFromSettings(settings).describe();
+  const checks: VoiceHealthCheck[] = [
+    ...hw.health(),
+    {
+      id: "voice-stt",
+      label: "Speech-to-text",
+      state: stt.available ? "ok" : "warn",
+      detail: `${stt.backend}: ${stt.detail}`,
+      remediation: stt.available ? undefined : "Install Whisper/whisper.cpp or configure a local OpenAI-compatible STT endpoint.",
+    },
+    {
+      id: "voice-tts",
+      label: "Text-to-speech",
+      state: tts.available ? "ok" : "warn",
+      detail: `${tts.engine}: ${tts.detail}`,
+      remediation: tts.available ? undefined : "Install Piper/Kokoro/espeak or configure XR_TTS_URL.",
+    },
+    {
+      id: "voice-mode",
+      label: "Voice mode",
+      state: settings.enabled ? "ok" : "warn",
+      detail: settings.enabled ? `${settings.mode}` : "disabled by default",
+      remediation: settings.enabled ? undefined : "Run xr voice setup or xr voice start when you want voice.",
+    },
+    {
+      id: "voice-privacy",
+      label: "Voice privacy",
+      state: !settings.alwaysListen && !settings.allowCloudStt ? "ok" : "warn",
+      detail: `alwaysListen=${settings.alwaysListen}, cloudStt=${settings.allowCloudStt}, transcripts=${settings.transcriptPolicy}`,
+      remediation: settings.alwaysListen ? "Always-listen should be opt-in only; use push-to-talk for safest default." : undefined,
+    },
+  ];
+  const details = checks.map((c) => `${c.label}: ${c.state === "ok" ? "✓" : c.state === "warn" ? "!" : "✗"} ${c.detail}`);
+  return { stt: stt.available, tts: tts.available, wakeWord: settings.mode === "wake-word" || settings.mode === "always-listen", details, checks };
 }
+
+export function routeVoiceCommand(text: string): { action: string; args: string } | null {
+  const t = text.trim();
+  const wake = detectWake(t);
+  const command = wake.triggered ? wake.command : t;
+  let m: RegExpMatchArray | null;
+  if ((m = command.match(/^(?:research|investigate|compare)\s+(.+)$/i))) return { action: "research", args: m[1].trim() };
+  if (/^(stop|cancel|abort)$/i.test(command)) return { action: "stop", args: "" };
+  if ((m = command.match(/^(?:open|launch)\s+(.+)$/i))) return { action: "open_app", args: m[1].trim() };
+  return null;
+}
+
+export type { VoiceSettings, VoiceHealthCheck } from "./types.ts";
+export { SpeechToText, TextToSpeech, VoiceHardware };
+export { detectWake, parseConfirmation, parseSpokenMetaCommand } from "./wake.ts";
