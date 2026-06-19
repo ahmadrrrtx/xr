@@ -37,11 +37,14 @@ export function renderReport(session: ResearchSession): RenderedReport {
   L.push(`# Research Report — ${s.topic}`);
   L.push("");
   L.push(`- Generated: ${new Date(s.updatedAt).toISOString()}`);
-  L.push(`- Mode: ${s.depth}`);
+  L.push(`- Mode: ${s.mode ?? s.depth} (${s.depth})`);
   L.push(`- Session: ${s.id}`);
   if (s.synthesis) L.push(`- Overall confidence: ${confBadge(s.synthesis.overallConfidence)}`);
   L.push(`- Sources collected: ${s.sources.length} (fetched: ${s.sources.filter((x) => x.fetched).length})`);
   L.push(`- Evidence notes: ${s.notes.length} (verified: ${s.notes.filter((n) => n.verified).length})`);
+  L.push(`- Claims tracked: ${s.claims?.length ?? 0}`);
+  L.push(`- Contradictions: ${s.contradictions.length}`);
+  if (s.lastRefreshedAt) L.push(`- Last refreshed: ${new Date(s.lastRefreshedAt).toISOString()}`);
   if (s.meter) L.push(`- Spend: ${stripAnsi(s.meter)}`);
   L.push("");
 
@@ -67,6 +70,20 @@ export function renderReport(session: ResearchSession): RenderedReport {
     L.push("");
   }
 
+  // ── Comparison matrix ─────────────────────────────────────────────────────
+  if (s.comparison) {
+    L.push(`## Comparison matrix`);
+    L.push("");
+    L.push(`**Verdict:** ${s.comparison.verdict}`);
+    L.push("");
+    L.push(`| criterion | ${s.comparison.subjects.map(escapePipe).join(" | ")} |`);
+    L.push(`|---|${s.comparison.subjects.map(() => "---").join("|")}|`);
+    for (const row of s.comparison.matrix) {
+      L.push(`| ${escapePipe(row.criterion ?? "")} | ${s.comparison.subjects.map((subject) => escapePipe(row[subject] ?? "")).join(" | ")} |`);
+    }
+    L.push("");
+  }
+
   // ── Contradictions ────────────────────────────────────────────────────────
   if (s.contradictions.length) {
     L.push(`## ⚠️ Contradictions & disagreements`);
@@ -86,15 +103,27 @@ export function renderReport(session: ResearchSession): RenderedReport {
     L.push("");
   }
 
+  // ── Claims ────────────────────────────────────────────────────────────────
+  if (s.claims?.length) {
+    L.push(`## Claim ledger`);
+    L.push("");
+    for (const cl of s.claims) {
+      const refs = cl.sourceIds.map((id) => `[${id}]`).join("");
+      L.push(`- **${cl.status}** (${cl.kind}/${cl.confidence}) ${cl.text} ${refs}`);
+    }
+    L.push("");
+  }
+
   // ── Evidence notes ────────────────────────────────────────────────────────
   if (s.notes.length) {
-    L.push(`## Evidence notes`);
+    L.push(`## Evidence ledger`);
     L.push("");
-    L.push(`_Each note is tied to a source. "unverified" means it came from a search snippet, not fetched page text._`);
+    L.push(`_Each evidence block is tied to a source. "unverified" means it came from a search snippet, not fetched page text._`);
     L.push("");
     for (const n of s.notes) {
-      const verified = n.verified ? "" : " · _unverified_";
-      L.push(`- [${n.sourceId}] (${n.claim}, ${n.confidence}${verified}) ${n.text}`);
+      const verified = n.verified ? "verified" : "unverified";
+      L.push(`- [${n.id}] [${n.sourceId}] (${n.kind ?? n.claim}, ${n.confidence}, ${n.strength ?? "weak"}, ${verified}) ${n.text}`);
+      if (n.quote) L.push(`  - quote: “${n.quote}”`);
     }
     L.push("");
   }
@@ -103,17 +132,27 @@ export function renderReport(session: ResearchSession): RenderedReport {
   L.push(`## Sources`);
   L.push("");
   if (s.sources.length) {
-    L.push(`| id | trust | source | fetched |`);
-    L.push(`|---|---|---|---|`);
+    L.push(`| id | quality | trust | freshness | type | source | fetched |`);
+    L.push(`|---|---|---|---|---|---|---|`);
     for (const src of s.sources) {
       L.push(
-        `| ${src.id} | ${trustBadge(src.trust)} ${src.trust.toFixed(2)} | [${escapePipe(src.title)}](${src.url}) <br>_${src.domain} — ${escapePipe(src.trustReason)}_ | ${src.fetched ? "✅" : "—"} |`,
+        `| ${src.id} | ${src.quality?.toFixed?.(2) ?? "—"} | ${trustBadge(src.trust)} ${src.trust.toFixed(2)} | ${src.freshness?.label ?? "unknown"} | ${src.type ?? "unknown"} | [${escapePipe(src.title)}](${src.url}) <br>_${src.domain} — ${escapePipe(src.trustReason)}_ | ${src.fetched ? "✅" : "—"} |`,
       );
     }
   } else {
     L.push(`_No sources were collected._`);
   }
   L.push("");
+
+  // ── Refresh history ───────────────────────────────────────────────────────
+  if (s.refreshHistory?.length) {
+    L.push(`## Refresh history`);
+    L.push("");
+    for (const r of s.refreshHistory) {
+      L.push(`- ${new Date(r.refreshedAt).toISOString()} — ${r.status}; checked ${r.sourcesChecked}; changed ${r.changedSources.length}; notes added ${r.notesAdded}. ${r.message}`);
+    }
+    L.push("");
+  }
 
   // ── Research plan (appendix) ──────────────────────────────────────────────
   if (s.plan) {
@@ -174,7 +213,7 @@ export function renderSourcesList(sources: Source[], c: { cyan: (s: string) => s
     .map((s) => {
       const badge = s.trust >= 0.8 ? c.green : s.trust >= 0.55 ? c.yellow : c.red;
       const fetched = s.fetched ? c.green("fetched") : c.dim("snippet");
-      return `  ${badge(`[${s.id}] ${s.trust.toFixed(2)}`)} ${s.title}\n      ${c.cyan(s.url)}\n      ${c.dim(`${s.domain} · ${s.trustReason} · ${fetched}`)}`;
+      return `  ${badge(`[${s.id}] q=${(s.quality ?? s.trust).toFixed(2)} t=${s.trust.toFixed(2)}`)} ${s.title}\n      ${c.cyan(s.url)}\n      ${c.dim(`${s.domain} · ${s.type ?? "unknown"} · freshness ${s.freshness?.label ?? "unknown"} · ${s.trustReason} · ${fetched}`)}`;
     })
     .join("\n");
 }
