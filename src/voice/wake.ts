@@ -1,35 +1,56 @@
 /**
- * XR — wake-word + voice-command parsing (pure, testable).
+ * XR Stage 8 — wake-word and spoken control parsing.
  *
- * Wake-word detection itself (audio) is handled by OpenWakeWord on-device; here
- * we implement the deterministic text-side logic: did a transcript start with
- * the wake phrase, and how do we interpret spoken confirmations.
+ * Audio wake-word detection can be delegated to openWakeWord externally. This
+ * module provides deterministic transcript-side gating and confirmations.
  */
-
-const WAKE_PATTERNS = [/^\s*(hey|ok|okay)\s+xr\b/i, /^\s*xr[, ]/i];
 
 export interface WakeResult {
   triggered: boolean;
-  /** The command text with the wake phrase stripped. */
   command: string;
+  wakeWord: string;
 }
 
-export function detectWake(transcript: string): WakeResult {
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function wakePatterns(wakeWord = "hey xr"): RegExp[] {
+  const normalized = wakeWord.trim().replace(/\s+/g, " ");
+  const parts = normalized.split(" ").map(escapeRegExp).join("\\s+");
+  return [
+    new RegExp(`^\\s*(?:${parts})\\b[,.!?:;\\s]*`, "i"),
+    /^\s*(?:ok|okay)\s+xr\b[,.!?:;\s]*/i,
+    /^\s*xr\b[,.!?:;\s]*/i,
+  ];
+}
+
+export function detectWake(transcript: string, wakeWord = "hey xr"): WakeResult {
   const t = (transcript ?? "").trim();
-  for (const re of WAKE_PATTERNS) {
-    if (re.test(t)) {
-      return { triggered: true, command: t.replace(re, "").replace(/^[,\s]+/, "").trim() };
-    }
+  for (const re of wakePatterns(wakeWord)) {
+    if (re.test(t)) return { triggered: true, command: t.replace(re, "").trim(), wakeWord };
   }
-  return { triggered: false, command: "" };
+  return { triggered: false, command: "", wakeWord };
 }
 
 export type Confirmation = "confirm" | "cancel" | "unclear";
 
-/** Interpret a spoken yes/no for high-risk voice-confirm actions. */
 export function parseConfirmation(transcript: string): Confirmation {
   const t = (transcript ?? "").toLowerCase().trim();
-  if (/\b(confirm|yes|yeah|yep|approve|do it|go ahead|affirmative|sure)\b/.test(t)) return "confirm";
-  if (/\b(cancel|no|nope|stop|abort|don't|do not|negative)\b/.test(t)) return "cancel";
+  if (/\b(confirm|confirmed|yes|yeah|yep|approve|approved|do it|go ahead|affirmative|sure|proceed)\b/.test(t)) return "confirm";
+  if (/\b(cancel|cancelled|no|nope|stop|abort|don't|do not|negative|never mind|nevermind)\b/.test(t)) return "cancel";
   return "unclear";
+}
+
+export type SpokenMetaCommand = "stop" | "cancel" | "repeat" | "say-again" | "mute" | "unmute" | "none";
+
+export function parseSpokenMetaCommand(transcript: string): SpokenMetaCommand {
+  const t = (transcript ?? "").toLowerCase().trim();
+  if (/^(stop|stop talking|quiet|be quiet|shut up|pause)\b/.test(t)) return "stop";
+  if (/^(cancel|abort|never mind|nevermind)\b/.test(t)) return "cancel";
+  if (/\b(repeat that|repeat|say that again)\b/.test(t)) return "repeat";
+  if (/\b(say again|what did you say)\b/.test(t)) return "say-again";
+  if (/\b(mute voice|voice off|stop listening)\b/.test(t)) return "mute";
+  if (/\b(unmute voice|voice on)\b/.test(t)) return "unmute";
+  return "none";
 }
