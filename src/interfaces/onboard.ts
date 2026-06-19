@@ -207,6 +207,12 @@ export async function runOnboarding(): Promise<void> {
     ? await confirm("  Inject relevant memory into prompts when useful (conservative)?", true)
     : false;
 
+  // Stage 8 — optional voice pack. Push-to-talk is the safe default; always-listen is never silently enabled.
+  console.log();
+  console.log(`  ${xrDim("Voice:")} ${xrGreen("optional, local-first, push-to-talk by default.")} ${xrDim("You can skip and set up later.")}`);
+  const voiceOn = await confirm("  Enable voice interface now?", false);
+  const voiceWake = voiceOn ? await confirm("  Use wake-word mode instead of push-to-talk?", false) : false;
+
   // ── Save ──────────────────────────────────────────────────────────────────
   section("Step 4 of 4  —  Saving Configuration");
   console.log();
@@ -225,6 +231,15 @@ export async function runOnboarding(): Promise<void> {
   config.memory.enabled = memOn;
   config.memory.autoSuggest = memSuggest;
   config.memory.injectInChat = memInject;
+
+  // Stage 8 — voice preferences from onboarding. Cloud audio and always-listen remain off.
+  config.voice.enabled = voiceOn;
+  config.voice.mode = voiceOn ? (voiceWake ? "wake-word" : "push-to-talk") : "push-to-talk";
+  config.voice.alwaysListen = false;
+  config.voice.allowCloudStt = false;
+  config.voice.allowCloudTts = false;
+  config.voice.microphonePermission = voiceOn ? "granted" : "unknown";
+  config.voice.speakerPermission = voiceOn ? "granted" : "unknown";
 
   config.localModels.enabled            = localEnabled;
   config.localModels.runtime            = "ollama";
