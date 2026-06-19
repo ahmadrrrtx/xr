@@ -24,10 +24,10 @@ import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
 import { BudgetManager } from "../cost/manager.ts";
 import { banner, ok, warn, info, colors as C } from "../interfaces/cli.ts";
-import type { ResearchDepth, ResearchSession } from "./types.ts";
+import type { ResearchDepth, ResearchMode, ResearchSession } from "./types.ts";
 import { WebSearchCapability } from "./search.ts";
 import { GovernedResearchBudget, LocalResearchBudget } from "./budget.ts";
-import { runResearch, summarizeExisting, type ResearchEngineDeps } from "./engine.ts";
+import { runResearch, summarizeExisting, refreshResearch, type ResearchEngineDeps } from "./engine.ts";
 import { makePlan } from "./plan.ts";
 import { DEPTH_BUDGETS } from "./types.ts";
 import { renderReport, renderSourcesList, renderTerminalSummary } from "./report.ts";
@@ -37,7 +37,7 @@ import { isMemoryEnabled } from "../config/config.ts";
 /** Build engine deps with the same routing/budget logic the agent uses. */
 function buildEngine(
   store: Store,
-  override: { provider?: string; model?: string },
+  override: { provider?: string; model?: string; allowPublicWeb?: boolean },
   perTaskBudgetUsd?: number,
 ): { deps: ResearchEngineDeps; providerId: string; model: string } {
   const { config } = loadConfig();
@@ -68,7 +68,7 @@ function buildEngine(
     egressAllowlist: config.security.egressAllowlist,
     dryRun: false,
   };
-  const search = new WebSearchCapability(toolCtx);
+  const search = new WebSearchCapability(toolCtx, { allowPublicWeb: override.allowPublicWeb });
 
   // Spend cap: governed for cloud, soft-step cap for local/free.
   const budget = isLocal(providerId)
@@ -101,14 +101,14 @@ function loadSession(store: Store, id?: string): ResearchSession | null {
   }
 }
 
-async function doRun(store: Store, topic: string, depth: ResearchDepth, override: { provider?: string; model?: string; budget?: number }): Promise<void> {
+async function doRun(store: Store, topic: string, depth: ResearchDepth, override: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean }, mode: ResearchMode = depth): Promise<void> {
   if (!topic.trim()) {
     warn(`Usage: xr research ${depth === "quick" ? "" : depth + " "}"your topic"`);
     return;
   }
   banner();
   const { deps, providerId, model } = buildEngine(store, override, override.budget);
-  console.log(`${C.bold("🔬 Research")} ${C.cyan(`(${depth})`)} · ${C.dim(`${providerId}/${model}`)}`);
+  console.log(`${C.bold("🔬 Research")} ${C.cyan(`(${mode}/${depth})`)} · ${C.dim(`${providerId}/${model}`)}`);
   console.log(`${C.dim("topic:")} ${topic}\n`);
 
   // Stage 6 — surface relevant durable memory so research starts with the
@@ -129,7 +129,7 @@ async function doRun(store: Store, topic: string, depth: ResearchDepth, override
     }
   }
 
-  const session = await runResearch(deps, { topic, depth });
+  const session = await runResearch(deps, { topic, depth, mode, liveSourcesOnly: override.liveSourcesOnly });
 
   console.log();
   if (session.status === "done") ok(`research complete · ${session.meter ?? ""}`);
@@ -152,6 +152,7 @@ async function doPlan(store: Store, topic: string, override: { provider?: string
     { provider: deps.provider, onUsage: (i, o) => deps.budget.record(i, o) },
     topic,
     DEPTH_BUDGETS.deep,
+    "deep",
   );
   console.log(`${C.bold("Objective")}`);
   console.log(`  ${plan.objective}\n`);
@@ -247,6 +248,34 @@ function doExport(store: Store, id: string | undefined, outPath: string | undefi
   console.log(`  signature .. ${C.dim(sha256.slice(0, 16) + "…")}`);
 }
 
+
+async function doRefresh(store: Store, id: string | undefined, override: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean }): Promise<void> {
+  const session = loadSession(store, id);
+  banner();
+  if (!session) {
+    info("No research session found to refresh.");
+    return;
+  }
+  const { deps } = buildEngine(store, override, override.budget);
+  const updated = await refreshResearch(deps, session);
+  ok("research refreshed");
+  const last = updated.refreshHistory[updated.refreshHistory.length - 1];
+  if (last) console.log(`  ${last.message}`);
+  console.log(`  last verified ... ${new Date(updated.lastRefreshedAt ?? updated.updatedAt).toISOString()}`);
+}
+
+async function doCompare(store: Store, topic: string, override: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean }): Promise<void> {
+  return doRun(store, topic, "deep", override, "compare");
+}
+
+async function doFactcheck(store: Store, topic: string, override: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean }): Promise<void> {
+  return doRun(store, topic, "quick", override, "factcheck");
+}
+
+async function doBriefing(store: Store, topic: string, override: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean }): Promise<void> {
+  return doRun(store, topic, "deep", override, "briefing");
+}
+
 /**
  * v0.9 — save a finished research finding into durable memory (explicit).
  * Stores the short answer (or topic) as a `fact`, tagged `research`, so future
@@ -312,45 +341,68 @@ function statusColor(s: string): string {
 export async function handleResearchCommand(
   argv: string[],
   store: Store,
-  override: { provider?: string; model?: string; budget?: number } = {},
+  override: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean } = {},
 ): Promise<void> {
-  const sub = (argv[0] ?? "").toLowerCase();
-  const rest = argv.slice(1).join(" ").trim();
+  const parsed = parseResearchArgs(argv, override);
+  const sub = (parsed.args[0] ?? "").toLowerCase();
+  const rest = parsed.args.slice(1).join(" ").trim();
 
   switch (sub) {
     case "":
       printResearchHelp();
       return;
     case "quick":
-      return doRun(store, rest, "quick", override);
+      return doRun(store, rest, "quick", parsed.override, "quick");
     case "deep":
-      return doRun(store, rest, "deep", override);
+      return doRun(store, rest, "deep", parsed.override, "deep");
+    case "compare":
+      return doCompare(store, rest, parsed.override);
+    case "factcheck":
+    case "fact-check":
+      return doFactcheck(store, rest, parsed.override);
+    case "briefing":
+    case "brief":
+      return doBriefing(store, rest, parsed.override);
     case "plan":
-      return doPlan(store, rest, override);
+      return doPlan(store, rest, parsed.override);
     case "status":
-      return doStatus(store, argv[1]);
+      return doStatus(store, parsed.args[1]);
     case "sources":
-      return doSources(store, argv[1]);
+      return doSources(store, parsed.args[1]);
     case "summarize":
-      return doSummarize(store, argv[1], override);
+      return doSummarize(store, parsed.args[1], parsed.override);
     case "export":
-      return doExport(store, argv[1], argv[2]);
+      return doExport(store, parsed.args[1], parsed.args[2]);
+    case "refresh":
+      return doRefresh(store, parsed.args[1], parsed.override);
     case "remember":
-      return doRemember(store, argv[1]);
+      return doRemember(store, parsed.args[1]);
     case "list":
+    case "history":
       return doList(store);
     case "help":
     case "--help":
     case "-h":
       printResearchHelp();
       return;
-    default: {
-      // No subcommand keyword ⇒ treat the whole thing as a topic (default depth).
-      const topic = argv.join(" ").trim();
-      const defaultDepth: ResearchDepth = "quick";
-      return doRun(store, topic, defaultDepth, override);
-    }
+    default:
+      return doRun(store, parsed.args.join(" ").trim(), "quick", parsed.override, "quick");
   }
+}
+
+function parseResearchArgs(argv: string[], base: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean }) {
+  const args: string[] = [];
+  const override = { ...base };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--provider") override.provider = argv[++i];
+    else if (a === "--model") override.model = argv[++i];
+    else if (a === "--budget") override.budget = Number(argv[++i]);
+    else if (a === "--allow-public-web") override.allowPublicWeb = true;
+    else if (a === "--live-sources-only") override.liveSourcesOnly = true;
+    else args.push(a);
+  }
+  return { args, override };
 }
 
 function printResearchHelp(): void {
@@ -360,16 +412,22 @@ function printResearchHelp(): void {
   console.log(`  xr research "topic"            quick research (default)`);
   console.log(`  xr research quick "topic"      fast: fewer sources, faster summary`);
   console.log(`  xr research deep "topic"       deeper: more sources, richer synthesis`);
+  console.log(`  xr research compare "A vs B"    comparative analysis with criteria`);
+  console.log(`  xr research factcheck "claim"  verify a claim against sources`);
+  console.log(`  xr research briefing "topic"   briefing-style deep report`);
   console.log(`  xr research plan "topic"       generate research questions + strategy`);
   console.log(`  xr research status [id]        show current/most-recent session`);
   console.log(`  xr research sources [id]       list collected sources + trust`);
   console.log(`  xr research summarize [id]     (re)synthesize a report from notes`);
   console.log(`  xr research export [id] [path] write report to markdown (+ json)`);
+  console.log(`  xr research refresh [id]       re-check source freshness`);
   console.log(`  xr research remember [id]     save this finding to durable memory`);
   console.log(`  xr research list               recent research sessions\n`);
   console.log(`${C.bold("Flags")}`);
   console.log(`  --provider [id]   override provider   --model [id]   override model`);
-  console.log(`  --budget [usd]    per-research USD ceiling (cloud providers)\n`);
+  console.log(`  --budget [usd]    per-research USD ceiling (cloud providers)`);
+  console.log(`  --allow-public-web explicit permission to fetch public pages beyond allow-list`);
+  console.log(`  --live-sources-only use fetched/verified source text only\n`);
   console.log(C.dim("XR collects sources before forming conclusions, marks anything it did not"));
   console.log(C.dim("verify, and never fabricates a source or fakes certainty."));
 }
