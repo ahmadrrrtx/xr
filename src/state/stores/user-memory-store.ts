@@ -77,8 +77,20 @@ export class UserMemoryStore extends BaseStore {
       const cols = this.db
         .query<{ name: string }, []>(`PRAGMA table_info(user_memory)`)
         .all();
-      if (!cols.some((c) => c.name === "embedding")) {
+      const have = new Set(cols.map((c) => c.name));
+      if (!have.has("embedding")) {
         this.exec(`ALTER TABLE user_memory ADD COLUMN embedding TEXT`);
+      }
+      // Stage 6: keep the shared user_memory schema consistent regardless of
+      // which Store class opens the DB first. Idempotent + fail-soft.
+      if (!have.has("last_accessed_at")) {
+        this.exec(`ALTER TABLE user_memory ADD COLUMN last_accessed_at INTEGER`);
+      }
+      if (!have.has("access_count")) {
+        this.exec(`ALTER TABLE user_memory ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!have.has("expires_at")) {
+        this.exec(`ALTER TABLE user_memory ADD COLUMN expires_at INTEGER`);
       }
     } catch {
       /* fail-soft */
