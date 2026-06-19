@@ -24,6 +24,10 @@ export interface MemoryRow {
   updated_at: number;
   /** v0.9: cached embedding (JSON number[]) or NULL when not yet embedded. */
   embedding: string | null;
+  /** Stage 6: access tracking + retention. */
+  last_accessed_at: number | null;
+  access_count: number;
+  expires_at: number | null;
 }
 
 /** v0.9: a session summary row (kept separate from long-term memory). */
@@ -167,7 +171,11 @@ export class Store {
         importance INTEGER NOT NULL DEFAULT 3,  -- 1..5
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
-        embedding TEXT                 -- v0.9: JSON number[] or NULL (semantic recall cache)
+        embedding TEXT,                -- v0.9: JSON number[] or NULL (semantic recall cache)
+        -- Stage 6: access tracking + retention/expiry.
+        last_accessed_at INTEGER,      -- last time recall surfaced this (NULL = never)
+        access_count INTEGER NOT NULL DEFAULT 0,  -- how many times recalled
+        expires_at INTEGER             -- epoch-ms after which eligible to prune / excluded from recall (NULL = never)
       );
       CREATE INDEX IF NOT EXISTS idx_user_memory_scope ON user_memory(scope);
       CREATE INDEX IF NOT EXISTS idx_user_memory_category ON user_memory(category);
@@ -188,8 +196,19 @@ export class Store {
       const cols = this.db
         .query<{ name: string }, []>(`PRAGMA table_info(user_memory)`)
         .all();
-      if (!cols.some((c) => c.name === "embedding")) {
+      const have = new Set(cols.map((c) => c.name));
+      if (!have.has("embedding")) {
         this.db.exec(`ALTER TABLE user_memory ADD COLUMN embedding TEXT`);
+      }
+      // Stage 6: access tracking + retention columns (idempotent, fail-soft).
+      if (!have.has("last_accessed_at")) {
+        this.db.exec(`ALTER TABLE user_memory ADD COLUMN last_accessed_at INTEGER`);
+      }
+      if (!have.has("access_count")) {
+        this.db.exec(`ALTER TABLE user_memory ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0`);
+      }
+      if (!have.has("expires_at")) {
+        this.db.exec(`ALTER TABLE user_memory ADD COLUMN expires_at INTEGER`);
       }
     } catch {
       /* never block startup on a migration probe */
@@ -208,12 +227,14 @@ export class Store {
     importance: number;
     /** v0.9: optional precomputed embedding (number[]); stored as JSON. */
     embedding?: number[] | null;
+    /** Stage 6: absolute expiry epoch-ms (null/omitted = never expires). */
+    expiresAt?: number | null;
   }): void {
     const now = Date.now();
     this.db
       .query(
-        `INSERT INTO user_memory (id,category,content,scope,source,tags,importance,created_at,updated_at,embedding)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO user_memory (id,category,content,scope,source,tags,importance,created_at,updated_at,embedding,last_accessed_at,access_count,expires_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
       .run(
         row.id,
@@ -226,7 +247,51 @@ export class Store {
         now,
         now,
         row.embedding && row.embedding.length ? JSON.stringify(row.embedding) : null,
+        null,
+        0,
+        Number.isFinite(row.expiresAt as number) ? (row.expiresAt as number) : null,
       );
+  }
+
+  /**
+   * Stage 6 — record that a set of entries was surfaced by recall: bump
+   * `access_count` and set `last_accessed_at` to now. Best-effort; never throws.
+   * Done in one statement per id for simplicity.
+   */
+  touchMemoryAccess(ids: string[], now: number = Date.now()): void {
+    if (!ids.length) return;
+    const stmt = this.db.query(
+      `UPDATE user_memory SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?`,
+    );
+    for (const id of ids) {
+      try {
+        stmt.run(now, id);
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+
+  /**
+   * Stage 6 — permanently delete every entry whose `expires_at` has passed.
+   * Returns the number removed. Exclusions with expiry are pruned too.
+   */
+  pruneExpiredMemory(now: number = Date.now()): number {
+    const r = this.db
+      .query(`DELETE FROM user_memory WHERE expires_at IS NOT NULL AND expires_at <= ?`)
+      .run(now);
+    return (r as any).changes ?? 0;
+  }
+
+  /** Stage 6 — count entries that are currently expired (not yet pruned). */
+  expiredMemoryCount(now: number = Date.now()): number {
+    return (
+      this.db
+        .query<{ c: number }, [number]>(
+          `SELECT COUNT(*) c FROM user_memory WHERE expires_at IS NOT NULL AND expires_at <= ?`,
+        )
+        .get(now)?.c ?? 0
+    );
   }
 
   /** v0.9: cache/refresh the embedding for a memory entry. */
@@ -273,7 +338,12 @@ export class Store {
    * \`exclusion\` category unless explicitly requested.
    */
   listMemory(
-    opts: { scope?: string; category?: string; includeExclusions?: boolean } = {},
+    opts: {
+      scope?: string;
+      category?: string;
+      includeExclusions?: boolean;
+      includeExpired?: boolean;
+    } = {},
   ): MemoryRow[] {
     const clauses: string[] = [];
     const params: string[] = [];
@@ -286,6 +356,10 @@ export class Store {
       params.push(opts.category);
     } else if (!opts.includeExclusions) {
       clauses.push(`category!='exclusion'`);
+    }
+    if (!opts.includeExpired) {
+      clauses.push(`(expires_at IS NULL OR expires_at > ?)`);
+      params.push(String(Date.now()));
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     return this.db
@@ -303,6 +377,7 @@ export class Store {
       scope: string;
       tags: string;
       importance: number;
+      expiresAt: number | null;
     }>,
   ): boolean {
     const cur = this.getMemory(id);
@@ -312,9 +387,16 @@ export class Store {
     const textChanged =
       (patch.content !== undefined && patch.content !== cur.content) ||
       (patch.tags !== undefined && patch.tags !== cur.tags);
+    // Stage 6: explicit expiry update (null = clear expiry / never expire).
+    let nextExpires = cur.expires_at;
+    if (patch.expiresAt !== undefined) {
+      nextExpires = patch.expiresAt === null || !Number.isFinite(patch.expiresAt as number)
+        ? null
+        : (patch.expiresAt as number);
+    }
     this.db
       .query(
-        `UPDATE user_memory SET content=?, category=?, scope=?, tags=?, importance=?, updated_at=?, embedding=? WHERE id=?`,
+        `UPDATE user_memory SET content=?, category=?, scope=?, tags=?, importance=?, updated_at=?, embedding=?, expires_at=? WHERE id=?`,
       )
       .run(
         patch.content ?? cur.content,
@@ -324,6 +406,7 @@ export class Store {
         patch.importance ?? cur.importance,
         Date.now(),
         textChanged ? null : cur.embedding,
+        nextExpires,
         id,
       );
     return true;
