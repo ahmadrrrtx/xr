@@ -18,7 +18,7 @@
  */
 import type { Store } from "../state/db.ts";
 import { MemoryStore, projectScopeFromCwd } from "./store.ts";
-import { MEMORY_CATEGORIES, isCategory, type MemoryCategory } from "./types.ts";
+import { MEMORY_CATEGORIES, isCategory, type MemoryCategory, type MemoryEntry } from "./types.ts";
 import { banner, ok, warn, info, confirm, colors as C } from "../interfaces/cli.ts";
 import { isMemoryEnabled } from "../config/config.ts";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -28,6 +28,10 @@ interface Flags {
   category?: MemoryCategory;
   tags: string[];
   importance?: number;
+  /** Stage 6 — TTL in seconds for `add`. */
+  ttlSeconds?: number;
+  /** Stage 6 — TTL in days for `add`. */
+  ttlDays?: number;
   json: boolean;
   yes: boolean;
   /** Force deterministic lexical recall (skip embeddings). */
@@ -49,6 +53,8 @@ function parseFlags(argv: string[]): Flags {
     else if (a === "--dry-run" || a === "--preview") f.dryRun = true;
     else if (a === "--days") f.days = Number(argv[++i]);
     else if (a === "--max-importance") f.maxImportance = Number(argv[++i]);
+    else if (a === "--ttl") f.ttlSeconds = Number(argv[++i]);
+    else if (a === "--ttl-days") f.ttlDays = Number(argv[++i]);
     else if (a === "--scope") f.scope = argv[++i];
     else if (a === "--category" || a === "-c") {
       const c = argv[++i];
@@ -93,6 +99,8 @@ function printEntry(e: ReturnType<MemoryStore["list"]>[number]): void {
     `scope=${e.scope}`,
     `src=${e.source}`,
     e.tags.length ? `tags=${e.tags.join(",")}` : "",
+    e.expiresAt ? `expires=${fmtTime(e.expiresAt)}` : "",
+    e.accessCount ? `accessed=${e.accessCount}×` : "",
     fmtTime(e.updatedAt),
   ]
     .filter(Boolean)
@@ -100,14 +108,31 @@ function printEntry(e: ReturnType<MemoryStore["list"]>[number]): void {
   console.log(`      ${C.dim(meta)}`);
 }
 
+/** Stage 6 — print a recall hit with its score + reason (explainable recall). */
+function printHit(h: { entry: MemoryEntry; sim: number; score: number; reason: string }): void {
+  const pct = Math.round(h.sim * 100);
+  const bar = C.dim(`${pct}%`);
+  console.log(
+    `  ${C.dim(h.entry.id)} ${bar} ${colorCat(h.entry.category.padEnd(10))} ${h.entry.content}`,
+  );
+  console.log(`      ${C.dim(`why: ${h.reason} · scope=${h.entry.scope}`)}`);
+}
+
 // ── subcommands ──────────────────────────────────────────────────────────
 
 function cmdStatus(mem: MemoryStore): void {
   banner();
   const enabled = isMemoryEnabled();
+  const health = mem.health();
   console.log(C.bold("🧠 XR Memory"));
   console.log(`  enabled .......... ${enabled ? C.green("✓ yes") : C.red("✗ disabled")}`);
-  console.log(`  entries .......... ${C.cyan(String(mem.count()))}`);
+  console.log(`  entries .......... ${C.cyan(String(health.total))}`);
+  if (health.expired > 0) {
+    console.log(`  expired .......... ${C.red(String(health.expired))} (prune with: xr memory prune)`);
+  }
+  if (health.neverAccessed > 0) {
+    console.log(`  never recalled ... ${C.dim(String(health.neverAccessed))}`);
+  }
   const stats = mem.stats();
   if (stats.length) {
     for (const s of stats) {
@@ -116,10 +141,51 @@ function cmdStatus(mem: MemoryStore): void {
   }
   console.log("");
   if (!enabled) {
-    warn('memory is disabled — re-enable in config: control? no; set "memory.enabled": true');
+    warn('memory is disabled — re-enable by setting "memory.enabled": true (or unset XR_MEMORY_DISABLED)');
   }
   info('add with: xr memory add "I prefer TypeScript and Bun" --category preference');
   info('inspect:  xr memory list   ·   recall: xr memory recall "preferences"');
+  info('health:   xr memory health');
+}
+
+/** Stage 6 — memory health snapshot (used by `xr doctor` too). */
+function cmdHealth(mem: MemoryStore, f: Flags): void {
+  const h = mem.health();
+  if (f.json) {
+    console.log(JSON.stringify({ enabled: isMemoryEnabled(), ...h }, null, 2));
+    return;
+  }
+  banner();
+  console.log(C.bold("🧠 Memory Health"));
+  console.log(`  status ............ ${h.ok ? C.green("ok") : C.red("error" + (h.error ? `: ${h.error}` : ""))}`);
+  console.log(`  enabled ........... ${isMemoryEnabled() ? C.green("yes") : C.red("disabled")}`);
+  console.log(`  total entries ..... ${C.cyan(String(h.total))}`);
+  console.log(`  expired ........... ${h.expired ? C.red(String(h.expired)) : C.dim("0")}`);
+  console.log(`  never recalled .... ${C.dim(String(h.neverAccessed))}`);
+  if (h.oldestCreatedAt) {
+    console.log(`  oldest entry ...... ${C.dim(fmtTime(h.oldestCreatedAt))}`);
+  }
+  if (h.byCategory.length) {
+    console.log(`  by category:`);
+    for (const s of h.byCategory) {
+      console.log(`    ${colorCat(s.category.padEnd(11))} ${C.dim(String(s.c))}`);
+    }
+  }
+  if (h.expired > 0) {
+    console.log("");
+    info(`${h.expired} expired entr${h.expired === 1 ? "y" : "ies"} — remove with: xr memory prune`);
+  }
+}
+
+/** Stage 6 — permanently delete expired entries. */
+function cmdPrune(mem: MemoryStore, f: Flags): void {
+  const before = mem.health().expired;
+  if (before === 0) {
+    info("no expired entries to prune.");
+    return;
+  }
+  const n = mem.pruneExpired();
+  ok(`pruned ${n} expired entr${n === 1 ? "y" : "ies"}.`);
 }
 
 function cmdList(mem: MemoryStore, f: Flags): void {
@@ -153,9 +219,14 @@ function cmdList(mem: MemoryStore, f: Flags): void {
 function cmdAdd(mem: MemoryStore, f: Flags): void {
   const content = f.rest.join(" ").trim();
   if (!content) {
-    warn('usage: xr memory add "<text>" [--category <c>] [--scope <s>] [--tag t] [--importance 1-5]');
+    warn('usage: xr memory add "<text>" [--category <c>] [--scope <s>] [--tag t] [--importance 1-5] [--ttl <sec>|--ttl-days <n>]');
     return;
   }
+  // Stage 6 — TTL: seconds take precedence over days.
+  let ttlMs: number | null = null;
+  if (Number.isFinite(f.ttlSeconds) && (f.ttlSeconds as number) > 0) ttlMs = (f.ttlSeconds as number) * 1000;
+  else if (Number.isFinite(f.ttlDays) && (f.ttlDays as number) > 0) ttlMs = (f.ttlDays as number) * 86_400_000;
+
   const res = mem.add({
     content,
     category: f.category,
@@ -163,6 +234,7 @@ function cmdAdd(mem: MemoryStore, f: Flags): void {
     source: "user",
     tags: f.tags,
     importance: f.importance,
+    ttlMs,
   });
   if (!res.ok) {
     warn(`not stored: ${res.reason}`);
@@ -172,7 +244,8 @@ function cmdAdd(mem: MemoryStore, f: Flags): void {
     info(`already remembered (${res.entry!.id}) — no duplicate created.`);
     return;
   }
-  ok(`remembered ${C.dim(res.entry!.id)} · ${colorCat(res.entry!.category)}`);
+  const ttlNote = res.entry?.expiresAt ? ` · expires ${fmtTime(res.entry.expiresAt)}` : "";
+  ok(`remembered ${C.dim(res.entry!.id)} · ${colorCat(res.entry!.category)}${ttlNote}`);
 }
 
 function cmdEdit(mem: MemoryStore, f: Flags): void {
@@ -237,24 +310,25 @@ async function cmdRecall(mem: MemoryStore, f: Flags): Promise<void> {
     warn('usage: xr memory recall "<text>" [--lexical]');
     return;
   }
-  // Mirror chat behaviour: semantic by default, lexical when forced.
-  const results = f.lexical
-    ? mem.recall(q, { scope: f.scope })
-    : await mem.recallSemantic(q, { scope: f.scope });
+  // Stage 6 — explainable recall: show scores + reasons so retrieval is never
+  // a black box. Mirrors chat behaviour (semantic by default, lexical when forced).
+  const hits = f.lexical
+    ? mem.recallExplain(q, { scope: f.scope })
+    : await mem.recallSemanticExplain(q, { scope: f.scope });
   if (f.json) {
-    console.log(JSON.stringify(results, null, 2));
+    console.log(JSON.stringify(hits, null, 2));
     return;
   }
   banner();
-  console.log(C.bold(`🧠 Recall "${q}" (${results.length})`));
+  console.log(C.bold(`🧠 Recall "${q}" (${hits.length})`));
   info(
     `this is exactly what XR would surface in chat/voice for that query (${f.lexical ? "lexical" : "semantic"}).`,
   );
-  if (!results.length) {
+  if (!hits.length) {
     info("nothing relevant — XR would inject no memory for this.");
     return;
   }
-  for (const e of results) printEntry(e);
+  for (const h of hits) printHit(h);
 }
 
 /** Pre-compute embeddings for every entry (warms the semantic-recall cache). */
@@ -415,23 +489,27 @@ ${C.bold("Inspect")}
   xr memory search "<text>"          keyword search
   xr memory recall "<text>" [--lexical]  show exactly what chat/voice would surface
                                      (semantic by default; --lexical forces keyword scoring)
+                                     — shows match % and WHY each entry was recalled
+  xr memory health [--json]          memory health (expired, never-recalled, by category)
   xr memory reindex                  pre-compute embeddings (warms semantic recall)
 
 ${C.bold("Write")}
   xr memory add "<text>" [--category preference|project|workflow|fact|exclusion]
                          [--scope <s>] [--tag <t>] [--importance 1-5]
+                         [--ttl <sec>|--ttl-days <n>]   (entry auto-expires after TTL)
   xr memory edit <id> ["<new text>"] [--category c] [--scope s] [--importance n] [--tag t]
   xr memory remove <id>              forget one entry (permanent)
   xr memory clear [--scope s] [-y]   forget everything / one scope (permanent)
 
 ${C.bold("Maintain")}
+  xr memory prune                    permanently delete expired entries
   xr memory summarize [--days N] [--max-importance n] [--scope s] [--dry-run] [-y]
                                      fold OLD, low-importance entries into compact
                                      summaries (proposes first, asks to apply)
 
 ${C.bold("Portability")}
   xr memory export [path]            JSON bundle (stdout if no path)
-  xr memory import <path>            merge a JSON bundle (dedupes)
+  xr memory import <path>            merge a JSON bundle (dedupes; expired entries dropped)
 
 ${C.bold("Sessions")}
   xr memory summaries [clear] [--scope s]   conversation recaps (separate store)
@@ -467,6 +545,8 @@ export async function handleMemoryCommand(argv: string[], store: Store): Promise
   if (sub === "recall") return cmdRecall(mem, flags);
   if (sub === "reindex") return cmdReindex(mem);
   if (sub === "summarize") return cmdSummarize(mem, flags);
+  if (sub === "prune" || sub === "gc") return cmdPrune(mem, flags);
+  if (sub === "health") return cmdHealth(mem, flags);
   if (sub === "export") return cmdExport(mem, flags);
   if (sub === "import") return cmdImport(mem, flags);
   if (sub === "clear") return cmdClear(mem, flags);
