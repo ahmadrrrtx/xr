@@ -70,6 +70,7 @@ export interface SourceMetadata {
   httpStatus?: number;
   contentType?: string;
   contentLength?: number;
+  lastModified?: string;
   lastVerifiedAt?: number;
 }
 
