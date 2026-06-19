@@ -9,6 +9,9 @@ import {
   detectPlatform,
 } from "../install/system.ts";
 import { ProviderService } from "../services/provider-service.ts";
+import { Store } from "../state/db.ts";
+import { MemoryStore } from "../memory/store.ts";
+import { isMemoryEnabled } from "../config/config.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";
 
 export class DoctorCommand implements Command {
@@ -18,6 +21,17 @@ export class DoctorCommand implements Command {
 
   async execute(ctx: CommandContext): Promise<void> {
     const json = ctx.args.includes("--json");
+
+    // Stage 6 — memory health (shared engine over the legacy store).
+    let store: Store;
+    try {
+      store = ctx.container.resolve<Store>("legacyStore");
+    } catch {
+      store = new Store();
+    }
+    const mem = new MemoryStore(store);
+    const memHealth = mem.health();
+    const memEnabled = isMemoryEnabled();
 
     if (json) {
       // Build combined JSON output including provider health
@@ -51,6 +65,23 @@ export class DoctorCommand implements Command {
           detail: (e as Error).message,
         });
       }
+
+      // Stage 6 — memory health check.
+      checks.push({
+        id: "memory",
+        label: "Memory engine",
+        state: memEnabled && memHealth.ok && memHealth.expired === 0
+          ? "ok"
+          : memHealth.expired > 0 ? "warn" : memEnabled ? "ok" : "warn",
+        detail: memEnabled
+          ? `${memHealth.total} entries (${memHealth.expired} expired, ${memHealth.neverAccessed} never recalled)`
+          : "disabled",
+        remediation: !memEnabled
+          ? 'Enable: set "memory.enabled": true (or unset XR_MEMORY_DISABLED)'
+          : memHealth.expired > 0
+          ? "Run: xr memory prune"
+          : undefined,
+      });
 
       console.log(
         JSON.stringify(
@@ -87,6 +118,26 @@ export class DoctorCommand implements Command {
       }
     } catch (e) {
       warn(`Provider health check failed: ${(e as Error).message}`);
+    }
+
+    // Stage 6 — memory health.
+    console.log("");
+    console.log(C.bold("Memory Engine"));
+    const memState = !memEnabled ? C.red("✗ disabled")
+      : memHealth.expired > 0 ? C.amber(`! ${memHealth.total} entries (${memHealth.expired} expired)`)
+      : C.green(`✓ ${memHealth.total} entries`);
+    console.log(`  enabled ........ ${memState}`);
+    if (memEnabled && memHealth.ok) {
+      if (memHealth.byCategory.length) {
+        const cats = memHealth.byCategory.map((s) => `${s.category}: ${s.c}`).join(" · ");
+        console.log(`  by category .... ${C.dim(cats)}`);
+      }
+      if (memHealth.expired > 0) {
+        warn(`${memHealth.expired} expired entr${memHealth.expired === 1 ? "y" : "ies"} — run: xr memory prune`);
+      }
+      console.log(`  inspect ........ ${C.dim("xr memory list  ·  xr memory health")}`);
+    } else if (!memEnabled) {
+      warn('memory off — re-enable with "memory.enabled": true');
     }
   }
 }
