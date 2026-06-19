@@ -98,8 +98,9 @@ async function main(): Promise<void> {
       console.log(`  xr providers list         show all providers and keys`);
       console.log(`  xr providers set <id>     set active provider`);
       console.log(`  xr providers test         test provider health`);
-      console.log(`  xr models recommend       local model recommendation`);
-      console.log(`  xr models install         pull local model with approval`);
+      console.log(`  xr models runtimes        detect local AI runtimes`);
+      console.log(`  xr models recommend       local runtime/model recommendation`);
+      console.log(`  xr models install         install/configure local model with approval`);
       console.log(`  xr voice setup            voice prerequisites`);
       console.log(`  xr control setup          desktop control prerequisites`);
       console.log(`  xr research setup         research prerequisites`);
