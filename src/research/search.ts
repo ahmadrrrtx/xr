@@ -1,17 +1,13 @@
 /**
- * XR — research search capability.
+ * XR Stage 7 — live source discovery and safe fetching.
  *
- * This is a thin, EGRESS-GATED adapter over the existing web tools. It is the
- * single seam research uses to touch the network, so:
- *   - all network access stays on the allow-list (exfiltration stays blocked)
- *   - we can swap/stub it in tests without a live network
- *
- * It NEVER fabricates results. If search is unavailable (host not allow-listed,
- * network down, SearXNG returns nothing) it returns an empty list and a reason,
- * and the caller degrades gracefully (UX rule: graceful fallback).
+ * Default network posture stays fail-closed through XR's egress allow-list. For
+ * real research runs the user can explicitly pass --allow-public-web, which only
+ * permits http(s) public web hosts and blocks localhost/private/link-local IPs.
  */
 import type { ToolContext } from "../core/types.ts";
 import { webSearchTool, fetchUrlTool } from "../tools/web.ts";
+import { htmlToText, hostAllowed } from "../tools/egress.ts";
 
 export interface SearchHit {
   title: string;
@@ -21,94 +17,206 @@ export interface SearchHit {
 
 export interface SearchResponse {
   hits: SearchHit[];
-  /** Present when the search could not be performed (egress, network, empty). */
   unavailableReason?: string;
 }
 
 export interface FetchResponse {
   ok: boolean;
-  /** Cleaned page text (truncated by the web tool). */
   text?: string;
+  status?: number;
+  contentType?: string;
+  lastModified?: string;
+  canonicalUrl?: string;
+  bytes?: number;
   reason?: string;
 }
 
-/**
- * Capability interface so research can be tested with an in-memory fake.
- * The real implementation delegates to the egress-gated web tools.
- */
 export interface SearchCapability {
-  /** True when at least one search-capable host is on the egress allow-list. */
   available(): boolean;
   search(query: string, maxResults: number): Promise<SearchResponse>;
   fetch(url: string): Promise<FetchResponse>;
 }
 
-/** Hostname (no scheme, no port) of the configured SearXNG endpoint. */
+export interface WebSearchOptions {
+  allowPublicWeb?: boolean;
+  timeoutMs?: number;
+  maxChars?: number;
+}
+
 function searxHost(): string {
   const raw = process.env.XR_SEARXNG ?? "https://searx.be";
   try {
     return new URL(raw).hostname.toLowerCase();
   } catch {
-    // Best-effort fallback for bare hosts like "searx.be".
     return raw.replace(/^https?:\/\//, "").replace(/[:/].*$/, "").toLowerCase();
   }
 }
 
-/** Real search capability built on XR's existing egress-gated web tools. */
 export class WebSearchCapability implements SearchCapability {
-  constructor(private ctx: ToolContext) {}
+  private timeoutMs: number;
+  private maxChars: number;
+  private allowPublicWeb: boolean;
+
+  constructor(private ctx: ToolContext, opts: WebSearchOptions = {}) {
+    this.allowPublicWeb = Boolean(opts.allowPublicWeb || process.env.XR_RESEARCH_ALLOW_PUBLIC_WEB === "1");
+    this.timeoutMs = opts.timeoutMs ?? 15_000;
+    this.maxChars = opts.maxChars ?? 24_000;
+  }
 
   available(): boolean {
     const allow = this.ctx.egressAllowlist ?? [];
     if (allow.length === 0) return false;
-    // The configured SearXNG host (or a subdomain) must be allow-listed.
     const host = searxHost();
-    return allow.some(
-      (d) => host === d.toLowerCase() || host.endsWith("." + d.toLowerCase()),
-    );
+    return allow.some((d) => host === d.toLowerCase() || host.endsWith("." + d.toLowerCase()));
   }
 
   async search(query: string, maxResults: number): Promise<SearchResponse> {
-    if (!this.available()) {
-      return { hits: [], unavailableReason: `search host "${searxHost()}" not in egress allow-list` };
-    }
-    const res = await webSearchTool.run({ query, max_results: maxResults }, this.ctx);
+    const q = sanitizeQuery(query);
+    if (!q) return { hits: [], unavailableReason: "empty query" };
+    if (!this.available()) return { hits: [], unavailableReason: `search host "${searxHost()}" not in egress allow-list` };
+    const res = await webSearchTool.run({ query: q, max_results: Math.max(1, Math.min(20, maxResults)) }, this.ctx);
     if (!res.ok) return { hits: [], unavailableReason: res.output };
-
-    // The web tool returns a formatted string; parse it back into structured hits.
-    const hits = parseSearxOutput(res.output);
+    const hits = parseSearxOutput(res.output).filter((h) => isHttpUrl(h.url));
     if (hits.length === 0) return { hits: [], unavailableReason: "no results returned" };
     return { hits };
   }
 
   async fetch(url: string): Promise<FetchResponse> {
-    const res = await fetchUrlTool.run({ url }, this.ctx);
-    if (!res.ok) return { ok: false, reason: res.output };
-    return { ok: true, text: String(res.output) };
+    if (!isHttpUrl(url)) return { ok: false, reason: "only http(s) urls are allowed" };
+
+    // Normal XR tool path: egress allow-list only.
+    if (hostAllowed(url, this.ctx.egressAllowlist ?? [])) {
+      const res = await fetchUrlTool.run({ url }, this.ctx);
+      if (!res.ok) return { ok: false, reason: res.output };
+      return { ok: true, text: String(res.output), bytes: String(res.output).length, lastModified: undefined };
+    }
+
+    // Explicit research-only public web path.
+    if (!this.allowPublicWeb) {
+      return { ok: false, reason: "blocked by egress allow-list (rerun with --allow-public-web to fetch public web pages)" };
+    }
+    return directPublicFetch(url, this.timeoutMs, this.maxChars, this.ctx.audit);
   }
 }
 
-/**
- * Parse the human-formatted output of webSearchTool back into structured hits.
- * The tool emits blocks like:
- *   "1. Title\n   https://url\n   snippet"
- * separated by blank lines. We parse defensively.
- */
 export function parseSearxOutput(output: string): SearchHit[] {
   const hits: SearchHit[] = [];
   const blocks = output.split(/\n\s*\n/);
   for (const block of blocks) {
     const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
-    if (lines.length === 0) continue;
+    if (!lines.length) continue;
     const title = lines[0].replace(/^\d+\.\s*/, "").trim();
     const url = lines.find((l) => /^https?:\/\//i.test(l)) ?? "";
     if (!url || !title) continue;
-    const snippet = lines
-      .slice(1)
-      .filter((l) => !/^https?:\/\//i.test(l))
-      .join(" ")
-      .trim();
+    const snippet = lines.slice(1).filter((l) => !/^https?:\/\//i.test(l)).join(" ").trim();
     hits.push({ title, url, snippet });
   }
-  return hits;
+  return dedupeHits(hits);
+}
+
+export function extractUrls(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of text.matchAll(/https?:\/\/[^\s)\]}>'"]+/gi)) {
+    const url = m[0].replace(/[.,;:!?]+$/, "");
+    if (isHttpUrl(url) && !seen.has(url)) {
+      seen.add(url);
+      out.push(url);
+    }
+  }
+  return out;
+}
+
+export function sanitizeQuery(q: string): string {
+  return q.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 300);
+}
+
+function dedupeHits(hits: SearchHit[]): SearchHit[] {
+  const seen = new Set<string>();
+  const out: SearchHit[] = [];
+  for (const h of hits) {
+    const key = normalizeUrl(h.url);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...h, snippet: (h.snippet ?? "").slice(0, 700) });
+  }
+  return out;
+}
+
+function normalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    for (const p of ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"]) u.searchParams.delete(p);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+function isHttpUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+async function directPublicFetch(
+  url: string,
+  timeoutMs: number,
+  maxChars: number,
+  audit?: (event: string, detail: Record<string, unknown>) => void,
+): Promise<FetchResponse> {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return { ok: false, reason: "invalid url" };
+  }
+  if (!isPublicHost(u.hostname)) return { ok: false, reason: "blocked private/local host" };
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(u.toString(), {
+      signal: ctrl.signal,
+      redirect: "follow",
+      headers: {
+        "User-Agent": "XR-Research/1.0 (+https://github.com/ahmadrrrtx/xr)",
+        Accept: "text/html,text/plain,application/xhtml+xml,application/json;q=0.8,*/*;q=0.5",
+      },
+    });
+    const contentType = res.headers.get("content-type") ?? "";
+    const lastModified = res.headers.get("last-modified") ?? undefined;
+    if (!res.ok) return { ok: false, status: res.status, contentType, lastModified, reason: `http ${res.status}` };
+    const raw = await res.text();
+    const text = contentType.includes("html") ? htmlToText(raw) : raw.replace(/\s+/g, " ").trim();
+    const clipped = text.slice(0, maxChars);
+    audit?.("research.public_fetch", { host: u.hostname, status: res.status, bytes: clipped.length });
+    return { ok: true, text: clipped, status: res.status, contentType, lastModified, canonicalUrl: res.url, bytes: clipped.length };
+  } catch (e) {
+    return { ok: false, reason: `fetch failed: ${(e as Error).message}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function isPublicHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local")) return false;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(h)) return isPublicIPv4(h);
+  if (h === "0.0.0.0" || h === "::1" || h.startsWith("[")) return false;
+  return true;
+}
+
+function isPublicIPv4(ip: string): boolean {
+  const p = ip.split(".").map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  if (p[0] === 10 || p[0] === 127 || p[0] === 0) return false;
+  if (p[0] === 172 && p[1] >= 16 && p[1] <= 31) return false;
+  if (p[0] === 192 && p[1] === 168) return false;
+  if (p[0] === 169 && p[1] === 254) return false;
+  return true;
 }
