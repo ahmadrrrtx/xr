@@ -71,11 +71,9 @@ export class ProviderRouter {
       this.config.localModels?.enabled &&
       !this.isLocal(primaryId)
     ) {
-      fallbackId = "ollama";
-      fallbackModel =
-        this.config.localModels.selected ??
-        this.config.defaults.fallbackModel ??
-        "qwen2.5:7b";
+      const local = this.findBestLocal();
+      fallbackId = local?.id ?? "ollama";
+      fallbackModel = local?.model ?? this.config.defaults.fallbackModel ?? "qwen2.5:7b";
     }
 
     if (fallbackId && fallbackId !== primaryId) {
@@ -102,11 +100,16 @@ export class ProviderRouter {
   }
 
   private findBestLocal(): { id: string; model: string } | undefined {
-    const ollama = registry.getPreset("ollama") ?? PRESETS["ollama"];
-    if (ollama) {
-      const model =
-        this.config.localModels?.selected ?? ollama.defaultModel;
-      return { id: "ollama", model };
+    const localCfg: any = this.config.localModels ?? {};
+    const configuredProvider = localCfg.provider ?? localCfg.runtime ?? this.config.defaults.provider;
+    const preset = registry.getPreset(configuredProvider) ?? PRESETS[configuredProvider];
+    if (preset?.kind === "local") {
+      return { id: preset.id, model: localCfg.selected ?? this.config.defaults.model ?? preset.defaultModel };
+    }
+
+    for (const id of ["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang"]) {
+      const p = registry.getPreset(id) ?? PRESETS[id];
+      if (p?.kind === "local") return { id: p.id, model: localCfg.selected ?? p.defaultModel };
     }
     return undefined;
   }
