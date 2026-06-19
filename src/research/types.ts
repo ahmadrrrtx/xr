@@ -1,169 +1,216 @@
 /**
- * XR — research mode core types (v0.7).
+ * XR Stage 7 — Research Engine types.
  *
- * The research module is a CLEAN abstraction, intentionally decoupled from
- * provider auth, budget logic, voice, and control. It only depends on:
- *   - a Provider (to think)            — passed in by the caller
- *   - a web search/fetch capability    — passed in by the caller (egress-gated)
- *   - a sink for persistence/audit     — passed in by the caller
- *
- * This keeps research deterministic and testable: every layer takes its inputs
- * explicitly and returns plain data. No hidden globals.
- *
- * Design rules baked into these types:
- *   - SOURCE-FIRST: we collect Source[] before we ever synthesize.
- *   - CITATION-AWARE: every Note and every Claim references a sourceId.
- *   - NO FAKE CERTAINTY: notes are tagged fact | inference | opinion, and
- *     each note records whether the source was actually fetched/verified.
+ * Source-first data model: every conclusion must trace back to a checked source
+ * or be explicitly marked as inference/uncertainty. These plain JSON types are
+ * persisted as one ResearchSession blob by Store, so Stage 7 can evolve without
+ * risky DB migrations for every internal field.
  */
 
-/** How deep to research. */
+export type ResearchMode = "quick" | "deep" | "compare" | "factcheck" | "briefing";
 export type ResearchDepth = "quick" | "deep";
 
-/** Lifecycle of a research session. */
 export type ResearchStatus =
   | "planning"
-  | "searching"
+  | "discovering"
   | "ranking"
+  | "fetching"
   | "extracting"
+  | "checking"
   | "synthesizing"
+  | "refreshing"
   | "done"
   | "stopped"
   | "error";
 
-/** Epistemic category of an extracted note. NEVER guess — default to "inference". */
-export type Claim = "fact" | "inference" | "opinion";
-
-/** How confident XR is in a note, based on source quality + corroboration. */
+export type ClaimKind = "fact" | "inference" | "opinion" | "uncertainty";
+export type Claim = ClaimKind;
 export type Confidence = "high" | "medium" | "low";
+export type SourceType = "official" | "primary" | "academic" | "news" | "docs" | "community" | "blog" | "reference" | "unknown";
+export type Freshness = "fresh" | "recent" | "stale" | "unknown";
+export type EvidenceStrength = "strong" | "moderate" | "weak";
+export type OutputFormat = "markdown" | "html" | "json";
 
-/** A research question generated during planning. */
 export interface ResearchQuestion {
   id: string;
   text: string;
-  /** Search queries proposed to answer this question. */
   queries: string[];
 }
 
-/** The plan: questions + a search strategy. Produced before any searching. */
 export interface ResearchPlan {
   topic: string;
-  /** A one-line restatement of what the user actually wants answered. */
   objective: string;
+  mode: ResearchMode;
   questions: ResearchQuestion[];
-  /** Free-form notes on strategy, scope, and what counts as a good source. */
   strategy: string;
+  sourceRequirements: string[];
   createdAt: number;
 }
 
-/** A discovered source. Metadata is captured where possible (UX: transparency). */
-export interface Source {
-  id: string; // stable short id, e.g. "s1"
+export interface SourceFreshness {
+  checkedAt: number;
+  lastModified?: string;
+  apparentDate?: string;
+  ageDays?: number;
+  score: number;
+  label: Freshness;
+  reason: string;
+}
+
+export interface SourceMetadata {
   title: string;
   url: string;
-  /** Hostname, used for trust scoring + dedupe. */
+  canonicalUrl?: string;
   domain: string;
-  /** Search-engine snippet (NOT verified content). */
+  type: SourceType;
   snippet: string;
-  /** Which query surfaced this source. */
   foundVia: string;
-  /** 0..1 trust score from deterministic heuristics (see ranking.ts). */
+  discoveredAt: number;
+  fetchedAt?: number;
+  httpStatus?: number;
+  contentType?: string;
+  contentLength?: number;
+  lastVerifiedAt?: number;
+}
+
+export interface Source {
+  id: string;
+  title: string;
+  url: string;
+  domain: string;
+  snippet: string;
+  foundVia: string;
+  type: SourceType;
   trust: number;
-  /** Human-readable reason for the trust score. */
+  relevance: number;
+  freshness: SourceFreshness;
+  quality: number;
   trustReason: string;
-  /** Did we actually fetch the page body? If false, only the snippet is known. */
+  rankingReason: string;
   fetched: boolean;
-  /** Cleaned page text, only present when fetched === true. */
+  verified: boolean;
+  fetchError?: string;
   content?: string;
-  /** When this source was discovered/fetched. */
+  metadata: SourceMetadata;
   collectedAt: number;
 }
 
-/** A single extracted point, always tied to a source. */
-export interface Note {
+export interface EvidenceBlock {
   id: string;
-  /** The source this note came from. Required — no orphan notes. */
   sourceId: string;
-  /** The extracted point, in XR's words. */
+  claimId?: string;
   text: string;
-  claim: Claim;
+  quote?: string;
+  kind: ClaimKind;
   confidence: Confidence;
-  /**
-   * verified === true ONLY when the note was extracted from FETCHED content,
-   * not from a search snippet. This backs the "never pretend to have checked"
-   * rule: unverified notes are explicitly marked.
-   */
+  strength: EvidenceStrength;
   verified: boolean;
+  relevance: number;
+  extractedAt: number;
 }
 
-/** A detected disagreement between sources. */
-export interface Contradiction {
-  topic: string;
-  /** Source ids that disagree. */
+export interface Note extends EvidenceBlock {
+  claim: ClaimKind;
+}
+
+export interface ResearchClaim {
+  id: string;
+  text: string;
+  kind: ClaimKind;
+  confidence: Confidence;
   sourceIds: string[];
-  description: string;
+  evidenceIds: string[];
+  corroboratedBy: string[];
+  contradictedBy: string[];
+  status: "supported" | "contested" | "weak" | "unverified";
 }
 
-/** Final synthesized output. */
+export interface Contradiction {
+  id: string;
+  topic: string;
+  sourceIds: string[];
+  evidenceIds: string[];
+  description: string;
+  severity: "high" | "medium" | "low";
+  status: "open" | "resolved";
+}
+
 export interface Synthesis {
-  /** One or two sentences answering the question directly. */
   shortAnswer: string;
-  /** 3–6 bullet executive summary. */
   executiveSummary: string[];
-  /** Long-form, sectioned report body (markdown). */
   report: string;
-  /** Things XR could NOT verify or that remain open. */
   openQuestions: string[];
-  /** Honest confidence statement for the whole answer. */
   overallConfidence: Confidence;
 }
 
-/** The full research session: the suggested data model, materialized. */
+export interface ReportVersion {
+  id: string;
+  format: OutputFormat;
+  path?: string;
+  sha256: string;
+  createdAt: number;
+}
+
+export interface RefreshRecord {
+  id: string;
+  refreshedAt: number;
+  previousUpdatedAt: number;
+  sourcesChecked: number;
+  changedSources: string[];
+  notesAdded: number;
+  status: "done" | "partial" | "error";
+  message: string;
+}
+
+export interface ComparisonOutput {
+  id: string;
+  subjects: string[];
+  criteria: string[];
+  matrix: Array<Record<string, string>>;
+  verdict: string;
+  createdAt: number;
+}
+
 export interface ResearchSession {
   id: string;
   topic: string;
+  query: string;
+  mode: ResearchMode;
   depth: ResearchDepth;
   status: ResearchStatus;
   plan?: ResearchPlan;
   sources: Source[];
+  sourceSets: Array<{ id: string; name: string; sourceIds: string[]; createdAt: number }>;
+  evidence: EvidenceBlock[];
   notes: Note[];
+  claims: ResearchClaim[];
   contradictions: Contradiction[];
+  summary?: Synthesis;
   synthesis?: Synthesis;
-  /** Where the last export was written, if any. */
+  finalReport?: string;
+  reportVersions: ReportVersion[];
+  refreshHistory: RefreshRecord[];
+  comparison?: ComparisonOutput;
   exportPath?: string;
-  /** Token/$ meter string captured at the end of the run. */
+  tags: string[];
+  projectId?: string;
+  liveSourcesOnly: boolean;
+  lastRefreshedAt?: number;
   meter?: string;
   createdAt: number;
   updatedAt: number;
 }
 
-/** Tunable limits per depth. Deterministic, not magic. */
 export interface DepthBudget {
-  /** Max distinct search queries to run. */
   maxQueries: number;
-  /** Results requested per query. */
   resultsPerQuery: number;
-  /** Max sources to keep after ranking. */
   maxSources: number;
-  /** Max sources to actually fetch (full-text). */
   maxFetched: number;
-  /** Research questions to generate in the plan. */
   maxQuestions: number;
+  maxEvidencePerSource: number;
 }
 
 export const DEPTH_BUDGETS: Record<ResearchDepth, DepthBudget> = {
-  quick: {
-    maxQueries: 3,
-    resultsPerQuery: 5,
-    maxSources: 8,
-    maxFetched: 3,
-    maxQuestions: 3,
-  },
-  deep: {
-    maxQueries: 6,
-    resultsPerQuery: 6,
-    maxSources: 16,
-    maxFetched: 8,
-    maxQuestions: 6,
-  },
+  quick: { maxQueries: 4, resultsPerQuery: 6, maxSources: 10, maxFetched: 5, maxQuestions: 4, maxEvidencePerSource: 5 },
+  deep: { maxQueries: 10, resultsPerQuery: 8, maxSources: 28, maxFetched: 16, maxQuestions: 8, maxEvidencePerSource: 8 },
 };
