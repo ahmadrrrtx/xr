@@ -10,6 +10,7 @@ import { DoctorCommand } from "./commands/doctor.ts";
 import { ConfigCommand } from "./commands/config.ts";
 import { BudgetCommand } from "./commands/budget.ts";
 import { ProvidersCommand } from "./commands/providers.ts";
+import { MemoryCommand } from "./commands/memory.ts";
 import {
   ControlCommand,
   InstallCommand,
@@ -68,6 +69,7 @@ function registerCommands(runtime: XRRuntime): void {
   runtime.commands.register(new VoiceCommand());
   runtime.commands.register(new ControlCommand());
   runtime.commands.register(new ResearchCommand());
+  runtime.commands.register(new MemoryCommand());
 }
 
 async function main(): Promise<void> {
@@ -82,6 +84,15 @@ async function main(): Promise<void> {
     const argv = process.argv
       .slice(2)
       .filter((a) => a !== "--from-bootstrap");
+
+    // Stage 5/6 — interactive TUI (`xr --tui`). Was previously defined but never
+    // routed, so the flag fell through to the agent.
+    if (argv[0] === "--tui" || argv[0] === "tui") {
+      const { runTUI } = await import("./interfaces/tui.ts");
+      await runTUI();
+      return;
+    }
+
     if (
       argv.length === 0 ||
       argv[0] === "help" ||
@@ -91,8 +102,9 @@ async function main(): Promise<void> {
       banner();
       console.log(`${C.bold("Usage")}`);
       console.log(`  xr install                setup wizard`);
-      console.log(`  xr doctor                 health check`);
+      console.log(`  xr doctor                 health check (incl. memory)`);
       console.log(`  xr status                 component status`);
+      console.log(`  xr --tui                  interactive terminal UI`);
       console.log(`  xr repair                 safe repair`);
       console.log(`  xr update                 update with rollback guard`);
       console.log(`  xr providers list         show all providers and keys`);
@@ -101,6 +113,7 @@ async function main(): Promise<void> {
       console.log(`  xr models runtimes        detect local AI runtimes`);
       console.log(`  xr models recommend       local runtime/model recommendation`);
       console.log(`  xr models install         install/configure local model with approval`);
+      console.log(`  xr memory                 durable memory (status/add/list/…)`);
       console.log(`  xr voice setup            voice prerequisites`);
       console.log(`  xr control setup          desktop control prerequisites`);
       console.log(`  xr research setup         research prerequisites`);
