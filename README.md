@@ -2,12 +2,12 @@
 
 # ⚡ XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `local model intelligence` · `spend-capped` · `tamper-evident` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
+**`BYOK` · `local-first` · `Stage 4 local AI runtime manager` · `offline-capable` · `spend-capped` · `tamper-evident` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![Tests](https://img.shields.io/badge/tests-219%20passing-34e2a0?style=flat-square)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/tests-235%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows%20%C2%B7%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0.0-22e0ff?style=flat-square)](#)
@@ -46,7 +46,7 @@ Install modes:
 
 ```bash
 xr install --mode minimal          # core only
-xr install --mode local            # local/free via Ollama where available
+xr install --mode local            # local/free, no API key required
 xr install --mode byok             # cloud keys you own
 xr install --mode hybrid           # cloud primary + local fallback
 xr install --mode full             # asks for all optional packs
@@ -55,8 +55,9 @@ xr install --mode full             # asks for all optional packs
 After install:
 
 ```bash
-xr models recommend
-xr models install                  # optional local model pull
+xr models runtimes                 # detect Ollama, LM Studio, Jan, llama.cpp, LocalAI, vLLM, GPT4All, etc.
+xr models recommend                # hardware-aware runtime/model recommendation
+xr models install                  # safe one-command Ollama setup/pull when approved
 xr "hello"
 ```
 
@@ -78,7 +79,7 @@ XR has evolved from a modular agent script into a **True AI Operating System**. 
 
 | | Most AI agents | **XR** |
 |---|---|---|
-| **Provider** | locked to vendor | BYOK — **any of 20+ providers**, or **fully local** via Ollama, LM Studio, vLLM, LocalAI, Jan |
+| **Provider** | locked to vendor | BYOK — **any of 20+ providers**, or **fully local** via Ollama, LM Studio, llama.cpp, Jan, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, SGLang |
 | **Cost** | "soft" warnings | **hard ceiling enforced in code** (`checkBeforeStep()`) |
 | **Security** | trust us | **deterministic injection benchmark**, signed block-rate report |
 | **Audit** | scrollback only | **SHA-256 hash chain** — tamper-evident, offline, free |
@@ -185,7 +186,7 @@ In chat and voice it's conversational:
 
 **How recall works:** when you run a task, XR surfaces *only the few entries relevant to that task* as one clearly-labelled reference block — never every memory on every prompt. `exclusion` rules are never surfaced and actively block matching content from ever being stored.
 
-**Semantic recall (v0.9):** retrieval uses **embeddings** (local Ollama `nomic-embed-text`) for meaning-based matching, with an automatic, dimension-safe **lexical fallback** so it works even with no embedding model — fully offline, never crashes. Embeddings are cached per entry and computed lazily on first recall (or warmed with `xr memory reindex`). Force deterministic keyword scoring with `xr memory recall "…" --lexical`, or disable globally with `memory.semanticRecall: false`.
+**Semantic recall (v0.9):** retrieval uses **local embeddings** when available (Ollama `nomic-embed-text` or a configured OpenAI-compatible local embeddings endpoint), with an automatic, dimension-safe **lexical fallback** so it works even with no embedding model — fully offline, never crashes. Embeddings are cached per entry and computed lazily on first recall (or warmed with `xr memory reindex`). Force deterministic keyword scoring with `xr memory recall "…" --lexical`, or disable globally with `memory.semanticRecall: false`.
 
 **Summarization (v0.9):** keep long-lived memory tidy with `xr memory summarize` — it folds **old, low-importance** entries (per category/scope) into compact digests. It's a two-phase, **approval-first** flow: it *proposes* what would fold, then asks before changing anything (`--dry-run` to preview, `-y` to skip the prompt). Deterministic, and `exclusion` rules are never folded.
 
@@ -204,13 +205,34 @@ xr memory summarize -y                       # apply (folds old notes → digest
 - Logs/telemetry never contain raw memory content — only ids and counts.
 - Research findings are saved only on request: `xr research remember [id]`.
 
-### 🧠 Local Model Intelligence (v0.5)
+### 🏠 Stage 4 Local AI System
+
+XR is not just an Ollama wrapper. Stage 4 adds a first-class **local AI runtime manager** so non-technical users can choose private/offline AI without learning model runtimes, while power users can bring their own local servers.
+
 ```bash
-xr models recommend         # auto-detects RAM/CPU → picks the right Ollama model
-xr models install            # one-click download
-xr models test               # smoke test
+xr models                         # local AI status
+xr models runtimes                # detect installed/running/configured local runtimes
+xr models recommend [use-case]    # hardware-aware runtime + model recommendation
+xr models install [model]         # safe Ollama install/pull flow with approval
+xr models set <runtime> <model>   # select LM Studio / Jan / llama.cpp / vLLM / etc.
+xr models test [model]            # local inference smoke test
 ```
-Hybrid routing: cloud for hard tasks, local for cheap ones, with automatic fallback when the budget is exhausted.
+
+Supported local runtimes:
+
+- **Automatic install / model pull where safe:** Ollama
+- **Detect + configure + route + test:** LM Studio, llama.cpp server, Jan, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, SGLang, custom OpenAI-compatible local endpoints
+
+Hardware-aware recommendations consider OS, CPU, RAM, GPU/VRAM where detectable, disk space, acceleration support, and use case (`general`, `coding`, `reasoning`, `summarization`, `research`, `embeddings`, `voice`). XR recommends smaller CPU-friendly models on low-end hardware and stronger coding/reasoning models only when the machine can realistically run them.
+
+Routing modes:
+
+- **Local only** — no cloud fallback, no API key required
+- **Hybrid** — your primary provider with local fallback
+- **Cloud-first** — cloud primary with selected local runtime available as fallback/override
+- **Power-user custom local runtime** — any OpenAI-compatible local endpoint
+
+XR never silently downloads large models, starts background services, or overwrites runtime-managed model settings. Downloads and installers require explicit approval.
 
 ### 🔬 Research Mode (v0.7)
 ```bash
@@ -387,7 +409,7 @@ abstraction.
 - **Cheap cloud:** OpenRouter, Together AI, Mistral AI, Fireworks, SambaNova, Hugging Face
 - **Premium:** OpenAI, Anthropic Claude, Cohere, xAI (Grok), Perplexity
 - **Enterprise:** AWS Bedrock
-- **Local / self-hosted:** Ollama, LM Studio, Jan, LocalAI, vLLM
+- **Local / self-hosted:** Ollama, LM Studio, llama.cpp, Jan, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, SGLang
 - **Custom:** any OpenAI-compatible endpoint you define
 
 **Provider commands:**
@@ -434,15 +456,26 @@ Key management is **secure by default**: OS-backed stores (macOS Keychain,
 Linux Secret Service, Windows DPAPI) are used when available. File fallback is
 chmod 600. Keys are **never** printed in diagnostics or logs.
 
-### Local Models
+### Local AI Runtime Manager
 
 ```bash
-xr models                                 # local model status
-xr models recommend                       # auto-detect hardware → suggest model
-xr models install [id]                    # download & configure Ollama model
-xr models test [id]                       # smoke test
-xr models set <id>                        # select and configure routing
-xr models remove <id>                     # remove a pulled model
+xr models                                 # local AI status
+xr models list                            # recommended local model families
+xr models runtimes                        # detect local runtimes and API servers
+xr models recommend [general|coding|reasoning|research]
+xr models install [model]                 # install/pull through selected runtime when supported
+xr models set <runtime> <model>           # select runtime + model + routing mode
+xr models test [model]                    # local inference smoke test
+xr models remove [model]                  # safely remove Ollama-managed models
+```
+
+Examples:
+
+```bash
+xr models recommend coding                # choose a coding model for this hardware
+xr models install qwen2.5-coder:7b        # explicit Ollama pull, asks first unless --yes
+xr models set lmstudio my-local-model     # use LM Studio's running local server
+xr models set llamacpp local-model        # use llama.cpp server at localhost:8080/v1
 ```
 
 ### Budget
@@ -600,11 +633,11 @@ src/
     native/          # non-OpenAI adapters (Anthropic, Google, Mistral, Cohere, Bedrock, Cerebras)
   services/      # provider-service, agent-service, budget-service, plugin-service, config-service
   commands/      # CLI command implementations (run, install, providers, doctor, …)
-  config/        # schema-validated, versioned config loader (v9) with migrations
+  config/        # schema-validated, versioned config loader (v10) with migrations
   install/       # system.ts — platform detection, wizard, health checks
   security/      # secrets.ts — OS-backed keychain / secret-tool / DPAPI + file fallback
   interfaces/    # CLI UI helpers (ask, confirm, password, colors)
-  local/         # hardware detection, Ollama integration, model registry
+  local/         # Stage 4 hardware detection, runtime detection, local model registry/recommender
   state/         # specialized stores (session, audit, memory, cost, user-memory)
   automation/    # Playwright / browser automation
   computer/      # desktop control primitives (mouse, keyboard, window)
