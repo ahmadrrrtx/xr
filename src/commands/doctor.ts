@@ -78,6 +78,22 @@ export class DoctorCommand implements Command {
         remediation: latestResearch?.status === "stopped" || latestResearch?.status === "error" ? "Inspect with: xr research status" : undefined,
       });
 
+      // Stage 8 — voice health check.
+      try {
+        const { checkVoiceStack } = await import("../voice/index.ts");
+        for (const c of checkVoiceStack().checks) {
+          checks.push({
+            id: c.id,
+            label: c.label,
+            state: c.state,
+            detail: c.detail,
+            remediation: c.remediation,
+          });
+        }
+      } catch (e) {
+        checks.push({ id: "voice", label: "Voice stack", state: "warn", detail: (e as Error).message });
+      }
+
       // Stage 6 — memory health check.
       checks.push({
         id: "memory",
@@ -141,6 +157,20 @@ export class DoctorCommand implements Command {
       console.log(`  inspect ........ ${C.dim("xr research status  ·  xr research sources  ·  xr research refresh")}`);
     } else {
       console.log(`  start .......... ${C.dim('xr research "your topic"')}`);
+    }
+
+    // Stage 8 — voice health.
+    console.log("");
+    console.log(C.bold("Voice Stack"));
+    try {
+      const { checkVoiceStack } = await import("../voice/index.ts");
+      const voice = checkVoiceStack();
+      for (const c of voice.checks) {
+        const status = c.state === "ok" ? C.green("✓") : c.state === "warn" ? C.amber("!") : C.red("✗");
+        console.log(`  ${c.label.padEnd(20)} ${status} ${C.dim(c.detail)}`);
+      }
+    } catch (e) {
+      warn(`Voice health check failed: ${(e as Error).message}`);
     }
 
     // Stage 6 — memory health.
