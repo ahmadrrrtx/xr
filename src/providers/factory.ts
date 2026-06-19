@@ -24,7 +24,7 @@ import { getSecret } from "../security/secrets.ts";
 
 export type CostTier = "free" | "cheap" | "premium" | "enterprise";
 
-export { ProviderPreset } from "./presets.ts";
+export type { ProviderPreset } from "./presets.ts";
 export { PRESETS } from "./presets.ts";
 
 // ── Register built-in presets ────────────────────────────────────────────────
