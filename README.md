@@ -9,16 +9,16 @@
 
 # XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `polished UI layer` · `offline-capable` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `polished UI layer` · `offline-capable` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![Tests](https://img.shields.io/badge/tests-235%20passing-34e2a0?style=flat-square)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/tests-255%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-5%20UI%20Layer-00FF88?style=flat-square)](#stage-5--user-interfaces)
+[![Stage](https://img.shields.io/badge/stage-6%20Memory%20Engine-00FF88?style=flat-square)](#stage-6--the-memory-engine)
 
 </div>
 
@@ -43,8 +43,8 @@ iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 
 ```bash
 # After install — first time setup
-xr onboarding        # guided setup wizard
-xr doctor            # full health check
+xr onboarding        # guided setup wizard (incl. memory toggle)
+xr doctor            # full health check (incl. memory health)
 xr "hello, XR"       # run your first task
 xr --tui             # open interactive terminal UI
 xr serve             # start local dashboard + chat in browser
@@ -65,6 +65,9 @@ xr serve             # start local dashboard + chat in browser
 | **Computer Control** | wild west | **safe-by-construction** — classify → preview → approve → audit |
 | **Multi-step planner** | hidden prompts | **typed Action[] schema** validated with Zod, every step previewed |
 | **Plan memory** | none | **cached deterministic plans** — second run skips the LLM |
+| **Durable memory** | silent auto-save, creepy | **explicit-by-default** — XR only remembers what you ask; live "remember this?" with consent |
+| **Memory recall** | injects everything, opaque | **explainable** — shows match-% + why; conservative floor, never floods the prompt |
+| **Memory hygiene** | grows forever | **TTL/expiry + prune + access tracking** — see what's stale, delete permanently |
 | **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, no telemetry |
 | **Voice** | cloud STT | **local Whisper + Kokoro** by default, push-to-talk |
 | **Runtime** | procedural script | **AI OS Kernel** with DI and Lifecycle management |
@@ -146,7 +149,7 @@ A **mission-control dashboard** with 12 navigation panels:
 | **Status** | Complete system health grid |
 | **Providers** | All 12+ providers with status, tier, key configuration |
 | **Models** | Local runtime status, installed models |
-| **Memory** | All durable memory entries with inline delete |
+| **Memory** | Health cards (total/expired/never-recalled), live search, all entries with inline delete, expiry badges |
 | **Research** | Research mode quick reference |
 | **Plugins** | Plugin install/enable quick reference |
 | **Voice** | Voice control quick reference |
@@ -179,6 +182,131 @@ src/ui/
 - Warning / cloud: `#F59E0B` amber
 - Background: `#0A0A0F`
 - Logo: `▀▄▀ █▀█ / █░█ █▀▄` (block-char ASCII art spelling XR)
+
+---
+
+## 🧠 Stage 6 — The Memory Engine
+
+Stage 6 makes XR **stateful, personal, and durable** — without becoming creepy, noisy, or unsafe. XR now remembers your preferences, projects, workflows, and long-lived context in a way that is **transparent and controllable**.
+
+### Design principles
+
+- **Explicit by default** — XR only remembers what you ask it to. No silent auto-save.
+- **Local-first** — all memory lives in `~/.xr/xr.db`. Nothing leaves your machine.
+- **Explainable** — recall shows the match percentage and *why* each entry surfaced.
+- **Reversible** — everything is editable, deletable, exportable, and importable.
+- **Non-creepy** — conservative retrieval; session summaries are off by default.
+- **Private** — audit log stores content length only, never raw content; secrets redacted.
+- **Kill-switch** — `XR_MEMORY_DISABLED=1` turns memory off completely.
+
+### Memory commands
+
+```bash
+# Inspect
+xr memory                          # status + counts by category
+xr memory list [--scope s] [--category c] [--json]
+xr memory search "typescript"      # keyword search
+xr memory recall "what runtime"    # EXACTLY what XR would surface + WHY (match %)
+xr memory health                   # expired, never-recalled, by category
+xr memory reindex                  # warm the semantic-recall cache
+
+# Write (explicit, consent-gated)
+xr memory add "I prefer TypeScript" --category preference
+xr memory add "temp note" --ttl 3600          # expires after 1 hour
+xr memory add "tmp" --ttl-days 7              # expires after 7 days
+xr memory edit mem_ab12 "new text"
+xr memory remove mem_ab12                      # permanent
+xr memory clear [--scope s]                    # permanent
+
+# Maintain
+xr memory prune                   # permanently delete expired entries
+xr memory summarize [--days 30]   # fold old, low-importance entries into compact summaries
+
+# Portability
+xr memory export [path]           # JSON bundle
+xr memory import <path>           # merge (dedupes; drops stale entries)
+```
+
+### Live capture — "remember this?"
+
+In the **TUI, chat, and voice**, XR intercepts memory intents naturally:
+
+```
+you: remember I prefer dark mode for everything
+xr: ✓ remembered: I prefer dark mode for everything (preference)
+
+you: what do you remember about my preferences?
+xr: here's what I remember (1):
+       • I prefer dark mode for everything
+
+you: don't remember my email address
+xr: ✓ got it — I won't remember that.           # no prompt needed (reduces stored data)
+
+you: forget the note about vim
+xr: ✓ forgotten 1 entry.
+```
+
+- Durable adds **ask for consent** first (`autoSuggest`).
+- "Don't remember" and "forget" **never prompt** — reducing stored data is always honoured.
+- "What do you remember" is **read-only recall**.
+
+### Memory categories & scopes
+
+| Category | Use for | Surfaced in recall? |
+|---|---|---|
+| `preference` | coding style, provider, tools | ✅ |
+| `project` | long-running project context | ✅ |
+| `workflow` | repeated procedures | ✅ |
+| `fact` | stable long-term facts | ✅ |
+| `exclusion` | **do-not-remember rules** | ❌ (never surfaced) |
+
+Scopes separate **personal** memory (`global`) from **project** memory (per-directory), so your TypeScript preferences don't leak into a Python project.
+
+### Retention, expiry & hygiene
+
+- **Per-entry TTL** — `--ttl` / `--ttl-days` make an entry auto-expire.
+- **Expired = forgotten** — expired entries are excluded from recall and list (visible only with `--include-expired` / `xr memory list` flag in code).
+- **`xr memory prune`** — permanently deletes expired entries.
+- **Access tracking** — every entry records `lastAccessedAt` + `accessCount`, so `xr memory health` can show you what's never been used.
+- **Import safety** — importing an already-expired entry **drops it** (no silent resurrection of stale memory).
+
+### Explainable retrieval
+
+Recall is never a black box. Every surfaced entry comes with a **score and a reason**:
+
+```
+🧠 Recall "what typescript runtime" (1)
+  mem_177cce4b 27% preference I prefer TypeScript and Bun for backend work
+      why: lexical match 27% · scope=global
+```
+
+Retrieval uses **semantic embeddings** (Ollama `nomic-embed-text`) when available, with an automatic **lexical fallback** so it always works — even fully offline.
+
+### Session summaries (opt-in)
+
+Conversations can fold into compact **session summaries**, kept in a **separate store** so the agent never confuses ephemeral chat recaps with durable facts. Off by default (`memory.saveSessionSummaries`).
+
+### Dashboard memory panel
+
+The dashboard Memory panel now includes **health cards** (total / expired / never-recalled), a **live search box**, expiry badges, and inline delete. `xr doctor` includes a memory-health row.
+
+### Memory config
+
+```jsonc
+// ~/.xr/config.json
+{
+  "memory": {
+    "enabled": true,              // master switch
+    "autoSuggest": true,          // offer to remember in chat/voice (asks first)
+    "injectInChat": true,         // inject relevant memory into prompts
+    "recallLimit": 5,             // max entries surfaced per prompt
+    "semanticRecall": true,       // embeddings (with lexical fallback)
+    "autoExpireDays": 0,          // 0 = never auto-expire
+    "saveSessionSummaries": false,// off by default (non-creepy)
+    "sessionSummaryMinTurns": 6
+  }
+}
+```
 
 ---
 
@@ -234,14 +362,16 @@ xr control plan "open github notifications" --yes  # next run: ⚡ recalled, $0.
 xr control memory list
 ```
 
-### 🧠 Durable Memory (v0.9)
+### 🧠 Durable Memory (v0.9 → Stage 6)
 
 ```bash
 xr memory add "I prefer TypeScript and Bun" --category preference
 xr memory add "this project is called XR" --category project --scope xr
 xr memory list             # see everything XR remembers
-xr memory recall "what do I prefer?"
+xr memory recall "what do I prefer?"    # shows match % + WHY
 xr memory search "bun"
+xr memory health           # expired, never-recalled, by category
+xr memory prune            # delete expired entries permanently
 xr memory edit mem_ab12 "prefer Bun + Zod"
 xr memory remove mem_ab12
 xr memory clear            # forget everything (asks first)
@@ -249,9 +379,7 @@ xr memory export memories.json
 xr memory import memories.json
 ```
 
-XR remembers **only what you explicitly tell it to.** Everything is local-first, inspectable, editable, and permanently deletable.
-
-**Semantic recall (v0.9):** retrieval uses local embeddings when available (Ollama `nomic-embed-text`), with automatic lexical fallback — fully offline, never crashes.
+XR remembers **only what you explicitly tell it to.** Everything is local-first, inspectable, editable, and permanently deletable. See [Stage 6 — The Memory Engine](#-stage-6--the-memory-engine) for the full feature set: live capture, explainable recall, TTL/expiry, session summaries, and memory health.
 
 ### 🏠 Stage 4 — Local AI Runtime Manager
 
@@ -394,10 +522,11 @@ xr/
 │   │   ├── providers.ts  # provider management UI
 │   │   └── models.ts     # local AI model UI
 │   ├── commands/         # CLI command handlers
+│   │   ├── memory.ts     # xr memory — the Memory Engine (Stage 6)
 │   │   ├── help.ts       # xr help [topic]
 │   │   ├── budget.ts
 │   │   ├── config.ts
-│   │   ├── doctor.ts
+│   │   ├── doctor.ts     # includes memory health (Stage 6)
 │   │   └── ...
 │   ├── daemon/           # local server
 │   │   ├── server.ts     # xr serve — dashboard + chat + API
@@ -449,7 +578,11 @@ xr providers add claude
 
 # Memory
 xr memory add "I prefer TypeScript" --category preference
+xr memory add "temp" --ttl 3600          # expires after 1h
 xr memory list
+xr memory recall "what do I prefer?"     # match % + why
+xr memory health
+xr memory prune                         # delete expired
 xr memory clear
 
 # Research
@@ -468,6 +601,7 @@ xr help                              # full command reference
 xr help tui                          # TUI guide
 xr help security                     # security guide
 xr help providers                    # providers guide
+xr help memory                       # memory engine guide
 ```
 
 ---
@@ -493,8 +627,9 @@ xr help providers                    # providers guide
 | Stage 2 | Security + Audit | ✅ Done |
 | Stage 3 | Research + Plugins | ✅ Done |
 | Stage 4 | Local AI Runtime | ✅ Done |
-| **Stage 5** | **User Interfaces** | ✅ **Done** |
-| Stage 6 | Multi-Agent + Collaboration | 🔜 Next |
+| Stage 5 | User Interfaces | ✅ Done |
+| **Stage 6** | **Memory Engine** | ✅ **Done** |
+| Stage 7 | Multi-Agent + Collaboration | 🔜 Next |
 
 ---
 
