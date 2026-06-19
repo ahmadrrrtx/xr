@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import { getSecret } from "../security/secrets.ts";
 import { PRESETS } from "../providers/presets.ts";
 
-export const CONFIG_VERSION = 11; // Stage 6 Memory Engine
+export const CONFIG_VERSION = 12; // Stage 8 Voice Stack
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -166,11 +166,56 @@ const ConfigSchema = z.object({
     .default({}),
   // Auto-select free provider when available
   preferFreeProviders: z.boolean().default(true),
-  // Voice interaction settings (opt-in; STT/TTS endpoints come from env).
+  // Stage 8 — Voice Stack. Disabled by default, push-to-talk by default,
+  // local-first by default. Cloud STT/TTS and always-listen require explicit opt-in.
   voice: z
     .object({
-      /** Keep listening continuously (wake-word) vs push-to-talk. */
+      enabled: z.boolean().default(false),
+      mode: z.enum(["off", "push-to-talk", "wake-word", "always-listen"]).default("push-to-talk"),
+      inputDevice: z.string().min(1).max(500).optional(),
+      outputDevice: z.string().min(1).max(500).optional(),
+      sttBackend: z.enum(["auto", "http", "groq", "openai", "whisper-cli", "whispercpp", "disabled"]).default("auto"),
+      sttUrl: z.string().url().optional(),
+      sttModel: z.string().min(1).max(200).default("base.en"),
+      sttLanguage: z.string().min(2).max(32).optional(),
+      ttsBackend: z.enum(["auto", "http", "piper", "kokoro-cli", "system", "say", "espeak", "powershell", "disabled"]).default("auto"),
+      ttsUrl: z.string().url().optional(),
+      ttsVoice: z.string().min(1).max(200).default("default"),
+      ttsPersona: z.enum(["calm", "fast", "detailed"]).default("calm"),
+      vadBackend: z.enum(["energy", "silero-external", "none"]).default("energy"),
+      wakeBackend: z.enum(["text", "openwakeword-external", "none"]).default("text"),
+      wakeWord: z.string().min(2).max(80).default("hey xr"),
+      pushToTalkKey: z.string().min(1).max(80).default("enter"),
       alwaysListen: z.boolean().default(false),
+      interruptionPolicy: z.enum(["barge-in", "finish-sentence", "disabled"]).default("barge-in"),
+      confirmationPolicy: z.enum(["always-risky", "always", "never-execute-risky"]).default("always-risky"),
+      microphonePermission: z.enum(["unknown", "granted", "denied"]).default("unknown"),
+      speakerPermission: z.enum(["unknown", "granted", "denied"]).default("unknown"),
+      transcriptPolicy: z.enum(["off", "session", "local-private"]).default("session"),
+      transcriptRetentionDays: z.number().int().min(0).max(365).default(7),
+      fallbackTextMode: z.boolean().default(true),
+      allowCloudStt: z.boolean().default(false),
+      allowCloudTts: z.boolean().default(false),
+      noiseSuppression: z.boolean().default(true),
+      endpointing: z.object({
+        minSilenceMs: z.number().int().min(100).max(5000).default(650),
+        maxSilenceMs: z.number().int().min(250).max(10000).default(1500),
+        speechPaddingMs: z.number().int().min(0).max(2000).default(250),
+        maxUtteranceMs: z.number().int().min(1000).max(120000).default(15000),
+        energyThreshold: z.number().min(0.001).max(0.5).default(0.012),
+      }).default({}),
+      deviceMetadata: z.record(z.unknown()).default({}),
+      lastTestResult: z.object({
+        ok: z.boolean(),
+        at: z.string(),
+        inputDevice: z.string().optional(),
+        outputDevice: z.string().optional(),
+        sttBackend: z.string().optional(),
+        ttsBackend: z.string().optional(),
+        transcript: z.string().optional(),
+        detail: z.string().optional(),
+      }).optional(),
+      lastUsedAt: z.string().optional(),
     })
     .default({}),
   // v0.9 / Stage 6 — durable memory system (long-term preferences, project
@@ -369,6 +414,50 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       autoExpireDays: raw.memory?.autoExpireDays ?? 0,
       saveSessionSummaries: raw.memory?.saveSessionSummaries ?? false,
       sessionSummaryMinTurns: raw.memory?.sessionSummaryMinTurns ?? 6,
+    },
+  }),
+  // 11 -> 12: Stage 8 Voice Stack — safe, disabled-by-default, local-first.
+  11: (raw) => ({
+    ...raw,
+    version: 12,
+    voice: {
+      enabled: raw.voice?.enabled ?? false,
+      mode: raw.voice?.mode ?? (raw.voice?.alwaysListen ? "wake-word" : "push-to-talk"),
+      inputDevice: raw.voice?.inputDevice,
+      outputDevice: raw.voice?.outputDevice,
+      sttBackend: raw.voice?.sttBackend ?? "auto",
+      sttUrl: raw.voice?.sttUrl,
+      sttModel: raw.voice?.sttModel ?? "base.en",
+      sttLanguage: raw.voice?.sttLanguage,
+      ttsBackend: raw.voice?.ttsBackend ?? "auto",
+      ttsUrl: raw.voice?.ttsUrl,
+      ttsVoice: raw.voice?.ttsVoice ?? "default",
+      ttsPersona: raw.voice?.ttsPersona ?? "calm",
+      vadBackend: raw.voice?.vadBackend ?? "energy",
+      wakeBackend: raw.voice?.wakeBackend ?? "text",
+      wakeWord: raw.voice?.wakeWord ?? "hey xr",
+      pushToTalkKey: raw.voice?.pushToTalkKey ?? "enter",
+      alwaysListen: raw.voice?.alwaysListen ?? false,
+      interruptionPolicy: raw.voice?.interruptionPolicy ?? "barge-in",
+      confirmationPolicy: raw.voice?.confirmationPolicy ?? "always-risky",
+      microphonePermission: raw.voice?.microphonePermission ?? "unknown",
+      speakerPermission: raw.voice?.speakerPermission ?? "unknown",
+      transcriptPolicy: raw.voice?.transcriptPolicy ?? "session",
+      transcriptRetentionDays: raw.voice?.transcriptRetentionDays ?? 7,
+      fallbackTextMode: raw.voice?.fallbackTextMode ?? true,
+      allowCloudStt: raw.voice?.allowCloudStt ?? false,
+      allowCloudTts: raw.voice?.allowCloudTts ?? false,
+      noiseSuppression: raw.voice?.noiseSuppression ?? true,
+      endpointing: {
+        minSilenceMs: raw.voice?.endpointing?.minSilenceMs ?? 650,
+        maxSilenceMs: raw.voice?.endpointing?.maxSilenceMs ?? 1500,
+        speechPaddingMs: raw.voice?.endpointing?.speechPaddingMs ?? 250,
+        maxUtteranceMs: raw.voice?.endpointing?.maxUtteranceMs ?? 15000,
+        energyThreshold: raw.voice?.endpointing?.energyThreshold ?? 0.012,
+      },
+      deviceMetadata: raw.voice?.deviceMetadata ?? {},
+      lastTestResult: raw.voice?.lastTestResult,
+      lastUsedAt: raw.voice?.lastUsedAt,
     },
   }),
 
