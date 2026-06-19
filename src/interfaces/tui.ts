@@ -28,13 +28,15 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join, basename } from "node:path";
-import { loadConfig } from "../config/config.ts";
+import { loadConfig, isMemoryEnabled } from "../config/config.ts";
 import { buildProvider, knownProviders } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
 import { Store } from "../state/db.ts";
+import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import type { CaptureOutcome } from "../memory/store.ts";
 import { loadSkills } from "../skills/loader.ts";
 import { runLab } from "../security/lab.ts";
-import { approvePrompt, overBudgetPrompt } from "./cli.ts";
+import { approvePrompt, overBudgetPrompt, confirm } from "./cli.ts";
 import { runAgent, type AgentResult, type AgentDeps } from "../core/agent.ts";
 import type { Message } from "../core/types.ts";
 import {
@@ -372,6 +374,29 @@ async function dispatch(input: string, ctx: TUIContext): Promise<boolean> {
 
 // ── Task Runner ───────────────────────────────────────────────────────────────
 
+/** Stage 6 — render a live memory-capture outcome inline in the TUI. */
+function renderCaptureOutcome(o: CaptureOutcome): void {
+  console.log(`\n  ${xrDim("│")} ${xrBold("XR")} (memory)`);
+  if (o.kind === "add") {
+    if (o.ok && o.entry) console.log(`  ${xrDim("│")} ${xrGreen("✓")} remembered: ${xrDim(o.entry.content)}`);
+    else if (o.declined) console.log(`  ${xrDim("│")} ${xrDim("ok — I won't remember that.")}`);
+    else if (o.duplicate) console.log(`  ${xrDim("│")} ${xrDim("already remembered — no duplicate created.")}`);
+    else console.log(`  ${xrDim("│")} ${xrAmber("⚠")} could not store: ${o.reason ?? "unknown"}`);
+  } else if (o.kind === "exclusion") {
+    console.log(`  ${xrDim("│")} ${xrGreen("✓")} ${xrDim("got it — I won't remember that.")}`);
+  } else if (o.kind === "forget") {
+    console.log(`  ${xrDim("│")} ${xrGreen("✓")} forgotten ${o.removed ?? 0} entr${(o.removed ?? 0) === 1 ? "y" : "ies"}.`);
+  } else if (o.kind === "recall") {
+    const entries = o.entries ?? [];
+    if (!entries.length) console.log(`  ${xrDim("│")} ${xrDim("I don't have anything relevant saved.")}`);
+    else {
+      console.log(`  ${xrDim("│")} ${xrDim(`here's what I remember (${entries.length}):`)}`);
+      for (const e of entries.slice(0, 6)) console.log(`  ${xrDim("│")}   • ${e.content}`);
+    }
+  }
+  console.log(`  ${xrDim("│")}\n`);
+}
+
 async function runTask(
   task:    string,
   mode:    TUIState["mode"],
@@ -379,6 +404,25 @@ async function runTask(
 ): Promise<void> {
   const { config } = loadConfig();
   const { state, store } = ctx;
+
+  // Stage 6 — live memory capture. If the message is a memory intent
+  // ("remember I prefer X", "forget Y", "what do you remember?"), handle it
+  // inline instead of sending it to the model. Consent is asked for durable
+  // adds (autoSuggest). Never a silent auto-save.
+  if (isMemoryEnabled() && config.memory.autoSuggest) {
+    const mem = new MemoryStore(store);
+    const scope = projectScopeFromCwd(ctx.cwd);
+    const outcome = await mem.captureIntentAsync(task, {
+      scope,
+      source: "chat",
+      autoSuggest: true,
+      confirm: (p) => confirm(p, true),
+    });
+    if (outcome.handled) {
+      renderCaptureOutcome(outcome);
+      return;
+    }
+  }
 
   // Provider health check
   const spinner = new Spinner().start(`Connecting to ${xrCyan(state.provider)}…`);
@@ -415,6 +459,9 @@ async function runTask(
     maxTokens: config.budget.perTaskTokens,
   };
 
+  // Stage 6 — the canonical memory engine, shared with CLI/voice/dashboard.
+  const memoryEngine = new MemoryStore(store);
+
   let result: AgentResult | null = null;
   try {
     result = await runAgent(task, mode, {
@@ -428,6 +475,16 @@ async function runTask(
       pricing:    priceFor(state.provider, state.model),
       egressAllowlist: config.security.egressAllowlist,
       dryRun:     false,
+      memory: {
+        enabled: isMemoryEnabled() && config.memory.injectInChat,
+        recallLimit: config.memory.recallLimit,
+        semantic: config.memory.semanticRecall,
+      },
+      memoryStore: memoryEngine,
+      sessionSummary: {
+        enabled: isMemoryEnabled() && config.memory.saveSessionSummaries,
+        minTurns: config.memory.sessionSummaryMinTurns,
+      },
     } as AgentDeps);
   } catch (e) {
     thinkSpinner.fail(`Agent error: ${(e as Error).message}`);
@@ -605,11 +662,13 @@ function renderMemoryPanel(ctx: TUIContext): void {
 
   // Durable memory
   try {
-    const { MemoryStore } = require("../memory/store.ts");
-    const mem   = new MemoryStore(store);
+    const mem = new MemoryStore(store);
     const stats = mem.stats();
+    const health = mem.health();
     divider("Durable Memory");
-    kv("Total entries", String(mem.count()));
+    kv("Total entries", String(health.total));
+    if (health.expired > 0) kv("Expired", String(health.expired), "warn");
+    if (health.neverAccessed > 0) kv("Never recalled", String(health.neverAccessed), "dim");
     for (const [cat, n] of Object.entries(stats)) {
       kv(`  ${cat}`, String(n), "dim");
     }
@@ -618,7 +677,8 @@ function renderMemoryPanel(ctx: TUIContext): void {
   console.log();
   console.log(`  ${xrDim("Add: xr memory add \"…\" --category preference")}`);
   console.log(`  ${xrDim("List: xr memory list")}`);
-  console.log(`  ${xrDim("Delete: xr memory delete <id>")}\n`);
+  console.log(`  ${xrDim("Recall: xr memory recall \"…\" (shows match % + why)")}`);
+  console.log(`  ${xrDim("Delete: xr memory remove <id>  ·  Health: xr memory health\n")}`);
 }
 
 async function renderSecurityLab(ctx: TUIContext): Promise<void> {
