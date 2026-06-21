@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-10%20Plugin%20Platform-00FF88?style=flat-square)](#-stage-10--the-plugin-platform)
+[![Stage](https://img.shields.io/badge/stage-11%20MCP%20Platform-00FF88?style=flat-square)](#-stage-11--the-mcp-platform)
 
 </div>
 
@@ -73,7 +73,7 @@ xr serve             # start local dashboard + chat in browser
 | **Research** | answer-first summaries | **source-first Research Engine** — live discovery, trust/freshness ranking, evidence ledger, claims, contradictions, signed reports |
 | **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, no telemetry |
 | **Voice** | silent cloud listener | **Stage 8 Voice Stack** — disabled by default, push-to-talk default, local Whisper/Piper/Kokoro/system adapters, explicit cloud consent |
-| **Extensibility** | arbitrary packages or hardcoded integrations | **Stage 10 Plugin Platform** — opt-in installs, explicit permissions, inspectable manifests, plugin skills, MCP connectors, health checks, and clean disable/remove |
+| **Extensibility** | arbitrary packages or hardcoded integrations | **Stage 10 Plugin Platform** + **Stage 11 MCP Platform** — first-class standardized MCP (tools, resources, prompts), opt-in servers, explicit permissions & trust, health checks, approval-gated invocation, clean lifecycle |
 | **Runtime** | procedural script | **AI OS Kernel** with DI and Lifecycle management |
 
 ---
@@ -846,7 +846,8 @@ xr help memory                       # memory engine guide
 | **Stage 8** | **Voice Stack** | ✅ **Done** |
 | **Stage 9** | **Computer Control Engine** | ✅ **Done** |
 | **Stage 10** | **Plugin Platform** | ✅ **Done** |
-| Stage 11 | Multi-Agent Orchestration | 🔜 Next |
+| **Stage 11** | **MCP Platform** | ✅ **Done** |
+| Stage 12 | Multi-Agent + Advanced Orchestration | 🔜 Next |
 
 ---
 
@@ -900,6 +901,69 @@ The `xr control computer` command starts a JARVIS-level loop:
 | **macOS** | `osascript` | `cliclick` | `open` | Playwright |
 | **Linux** | `xdotool` | `xdotool` | `xdg-open` | Playwright |
 | **Windows**| PowerShell | .NET Native | `Start-Process` | Playwright |
+
+---
+
+## 🔌 Stage 11 — The MCP Platform
+
+**Stage 11 turns XR into a true standardized integration platform** using the Model Context Protocol (MCP 2025-06-18).
+
+MCP servers expose **tools**, **resources**, and **prompts** in a uniform way. XR can now safely consume any compliant MCP server (GitHub, databases, browsers, filesystems, workflows, etc.) without bespoke glue code.
+
+### MCP Principles (enforced in code)
+- **Opt-in only** — servers are never auto-discovered or enabled
+- **Inspect before activate** — `xr mcp inspect` shows capabilities + declared permissions
+- **Explicit permissions** — 15 permission scopes (fs:read, fs:write, net, secrets, control, shell, etc.)
+- **Always approval-gated** — every MCP tool/resource call requires explicit user approval
+- **Audit + budget inheritance** — all calls go through XR's existing safety rails
+- **Clean lifecycle** — enable / disable / remove actually stops access
+- **Fail closed** — broken servers are isolated and never crash XR
+
+### Full MCP Command Surface
+
+```bash
+xr mcp list
+xr mcp add github stdio npx @modelcontextprotocol/server-github
+xr mcp add postgres http http://127.0.0.1:8765/mcp
+xr mcp inspect github
+xr mcp enable github
+xr mcp disable github
+xr mcp tools github
+xr mcp resources github
+xr mcp prompts github
+xr mcp health
+xr mcp permissions github
+xr mcp remove github
+xr mcp doctor
+```
+
+MCP tools/resources/prompts automatically appear in the agent as namespaced tools:
+- `mcp.github.create_issue`
+- `mcp.postgres.query`
+- etc.
+
+All are wrapped with `requiresApproval: true`, full audit, and budget checks.
+
+### Supported Transports
+- `stdio` (local processes)
+- `http` / `sse` / `streamable-http` (remote)
+
+### Security Model
+- Never stores raw API keys (only `apiKeyEnv`)
+- All calls go through XR approval + egress + audit
+- Remote servers are treated as higher trust risk
+- Disable/remove actually stops execution
+
+### Doctor & Health
+```bash
+xr doctor
+# includes: MCP platform (X installed, Y enabled, Z healthy)
+```
+
+### Dashboard
+MCP servers will appear in future dashboard updates (core is complete).
+
+See `xr mcp --help` for the full surface.
 
 ---
 
@@ -983,3 +1047,32 @@ MIT — [LICENSE](LICENSE)
 *Local-first. Spend-capped. Tamper-evident. Yours.*
 
 </div>
+
+## 🔌 Stage 11 — The MCP Platform (Completed)
+
+XR is now a first-class **MCP-native** platform.
+
+MCP (Model Context Protocol) lets XR connect to any compliant server for tools, resources, and prompts using a single standard — no more bespoke integrations.
+
+**Core capabilities delivered:**
+- Full MCP 2025-06-18 client (tools/list, tools/call, resources, prompts)
+- 4 transports: stdio, http, sse, streamable-http
+- Persistent registry + complete lifecycle (`add` / `enable` / `disable` / `remove` / `inspect`)
+- Explicit permission model (15 scopes) + trust levels
+- Every MCP invocation is **approval-gated**, audited, budget-aware, and egress-controlled
+- MCP tools/resources/prompts surface automatically into the agent as `mcp.<server>.<name>`
+- Health checks + `xr mcp doctor`
+- Clean fail-closed behavior
+
+**Quick start**
+```bash
+xr mcp add github stdio npx @modelcontextprotocol/server-github
+xr mcp enable github
+xr mcp inspect github
+xr mcp tools github
+xr "list my open PRs using the github MCP server"
+```
+
+All safety rails from previous stages still apply. MCP servers are **never trusted by default**.
+
+See `xr mcp --help` for the full surface.
