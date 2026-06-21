@@ -735,22 +735,22 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <!-- ════════ PLUGINS ════════ -->
       <div class="panel" id="panel-plugins">
         <div class="section-header">
-          <div><div class="section-title">Plugins</div><div class="section-sub">Permission-based, sandboxed, audited</div></div>
+          <div><div class="section-title">Plugins</div><div class="section-sub">Opt-in extensions with explicit permissions, health, trust, and clean disable/remove.</div></div>
+          <button class="btn btn-ghost" onclick="loadPlugins()" style="font-size:12px">↻ Refresh</button>
+        </div>
+        <div class="grid grid-3 mb-4">
+          <div class="card"><div class="card-header"><div class="card-title">Installed</div></div><div class="card-value" id="plug-installed">0</div><div class="card-sub">plugins on this machine</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Enabled</div></div><div class="card-value" id="plug-enabled">0</div><div class="card-sub">loaded into XR when healthy</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Health</div></div><div class="card-value" id="plug-health">—</div><div class="card-sub">broken plugins fail closed</div></div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><div class="card-title">Installed Plugins</div></div>
+          <div id="plugins-list"><div class="spin"></div></div>
         </div>
         <div class="card">
-          <div style="text-align:center;padding:32px 16px">
-            <div style="font-size:32px;margin-bottom:12px">⚡</div>
-            <div style="font-weight:600;margin-bottom:8px">Plugin Ecosystem</div>
-            <div class="muted" style="font-size:12px;margin-bottom:16px">
-              Every plugin shows exact permissions before install.<br>
-              Budget, egress, memory, and security controls always apply.
-            </div>
-          </div>
-          <div style="border-top:1px solid var(--border);padding-top:12px">
-            <div class="stat-row"><div class="stat-key">Install</div><div class="stat-val mono text-cyan">xr plugins install ./plugin</div></div>
-            <div class="stat-row"><div class="stat-key">Enable</div><div class="stat-val mono text-cyan">xr plugins enable &lt;name&gt;</div></div>
-            <div class="stat-row"><div class="stat-key">List</div><div class="stat-val mono text-cyan">xr plugins list</div></div>
-          </div>
+          <div class="card-header"><div class="card-title">Catalog</div><button class="btn btn-ghost" onclick="searchPlugins()" style="font-size:11px">Search</button></div>
+          <div style="display:flex;gap:8px;margin-bottom:12px"><input id="plugin-search" placeholder="Search plugins…" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px" onkeydown="if(event.key==='Enter')searchPlugins()"><button class="btn" onclick="searchPlugins()">Search</button></div>
+          <div id="plugins-catalog"><div class="muted" style="font-size:12px">Use the catalog to inspect metadata, then install from CLI: <code class="mono text-cyan">xr plugins install &lt;id|path&gt;</code></div></div>
         </div>
       </div>
 
@@ -929,6 +929,7 @@ function navigateTo(id) {
     case "models":      loadModels();    break;
     case "memory":      loadMemory();    break;
     case "security":    loadSecurity();  break;
+    case "plugins":     loadPlugins();   break;
     case "audit":       loadAuditLog();  break;
     case "settings":    loadSettings();  break;
   }
@@ -1173,6 +1174,83 @@ async function clearMemory() {
   } catch(e) {
     toast("Clear failed: " + e.message, "err");
   }
+}
+
+// ── Plugins ───────────────────────────────────────────────────────────────────
+function pluginBadge(status) {
+  if (status === "enabled") return '<span class="badge badge-green">enabled</span>';
+  if (status === "disabled") return '<span class="badge badge-gray">disabled</span>';
+  if (status === "untrusted") return '<span class="badge badge-red">untrusted</span>';
+  if (status === "incompatible") return '<span class="badge badge-amber">incompatible</span>';
+  return '<span class="badge badge-red">error</span>';
+}
+
+async function loadPlugins() {
+  try {
+    const data = await api("/api/plugins");
+    const s = data.summary ?? {};
+    const plugins = data.plugins ?? [];
+    const broken = s.errored ?? plugins.filter(p => ["error","untrusted","incompatible"].includes(p.status)).length;
+    document.getElementById("plug-installed").textContent = s.installed ?? plugins.length;
+    document.getElementById("plug-enabled").textContent = s.enabled ?? plugins.filter(p => p.enabled).length;
+    document.getElementById("plug-health").textContent = broken ? "⚠ " + broken : "Healthy";
+    document.getElementById("plug-health").className = "card-value " + (broken ? "val-red" : "val-green");
+
+    document.getElementById("plugins-list").innerHTML = plugins.length ? plugins.map(p => {
+      const perms = (p.permissions ?? []).map(x => '<span class="badge badge-gray" style="margin-right:4px">' + escapeHtml(String(x)) + '</span>').join("") || '<span class="muted">none</span>';
+      const caps = (p.capabilities ?? []).map(c => String(c.kind) + ':' + String(c.name)).join(", ") || "none";
+      const action = p.enabled
+        ? '<button class="btn btn-ghost" onclick="pluginAction(\'' + escapeHtml(p.id) + '\',\'disable\')" style="font-size:11px">Disable</button>'
+        : '<button class="btn" onclick="pluginAction(\'' + escapeHtml(p.id) + '\',\'enable\')" style="font-size:11px">Enable</button>';
+      return '<div class="mem-item" style="display:block">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+          '<div><div style="font-weight:700;color:var(--text)">' + escapeHtml(p.name ?? p.id) + ' <span class="mono muted">' + escapeHtml(p.id) + '</span></div>' +
+          '<div class="muted" style="font-size:11px">v' + escapeHtml(p.version ?? "?") + ' · ' + escapeHtml(p.type ?? "tool") + ' · trust:' + escapeHtml(p.trustLevel ?? "unknown") + '</div></div>' +
+          '<div style="display:flex;gap:6px;align-items:center">' + pluginBadge(p.status) + action + '<button class="btn btn-danger" onclick="pluginRemove(\'' + escapeHtml(p.id) + '\')" style="font-size:11px">Remove</button></div>' +
+        '</div>' +
+        '<div class="muted" style="font-size:12px;margin:8px 0">' + escapeHtml(p.description ?? "") + '</div>' +
+        '<div style="font-size:11px;margin-bottom:6px"><span class="muted">Permissions:</span> ' + perms + '</div>' +
+        '<div class="muted" style="font-size:11px">Capabilities: ' + escapeHtml(caps) + '</div>' +
+        (p.detail ? '<div style="color:var(--amber);font-size:11px;margin-top:6px">' + escapeHtml(p.detail) + '</div>' : '') +
+      '</div>';
+    }).join("") : '<div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">No plugins installed. Search the catalog or run <code class="mono text-cyan">xr plugins install ./plugin</code>.</div>';
+  } catch(e) {
+    document.getElementById("plugins-list").innerHTML = '<div class="muted" style="font-size:12px">Plugin API unavailable: '+escapeHtml(e.message)+'</div>';
+  }
+}
+
+async function searchPlugins() {
+  try {
+    const q = document.getElementById("plugin-search")?.value ?? "";
+    const data = await api("/api/plugins/catalog?q=" + encodeURIComponent(q));
+    const rows = data.plugins ?? [];
+    document.getElementById("plugins-catalog").innerHTML = rows.length ? rows.map(p =>
+      '<div class="provider-item" style="display:block;margin-bottom:8px">' +
+        '<div style="font-weight:700">' + escapeHtml(p.name) + ' <span class="mono muted">' + escapeHtml(p.id) + '</span></div>' +
+        '<div class="muted" style="font-size:11px;margin:3px 0">v' + escapeHtml(p.version) + ' · ' + escapeHtml(p.type) + ' · trust:' + escapeHtml(p.trustLevel) + '</div>' +
+        '<div class="muted" style="font-size:12px">' + escapeHtml(p.description ?? "") + '</div>' +
+        '<div style="font-size:11px;margin-top:6px"><span class="muted">Install:</span> <code class="mono text-cyan">xr plugins install ' + escapeHtml(p.id) + '</code></div>' +
+      '</div>').join("") : '<div class="muted" style="font-size:12px">No catalog matches.</div>';
+  } catch(e) {
+    document.getElementById("plugins-catalog").innerHTML = '<div class="muted" style="font-size:12px">Catalog unavailable: '+escapeHtml(e.message)+'</div>';
+  }
+}
+
+async function pluginAction(id, action) {
+  try {
+    await api("/api/plugins/" + encodeURIComponent(id) + "/" + action, { method: "POST" });
+    toast("Plugin " + action + "d", "ok");
+    loadPlugins();
+  } catch(e) { toast("Plugin action failed: " + e.message, "err"); }
+}
+
+async function pluginRemove(id) {
+  if (!confirm("Remove plugin " + id + "? This deletes its installed files.")) return;
+  try {
+    await api("/api/plugins/" + encodeURIComponent(id) + "/remove", { method: "DELETE" });
+    toast("Plugin removed", "ok");
+    loadPlugins();
+  } catch(e) { toast("Remove failed: " + e.message, "err"); }
 }
 
 // ── Security ──────────────────────────────────────────────────────────────────
