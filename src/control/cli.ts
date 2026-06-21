@@ -140,6 +140,7 @@ export async function handleControlCommand(argv: string[], store: Store): Promis
     case "execute": return cmdPlan(store, { ...flags, mode: "auto", yes: true });
     case "computer": return cmdComputer(store, flags);
     case "browser": return cmdBrowser(flags);
+    case "desktop": return cmdStatus(); // Alias for status in desktop context
     case "app": return void (await runAction(store, { type: "app", name: flags.rest.join(" ") }, makeOpts(flags)));
     case "open": return void (await runAction(store, { type: "open", target: flags.rest.join(" ") }, makeOpts(flags)));
     case "click": {
