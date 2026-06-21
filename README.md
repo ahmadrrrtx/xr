@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-8%20Voice%20Stack-00FF88?style=flat-square)](#-stage-8--the-voice-stack)
+[![Stage](https://img.shields.io/badge/stage-9%20Computer%20Control-00FF88?style=flat-square)](#-stage-9--the-computer-control-engine)
 
 </div>
 
@@ -825,7 +825,61 @@ xr help memory                       # memory engine guide
 | **Stage 6** | **Memory Engine** | ✅ **Done** |
 | **Stage 7** | **Research Engine** | ✅ **Done** |
 | **Stage 8** | **Voice Stack** | ✅ **Done** |
-| Stage 9 | Multi-Agent + Collaboration | 🔜 Next |
+| **Stage 9** | **Computer Control Engine** | ✅ **Done** |
+| Stage 10 | Multi-Agent Orchestration | 🔜 Next |
+
+---
+
+## 🖥️ Stage 9 — Computer Control Engine
+
+Stage 9 turns XR from a chat assistant into a **safe, vision-capable AI operator**. XR can now operate your computer exactly like a human assistant, with full transparency and permission gates.
+
+### Design principles
+
+- **Safe-by-construction** — all actions are Zod-validated against a strict schema.
+- **Human-in-the-loop** — risk classifier checks every step. Sensitive actions prompt; destructive actions *always* prompt.
+- **Vision-assisted** — XR uses screenshots and Vision LLMs to navigate modern UIs, not just shell commands.
+- **Transparent** — every click, keystroke, and scroll is logged to the tamper-evident audit chain.
+- **Kill-switch** — `xr control stop` disables the engine immediately.
+
+### Control commands
+
+```bash
+# Setup & Status
+xr control status              # check tools (keyboard, mouse, browser)
+xr control start               # enable control engine
+xr control stop                # disable control engine
+xr control browser install     # setup Playwright + Chromium
+
+# Automation
+xr control plan "task"         # plan and execute multi-step workflow
+xr control computer "task"     # vision-driven agentic loop (screenshot -> act)
+xr control test                # run a safety/capability self-test
+
+# Primitive Actions
+xr control app "VS Code"       # launch application
+xr control open "https://..."  # open URL or file
+xr control click 640,480       # click coordinates
+xr control type "hello"        # type text
+xr control key "cmd+tab"       # press keys
+xr control scroll down 5       # scroll
+```
+
+### Vision Agent (Computer-Use)
+
+The `xr control computer` command starts a JARVIS-level loop:
+1. **Observe**: Captures a high-res screenshot.
+2. **Reason**: A Vision LLM (like Claude 3.5 Sonnet) analyzes the UI state.
+3. **Act**: XR sends a mouse/keyboard action.
+4. **Repeat**: Loop continues until the task is marked `DONE`.
+
+### Platform Support
+
+| Platform | Keyboard | Mouse | Apps | Browser |
+|---|---|---|---|---|
+| **macOS** | `osascript` | `cliclick` | `open` | Playwright |
+| **Linux** | `xdotool` | `xdotool` | `xdg-open` | Playwright |
+| **Windows**| PowerShell | .NET Native | `Start-Process` | Playwright |
 
 ---
 
