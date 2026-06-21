@@ -62,7 +62,6 @@ function execClick(x: number, y: number, button: "left" | "right" | "double"): A
     const r = run("xdotool", ["click", ...rep, btn]);
     return r.code === 0 ? ok(`${button}-click at (${x},${y})`) : fail(r.err);
   }
-  // Windows Native Click
   const btnCode = button === "right" ? "0x08,0x10" : button === "double" ? "0x02,0x04,0x02,0x04" : "0x02,0x04";
   const ps = `
     Add-Type -TypeDefinition "using System; using System.Runtime.InteropServices; public class Mouse { [DllImport(\\"user32.dll\\")] public static extern void mouse_event(int flags, int x, int y, int data, int extra); }";
@@ -111,8 +110,7 @@ function execKey(keys: string[]): ActionResult {
       : `tell application "System Events" to keystroke ${asQuote(last)}${using.length ? ` using {${using.join(", ")}}` : ""}`;
     const r = run("osascript", ["-e", cmd]); return r.code === 0 ? ok(`pressed ${k.join("+")}`) : fail(r.err);
   }
-  // Windows Keys
-  const esc = k.join("+").replace(/ctrl/g, "^").replace(/alt/g, "%").replace(/shift/g, "+").replace(/win/g, "^{ESC}"); // minimal mapping
+  const esc = k.join("+").replace(/ctrl/g, "^").replace(/alt/g, "%").replace(/shift/g, "+").replace(/win/g, "^{ESC}");
   const ps = `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(${psQuote(esc)})`;
   const r = run("powershell", ["-NoProfile", "-Command", ps]);
   return r.code === 0 ? ok(`pressed ${k.join("+")}`) : fail(r.err);
