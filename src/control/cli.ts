@@ -95,7 +95,7 @@ async function cmdComputer(store: Store, flags: ParsedFlags): Promise<void> {
   const { config } = loadConfig();
   const provider = buildProvider(config, {});
   banner();
-  const result = await runComputerUse({ provider, store, task });
+  const result = await runComputerUse(store, task, provider);
   console.log("");
   ok(`Task Complete: ${result}`);
 }
