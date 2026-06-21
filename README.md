@@ -9,7 +9,7 @@
 
 # XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `polished UI layer` · `offline-capable` · `safe computer control` · `multi-step planner` · `plan memory` · `durable memory` · `universal provider engine`**
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `polished UI layer` · `offline-capable` · `safe computer control` · `universal provider engine`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-9%20Computer%20Control-00FF88?style=flat-square)](#-stage-9--the-computer-control-engine)
+[![Stage](https://img.shields.io/badge/stage-10%20Plugin%20Platform-00FF88?style=flat-square)](#-stage-10--the-plugin-platform)
 
 </div>
 
@@ -44,7 +44,8 @@ iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 ```bash
 # After install — first time setup
 xr onboarding        # guided setup wizard (incl. memory + optional voice)
-xr doctor            # full health check (incl. memory + research + voice health)
+xr doctor            # full health check (incl. memory + research + voice + plugins)
+xr plugins search    # discover safe, permissioned plugins
 xr voice setup       # optional local-first voice setup
 xr "hello, XR"       # run your first task
 xr --tui             # open interactive terminal UI
@@ -72,6 +73,7 @@ xr serve             # start local dashboard + chat in browser
 | **Research** | answer-first summaries | **source-first Research Engine** — live discovery, trust/freshness ranking, evidence ledger, claims, contradictions, signed reports |
 | **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, no telemetry |
 | **Voice** | silent cloud listener | **Stage 8 Voice Stack** — disabled by default, push-to-talk default, local Whisper/Piper/Kokoro/system adapters, explicit cloud consent |
+| **Extensibility** | arbitrary packages or hardcoded integrations | **Stage 10 Plugin Platform** — opt-in installs, explicit permissions, inspectable manifests, plugin skills, MCP connectors, health checks, and clean disable/remove |
 | **Runtime** | procedural script | **AI OS Kernel** with DI and Lifecycle management |
 
 ---
@@ -153,7 +155,7 @@ A **mission-control dashboard** with 12 navigation panels:
 | **Models** | Local runtime status, installed models |
 | **Memory** | Health cards (total/expired/never-recalled), live search, all entries with inline delete, expiry badges |
 | **Research** | Research mode quick reference |
-| **Plugins** | Plugin install/enable quick reference |
+| **Plugins** | Installed plugins, permissions, enabled state, trust, health, catalog search, enable/disable/remove actions |
 | **Voice** | Voice control quick reference |
 | **Security** | Injection lab (run-on-demand), egress list, security posture |
 | **Audit Log** | Full SHA-256 chain with integrity badge |
@@ -582,15 +584,21 @@ xr research export        # signed Markdown + JSON sidecar
 
 See [Stage 7 — The Research Engine](#-stage-7--the-research-engine) for the full workflow: live source discovery, trust/freshness ranking, evidence extraction, contradiction detection, comparison matrices, refresh history, and signed reports.
 
-### 🧩 Plugin Ecosystem (v1.0)
+### 🧩 Stage 10 — Plugin Platform
 
 ```bash
+xr plugins search                     # catalog metadata search
+xr plugins inspect ./plugins/github   # manifest + permissions, no code execution
 xr plugins install ./plugins/github   # shows permissions, asks to approve
-xr plugins enable github              # explicit, conscious step
-xr plugin github repo ahmadrrrtx/xr  # run a plugin command
+xr plugins enable github              # explicit activation
+xr plugin github repo ahmadrrtx/xr    # run a plugin command
+xr plugins permissions github         # requested vs granted permissions
+xr plugins doctor                     # health/trust check
 ```
 
-Plugins are **local-first, permission-based, sandboxed** — they cannot access the database, raw config, `process.env`, `fetch`, or `node:fs` directly. Every capability must be explicitly granted. Full spec: [docs/PLUGINS.md](docs/PLUGINS.md)
+Plugins are **opt-in, permissioned, inspectable, and disableable**. XR records entrypoint + whole-tree hashes at install, rejects tampered plugins as `untrusted`, blocks common ambient-authority imports (`node:fs`, `child_process`, raw `fetch`, `process.env`, dynamic eval), and forces approval for tools from plugins with sensitive grants. Plugins can ship tools, commands, skills, MCP-backed tools, UI metadata, provider adapters, workflow packs, research packs, voice packs, security packs, business packs, and developer packs without editing XR core.
+
+Full spec: [docs/PLUGINS.md](docs/PLUGINS.md)
 
 ### 🤖 JARVIS-Level Vision Loop
 
@@ -661,6 +669,7 @@ Every security feature is **code-enforced**, not a suggestion:
 |---|---|
 | **Hard budget ceiling** | `checkBeforeStep()` blocks — no exceptions |
 | **Tamper-evident audit** | SHA-256 hash chain, offline, `xr verify-log` |
+| **Plugin trust** | Explicit permissions, tree hashes, static scan, health checks, disable/remove |
 | **Injection defense** | 10-attack benchmark, signed block-rate report |
 | **Egress allow-list** | Only configured domains receive data |
 | **Approval gates** | `write_file`, `delete`, `shell`, `send` need consent |
@@ -703,18 +712,20 @@ xr/
 │   │   ├── help.ts       # xr help [topic]
 │   │   ├── budget.ts
 │   │   ├── config.ts
-│   │   ├── doctor.ts     # includes memory + research + voice health
+│   │   ├── doctor.ts     # includes memory + research + voice + plugin health
+│   │   ├── plugins.ts    # xr plugins / xr plugin command adapters
 │   │   └── ...
 │   ├── daemon/           # local server
-│   │   ├── server.ts     # xr serve — dashboard + chat + API
-│   │   └── dashboard.ts  # full SPA: 12 panels, chat, command palette
+│   │   ├── server.ts      # xr serve — dashboard + chat + API
+│   │   ├── plugin-api.ts  # plugin management API
+│   │   └── dashboard.ts   # full SPA: 12 panels, chat, command palette
 │   ├── core/             # agent runtime
 │   ├── providers/        # 20+ provider adapters
 │   ├── memory/           # durable memory + RAG
 │   ├── security/         # injection lab, audit, egress
 │   ├── control/          # computer control, planner
 │   ├── local/            # local AI runtime manager
-│   ├── plugins/          # plugin sandbox
+│   ├── plugins/          # Stage 10 plugin platform: manifests, registry, host, loader, lifecycle
 │   ├── research/         # Stage 7 Research Engine
 │   ├── voice/            # Stage 8 Voice Stack
 │   ├── cost/             # budget governor
@@ -772,6 +783,14 @@ xr research evidence
 xr research refresh
 xr research export
 
+# Plugins (Stage 10)
+xr plugins search
+xr plugins inspect ./plugins/hello
+xr plugins install ./plugins/hello --yes
+xr plugins enable hello
+xr plugin hello greet Ahmad
+xr plugins doctor
+
 # Voice (Stage 8, opt-in)
 xr voice status
 xr voice setup
@@ -826,7 +845,8 @@ xr help memory                       # memory engine guide
 | **Stage 7** | **Research Engine** | ✅ **Done** |
 | **Stage 8** | **Voice Stack** | ✅ **Done** |
 | **Stage 9** | **Computer Control Engine** | ✅ **Done** |
-| Stage 10 | Multi-Agent Orchestration | 🔜 Next |
+| **Stage 10** | **Plugin Platform** | ✅ **Done** |
+| Stage 11 | Multi-Agent Orchestration | 🔜 Next |
 
 ---
 
@@ -880,6 +900,55 @@ The `xr control computer` command starts a JARVIS-level loop:
 | **macOS** | `osascript` | `cliclick` | `open` | Playwright |
 | **Linux** | `xdotool` | `xdotool` | `xdg-open` | Playwright |
 | **Windows**| PowerShell | .NET Native | `Start-Process` | Playwright |
+
+---
+
+## 🧩 Stage 10 — The Plugin Platform
+
+Stage 10 makes XR extensible without making core a monolith. Plugins are capability bundles that can add tools, skills, integrations, MCP connectors, workflow packs, research packs, voice packs, security packs, business packs, developer packs, and UI metadata through a strict manifest and explicit permission model.
+
+### Plugin platform principles
+
+- **Opt-in install and opt-in enable** — XR never silently installs or activates plugins.
+- **Manifest-first** — `xr plugins inspect` shows identity, version, permissions, capabilities, source, trust, skills, and MCP declarations without executing code.
+- **Explicit permissions** — a plugin receives only permissions it declares and the user grants.
+- **No ambient authority by default** — plugin scanning blocks direct `node:fs`, `child_process`, raw `fetch`, `process.env`, Bun host APIs, eval/dynamic Function, and symlinks.
+- **Tamper detection** — XR records entrypoint and full plugin-tree SHA-256 hashes at install; changed code fails closed as `untrusted`.
+- **Budget/security inheritance** — plugin provider calls, network calls, memory, secrets, MCP tools, and computer-control paths still pass through XR gates.
+- **Recoverable lifecycle** — disable/remove actually stops loaded contributions and deletes installed files.
+
+### Plugin commands
+
+```bash
+xr plugins list                         # installed state + health
+xr plugins search [query]               # catalog metadata search
+xr plugins inspect <id|path>            # manifest + permissions; no code runs
+xr plugins install <path|catalog-id>    # review and approve permissions
+xr plugins enable <id>
+xr plugins disable <id>
+xr plugins update <id> [path]           # blocks new permissions until reinstall approval
+xr plugins remove <id>
+xr plugins permissions <id>             # requested/granted permissions
+xr plugins skills                       # skills contributed by enabled plugins
+xr plugins doctor                       # health/trust check
+xr plugin <id> <command> [args...]      # run plugin CLI command
+```
+
+### Plugin manifest surfaces
+
+`xr-plugin.json` supports:
+
+- `id`, `name`, `version`, `author`, `description`, `type`, `entrypoint`
+- `permissions`, `capabilities`, `dependencies`, `compatibility`, `apiVersion`
+- `source`, `sourceUrl`, `updateSource`, `trustLevel`, `trust.signature`, `trust.sha256`, `trust.treeSha256`
+- `uiHooks`, `commandHooks`, `toolHooks`, `mcpServers`, `skillPaths`
+- plugin types: `tool`, `skill`, `integration`, `provider`, `memory`, `research`, `automation`, `ui`, `mcp`, `voice`, `security`, `business`, `developer`, `workflow`
+
+### Dashboard integration
+
+The local dashboard Plugins panel now shows installed plugins, version, type, enabled state, health, trust level, requested/granted permissions, capabilities, catalog search, and enable/disable/remove actions.
+
+See [docs/PLUGINS.md](docs/PLUGINS.md) for the full authoring and security contract.
 
 ---
 
