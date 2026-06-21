@@ -1,14 +1,22 @@
 {
+  "schemaVersion": 1,
   "id": "github",
   "name": "GitHub",
   "version": "1.0.0",
   "author": "rrrtx",
-  "description": "Reference integration plugin: look up public GitHub repositories. Demonstrates permissioned access (net + optional secrets) through the XR host — egress-gated and audited.",
+  "description": "Reference integration plugin: look up public GitHub repositories through permissioned network access and optional named secrets.",
   "type": "integration",
   "entrypoint": "index.ts",
   "permissions": ["net", "secrets"],
+  "capabilities": [
+    { "kind": "command", "name": "repo", "description": "Show public GitHub repository metadata." },
+    { "kind": "tool", "name": "repo", "description": "Agent-callable GitHub repository lookup." }
+  ],
   "dependencies": [],
   "compatibility": ">=1.0.0 <2.0.0",
   "apiVersion": 1,
-  "homepage": "https://github.com/ahmadrrrtx/xr"
+  "source": { "kind": "builtin", "url": "https://github.com/ahmadrrrtx/xr/tree/main/plugins/github" },
+  "trustLevel": "official",
+  "homepage": "https://github.com/ahmadrrrtx/xr",
+  "keywords": ["github", "integration", "example"]
 }
