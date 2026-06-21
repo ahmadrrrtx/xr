@@ -24,7 +24,6 @@ export async function captureScreen(savePath?: string): Promise<{ ok: boolean; p
         catch { execSync(`import -window root "${path}"`, { timeout: 8000 }); }
       }
     } else {
-      // Windows PowerShell Screenshot
       const ps = `
         Add-Type -AssemblyName System.Windows.Forms;
         Add-Type -AssemblyName System.Drawing;
@@ -43,10 +42,9 @@ export async function captureScreen(savePath?: string): Promise<{ ok: boolean; p
       execSync(`powershell -NoProfile -Command "${ps}"`, { timeout: 10000 });
     }
 
-    if (!existsSync(path)) return { ok: false, message: "Screenshot file not created. Check tool availability." };
+    if (!existsSync(path)) return { ok: false, message: "Screenshot file not created." };
     
     const buf = readFileSync(path);
-    // Cleanup old screenshots after 1 minute
     setTimeout(() => { try { if (existsSync(path)) unlinkSync(path); } catch { } }, 60000);
     
     return { 
@@ -62,7 +60,7 @@ export async function captureScreen(savePath?: string): Promise<{ ok: boolean; p
 
 export async function cloudVision(provider: any, prompt: string, base64Png: string): Promise<string> {
   try {
-    const supports = (provider as any).supportsVision?.() ?? true; // Assume true for most modern providers
+    const supports = (provider as any).supportsVision?.() ?? true;
     if (!supports) return "[Provider does not support vision]";
 
     const messages = [{
@@ -85,4 +83,19 @@ export async function cloudVision(provider: any, prompt: string, base64Png: stri
   } catch (e) {
     return `Vision error: ${(e as Error).message}`;
   }
+}
+
+export async function ocrImage(base64OrPath: string): Promise<string> {
+  let imgPath = base64OrPath;
+  let tmp = false;
+  if (!existsSync(base64OrPath) && base64OrPath.length > 200) {
+    imgPath = join(tmpdir(), `xr-ocr-${Date.now()}.png`);
+    writeFileSync(imgPath, Buffer.from(base64OrPath, "base64"));
+    tmp = true;
+  }
+  try {
+    const out = execSync(`tesseract "${imgPath}" stdout -l eng 2>/dev/null`, { timeout: 12000 }).toString();
+    return out.trim();
+  } catch { return "[OCR unavailable]"; }
+  finally { if (tmp) try { unlinkSync(imgPath) } catch { } }
 }
