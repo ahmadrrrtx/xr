@@ -1,14 +1,22 @@
 {
+  "schemaVersion": 1,
   "id": "hello",
   "name": "Hello XR",
   "version": "1.0.0",
   "author": "rrrtx",
-  "description": "Reference plugin: contributes a command and a tool. Demonstrates the XR 1.0 plugin contract with zero sensitive permissions.",
+  "description": "Reference plugin: contributes a command and a safe echo tool. Demonstrates the XR Stage 10 plugin contract with zero sensitive permissions.",
   "type": "tool",
   "entrypoint": "index.ts",
   "permissions": [],
+  "capabilities": [
+    { "kind": "command", "name": "greet", "description": "Print a friendly greeting." },
+    { "kind": "tool", "name": "echo", "description": "Echo a message back." }
+  ],
   "dependencies": [],
   "compatibility": ">=1.0.0 <2.0.0",
   "apiVersion": 1,
-  "homepage": "https://github.com/ahmadrrrtx/xr"
+  "source": { "kind": "builtin", "url": "https://github.com/ahmadrrrtx/xr/tree/main/plugins/hello" },
+  "trustLevel": "official",
+  "homepage": "https://github.com/ahmadrrrtx/xr",
+  "keywords": ["example", "tool"]
 }
