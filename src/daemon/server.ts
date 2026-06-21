@@ -18,6 +18,7 @@
  *  - Improved CORS and CSP headers
  */
 import { handleControlApi } from "./control-api.ts";
+import { handlePluginApi } from "./plugin-api.ts";
 import { randomBytes } from "node:crypto";
 import { Store } from "../state/db.ts";
 import { loadConfig, isMemoryEnabled } from "../config/config.ts";
@@ -262,6 +263,12 @@ export function makeHandler(store: Store, token: string) {
         budget:       config.budget,
         // NEVER return apiKeys, secrets, tokens
       });
+    }
+
+    // ── Plugins ───────────────────────────────────────────────────────────
+    if (path.startsWith("/api/plugins")) {
+      const pluginRes = await handlePluginApi(req, url, store);
+      if (pluginRes) return pluginRes;
     }
 
     // ── Computer Control ──────────────────────────────────────────────────
