@@ -11,7 +11,7 @@ export async function handleControlApi(req: Request, url: URL, store: Store): Pr
     return Response.json({ caps: detectCapabilities(), permissions: listPermissions(), pending: approvals.list() });
   }
   if (url.pathname === "/api/control/plan" && req.method === "POST") {
-    const body = await req.json().catch(()=>({}));
+    const body = (await req.json().catch(()=>({}))) as { task?: string };
     const task = body.task || "";
     const { config } = loadConfig();
     const provider = buildProvider(config, {});
@@ -19,7 +19,7 @@ export async function handleControlApi(req: Request, url: URL, store: Store): Pr
     return Response.json(planned);
   }
   if (url.pathname === "/api/control/approve" && req.method === "POST") {
-    const { id, approved } = await req.json().catch(()=>({}));
+    const { id, approved } = (await req.json().catch(()=>({}))) as { id?: string; approved?: boolean };
     const ok = approvals.answer(String(id), !!approved);
     return Response.json({ ok });
   }
