@@ -69,6 +69,10 @@ export class AgentService implements LifecycleHook {
       maxTokens: overrides.maxTokens ?? config.budget.perTaskTokens,
     };
 
+    await pluginService.ensureLoaded();
+
+    const { confirm } = await import("../interfaces/cli.ts");
+
     const deps: AgentDeps = {
       provider,
       sessionStore,
@@ -78,8 +82,8 @@ export class AgentService implements LifecycleHook {
       cwd: process.cwd(),
       say: (line: string) => console.log(line),
       approve: async (req) => {
-        // This should ideally be handled by a UI service
-        return true; // Placeholder for now, logic will be in the CLI command
+        const preview = req.preview ? `\n${req.preview}` : "";
+        return await confirm(`Approve ${req.tool}? ${req.reason}${preview}`, false);
       },
       onOverBudget: async (meter, reason) => {
         return null; // Default to stop
