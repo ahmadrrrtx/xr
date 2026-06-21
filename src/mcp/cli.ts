@@ -275,3 +275,32 @@ async function cmdDoctor(mgr: McpManager) {
     console.log(`  ${healthTag(r.state)} ${r.id}`);
   }
 }
+
+async function cmdPermissions(mgr: McpManager, flags: Flags) {
+  const id = flags.rest[0];
+  if (!id) return warn("usage: xr mcp permissions <id>");
+  const entry = mgr.getServer(id);
+  if (!entry) return warn("MCP server not found");
+
+  if (flags.json) {
+    return console.log(JSON.stringify({
+      id: entry.id,
+      declaredPermissions: entry.declaredPermissions || [],
+      trustLevel: entry.trustLevel,
+      health: entry.health,
+    }, null, 2));
+  }
+
+  banner();
+  console.log(`${C.bold("MCP Permissions")} — ${C.cyan(entry.id)}`);
+  const perms = entry.declaredPermissions || [];
+  if (!perms.length) {
+    console.log("  No permissions declared (safe / read-only server).");
+  } else {
+    for (const p of perms) {
+      const sensitive = ["fs:write","net","control","secrets","shell","browser"].includes(p);
+      console.log(`  ${sensitive ? C.yellow("⚠") : C.green("•")} ${p}`);
+    }
+  }
+  console.log(`\n  Trust: ${entry.trustLevel}   Enabled: ${entry.enabled ? C.green("yes") : C.dim("no")}   Health: ${healthTag(entry.health)}`);
+}
