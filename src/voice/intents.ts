@@ -1,4 +1,4 @@
-/** XR Stage 8 — deterministic voice intent router. */
+/** XR Stage 9 — deterministic voice intent router. */
 import type { Store } from "../state/db.ts";
 import { loadConfig, saveConfig } from "../config/config.ts";
 import { runAction } from "../control/service.ts";
@@ -27,14 +27,13 @@ export interface VoiceIntent {
 export function parseVoiceIntent(text: string): VoiceIntent {
   const t = text.trim();
   let m: RegExpMatchArray | null;
-  if (/^(stop|cancel|abort|never mind|nevermind)$/i.test(t)) return { kind: "stop", confidence: 1, args: "" };
+  if (/^(stop|cancel|abort|never mind|nevermind|pause)$/i.test(t)) return { kind: "stop", confidence: 1, args: "" };
   if (/^(doctor|health check|check system|system status)$/i.test(t)) return { kind: "doctor", confidence: 0.95, args: "" };
   if ((m = t.match(/^(?:research|investigate|look up deeply|make a report on|give me a brief on)\s+(.+)$/i))) return { kind: "research", confidence: 0.9, args: m[1].trim() };
   if ((m = t.match(/^(?:remember|forget|what do you remember|what do you know)\b(.*)$/i))) return { kind: "memory", confidence: 0.9, args: t };
   if ((m = t.match(/^(?:switch|change|set)\s+(?:provider|ai provider)\s+(?:to\s+)?([a-z0-9_-]+)$/i))) return { kind: "provider", confidence: 0.9, args: m[1].trim() };
   if ((m = t.match(/^(?:switch|change|set)\s+(?:model)\s+(?:to\s+)?(.+)$/i))) return { kind: "model", confidence: 0.85, args: m[1].trim() };
   if (/\b(budget|spend|cost|remaining)\b/i.test(t)) return { kind: "budget", confidence: 0.75, args: t };
-
   const action = parseControlAction(t);
   if (action) return { kind: "control", confidence: 0.88, args: t, action };
   return { kind: "general", confidence: 0.5, args: t };
@@ -48,21 +47,21 @@ export function parseControlAction(t: string): unknown | null {
     if (/\.[a-z]{2,}(?:\/.*)?$/i.test(target) && !/\s/.test(target)) return { type: "open", target: target.startsWith("http") ? target : `https://${target}` };
     return { type: "app", name: target };
   }
+  if ((m = t.match(/^(?:close|quit)\s+(?:the\s+)?(.+)$/i))) return { type: "close", name: m[1].trim() };
   if ((m = t.match(/^(?:go to|visit|navigate to)\s+(.+)$/i))) {
     const target = m[1].trim();
     return { type: "open", target: /^https?:\/\//i.test(target) ? target : `https://${target}` };
   }
-  if ((m = t.match(/^type(?:\s+this)?(?:\s+message)?[:\s]+(.+)$/i))) return { type: "type", text: m[1].trim() };
-  if ((m = t.match(/^click(?:\s+(left|right|double))?(?:\s+(?:at\s+)?)?(\d+)\s*[, ]\s*(\d+)$/i))) return { type: "click", button: (m[1] ?? "left").toLowerCase(), x: Number(m[2]), y: Number(m[3]) };
-  if ((m = t.match(/^click\s+(.+)$/i))) return { type: "click", target: m[1].trim() };
-  if ((m = t.match(/^move(?:\s+mouse)?(?:\s+to)?\s+(\d+)\s*[, ]\s*(\d+)$/i))) return { type: "move", x: Number(m[1]), y: Number(m[2]) };
+  if ((m = t.match(/^type(?:\s+.+?)?[:\s]+(.+)$/i))) return { type: "type", text: m[1].trim() };
+  if ((m = t.match(/^click(?:\s+(left|right|double))?(?:\s+at)?\s+(\d+)[,\s]+(\d+)/i))) return { type: "click", button: (m[1] || "left").toLowerCase(), x: Number(m[2]), y: Number(m[3]) };
+  if ((m = t.match(/^drag\s+(\d+)[,\s]+(\d+)\s+(?:to|->)\s+(\d+)[,\s]+(\d+)/i))) return { type: "drag_drop", x1: Number(m[1]), y1: Number(m[2]), x2: Number(m[3]), y2: Number(m[4]) };
+  if ((m = t.match(/^move(?:\s+mouse)?(?:\s+to)?\s+(\d+)[,\s]+(\d+)/i))) return { type: "move", x: Number(m[1]), y: Number(m[2]) };
   if ((m = t.match(/^press\s+(.+)$/i))) return { type: "key", keys: m[1].split(/[+\s]+/).filter(Boolean) };
-  if ((m = t.match(/^focus\s+(?:on\s+)?(?:the\s+)?(.+?)(?:\s+window)?$/i))) return { type: "focus", name: m[1].trim() };
-  if ((m = t.match(/^scroll\s+(up|down|left|right)(?:\s+(\d+))?/i))) return { type: "scroll", direction: m[1].toLowerCase(), amount: Number(m[2] ?? 3) };
-  if ((m = t.match(/^(?:close|quit)\s+(?:the\s+)?(?:app\s+)?(.+)$/i))) {
-    const app = m[1].trim();
-    return process.platform === "darwin" ? { type: "key", keys: ["cmd", "q"] } : { type: "key", keys: ["alt", "f4"] };
-  }
+  if ((m = t.match(/^focus\s+(.+)$/i))) return { type: "focus", name: m[1].trim() };
+  if ((m = t.match(/^scroll\s+(up|down|left|right)(?:\s+(\d+))?/i))) return { type: "scroll", direction: m[1].toLowerCase(), amount: Number(m[2] || 3) };
+  if (/screenshot|take a picture|snap/i.test(t)) return { type: "screenshot", target: "screen" };
+  if ((m = t.match(/^(?:open|edit)\s+(?:in\s+)?(?:vscode|vs code|code|cursor)\s+(.+)$/i))) return { type: "editor", op: "open", editor: "auto", file: m[1].trim() };
+  if ((m = t.match(/^computer(?:\s+use)?\s+(.+)$/i))) return { type: "computer_use", task: m[1].trim() };
   return null;
 }
 
@@ -78,12 +77,8 @@ export async function handleDeterministicVoiceIntent(store: Store, text: string,
     await speak(result.result.ok ? `Done. ${result.result.message}` : `I could not do that. ${result.result.message}`);
     return true;
   }
-
   if (intent.kind === "memory") {
-    if (!isMemoryEnabled()) {
-      await speak("Memory is disabled.");
-      return true;
-    }
+    if (!isMemoryEnabled()) { await speak("Memory is disabled."); return true; }
     const parsed = parseMemoryIntent(text);
     if (parsed.kind === "none") return false;
     const mem = new MemoryStore(store);
@@ -103,28 +98,18 @@ export async function handleDeterministicVoiceIntent(store: Store, text: string,
     await speak(results.length ? `Here's what I remember. ${results.slice(0, 4).map((e) => e.content).join(". ")}.` : "I don't have anything saved that's relevant.");
     return true;
   }
-
   if (intent.kind === "provider") {
-    const { config } = loadConfig();
-    config.defaults.provider = intent.args;
-    saveConfig(config);
-    await speak(`Provider switched to ${intent.args}.`);
-    return true;
+    const { config } = loadConfig(); config.defaults.provider = intent.args; saveConfig(config);
+    await speak(`Provider switched to ${intent.args}.`); return true;
   }
-
   if (intent.kind === "model") {
-    const { config } = loadConfig();
-    config.defaults.model = intent.args;
-    saveConfig(config);
-    await speak(`Model switched to ${intent.args}.`);
-    return true;
+    const { config } = loadConfig(); config.defaults.model = intent.args; saveConfig(config);
+    await speak(`Model switched to ${intent.args}.`); return true;
   }
-
   if (intent.kind === "budget") {
     const { config } = loadConfig();
     await speak(`Your per-task cloud budget is ${config.budget.perTaskUsd} dollars and ${config.budget.perTaskTokens.toLocaleString()} tokens.`);
     return true;
   }
-
   return false;
 }
