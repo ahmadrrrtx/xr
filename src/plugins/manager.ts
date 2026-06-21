@@ -1,56 +1,34 @@
-/**
- * XR 1.0 — plugin manager (high-level orchestrator).
- *
- * The single entry point the CLI, agent, and doctor use. It ties together the
- * registry (what's installed), the loader (safe load), and the host (capability
- * boundary), and exposes:
- *
- *   • install / remove / enable / disable / update
- *   • inspect (manifest + permissions + compatibility, no code run)
- *   • loadEnabled() → activate all enabled plugins, isolate failures
- *   • pluginTools() → contributed tools adapted into core Tools for the agent
- *   • health() → per-plugin status for `xr doctor`
- *
- * Every install/enable is EXPLICIT and audited. A broken plugin is isolated and
- * never affects the core or other plugins.
- */
-import { cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
-import { join, isAbsolute, resolve } from "node:path";
+/** XR Stage 10 — high-level plugin platform manager. */
+import { cpSync, existsSync, mkdirSync, rmSync, renameSync, statSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import type { Store } from "../state/db.ts";
 import { loadConfig, type XRConfig } from "../config/config.ts";
 import { CORE_VERSION, PLUGIN_API_VERSION } from "../core/version.ts";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
+import { McpClient, wrapMcpTool } from "../mcp/client.ts";
 import { PluginRegistry, type RegistryEntry } from "./registry.ts";
-import {
-  loadPlugin,
-  validatePlugin,
-  hashEntrypoint,
-  type LoadResult,
-} from "./loader.ts";
 import { effectiveGrant } from "./manifest.ts";
 import { checkCompatibility } from "./compat.ts";
-import type {
-  PermissionScope,
-  PluginCommand,
-  PluginContributions,
-  PluginManifest,
-  PluginStatus,
-  PluginTool,
-} from "./types.ts";
+import { hashEntrypoint, hashPluginTree, loadPlugin, validatePlugin, type LoadResult } from "./loader.ts";
+import { loadPluginSkills } from "./skills.ts";
+import type { LoadedSkill } from "../skills/loader.ts";
+import { SENSITIVE_PERMISSIONS, type PermissionScope, type PluginCommand, type PluginContributions, type PluginManifest, type PluginStatus, type PluginTool } from "./types.ts";
 
 export interface LoadedPlugin {
   id: string;
   manifest: PluginManifest;
   contributions: PluginContributions;
   granted: PermissionScope[];
+  mcpTools: Tool[];
+  skills: LoadedSkill[];
 }
 
 export interface InstallResult {
   ok: boolean;
   manifest?: PluginManifest;
   reason?: string;
-  /** Permissions the manifest requests (for the approval prompt). */
   requestedPermissions?: PermissionScope[];
+  warnings?: string[];
 }
 
 export class PluginManager {
@@ -59,124 +37,81 @@ export class PluginManager {
   private loaded: Map<string, LoadedPlugin> = new Map();
   private loadErrors: Map<string, { reason: string; kind: string }> = new Map();
 
-  constructor(
-    private store: Store,
-    private cwd: string = process.cwd(),
-    config?: XRConfig,
-  ) {
+  constructor(private store: Store, private cwd: string = process.cwd(), config?: XRConfig) {
     this.registry = new PluginRegistry();
     this.config = config ?? loadConfig().config;
   }
 
-  get warnings(): string[] {
-    return this.registry.warnings;
-  }
+  get warnings(): string[] { return this.registry.warnings; }
 
-  // ── Inspect (no code execution) ───────────────────────────────────────────────
-
-  /** Inspect a directory OR an installed plugin id without running its code. */
-  inspect(idOrDir: string): {
-    ok: boolean;
-    manifest?: PluginManifest;
-    errors: string[];
-    installed: boolean;
-    granted?: PermissionScope[];
-    enabled?: boolean;
-  } {
+  inspect(idOrDir: string): { ok: boolean; manifest?: PluginManifest; errors: string[]; warnings: string[]; installed: boolean; granted?: PermissionScope[]; enabled?: boolean; dir?: string } {
     const dir = this.resolveDir(idOrDir);
     const v = validatePlugin(dir);
     const entry = this.registry.get(v.manifest?.id ?? idOrDir);
-    return {
-      ok: v.ok,
-      manifest: v.manifest,
-      errors: v.errors,
-      installed: Boolean(entry),
-      granted: entry?.grantedPermissions,
-      enabled: entry?.enabled,
-    };
+    return { ok: v.ok, manifest: v.manifest, errors: v.errors, warnings: v.warnings, installed: Boolean(entry), granted: entry?.grantedPermissions, enabled: entry?.enabled, dir };
   }
 
-  /** Resolve an id (installed) or a path (to install from) to a directory. */
   private resolveDir(idOrDir: string): string {
     if (this.registry.has(idOrDir)) return this.registry.dirFor(idOrDir);
     const abs = isAbsolute(idOrDir) ? idOrDir : resolve(this.cwd, idOrDir);
     if (existsSync(abs) && statSync(abs).isDirectory()) return abs;
-    // Fall back to the conventional install dir for the id.
     return this.registry.dirFor(idOrDir);
   }
 
-  // ── Install / remove ───────────────────────────────────────────────────────────
-
-  /**
-   * Stage a local plugin source for install: validate it and return the
-   * requested permissions so the caller can show an approval prompt. Does NOT
-   * activate. The actual filesystem copy + registry write happens in
-   * `commitInstall` after the user approves.
-   */
   prepareInstall(source: string): InstallResult {
     const src = isAbsolute(source) ? source : resolve(this.cwd, source);
-    if (!existsSync(src) || !statSync(src).isDirectory()) {
-      return { ok: false, reason: `plugin source is not a directory: ${source}` };
-    }
+    if (!existsSync(src) || !statSync(src).isDirectory()) return { ok: false, reason: `plugin source is not a directory: ${source}` };
     const v = validatePlugin(src);
-    if (!v.ok || !v.manifest) {
-      return { ok: false, reason: v.errors.join("; ") || "invalid plugin" };
-    }
-    return {
-      ok: true,
-      manifest: v.manifest,
-      requestedPermissions: v.manifest.permissions,
-    };
+    if (!v.ok || !v.manifest) return { ok: false, reason: v.errors.join("; ") || "invalid plugin", warnings: v.warnings };
+    return { ok: true, manifest: v.manifest, requestedPermissions: v.manifest.permissions, warnings: v.warnings };
   }
 
-  /**
-   * Copy a validated plugin source into XR_HOME/plugins/<id> and register it
-   * with the granted permissions. `enabled` defaults to false: explicit by
-   * design — the user enables it as a separate, conscious step.
-   */
-  commitInstall(
-    source: string,
-    grantedPermissions: PermissionScope[],
-    opts: { enable?: boolean; updateSource?: string } = {},
-  ): InstallResult {
+  commitInstall(source: string, grantedPermissions: PermissionScope[], opts: { enable?: boolean; updateSource?: string } = {}): InstallResult {
     const prep = this.prepareInstall(source);
     if (!prep.ok || !prep.manifest) return prep;
     const manifest = prep.manifest;
-
     const src = isAbsolute(source) ? source : resolve(this.cwd, source);
     const dest = this.registry.dirFor(manifest.id);
+    const tmp = `${dest}.stage-${Date.now()}`;
+    const bak = `${dest}.bak-${Date.now()}`;
+    const hadPrevious = existsSync(dest);
 
-    // Idempotent reinstall: clear any prior copy first.
-    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
-    mkdirSync(dest, { recursive: true });
-    cpSync(src, dest, { recursive: true });
+    try {
+      if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
+      mkdirSync(tmp, { recursive: true });
+      cpSync(src, tmp, { recursive: true, dereference: false });
 
-    const granted = effectiveGrant(manifest.permissions, grantedPermissions);
-    const installedHash = hashEntrypoint(dest, manifest);
-    const entry = PluginRegistry.newEntry(manifest, granted, {
-      enabled: opts.enable ?? false,
-      installedHash,
-    });
-    if (opts.updateSource) entry.updateSource = opts.updateSource;
-    else entry.updateSource = manifest.updateSource ?? src;
-    entry.source = manifest.source ?? src;
-    this.registry.upsert(entry);
+      const post = validatePlugin(tmp);
+      if (!post.ok || !post.manifest) throw new Error(post.errors.join("; ") || "staged plugin failed validation");
+      if (post.manifest.id !== manifest.id) throw new Error("staged manifest id changed during install");
 
-    this.store.audit("plugin.install", {
-      plugin: manifest.id,
-      version: manifest.version,
-      granted,
-      enabled: entry.enabled,
-    });
+      if (hadPrevious) renameSync(dest, bak);
+      renameSync(tmp, dest);
+      if (existsSync(bak)) rmSync(bak, { recursive: true, force: true });
 
-    return { ok: true, manifest, requestedPermissions: granted };
+      const granted = effectiveGrant(manifest.permissions, grantedPermissions);
+      const installedHash = hashEntrypoint(dest, manifest);
+      const treeHash = hashPluginTree(dest);
+      const entry = PluginRegistry.newEntry(manifest, granted, {
+        enabled: opts.enable ?? false,
+        installedHash,
+        treeHash,
+        source: typeof manifest.source === "string" ? manifest.source : manifest.source?.url ?? src,
+        updateSource: opts.updateSource ?? manifest.updateSource ?? src,
+      });
+      this.registry.upsert(entry);
+      this.store.audit("plugin.install", { plugin: manifest.id, version: manifest.version, granted, enabled: entry.enabled, treeHash });
+      return { ok: true, manifest, requestedPermissions: granted, warnings: prep.warnings };
+    } catch (e) {
+      try { if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true }); } catch {}
+      try { if (existsSync(bak) && !existsSync(dest)) renameSync(bak, dest); } catch {}
+      return { ok: false, manifest, reason: (e as Error).message, warnings: prep.warnings };
+    }
   }
 
-  /** Remove a plugin entirely: dispose if loaded, delete files + registry row. */
   async remove(id: string): Promise<{ ok: boolean; reason?: string }> {
     const entry = this.registry.get(id);
     if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
-
     await this.disposeOne(id);
     const dir = this.registry.dirFor(id);
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
@@ -185,33 +120,20 @@ export class PluginManager {
     return { ok: true };
   }
 
-  // ── Enable / disable ───────────────────────────────────────────────────────────
-
   enable(id: string): { ok: boolean; reason?: string } {
     const entry = this.registry.get(id);
     if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
-
-    // Compatibility re-check at enable time (core may have changed).
     const v = validatePlugin(this.registry.dirFor(id));
-    if (!v.ok || !v.manifest) {
-      return { ok: false, reason: v.errors.join("; ") || "invalid plugin" };
-    }
-    const compat = checkCompatibility(
-      CORE_VERSION,
-      v.manifest.apiVersion,
-      PLUGIN_API_VERSION,
-      v.manifest.compatibility,
-    );
+    if (!v.ok || !v.manifest) return { ok: false, reason: v.errors.join("; ") || "invalid plugin" };
+    const compat = checkCompatibility(CORE_VERSION, v.manifest.apiVersion, PLUGIN_API_VERSION, v.manifest.compatibility);
     if (!compat.ok) return { ok: false, reason: compat.reason };
-
-    // Dependency gate: required plugins must be installed AND enabled.
     for (const dep of v.manifest.dependencies) {
       const d = this.registry.get(dep);
-      if (!d) return { ok: false, reason: `missing dependency: ${dep} (install it first)` };
-      if (!d.enabled) return { ok: false, reason: `dependency not enabled: ${dep} (enable it first)` };
+      if (!d) return { ok: false, reason: `missing dependency: ${dep}` };
+      if (!d.enabled) return { ok: false, reason: `dependency not enabled: ${dep}` };
     }
-
     this.registry.setEnabled(id, true);
+    this.registry.record(id, "enable");
     this.store.audit("plugin.enable", { plugin: id });
     return { ok: true };
   }
@@ -219,20 +141,12 @@ export class PluginManager {
   async disable(id: string): Promise<{ ok: boolean; reason?: string }> {
     const entry = this.registry.get(id);
     if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
-
-    // Refuse to leave a dependent plugin dangling.
-    const dependents = this.registry
-      .list()
-      .filter((e) => e.enabled && this.dependsOn(e.id, id));
-    if (dependents.length) {
-      return {
-        ok: false,
-        reason: `still required by enabled plugin(s): ${dependents.map((d) => d.id).join(", ")}`,
-      };
-    }
-
+    const dependents = this.registry.list().filter((e) => e.enabled && this.dependsOn(e.id, id));
+    if (dependents.length) return { ok: false, reason: `still required by enabled plugin(s): ${dependents.map((d) => d.id).join(", ")}` };
     await this.disposeOne(id);
     this.registry.setEnabled(id, false);
+    this.registry.setHealth(id, { state: "disabled", checkedAt: Date.now() });
+    this.registry.record(id, "disable");
     this.store.audit("plugin.disable", { plugin: id });
     return { ok: true };
   }
@@ -242,117 +156,84 @@ export class PluginManager {
     return Boolean(v.manifest?.dependencies.includes(dep));
   }
 
-  // ── Update ─────────────────────────────────────────────────────────────────────
-
-  /**
-   * Update a plugin from a local source directory (its recorded updateSource by
-   * default). Re-validates and re-installs, preserving granted permissions and
-   * enabled state. If the new manifest requests NEW permissions, the update is
-   * rejected and the new permissions are reported so the user can re-approve.
-   */
   update(id: string, source?: string): InstallResult & { newPermissions?: PermissionScope[] } {
     const entry = this.registry.get(id);
     if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
-
     const src = source ?? entry.updateSource;
     if (!src) return { ok: false, reason: `no update source recorded for ${id}` };
-
     const prep = this.prepareInstall(src);
     if (!prep.ok || !prep.manifest) return prep;
-    if (prep.manifest.id !== id) {
-      return { ok: false, reason: `update source id "${prep.manifest.id}" does not match "${id}"` };
-    }
-
-    const newPerms = prep.manifest.permissions.filter(
-      (p) => !entry.grantedPermissions.includes(p),
-    );
-    if (newPerms.length) {
-      return {
-        ok: false,
-        manifest: prep.manifest,
-        reason: `update requests new permissions — re-install to approve`,
-        newPermissions: newPerms,
-      };
-    }
-
-    const res = this.commitInstall(src, entry.grantedPermissions, {
-      enable: entry.enabled,
-      updateSource: src,
-    });
+    if (prep.manifest.id !== id) return { ok: false, reason: `update source id "${prep.manifest.id}" does not match "${id}"` };
+    const newPerms = prep.manifest.permissions.filter((p) => !entry.grantedPermissions.includes(p));
+    if (newPerms.length) return { ok: false, manifest: prep.manifest, reason: "update requests new permissions — re-install to approve", newPermissions: newPerms };
+    const res = this.commitInstall(src, entry.grantedPermissions, { enable: entry.enabled, updateSource: src });
     if (res.ok) {
+      this.registry.record(id, "update", `v${prep.manifest.version}`);
       this.store.audit("plugin.update", { plugin: id, version: prep.manifest.version });
     }
     return res;
   }
 
-  // ── Permissions ────────────────────────────────────────────────────────────────
-
-  /** Re-grant permissions for an installed plugin (subset of declared). */
   setPermissions(id: string, perms: PermissionScope[]): { ok: boolean; reason?: string; granted?: PermissionScope[] } {
     const entry = this.registry.get(id);
     if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
     const v = validatePlugin(this.registry.dirFor(id));
     if (!v.manifest) return { ok: false, reason: "invalid plugin" };
-    const granted = effectiveGrant(v.manifest.permissions, perms);
+    const denied = new Set(((this.config as any).plugins?.deniedPermissions ?? []) as string[]);
+    const granted = effectiveGrant(v.manifest.permissions, perms).filter((p) => !denied.has(p));
     this.registry.setPermissions(id, granted);
+    this.registry.record(id, "permissions", granted.join(","));
     this.store.audit("plugin.permissions", { plugin: id, granted });
     return { ok: true, granted };
   }
 
-  // ── Load enabled plugins (activation) ────────────────────────────────────────
-
-  /**
-   * Activate every enabled plugin. Failures are isolated and recorded — the
-   * method always resolves. Dependencies are loaded before dependents.
-   */
   async loadEnabled(): Promise<void> {
     this.loaded.clear();
     this.loadErrors.clear();
-    // Global hard off-switch: when plugins.enabled is false, nothing is loaded
-    // into the agent (the `xr plugins …` management commands still work).
     if ((this.config as any).plugins?.enabled === false) return;
-    const enabled = this.registry.list().filter((e) => e.enabled);
-    const ordered = this.topoSort(enabled);
-
-    for (const entry of ordered) {
-      await this.loadOne(entry);
-    }
+    const ordered = this.topoSort(this.registry.list().filter((e) => e.enabled));
+    for (const entry of ordered) await this.loadOne(entry);
   }
 
   private async loadOne(entry: RegistryEntry): Promise<void> {
-    const dir = this.registry.dirFor(entry.id);
-    // Respect config: trust enforcement may be disabled (e.g. local dev), and a
-    // denied-permission policy strips scopes before they ever reach the host.
     const pluginCfg = (this.config as any).plugins ?? {};
     const requireTrust = pluginCfg.requireTrust !== false;
     const denied: Set<string> = new Set(pluginCfg.deniedPermissions ?? []);
     const granted = entry.grantedPermissions.filter((p) => !denied.has(p));
-    const res: LoadResult = await loadPlugin(dir, {
-      store: this.store,
-      config: this.config,
-      cwd: this.cwd,
-      granted,
-      expectedHash: requireTrust ? entry.installedHash : undefined,
-    });
-    if (res.ok) {
-      this.loaded.set(entry.id, {
-        id: entry.id,
-        manifest: res.manifest,
-        contributions: res.contributions,
-        granted: res.granted,
-      });
-      this.store.audit("plugin.load", {
-        plugin: entry.id,
-        tools: res.contributions.tools?.length ?? 0,
-        commands: res.contributions.commands?.length ?? 0,
-      });
-    } else {
+    const dir = this.registry.dirFor(entry.id);
+    const res: LoadResult = await loadPlugin(dir, { store: this.store, config: this.config, cwd: this.cwd, granted, expectedHash: requireTrust ? entry.installedHash : undefined, expectedTreeHash: requireTrust ? entry.treeHash : undefined });
+    if (!res.ok) {
       this.loadErrors.set(entry.id, { reason: res.reason, kind: res.kind });
+      this.registry.setHealth(entry.id, { state: res.kind === "untrusted" ? "untrusted" : res.kind === "incompatible" ? "incompatible" : "error", checkedAt: Date.now(), detail: res.reason, errors: [res.reason] });
+      this.registry.record(entry.id, "load_error", res.reason);
       this.store.audit("plugin.load_error", { plugin: entry.id, kind: res.kind, reason: res.reason });
+      return;
     }
+    const mcpTools = await this.loadMcpTools(entry.id, res.manifest, res.granted);
+    const skills = loadPluginSkills(dir, res.manifest);
+    this.loaded.set(entry.id, { id: entry.id, manifest: res.manifest, contributions: res.contributions, granted: res.granted, mcpTools, skills });
+    this.registry.setHealth(entry.id, { state: "healthy", checkedAt: Date.now(), detail: `${(res.contributions.tools?.length ?? 0) + (res.contributions.commands?.length ?? 0) + mcpTools.length + skills.length} contribution(s)` });
+    this.registry.record(entry.id, "load");
+    this.store.audit("plugin.load", { plugin: entry.id, tools: res.contributions.tools?.length ?? 0, commands: res.contributions.commands?.length ?? 0, mcpTools: mcpTools.length, skills: skills.length });
   }
 
-  /** Dependencies-first ordering; cycles are broken deterministically. */
+  private async loadMcpTools(pluginId: string, manifest: PluginManifest, granted: PermissionScope[]): Promise<Tool[]> {
+    if (!granted.includes("mcp")) return [];
+    const out: Tool[] = [];
+    for (const server of manifest.mcpServers) {
+      if (server.transport !== "http" || !server.url) continue;
+      try {
+        const client = new McpClient({ id: `${pluginId}.${server.id}`, url: server.url, apiKeyEnv: server.apiKeyEnv });
+        const defs = await client.listTools();
+        const allowed = new Set(server.tools ?? []);
+        for (const def of defs) if (!allowed.size || allowed.has(def.name)) out.push(wrapMcpTool(client, `${pluginId}.${server.id}`, def));
+      } catch (e) {
+        this.loadErrors.set(pluginId, { kind: "error", reason: `MCP ${server.id}: ${(e as Error).message}` });
+      }
+    }
+    return out;
+  }
+
   private topoSort(entries: RegistryEntry[]): RegistryEntry[] {
     const byId = new Map(entries.map((e) => [e.id, e]));
     const out: RegistryEntry[] = [];
@@ -376,106 +257,61 @@ export class PluginManager {
   private async disposeOne(id: string): Promise<void> {
     const lp = this.loaded.get(id);
     if (lp?.contributions.dispose) {
-      try {
-        await lp.contributions.dispose();
-      } catch {
-        /* dispose must not break disable/remove */
-      }
+      try { await lp.contributions.dispose(); } catch {}
     }
     this.loaded.delete(id);
   }
 
-  // ── Contributions exposed to the rest of XR ──────────────────────────────────
+  getLoaded(): LoadedPlugin[] { return [...this.loaded.values()]; }
 
-  /** All loaded plugins (after loadEnabled). */
-  getLoaded(): LoadedPlugin[] {
-    return [...this.loaded.values()];
-  }
-
-  /** A contributed command, looked up as <pluginId> <command>. */
   findCommand(pluginId: string, command: string): { plugin: LoadedPlugin; cmd: PluginCommand } | null {
     const lp = this.loaded.get(pluginId);
     const cmd = lp?.contributions.commands?.find((c) => c.name === command);
     return lp && cmd ? { plugin: lp, cmd } : null;
   }
 
-  /**
-   * Adapt all contributed plugin tools into core Tools — namespaced
-   * `plugin.<id>.<name>` and (by default) approval-gated. These plug straight
-   * into the agent's tool list, inheriting the agent's approval + audit context.
-   */
   pluginTools(): Tool[] {
     const tools: Tool[] = [];
     for (const lp of this.loaded.values()) {
-      for (const pt of lp.contributions.tools ?? []) {
-        tools.push(adaptTool(lp.id, pt));
-      }
+      for (const pt of lp.contributions.tools ?? []) tools.push(adaptTool(lp.id, pt, lp.granted));
+      tools.push(...lp.mcpTools);
     }
     return tools;
   }
 
-  // ── Health / status ───────────────────────────────────────────────────────────
+  pluginSkills(): LoadedSkill[] {
+    return this.getLoaded().flatMap((p) => p.skills);
+  }
 
   health(): Array<{ entry: RegistryEntry; manifest?: PluginManifest; status: PluginStatus }> {
     return this.registry.list().map((entry) => {
       const v = validatePlugin(this.registry.dirFor(entry.id));
       const err = this.loadErrors.get(entry.id);
       let status: PluginStatus;
-      if (err) {
-        status = {
-          kind: err.kind === "incompatible" ? "incompatible" : err.kind === "untrusted" ? "untrusted" : "error",
-          loaded: false,
-          detail: err.reason,
-        };
-      } else if (!v.ok) {
-        status = { kind: "error", loaded: false, detail: v.errors.join("; ") };
-      } else if (this.loaded.has(entry.id)) {
+      if (err) status = { kind: err.kind === "incompatible" ? "incompatible" : err.kind === "untrusted" ? "untrusted" : "error", loaded: false, detail: err.reason };
+      else if (!v.ok) status = { kind: "error", loaded: false, detail: v.errors.join("; ") };
+      else if (this.loaded.has(entry.id)) {
         const lp = this.loaded.get(entry.id)!;
-        status = {
-          kind: "enabled",
-          loaded: true,
-          contributions:
-            (lp.contributions.tools?.length ?? 0) + (lp.contributions.commands?.length ?? 0),
-        };
-      } else {
-        status = { kind: entry.enabled ? "enabled" : "disabled", loaded: false };
-      }
+        status = { kind: "enabled", loaded: true, contributions: (lp.contributions.tools?.length ?? 0) + (lp.contributions.commands?.length ?? 0) + lp.mcpTools.length + lp.skills.length };
+      } else status = { kind: entry.enabled ? "enabled" : "disabled", loaded: false, detail: entry.health?.detail };
       return { entry, manifest: v.manifest, status };
     });
   }
 
-  /** Convenience for `xr doctor`: counts only. */
   summary(): { installed: number; enabled: number; loaded: number; errored: number } {
-    const all = this.registry.list();
-    return {
-      installed: all.length,
-      enabled: all.filter((e) => e.enabled).length,
-      loaded: this.loaded.size,
-      errored: this.loadErrors.size,
-    };
+    const health = this.health();
+    return { installed: health.length, enabled: health.filter((h) => h.entry.enabled).length, loaded: this.loaded.size, errored: health.filter((h) => ["error", "untrusted", "incompatible"].includes(h.status.kind)).length };
   }
 
-  /** Direct registry access for the CLI list view. */
-  listInstalled(): RegistryEntry[] {
-    return this.registry.list();
-  }
-  getEntry(id: string): RegistryEntry | undefined {
-    return this.registry.get(id);
-  }
-  dirFor(id: string): string {
-    return this.registry.dirFor(id);
-  }
+  listInstalled(): RegistryEntry[] { return this.registry.list(); }
+  getEntry(id: string): RegistryEntry | undefined { return this.registry.get(id); }
+  dirFor(id: string): string { return this.registry.dirFor(id); }
 }
 
-/**
- * Wrap a PluginTool as a core Tool. The wrapper is the runtime security
- * boundary: namespaced name, approval gate (unless the plugin opted out AND it's
- * read-only), audit on every call. The plugin tool itself only ever received a
- * permission-scoped host at activate time, so it cannot exceed its grant here.
- */
-function adaptTool(pluginId: string, pt: PluginTool): Tool {
+function adaptTool(pluginId: string, pt: PluginTool, granted: PermissionScope[]): Tool {
   const fqName = `plugin.${pluginId}.${pt.name}`;
-  const requiresApproval = pt.requiresApproval !== false; // default: approve
+  const hasSensitiveGrant = granted.some((p) => SENSITIVE_PERMISSIONS.has(p));
+  const requiresApproval = hasSensitiveGrant || pt.requiresApproval !== false;
   return {
     name: fqName,
     description: `[plugin:${pluginId}] ${pt.description}`,
@@ -483,19 +319,13 @@ function adaptTool(pluginId: string, pt: PluginTool): Tool {
     requiresApproval,
     async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
       if (requiresApproval) {
-        const approved = await ctx.approve({
-          tool: fqName,
-          reason: `run plugin tool from "${pluginId}"`,
-          preview: JSON.stringify(args).slice(0, 300),
-        });
+        const approved = await ctx.approve({ tool: fqName, reason: `run plugin tool from "${pluginId}"`, preview: JSON.stringify(args).slice(0, 300) });
         if (!approved) {
           ctx.audit("plugin.tool.denied", { plugin: pluginId, tool: pt.name });
           return { ok: false, output: "plugin tool call denied" };
         }
       }
-      if (ctx.dryRun) {
-        return { ok: true, output: `[dry-run] would call ${fqName}` };
-      }
+      if (ctx.dryRun) return { ok: true, output: `[dry-run] would call ${fqName}` };
       try {
         const res = await pt.run(args);
         ctx.audit("plugin.tool.call", { plugin: pluginId, tool: pt.name, ok: res.ok });
