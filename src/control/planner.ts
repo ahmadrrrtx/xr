@@ -17,7 +17,7 @@ import { ActionSchema, type Action, type Plan } from "./types.ts";
 import type { Store } from "../state/db.ts";
 import { recallPlan } from "./memory.ts";
 
-const SYSTEM_PROMPT = You are XR's Computer-Control Planner.
+const SYSTEM_PROMPT = `You are XR's Computer-Control Planner.
 
 Reply with ONLY JSON: { "rationale": "...", "actions": [ ... ] }
 
@@ -50,7 +50,7 @@ Actions available:
 { "type":"system","op":"notify","title":"XR","value":"done" }
 { "type":"system","op":"clipboard_write","value":"copied text" }
 
-Rules: max 12 actions. Never type shell commands (sudo, rm, curl|bash). Prefer browser actions over coordinate clicks. Sensitive values: "sensitive":true. Empty actions if unsafe.
+Rules: max 12 actions. Never type shell commands (sudo, rm, curl|bash). Prefer browser actions over coordinate clicks. Sensitive values: "sensitive":true. Empty actions if unsafe.`;
 interface PlanOptions {
   /** Hard cap on actions (defaults to 10). */
   maxActions?: number;
