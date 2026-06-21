@@ -6,6 +6,7 @@ import { Store } from "../state/db.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";
+import { pluginDoctorLine } from "../plugins/cli.ts";
 
 export class DoctorCommand implements Command {
   name = "doctor";
@@ -34,6 +35,7 @@ export class DoctorCommand implements Command {
       checks.push({ id:"research", label:"Research engine", state:"ok", detail:`${researchCount} sessions` });
       try { const { checkVoiceStack } = await import("../voice/index.ts"); for(const c of checkVoiceStack().checks) checks.push({ id:c.id, label:c.label, state:c.state, detail:c.detail }); } catch(e){ checks.push({ id:"voice", label:"Voice stack", state:"warn", detail:(e as Error).message });}
       checks.push({ id:"memory", label:"Memory engine", state: memEnabled ? "ok" : "warn", detail: `${memHealth.total} entries` });
+      try { const { PluginManager } = await import("../plugins/manager.ts"); const pm = new PluginManager(store, ctx.cwd); await pm.loadEnabled(); const ps = pm.summary(); checks.push({ id:"plugins", label:"Plugin platform", state: ps.errored ? "warn" : "ok", detail: `${ps.installed} installed, ${ps.enabled} enabled, ${ps.errored} need attention` }); } catch(e){ checks.push({ id:"plugins", label:"Plugin platform", state:"warn", detail:(e as Error).message }); }
       // control
       try { const { detectCapabilities } = await import("../control/adapter.ts"); const caps = detectCapabilities(); checks.push({ id:"control", label:"Computer Control", state: caps.tools.keyboard ? "ok":"warn", detail: `${caps.os} · keyboard:${caps.tools.keyboard} mouse:${caps.tools.mouse}` }); } catch {}
       console.log(JSON.stringify({ platform: detectPlatform(), checks }, null, 2)); return;
@@ -53,6 +55,9 @@ export class DoctorCommand implements Command {
 
     console.log(""); console.log(C.bold("Voice Stack"));
     try { const { checkVoiceStack } = await import("../voice/index.ts"); const voice = checkVoiceStack(); for (const c of voice.checks) { const status = c.state === "ok" ? C.green("✓") : c.state === "warn" ? C.amber("!") : C.red("✗"); console.log(`  ${c.label.padEnd(20)} ${status} ${C.dim(c.detail)}`); } } catch(e){ warn(`Voice health check failed: ${(e as Error).message}`); }
+
+    console.log(""); console.log(C.bold("Plugin Platform"));
+    console.log(`  health ......... ${await pluginDoctorLine(store)}`);
 
     // Stage 9 — Control Health
     console.log(""); console.log(C.bold("Computer Control"));
