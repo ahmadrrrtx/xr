@@ -17,7 +17,7 @@
  *  - /api/config returns safe (redacted) config subset
  *  - Improved CORS and CSP headers
  */
-
+import { handleControlApi } from "./control-api.ts";
 import { randomBytes } from "node:crypto";
 import { Store } from "../state/db.ts";
 import { loadConfig, isMemoryEnabled } from "../config/config.ts";
@@ -399,7 +399,8 @@ export function makeHandler(store: Store, token: string) {
       store.audit("memory.delete", { id: key, ok: r.ok });
       return json({ ok: r.ok, reason: r.reason }, r.ok ? 200 : 404);
     }
-
+      const controlRes = await handleControlApi(req, url, store);
+      if (controlRes) return controlRes;
     // ── 404 ───────────────────────────────────────────────────────────────
     return json({ error: "not found" }, 404);
   };
