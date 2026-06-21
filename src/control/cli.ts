@@ -1,23 +1,17 @@
 /**
- * XR v0.8 — Computer Control: CLI handlers.
- *
- * All `xr control …` subcommands route here.  The handlers stay thin: they
- * parse flags, build an Action, and hand it to the service.
+ * XR Stage 9 — Computer Control: CLI handlers.
  */
-
 import type { Store } from "../state/db.ts";
 import { banner, ok, warn, info, colors as C } from "../interfaces/cli.ts";
 import { loadConfig, saveConfig } from "../config/config.ts";
 import { detectCapabilities, isControlReady } from "./adapter.ts";
-import { isDisabled, runAction, runPlan, runTypedPlan } from "./service.ts";
+import { isDisabled, runAction, runPlan, runTypedPlan, runComputerUse } from "./service.ts";
 import type { Action, ControlOptions, ExecutionMode } from "./types.ts";
 import { planActions } from "./planner.ts";
 import { browserStatus, shutdownBrowser } from "./browser.ts";
 import { listRemembered, forgetPlan, clearAllMemory, fingerprintTask } from "./memory.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { spawnSync } from "node:child_process";
-
-// ── flag helpers ────────────────────────────────────────────────────────────
 
 interface ParsedFlags {
   mode: ExecutionMode;
@@ -26,7 +20,6 @@ interface ParsedFlags {
   noMemory: boolean;
   rest: string[];
 }
-
 function parseFlags(argv: string[]): ParsedFlags {
   let mode: ExecutionMode = "auto";
   let yes = false;
@@ -44,426 +37,293 @@ function parseFlags(argv: string[]): ParsedFlags {
   }
   return { mode, yes, delayMs, noMemory, rest };
 }
-
 function makeOpts(flags: ParsedFlags): ControlOptions {
   return { mode: flags.mode, autoApproveSensitive: flags.yes, delayMs: flags.delayMs };
 }
+function finish(success: boolean, msg: string): void {
+  if (success) ok(msg); else warn(msg);
+}
 
-// ── subcommands ─────────────────────────────────────────────────────────────
-
+// ---- status / enable ----
 async function cmdStatus(): Promise<void> {
   banner();
   console.log(C.bold("🖥  Computer Control Status"));
   const caps = detectCapabilities();
   const kill = isDisabled();
   const { config } = loadConfig();
-
   console.log(`  enabled .......... ${kill.disabled ? C.red(`✗ ${kill.reason}`) : C.green("✓ yes")}`);
   console.log(`  platform ......... ${C.cyan(caps.os)}`);
   console.log(`  launcher ......... ${caps.tools.launcher ? C.green("✓") : C.red("✗")}`);
   console.log(`  keyboard ......... ${caps.tools.keyboard ? C.green("✓") : C.red("✗")}`);
   console.log(`  mouse ............ ${caps.tools.mouse ? C.green("✓") : C.red("✗")}`);
   console.log(`  windows .......... ${caps.tools.windows ? C.green("✓") : C.red("✗")}`);
-  console.log(`  default mode ..... ${C.cyan(config.control?.defaultMode ?? "auto")}`);
-
+  try {
+    const { listPermissions } = await import("./permissions.ts");
+    console.log(`  permissions ...... ${C.dim(listPermissions().join(", ") || "(none)")}`);
+  } catch {}
   if (caps.missing.length) {
-    console.log("");
-    console.log(C.amber("  Install these for full capability:"));
+    console.log(""); console.log(C.amber("  Install these for full capability:"));
     for (const m of caps.missing) console.log(`    • ${m}`);
   }
-
   console.log("");
-  console.log(C.bold("  Supported actions:"));
-  for (const line of [
-    "app   — launch an application",
-    "open  — open a URL or file path",
-    "type  — type text into the focused window",
-    "click — left/right/double click at coordinates",
-    "move  — move the cursor",
-    "scroll — scroll up / down / left / right",
-    "key   — press a key combination",
-    "focus — bring an existing window to the front",
-  ]) console.log(`    • ${C.dim(line)}`);
-
-  if (!isControlReady(caps)) {
-    console.log("");
-    warn("Control is partially unavailable on this machine. Some actions will refuse.");
-  } else if (!kill.disabled) {
-    console.log("");
-    ok("Computer control is ready.");
-  }
-}
-
-async function cmdTest(store: Store, flags: ParsedFlags): Promise<void> {
-  banner();
-  console.log(C.bold("🧪 Computer Control: self-test"));
-  info("Running a safe, dependency-only probe — no clicks, no keys are sent.");
-
-  // 1) capability probe
-  const caps = detectCapabilities();
-  console.log(`  platform .. ${caps.os}`);
-  console.log(`  launcher .. ${caps.tools.launcher ? "ok" : "missing"}`);
-  console.log(`  keyboard .. ${caps.tools.keyboard ? "ok" : "missing"}`);
-
-  // 2) dry-run a representative plan so the user sees the *exact* preview UX
-  const opts: ControlOptions = { mode: "dry-run", autoApproveSensitive: false, delayMs: 0 };
-  const sample: Action[] = [
-    { type: "focus", name: "Finder" },
-    { type: "open",  target: "https://example.com" },
-    { type: "type",  text: "hello from xr control test" },
-    { type: "key",   keys: ["enter"] },
-  ];
-  console.log("");
-  console.log(C.bold("  Dry-run plan:"));
-  await runPlan(store, sample, opts);
-
-  console.log("");
-  ok("self-test complete. Nothing was executed.");
-  if (caps.missing.length) {
-    warn(`Some tools are missing — see "xr control status" for install hints.`);
-  }
 }
 
 async function cmdStart(): Promise<void> {
-  // "start" simply enables the feature in config.  Persistent listener loops
-  // belong in the voice/agent layer, not here, to keep responsibilities clean.
   const { config } = loadConfig();
   if (!config.control) (config as any).control = {};
   config.control!.enabled = true;
   saveConfig(config);
-  ok("computer control enabled (config.control.enabled = true)");
-  info('Run "xr control status" to verify capabilities.');
+  ok("computer control enabled");
+  info('Grant permissions: xr control permissions grant desktop');
 }
-
 async function cmdStop(): Promise<void> {
   const { config } = loadConfig();
   if (!config.control) (config as any).control = {};
   config.control!.enabled = false;
   saveConfig(config);
-  ok("computer control disabled. Every `xr control` action will now refuse.");
+  ok("computer control disabled");
 }
 
+// ---- actions ----
 async function cmdApp(store: Store, flags: ParsedFlags): Promise<void> {
-  const name = flags.rest.join(" ").trim();
-  if (!name) { warn(`usage: xr control app "<app name>"`); return; }
-  const r = await runAction(store, { type: "app", name }, makeOpts(flags));
-  finish(r.result.ok, r.result.message);
+  const name = flags.rest.join(" ").trim(); if (!name) { warn(`usage: xr control app "<app name>"`); return; }
+  const r = await runAction(store, { type: "app", name }, makeOpts(flags)); finish(r.result.ok, r.result.message);
 }
-
+async function cmdClose(store: Store, flags: ParsedFlags): Promise<void> {
+  const name = flags.rest.join(" ").trim(); if (!name) { warn(`usage: xr control close "<app name>"`); return; }
+  const r = await runAction(store, { type: "close", name }, makeOpts(flags)); finish(r.result.ok, r.result.message);
+}
 async function cmdOpen(store: Store, flags: ParsedFlags): Promise<void> {
-  const target = flags.rest.join(" ").trim();
-  if (!target) { warn(`usage: xr control open "<url or path>"`); return; }
-  const r = await runAction(store, { type: "open", target }, makeOpts(flags));
-  finish(r.result.ok, r.result.message);
+  const target = flags.rest.join(" ").trim(); if (!target) { warn(`usage: xr control open "<url or path>"`); return; }
+  const r = await runAction(store, { type: "open", target }, makeOpts(flags)); finish(r.result.ok, r.result.message);
 }
-
 async function cmdType(store: Store, flags: ParsedFlags): Promise<void> {
-  const text = flags.rest.join(" ");
-  if (!text) { warn(`usage: xr control type "<text>"`); return; }
-  const r = await runAction(store, { type: "type", text }, makeOpts(flags));
-  finish(r.result.ok, r.result.message);
+  const text = flags.rest.join(" "); if (!text) { warn(`usage: xr control type "<text>"`); return; }
+  const r = await runAction(store, { type: "type", text }, makeOpts(flags)); finish(r.result.ok, r.result.message);
 }
-
 async function cmdClick(store: Store, flags: ParsedFlags): Promise<void> {
   const raw = flags.rest.join(" ").trim();
-  if (!raw) { warn(`usage: xr control click "<x,y>" [--right|--double]`); return; }
-  const m = raw.match(/^\(?\s*(\d+)\s*[, ]\s*(\d+)\s*\)?$/);
-  if (!m) {
-    warn(`v0.8 click requires coordinates like "640,480". Use "xr --computer" for vision-based targets.`);
-    return;
-  }
-  const button: "left" | "right" | "double" =
-    flags.rest.includes("--right") ? "right" :
-    flags.rest.includes("--double") ? "double" : "left";
+  const m = raw.match(/\(?\s*(\d+)\s*[,\s]\s*(\d+)\s*\)?/);
+  if (!m) { warn(`usage: xr control click "<x,y>" [--right|--double]`); return; }
+  const button: "left" | "right" | "double" = flags.rest.includes("--right") ? "right" : flags.rest.includes("--double") ? "double" : "left";
   const r = await runAction(store, { type: "click", x: Number(m[1]), y: Number(m[2]), button }, makeOpts(flags));
   finish(r.result.ok, r.result.message);
 }
-
+async function cmdDrag(store: Store, flags: ParsedFlags): Promise<void> {
+  const raw = flags.rest.join(" ");
+  const m = raw.match(/(\d+)[,\s]+(\d+)[^\d]+(\d+)[,\s]+(\d+)/);
+  if (!m) { warn(`usage: xr control drag <x1,y1> <x2,y2>`); return; }
+  const [, x1, y1, x2, y2] = m.map(Number);
+  const r = await runAction(store, { type: "drag_drop", x1, y1, x2, y2 }, makeOpts(flags));
+  finish(r.result.ok, r.result.message);
+}
 async function cmdMove(store: Store, flags: ParsedFlags): Promise<void> {
   const raw = flags.rest.join(" ").trim();
-  const m = raw.match(/^\(?\s*(\d+)\s*[, ]\s*(\d+)\s*\)?$/);
+  const m = raw.match(/\(?\s*(\d+)\s*[,\s]\s*(\d+)\s*\)?/);
   if (!m) { warn(`usage: xr control move "<x,y>"`); return; }
   const r = await runAction(store, { type: "move", x: Number(m[1]), y: Number(m[2]) }, makeOpts(flags));
   finish(r.result.ok, r.result.message);
 }
-
 async function cmdScroll(store: Store, flags: ParsedFlags): Promise<void> {
   const dir = (flags.rest[0] ?? "").toLowerCase();
-  if (!["up", "down", "left", "right"].includes(dir)) {
-    warn(`usage: xr control scroll <up|down|left|right> [amount]`);
-    return;
-  }
+  if (!["up","down","left","right"].includes(dir)) { warn(`usage: xr control scroll <up|down|left|right> [amount]`); return; }
   const amount = Math.max(1, Math.min(50, Number(flags.rest[1]) || 3));
   const r = await runAction(store, { type: "scroll", direction: dir as any, amount }, makeOpts(flags));
   finish(r.result.ok, r.result.message);
 }
-
 async function cmdKey(store: Store, flags: ParsedFlags): Promise<void> {
-  const raw = flags.rest.join(" ").trim();
-  if (!raw) { warn(`usage: xr control key "<ctrl+c | cmd+tab | enter>"`); return; }
+  const raw = flags.rest.join(" ").trim(); if (!raw) { warn(`usage: xr control key "<ctrl+c | cmd+tab | enter>"`); return; }
   const keys = raw.split(/[+\s]+/).filter(Boolean);
   const r = await runAction(store, { type: "key", keys }, makeOpts(flags));
   finish(r.result.ok, r.result.message);
 }
-
 async function cmdFocus(store: Store, flags: ParsedFlags): Promise<void> {
-  const name = flags.rest.join(" ").trim();
-  if (!name) { warn(`usage: xr control focus "<window name>"`); return; }
-  const r = await runAction(store, { type: "focus", name }, makeOpts(flags));
+  const name = flags.rest.join(" ").trim(); if (!name) { warn(`usage: xr control focus "<window name>"`); return; }
+  const r = await runAction(store, { type: "focus", name }, makeOpts(flags)); finish(r.result.ok, r.result.message);
+}
+
+// ---- file / editor / screenshot / system ----
+async function cmdFile(store: Store, flags: ParsedFlags): Promise<void> {
+  const op = (flags.rest[0] || "list") as any;
+  const path = flags.rest[1] || "~/";
+  if (op === "write") {
+    const content = flags.rest.slice(2).join(" ");
+    const r = await runAction(store, { type: "file", op: "write", path, content }, makeOpts(flags));
+    finish(r.result.ok, r.result.message); return;
+  }
+  if (op === "move") {
+    const targetPath = flags.rest[2]; if (!targetPath) { warn(`usage: xr control file move <src> <dest>`); return; }
+    const r = await runAction(store, { type: "file", op: "move", path, targetPath }, makeOpts(flags));
+    finish(r.result.ok, r.result.message); return;
+  }
+  const r = await runAction(store, { type: "file", op, path }, makeOpts(flags));
+  const data: any = r.result.data || {};
+  if (data.text) console.log(data.text.slice(0, 4000));
+  if (data.list) console.log(data.list);
+  finish(r.result.ok, r.result.message);
+}
+async function cmdEditor(store: Store, flags: ParsedFlags): Promise<void> {
+  const file = flags.rest[0]; if (!file) { warn(`usage: xr control editor <file> [line]`); return; }
+  const line = Number(flags.rest[1]) || undefined;
+  const r = await runAction(store, { type: "editor", op: "open", editor: "auto", file, line }, makeOpts(flags));
+  finish(r.result.ok, r.result.message);
+}
+async function cmdScreenshot(store: Store, flags: ParsedFlags): Promise<void> {
+  const r = await runAction(store, { type: "screenshot", target: "screen" }, makeOpts(flags));
+  const data: any = r.result.data || {};
+  if (data.path) info(`saved: ${data.path}`);
+  finish(r.result.ok, r.result.message);
+}
+async function cmdSystem(store: Store, flags: ParsedFlags): Promise<void> {
+  const op = flags.rest[0] || "notify";
+  if (op === "clipboard") { const r = await runAction(store, { type: "system", op: "clipboard_read" }, makeOpts(flags)); console.log((r.result.data as any)?.text || ""); return; }
+  const value = flags.rest.slice(1).join(" ") || "XR";
+  const r = await runAction(store, { type: "system", op: "notify", title: "XR", value }, makeOpts(flags));
   finish(r.result.ok, r.result.message);
 }
 
-function finish(success: boolean, msg: string): void {
-  if (success) ok(msg);
-  else warn(msg);
+// ---- computer-use ----
+async function cmdComputer(store: Store, flags: ParsedFlags): Promise<void> {
+  const task = flags.rest.join(" ").trim(); if (!task) { warn(`usage: xr control computer "<task>"`); return; }
+  const { config } = loadConfig();
+  const provider = buildProvider(config, {});
+  banner();
+  console.log(C.bold(`🤖 Computer-Use: ${task}`));
+  const res = await runComputerUse(store, task, provider);
+  console.log(""); ok(res);
 }
 
-// ── plan / run (multi-step) ────────────────────────────────────────────────
-
+// ---- plan ----
 async function cmdPlan(store: Store, flags: ParsedFlags): Promise<void> {
   const task = flags.rest.join(" ").trim();
-  if (!task) { warn(`usage: xr control plan "<task>"  [--dry-run|--step|--yes] [--no-memory]`); return; }
-  banner();
-  console.log(C.bold(`🧭 Planning: ${task}`));
-
+  if (!task) { warn(`usage: xr control plan "<task>" [--dry-run|--step|--yes]`); return; }
+  banner(); console.log(C.bold(`🧭 Planning: ${task}`));
   const { config } = loadConfig();
   const provider = buildProvider(config, {});
   const memoryEnabled = config.control?.memory?.enabled !== false && !flags.noMemory;
   const planned = await planActions(provider, task, { store, noMemory: !memoryEnabled });
-  if ("error" in planned) {
-    warn(`planner failed: ${planned.error}`);
-    return;
-  }
+  if ("error" in planned) { warn(`planner failed: ${planned.error}`); return; }
   const plan = planned.plan;
-  if (plan.actions.length === 0) {
-    info(plan.rationale ?? "planner returned an empty plan");
-    return;
-  }
-
-  // Show source so the user knows when LLM cost was spent vs cached.
-  if (planned.source === "memory") {
-    console.log(C.green(`  ⚡ recalled from memory — no LLM call`));
-  } else {
-    console.log(C.dim(`  ✓ planned via ${provider.label}`));
-  }
-
-  // Default to dry-run for `plan` unless user passed an explicit flag.
+  if (plan.actions.length === 0) { info(plan.rationale ?? "empty plan"); return; }
+  if (planned.source === "memory") console.log(C.green(`  ⚡ recalled from memory — $0.00`));
+  else console.log(C.dim(`  ✓ planned via ${provider.label}`));
   const opts = { ...makeOpts({ ...flags, mode: flags.mode === "auto" ? "dry-run" : flags.mode }), memory: memoryEnabled };
   const results = await runTypedPlan(store, plan, opts);
-
   const okCount = results.filter((r) => r.result.ok && !r.result.skipped).length;
   const skipped = results.filter((r) => r.result.skipped).length;
   const failed = results.filter((r) => !r.result.ok && !r.result.skipped).length;
-  console.log("");
-  console.log(C.dim(`  → ${okCount} executed · ${skipped} skipped · ${failed} failed`));
-  if (opts.mode === "dry-run") {
-    info(`Dry-run only. Re-run with "xr control plan \\"${task}\\" --yes" or "--step" to execute.`);
-  } else if (okCount === plan.actions.length && memoryEnabled && planned.source === "llm") {
-    info(`Remembered. Next time you run this task XR will skip the LLM.`);
-  }
+  console.log(""); console.log(C.dim(`  → ${okCount} executed · ${skipped} skipped · ${failed} failed`));
+  if (opts.mode === "dry-run") info(`Dry-run only. Re-run with --yes or --step to execute.`);
 }
 
-async function cmdRun(store: Store, flags: ParsedFlags): Promise<void> {
-  // Read a JSON Action[] from stdin and execute through the safety pipeline.
-  const stdin = await readAllStdin();
-  if (!stdin.trim()) {
-    warn(`usage: cat plan.json | xr control run [--dry-run|--step|--yes]`);
-    return;
-  }
-  let parsed: any;
-  try { parsed = JSON.parse(stdin); } catch (e) {
-    warn(`invalid JSON: ${(e as Error).message}`);
-    return;
-  }
-  const actions: unknown[] = Array.isArray(parsed) ? parsed
-    : Array.isArray(parsed?.actions) ? parsed.actions
-    : [];
-  if (!actions.length) {
-    warn("no actions found in input (expected JSON array, or { actions: [...] })");
-    return;
-  }
-  await runPlan(store, actions, makeOpts(flags));
-}
-
-async function readAllStdin(): Promise<string> {
-  if (process.stdin.isTTY) return "";
-  let data = "";
-  for await (const chunk of process.stdin as any) data += chunk;
-  return data;
-}
-
-// ── browser subcommands ───────────────────────────────────────────────────
-
-// ── memory subcommands ────────────────────────────────────────────────────
-
-async function cmdMemory(store: Store, flags: ParsedFlags): Promise<void> {
-  const sub = flags.rest[0];
-
-  if (!sub || sub === "list") {
-    banner();
-    console.log(C.bold("🧠 Remembered Computer-Control Plans"));
-    const entries = listRemembered(store);
-    if (!entries.length) {
-      info("nothing remembered yet — successful plans get cached automatically.");
-      return;
-    }
-    for (const e of entries) {
-      const when = new Date(e.rememberedAt).toISOString().replace("T", " ").slice(0, 19);
-      console.log(`  ${C.cyan(e.baselineId)} ${C.dim("·")} ${C.bold(e.task)} ${C.dim(`(${e.actions.length} steps · ${e.hits} hits · ${when})`)}`);
-    }
-    console.log("");
-    info(`use "xr control memory show <id>" to inspect, or "forget <id|task>" to delete.`);
-    return;
-  }
-
-  if (sub === "show") {
-    const key = flags.rest.slice(1).join(" ").trim();
-    if (!key) { warn(`usage: xr control memory show <baseline-id|task>`); return; }
-    const all = listRemembered(store);
-    const match = all.find((e) => e.baselineId === key || e.skillId === key || e.task === key)
-      ?? all.find((e) => e.skillId === fingerprintTask(key));
-    if (!match) { warn(`no remembered plan matches: ${key}`); return; }
-    banner();
-    console.log(C.bold("🧠 ") + match.task);
-    console.log(C.dim(`  ${match.baselineId} · ${match.actions.length} steps · ${match.hits} hits`));
-    console.log("");
-    for (let i = 0; i < match.actions.length; i++) {
-      console.log(`  ${C.dim(String(i + 1).padStart(2) + ".")} ${JSON.stringify(match.actions[i])}`);
-    }
-    return;
-  }
-
-  if (sub === "forget") {
-    const key = flags.rest.slice(1).join(" ").trim();
-    if (!key) { warn(`usage: xr control memory forget <baseline-id|task>`); return; }
-    const res = forgetPlan(store, key);
-    if (res.ok) ok(res.reason); else warn(res.reason);
-    return;
-  }
-
-  if (sub === "clear") {
-    const { confirm } = await import("../interfaces/cli.ts");
-    const yes = flags.yes || await confirm("Forget ALL remembered control plans?", false);
-    if (!yes) { info("cancelled."); return; }
-    const n = clearAllMemory(store);
-    ok(`forgot ${n} entr${n === 1 ? "y" : "ies"}.`);
-    return;
-  }
-
-  warn(`unknown memory subcommand: ${sub}. Use list, show, forget, or clear.`);
-}
-
+// ---- browser ----
 async function cmdBrowser(store: Store, flags: ParsedFlags): Promise<void> {
   const sub = flags.rest[0];
   if (!sub || sub === "status") {
     const s = browserStatus();
-    banner();
-    console.log(C.bold("🌐 Browser Backend (Playwright)"));
+    banner(); console.log(C.bold("🌐 Browser Backend (Playwright)"));
     console.log(`  installed ........ ${s.installed ? C.green("✓ yes") : C.red("✗ no")} ${s.reason ? C.dim(`(${s.reason})`) : ""}`);
     console.log(`  active session ... ${s.active ? C.green("✓ open") : C.dim("(none)")}`);
     if (s.url) console.log(`  current url ...... ${C.cyan(s.url)}`);
-    if (!s.installed) {
-      console.log("");
-      info(`Install with: xr control browser install`);
-    }
+    if (!s.installed) info(`Install with: xr control browser install`);
     return;
   }
   if (sub === "install") {
-    banner();
-    console.log(C.bold("📦 Installing Playwright + Chromium…"));
-    info("This downloads ~150 MB and takes 1–2 minutes.");
-    // Use bun if available, otherwise npm. Always at the project root.
+    banner(); console.log(C.bold("📦 Installing Playwright + Chromium…"));
     const hasBun = spawnSync("bun", ["--version"], { stdio: "ignore" }).status === 0;
-    const pmInstall = hasBun ? ["bun", ["add", "playwright"]] : ["npm", ["install", "playwright"]];
-    const r1 = spawnSync(pmInstall[0] as string, pmInstall[1] as string[], { stdio: "inherit" });
+    const pm = hasBun ? ["bun", ["add", "playwright"]] : ["npm", ["install", "playwright"]];
+    const r1 = spawnSync(pm[0] as string, pm[1] as string[], { stdio: "inherit" });
     if (r1.status !== 0) { warn("playwright install failed"); return; }
     const r2 = spawnSync("npx", ["playwright", "install", "chromium"], { stdio: "inherit" });
     if (r2.status !== 0) { warn("chromium install failed"); return; }
-    ok("Playwright + Chromium installed.");
-    info(`Try: xr control plan "open github.com and search for ahmadrrrtx" --yes`);
-    return;
+    ok("Playwright + Chromium installed."); return;
   }
-  if (sub === "close") {
-    await shutdownBrowser();
-    ok("browser closed");
-    return;
-  }
-  warn(`unknown browser subcommand: ${sub}. Use status, install, or close.`);
+  if (sub === "close") { await shutdownBrowser(); ok("browser closed"); return; }
+  warn(`unknown browser subcommand: ${sub}`);
 }
 
+// ---- permissions ----
+async function cmdPermissions(): Promise<void> {
+  const { listPermissions, grantPermission, revokePermission } = await import("./permissions.ts");
+  const args = process.argv.slice(3);
+  const sub = args[1] || "list";
+  if (sub === "list") { console.log("granted:", listPermissions().join(", ") || "(none)"); console.log("available: desktop, browser, files_read, files_write, system, clipboard, vision_cloud"); return; }
+  if (sub === "grant" && args[2]) { grantPermission(args[2] as any); ok(`granted ${args[2]}`); return; }
+  if (sub === "revoke" && args[2]) { revokePermission(args[2] as any); ok(`revoked ${args[2]}`); return; }
+  console.log("usage: xr control permissions [list|grant <scope>|revoke <scope>]");
+}
+
+// ---- help ----
 function printHelp(): void {
   banner();
-  console.log(`${C.bold("xr control")} — safe, explicit computer automation
+  console.log(`${C.bold("xr control")} — safe computer automation (Stage 9)
 
 ${C.bold("Setup")}
-  xr control status                         show capabilities + missing deps
-  xr control test                           dry-run a self-test plan
-  xr control start                          enable control in config
-  xr control stop                           disable control completely
+  xr control status          capabilities + permissions
+  xr control start           enable control
+  xr control stop            disable control
+  xr control permissions list
+  xr control permissions grant desktop|browser|files_read|files_write|system|clipboard|vision_cloud
 
-${C.bold("Actions")}
-  xr control app   "<app name>"             launch an application
-  xr control open  "<url or path>"          open a URL or local path
-  xr control type  "<text>"                 type into the focused window
-  xr control click "<x,y>" [--right|--double]
-  xr control move  "<x,y>"                  move the cursor
-  xr control scroll <up|down|left|right> [n]
-  xr control key   "<ctrl+c>"               press a key combo
-  xr control focus "<window>"               focus an existing window
+${C.bold("Desktop")}
+  xr control app "<name>"         launch app
+  xr control close "<name>"       close app
+  xr control focus "<name>"       focus window
+  xr control type "<text>"        type text
+  xr control click <x,y>          click
+  xr control drag <x1,y1> <x2,y2> drag & drop
+  xr control scroll <dir> [n]
+  xr control key "<ctrl+c>"
+  xr control screenshot
 
-${C.bold("Multi-step")}
-  xr control plan  "<task>"                 LLM plans → preview (dry-run default)
-  xr control plan  "<task>" --yes           plan and execute (with approvals)
-  cat plan.json | xr control run            execute a pre-built JSON plan
+${C.bold("Files / Editor")}
+  xr control file list ~/ 
+  xr control file read <path>
+  xr control file write <path> <content>
+  xr control file move <src> <dest>
+  xr control file delete <path>
+  xr control file mkdir <path>
+  xr control editor <file> [line]
 
 ${C.bold("Browser")}
-  xr control browser status                 check Playwright availability
-  xr control browser install                install playwright + chromium
-  xr control browser close                  close the active browser session
+  xr control browser status
+  xr control browser install
+  xr control browser close
 
-${C.bold("Memory")}
-  xr control memory list                    list remembered plans
-  xr control memory show <id|task>          inspect a remembered plan
-  xr control memory forget <id|task>        delete one entry
-  xr control memory clear                   forget everything (asks confirmation)
+${C.bold("AI")}
+  xr control plan "<task>" [--dry-run|--step|--yes]
+  xr control computer "<task>"    screenshot → reason → act loop
 
-${C.bold("Flags (any subcommand)")}
-  --dry-run         show the plan, execute nothing
-  --step            confirm every single action
-  --yes, -y         auto-approve SENSITIVE actions only
-                    (destructive actions always prompt)
-  --no-memory       skip memory recall + don't remember this plan
-  --delay <ms>      pause between actions in a plan
-
-${C.bold("Disable everything")}
-  xr control stop                           or  XR_CONTROL_DISABLED=1
+${C.bold("Flags")}
+  --dry-run  --step  --yes  --no-memory  --delay <ms>
 `);
 }
 
-// ── entry point ─────────────────────────────────────────────────────────────
-
+// ---- entry ----
 export async function handleControlCommand(argv: string[], store: Store): Promise<void> {
   const sub = argv[0];
   const flags = parseFlags(argv.slice(1));
-
-  if (!sub || sub === "help" || sub === "--help" || sub === "-h") return printHelp();
+  if (!sub || sub === "help") return printHelp();
   if (sub === "status") return cmdStatus();
-  if (sub === "test")   return cmdTest(store, flags);
-  if (sub === "start")  return cmdStart();
-  if (sub === "stop")   return cmdStop();
-  if (sub === "app")    return cmdApp(store, flags);
-  if (sub === "open")   return cmdOpen(store, flags);
-  if (sub === "type")   return cmdType(store, flags);
-  if (sub === "click")  return cmdClick(store, flags);
-  if (sub === "move")   return cmdMove(store, flags);
+  if (sub === "start") return cmdStart();
+  if (sub === "stop") return cmdStop();
+  if (sub === "app") return cmdApp(store, flags);
+  if (sub === "close") return cmdClose(store, flags);
+  if (sub === "open") return cmdOpen(store, flags);
+  if (sub === "type") return cmdType(store, flags);
+  if (sub === "click") return cmdClick(store, flags);
+  if (sub === "drag") return cmdDrag(store, flags);
+  if (sub === "move") return cmdMove(store, flags);
   if (sub === "scroll") return cmdScroll(store, flags);
-  if (sub === "key")    return cmdKey(store, flags);
-  if (sub === "focus")   return cmdFocus(store, flags);
-  if (sub === "plan")    return cmdPlan(store, flags);
-  if (sub === "run")     return cmdRun(store, flags);
+  if (sub === "key") return cmdKey(store, flags);
+  if (sub === "focus") return cmdFocus(store, flags);
+  if (sub === "file") return cmdFile(store, flags);
+  if (sub === "editor") return cmdEditor(store, flags);
+  if (sub === "screenshot") return cmdScreenshot(store, flags);
+  if (sub === "system") return cmdSystem(store, flags);
+  if (sub === "computer") return cmdComputer(store, flags);
+  if (sub === "plan") return cmdPlan(store, flags);
   if (sub === "browser") return cmdBrowser(store, flags);
-  if (sub === "memory")  return cmdMemory(store, flags);
-
-  warn(`unknown subcommand: ${sub}`);
-  printHelp();
+  if (sub === "permissions") return cmdPermissions();
+  warn(`unknown subcommand: ${sub}`); printHelp();
 }
