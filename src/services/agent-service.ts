@@ -10,6 +10,7 @@ import { ProviderService } from "./provider-service.ts";
 import { BudgetService } from "./budget-service.ts";
 import { ConfigService } from "./config-service.ts";
 import { PluginService } from "./plugin-service.ts";
+import { McpService } from "./mcp-service.ts";
 import { SessionStore } from "../state/stores/session-store.ts";
 import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
 import { CostStore } from "../state/stores/cost-store.ts";
@@ -45,6 +46,7 @@ export class AgentService implements LifecycleHook {
     const providerService = this.container.resolve<ProviderService>("providers");
     const budgetService = this.container.resolve<BudgetService>("budget");
     const pluginService = this.container.resolve<PluginService>("plugins");
+    const mcpService = this.container.resolve<McpService>("mcp");
     const sessionStore = this.container.resolve<SessionStore>("sessionStore");
     const memoryStore = this.container.resolve<UserMemoryStore>("userMemoryStore");
     const costStore = this.container.resolve<CostStore>("costStore");
@@ -70,6 +72,7 @@ export class AgentService implements LifecycleHook {
     };
 
     await pluginService.ensureLoaded();
+    await mcpService.ensureLoaded();
 
     const { confirm } = await import("../interfaces/cli.ts");
 
@@ -103,7 +106,7 @@ export class AgentService implements LifecycleHook {
         enabled: config.memory.enabled && config.memory.saveSessionSummaries,
         minTurns: config.memory.sessionSummaryMinTurns,
       },
-      extraTools: pluginService.getPluginTools(),
+      extraTools: [...pluginService.getPluginTools(), ...mcpService.getMcpTools()],
     };
 
     return await runAgent(task, mode, deps);
