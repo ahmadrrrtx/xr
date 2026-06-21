@@ -11,6 +11,7 @@ import { ConfigCommand } from "./commands/config.ts";
 import { BudgetCommand } from "./commands/budget.ts";
 import { ProvidersCommand } from "./commands/providers.ts";
 import { MemoryCommand } from "./commands/memory.ts";
+import { PluginsCommand, PluginRunCommand } from "./commands/plugins.ts";
 import {
   ControlCommand,
   InstallCommand,
@@ -48,11 +49,26 @@ function registerServices(runtime: XRRuntime): void {
   container.register("costStore", new CostStore());
   container.register("userMemoryStore", new UserMemoryStore());
 
-  container.register("config", new ConfigService());
-  container.register("providers", new ProviderService(container));
-  container.register("budget", new BudgetService(container));
-  container.register("plugins", new PluginService(container));
-  container.register("agent", new AgentService(container));
+  const configService = new ConfigService();
+  container.register("config", configService);
+
+  const providerService = new ProviderService(container);
+  container.register("providers", providerService);
+
+  const budgetService = new BudgetService(container);
+  container.register("budget", budgetService);
+
+  const pluginService = new PluginService(container);
+  container.register("plugins", pluginService);
+
+  const agentService = new AgentService(container);
+  container.register("agent", agentService);
+
+  runtime.lifecycle.register(configService);
+  runtime.lifecycle.register(providerService);
+  runtime.lifecycle.register(budgetService);
+  runtime.lifecycle.register(pluginService);
+  runtime.lifecycle.register(agentService);
 }
 
 function registerCommands(runtime: XRRuntime): void {
@@ -74,6 +90,8 @@ function registerCommands(runtime: XRRuntime): void {
   runtime.commands.register(new ControlCommand());
   runtime.commands.register(new ResearchCommand());
   runtime.commands.register(new MemoryCommand());
+  runtime.commands.register(new PluginsCommand());
+  runtime.commands.register(new PluginRunCommand());
 }
 
 async function main(): Promise<void> {
@@ -118,6 +136,7 @@ async function main(): Promise<void> {
       console.log(`  xr models recommend       local runtime/model recommendation`);
       console.log(`  xr models install         install/configure local model with approval`);
       console.log(`  xr memory                 durable memory (status/add/list/…)`);
+      console.log(`  xr plugins                discover and manage permissioned plugins`);
       console.log(`  xr voice setup            optional voice setup (push-to-talk default)`);
       console.log(`  xr voice start            talk to XR safely by voice`);
       console.log(`  xr speak <text>           speak text once`);
