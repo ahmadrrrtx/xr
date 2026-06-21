@@ -140,15 +140,26 @@ export async function handleControlCommand(argv: string[], store: Store): Promis
     case "execute": return cmdPlan(store, { ...flags, mode: "auto", yes: true });
     case "computer": return cmdComputer(store, flags);
     case "browser": return cmdBrowser(flags);
-    case "desktop": return cmdStatus(); // Alias for status in desktop context
     case "app": return void (await runAction(store, { type: "app", name: flags.rest.join(" ") }, makeOpts(flags)));
+    case "close": return void (await runAction(store, { type: "close", name: flags.rest.join(" ") }, makeOpts(flags)));
+    case "focus": return void (await runAction(store, { type: "focus", name: flags.rest.join(" ") }, makeOpts(flags)));
     case "open": return void (await runAction(store, { type: "open", target: flags.rest.join(" ") }, makeOpts(flags)));
     case "click": {
       const m = flags.rest[0]?.match(/(\d+),(\d+)/);
-      if (!m) return warn("usage: xr control click x,y");
-      return void (await runAction(store, { type: "click", x: Number(m[1]), y: Number(m[2]), button: "left" }, makeOpts(flags)));
+      const button: any = flags.rest.includes("--right") ? "right" : flags.rest.includes("--double") ? "double" : "left";
+      if (!m) return warn("usage: xr control click x,y [--right|--double]");
+      return void (await runAction(store, { type: "click", x: Number(m[1]), y: Number(m[2]), button }, makeOpts(flags)));
     }
     case "type": return void (await runAction(store, { type: "type", text: flags.rest.join(" ") }, makeOpts(flags)));
+    case "scroll": {
+      const dir: any = flags.rest[0] || "down";
+      const amount = Number(flags.rest[1]) || 3;
+      return void (await runAction(store, { type: "scroll", direction: dir, amount }, makeOpts(flags)));
+    }
+    case "key": {
+      const keys = flags.rest[0]?.split("+") || [];
+      return void (await runAction(store, { type: "key", keys }, makeOpts(flags)));
+    }
     default:
       console.log(`
 XR Computer Control
@@ -160,9 +171,13 @@ XR Computer Control
   xr control browser install install playwright
   
   xr control app <name>      launch app
+  xr control close <name>    close app
+  xr control focus <name>    focus window
   xr control open <url>      open url
   xr control click <x,y>     click coordinates
   xr control type <text>     type text
+  xr control scroll <up|down>
+  xr control key <key1+key2>
       `);
   }
 }
