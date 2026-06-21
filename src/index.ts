@@ -12,6 +12,7 @@ import { BudgetCommand } from "./commands/budget.ts";
 import { ProvidersCommand } from "./commands/providers.ts";
 import { MemoryCommand } from "./commands/memory.ts";
 import { PluginsCommand, PluginRunCommand } from "./commands/plugins.ts";
+import { McpCommand } from "./commands/mcp.ts";
 import {
   ControlCommand,
   InstallCommand,
@@ -31,6 +32,7 @@ import { ProviderService } from "./services/provider-service.ts";
 import { AgentService } from "./services/agent-service.ts";
 import { BudgetService } from "./services/budget-service.ts";
 import { PluginService } from "./services/plugin-service.ts";
+import { McpService } from "./services/mcp-service.ts";
 import { Store } from "./state/db.ts";
 import { SessionStore } from "./state/stores/session-store.ts";
 import { AuditStore } from "./state/stores/audit-store.ts";
@@ -61,6 +63,9 @@ function registerServices(runtime: XRRuntime): void {
   const pluginService = new PluginService(container);
   container.register("plugins", pluginService);
 
+  const mcpService = new McpService(container);
+  container.register("mcp", mcpService);
+
   const agentService = new AgentService(container);
   container.register("agent", agentService);
 
@@ -68,6 +73,7 @@ function registerServices(runtime: XRRuntime): void {
   runtime.lifecycle.register(providerService);
   runtime.lifecycle.register(budgetService);
   runtime.lifecycle.register(pluginService);
+  runtime.lifecycle.register(mcpService);
   runtime.lifecycle.register(agentService);
 }
 
@@ -92,6 +98,7 @@ function registerCommands(runtime: XRRuntime): void {
   runtime.commands.register(new MemoryCommand());
   runtime.commands.register(new PluginsCommand());
   runtime.commands.register(new PluginRunCommand());
+  runtime.commands.register(new McpCommand());
 }
 
 async function main(): Promise<void> {
