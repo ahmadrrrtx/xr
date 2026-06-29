@@ -33,13 +33,16 @@ import { AgentService } from "./services/agent-service.ts";
 import { BudgetService } from "./services/budget-service.ts";
 import { PluginService } from "./services/plugin-service.ts";
 import { McpService } from "./services/mcp-service.ts";
+import { MultiAgentService } from "./services/multi-agent-service.ts";
 import { Store } from "./state/db.ts";
 import { SessionStore } from "./state/stores/session-store.ts";
 import { AuditStore } from "./state/stores/audit-store.ts";
 import { MemoryStore } from "./state/stores/memory-store.ts";
 import { CostStore } from "./state/stores/cost-store.ts";
 import { UserMemoryStore } from "./state/stores/user-memory-store.ts";
+import { WorkflowStore } from "./state/stores/workflow-store.ts";
 import { banner, colors as C } from "./interfaces/cli.ts";
+import { AgentsCommand } from "./commands/agents.ts";
 
 function registerServices(runtime: XRRuntime): void {
   const container = runtime.container;
@@ -50,6 +53,7 @@ function registerServices(runtime: XRRuntime): void {
   container.register("memoryStore", new MemoryStore());
   container.register("costStore", new CostStore());
   container.register("userMemoryStore", new UserMemoryStore());
+  container.register("workflowStore", new WorkflowStore());
 
   const configService = new ConfigService();
   container.register("config", configService);
@@ -69,12 +73,16 @@ function registerServices(runtime: XRRuntime): void {
   const agentService = new AgentService(container);
   container.register("agent", agentService);
 
+  const multiAgentService = new MultiAgentService(container);
+  container.register("multiAgents", multiAgentService);
+
   runtime.lifecycle.register(configService);
   runtime.lifecycle.register(providerService);
   runtime.lifecycle.register(budgetService);
   runtime.lifecycle.register(pluginService);
   runtime.lifecycle.register(mcpService);
   runtime.lifecycle.register(agentService);
+  runtime.lifecycle.register(multiAgentService);
 }
 
 function registerCommands(runtime: XRRuntime): void {
@@ -99,6 +107,7 @@ function registerCommands(runtime: XRRuntime): void {
   runtime.commands.register(new PluginsCommand());
   runtime.commands.register(new PluginRunCommand());
   runtime.commands.register(new McpCommand());
+  runtime.commands.register(new AgentsCommand());
 }
 
 async function main(): Promise<void> {
@@ -144,6 +153,7 @@ async function main(): Promise<void> {
       console.log(`  xr models install         install/configure local model with approval`);
       console.log(`  xr memory                 durable memory (status/add/list/…)`);
       console.log(`  xr plugins                discover and manage permissioned plugins`);
+      console.log(`  xr agents                 multi-agent supervisor runtime`);
       console.log(`  xr voice setup            optional voice setup (push-to-talk default)`);
       console.log(`  xr voice start            talk to XR safely by voice`);
       console.log(`  xr speak <text>           speak text once`);
@@ -174,6 +184,7 @@ async function main(): Promise<void> {
       "memoryStore",
       "costStore",
       "userMemoryStore",
+      "workflowStore",
     ]) {
       try {
         c.resolve<{ close(): void }>(name).close();
