@@ -42,6 +42,28 @@ export class AgentService implements LifecycleHook {
       json?: boolean;
     } = {},
   ): Promise<AgentResult> {
+    return this.runScopedTask(task, mode, overrides);
+  }
+
+  async runScopedTask(
+    task: string,
+    mode: Mode,
+    overrides: {
+      provider?: string;
+      model?: string;
+      budget?: number;
+      maxTokens?: number;
+      maxSteps?: number;
+      dryRun?: boolean;
+      json?: boolean;
+      systemPrompt?: string;
+      toolsAllow?: string[];
+      toolsDeny?: string[];
+      say?: (line: string) => void;
+      approve?: (req: any) => Promise<boolean>;
+      memoryEnabled?: boolean;
+    } = {},
+  ): Promise<AgentResult> {
     const configService = this.container.resolve<ConfigService>("config");
     const providerService = this.container.resolve<ProviderService>("providers");
     const budgetService = this.container.resolve<BudgetService>("budget");
@@ -83,11 +105,16 @@ export class AgentService implements LifecycleHook {
       costStore,
       userMemoryStore: memoryStore,
       cwd: process.cwd(),
-      say: (line: string) => console.log(line),
-      approve: async (req) => {
+      systemPrompt: overrides.systemPrompt,
+      tools: {
+        allow: overrides.toolsAllow,
+        deny: overrides.toolsDeny,
+      },
+      say: overrides.say ?? ((line: string) => console.log(line)),
+      approve: overrides.approve ?? (async (req) => {
         const preview = req.preview ? `\n${req.preview}` : "";
         return await confirm(`Approve ${req.tool}? ${req.reason}${preview}`, false);
-      },
+      }),
       onOverBudget: async (meter, reason) => {
         return null; // Default to stop
       },
@@ -97,7 +124,7 @@ export class AgentService implements LifecycleHook {
       egressAllowlist: config.security.egressAllowlist,
       dryRun: overrides.dryRun,
       memory: {
-        enabled: config.memory.enabled && config.memory.injectInChat,
+        enabled: overrides.memoryEnabled ?? (config.memory.enabled && config.memory.injectInChat),
         recallLimit: config.memory.recallLimit,
         semantic: config.memory.semanticRecall,
       },
