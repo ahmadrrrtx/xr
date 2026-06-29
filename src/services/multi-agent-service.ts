@@ -254,6 +254,26 @@ export class MultiAgentService implements LifecycleHook {
     this.events.emit("agents.workflow.updated", workflowSummary(record));
   }
 
+  private emitTaskEvent(
+    name: string,
+    task: WorkflowTask,
+    record: WorkflowRecord,
+    extra: Record<string, unknown> = {},
+  ): void {
+    this.events.emit(name, {
+      workflowId: record.workflowId,
+      taskId: task.taskId,
+      agentId: task.agentId,
+      role: task.role,
+      phase: task.phase,
+      name: task.name,
+      status: task.status,
+      reviewState: task.reviewState,
+      blockedReason: task.blockedReason,
+      ...extra,
+    });
+  }
+
   private appendWorkflowEvent(record: WorkflowRecord, actor: string, kind: any, message: string, detail?: Record<string, unknown>): void {
     record.auditTrail.push({
       id: `evt_${randomUUID().slice(0, 8)}`,
@@ -306,6 +326,7 @@ export class MultiAgentService implements LifecycleHook {
         task.blockedReason = `blocked by ${failedGate.taskId} (${failedGate.reviewState})`;
         task.updatedAt = Date.now();
         this.appendTaskEvent(task, "supervisor", "task.blocked", task.blockedReason, { dependency: failedGate.taskId });
+        this.emitTaskEvent("agents.task.blocked", task, record, { dependency: failedGate.taskId });
         continue;
       }
       if (deps.every((dep) => dep.status === "completed")) {
@@ -313,6 +334,9 @@ export class MultiAgentService implements LifecycleHook {
         task.updatedAt = Date.now();
         if (task.status === "ready") {
           this.appendTaskEvent(task, "supervisor", "task.ready", `${task.name} is ready`, { dependencies: task.dependencies });
+          this.emitTaskEvent("agents.task.ready", task, record, { dependencies: task.dependencies });
+        } else {
+          this.emitTaskEvent("agents.task.blocked", task, record, { dependencies: task.dependencies });
         }
       }
     }
@@ -367,6 +391,10 @@ export class MultiAgentService implements LifecycleHook {
         record.status = "cancelled";
         record.endedAt = Date.now();
         record.errors.push(`cancelled:${record.workflowId}`);
+        this.events.emit("agents.workflow.cancelled", {
+          workflowId: record.workflowId,
+          status: record.status,
+        });
         this.persist(record, "workflow.cancelled", { workflowId: record.workflowId });
         return record;
       }
@@ -414,6 +442,7 @@ export class MultiAgentService implements LifecycleHook {
       ts: Date.now(),
       payloadSummary: task.description.slice(0, 200),
     });
+    this.emitTaskEvent("agents.task.started", task, record);
     this.persist(record, "workflow.updated", {
       workflowId: record.workflowId,
       taskId: task.taskId,
@@ -437,6 +466,10 @@ export class MultiAgentService implements LifecycleHook {
       this.appendTaskEvent(task, task.agentId, "task.completed", `${task.name} completed`, {
         reviewState: task.reviewState,
       });
+      this.emitTaskEvent("agents.task.completed", task, record, {
+        reviewState: task.reviewState,
+        summary: output.summary,
+      });
       if (task.role === "synthesizer") record.finalOutput = output;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -445,6 +478,7 @@ export class MultiAgentService implements LifecycleHook {
       task.endedAt = Date.now();
       task.updatedAt = task.endedAt;
       this.appendTaskEvent(task, task.agentId, "task.failed", message);
+      this.emitTaskEvent("agents.task.failed", task, record, { error: message });
       record.errors.push(`${task.taskId}:${message}`);
     }
   }
@@ -576,7 +610,9 @@ export class MultiAgentService implements LifecycleHook {
         toolsDeny: deny,
         say: (line) => {
           const clean = line.replace(/\x1b\[[0-9;]*m/g, "");
-          this.appendTaskEvent(task, task.agentId, "note", clean.slice(0, 400));
+          const text = clean.slice(0, 400);
+          this.appendTaskEvent(task, task.agentId, "note", text);
+          this.emitTaskEvent("agents.task.note", task, record, { note: text });
         },
         memoryEnabled: false,
       },
