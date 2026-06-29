@@ -9,7 +9,7 @@
 
 # XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `polished UI layer` · `offline-capable` · `safe computer control` · `universal provider engine`**
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-11%20MCP%20Platform-00FF88?style=flat-square)](#-stage-11--the-mcp-platform)
+[![Stage](https://img.shields.io/badge/stage-12%20Multi--Agent%20System-00FF88?style=flat-square)](#-stage-12--the-multi-agent-system)
 
 </div>
 
@@ -46,6 +46,8 @@ iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 xr onboarding        # guided setup wizard (incl. memory + optional voice)
 xr doctor            # full health check (incl. memory + research + voice + plugins)
 xr plugins search    # discover safe, permissioned plugins
+xr agents list       # inspect the built-in multi-agent workforce
+xr agents plan "refactor this repo safely"
 xr voice setup       # optional local-first voice setup
 xr "hello, XR"       # run your first task
 xr --tui             # open interactive terminal UI
@@ -74,7 +76,8 @@ xr serve             # start local dashboard + chat in browser
 | **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, no telemetry |
 | **Voice** | silent cloud listener | **Stage 8 Voice Stack** — disabled by default, push-to-talk default, local Whisper/Piper/Kokoro/system adapters, explicit cloud consent |
 | **Extensibility** | arbitrary packages or hardcoded integrations | **Stage 10 Plugin Platform** + **Stage 11 MCP Platform** — first-class standardized MCP (tools, resources, prompts), opt-in servers, explicit permissions & trust, health checks, approval-gated invocation, clean lifecycle |
-| **Runtime** | procedural script | **AI OS Kernel** with DI and Lifecycle management |
+| **Multi-agent orchestration** | one big agent with tool spam | **Stage 12 Multi-Agent Runtime** — supervisor, planner, researcher, builder, reviewer, executor, synthesizer, memory manager, security checker |
+| **Runtime** | procedural script | **AI OS Kernel** with DI, Lifecycle management, and a persisted multi-agent workflow store |
 
 ---
 
@@ -847,7 +850,72 @@ xr help memory                       # memory engine guide
 | **Stage 9** | **Computer Control Engine** | ✅ **Done** |
 | **Stage 10** | **Plugin Platform** | ✅ **Done** |
 | **Stage 11** | **MCP Platform** | ✅ **Done** |
-| Stage 12 | Multi-Agent + Advanced Orchestration | 🔜 Next |
+| **Stage 12** | **Multi-Agent + Advanced Orchestration** | ✅ **Done** |
+| Stage 13 | Advanced Runtime / Visual Orchestration / Background Workers | 🔜 Next |
+
+---
+
+## 🤝 Stage 12 — The Multi-Agent System
+
+Stage 12 turns XR from a powerful single-agent shell into a **professional multi-agent operating layer**.
+
+XR now supports a **supervisor / worker runtime** with:
+
+- **Supervisor / Coordinator**
+- **Planner**
+- **Researcher**
+- **Builder / Developer**
+- **Reviewer**
+- **Executor**
+- **Synthesizer**
+- **Memory Manager**
+- **Router / Model Selector**
+- **Security Checker**
+
+### What Stage 12 adds
+
+- **Agent registry** with explicit roles, capabilities, permissions, memory scopes, and tool scopes
+- **Persisted workflow graphs** (`agent_workflows` + `agent_tasks`) for inspectability, resume, and auditability
+- **Task decomposition** with dependency tracking, parallel branches, handoffs, and review checkpoints
+- **Role-scoped execution** so reviewer agents stay read-only while builder/executor agents get narrow side-effect lanes
+- **Memory boundaries** via a dedicated memory-manager brief instead of broad memory injection into every worker
+- **Security and critique gates** that can block downstream execution with `CHANGES_REQUESTED` or `REJECTED`
+- **Live CLI progress** for `xr agents run`, so you can see which agent is active and what it is doing
+
+### Commands
+
+```bash
+xr agents list
+xr agents status
+xr agents status <workflowId>
+xr agents inspect <agentId|workflowId>
+xr agents plan "implement this safely"
+xr agents run "implement this safely" --dry-run
+xr agents delegate <workflowId> <agentId> "investigate X"
+xr agents review <workflowId>
+xr agents synthesize <workflowId>
+xr agents stop <workflowId>
+xr agents resume <workflowId>
+```
+
+### Design principles
+
+- **Not one giant agent**
+- **Supervisor owns the flow**
+- **Workers stay narrow**
+- **Review is separate from generation**
+- **Synthesis is separate from execution**
+- **Memory and tools are scoped per role**
+- **High-risk execution must pass through security/review gates**
+- **Everything important is persisted and inspectable**
+
+### Current architecture
+
+- `src/agents/registry.ts` — built-in agent workforce
+- `src/agents/planner.ts` — deterministic workflow/task graph compiler
+- `src/services/multi-agent-service.ts` — supervisor runtime
+- `src/state/stores/workflow-store.ts` — persisted workflow/task storage
+- `src/commands/agents.ts` — CLI surface
 
 ---
 
