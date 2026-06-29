@@ -7,6 +7,7 @@ import { MultiAgentService } from "../services/multi-agent-service.ts";
 import { banner, colors as C, info, ok, warn } from "../interfaces/cli.ts";
 import type { WorkflowKind } from "../agents/types.ts";
 import { renderWorkflowPlan } from "../agents/planner.ts";
+import type { EventBus } from "../core/event-bus.ts";
 
 function fmtTs(ts?: number): string {
   return ts ? new Date(ts).toISOString() : "—";
@@ -64,6 +65,10 @@ function printWorkflowSummaryLine(row: any): void {
     row.goal.slice(0, 64),
   ];
   console.log(`  ${parts[0].padEnd(14)} ${parts[1].padEnd(11)} ${parts[2].padEnd(16)} ${parts[3].padEnd(7)} ${parts[4].padEnd(18)} ${parts[5]}`);
+}
+
+function printProgressPrefix(agentId: string, label: string): string {
+  return `${C.dim("[")}${C.cyan(agentId)}${C.dim("]")} ${label}`;
 }
 
 export class AgentsCommand implements Command {
@@ -167,27 +172,89 @@ export class AgentsCommand implements Command {
       const goal = flags.positionals.join(" ").trim();
       if (!goal) throw new Error('Usage: xr agents run "your task"');
       banner("Running Multi-Agent Workflow");
-      const record = await svc.runWorkflow({
-        goal,
-        cwd: ctx.cwd,
-        kind: flags.kind,
-        provider: flags.provider,
-        model: flags.model,
-        dryRun: flags.dryRun,
-        budget: flags.budget,
-        maxSteps: flags.maxSteps,
-        maxTokens: flags.maxTokens,
-      });
-      console.log(`workflow ...... ${record.workflowId}`);
-      console.log(`status ........ ${record.status}`);
-      console.log(`kind .......... ${record.kind}`);
-      if (record.finalOutput?.summary) {
-        console.log(`\n${C.bold("Final output")}`);
-        console.log(record.finalOutput.summary);
-      } else {
-        warn(`Workflow ended without a final synthesis. Inspect with: xr agents status ${record.workflowId}`);
+      const events = ctx.container.resolve<EventBus>("events");
+      const startedAt = Date.now();
+      let activeWorkflowId: string | null = null;
+
+      const onWorkflow = (payload: any) => {
+        if (!activeWorkflowId && payload?.goal === goal) activeWorkflowId = payload.workflowId;
+      };
+      const onStarted = (payload: any) => {
+        if (activeWorkflowId && payload?.workflowId !== activeWorkflowId) return;
+        if (!activeWorkflowId) activeWorkflowId = payload?.workflowId ?? null;
+        console.log(`  ${printProgressPrefix(payload.agentId, C.bold("start"))} ${payload.name}`);
+      };
+      const onReady = (payload: any) => {
+        if (activeWorkflowId && payload?.workflowId !== activeWorkflowId) return;
+        if (!activeWorkflowId) activeWorkflowId = payload?.workflowId ?? null;
+        console.log(`  ${printProgressPrefix(payload.agentId, C.dim("ready"))} ${payload.name}`);
+      };
+      const onNote = (payload: any) => {
+        if (activeWorkflowId && payload?.workflowId !== activeWorkflowId) return;
+        if (!activeWorkflowId) activeWorkflowId = payload?.workflowId ?? null;
+        if (payload?.note) console.log(`    ${printProgressPrefix(payload.agentId, C.dim("note"))} ${payload.note}`);
+      };
+      const onCompleted = (payload: any) => {
+        if (activeWorkflowId && payload?.workflowId !== activeWorkflowId) return;
+        if (!activeWorkflowId) activeWorkflowId = payload?.workflowId ?? null;
+        console.log(`  ${printProgressPrefix(payload.agentId, C.green("done"))} ${payload.name}`);
+        if (payload?.reviewState && payload.reviewState !== "not_required") {
+          console.log(`    ${C.dim("review:")} ${payload.reviewState}`);
+        }
+      };
+      const onBlocked = (payload: any) => {
+        if (activeWorkflowId && payload?.workflowId !== activeWorkflowId) return;
+        if (!activeWorkflowId) activeWorkflowId = payload?.workflowId ?? null;
+        console.log(`  ${printProgressPrefix(payload.agentId, C.yellow("blocked"))} ${payload.name}`);
+        if (payload?.blockedReason) console.log(`    ${payload.blockedReason}`);
+      };
+      const onFailed = (payload: any) => {
+        if (activeWorkflowId && payload?.workflowId !== activeWorkflowId) return;
+        if (!activeWorkflowId) activeWorkflowId = payload?.workflowId ?? null;
+        console.log(`  ${printProgressPrefix(payload.agentId, C.red("failed"))} ${payload.name}`);
+        if (payload?.error) console.log(`    ${payload.error}`);
+      };
+
+      events.on("agents.workflow.updated", onWorkflow);
+      events.on("agents.task.started", onStarted);
+      events.on("agents.task.ready", onReady);
+      events.on("agents.task.note", onNote);
+      events.on("agents.task.completed", onCompleted);
+      events.on("agents.task.blocked", onBlocked);
+      events.on("agents.task.failed", onFailed);
+
+      try {
+        const record = await svc.runWorkflow({
+          goal,
+          cwd: ctx.cwd,
+          kind: flags.kind,
+          provider: flags.provider,
+          model: flags.model,
+          dryRun: flags.dryRun,
+          budget: flags.budget,
+          maxSteps: flags.maxSteps,
+          maxTokens: flags.maxTokens,
+        });
+        console.log(`\nworkflow ...... ${record.workflowId}`);
+        console.log(`status ........ ${record.status}`);
+        console.log(`kind .......... ${record.kind}`);
+        console.log(`duration ...... ${(((Date.now() - startedAt) / 1000).toFixed(1))}s`);
+        if (record.finalOutput?.summary) {
+          console.log(`\n${C.bold("Final output")}`);
+          console.log(record.finalOutput.summary);
+        } else {
+          warn(`Workflow ended without a final synthesis. Inspect with: xr agents status ${record.workflowId}`);
+        }
+        return;
+      } finally {
+        events.off("agents.workflow.updated", onWorkflow);
+        events.off("agents.task.started", onStarted);
+        events.off("agents.task.ready", onReady);
+        events.off("agents.task.note", onNote);
+        events.off("agents.task.completed", onCompleted);
+        events.off("agents.task.blocked", onBlocked);
+        events.off("agents.task.failed", onFailed);
       }
-      return;
     }
 
     if (sub === "delegate") {
