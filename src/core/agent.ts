@@ -31,6 +31,13 @@ export interface AgentDeps {
   costStore?: CostStore;
   userMemoryStore?: UserMemoryStore;
   cwd: string;
+  /** Extra system guidance for role-scoped or workflow-scoped agents. */
+  systemPrompt?: string;
+  /** Fine-grained tool scoping for multi-agent workers. */
+  tools?: {
+    allow?: string[];
+    deny?: string[];
+  };
   /** UI hook: stream a line to the user. */
   say(line: string): void;
   /** UI hook: ask the human to approve a risky action. */
@@ -118,7 +125,13 @@ export async function runAgent(
 
   const coreTools: Tool[] = toolsForMode(mode);
   const extraTools: Tool[] = mode === "agent" ? deps.extraTools ?? [] : [];
-  const tools: Tool[] = [...coreTools, ...extraTools];
+  const filteredAllow = deps.tools?.allow ? new Set(deps.tools.allow) : null;
+  const filteredDeny = deps.tools?.deny ? new Set(deps.tools.deny) : null;
+  const tools: Tool[] = [...coreTools, ...extraTools].filter((tool) => {
+    if (filteredAllow && !filteredAllow.has(tool.name)) return false;
+    if (filteredDeny && filteredDeny.has(tool.name)) return false;
+    return true;
+  });
   const extraToolMap = new Map(extraTools.map((t) => [t.name, t]));
   const toolCtx = {
     cwd,
@@ -163,6 +176,10 @@ export async function runAgent(
     } catch {
       /* best-effort: recall must never break a run */
     }
+  }
+
+  if (deps.systemPrompt?.trim()) {
+    messages.push({ role: "system", content: deps.systemPrompt.trim() });
   }
 
   messages.push({ role: "user", content: task });
