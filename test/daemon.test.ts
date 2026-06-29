@@ -100,6 +100,31 @@ test("dashboard html embeds the token and has no external assets", () => {
   expect(html).not.toMatch(/<link[^>]+href=/i);
 });
 
+test("agents endpoint returns the built-in workforce and workflow counters", async () => {
+  const h = makeHandler(store, TOKEN);
+  const j: any = await (await h(req("/api/agents"))).json();
+  expect(Array.isArray(j.agents)).toBe(true);
+  expect(j.agents.some((a: any) => a.id === "supervisor")).toBe(true);
+  expect(j).toHaveProperty("workflows");
+});
+
+test("agents workflow detail endpoint returns a persisted workflow", async () => {
+  const { compileWorkflowPlan } = await import("../src/agents/planner.ts");
+  const { WorkflowStore } = await import("../src/state/stores/workflow-store.ts");
+  const wf = new WorkflowStore();
+  const plan = compileWorkflowPlan({ goal: "Implement a safe feature", cwd: process.cwd() });
+  wf.saveWorkflow(plan);
+  wf.close();
+
+  const h = makeHandler(store, TOKEN);
+  const res = await h(req(`/api/agents/workflows/${plan.workflowId}`));
+  expect(res.status).toBe(200);
+  const j: any = await res.json();
+  expect(j.workflowId).toBe(plan.workflowId);
+  expect(Array.isArray(j.tasks)).toBe(true);
+  expect(j.tasks.length).toBeGreaterThan(0);
+});
+
 // ── v0.9: durable memory endpoints ──────────────────────────────────────────
 
 import { MemoryStore } from "../src/memory/store.ts";
