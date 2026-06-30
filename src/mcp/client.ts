@@ -24,7 +24,7 @@ import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 
 export interface McpServerConfig {
   id: string;
-  transport: "stdio" | "sse" | "http" | "streamable-http";
+  transport?: "stdio" | "sse" | "http" | "streamable-http";
   url?: string;
   command?: string;
   args?: string[];
@@ -72,6 +72,7 @@ export class McpClient {
     private cfg: McpServerConfig,
     private f: typeof fetch = fetch,
   ) {
+    this.cfg = { ...cfg, transport: cfg.transport ?? "http" };
     if (cfg.apiKeyEnv) {
       this.apiKey = process.env[cfg.apiKeyEnv];
     }
@@ -160,7 +161,7 @@ export class McpClient {
     const id = rpcId++;
     const payload = { jsonrpc: "2.0", id, method, params };
 
-    if (["stdio"].includes(this.cfg.transport)) {
+    if (this.cfg.transport === "stdio") {
       if (!this.stdin) throw new Error("stdio not connected");
       return new Promise((resolve, reject) => {
         this.pending.set(id, { resolve, reject });
@@ -232,7 +233,7 @@ export class McpClient {
     return (res?.tools ?? []) as McpToolDef[];
   }
 
-  async callTool(name: string, args: Record<string, unknown>): Promise<{ content: string; data?: unknown }> {
+  async callTool(name: string, args: Record<string, unknown>): Promise<string & { content: string; data?: unknown }> {
     const res = await this.rpc("tools/call", { name, arguments: args });
     const blocks = res?.content ?? [];
     let text = "";
@@ -241,7 +242,11 @@ export class McpClient {
     } else {
       text = typeof res === "string" ? res : JSON.stringify(res);
     }
-    return { content: text.slice(0, 12000), data: res };
+    const content = text.slice(0, 12000);
+    const out = new String(content) as unknown as string & { content: string; data?: unknown };
+    out.content = content;
+    out.data = res;
+    return out;
   }
 
   async listResources(): Promise<McpResourceDef[]> {
