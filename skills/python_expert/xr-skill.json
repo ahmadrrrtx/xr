@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "id": "python_expert",
+  "name": "Python Expert",
+  "version": "1.0.0",
+  "description": "Python Expert delivers production-grade technical work with clear architecture, tests, maintainability, and operational awareness.",
+  "longDescription": "Python Expert delivers production-grade technical work with clear architecture, tests, maintainability, and operational awareness.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "publisher": "xr-official",
+  "license": "MIT",
+  "categories": [
+    "developer"
+  ],
+  "tags": [
+    "python",
+    "automation",
+    "data",
+    "backend"
+  ],
+  "keywords": [
+    "python",
+    "automation",
+    "data",
+    "backend",
+    "python expert",
+    "professional",
+    "xr"
+  ],
+  "compatibility": {
+    "xr": ">=1.0.0",
+    "os": [
+      "any"
+    ],
+    "providers": [],
+    "modes": [
+      "agent",
+      "plan",
+      "ask"
+    ]
+  },
+  "activation": {
+    "phrases": [
+      "Python Expert",
+      "python expert",
+      "python",
+      "automation",
+      "data",
+      "backend"
+    ],
+    "intents": [
+      "python_expert"
+    ],
+    "fileGlobs": [],
+    "slashCommands": [
+      "python_expert"
+    ],
+    "auto": true
+  },
+  "content": {
+    "instructions": "SKILL.md",
+    "reasoning": "docs/reasoning.md",
+    "knowledge": [
+      "knowledge/checklist.md"
+    ],
+    "promptTemplates": [
+      "templates/output.md"
+    ],
+    "examples": [
+      "examples/basic.md"
+    ],
+    "tests": [
+      "tests/selection.md"
+    ],
+    "docs": [
+      "README.md"
+    ],
+    "assets": []
+  },
+  "contributions": {
+    "commands": [
+      {
+        "name": "python-expert",
+        "title": "Python Expert",
+        "description": "Apply the Python Expert skill to a task.",
+        "prompt": "Use the Python Expert skill and produce professional, validated output."
+      }
+    ],
+    "voiceIntents": [
+      {
+        "id": "python_expert",
+        "utterances": [
+          "use python expert",
+          "act as python expert",
+          "switch to python expert mode"
+        ],
+        "action": "python-expert",
+        "confirmation": "risky"
+      }
+    ],
+    "chatActions": [
+      {
+        "id": "python_expert",
+        "title": "Python Expert",
+        "description": "Apply Python Expert expertise in chat.",
+        "prompt": "Apply Python Expert expertise to the current task."
+      }
+    ],
+    "slashCommands": [
+      {
+        "name": "python-expert",
+        "title": "/python-expert",
+        "description": "Invoke Python Expert.",
+        "prompt": "Invoke the Python Expert skill."
+      }
+    ],
+    "computerActions": [],
+    "researchModes": [],
+    "planners": [
+      {
+        "id": "python_expert:planner",
+        "title": "Python Expert Planner",
+        "description": "Plan work as Python Expert.",
+        "prompt": "Create a concise professional plan before execution."
+      }
+    ],
+    "agentBehaviors": [
+      {
+        "id": "python_expert:behavior",
+        "title": "Python Expert Behavior",
+        "description": "Professional behavior profile for Python Expert.",
+        "prompt": "Operate as a careful, safety-aware Python Expert."
+      }
+    ],
+    "workflows": [
+      {
+        "id": "python_expert:workflow",
+        "title": "Python Expert Professional Workflow",
+        "description": "Default workflow for Python Expert.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Identify objective, audience, constraints, available inputs, risk level, and acceptance criteria.",
+            "expectedOutput": "A clear task brief."
+          },
+          {
+            "id": "plan",
+            "title": "Plan",
+            "instruction": "Choose the smallest professional workflow that can satisfy the brief; call out assumptions and required approvals.",
+            "expectedOutput": "A short execution plan."
+          },
+          {
+            "id": "execute",
+            "title": "Execute",
+            "instruction": "Produce the work product with domain best practices, traceable decisions, and no unsafe hidden behavior.",
+            "expectedOutput": "The requested deliverable."
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Check completeness, correctness, safety, edge cases, and user-specific constraints before final handoff.",
+            "expectedOutput": "Validation checklist and residual risks."
+          }
+        ]
+      }
+    ],
+    "uiPanels": [
+      {
+        "id": "python_expert:panel",
+        "surface": "dashboard",
+        "title": "Python Expert",
+        "description": "Python Expert skill status, commands, examples, and permissions.",
+        "markdown": "# Python Expert\n\nPython Expert delivers production-grade technical work with clear architecture, tests, maintainability, and operational awareness."
+      }
+    ],
+    "dashboardWidgets": [
+      {
+        "id": "python_expert:widget",
+        "surface": "dashboard",
+        "title": "Python Expert Usage",
+        "description": "Shows recent Python Expert usage and validation status."
+      }
+    ]
+  },
+  "tools": [
+    "read_file",
+    "write_file",
+    "shell"
+  ],
+  "mcp": [],
+  "plugins": [],
+  "memoryTemplates": [
+    {
+      "id": "python_expert:prefs",
+      "category": "workflow",
+      "contentTemplate": "For Python Expert, remember the user's preferred output format, standards, and recurring constraints.",
+      "scope": "project",
+      "importance": 3
+    }
+  ],
+  "dependencies": [],
+  "permissions": [
+    {
+      "scope": "fs:read",
+      "reason": "Python Expert may need to inspect project files.",
+      "dangerous": false
+    },
+    {
+      "scope": "fs:write",
+      "reason": "Python Expert may produce or edit project files only after approval.",
+      "dangerous": true
+    },
+    {
+      "scope": "shell",
+      "reason": "Python Expert may run local validation commands only after approval.",
+      "dangerous": true
+    }
+  ],
+  "settings": [
+    {
+      "key": "output-depth",
+      "title": "Output depth",
+      "description": "Controls whether the skill produces concise or detailed deliverables.",
+      "type": "enum",
+      "required": false,
+      "default": "professional",
+      "options": [
+        "concise",
+        "professional",
+        "deep"
+      ]
+    }
+  ],
+  "verification": {
+    "level": "official",
+    "reviewedBy": "xr-core",
+    "reviewedAt": "2026-06-30"
+  }
+}
