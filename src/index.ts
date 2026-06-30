@@ -43,6 +43,8 @@ import { UserMemoryStore } from "./state/stores/user-memory-store.ts";
 import { WorkflowStore } from "./state/stores/workflow-store.ts";
 import { banner, colors as C } from "./interfaces/cli.ts";
 import { AgentsCommand } from "./commands/agents.ts";
+import { SkillsCommand, SkillsAliasCommand } from "./commands/skills.ts";
+import { SkillService } from "./services/skill-service.ts";
 
 function registerServices(runtime: XRRuntime): void {
   const container = runtime.container;
@@ -70,6 +72,9 @@ function registerServices(runtime: XRRuntime): void {
   const mcpService = new McpService(container);
   container.register("mcp", mcpService);
 
+  const skillService = new SkillService();
+  container.register("skills", skillService);
+
   const agentService = new AgentService(container);
   container.register("agent", agentService);
 
@@ -81,6 +86,7 @@ function registerServices(runtime: XRRuntime): void {
   runtime.lifecycle.register(budgetService);
   runtime.lifecycle.register(pluginService);
   runtime.lifecycle.register(mcpService);
+  runtime.lifecycle.register(skillService);
   runtime.lifecycle.register(agentService);
   runtime.lifecycle.register(multiAgentService);
 }
@@ -107,6 +113,8 @@ function registerCommands(runtime: XRRuntime): void {
   runtime.commands.register(new PluginsCommand());
   runtime.commands.register(new PluginRunCommand());
   runtime.commands.register(new McpCommand());
+  runtime.commands.register(new SkillsCommand());
+  runtime.commands.register(new SkillsAliasCommand());
   runtime.commands.register(new AgentsCommand());
 }
 
@@ -153,6 +161,8 @@ async function main(): Promise<void> {
       console.log(`  xr models install         install/configure local model with approval`);
       console.log(`  xr memory                 durable memory (status/add/list/…)`);
       console.log(`  xr plugins                discover and manage permissioned plugins`);
+      console.log(`  xr skill browse           XR Skills Marketplace`);
+      console.log(`  xr skill install <id>     install/enable a professional Skill`);
       console.log(`  xr agents                 multi-agent supervisor runtime`);
       console.log(`  xr voice setup            optional voice setup (push-to-talk default)`);
       console.log(`  xr voice start            talk to XR safely by voice`);
