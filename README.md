@@ -46,6 +46,8 @@ iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 xr onboarding        # guided setup wizard (incl. memory + optional voice)
 xr doctor            # full health check (incl. memory + research + voice + plugins)
 xr plugins search    # discover safe, permissioned plugins
+xr skill browse      # browse the XR Skills Marketplace
+xr skill install react_expert  # install/enable a professional Skill
 xr agents list       # inspect the built-in multi-agent workforce
 xr agents plan "refactor this repo safely"
 xr voice setup       # optional local-first voice setup
