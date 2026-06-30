@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "id": "social_media_creator",
+  "name": "Social Media Creator",
+  "version": "1.0.0",
+  "description": "Social Media Creator delivers distinctive creative work grounded in audience, constraints, taste, iteration, and execution quality.",
+  "longDescription": "Social Media Creator delivers distinctive creative work grounded in audience, constraints, taste, iteration, and execution quality.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "publisher": "xr-official",
+  "license": "MIT",
+  "categories": [
+    "creative"
+  ],
+  "tags": [
+    "social",
+    "posts",
+    "platforms",
+    "engagement"
+  ],
+  "keywords": [
+    "social",
+    "posts",
+    "platforms",
+    "engagement",
+    "social media creator",
+    "professional",
+    "xr"
+  ],
+  "compatibility": {
+    "xr": ">=1.0.0",
+    "os": [
+      "any"
+    ],
+    "providers": [],
+    "modes": [
+      "agent",
+      "plan",
+      "ask"
+    ]
+  },
+  "activation": {
+    "phrases": [
+      "Social Media Creator",
+      "social media creator",
+      "social",
+      "posts",
+      "platforms",
+      "engagement"
+    ],
+    "intents": [
+      "social_media_creator"
+    ],
+    "fileGlobs": [],
+    "slashCommands": [
+      "social_media_creator"
+    ],
+    "auto": true
+  },
+  "content": {
+    "instructions": "SKILL.md",
+    "reasoning": "docs/reasoning.md",
+    "knowledge": [
+      "knowledge/checklist.md"
+    ],
+    "promptTemplates": [
+      "templates/output.md"
+    ],
+    "examples": [
+      "examples/basic.md"
+    ],
+    "tests": [
+      "tests/selection.md"
+    ],
+    "docs": [
+      "README.md"
+    ],
+    "assets": []
+  },
+  "contributions": {
+    "commands": [
+      {
+        "name": "social-media-creator",
+        "title": "Social Media Creator",
+        "description": "Apply the Social Media Creator skill to a task.",
+        "prompt": "Use the Social Media Creator skill and produce professional, validated output."
+      }
+    ],
+    "voiceIntents": [
+      {
+        "id": "social_media_creator",
+        "utterances": [
+          "use social media creator",
+          "act as social media creator",
+          "switch to social media creator mode"
+        ],
+        "action": "social-media-creator",
+        "confirmation": "risky"
+      }
+    ],
+    "chatActions": [
+      {
+        "id": "social_media_creator",
+        "title": "Social Media Creator",
+        "description": "Apply Social Media Creator expertise in chat.",
+        "prompt": "Apply Social Media Creator expertise to the current task."
+      }
+    ],
+    "slashCommands": [
+      {
+        "name": "social-media-creator",
+        "title": "/social-media-creator",
+        "description": "Invoke Social Media Creator.",
+        "prompt": "Invoke the Social Media Creator skill."
+      }
+    ],
+    "computerActions": [],
+    "researchModes": [],
+    "planners": [
+      {
+        "id": "social_media_creator:planner",
+        "title": "Social Media Creator Planner",
+        "description": "Plan work as Social Media Creator.",
+        "prompt": "Create a concise professional plan before execution."
+      }
+    ],
+    "agentBehaviors": [
+      {
+        "id": "social_media_creator:behavior",
+        "title": "Social Media Creator Behavior",
+        "description": "Professional behavior profile for Social Media Creator.",
+        "prompt": "Operate as a careful, safety-aware Social Media Creator."
+      }
+    ],
+    "workflows": [
+      {
+        "id": "social_media_creator:workflow",
+        "title": "Social Media Creator Professional Workflow",
+        "description": "Default workflow for Social Media Creator.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Identify objective, audience, constraints, available inputs, risk level, and acceptance criteria.",
+            "expectedOutput": "A clear task brief."
+          },
+          {
+            "id": "plan",
+            "title": "Plan",
+            "instruction": "Choose the smallest professional workflow that can satisfy the brief; call out assumptions and required approvals.",
+            "expectedOutput": "A short execution plan."
+          },
+          {
+            "id": "execute",
+            "title": "Execute",
+            "instruction": "Produce the work product with domain best practices, traceable decisions, and no unsafe hidden behavior.",
+            "expectedOutput": "The requested deliverable."
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Check completeness, correctness, safety, edge cases, and user-specific constraints before final handoff.",
+            "expectedOutput": "Validation checklist and residual risks."
+          }
+        ]
+      }
+    ],
+    "uiPanels": [
+      {
+        "id": "social_media_creator:panel",
+        "surface": "dashboard",
+        "title": "Social Media Creator",
+        "description": "Social Media Creator skill status, commands, examples, and permissions.",
+        "markdown": "# Social Media Creator\n\nSocial Media Creator delivers distinctive creative work grounded in audience, constraints, taste, iteration, and execution quality."
+      }
+    ],
+    "dashboardWidgets": [
+      {
+        "id": "social_media_creator:widget",
+        "surface": "dashboard",
+        "title": "Social Media Creator Usage",
+        "description": "Shows recent Social Media Creator usage and validation status."
+      }
+    ]
+  },
+  "tools": [
+    "read_file",
+    "write_file"
+  ],
+  "mcp": [],
+  "plugins": [],
+  "memoryTemplates": [
+    {
+      "id": "social_media_creator:prefs",
+      "category": "workflow",
+      "contentTemplate": "For Social Media Creator, remember the user's preferred output format, standards, and recurring constraints.",
+      "scope": "project",
+      "importance": 3
+    }
+  ],
+  "dependencies": [],
+  "permissions": [
+    {
+      "scope": "fs:write",
+      "reason": "Social Media Creator may save generated deliverables after approval.",
+      "dangerous": true
+    }
+  ],
+  "settings": [
+    {
+      "key": "output-depth",
+      "title": "Output depth",
+      "description": "Controls whether the skill produces concise or detailed deliverables.",
+      "type": "enum",
+      "required": false,
+      "default": "professional",
+      "options": [
+        "concise",
+        "professional",
+        "deep"
+      ]
+    }
+  ],
+  "verification": {
+    "level": "official",
+    "reviewedBy": "xr-core",
+    "reviewedAt": "2026-06-30"
+  }
+}
