@@ -40,6 +40,7 @@ import type {
   WorkflowPlanRequest,
   WorkflowRecord,
   WorkflowRunRequest,
+  WorkflowStatus,
   WorkflowSummary,
   WorkflowTask,
 } from "../agents/types.ts";
@@ -403,7 +404,7 @@ export class MultiAgentService implements LifecycleHook {
       const ready = record.tasks.filter((task) => task.status === "ready");
       if (!ready.length) {
         this.recomputeWorkflowStatus(record);
-        if (record.status === "completed") {
+        if ((record.status as WorkflowStatus) === "completed") {
           const synth = [...record.tasks].reverse().find((task) => task.role === "synthesizer" && task.outputs);
           if (synth?.outputs) record.finalOutput = synth.outputs;
         }
@@ -415,7 +416,7 @@ export class MultiAgentService implements LifecycleHook {
       await Promise.all(batch.map((task) => this.executeTask(record, task, req)));
       this.recomputeWorkflowStatus(record);
       this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "tick" });
-      if (record.status === "failed" || record.status === "blocked") {
+      if ((record.status as WorkflowStatus) === "failed" || (record.status as WorkflowStatus) === "blocked") {
         return record;
       }
     }
