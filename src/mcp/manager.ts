@@ -173,7 +173,12 @@ export class McpManager {
   }
 
   async healthCheck(id?: string): Promise<McpHealthReport[]> {
-    const targets = id ? [this.registry.get(id)].filter(Boolean) : this.registry.listEnabled();
+    const targets: McpRegistryEntry[] = id
+      ? (() => {
+          const entry = this.registry.get(id);
+          return entry ? [entry] : [];
+        })()
+      : this.registry.listEnabled();
     const reports: McpHealthReport[] = [];
 
     for (const e of targets) {
