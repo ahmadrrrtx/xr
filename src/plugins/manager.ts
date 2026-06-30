@@ -223,7 +223,7 @@ export class PluginManager {
     for (const server of manifest.mcpServers) {
       if (server.transport !== "http" || !server.url) continue;
       try {
-        const client = new McpClient({ id: `${pluginId}.${server.id}`, url: server.url, apiKeyEnv: server.apiKeyEnv });
+        const client = new McpClient({ id: `${pluginId}.${server.id}`, transport: "http", url: server.url, apiKeyEnv: server.apiKeyEnv });
         const defs = await client.listTools();
         const allowed = new Set(server.tools ?? []);
         for (const def of defs) if (!allowed.size || allowed.has(def.name)) out.push(wrapMcpTool(client, `${pluginId}.${server.id}`, def));
