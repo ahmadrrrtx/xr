@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "id": "paper_analyzer",
+  "name": "Paper Analyzer",
+  "version": "1.0.0",
+  "description": "Paper Analyzer delivers source-aware research synthesis with evidence grading, uncertainty tracking, and clear conclusions.",
+  "longDescription": "Paper Analyzer delivers source-aware research synthesis with evidence grading, uncertainty tracking, and clear conclusions.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "publisher": "xr-official",
+  "license": "MIT",
+  "categories": [
+    "research"
+  ],
+  "tags": [
+    "papers",
+    "methods",
+    "results",
+    "critique"
+  ],
+  "keywords": [
+    "papers",
+    "methods",
+    "results",
+    "critique",
+    "paper analyzer",
+    "professional",
+    "xr"
+  ],
+  "compatibility": {
+    "xr": ">=1.0.0",
+    "os": [
+      "any"
+    ],
+    "providers": [],
+    "modes": [
+      "agent",
+      "plan",
+      "ask"
+    ]
+  },
+  "activation": {
+    "phrases": [
+      "Paper Analyzer",
+      "paper analyzer",
+      "papers",
+      "methods",
+      "results",
+      "critique"
+    ],
+    "intents": [
+      "paper_analyzer"
+    ],
+    "fileGlobs": [],
+    "slashCommands": [
+      "paper_analyzer"
+    ],
+    "auto": true
+  },
+  "content": {
+    "instructions": "SKILL.md",
+    "reasoning": "docs/reasoning.md",
+    "knowledge": [
+      "knowledge/checklist.md"
+    ],
+    "promptTemplates": [
+      "templates/output.md"
+    ],
+    "examples": [
+      "examples/basic.md"
+    ],
+    "tests": [
+      "tests/selection.md"
+    ],
+    "docs": [
+      "README.md"
+    ],
+    "assets": []
+  },
+  "contributions": {
+    "commands": [
+      {
+        "name": "paper-analyzer",
+        "title": "Paper Analyzer",
+        "description": "Apply the Paper Analyzer skill to a task.",
+        "prompt": "Use the Paper Analyzer skill and produce professional, validated output."
+      }
+    ],
+    "voiceIntents": [
+      {
+        "id": "paper_analyzer",
+        "utterances": [
+          "use paper analyzer",
+          "act as paper analyzer",
+          "switch to paper analyzer mode"
+        ],
+        "action": "paper-analyzer",
+        "confirmation": "risky"
+      }
+    ],
+    "chatActions": [
+      {
+        "id": "paper_analyzer",
+        "title": "Paper Analyzer",
+        "description": "Apply Paper Analyzer expertise in chat.",
+        "prompt": "Apply Paper Analyzer expertise to the current task."
+      }
+    ],
+    "slashCommands": [
+      {
+        "name": "paper-analyzer",
+        "title": "/paper-analyzer",
+        "description": "Invoke Paper Analyzer.",
+        "prompt": "Invoke the Paper Analyzer skill."
+      }
+    ],
+    "computerActions": [],
+    "researchModes": [
+      {
+        "id": "paper_analyzer:research",
+        "title": "Paper Analyzer Mode",
+        "description": "Research mode for Paper Analyzer.",
+        "prompt": "Run a careful Paper Analyzer research workflow."
+      }
+    ],
+    "planners": [
+      {
+        "id": "paper_analyzer:planner",
+        "title": "Paper Analyzer Planner",
+        "description": "Plan work as Paper Analyzer.",
+        "prompt": "Create a concise professional plan before execution."
+      }
+    ],
+    "agentBehaviors": [
+      {
+        "id": "paper_analyzer:behavior",
+        "title": "Paper Analyzer Behavior",
+        "description": "Professional behavior profile for Paper Analyzer.",
+        "prompt": "Operate as a careful, safety-aware Paper Analyzer."
+      }
+    ],
+    "workflows": [
+      {
+        "id": "paper_analyzer:workflow",
+        "title": "Paper Analyzer Professional Workflow",
+        "description": "Default workflow for Paper Analyzer.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Identify objective, audience, constraints, available inputs, risk level, and acceptance criteria.",
+            "expectedOutput": "A clear task brief."
+          },
+          {
+            "id": "plan",
+            "title": "Plan",
+            "instruction": "Choose the smallest professional workflow that can satisfy the brief; call out assumptions and required approvals.",
+            "expectedOutput": "A short execution plan."
+          },
+          {
+            "id": "execute",
+            "title": "Execute",
+            "instruction": "Produce the work product with domain best practices, traceable decisions, and no unsafe hidden behavior.",
+            "expectedOutput": "The requested deliverable."
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Check completeness, correctness, safety, edge cases, and user-specific constraints before final handoff.",
+            "expectedOutput": "Validation checklist and residual risks."
+          }
+        ]
+      }
+    ],
+    "uiPanels": [
+      {
+        "id": "paper_analyzer:panel",
+        "surface": "dashboard",
+        "title": "Paper Analyzer",
+        "description": "Paper Analyzer skill status, commands, examples, and permissions.",
+        "markdown": "# Paper Analyzer\n\nPaper Analyzer delivers source-aware research synthesis with evidence grading, uncertainty tracking, and clear conclusions."
+      }
+    ],
+    "dashboardWidgets": [
+      {
+        "id": "paper_analyzer:widget",
+        "surface": "dashboard",
+        "title": "Paper Analyzer Usage",
+        "description": "Shows recent Paper Analyzer usage and validation status."
+      }
+    ]
+  },
+  "tools": [
+    "web_search",
+    "read_file"
+  ],
+  "mcp": [],
+  "plugins": [],
+  "memoryTemplates": [
+    {
+      "id": "paper_analyzer:prefs",
+      "category": "workflow",
+      "contentTemplate": "For Paper Analyzer, remember the user's preferred output format, standards, and recurring constraints.",
+      "scope": "project",
+      "importance": 3
+    }
+  ],
+  "dependencies": [],
+  "permissions": [
+    {
+      "scope": "net",
+      "reason": "Paper Analyzer may need web access for source discovery through XR egress controls.",
+      "dangerous": true
+    },
+    {
+      "scope": "fs:write",
+      "reason": "Paper Analyzer may save reports after approval.",
+      "dangerous": true
+    }
+  ],
+  "settings": [
+    {
+      "key": "output-depth",
+      "title": "Output depth",
+      "description": "Controls whether the skill produces concise or detailed deliverables.",
+      "type": "enum",
+      "required": false,
+      "default": "professional",
+      "options": [
+        "concise",
+        "professional",
+        "deep"
+      ]
+    }
+  ],
+  "verification": {
+    "level": "official",
+    "reviewedBy": "xr-core",
+    "reviewedAt": "2026-06-30"
+  }
+}
