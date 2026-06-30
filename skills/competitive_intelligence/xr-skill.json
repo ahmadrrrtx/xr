@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 1,
+  "id": "competitive_intelligence",
+  "name": "Competitive Intelligence",
+  "version": "1.0.0",
+  "description": "Competitive Intelligence delivers source-aware research synthesis with evidence grading, uncertainty tracking, and clear conclusions.",
+  "longDescription": "Competitive Intelligence delivers source-aware research synthesis with evidence grading, uncertainty tracking, and clear conclusions.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "publisher": "xr-official",
+  "license": "MIT",
+  "categories": [
+    "research"
+  ],
+  "tags": [
+    "competitors",
+    "positioning",
+    "pricing",
+    "strategy"
+  ],
+  "keywords": [
+    "competitors",
+    "positioning",
+    "pricing",
+    "strategy",
+    "competitive intelligence",
+    "professional",
+    "xr"
+  ],
+  "compatibility": {
+    "xr": ">=1.0.0",
+    "os": [
+      "any"
+    ],
+    "providers": [],
+    "modes": [
+      "agent",
+      "plan",
+      "ask"
+    ]
+  },
+  "activation": {
+    "phrases": [
+      "Competitive Intelligence",
+      "competitive intelligence",
+      "competitors",
+      "positioning",
+      "pricing",
+      "strategy"
+    ],
+    "intents": [
+      "competitive_intelligence"
+    ],
+    "fileGlobs": [],
+    "slashCommands": [
+      "competitive_intelligence"
+    ],
+    "auto": true
+  },
+  "content": {
+    "instructions": "SKILL.md",
+    "reasoning": "docs/reasoning.md",
+    "knowledge": [
+      "knowledge/checklist.md"
+    ],
+    "promptTemplates": [
+      "templates/output.md"
+    ],
+    "examples": [
+      "examples/basic.md"
+    ],
+    "tests": [
+      "tests/selection.md"
+    ],
+    "docs": [
+      "README.md"
+    ],
+    "assets": []
+  },
+  "contributions": {
+    "commands": [
+      {
+        "name": "competitive-intelligence",
+        "title": "Competitive Intelligence",
+        "description": "Apply the Competitive Intelligence skill to a task.",
+        "prompt": "Use the Competitive Intelligence skill and produce professional, validated output."
+      }
+    ],
+    "voiceIntents": [
+      {
+        "id": "competitive_intelligence",
+        "utterances": [
+          "use competitive intelligence",
+          "act as competitive intelligence",
+          "switch to competitive intelligence mode"
+        ],
+        "action": "competitive-intelligence",
+        "confirmation": "risky"
+      }
+    ],
+    "chatActions": [
+      {
+        "id": "competitive_intelligence",
+        "title": "Competitive Intelligence",
+        "description": "Apply Competitive Intelligence expertise in chat.",
+        "prompt": "Apply Competitive Intelligence expertise to the current task."
+      }
+    ],
+    "slashCommands": [
+      {
+        "name": "competitive-intelligence",
+        "title": "/competitive-intelligence",
+        "description": "Invoke Competitive Intelligence.",
+        "prompt": "Invoke the Competitive Intelligence skill."
+      }
+    ],
+    "computerActions": [],
+    "researchModes": [
+      {
+        "id": "competitive_intelligence:research",
+        "title": "Competitive Intelligence Mode",
+        "description": "Research mode for Competitive Intelligence.",
+        "prompt": "Run a careful Competitive Intelligence research workflow."
+      }
+    ],
+    "planners": [
+      {
+        "id": "competitive_intelligence:planner",
+        "title": "Competitive Intelligence Planner",
+        "description": "Plan work as Competitive Intelligence.",
+        "prompt": "Create a concise professional plan before execution."
+      }
+    ],
+    "agentBehaviors": [
+      {
+        "id": "competitive_intelligence:behavior",
+        "title": "Competitive Intelligence Behavior",
+        "description": "Professional behavior profile for Competitive Intelligence.",
+        "prompt": "Operate as a careful, safety-aware Competitive Intelligence."
+      }
+    ],
+    "workflows": [
+      {
+        "id": "competitive_intelligence:workflow",
+        "title": "Competitive Intelligence Professional Workflow",
+        "description": "Default workflow for Competitive Intelligence.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Identify objective, audience, constraints, available inputs, risk level, and acceptance criteria.",
+            "expectedOutput": "A clear task brief."
+          },
+          {
+            "id": "plan",
+            "title": "Plan",
+            "instruction": "Choose the smallest professional workflow that can satisfy the brief; call out assumptions and required approvals.",
+            "expectedOutput": "A short execution plan."
+          },
+          {
+            "id": "execute",
+            "title": "Execute",
+            "instruction": "Produce the work product with domain best practices, traceable decisions, and no unsafe hidden behavior.",
+            "expectedOutput": "The requested deliverable."
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Check completeness, correctness, safety, edge cases, and user-specific constraints before final handoff.",
+            "expectedOutput": "Validation checklist and residual risks."
+          }
+        ]
+      }
+    ],
+    "uiPanels": [
+      {
+        "id": "competitive_intelligence:panel",
+        "surface": "dashboard",
+        "title": "Competitive Intelligence",
+        "description": "Competitive Intelligence skill status, commands, examples, and permissions.",
+        "markdown": "# Competitive Intelligence\n\nCompetitive Intelligence delivers source-aware research synthesis with evidence grading, uncertainty tracking, and clear conclusions."
+      }
+    ],
+    "dashboardWidgets": [
+      {
+        "id": "competitive_intelligence:widget",
+        "surface": "dashboard",
+        "title": "Competitive Intelligence Usage",
+        "description": "Shows recent Competitive Intelligence usage and validation status."
+      }
+    ]
+  },
+  "tools": [
+    "web_search",
+    "read_file"
+  ],
+  "mcp": [],
+  "plugins": [],
+  "memoryTemplates": [
+    {
+      "id": "competitive_intelligence:prefs",
+      "category": "workflow",
+      "contentTemplate": "For Competitive Intelligence, remember the user's preferred output format, standards, and recurring constraints.",
+      "scope": "project",
+      "importance": 3
+    }
+  ],
+  "dependencies": [],
+  "permissions": [
+    {
+      "scope": "net",
+      "reason": "Competitive Intelligence may need web access for source discovery through XR egress controls.",
+      "dangerous": true
+    },
+    {
+      "scope": "fs:write",
+      "reason": "Competitive Intelligence may save reports after approval.",
+      "dangerous": true
+    }
+  ],
+  "settings": [
+    {
+      "key": "output-depth",
+      "title": "Output depth",
+      "description": "Controls whether the skill produces concise or detailed deliverables.",
+      "type": "enum",
+      "required": false,
+      "default": "professional",
+      "options": [
+        "concise",
+        "professional",
+        "deep"
+      ]
+    }
+  ],
+  "verification": {
+    "level": "official",
+    "reviewedBy": "xr-core",
+    "reviewedAt": "2026-06-30"
+  }
+}

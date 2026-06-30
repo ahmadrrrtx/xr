@@ -1,0 +1,227 @@
+{
+  "schemaVersion": 1,
+  "id": "incident_response",
+  "name": "Incident Response",
+  "version": "1.0.0",
+  "description": "Incident Response delivers defensive, authorized, auditable security analysis with explicit scope boundaries and risk handling.",
+  "longDescription": "Incident Response delivers defensive, authorized, auditable security analysis with explicit scope boundaries and risk handling.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "publisher": "xr-official",
+  "license": "MIT",
+  "categories": [
+    "security"
+  ],
+  "tags": [
+    "incident",
+    "forensics",
+    "containment",
+    "eradication"
+  ],
+  "keywords": [
+    "incident",
+    "forensics",
+    "containment",
+    "eradication",
+    "incident response",
+    "professional",
+    "xr"
+  ],
+  "compatibility": {
+    "xr": ">=1.0.0",
+    "os": [
+      "any"
+    ],
+    "providers": [],
+    "modes": [
+      "agent",
+      "plan",
+      "ask"
+    ]
+  },
+  "activation": {
+    "phrases": [
+      "Incident Response",
+      "incident response",
+      "incident",
+      "forensics",
+      "containment",
+      "eradication"
+    ],
+    "intents": [
+      "incident_response"
+    ],
+    "fileGlobs": [],
+    "slashCommands": [
+      "incident_response"
+    ],
+    "auto": true
+  },
+  "content": {
+    "instructions": "SKILL.md",
+    "reasoning": "docs/reasoning.md",
+    "knowledge": [
+      "knowledge/checklist.md"
+    ],
+    "promptTemplates": [
+      "templates/output.md"
+    ],
+    "examples": [
+      "examples/basic.md"
+    ],
+    "tests": [
+      "tests/selection.md"
+    ],
+    "docs": [
+      "README.md"
+    ],
+    "assets": []
+  },
+  "contributions": {
+    "commands": [
+      {
+        "name": "incident-response",
+        "title": "Incident Response",
+        "description": "Apply the Incident Response skill to a task.",
+        "prompt": "Use the Incident Response skill and produce professional, validated output."
+      }
+    ],
+    "voiceIntents": [
+      {
+        "id": "incident_response",
+        "utterances": [
+          "use incident response",
+          "act as incident response",
+          "switch to incident response mode"
+        ],
+        "action": "incident-response",
+        "confirmation": "risky"
+      }
+    ],
+    "chatActions": [
+      {
+        "id": "incident_response",
+        "title": "Incident Response",
+        "description": "Apply Incident Response expertise in chat.",
+        "prompt": "Apply Incident Response expertise to the current task."
+      }
+    ],
+    "slashCommands": [
+      {
+        "name": "incident-response",
+        "title": "/incident-response",
+        "description": "Invoke Incident Response.",
+        "prompt": "Invoke the Incident Response skill."
+      }
+    ],
+    "computerActions": [],
+    "researchModes": [],
+    "planners": [
+      {
+        "id": "incident_response:planner",
+        "title": "Incident Response Planner",
+        "description": "Plan work as Incident Response.",
+        "prompt": "Create a concise professional plan before execution."
+      }
+    ],
+    "agentBehaviors": [
+      {
+        "id": "incident_response:behavior",
+        "title": "Incident Response Behavior",
+        "description": "Professional behavior profile for Incident Response.",
+        "prompt": "Operate as a careful, safety-aware Incident Response."
+      }
+    ],
+    "workflows": [
+      {
+        "id": "incident_response:workflow",
+        "title": "Incident Response Professional Workflow",
+        "description": "Default workflow for Incident Response.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Identify objective, audience, constraints, available inputs, risk level, and acceptance criteria.",
+            "expectedOutput": "A clear task brief."
+          },
+          {
+            "id": "plan",
+            "title": "Plan",
+            "instruction": "Choose the smallest professional workflow that can satisfy the brief; call out assumptions and required approvals.",
+            "expectedOutput": "A short execution plan."
+          },
+          {
+            "id": "execute",
+            "title": "Execute",
+            "instruction": "Produce the work product with domain best practices, traceable decisions, and no unsafe hidden behavior.",
+            "expectedOutput": "The requested deliverable."
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Check completeness, correctness, safety, edge cases, and user-specific constraints before final handoff.",
+            "expectedOutput": "Validation checklist and residual risks."
+          }
+        ]
+      }
+    ],
+    "uiPanels": [
+      {
+        "id": "incident_response:panel",
+        "surface": "dashboard",
+        "title": "Incident Response",
+        "description": "Incident Response skill status, commands, examples, and permissions.",
+        "markdown": "# Incident Response\n\nIncident Response delivers defensive, authorized, auditable security analysis with explicit scope boundaries and risk handling."
+      }
+    ],
+    "dashboardWidgets": [
+      {
+        "id": "incident_response:widget",
+        "surface": "dashboard",
+        "title": "Incident Response Usage",
+        "description": "Shows recent Incident Response usage and validation status."
+      }
+    ]
+  },
+  "tools": [
+    "read_file",
+    "write_file"
+  ],
+  "mcp": [],
+  "plugins": [],
+  "memoryTemplates": [
+    {
+      "id": "incident_response:prefs",
+      "category": "workflow",
+      "contentTemplate": "For Incident Response, remember the user's preferred output format, standards, and recurring constraints.",
+      "scope": "project",
+      "importance": 3
+    }
+  ],
+  "dependencies": [],
+  "permissions": [
+    {
+      "scope": "fs:write",
+      "reason": "Incident Response may save generated deliverables after approval.",
+      "dangerous": true
+    }
+  ],
+  "settings": [
+    {
+      "key": "output-depth",
+      "title": "Output depth",
+      "description": "Controls whether the skill produces concise or detailed deliverables.",
+      "type": "enum",
+      "required": false,
+      "default": "professional",
+      "options": [
+        "concise",
+        "professional",
+        "deep"
+      ]
+    }
+  ],
+  "verification": {
+    "level": "official",
+    "reviewedBy": "xr-core",
+    "reviewedAt": "2026-06-30"
+  }
+}
