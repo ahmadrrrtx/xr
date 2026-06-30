@@ -129,7 +129,7 @@ async function cmdAdd(mgr: McpManager, flags: Flags) {
   }
 
   const res = await mgr.addServer(input);
-  if (!res.ok) return warn(res.reason);
+  if (!res.ok) return warn(res.reason ?? "MCP operation failed");
   ok(`registered MCP server ${id}`);
 
   if (flags.enable) {
@@ -174,14 +174,14 @@ async function cmdEnable(mgr: McpManager, flags: Flags) {
   const id = flags.rest[0];
   if (!id) return warn("xr mcp enable <id>");
   const r = mgr.enable(id);
-  if (r.ok) ok(`enabled ${id}`); else warn(r.reason);
+  if (r.ok) ok(`enabled ${id}`); else warn(r.reason ?? "MCP operation failed");
 }
 
 async function cmdDisable(mgr: McpManager, flags: Flags) {
   const id = flags.rest[0];
   if (!id) return warn("xr mcp disable <id>");
   const r = await mgr.disable(id);
-  if (r.ok) ok(`disabled ${id}`); else warn(r.reason);
+  if (r.ok) ok(`disabled ${id}`); else warn(r.reason ?? "MCP operation failed");
 }
 
 async function cmdRemove(mgr: McpManager, flags: Flags) {
@@ -192,14 +192,14 @@ async function cmdRemove(mgr: McpManager, flags: Flags) {
     if (!okc) return info("cancelled");
   }
   const r = mgr.remove(id);
-  if (r.ok) ok(`removed ${id}`); else warn(r.reason);
+  if (r.ok) ok(`removed ${id}`); else warn(r.reason ?? "MCP operation failed");
 }
 
 async function cmdTools(mgr: McpManager, flags: Flags) {
   const id = flags.rest[0];
   if (!id) return warn("xr mcp tools <id>");
   const r = await mgr.inspect(id);
-  if (!r.ok) return warn(r.error);
+  if (!r.ok) return warn(r.error ?? "MCP operation failed");
   if (flags.json) return console.log(JSON.stringify(r.tools, null, 2));
   console.log(C.bold(`Tools from ${id}`));
   r.tools.forEach(t => console.log(`  ${t.name} — ${t.description || ""}`));
@@ -209,7 +209,7 @@ async function cmdResources(mgr: McpManager, flags: Flags) {
   const id = flags.rest[0];
   if (!id) return warn("xr mcp resources <id>");
   const r = await mgr.inspect(id);
-  if (!r.ok) return warn(r.error);
+  if (!r.ok) return warn(r.error ?? "MCP operation failed");
   if (flags.json) return console.log(JSON.stringify(r.resources, null, 2));
   console.log(C.bold(`Resources from ${id}`));
   r.resources.forEach(r => console.log(`  ${r.uri}`));
@@ -219,7 +219,7 @@ async function cmdPrompts(mgr: McpManager, flags: Flags) {
   const id = flags.rest[0];
   if (!id) return warn("xr mcp prompts <id>");
   const r = await mgr.inspect(id);
-  if (!r.ok) return warn(r.error);
+  if (!r.ok) return warn(r.error ?? "MCP operation failed");
   if (flags.json) return console.log(JSON.stringify(r.prompts, null, 2));
   console.log(C.bold(`Prompts from ${id}`));
   r.prompts.forEach(p => console.log(`  ${p.name}`));
@@ -257,7 +257,7 @@ async function cmdUpdate(mgr: McpManager, flags: Flags) {
   if (ins.ok) {
     ok(`refreshed ${id}`);
   } else {
-    warn(ins.error);
+    warn(ins.error ?? "MCP refresh failed");
   }
 }
 
