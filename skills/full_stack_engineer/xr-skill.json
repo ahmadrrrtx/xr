@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "id": "full_stack_engineer",
+  "name": "Full Stack Engineer",
+  "version": "1.0.0",
+  "description": "Full Stack Engineer delivers production-grade technical work with clear architecture, tests, maintainability, and operational awareness.",
+  "longDescription": "Full Stack Engineer delivers production-grade technical work with clear architecture, tests, maintainability, and operational awareness.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "publisher": "xr-official",
+  "license": "MIT",
+  "categories": [
+    "developer"
+  ],
+  "tags": [
+    "architecture",
+    "frontend",
+    "backend",
+    "delivery"
+  ],
+  "keywords": [
+    "architecture",
+    "frontend",
+    "backend",
+    "delivery",
+    "full stack engineer",
+    "professional",
+    "xr"
+  ],
+  "compatibility": {
+    "xr": ">=1.0.0",
+    "os": [
+      "any"
+    ],
+    "providers": [],
+    "modes": [
+      "agent",
+      "plan",
+      "ask"
+    ]
+  },
+  "activation": {
+    "phrases": [
+      "Full Stack Engineer",
+      "full stack engineer",
+      "architecture",
+      "frontend",
+      "backend",
+      "delivery"
+    ],
+    "intents": [
+      "full_stack_engineer"
+    ],
+    "fileGlobs": [],
+    "slashCommands": [
+      "full_stack_engineer"
+    ],
+    "auto": true
+  },
+  "content": {
+    "instructions": "SKILL.md",
+    "reasoning": "docs/reasoning.md",
+    "knowledge": [
+      "knowledge/checklist.md"
+    ],
+    "promptTemplates": [
+      "templates/output.md"
+    ],
+    "examples": [
+      "examples/basic.md"
+    ],
+    "tests": [
+      "tests/selection.md"
+    ],
+    "docs": [
+      "README.md"
+    ],
+    "assets": []
+  },
+  "contributions": {
+    "commands": [
+      {
+        "name": "full-stack-engineer",
+        "title": "Full Stack Engineer",
+        "description": "Apply the Full Stack Engineer skill to a task.",
+        "prompt": "Use the Full Stack Engineer skill and produce professional, validated output."
+      }
+    ],
+    "voiceIntents": [
+      {
+        "id": "full_stack_engineer",
+        "utterances": [
+          "use full stack engineer",
+          "act as full stack engineer",
+          "switch to full stack engineer mode"
+        ],
+        "action": "full-stack-engineer",
+        "confirmation": "risky"
+      }
+    ],
+    "chatActions": [
+      {
+        "id": "full_stack_engineer",
+        "title": "Full Stack Engineer",
+        "description": "Apply Full Stack Engineer expertise in chat.",
+        "prompt": "Apply Full Stack Engineer expertise to the current task."
+      }
+    ],
+    "slashCommands": [
+      {
+        "name": "full-stack-engineer",
+        "title": "/full-stack-engineer",
+        "description": "Invoke Full Stack Engineer.",
+        "prompt": "Invoke the Full Stack Engineer skill."
+      }
+    ],
+    "computerActions": [],
+    "researchModes": [],
+    "planners": [
+      {
+        "id": "full_stack_engineer:planner",
+        "title": "Full Stack Engineer Planner",
+        "description": "Plan work as Full Stack Engineer.",
+        "prompt": "Create a concise professional plan before execution."
+      }
+    ],
+    "agentBehaviors": [
+      {
+        "id": "full_stack_engineer:behavior",
+        "title": "Full Stack Engineer Behavior",
+        "description": "Professional behavior profile for Full Stack Engineer.",
+        "prompt": "Operate as a careful, safety-aware Full Stack Engineer."
+      }
+    ],
+    "workflows": [
+      {
+        "id": "full_stack_engineer:workflow",
+        "title": "Full Stack Engineer Professional Workflow",
+        "description": "Default workflow for Full Stack Engineer.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Identify objective, audience, constraints, available inputs, risk level, and acceptance criteria.",
+            "expectedOutput": "A clear task brief."
+          },
+          {
+            "id": "plan",
+            "title": "Plan",
+            "instruction": "Choose the smallest professional workflow that can satisfy the brief; call out assumptions and required approvals.",
+            "expectedOutput": "A short execution plan."
+          },
+          {
+            "id": "execute",
+            "title": "Execute",
+            "instruction": "Produce the work product with domain best practices, traceable decisions, and no unsafe hidden behavior.",
+            "expectedOutput": "The requested deliverable."
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Check completeness, correctness, safety, edge cases, and user-specific constraints before final handoff.",
+            "expectedOutput": "Validation checklist and residual risks."
+          }
+        ]
+      }
+    ],
+    "uiPanels": [
+      {
+        "id": "full_stack_engineer:panel",
+        "surface": "dashboard",
+        "title": "Full Stack Engineer",
+        "description": "Full Stack Engineer skill status, commands, examples, and permissions.",
+        "markdown": "# Full Stack Engineer\n\nFull Stack Engineer delivers production-grade technical work with clear architecture, tests, maintainability, and operational awareness."
+      }
+    ],
+    "dashboardWidgets": [
+      {
+        "id": "full_stack_engineer:widget",
+        "surface": "dashboard",
+        "title": "Full Stack Engineer Usage",
+        "description": "Shows recent Full Stack Engineer usage and validation status."
+      }
+    ]
+  },
+  "tools": [
+    "read_file",
+    "write_file",
+    "shell"
+  ],
+  "mcp": [],
+  "plugins": [],
+  "memoryTemplates": [
+    {
+      "id": "full_stack_engineer:prefs",
+      "category": "workflow",
+      "contentTemplate": "For Full Stack Engineer, remember the user's preferred output format, standards, and recurring constraints.",
+      "scope": "project",
+      "importance": 3
+    }
+  ],
+  "dependencies": [],
+  "permissions": [
+    {
+      "scope": "fs:read",
+      "reason": "Full Stack Engineer may need to inspect project files.",
+      "dangerous": false
+    },
+    {
+      "scope": "fs:write",
+      "reason": "Full Stack Engineer may produce or edit project files only after approval.",
+      "dangerous": true
+    },
+    {
+      "scope": "shell",
+      "reason": "Full Stack Engineer may run local validation commands only after approval.",
+      "dangerous": true
+    }
+  ],
+  "settings": [
+    {
+      "key": "output-depth",
+      "title": "Output depth",
+      "description": "Controls whether the skill produces concise or detailed deliverables.",
+      "type": "enum",
+      "required": false,
+      "default": "professional",
+      "options": [
+        "concise",
+        "professional",
+        "deep"
+      ]
+    }
+  ],
+  "verification": {
+    "level": "official",
+    "reviewedBy": "xr-core",
+    "reviewedAt": "2026-06-30"
+  }
+}
