@@ -19,8 +19,8 @@ export interface AuditEntry {
 }
 
 export class AuditStore extends BaseStore {
-  constructor() {
-    super();
+  constructor(path?: string) {
+    super(path);
     this.migrate();
   }
 
