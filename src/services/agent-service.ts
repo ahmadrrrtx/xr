@@ -11,6 +11,7 @@ import { BudgetService } from "./budget-service.ts";
 import { ConfigService } from "./config-service.ts";
 import { PluginService } from "./plugin-service.ts";
 import { McpService } from "./mcp-service.ts";
+import { SkillService } from "./skill-service.ts";
 import { SessionStore } from "../state/stores/session-store.ts";
 import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
 import { CostStore } from "../state/stores/cost-store.ts";
@@ -69,6 +70,8 @@ export class AgentService implements LifecycleHook {
     const budgetService = this.container.resolve<BudgetService>("budget");
     const pluginService = this.container.resolve<PluginService>("plugins");
     const mcpService = this.container.resolve<McpService>("mcp");
+    let skillService: SkillService | undefined;
+    try { skillService = this.container.resolve<SkillService>("skills"); } catch { skillService = undefined; }
     const sessionStore = this.container.resolve<SessionStore>("sessionStore");
     const memoryStore = this.container.resolve<UserMemoryStore>("userMemoryStore");
     const costStore = this.container.resolve<CostStore>("costStore");
@@ -98,6 +101,19 @@ export class AgentService implements LifecycleHook {
 
     const { confirm } = await import("../interfaces/cli.ts");
 
+    let skillPrompt = "";
+    try {
+      const ctx = skillService?.executionContext(task, 4);
+      if (ctx?.prompt) skillPrompt = ctx.prompt;
+    } catch {
+      /* skills are best-effort; they must never break the agent */
+    }
+
+    const scopedSystemPrompt = [skillPrompt, overrides.systemPrompt]
+      .map((s) => s?.trim())
+      .filter(Boolean)
+      .join("\n\n");
+
     const deps: AgentDeps = {
       provider,
       sessionStore,
@@ -105,7 +121,7 @@ export class AgentService implements LifecycleHook {
       costStore,
       userMemoryStore: memoryStore,
       cwd: process.cwd(),
-      systemPrompt: overrides.systemPrompt,
+      systemPrompt: scopedSystemPrompt || undefined,
       tools: {
         allow: overrides.toolsAllow,
         deny: overrides.toolsDeny,
