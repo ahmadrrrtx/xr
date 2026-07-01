@@ -501,6 +501,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <a class="nav-item" data-panel="plugins">
         <span class="nav-icon">⚡</span> Plugins
       </a>
+      <a class="nav-item" data-panel="skills">
+        <span class="nav-icon">🧩</span> Skills
+      </a>
       <a class="nav-item" data-panel="voice">
         <span class="nav-icon">🎤</span> Voice
       </a>
@@ -754,6 +757,31 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         </div>
       </div>
 
+      <!-- ════════ SKILLS ════════ -->
+      <div class="panel" id="panel-skills">
+        <div class="section-header">
+          <div><div class="section-title">Unified Skills</div><div class="section-sub">Installed Skills, inspector, permissions, dependencies, and runtime health. Plugins, MCP, research, voice, memory, computer control, and multi-agent remain execution substrates.</div></div>
+          <button class="btn btn-ghost" onclick="loadSkills()" style="font-size:12px">↻ Refresh</button>
+        </div>
+        <div class="grid grid-4 mb-4">
+          <div class="card"><div class="card-header"><div class="card-title">Total</div></div><div class="card-value" id="skill-total">0</div><div class="card-sub">unified skill records</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Enabled</div></div><div class="card-value" id="skill-enabled">0</div><div class="card-sub">available to runtime</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Invalid</div></div><div class="card-value" id="skill-invalid">0</div><div class="card-sub">fail closed</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Search Index</div></div><div class="card-value" id="skill-index">0</div><div class="card-sub">local documents</div></div>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Installed Skills</div></div>
+            <div style="display:flex;gap:8px;margin-bottom:12px"><input id="skill-search" placeholder="Search skills…" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px" onkeydown="if(event.key==='Enter')loadSkills()"><button class="btn" onclick="loadSkills()">Search</button></div>
+            <div id="skills-list"><div class="spin"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Skill Inspector</div></div>
+            <div id="skill-inspector"><div class="muted" style="font-size:12px">Select a Skill to view permissions, dependencies, and runtime metadata.</div></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ════════ VOICE ════════ -->
       <div class="panel" id="panel-voice">
         <div class="section-header">
@@ -893,7 +921,7 @@ function toast(msg, type = "info") {
 const NAV_LABELS = {
   dashboard: "Dashboard", chat: "Chat", status: "Status",
   providers: "Providers", models: "Models", memory: "Memory",
-  research: "Research", plugins: "Plugins", voice: "Voice",
+  research: "Research", plugins: "Plugins", skills: "Skills", voice: "Voice",
   security: "Security", audit: "Audit Log", settings: "Settings",
 };
 
@@ -930,6 +958,7 @@ function navigateTo(id) {
     case "memory":      loadMemory();    break;
     case "security":    loadSecurity();  break;
     case "plugins":     loadPlugins();   break;
+    case "skills":      loadSkills();    break;
     case "audit":       loadAuditLog();  break;
     case "settings":    loadSettings();  break;
   }
@@ -1251,6 +1280,81 @@ async function pluginRemove(id) {
     toast("Plugin removed", "ok");
     loadPlugins();
   } catch(e) { toast("Remove failed: " + e.message, "err"); }
+}
+
+function skillHealthBadge(health) {
+  if (health === "healthy") return '<span class="badge badge-green">healthy</span>';
+  if (health === "disabled") return '<span class="badge badge-gray">disabled</span>';
+  if (health === "missing-dependency") return '<span class="badge badge-amber">missing dep</span>';
+  return '<span class="badge badge-red">invalid</span>';
+}
+
+async function loadSkills() {
+  try {
+    const q = document.getElementById("skill-search")?.value ?? "";
+    const data = await api("/api/skills" + (q ? "?q=" + encodeURIComponent(q) : ""));
+    const h = data.health ?? {};
+    const rows = data.skills ?? [];
+    document.getElementById("skill-total").textContent = h.total ?? rows.length;
+    document.getElementById("skill-enabled").textContent = h.enabled ?? rows.filter(s => s.enabled).length;
+    document.getElementById("skill-invalid").textContent = h.invalid ?? rows.filter(s => s.health === "invalid").length;
+    document.getElementById("skill-index").textContent = h.index?.documents ?? rows.length;
+    document.getElementById("skills-list").innerHTML = rows.length ? rows.map(s => {
+      const perms = (s.permissions ?? []).map(p => '<span class="badge ' + (p.dangerous ? 'badge-amber' : 'badge-gray') + '" style="margin-right:4px">' + escapeHtml(p.scope) + (p.dangerous ? '!' : '') + '</span>').join("") || '<span class="muted">none</span>';
+      const action = s.enabled
+        ? '<button class="btn btn-ghost" onclick="skillAction(\'' + escapeHtml(s.id) + '\',\'disable\')" style="font-size:11px">Disable</button>'
+        : '<button class="btn" onclick="skillAction(\'' + escapeHtml(s.id) + '\',\'enable\')" style="font-size:11px">Enable</button>';
+      return '<div class="mem-item" style="display:block;cursor:pointer" onclick="inspectSkill(\'' + escapeHtml(s.id) + '\')">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+          '<div><div style="font-weight:700;color:var(--text)">' + escapeHtml(s.name) + ' <span class="mono muted">' + escapeHtml(s.id) + '</span></div>' +
+          '<div class="muted" style="font-size:11px">v' + escapeHtml(s.version) + ' · ' + escapeHtml(s.kind) + ' · ' + escapeHtml(s.source) + ' · ' + escapeHtml(s.verification) + '</div></div>' +
+          '<div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">' + skillHealthBadge(s.health) + action + '</div>' +
+        '</div>' +
+        '<div class="muted" style="font-size:12px;margin:8px 0">' + escapeHtml(s.description ?? "") + '</div>' +
+        '<div style="font-size:11px"><span class="muted">Permissions:</span> ' + perms + '</div>' +
+      '</div>';
+    }).join("") : '<div class="muted" style="font-size:12px;padding:20px">No skills found.</div>';
+  } catch(e) {
+    document.getElementById("skills-list").innerHTML = '<div class="muted" style="font-size:12px">Skills API unavailable: '+escapeHtml(e.message)+'</div>';
+  }
+}
+
+async function inspectSkill(id) {
+  try {
+    const data = await api("/api/skills/" + encodeURIComponent(id) + "/inspect");
+    const s = data.skill;
+    const perms = data.permissions;
+    const deps = data.dependencies;
+    const permRows = ([...(perms?.safe ?? []), ...(perms?.dangerous ?? [])]).map(p =>
+      '<div class="stat-row"><div class="stat-key">' + escapeHtml(p.scope) + (p.dangerous ? ' !' : '') + '</div><div class="stat-val ' + (p.granted ? 'val-green' : 'val-amber') + '">' + (p.granted ? 'granted' : 'needs approval') + '</div></div>' +
+      '<div class="muted" style="font-size:11px;margin-bottom:6px">' + escapeHtml(p.reason) + '</div>'
+    ).join("") || '<div class="muted">No permissions declared.</div>';
+    const depRows = (deps?.statuses ?? []).map(d =>
+      '<div class="stat-row"><div class="stat-key">' + escapeHtml(d.dependency.kind + ':' + d.dependency.id) + '</div><div class="stat-val ' + (d.satisfied ? 'val-green' : 'val-amber') + '">' + (d.satisfied ? 'ok' : 'missing') + '</div></div>' +
+      '<div class="muted" style="font-size:11px;margin-bottom:6px">' + escapeHtml(d.reason) + '</div>'
+    ).join("") || '<div class="muted">No dependencies declared.</div>';
+    document.getElementById("skill-inspector").innerHTML =
+      '<div style="font-weight:800;font-size:16px">' + escapeHtml(s.name) + '</div>' +
+      '<div class="mono muted" style="font-size:11px;margin-bottom:8px">' + escapeHtml(s.id) + ' · ' + escapeHtml(s.kind) + ' · ' + escapeHtml(s.health) + '</div>' +
+      '<div class="muted" style="font-size:12px;margin-bottom:12px">' + escapeHtml(s.description) + '</div>' +
+      '<div class="card-title" style="margin-top:12px">Permission Viewer</div>' + permRows +
+      '<div class="card-title" style="margin-top:16px">Dependency Viewer</div>' + depRows +
+      '<div class="card-title" style="margin-top:16px">Runtime Health</div>' +
+      '<div class="stat-row"><div class="stat-key">enabled</div><div class="stat-val">' + String(s.enabled) + '</div></div>' +
+      '<div class="stat-row"><div class="stat-key">installed</div><div class="stat-val">' + String(s.installed) + '</div></div>' +
+      '<div class="stat-row"><div class="stat-key">publisher</div><div class="stat-val">' + escapeHtml(s.publisher) + '</div></div>';
+  } catch(e) {
+    document.getElementById("skill-inspector").innerHTML = '<div class="muted" style="font-size:12px">Inspect failed: '+escapeHtml(e.message)+'</div>';
+  }
+}
+
+async function skillAction(id, action) {
+  try {
+    await api("/api/skills/" + encodeURIComponent(id) + "/" + action, { method: "POST" });
+    toast("Skill " + action + "d", "ok");
+    loadSkills();
+    inspectSkill(id);
+  } catch(e) { toast("Skill action failed: " + e.message, "err"); }
 }
 
 // ── Security ──────────────────────────────────────────────────────────────────
