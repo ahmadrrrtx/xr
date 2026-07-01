@@ -1,8 +1,9 @@
-/** XR Stage 13 — Skills Marketplace CLI. */
+/** XR 2.1A — Unified Skill Runtime CLI. */
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { SkillService } from "../services/skill-service.ts";
 import { colors as C, heading, ok, warn, error, tip } from "../interfaces/cli.ts";
 import { SKILL_CATEGORIES, type SkillCategory, type SkillPermissionScope } from "../skills/schema.ts";
+import type { UnifiedSkillRecord } from "../skills/adapters.ts";
 
 type Parsed = { positional: string[]; flags: Record<string, string | boolean> };
 
@@ -25,55 +26,48 @@ function boolFlag(flags: Record<string, string | boolean>, key: string): boolean
   return flags[key] === true || flags[key] === "true" || flags[key] === "1";
 }
 
-function printSkill(row: ReturnType<SkillService["catalog"]>[number], verbose = false): void {
+function printUnifiedSkill(row: UnifiedSkillRecord, verbose = false): void {
   const m = row.manifest;
-  const badges = [
-    row.enabled ? C.green("enabled") : C.dim("disabled"),
-    m.verification.level === "official" || m.verification.level === "verified" ? C.cyan(m.verification.level) : C.dim(m.verification.level),
-    row.favorite ? C.amber("★") : "",
-    row.pinned ? C.amber("pinned") : "",
-  ].filter(Boolean).join(" ");
-  console.log(`  ${C.bold(m.id)} ${C.dim(`v${m.version}`)} ${badges}`);
+  const status = row.health === "healthy" ? C.green("healthy") : row.health === "disabled" ? C.dim("disabled") : C.amber(row.health);
+  console.log(`  ${C.bold(m.id)} ${C.dim(`v${m.version}`)} ${row.enabled ? C.green("enabled") : C.dim("disabled")} ${status} ${C.dim(row.kind)}`);
   console.log(`    ${m.description}`);
   console.log(`    ${C.dim(m.categories.join(" / "))}  ${m.tags.slice(0, 8).map((t) => `#${t}`).join(" ")}`);
   if (verbose) {
-    console.log(`    publisher: ${m.publisher}  permissions: ${m.permissions.map((p) => p.scope).join(", ") || "none"}`);
+    console.log(`    source: ${row.source}  dir: ${row.dir}`);
+    console.log(`    publisher: ${m.publisher}  verification: ${m.verification.level}`);
+    console.log(`    permissions: ${m.permissions.map((p) => `${p.scope}${p.dangerous ? "!" : ""}`).join(", ") || "none"}`);
+    console.log(`    dependencies: ${m.dependencies.map((d) => `${d.kind}:${d.id}${d.optional ? "?" : ""}`).join(", ") || "none"}`);
     console.log(`    commands: ${m.contributions.commands.map((c) => c.name).join(", ") || "none"}`);
-    console.log(`    voice: ${m.contributions.voiceIntents.map((v) => v.id).join(", ") || "none"}`);
-    console.log(`    mcp: ${m.mcp.map((x) => x.id).join(", ") || "none"}`);
+    if (row.warnings.length) for (const w of row.warnings) console.log(`    ${C.amber("warning:")} ${w}`);
+    if (row.errors.length) for (const e of row.errors) console.log(`    ${C.red("error:")} ${e}`);
   }
 }
 
 function printUsage(): void {
-  heading("XR Skills Marketplace");
-  console.log("  xr skill browse [--category developer] [--verified]");
-  console.log("  xr skill search <query> [--category security] [--tag react]");
-  console.log("  xr skill info <id>");
-  console.log("  xr skill install <id|dir|git-url|package.xrs> [--enable] [--pin] [--grant fs:read,net]");
-  console.log("  xr skill update <id> [--force]");
-  console.log("  xr skill remove <id>");
-  console.log("  xr skill enable|disable <id>");
-  console.log("  xr skill favorite|unfavorite <id>");
-  console.log("  xr skill pin|unpin <id>");
-  console.log("  xr skill rollback <id> [--version 1.2.3]");
-  console.log("  xr skill create <name> [--id slug] [--category developer] [--publisher you] [--dir path]");
-  console.log("  xr skill validate <dir>");
-  console.log("  xr skill package <dir> [--out file.xrs]");
-  console.log("  xr skill publish <dir> [--out-dir dir]");
-  console.log("  xr skill test <dir>");
-  console.log("  xr skill recommend <task>");
-  console.log("  xr skill doctor");
+  heading("XR 2.1A Unified Skills");
+  console.log("  xr skills list [--verbose]");
+  console.log("  xr skills inspect <id>");
+  console.log("  xr skills validate <dir>");
+  console.log("  xr skills enable <id>");
+  console.log("  xr skills disable <id>");
+  console.log("  xr skills install-local <dir> [--grant fs:read,net]");
+  console.log("  xr skills remove <id>");
+  console.log("  xr skills migrate [root]");
+  console.log("  xr skills doctor");
+  console.log("");
+  console.log("  Backward-compatible SDK/marketplace commands remain available:");
+  console.log("  xr skill search <query> | create | package | publish | test | export | import | update");
 }
 
 export class SkillsCommand implements Command {
   name = "skill";
-  description = "browse, install, run, and develop XR Skills";
-  usage = "xr skill <browse|search|info|install|update|remove|enable|disable|create|validate|package|publish|test|doctor>";
+  description = "XR Unified Skill Runtime and SDK";
+  usage = "xr skills <list|inspect|validate|enable|disable|install-local|remove|migrate|doctor>";
 
   async execute(ctx: CommandContext): Promise<void> {
     const service = ctx.container.resolve<SkillService>("skills");
     const parsed = parse(ctx.args);
-    const action = parsed.positional[0] ?? "browse";
+    const action = parsed.positional[0] ?? "list";
     const rest = parsed.positional.slice(1);
     const flags = parsed.flags;
 
@@ -84,61 +78,73 @@ export class SkillsCommand implements Command {
           printUsage();
           return;
 
-        case "browse":
         case "list":
+        case "ls":
+        case "browse":
         case "marketplace": {
-          const rows = service.search({
-            category: typeof flags.category === "string" ? flags.category : undefined,
-            tag: typeof flags.tag === "string" ? flags.tag : undefined,
-            installed: boolFlag(flags, "installed") ? true : undefined,
-            enabled: boolFlag(flags, "enabled") ? true : undefined,
-            verified: boolFlag(flags, "verified"),
-            limit: typeof flags.limit === "string" ? Number(flags.limit) : 80,
-          });
-          heading(`Skills (${rows.length})`);
-          for (const row of rows) printSkill(row, boolFlag(flags, "verbose"));
+          const rows = service.listUnified();
+          const category = typeof flags.category === "string" ? flags.category : undefined;
+          const kind = typeof flags.kind === "string" ? flags.kind : undefined;
+          const visible = rows.filter((row) => (!category || row.manifest.categories.includes(category as any)) && (!kind || row.kind === kind));
+          heading(`Unified Skills (${visible.length})`);
+          for (const row of visible) printUnifiedSkill(row, boolFlag(flags, "verbose"));
           return;
         }
 
         case "installed": {
-          const rows = service.search({ installed: true, limit: 200 });
+          const rows = service.listUnified().filter((row) => row.installed);
           heading(`Installed Skills (${rows.length})`);
-          for (const row of rows) printSkill(row, boolFlag(flags, "verbose"));
+          for (const row of rows) printUnifiedSkill(row, boolFlag(flags, "verbose"));
           return;
         }
 
         case "search": {
           const query = rest.join(" ").trim();
           if (!query) { warn("provide a search query"); return; }
-          const rows = service.search({ query, category: typeof flags.category === "string" ? flags.category : undefined, tag: typeof flags.tag === "string" ? flags.tag : undefined, limit: typeof flags.limit === "string" ? Number(flags.limit) : 20 });
-          heading(`Search: ${query}`);
-          for (const row of rows) printSkill(row, boolFlag(flags, "verbose"));
+          const rows = service.searchUnified(query, typeof flags.limit === "string" ? Number(flags.limit) : 20);
+          heading(`Skill Search: ${query}`);
+          for (const row of rows) printUnifiedSkill(row, boolFlag(flags, "verbose"));
           return;
         }
 
-        case "recommend": {
+        case "recommend":
+        case "resolve": {
           const task = rest.join(" ").trim();
-          if (!task) { warn("provide a task to recommend skills for"); return; }
-          const rows = service.recommendations(task, typeof flags.limit === "string" ? Number(flags.limit) : 8);
-          heading("Recommended Skills");
-          for (const row of rows) printSkill(row, true);
+          if (!task) { warn("provide a task to resolve skills for"); return; }
+          const result = service.resolve(task, typeof flags.limit === "string" ? Number(flags.limit) : 6);
+          heading("Resolved Skills");
+          for (const row of result.selected) printUnifiedSkill(row, true);
+          if (!result.selected.length) warn("no enabled healthy skill matched this task");
           return;
         }
 
+        case "inspect":
         case "info":
         case "show": {
           const id = rest[0];
           if (!id) { warn("provide a skill id"); return; }
-          const row = service.get(id);
+          const row = service.inspectUnified(id);
           if (!row) { error(`skill not found: ${id}`); return; }
+          const perms = service.permissionReport(row.manifest.id);
+          const deps = service.dependencyReport(row.manifest.id);
           heading(row.manifest.name);
-          printSkill(row, true);
+          printUnifiedSkill(row, true);
           console.log(`\n  ${C.bold("Long description")}\n  ${(row.manifest.longDescription ?? row.manifest.description).replace(/\n/g, "\n  ")}`);
-          const similar = service.similar(row.manifest.id, 5);
-          if (similar.length) {
-            console.log(`\n  ${C.bold("Similar")}`);
-            for (const s of similar) console.log(`  - ${s.manifest.id}: ${s.manifest.name}`);
-          }
+          console.log(`\n  ${C.bold("Permissions")}`);
+          for (const p of [...(perms?.safe ?? []), ...(perms?.dangerous ?? [])]) console.log(`  - ${p.scope}${p.dangerous ? " !" : ""}: ${p.granted ? "granted" : "not granted"} — ${p.reason}`);
+          if (!perms || (![...perms.safe, ...perms.dangerous].length)) console.log("  none");
+          console.log(`\n  ${C.bold("Dependencies")}`);
+          for (const d of deps.statuses) console.log(`  - ${d.dependency.kind}:${d.dependency.id} ${d.satisfied ? C.green("ok") : C.amber("missing")} — ${d.reason}`);
+          if (!deps.statuses.length) console.log("  none");
+          return;
+        }
+
+        case "install-local": {
+          const dir = rest[0];
+          if (!dir) { warn("usage: xr skills install-local <dir>"); return; }
+          const grant = typeof flags.grant === "string" ? flags.grant.split(",").map((s) => s.trim()).filter(Boolean) as SkillPermissionScope[] : undefined;
+          const entry = service.installLocal(dir, { grantPermissions: grant, force: boolFlag(flags, "force"), pin: boolFlag(flags, "pin") });
+          ok(`installed local skill ${entry.id}@${entry.version}`);
           return;
         }
 
@@ -168,20 +174,48 @@ export class SkillsCommand implements Command {
         }
 
         case "enable":
-        case "disable":
+        case "disable": {
+          const id = rest[0];
+          if (!id) { warn(`provide skill id to ${action}`); return; }
+          action === "enable" ? service.enable(id) : service.disable(id);
+          ok(`${action} ${id}`);
+          return;
+        }
+
         case "favorite":
         case "unfavorite":
         case "pin":
         case "unpin": {
           const id = rest[0];
           if (!id) { warn(`provide skill id to ${action}`); return; }
-          if (action === "enable") service.enable(id);
-          if (action === "disable") service.disable(id);
           if (action === "favorite") service.favorite(id, true);
           if (action === "unfavorite") service.favorite(id, false);
           if (action === "pin") service.pin(id, true);
           if (action === "unpin") service.pin(id, false);
           ok(`${action} ${id}`);
+          return;
+        }
+
+        case "migrate": {
+          const root = rest[0] ?? ctx.cwd;
+          const result = service.migrate(root);
+          heading("Skill Migration");
+          console.log(`  scanned: ${result.scanned}`);
+          console.log(`  migrated: ${result.migrated.length}`);
+          for (const m of result.migrated) ok(`${m.id} -> ${m.file}`);
+          if (result.skipped.length) {
+            console.log(`  skipped: ${result.skipped.length}`);
+            for (const s of result.skipped.slice(0, 20)) warn(`${s.dir}: ${s.reason}`);
+          }
+          return;
+        }
+
+        case "validate": {
+          const dir = rest[0] ?? ctx.cwd;
+          const result = service.validate(dir);
+          for (const e of result.errors) error(e);
+          for (const w of result.warnings) warn(w);
+          result.ok ? ok(`valid skill: ${result.manifest?.id}`) : error("skill validation failed");
           return;
         }
 
@@ -209,26 +243,18 @@ export class SkillsCommand implements Command {
           return;
         }
 
-        case "create": {
-          const name = rest.join(" ").trim();
-          if (!name) { warn("provide skill name"); return; }
+        case "create":
+        case "init": {
+          const name = rest.join(" ").trim() || "New XR Skill";
           const category = typeof flags.category === "string" && (SKILL_CATEGORIES as readonly string[]).includes(flags.category) ? flags.category as SkillCategory : "productivity";
           const dir = service.create({ name, id: typeof flags.id === "string" ? flags.id : undefined, category, publisher: typeof flags.publisher === "string" ? flags.publisher : undefined, dir: typeof flags.dir === "string" ? flags.dir : undefined, description: typeof flags.description === "string" ? flags.description : undefined });
           ok(`created skill at ${dir}`);
-          tip(`next: xr skill validate ${dir}`);
+          tip(`next: xr skills validate ${dir}`);
           return;
         }
 
-        case "validate": {
-          const dir = rest[0] ?? ctx.cwd;
-          const result = service.validate(dir);
-          for (const e of result.errors) error(e);
-          for (const w of result.warnings) warn(w);
-          result.ok ? ok(`valid skill: ${result.manifest?.id}`) : error("skill validation failed");
-          return;
-        }
-
-        case "package": {
+        case "package":
+        case "build": {
           const dir = rest[0] ?? ctx.cwd;
           const out = service.package(dir, typeof flags.out === "string" ? flags.out : undefined);
           ok(`packaged skill: ${out}`);
@@ -239,7 +265,7 @@ export class SkillsCommand implements Command {
           const dir = rest[0] ?? ctx.cwd;
           const out = service.publish(dir, typeof flags["out-dir"] === "string" ? flags["out-dir"] : undefined);
           ok(`prepared publish package: ${out.packagePath}`);
-          ok(`prepared marketplace metadata: ${out.manifestPath}`);
+          ok(`prepared metadata: ${out.manifestPath}`);
           return;
         }
 
@@ -254,13 +280,18 @@ export class SkillsCommand implements Command {
 
         case "doctor": {
           const d = service.doctor();
-          heading("Skill Marketplace Doctor");
-          console.log(`  total: ${d.total}`);
-          console.log(`  installed: ${d.installed}`);
-          console.log(`  enabled: ${d.enabled}`);
+          heading("XR 2.1A Skill Runtime Doctor");
+          console.log(`  catalog total: ${d.total}`);
+          console.log(`  catalog installed: ${d.installed}`);
+          console.log(`  catalog enabled: ${d.enabled}`);
           console.log(`  official: ${d.official}`);
-          console.log(`  dangerous permissions: ${d.dangerous.length}`);
-          if (d.dangerous.length) for (const p of d.dangerous) warn(p);
+          console.log(`  runtime total: ${d.runtime.total}`);
+          console.log(`  runtime enabled: ${d.runtime.enabled}`);
+          console.log(`  runtime invalid: ${d.runtime.invalid}`);
+          console.log(`  search index docs: ${d.runtime.index.documents}`);
+          console.log(`  missing required deps: ${d.runtime.missingRequired.length}`);
+          if (d.dangerous.length) for (const p of d.dangerous.slice(0, 30)) warn(`dangerous permission declared: ${p}`);
+          if (d.runtime.missingRequired.length) for (const dep of d.runtime.missingRequired.slice(0, 30)) warn(`missing dependency: ${dep}`);
           return;
         }
 
