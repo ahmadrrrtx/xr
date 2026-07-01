@@ -1,14 +1,28 @@
-/** XR Stage 13 — Skill Service lifecycle integration. */
+/** XR 2.1A — Unified Skill Service lifecycle integration. */
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import { SkillMarketplace, type SkillCatalogEntry, type SkillInstallOptions, type SkillSearchOptions } from "../skills/marketplace.ts";
 import { SkillSDK, type SkillCreateOptions } from "../skills/sdk.ts";
 import { SkillMarketplaceStore } from "../skills/marketplace-store.ts";
+import { UnifiedSkillRuntime } from "../skills/runtime.ts";
 
 export class SkillService implements LifecycleHook {
   private readonly store = new SkillMarketplaceStore();
   private readonly marketplace = new SkillMarketplace(this.store);
   private readonly sdk = new SkillSDK(this.marketplace);
+  private readonly runtime = new UnifiedSkillRuntime(this.marketplace);
 
+  // XR 2.1A unified runtime API.
+  listUnified() { return this.runtime.list(); }
+  inspectUnified(id: string) { return this.runtime.inspect(id); }
+  searchUnified(query: string, limit?: number) { return this.runtime.search(query, limit); }
+  resolve(task: string, limit?: number) { return this.runtime.resolve(task, limit); }
+  dependencyReport(id: string) { return this.runtime.dependencyReport(id); }
+  permissionReport(id: string) { return this.runtime.permissionReport(id); }
+  runtimeHealth() { return this.runtime.health(); }
+  migrate(root: string) { return this.runtime.lifecycle.migrate(root); }
+  installLocal(dir: string, options?: SkillInstallOptions) { return this.runtime.lifecycle.installLocal(dir, options); }
+
+  // Stage 13 marketplace/package API retained for backward compatibility.
   catalog(): SkillCatalogEntry[] { return this.marketplace.catalog(); }
   search(options: SkillSearchOptions = {}): SkillCatalogEntry[] { return this.marketplace.search(options); }
   get(id: string): SkillCatalogEntry | undefined { return this.marketplace.get(id); }
@@ -25,7 +39,7 @@ export class SkillService implements LifecycleHook {
   rollback(id: string, version?: string) { return this.marketplace.rollback(id, version); }
   export(id: string, outFile?: string) { return this.marketplace.export(id, outFile); }
   importPackage(file: string, options?: SkillInstallOptions) { return this.marketplace.importPackage(file, options); }
-  validate(dir: string) { return this.marketplace.validate(dir); }
+  validate(dir: string) { return this.runtime.lifecycle.validate(dir); }
   package(dir: string, outFile?: string) { return this.marketplace.package(dir, outFile); }
   publish(dir: string, outDir?: string) { return this.marketplace.publish(dir, outDir); }
   create(options: SkillCreateOptions) { return this.sdk.create(options); }
@@ -36,11 +50,12 @@ export class SkillService implements LifecycleHook {
     const enabled = catalog.filter((s) => s.enabled).length;
     const official = catalog.filter((s) => s.manifest.verification.level === "official").length;
     const dangerous = catalog.flatMap((s) => s.manifest.permissions.filter((p) => p.dangerous).map((p) => `${s.manifest.id}:${p.scope}`));
-    return { total: catalog.length, installed, enabled, official, dangerous };
+    const runtime = this.runtime.health();
+    return { total: catalog.length, installed, enabled, official, dangerous, runtime };
   }
-  executionContext(task: string, limit?: number) { return this.marketplace.executionContext(task, limit); }
+  executionContext(task: string, limit?: number) { return this.runtime.executionContext(task, limit); }
 
   async onInit(): Promise<void> {}
-  async onStart(): Promise<void> {}
+  async onStart(): Promise<void> { this.runtime.list(); }
   async onStop(): Promise<void> {}
 }
