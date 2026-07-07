@@ -41,9 +41,12 @@ export class SkillService implements LifecycleHook {
   importPackage(file: string, options?: SkillInstallOptions) { return this.marketplace.importPackage(file, options); }
   validate(dir: string) { return this.runtime.lifecycle.validate(dir); }
   package(dir: string, outFile?: string) { return this.marketplace.package(dir, outFile); }
-  publish(dir: string, outDir?: string) { return this.marketplace.publish(dir, outDir); }
+  publish(dir: string, outDir?: string) { return this.sdk.publish(dir, outDir); }
   create(options: SkillCreateOptions) { return this.sdk.create(options); }
+  init(options: SkillCreateOptions & { dir: string }) { return this.sdk.init(options); }
+  build(dir: string, outDir?: string) { return this.sdk.build(dir, outDir); }
   test(dir: string) { return this.sdk.test(dir); }
+  sdkDoctor(dir?: string) { return this.sdk.doctor(dir); }
   doctor() {
     const catalog = this.catalog();
     const installed = catalog.filter((s) => s.installed).length;
