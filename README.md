@@ -9,7 +9,7 @@
 
 # XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine`**
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine` · `XR 2.1 Skills Marketplace`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
@@ -18,7 +18,7 @@
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
 [![Version](https://img.shields.io/badge/version-v1.0-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-12%20Multi--Agent%20System-00FF88?style=flat-square)](#-stage-12--the-multi-agent-system)
+[![Stage](https://img.shields.io/badge/stage-XR%202.1%20Skills%20Marketplace-00FF88?style=flat-square)](#-xr-21--skills-marketplace-good-to-go)
 
 </div>
 
@@ -26,6 +26,47 @@
 
 > **You bring the key. We ship none.**
 > XR runs on *your* provider API key or *your* local model — it costs **us $0 to maintain** and **you $0 to trust.**
+
+---
+
+## ✅ XR 2.1 — Skills Marketplace Good To Go
+
+**Status: XR 2.1 is implemented successfully on `main` and is ready to move forward.**
+
+XR 2.1 turns XR from an assistant into an extensible AI operating system with a complete Skill layer:
+
+| Phase | Status | What shipped |
+|---|---:|---|
+| **XR 2.1A — Unified Skill Runtime** | ✅ Done | `xr-skill.json`, unified loader, registry, resolver, validator, installer, lifecycle manager, permission manager, dependency resolver, local search index, compatibility adapters for legacy skills / plugin skills / MCP bundles / learned skills / research packs / role packs |
+| **XR 2.1B — Skill SDK** | ✅ Done | `xr skill init/create/build/package/validate/publish/doctor/test`, production folder scaffolding, docs, examples, tests, icon, changelog, lockfile, build reports |
+| **XR 2.1C — Marketplace Backend** | ✅ Done | local + installed registry state, online registry interface, download engine, dependency solver, updates, rollback snapshots, verification/signing helpers, publisher IDs, version resolution, compatibility checks |
+| **XR 2.1D — Marketplace UI** | ✅ Done | local dashboard Marketplace, website `/marketplace`, XR logo/avatar brand system, search, filters, categories, Skill inspector, permission viewer, dependency viewer, install command copy |
+| **XR 2.1E — Official Skill Packs** | ✅ Done | 54 official professional Skills hardened with playbooks, diagnostic prompts, operating manuals, permission docs, quality tests, professional examples, quality gates, workflows, commands, and memory templates |
+
+### Marketplace surfaces
+
+```bash
+xr skill browse                    # browse local Skills
+xr skills list                     # unified runtime Skills
+xr skill registry list             # configured registries
+xr skill registry sync             # sync online/local registries
+xr skill install-online <id>       # install from marketplace backend
+xr skill updates                   # check available Skill updates
+xr skill rollback-online <id>      # rollback registry-installed Skill
+xr serve                           # open local dashboard Marketplace
+```
+
+Website:
+
+```text
+/marketplace
+```
+
+The website Marketplace now renders the full repository Skill catalog: **65 available Skills** including **54 official Skills** and **11 legacy compatibility Skills**.
+
+### Good-to-go signal
+
+XR 2.1 is **GOOD TO GO** for the next Stage 13 workstream. The architecture is stable enough to build on top of the completed Skill Runtime, SDK, Marketplace Backend, Marketplace UI, and official Skill pack foundation.
 
 ---
 
@@ -75,9 +116,9 @@ xr serve             # start local dashboard + chat in browser
 | **Memory recall** | injects everything, opaque | **explainable** — shows match-% + why; conservative floor, never floods the prompt |
 | **Memory hygiene** | grows forever | **TTL/expiry + prune + access tracking** — see what's stale, delete permanently |
 | **Research** | answer-first summaries | **source-first Research Engine** — live discovery, trust/freshness ranking, evidence ledger, claims, contradictions, signed reports |
-| **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, no telemetry |
+| **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, Marketplace, no telemetry |
 | **Voice** | silent cloud listener | **Stage 8 Voice Stack** — disabled by default, push-to-talk default, local Whisper/Piper/Kokoro/system adapters, explicit cloud consent |
-| **Extensibility** | arbitrary packages or hardcoded integrations | **Stage 10 Plugin Platform** + **Stage 11 MCP Platform** — first-class standardized MCP (tools, resources, prompts), opt-in servers, explicit permissions & trust, health checks, approval-gated invocation, clean lifecycle |
+| **Extensibility** | arbitrary packages or hardcoded integrations | **XR 2.1 Skills Marketplace** + **Stage 10 Plugin Platform** + **Stage 11 MCP Platform** — install professional AI capabilities with manifests, permissions, dependencies, SDK, backend registry, updates, rollback, signing hooks, and App Store-style UI |
 | **Multi-agent orchestration** | one big agent with tool spam | **Stage 12 Multi-Agent Runtime** — supervisor, planner, researcher, builder, reviewer, executor, synthesizer, memory manager, security checker |
 | **Runtime** | procedural script | **AI OS Kernel** with DI, Lifecycle management, and a persisted multi-agent workflow store |
 
@@ -149,7 +190,7 @@ xr serve
 # Opens: http://localhost:3141/?token=<TOKEN>
 ```
 
-A **mission-control dashboard** with 12 navigation panels:
+A **mission-control dashboard** with 13 navigation panels:
 
 | Panel | What it shows |
 |---|---|
@@ -161,6 +202,7 @@ A **mission-control dashboard** with 12 navigation panels:
 | **Memory** | Health cards (total/expired/never-recalled), live search, all entries with inline delete, expiry badges |
 | **Research** | Research mode quick reference |
 | **Plugins** | Installed plugins, permissions, enabled state, trust, health, catalog search, enable/disable/remove actions |
+| **Marketplace** | XR 2.1 Skills Marketplace — search, categories, collections, installed/verified/update filters, Skill cards, inspector, permissions, dependencies, install/enable/disable actions |
 | **Voice** | Voice control quick reference |
 | **Security** | Injection lab (run-on-demand), egress list, security posture |
 | **Audit Log** | Full SHA-256 chain with integrity badge |
