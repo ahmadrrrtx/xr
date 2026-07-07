@@ -4,7 +4,7 @@
   "name": "Kubernetes Expert",
   "version": "1.0.0",
   "description": "Kubernetes Expert delivers production-grade technical work with clear architecture, tests, maintainability, and operational awareness.",
-  "longDescription": "Kubernetes Expert delivers production-grade technical work with clear architecture, tests, maintainability, and operational awareness.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "longDescription": "Kubernetes Expert delivers production-grade technical work with clear architecture, tests, maintainability, and operational awareness.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.\n\nXR 2.1E official Skill hardening: includes a professional playbook, diagnostic prompt, operating manual, permission docs, quality tests, advanced examples, quality-gate workflow, and memory templates.",
   "publisher": "xr-official",
   "license": "MIT",
   "categories": [
@@ -59,19 +59,27 @@
     "instructions": "SKILL.md",
     "reasoning": "docs/reasoning.md",
     "knowledge": [
-      "knowledge/checklist.md"
+      "knowledge/checklist.md",
+      "knowledge/playbook.md"
     ],
     "promptTemplates": [
-      "templates/output.md"
+      "templates/output.md",
+      "prompts/default.md",
+      "prompts/diagnostic.md"
     ],
     "examples": [
-      "examples/basic.md"
+      "examples/basic.md",
+      "examples/professional.md"
     ],
     "tests": [
-      "tests/selection.md"
+      "tests/selection.md",
+      "tests/quality.md",
+      "tests/permissions.md"
     ],
     "docs": [
-      "README.md"
+      "README.md",
+      "docs/operating-manual.md",
+      "docs/permissions.md"
     ],
     "assets": []
   },
@@ -82,6 +90,12 @@
         "title": "Kubernetes Expert",
         "description": "Apply the Kubernetes Expert skill to a task.",
         "prompt": "Use the Kubernetes Expert skill and produce professional, validated output."
+      },
+      {
+        "name": "kubernetes-expert-doctor",
+        "title": "Kubernetes Expert Doctor",
+        "description": "Run the Kubernetes Expert Skill quality and readiness checklist.",
+        "prompt": "Use Kubernetes Expert to inspect the current task or artifact and return readiness, risks, validation gaps, and next actions."
       }
     ],
     "voiceIntents": [
@@ -110,6 +124,12 @@
         "title": "/kubernetes-expert",
         "description": "Invoke Kubernetes Expert.",
         "prompt": "Invoke the Kubernetes Expert skill."
+      },
+      {
+        "name": "kubernetes-expert-doctor",
+        "title": "/kubernetes-expert-doctor",
+        "description": "Diagnose readiness with Kubernetes Expert.",
+        "prompt": "Run Kubernetes Expert diagnostic mode before final output."
       }
     ],
     "computerActions": [],
@@ -161,6 +181,74 @@
             "expectedOutput": "Validation checklist and residual risks."
           }
         ]
+      },
+      {
+        "id": "kubernetes_expert:professional-delivery",
+        "title": "Kubernetes Expert Professional Delivery",
+        "description": "End-to-end professional workflow for Kubernetes Expert.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Map the codebase surface, inputs, outputs, constraints, and owner expectations.",
+            "expectedOutput": "Task brief and acceptance criteria"
+          },
+          {
+            "id": "diagnose",
+            "title": "Diagnose",
+            "instruction": "Identify the smallest safe implementation path and the tests that prove it.",
+            "expectedOutput": "Diagnosis with assumptions and risks"
+          },
+          {
+            "id": "produce",
+            "title": "Produce",
+            "instruction": "Implement or describe changes with attention to maintainability, security, and performance.",
+            "expectedOutput": "Professional work product"
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Run or recommend validation commands and capture failures precisely.",
+            "expectedOutput": "Validation checklist"
+          },
+          {
+            "id": "handoff",
+            "title": "Handoff",
+            "instruction": "Handoff with changed files, rationale, risks, and next steps.",
+            "expectedOutput": "Reusable handoff summary"
+          }
+        ]
+      },
+      {
+        "id": "kubernetes_expert:quality-gate",
+        "title": "Kubernetes Expert Quality Gate",
+        "description": "Pre-final validation gate for Kubernetes Expert.",
+        "steps": [
+          {
+            "id": "scope-check",
+            "title": "Scope Check",
+            "instruction": "Confirm the output stays within user intent, authorization, and declared permissions.",
+            "expectedOutput": "Scope status"
+          },
+          {
+            "id": "evidence-check",
+            "title": "Evidence Check",
+            "instruction": "Separate facts, assumptions, estimates, and recommendations.",
+            "expectedOutput": "Evidence notes"
+          },
+          {
+            "id": "risk-check",
+            "title": "Risk Check",
+            "instruction": "List operational, security, privacy, quality, and stakeholder risks.",
+            "expectedOutput": "Risk register"
+          },
+          {
+            "id": "finalize",
+            "title": "Finalize",
+            "instruction": "Produce the final answer with validation and next steps.",
+            "expectedOutput": "Final deliverable"
+          }
+        ]
       }
     ],
     "uiPanels": [
@@ -195,6 +283,20 @@
       "contentTemplate": "For Kubernetes Expert, remember the user's preferred output format, standards, and recurring constraints.",
       "scope": "project",
       "importance": 3
+    },
+    {
+      "id": "kubernetes_expert:standards",
+      "category": "workflow",
+      "contentTemplate": "When using Kubernetes Expert, remember project-specific quality standards, constraints, and preferred validation methods.",
+      "scope": "project",
+      "importance": 4
+    },
+    {
+      "id": "kubernetes_expert:handoff",
+      "category": "workflow",
+      "contentTemplate": "When Kubernetes Expert finishes, remember reusable handoff format, recurring risks, and accepted output structure.",
+      "scope": "project",
+      "importance": 3
     }
   ],
   "dependencies": [],
@@ -227,6 +329,28 @@
         "concise",
         "professional",
         "deep"
+      ]
+    },
+    {
+      "key": "quality-gate",
+      "title": "Quality gate",
+      "description": "Require the Skill to run its quality gate before final response.",
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "options": []
+    },
+    {
+      "key": "evidence-level",
+      "title": "Evidence level",
+      "description": "How much validation/evidence the Skill should include.",
+      "type": "enum",
+      "required": false,
+      "default": "standard",
+      "options": [
+        "light",
+        "standard",
+        "strict"
       ]
     }
   ],

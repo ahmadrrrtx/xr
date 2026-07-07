@@ -4,7 +4,7 @@
   "name": "Paper Analyzer",
   "version": "1.0.0",
   "description": "Paper Analyzer delivers source-aware research synthesis with evidence grading, uncertainty tracking, and clear conclusions.",
-  "longDescription": "Paper Analyzer delivers source-aware research synthesis with evidence grading, uncertainty tracking, and clear conclusions.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "longDescription": "Paper Analyzer delivers source-aware research synthesis with evidence grading, uncertainty tracking, and clear conclusions.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.\n\nXR 2.1E official Skill hardening: includes a professional playbook, diagnostic prompt, operating manual, permission docs, quality tests, advanced examples, quality-gate workflow, and memory templates.",
   "publisher": "xr-official",
   "license": "MIT",
   "categories": [
@@ -59,19 +59,27 @@
     "instructions": "SKILL.md",
     "reasoning": "docs/reasoning.md",
     "knowledge": [
-      "knowledge/checklist.md"
+      "knowledge/checklist.md",
+      "knowledge/playbook.md"
     ],
     "promptTemplates": [
-      "templates/output.md"
+      "templates/output.md",
+      "prompts/default.md",
+      "prompts/diagnostic.md"
     ],
     "examples": [
-      "examples/basic.md"
+      "examples/basic.md",
+      "examples/professional.md"
     ],
     "tests": [
-      "tests/selection.md"
+      "tests/selection.md",
+      "tests/quality.md",
+      "tests/permissions.md"
     ],
     "docs": [
-      "README.md"
+      "README.md",
+      "docs/operating-manual.md",
+      "docs/permissions.md"
     ],
     "assets": []
   },
@@ -82,6 +90,12 @@
         "title": "Paper Analyzer",
         "description": "Apply the Paper Analyzer skill to a task.",
         "prompt": "Use the Paper Analyzer skill and produce professional, validated output."
+      },
+      {
+        "name": "paper-analyzer-doctor",
+        "title": "Paper Analyzer Doctor",
+        "description": "Run the Paper Analyzer Skill quality and readiness checklist.",
+        "prompt": "Use Paper Analyzer to inspect the current task or artifact and return readiness, risks, validation gaps, and next actions."
       }
     ],
     "voiceIntents": [
@@ -110,6 +124,12 @@
         "title": "/paper-analyzer",
         "description": "Invoke Paper Analyzer.",
         "prompt": "Invoke the Paper Analyzer skill."
+      },
+      {
+        "name": "paper-analyzer-doctor",
+        "title": "/paper-analyzer-doctor",
+        "description": "Diagnose readiness with Paper Analyzer.",
+        "prompt": "Run Paper Analyzer diagnostic mode before final output."
       }
     ],
     "computerActions": [],
@@ -168,6 +188,74 @@
             "expectedOutput": "Validation checklist and residual risks."
           }
         ]
+      },
+      {
+        "id": "paper_analyzer:professional-delivery",
+        "title": "Paper Analyzer Professional Delivery",
+        "description": "End-to-end professional workflow for Paper Analyzer.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Frame the research question, audience, scope, and decision to support.",
+            "expectedOutput": "Task brief and acceptance criteria"
+          },
+          {
+            "id": "diagnose",
+            "title": "Diagnose",
+            "instruction": "Plan source strategy across primary, secondary, and contradictory evidence.",
+            "expectedOutput": "Diagnosis with assumptions and risks"
+          },
+          {
+            "id": "produce",
+            "title": "Produce",
+            "instruction": "Extract claims, methods, dates, metrics, and limitations.",
+            "expectedOutput": "Professional work product"
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Synthesize findings with confidence and alternative interpretations.",
+            "expectedOutput": "Validation checklist"
+          },
+          {
+            "id": "handoff",
+            "title": "Handoff",
+            "instruction": "Deliver conclusions, open questions, and recommended next research steps.",
+            "expectedOutput": "Reusable handoff summary"
+          }
+        ]
+      },
+      {
+        "id": "paper_analyzer:quality-gate",
+        "title": "Paper Analyzer Quality Gate",
+        "description": "Pre-final validation gate for Paper Analyzer.",
+        "steps": [
+          {
+            "id": "scope-check",
+            "title": "Scope Check",
+            "instruction": "Confirm the output stays within user intent, authorization, and declared permissions.",
+            "expectedOutput": "Scope status"
+          },
+          {
+            "id": "evidence-check",
+            "title": "Evidence Check",
+            "instruction": "Separate facts, assumptions, estimates, and recommendations.",
+            "expectedOutput": "Evidence notes"
+          },
+          {
+            "id": "risk-check",
+            "title": "Risk Check",
+            "instruction": "List operational, security, privacy, quality, and stakeholder risks.",
+            "expectedOutput": "Risk register"
+          },
+          {
+            "id": "finalize",
+            "title": "Finalize",
+            "instruction": "Produce the final answer with validation and next steps.",
+            "expectedOutput": "Final deliverable"
+          }
+        ]
       }
     ],
     "uiPanels": [
@@ -201,6 +289,20 @@
       "contentTemplate": "For Paper Analyzer, remember the user's preferred output format, standards, and recurring constraints.",
       "scope": "project",
       "importance": 3
+    },
+    {
+      "id": "paper_analyzer:standards",
+      "category": "workflow",
+      "contentTemplate": "When using Paper Analyzer, remember project-specific quality standards, constraints, and preferred validation methods.",
+      "scope": "project",
+      "importance": 4
+    },
+    {
+      "id": "paper_analyzer:handoff",
+      "category": "workflow",
+      "contentTemplate": "When Paper Analyzer finishes, remember reusable handoff format, recurring risks, and accepted output structure.",
+      "scope": "project",
+      "importance": 3
     }
   ],
   "dependencies": [],
@@ -228,6 +330,28 @@
         "concise",
         "professional",
         "deep"
+      ]
+    },
+    {
+      "key": "quality-gate",
+      "title": "Quality gate",
+      "description": "Require the Skill to run its quality gate before final response.",
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "options": []
+    },
+    {
+      "key": "evidence-level",
+      "title": "Evidence level",
+      "description": "How much validation/evidence the Skill should include.",
+      "type": "enum",
+      "required": false,
+      "default": "standard",
+      "options": [
+        "light",
+        "standard",
+        "strict"
       ]
     }
   ],

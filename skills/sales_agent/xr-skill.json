@@ -4,7 +4,7 @@
   "name": "Sales Agent",
   "version": "1.0.0",
   "description": "Sales Agent delivers practical business output with market context, metrics, stakeholder clarity, and execution focus.",
-  "longDescription": "Sales Agent delivers practical business output with market context, metrics, stakeholder clarity, and execution focus.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "longDescription": "Sales Agent delivers practical business output with market context, metrics, stakeholder clarity, and execution focus.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.\n\nXR 2.1E official Skill hardening: includes a professional playbook, diagnostic prompt, operating manual, permission docs, quality tests, advanced examples, quality-gate workflow, and memory templates.",
   "publisher": "xr-official",
   "license": "MIT",
   "categories": [
@@ -59,19 +59,27 @@
     "instructions": "SKILL.md",
     "reasoning": "docs/reasoning.md",
     "knowledge": [
-      "knowledge/checklist.md"
+      "knowledge/checklist.md",
+      "knowledge/playbook.md"
     ],
     "promptTemplates": [
-      "templates/output.md"
+      "templates/output.md",
+      "prompts/default.md",
+      "prompts/diagnostic.md"
     ],
     "examples": [
-      "examples/basic.md"
+      "examples/basic.md",
+      "examples/professional.md"
     ],
     "tests": [
-      "tests/selection.md"
+      "tests/selection.md",
+      "tests/quality.md",
+      "tests/permissions.md"
     ],
     "docs": [
-      "README.md"
+      "README.md",
+      "docs/operating-manual.md",
+      "docs/permissions.md"
     ],
     "assets": []
   },
@@ -82,6 +90,12 @@
         "title": "Sales Agent",
         "description": "Apply the Sales Agent skill to a task.",
         "prompt": "Use the Sales Agent skill and produce professional, validated output."
+      },
+      {
+        "name": "sales-agent-doctor",
+        "title": "Sales Agent Doctor",
+        "description": "Run the Sales Agent Skill quality and readiness checklist.",
+        "prompt": "Use Sales Agent to inspect the current task or artifact and return readiness, risks, validation gaps, and next actions."
       }
     ],
     "voiceIntents": [
@@ -110,6 +124,12 @@
         "title": "/sales-agent",
         "description": "Invoke Sales Agent.",
         "prompt": "Invoke the Sales Agent skill."
+      },
+      {
+        "name": "sales-agent-doctor",
+        "title": "/sales-agent-doctor",
+        "description": "Diagnose readiness with Sales Agent.",
+        "prompt": "Run Sales Agent diagnostic mode before final output."
       }
     ],
     "computerActions": [],
@@ -161,6 +181,74 @@
             "expectedOutput": "Validation checklist and residual risks."
           }
         ]
+      },
+      {
+        "id": "sales_agent:professional-delivery",
+        "title": "Sales Agent Professional Delivery",
+        "description": "End-to-end professional workflow for Sales Agent.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Clarify objective, market/customer context, constraints, and success metrics.",
+            "expectedOutput": "Task brief and acceptance criteria"
+          },
+          {
+            "id": "diagnose",
+            "title": "Diagnose",
+            "instruction": "Diagnose current state and key bottlenecks.",
+            "expectedOutput": "Diagnosis with assumptions and risks"
+          },
+          {
+            "id": "produce",
+            "title": "Produce",
+            "instruction": "Generate options with trade-offs, costs, risks, and expected impact.",
+            "expectedOutput": "Professional work product"
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Recommend a prioritized plan with metrics and owner-ready next steps.",
+            "expectedOutput": "Validation checklist"
+          },
+          {
+            "id": "handoff",
+            "title": "Handoff",
+            "instruction": "Create an executive-ready deliverable and validation checklist.",
+            "expectedOutput": "Reusable handoff summary"
+          }
+        ]
+      },
+      {
+        "id": "sales_agent:quality-gate",
+        "title": "Sales Agent Quality Gate",
+        "description": "Pre-final validation gate for Sales Agent.",
+        "steps": [
+          {
+            "id": "scope-check",
+            "title": "Scope Check",
+            "instruction": "Confirm the output stays within user intent, authorization, and declared permissions.",
+            "expectedOutput": "Scope status"
+          },
+          {
+            "id": "evidence-check",
+            "title": "Evidence Check",
+            "instruction": "Separate facts, assumptions, estimates, and recommendations.",
+            "expectedOutput": "Evidence notes"
+          },
+          {
+            "id": "risk-check",
+            "title": "Risk Check",
+            "instruction": "List operational, security, privacy, quality, and stakeholder risks.",
+            "expectedOutput": "Risk register"
+          },
+          {
+            "id": "finalize",
+            "title": "Finalize",
+            "instruction": "Produce the final answer with validation and next steps.",
+            "expectedOutput": "Final deliverable"
+          }
+        ]
       }
     ],
     "uiPanels": [
@@ -194,6 +282,20 @@
       "contentTemplate": "For Sales Agent, remember the user's preferred output format, standards, and recurring constraints.",
       "scope": "project",
       "importance": 3
+    },
+    {
+      "id": "sales_agent:standards",
+      "category": "workflow",
+      "contentTemplate": "When using Sales Agent, remember project-specific quality standards, constraints, and preferred validation methods.",
+      "scope": "project",
+      "importance": 4
+    },
+    {
+      "id": "sales_agent:handoff",
+      "category": "workflow",
+      "contentTemplate": "When Sales Agent finishes, remember reusable handoff format, recurring risks, and accepted output structure.",
+      "scope": "project",
+      "importance": 3
     }
   ],
   "dependencies": [],
@@ -216,6 +318,28 @@
         "concise",
         "professional",
         "deep"
+      ]
+    },
+    {
+      "key": "quality-gate",
+      "title": "Quality gate",
+      "description": "Require the Skill to run its quality gate before final response.",
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "options": []
+    },
+    {
+      "key": "evidence-level",
+      "title": "Evidence level",
+      "description": "How much validation/evidence the Skill should include.",
+      "type": "enum",
+      "required": false,
+      "default": "standard",
+      "options": [
+        "light",
+        "standard",
+        "strict"
       ]
     }
   ],

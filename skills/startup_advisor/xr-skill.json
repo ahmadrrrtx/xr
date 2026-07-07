@@ -4,7 +4,7 @@
   "name": "Startup Advisor",
   "version": "1.0.0",
   "description": "Startup Advisor delivers practical business output with market context, metrics, stakeholder clarity, and execution focus.",
-  "longDescription": "Startup Advisor delivers practical business output with market context, metrics, stakeholder clarity, and execution focus.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "longDescription": "Startup Advisor delivers practical business output with market context, metrics, stakeholder clarity, and execution focus.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.\n\nXR 2.1E official Skill hardening: includes a professional playbook, diagnostic prompt, operating manual, permission docs, quality tests, advanced examples, quality-gate workflow, and memory templates.",
   "publisher": "xr-official",
   "license": "MIT",
   "categories": [
@@ -59,19 +59,27 @@
     "instructions": "SKILL.md",
     "reasoning": "docs/reasoning.md",
     "knowledge": [
-      "knowledge/checklist.md"
+      "knowledge/checklist.md",
+      "knowledge/playbook.md"
     ],
     "promptTemplates": [
-      "templates/output.md"
+      "templates/output.md",
+      "prompts/default.md",
+      "prompts/diagnostic.md"
     ],
     "examples": [
-      "examples/basic.md"
+      "examples/basic.md",
+      "examples/professional.md"
     ],
     "tests": [
-      "tests/selection.md"
+      "tests/selection.md",
+      "tests/quality.md",
+      "tests/permissions.md"
     ],
     "docs": [
-      "README.md"
+      "README.md",
+      "docs/operating-manual.md",
+      "docs/permissions.md"
     ],
     "assets": []
   },
@@ -82,6 +90,12 @@
         "title": "Startup Advisor",
         "description": "Apply the Startup Advisor skill to a task.",
         "prompt": "Use the Startup Advisor skill and produce professional, validated output."
+      },
+      {
+        "name": "startup-advisor-doctor",
+        "title": "Startup Advisor Doctor",
+        "description": "Run the Startup Advisor Skill quality and readiness checklist.",
+        "prompt": "Use Startup Advisor to inspect the current task or artifact and return readiness, risks, validation gaps, and next actions."
       }
     ],
     "voiceIntents": [
@@ -110,6 +124,12 @@
         "title": "/startup-advisor",
         "description": "Invoke Startup Advisor.",
         "prompt": "Invoke the Startup Advisor skill."
+      },
+      {
+        "name": "startup-advisor-doctor",
+        "title": "/startup-advisor-doctor",
+        "description": "Diagnose readiness with Startup Advisor.",
+        "prompt": "Run Startup Advisor diagnostic mode before final output."
       }
     ],
     "computerActions": [],
@@ -161,6 +181,74 @@
             "expectedOutput": "Validation checklist and residual risks."
           }
         ]
+      },
+      {
+        "id": "startup_advisor:professional-delivery",
+        "title": "Startup Advisor Professional Delivery",
+        "description": "End-to-end professional workflow for Startup Advisor.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Clarify objective, market/customer context, constraints, and success metrics.",
+            "expectedOutput": "Task brief and acceptance criteria"
+          },
+          {
+            "id": "diagnose",
+            "title": "Diagnose",
+            "instruction": "Diagnose current state and key bottlenecks.",
+            "expectedOutput": "Diagnosis with assumptions and risks"
+          },
+          {
+            "id": "produce",
+            "title": "Produce",
+            "instruction": "Generate options with trade-offs, costs, risks, and expected impact.",
+            "expectedOutput": "Professional work product"
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Recommend a prioritized plan with metrics and owner-ready next steps.",
+            "expectedOutput": "Validation checklist"
+          },
+          {
+            "id": "handoff",
+            "title": "Handoff",
+            "instruction": "Create an executive-ready deliverable and validation checklist.",
+            "expectedOutput": "Reusable handoff summary"
+          }
+        ]
+      },
+      {
+        "id": "startup_advisor:quality-gate",
+        "title": "Startup Advisor Quality Gate",
+        "description": "Pre-final validation gate for Startup Advisor.",
+        "steps": [
+          {
+            "id": "scope-check",
+            "title": "Scope Check",
+            "instruction": "Confirm the output stays within user intent, authorization, and declared permissions.",
+            "expectedOutput": "Scope status"
+          },
+          {
+            "id": "evidence-check",
+            "title": "Evidence Check",
+            "instruction": "Separate facts, assumptions, estimates, and recommendations.",
+            "expectedOutput": "Evidence notes"
+          },
+          {
+            "id": "risk-check",
+            "title": "Risk Check",
+            "instruction": "List operational, security, privacy, quality, and stakeholder risks.",
+            "expectedOutput": "Risk register"
+          },
+          {
+            "id": "finalize",
+            "title": "Finalize",
+            "instruction": "Produce the final answer with validation and next steps.",
+            "expectedOutput": "Final deliverable"
+          }
+        ]
       }
     ],
     "uiPanels": [
@@ -194,6 +282,20 @@
       "contentTemplate": "For Startup Advisor, remember the user's preferred output format, standards, and recurring constraints.",
       "scope": "project",
       "importance": 3
+    },
+    {
+      "id": "startup_advisor:standards",
+      "category": "workflow",
+      "contentTemplate": "When using Startup Advisor, remember project-specific quality standards, constraints, and preferred validation methods.",
+      "scope": "project",
+      "importance": 4
+    },
+    {
+      "id": "startup_advisor:handoff",
+      "category": "workflow",
+      "contentTemplate": "When Startup Advisor finishes, remember reusable handoff format, recurring risks, and accepted output structure.",
+      "scope": "project",
+      "importance": 3
     }
   ],
   "dependencies": [],
@@ -216,6 +318,28 @@
         "concise",
         "professional",
         "deep"
+      ]
+    },
+    {
+      "key": "quality-gate",
+      "title": "Quality gate",
+      "description": "Require the Skill to run its quality gate before final response.",
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "options": []
+    },
+    {
+      "key": "evidence-level",
+      "title": "Evidence level",
+      "description": "How much validation/evidence the Skill should include.",
+      "type": "enum",
+      "required": false,
+      "default": "standard",
+      "options": [
+        "light",
+        "standard",
+        "strict"
       ]
     }
   ],

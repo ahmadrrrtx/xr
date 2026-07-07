@@ -4,7 +4,7 @@
   "name": "Story Writer",
   "version": "1.0.0",
   "description": "Story Writer delivers distinctive creative work grounded in audience, constraints, taste, iteration, and execution quality.",
-  "longDescription": "Story Writer delivers distinctive creative work grounded in audience, constraints, taste, iteration, and execution quality.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.",
+  "longDescription": "Story Writer delivers distinctive creative work grounded in audience, constraints, taste, iteration, and execution quality.\n\nThis official XR professional skill packages role instructions, reasoning policy, workflows, examples, validation tests, memory templates, and safe permission declarations so users can make XR smarter without writing code.\n\nXR 2.1E official Skill hardening: includes a professional playbook, diagnostic prompt, operating manual, permission docs, quality tests, advanced examples, quality-gate workflow, and memory templates.",
   "publisher": "xr-official",
   "license": "MIT",
   "categories": [
@@ -59,19 +59,27 @@
     "instructions": "SKILL.md",
     "reasoning": "docs/reasoning.md",
     "knowledge": [
-      "knowledge/checklist.md"
+      "knowledge/checklist.md",
+      "knowledge/playbook.md"
     ],
     "promptTemplates": [
-      "templates/output.md"
+      "templates/output.md",
+      "prompts/default.md",
+      "prompts/diagnostic.md"
     ],
     "examples": [
-      "examples/basic.md"
+      "examples/basic.md",
+      "examples/professional.md"
     ],
     "tests": [
-      "tests/selection.md"
+      "tests/selection.md",
+      "tests/quality.md",
+      "tests/permissions.md"
     ],
     "docs": [
-      "README.md"
+      "README.md",
+      "docs/operating-manual.md",
+      "docs/permissions.md"
     ],
     "assets": []
   },
@@ -82,6 +90,12 @@
         "title": "Story Writer",
         "description": "Apply the Story Writer skill to a task.",
         "prompt": "Use the Story Writer skill and produce professional, validated output."
+      },
+      {
+        "name": "story-writer-doctor",
+        "title": "Story Writer Doctor",
+        "description": "Run the Story Writer Skill quality and readiness checklist.",
+        "prompt": "Use Story Writer to inspect the current task or artifact and return readiness, risks, validation gaps, and next actions."
       }
     ],
     "voiceIntents": [
@@ -110,6 +124,12 @@
         "title": "/story-writer",
         "description": "Invoke Story Writer.",
         "prompt": "Invoke the Story Writer skill."
+      },
+      {
+        "name": "story-writer-doctor",
+        "title": "/story-writer-doctor",
+        "description": "Diagnose readiness with Story Writer.",
+        "prompt": "Run Story Writer diagnostic mode before final output."
       }
     ],
     "computerActions": [],
@@ -161,6 +181,74 @@
             "expectedOutput": "Validation checklist and residual risks."
           }
         ]
+      },
+      {
+        "id": "story_writer:professional-delivery",
+        "title": "Story Writer Professional Delivery",
+        "description": "End-to-end professional workflow for Story Writer.",
+        "steps": [
+          {
+            "id": "intake",
+            "title": "Intake",
+            "instruction": "Define audience, goal, brand/taste direction, constraints, and deliverable format.",
+            "expectedOutput": "Task brief and acceptance criteria"
+          },
+          {
+            "id": "diagnose",
+            "title": "Diagnose",
+            "instruction": "Explore creative territories and select a coherent direction.",
+            "expectedOutput": "Diagnosis with assumptions and risks"
+          },
+          {
+            "id": "produce",
+            "title": "Produce",
+            "instruction": "Produce polished draft artifacts with rationale.",
+            "expectedOutput": "Professional work product"
+          },
+          {
+            "id": "validate",
+            "title": "Validate",
+            "instruction": "Critique against audience, clarity, originality, and conversion/usability.",
+            "expectedOutput": "Validation checklist"
+          },
+          {
+            "id": "handoff",
+            "title": "Handoff",
+            "instruction": "Deliver final version plus variants, usage guidance, and next iteration ideas.",
+            "expectedOutput": "Reusable handoff summary"
+          }
+        ]
+      },
+      {
+        "id": "story_writer:quality-gate",
+        "title": "Story Writer Quality Gate",
+        "description": "Pre-final validation gate for Story Writer.",
+        "steps": [
+          {
+            "id": "scope-check",
+            "title": "Scope Check",
+            "instruction": "Confirm the output stays within user intent, authorization, and declared permissions.",
+            "expectedOutput": "Scope status"
+          },
+          {
+            "id": "evidence-check",
+            "title": "Evidence Check",
+            "instruction": "Separate facts, assumptions, estimates, and recommendations.",
+            "expectedOutput": "Evidence notes"
+          },
+          {
+            "id": "risk-check",
+            "title": "Risk Check",
+            "instruction": "List operational, security, privacy, quality, and stakeholder risks.",
+            "expectedOutput": "Risk register"
+          },
+          {
+            "id": "finalize",
+            "title": "Finalize",
+            "instruction": "Produce the final answer with validation and next steps.",
+            "expectedOutput": "Final deliverable"
+          }
+        ]
       }
     ],
     "uiPanels": [
@@ -194,6 +282,20 @@
       "contentTemplate": "For Story Writer, remember the user's preferred output format, standards, and recurring constraints.",
       "scope": "project",
       "importance": 3
+    },
+    {
+      "id": "story_writer:standards",
+      "category": "workflow",
+      "contentTemplate": "When using Story Writer, remember project-specific quality standards, constraints, and preferred validation methods.",
+      "scope": "project",
+      "importance": 4
+    },
+    {
+      "id": "story_writer:handoff",
+      "category": "workflow",
+      "contentTemplate": "When Story Writer finishes, remember reusable handoff format, recurring risks, and accepted output structure.",
+      "scope": "project",
+      "importance": 3
     }
   ],
   "dependencies": [],
@@ -216,6 +318,28 @@
         "concise",
         "professional",
         "deep"
+      ]
+    },
+    {
+      "key": "quality-gate",
+      "title": "Quality gate",
+      "description": "Require the Skill to run its quality gate before final response.",
+      "type": "boolean",
+      "required": false,
+      "default": true,
+      "options": []
+    },
+    {
+      "key": "evidence-level",
+      "title": "Evidence level",
+      "description": "How much validation/evidence the Skill should include.",
+      "type": "enum",
+      "required": false,
+      "default": "standard",
+      "options": [
+        "light",
+        "standard",
+        "strict"
       ]
     }
   ],
