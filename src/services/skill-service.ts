@@ -4,12 +4,14 @@ import { SkillMarketplace, type SkillCatalogEntry, type SkillInstallOptions, typ
 import { SkillSDK, type SkillCreateOptions } from "../skills/sdk.ts";
 import { SkillMarketplaceStore } from "../skills/marketplace-store.ts";
 import { UnifiedSkillRuntime } from "../skills/runtime.ts";
+import { SkillMarketplaceBackend, type OnlineInstallOptions } from "../skills/marketplace-backend.ts";
 
 export class SkillService implements LifecycleHook {
   private readonly store = new SkillMarketplaceStore();
   private readonly marketplace = new SkillMarketplace(this.store);
   private readonly sdk = new SkillSDK(this.marketplace);
   private readonly runtime = new UnifiedSkillRuntime(this.marketplace);
+  private readonly backend = new SkillMarketplaceBackend(this.marketplace);
 
   // XR 2.1A unified runtime API.
   listUnified() { return this.runtime.list(); }
@@ -20,6 +22,18 @@ export class SkillService implements LifecycleHook {
   permissionReport(id: string) { return this.runtime.permissionReport(id); }
   runtimeHealth() { return this.runtime.health(); }
   migrate(root: string) { return this.runtime.lifecycle.migrate(root); }
+
+  // XR 2.1C marketplace backend API.
+  addRegistry(id: string, url: string) { return this.backend.addRegistry(id, url); }
+  listRegistries() { return this.backend.listRegistries(); }
+  removeRegistry(id: string) { return this.backend.removeRegistry(id); }
+  syncRegistries() { return this.backend.syncRegistries(); }
+  searchOnline(query: string) { return this.backend.searchOnline(query); }
+  installOnline(id: string, options?: OnlineInstallOptions) { return this.backend.installOnline(id, options); }
+  checkUpdates() { return this.backend.checkUpdates(); }
+  updateOnline(id: string) { return this.backend.updateOnline(id); }
+  rollbackOnline(id: string, version?: string) { return this.backend.rollback(id, version); }
+  verifyPackage(path: string) { return this.backend.verifyPackage(path); }
   installLocal(dir: string, options?: SkillInstallOptions) { return this.runtime.lifecycle.installLocal(dir, options); }
 
   // Stage 13 marketplace/package API retained for backward compatibility.
