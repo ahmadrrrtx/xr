@@ -14,8 +14,25 @@
  *  - Keyboard shortcuts: ? = help, g+d = dashboard, g+c = chat, etc.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+function assetDataUri(name: string): string {
+  try {
+    const file = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", name);
+    if (!existsSync(file)) return "";
+    return `data:image/png;base64,${readFileSync(file).toString("base64")}`;
+  } catch {
+    return "";
+  }
+}
+
 export function dashboardHtml(token: string): string {
-  return PAGE.replaceAll("__TOKEN__", token);
+  return PAGE
+    .replaceAll("__TOKEN__", token)
+    .replaceAll("__XR_LOGO__", assetDataUri("logo.png"))
+    .replaceAll("__XR_AVATAR__", assetDataUri("avatar.png"));
 }
 
 const PAGE = `<!DOCTYPE html>
@@ -242,6 +259,19 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .btn-ghost{background:transparent;color:var(--textDim);border:1px solid var(--border)}
 .btn-ghost:hover{border-color:var(--cyan);color:var(--cyan)}
 .btn-danger{background:transparent;color:var(--red);border:1px solid rgba(255,77,77,.3)}
+
+/* ── XR Marketplace UI ───────────────────────────────────────────────────── */
+.mp-hero{position:relative;overflow:hidden;border:1px solid rgba(0,212,255,.18);border-radius:24px;padding:24px;background:radial-gradient(circle at 12% 0%,rgba(0,212,255,.22),transparent 34%),radial-gradient(circle at 82% 10%,rgba(145,92,255,.22),transparent 30%),linear-gradient(135deg,rgba(8,13,24,.96),rgba(14,19,34,.92));box-shadow:0 24px 90px rgba(0,0,0,.35),0 0 70px rgba(0,212,255,.08);margin-bottom:18px}
+.mp-hero:before{content:"";position:absolute;inset:-2px;background:linear-gradient(120deg,transparent,rgba(0,212,255,.16),transparent,rgba(145,92,255,.16),transparent);opacity:.65;animation:mpSweep 9s linear infinite;pointer-events:none}.mp-hero>*{position:relative;z-index:1}@keyframes mpSweep{0%{transform:translateX(-25%)}50%{transform:translateX(20%)}100%{transform:translateX(-25%)}}
+.mp-hero-grid{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:20px;align-items:center}@media(max-width:1000px){.mp-hero-grid{grid-template-columns:1fr}.mp-brand-orb{display:none}}
+.mp-kicker{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid rgba(0,212,255,.28);border-radius:999px;color:var(--cyan);font-family:var(--font);font-size:11px;background:rgba(0,212,255,.08);text-transform:uppercase;letter-spacing:.08em}.mp-title{font-size:34px;line-height:1.05;letter-spacing:-.04em;margin:12px 0 10px;font-weight:900}.mp-title span{background:linear-gradient(90deg,var(--cyan),#7aa7ff,#a855f7);-webkit-background-clip:text;color:transparent}.mp-sub{color:var(--textDim);max-width:740px;font-size:13px;line-height:1.7}
+.mp-search-row{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}.mp-search{flex:1;min-width:260px;background:rgba(3,7,18,.72);border:1px solid rgba(0,212,255,.22);color:var(--text);border-radius:14px;padding:12px 14px;outline:none;box-shadow:inset 0 0 18px rgba(0,0,0,.18)}.mp-search:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,212,255,.08)}
+.mp-filter-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.mp-chip{border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.045);color:var(--textDim);border-radius:999px;padding:6px 10px;font-size:11px;cursor:pointer}.mp-chip:hover,.mp-chip.active{border-color:rgba(0,212,255,.42);color:var(--cyan);background:rgba(0,212,255,.09)}
+.mp-brand-orb{position:relative;height:220px}.mp-orbit{position:absolute;inset:12px;border-radius:50%;background:conic-gradient(from 90deg,rgba(0,212,255,.08),rgba(168,85,247,.28),rgba(0,255,136,.12),rgba(0,212,255,.08));filter:blur(.2px);animation:mpSpin 18s linear infinite}.mp-orbit:after{content:"";position:absolute;inset:24px;border-radius:50%;background:var(--bg);border:1px solid rgba(0,212,255,.16)}@keyframes mpSpin{to{transform:rotate(360deg)}}.mp-logo-img{position:absolute;left:50%;top:42%;width:92px;height:92px;transform:translate(-50%,-50%);border-radius:24px;box-shadow:0 0 34px rgba(0,212,255,.28)}.mp-avatar-img{position:absolute;right:10px;bottom:6px;width:92px;height:92px;border-radius:26px;border:1px solid rgba(0,212,255,.3);box-shadow:0 0 42px rgba(0,212,255,.18)}
+.mp-shell{display:grid;grid-template-columns:230px minmax(0,1fr) 330px;gap:16px}@media(max-width:1200px){.mp-shell{grid-template-columns:1fr}.mp-side,.mp-inspector{order:2}.mp-main{order:1}}
+.mp-card{background:linear-gradient(180deg,rgba(17,24,39,.96),rgba(10,14,25,.96));border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:16px;box-shadow:0 12px 44px rgba(0,0,0,.22)}.mp-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800;margin-bottom:10px}.mp-cat{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:12px;color:var(--textDim);cursor:pointer;font-size:12px}.mp-cat:hover,.mp-cat.active{background:rgba(0,212,255,.08);color:var(--cyan)}.mp-cat b{font-weight:700}.mp-cat span{font-family:var(--font);font-size:10px;color:var(--muted)}
+.mp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}.mp-skill-card{position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(22,29,48,.95),rgba(10,14,24,.98));border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:14px;cursor:pointer;transition:transform .16s,border-color .16s,box-shadow .16s}.mp-skill-card:hover{transform:translateY(-2px);border-color:rgba(0,212,255,.35);box-shadow:0 14px 50px rgba(0,212,255,.08)}.mp-skill-card.selected{border-color:var(--cyan);box-shadow:0 0 0 1px rgba(0,212,255,.2),0 18px 60px rgba(0,212,255,.12)}.mp-skill-card:before{content:"";position:absolute;right:-40px;top:-40px;width:100px;height:100px;background:radial-gradient(circle,rgba(0,212,255,.13),transparent 70%)}.mp-skill-top{display:flex;gap:10px;align-items:flex-start}.mp-skill-icon{width:42px;height:42px;border-radius:13px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,rgba(0,212,255,.18),rgba(168,85,247,.16));border:1px solid rgba(0,212,255,.22);font-weight:900;color:var(--cyan);font-family:var(--font)}.mp-skill-name{font-weight:800;letter-spacing:-.01em}.mp-skill-id{font-size:10px;color:var(--muted);font-family:var(--font)}.mp-desc{font-size:12px;color:var(--textDim);line-height:1.55;margin:10px 0;min-height:56px}.mp-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.mp-mini{font-size:10px;border:1px solid rgba(255,255,255,.08);border-radius:999px;padding:3px 7px;color:var(--textDim);background:rgba(255,255,255,.035)}.mp-mini.ok{color:var(--green);border-color:rgba(0,255,136,.22)}.mp-mini.warn{color:var(--amber);border-color:rgba(245,158,11,.22)}.mp-actions{display:flex;gap:8px;margin-top:12px}.mp-actions button{font-size:11px;padding:6px 9px}.mp-panel-empty{text-align:center;color:var(--muted);font-size:12px;padding:30px 12px;border:1px dashed rgba(255,255,255,.12);border-radius:16px}.mp-shot{height:96px;border-radius:14px;background:radial-gradient(circle at 20% 20%,rgba(0,212,255,.3),transparent 30%),radial-gradient(circle at 75% 25%,rgba(168,85,247,.28),transparent 28%),linear-gradient(135deg,rgba(0,212,255,.06),rgba(168,85,247,.06));border:1px solid rgba(0,212,255,.16);margin:12px 0;position:relative;overflow:hidden}.mp-shot:after{content:"";position:absolute;left:18px;right:18px;bottom:18px;height:8px;border-radius:999px;background:linear-gradient(90deg,var(--cyan),#a855f7);box-shadow:0 0 22px rgba(0,212,255,.35)}
+.mp-inspector h3{font-size:18px;line-height:1.2;margin-bottom:4px}.mp-inspector-sub{font-size:11px;color:var(--muted);font-family:var(--font);margin-bottom:10px}.mp-perm{padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}.mp-perm:last-child{border-bottom:none}.mp-perm-head{display:flex;justify-content:space-between;font-size:12px}.mp-perm p{font-size:11px;color:var(--muted);line-height:1.45;margin-top:3px}.mp-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.mp-tab{font-size:11px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:var(--textDim);cursor:pointer}.mp-tab.active{color:#001018;background:linear-gradient(90deg,var(--cyan),#7aa7ff);border-color:transparent;font-weight:800}
 
 /* ── Chat UI ─────────────────────────────────────────────────────────────── */
 .chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 52px)}
@@ -502,7 +532,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         <span class="nav-icon">⚡</span> Plugins
       </a>
       <a class="nav-item" data-panel="skills">
-        <span class="nav-icon">🧩</span> Skills
+        <span class="nav-icon">🧩</span> Marketplace
       </a>
       <a class="nav-item" data-panel="voice">
         <span class="nav-icon">🎤</span> Voice
@@ -757,28 +787,69 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         </div>
       </div>
 
-      <!-- ════════ SKILLS ════════ -->
+      <!-- ════════ XR SKILLS MARKETPLACE ════════ -->
       <div class="panel" id="panel-skills">
-        <div class="section-header">
-          <div><div class="section-title">Unified Skills</div><div class="section-sub">Installed Skills, inspector, permissions, dependencies, and runtime health. Plugins, MCP, research, voice, memory, computer control, and multi-agent remain execution substrates.</div></div>
-          <button class="btn btn-ghost" onclick="loadSkills()" style="font-size:12px">↻ Refresh</button>
+        <div class="mp-hero">
+          <div class="mp-hero-grid">
+            <div>
+              <div class="mp-kicker">🛡 XR Marketplace · Skills for AI Agents</div>
+              <div class="mp-title">Install expertise like <span>hiring a specialist</span>.</div>
+              <div class="mp-sub">Browse official, installed, verified, trending, and update-ready XR Skills. Every Skill exposes permissions, dependencies, compatibility, examples, changelog, publisher metadata, and runtime health before you enable it.</div>
+              <div class="mp-search-row">
+                <input id="market-search" class="mp-search" placeholder="Search skills, publishers, categories, tags… try: react, incident, research" onkeydown="if(event.key==='Enter')loadMarketplace()" />
+                <button class="btn btn-primary" onclick="loadMarketplace()">Search</button>
+                <button class="btn btn-ghost" onclick="syncMarketplace()">Sync Registries</button>
+              </div>
+              <div class="mp-filter-row" id="market-filter-row">
+                <button class="mp-chip active" data-market-filter="all" onclick="setMarketFilter('all')">All</button>
+                <button class="mp-chip" data-market-filter="installed" onclick="setMarketFilter('installed')">Installed</button>
+                <button class="mp-chip" data-market-filter="verified" onclick="setMarketFilter('verified')">Verified</button>
+                <button class="mp-chip" data-market-filter="updates" onclick="setMarketFilter('updates')">Updates</button>
+                <button class="mp-chip" data-market-filter="official" onclick="setMarketFilter('official')">Official</button>
+              </div>
+            </div>
+            <div class="mp-brand-orb">
+              <div class="mp-orbit"></div>
+              <img class="mp-logo-img" src="__XR_LOGO__" alt="XR logo"/>
+              <img class="mp-avatar-img" src="__XR_AVATAR__" alt="XR avatar"/>
+            </div>
+          </div>
         </div>
+
         <div class="grid grid-4 mb-4">
-          <div class="card"><div class="card-header"><div class="card-title">Total</div></div><div class="card-value" id="skill-total">0</div><div class="card-sub">unified skill records</div></div>
-          <div class="card"><div class="card-header"><div class="card-title">Enabled</div></div><div class="card-value" id="skill-enabled">0</div><div class="card-sub">available to runtime</div></div>
-          <div class="card"><div class="card-header"><div class="card-title">Invalid</div></div><div class="card-value" id="skill-invalid">0</div><div class="card-sub">fail closed</div></div>
-          <div class="card"><div class="card-header"><div class="card-title">Search Index</div></div><div class="card-value" id="skill-index">0</div><div class="card-sub">local documents</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Installed</div></div><div class="card-value" id="market-installed">0</div><div class="card-sub">ready in local runtime</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Verified</div></div><div class="card-value" id="market-verified">0</div><div class="card-sub">official / verified trust</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Updates</div></div><div class="card-value" id="market-updates">0</div><div class="card-sub">new versions available</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Runtime</div></div><div class="card-value" id="market-runtime">—</div><div class="card-sub">health + index status</div></div>
         </div>
-        <div class="grid grid-2">
-          <div class="card">
-            <div class="card-header"><div class="card-title">Installed Skills</div></div>
-            <div style="display:flex;gap:8px;margin-bottom:12px"><input id="skill-search" placeholder="Search skills…" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:8px" onkeydown="if(event.key==='Enter')loadSkills()"><button class="btn" onclick="loadSkills()">Search</button></div>
-            <div id="skills-list"><div class="spin"></div></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">Skill Inspector</div></div>
-            <div id="skill-inspector"><div class="muted" style="font-size:12px">Select a Skill to view permissions, dependencies, and runtime metadata.</div></div>
-          </div>
+
+        <div class="mp-shell">
+          <aside class="mp-card mp-side">
+            <div class="mp-section-title">Categories</div>
+            <div id="market-categories"></div>
+            <div class="mp-section-title" style="margin-top:16px">Collections</div>
+            <div class="mp-cat" onclick="setMarketQuery('official verified security')"><b>🛡 Security Desk</b><span>IR/SOC</span></div>
+            <div class="mp-cat" onclick="setMarketQuery('react next node full stack')"><b>⚛ Dev Suite</b><span>code</span></div>
+            <div class="mp-cat" onclick="setMarketQuery('research academic paper market')"><b>🔬 Research Lab</b><span>deep</span></div>
+            <div class="mp-cat" onclick="setMarketQuery('brand copy presentation content')"><b>🎨 Creative Studio</b><span>design</span></div>
+            <div class="mp-section-title" style="margin-top:16px">Registry</div>
+            <div id="market-registries" class="muted" style="font-size:12px">Loading…</div>
+          </aside>
+
+          <main class="mp-main">
+            <div class="mp-tabs">
+              <button class="mp-tab active" data-market-sort="relevance" onclick="setMarketSort('relevance')">Recommended</button>
+              <button class="mp-tab" data-market-sort="trending" onclick="setMarketSort('trending')">Trending</button>
+              <button class="mp-tab" data-market-sort="updated" onclick="setMarketSort('updated')">Recently Updated</button>
+              <button class="mp-tab" data-market-sort="rating" onclick="setMarketSort('rating')">Top Rated</button>
+            </div>
+            <div id="market-grid" class="mp-grid"><div class="spin"></div></div>
+          </main>
+
+          <aside class="mp-card mp-inspector">
+            <div class="mp-section-title">Skill Inspector</div>
+            <div id="market-inspector"><div class="mp-panel-empty">Select a Skill to inspect docs, permissions, dependencies, examples, changelog, compatibility, and publisher trust.</div></div>
+          </aside>
         </div>
       </div>
 
@@ -921,7 +992,7 @@ function toast(msg, type = "info") {
 const NAV_LABELS = {
   dashboard: "Dashboard", chat: "Chat", status: "Status",
   providers: "Providers", models: "Models", memory: "Memory",
-  research: "Research", plugins: "Plugins", skills: "Skills", voice: "Voice",
+  research: "Research", plugins: "Plugins", skills: "Marketplace", voice: "Voice",
   security: "Security", audit: "Audit Log", settings: "Settings",
 };
 
@@ -958,7 +1029,7 @@ function navigateTo(id) {
     case "memory":      loadMemory();    break;
     case "security":    loadSecurity();  break;
     case "plugins":     loadPlugins();   break;
-    case "skills":      loadSkills();    break;
+    case "skills":      loadMarketplace(); break;
     case "audit":       loadAuditLog();  break;
     case "settings":    loadSettings();  break;
   }
@@ -1282,6 +1353,11 @@ async function pluginRemove(id) {
   } catch(e) { toast("Remove failed: " + e.message, "err"); }
 }
 
+let MARKET_FILTER = "all";
+let MARKET_SORT = "relevance";
+let MARKET_ROWS = [];
+let MARKET_SELECTED = null;
+
 function skillHealthBadge(health) {
   if (health === "healthy") return '<span class="badge badge-green">healthy</span>';
   if (health === "disabled") return '<span class="badge badge-gray">disabled</span>';
@@ -1289,73 +1365,193 @@ function skillHealthBadge(health) {
   return '<span class="badge badge-red">invalid</span>';
 }
 
-async function loadSkills() {
+function marketTrustBadge(s) {
+  const trust = s.verification || s.trust || "unknown";
+  if (["official","verified"].includes(trust)) return '<span class="mp-mini ok">' + escapeHtml(trust) + '</span>';
+  if (trust === "reviewed") return '<span class="mp-mini">reviewed</span>';
+  return '<span class="mp-mini warn">' + escapeHtml(trust) + '</span>';
+}
+
+function skillInitials(name) {
+  return String(name || "XR").split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase() || "XR";
+}
+
+function setMarketFilter(filter) {
+  MARKET_FILTER = filter;
+  document.querySelectorAll("[data-market-filter]").forEach(el => el.classList.toggle("active", el.dataset.marketFilter === filter));
+  renderMarketplace();
+}
+
+function setMarketSort(sort) {
+  MARKET_SORT = sort;
+  document.querySelectorAll("[data-market-sort]").forEach(el => el.classList.toggle("active", el.dataset.marketSort === sort));
+  renderMarketplace();
+}
+
+function setMarketQuery(q) {
+  const input = document.getElementById("market-search");
+  if (input) input.value = q;
+  loadMarketplace();
+}
+
+function normalizeMarketplaceSkill(s) {
+  const perms = s.permissions ?? [];
+  const deps = s.dependencies ?? [];
+  const categories = s.categories ?? [];
+  return {
+    ...s,
+    categories,
+    tags: s.tags ?? [],
+    permissions: perms,
+    dependencies: deps,
+    rating: s.rating?.average ?? s.rating ?? 0,
+    ratingCount: s.rating?.count ?? 0,
+    downloads: s.downloads ?? s.runs ?? 0,
+    updatedAt: s.updatedAt ?? s.publishedAt ?? 0,
+    permissionRisk: perms.filter(p => p.dangerous).length,
+    dependencyCount: deps.length,
+    installed: Boolean(s.installed),
+    enabled: Boolean(s.enabled),
+    verification: s.verification ?? (s.verified ? "verified" : "community"),
+  };
+}
+
+async function loadMarketplace() {
   try {
-    const q = document.getElementById("skill-search")?.value ?? "";
-    const data = await api("/api/skills" + (q ? "?q=" + encodeURIComponent(q) : ""));
-    const h = data.health ?? {};
-    const rows = data.skills ?? [];
-    document.getElementById("skill-total").textContent = h.total ?? rows.length;
-    document.getElementById("skill-enabled").textContent = h.enabled ?? rows.filter(s => s.enabled).length;
-    document.getElementById("skill-invalid").textContent = h.invalid ?? rows.filter(s => s.health === "invalid").length;
-    document.getElementById("skill-index").textContent = h.index?.documents ?? rows.length;
-    document.getElementById("skills-list").innerHTML = rows.length ? rows.map(s => {
-      const perms = (s.permissions ?? []).map(p => '<span class="badge ' + (p.dangerous ? 'badge-amber' : 'badge-gray') + '" style="margin-right:4px">' + escapeHtml(p.scope) + (p.dangerous ? '!' : '') + '</span>').join("") || '<span class="muted">none</span>';
-      const action = s.enabled
-        ? '<button class="btn btn-ghost" onclick="skillAction(\'' + escapeHtml(s.id) + '\',\'disable\')" style="font-size:11px">Disable</button>'
-        : '<button class="btn" onclick="skillAction(\'' + escapeHtml(s.id) + '\',\'enable\')" style="font-size:11px">Enable</button>';
-      return '<div class="mem-item" style="display:block;cursor:pointer" onclick="inspectSkill(\'' + escapeHtml(s.id) + '\')">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
-          '<div><div style="font-weight:700;color:var(--text)">' + escapeHtml(s.name) + ' <span class="mono muted">' + escapeHtml(s.id) + '</span></div>' +
-          '<div class="muted" style="font-size:11px">v' + escapeHtml(s.version) + ' · ' + escapeHtml(s.kind) + ' · ' + escapeHtml(s.source) + ' · ' + escapeHtml(s.verification) + '</div></div>' +
-          '<div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">' + skillHealthBadge(s.health) + action + '</div>' +
-        '</div>' +
-        '<div class="muted" style="font-size:12px;margin:8px 0">' + escapeHtml(s.description ?? "") + '</div>' +
-        '<div style="font-size:11px"><span class="muted">Permissions:</span> ' + perms + '</div>' +
-      '</div>';
-    }).join("") : '<div class="muted" style="font-size:12px;padding:20px">No skills found.</div>';
+    const q = document.getElementById("market-search")?.value ?? "";
+    const data = await api("/api/skills/marketplace" + (q ? "?q=" + encodeURIComponent(q) : ""));
+    MARKET_ROWS = (data.skills ?? []).map(normalizeMarketplaceSkill);
+    const stats = data.stats ?? {};
+    document.getElementById("market-installed").textContent = stats.installed ?? MARKET_ROWS.filter(s => s.installed).length;
+    document.getElementById("market-verified").textContent = stats.verified ?? MARKET_ROWS.filter(s => ["official","verified"].includes(s.verification)).length;
+    document.getElementById("market-updates").textContent = stats.updates ?? 0;
+    document.getElementById("market-runtime").textContent = (data.health?.invalid ?? 0) ? "⚠" : "OK";
+    renderMarketCategories(MARKET_ROWS);
+    renderMarketRegistries(data.registries ?? []);
+    renderMarketplace();
+    if (!MARKET_SELECTED && MARKET_ROWS[0]) inspectMarketplaceSkill(MARKET_ROWS[0].id);
   } catch(e) {
-    document.getElementById("skills-list").innerHTML = '<div class="muted" style="font-size:12px">Skills API unavailable: '+escapeHtml(e.message)+'</div>';
+    document.getElementById("market-grid").innerHTML = '<div class="mp-panel-empty">Marketplace API unavailable: '+escapeHtml(e.message)+'</div>';
   }
 }
 
-async function inspectSkill(id) {
+function renderMarketRegistries(registries) {
+  const el = document.getElementById("market-registries");
+  if (!el) return;
+  el.innerHTML = registries.length ? registries.map(r =>
+    '<div class="stat-row"><div class="stat-key">' + escapeHtml(r.id) + '</div><div class="stat-val ' + (r.enabled ? 'val-green' : 'val-muted') + '">' + (r.enabled ? 'on' : 'off') + '</div></div>'
+  ).join("") : '<div class="muted" style="font-size:12px">No online registries configured yet.<br><code class="mono text-cyan">xr skill registry add official &lt;url&gt;</code></div>';
+}
+
+function renderMarketCategories(rows) {
+  const counts = {};
+  for (const s of rows) for (const c of s.categories ?? []) counts[c] = (counts[c] ?? 0) + 1;
+  const cats = ["developer","security","research","business","creative","agent","mcp","workflow","productivity"];
+  document.getElementById("market-categories").innerHTML = cats.map(c =>
+    '<div class="mp-cat" onclick="setMarketQuery(\'' + c + '\')"><b>' + categoryIcon(c) + ' ' + c + '</b><span>' + (counts[c] ?? 0) + '</span></div>'
+  ).join("");
+}
+
+function categoryIcon(c) {
+  return ({developer:'⌘',security:'🛡',research:'🔬',business:'📈',creative:'🎨',agent:'🤖',mcp:'🔌',workflow:'◆',productivity:'⚡'})[c] || '◇';
+}
+
+function filteredMarketplaceRows() {
+  let rows = [...MARKET_ROWS];
+  if (MARKET_FILTER === "installed") rows = rows.filter(s => s.installed);
+  if (MARKET_FILTER === "verified") rows = rows.filter(s => ["official","verified"].includes(s.verification));
+  if (MARKET_FILTER === "official") rows = rows.filter(s => s.verification === "official" || s.publisher === "xr-official");
+  if (MARKET_FILTER === "updates") rows = rows.filter(s => s.updateAvailable);
+  if (MARKET_SORT === "trending") rows.sort((a,b)=>(b.downloads+b.runs)-(a.downloads+a.runs));
+  else if (MARKET_SORT === "updated") rows.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  else if (MARKET_SORT === "rating") rows.sort((a,b)=>(b.rating||0)-(a.rating||0));
+  return rows;
+}
+
+function renderMarketplace() {
+  const rows = filteredMarketplaceRows();
+  document.getElementById("market-grid").innerHTML = rows.length ? rows.map(s => {
+    const selected = MARKET_SELECTED === s.id ? " selected" : "";
+    const danger = s.permissionRisk ? '<span class="mp-mini warn">' + s.permissionRisk + ' risky perm</span>' : '<span class="mp-mini ok">safe perms</span>';
+    const action = s.installed
+      ? (s.enabled ? '<button class="btn btn-ghost" onclick="event.stopPropagation(); skillAction(\'' + escapeHtml(s.id) + '\',\'disable\')">Disable</button>' : '<button class="btn" onclick="event.stopPropagation(); skillAction(\'' + escapeHtml(s.id) + '\',\'enable\')">Enable</button>')
+      : '<button class="btn btn-primary" onclick="event.stopPropagation(); installMarketplaceSkill(\'' + escapeHtml(s.id) + '\')">Install</button>';
+    return '<article class="mp-skill-card' + selected + '" onclick="inspectMarketplaceSkill(\'' + escapeHtml(s.id) + '\')">' +
+      '<div class="mp-skill-top"><div class="mp-skill-icon">' + escapeHtml(skillInitials(s.name)) + '</div><div style="min-width:0;flex:1"><div class="mp-skill-name">' + escapeHtml(s.name) + '</div><div class="mp-skill-id">' + escapeHtml(s.id) + '</div></div>' + marketTrustBadge(s) + '</div>' +
+      '<div class="mp-shot"></div>' +
+      '<div class="mp-desc">' + escapeHtml(s.description || '') + '</div>' +
+      '<div class="mp-meta"><span class="mp-mini">' + escapeHtml((s.categories||[])[0] || 'skill') + '</span><span class="mp-mini">' + escapeHtml(s.publisher || 'unknown') + '</span>' + danger + '<span class="mp-mini">deps ' + s.dependencyCount + '</span></div>' +
+      '<div class="mp-actions">' + action + '<button class="btn btn-ghost" onclick="event.stopPropagation(); inspectMarketplaceSkill(\'' + escapeHtml(s.id) + '\')">Details</button></div>' +
+    '</article>';
+  }).join("") : '<div class="mp-panel-empty">No Skills match this view. Try another category or sync registries.</div>';
+}
+
+async function inspectMarketplaceSkill(id) {
+  MARKET_SELECTED = id;
+  renderMarketplace();
   try {
     const data = await api("/api/skills/" + encodeURIComponent(id) + "/inspect");
-    const s = data.skill;
+    const s = normalizeMarketplaceSkill(data.skill);
     const perms = data.permissions;
     const deps = data.dependencies;
     const permRows = ([...(perms?.safe ?? []), ...(perms?.dangerous ?? [])]).map(p =>
-      '<div class="stat-row"><div class="stat-key">' + escapeHtml(p.scope) + (p.dangerous ? ' !' : '') + '</div><div class="stat-val ' + (p.granted ? 'val-green' : 'val-amber') + '">' + (p.granted ? 'granted' : 'needs approval') + '</div></div>' +
-      '<div class="muted" style="font-size:11px;margin-bottom:6px">' + escapeHtml(p.reason) + '</div>'
+      '<div class="mp-perm"><div class="mp-perm-head"><b>' + escapeHtml(p.scope) + (p.dangerous ? ' !' : '') + '</b><span class="' + (p.granted ? 'val-green' : 'val-amber') + '">' + (p.granted ? 'granted' : 'approval') + '</span></div><p>' + escapeHtml(p.reason) + '</p></div>'
     ).join("") || '<div class="muted">No permissions declared.</div>';
     const depRows = (deps?.statuses ?? []).map(d =>
-      '<div class="stat-row"><div class="stat-key">' + escapeHtml(d.dependency.kind + ':' + d.dependency.id) + '</div><div class="stat-val ' + (d.satisfied ? 'val-green' : 'val-amber') + '">' + (d.satisfied ? 'ok' : 'missing') + '</div></div>' +
-      '<div class="muted" style="font-size:11px;margin-bottom:6px">' + escapeHtml(d.reason) + '</div>'
+      '<div class="mp-perm"><div class="mp-perm-head"><b>' + escapeHtml(d.dependency.kind + ':' + d.dependency.id) + '</b><span class="' + (d.satisfied ? 'val-green' : 'val-amber') + '">' + (d.satisfied ? 'ok' : 'missing') + '</span></div><p>' + escapeHtml(d.reason) + '</p></div>'
     ).join("") || '<div class="muted">No dependencies declared.</div>';
-    document.getElementById("skill-inspector").innerHTML =
-      '<div style="font-weight:800;font-size:16px">' + escapeHtml(s.name) + '</div>' +
-      '<div class="mono muted" style="font-size:11px;margin-bottom:8px">' + escapeHtml(s.id) + ' · ' + escapeHtml(s.kind) + ' · ' + escapeHtml(s.health) + '</div>' +
-      '<div class="muted" style="font-size:12px;margin-bottom:12px">' + escapeHtml(s.description) + '</div>' +
-      '<div class="card-title" style="margin-top:12px">Permission Viewer</div>' + permRows +
-      '<div class="card-title" style="margin-top:16px">Dependency Viewer</div>' + depRows +
-      '<div class="card-title" style="margin-top:16px">Runtime Health</div>' +
-      '<div class="stat-row"><div class="stat-key">enabled</div><div class="stat-val">' + String(s.enabled) + '</div></div>' +
-      '<div class="stat-row"><div class="stat-key">installed</div><div class="stat-val">' + String(s.installed) + '</div></div>' +
-      '<div class="stat-row"><div class="stat-key">publisher</div><div class="stat-val">' + escapeHtml(s.publisher) + '</div></div>';
+    const workflows = (s.workflows ?? []).slice(0,3).map(w => '<span class="mp-mini">' + escapeHtml(w.title || w.id) + '</span>').join("") || '<span class="muted">none</span>';
+    const commands = (s.commands ?? []).slice(0,4).map(c => '<code class="mono text-cyan">/' + escapeHtml(c.name) + '</code>').join(' ') || '<span class="muted">none</span>';
+    document.getElementById("market-inspector").innerHTML =
+      '<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px"><div class="mp-skill-icon" style="width:54px;height:54px">' + escapeHtml(skillInitials(s.name)) + '</div><div><h3>' + escapeHtml(s.name) + '</h3><div class="mp-inspector-sub">' + escapeHtml(s.id) + ' · v' + escapeHtml(s.version) + ' · ' + escapeHtml(s.kind) + '</div>' + marketTrustBadge(s) + '</div></div>' +
+      '<div class="mp-shot"></div>' +
+      '<p class="muted" style="font-size:12px;line-height:1.6;margin-bottom:12px">' + escapeHtml(s.description) + '</p>' +
+      '<div class="mp-actions" style="margin-bottom:12px">' + (s.installed ? '<button class="btn btn-ghost" onclick="skillAction(\'' + escapeHtml(s.id) + '\',\'' + (s.enabled ? 'disable' : 'enable') + '\')">' + (s.enabled ? 'Disable' : 'Enable') + '</button>' : '<button class="btn btn-primary" onclick="installMarketplaceSkill(\'' + escapeHtml(s.id) + '\')">Install</button>') + '<button class="btn btn-ghost" onclick="copySkillInstall(\'' + escapeHtml(s.id) + '\')">Copy CLI</button></div>' +
+      '<div class="mp-section-title">Publisher</div><div class="stat-row"><div class="stat-key">publisher</div><div class="stat-val">' + escapeHtml(s.publisher) + '</div></div><div class="stat-row"><div class="stat-key">trust</div><div class="stat-val val-cyan">' + escapeHtml(s.verification) + '</div></div>' +
+      '<div class="mp-section-title" style="margin-top:16px">Commands</div><div style="font-size:12px;margin-bottom:12px">' + commands + '</div>' +
+      '<div class="mp-section-title">Workflows</div><div class="mp-meta" style="margin-bottom:12px">' + workflows + '</div>' +
+      '<div class="mp-section-title">Permission Viewer</div>' + permRows +
+      '<div class="mp-section-title" style="margin-top:16px">Dependency Viewer</div>' + depRows +
+      '<div class="mp-section-title" style="margin-top:16px">Examples & Changelog</div><div class="muted" style="font-size:12px;line-height:1.6">Examples and changelog are read from the Skill package/docs. Use <code class="mono text-cyan">xr skill inspect ' + escapeHtml(s.id) + '</code> for full local file details.</div>';
   } catch(e) {
-    document.getElementById("skill-inspector").innerHTML = '<div class="muted" style="font-size:12px">Inspect failed: '+escapeHtml(e.message)+'</div>';
+    document.getElementById("market-inspector").innerHTML = '<div class="mp-panel-empty">Inspect failed: '+escapeHtml(e.message)+'</div>';
   }
+}
+
+async function installMarketplaceSkill(id) {
+  try {
+    await api("/api/skills/marketplace/install", { method:"POST", body: JSON.stringify({ id }) });
+    toast("Skill install started", "ok");
+    loadMarketplace();
+  } catch(e) {
+    toast("Install failed: " + e.message + " — try CLI: xr skill install-online " + id, "err");
+  }
+}
+
+async function syncMarketplace() {
+  try {
+    const data = await api("/api/skills/marketplace/sync", { method:"POST" });
+    toast("Registry sync complete: " + (data.results?.filter(r=>r.ok).length ?? 0) + " ok", "ok");
+    loadMarketplace();
+  } catch(e) { toast("Registry sync failed: " + e.message, "err"); }
+}
+
+function copySkillInstall(id) {
+  navigator.clipboard?.writeText("xr skill install-online " + id).catch(()=>{});
+  toast("Copied install command", "ok");
 }
 
 async function skillAction(id, action) {
   try {
     await api("/api/skills/" + encodeURIComponent(id) + "/" + action, { method: "POST" });
     toast("Skill " + action + "d", "ok");
-    loadSkills();
-    inspectSkill(id);
+    loadMarketplace();
+    inspectMarketplaceSkill(id);
   } catch(e) { toast("Skill action failed: " + e.message, "err"); }
 }
+
+function loadSkills(){ return loadMarketplace(); }
+function inspectSkill(id){ return inspectMarketplaceSkill(id); }
 
 // ── Security ──────────────────────────────────────────────────────────────────
 async function loadSecurity() {
