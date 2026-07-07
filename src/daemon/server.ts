@@ -71,7 +71,7 @@ function html(body: string): Response {
       "x-content-type-options":      "nosniff",
       "x-frame-options":             "DENY",
       "referrer-policy":             "no-referrer",
-      "content-security-policy":     "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+      "content-security-policy":     "default-src 'self'; img-src 'self' data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'", 
     },
   });
 }
