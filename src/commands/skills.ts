@@ -57,6 +57,9 @@ function printUsage(): void {
   console.log("");
   console.log("  Backward-compatible SDK/marketplace commands remain available:");
   console.log("  xr skill search <query> | init | create | build | package | publish | test | doctor | export | import | update");
+  console.log("  xr skill registry add|list|sync|search|remove  # XR 2.1C backend registries");
+  console.log("  xr skill install-online <id> [--version range] [--registry id]");
+  console.log("  xr skill updates | update-online <id> | rollback-online <id> | verify-package <file.xrs>");
 }
 
 export class SkillsCommand implements Command {
@@ -302,6 +305,90 @@ export class SkillsCommand implements Command {
           for (const e of result.errors) error(e);
           for (const w of result.warnings) warn(w);
           result.ok ? ok("skill tests passed") : error("skill tests failed");
+          return;
+        }
+
+        case "registry": {
+          const sub = rest[0] ?? "list";
+          if (sub === "add") {
+            const id = rest[1];
+            const url = rest[2];
+            if (!id || !url) { warn("usage: xr skill registry add <id> <url>"); return; }
+            const row = service.addRegistry(id, url);
+            ok(`registry added ${row.id}: ${row.url}`);
+            return;
+          }
+          if (sub === "remove") {
+            const id = rest[1];
+            if (!id) { warn("usage: xr skill registry remove <id>"); return; }
+            service.removeRegistry(id) ? ok(`registry removed ${id}`) : warn(`registry not found: ${id}`);
+            return;
+          }
+          if (sub === "sync") {
+            const rows = await service.syncRegistries();
+            for (const row of rows) row.ok ? ok(`synced ${row.endpoint.id}`) : error(`${row.endpoint.id}: ${row.error}`);
+            return;
+          }
+          if (sub === "search") {
+            const q = rest.slice(1).join(" ");
+            if (!q) { warn("usage: xr skill registry search <query>"); return; }
+            await service.syncRegistries();
+            const rows = service.searchOnline(q);
+            heading(`Online Skill Search: ${q}`);
+            for (const row of rows.slice(0, 30)) console.log(`  ${C.bold(row.version.id)} ${C.dim(row.version.version)} ${row.registry.id} — ${row.version.manifest.description}`);
+            return;
+          }
+          const rows = service.listRegistries();
+          heading(`Skill Registries (${rows.length})`);
+          for (const row of rows) console.log(`  ${row.enabled ? C.green("●") : C.dim("○")} ${C.bold(row.id)} ${row.url} ${C.dim(row.trustLevel)}${row.lastError ? " " + C.red(row.lastError) : ""}`);
+          return;
+        }
+
+        case "install-online": {
+          const id = rest[0];
+          if (!id) { warn("usage: xr skill install-online <id> [--version range] [--registry id]"); return; }
+          const result = await service.installOnline(id, {
+            versionRange: typeof flags.version === "string" ? flags.version : undefined,
+            registryId: typeof flags.registry === "string" ? flags.registry : undefined,
+            force: boolFlag(flags, "force"),
+            withDependencies: !boolFlag(flags, "no-deps"),
+          });
+          for (const w of result.warnings) warn(w);
+          for (const e of result.errors) error(e);
+          if (result.ok) for (const row of result.installed) ok(`installed ${row.id}@${row.version}`);
+          return;
+        }
+
+        case "updates": {
+          const rows = await service.checkUpdates();
+          heading(`Skill Updates (${rows.length})`);
+          for (const row of rows) console.log(`  ${C.bold(row.id)} ${row.currentVersion} → ${C.green(row.latestVersion)} ${C.dim(row.registryId)}${row.changelog ? " — " + row.changelog : ""}`);
+          return;
+        }
+
+        case "update-online": {
+          const id = rest[0];
+          if (!id) { warn("usage: xr skill update-online <id>"); return; }
+          const result = await service.updateOnline(id);
+          for (const w of result.warnings) warn(w);
+          for (const e of result.errors) error(e);
+          if (result.ok) for (const row of result.installed) ok(`updated ${row.id}@${row.version}`);
+          return;
+        }
+
+        case "rollback-online": {
+          const id = rest[0];
+          if (!id) { warn("usage: xr skill rollback-online <id> [--version x.y.z]"); return; }
+          const result = service.rollbackOnline(id, typeof flags.version === "string" ? flags.version : undefined);
+          result.ok ? ok(result.reason) : error(result.reason);
+          return;
+        }
+
+        case "verify-package": {
+          const file = rest[0];
+          if (!file) { warn("usage: xr skill verify-package <file.xrs>"); return; }
+          const result = service.verifyPackage(file);
+          result.ok ? ok(`${file} sha256=${result.sha256}`) : error(result.reason);
           return;
         }
 
