@@ -56,7 +56,7 @@ function printUsage(): void {
   console.log("  xr skills doctor");
   console.log("");
   console.log("  Backward-compatible SDK/marketplace commands remain available:");
-  console.log("  xr skill search <query> | create | package | publish | test | export | import | update");
+  console.log("  xr skill search <query> | init | create | build | package | publish | test | doctor | export | import | update");
 }
 
 export class SkillsCommand implements Command {
@@ -247,14 +247,41 @@ export class SkillsCommand implements Command {
         case "init": {
           const name = rest.join(" ").trim() || "New XR Skill";
           const category = typeof flags.category === "string" && (SKILL_CATEGORIES as readonly string[]).includes(flags.category) ? flags.category as SkillCategory : "productivity";
-          const dir = service.create({ name, id: typeof flags.id === "string" ? flags.id : undefined, category, publisher: typeof flags.publisher === "string" ? flags.publisher : undefined, dir: typeof flags.dir === "string" ? flags.dir : undefined, description: typeof flags.description === "string" ? flags.description : undefined });
-          ok(`created skill at ${dir}`);
-          tip(`next: xr skills validate ${dir}`);
+          const common = {
+            name,
+            id: typeof flags.id === "string" ? flags.id : undefined,
+            category,
+            publisher: typeof flags.publisher === "string" ? flags.publisher : undefined,
+            description: typeof flags.description === "string" ? flags.description : undefined,
+            force: boolFlag(flags, "force"),
+            template: typeof flags.template === "string" ? flags.template as any : undefined,
+          };
+          if (action === "init") {
+            const result = service.init({ ...common, dir: typeof flags.dir === "string" ? flags.dir : ctx.cwd });
+            ok(`initialized skill ${result.id} at ${result.dir}`);
+            tip(`${result.files.filter((f) => f.status !== "skipped").length} file(s) written, ${result.files.filter((f) => f.status === "skipped").length} skipped`);
+            tip(`next: xr skill build ${result.dir}`);
+          } else {
+            const dir = service.create({ ...common, dir: typeof flags.dir === "string" ? flags.dir : undefined });
+            ok(`created skill at ${dir}`);
+            tip(`next: xr skill build ${dir}`);
+          }
           return;
         }
 
-        case "package":
         case "build": {
+          const dir = rest[0] ?? ctx.cwd;
+          const result = service.build(dir, typeof flags["out-dir"] === "string" ? flags["out-dir"] : undefined);
+          for (const e of result.errors) error(e);
+          for (const w of result.warnings) warn(w);
+          if (!result.ok) { error("skill build failed"); return; }
+          ok(`built ${result.skillId}@${result.version}`);
+          ok(`package: ${result.packagePath}`);
+          ok(`report: ${result.reportPath}`);
+          return;
+        }
+
+        case "package": {
           const dir = rest[0] ?? ctx.cwd;
           const out = service.package(dir, typeof flags.out === "string" ? flags.out : undefined);
           ok(`packaged skill: ${out}`);
@@ -280,7 +307,7 @@ export class SkillsCommand implements Command {
 
         case "doctor": {
           const d = service.doctor();
-          heading("XR 2.1A Skill Runtime Doctor");
+          heading("XR 2.1B Skill SDK + Runtime Doctor");
           console.log(`  catalog total: ${d.total}`);
           console.log(`  catalog installed: ${d.installed}`);
           console.log(`  catalog enabled: ${d.enabled}`);
@@ -290,6 +317,12 @@ export class SkillsCommand implements Command {
           console.log(`  runtime invalid: ${d.runtime.invalid}`);
           console.log(`  search index docs: ${d.runtime.index.documents}`);
           console.log(`  missing required deps: ${d.runtime.missingRequired.length}`);
+          const dir = typeof flags.dir === "string" ? flags.dir : (rest[0] ?? undefined);
+          if (dir) {
+            const sdk = service.sdkDoctor(dir);
+            console.log(`  sdk project: ${sdk.ok ? C.green("ready") : C.amber("needs work")}`);
+            for (const check of sdk.checks) console.log(`    ${check.ok ? C.green("✓") : C.amber("!")} ${check.id}: ${check.detail}`);
+          }
           if (d.dangerous.length) for (const p of d.dangerous.slice(0, 30)) warn(`dangerous permission declared: ${p}`);
           if (d.runtime.missingRequired.length) for (const dep of d.runtime.missingRequired.slice(0, 30)) warn(`missing dependency: ${dep}`);
           return;
