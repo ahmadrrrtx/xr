@@ -1,0 +1,57 @@
+{
+  "id": "sales-followup",
+  "name": "Sales Follow-up",
+  "description": "Automatically follow up on deals that haven't been updated in 3 days.",
+  "trigger": {
+    "type": "schedule",
+    "config": {
+      "cron": "0 9 * * 1-5",
+      "timezone": "UTC"
+    }
+  },
+  "steps": [
+    {
+      "id": "find_stale_deals",
+      "name": "Find Stale Deals",
+      "type": "run_skill",
+      "config": {
+        "skillId": "business_sales",
+        "action": "find_stale_deals",
+        "input": { "days": 3 }
+      },
+      "onError": "stop"
+    },
+    {
+      "id": "for_each_deal",
+      "name": "Follow Up Each Deal",
+      "type": "run_worker",
+      "config": {
+        "workerId": "sales_director",
+        "action": "draft_followup",
+        "input": "{{step_find_stale_deals_output.deals}}"
+      },
+      "onError": "skip"
+    },
+    {
+      "id": "send_followups",
+      "name": "Send Follow-up Emails",
+      "type": "send_email",
+      "config": {
+        "template": "sales-followup",
+        "data": "{{step_for_each_deal_output.emails}}"
+      },
+      "onError": "skip"
+    },
+    {
+      "id": "notify_team",
+      "name": "Notify Sales Team",
+      "type": "send_notification",
+      "config": {
+        "type": "warning",
+        "title": "Stale Deals Alert",
+        "body": "{{step_find_stale_deals_output.count}} deals need follow-up"
+      },
+      "onError": "skip"
+    }
+  ]
+}

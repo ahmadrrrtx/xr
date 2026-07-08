@@ -1,0 +1,73 @@
+{
+  "id": "invoice-generation",
+  "name": "Invoice Generation",
+  "description": "Automatically generate and send invoices when deals are closed.",
+  "trigger": {
+    "type": "event",
+    "config": {
+      "event": "deal.won"
+    }
+  },
+  "steps": [
+    {
+      "id": "get_deal_details",
+      "name": "Get Deal Details",
+      "type": "run_skill",
+      "config": {
+        "skillId": "business_sales",
+        "action": "get_deal",
+        "input": "{{event.data.dealId}}"
+      },
+      "onError": "stop"
+    },
+    {
+      "id": "create_invoice",
+      "name": "Create Invoice",
+      "type": "create_record",
+      "config": {
+        "entity": "invoices",
+        "fields": {
+          "contactId": "{{step_get_deal_details_output.contactId}}",
+          "dealId": "{{event.data.dealId}}",
+          "lineItems": "{{step_get_deal_details_output.lineItems}}",
+          "currency": "{{step_get_deal_details_output.currency}}"
+        }
+      },
+      "onError": "stop"
+    },
+    {
+      "id": "run_worker_review",
+      "name": "Financial Analyst Review",
+      "type": "run_worker",
+      "config": {
+        "workerId": "financial_analyst",
+        "action": "review_invoice",
+        "input": "{{step_create_invoice_output.invoiceId}}"
+      },
+      "onError": "skip"
+    },
+    {
+      "id": "send_invoice",
+      "name": "Send Invoice",
+      "type": "send_email",
+      "config": {
+        "to": "{{step_get_deal_details_output.contactEmail}}",
+        "subject": "Invoice for {{event.data.title}}",
+        "template": "invoice",
+        "data": "{{step_create_invoice_output}}"
+      },
+      "onError": "skip"
+    },
+    {
+      "id": "notify_finance",
+      "name": "Notify Finance",
+      "type": "send_notification",
+      "config": {
+        "type": "info",
+        "title": "Invoice Sent",
+        "body": "Invoice for {{event.data.title}} ({{event.data.value}}) sent to {{step_get_deal_details_output.contactName}}"
+      },
+      "onError": "skip"
+    }
+  ]
+}

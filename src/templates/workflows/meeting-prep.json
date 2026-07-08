@@ -1,0 +1,48 @@
+{
+  "id": "meeting-prep",
+  "name": "Meeting Preparation",
+  "description": "Prepare meeting briefings by gathering relevant contact and deal context 30 minutes before meetings.",
+  "trigger": {
+    "type": "schedule",
+    "config": {
+      "cron": "*/30 * * * *",
+      "timezone": "UTC"
+    }
+  },
+  "steps": [
+    {
+      "id": "find_upcoming_meetings",
+      "name": "Find Upcoming Meetings",
+      "type": "run_skill",
+      "config": {
+        "skillId": "business_meetings",
+        "action": "find_upcoming",
+        "input": { "withinMinutes": 35 }
+      },
+      "onError": "stop"
+    },
+    {
+      "id": "gather_context",
+      "name": "Gather Meeting Context",
+      "type": "run_worker",
+      "config": {
+        "workerId": "ceo_advisor",
+        "action": "prepare_meeting_brief",
+        "input": "{{step_find_upcoming_meetings_output.meetings}}"
+      },
+      "onError": "skip"
+    },
+    {
+      "id": "send_briefing",
+      "name": "Send Briefing to Organizer",
+      "type": "send_notification",
+      "config": {
+        "type": "info",
+        "title": "Meeting Briefing Ready",
+        "body": "{{step_gather_context_output.summary}}",
+        "recipientId": "{{step_find_upcoming_meetings_output.organizerId}}"
+      },
+      "onError": "skip"
+    }
+  ]
+}

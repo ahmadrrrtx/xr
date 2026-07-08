@@ -1,0 +1,14 @@
+{
+  "id": "market-research",
+  "name": "Market Research",
+  "description": "Bi-weekly market research and trend analysis.",
+  "trigger": { "type": "schedule", "config": { "cron": "0 7 1,15 * *", "timezone": "UTC" } },
+  "steps": [
+    { "id": "research", "name": "Market Research", "type": "run_worker",
+      "config": { "workerId": "research_analyst", "action": "market_scan" }, "onError": "stop" },
+    { "id": "strategy", "name": "Growth Strategy", "type": "run_worker",
+      "config": { "workerId": "growth_strategist", "action": "analyze_market", "input": "{{step_research_output}}" }, "onError": "skip" },
+    { "id": "report", "name": "Create Report", "type": "create_record",
+      "config": { "entity": "documents", "fields": { "title": "Market Research Report", "content": "{{step_strategy_output}}" } }, "onError": "skip" }
+  ]
+}

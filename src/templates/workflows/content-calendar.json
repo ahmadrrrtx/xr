@@ -1,0 +1,14 @@
+{
+  "id": "content-calendar",
+  "name": "Content Calendar",
+  "description": "Weekly content planning and scheduling.",
+  "trigger": { "type": "schedule", "config": { "cron": "0 9 * * 1", "timezone": "UTC" } },
+  "steps": [
+    { "id": "plan", "name": "Plan Content", "type": "run_worker",
+      "config": { "workerId": "marketing_director", "action": "plan_content_week" }, "onError": "stop" },
+    { "id": "create_items", "name": "Create Content Items", "type": "create_record",
+      "config": { "entity": "content_items", "bulk": "{{step_plan_output.items}}" }, "onError": "skip" },
+    { "id": "notify", "name": "Notify Team", "type": "send_notification",
+      "config": { "type": "info", "title": "Content Calendar Updated", "body": "{{step_plan_output.summary}}" }, "onError": "skip" }
+  ]
+}

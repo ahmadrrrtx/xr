@@ -1,0 +1,14 @@
+{
+  "id": "email-campaign",
+  "name": "Email Campaign",
+  "description": "Automated email campaign with follow-ups.",
+  "trigger": { "type": "manual" },
+  "steps": [
+    { "id": "segment", "name": "Segment Audience", "type": "run_skill",
+      "config": { "skillId": "business_marketing", "action": "segment_contacts", "input": "{{trigger.filters}}" }, "onError": "stop" },
+    { "id": "send_batch", "name": "Send Email Batch", "type": "send_email",
+      "config": { "template": "{{trigger.template}}", "recipients": "{{step_segment_output.contacts}}" }, "onError": "skip" },
+    { "id": "track", "name": "Track Metrics", "type": "run_skill",
+      "config": { "skillId": "business_marketing", "action": "track_campaign" }, "onError": "skip" }
+  ]
+}

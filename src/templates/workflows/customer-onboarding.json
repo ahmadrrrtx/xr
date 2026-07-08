@@ -1,0 +1,25 @@
+{
+  "id": "customer-onboarding",
+  "name": "Customer Onboarding",
+  "description": "Trigger onboarding workflow when a deal is won.",
+  "trigger": {
+    "type": "event",
+    "config": { "event": "deal.won" }
+  },
+  "steps": [
+    { "id": "update_status", "name": "Update Contact Status", "type": "update_record",
+      "config": { "entity": "contacts", "id": "{{event.data.contactId}}", "fields": { "status": "customer" } }, "onError": "skip" },
+    { "id": "create_project", "name": "Create Onboarding Project", "type": "create_record",
+      "config": { "entity": "projects", "fields": { "name": "Onboarding: {{event.data.title}}", "status": "active" } }, "onError": "skip" },
+    { "id": "create_tasks", "name": "Create Onboarding Tasks", "type": "create_record",
+      "config": { "entity": "tasks", "bulk": [
+        { "title": "Send welcome email", "priority": "high" },
+        { "title": "Schedule kickoff meeting", "priority": "high" },
+        { "title": "Setup account access", "priority": "medium" },
+        { "title": "Send documentation", "priority": "medium" },
+        { "title": "30-day check-in", "priority": "low" }
+      ]}, "onError": "skip" },
+    { "id": "send_welcome", "name": "Send Welcome Email", "type": "send_email",
+      "config": { "template": "customer-welcome", "to": "{{event.data.contactEmail}}" }, "onError": "skip" }
+  ]
+}

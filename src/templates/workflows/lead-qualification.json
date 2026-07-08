@@ -1,0 +1,78 @@
+{
+  "id": "lead-qualification",
+  "name": "Lead Qualification",
+  "description": "Automatically qualify new leads based on scoring criteria and assign to sales team.",
+  "trigger": {
+    "type": "event",
+    "config": {
+      "event": "contact.created",
+      "filters": {
+        "type": "person"
+      }
+    }
+  },
+  "steps": [
+    {
+      "id": "score_lead",
+      "name": "Score Lead",
+      "type": "run_skill",
+      "config": {
+        "skillId": "business_marketing",
+        "action": "score_lead",
+        "input": "{{event.data.contactId}}"
+      },
+      "onError": "stop"
+    },
+    {
+      "id": "check_score",
+      "name": "Check Score Threshold",
+      "type": "conditional",
+      "config": {
+        "field": "step_score_lead_output.score",
+        "operator": "gte",
+        "value": 50
+      },
+      "onError": "stop"
+    },
+    {
+      "id": "assign_owner",
+      "name": "Assign Sales Owner",
+      "type": "update_record",
+      "config": {
+        "entity": "contacts",
+        "id": "{{event.data.contactId}}",
+        "fields": {
+          "status": "qualified",
+          "score": "{{step_score_lead_output.score}}"
+        }
+      },
+      "onError": "skip"
+    },
+    {
+      "id": "create_deal",
+      "name": "Create Deal",
+      "type": "create_record",
+      "config": {
+        "entity": "deals",
+        "fields": {
+          "title": "New deal: {{event.data.name}}",
+          "contactId": "{{event.data.contactId}}",
+          "stageId": "qualified"
+        }
+      },
+      "onError": "skip"
+    },
+    {
+      "id": "notify_sales",
+      "name": "Notify Sales Team",
+      "type": "send_notification",
+      "config": {
+        "type": "info",
+        "title": "New Qualified Lead",
+        "body": "{{event.data.name}} has been qualified with score {{step_score_lead_output.score}}",
+        "link": "/contacts/{{event.data.contactId}}"
+      },
+      "onError": "skip"
+    }
+  ]
+}

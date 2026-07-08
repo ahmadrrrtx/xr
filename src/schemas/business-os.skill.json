@@ -1,0 +1,179 @@
+{
+  "id": "business_os",
+  "name": "XR Business OS",
+  "version": "15.0.0",
+  "description": "AI Operating System for businesses. Unified CRM, Sales, Marketing, Support, Projects, Knowledge, Finance, HR, Analytics, Automation, and AI Workers.",
+  "author": "ahmadrrrtx",
+  "license": "MIT",
+  "category": "business",
+  "tags": ["business", "crm", "sales", "marketing", "support", "projects", "finance", "hr", "analytics", "automation", "ai-workers"],
+  "icon": "🏢",
+  "minXRVersion": "2.1.0",
+  "entryPoint": "src/business/index.ts",
+  "permissions": [
+    {
+      "resource": "memory",
+      "actions": ["read", "write"],
+      "reason": "Business entities stored in Memory Engine"
+    },
+    {
+      "resource": "providers",
+      "actions": ["use"],
+      "reason": "AI Workers use Provider Engine for LLM calls"
+    },
+    {
+      "resource": "research",
+      "actions": ["use"],
+      "reason": "AI Workers use Research Engine for market analysis"
+    },
+    {
+      "resource": "voice",
+      "actions": ["use"],
+      "reason": "AI Workers support voice interaction"
+    },
+    {
+      "resource": "computer",
+      "actions": ["use"],
+      "reason": "AI Workers can control computer for report generation"
+    },
+    {
+      "resource": "network",
+      "actions": ["request"],
+      "reason": "Integration connectors make API calls to external services"
+    },
+    {
+      "resource": "filesystem",
+      "actions": ["read", "write"],
+      "reason": "Document storage and template management"
+    },
+    {
+      "resource": "cron",
+      "actions": ["register"],
+      "reason": "Automation schedules and recurring reports"
+    }
+  ],
+  "dependencies": [],
+  "commands": [
+    {
+      "name": "biz",
+      "description": "XR Business OS commands",
+      "usage": "xr biz <subcommand>",
+      "subcommands": [
+        "init", "status", "enable", "disable",
+        "contacts", "deals", "tickets", "projects", "tasks",
+        "kb", "invoices", "kpis", "automations", "workers",
+        "connect", "disconnect", "integrations",
+        "audit", "verify"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "id": "business_crm",
+      "name": "CRM",
+      "description": "Contact management, relationship tracking",
+      "triggers": ["contact", "crm", "customer", "lead", "prospect"]
+    },
+    {
+      "id": "business_sales",
+      "name": "Sales",
+      "description": "Pipeline management, deal tracking, forecasting",
+      "triggers": ["deal", "pipeline", "forecast", "revenue", "sales"]
+    },
+    {
+      "id": "business_marketing",
+      "name": "Marketing",
+      "description": "Campaigns, content, lead generation",
+      "triggers": ["campaign", "marketing", "content", "lead scoring"]
+    },
+    {
+      "id": "business_support",
+      "name": "Support",
+      "description": "Ticket management, SLA tracking",
+      "triggers": ["ticket", "support", "issue", "help", "sla"]
+    },
+    {
+      "id": "business_projects",
+      "name": "Projects",
+      "description": "Project and task management",
+      "triggers": ["project", "task", "milestone", "sprint", "kanban"]
+    },
+    {
+      "id": "business_knowledge",
+      "name": "Knowledge",
+      "description": "Wiki, SOPs, knowledge base",
+      "triggers": ["knowledge", "wiki", "article", "documentation", "sop"]
+    },
+    {
+      "id": "business_finance",
+      "name": "Finance",
+      "description": "Invoicing, expenses, P&L",
+      "triggers": ["invoice", "expense", "payment", "finance", "revenue", "pnl"]
+    },
+    {
+      "id": "business_hr",
+      "name": "HR",
+      "description": "People management, time-off",
+      "triggers": ["employee", "hr", "time-off", "vacation", "department"]
+    },
+    {
+      "id": "business_analytics",
+      "name": "Analytics",
+      "description": "Dashboards, reports, KPIs",
+      "triggers": ["analytics", "dashboard", "report", "kpi", "metrics"]
+    },
+    {
+      "id": "business_automation",
+      "name": "Automation",
+      "description": "Workflow automation engine",
+      "triggers": ["automation", "workflow", "trigger", "schedule"]
+    },
+    {
+      "id": "business_scheduling",
+      "name": "Scheduling",
+      "description": "Calendar and availability management",
+      "triggers": ["calendar", "schedule", "availability", "appointment"]
+    },
+    {
+      "id": "business_comm",
+      "name": "Communication",
+      "description": "Email, chat, notifications",
+      "triggers": ["email", "message", "notification", "chat"]
+    },
+    {
+      "id": "business_docs",
+      "name": "Documents",
+      "description": "Document creation and templates",
+      "triggers": ["document", "template", "proposal", "contract"]
+    },
+    {
+      "id": "business_meetings",
+      "name": "Meetings",
+      "description": "Meeting scheduling and management",
+      "triggers": ["meeting", "call", "video", "agenda"]
+    },
+    {
+      "id": "business_workers",
+      "name": "AI Workers",
+      "description": "Specialized AI business roles",
+      "triggers": ["worker", "ai team", "assistant", "advisor", "analyst"]
+    }
+  ],
+  "workers": [
+    "ceo_advisor", "sales_director", "marketing_director", "financial_analyst",
+    "hr_manager", "project_manager", "support_manager", "operations_manager",
+    "legal_assistant", "research_analyst", "growth_strategist"
+  ],
+  "integrations": [
+    "gmail", "outlook", "slack", "discord", "microsoft_teams", "telegram", "whatsapp_business",
+    "google_calendar", "outlook_calendar", "cal_com",
+    "github", "gitlab", "jira", "linear",
+    "google_drive", "onedrive", "dropbox", "nextcloud",
+    "hubspot", "salesforce", "erpnext", "twenty",
+    "n8n", "activepieces",
+    "plausible", "posthog",
+    "stripe", "paypal",
+    "shopify", "woocommerce",
+    "coolify", "docker"
+  ]
+}

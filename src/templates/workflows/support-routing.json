@@ -1,0 +1,21 @@
+{
+  "id": "support-routing",
+  "name": "Support Ticket Routing",
+  "description": "Automatically route and assign new support tickets.",
+  "trigger": { "type": "event", "config": { "event": "ticket.created" } },
+  "steps": [
+    { "id": "analyze", "name": "Analyze Ticket", "type": "run_worker",
+      "config": { "workerId": "support_manager", "action": "analyze_ticket", "input": "{{event.data.ticketId}}" }, "onError": "stop" },
+    { "id": "set_priority", "name": "Set Priority", "type": "update_record",
+      "config": { "entity": "tickets", "id": "{{event.data.ticketId}}", "fields": { "priority": "{{step_analyze_output.priority}}" } }, "onError": "skip" },
+    { "id": "assign", "name": "Assign Ticket", "type": "update_record",
+      "config": { "entity": "tickets", "id": "{{event.data.ticketId}}", "fields": { "assigneeId": "{{step_analyze_output.assigneeId}}" } }, "onError": "skip" },
+    { "id": "suggest_article", "name": "Suggest KB Article", "type": "run_skill",
+      "config": { "skillId": "business_knowledge", "action": "search", "input": "{{event.data.subject}}" }, "onError": "skip" },
+    { "id": "auto_reply", "name": "Auto-Reply", "type": "conditional",
+      "config": { "field": "step_suggest_article_output.found", "operator": "eq", "value": true },
+      "onError": "skip" },
+    { "id": "send_article", "name": "Send Article Link", "type": "send_email",
+      "config": { "template": "support-article-suggestion", "data": "{{step_suggest_article_output}}" }, "onError": "skip" }
+  ]
+}

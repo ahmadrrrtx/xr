@@ -1,0 +1,14 @@
+{
+  "id": "competitor-monitoring",
+  "name": "Competitor Monitoring",
+  "description": "Weekly competitor analysis and market intelligence.",
+  "trigger": { "type": "schedule", "config": { "cron": "0 6 * * 1", "timezone": "UTC" } },
+  "steps": [
+    { "id": "research", "name": "Research Competitors", "type": "run_worker",
+      "config": { "workerId": "research_analyst", "action": "competitor_scan" }, "onError": "stop" },
+    { "id": "analyze", "name": "Analyze Findings", "type": "run_worker",
+      "config": { "workerId": "growth_strategist", "action": "analyze_competitors", "input": "{{step_research_output}}" }, "onError": "skip" },
+    { "id": "notify", "name": "Send Intelligence Brief", "type": "send_notification",
+      "config": { "type": "info", "title": "Weekly Competitor Brief", "body": "{{step_analyze_output.summary}}" }, "onError": "skip" }
+  ]
+}

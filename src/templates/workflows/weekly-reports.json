@@ -1,0 +1,14 @@
+{
+  "id": "weekly-reports",
+  "name": "Weekly Business Reports",
+  "description": "Generate and distribute weekly business reports every Monday morning.",
+  "trigger": { "type": "schedule", "config": { "cron": "0 8 * * 1", "timezone": "UTC" } },
+  "steps": [
+    { "id": "generate_kpis", "name": "Generate KPIs", "type": "run_skill",
+      "config": { "skillId": "business_analytics", "action": "generate_kpis" }, "onError": "stop" },
+    { "id": "ceo_analysis", "name": "CEO Advisor Analysis", "type": "run_worker",
+      "config": { "workerId": "ceo_advisor", "action": "weekly_report", "input": "{{step_generate_kpis_output}}" }, "onError": "skip" },
+    { "id": "distribute", "name": "Distribute Report", "type": "send_email",
+      "config": { "template": "weekly-report", "data": "{{step_ceo_analysis_output}}" }, "onError": "skip" }
+  ]
+}
