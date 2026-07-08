@@ -287,8 +287,9 @@ export class PipelineManager {
     const totalDeals = (this.db.prepare(`SELECT COUNT(*) as c FROM biz_deals ${whereClause}`).get(...whereValues) as any)?.c ?? 0;
     const totalValue = (this.db.prepare(`SELECT COALESCE(SUM(value), 0) as v FROM biz_deals ${whereClause}`).get(...whereValues) as any)?.v ?? 0;
 
-    const wonDeals = (this.db.prepare(`${whereClause.replace('WHERE', 'WHERE') ? whereClause + ' AND' : 'WHERE'} stage_id = 'closed_won'` ??
-      `SELECT COUNT(*) as c FROM biz_deals ${whereClause} AND stage_id = 'closed_won'`).get(...whereValues) as any)?.c ?? 0;
+    const wonDeals = (this.db.prepare(
+      `SELECT COUNT(*) as c FROM biz_deals ${whereClause} AND stage_id = 'closed_won'`
+    ).get(...whereValues) as any)?.c ?? 0;
     const wonValue = (this.db.prepare(
       `SELECT COALESCE(SUM(value), 0) as v FROM biz_deals ${whereClause} AND stage_id = 'closed_won'`
     ).get(...whereValues) as any)?.v ?? 0;

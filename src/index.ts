@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 /**
- * XR — The AI Agent You Can Actually Trust
- * Stage 3 CLI bootstrap.
+ * XR — The AI OS Kernel Bootstrap
+ * Stage 16: Coherent AI Operating System Core
  */
 
-import { XRRuntime } from "./core/runtime.ts";
+import { XRKernel } from "./core/kernel.ts";
 import { RunAgentCommand } from "./commands/run-agent.ts";
 import { DoctorCommand } from "./commands/doctor.ts";
 import { ConfigCommand } from "./commands/config.ts";
@@ -13,6 +13,7 @@ import { ProvidersCommand } from "./commands/providers.ts";
 import { MemoryCommand } from "./commands/memory.ts";
 import { PluginsCommand, PluginRunCommand } from "./commands/plugins.ts";
 import { McpCommand } from "./commands/mcp.ts";
+import { WorkspaceCommand } from "./commands/workspace.ts";
 import {
   ControlCommand,
   InstallCommand,
@@ -27,114 +28,56 @@ import {
   SpeakCommand,
   ListenCommand,
 } from "./commands/install.ts";
-import { ConfigService } from "./services/config-service.ts";
-import { ProviderService } from "./services/provider-service.ts";
-import { AgentService } from "./services/agent-service.ts";
-import { BudgetService } from "./services/budget-service.ts";
-import { PluginService } from "./services/plugin-service.ts";
-import { McpService } from "./services/mcp-service.ts";
-import { MultiAgentService } from "./services/multi-agent-service.ts";
-import { Store } from "./state/db.ts";
-import { SessionStore } from "./state/stores/session-store.ts";
-import { AuditStore } from "./state/stores/audit-store.ts";
-import { MemoryStore } from "./state/stores/memory-store.ts";
-import { CostStore } from "./state/stores/cost-store.ts";
-import { UserMemoryStore } from "./state/stores/user-memory-store.ts";
-import { WorkflowStore } from "./state/stores/workflow-store.ts";
 import { banner, colors as C } from "./interfaces/cli.ts";
 import { AgentsCommand } from "./commands/agents.ts";
 import { SkillsCommand, SkillsAliasCommand } from "./commands/skills.ts";
-import { SkillService } from "./services/skill-service.ts";
 import { ShieldCommand } from "./commands/shield.ts";
 
-function registerServices(runtime: XRRuntime): void {
-  const container = runtime.container;
-
-  container.register("legacyStore", new Store());
-  container.register("sessionStore", new SessionStore());
-  container.register("auditStore", new AuditStore());
-  container.register("memoryStore", new MemoryStore());
-  container.register("costStore", new CostStore());
-  container.register("userMemoryStore", new UserMemoryStore());
-  container.register("workflowStore", new WorkflowStore());
-
-  const configService = new ConfigService();
-  container.register("config", configService);
-
-  const providerService = new ProviderService(container);
-  container.register("providers", providerService);
-
-  const budgetService = new BudgetService(container);
-  container.register("budget", budgetService);
-
-  const pluginService = new PluginService(container);
-  container.register("plugins", pluginService);
-
-  const mcpService = new McpService(container);
-  container.register("mcp", mcpService);
-
-  const skillService = new SkillService();
-  container.register("skills", skillService);
-
-  const agentService = new AgentService(container);
-  container.register("agent", agentService);
-
-  const multiAgentService = new MultiAgentService(container);
-  container.register("multiAgents", multiAgentService);
-
-  runtime.lifecycle.register(configService);
-  runtime.lifecycle.register(providerService);
-  runtime.lifecycle.register(budgetService);
-  runtime.lifecycle.register(pluginService);
-  runtime.lifecycle.register(mcpService);
-  runtime.lifecycle.register(skillService);
-  runtime.lifecycle.register(agentService);
-  runtime.lifecycle.register(multiAgentService);
-}
-
-function registerCommands(runtime: XRRuntime): void {
-  runtime.commands.register(new RunAgentCommand());
-  runtime.commands.register(new InstallCommand());
-  runtime.commands.register(new OnboardingCommand());
-  runtime.commands.register(new DoctorCommand());
-  runtime.commands.register(new StatusCommand());
-  runtime.commands.register(new RepairCommand());
-  runtime.commands.register(new UpdateCommand());
-  runtime.commands.register(new ResetCommand());
-  runtime.commands.register(new ConfigCommand());
-  runtime.commands.register(new BudgetCommand());
-  runtime.commands.register(new ProvidersCommand());
-  runtime.commands.register(new ModelsCommand());
-  runtime.commands.register(new VoiceCommand());
-  runtime.commands.register(new SpeakCommand());
-  runtime.commands.register(new ListenCommand());
-  runtime.commands.register(new ControlCommand());
-  runtime.commands.register(new ResearchCommand());
-  runtime.commands.register(new MemoryCommand());
-  runtime.commands.register(new PluginsCommand());
-  runtime.commands.register(new PluginRunCommand());
-  runtime.commands.register(new McpCommand());
-  runtime.commands.register(new SkillsCommand());
-  runtime.commands.register(new SkillsAliasCommand());
-  runtime.commands.register(new AgentsCommand());
-  runtime.commands.register(new ShieldCommand());
+function registerCommands(kernel: XRKernel): void {
+  kernel.commands.register(new RunAgentCommand());
+  kernel.commands.register(new InstallCommand());
+  kernel.commands.register(new OnboardingCommand());
+  kernel.commands.register(new DoctorCommand());
+  kernel.commands.register(new StatusCommand());
+  kernel.commands.register(new RepairCommand());
+  kernel.commands.register(new UpdateCommand());
+  kernel.commands.register(new ResetCommand());
+  kernel.commands.register(new ConfigCommand());
+  kernel.commands.register(new BudgetCommand());
+  kernel.commands.register(new ProvidersCommand());
+  kernel.commands.register(new ModelsCommand());
+  kernel.commands.register(new VoiceCommand());
+  kernel.commands.register(new SpeakCommand());
+  kernel.commands.register(new ListenCommand());
+  kernel.commands.register(new ControlCommand());
+  kernel.commands.register(new ResearchCommand());
+  kernel.commands.register(new MemoryCommand());
+  kernel.commands.register(new PluginsCommand());
+  kernel.commands.register(new PluginRunCommand());
+  kernel.commands.register(new McpCommand());
+  kernel.commands.register(new SkillsCommand());
+  kernel.commands.register(new SkillsAliasCommand());
+  kernel.commands.register(new AgentsCommand());
+  kernel.commands.register(new ShieldCommand());
+  kernel.commands.register(new WorkspaceCommand());
 }
 
 async function main(): Promise<void> {
-  const runtime = new XRRuntime();
-  registerServices(runtime);
-  registerCommands(runtime);
+  const kernel = new XRKernel();
+  
+  // Register commands directly in kernel commands registry
+  registerCommands(kernel);
 
   try {
-    await runtime.bootstrap();
-    await runtime.start();
+    // Bootstrap & start full OS kernel
+    await kernel.bootstrap();
+    await kernel.start();
 
     const argv = process.argv
       .slice(2)
       .filter((a) => a !== "--from-bootstrap");
 
-    // Stage 5/6 — interactive TUI (`xr --tui`). Was previously defined but never
-    // routed, so the flag fell through to the agent.
+    // Interactive TUI router
     if (argv[0] === "--tui" || argv[0] === "tui") {
       const { runTUI } = await import("./interfaces/tui.ts");
       await runTUI();
@@ -153,6 +96,7 @@ async function main(): Promise<void> {
       console.log(`  xr doctor                 health check (incl. memory)`);
       console.log(`  xr status                 component status`);
       console.log(`  xr --tui                  interactive terminal UI`);
+      console.log(`  xr workspace              manage isolated workspaces (list/create/use/delete)`);
       console.log(`  xr repair                 safe repair`);
       console.log(`  xr update                 update with rollback guard`);
       console.log(`  xr providers list         show all providers and keys`);
@@ -179,30 +123,20 @@ async function main(): Promise<void> {
 
     const commandName = argv[0];
     const args = argv.slice(1);
-    if (runtime.commands.get(commandName))
-      await runtime.executeCommand(commandName, args, process.cwd());
-    else await runtime.executeCommand("run", argv, process.cwd());
+    
+    if (kernel.commands.get(commandName)) {
+      await kernel.executeCommand(commandName, args, process.cwd());
+    } else {
+      await kernel.executeCommand("run", argv, process.cwd());
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(C.red("fatal:"), msg);
     if (process.env.XR_DEBUG === "1") console.error(e);
     process.exit(1);
   } finally {
-    await runtime.shutdown();
-    const c = runtime.container;
-    for (const name of [
-      "legacyStore",
-      "sessionStore",
-      "auditStore",
-      "memoryStore",
-      "costStore",
-      "userMemoryStore",
-      "workflowStore",
-    ]) {
-      try {
-        c.resolve<{ close(): void }>(name).close();
-      } catch {}
-    }
+    // Graceful kernel shutdown sequence
+    await kernel.shutdown();
   }
 }
 

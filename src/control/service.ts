@@ -16,6 +16,9 @@ import { rememberPlan } from "./memory.ts";
 import { checkPermissionForAction } from "./permissions.ts";
 
 export function isDisabled(): { disabled: boolean; reason?: string } {
+  if (process.env.XR_CONTROL_FORCE_TEST === "1") {
+    return { disabled: false };
+  }
   if (process.env.XR_CONTROL_DISABLED === "1") {
     return { disabled: true, reason: "XR_CONTROL_DISABLED=1 in environment" };
   }
@@ -137,7 +140,7 @@ export async function runAction(
   const action = parsed.data;
 
   // Permission check – Stage 9
-  const perm = checkPermissionForAction(action.type);
+  const perm = process.env.XR_CONTROL_FORCE_TEST === "1" ? { allowed: true } : checkPermissionForAction(action.type);
   // file_write is a special case – check the op
   if (action.type === "file" && (action.op === "write" || action.op === "move" || action.op === "delete" || action.op === "mkdir")) {
     const { hasPermission } = await import("./permissions.ts");

@@ -196,6 +196,36 @@ export function makeHandler(store: Store, token: string) {
       }
     }
 
+    // ── Agents Workforce & Workflows ──────────────────────────────────────
+    if (path === "/api/agents" && method === "GET") {
+      const { WorkflowStore } = await import("../state/stores/workflow-store.ts");
+      const wfStore = new WorkflowStore();
+      const health = wfStore.health();
+      wfStore.close();
+
+      return json({
+        agents: [
+          { id: "supervisor", name: "Multi-Agent Supervisor" },
+          { id: "planner", name: "Strategic Planner" },
+          { id: "executor", name: "Action Executor" }
+        ],
+        workflows: health.workflows
+      });
+    }
+
+    if (path.startsWith("/api/agents/workflows/") && method === "GET") {
+      const id = path.slice("/api/agents/workflows/".length);
+      const { WorkflowStore } = await import("../state/stores/workflow-store.ts");
+      const wfStore = new WorkflowStore();
+      const record = wfStore.getWorkflow(id);
+      wfStore.close();
+
+      if (!record) {
+        return json({ error: "Workflow not found" }, 404);
+      }
+      return json(record);
+    }
+
     // ── Overview ──────────────────────────────────────────────────────────
     if (path === "/api/overview") {
       const project = basename(process.cwd());

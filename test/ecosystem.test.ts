@@ -44,7 +44,7 @@ test("McpClient lists and calls tools", async () => {
   const tools = await client.listTools();
   expect(tools[0].name).toBe("query");
   const out = await client.callTool("query", { q: "SELECT 1" });
-  expect(out).toContain("rows: 3");
+  expect(out.toString()).toContain("rows: 3");
 });
 
 test("wrapped MCP tool is approval-gated (denied = no call)", async () => {

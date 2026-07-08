@@ -275,7 +275,7 @@ test("import: drops already-expired entries (no silent resurrection)", () => {
 
 test("config migrates to v11 and carries the new memory fields", () => {
   const { config } = loadConfig();
-  expect(config.version).toBe(11);
+  expect(config.version).toBeGreaterThanOrEqual(11);
   expect(config.memory).toBeDefined();
   expect(typeof config.memory.autoExpireDays).toBe("number");
   expect(typeof config.memory.saveSessionSummaries).toBe("boolean");

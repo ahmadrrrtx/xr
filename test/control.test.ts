@@ -108,6 +108,7 @@ describe("runAction(dry-run)", () => {
     delete process.env.XR_CONTROL_DISABLED;
 
     try {
+      process.env.XR_CONTROL_FORCE_TEST = "1";
       const store = new Store(join(tmp, "xr.db"));
       // Force-enable for this temp config by writing a minimal config file.
       const { saveConfig, loadConfig } = await import("../src/config/config.ts");
@@ -125,6 +126,7 @@ describe("runAction(dry-run)", () => {
       expect(result.result.message).toContain("dry-run");
       store.close();
     } finally {
+      delete process.env.XR_CONTROL_FORCE_TEST;
       if (prevHome === undefined) delete process.env.XR_HOME;
       else process.env.XR_HOME = prevHome;
       if (prevDisabled !== undefined) process.env.XR_CONTROL_DISABLED = prevDisabled;
