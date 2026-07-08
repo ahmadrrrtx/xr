@@ -84,6 +84,12 @@ async function main(): Promise<void> {
       return;
     }
 
+    // Version flag capture
+    if (argv[0] === "--version" || argv[0] === "-v" || argv[0] === "version") {
+      console.log(`v3.0.2`);
+      return;
+    }
+
     if (
       argv.length === 0 ||
       argv[0] === "help" ||
