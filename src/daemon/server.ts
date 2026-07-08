@@ -22,7 +22,7 @@ import { handlePluginApi } from "./plugin-api.ts";
 import { handleSkillsApi } from "./skills-api.ts";
 import { randomBytes } from "node:crypto";
 import { Store } from "../state/db.ts";
-import { loadConfig, isMemoryEnabled } from "../config/config.ts";
+import { loadConfig, saveConfig, isMemoryEnabled } from "../config/config.ts";
 import { runLab } from "../security/lab.ts";
 import { XRShieldService } from "../security/shield.ts";
 import { fingerprint } from "../memory/rag.ts";
@@ -103,8 +103,14 @@ function sse(stream: ReadableStream): Response {
 }
 
 /** Build the request handler (pure; used by both serve() and tests). */
-export function makeHandler(store: Store, token: string) {
-  const { config } = loadConfig();
+export function makeHandler(initialStore: Store, token: string) {
+  let liveStore = initialStore;
+  let shieldService = new XRShieldService(liveStore);
+  const workspaceManager = new WorkspaceManager();
+
+  function currentConfig() {
+    return loadConfig().config;
+  }
 
   function authed(req: Request): boolean {
     const h   = req.headers.get("authorization") ?? "";
@@ -116,12 +122,12 @@ export function makeHandler(store: Store, token: string) {
     return false;
   }
 
-  const shieldService = new XRShieldService(store);
-
   return async function handle(req: Request): Promise<Response> {
     const url    = new URL(req.url);
     const path   = url.pathname;
     const method = req.method;
+    const store  = liveStore;
+    const config = currentConfig();
 
     // ── Open endpoints (no auth) ──────────────────────────────────────────
     if (path === "/api/health") {
@@ -458,16 +464,81 @@ export function makeHandler(store: Store, token: string) {
       });
     }
 
+    if (path === "/api/providers/set" && method === "POST") {
+      try {
+        const body = await req.json() as {
+          provider?: string;
+          model?: string;
+          fallbackProvider?: string | null;
+          fallbackModel?: string | null;
+        };
+        const allowed = new Set(getProviderEnvStatus().map((p) => p.id));
+        if (!body.provider || !allowed.has(body.provider)) {
+          return json({ error: "valid provider is required" }, 400);
+        }
+        if (body.fallbackProvider && !allowed.has(body.fallbackProvider)) {
+          return json({ error: "fallbackProvider must be a known provider" }, 400);
+        }
+        const next = loadConfig().config;
+        next.defaults.provider = body.provider;
+        if (body.model?.trim()) next.defaults.model = body.model.trim();
+        next.defaults.fallbackProvider = body.fallbackProvider || undefined;
+        next.defaults.fallbackModel = body.fallbackProvider ? (body.fallbackModel?.trim() || next.defaults.fallbackModel) : undefined;
+        saveConfig(next);
+        liveStore.audit("providers.set", {
+          provider: next.defaults.provider,
+          model: next.defaults.model,
+          fallbackProvider: next.defaults.fallbackProvider ?? null,
+          fallbackModel: next.defaults.fallbackModel ?? null,
+        });
+        return json({ ok: true, provider: next.defaults.provider, model: next.defaults.model, fallbackProvider: next.defaults.fallbackProvider ?? null, fallbackModel: next.defaults.fallbackModel ?? null });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
+    }
+
     if (path === "/api/workspaces") {
-      const wm = new WorkspaceManager();
       return json({
-        active: wm.getActiveId(),
-        workspaces: wm.listWorkspaces().map((ws) => ({
+        active: workspaceManager.getActiveId(),
+        workspaces: workspaceManager.listWorkspaces().map((ws) => ({
           id: ws.id,
           name: ws.name,
           rootDir: ws.rootDir,
         })),
       });
+    }
+
+    if (path === "/api/workspaces/create" && method === "POST") {
+      try {
+        const body = await req.json() as { id?: string; name?: string };
+        const id = (body.id ?? "").trim();
+        if (!id || !/^[a-z0-9_-]+$/i.test(id)) return json({ error: "workspace id must match /^[a-z0-9_-]+$/i" }, 400);
+        const ctx = workspaceManager.ensureWorkspace(id, (body.name ?? id).trim() || id);
+        liveStore.audit("workspace.create", { id: ctx.id, name: ctx.name });
+        return json({ ok: true, workspace: { id: ctx.id, name: ctx.name, rootDir: ctx.rootDir } });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
+    }
+
+    if (path === "/api/workspaces/switch" && method === "POST") {
+      try {
+        const body = await req.json() as { id?: string };
+        const id = (body.id ?? "").trim();
+        if (!id) return json({ error: "workspace id is required" }, 400);
+        const previousId = workspaceManager.getActiveId();
+        if (previousId !== id) {
+          const previousStore = liveStore;
+          workspaceManager.setActiveId(id);
+          liveStore = workspaceManager.getStore(id);
+          shieldService = new XRShieldService(liveStore);
+          try { previousStore.close(); } catch {}
+        }
+        liveStore.audit("workspace.switch", { from: previousId, to: id });
+        return json({ ok: true, active: workspaceManager.getActiveId() });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
     }
 
     // ── Config (safe subset) ──────────────────────────────────────────────
@@ -660,7 +731,8 @@ export function makeHandler(store: Store, token: string) {
 export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const port  = opts.port  ?? 3141;
   const token = opts.token ?? randomBytes(24).toString("hex");
-  const store = opts.store ?? new Store();
+  const workspaceManager = new WorkspaceManager();
+  const store = opts.store ?? workspaceManager.getStore(workspaceManager.getActiveId());
 
   const handler = makeHandler(store, token);
 

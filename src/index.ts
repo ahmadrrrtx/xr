@@ -103,7 +103,7 @@ async function main(): Promise<void> {
     }
 
     if (head === "--version" || head === "-v" || head === "version") {
-      console.log("v3.1.0");
+      console.log("v3.1.1");
       return;
     }
 

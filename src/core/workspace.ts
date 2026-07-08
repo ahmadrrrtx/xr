@@ -1,12 +1,23 @@
 /**
- * XR 3.0 — Workspace Manager
- * Implements Phase 7: Workspace isolation.
- * Isolates settings, providers, memories, skills, plugins, and databases.
+ * XR 3.1 — Workspace Manager
+ *
+ * Responsibilities:
+ *  - provision workspace folders and isolated database paths
+ *  - persist the active workspace selection across launches
+ *  - expose a stable source of truth for CLI, TUI, and daemon surfaces
  */
 
 import { join } from "node:path";
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
-import { XR_HOME, loadConfig, saveConfig, type XRConfig } from "../config/config.ts";
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+} from "node:fs";
+import { XR_HOME, loadConfig, type XRConfig } from "../config/config.ts";
 import { Store } from "../state/db.ts";
 
 export interface WorkspaceContext {
@@ -20,14 +31,45 @@ export interface WorkspaceContext {
   memoriesDir: string;
 }
 
+interface WorkspaceStateFile {
+  activeWorkspaceId: string;
+}
+
+const WORKSPACES_ROOT = join(XR_HOME, "workspaces");
+const WORKSPACE_STATE_PATH = join(WORKSPACES_ROOT, "state.json");
+
 export class WorkspaceManager {
-  private activeWorkspaceId: string = "default";
+  private activeWorkspaceId = "default";
   private workspaces = new Map<string, WorkspaceContext>();
   private globalConfig: XRConfig;
 
   constructor() {
     this.globalConfig = loadConfig().config;
     this.ensureWorkspace("default", "Default Workspace");
+    this.activeWorkspaceId = this.readState().activeWorkspaceId || "default";
+    this.ensureWorkspace(this.activeWorkspaceId, this.activeWorkspaceId === "default" ? "Default Workspace" : this.activeWorkspaceId);
+    this.writeState();
+  }
+
+  private ensureRoots(): void {
+    mkdirSync(XR_HOME, { recursive: true });
+    mkdirSync(WORKSPACES_ROOT, { recursive: true });
+  }
+
+  private readState(): WorkspaceStateFile {
+    this.ensureRoots();
+    if (!existsSync(WORKSPACE_STATE_PATH)) return { activeWorkspaceId: "default" };
+    try {
+      const parsed = JSON.parse(readFileSync(WORKSPACE_STATE_PATH, "utf8")) as Partial<WorkspaceStateFile>;
+      return { activeWorkspaceId: parsed.activeWorkspaceId || "default" };
+    } catch {
+      return { activeWorkspaceId: "default" };
+    }
+  }
+
+  private writeState(): void {
+    this.ensureRoots();
+    writeFileSync(WORKSPACE_STATE_PATH, JSON.stringify({ activeWorkspaceId: this.activeWorkspaceId }, null, 2), "utf8");
   }
 
   /**
@@ -38,34 +80,33 @@ export class WorkspaceManager {
   }
 
   /**
-   * Set the active workspace ID.
+   * Set the active workspace ID and persist it.
    */
   setActiveId(id: string): void {
     if (!this.workspaces.has(id)) {
-      this.ensureWorkspace(id, id);
+      this.ensureWorkspace(id, id === "default" ? "Default Workspace" : id);
     }
     this.activeWorkspaceId = id;
+    this.writeState();
   }
 
   /**
    * Ensure a workspace exists and is provisioned.
    */
   ensureWorkspace(id: string, name: string): WorkspaceContext {
-    const rootDir = id === "default" ? XR_HOME : join(XR_HOME, "workspaces", id);
+    if (this.workspaces.has(id)) return this.workspaces.get(id)!;
+
+    const rootDir = id === "default" ? XR_HOME : join(WORKSPACES_ROOT, id);
     const dbPath = join(rootDir, id === "default" ? "xr.db" : `xr-${id}.db`);
     const configPath = join(rootDir, "config.json");
     const pluginsDir = join(rootDir, "plugins");
     const skillsDir = join(rootDir, "skills");
     const memoriesDir = join(rootDir, "memories");
 
-    // Provision folders
     for (const dir of [rootDir, pluginsDir, skillsDir, memoriesDir]) {
-      if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-      }
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     }
 
-    // Default configuration overlay
     if (!existsSync(configPath)) {
       const overlayConfig = {
         ...this.globalConfig,
@@ -94,7 +135,7 @@ export class WorkspaceManager {
    * Get context of active workspace.
    */
   getActiveContext(): WorkspaceContext {
-    return this.workspaces.get(this.activeWorkspaceId)!;
+    return this.ensureWorkspace(this.activeWorkspaceId, this.activeWorkspaceId === "default" ? "Default Workspace" : this.activeWorkspaceId);
   }
 
   /**
@@ -108,26 +149,30 @@ export class WorkspaceManager {
    * List all provisioned workspaces.
    */
   listWorkspaces(): WorkspaceContext[] {
-    const defaultCtx = this.workspaces.get("default")!;
-    const list = [defaultCtx];
+    const list: WorkspaceContext[] = [this.ensureWorkspace("default", "Default Workspace")];
 
-    const workspacesDir = join(XR_HOME, "workspaces");
-    if (existsSync(workspacesDir)) {
-      const dirents = require("node:fs").readdirSync(workspacesDir, { withFileTypes: true });
+    if (existsSync(WORKSPACES_ROOT)) {
+      const dirents = readdirSync(WORKSPACES_ROOT, { withFileTypes: true });
       for (const ent of dirents) {
-        if (ent.isDirectory() && ent.name !== "default") {
-          list.push(this.ensureWorkspace(ent.name, ent.name));
-        }
+        if (!ent.isDirectory()) continue;
+        if (ent.name === "default") continue;
+        list.push(this.ensureWorkspace(ent.name, ent.name));
       }
     }
-    return list;
+
+    const seen = new Set<string>();
+    return list.filter((ws) => {
+      if (seen.has(ws.id)) return false;
+      seen.add(ws.id);
+      return true;
+    });
   }
 
   /**
    * Retrieve a localized SQLite store for the workspace.
    */
   getStore(id: string): Store {
-    const ctx = this.ensureWorkspace(id, id);
+    const ctx = this.ensureWorkspace(id, id === "default" ? "Default Workspace" : id);
     return new Store(ctx.dbPath);
   }
 
@@ -136,17 +181,16 @@ export class WorkspaceManager {
    */
   deleteWorkspace(id: string): boolean {
     if (id === "default") return false;
-    const ctx = this.workspaces.get(id);
-    if (!ctx) return false;
+    const ctx = this.ensureWorkspace(id, id);
 
-    // Delete database, config, and recursively workspace folders
     try {
-      if (existsSync(ctx.dbPath)) require("node:fs").unlinkSync(ctx.dbPath);
-      if (existsSync(ctx.configPath)) require("node:fs").unlinkSync(ctx.configPath);
-      require("node:fs").rmSync(ctx.rootDir, { recursive: true, force: true });
+      if (existsSync(ctx.dbPath)) unlinkSync(ctx.dbPath);
+      if (existsSync(ctx.configPath)) unlinkSync(ctx.configPath);
+      rmSync(ctx.rootDir, { recursive: true, force: true });
       this.workspaces.delete(id);
       if (this.activeWorkspaceId === id) {
         this.activeWorkspaceId = "default";
+        this.writeState();
       }
       return true;
     } catch {

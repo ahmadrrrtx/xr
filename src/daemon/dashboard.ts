@@ -508,6 +508,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <a class="nav-item" data-panel="status">
         <span class="nav-icon">◎</span> Status
       </a>
+      <a class="nav-item" data-panel="workspaces">
+        <span class="nav-icon">🗂</span> Workspaces
+      </a>
     </div>
 
     <div class="sidebar-section">
@@ -685,14 +688,65 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         </div>
       </div>
 
+      <!-- ════════ WORKSPACES ════════ -->
+      <div class="panel" id="panel-workspaces">
+        <div class="section-header">
+          <div><div class="section-title">Workspaces</div><div class="section-sub">Switch isolated XR workspaces and create new ones</div></div>
+          <button class="btn btn-ghost" onclick="loadWorkspaces()" style="font-size:12px">↻ Refresh</button>
+        </div>
+        <div class="grid grid-2 mb-4">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Active Workspace</div></div>
+            <div class="card-value" id="ws-active">default</div>
+            <div class="card-sub" id="ws-active-path">loading…</div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Create Workspace</div></div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <input id="ws-create-id" placeholder="workspace-id" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)" />
+              <input id="ws-create-name" placeholder="Optional display name" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)" />
+              <button class="btn btn-primary" onclick="createWorkspace()" style="width:max-content">Create</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Available Workspaces</div></div>
+          <div id="ws-list"><div class="spin"></div></div>
+        </div>
+      </div>
+
       <!-- ════════ PROVIDERS ════════ -->
       <div class="panel" id="panel-providers">
         <div class="section-header">
-          <div><div class="section-title">Providers</div><div class="section-sub">API keys, health, and routing</div></div>
+          <div><div class="section-title">Providers</div><div class="section-sub">API keys, health, defaults, and routing</div></div>
         </div>
         <div class="card mb-4">
           <div class="card-header"><div class="card-title">Active Routing</div></div>
           <div id="prov-routing"><div class="spin"></div></div>
+        </div>
+        <div class="card mb-4">
+          <div class="card-header"><div class="card-title">Provider Manager</div></div>
+          <div class="grid grid-2">
+            <div>
+              <div class="muted" style="font-size:11px;margin-bottom:8px">Set primary provider + model</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <select id="prov-set-provider" style="min-width:160px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)"></select>
+                <input id="prov-set-model" placeholder="model" style="flex:1;min-width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)" />
+              </div>
+            </div>
+            <div>
+              <div class="muted" style="font-size:11px;margin-bottom:8px">Optional fallback</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <select id="prov-set-fallback" style="min-width:160px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)"></select>
+                <input id="prov-set-fallback-model" placeholder="fallback model" style="flex:1;min-width:180px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)" />
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+            <button class="btn btn-primary" onclick="saveProviderRouting()">Save Routing</button>
+            <button class="btn btn-ghost" onclick="loadProviders()">Retest Providers</button>
+          </div>
+          <div id="prov-manager-note" class="muted" style="font-size:11px;margin-top:10px">Changes apply to XR defaults and are saved locally.</div>
         </div>
         <div class="card">
           <div class="card-header"><div class="card-title">All Providers</div></div>
@@ -1143,7 +1197,7 @@ function toast(msg, type = "info") {
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 const NAV_LABELS = {
-  dashboard: "Dashboard", chat: "Chat", status: "Status",
+  dashboard: "Dashboard", chat: "Chat", status: "Status", workspaces: "Workspaces",
   providers: "Providers", models: "Models", memory: "Memory",
   research: "Research", plugins: "Plugins", skills: "Marketplace", voice: "Voice",
   security: "Security", audit: "Audit Log", settings: "Settings",
@@ -1177,6 +1231,7 @@ function navigateTo(id) {
   switch (id) {
     case "dashboard":   loadDashboard(); break;
     case "status":      loadStatus();    break;
+    case "workspaces":  loadWorkspaces(); break;
     case "providers":   loadProviders(); break;
     case "models":      loadModels();    break;
     case "memory":      loadMemory();    break;
@@ -1320,6 +1375,54 @@ async function loadStatus() {
   }
 }
 
+// ── Workspaces ────────────────────────────────────────────────────────────────
+async function loadWorkspaces() {
+  try {
+    const data = await api("/api/workspaces");
+    const rows = data.workspaces ?? [];
+    const active = rows.find(w => w.id === data.active) || rows[0];
+    document.getElementById("ws-active").textContent = data.active ?? "default";
+    document.getElementById("ws-active-path").textContent = active?.rootDir ?? "—";
+    document.getElementById("ws-list").innerHTML = rows.length ? rows.map(w =>
+      '<div class="mem-item" style="display:block">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+          '<div><div style="font-weight:700;color:var(--text)">' + escapeHtml(w.id) + '</div><div class="muted" style="font-size:11px">' + escapeHtml(w.name || w.id) + '</div><div class="muted" style="font-size:11px">' + escapeHtml(w.rootDir) + '</div></div>' +
+          '<div style="display:flex;gap:6px;align-items:center">' +
+            (w.id === data.active ? '<span class="badge badge-green">active</span>' : '<button class="btn btn-ghost" onclick="switchWorkspaceUI(\'' + escapeHtml(w.id) + '\')" style="font-size:11px">Switch</button>') +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    ).join("") : '<div class="muted" style="font-size:12px">No workspaces found.</div>';
+  } catch (e) {
+    document.getElementById("ws-list").innerHTML = '<div class="muted" style="font-size:12px">Workspace API unavailable: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function createWorkspace() {
+  const id = (document.getElementById("ws-create-id")?.value ?? "").trim();
+  const name = (document.getElementById("ws-create-name")?.value ?? "").trim();
+  if (!id) return toast("Workspace id is required", "err");
+  try {
+    await api("/api/workspaces/create", { method: "POST", body: { id, name } });
+    toast("Workspace created", "ok");
+    document.getElementById("ws-create-id").value = "";
+    document.getElementById("ws-create-name").value = "";
+    await loadWorkspaces();
+  } catch (e) {
+    toast("Create workspace failed: " + e.message, "err");
+  }
+}
+
+async function switchWorkspaceUI(id) {
+  try {
+    await api("/api/workspaces/switch", { method: "POST", body: { id } });
+    toast("Workspace switched to " + id, "ok");
+    await Promise.all([loadWorkspaces(), loadDashboard(), loadProviders(), loadSettings()]);
+  } catch (e) {
+    toast("Switch workspace failed: " + e.message, "err");
+  }
+}
+
 // ── Providers ─────────────────────────────────────────────────────────────────
 async function loadProviders() {
   try {
@@ -1328,7 +1431,9 @@ async function loadProviders() {
       \`<div class="stat-row"><div class="stat-key">Primary</div><div class="stat-val val-cyan">\${data.primary ?? ov.provider?.active ?? "—"} / \${data.model ?? ov.provider?.model ?? "—"}</div></div>
        <div class="stat-row"><div class="stat-key">Fallback</div><div class="stat-val val-muted">\${data.fallback ? data.fallback + ' / ' + (data.fallbackModel ?? 'default') : 'none'}</div></div>
        <div class="stat-row"><div class="stat-key">Workspace</div><div class="stat-val val-muted">\${ov.workspace ?? 'default'}</div></div>\`;
-    document.getElementById("prov-grid").innerHTML = (data.providers ?? []).map(n =>
+
+    const providerRows = data.providers ?? [];
+    document.getElementById("prov-grid").innerHTML = providerRows.map(n =>
       \`<div class="provider-item \${n.id === data.primary ? "active" : ""} \${n.healthy === false && !n.hasKey ? "offline" : ""}">
          <div class="provider-avatar">\${(n.label || n.id)[0]}</div>
          \${n.label}
@@ -1336,8 +1441,45 @@ async function loadProviders() {
          <span class="badge \${n.healthy ? "badge-green" : (n.hasKey ? "badge-amber" : "badge-gray")}">\${n.healthy ? "online" : (n.hasKey ? "offline" : "no key")}</span>
        </div>\`
     ).join("");
+
+    const primarySelect = document.getElementById("prov-set-provider");
+    const fallbackSelect = document.getElementById("prov-set-fallback");
+    if (primarySelect && fallbackSelect) {
+      const options = providerRows.map(r => '<option value="' + escapeHtml(r.id) + '">' + escapeHtml(r.label + ' (' + r.id + ')') + '</option>').join('');
+      primarySelect.innerHTML = options;
+      fallbackSelect.innerHTML = '<option value="">No fallback</option>' + options;
+      primarySelect.value = data.primary ?? "";
+      fallbackSelect.value = data.fallback ?? "";
+    }
+    const modelInput = document.getElementById("prov-set-model");
+    const fallbackModelInput = document.getElementById("prov-set-fallback-model");
+    if (modelInput) modelInput.value = data.model ?? "";
+    if (fallbackModelInput) fallbackModelInput.value = data.fallbackModel ?? "";
   } catch(e) {
     toast("Providers error: " + e.message, "err");
+  }
+}
+
+async function saveProviderRouting() {
+  const provider = document.getElementById("prov-set-provider")?.value ?? "";
+  const model = (document.getElementById("prov-set-model")?.value ?? "").trim();
+  const fallbackProvider = document.getElementById("prov-set-fallback")?.value ?? "";
+  const fallbackModel = (document.getElementById("prov-set-fallback-model")?.value ?? "").trim();
+  if (!provider) return toast("Choose a primary provider", "err");
+  try {
+    await api("/api/providers/set", {
+      method: "POST",
+      body: {
+        provider,
+        model,
+        fallbackProvider: fallbackProvider || null,
+        fallbackModel: fallbackProvider ? (fallbackModel || null) : null,
+      },
+    });
+    toast("Provider routing saved", "ok");
+    await Promise.all([loadProviders(), loadDashboard(), loadSettings()]);
+  } catch (e) {
+    toast("Save provider routing failed: " + e.message, "err");
   }
 }
 
@@ -2324,6 +2466,7 @@ function escapeHtml(t) {
 const PALETTE_CMDS = [
   { label: "Go to Dashboard",    icon: "⬡", action: () => navigateTo("dashboard"), key: "g d" },
   { label: "Go to Chat",         icon: "💬", action: () => navigateTo("chat"),      key: "g c" },
+  { label: "Go to Workspaces",   icon: "🗂", action: () => navigateTo("workspaces"), key: "g w" },
   { label: "Go to Providers",    icon: "☁",  action: () => navigateTo("providers") },
   { label: "Go to Models",       icon: "⚙",  action: () => navigateTo("models") },
   { label: "Go to Memory",       icon: "🧠", action: () => navigateTo("memory") },
@@ -2402,6 +2545,7 @@ document.addEventListener("keydown", e => {
   if (gPressed) {
     if (e.key === "d") { navigateTo("dashboard"); gPressed = false; }
     if (e.key === "c") { navigateTo("chat");      gPressed = false; }
+    if (e.key === "w") { navigateTo("workspaces"); gPressed = false; }
     if (e.key === "p") { navigateTo("providers"); gPressed = false; }
     if (e.key === "m") { navigateTo("memory");    gPressed = false; }
     if (e.key === "s") { navigateTo("security");  gPressed = false; }
