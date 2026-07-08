@@ -1,7 +1,7 @@
 /**
  * XR Stage 8 — Voice Hardware Interface.
  *
- * Uses common OS audio tools instead of native bindings so @rrtx/xr remains a
+ * Uses common OS audio tools instead of native bindings so @rrrtx/xr remains a
  * small Bun package.  Missing tools degrade gracefully and never crash XR's text
  * mode.  All command invocation uses argv arrays, not shell interpolation.
  */

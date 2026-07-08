@@ -1,7 +1,7 @@
 {
-  "name": "@rrtx/xr",
-  "version": "1.0.0",
-  "description": "XR — local-first AI operating system / agent platform. BYOK, local models, spend-capped, tamper-evident, plugin ecosystem.",
+  "name": "@rrrtx/xr",
+  "version": "3.0.0",
+  "description": "XR 3.0 — The Unified AI Operating System. Local-first, BYOK, secure desktop automation, persistent RAG memories, and workflow supervisor.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr.cjs"
@@ -25,6 +25,14 @@
     "typecheck": "tsc --noEmit",
     "xr": "bun run src/index.ts"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahmadrrrtx/xr.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ahmadrrrtx/xr/issues"
+  },
+  "homepage": "https://xr-gules.vercel.app",
   "keywords": [
     "ai-agent",
     "ai-os",
