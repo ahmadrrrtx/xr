@@ -1388,12 +1388,14 @@ document.querySelectorAll(".nav-item").forEach(el => {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
   try {
-    const [ov, cost, ctrl, mem, providers] = await Promise.allSettled([
+    const [ov, cost, ctrl, mem, providers, security, models] = await Promise.allSettled([
       api("/api/overview"),
       api("/api/cost"),
       api("/api/control/status"),
       api("/api/memory"),
       api("/api/providers"),
+      api("/api/security"),
+      api("/api/models"),
     ]);
 
     // Overview
@@ -1442,6 +1444,25 @@ async function loadDashboard() {
         \`<div style="font-size:10px;color:var(--muted);margin-top:8px">Add: <code style="color:var(--cyan)">xr memory add "…"</code></div>\`;
     }
 
+    // Security score
+    if (security.status === "fulfilled") {
+      const s = security.value;
+      const pct = Math.round((s.rate ?? 0) * 100);
+      document.getElementById("d-sec-score").textContent = pct + "%";
+      document.getElementById("d-sec-score").className = "card-value " + (pct >= 90 ? "val-green" : pct >= 70 ? "val-amber" : "val-red");
+    }
+
+    // Local AI summary
+    if (models.status === "fulfilled") {
+      const m = models.value;
+      const current = m.current ?? {};
+      const selected = m.selected ?? {};
+      document.getElementById("d-local-status").innerHTML =
+        \`<div class="stat-row"><div class="stat-key">Runtime</div><div class="stat-val val-cyan">\${current.label ?? selected.runtime ?? "—"}</div></div>
+         <div class="stat-row"><div class="stat-key">Model</div><div class="stat-val \${current.healthy ? 'val-green' : 'val-muted'}">\${selected.model ?? "none"}</div></div>
+         <div class="stat-row"><div class="stat-key">Routing</div><div class="stat-val val-muted">\${selected.routing ?? "hybrid"}</div></div>\`;
+    }
+
     // Provider quick list
     if (providers.status === "fulfilled") {
       const p = providers.value;
@@ -1486,6 +1507,8 @@ async function loadProviderChip() {
     document.getElementById("chip-provider-label").textContent = activeId + " / " + activeModel;
     document.getElementById("chip-provider").className = "status-chip " + (activeRow?.healthy === false ? "err" : activeRow?.healthy ? "ok" : "warn");
     document.getElementById("provider-dot").style.background = activeRow?.healthy === false ? "var(--red)" : activeRow?.healthy ? "var(--green)" : "var(--amber)";
+    const chatLabel = document.getElementById("chat-model-label");
+    if (chatLabel) chatLabel.textContent = activeId + " / " + activeModel;
   } catch {}
 }
 
@@ -1629,21 +1652,31 @@ function seedSessionToChat(title) {
 // ── Status Panel ──────────────────────────────────────────────────────────────
 async function loadStatus() {
   try {
-    const [ov, cost, ctrl] = await Promise.all([
+    const [ov, cost, ctrl, providers, models] = await Promise.all([
       api("/api/overview"),
       api("/api/cost"),
       api("/api/control/status"),
+      api("/api/providers"),
+      api("/api/models"),
     ]);
+    const activeId = providers.primary ?? ov.provider?.active ?? "xr";
+    const activeModel = providers.model ?? ov.provider?.model ?? "—";
+    const activeRow = (providers.providers ?? []).find((p) => p.id === activeId);
     document.getElementById("st-provider").innerHTML =
-      \`<div class="stat-row"><div class="stat-key">Status</div><div class="stat-val val-green">online</div></div>\`;
+      \`<div class="stat-row"><div class="stat-key">Provider</div><div class="stat-val \${activeRow?.healthy ? 'val-green' : (activeRow?.hasKey ? 'val-amber' : 'val-muted')}">\${activeId} / \${activeModel}</div></div>
+       <div class="stat-row"><div class="stat-key">Health</div><div class="stat-val \${activeRow?.healthy ? 'val-green' : 'val-amber'}">\${activeRow?.healthy ? 'online' : (activeRow?.detail || 'offline')}\${activeRow?.latencyMs ? ' · ' + activeRow.latencyMs + 'ms' : ''}</div></div>\`;
     document.getElementById("st-budget").innerHTML =
       \`<div class="stat-row"><div class="stat-key">All-time spent</div><div class="stat-val val-cyan">$\${(cost.totalUsd??0).toFixed(6)}</div></div>
        <div class="stat-row"><div class="stat-key">All-time tokens</div><div class="stat-val">\${(cost.totalTokens??0).toLocaleString()}</div></div>\`;
     document.getElementById("st-audit").innerHTML =
       \`<div class="stat-row"><div class="stat-key">Chain</div><div class="stat-val \${ov.audit?.chain?.valid ? "val-green" : "val-red"}">\${ov.audit?.chain?.valid ? "Intact" : "BROKEN"}</div></div>
        <div class="stat-row"><div class="stat-key">Entries</div><div class="stat-val">\${ov.audit?.count ?? 0}</div></div>\`;
+    const current = models.current ?? {};
+    const selected = models.selected ?? {};
     document.getElementById("st-local").innerHTML =
-      \`<div class="stat-row"><div class="stat-key">Control</div><div class="stat-val \${ctrl.enabled ? "val-green" : "val-muted"}">\${ctrl.enabled ? "enabled" : "disabled"}</div></div>
+      \`<div class="stat-row"><div class="stat-key">Runtime</div><div class="stat-val \${current.healthy ? 'val-green' : 'val-muted'}">\${current.label ?? selected.runtime ?? '—'}</div></div>
+       <div class="stat-row"><div class="stat-key">Model</div><div class="stat-val">\${selected.model ?? 'none'}</div></div>
+       <div class="stat-row"><div class="stat-key">Control</div><div class="stat-val \${ctrl.enabled ? "val-green" : "val-muted"}">\${ctrl.enabled ? "enabled" : "disabled"}</div></div>
        <div class="stat-row"><div class="stat-key">Pending</div><div class="stat-val">\${ctrl.pending ?? 0}</div></div>\`;
   } catch(e) {
     toast("Status error: " + e.message, "err");
@@ -2693,13 +2726,14 @@ function buildChatUI() {
   const panel = document.getElementById("panel-chat");
   if (panel.innerHTML.trim()) return; // already built
 
+  const activeRuntimeLabel = document.getElementById("chip-provider-label")?.textContent?.trim() || "local-first · BYOK";
   panel.innerHTML = \`
     <div class="chat-wrap">
       <div class="chat-header">
         <span style="font-size:18px;color:var(--cyan)">💬</span>
         <div>
           <div class="chat-header-title">XR Chat</div>
-          <div class="chat-header-model" id="chat-model-label">local-first · BYOK</div>
+          <div class="chat-header-model" id="chat-model-label">\${activeRuntimeLabel}</div>
         </div>
         <div style="flex:1"></div>
         <button class="btn btn-ghost" style="font-size:11px" onclick="clearChat()">Clear</button>

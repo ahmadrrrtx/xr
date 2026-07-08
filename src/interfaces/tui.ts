@@ -923,6 +923,10 @@ async function handleSlashCommand(state: TuiState, input: string): Promise<void>
           "/logs",
           "/context",
           "/activity",
+          "/home",
+          "/palette",
+          "/notifications",
+          "/quick",
           "/models",
           "/research",
           "/dashboard",
@@ -965,6 +969,22 @@ async function handleSlashCommand(state: TuiState, input: string): Promise<void>
     case "activity":
       state.view = "activity";
       state.sidebarIndex = VIEW_ORDER.indexOf("activity");
+      break;
+    case "home":
+      state.view = "home";
+      state.sidebarIndex = VIEW_ORDER.indexOf("home");
+      break;
+    case "palette":
+      state.overlay = "palette";
+      state.paletteQuery = "";
+      state.paletteIndex = 0;
+      break;
+    case "notifications":
+    case "notice":
+      state.overlay = "notifications";
+      break;
+    case "quick":
+      state.overlay = "quick";
       break;
     case "models":
     case "local":
