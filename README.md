@@ -1177,6 +1177,152 @@ The **Security (XR Shield)** control cockpit is completely integrated into the w
 - **Auto-Hardening Settings**: One-click remediation buttons to safely quarantine scripts, terminate risky processes, and activate tracker blocking.
 
 ---
+## ✅ XR 15 — Business OS
+
+**Status: XR 15 is implemented on `main` and ready for use.**
+
+XR 15 transforms XR from an AI agent into an **AI Business Operating System**. It unifies CRM, Sales, Marketing, Support, Projects, Knowledge, Finance, HR, Analytics, Automation, Scheduling, Communication, Documents, Meetings, and AI Workers — all behind one intelligent AI platform.
+
+| Phase | Status | What shipped |
+| --- | --: | --- |
+| **XR 15A — Business Core** | ✅ Done | Organization management, workspace isolation, RBAC (6 roles), unified contact model, sales pipeline engine, business event bus, SHA-256 audit trail with hash chain verification, encrypted credential vault (AES-256-GCM) |
+| **XR 15B — Business Modules** | ✅ Done | 15 production modules: CRM, Sales, Marketing, Support, Projects, Knowledge, Finance, HR, Analytics, Automation, Scheduling, Communication, Documents, Meetings, AI Workers — each with full CRUD, pagination, filtering, search, and statistics |
+| **XR 15C — AI Business Team** | ✅ Done | 11 specialized AI Workers: CEO Advisor, Sales Director, Marketing Director, Financial Analyst, HR Manager, Project Manager, Support Manager, Operations Manager, Legal Assistant, Research Analyst, Growth Strategist — each with system prompts, capability matrices, permission sets, and live business context |
+| **XR 15D — Integration Layer** | ✅ Done | 30+ optional BYOK integrations: Gmail, Outlook, Slack, Discord, Teams, Telegram, WhatsApp, Google Calendar, Cal.com, GitHub, GitLab, Jira, Linear, Google Drive, OneDrive, Dropbox, Nextcloud, HubSpot, Salesforce, ERPNext, Twenty, Stripe, PayPal, Plausible, PostHog, Shopify, WooCommerce, n8n, Activepieces, Coolify, Docker — OAuth2 flow manager, credential vault |
+| **XR 15E — Automation Engine** | ✅ Done | Workflow engine with event/schedule/webhook/manual triggers, conditional steps, retry logic, error handling (stop/skip/retry). 12 pre-built templates: Lead Qualification, Sales Follow-up, Meeting Preparation, Proposal Generation, Invoice Generation, Customer Onboarding, Weekly Reports, Competitor Monitoring, Market Research, Content Calendar, Email Campaign, Support Ticket Routing |
+| **XR 15F — Security & CLI** | ✅ Done | 7 security policies (least privilege, workspace isolation, export approval, integration consent, credential protection, automation budget, worker permission approval). Full CLI: `xr biz` with 40+ subcommands. Migration guide, architecture docs, test suite |
+
+### What's new in Stage 15
+
+```
+src/business/              # Business OS core
+├── core/                   # 10 files: types, schema, database, org, rbac, contacts, pipeline, bus, audit, index
+├── modules/                # 15 modules, each with full implementation
+│   ├── crm/                # Contact management, companies, notes, activity feed
+│   ├── sales/              # Pipeline, deals, stages, forecasting
+│   ├── marketing/          # Campaigns, content calendar, lead scoring
+│   ├── support/            # Tickets, SLA, messages, routing
+│   ├── projects/           # Projects, tasks, milestones, time tracking
+│   ├── knowledge/          # Wiki, SOPs, articles, search
+│   ├── finance/            # Invoices, expenses, P&L, tax
+│   ├── hr/                 # Employees, time-off, directory
+│   ├── analytics/          # Dashboards, widgets, reports, KPIs
+│   ├── automation/         # Workflow engine with triggers and conditions
+│   ├── scheduling/         # Calendar, events, availability
+│   ├── communication/      # Email, chat, notifications, templates
+│   ├── documents/          # Create, edit, version, templates
+│   ├── meetings/           # Schedule, attendees, notes, transcript
+│   └── ai-workers/         # 11 AI business roles with full XR integration
+├── index.ts                # Unified BusinessOS API
+└── cli.ts                  # 40+ CLI commands
+
+src/integrations/           # Integration layer
+├── registry.ts             # 30+ connector definitions
+├── oauth.ts                # OAuth2 flow manager
+└── credentials.ts          # AES-256-GCM encrypted credential vault
+
+src/security/
+└── policies.ts             # 7 security policies for business operations
+
+src/schemas/
+└── business-os.skill.json  # XR Skill definition
+
+src/templates/workflows/    # 12 automation templates
+├── lead-qualification.json
+├── sales-followup.json
+├── meeting-prep.json
+├── invoice-generation.json
+├── customer-onboarding.json
+├── weekly-reports.json
+├── competitor-monitoring.json
+├── market-research.json
+├── content-calendar.json
+├── email-campaign.json
+└── support-routing.json
+
+src/tests/
+└── business.test.ts        # Full test suite
+
+docs/
+├── XR-15-BUSINESS-OS-ARCHITECTURE.md
+└── MIGRATION-GUIDE.md
+```
+
+### How Business OS integrates with existing XR
+
+| Existing XR System | Business OS Integration |
+|---|---|
+| **Provider Engine** | AI Workers use it for LLM calls. No new providers. |
+| **Memory Engine** | Business entities stored with business schema. |
+| **Research Engine** | AI Workers use for market analysis, competitor monitoring. |
+| **Voice Stack** | Meeting transcription via STT. Voice-enabled workers. |
+| **Computer Control** | Workers generate reports, take screenshots. |
+| **Plugin Platform** | Gmail, Slack, Discord connectors are Plugins. |
+| **MCP Platform** | HubSpot, Salesforce, ERPNext via MCP. |
+| **Skill Runtime** | Each module registers as an XR Skill (15 skills). |
+| **Dashboard** | Business UI served through daemon. |
+| **CLI** | `xr biz` commands via command registry. |
+| **Multi-Agent Runtime** | AI Workers are XR Agents (11 agents). |
+| **XR Shield** | All operations pass through policy engine. |
+
+**Nothing is duplicated. Everything delegates to existing XR engines.**
+
+### Quick start
+
+```bash
+# Initialize Business OS
+xr biz init
+
+# Enable modules
+xr biz enable all
+
+# Deploy AI Workers
+xr biz workers deploy --all
+
+# Connect integrations (optional, BYOK)
+xr biz connect gmail
+xr biz connect slack
+xr biz connect stripe
+
+# Use it
+xr biz contacts add --name "John Doe" --email john@example.com
+xr biz deals add --title "Big Deal" --value 50000
+xr biz tickets add --subject "Help needed" --priority high
+xr biz kpis
+```
+
+### AI Business Team
+
+| Worker | Role | Capabilities |
+|---|---|---|
+| 👔 CEO Advisor | Strategic advisor | KPIs, reports, risk flagging, board prep |
+| 💼 Sales Director | Pipeline manager | Deals, forecasting, follow-ups, coaching |
+| 📣 Marketing Director | Campaign strategist | Campaigns, content, lead scoring, ROI |
+| 📊 Financial Analyst | Finance monitor | P&L, invoices, expenses, cash flow |
+| 👥 HR Manager | People operations | Directory, time-off, engagement |
+| 📋 Project Manager | Delivery manager | Tasks, milestones, sprints, status |
+| 🎧 Support Manager | Customer support | Tickets, SLA, knowledge base, routing |
+| ⚙️ Operations Manager | Process optimizer | Workflows, automation, efficiency |
+| ⚖️ Legal Assistant | Legal support | Contracts, compliance, risk |
+| 🔍 Research Analyst | Intelligence analyst | Market research, competitors, trends |
+| 🚀 Growth Strategist | Growth driver | Funnels, CAC/LTV, experiments |
+
+### Integration catalog (30+, all optional, all BYOK)
+
+| Category | Services |
+|---|---|
+| Communication | Gmail, Outlook, Slack, Discord, Teams, Telegram, WhatsApp |
+| Calendar | Google Calendar, Outlook Calendar, Cal.com |
+| Development | GitHub, GitLab, Jira, Linear |
+| Storage | Google Drive, OneDrive, Dropbox, Nextcloud |
+| CRM/ERP | HubSpot, Salesforce, ERPNext, Twenty |
+| Payments | Stripe, PayPal |
+| Analytics | Plausible, PostHog |
+| Commerce | Shopify, WooCommerce |
+| Automation | n8n, Activepieces |
+| Infrastructure | Coolify, Docker |
+
+---
 
 ## 🤝 Contributing
 
