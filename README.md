@@ -895,7 +895,8 @@ xr help memory                       # memory engine guide
 | **Stage 10** | **Plugin Platform** | ✅ **Done** |
 | **Stage 11** | **MCP Platform** | ✅ **Done** |
 | **Stage 12** | **Multi-Agent + Advanced Orchestration** | ✅ **Done** |
-| Stage 13 | Advanced Runtime / Visual Orchestration / Background Workers | 🔜 Next |
+| Stage 13 | Advanced Runtime / Visual Orchestration / Background Workers | ✅ Done |
+| **Stage 14** | **XR Shield — Security & Privacy Layer** | ✅ **Done** |
 
 ---
 
@@ -1125,6 +1126,55 @@ xr plugin <id> <command> [args...]      # run plugin CLI command
 The local dashboard Plugins panel now shows installed plugins, version, type, enabled state, health, trust level, requested/granted permissions, capabilities, catalog search, and enable/disable/remove actions.
 
 See [docs/PLUGINS.md](docs/PLUGINS.md) for the full authoring and security contract.
+
+---
+
+---
+
+## 🛡️ Stage 14 — XR Shield (AI Security & Privacy Layer)
+
+Stage 14 integrates **XR Shield** — an AI-powered Endpoint Detection, Response, Privacy Protection, and System Integrity layer directly into XR. 
+
+XR Shield is **NOT** a replacement for commercial antivirus software. It is an agentic, local-first security layer that helps users understand, detect, and respond to potential vulnerabilities, malware indicators, and privacy exposures, keeping with XR's principles of absolute transparency and fail-closed safety.
+
+### 🧩 Key Architecture & Modules
+
+1. **Threat Detection Engine**: Scans active processes, autoruns, crontabs, and scheduled tasks for signatures matching known miners, backdoors, Trojan spoof files, and dangerous LOLBins (dual-use system binaries).
+2. **Malware Assistant Agents**: Integrates specialized AI agents (Process Inspector, Startup Inspector, Crypto Miner Detection Agent, Download Inspector, and Forensics Assistant) to contextualize and explain anomalies in natural language with structured confidence scores.
+3. **Crypto Miner Detection**: Identifies sustained, unauthorized background miner indicators through CPU/GPU utilization audits and known block-mining pool connections (e.g., nanopool, supportxmr).
+4. **Privacy Controls Gating**: Runs diagnostics on browser mic/camera permissions, OS and VS Code telemetry trackers, and active clipboard dumps to warn if secrets or passwords sit in unsafe caches.
+5. **Ad & Tracker Protection**: Uses a permission-gated hosts-file sinkholing tool to map over 50,000 corporate diagnostic tracking endpoints to `0.0.0.0` (fully local DNS filter lists).
+6. **Chronological Audit Ledger**: Writes all scans, isolations, restores, whitelists, and toggles into XR's cryptographically linked, tamper-evident SHA-256 SQLite hash chain.
+
+### 💻 Command Surface
+
+```bash
+# General Status & Self-Diagnostics
+xr shield status               # show protection modules, score, and outstanding threats
+xr shield doctor               # run integrity diagnostics on files, state, and logs
+
+# System Scans
+xr shield quick-scan           # fast heuristics scan of processes and autorun registries
+xr shield full-scan            # deep scan including downloads, extensions, and tasks
+xr shield processes            # list running processes highlighting signature verification
+xr shield startup              # audit persistence (registry run keys, launchd plists, desktop autostarts)
+xr shield downloads            # check Downloads folder for double extensions (.pdf.exe) and Trojan spoof names
+xr shield browser              # check extensions safety profiles, secure cookies, and permissions
+
+# Quarantine & Remediations
+xr shield explain <threat-id>  # get agentic risk analysis, details, and remedy recommendations
+xr shield quarantine-review    # interactively review, permanently delete, or restore isolated items
+xr shield adblock [on|off]     # enable/disable DNS hosts tracker blocking (requires root/elevation)
+xr shield logs                 # view chronological security operations chain from database
+```
+
+### 🖥️ Dashboard Controls
+
+The **Security (XR Shield)** control cockpit is completely integrated into the web dashboard, providing a highly visual interface for:
+- **Privacy Score Card**: Shows a dynamic 0..100 security rating based on system checklist validations.
+- **Threat Timeline & Feeds**: Shows chronological heuristics feeds with deep explanation modals.
+- **System Processes Explorer**: Search and filter running processes with live CPU/Memory stats and signature certifications.
+- **Auto-Hardening Settings**: One-click remediation buttons to safely quarantine scripts, terminate risky processes, and activate tracker blocking.
 
 ---
 
