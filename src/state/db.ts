@@ -952,6 +952,14 @@ export class Store {
       .all();
   }
 
+  providerCostSummary(): Array<{ provider: string; usd: number; tokens: number }> {
+    return this.db
+      .query<{ provider: string; usd: number; tokens: number }, []>(
+        `SELECT provider, COALESCE(SUM(usd),0) usd, COALESCE(SUM(in_tokens+out_tokens),0) tokens FROM cost_events GROUP BY provider ORDER BY usd DESC`,
+      )
+      .all();
+  }
+
   /** Aggregate cost data for the Cost Cockpit. */
   costSummary(): {
     totalUsd: number;

@@ -511,6 +511,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <a class="nav-item" data-panel="status">
         <span class="nav-icon">◎</span> Status
       </a>
+      <a class="nav-item" data-panel="budget">
+        <span class="nav-icon">💰</span> Budget
+      </a>
       <a class="nav-item" data-panel="workspaces">
         <span class="nav-icon">🗂</span> Workspaces
       </a>
@@ -715,6 +718,58 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
           <div class="card">
             <div class="card-header"><div class="card-title">Audit Chain</div></div>
             <div id="st-audit"><div class="spin"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════════ BUDGET ════════ -->
+      <div class="panel" id="panel-budget">
+        <div class="section-header">
+          <div><div class="section-title">Budget & Usage</div><div class="section-sub">Spend controls, model/provider usage, and hard-cap configuration</div></div>
+          <button class="btn btn-ghost" onclick="loadBudgetPanel()" style="font-size:12px">↻ Refresh</button>
+        </div>
+        <div class="grid grid-4 mb-4">
+          <div class="card"><div class="card-header"><div class="card-title">Per-task Cap</div></div><div class="card-value" id="bud-cap-task">$0.00</div><div class="card-sub">hard stop before model calls</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Today</div></div><div class="card-value" id="bud-day-spend">$0.00</div><div class="card-sub">current day spend</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">This Month</div></div><div class="card-value" id="bud-month-spend">$0.00</div><div class="card-sub">current month spend</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Top Model</div></div><div class="card-value" id="bud-top-model">—</div><div class="card-sub" id="bud-top-model-sub">highest spend model</div></div>
+        </div>
+        <div class="grid grid-2 mb-4">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Budget Controls</div></div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <label class="muted" style="font-size:11px">Per-task USD cap
+                <input id="bud-input-task" type="number" step="0.01" min="0" style="margin-top:4px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)" />
+              </label>
+              <label class="muted" style="font-size:11px">Monthly soft cap
+                <input id="bud-input-month" type="number" step="0.01" min="0" style="margin-top:4px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)" />
+              </label>
+              <label class="muted" style="font-size:11px">Daily soft cap
+                <input id="bud-input-day" type="number" step="0.01" min="0" style="margin-top:4px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)" />
+              </label>
+              <div style="display:flex;gap:14px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--textDim)"><input id="bud-toggle-warn" type="checkbox"/> warnings enabled</label>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--textDim)"><input id="bud-toggle-fallback" type="checkbox"/> auto fallback</label>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-primary" onclick="saveBudgetConfig()">Save Budget Settings</button>
+                <button class="btn btn-ghost" onclick="loadBudgetPanel()">Reset</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Recent Cost Events</div></div>
+            <div id="bud-recent"><div class="spin"></div></div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">By Model</div></div>
+            <div id="bud-models"><div class="spin"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">By Provider</div></div>
+            <div id="bud-providers"><div class="spin"></div></div>
           </div>
         </div>
       </div>
@@ -1228,7 +1283,7 @@ function toast(msg, type = "info") {
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 const NAV_LABELS = {
-  dashboard: "Dashboard", chat: "Chat", sessions: "Sessions", status: "Status", workspaces: "Workspaces",
+  dashboard: "Dashboard", chat: "Chat", sessions: "Sessions", status: "Status", budget: "Budget", workspaces: "Workspaces",
   providers: "Providers", models: "Models", memory: "Memory",
   research: "Research", plugins: "Plugins", skills: "Marketplace", voice: "Voice",
   security: "Security", audit: "Audit Log", settings: "Settings",
@@ -1263,6 +1318,7 @@ function navigateTo(id) {
     case "dashboard":   loadDashboard(); break;
     case "sessions":    loadSessionsPanel(); break;
     case "status":      loadStatus();    break;
+    case "budget":      loadBudgetPanel(); break;
     case "workspaces":  loadWorkspaces(); break;
     case "providers":   loadProviders(); break;
     case "models":      loadModels();    break;
@@ -1481,6 +1537,70 @@ async function loadStatus() {
        <div class="stat-row"><div class="stat-key">Pending</div><div class="stat-val">\${ctrl.pending ?? 0}</div></div>\`;
   } catch(e) {
     toast("Status error: " + e.message, "err");
+  }
+}
+
+// ── Budget Panel ──────────────────────────────────────────────────────────────
+async function loadBudgetPanel() {
+  try {
+    const data = await api("/api/budget");
+    const config = data.config ?? {};
+    const persisted = data.persisted ?? {};
+    const usage = data.usage ?? {};
+    const byModel = data.byModel ?? [];
+    const byProvider = data.byProvider ?? [];
+    const recent = data.recent ?? [];
+
+    document.getElementById("bud-cap-task").textContent = "$" + Number(config.perTaskUsd ?? 0).toFixed(2);
+    document.getElementById("bud-day-spend").textContent = "$" + Number(usage.dayUsd ?? 0).toFixed(2);
+    document.getElementById("bud-month-spend").textContent = "$" + Number(usage.monthUsd ?? 0).toFixed(2);
+    document.getElementById("bud-top-model").textContent = byModel[0]?.model ?? "—";
+    document.getElementById("bud-top-model-sub").textContent = byModel[0] ? ("$" + Number(byModel[0].usd ?? 0).toFixed(4) + " · " + Number(byModel[0].tokens ?? 0).toLocaleString() + " tok") : "highest spend model";
+
+    document.getElementById("bud-input-task").value = config.perTaskUsd ?? 0;
+    document.getElementById("bud-input-month").value = persisted.monthly_cap ?? 0;
+    document.getElementById("bud-input-day").value = persisted.daily_cap ?? "";
+    document.getElementById("bud-toggle-warn").checked = Boolean(persisted.warnings_enabled);
+    document.getElementById("bud-toggle-fallback").checked = Boolean(persisted.auto_fallback);
+
+    document.getElementById("bud-models").innerHTML = byModel.length
+      ? byModel.map(row => '<div class="stat-row"><div class="stat-key">' + escapeHtml(row.model) + '</div><div class="stat-val val-cyan">$' + Number(row.usd ?? 0).toFixed(4) + ' · ' + Number(row.tokens ?? 0).toLocaleString() + '</div></div>').join("")
+      : '<div class="muted" style="font-size:12px">No model usage yet.</div>';
+
+    document.getElementById("bud-providers").innerHTML = byProvider.length
+      ? byProvider.map(row => '<div class="stat-row"><div class="stat-key">' + escapeHtml(row.provider || 'unknown') + '</div><div class="stat-val val-cyan">$' + Number(row.usd ?? 0).toFixed(4) + ' · ' + Number(row.tokens ?? 0).toLocaleString() + '</div></div>').join("")
+      : '<div class="muted" style="font-size:12px">No provider usage yet.</div>';
+
+    document.getElementById("bud-recent").innerHTML = recent.length
+      ? recent.slice(0, 8).map(row => '<div class="stat-row"><div class="stat-key">' + new Date(row.at).toLocaleString() + '</div><div class="stat-val val-muted">$' + Number(row.usd ?? 0).toFixed(4) + ' · ' + Number(row.tokens ?? 0).toLocaleString() + '</div></div>').join("")
+      : '<div class="muted" style="font-size:12px">No recent cost events.</div>';
+  } catch (e) {
+    document.getElementById("bud-models").innerHTML = '<div class="muted" style="font-size:12px">Budget API unavailable: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function saveBudgetConfig() {
+  const perTaskUsd = Number.parseFloat(document.getElementById("bud-input-task")?.value ?? "0") || 0;
+  const monthlyCap = Number.parseFloat(document.getElementById("bud-input-month")?.value ?? "0") || 0;
+  const rawDaily = (document.getElementById("bud-input-day")?.value ?? "").trim();
+  const dailyCap = rawDaily === "" ? null : (Number.parseFloat(rawDaily) || 0);
+  const warningsEnabled = Boolean(document.getElementById("bud-toggle-warn")?.checked);
+  const autoFallback = Boolean(document.getElementById("bud-toggle-fallback")?.checked);
+  try {
+    await api("/api/budget/set", {
+      method: "POST",
+      body: {
+        perTaskUsd,
+        monthlyCap,
+        dailyCap,
+        warningsEnabled,
+        autoFallback,
+      },
+    });
+    toast("Budget settings saved", "ok");
+    await Promise.all([loadBudgetPanel(), loadDashboard(), loadSettings()]);
+  } catch (e) {
+    toast("Budget save failed: " + e.message, "err");
   }
 }
 
@@ -2575,7 +2695,8 @@ function escapeHtml(t) {
 const PALETTE_CMDS = [
   { label: "Go to Dashboard",    icon: "⬡", action: () => navigateTo("dashboard"), key: "g d" },
   { label: "Go to Chat",         icon: "💬", action: () => navigateTo("chat"),      key: "g c" },
-  { label: "Go to Sessions",     icon: "🕘", action: () => navigateTo("sessions") },
+  { label: "Go to Sessions",     icon: "🕘", action: () => navigateTo("sessions"),  key: "g t" },
+  { label: "Go to Budget",       icon: "💰", action: () => navigateTo("budget"),    key: "g b" },
   { label: "Go to Workspaces",   icon: "🗂", action: () => navigateTo("workspaces"), key: "g w" },
   { label: "Go to Providers",    icon: "☁",  action: () => navigateTo("providers") },
   { label: "Go to Models",       icon: "⚙",  action: () => navigateTo("models") },
@@ -2656,6 +2777,7 @@ document.addEventListener("keydown", e => {
     if (e.key === "d") { navigateTo("dashboard"); gPressed = false; }
     if (e.key === "c") { navigateTo("chat");      gPressed = false; }
     if (e.key === "t") { navigateTo("sessions");  gPressed = false; }
+    if (e.key === "b") { navigateTo("budget");    gPressed = false; }
     if (e.key === "w") { navigateTo("workspaces"); gPressed = false; }
     if (e.key === "p") { navigateTo("providers"); gPressed = false; }
     if (e.key === "m") { navigateTo("memory");    gPressed = false; }
@@ -2679,6 +2801,7 @@ setInterval(() => {
   const active = document.querySelector(".nav-item.active")?.dataset.panel;
   if (active === "dashboard") loadDashboard();
   if (active === "sessions")  loadSessionsPanel();
+  if (active === "budget")    loadBudgetPanel();
   if (active === "audit")     loadAuditLog();
 }, 30_000);
 </script>

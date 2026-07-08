@@ -1,6 +1,6 @@
 {
   "name": "@rrrtx/xr",
-  "version": "3.1.2",
+  "version": "3.1.3",
   "description": "XR 3.0 — The Unified AI Operating System. Local-first, BYOK, secure desktop automation, persistent RAG memories, and workflow supervisor.",
   "type": "module",
   "bin": {

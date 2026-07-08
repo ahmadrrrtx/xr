@@ -193,7 +193,7 @@ xr serve
 # Opens: http://localhost:3141/?token=<TOKEN>
 ```
 
-A **mission-control dashboard** with 15 navigation panels:
+A **mission-control dashboard** with 16 navigation panels:
 
 | Panel | What it shows |
 |---|---|
@@ -201,6 +201,7 @@ A **mission-control dashboard** with 15 navigation panels:
 | **Chat** | Full streaming chat UI |
 | **Sessions** | Recent chats/tasks, session detail, step timeline, research runs |
 | **Status** | Complete system health grid |
+| **Budget** | Spend controls, recent cost events, by-model and by-provider usage, soft-cap settings |
 | **Workspaces** | Create and switch isolated XR workspaces |
 | **Providers** | All 12+ providers with status, tier, key configuration, plus provider manager controls |
 | **Models** | Local runtime status, installed models |
