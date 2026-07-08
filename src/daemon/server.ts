@@ -417,14 +417,36 @@ export function makeHandler(initialStore: Store, token: string) {
 
     // ── Sessions ──────────────────────────────────────────────────────────
     if (path === "/api/sessions") {
+      const sessions = store.recentSessions(50);
+      const countsByStatus = Object.fromEntries(store.sessionStatusCounts().map((row) => [row.status, row.c]));
       return json({
-        sessions: store.recentSessions(50),
+        sessions,
         research: store.listResearch(10),
         counts: {
-          sessions: store.recentSessions(200).length,
+          sessions: Object.values(countsByStatus).reduce((sum, value) => sum + Number(value || 0), 0),
           research: store.researchCount(),
+          running: countsByStatus.running ?? 0,
+          done: countsByStatus.done ?? 0,
+          error: countsByStatus.error ?? 0,
+          stopped: countsByStatus.stopped ?? 0,
         },
       });
+    }
+
+    if (path.startsWith("/api/sessions/") && method === "GET") {
+      const id = decodeURIComponent(path.slice("/api/sessions/".length));
+      const session = store.getSession(id);
+      if (!session) return json({ error: "session not found" }, 404);
+      const steps = store.sessionSteps(id).map((step) => ({
+        ...step,
+        parsedDetail: (() => {
+          try { return JSON.parse(step.detail); } catch { return null; }
+        })(),
+      }));
+      const audit = store.recentAudit(200)
+        .filter((entry) => entry.session_id === id)
+        .slice(0, 20);
+      return json({ session, steps, audit });
     }
 
     // ── Providers (safe — no keys returned) ───────────────────────────────

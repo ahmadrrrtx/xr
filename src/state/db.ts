@@ -910,10 +910,10 @@ export class Store {
   // ---- Block 5: daemon read APIs ----
 
   /** Recent audit entries (newest first), for the dashboard. */
-  recentAudit(limit = 50): Array<{ id: number; event: string; detail: string; hash: string; created_at: number }> {
+  recentAudit(limit = 50): Array<{ id: number; session_id?: string | null; event: string; detail: string; hash: string; created_at: number }> {
     return this.db
-      .query<{ id: number; event: string; detail: string; hash: string; created_at: number }, [number]>(
-        `SELECT id,event,detail,hash,created_at FROM audit_log ORDER BY id DESC LIMIT ?`,
+      .query<{ id: number; session_id?: string | null; event: string; detail: string; hash: string; created_at: number }, [number]>(
+        `SELECT id,session_id,event,detail,hash,created_at FROM audit_log ORDER BY id DESC LIMIT ?`,
       )
       .all(limit);
   }
@@ -924,6 +924,32 @@ export class Store {
         `SELECT id,title,mode,status,created_at FROM sessions ORDER BY created_at DESC LIMIT ?`,
       )
       .all(limit);
+  }
+
+  getSession(id: string): { id: string; title: string; mode: string; status: string; created_at: number } | null {
+    return (
+      this.db
+        .query<{ id: string; title: string; mode: string; status: string; created_at: number }, [string]>(
+          `SELECT id,title,mode,status,created_at FROM sessions WHERE id=? LIMIT 1`,
+        )
+        .get(id) ?? null
+    );
+  }
+
+  sessionSteps(sessionId: string): Array<{ id: string; idx: number; phase: string; tool: string | null; detail: string; created_at: number }> {
+    return this.db
+      .query<{ id: string; idx: number; phase: string; tool: string | null; detail: string; created_at: number }, [string]>(
+        `SELECT id,idx,phase,tool,detail,created_at FROM steps WHERE session_id=? ORDER BY idx ASC, created_at ASC`,
+      )
+      .all(sessionId);
+  }
+
+  sessionStatusCounts(): Array<{ status: string; c: number }> {
+    return this.db
+      .query<{ status: string; c: number }, []>(
+        `SELECT status, COUNT(*) c FROM sessions GROUP BY status ORDER BY c DESC`,
+      )
+      .all();
   }
 
   /** Aggregate cost data for the Cost Cockpit. */

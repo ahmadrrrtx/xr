@@ -505,6 +505,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <a class="nav-item" data-panel="chat">
         <span class="nav-icon">💬</span> Chat
       </a>
+      <a class="nav-item" data-panel="sessions">
+        <span class="nav-icon">🕘</span> Sessions
+      </a>
       <a class="nav-item" data-panel="status">
         <span class="nav-icon">◎</span> Status
       </a>
@@ -661,6 +664,34 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <!-- ════════ CHAT ════════ -->
       <div class="panel" id="panel-chat">
         <!-- Chat uses full height, rendered without content padding -->
+      </div>
+
+      <!-- ════════ SESSIONS ════════ -->
+      <div class="panel" id="panel-sessions">
+        <div class="section-header">
+          <div><div class="section-title">Sessions</div><div class="section-sub">Recent tasks, chats, execution history, and research runs</div></div>
+          <button class="btn btn-ghost" onclick="loadSessionsPanel()" style="font-size:12px">↻ Refresh</button>
+        </div>
+        <div class="grid grid-4 mb-4">
+          <div class="card"><div class="card-header"><div class="card-title">Sessions</div></div><div class="card-value" id="sess-count-total">0</div><div class="card-sub">recent and persisted</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Running</div></div><div class="card-value" id="sess-count-running">0</div><div class="card-sub">active tasks</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Completed</div></div><div class="card-value" id="sess-count-done">0</div><div class="card-sub">successful runs</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Research</div></div><div class="card-value" id="sess-count-research">0</div><div class="card-sub">research sessions</div></div>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Recent Sessions</div></div>
+            <div id="sess-list"><div class="spin"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Session Detail</div></div>
+            <div id="sess-detail"><div class="muted" style="font-size:12px">Select a session to inspect its steps.</div></div>
+          </div>
+        </div>
+        <div class="card mt-4">
+          <div class="card-header"><div class="card-title">Recent Research Runs</div></div>
+          <div id="sess-research"><div class="spin"></div></div>
+        </div>
       </div>
 
       <!-- ════════ STATUS ════════ -->
@@ -1197,7 +1228,7 @@ function toast(msg, type = "info") {
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 const NAV_LABELS = {
-  dashboard: "Dashboard", chat: "Chat", status: "Status", workspaces: "Workspaces",
+  dashboard: "Dashboard", chat: "Chat", sessions: "Sessions", status: "Status", workspaces: "Workspaces",
   providers: "Providers", models: "Models", memory: "Memory",
   research: "Research", plugins: "Plugins", skills: "Marketplace", voice: "Voice",
   security: "Security", audit: "Audit Log", settings: "Settings",
@@ -1230,6 +1261,7 @@ function navigateTo(id) {
   // Lazy-load panel data
   switch (id) {
     case "dashboard":   loadDashboard(); break;
+    case "sessions":    loadSessionsPanel(); break;
     case "status":      loadStatus();    break;
     case "workspaces":  loadWorkspaces(); break;
     case "providers":   loadProviders(); break;
@@ -1349,6 +1381,83 @@ async function loadProviderChip() {
     document.getElementById("chip-provider").className = "status-chip " + (activeRow?.healthy === false ? "err" : activeRow?.healthy ? "ok" : "warn");
     document.getElementById("provider-dot").style.background = activeRow?.healthy === false ? "var(--red)" : activeRow?.healthy ? "var(--green)" : "var(--amber)";
   } catch {}
+}
+
+let SELECTED_SESSION_ID = null;
+
+// ── Sessions Panel ────────────────────────────────────────────────────────────
+async function loadSessionsPanel() {
+  try {
+    const data = await api("/api/sessions");
+    const sessions = data.sessions ?? [];
+    const research = data.research ?? [];
+    const counts = data.counts ?? {};
+
+    document.getElementById("sess-count-total").textContent = counts.sessions ?? sessions.length;
+    document.getElementById("sess-count-running").textContent = counts.running ?? 0;
+    document.getElementById("sess-count-done").textContent = counts.done ?? 0;
+    document.getElementById("sess-count-research").textContent = counts.research ?? research.length;
+
+    document.getElementById("sess-list").innerHTML = sessions.length ? sessions.map(s => {
+      const statusClass = s.status === "done" ? "badge-green" : s.status === "running" ? "badge-cyan" : s.status === "error" ? "badge-red" : "badge-amber";
+      return '<div class="mem-item" style="display:block;cursor:pointer" onclick="loadSessionDetail(\'' + escapeHtml(s.id) + '\')">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+          '<div><div style="font-weight:700;color:var(--text)">' + escapeHtml(s.title) + '</div><div class="muted" style="font-size:11px">' + escapeHtml(s.id) + ' · ' + escapeHtml(s.mode) + ' · ' + new Date(s.created_at).toLocaleString() + '</div></div>' +
+          '<span class="badge ' + statusClass + '">' + escapeHtml(s.status) + '</span>' +
+        '</div>' +
+      '</div>';
+    }).join("") : '<div class="muted" style="font-size:12px">No sessions yet.</div>';
+
+    document.getElementById("sess-research").innerHTML = research.length ? research.map(r =>
+      '<div class="stat-row"><div class="stat-key">' + escapeHtml(r.topic) + '</div><div class="stat-val val-muted">' + escapeHtml(r.depth + ' / ' + r.status) + '</div></div>'
+    ).join("") : '<div class="muted" style="font-size:12px">No research runs yet.</div>';
+
+    if (!SELECTED_SESSION_ID && sessions[0]?.id) {
+      await loadSessionDetail(sessions[0].id);
+    }
+  } catch (e) {
+    document.getElementById("sess-list").innerHTML = '<div class="muted" style="font-size:12px">Sessions API unavailable: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function loadSessionDetail(id) {
+  SELECTED_SESSION_ID = id;
+  try {
+    const data = await api("/api/sessions/" + encodeURIComponent(id));
+    const session = data.session;
+    const steps = data.steps ?? [];
+    const audit = data.audit ?? [];
+    const stepHtml = steps.length ? steps.map(step => {
+      const detail = step.parsedDetail ? JSON.stringify(step.parsedDetail) : step.detail;
+      return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px"><b>' + escapeHtml(step.idx + '. ' + step.phase + (step.tool ? ' · ' + step.tool : '')) + '</b><span class="muted mono">' + new Date(step.created_at).toLocaleTimeString() + '</span></div>' +
+        '<div class="muted" style="font-size:11px;margin-top:4px">' + escapeHtml(String(detail).slice(0, 240)) + '</div>' +
+      '</div>';
+    }).join("") : '<div class="muted" style="font-size:12px">No steps recorded for this session.</div>';
+    const auditHtml = audit.length ? audit.slice(0, 6).map(entry =>
+      '<div class="stat-row"><div class="stat-key">' + escapeHtml(entry.event) + '</div><div class="stat-val val-muted">' + new Date(entry.created_at).toLocaleTimeString() + '</div></div>'
+    ).join("") : '<div class="muted" style="font-size:12px">No session-scoped audit entries.</div>';
+
+    document.getElementById("sess-detail").innerHTML =
+      '<div style="margin-bottom:12px"><div style="font-weight:800;font-size:15px">' + escapeHtml(session.title) + '</div><div class="muted" style="font-size:11px">' + escapeHtml(session.id) + ' · ' + escapeHtml(session.mode) + ' · ' + escapeHtml(session.status) + '</div></div>' +
+      '<div style="margin-bottom:12px"><button class="btn btn-ghost" style="font-size:11px" onclick="seedSessionToChat(\'' + escapeHtml(session.title).replace(/'/g, "&#39;") + '\')">Use title in Chat</button></div>' +
+      '<div class="settings-title" style="margin-bottom:8px">Execution Steps</div>' +
+      stepHtml +
+      '<div class="settings-title" style="margin:14px 0 8px">Recent Audit</div>' +
+      auditHtml;
+  } catch (e) {
+    document.getElementById("sess-detail").innerHTML = '<div class="muted" style="font-size:12px">Failed to load session detail: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function seedSessionToChat(title) {
+  navigateTo('chat');
+  const input = document.getElementById('chat-input');
+  if (input) {
+    input.value = title;
+    input.focus();
+    autoResize(input);
+  }
 }
 
 // ── Status Panel ──────────────────────────────────────────────────────────────
@@ -2466,6 +2575,7 @@ function escapeHtml(t) {
 const PALETTE_CMDS = [
   { label: "Go to Dashboard",    icon: "⬡", action: () => navigateTo("dashboard"), key: "g d" },
   { label: "Go to Chat",         icon: "💬", action: () => navigateTo("chat"),      key: "g c" },
+  { label: "Go to Sessions",     icon: "🕘", action: () => navigateTo("sessions") },
   { label: "Go to Workspaces",   icon: "🗂", action: () => navigateTo("workspaces"), key: "g w" },
   { label: "Go to Providers",    icon: "☁",  action: () => navigateTo("providers") },
   { label: "Go to Models",       icon: "⚙",  action: () => navigateTo("models") },
@@ -2545,6 +2655,7 @@ document.addEventListener("keydown", e => {
   if (gPressed) {
     if (e.key === "d") { navigateTo("dashboard"); gPressed = false; }
     if (e.key === "c") { navigateTo("chat");      gPressed = false; }
+    if (e.key === "t") { navigateTo("sessions");  gPressed = false; }
     if (e.key === "w") { navigateTo("workspaces"); gPressed = false; }
     if (e.key === "p") { navigateTo("providers"); gPressed = false; }
     if (e.key === "m") { navigateTo("memory");    gPressed = false; }
@@ -2567,6 +2678,7 @@ loadDashboard();
 setInterval(() => {
   const active = document.querySelector(".nav-item.active")?.dataset.panel;
   if (active === "dashboard") loadDashboard();
+  if (active === "sessions")  loadSessionsPanel();
   if (active === "audit")     loadAuditLog();
 }, 30_000);
 </script>

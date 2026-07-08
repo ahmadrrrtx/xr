@@ -193,14 +193,16 @@ xr serve
 # Opens: http://localhost:3141/?token=<TOKEN>
 ```
 
-A **mission-control dashboard** with 13 navigation panels:
+A **mission-control dashboard** with 15 navigation panels:
 
 | Panel | What it shows |
 |---|---|
 | **Dashboard** | 4 stat cards (spend, security score, audit chain, skills) + provider health + local AI + memory + recent audit |
 | **Chat** | Full streaming chat UI |
+| **Sessions** | Recent chats/tasks, session detail, step timeline, research runs |
 | **Status** | Complete system health grid |
-| **Providers** | All 12+ providers with status, tier, key configuration |
+| **Workspaces** | Create and switch isolated XR workspaces |
+| **Providers** | All 12+ providers with status, tier, key configuration, plus provider manager controls |
 | **Models** | Local runtime status, installed models |
 | **Memory** | Health cards (total/expired/never-recalled), live search, all entries with inline delete, expiry badges |
 | **Research** | Research mode quick reference |
