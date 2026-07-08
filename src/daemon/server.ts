@@ -24,6 +24,7 @@ import { randomBytes } from "node:crypto";
 import { Store } from "../state/db.ts";
 import { loadConfig, isMemoryEnabled } from "../config/config.ts";
 import { runLab } from "../security/lab.ts";
+import { XRShieldService } from "../security/shield.ts";
 import { fingerprint } from "../memory/rag.ts";
 import { basename } from "node:path";
 import { dashboardHtml } from "./dashboard.ts";
@@ -99,6 +100,8 @@ export function makeHandler(store: Store, token: string) {
     if (url.searchParams.get("token") === token) return true;
     return false;
   }
+
+  const shieldService = new XRShieldService(store);
 
   return async function handle(req: Request): Promise<Response> {
     const url    = new URL(req.url);
@@ -229,6 +232,114 @@ export function makeHandler(store: Store, token: string) {
         ...report,
         egressAllowlist: config.security.egressAllowlist?.map(d => d.replace(/^https?:\/\//, "")) ?? [],
       });
+    }
+
+    // ── XR Shield API Endpoints ───────────────────────────────────────────
+    if (path === "/api/shield/status") {
+      return json({
+        state: shieldService.getState(),
+        score: shieldService.getPrivacyScore(),
+        activeModules: ["Process Inspector", "Startup & Persist", "Privacy Advisor", "Ad & Tracker Filter", "Forensic Quarantine"]
+      });
+    }
+
+    if (path === "/api/shield/scan") {
+      const mode = url.searchParams.get("mode") === "full" ? "full" : "quick";
+      const threats = shieldService.runScan(mode);
+      return json({ threats });
+    }
+
+    if (path === "/api/shield/processes") {
+      return json({ processes: shieldService.getSystemProcesses() });
+    }
+
+    if (path === "/api/shield/startup") {
+      return json({ startup: shieldService.getStartupEntries() });
+    }
+
+    if (path === "/api/shield/privacy") {
+      return json({
+        score: shieldService.getPrivacyScore(),
+        telemetry: shieldService.checkTelemetry(),
+        adBlock: shieldService.getHostsAdBlockData()
+      });
+    }
+
+    if (path === "/api/shield/downloads") {
+      return json({ downloads: shieldService.getDownloads() });
+    }
+
+    if (path === "/api/shield/browser") {
+      return json({ browser: shieldService.getBrowserSecurity() });
+    }
+
+    if (path === "/api/shield/explain" && method === "POST") {
+      try {
+        const body = await req.json() as { id?: string };
+        if (!body?.id) return json({ error: "id parameter required" }, 400);
+
+        // Find the threat by scanning
+        const threats = shieldService.runScan("full");
+        const threat = threats.find(t => t.id === body.id);
+
+        if (!threat) return json({ error: "threat not found" }, 404);
+
+        const analysis = shieldService.analyzeThreatWithAgent(threat.agent, threat);
+        return json({ analysis });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
+    }
+
+    if (path === "/api/shield/quarantine" && method === "POST") {
+      try {
+        const body = await req.json() as { action: "isolate" | "restore" | "delete"; id: string; threat?: any };
+        if (!body?.action || !body?.id) return json({ error: "action and id required" }, 400);
+
+        if (body.action === "isolate") {
+          const success = shieldService.quarantineItem(body.id, body.threat);
+          return json({ ok: success });
+        } else if (body.action === "restore") {
+          const success = shieldService.restoreQuarantinedItem(body.id);
+          return json({ ok: success });
+        } else if (body.action === "delete") {
+          const state = shieldService.getState();
+          state.quarantined = state.quarantined.filter(q => q.id !== body.id);
+          shieldService["saveState"]();
+          return json({ ok: true });
+        }
+        return json({ error: "invalid action" }, 400);
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
+    }
+
+    if (path === "/api/shield/whitelist" && method === "POST") {
+      try {
+        const body = await req.json() as { action: "add" | "remove"; type: string; value: string };
+        if (!body?.action || !body?.type || !body?.value) return json({ error: "action, type, and value required" }, 400);
+
+        if (body.action === "add") {
+          const success = shieldService.whitelistItem(body.type, body.value);
+          return json({ ok: success });
+        } else if (body.action === "remove") {
+          const success = shieldService.removeWhitelistItem(body.value);
+          return json({ ok: success });
+        }
+        return json({ error: "invalid action" }, 400);
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
+    }
+
+    if (path === "/api/shield/adblock" && method === "POST") {
+      try {
+        const body = await req.json() as { enable: boolean };
+        const success = await shieldService.toggleAdBlock(body.enable);
+        return json({ ok: success, active: shieldService.getState().adBlockEnabled });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
     }
 
     // ── Sessions ──────────────────────────────────────────────────────────
