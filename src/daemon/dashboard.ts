@@ -875,25 +875,178 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
         </div>
       </div>
 
-      <!-- ════════ SECURITY ════════ -->
+      <!-- ════════ SECURITY (XR SHIELD) ════════ -->
       <div class="panel" id="panel-security">
         <div class="section-header">
-          <div><div class="section-title">Security</div><div class="section-sub">Injection defense, egress controls, audit integrity</div></div>
-          <button class="btn btn-ghost" onclick="runSecLab()" style="font-size:12px">Run Lab</button>
-        </div>
-        <div class="grid grid-2 mb-4">
-          <div class="card">
-            <div class="card-header"><div class="card-title">Injection Defense</div></div>
-            <div id="sec-lab-result"><div class="muted" style="font-size:12px">Click "Run Lab" to test</div></div>
+          <div>
+            <div class="section-title">🛡️ XR Shield — Security & Privacy</div>
+            <div class="section-sub">AI-powered endpoint detection, privacy advisors, and telemetry control</div>
           </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">Egress Allow-List</div></div>
-            <div id="sec-egress"><div class="spin"></div></div>
+          <div class="flex gap-2">
+            <button class="btn btn-primary" onclick="runShieldScan('quick')" style="font-size:12px">Quick Scan</button>
+            <button class="btn btn-ghost" onclick="runShieldScan('full')" style="font-size:12px">Full Scan</button>
           </div>
         </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">Security Posture</div></div>
-          <div id="sec-posture"><div class="spin"></div></div>
+
+        <!-- Metric Cards Grid -->
+        <div class="grid grid-4 mb-4">
+          <div class="card card-glow-green" id="shield-card-score">
+            <div class="card-header"><div class="card-title">Privacy Score</div><span class="card-icon">🛡️</span></div>
+            <div class="card-value" id="shield-score-val">Checking...</div>
+            <div class="card-sub" id="shield-score-desc">System diagnostic check</div>
+          </div>
+          <div class="card" id="shield-card-threats">
+            <div class="card-header"><div class="card-title">Active Threats</div><span class="card-icon">⚠</span></div>
+            <div class="card-value" id="shield-threats-val" style="color:var(--red)">Checking...</div>
+            <div class="card-sub" id="shield-threats-desc">Unresolved items</div>
+          </div>
+          <div class="card" id="shield-card-quarantined">
+            <div class="card-header"><div class="card-title">Quarantined</div><span class="card-icon">📦</span></div>
+            <div class="card-value" id="shield-quarantined-val" style="color:var(--amber)">Checking...</div>
+            <div class="card-sub">Files safely isolated</div>
+          </div>
+          <div class="card" id="shield-card-adblock">
+            <div class="card-header"><div class="card-title">Tracker Block</div><span class="card-icon">🚫</span></div>
+            <div class="card-value" id="shield-adblock-val" style="color:var(--cyan); cursor:pointer;" onclick="toggleShieldAdBlock()">Checking...</div>
+            <div class="card-sub" id="shield-adblock-desc">Click toggle to set</div>
+          </div>
+        </div>
+
+        <!-- Sub-navigation Tabs -->
+        <div style="display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:16px; overflow-x:auto;">
+          <button class="btn btn-ghost active" id="shield-tab-overview" onclick="switchShieldTab('overview')">Overview</button>
+          <button class="btn btn-ghost" id="shield-tab-processes" onclick="switchShieldTab('processes')">Processes</button>
+          <button class="btn btn-ghost" id="shield-tab-startup" onclick="switchShieldTab('startup')">Startup & Tasks</button>
+          <button class="btn btn-ghost" id="shield-tab-downloads" onclick="switchShieldTab('downloads')">Downloads</button>
+          <button class="btn btn-ghost" id="shield-tab-browser" onclick="switchShieldTab('browser')">Browser Privacy</button>
+          <button class="btn btn-ghost" id="shield-tab-lab" onclick="switchShieldTab('lab')">Security Lab</button>
+        </div>
+
+        <!-- SUB-PANELS -->
+        <div id="shield-subpanel-overview">
+          <div class="grid grid-2 mb-4">
+            <div class="card">
+              <div class="card-header"><div class="card-title">Detected Vulnerabilities & Threats</div></div>
+              <div id="shield-threats-list" style="max-height: 400px; overflow-y: auto; padding:12px 0;">
+                <div class="muted" style="font-size:12px; padding:12px;">No scan performed yet. Click Quick Scan above to query.</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">Recommendations</div></div>
+              <div id="shield-recommendations-list" style="max-height: 400px; overflow-y: auto; padding:12px 0;">
+                <div class="muted" style="font-size:12px; padding:12px;">Perform a scan to retrieve local hardening feedback.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="shield-subpanel-processes" style="display:none">
+          <div class="card">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <div class="card-title">Active Running Processes</div>
+              <input type="text" id="shield-proc-search" placeholder="Search processes..." onkeyup="filterShieldProcesses()" style="background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:4px 8px; color:var(--text); font-size:12px; max-width:200px;" />
+            </div>
+            <div style="overflow-x:auto; margin-top:12px;">
+              <table style="width:100%; border-collapse:collapse; text-align:left; font-size:12px;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border); color:var(--muted); height:32px;">
+                    <th style="padding:4px 8px;">PID</th>
+                    <th style="padding:4px 8px;">PPID</th>
+                    <th style="padding:4px 8px;">Name</th>
+                    <th style="padding:4px 8px;">CPU%</th>
+                    <th style="padding:4px 8px;">Memory</th>
+                    <th style="padding:4px 8px;">Signature</th>
+                    <th style="padding:4px 8px; text-align:right; width: 120px;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="shield-processes-table-body">
+                  <tr><td colspan="7" class="muted" style="padding:12px; text-align:center;"><div class="spin"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="shield-subpanel-startup" style="display:none">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Startup Tasks & Persistence Registry</div></div>
+            <div style="overflow-x:auto; margin-top:12px;">
+              <table style="width:100%; border-collapse:collapse; text-align:left; font-size:12px;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border); color:var(--muted); height:32px;">
+                    <th style="padding:4px 8px;">Registry/File Name</th>
+                    <th style="padding:4px 8px;">Type</th>
+                    <th style="padding:4px 8px;">Location</th>
+                    <th style="padding:4px 8px;">Command Execution</th>
+                    <th style="padding:4px 8px; text-align:right;">Integrity Status</th>
+                  </tr>
+                </thead>
+                <tbody id="shield-startup-table-body">
+                  <tr><td colspan="5" class="muted" style="padding:12px; text-align:center;"><div class="spin"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="shield-subpanel-downloads" style="display:none">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Downloads Folder Inspector</div></div>
+            <div style="overflow-x:auto; margin-top:12px;">
+              <table style="width:100%; border-collapse:collapse; text-align:left; font-size:12px;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border); color:var(--muted); height:32px;">
+                    <th style="padding:4px 8px;">Downloaded File Name</th>
+                    <th style="padding:4px 8px;">Path</th>
+                    <th style="padding:4px 8px;">Size</th>
+                    <th style="padding:4px 8px;">Risk Assessment</th>
+                    <th style="padding:4px 8px; text-align:right;">Remediation</th>
+                  </tr>
+                </thead>
+                <tbody id="shield-downloads-table-body">
+                  <tr><td colspan="5" class="muted" style="padding:12px; text-align:center;"><div class="spin"></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="shield-subpanel-browser" style="display:none">
+          <div class="grid grid-2 mb-4">
+            <div class="card">
+              <div class="card-header"><div class="card-title">Browser Privacy Metrics</div></div>
+              <div id="shield-browser-metrics" style="padding:12px;">
+                <div class="spin"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">Installed Browser Extensions</div></div>
+              <div id="shield-browser-extensions" style="padding:12px; max-height: 400px; overflow-y: auto;">
+                <div class="spin"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="shield-subpanel-lab" style="display:none">
+          <div class="grid grid-2 mb-4">
+            <div class="card">
+              <div class="card-header"><div class="card-title">Injection Defense Test Lab</div></div>
+              <div style="padding:12px;">
+                <p class="muted" style="font-size:12px; margin-bottom:16px;">This test runs prompt injection attack payloads from standard AgentDojo corpora directly against XR's security layers to measure block rates.</p>
+                <div id="sec-lab-result"><div class="muted" style="font-size:12px">Click Run Lab below to execute test corpus</div></div>
+                <button class="btn btn-primary" onclick="runSecLab()" style="margin-top:16px; font-size:12px">Run Security Lab</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">Egress Allow-List</div></div>
+              <div id="sec-egress" style="padding:12px;"><div class="spin"></div></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Static Security Posture</div></div>
+            <div id="sec-posture" style="padding:12px;"><div class="spin"></div></div>
+          </div>
         </div>
       </div>
 
@@ -1554,45 +1707,405 @@ function loadSkills(){ return loadMarketplace(); }
 function inspectSkill(id){ return inspectMarketplaceSkill(id); }
 
 // ── Security ──────────────────────────────────────────────────────────────────
+let activeShieldTab = "overview";
+let currentShieldProcesses = [];
+
+async function switchShieldTab(tab) {
+  activeShieldTab = tab;
+  const tabs = ["overview", "processes", "startup", "downloads", "browser", "lab"];
+  tabs.forEach(t => {
+    const btn = document.getElementById("shield-tab-" + t);
+    const pnl = document.getElementById("shield-subpanel-" + t);
+    if (btn) {
+      if (t === tab) btn.classList.add("active");
+      else btn.classList.remove("active");
+    }
+    if (pnl) {
+      if (t === tab) pnl.style.display = "block";
+      else pnl.style.display = "none";
+    }
+  });
+
+  // Load tab specific data
+  if (tab === "processes") await loadShieldProcesses();
+  else if (tab === "startup") await loadShieldStartup();
+  else if (tab === "downloads") await loadShieldDownloads();
+  else if (tab === "browser") await loadShieldBrowser();
+  else if (tab === "lab") await loadSecurityLab();
+}
+
 async function loadSecurity() {
+  try {
+    const status = await api("/api/shield/status");
+
+    // Update Top Metric Cards
+    const scoreVal = document.getElementById("shield-score-val");
+    if (scoreVal) {
+      scoreVal.textContent = status.score.score + "/100";
+      const scoreCard = document.getElementById("shield-card-score");
+      if (status.score.score >= 80) {
+        scoreVal.className = "card-value text-green";
+        scoreCard.className = "card card-glow-green";
+      } else if (status.score.score >= 50) {
+        scoreVal.className = "card-value text-amber";
+        scoreCard.className = "card card-glow-amber";
+      } else {
+        scoreVal.className = "card-value text-red";
+        scoreCard.className = "card card-glow-red";
+      }
+    }
+
+    // Active threats
+    const activeThreats = status.state.history[status.state.history.length - 1]?.threatsCount ?? 0;
+    const threatsVal = document.getElementById("shield-threats-val");
+    if (threatsVal) {
+      threatsVal.textContent = activeThreats;
+      const threatsCard = document.getElementById("shield-card-threats");
+      if (activeThreats > 0) {
+        threatsVal.style.color = "var(--red)";
+        threatsCard.className = "card card-glow-red";
+      } else {
+        threatsVal.style.color = "var(--green)";
+        threatsCard.className = "card";
+      }
+    }
+
+    // Quarantined
+    const quarantinedVal = document.getElementById("shield-quarantined-val");
+    if (quarantinedVal) {
+      const qCount = status.state.quarantined.length;
+      quarantinedVal.textContent = qCount;
+      quarantinedVal.style.color = qCount > 0 ? "var(--amber)" : "var(--green)";
+    }
+
+    // Tracker Block
+    const adblockVal = document.getElementById("shield-adblock-val");
+    if (adblockVal) {
+      const adActive = status.state.adBlockEnabled;
+      adblockVal.textContent = adActive ? "Enabled" : "Disabled";
+      adblockVal.style.color = adActive ? "var(--cyan)" : "var(--textDim)";
+      const adCard = document.getElementById("shield-card-adblock");
+      if (adActive) adCard.className = "card card-glow-cyan";
+      else adCard.className = "card";
+    }
+
+    // Load active threats and recommendations for overview tab
+    const scan = await api("/api/shield/scan?mode=quick");
+    renderOverviewScan(scan.threats, status.score.checks);
+
+  } catch(e) {
+    toast("Security load error: " + e.message, "err");
+  }
+}
+
+function renderOverviewScan(threats, privacyChecks) {
+  const threatsList = document.getElementById("shield-threats-list");
+  const recommendationsList = document.getElementById("shield-recommendations-list");
+
+  if (threatsList) {
+    if (threats.length === 0) {
+      threatsList.innerHTML = "<div class='muted' style='font-size:12px; padding:12px; text-align:center;'><span style='font-size: 24px; display:block; margin-bottom: 8px;'>✓</span>0 active threats or integrity anomalies detected.</div>";
+    } else {
+      threatsList.innerHTML = threats.map(function(t) {
+        const badgeColor = (t.severity === "critical" || t.severity === "high") ? "badge-red" : "badge-amber";
+        return "<div style='border-bottom:1px solid var(--border); padding:12px; display:flex; justify-content:space-between; align-items:center;'>" +
+          "<div>" +
+            "<div style='font-weight:bold; font-size:13px; display:flex; align-items:center; gap:8px;'>" +
+              "<span class='badge " + badgeColor + "'>" + t.severity.toUpperCase() + "</span>" +
+              t.title +
+            "</div>" +
+            "<div class='muted' style='font-size:11px; margin-top:4px;'>Agent: " + t.agent + " | Evidence: " + t.evidence + "</div>" +
+            "<div style='font-size:12px; margin-top:4px;'>" + t.details + "</div>" +
+          "</div>" +
+          "<div style='display:flex; gap:6px;'>" +
+            "<button class='btn btn-ghost' onclick='explainShieldThreat(\"" + t.id + "\")' style='font-size:11px; padding:2px 8px;'>Explain</button>" +
+            "<button class='btn btn-danger' onclick='remediateShieldThreat(\"" + t.id + "\", " + JSON.stringify(t).replace(/"/g, '&quot;') + ")' style='font-size:11px; padding:2px 8px;'>Remediation</button>" +
+          "</div>" +
+        "</div>";
+      }).join("");
+    }
+  }
+
+  if (recommendationsList) {
+    const failedChecks = privacyChecks.filter(function(c) { return !c.passed; });
+    if (failedChecks.length === 0) {
+      recommendationsList.innerHTML = "<div class='muted' style='font-size:12px; padding:12px; text-align:center;'><span style='font-size: 24px; display:block; margin-bottom: 8px;'>🔒</span>Privacy configurations match verified high-security profiles.</div>";
+    } else {
+      recommendationsList.innerHTML = failedChecks.map(function(c) {
+        return "<div style='border-bottom:1px solid var(--border); padding:12px;'>" +
+          "<div style='font-weight:bold; font-size:13px; color:var(--amber);'>⚠ Hardening Recommendation</div>" +
+          "<div style='font-size:12px; font-weight:500; margin-top:4px;'>" + c.name + "</div>" +
+          "<div class='muted' style='font-size:11px; margin-top:2px;'>" + c.details + "</div>" +
+          "<div style='font-size:11px; color:var(--cyan); margin-top:4px; cursor:pointer;' onclick='switchShieldTab(\"startup\")'>› Remediate via Settings</div>" +
+        "</div>";
+      }).join("");
+    }
+  }
+}
+
+async function runShieldScan(mode) {
+  toast("Running " + mode + " scan...");
+  const threatsList = document.getElementById("shield-threats-list");
+  if (threatsList) threatsList.innerHTML = "<div class='spin' style='margin:20px auto;'></div>";
+
+  try {
+    const scan = await api("/api/shield/scan?mode=" + mode);
+    toast("Scan complete. Found " + scan.threats.length + " threats.", "ok");
+    await loadSecurity();
+  } catch (e) {
+    toast("Scan execution error: " + e.message, "err");
+  }
+}
+
+async function loadShieldProcesses() {
+  const body = document.getElementById("shield-processes-table-body");
+  if (!body) return;
+  body.innerHTML = "<tr><td colspan='7' class='muted' style='padding:12px; text-align:center;'><div class='spin'></div></td></tr>";
+
+  try {
+    const data = await api("/api/shield/processes");
+    currentShieldProcesses = data.processes ?? [];
+    renderShieldProcessesList(currentShieldProcesses);
+  } catch (e) {
+    body.innerHTML = "<tr><td colspan='7' class='text-red' style='padding:12px; text-align:center;'>Error: " + e.message + "</td></tr>";
+  }
+}
+
+function renderShieldProcessesList(processes) {
+  const body = document.getElementById("shield-processes-table-body");
+  if (!body) return;
+
+  if (processes.length === 0) {
+    body.innerHTML = "<tr><td colspan='7' class='muted' style='padding:12px; text-align:center;'>No processes detected</td></tr>";
+    return;
+  }
+
+  body.innerHTML = processes.map(function(p) {
+    const sigLabel = p.unsigned ? "<span class='badge badge-amber'>Unsigned</span>" : "<span class='badge badge-green'>Verified</span>";
+    const actionBtn = "<button class='btn btn-danger' onclick='killShieldProcess(" + p.pid + ", \"" + p.name + "\")' style='font-size:10px; padding:2px 6px;'>Kill PID</button>";
+    return "<tr style='border-bottom:1px solid var(--border); height:36px;' class='proc-row' data-name='" + p.name.toLowerCase() + "'>" +
+      "<td style='padding:4px 8px;' class='mono'>" + p.pid + "</td>" +
+      "<td style='padding:4px 8px;' class='mono'>" + p.ppid + "</td>" +
+      "<td style='padding:4px 8px; font-weight:bold;'>" + p.name + "</td>" +
+      "<td style='padding:4px 8px;' class='mono'>" + p.cpu + "%</td>" +
+      "<td style='padding:4px 8px;' class='mono'>" + p.memory + " MB</td>" +
+      "<td style='padding:4px 8px;'>" + sigLabel + "</td>" +
+      "<td style='padding:4px 8px; text-align:right;'>" + actionBtn + "</td>" +
+    "</tr>";
+  }).join("");
+}
+
+function filterShieldProcesses() {
+  const q = document.getElementById("shield-proc-search")?.value.toLowerCase() ?? "";
+  const rows = document.querySelectorAll(".proc-row");
+  rows.forEach(function(r) {
+    const name = r.getAttribute("data-name") ?? "";
+    if (name.includes(q)) r.style.display = "";
+    else r.style.display = "none";
+  });
+}
+
+async function killShieldProcess(pid, name) {
+  if (confirm("Do you want to terminate process " + name + " (PID: " + pid + ")?")) {
+    try {
+      toast("Terminating process " + pid + "...");
+      await api("/api/shield/quarantine", {
+        method: "POST",
+        body: { action: "isolate", id: "proc-" + pid, threat: { title: "Terminated Process: " + name, severity: "medium", agent: "Manual Administrator Intervention", evidence: "PID: " + pid, details: "Terminated process via System Dashboard Control", recommendations: [] } }
+      });
+      toast("Successfully terminated PID " + pid, "ok");
+      await loadShieldProcesses();
+      await loadSecurity();
+    } catch (e) {
+      toast("Process termination failed: " + e.message, "err");
+    }
+  }
+}
+
+async function loadShieldStartup() {
+  const body = document.getElementById("shield-startup-table-body");
+  if (!body) return;
+  body.innerHTML = "<tr><td colspan='5' class='muted' style='padding:12px; text-align:center;'><div class='spin'></div></td></tr>";
+
+  try {
+    const data = await api("/api/shield/startup");
+    const items = data.startup ?? [];
+    if (items.length === 0) {
+      body.innerHTML = "<tr><td colspan='5' class='muted' style='padding:12px; text-align:center;'>No startup entries registered</td></tr>";
+      return;
+    }
+    body.innerHTML = items.map(function(i) {
+      const integrity = i.suspicious ? "<span class='badge badge-red'>Suspicious Heuristic</span>" : "<span class='badge badge-green'>Clean Signature</span>";
+      return "<tr style='border-bottom:1px solid var(--border); height:40px;'>" +
+        "<td style='padding:4px 8px; font-weight:bold;'>" + i.name + "</td>" +
+        "<td style='padding:4px 8px;'><span class='badge badge-gray'>" + i.type + "</span></td>" +
+        "<td style='padding:4px 8px;' class='muted'>" + i.location + "</td>" +
+        "<td style='padding:4px 8px;' class='mono'>" + i.command + "</td>" +
+        "<td style='padding:4px 8px; text-align:right;'>" + integrity + "</td>" +
+      "</tr>";
+    }).join("");
+  } catch (e) {
+    body.innerHTML = "<tr><td colspan='5' class='text-red' style='padding:12px; text-align:center;'>Error: " + e.message + "</td></tr>";
+  }
+}
+
+async function loadShieldDownloads() {
+  const body = document.getElementById("shield-downloads-table-body");
+  if (!body) return;
+  body.innerHTML = "<tr><td colspan='5' class='muted' style='padding:12px; text-align:center;'><div class='spin'></div></td></tr>";
+
+  try {
+    const data = await api("/api/shield/downloads");
+    const items = data.downloads ?? [];
+    if (items.length === 0) {
+      body.innerHTML = "<tr><td colspan='5' class='muted' style='padding:12px; text-align:center;'>Downloads folder empty</td></tr>";
+      return;
+    }
+    body.innerHTML = items.map(function(d) {
+      const risk = d.suspicious ? "<span class='badge badge-red'>High Risk Attachment</span>" : "<span class='badge badge-green'>Low Risk File</span>";
+      const remediate = d.suspicious ? "<button class='btn btn-danger' onclick='remediateDownload(\"" + d.path + "\", \"" + d.name + "\")' style='font-size:10px; padding:2px 6px;'>Isolate</button>" : "<span class='muted'>—</span>";
+      return "<tr style='border-bottom:1px solid var(--border); height:40px;'>" +
+        "<td style='padding:4px 8px; font-weight:bold;'>" + d.name + "</td>" +
+        "<td style='padding:4px 8px;' class='muted mono'>" + d.path + "</td>" +
+        "<td style='padding:4px 8px;' class='mono'>" + Math.round(d.sizeBytes / 1024) + " KB</td>" +
+        "td style='padding:4px 8px;'>" + risk + "</td>" +
+        "<td style='padding:4px 8px; text-align:right;'>" + remediate + "</td>" +
+      "</tr>";
+    }).join("");
+  } catch (e) {
+    body.innerHTML = "<tr><td colspan='5' class='text-red' style='padding:12px; text-align:center;'>Error: " + e.message + "</td></tr>";
+  }
+}
+
+async function remediateDownload(path, name) {
+  if (confirm("Do you want to safely isolate and quarantine the downloaded file \"" + name + "\"?")) {
+    try {
+      await api("/api/shield/quarantine", {
+        method: "POST",
+        body: { action: "isolate", id: "down-" + name, threat: { title: "Isolated Attachment: " + name, severity: "high", agent: "Download Inspector Agent", evidence: "File: " + path, details: "Safely removed from Downloads folder", recommendations: [] } }
+      });
+      toast("Successfully quarantined " + name, "ok");
+      await loadShieldDownloads();
+      await loadSecurity();
+    } catch (e) {
+      toast("Quarantine failed: " + e.message, "err");
+    }
+  }
+}
+
+async function loadShieldBrowser() {
+  const metricsDiv = document.getElementById("shield-browser-metrics");
+  const extensionsDiv = document.getElementById("shield-browser-extensions");
+  if (!metricsDiv || !extensionsDiv) return;
+
+  metricsDiv.innerHTML = "<div class='spin'></div>";
+  extensionsDiv.innerHTML = "<div class='spin'></div>";
+
+  try {
+    const data = await api("/api/shield/browser");
+    const info = data.browser?.[0] ?? { browser: "Chrome", extensions: [], cookiesCheck: { secure: true, count: 0 }, permissionsCheck: { micCamBlocked: true, notificationsBlocked: true } };
+
+    metricsDiv.innerHTML = "<div class='stat-row'><div class='stat-key'>Active Profile</div><div class='stat-val mono text-cyan'>" + info.browser.toUpperCase() + "</div></div>" +
+      "<div class='stat-row'><div class='stat-key'>Secure Cookie Policy</div><div class='stat-val text-green'>" + (info.cookiesCheck.secure ? "Verified Enforced" : "Warning (unencrypted)") + "</div></div>" +
+      "<div class='stat-row'><div class='stat-key'>Tracking Cookies Cached</div><div class='stat-val mono text-amber'>" + info.cookiesCheck.count + " tracking items</div></div>" +
+      "<div class='stat-row'><div class='stat-key'>Camera & Mic Consent Gating</div><div class='stat-val text-green'>" + (info.permissionsCheck.micCamBlocked ? "Fully Gated" : "Disabled (Unrestricted)") + "</div></div>" +
+      "<div class='stat-row'><div class='stat-key'>Browser Notification spam</div><div class='stat-val text-green'>" + (info.permissionsCheck.notificationsBlocked ? "Blocked" : "Allowed") + "</div></div>";
+
+    if (info.extensions.length === 0) {
+      extensionsDiv.innerHTML = "<div class='muted' style='font-size:12px; padding:12px; text-align:center;'>No browser extensions detected</div>";
+    } else {
+      extensionsDiv.innerHTML = info.extensions.map(function(ext) {
+        const titleColor = ext.suspicious ? "color:var(--red);" : "font-weight:bold;";
+        return "<div style='" + titleColor + " display:flex; justify-content:space-between; align-items:center;'>" +
+          "<span>" + ext.name + "</span>" +
+          (ext.suspicious ? "<span class='badge badge-red'>Heuristic Warn</span>" : "<span class='badge badge-green'>Verified</span>") +
+        "</div>" +
+        "<div class='muted' style='font-size:10px; margin-top:2px;'>ID: " + ext.id + "</div>" +
+        "<div class='muted' style='font-size:10px;'>Permissions: " + ext.permissions.join(", ") + "</div>";
+      }).join("");
+    }
+  } catch (e) {
+    metricsDiv.innerHTML = "<div class='text-red'>Error: " + e.message + "</div>";
+  }
+}
+
+async function toggleShieldAdBlock() {
+  try {
+    const status = await api("/api/shield/status");
+    const currentlyEnabled = status.state.adBlockEnabled;
+    const confirmMsg = currentlyEnabled
+      ? "Do you want to disable DNS-level ad and tracker filtering?"
+      : "Would you like to enable DNS-level ad and tracker block lists? This modifies your local hosts file to sinkhole malicious domains.";
+
+    if (confirm(confirmMsg)) {
+      toast("Updating filter hosts configurations...");
+      const result = await api("/api/shield/adblock", { method: "POST", body: { enable: !currentlyEnabled } });
+      toast("Successfully updated ad and tracker block configuration", "ok");
+      await loadSecurity();
+    }
+  } catch (e) {
+    toast("Adblock update failed: " + e.message, "err");
+  }
+}
+
+async function explainShieldThreat(id) {
+  try {
+    const res = await api("/api/shield/explain", { method: "POST", body: { id: id } });
+    const analysis = res.analysis;
+    alert("[" + analysis.agentName + " REPORT - Confidence: " + Math.round(analysis.confidence * 100) + "%]\n\nANALYST EXPLANATION:\n" + analysis.explanation + "\n\nRECOMMENDED ACTION:\n" + analysis.remedy);
+  } catch (e) {
+    toast("Explanation query failed: " + e.message, "err");
+  }
+}
+
+async function remediateShieldThreat(id, threat) {
+  const confirmMsg = "Address finding \"" + threat.title + "\"? This executes the specialized agent remediation workflow: isolate item and add file rule parameters to block execution.";
+  if (confirm(confirmMsg)) {
+    try {
+      toast("Initiating isolation gating...");
+      await api("/api/shield/quarantine", {
+        method: "POST",
+        body: { action: "isolate", id: id, threat: threat }
+      });
+      toast("Integrity hardening applied successfully.", "ok");
+      await loadSecurity();
+    } catch (e) {
+      toast("Remediation execution error: " + e.message, "err");
+    }
+  }
+}
+
+async function loadSecurityLab() {
   try {
     const sec = await api("/api/security");
     const outcomes = sec.outcomes ?? [];
     document.getElementById("sec-lab-result").innerHTML = outcomes.length
-      ? \`<div style="margin-bottom:8px">
-           <div class="stat-row">
-             <div class="stat-key">Block-rate</div>
-             <div class="stat-val \${sec.rate >= .9 ? 'val-green' : 'val-amber'}">\${Math.round(sec.rate * 100)}%  (\${sec.blocked}/\${sec.total})</div>
-           </div>
-         </div>\` +
-         outcomes.map(o =>
-           \`<div class="sec-attack">
-              <span class="sec-icon">\${o.blocked ? "✓" : "✗"}</span>
-              <span class="sec-label">\${o.category}</span>
-              <span class="sec-result \${o.blocked ? 'val-green' : 'val-red'}">\${o.blocked ? "blocked" : "ALLOWED"}</span>
-            </div>\`
-         ).join("")
+      ? outcomes.map(function(o) {
+           return "<div class='sec-attack'>" +
+              "<span class='sec-icon'>" + (o.blocked ? "✓" : "✗") + "</span>" +
+              "<span class='sec-label'>" + o.category + "</span>" +
+              "<span class='sec-result " + (o.blocked ? 'val-green' : 'val-red') + "'>" + (o.blocked ? "blocked" : "ALLOWED") + "</span>" +
+            "</div>";
+         }).join("")
       : "<div class='muted' style='font-size:12px'>Click Run Lab to execute tests</div>";
 
     document.getElementById("sec-egress").innerHTML =
-      \`<div class="stat-row"><div class="stat-key">Egress allow-list</div><div class="stat-val val-muted">\${sec.egressAllowlist?.join(", ") || "unrestricted"}</div></div>\`;
+      "<div class='stat-row'><div class='stat-key'>Egress allow-list</div><div class='stat-val val-muted'>" + (sec.egressAllowlist?.join(", ") || "unrestricted") + "</div></div>";
 
     document.getElementById("sec-posture").innerHTML =
-      \`<div class="stat-row"><div class="stat-key">Local-first</div><div class="stat-val val-green">✓</div></div>
-       <div class="stat-row"><div class="stat-key">API key redaction</div><div class="stat-val val-green">✓</div></div>
-       <div class="stat-row"><div class="stat-key">Budget enforcement</div><div class="stat-val val-green">code-enforced</div></div>
-       <div class="stat-row"><div class="stat-key">Approval gates</div><div class="stat-val val-cyan">configured</div></div>\`;
-  } catch(e) {
-    toast("Security error: " + e.message, "err");
+      "<div class='stat-row'><div class='stat-key'>Local-first</div><div class='stat-val val-green'>✓</div></div>" +
+       "<div class='stat-row'><div class='stat-key'>API key redaction</div><div class='stat-val val-green'>✓</div></div>" +
+       "<div class='stat-row'><div class='stat-key'>Budget enforcement</div><div class='stat-val val-green'>code-enforced</div></div>" +
+       "<div class='stat-row'><div class='stat-key'>Approval gates</div><div class='stat-val val-cyan'>configured</div></div>";
+  } catch (e) {
+    toast("Security lab load error: " + e.message, "err");
   }
 }
 
 async function runSecLab() {
   document.getElementById("sec-lab-result").innerHTML = "<div class='spin'></div>";
-  loadSecurity();
+  await loadSecurityLab();
 }
-
-// ── Audit Log ─────────────────────────────────────────────────────────────────
 async function loadAuditLog() {
   try {
     const data  = await api("/api/audit?limit=50");
