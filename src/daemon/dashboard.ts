@@ -843,15 +843,53 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <!-- ════════ MODELS ════════ -->
       <div class="panel" id="panel-models">
         <div class="section-header">
-          <div><div class="section-title">Models</div><div class="section-sub">Local AI runtimes and model management</div></div>
+          <div><div class="section-title">Models</div><div class="section-sub">Local AI runtimes, recommendations, and selection</div></div>
+          <button class="btn btn-ghost" onclick="loadModels()" style="font-size:12px">↻ Refresh</button>
         </div>
-        <div class="card mb-4">
-          <div class="card-header"><div class="card-title">Local Runtime Status</div></div>
-          <div id="models-local"><div class="spin"></div></div>
+        <div class="grid grid-4 mb-4">
+          <div class="card"><div class="card-header"><div class="card-title">Selected Runtime</div></div><div class="card-value" id="models-selected-runtime">—</div><div class="card-sub" id="models-selected-runtime-sub">current local runtime</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Selected Model</div></div><div class="card-value" id="models-selected-model">—</div><div class="card-sub" id="models-selected-model-sub">current local model</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Recommended</div></div><div class="card-value" id="models-recommended">—</div><div class="card-sub" id="models-recommended-sub">hardware-aware recommendation</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Healthy Runtimes</div></div><div class="card-value" id="models-healthy-count">0</div><div class="card-sub">detected and reachable</div></div>
         </div>
-        <div class="card">
-          <div class="card-header"><div class="card-title">Installed Models</div></div>
-          <div id="models-list"><div class="spin"></div></div>
+        <div class="grid grid-2 mb-4">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Runtime Manager</div></div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <label class="muted" style="font-size:11px">Runtime
+                <select id="models-select-runtime" style="margin-top:4px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)"></select>
+              </label>
+              <label class="muted" style="font-size:11px">Model name
+                <input id="models-select-model" placeholder="qwen2.5:7b" style="margin-top:4px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)" />
+              </label>
+              <label class="muted" style="font-size:11px">Routing
+                <select id="models-select-routing" style="margin-top:4px;width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;color:var(--text)">
+                  <option value="local-only">local-only</option>
+                  <option value="hybrid">hybrid</option>
+                  <option value="cloud-first">cloud-first</option>
+                </select>
+              </label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-primary" onclick="saveModelSelection()">Save Selection</button>
+                <button class="btn btn-ghost" onclick="testModelSelection()">Smoke Test</button>
+              </div>
+              <div id="models-manager-note" class="muted" style="font-size:11px">Choose a detected runtime/model or enter one manually.</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Hardware & Recommendation</div></div>
+            <div id="models-hardware"><div class="spin"></div></div>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Detected Runtimes</div></div>
+            <div id="models-local"><div class="spin"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Installed / Known Models</div></div>
+            <div id="models-list"><div class="spin"></div></div>
+          </div>
         </div>
       </div>
 
@@ -887,20 +925,31 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
       <div class="panel" id="panel-research">
         <div class="section-header">
           <div><div class="section-title">Research</div><div class="section-sub">Source-first, citation-aware research mode</div></div>
+          <button class="btn btn-ghost" onclick="loadResearchPanel()" style="font-size:12px">↻ Refresh</button>
+        </div>
+        <div class="grid grid-4 mb-4">
+          <div class="card"><div class="card-header"><div class="card-title">Sessions</div></div><div class="card-value" id="research-count">0</div><div class="card-sub">total research runs</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Latest Status</div></div><div class="card-value" id="research-latest-status">—</div><div class="card-sub" id="research-latest-status-sub">no research yet</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Sources</div></div><div class="card-value" id="research-latest-sources">0</div><div class="card-sub">latest run sources</div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Contradictions</div></div><div class="card-value" id="research-latest-contradictions">0</div><div class="card-sub">latest run contradiction count</div></div>
+        </div>
+        <div class="grid grid-2 mb-4">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Latest Research Brief</div></div>
+            <div id="research-latest"><div class="spin"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Recent Research Runs</div></div>
+            <div id="research-list"><div class="spin"></div></div>
+          </div>
         </div>
         <div class="card">
-          <div style="text-align:center;padding:32px 16px">
-            <div style="font-size:32px;margin-bottom:12px">🔬</div>
-            <div style="font-weight:600;margin-bottom:8px">Research Mode</div>
-            <div class="muted" style="font-size:12px;margin-bottom:16px">
-              Launch a research job from the CLI or Chat interface.<br>
-              XR plans queries, ranks sources, extracts evidence, and exports a signed report.
-            </div>
-            <button class="btn btn-ghost" onclick="navigateTo('chat')">Open Chat → Research</button>
-          </div>
-          <div style="border-top:1px solid var(--border);padding-top:12px">
-            <div class="stat-row"><div class="stat-key">Command</div><div class="stat-val mono text-cyan">xr research "topic"</div></div>
-            <div class="stat-row"><div class="stat-key">In chat</div><div class="stat-val mono text-cyan">/research &lt;topic&gt;</div></div>
+          <div class="card-header"><div class="card-title">Research Commands</div></div>
+          <div id="research-commands">
+            <div class="stat-row"><div class="stat-key">Quick</div><div class="stat-val mono text-cyan">xr research "topic"</div></div>
+            <div class="stat-row"><div class="stat-key">Deep</div><div class="stat-val mono text-cyan">xr research deep "topic" --allow-public-web</div></div>
+            <div class="stat-row"><div class="stat-key">Compare</div><div class="stat-val mono text-cyan">xr research compare "A vs B"</div></div>
+            <div class="stat-row"><div class="stat-key">Factcheck</div><div class="stat-val mono text-cyan">xr research factcheck "claim"</div></div>
           </div>
         </div>
       </div>
@@ -1322,6 +1371,7 @@ function navigateTo(id) {
     case "workspaces":  loadWorkspaces(); break;
     case "providers":   loadProviders(); break;
     case "models":      loadModels();    break;
+    case "research":    loadResearchPanel(); break;
     case "memory":      loadMemory();    break;
     case "security":    loadSecurity();  break;
     case "plugins":     loadPlugins();   break;
@@ -1440,6 +1490,66 @@ async function loadProviderChip() {
 }
 
 let SELECTED_SESSION_ID = null;
+let SELECTED_RESEARCH_ID = null;
+
+// ── Research Panel ────────────────────────────────────────────────────────────
+async function loadResearchPanel() {
+  try {
+    const data = await api("/api/research");
+    const recent = data.recent ?? [];
+    const latest = data.latest ?? null;
+    document.getElementById("research-count").textContent = data.count ?? recent.length;
+    document.getElementById("research-latest-status").textContent = latest?.status ?? "—";
+    document.getElementById("research-latest-status-sub").textContent = latest?.topic ? escapeHtml(latest.topic) : 'no research yet';
+    document.getElementById("research-latest-sources").textContent = latest?.sources?.length ?? 0;
+    document.getElementById("research-latest-contradictions").textContent = latest?.contradictions?.length ?? 0;
+
+    document.getElementById("research-latest").innerHTML = latest
+      ? '<div style="font-weight:700;color:var(--text);margin-bottom:6px">' + escapeHtml(latest.topic) + '</div>' +
+        '<div class="muted" style="font-size:12px;line-height:1.7">' + escapeHtml(latest.synthesis?.shortAnswer || latest.summary || latest.finalReport?.slice(0, 280) || 'No synthesized summary yet.') + '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-ghost" style="font-size:11px" onclick="loadResearchDetail(\'' + escapeHtml(latest.id) + '\')">Inspect Session</button><button class="btn btn-ghost" style="font-size:11px" onclick="navigateTo(\'sessions\')">Open Sessions</button></div>'
+      : '<div class="muted" style="font-size:12px">No research runs yet. Start one from chat or CLI.</div>';
+
+    document.getElementById("research-list").innerHTML = recent.length ? recent.map(r =>
+      '<div class="mem-item" style="display:block;cursor:pointer" onclick="loadResearchDetail(\'' + escapeHtml(r.id) + '\')">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+          '<div><div style="font-weight:700;color:var(--text)">' + escapeHtml(r.topic) + '</div><div class="muted" style="font-size:11px">' + escapeHtml(r.id) + ' · ' + escapeHtml(r.depth) + ' · ' + new Date(r.updated_at).toLocaleString() + '</div></div>' +
+          '<span class="badge ' + (r.status === 'done' ? 'badge-green' : (r.status === 'error' ? 'badge-red' : 'badge-amber')) + '">' + escapeHtml(r.status) + '</span>' +
+        '</div>' +
+      '</div>'
+    ).join('') : '<div class="muted" style="font-size:12px">No research sessions yet.</div>';
+  } catch (e) {
+    document.getElementById("research-list").innerHTML = '<div class="muted" style="font-size:12px">Research API unavailable: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function loadResearchDetail(id) {
+  SELECTED_RESEARCH_ID = id;
+  try {
+    const data = await api("/api/research/" + encodeURIComponent(id));
+    const s = data.session;
+    document.getElementById("research-latest").innerHTML =
+      '<div style="font-weight:700;color:var(--text);margin-bottom:6px">' + escapeHtml(s.topic) + '</div>' +
+      '<div class="muted" style="font-size:11px;margin-bottom:8px">' + escapeHtml(s.id) + ' · ' + escapeHtml((s.mode || s.depth) + ' / ' + s.status) + '</div>' +
+      '<div class="muted" style="font-size:12px;line-height:1.7">' + escapeHtml(s.synthesis?.shortAnswer || s.summary || s.finalReport?.slice(0, 320) || 'No synthesized summary yet.') + '</div>' +
+      '<div class="stat-row" style="margin-top:10px"><div class="stat-key">Sources</div><div class="stat-val val-cyan">' + Number(s.sources?.length ?? 0) + '</div></div>' +
+      '<div class="stat-row"><div class="stat-key">Claims</div><div class="stat-val val-cyan">' + Number(s.claims?.length ?? 0) + '</div></div>' +
+      '<div class="stat-row"><div class="stat-key">Contradictions</div><div class="stat-val ' + ((s.contradictions?.length ?? 0) > 0 ? 'val-amber' : 'val-green') + '">' + Number(s.contradictions?.length ?? 0) + '</div></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-ghost" style="font-size:11px" onclick="navigateTo(\'sessions\')">Open Sessions</button><button class="btn btn-ghost" style="font-size:11px" onclick="seedResearchToChat(\'' + escapeHtml(s.topic).replace(/'/g, "&#39;") + '\')">Ask Follow-up in Chat</button></div>';
+  } catch (e) {
+    toast('Research detail failed: ' + e.message, 'err');
+  }
+}
+
+function seedResearchToChat(topic) {
+  navigateTo('chat');
+  const input = document.getElementById('chat-input');
+  if (input) {
+    input.value = 'Continue research on: ' + topic;
+    input.focus();
+    autoResize(input);
+  }
+}
 
 // ── Sessions Panel ────────────────────────────────────────────────────────────
 async function loadSessionsPanel() {
@@ -1715,17 +1825,83 @@ async function saveProviderRouting() {
 // ── Models ────────────────────────────────────────────────────────────────────
 async function loadModels() {
   try {
-    const ctrl = await api("/api/control/status");
-    document.getElementById("models-local").innerHTML =
-      \`<div class="stat-row"><div class="stat-key">Runtime</div><div class="stat-val val-cyan">Ollama</div></div>
-       <div class="stat-row"><div class="stat-key">Status</div><div class="stat-val \${ctrl.enabled ? 'val-green' : 'val-muted'}">ready</div></div>
-       <div style="font-size:11px;color:var(--muted);margin-top:8px">Run <code style="color:var(--cyan)">xr models status</code> for full details</div>\`;
-    document.getElementById("models-list").innerHTML =
-      \`<div class="muted" style="font-size:12px;text-align:center;padding:16px">
-         Run <code style="color:var(--cyan)">xr models list</code> to see available models
-       </div>\`;
+    const data = await api("/api/models");
+    const selected = data.selected ?? {};
+    const current = data.current ?? {};
+    const recommendation = data.recommendation ?? {};
+    const runtimes = data.runtimes ?? [];
+    const installed = data.installed ?? [];
+    const healthyCount = runtimes.filter(r => r.healthy).length;
+
+    document.getElementById("models-selected-runtime").textContent = selected.runtime ?? "—";
+    document.getElementById("models-selected-runtime-sub").textContent = current.label ? (current.label + (current.running ? ' · running' : ' · offline')) : 'current local runtime';
+    document.getElementById("models-selected-model").textContent = selected.model ?? "—";
+    document.getElementById("models-selected-model-sub").textContent = selected.routing ?? 'current local model';
+    document.getElementById("models-recommended").textContent = recommendation.runtimeModel ?? "—";
+    document.getElementById("models-recommended-sub").textContent = recommendation.runtime ? (recommendation.runtime + ' · ' + (recommendation.confidence ?? 'unknown')) : 'hardware-aware recommendation';
+    document.getElementById("models-healthy-count").textContent = healthyCount;
+
+    const runtimeSelect = document.getElementById("models-select-runtime");
+    if (runtimeSelect) {
+      runtimeSelect.innerHTML = runtimes.map(r => '<option value="' + escapeHtml(r.id) + '">' + escapeHtml(r.label + ' (' + r.id + ')') + '</option>').join('');
+      runtimeSelect.value = selected.runtime ?? runtimes[0]?.id ?? '';
+    }
+    const modelInput = document.getElementById("models-select-model");
+    if (modelInput) modelInput.value = selected.model ?? recommendation.runtimeModel ?? '';
+    const routingSelect = document.getElementById("models-select-routing");
+    if (routingSelect) routingSelect.value = selected.routing ?? 'hybrid';
+
+    document.getElementById("models-hardware").innerHTML =
+      '<div class="muted" style="font-size:12px;line-height:1.7">' + escapeHtml(data.hardware?.summary ?? 'Hardware summary unavailable.') + '</div>' +
+      '<div class="stat-row" style="margin-top:10px"><div class="stat-key">Recommended runtime</div><div class="stat-val val-cyan">' + escapeHtml(recommendation.runtime ?? '—') + '</div></div>' +
+      '<div class="stat-row"><div class="stat-key">Recommended model</div><div class="stat-val val-cyan">' + escapeHtml(recommendation.runtimeModel ?? '—') + '</div></div>' +
+      '<div class="muted" style="font-size:11px;margin-top:8px">' + escapeHtml(recommendation.reason ?? '') + '</div>';
+
+    document.getElementById("models-local").innerHTML = runtimes.length ? runtimes.map(r =>
+      '<div class="mem-item" style="display:block">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+          '<div><div style="font-weight:700;color:var(--text)">' + escapeHtml(r.label) + ' <span class="mono muted">' + escapeHtml(r.id) + '</span></div><div class="muted" style="font-size:11px">' + escapeHtml(r.baseUrl) + '</div></div>' +
+          '<div style="display:flex;gap:6px;align-items:center">' +
+            '<span class="badge ' + (r.healthy ? 'badge-green' : (r.installed ? 'badge-amber' : 'badge-gray')) + '">' + (r.healthy ? 'healthy' : (r.installed ? 'installed' : 'not found')) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="muted" style="font-size:11px;margin-top:6px">models: ' + escapeHtml((r.models ?? []).slice(0, 5).join(', ') || 'none detected') + '</div>' +
+        '<div class="muted" style="font-size:11px">' + escapeHtml(r.detail ?? '') + '</div>' +
+      '</div>'
+    ).join('') : '<div class="muted" style="font-size:12px">No runtimes detected.</div>';
+
+    document.getElementById("models-list").innerHTML = installed.length ? installed.map(m =>
+      '<div class="stat-row"><div class="stat-key">' + escapeHtml((m.runtime ?? '') + ' · ' + (m.model ?? '')) + '</div><div class="stat-val ' + (m.healthy ? 'val-green' : 'val-muted') + '">' + (m.healthy ? 'healthy' : 'configured') + '</div></div>'
+    ).join('') : '<div class="muted" style="font-size:12px">No configured models yet.</div>';
   } catch(e) {
     toast("Models error: " + e.message, "err");
+  }
+}
+
+async function saveModelSelection() {
+  const runtime = document.getElementById("models-select-runtime")?.value ?? "";
+  const model = (document.getElementById("models-select-model")?.value ?? "").trim();
+  const routing = document.getElementById("models-select-routing")?.value ?? "hybrid";
+  if (!runtime || !model) return toast("Runtime and model are required", "err");
+  try {
+    await api("/api/models/select", { method: "POST", body: { runtime, model, routing } });
+    toast("Model selection saved", "ok");
+    await Promise.all([loadModels(), loadDashboard(), loadSettings()]);
+  } catch (e) {
+    toast("Save model selection failed: " + e.message, "err");
+  }
+}
+
+async function testModelSelection() {
+  const runtime = document.getElementById("models-select-runtime")?.value ?? "";
+  const model = (document.getElementById("models-select-model")?.value ?? "").trim();
+  if (!runtime || !model) return toast("Runtime and model are required", "err");
+  try {
+    const data = await api("/api/models/test", { method: "POST", body: { runtime, model } });
+    toast(data.result?.ok ? ('Model responded in ' + (data.result.latencyMs ?? '?') + 'ms') : ('Model test failed: ' + (data.result?.detail ?? 'unknown')), data.result?.ok ? 'ok' : 'err');
+    await loadModels();
+  } catch (e) {
+    toast("Model test failed: " + e.message, "err");
   }
 }
 
@@ -2697,6 +2873,7 @@ const PALETTE_CMDS = [
   { label: "Go to Chat",         icon: "💬", action: () => navigateTo("chat"),      key: "g c" },
   { label: "Go to Sessions",     icon: "🕘", action: () => navigateTo("sessions"),  key: "g t" },
   { label: "Go to Budget",       icon: "💰", action: () => navigateTo("budget"),    key: "g b" },
+  { label: "Go to Research",     icon: "🔬", action: () => navigateTo("research"),  key: "g r" },
   { label: "Go to Workspaces",   icon: "🗂", action: () => navigateTo("workspaces"), key: "g w" },
   { label: "Go to Providers",    icon: "☁",  action: () => navigateTo("providers") },
   { label: "Go to Models",       icon: "⚙",  action: () => navigateTo("models") },
@@ -2778,6 +2955,7 @@ document.addEventListener("keydown", e => {
     if (e.key === "c") { navigateTo("chat");      gPressed = false; }
     if (e.key === "t") { navigateTo("sessions");  gPressed = false; }
     if (e.key === "b") { navigateTo("budget");    gPressed = false; }
+    if (e.key === "r") { navigateTo("research");  gPressed = false; }
     if (e.key === "w") { navigateTo("workspaces"); gPressed = false; }
     if (e.key === "p") { navigateTo("providers"); gPressed = false; }
     if (e.key === "m") { navigateTo("memory");    gPressed = false; }
@@ -2802,6 +2980,8 @@ setInterval(() => {
   if (active === "dashboard") loadDashboard();
   if (active === "sessions")  loadSessionsPanel();
   if (active === "budget")    loadBudgetPanel();
+  if (active === "models")    loadModels();
+  if (active === "research")  loadResearchPanel();
   if (active === "audit")     loadAuditLog();
 }, 30_000);
 </script>

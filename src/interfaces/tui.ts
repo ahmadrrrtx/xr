@@ -21,6 +21,7 @@ import { buildProvider, knownProviders } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
 import { Store } from "../state/db.ts";
 import { MemoryStore, projectScopeFromCwd, type CaptureOutcome } from "../memory/store.ts";
+import { detectRuntime } from "../local/runtimes.ts";
 import { loadSkills } from "../skills/loader.ts";
 import { runLab } from "../security/lab.ts";
 import { buildAuditReport } from "../export/report.ts";
@@ -868,6 +869,41 @@ async function exportAudit(state: TuiState): Promise<void> {
   notify(state, "ok", "Audit report exported", file);
 }
 
+function buildBudgetSummary(state: TuiState): string {
+  const { config } = loadConfig();
+  const cost = state.store.costSummary();
+  return [
+    `Budget summary`,
+    `• per-task cap: ${config.budget.perTaskUsd > 0 ? `$${config.budget.perTaskUsd}` : 'none'}`,
+    `• total spent: $${cost.totalUsd.toFixed(4)}`,
+    `• total tokens: ${cost.totalTokens.toLocaleString()}`,
+    `• top model: ${cost.byModel[0] ? `${cost.byModel[0].model} ($${cost.byModel[0].usd.toFixed(4)})` : 'none yet'}`,
+  ].join("\n");
+}
+
+async function buildModelsSummary(state: TuiState): Promise<string> {
+  const { config } = loadConfig();
+  const local: any = config.localModels;
+  const runtime = local.runtime ?? "ollama";
+  const status = await detectRuntime(runtime);
+  return [
+    `Local models`,
+    `• runtime: ${status.label} (${status.id})`,
+    `• selected: ${local.selected ?? config.defaults.model ?? 'none'}`,
+    `• routing: ${local.routing ?? 'hybrid'}`,
+    `• endpoint: ${status.baseUrl}`,
+    `• health: ${status.healthy ? 'healthy' : status.running ? 'running' : status.installed ? 'installed' : 'not found'}`,
+    `• detected models: ${(status.models ?? []).slice(0, 6).join(', ') || 'none'}`,
+  ].join("\n");
+}
+
+function buildResearchSummary(state: TuiState): string {
+  const recent = state.research.slice(0, 6);
+  return recent.length
+    ? ['Recent research', ...recent.map((r) => `• ${r.topic} (${r.depth}/${r.status})`)].join('\n')
+    : 'No research runs yet. Use `xr research "topic"` or ask from chat.';
+}
+
 async function handleSlashCommand(state: TuiState, input: string): Promise<void> {
   const [rawName, ...rest] = input.slice(1).split(/\s+/);
   const name = rawName?.toLowerCase() ?? "";
@@ -887,10 +923,12 @@ async function handleSlashCommand(state: TuiState, input: string): Promise<void>
           "/logs",
           "/context",
           "/activity",
+          "/models",
+          "/research",
           "/dashboard",
           "/mode agent|plan|ask",
           "/model <provider> [model]",
-          "/budget <usd>",
+          "/budget [usd]",
           "/security-lab",
           "/export-audit",
           "/clear",
@@ -928,6 +966,13 @@ async function handleSlashCommand(state: TuiState, input: string): Promise<void>
       state.view = "activity";
       state.sidebarIndex = VIEW_ORDER.indexOf("activity");
       break;
+    case "models":
+    case "local":
+      appendMessage(state, "assistant", await buildModelsSummary(state), "models");
+      break;
+    case "research":
+      appendMessage(state, "assistant", buildResearchSummary(state), "research");
+      break;
     case "dashboard":
       appendMessage(state, "assistant", "Run `xr serve` in another terminal, then open http://127.0.0.1:3141 .", "guide");
       break;
@@ -961,6 +1006,10 @@ async function handleSlashCommand(state: TuiState, input: string): Promise<void>
       break;
     }
     case "budget": {
+      if (!args) {
+        appendMessage(state, "assistant", buildBudgetSummary(state), "budget");
+        break;
+      }
       const next = Number.parseFloat(args);
       if (!Number.isFinite(next)) {
         notify(state, "warn", "Usage", "/budget 0.25");

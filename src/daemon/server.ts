@@ -38,6 +38,10 @@ import { getProviderEnvStatus } from "../config/config.ts";
 import { listRemembered, forgetPlan, clearAllMemory } from "../control/memory.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { WorkspaceManager } from "../core/workspace.ts";
+import { detectHardwareSpecs, formatHardwareSummary } from "../local/hardware.ts";
+import { recommendLocalAI } from "../local/recommend.ts";
+import { detectAllRuntimes, detectRuntime, testLocalModel } from "../local/runtimes.ts";
+import { isLocalRuntimeId, providerIdForRuntime, validateLocalModelId } from "../local/registry.ts";
 import type { Message } from "../core/types.ts";
 
 export interface DaemonOptions {
@@ -628,6 +632,151 @@ export function makeHandler(initialStore: Store, token: string) {
         return json({ ok: true, active: workspaceManager.getActiveId() });
       } catch (e) {
         return json({ error: (e as Error).message }, 400);
+      }
+    }
+
+    if (path === "/api/models") {
+      try {
+        const specs = detectHardwareSpecs();
+        const runtimes = await detectAllRuntimes();
+        const local = config.localModels as any;
+        const selectedRuntime = local.runtime ?? "ollama";
+        const selectedModel = local.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
+        const selectedStatus = isLocalRuntimeId(selectedRuntime) ? await detectRuntime(selectedRuntime) : undefined;
+        const recommendation = recommendLocalAI(specs, {
+          useCase: local.useCase ?? "general",
+          preferredRuntime: isLocalRuntimeId(selectedRuntime) ? selectedRuntime : undefined,
+          runtimes,
+        });
+        return json({
+          selected: {
+            runtime: selectedRuntime,
+            model: selectedModel,
+            routing: local.routing ?? "hybrid",
+            provider: local.provider ?? providerIdForRuntime(selectedRuntime),
+            enabled: local.enabled ?? false,
+          },
+          current: selectedStatus ?? null,
+          hardware: {
+            summary: formatHardwareSummary(specs),
+            specs,
+          },
+          recommendation,
+          runtimes,
+          installed: Array.isArray(local.installed) ? local.installed : [],
+        });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 500);
+      }
+    }
+
+    if (path === "/api/models/select" && method === "POST") {
+      try {
+        const body = await req.json() as { runtime?: string; model?: string; routing?: "local-only" | "hybrid" | "cloud-first" };
+        const runtime = body.runtime ?? "";
+        const model = (body.model ?? "").trim();
+        if (!isLocalRuntimeId(runtime)) return json({ error: "valid local runtime is required" }, 400);
+        if (!model || !validateLocalModelId(model)) return json({ error: "valid local model id is required" }, 400);
+        const status = await detectRuntime(runtime);
+        const next = loadConfig().config;
+        const local = next.localModels as any;
+        local.enabled = true;
+        local.runtime = runtime;
+        local.provider = providerIdForRuntime(runtime);
+        local.selected = model;
+        local.routing = body.routing ?? local.routing ?? "hybrid";
+        local.runtimes = local.runtimes ?? {};
+        local.runtimes[runtime] = {
+          providerId: providerIdForRuntime(runtime),
+          baseUrl: status.baseUrl,
+          installed: status.installed,
+          running: status.running,
+          configured: true,
+          healthy: status.healthy,
+          lastCheckedAt: new Date().toISOString(),
+          detail: status.detail,
+        };
+        local.installed = Array.isArray(local.installed) ? local.installed : [];
+        if (!local.installed.some((m: any) => m.runtime === runtime && m.model === model)) {
+          local.installed.push({
+            id: model,
+            runtime,
+            providerId: providerIdForRuntime(runtime),
+            model,
+            family: ["general"],
+            source: runtime,
+            downloaded: status.models.includes(model),
+            configured: true,
+            healthy: status.healthy,
+            baseUrl: status.baseUrl,
+            installedAt: new Date().toISOString(),
+            lastCheckedAt: new Date().toISOString(),
+            detail: status.detail,
+          });
+        }
+        if (local.routing === "local-only") {
+          next.defaults.provider = providerIdForRuntime(runtime);
+          next.defaults.model = model;
+          next.defaults.fallbackProvider = undefined;
+          next.defaults.fallbackModel = undefined;
+        } else {
+          next.defaults.fallbackProvider = providerIdForRuntime(runtime);
+          next.defaults.fallbackModel = model;
+        }
+        (next.providers as any)[providerIdForRuntime(runtime)] = {
+          ...((next.providers as any)[providerIdForRuntime(runtime)] ?? {}),
+          baseUrl: status.baseUrl,
+        };
+        saveConfig(next);
+        liveStore.audit("models.select", { runtime, model, routing: local.routing, baseUrl: status.baseUrl });
+        return json({ ok: true, runtime, model, routing: local.routing, status });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
+    }
+
+    if (path === "/api/models/test" && method === "POST") {
+      try {
+        const body = await req.json() as { runtime?: string; model?: string };
+        const runtime = body.runtime ?? (config.localModels as any).runtime ?? "ollama";
+        const model = (body.model ?? (config.localModels as any).selected ?? config.defaults.model ?? "").trim();
+        if (!isLocalRuntimeId(runtime)) return json({ error: "valid local runtime is required" }, 400);
+        if (!model || !validateLocalModelId(model)) return json({ error: "valid local model id is required" }, 400);
+        const status = await detectRuntime(runtime);
+        const result = await testLocalModel(runtime, model, status.baseUrl);
+        liveStore.audit("models.test", { runtime, model, ok: result.ok, detail: result.detail, latencyMs: result.latencyMs ?? null });
+        return json({ ok: true, runtime, model, status, result });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 400);
+      }
+    }
+
+    if (path === "/api/research") {
+      try {
+        const recent = store.listResearch(20);
+        const latestRow = store.latestResearch();
+        let latest: any = null;
+        if (latestRow) {
+          try { latest = JSON.parse(latestRow.data); } catch { latest = null; }
+        }
+        return json({
+          count: store.researchCount(),
+          recent,
+          latest,
+        });
+      } catch (e) {
+        return json({ error: (e as Error).message }, 500);
+      }
+    }
+
+    if (path.startsWith("/api/research/") && method === "GET") {
+      const id = decodeURIComponent(path.slice("/api/research/".length));
+      const row = store.getResearch(id);
+      if (!row) return json({ error: "research session not found" }, 404);
+      try {
+        return json({ session: JSON.parse(row.data) });
+      } catch {
+        return json({ error: "research session data is invalid" }, 500);
       }
     }
 
