@@ -22,6 +22,13 @@ import { MultiAgentService } from "../services/multi-agent-service.ts";
 import { XRShieldService } from "../security/shield.ts";
 import { BusinessOS } from "../business/index.ts";
 
+import { SessionStore } from "../state/stores/session-store.ts";
+import { AuditStore } from "../state/stores/audit-store.ts";
+import { MemoryStore } from "../state/stores/memory-store.ts";
+import { CostStore } from "../state/stores/cost-store.ts";
+import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
+import { WorkflowStore } from "../state/stores/workflow-store.ts";
+
 export class XRKernel {
   public static readonly VERSION = "3.0.0";
   
@@ -61,6 +68,14 @@ export class XRKernel {
     // Core Stores
     this.container.register("legacyStore", workspaceStore);
     this.container.register("store", workspaceStore);
+
+    // Specialized Stores for backward compatibility
+    this.container.register("sessionStore", new SessionStore());
+    this.container.register("auditStore", new AuditStore(activeWorkspace.dbPath));
+    this.container.register("memoryStore", new MemoryStore());
+    this.container.register("costStore", new CostStore());
+    this.container.register("userMemoryStore", new UserMemoryStore());
+    this.container.register("workflowStore", new WorkflowStore(activeWorkspace.dbPath));
 
     // Core Services
     const configService = new ConfigService();
@@ -131,10 +146,23 @@ export class XRKernel {
     await this.lifecycle.stop();
     this.events.emit("kernel.stopped", { timestamp: Date.now() });
     
-    // Close Database
+    // Close Database & Specialized Stores
     try {
       this.container.resolve<Store>("store").close();
     } catch {}
+
+    for (const name of [
+      "sessionStore",
+      "auditStore",
+      "memoryStore",
+      "costStore",
+      "userMemoryStore",
+      "workflowStore",
+    ]) {
+      try {
+        this.container.resolve<{ close(): void }>(name).close();
+      } catch {}
+    }
   }
 
   /**
