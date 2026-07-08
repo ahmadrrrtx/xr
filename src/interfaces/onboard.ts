@@ -12,19 +12,46 @@
  */
 
 import { mkdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { loadConfig, XR_HOME, configPath, saveConfig } from "../config/config.ts";
 import { knownProviders, PRESETS } from "../providers/factory.ts";
 import { banner, info, ok, warn, ask, confirm, password, colors as C } from "./cli.ts";
 import { StepTracker } from "../ui/spinner.ts";
-import { section, kv, divider, notify, box } from "../ui/layout.ts";
+import { section, kv, divider, notify } from "../ui/layout.ts";
 import { xrCyan, xrGreen, xrAmber, xrDim, xrBold, SYM } from "../ui/theme.ts";
 import { detectHardwareSpecs, formatHardwareSummary } from "../local/hardware.ts";
 import { recommendLocalModel } from "../local/recommend.ts";
 import { ollamaStatus, pullOllamaModel, testOllamaModel } from "../local/ollama.ts";
 import { setSecret, preferredSecretBackend } from "../security/secrets.ts";
+import { detectPlatform } from "../install/system.ts";
 
 function defaultCloudModel(provider: string): string {
   return PRESETS[provider]?.defaultModel ?? "gpt-4o-mini";
+}
+
+async function checkInternet(): Promise<boolean> {
+  try {
+    const res = await fetch("https://registry.npmjs.org/", { method: "HEAD", signal: AbortSignal.timeout(2500) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+function detectStorageGb(): number | null {
+  try {
+    if (process.platform === "win32") return null;
+    const out = spawnSync("df", ["-k", process.cwd()], { encoding: "utf8" });
+    if (out.status !== 0) return null;
+    const line = out.stdout.trim().split("\n")[1];
+    if (!line) return null;
+    const parts = line.trim().split(/\s+/);
+    const availableKb = Number.parseInt(parts[3] ?? "0", 10);
+    if (!Number.isFinite(availableKb) || availableKb <= 0) return null;
+    return Math.round((availableKb / 1024 / 1024) * 10) / 10;
+  } catch {
+    return null;
+  }
 }
 
 // ── Local Model Setup ─────────────────────────────────────────────────────────
@@ -59,6 +86,8 @@ async function configureLocal(
   kv("CPU cores", String(specs.cpuCores));
   const maxGpuVram = Math.max(0, ...specs.gpus.map((g) => g.vramGb ?? 0));
   if (maxGpuVram) kv("GPU VRAM", maxGpuVram + "GB");
+  const freeDiskGb = detectStorageGb();
+  if (freeDiskGb !== null) kv("Free storage", `${freeDiskGb}GB`, freeDiskGb >= rec.model.estimatedDiskGb ? "ok" : "warn");
   kv("Suitability", `${specs.tier} — ${specs.suitability.reason}`, specs.tier === "heavy" || specs.tier === "medium" ? "ok" : "warn");
 
   console.log();
@@ -98,12 +127,16 @@ async function configureLocal(
 // ── Welcome Screen ────────────────────────────────────────────────────────────
 
 function showWelcome(): void {
+  const platform = detectPlatform();
   banner();
-  console.log(`  ${xrBold("Welcome to XR.")} Let's set up your AI agent in a few steps.\n`);
+  console.log(`  ${xrBold("Welcome to XR.")} Let's get you from install → xr → AI-ready.\n`);
   console.log(`  ${SYM.local} ${xrGreen("Local-first")}  — your data stays on your machine`);
   console.log(`  ${SYM.secure} ${xrGreen("Zero cloud required")} — run 100% free with Ollama`);
   console.log(`  ${SYM.budget} ${xrGreen("Spend-capped")} — hard budget ceiling, enforced in code`);
   console.log(`  ${SYM.secure} ${xrGreen("BYOK")} — bring your own API key, no vendor lock-in`);
+  console.log();
+  kv("Platform", `${platform.os} / ${platform.arch}`, "cyan");
+  kv("Shell", platform.shell, "dim");
   console.log();
 }
 
@@ -112,6 +145,14 @@ function showWelcome(): void {
 export async function runOnboarding(): Promise<void> {
   showWelcome();
 
+  const internet = await checkInternet();
+  const freeDiskGb = detectStorageGb();
+
+  section("System Snapshot");
+  kv("Internet", internet ? "online" : "offline / blocked", internet ? "ok" : "warn");
+  if (freeDiskGb !== null) kv("Free storage", `${freeDiskGb} GB`, freeDiskGb >= 8 ? "ok" : "warn");
+  console.log();
+
   // ── Step 1: Mode ──────────────────────────────────────────────────────────
   section("Step 1 of 4  —  Operating Mode");
   console.log();
@@ -119,8 +160,10 @@ export async function runOnboarding(): Promise<void> {
   console.log(`  ${xrBold("2")} ${xrCyan("BYOK Cloud")}   ${xrDim("Your provider keys · no local required")}`);
   console.log(`  ${xrBold("3")} ${xrCyan("Hybrid")}       ${xrDim("Cloud primary + local fallback · recommended")}`);
   console.log();
+  console.log(`  ${xrDim("Recommendation:")} ${internet ? xrGreen("Hybrid") : xrAmber("Local-only")} ${xrDim(internet ? "for resilience and cost control" : "because network access is unavailable right now")}`);
+  console.log();
 
-  const modeChoice    = await ask("Select mode", { default: "3" });
+  const modeChoice    = await ask("Select mode", { default: internet ? "3" : "1" });
   const isLocalOnly   = modeChoice === "1";
   const isCloudOnly   = modeChoice === "2";
   const isHybrid      = !isLocalOnly && !isCloudOnly;
@@ -145,6 +188,8 @@ export async function runOnboarding(): Promise<void> {
 
   // ── Step 3: Cloud Providers ───────────────────────────────────────────────
   section("Step 2 of 4  —  Cloud Providers (BYOK)");
+  console.log();
+  console.log(`  ${xrDim("XR stores provider keys in your OS keychain when available and never prints them back.")}`);
   console.log();
 
   const apiKeys: Record<string, string> = {};
@@ -291,8 +336,9 @@ export async function runOnboarding(): Promise<void> {
   console.log();
   console.log(`  ${xrCyan("xr doctor")}           ${xrDim("verify providers, audit chain, local runtime")}`);
   console.log(`  ${xrCyan("xr models")}           ${xrDim("check local model status")}`);
-  console.log(`  ${xrCyan("xr \"hello, XR\"")}     ${xrDim("run your first task")}`);
-  console.log(`  ${xrCyan("xr --tui")}            ${xrDim("open the interactive terminal UI")}`);
+  console.log(`  ${xrCyan("xr")}                   ${xrDim("open the dedicated fullscreen XR shell")}`);
+  console.log(`  ${xrCyan("xr \"hello, XR\"")}     ${xrDim("run your first task directly")}`);
+  console.log(`  ${xrCyan("xr --tui")}            ${xrDim("explicit alias for the fullscreen shell")}`);
   console.log(`  ${xrCyan("xr serve")}            ${xrDim("start the dashboard + chat server")}`);
   console.log();
   console.log(`  ${xrDim("Docs:")} ${xrCyan("https://github.com/ahmadrrrtx/xr")}`);

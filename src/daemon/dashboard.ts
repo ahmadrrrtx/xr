@@ -1195,11 +1195,12 @@ document.querySelectorAll(".nav-item").forEach(el => {
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 async function loadDashboard() {
   try {
-    const [ov, cost, ctrl, mem] = await Promise.allSettled([
+    const [ov, cost, ctrl, mem, providers] = await Promise.allSettled([
       api("/api/overview"),
       api("/api/cost"),
       api("/api/control/status"),
       api("/api/memory"),
+      api("/api/providers"),
     ]);
 
     // Overview
@@ -1248,6 +1249,17 @@ async function loadDashboard() {
         \`<div style="font-size:10px;color:var(--muted);margin-top:8px">Add: <code style="color:var(--cyan)">xr memory add "…"</code></div>\`;
     }
 
+    // Provider quick list
+    if (providers.status === "fulfilled") {
+      const p = providers.value;
+      const rows = p.providers ?? [];
+      document.getElementById("d-provider-list").innerHTML = rows.length
+        ? rows.slice(0, 8).map(r =>
+            \`<div class="stat-row"><div class="stat-key">\${r.label}</div><div class="stat-val \${r.healthy ? 'val-green' : (r.hasKey ? 'val-amber' : 'val-muted')}">\${r.healthy ? 'online' : (r.hasKey ? 'offline' : 'no key')}\${r.latencyMs ? ' · ' + r.latencyMs + 'ms' : ''}</div></div>\`
+          ).join("")
+        : "<div class='muted' style='font-size:12px'>No providers configured</div>";
+    }
+
     // Audit recent
     const audit = await api("/api/audit?limit=6");
     const entries = audit.entries ?? [];
@@ -1270,18 +1282,17 @@ async function loadDashboard() {
 
 async function loadProviderChip() {
   try {
-    const ov = await api("/api/overview");
+    const [ov, providers] = await Promise.all([api("/api/overview"), api("/api/providers")]);
     const budget = ov.budget?.perTaskUsd ?? 0;
     document.getElementById("chip-budget-label").textContent = budget > 0 ? "Cap $" + budget.toFixed(2) : "No cap";
-  } catch {}
-  // Sidebar provider pill
-  const config = { provider: "—", model: "—" };
-  try {
-    // We don't have a config endpoint so read from overview indirectly
-    const st = await api("/api/control/status");
-    document.getElementById("sidebar-provider-text").textContent = st.enabled ? "computer-control on" : "ready";
-    document.getElementById("chip-provider-label").textContent = "XR";
-    document.getElementById("chip-provider").className = "status-chip ok";
+
+    const activeId = providers.primary ?? ov.provider?.active ?? "xr";
+    const activeModel = providers.model ?? ov.provider?.model ?? "—";
+    const activeRow = (providers.providers ?? []).find((p) => p.id === activeId);
+    document.getElementById("sidebar-provider-text").textContent = activeId + " · " + activeModel;
+    document.getElementById("chip-provider-label").textContent = activeId + " / " + activeModel;
+    document.getElementById("chip-provider").className = "status-chip " + (activeRow?.healthy === false ? "err" : activeRow?.healthy ? "ok" : "warn");
+    document.getElementById("provider-dot").style.background = activeRow?.healthy === false ? "var(--red)" : activeRow?.healthy ? "var(--green)" : "var(--amber)";
   } catch {}
 }
 
@@ -1312,29 +1323,17 @@ async function loadStatus() {
 // ── Providers ─────────────────────────────────────────────────────────────────
 async function loadProviders() {
   try {
-    const ov = await api("/api/overview");
-    const names = [
-      {id:"ollama",label:"Ollama",tier:"local"},
-      {id:"openai",label:"OpenAI",tier:"cloud"},
-      {id:"anthropic",label:"Claude",tier:"cloud"},
-      {id:"gemini",label:"Gemini",tier:"cloud"},
-      {id:"groq",label:"Groq",tier:"cloud"},
-      {id:"deepseek",label:"DeepSeek",tier:"cloud"},
-      {id:"together",label:"Together",tier:"cloud"},
-      {id:"mistral",label:"Mistral",tier:"cloud"},
-      {id:"cohere",label:"Cohere",tier:"cloud"},
-      {id:"cerebras",label:"Cerebras",tier:"cloud"},
-      {id:"openrouter",label:"OpenRouter",tier:"cloud"},
-      {id:"bedrock",label:"Bedrock",tier:"cloud"},
-    ];
+    const [ov, data] = await Promise.all([api("/api/overview"), api("/api/providers")]);
     document.getElementById("prov-routing").innerHTML =
-      \`<div class="stat-row"><div class="stat-key">Mode</div><div class="stat-val val-cyan">hybrid</div></div>
-       <div class="stat-row"><div class="stat-key">Primary</div><div class="stat-val val-cyan">\${ov.project ?? "—"}</div></div>\`;
-    document.getElementById("prov-grid").innerHTML = names.map(n =>
-      \`<div class="provider-item \${n.tier === "local" ? "active" : ""}">
-         <div class="provider-avatar">\${n.label[0]}</div>
+      \`<div class="stat-row"><div class="stat-key">Primary</div><div class="stat-val val-cyan">\${data.primary ?? ov.provider?.active ?? "—"} / \${data.model ?? ov.provider?.model ?? "—"}</div></div>
+       <div class="stat-row"><div class="stat-key">Fallback</div><div class="stat-val val-muted">\${data.fallback ? data.fallback + ' / ' + (data.fallbackModel ?? 'default') : 'none'}</div></div>
+       <div class="stat-row"><div class="stat-key">Workspace</div><div class="stat-val val-muted">\${ov.workspace ?? 'default'}</div></div>\`;
+    document.getElementById("prov-grid").innerHTML = (data.providers ?? []).map(n =>
+      \`<div class="provider-item \${n.id === data.primary ? "active" : ""} \${n.healthy === false && !n.hasKey ? "offline" : ""}">
+         <div class="provider-avatar">\${(n.label || n.id)[0]}</div>
          \${n.label}
-         <span class="badge \${n.tier === "local" ? "badge-green" : "badge-gray"}">\${n.tier}</span>
+         <span class="badge \${n.tier === "free" ? "badge-green" : "badge-gray"}">\${n.tier}</span>
+         <span class="badge \${n.healthy ? "badge-green" : (n.hasKey ? "badge-amber" : "badge-gray")}">\${n.healthy ? "online" : (n.hasKey ? "offline" : "no key")}</span>
        </div>\`
     ).join("");
   } catch(e) {
@@ -1968,7 +1967,7 @@ async function loadShieldDownloads() {
         "<td style='padding:4px 8px; font-weight:bold;'>" + d.name + "</td>" +
         "<td style='padding:4px 8px;' class='muted mono'>" + d.path + "</td>" +
         "<td style='padding:4px 8px;' class='mono'>" + Math.round(d.sizeBytes / 1024) + " KB</td>" +
-        "td style='padding:4px 8px;'>" + risk + "</td>" +
+        "<td style='padding:4px 8px;'>" + risk + "</td>" +
         "<td style='padding:4px 8px; text-align:right;'>" + remediate + "</td>" +
       "</tr>";
     }).join("");
@@ -2131,10 +2130,10 @@ async function loadAuditLog() {
 // ── Settings ──────────────────────────────────────────────────────────────────
 async function loadSettings() {
   try {
-    const ov = await api("/api/overview");
-    document.getElementById("set-budget").textContent = ov.budget?.perTaskUsd ? "$" + ov.budget.perTaskUsd : "no limit";
-    document.getElementById("set-egress").textContent = ov.budget?.egressAllowlist?.join(", ") || "unrestricted";
-    document.getElementById("set-approval").textContent = "write_file, delete, shell, send";
+    const cfg = await api("/api/config");
+    document.getElementById("set-budget").textContent = cfg.budget?.perTaskUsd ? "$" + cfg.budget.perTaskUsd : "no limit";
+    document.getElementById("set-egress").textContent = cfg.security?.egressAllowlist?.join(", ") || "unrestricted";
+    document.getElementById("set-approval").textContent = cfg.security?.requireApproval?.join(", ") || "none";
     document.getElementById("set-key-backend").textContent = "OS keychain / encrypted file";
   } catch {}
 }

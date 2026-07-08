@@ -160,7 +160,7 @@ function Navbar() {
           {/* Logo */}
           <a href="#" className="flex items-center gap-3 group">
             <img
-              src="https://raw.githubusercontent.com/ahmadrrrtx/xr/main/assets/logo.png"
+              src="/logo.png"
               alt="XR"
               className="h-8 w-8 object-contain"
             />
@@ -357,7 +357,7 @@ function HeroSection() {
 
           {/* Avatar image */}
           <motion.img
-            src="https://raw.githubusercontent.com/ahmadrrrtx/xr/main/assets/avatar.png"
+            src="/avatar.png"
             alt="XR — Cybernetic Guardian"
             className="relative w-48 h-48 object-contain rounded-full z-10"
             style={{
@@ -1607,7 +1607,7 @@ function FinalCTA() {
           transition={{ duration: 0.6 }}
         >
           <img
-            src="https://raw.githubusercontent.com/ahmadrrrtx/xr/main/assets/avatar.png"
+            src="/avatar.png"
             alt="XR"
             className="w-24 h-24 object-contain mx-auto mb-8 rounded-full"
             style={{ filter: "drop-shadow(0 0 30px rgba(0, 212, 255, 0.5))" }}
@@ -1652,7 +1652,7 @@ function Footer() {
           {/* Logo + tagline */}
           <div className="flex items-center gap-3">
             <img
-              src="https://raw.githubusercontent.com/ahmadrrrtx/xr/main/assets/logo.png"
+              src="/logo.png"
               alt="XR"
               className="h-8 w-8 object-contain"
             />

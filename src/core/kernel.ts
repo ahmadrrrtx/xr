@@ -30,7 +30,7 @@ import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
 import { WorkflowStore } from "../state/stores/workflow-store.ts";
 
 export class XRKernel {
-  public static readonly VERSION = "3.0.0";
+  public static readonly VERSION = "3.1.0";
   
   public readonly container = new Container();
   public readonly events = new EventBus();

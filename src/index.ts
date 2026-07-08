@@ -1,7 +1,11 @@
 #!/usr/bin/env bun
 /**
- * XR — The AI OS Kernel Bootstrap
- * Stage 16: Coherent AI Operating System Core
+ * XR 3.1 — product shell bootstrap
+ *
+ * UX changes:
+ *  - `xr` now opens the dedicated fullscreen TUI by default
+ *  - `xr help`, `xr serve`, and `xr --version` are fast paths
+ *  - the heavy kernel only boots when a command actually needs it
  */
 
 import { XRKernel } from "./core/kernel.ts";
@@ -28,10 +32,12 @@ import {
   SpeakCommand,
   ListenCommand,
 } from "./commands/install.ts";
-import { banner, colors as C } from "./interfaces/cli.ts";
+import { colors as C } from "./interfaces/cli.ts";
 import { AgentsCommand } from "./commands/agents.ts";
 import { SkillsCommand, SkillsAliasCommand } from "./commands/skills.ts";
 import { ShieldCommand } from "./commands/shield.ts";
+import { showHelp } from "./commands/help.ts";
+import { serve } from "./daemon/server.ts";
 
 function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new RunAgentCommand());
@@ -62,87 +68,76 @@ function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new WorkspaceCommand());
 }
 
+function parseServePort(args: string[]): number | undefined {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--port" && args[i + 1]) return Number.parseInt(args[i + 1]!, 10);
+    if (arg?.startsWith("--port=")) return Number.parseInt(arg.slice("--port=".length), 10);
+  }
+  return undefined;
+}
+
+async function runServeCommand(args: string[]): Promise<void> {
+  const port = parseServePort(args);
+  const handle = await serve({ port: Number.isFinite(port) ? port : undefined });
+  await new Promise<void>((resolve) => {
+    const stop = () => {
+      try { handle.stop(); } catch {}
+      resolve();
+    };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
+  });
+}
+
 async function main(): Promise<void> {
-  const kernel = new XRKernel();
-  
-  // Register commands directly in kernel commands registry
-  registerCommands(kernel);
+  const argv = process.argv.slice(2).filter((a) => a !== "--from-bootstrap");
+  const head = argv[0];
 
   try {
-    // Bootstrap & start full OS kernel
-    await kernel.bootstrap();
-    await kernel.start();
-
-    const argv = process.argv
-      .slice(2)
-      .filter((a) => a !== "--from-bootstrap");
-
-    // Interactive TUI router
-    if (argv[0] === "--tui" || argv[0] === "tui") {
+    // Fast paths — no kernel boot required.
+    if (!head || head === "--tui" || head === "tui") {
       const { runTUI } = await import("./interfaces/tui.ts");
       await runTUI();
       return;
     }
 
-    // Version flag capture
-    if (argv[0] === "--version" || argv[0] === "-v" || argv[0] === "version") {
-      console.log(`v3.0.3`);
+    if (head === "--version" || head === "-v" || head === "version") {
+      console.log("v3.1.0");
       return;
     }
 
-    if (
-      argv.length === 0 ||
-      argv[0] === "help" ||
-      argv[0] === "--help" ||
-      argv[0] === "-h"
-    ) {
-      banner();
-      console.log(`${C.bold("Usage")}`);
-      console.log(`  xr install                setup wizard`);
-      console.log(`  xr doctor                 health check (incl. memory)`);
-      console.log(`  xr status                 component status`);
-      console.log(`  xr --tui                  interactive terminal UI`);
-      console.log(`  xr workspace              manage isolated workspaces (list/create/use/delete)`);
-      console.log(`  xr repair                 safe repair`);
-      console.log(`  xr update                 update with rollback guard`);
-      console.log(`  xr providers list         show all providers and keys`);
-      console.log(`  xr providers set <id>     set active provider`);
-      console.log(`  xr providers test         test provider health`);
-      console.log(`  xr models runtimes        detect local AI runtimes`);
-      console.log(`  xr models recommend       local runtime/model recommendation`);
-      console.log(`  xr models install         install/configure local model with approval`);
-      console.log(`  xr memory                 durable memory (status/add/list/…)`);
-      console.log(`  xr plugins                discover and manage permissioned plugins`);
-      console.log(`  xr skill browse           XR Skills Marketplace`);
-      console.log(`  xr skill install <id>     install/enable a professional Skill`);
-      console.log(`  xr agents                 multi-agent supervisor runtime`);
-      console.log(`  xr voice setup            optional voice setup (push-to-talk default)`);
-      console.log(`  xr voice start            talk to XR safely by voice`);
-      console.log(`  xr speak <text>           speak text once`);
-      console.log(`  xr listen                 listen once and print transcript`);
-      console.log(`  xr control setup          desktop control prerequisites`);
-      console.log(`  xr research setup         research prerequisites`);
-      console.log(`  xr shield                 AI-powered Security & Privacy layer`);
-      console.log(`  xr "your task"            run a task`);
+    if (head === "help" || head === "--help" || head === "-h") {
+      showHelp(argv[1]);
       return;
     }
 
-    const commandName = argv[0];
-    const args = argv.slice(1);
-    
-    if (kernel.commands.get(commandName)) {
-      await kernel.executeCommand(commandName, args, process.cwd());
-    } else {
-      await kernel.executeCommand("run", argv, process.cwd());
+    if (head === "serve") {
+      await runServeCommand(argv.slice(1));
+      return;
+    }
+
+    const kernel = new XRKernel();
+    registerCommands(kernel);
+    await kernel.bootstrap();
+    await kernel.start();
+
+    try {
+      const commandName = argv[0];
+      const args = argv.slice(1);
+      if (commandName && kernel.commands.get(commandName)) {
+        await kernel.executeCommand(commandName, args, process.cwd());
+      } else {
+        await kernel.executeCommand("run", argv, process.cwd());
+      }
+    } finally {
+      await kernel.shutdown();
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(C.red("fatal:"), msg);
     if (process.env.XR_DEBUG === "1") console.error(e);
     process.exit(1);
-  } finally {
-    // Graceful kernel shutdown sequence
-    await kernel.shutdown();
   }
 }
 

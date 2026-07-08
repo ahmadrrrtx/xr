@@ -20,9 +20,12 @@ export class InstallCommand implements Command {
 
 export class OnboardingCommand implements Command {
   name = "onboarding";
-  description = "first-time setup wizard alias";
+  description = "guided first-launch onboarding wizard";
   usage = "xr onboarding";
-  async execute(ctx: CommandContext): Promise<void> { await runInstallWizard(ctx.args); }
+  async execute(): Promise<void> {
+    const { runOnboarding } = await import("../interfaces/onboard.ts");
+    await runOnboarding();
+  }
 }
 
 export class StatusCommand implements Command {

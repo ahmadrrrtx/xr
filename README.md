@@ -1,4 +1,4 @@
-![XR — cybernetic guardian avatar](https://raw.githubusercontent.com/ahmadrrrtx/xr/main/assets/avatar.png)
+![XR — cybernetic guardian avatar](assets/avatar.png)
 
 <div align="center">
 
@@ -92,8 +92,9 @@ xr skill install react_expert  # install/enable a professional Skill
 xr agents list       # inspect the built-in multi-agent workforce
 xr agents plan "refactor this repo safely"
 xr voice setup       # optional local-first voice setup
-xr "hello, XR"       # run your first task
-xr --tui             # open interactive terminal UI
+xr                   # open the dedicated fullscreen XR shell
+xr "hello, XR"       # run your first task directly
+xr --tui             # explicit alias for the fullscreen shell
 xr serve             # start local dashboard + chat in browser
 ```
 
@@ -131,6 +132,8 @@ Stage 5 gives XR a **complete, polished UI layer** across every user-facing surf
 ### Terminal Interface (Claude Code–style TUI)
 
 ```bash
+xr
+# or
 xr --tui
 ```
 
@@ -797,7 +800,8 @@ xr "refactor auth module"            --budget 0.25
 xr "build a REST API"                --mode plan   # plan only
 
 # Interactive TUI
-xr --tui                             # full terminal workspace
+xr                                   # full terminal workspace
+xr --tui                             # explicit alias for the fullscreen shell
 
 # Browser interfaces
 xr serve                             # dashboard + chat at localhost:3141

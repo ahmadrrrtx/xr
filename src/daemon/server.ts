@@ -37,6 +37,7 @@ import { buildProvider, knownProviders, PRESETS } from "../providers/factory.ts"
 import { getProviderEnvStatus } from "../config/config.ts";
 import { listRemembered, forgetPlan, clearAllMemory } from "../control/memory.ts";
 import { MemoryStore } from "../memory/store.ts";
+import { WorkspaceManager } from "../core/workspace.ts";
 import type { Message } from "../core/types.ts";
 
 export interface DaemonOptions {
@@ -53,6 +54,20 @@ export interface DaemonHandle {
 }
 
 const HOST = "127.0.0.1";
+
+function gitSummary(cwd: string): { branch: string; dirty: boolean } {
+  try {
+    const branch = Bun.spawnSync(["git", "rev-parse", "--abbrev-ref", "HEAD"], { cwd, stdout: "pipe", stderr: "ignore" });
+    const status = Bun.spawnSync(["git", "status", "--porcelain"], { cwd, stdout: "pipe", stderr: "ignore" });
+    if (branch.exitCode !== 0 || status.exitCode !== 0) return { branch: "no git", dirty: false };
+    return {
+      branch: branch.stdout.toString().trim() || "detached",
+      dirty: status.stdout.toString().trim().length > 0,
+    };
+  } catch {
+    return { branch: "no git", dirty: false };
+  }
+}
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -229,16 +244,38 @@ export function makeHandler(store: Store, token: string) {
     // ── Overview ──────────────────────────────────────────────────────────
     if (path === "/api/overview") {
       const project = basename(process.cwd());
-      const fp      = fingerprint(process.cwd());
+      const fp = fingerprint(process.cwd());
+      const memory = new MemoryStore(store);
+      const git = gitSummary(process.cwd());
       return json({
         project,
+        workspace: new WorkspaceManager().getActiveId(),
+        cwd: process.cwd(),
         fingerprint: fp,
-        audit:   { count: store.auditCount(), chain: store.verifyChain() },
-        skills:  { learned: store.skillCount(), frozen: store.frozenCount() },
+        provider: {
+          active: config.defaults.provider,
+          model: config.defaults.model,
+          fallback: config.defaults.fallbackProvider ?? null,
+          fallbackModel: config.defaults.fallbackModel ?? null,
+          local: isLocal(config.defaults.provider),
+        },
+        audit: { count: store.auditCount(), chain: store.verifyChain() },
+        skills: { learned: store.skillCount(), frozen: store.frozenCount() },
         ragChunks: store.ragCount(project),
-        budget:  {
-          perTaskUsd:    config.budget.perTaskUsd,
+        memory: {
+          enabled: isMemoryEnabled(),
+          count: memory.count(),
+          health: memory.health(),
+        },
+        research: {
+          count: store.researchCount(),
+          recent: store.listResearch(4),
+        },
+        git,
+        budget: {
+          perTaskUsd: config.budget.perTaskUsd,
           perTaskTokens: config.budget.perTaskTokens,
+          egressAllowlist: config.security.egressAllowlist,
         },
       });
     }
@@ -374,22 +411,61 @@ export function makeHandler(store: Store, token: string) {
 
     // ── Sessions ──────────────────────────────────────────────────────────
     if (path === "/api/sessions") {
-      return json({ sessions: store.recentSessions(50) });
+      return json({
+        sessions: store.recentSessions(50),
+        research: store.listResearch(10),
+        counts: {
+          sessions: store.recentSessions(200).length,
+          research: store.researchCount(),
+        },
+      });
     }
 
     // ── Providers (safe — no keys returned) ───────────────────────────────
     if (path === "/api/providers") {
       const status = getProviderEnvStatus();
+      const rows = await Promise.all(status.map(async (p) => {
+        try {
+          const provider = buildProvider(config, { provider: p.id });
+          const health = await provider.health();
+          return {
+            id: p.id,
+            label: p.label,
+            tier: p.tier,
+            hasKey: p.hasKey,
+            healthy: health.ok,
+            latencyMs: health.latencyMs ?? null,
+            detail: health.detail ?? null,
+          };
+        } catch {
+          return {
+            id: p.id,
+            label: p.label,
+            tier: p.tier,
+            hasKey: p.hasKey,
+            healthy: false,
+            latencyMs: null,
+            detail: "unavailable",
+          };
+        }
+      }));
       return json({
-        primary:  config.defaults.provider,
-        model:    config.defaults.model,
+        primary: config.defaults.provider,
+        model: config.defaults.model,
         fallback: config.defaults.fallbackProvider,
-        providers: status.map(p => ({
-          id:     p.id,
-          label:  p.label,
-          tier:   p.tier,
-          hasKey: p.hasKey,
-          // NEVER return the actual key
+        fallbackModel: config.defaults.fallbackModel,
+        providers: rows,
+      });
+    }
+
+    if (path === "/api/workspaces") {
+      const wm = new WorkspaceManager();
+      return json({
+        active: wm.getActiveId(),
+        workspaces: wm.listWorkspaces().map((ws) => ({
+          id: ws.id,
+          name: ws.name,
+          rootDir: ws.rootDir,
         })),
       });
     }
@@ -397,13 +473,32 @@ export function makeHandler(store: Store, token: string) {
     // ── Config (safe subset) ──────────────────────────────────────────────
     if (path === "/api/config") {
       return json({
-        provider:     config.defaults.provider,
-        model:        config.defaults.model,
-        mode:         config.defaults.mode,
+        provider: config.defaults.provider,
+        model: config.defaults.model,
+        mode: config.defaults.mode,
+        fallbackProvider: config.defaults.fallbackProvider ?? null,
+        fallbackModel: config.defaults.fallbackModel ?? null,
         localEnabled: config.localModels.enabled,
-        routing:      config.localModels.routing,
-        budget:       config.budget,
-        // NEVER return apiKeys, secrets, tokens
+        routing: config.localModels.routing,
+        budget: config.budget,
+        memory: {
+          enabled: config.memory.enabled,
+          injectInChat: config.memory.injectInChat,
+          recallLimit: config.memory.recallLimit,
+        },
+        voice: {
+          enabled: config.voice.enabled,
+          mode: config.voice.mode,
+        },
+        security: {
+          requireApproval: config.security.requireApproval,
+          egressAllowlist: config.security.egressAllowlist,
+        },
+        plugins: {
+          enabled: config.plugins.enabled,
+          requireTrust: config.plugins.requireTrust,
+        },
+        // NEVER return apiKeys, secrets, tokens.
       });
     }
 

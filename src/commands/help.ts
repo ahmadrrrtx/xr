@@ -28,8 +28,9 @@ export function showHelp(topic?: string): void {
   console.log(`  ${xrBold("Quick Start")}`);
   console.log(`  ${xrDim("─────────────────────────────────────────────")}`);
   console.log(`  ${xrCyan("xr onboarding")}               ${xrDim("first-time setup wizard")}`);
+  console.log(`  ${xrCyan("xr")}                          ${xrDim("open the dedicated fullscreen XR shell")}`);
   console.log(`  ${xrCyan('xr "write a hello world"')}    ${xrDim("run a task (one-shot)")}`);
-  console.log(`  ${xrCyan("xr --tui")}                    ${xrDim("open interactive terminal UI")}`);
+  console.log(`  ${xrCyan("xr --tui")}                    ${xrDim("explicit alias for the fullscreen shell")}`);
   console.log(`  ${xrCyan("xr serve")}                    ${xrDim("start dashboard + chat server")}`);
   console.log();
 
@@ -38,8 +39,9 @@ export function showHelp(topic?: string): void {
   console.log(`  ${xrDim("─────────────────────────────────────────────")}`);
 
   const commands = [
+    ["xr",                               "open the fullscreen XR shell"],
     ["xr <task>",                        "run a task in agent mode"],
-    ["xr --tui",                         "interactive TUI (Claude Code–style)"],
+    ["xr --tui",                         "explicit alias for the fullscreen shell"],
     ["xr serve",                         "start local dashboard + chat UI"],
     ["xr onboarding",                    "setup wizard (re-run anytime)"],
     ["xr doctor",                        "system health check"],
