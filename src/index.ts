@@ -45,6 +45,7 @@ import { banner, colors as C } from "./interfaces/cli.ts";
 import { AgentsCommand } from "./commands/agents.ts";
 import { SkillsCommand, SkillsAliasCommand } from "./commands/skills.ts";
 import { SkillService } from "./services/skill-service.ts";
+import { ShieldCommand } from "./commands/shield.ts";
 
 function registerServices(runtime: XRRuntime): void {
   const container = runtime.container;
@@ -116,6 +117,7 @@ function registerCommands(runtime: XRRuntime): void {
   runtime.commands.register(new SkillsCommand());
   runtime.commands.register(new SkillsAliasCommand());
   runtime.commands.register(new AgentsCommand());
+  runtime.commands.register(new ShieldCommand());
 }
 
 async function main(): Promise<void> {
@@ -170,6 +172,7 @@ async function main(): Promise<void> {
       console.log(`  xr listen                 listen once and print transcript`);
       console.log(`  xr control setup          desktop control prerequisites`);
       console.log(`  xr research setup         research prerequisites`);
+      console.log(`  xr shield                 AI-powered Security & Privacy layer`);
       console.log(`  xr "your task"            run a task`);
       return;
     }
