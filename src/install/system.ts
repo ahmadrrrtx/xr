@@ -101,10 +101,13 @@ function detectArch(): XRArch {
 
 function detectAdmin(): boolean {
   if (process.platform !== "win32") return typeof process.getuid === "function" && process.getuid() === 0;
-  const ps = commandExists("pwsh") ? "pwsh" : commandExists("powershell") ? "powershell" : undefined;
-  if (!ps) return false;
-  const res = runCommand(ps, ["-NoProfile", "-NonInteractive", "-Command", "([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)"], { timeoutMs: 3000 });
-  return /True/i.test(res.stdout);
+  // Use fast, lightweight native net.exe call instead of heavy powershell
+  try {
+    const res = spawnSync("net.exe", ["session"], { stdio: "ignore", timeout: 1500 });
+    return res.status === 0;
+  } catch {
+    return false;
+  }
 }
 
 export function detectPlatform(): PlatformInfo {

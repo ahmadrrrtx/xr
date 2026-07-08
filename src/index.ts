@@ -86,7 +86,7 @@ async function main(): Promise<void> {
 
     // Version flag capture
     if (argv[0] === "--version" || argv[0] === "-v" || argv[0] === "version") {
-      console.log(`v3.0.2`);
+      console.log(`v3.0.3`);
       return;
     }
 
