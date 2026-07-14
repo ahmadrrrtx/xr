@@ -1,51 +1,118 @@
 /**
- * XR Stage 5 — Design System / Theme Token Layer
+ * XR 3.1 — Theme / ANSI token layer
  *
- * Single source of truth for all colors, typography, spacing, and ANSI codes
- * used across CLI, TUI, and (via CSS variables) the web dashboard/chat.
+ * Compiles design tokens (tokens.ts) into terminal-safe ANSI helpers.
+ * Supports truecolor (24-bit), 256-color, 16-color, monochrome, and NO_COLOR.
  *
- * Principles:
- *  - Dark-mode first, accessible contrast ratios
- *  - XR brand: cyan (#00D4FF) primary, green (#00FF88) success, amber (#F59E0B) warn
- *  - Consistent emoji-free ASCII symbols for tool-call indicators
- *  - All ANSI codes in one place — never scattered across files
+ * Spec: docs/xr-3.1/XR-3.1-DESIGN-SYSTEM.md §2.6
  */
 
-// ── Brand Palette ─────────────────────────────────────────────────────────────
+import {
+  COLOR,
+  RGB,
+  ANSI16,
+  CSS_VARS as TOKEN_CSS,
+  BRAND_META,
+  TERM,
+  MOTION,
+  type StatusKind,
+  STATUS_COLOR,
+} from "./tokens.ts";
 
+// Re-export brand palette for consumers that expect BRAND
 export const BRAND = {
-  /** Primary accent — cyan neon */
-  primary:  "#00D4FF",
-  /** Success / local / safe */
-  success:  "#00FF88",
-  /** Warning / cloud / caution */
-  warning:  "#F59E0B",
-  /** Error / danger */
-  error:    "#FF4D4D",
-  /** Muted / secondary text */
-  muted:    "#6B7280",
-  /** Background dark */
-  bg:       "#0A0A0F",
-  /** Surface card */
-  surface:  "#111827",
-  /** Border */
-  border:   "#1F2937",
-  /** Text primary */
-  text:     "#F9FAFB",
-  /** Text secondary */
-  textDim:  "#9CA3AF",
+  primary: COLOR.primary,
+  success: COLOR.success,
+  warning: COLOR.warning,
+  error: COLOR.error,
+  muted: COLOR.muted,
+  bg: COLOR.bg,
+  surface: COLOR.surface,
+  border: COLOR.border,
+  text: COLOR.text,
+  textDim: COLOR.textDim,
+  violet: COLOR.violet,
+  name: BRAND_META.name,
+  tagline: BRAND_META.tagline,
 } as const;
 
-// ── ANSI Terminal Tokens ──────────────────────────────────────────────────────
+export { COLOR, RGB, TERM, MOTION, BRAND_META };
+
+// ── Capability detection ──────────────────────────────────────────────────────
+
+export type ColorMode = "truecolor" | "256" | "16" | "mono" | "none";
+
+let _colorMode: ColorMode | null = null;
+let _reducedMotion = false;
+let _textOnly = false;
+
+export function detectColorMode(): ColorMode {
+  if (process.env.NO_COLOR != null && process.env.NO_COLOR !== "") return "none";
+  if (process.env.FORCE_COLOR === "0") return "none";
+  if (process.env.XR_COLOR === "mono") return "mono";
+  if (process.env.XR_COLOR === "16") return "16";
+  if (process.env.XR_COLOR === "256") return "256";
+  if (process.env.XR_COLOR === "truecolor" || process.env.FORCE_COLOR === "3") return "truecolor";
+
+  const ct = (process.env.COLORTERM || "").toLowerCase();
+  if (ct === "truecolor" || ct === "24bit") return "truecolor";
+
+  const term = (process.env.TERM || "").toLowerCase();
+  if (term === "dumb") return "none";
+  if (term.includes("256color") || term.includes("xterm") || term.includes("screen") || term.includes("tmux")) {
+    // Prefer truecolor when modern terminals advertise it
+    if (process.env.TERM_PROGRAM === "iTerm.app" ||
+        process.env.TERM_PROGRAM === "Apple_Terminal" ||
+        process.env.WT_SESSION ||
+        process.env.KITTY_WINDOW_ID ||
+        process.env.WEZTERM_EXECUTABLE ||
+        process.env.GHOSTTY ||
+        term.includes("direct") ||
+        process.env.COLORTERM) {
+      return "truecolor";
+    }
+    return "256";
+  }
+  if (term) return "16";
+  return process.stdout.isTTY ? "16" : "none";
+}
+
+export function getColorMode(): ColorMode {
+  if (_colorMode == null) _colorMode = detectColorMode();
+  return _colorMode;
+}
+
+export function setColorMode(mode: ColorMode): void {
+  _colorMode = mode;
+}
+
+export function setReducedMotion(on: boolean): void {
+  _reducedMotion = on;
+}
+
+export function isReducedMotion(): boolean {
+  if (_reducedMotion) return true;
+  if (process.env.XR_REDUCED_MOTION === "1") return true;
+  return false;
+}
+
+export function setTextOnly(on: boolean): void {
+  _textOnly = on;
+}
+
+export function isTextOnly(): boolean {
+  return _textOnly || process.env.XR_TEXT_ONLY === "1";
+}
+
+// ── ANSI escape primitives ────────────────────────────────────────────────────
 
 export const A = {
-  // Reset
   reset:          "\x1b[0m",
-  // Styles
   bold:           "\x1b[1m",
   dim:            "\x1b[2m",
   italic:         "\x1b[3m",
   underline:      "\x1b[4m",
+  reverse:        "\x1b[7m",
   // Standard foreground
   black:          "\x1b[30m",
   red:            "\x1b[31m",
@@ -80,36 +147,88 @@ export const A = {
   cursorShow:     "\x1b[?25h",
   saveCursor:     "\x1b[s",
   restoreCursor:  "\x1b[u",
+  altScreenEnter: "\x1b[?1049h",
+  altScreenLeave: "\x1b[?1049l",
+  mouseOn:        "\x1b[?1000h\x1b[?1002h\x1b[?1006h",
+  mouseOff:       "\x1b[?1006l\x1b[?1002l\x1b[?1000l",
+  bracketedPasteOn:  "\x1b[?2004h",
+  bracketedPasteOff: "\x1b[?2004l",
   moveUp:         (n: number) => `\x1b[${n}A`,
   moveDown:       (n: number) => `\x1b[${n}B`,
   moveRight:      (n: number) => `\x1b[${n}C`,
   moveLeft:       (n: number) => `\x1b[${n}D`,
   moveCol:        (n: number) => `\x1b[${n}G`,
   moveTo:         (row: number, col: number) => `\x1b[${row};${col}H`,
-  // 256-color helpers
   fg256:          (n: number) => `\x1b[38;5;${n}m`,
   bg256:          (n: number) => `\x1b[48;5;${n}m`,
-  // True-color (24-bit)
   fgRgb:          (r: number, g: number, b: number) => `\x1b[38;2;${r};${g};${b}m`,
   bgRgb:          (r: number, g: number, b: number) => `\x1b[48;2;${r};${g};${b}m`,
 } as const;
 
-// ── Semantic Color Helpers ────────────────────────────────────────────────────
+// ── Color application ─────────────────────────────────────────────────────────
 
-/** XR brand cyan — primary accent */
-export const xrCyan  = (s: string) => `${A.fgRgb(0, 212, 255)}${s}${A.reset}`;
-/** XR brand green — success / local / online */
-export const xrGreen = (s: string) => `${A.fgRgb(0, 255, 136)}${s}${A.reset}`;
-/** XR brand amber — warning / cloud */
-export const xrAmber = (s: string) => `${A.fgRgb(245, 158, 11)}${s}${A.reset}`;
-/** XR brand red — error / danger */
-export const xrRed   = (s: string) => `${A.fgRgb(255, 77, 77)}${s}${A.reset}`;
-/** Dim / muted text */
-export const xrDim   = (s: string) => `${A.dim}${s}${A.reset}`;
-/** Bold text */
-export const xrBold  = (s: string) => `${A.bold}${s}${A.reset}`;
+function paint(rgb: readonly [number, number, number], ansi16: number, s: string, dim = false): string {
+  const mode = getColorMode();
+  if (mode === "none" || mode === "mono") {
+    return dim ? `${A.dim}${s}${A.reset}` : s;
+  }
+  if (mode === "16") {
+    const code = dim ? `\x1b[2;${ansi16}m` : `\x1b[${ansi16}m`;
+    return `${code}${s}${A.reset}`;
+  }
+  // 256 and truecolor: prefer truecolor when available
+  if (mode === "truecolor") {
+    return `${A.fgRgb(rgb[0], rgb[1], rgb[2])}${dim ? A.dim : ""}${s}${A.reset}`;
+  }
+  // 256 approximate
+  return `${A.fgRgb(rgb[0], rgb[1], rgb[2])}${s}${A.reset}`;
+}
 
-// ── Status Symbols ────────────────────────────────────────────────────────────
+export const xrCyan  = (s: string) => paint(RGB.primary, ANSI16.primary, s);
+export const xrViolet = (s: string) => paint(RGB.violet, ANSI16.violet, s);
+export const xrGreen = (s: string) => paint(RGB.success, ANSI16.success, s);
+export const xrAmber = (s: string) => paint(RGB.warning, ANSI16.warning, s);
+export const xrRed   = (s: string) => paint(RGB.error, ANSI16.error, s);
+export const xrDim   = (s: string) => {
+  const mode = getColorMode();
+  if (mode === "none" || mode === "mono") return s;
+  return `${A.dim}${s}${A.reset}`;
+};
+export const xrBold  = (s: string) => {
+  const mode = getColorMode();
+  if (mode === "none") return s;
+  return `${A.bold}${s}${A.reset}`;
+};
+export const xrMuted = (s: string) => paint(RGB.muted, ANSI16.muted, s);
+export const xrText  = (s: string) => paint(RGB.text, ANSI16.text, s);
+
+/** Paint by semantic status */
+export function xrStatus(kind: StatusKind, s: string): string {
+  const key = STATUS_COLOR[kind];
+  const rgb = RGB[key];
+  const a16 = (ANSI16 as Record<string, number>)[key] ?? 37;
+  return paint(rgb, a16, s);
+}
+
+/** Soft background tint (truecolor only; no-op otherwise) */
+export function xrBgTint(rgb: readonly [number, number, number], s: string): string {
+  if (getColorMode() !== "truecolor") return s;
+  // 8% opacity approximation: blend toward surface
+  const r = Math.round(rgb[0] * 0.12 + RGB.surface[0] * 0.88);
+  const g = Math.round(rgb[1] * 0.12 + RGB.surface[1] * 0.88);
+  const b = Math.round(rgb[2] * 0.12 + RGB.surface[2] * 0.88);
+  return `${A.bgRgb(r, g, b)}${s}${A.reset}`;
+}
+
+export function xrSelected(s: string): string {
+  if (getColorMode() === "truecolor") {
+    return xrBgTint(RGB.primary, xrCyan(s));
+  }
+  return xrBold(xrCyan(s));
+}
+
+// ── Status symbols (static strings for CLI/layout compatibility) ──────────────
+// For text-only / a11y mode, use icons.ts glyph() helpers instead.
 
 export const SYM = {
   ok:       xrGreen("✓"),
@@ -122,27 +241,25 @@ export const SYM = {
   local:    xrGreen("⬡"),
   cloud:    xrAmber("☁"),
   secure:   xrGreen("🔒"),
-  budget:   xrAmber("💰"),
-  memory:   xrCyan("🧠"),
+  budget:   xrAmber("◈"),
+  memory:   xrCyan("◉"),
   voice:    xrCyan("🎤"),
-  plugin:   xrCyan("⚡"),
-  research: xrCyan("🔬"),
+  plugin:   xrCyan("⌁"),
+  research: xrCyan("◆"),
 } as const;
 
-// ── Spinner Frames (Claude Code–style) ────────────────────────────────────────
+/** Alias kept for callers that imported SYM_STATIC */
+export const SYM_STATIC = SYM;
 
-/** Primary thinking spinner — matches Claude Code's star-burst sequence */
+// ── Spinner frames ────────────────────────────────────────────────────────────
+
 export const SPINNER_FRAMES = ["·", "✻", "✽", "✶", "✳", "✢", "·"] as const;
-
-/** Dots spinner for progress bars */
 export const DOTS_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-
-/** Bar progress */
 export const BAR_FILLED  = "█";
 export const BAR_EMPTY   = "░";
 export const BAR_HEAD    = "▓";
 
-// ── Layout Constants ──────────────────────────────────────────────────────────
+// ── Layout constants (legacy + TERM) ──────────────────────────────────────────
 
 export const LAYOUT = {
   termWidth:    80,
@@ -152,33 +269,9 @@ export const LAYOUT = {
   boxTop:       "┌" + "─".repeat(74) + "┐",
   boxBottom:    "└" + "─".repeat(74) + "┘",
   boxSide:      "│",
+  ...TERM,
 } as const;
 
-// ── CSS Variables (for web surfaces) ─────────────────────────────────────────
+// ── CSS Variables ─────────────────────────────────────────────────────────────
 
-export const CSS_VARS = `
-  :root {
-    --xr-primary:    #00D4FF;
-    --xr-success:    #00FF88;
-    --xr-warning:    #F59E0B;
-    --xr-error:      #FF4D4D;
-    --xr-muted:      #6B7280;
-    --xr-bg:         #0A0A0F;
-    --xr-bg-2:       #0D1117;
-    --xr-surface:    #111827;
-    --xr-surface-2:  #1A2234;
-    --xr-border:     #1F2937;
-    --xr-border-2:   #2D3748;
-    --xr-text:       #F9FAFB;
-    --xr-text-dim:   #9CA3AF;
-    --xr-text-muted: #6B7280;
-    --xr-radius:     8px;
-    --xr-radius-lg:  12px;
-    --xr-radius-xl:  16px;
-    --xr-font-mono:  'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', monospace;
-    --xr-font-sans:  'Inter', 'Segoe UI', system-ui, sans-serif;
-    --xr-shadow:     0 4px 24px rgba(0,0,0,0.4);
-    --xr-glow-cyan:  0 0 20px rgba(0,212,255,0.2);
-    --xr-glow-green: 0 0 20px rgba(0,255,136,0.2);
-  }
-`;
+export const CSS_VARS = TOKEN_CSS;
