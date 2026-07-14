@@ -71,37 +71,33 @@ Launch feels intentional and premium instead of utility-first.
 
 ---
 
-## B. Fullscreen TUI redesign
+## B. Fullscreen Shell redesign (XR 3.1 definitive experience)
 
 ### Files
-- `src/interfaces/tui.ts`
-- `src/ui/brand.ts`
+- `src/interfaces/tui.ts` (entry re-export)
+- `src/interfaces/shell/*` (app, render, layout, types)
+- `src/ui/tokens.ts`, `theme.ts`, `primitives.ts`, `terminal.ts`, `icons.ts`, `ansi.ts`
+- `src/ui/brand.ts`, `src/ui/css-vars.css`
+- `docs/xr-3.1/XR-3.1-SHELL-IMPLEMENTATION.md`
 
 ### Problem
-The old TUI was powerful but structurally still a prompt loop.
+The old TUI was powerful but structurally still a prompt loop with full-screen redraws.
 
 ### Change
-Built a dedicated fullscreen shell with:
+Rebuilt the Shell from the XR 3.1 research docs:
 
-- alternate screen mode
-- animated startup
-- official XR logo/avatar rendered for terminal startup
-- startup workspace/session picker
-- sidebar navigation
-- center workspace
-- right-side inspector
-- command palette
-- notification center
-- quick actions overlay
-- logs viewer
-- activity timeline
-- context viewer
-- sessions view
-- workspace view
-- status-aware composer
+- design-token substrate shared with future Control Center / website
+- alternate screen + clean restore + bracketed paste
+- damage-region (line-diff) rendering
+- animated startup from official logo/avatar assets
+- three-pane responsive layout (sidebar · main · inspector)
+- universal composer + status bar + command palette
+- g-chord navigation, Esc priority stack, readline basics
+- notifications, quick actions, help, mode/model overlays
+- views: overview, chat, sessions, workspaces, research, activity, audit, memory, status, settings
 
 ### UX win
-XR now behaves like a terminal-native AI operating environment.
+XR behaves like a professional native terminal application — one product identity, keyboard-first, high signal.
 
 ---
 

@@ -1,0 +1,70 @@
+/**
+ * XR 3.1 — CSS custom properties
+ * Generated from src/ui/tokens.ts (keep in sync).
+ * Used by Control Center and website.
+ */
+:root {
+  --xr-bg: #0A0A0F;
+  --xr-bg-2: #0D1117;
+  --xr-surface: #111827;
+  --xr-surface-2: #1A2234;
+  --xr-border: #1F2937;
+  --xr-border-2: #2D3748;
+  --xr-text: #F9FAFB;
+  --xr-text-dim: #9CA3AF;
+  --xr-muted: #6B7280;
+  --xr-primary: #00D4FF;
+  --xr-cyan: #00D4FF;
+  --xr-violet: #A855F7;
+  --xr-success: #00FF88;
+  --xr-green: #00FF88;
+  --xr-warning: #F59E0B;
+  --xr-amber: #F59E0B;
+  --xr-error: #FF4D4D;
+  --xr-red: #FF4D4D;
+  --xr-on-primary: #001018;
+  --xr-data-1: #00D4FF;
+  --xr-data-2: #A855F7;
+  --xr-data-3: #00FF88;
+  --xr-data-4: #F59E0B;
+  --xr-data-5: #60A5FA;
+  --xr-data-6: #F472B6;
+  --xr-radius-sm: 4px;
+  --xr-radius: 8px;
+  --xr-radius-lg: 12px;
+  --xr-radius-xl: 16px;
+  --xr-radius-full: 999px;
+  --xr-space-1: 4px;
+  --xr-space-2: 8px;
+  --xr-space-3: 12px;
+  --xr-space-4: 16px;
+  --xr-space-5: 20px;
+  --xr-space-6: 24px;
+  --xr-space-8: 32px;
+  --xr-space-12: 48px;
+  --xr-dur-fast: 80ms;
+  --xr-dur-base: 120ms;
+  --xr-dur-slow: 200ms;
+  --xr-font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', ui-monospace, monospace;
+  --xr-font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --xr-font-display: 'Syne', 'Inter', system-ui, sans-serif;
+  --xr-fs-display: 48px;
+  --xr-fs-h1: 24px;
+  --xr-fs-h2: 18px;
+  --xr-fs-h3: 14px;
+  --xr-fs-body: 13px;
+  --xr-fs-small: 12px;
+  --xr-fs-xs: 11px;
+  --xr-fs-mono: 12px;
+  --xr-fs-composer: 14px;
+  --xr-shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --xr-shadow: 0 4px 24px rgba(0,0,0,.4);
+  --xr-shadow-lg: 0 12px 44px rgba(0,0,0,.5);
+  --xr-glow-cyan: 0 0 20px rgba(0,212,255,.15);
+  --xr-glow-green: 0 0 20px rgba(0,255,136,.12);
+  --xr-glow-amber: 0 0 20px rgba(245,158,11,.15);
+  --xr-glow-red: 0 0 24px rgba(255,77,77,.2);
+  --xr-focus: 0 0 0 1px rgba(0,212,255,.4), 0 0 20px rgba(0,212,255,.15);
+  --xr-gradient-brand: linear-gradient(90deg, #00D4FF, #7AA7FF, #A855F7);
+  --xr-gradient-shield: radial-gradient(circle, rgba(0,212,255,.22), transparent 60%);
+}
