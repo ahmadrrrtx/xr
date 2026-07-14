@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --xr-black: #0A0A0C;
+  --xr-blue: #3B82F6;
+  --xr-white: #F8FAFC;
+  --xr-slate: #64748B;
+}
+
+body {
+  font-feature-settings: "ss01", "ss02", "cv01";
+}
+
+/* Premium Typography */
+h1, h2, h3 {
+  font-feature-settings: "tnum", "tnum";
+}
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #3B82F6;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2563EB;
+}
+
+/* 3D Canvas Container */
+.canvas-container {
+  position: relative;
+}
+
+/* Interactive Elements */
+.interactive-card {
+  transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1), 
+              box-shadow 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.interactive-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 
+              0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+/* Section Spacing */
+.section {
+  padding-top: 120px;
+  padding-bottom: 120px;
+}
+
+/* Premium Button */
+.xr-button {
+  transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.xr-button:hover {
+  transform: translateY(-1px);
+}
+
+.xr-button:active {
+  transform: translateY(0);
+}
