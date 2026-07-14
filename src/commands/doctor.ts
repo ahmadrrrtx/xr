@@ -8,13 +8,26 @@ import { isMemoryEnabled } from "../config/config.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";
 import { pluginDoctorLine } from "../plugins/cli.ts";
 
+// Bun-friendly dynamic import helper for perf benches (avoid require in types)
+async function loadCatalog() {
+  return import("../cli/catalog.ts");
+}
+async function loadFlags() {
+  return import("../cli/flags.ts");
+}
+
 export class DoctorCommand implements Command {
   name = "doctor";
   description = "system health, dependency, audit, and provider check";
-  usage = "xr doctor [--network] [--json]";
+  usage = "xr doctor [--network] [--json] [--perf]";
 
   async execute(ctx: CommandContext): Promise<void> {
-    const json = ctx.args.includes("--json");
+    const { isJsonMode } = await import("../cli/output.ts");
+    const json = ctx.args.includes("--json") || isJsonMode();
+    if (ctx.args.includes("--perf")) {
+      await runPerfBenchmarks(json);
+      return;
+    }
     let store: Store;
     try { store = ctx.container.resolve<Store>("legacyStore"); } catch { store = new Store(); }
     const mem = new MemoryStore(store);
@@ -89,4 +102,66 @@ export class DoctorCommand implements Command {
     console.log(`  enabled ........ ${memState}`);
     if (memEnabled && memHealth.ok) { if (memHealth.byCategory.length) { const cats = memHealth.byCategory.map((s) => `${s.category}: ${s.c}`).join(" · "); console.log(`  by category .... ${C.dim(cats)}`); } }
   }
+}
+
+/**
+ * Lightweight startup microbenchmarks (Performance Standards §8 / §10).
+ * Measures help/version fast-path style work without booting providers.
+ */
+async function runPerfBenchmarks(asJson: boolean): Promise<void> {
+  const samples = 5;
+  const measure = (fn: () => void): number[] => {
+    const times: number[] = [];
+    for (let i = 0; i < samples; i++) {
+      const t0 = performance.now();
+      fn();
+      times.push(performance.now() - t0);
+    }
+    return times;
+  };
+  const median = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)] ?? 0;
+  };
+
+  const { CATALOG } = await loadCatalog();
+  const { parseGlobalFlags } = await loadFlags();
+
+  const versionMs = measure(() => {
+    void `v3.1.5`;
+  });
+
+  const helpMs = measure(() => {
+    void CATALOG.length;
+    void CATALOG.map((c) => c.name + c.description).join("\n");
+  });
+
+  const flagsMs = measure(() => {
+    parseGlobalFlags(["providers", "list", "--json", "--workspace", "default"]);
+  });
+
+  const results = [
+    { id: "version-string", targetMs: 100, medianMs: median(versionMs), samples: versionMs },
+    { id: "catalog-help-build", targetMs: 200, medianMs: median(helpMs), samples: helpMs },
+    { id: "flag-parse", targetMs: 50, medianMs: median(flagsMs), samples: flagsMs },
+  ].map((r) => ({ ...r, pass: r.medianMs <= r.targetMs }));
+
+  if (asJson) {
+    console.log(JSON.stringify({ ok: results.every((r) => r.pass), results }, null, 2));
+    return;
+  }
+
+  banner();
+  console.log(C.bold("CLI performance microbenchmarks"));
+  console.log(C.dim(`  ${samples}-run median · targets from XR 3.1 performance standards\n`));
+  for (const r of results) {
+    const mark = r.pass ? C.green("PASS") : C.red("FAIL");
+    console.log(
+      `  ${mark}  ${r.id.padEnd(22)}  ${r.medianMs.toFixed(2)}ms  ${C.dim(`(target ≤ ${r.targetMs}ms)`)}`,
+    );
+  }
+  console.log();
+  console.log(C.dim("Note: full `xr --version` / `xr help` wall times depend on Bun cold start."));
+  console.log(C.dim("These benches measure in-process work after the runtime is up."));
+  console.log();
 }

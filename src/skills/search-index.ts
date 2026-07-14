@@ -47,10 +47,10 @@ function documentText(record: UnifiedSkillRecord): string {
     ...m.keywords,
     ...m.activation.phrases,
     ...m.tools,
-    ...m.permissions.map((p) => `${p.scope} ${p.reason}`),
-    ...m.dependencies.map((d) => `${d.kind} ${d.id} ${d.reason ?? ""}`),
-    ...m.contributions.commands.map((c) => `${c.name} ${c.title} ${c.description}`),
-    ...m.contributions.workflows.flatMap((w) => [w.id, w.title, w.description, ...w.steps.map((s) => `${s.title} ${s.instruction}`)]),
+    ...(m.permissions ?? []).map((p) => `${p.scope} ${p.reason}`),
+    ...(m.dependencies ?? []).map((d) => `${d.kind} ${d.id} ${d.reason ?? ""}`),
+    ...(m.contributions?.commands ?? []).map((c) => `${c.name} ${c.title} ${c.description}`),
+    ...(m.contributions?.workflows ?? []).flatMap((w) => [w.id, w.title, w.description, ...(w.steps ?? []).map((s) => `${s.title} ${s.instruction}`)]),
   ].join(" ");
 }
 

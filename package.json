@@ -23,7 +23,9 @@
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "xr": "bun run src/index.ts"
+    "xr": "bun run src/index.ts",
+    "cli:help": "bun run src/index.ts help",
+    "cli:doctor": "bun run src/index.ts doctor"
   },
   "repository": {
     "type": "git",

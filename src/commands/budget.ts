@@ -1,57 +1,109 @@
 /**
- * XR — Budget Command
- * View and manage spend caps.
+ * XR 3.1C — Budget Command
+ * View and manage spend caps. Glyph/color aligned with Shell status bar.
  */
 
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { BudgetService } from "../services/budget-service.ts";
-import { colors as C } from "../interfaces/cli.ts";
-import { banner, ok } from "../interfaces/cli.ts";
+import {
+  banner,
+  ok,
+  emit,
+  tip,
+  xrCyan,
+  xrDim,
+  xrBold,
+  xrGreen,
+  xrAmber,
+  xrRed,
+  icon,
+} from "../cli/output.ts";
+import { usageError } from "../cli/errors.ts";
 
 export class BudgetCommand implements Command {
   name = "budget";
   description = "view spend caps and usage";
+  usage = "xr budget [status|set|reset] [amount] [--json]";
 
   async execute(ctx: CommandContext): Promise<void> {
     const { container, args } = ctx;
     const budgetService = container.resolve<BudgetService>("budget");
-    const sub = args[0];
+    const KNOWN = new Set(["status", "show", "set", "reset", "help"]);
+    const sub = args.find((a) => !a.startsWith("-") && KNOWN.has(a));
 
-    if (!sub || sub === "status") {
+    if (!sub || sub === "status" || sub === "show") {
       const status = budgetService.getStatus();
       const cfg = budgetService.getConfig();
-      banner();
-      console.log(`${C.bold("💰 Budget Status")}`);
-      console.log(`  Monthly Cap ...... ${C.green(`$${status.monthlyCap.toFixed(2)}`)}`);
-      console.log(`  Monthly Spend .... ${C.dim(`$${status.monthlySpend.toFixed(4)}`)}`);
-      console.log(`  Remaining ....... ${C.cyan(`$${status.remainingMonthly.toFixed(4)}`)}`);
-      console.log(`  Usage ............ ${status.percentUsed > 90 ? C.red : status.percentUsed > 70 ? C.yellow : C.green}(${status.percentUsed.toFixed(1)}%)`);
-      if (status.dailyCap !== null) {
-        console.log(`  Daily Cap ........ ${C.green(`$${status.dailyCap.toFixed(2)}`)}`);
-        console.log(`  Daily Spend ...... ${C.dim(`$${status.dailySpend.toFixed(4)}`)}`);
-      }
-      console.log(`\n  Auto-fallback .... ${cfg.auto_fallback ? C.green("enabled") : C.red("disabled")}`);
-      console.log(`  Warnings ........ ${cfg.warnings_enabled ? C.green("enabled") : C.red("disabled")}`);
+
+      emit(
+        {
+          ok: true,
+          monthlyCap: status.monthlyCap,
+          monthlySpend: status.monthlySpend,
+          remainingMonthly: status.remainingMonthly,
+          percentUsed: status.percentUsed,
+          dailyCap: status.dailyCap,
+          dailySpend: status.dailySpend,
+          autoFallback: cfg.auto_fallback,
+          warningsEnabled: cfg.warnings_enabled,
+        },
+        () => {
+          banner();
+          console.log(`  ${icon("budget", "amber")}  ${xrBold("Budget")}`);
+          console.log(`  ${xrDim("─".repeat(40))}`);
+          console.log(`  Monthly cap ...... ${xrGreen(`$${status.monthlyCap.toFixed(2)}`)}`);
+          console.log(`  Monthly spend .... ${xrDim(`$${status.monthlySpend.toFixed(4)}`)}`);
+          console.log(`  Remaining ........ ${xrCyan(`$${status.remainingMonthly.toFixed(4)}`)}`);
+          const pctColor =
+            status.percentUsed > 90 ? xrRed : status.percentUsed > 70 ? xrAmber : xrGreen;
+          console.log(`  Usage ............ ${pctColor(`${status.percentUsed.toFixed(1)}%`)}`);
+          if (status.dailyCap !== null) {
+            console.log(`  Daily cap ........ ${xrGreen(`$${status.dailyCap.toFixed(2)}`)}`);
+            console.log(`  Daily spend ...... ${xrDim(`$${status.dailySpend.toFixed(4)}`)}`);
+          }
+          console.log(
+            `\n  Auto-fallback .... ${cfg.auto_fallback ? xrGreen("enabled") : xrRed("disabled")}`,
+          );
+          console.log(
+            `  Warnings ......... ${cfg.warnings_enabled ? xrGreen("enabled") : xrRed("disabled")}`,
+          );
+          console.log();
+          tip('Per-task hard cap: xr "task" --budget 0.25');
+          console.log();
+        },
+      );
       return;
     }
 
     if (sub === "set") {
-      const amount = Number(args[1]);
-      if (isNaN(amount)) {
-        console.log(C.red(`Usage: xr budget set <amount>`));
-        return;
+      const amount = Number(args.find((a, i) => i > args.indexOf("set") && !a.startsWith("-")));
+      if (Number.isNaN(amount)) {
+        throw usageError("Amount required", "xr budget set <usd>", ["xr budget"]);
       }
       budgetService.setMonthlyCap(amount);
-      ok(`Monthly cap updated to $${amount.toFixed(2)}`);
+      emit({ ok: true, monthlyCap: amount }, () => {
+        ok(`Monthly cap updated to $${amount.toFixed(2)}`);
+      });
       return;
     }
 
     if (sub === "reset") {
       budgetService.resetSpending();
-      ok("Spending history reset.");
+      emit({ ok: true, reset: true }, () => {
+        ok("Spending history reset.");
+      });
       return;
     }
 
-    console.log(C.yellow(`Unknown budget command: ${sub}. Use status, set, or reset.`));
+    if (sub === "help" || sub === "--help" || sub === "-h") {
+      console.log("Usage: xr budget [status|set <usd>|reset]");
+      return;
+    }
+
+    throw usageError(
+      `Unknown budget command: ${sub}`,
+      "Use status, set, or reset.",
+      ["xr budget", "xr budget set 10"],
+    );
   }
 }

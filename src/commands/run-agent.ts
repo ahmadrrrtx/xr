@@ -1,46 +1,81 @@
 /**
- * XR — RunAgent Command
- * The default command to execute a task via the AI agent.
+ * XR 3.1C — RunAgent Command
+ * Default command to execute a task via the AI agent.
+ *
+ * Human-readable by default; never dumps raw stacks without --debug.
  */
 
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { AgentService } from "../services/agent-service.ts";
 import { Mode } from "../core/types.ts";
-import { colors as C } from "../interfaces/cli.ts";
-import { banner, ok, warn } from "../interfaces/cli.ts";
+import {
+  ok,
+  warn,
+  error,
+  statusHeader,
+  tip,
+  xrCyan,
+  xrDim,
+  colors as C,
+} from "../cli/output.ts";
+import { usageError } from "../cli/errors.ts";
 
 export class RunAgentCommand implements Command {
   name = "run";
   description = "run a task (default mode)";
-  usage = "xr \"your task\" [--mode agent|plan|ask] [--budget usd] [--max-tokens n]";
+  usage =
+    'xr run "<task>" [--mode agent|plan|ask] [--budget usd] [--model name] [--provider id] [--max-tokens n] [--dry-run]';
 
   async execute(ctx: CommandContext): Promise<void> {
     const { container, args } = ctx;
     const agentService = container.resolve<AgentService>("agent");
-    
-    // Very basic arg parsing for the 'run' command specifically
-    // In a real system, this would be handled by a better parser
+
     const taskArgs: string[] = [];
-    const overrides: any = {};
-    
+    const overrides: Record<string, unknown> = {};
+
     for (let i = 0; i < args.length; i++) {
-      if (args[i] === "--mode") overrides.mode = args[++i];
-      else if (args[i] === "--budget") overrides.budget = Number(args[++i]);
-      else if (args[i] === "--max-tokens") overrides.maxTokens = Number(args[++i]);
-      else if (args[i] === "--provider") overrides.provider = args[++i];
-      else if (args[i] === "--model") overrides.model = args[++i];
-      else if (args[i] === "--dry-run") overrides.dryRun = true;
-      else taskArgs.push(args[i]);
+      const a = args[i];
+      if (a === "--mode") overrides.mode = args[++i];
+      else if (a === "--budget") overrides.budget = Number(args[++i]);
+      else if (a === "--max-tokens") overrides.maxTokens = Number(args[++i]);
+      else if (a === "--provider") overrides.provider = args[++i];
+      else if (a === "--model") overrides.model = args[++i];
+      else if (a === "--dry-run") overrides.dryRun = true;
+      else if (a === "--resume") overrides.resume = args[++i];
+      else if (a === "--help" || a === "-h") {
+        console.log(`Usage: ${this.usage}`);
+        tip('Example: xr "summarize this repository" --budget 0.25');
+        tip("Modes: --mode agent | plan | ask");
+        return;
+      } else if (a) {
+        taskArgs.push(a);
+      }
     }
 
     const task = taskArgs.join(" ").trim();
     if (!task) {
-      console.log(C.yellow(`Usage: ${this.usage}`));
-      return;
+      throw usageError(
+        "No task provided",
+        'xr run "your task"   or   xr "your task"',
+        ["xr help run", "xr ask", "xr plan"],
+      );
     }
 
     const mode = (overrides.mode as Mode) ?? "agent";
-    
+    if (mode !== "agent" && mode !== "plan" && mode !== "ask") {
+      throw usageError(
+        `Invalid mode: ${String(overrides.mode)}`,
+        "Use --mode agent | plan | ask",
+        ["xr help modes"],
+      );
+    }
+
+    statusHeader({
+      mode,
+      provider: overrides.provider as string | undefined,
+      model: overrides.model as string | undefined,
+    });
+
     try {
       const result = await agentService.runTask(task, mode, overrides);
       console.log();
@@ -48,7 +83,14 @@ export class RunAgentCommand implements Command {
       else warn(`ended: ${result.finalMessage}`);
       if (result.finalMessage) console.log(C.cyan("\n" + result.finalMessage));
     } catch (e) {
-      console.error(C.red("fatal error:"), e);
+      const msg = e instanceof Error ? e.message : String(e);
+      error(msg);
+      if (process.env.XR_DEBUG === "1" && e instanceof Error) {
+        console.error(xrDim(e.stack ?? ""));
+      } else {
+        tip("For a stack trace: XR_DEBUG=1 xr …");
+      }
+      process.exitCode = 1;
     }
   }
 }
