@@ -25,7 +25,6 @@ function CoreOrb() {
 
   return (
     <group ref={groupRef}>
-      {/* Core Sphere */}
       <mesh ref={coreRef}>
         <sphereGeometry args={[1.8]} />
         <meshPhongMaterial 
@@ -36,7 +35,6 @@ function CoreOrb() {
         />
       </mesh>
 
-      {/* Inner Glow */}
       <mesh>
         <sphereGeometry args={[2.1]} />
         <meshBasicMaterial 
@@ -46,7 +44,6 @@ function CoreOrb() {
         />
       </mesh>
 
-      {/* Orbiting Ring */}
       <group ref={ringRef}>
         <mesh>
           <torusGeometry args={[3.2, 0.04, 16, 100]} />
@@ -54,7 +51,6 @@ function CoreOrb() {
         </mesh>
       </group>
 
-      {/* Small Orbiting Nodes */}
       {[0, 1, 2, 3].map((i) => (
         <mesh 
           key={i} 

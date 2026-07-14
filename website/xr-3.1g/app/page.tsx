@@ -1,12 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import XR3DOrb from '../components/XR3DOrb'
+import XR3DOrb from '../../components/XR3DOrb'
 import { ArrowRight, Download, Github } from 'lucide-react'
 
 export default function XRWebsite() {
-  const [showInstall, setShowInstall] = useState(false)
-
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-[#F8FAFC] overflow-x-hidden">
       {/* Navigation */}
@@ -73,7 +70,6 @@ export default function XRWebsite() {
           </div>
         </div>
 
-        {/* 3D ORB — Hero */}
         <div className="mt-8 -mb-12 relative z-10">
           <XR3DOrb />
         </div>
