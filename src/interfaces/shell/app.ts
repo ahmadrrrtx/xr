@@ -5,7 +5,6 @@
  * Backend systems are consumed only via existing APIs.
  */
 
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { loadConfig, saveConfig, isMemoryEnabled } from "../../config/config.ts";

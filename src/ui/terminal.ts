@@ -121,7 +121,11 @@ export class Terminal {
         // best-effort; Bun.write may not exist in all contexts
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const BunAny = (globalThis as any).Bun;
-        if (BunAny?.write) void BunAny.write("/tmp/xr-perf.log", lines + "\n");
+        if (BunAny?.write) {
+          // Cross-platform temp path (Windows: %TEMP%, Unix: /tmp)
+          const dir = process.env.TEMP || process.env.TMPDIR || process.env.TMP || "/tmp";
+          void BunAny.write(`${dir.replace(/[\\/]$/, "")}/xr-perf.log`, lines + "\n");
+        }
       } catch { /* ignore */ }
     }
   }
