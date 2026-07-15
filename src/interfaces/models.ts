@@ -25,16 +25,32 @@ import {
 } from "../local/runtimes.ts";
 
 function usage(): void {
-  console.log(`Usage: xr models [status|list|runtimes|recommend|install|remove|set|test]\n` +
-    `  xr models                         local AI status\n` +
-    `  xr models list                    list recommended model families\n` +
-    `  xr models runtimes                detect local runtimes and API servers\n` +
-    `  xr models recommend [use-case]    recommend runtime/model for this machine\n` +
-    `  xr models install [model]         install/pull via the selected runtime when supported\n` +
-    `  xr models remove [model]          remove Ollama model when supported\n` +
-    `  xr models set <runtime> <model>   select local runtime/model\n` +
-    `  xr models test [model]            run a local inference smoke test\n` +
-    `\nUse cases: general, coding, reasoning, summarization, research, embeddings, voice`);
+  console.log(`Usage: xr models [status|list|runtimes|recommend|install|remove|set|test]
+
+  ${C.bold("Discover")}
+  xr models                         show local AI status + active selection
+  xr models list                    list recommended model families
+  xr models runtimes                detect local runtimes and API servers
+  xr models recommend [use-case]    recommend runtime/model for this machine
+
+  ${C.bold("Change model (never stuck on default)")}
+  xr models set <runtime> <model>   select local runtime/model (persists)
+  xr models install [model]         install/pull via the selected runtime
+  xr models remove [model]          remove Ollama model when supported
+  xr models test [model]            smoke-test local inference
+
+  ${C.bold("Examples")}
+  xr models set ollama qwen2.5:7b
+  xr models set ollama llama3.2
+  xr models recommend coding
+  xr models install
+
+  ${C.bold("Also change via")}
+  xr providers set <id> [model]     primary cloud/local route
+  Shell: Alt+P  or  /model <provider> [model]
+  Control Center: xr serve → Models → Change model
+
+Use cases: general, coding, reasoning, summarization, research, embeddings, voice`);
 }
 
 function symbol(okState: boolean, warnState = false): string {
@@ -97,6 +113,10 @@ async function statusModels(): Promise<void> {
   const selectedRecord = installed.find((m: any) => m.runtime === runtime && m.model === selected);
 
   console.log(`${C.bold("Local AI Status")}`);
+  console.log(`  ${C.bold("primary route")} .. ${C.green(config.defaults.provider)} / ${C.green(config.defaults.model)}`);
+  if (config.defaults.fallbackProvider) {
+    console.log(`  fallback ......... ${C.dim(`${config.defaults.fallbackProvider} / ${config.defaults.fallbackModel ?? "default"}`)}`);
+  }
   console.log(`  enabled .......... ${local.enabled ? C.green("yes") : C.dim("no")}`);
   console.log(`  routing .......... ${C.cyan(local.routing ?? "hybrid")}`);
   console.log(`  runtime .......... ${C.cyan(status.label)} (${status.id})`);
@@ -109,6 +129,13 @@ async function statusModels(): Promise<void> {
   console.log(`  configured ....... ${status.configured ? C.green("yes") : C.dim("no")}`);
   console.log(`  model known ...... ${selectedRecord?.downloaded || status.models.includes(selected) ? C.green("yes") : C.yellow("not verified")}`);
   if (status.models.length) console.log(`  runtime models ... ${C.dim(status.models.slice(0, 8).join(", ") + (status.models.length > 8 ? " …" : ""))}`);
+
+  console.log(`\n${C.bold("Change model")}`);
+  console.log(`  ${C.cyan("xr models set <runtime> <model>")}   e.g. xr models set ollama llama3.2`);
+  console.log(`  ${C.cyan("xr providers set <id> [model]")}     primary cloud/local route`);
+  console.log(`  Shell: ${C.cyan("Alt+P")} or ${C.cyan("/model <provider> [model]")}`);
+  console.log(`  Control Center: ${C.cyan("xr serve")} → Models → Change model`);
+
   if (!status.running && local.enabled) {
     console.log(`\n${C.bold("Next step")}`);
     if (status.id === "ollama") console.log(`  Start Ollama, or run ${C.cyan("xr models install")} to let XR guide setup.`);
@@ -323,6 +350,8 @@ async function removeModel(target?: string): Promise<void> {
 
 async function setModel(runtimeArg?: string, modelArg?: string): Promise<void> {
   banner();
+  console.log(`${C.bold("Change local model")}`);
+  console.log(`  ${C.dim("This updates XR config immediately. Status bar / Control Center will reflect it.")}\n`);
   const runtimeInput = runtimeArg || await ask("Local runtime", { default: "ollama" });
   if (!isLocalRuntimeId(runtimeInput)) {
     warn(`Unknown local runtime: ${runtimeInput}`);
@@ -331,6 +360,9 @@ async function setModel(runtimeArg?: string, modelArg?: string): Promise<void> {
   }
   const runtime = runtimeInput;
   const status = await detectRuntime(runtime);
+  if (status.models.length) {
+    console.log(`  ${C.dim("Detected on")} ${status.label}: ${C.dim(status.models.slice(0, 8).join(", ") + (status.models.length > 8 ? " …" : ""))}`);
+  }
   const defaultModel = modelArg || status.models[0] || modelNameForRuntime(LOCAL_MODEL_REGISTRY[2], runtime);
   const model = modelArg || await ask("Model name as shown by the runtime", { default: defaultModel });
   if (!validateLocalModelId(model)) {
@@ -346,6 +378,11 @@ async function setModel(runtimeArg?: string, modelArg?: string): Promise<void> {
   (config.localModels as any).routing = choice.trim() === "1" ? "local-only" : choice.trim() === "3" ? "cloud-first" : "hybrid";
   saveConfig(config);
   await saveSelection(runtime, model, status.baseUrl, status.models.includes(model));
+  console.log();
+  ok(`Active local selection: ${runtime} / ${model}`);
+  console.log(`  ${C.dim("Verify:")} ${C.cyan("xr models")} · ${C.cyan("xr providers list")}`);
+  console.log(`  ${C.dim("Shell:")}   Alt+P or /model ${providerIdForRuntime(runtime)} ${model}`);
+  console.log(`  ${C.dim("Web:")}     xr serve → Models → Change model`);
 }
 
 async function testModel(target?: string): Promise<void> {

@@ -296,28 +296,48 @@ function showSuccess(state: OnboardingState): void {
   console.log(`  ${xrBold(xrGreen("✓ Onboarding complete — welcome to XR."))}`);
   console.log();
   kv("Workspace", state.workspaceName, "ok");
-  kv("Primary", `${state.providerId} / ${state.model}`, "cyan");
-  if (state.localEnabled) kv("Local", state.localModel, "dim");
+  kv("Active model", `${state.providerId} / ${state.model}`, "cyan");
+  if (state.localEnabled && state.localModel !== state.model) {
+    kv("Local fallback", state.localModel, "dim");
+  }
+  kv("Mode", state.mode, "dim");
   kv("Theme", state.theme, "dim");
   if (state.dependenciesInstalled.length) kv("Dependencies", state.dependenciesInstalled.join(", "), "dim");
   console.log();
 
+  // Always-visible post-setup: current model + how to change (never leave users stuck)
+  section("Your active model");
+  console.log();
+  console.log(`  ${xrBold(xrCyan(`${state.providerId}`))}  ${xrDim("→")}  ${xrBold(state.model)}`);
+  console.log();
+  console.log(`  ${xrBold("Change model anytime:")}`);
+  console.log(`    ${xrCyan("xr providers set <provider> [model]")}   ${xrDim("switch cloud/local primary")}`);
+  console.log(`    ${xrCyan("xr models set <runtime> <model>")}       ${xrDim("switch local runtime/model")}`);
+  console.log(`    ${xrCyan("xr models list")}                        ${xrDim("browse recommended families")}`);
+  console.log(`    ${xrCyan("xr providers list")}                     ${xrDim("see keys + primary/fallback")}`);
+  console.log();
+  console.log(`  ${xrBold("In the Shell (xr):")}`);
+  console.log(`    ${xrCyan("/model <provider> [model]")}  ${xrDim("or")}  ${xrCyan("Alt+P")}  ${xrDim("— status bar always shows active model")}`);
+  console.log();
+  console.log(`  ${xrBold("In Control Center (xr serve):")}`);
+  console.log(`    ${xrDim("Providers panel → set routing")}  ${xrDim("·")}  ${xrDim("Models panel → Change model")}`);
+  console.log();
+
   section("Ready to begin");
   console.log();
-  console.log(`  ${xrCyan("xr")}                   ${xrDim("Open the XR Shell")}`);
-  console.log(`  ${xrCyan("xr serve")}             ${xrDim("Launch Chat Workspace (recommended first step)")}`);
+  console.log(`  ${xrCyan("xr")}                   ${xrDim("Open the XR Shell (model shown in status bar)")}`);
+  console.log(`  ${xrCyan("xr serve")}             ${xrDim("Launch Control Center / Chat Workspace")}`);
+  console.log(`  ${xrCyan("xr doctor")}            ${xrDim("Verify providers, models, and health")}`);
   console.log();
   console.log(`  ${xrBold("Example prompts to try:")}`);
   console.log(`    ${xrDim("•")} "Explain quantum computing in simple terms"`);
   console.log(`    ${xrDim("•")} "Write a Python script to parse CSV"`);
   console.log(`    ${xrDim("•")} "Research latest developments in local LLMs"`);
   console.log();
-  console.log(`  ${xrBold("Keyboard shortcuts:")}`);
-  console.log(`    ${xrDim("Ctrl+K")} Command palette    ${xrDim("Ctrl+N")} New chat    ${xrDim("Esc")} Stop`);
+  console.log(`  ${xrBold("Keyboard shortcuts (Shell):")}`);
+  console.log(`    ${xrDim("Ctrl+K")} palette   ${xrDim("Alt+P")} change model   ${xrDim("Shift+Tab")} mode   ${xrDim("?")} help`);
   console.log();
-  console.log(`  ${xrDim("Interactive product tour available in Chat Workspace → Help → Tour")}`);
-  console.log(`  ${xrDim("Settings, Dashboard, and Shell are always one command away.")}`);
-  console.log();
+  console.log(`  ${xrDim("You are never locked to the default model — change it in CLI, Shell, or Control Center.")}`);
   console.log(`  ${xrDim("Need help?")} ${xrCyan("xr doctor")}  or  ${xrCyan("https://github.com/ahmadrrrtx/xr")}`);
 }
 
@@ -364,6 +384,16 @@ export async function runOnboarding(): Promise<void> {
 
   await installOptionalDependencies(state);
   await handleImport(state);
+
+  // Keep primary model in sync with local selection so users never land on a
+  // stale default when they chose a different Ollama model during onboarding.
+  if (state.mode === "local") {
+    state.providerId = "ollama";
+    state.model = state.localModel || state.model;
+    state.localEnabled = true;
+  } else if (state.providerId === "ollama" && state.localEnabled && state.localModel) {
+    state.model = state.localModel;
+  }
 
   // Persist everything (existing config contract preserved)
   mkdirSync(XR_HOME, { recursive: true });

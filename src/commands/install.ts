@@ -58,7 +58,7 @@ export class ResetCommand implements Command {
 
 export class ModelsCommand implements Command {
   name = "models";
-  description = "local model recommendation/install/status";
+  description = "local models: status, list, set, install, test (change model anytime)";
   usage = "xr models [status|list|runtimes|recommend|install|remove|set|test]";
   async execute(ctx: CommandContext): Promise<void> {
     const { handleModelsCommand } = await import("../interfaces/models.ts");

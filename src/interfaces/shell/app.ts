@@ -169,7 +169,12 @@ function createState(): ShellState {
       role: "assistant",
       at: Date.now(),
       meta: "XR",
-      content: "Welcome to XR. Composer is focused — ask anything, or type / for commands. Press ? for keyboard help.",
+      content: [
+        `Welcome to XR. Active model: ${config.defaults.provider ?? "ollama"} / ${config.defaults.model ?? "qwen2.5:7b"}.`,
+        "Composer is focused — ask anything, or type / for commands.",
+        "Change model anytime: Alt+P · /model <provider> [model] · status bar shows the active model.",
+        "CLI: xr providers set <id> [model] · xr models set <runtime> <model>. Press ? for keyboard help.",
+      ].join("\n"),
     }],
     chatScroll: 0,
     timeline: [],
@@ -215,7 +220,7 @@ function paletteItems(state: ShellState): PaletteItem[] {
     { id: "quick", label: "Quick Actions", description: "High-frequency ops", keywords: ["actions"], section: "commands", shortcut: "Ctrl+J", run: () => { state.overlay = "quick"; state.dirty = true; } },
     { id: "workspace-picker", label: "Workspace Picker", description: "Switch workspace", keywords: ["workspace"], section: "commands", shortcut: "Ctrl+W", run: () => { state.overlay = "startup"; state.startupSection = "workspace"; state.dirty = true; } },
     { id: "mode", label: "Switch Mode", description: "agent / plan / ask", keywords: ["mode"], section: "commands", shortcut: "Shift+Tab", run: () => { state.overlay = "mode"; state.dirty = true; } },
-    { id: "model", label: "Switch Model", description: "Provider and model", keywords: ["model", "provider"], section: "commands", shortcut: "Alt+P", run: () => { state.overlay = "model"; state.dirty = true; } },
+    { id: "model", label: "Change Model", description: `Active: ${state.provider}/${state.model}`, keywords: ["model", "provider", "switch", "ollama", "openai", "claude"], section: "commands", shortcut: "Alt+P", run: () => { state.overlay = "model"; state.dirty = true; } },
     { id: "help", label: "Keyboard Help", description: "All bindings", keywords: ["keys", "shortcuts"], section: "commands", shortcut: "?", run: () => { state.overlay = "help"; state.helpSeen++; state.dirty = true; } },
     { id: "serve", label: "Control Center guide", description: "How to launch xr serve", keywords: ["dashboard", "browser"], section: "commands", run: () => {
       appendMessage(state, "assistant", "Run `xr serve` in another terminal, then open http://127.0.0.1:3141 — same XR, browser surface.", "guide");
@@ -366,9 +371,22 @@ async function handleSlashCommand(state: ShellState, input: string): Promise<voi
     }
     case "model": {
       const parts = args.split(/\s+/).filter(Boolean);
+      if (!parts.length) {
+        // No args → open the model overlay (discoverable switcher)
+        state.overlay = "model";
+        state.dirty = true;
+        notify(state, "info", "Change model", `Active: ${state.provider} / ${state.model}`);
+        break;
+      }
       const provider = parts[0];
       if (!provider || !knownProviders().includes(provider)) {
         notify(state, "warn", "Unknown provider", knownProviders().join(", "));
+        appendMessage(
+          state,
+          "assistant",
+          `Unknown provider "${provider}".\nKnown: ${knownProviders().join(", ")}\n\nTry:\n  /model ollama qwen2.5:7b\n  /model openai gpt-4o-mini\n  xr providers list\n  xr models list`,
+          "system",
+        );
         break;
       }
       state.provider = provider;
@@ -376,8 +394,22 @@ async function handleSlashCommand(state: ShellState, input: string): Promise<voi
       const { config } = loadConfig();
       config.defaults.provider = state.provider;
       config.defaults.model = state.model;
+      // Keep local selection aligned when primary is a local runtime
+      if (provider === "ollama" || provider === "lmstudio" || provider === "jan" || provider === "localai" || provider === "vllm") {
+        const local: any = config.localModels ?? {};
+        local.enabled = true;
+        local.selected = state.model;
+        local.provider = provider;
+        config.localModels = local;
+      }
       saveConfig(config);
-      notify(state, "ok", "Provider updated", `${state.provider} / ${state.model}`);
+      notify(state, "ok", "Model updated", `${state.provider} / ${state.model}`);
+      appendMessage(
+        state,
+        "assistant",
+        `Active model is now ${state.provider} / ${state.model}.\nStatus bar and sidebar always show the current model.\nSwitch again with Alt+P or /model <provider> [model].`,
+        "system",
+      );
       break;
     }
     case "budget": {

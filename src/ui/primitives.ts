@@ -284,7 +284,8 @@ export function helpBindings(width: number): string[] {
     ["Esc", "Dismiss / interrupt / back"],
     ["Ctrl+C", "Interrupt generation"],
     ["Ctrl+L", "Clear chat view"],
-    ["Alt+P", "Model picker"],
+    ["Alt+P", "Change model (status bar shows active)"],
+    ["/model <p> [m]", "Switch provider/model now"],
     ["Shift+Tab", "Cycle mode (agent/plan/ask)"],
     ["Ctrl+D", "Exit (empty input)"],
   ];

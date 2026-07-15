@@ -775,14 +775,15 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
 
     <div class="sidebar-spacer"></div>
 
-    <!-- Provider chip lockup -->
+    <!-- Provider chip lockup — always shows active model; click to change -->
     <div class="sidebar-footer">
-      <div class="provider-pill" id="sidebar-provider" onclick="navigateTo('providers')">
+      <div class="provider-pill" id="sidebar-provider" onclick="navigateTo('models')" title="Active model — click to Change model">
         <div class="provider-dot" id="provider-dot"></div>
         <span id="sidebar-provider-text" class="truncate">loading…</span>
       </div>
-      <div class="sidebar-hint">
-        Press <span class="mono" style="color:var(--cyan); font-weight:bold;">?</span> for command search
+      <div class="sidebar-hint" style="display:flex; flex-direction:column; gap:2px;">
+        <button class="btn btn-ghost" style="padding:2px 6px; font-size:10px; width:100%;" onclick="navigateTo('models'); setTimeout(focusChangeModel, 50);">Change model</button>
+        <span>Press <span class="mono" style="color:var(--cyan); font-weight:bold;">?</span> for command search</span>
       </div>
     </div>
   </nav>
@@ -799,7 +800,7 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
       </div>
       <div class="topbar-spacer"></div>
       <div class="topbar-status">
-        <div class="status-chip" id="chip-provider" onclick="navigateTo('providers')"><div class="dot"></div><span id="chip-provider-label">—</span></div>
+        <div class="status-chip" id="chip-provider" onclick="navigateTo('models')" title="Active model — click to change"><div class="dot"></div><span id="chip-provider-label">—</span></div>
         <div class="status-chip" id="chip-audit" onclick="navigateTo('audit')"><div class="dot"></div><span id="chip-audit-label">Audit</span></div>
         <div class="status-chip" id="chip-budget" onclick="navigateTo('budget')"><div class="dot"></div><span id="chip-budget-label">Budget</span></div>
         <button class="btn" style="padding:4px 10px; font-family:var(--font-mono); font-size:11px" onclick="openPalette()">⌘K</button>
@@ -1051,7 +1052,11 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
       <!-- Panel 5: Providers (BYOK) -->
       <div class="panel" id="panel-providers">
         <div class="section-header">
-          <div><h1>Cloud Providers (BYOK)</h1><div class="section-sub">API credential keys verification and default fallback endpoints</div></div>
+          <div><h1>Cloud Providers (BYOK)</h1><div class="section-sub">Set primary/fallback routes — never stuck on the default model</div></div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" onclick="document.getElementById('prov-set-provider')?.focus()">Change model</button>
+            <button class="btn btn-ghost" onclick="navigateTo('models')">Local Models</button>
+          </div>
         </div>
         <div class="card" style="margin-bottom: 20px;">
           <div class="card-header"><span class="card-title">Routing policy</span></div>
@@ -1088,9 +1093,40 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
       <!-- Panel 6: Models (Local AI) -->
       <div class="panel" id="panel-models">
         <div class="section-header">
-          <div><h1>Models (Local AI)</h1><div class="section-sub">Ollama runtimes and hardware compatibility calculator</div></div>
-          <button class="btn" onclick="loadModels()">↻ Refresh</button>
+          <div>
+            <h1>Models (Local AI)</h1>
+            <div class="section-sub">Change model anytime — never stuck on the onboarding default</div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn btn-primary" onclick="focusChangeModel()" title="Jump to Change model form">Change model</button>
+            <button class="btn" onclick="loadModels()">↻ Refresh</button>
+          </div>
         </div>
+
+        <!-- Always-visible active model strip -->
+        <div class="card" id="models-active-strip" style="margin-bottom: 16px; border-color: var(--cyan); box-shadow: var(--glow-c);">
+          <div class="card-header" style="margin-bottom: 8px;">
+            <span class="card-title">Active model</span>
+            <span class="badge badge-green" id="models-active-badge">primary</span>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between;">
+            <div>
+              <div class="card-value mono" id="models-active-display" style="font-size:18px; color:var(--cyan);">— / —</div>
+              <div class="muted" id="models-active-sub" style="margin-top:4px;">Primary route used by Shell, CLI, and Chat Workspace</div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="focusChangeModel()">Change model</button>
+              <button class="btn btn-ghost" onclick="navigateTo('providers')">Open Providers</button>
+              <button class="btn btn-ghost" onclick="testModelSelection()">Smoke test</button>
+            </div>
+          </div>
+          <div class="muted" style="margin-top:12px; font-size:11px; line-height:1.5;">
+            CLI: <span class="mono" style="color:var(--cyan);">xr providers set &lt;id&gt; [model]</span>
+            · <span class="mono" style="color:var(--cyan);">xr models set &lt;runtime&gt; &lt;model&gt;</span>
+            · Shell: <span class="mono" style="color:var(--cyan);">Alt+P</span> or <span class="mono" style="color:var(--cyan);">/model</span>
+          </div>
+        </div>
+
         <div class="grid grid-4" style="margin-bottom: 20px;">
           <div class="card"><div class="card-title">Selected runtime</div><div class="card-value" id="models-selected-runtime">Ollama</div></div>
           <div class="card"><div class="card-title">Active local model</div><div class="card-value" id="models-selected-model">—</div></div>
@@ -1098,8 +1134,8 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
           <div class="card"><div class="card-title">Healthy runtimes</div><div class="card-value" id="models-healthy-count">0</div></div>
         </div>
         <div class="grid grid-2" style="margin-bottom: 20px;">
-          <div class="card">
-            <div class="card-header"><span class="card-title">Local selection selector</span></div>
+          <div class="card" id="models-change-card">
+            <div class="card-header"><span class="card-title">Change model</span></div>
             <div style="display:flex; flex-direction:column; gap:10px;">
               <label>Runtime engine
                 <select id="models-select-runtime"></select>
@@ -1114,9 +1150,13 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
                   <option value="cloud-first">cloud-first (cloud default, local backup)</option>
                 </select>
               </label>
-              <div style="display:flex; gap:8px;">
-                <button class="btn btn-primary" onclick="saveModelSelection()">Save selection</button>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="saveModelSelection()">Save &amp; apply model</button>
                 <button class="btn btn-ghost" onclick="testModelSelection()">Smoke test model latency</button>
+              </div>
+              <div class="muted" style="font-size:11px;">
+                Saving updates local selection and routing. For cloud primary routes, also use
+                <a href="#providers" onclick="navigateTo('providers'); return false;" style="color:var(--cyan);">Providers → Save Routing Policy</a>.
               </div>
             </div>
           </div>
@@ -1131,7 +1171,7 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
             <div id="models-local"><div class="spinner"></div></div>
           </div>
           <div class="card">
-            <div class="card-header"><span class="card-title">Downloaded model list</span></div>
+            <div class="card-header"><span class="card-title">Downloaded model list</span><span class="muted" style="font-size:11px;">Click a model to select it</span></div>
             <div id="models-list" style="max-height: 240px; overflow-y:auto;"><div class="spinner"></div></div>
           </div>
         </div>
@@ -2408,22 +2448,63 @@ async function saveProviderRouting() {
   const fallbackModel = document.getElementById("prov-set-fallback-model")?.value.trim();
   try {
     await api("/api/providers/set", { method: "POST", body: { provider, model, fallbackProvider: fallbackProvider || null, fallbackModel: fallbackModel || null } });
-    toast("Routing default saved", "ok");
+    toast("Primary model updated — active route saved", "ok");
     loadProviders();
     loadDashboard();
   } catch (e) { toast(e.message, "err"); }
 }
 
 // ── Models (Local AI)
+function focusChangeModel() {
+  navigateTo("models");
+  const card = document.getElementById("models-change-card");
+  const input = document.getElementById("models-select-model");
+  if (card) {
+    card.scrollIntoView({ behavior: "smooth", block: "center" });
+    card.style.boxShadow = "var(--glow-c)";
+    card.style.borderColor = "var(--cyan)";
+    setTimeout(() => {
+      card.style.boxShadow = "";
+      card.style.borderColor = "";
+    }, 1800);
+  }
+  if (input) {
+    setTimeout(() => { input.focus(); input.select?.(); }, 120);
+  }
+}
+
+function pickInstalledModel(runtime, model) {
+  const rt = document.getElementById("models-select-runtime");
+  const md = document.getElementById("models-select-model");
+  if (rt && runtime) rt.value = runtime;
+  if (md && model) md.value = model;
+  focusChangeModel();
+  toast("Selected " + (model || "") + " — click Save & apply model", "ok");
+}
+
 async function loadModels() {
   try {
-    const data = await api("/api/models");
+    const [data, providers] = await Promise.all([
+      api("/api/models"),
+      api("/api/providers").catch(() => ({})),
+    ]);
     const selected = data.selected ?? {};
     const specs = data.hardware?.specs ?? {};
     const rec = data.recommendation ?? {};
+    const primaryId = providers.primary ?? selected.provider ?? selected.runtime ?? "ollama";
+    const primaryModel = providers.model ?? selected.model ?? "—";
 
-    document.getElementById("models-selected-runtime").textContent = selected.runtime;
-    document.getElementById("models-selected-model").textContent = selected.model;
+    const activeDisplay = document.getElementById("models-active-display");
+    if (activeDisplay) activeDisplay.textContent = primaryId + " / " + primaryModel;
+    const activeSub = document.getElementById("models-active-sub");
+    if (activeSub) {
+      activeSub.textContent = "Primary route · local runtime " + (selected.runtime ?? "ollama")
+        + " · routing " + (selected.routing ?? "hybrid")
+        + " — change below or via CLI / Shell Alt+P";
+    }
+
+    document.getElementById("models-selected-runtime").textContent = selected.runtime ?? "—";
+    document.getElementById("models-selected-model").textContent = selected.model ?? "—";
     document.getElementById("models-recommended").textContent = rec.runtimeModel ?? "—";
     document.getElementById("models-healthy-count").textContent = (data.runtimes ?? []).filter(r => r.healthy).length;
 
@@ -2441,15 +2522,18 @@ async function loadModels() {
         <div><strong>\${r.label}</strong><br><span class="muted">\${r.baseUrl}</span></div>
         <span class="badge \${r.healthy ? "badge-green" : "badge-gray"}">\${r.healthy ? "healthy" : "offline"}</span>
       </div>
-    \`).join("");
+    \`).join("") || '<div class="muted">No runtimes detected. Install Ollama or enable a local API server.</div>';
 
-    // Model list
-    document.getElementById("models-list").innerHTML = (data.installed ?? []).map(m => \`
-      <div class="stat-row">
+    // Model list — clickable to select
+    const installed = data.installed ?? [];
+    document.getElementById("models-list").innerHTML = installed.length
+      ? installed.map(m => \`
+      <div class="stat-row" style="cursor:pointer;" onclick="pickInstalledModel('\${String(m.runtime || "").replace(/'/g, "")}', '\${String(m.model || "").replace(/'/g, "")}')" title="Use this model">
         <span class="stat-key mono">\${m.model}</span>
-        <span class="badge \s badge-gray">\${m.runtime}</span>
+        <span class="badge badge-gray">\${m.runtime}</span>
       </div>
-    \`).join("");
+    \`).join("")
+      : '<div class="muted">No downloaded models recorded. Use <span class="mono">xr models install</span> or pull via Ollama, then Refresh.</div>';
 
     // Select defaults
     const select = document.getElementById("models-select-runtime");
@@ -2459,24 +2543,37 @@ async function loadModels() {
     }
     document.getElementById("models-select-model").value = selected.model ?? "";
     document.getElementById("models-select-routing").value = selected.routing ?? "hybrid";
-  } catch {}
+  } catch (e) {
+    toast("Failed to load models: " + (e.message || e), "err");
+  }
 }
 
 async function saveModelSelection() {
   const runtime = document.getElementById("models-select-runtime")?.value;
   const model = document.getElementById("models-select-model")?.value.trim();
   const routing = document.getElementById("models-select-routing")?.value;
+  if (!model) {
+    toast("Enter a model tag ID (e.g. qwen2.5:7b)", "err");
+    focusChangeModel();
+    return;
+  }
   try {
     await api("/api/models/select", { method: "POST", body: { runtime, model, routing } });
-    toast("Local models selected set", "ok");
+    toast("Model applied: " + runtime + " / " + model, "ok");
     loadModels();
     loadDashboard();
+    loadProviderChip();
   } catch (e) { toast(e.message, "err"); }
 }
 
 async function testModelSelection() {
   const runtime = document.getElementById("models-select-runtime")?.value;
   const model = document.getElementById("models-select-model")?.value.trim();
+  if (!model) {
+    toast("Select or enter a model first", "err");
+    focusChangeModel();
+    return;
+  }
   toast("Smoke testing latency...");
   try {
     const data = await api("/api/models/test", { method: "POST", body: { runtime, model } });

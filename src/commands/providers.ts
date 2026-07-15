@@ -66,13 +66,27 @@ export class ProvidersCommand implements Command {
 function printUsage(): void {
   console.log(
     `Usage: xr providers [list|add|remove|set|test|status|refresh]
+
+  ${C.bold("Discover")}
   xr providers list              show all providers and key status
+  xr providers status            show active provider and routing
+  xr providers test [id]         test provider health (default: all)
+
+  ${C.bold("Change model / provider (never stuck on default)")}
+  xr providers set <id> [model]  set active provider and optional model
   xr providers add               add a custom OpenAI-compatible endpoint
   xr providers remove <id>       remove a custom provider
-  xr providers set <id> [model]  set active provider and optional model
-  xr providers test [id]         test provider health (default: active)
-  xr providers status            show active provider and routing
-  xr providers refresh           re-sync custom providers from config`,
+  xr providers refresh           re-sync custom providers from config
+
+  ${C.bold("Examples")}
+  xr providers set ollama qwen2.5:7b
+  xr providers set openai gpt-4o-mini
+  xr providers set anthropic claude-3-5-sonnet-latest
+
+  ${C.bold("Also change via")}
+  xr models set <runtime> <model>
+  Shell: Alt+P  or  /model <provider> [model]
+  Control Center: xr serve → Providers / Models → Change model`,
   );
 }
 
@@ -133,6 +147,13 @@ async function listProviders(
     }
   }
   console.log("");
+  console.log("");
+  console.log(C.bold("Change model anytime"));
+  console.log(`  ${C.cyan("xr providers set <id> [model]")}   e.g. xr providers set ollama llama3.2`);
+  console.log(`  ${C.cyan("xr models set <runtime> <model>")} local runtime selection`);
+  console.log(`  Shell: ${C.cyan("Alt+P")} · ${C.cyan("/model <provider> [model]")}`);
+  console.log(`  Control Center: ${C.cyan("xr serve")} → Providers / Models`);
+
 }
 
 async function addProvider(
@@ -216,12 +237,19 @@ async function setProvider(
   const model = args[1];
   if (!id) {
     warn("Usage: xr providers set <id> [model]");
+    console.log(`  ${C.dim("Examples:")}`);
+    console.log(`    xr providers set ollama qwen2.5:7b`);
+    console.log(`    xr providers set openai gpt-4o-mini`);
+    console.log(`  ${C.dim("List:")} xr providers list`);
     return;
   }
   await ps.setActiveProvider(id, model);
   ok(
-    `Active provider set to ${id}${model ? ` (${model})` : ""}.`,
+    `Active model set to ${id}${model ? ` / ${model}` : ""} (persisted).`,
   );
+  console.log(`  ${C.dim("Verify:")} xr providers list · xr models`);
+  console.log(`  ${C.dim("Shell:")}   Alt+P or /model ${id}${model ? ` ${model}` : ""}`);
+  console.log(`  ${C.dim("Web:")}     xr serve → Providers → Change model`);
 }
 
 async function testProvider(
@@ -278,6 +306,12 @@ async function providerStatus(
   console.log(
     `  custom providers . ${(config.providerEngine?.customProviders ?? []).length}`,
   );
+  console.log();
+  console.log(C.bold("Change model"));
+  console.log(`  ${C.cyan("xr providers set <id> [model]")}   e.g. xr providers set ollama llama3.2`);
+  console.log(`  ${C.cyan("xr models set <runtime> <model>")} local runtime selection`);
+  console.log(`  Shell: ${C.cyan("Alt+P")} · ${C.cyan("/model <provider> [model]")}`);
+  console.log(`  Control Center: ${C.cyan("xr serve")} → Providers / Models`);
 
   const report = await ps.checkHealth(activeId, activeModel);
   const status = report.ok ? C.green("✓ healthy") : C.red("✗ failed");

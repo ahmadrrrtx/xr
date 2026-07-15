@@ -74,16 +74,16 @@ export function renderSidebar(state: ShellState, width: number, height: number, 
     rows.push(navItem(def.glyph, def.label, { active, focused, width, iconOnly }));
   }
 
-  // Provider pill at bottom
+  // Provider pill at bottom — always show active model + how to change
   while (rows.length < height - 3) rows.push(padAnsi("", width));
   const conn = isLocal(state.provider) ? statusDot("local") : statusDot("cloud");
   if (!iconOnly) {
     rows.push(padAnsi(clipAnsi(`${conn} ${state.provider}`, width), width));
     rows.push(padAnsi(clipAnsi(xrDim(state.model), width), width));
-    rows.push(padAnsi(xrDim("? help"), width));
+    rows.push(padAnsi(clipAnsi(xrDim("Alt+P change model"), width), width));
   } else {
     rows.push(padAnsi(conn, width));
-    rows.push(padAnsi("", width));
+    rows.push(padAnsi(xrDim("M"), width));
     rows.push(padAnsi(xrDim("?"), width));
   }
   while (rows.length < height) rows.push(padAnsi("", width));
@@ -257,7 +257,7 @@ function renderStatus(state: ShellState, width: number, height: number): string[
     ["workspace", state.workspaceId, "cyan"],
     ["cwd", state.cwd, "dim"],
     ["provider", state.provider, isLocal(state.provider) ? "green" : "amber"],
-    ["model", state.model, "dim"],
+    ["model", state.model, isLocal(state.provider) ? "green" : "amber"],
     ["mode", state.mode, "cyan"],
     ["budget", state.budget > 0 ? `$${state.totalSpent.toFixed(4)} / $${state.budget.toFixed(2)}` : (isLocal(state.provider) ? "local / free" : "uncapped"), "amber"],
     ["memory", config.memory.enabled ? `${health.total} entries` : "disabled", config.memory.enabled ? "green" : "red"],
@@ -277,6 +277,8 @@ function renderStatus(state: ShellState, width: number, height: number): string[
       xrDim(v);
     lines.push(`${xrDim(k.padEnd(12))} ${val}`);
   }
+  lines.push("");
+  lines.push(xrDim("Change model: Alt+P · /model <provider> [model] · xr providers set"));
   while (lines.length < height) lines.push("");
   return lines.slice(0, height);
 }
@@ -286,19 +288,26 @@ function renderSettings(state: ShellState, width: number, height: number): strin
   const lines: string[] = [];
   lines.push(`${xrBold("Settings")}${xrDim(" · runtime ergonomics (slash or palette to change)")}`);
   lines.push(xrDim(hline(Math.max(10, width - 2))));
+  lines.push(`${xrDim("active")}    ${xrCyan(`${state.provider} / ${state.model}`)}`);
   lines.push(`${xrDim("provider")}  ${config.defaults.provider}`);
   lines.push(`${xrDim("model")}     ${config.defaults.model}`);
-  lines.push(`${xrDim("fallback")}  ${config.defaults.fallbackProvider ?? "none"}`);
+  lines.push(`${xrDim("fallback")}  ${config.defaults.fallbackProvider
+    ? `${config.defaults.fallbackProvider}/${config.defaults.fallbackModel ?? "default"}`
+    : "none"}`);
   lines.push(`${xrDim("budget")}    ${config.budget.perTaskUsd > 0 ? `$${config.budget.perTaskUsd}` : "none"}`);
   lines.push(`${xrDim("memory")}    ${config.memory.enabled ? "on" : "off"}`);
   lines.push(`${xrDim("voice")}     ${config.voice.enabled ? config.voice.mode : "off"}`);
   lines.push(`${xrDim("approvals")} ${(config.security.requireApproval ?? []).join(", ") || "none"}`);
   lines.push("");
-  lines.push(xrDim("Slash shortcuts:"));
+  lines.push(xrDim("Change model:"));
+  lines.push(`  ${xrCyan("/model <provider> [model]")}  ${xrDim("or Alt+P")}`);
+  lines.push(`  ${xrCyan("xr providers set <id> [model]")}`);
+  lines.push(`  ${xrCyan("xr models set <runtime> <model>")}`);
+  lines.push("");
+  lines.push(xrDim("Other shortcuts:"));
   lines.push(`  ${xrCyan("/mode agent|plan|ask")}`);
-  lines.push(`  ${xrCyan("/model <provider> [model]")}`);
   lines.push(`  ${xrCyan("/budget 0.25")}`);
-  lines.push(`  ${xrCyan("xr serve")}  ${xrDim("→ Control Center for full settings")}`);
+  lines.push(`  ${xrCyan("xr serve")}  ${xrDim("→ Control Center → Models → Change model")}`);
   while (lines.length < height) lines.push("");
   return lines.slice(0, height);
 }
@@ -409,15 +418,27 @@ export function renderStatusBar(state: ShellState, width: number): string {
   const nCount = state.notices.length;
   const bell = nCount > 0 ? xrAmber(`◌${nCount}`) : xrDim("◌");
 
+  // Always-visible model chip: label "model" + provider/id so users never wonder
+  // what is active or how to change it (Alt+P / /model).
+  const modelChipValue = `${state.provider}/${state.model}`;
+  const modelTone = isLocal(state.provider) ? "green" as const : "amber" as const;
+  // On narrow terminals keep the model id; on wider ones show the change hint.
+  const showHint = width >= 100;
+  const rightHint = state.gPending
+    ? "g…"
+    : showHint
+      ? "Alt+P change model"
+      : undefined;
+
   return statusBar([
     { label: "", value: `${conn} ${state.workspaceId}`, tone: isLocal(state.provider) ? "green" : "amber" },
     { label: "", value: state.mode, tone: "cyan" },
-    { label: "", value: `${state.provider}/${state.model}`, tone: "dim" },
+    { label: "model", value: modelChipValue, tone: modelTone },
     { label: "", value: `$${state.totalSpent.toFixed(4)}`, tone: spendTone },
     { label: "", value: activity, tone: "cyan" },
     { label: "", value: audit, tone: "dim" },
     { label: "", value: bell, tone: "dim" },
-  ], width, state.gPending ? "g…" : undefined);
+  ], width, rightHint);
 }
 
 // ── Overlays ──────────────────────────────────────────────────────────────────
@@ -493,7 +514,8 @@ export function renderQuickOverlay(cols: number, rows: number): string[] {
     `${xrCyan("/security-lab")} injection lab`,
     `${xrCyan("/dashboard")}  Control Center guide`,
     `${xrCyan("/mode")}       agent | plan | ask`,
-    `${xrCyan("/model")}      switch provider/model`,
+    `${xrCyan("/model")}      change model (or Alt+P)`,
+    `${xrCyan("/model ollama qwen2.5:7b")}  set primary`,
   ];
   return overlayFrame("Quick actions", body, cols, rows, 64);
 }
@@ -530,17 +552,27 @@ export function renderModeOverlay(state: ShellState, cols: number, rows: number)
 export function renderModelOverlay(state: ShellState, cols: number, rows: number): string[] {
   const { config } = loadConfig();
   const body = [
-    `${xrDim("current")} ${xrCyan(`${state.provider} / ${state.model}`)}`,
+    `${xrBold("Active")}  ${xrCyan(`${state.provider}`)}  ${xrDim("→")}  ${xrBold(state.model)}`,
     "",
-    xrDim("Use /model <provider> [model] or Alt+P after configuring providers."),
-    xrDim(`known: ollama, openai, anthropic, google, groq, …`),
+    xrDim("Change right now (Shell):"),
+    `  ${xrCyan("/model <provider> [model]")}   ${xrDim("e.g. /model ollama llama3.2")}`,
+    `  ${xrCyan("/model openai gpt-4o-mini")}  ${xrDim("requires key: xr providers add openai")}`,
+    `  ${xrCyan("Alt+P")}  ${xrDim("reopen this picker anytime")}`,
     "",
-    `${xrDim("default")} ${config.defaults.provider}/${config.defaults.model}`,
-    `${xrDim("fallback")} ${config.defaults.fallbackProvider ?? "none"}`,
+    xrDim("Change from CLI (persists to config):"),
+    `  ${xrCyan("xr providers set <id> [model]")}   ${xrDim("primary cloud/local route")}`,
+    `  ${xrCyan("xr models set <runtime> <model>")} ${xrDim("local runtime selection")}`,
+    `  ${xrCyan("xr models list")} · ${xrCyan("xr providers list")}`,
     "",
-    xrDim("Open Control Center (xr serve) for the full model picker."),
+    `${xrDim("config default")} ${config.defaults.provider}/${config.defaults.model}`,
+    `${xrDim("fallback")}       ${config.defaults.fallbackProvider
+      ? `${config.defaults.fallbackProvider}/${config.defaults.fallbackModel ?? "default"}`
+      : "none"}`,
+    "",
+    xrDim("Control Center: xr serve → Providers or Models → Change model"),
+    xrDim("Status bar always shows: model <provider>/<id>"),
   ];
-  return overlayFrame("Model / Provider", body, cols, rows, 64);
+  return overlayFrame("Change model / provider", body, cols, rows, 72);
 }
 
 export function renderExitOverlay(cols: number, rows: number): string[] {

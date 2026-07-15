@@ -82,6 +82,12 @@ export function showHelp(topic?: string, opts?: { all?: boolean }): void {
   console.log(`  ${xrCyan("xr serve")}                    ${xrDim("start Control Center (web)")}`);
   console.log(`  ${xrCyan("xr doctor")}                   ${xrDim("system health check")}`);
   console.log();
+  console.log(`  ${xrBold("Change model anytime")}`);
+  console.log(`  ${xrDim("─".repeat(46))}`);
+  console.log(`  ${xrCyan("xr providers set <id> [model]")} ${xrDim("primary route (e.g. ollama qwen2.5:7b)")}`);
+  console.log(`  ${xrCyan("xr models set <runtime> <model>")} ${xrDim("local runtime selection")}`);
+  console.log(`  ${xrDim("Shell: Alt+P · /model <provider> [model]  ·  status bar always shows active model")}`);
+  console.log();
 
   const byGroup = catalogByGroup(Boolean(opts?.all));
 
@@ -330,20 +336,29 @@ function topicProviders(): void {
   heading("Providers");
   console.log(`  ${xrDim("Supported:")} Ollama · Claude · OpenAI · Gemini · Groq · DeepSeek`);
   console.log(`              Together · Mistral · Cohere · Cerebras · OpenRouter · Bedrock\n`);
-  code("xr providers list", "list + key status");
-  code("xr providers set openai", "switch primary");
-  code("xr providers add", "add custom OpenAI-compatible endpoint");
+  console.log(`  ${xrBold("You are never stuck on the default model.")}\n`);
+  code("xr providers list", "list + key status + primary");
+  code("xr providers set ollama qwen2.5:7b", "change primary model");
+  code("xr providers set openai gpt-4o-mini", "switch to cloud (BYOK)");
+  code("xr providers add openai", "store API key securely");
   code("xr providers test", "health-check");
+  console.log();
+  console.log(`  ${xrDim("Also:")} Shell Alt+P · /model <provider> [model] · Control Center → Providers`);
   console.log();
 }
 
 function topicModels(): void {
   banner();
   heading("Local models");
+  console.log(`  ${xrBold("Change local model anytime — XR is not locked to the onboarding default.")}\n`);
+  code("xr models", "status + how to change");
+  code("xr models set ollama llama3.2", "change local model (persists)");
   code("xr models recommend", "best model for this machine");
   code("xr models install", "install recommended");
   code("xr models list", "families + runtimes");
   code("xr models test", "smoke-test active model");
+  console.log();
+  console.log(`  ${xrDim("Also:")} xr providers set · Shell Alt+P · Control Center → Models → Change model`);
   console.log();
 }
 
