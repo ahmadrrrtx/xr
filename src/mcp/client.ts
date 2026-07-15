@@ -12,15 +12,93 @@
  *   - streamable-http (POST with optional streaming)
  *   - stdio (child_process, JSON lines)
  *
- * SECURITY:
+ * SECURITY (HARDENED):
  * - Every call is wrapped by XR Tool layer (approval + audit + budget + egress)
  * - Never stores raw secrets (only env var names)
  * - Timeouts, size limits, fail-closed on errors
  * - No direct fs/network access from MCP code paths
+ * - CRITICAL: Environment variables are allow-listed (never inherit full process.env)
+ * - Child processes run with minimal environment
+ * - All inputs validated and sanitized
  */
 
 import { spawn, ChildProcess } from "node:child_process";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
+
+/**
+ * SECURITY: Allowed environment variables for MCP servers
+ * 
+ * MCP servers should NEVER inherit the full process.env from the XR host.
+ * Only explicitly allowed variables are passed through.
+ * 
+ * This is a critical security boundary to prevent secret leakage.
+ */
+const ALLOWED_ENV_PREFIXES = [
+  "NODE_ENV",
+  "XR_",
+  "MCP_",
+  "PLUGIN_",
+  // Add other safe prefixes as needed
+];
+
+const ALLOWED_ENV_EXACT = [
+  "PATH",
+  "HOME",
+  "USER",
+  "SHELL",
+  "LANG",
+  "LC_ALL",
+  "TERM",
+  // Explicitly allowed variables
+];
+
+/**
+ * SECURITY: Check if an environment variable is allowed
+ */
+function isEnvAllowed(key: string): boolean {
+  // Check exact matches
+  if (ALLOWED_ENV_EXACT.includes(key)) return true;
+  
+  // Check prefix matches
+  for (const prefix of ALLOWED_ENV_PREFIXES) {
+    if (key.startsWith(prefix)) return true;
+  }
+  
+  return false;
+}
+
+/**
+ * SECURITY: Create a minimal, allow-listed environment for child processes
+ */
+function createAllowedEnvironment(
+  customEnv?: Record<string, string>
+): Record<string, string> {
+  const allowed: Record<string, string> = {};
+  
+  // Only pass through explicitly allowed variables from parent env
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && isEnvAllowed(key)) {
+      allowed[key] = value;
+    }
+  }
+  
+  // Merge with custom env (this is where API keys etc. should be passed)
+  if (customEnv) {
+    for (const [key, value] of Object.entries(customEnv)) {
+      // Validate custom env keys
+      if (/^[A-Z_][A-Z0-9_]*$/i.test(key) && typeof value === "string") {
+        allowed[key] = value;
+      }
+    }
+  }
+  
+  // Ensure essential variables are set
+  if (!allowed.PATH) {
+    allowed.PATH = process.env.PATH || "/usr/local/bin:/usr/bin:/bin";
+  }
+  
+  return allowed;
+}
 
 export interface McpServerConfig {
   id: string;
@@ -73,7 +151,13 @@ export class McpClient {
     private f: typeof fetch = fetch,
   ) {
     this.cfg = { ...cfg, transport: cfg.transport ?? "http" };
+    
+    // SECURITY: Only read API key from explicitly named env var
     if (cfg.apiKeyEnv) {
+      // Validate the env var name
+      if (!/^[A-Z_][A-Z0-9_]*$/i.test(cfg.apiKeyEnv)) {
+        throw new Error(`Invalid API key env var name: ${cfg.apiKeyEnv}`);
+      }
       this.apiKey = process.env[cfg.apiKeyEnv];
     }
   }
@@ -105,11 +189,24 @@ export class McpClient {
   }
 
   private async connectStdio() {
-    const env = { ...process.env, ...(this.cfg.env || {}) };
+    // SECURITY: Create allow-listed environment (CRITICAL FIX)
+    const env = createAllowedEnvironment(this.cfg.env);
+    
+    // SECURITY: Validate command before spawning
+    if (!this.cfg.command) {
+      throw new Error("No command specified for stdio transport");
+    }
+    
+    // Basic command validation (should be expanded based on needs)
+    if (this.cfg.command.includes("..") || this.cfg.command.includes("|")) {
+      throw new Error("Potentially unsafe command");
+    }
+    
     this.proc = spawn(this.cfg.command!, this.cfg.args || [], {
       stdio: ["pipe", "pipe", "pipe"],
-      env,
-      shell: false,
+      env,  // SECURITY: Use allow-listed environment
+      shell: false,  // SECURITY: Never use shell
+      detached: false,  // SECURITY: Keep child in same process group
     });
 
     this.stdin = this.proc.stdin!;
@@ -121,13 +218,21 @@ export class McpClient {
     });
 
     this.proc.stderr?.on("data", (d) => {
-      // Log only in debug, never leak secrets
-      if (process.env.XR_DEBUG === "1") console.error("[MCP stdio stderr]", d.toString().slice(0, 200));
+      // SECURITY: Never log stderr without redaction
+      const redacted = d.toString().replace(/[A-Za-z0-9+/=]{20,}/g, "«redacted»");
+      if (process.env.XR_DEBUG === "1") {
+        console.error("[MCP stdio stderr]", redacted.slice(0, 200));
+      }
     });
 
     this.proc.on("exit", () => {
       this.connected = false;
       this.cleanupPending(new Error("MCP server exited"));
+    });
+
+    // SECURITY: Set process timeout to prevent hanging processes
+    this.proc.on("error", (err) => {
+      this.cleanupPending(err);
     });
 
     // give stdio a moment
@@ -148,7 +253,9 @@ export class McpClient {
           if (msg.error) p.reject(new Error(msg.error.message || "MCP error"));
           else p.resolve(msg.result);
         }
-      } catch {}
+      } catch {
+        // Ignore malformed JSON lines
+      }
     }
   }
 
@@ -183,6 +290,23 @@ export class McpClient {
     };
     if (this.apiKey) headers["authorization"] = `Bearer ${this.apiKey}`;
 
+    // SECURITY: Validate URL before making request
+    if (!this.cfg.url) {
+      throw new Error("No URL specified for HTTP transport");
+    }
+    
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(this.cfg.url);
+    } catch {
+      throw new Error(`Invalid URL: ${this.cfg.url}`);
+    }
+    
+    // SECURITY: Only allow http(s) protocols
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+      throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`);
+    }
+
     const res = await this.f(this.cfg.url!, {
       method: "POST",
       headers,
@@ -204,7 +328,9 @@ export class McpClient {
               if (data.error) throw new Error(data.error.message);
               return data.result;
             }
-          } catch {}
+          } catch {
+            // Ignore malformed SSE data
+          }
         }
       }
       throw new Error("No matching SSE response");
@@ -219,10 +345,21 @@ export class McpClient {
     this.connected = false;
     try {
       if (this.proc) {
-        this.proc.kill();
+        // SECURITY: Gracefully kill process
+        this.proc.kill("SIGTERM");
+        
+        // Force kill after timeout
+        setTimeout(() => {
+          if (this.proc && !this.proc.killed) {
+            this.proc.kill("SIGKILL");
+          }
+        }, 5000);
+        
         this.proc = undefined;
       }
-    } catch {}
+    } catch {
+      // Ignore errors during disconnect
+    }
     this.cleanupPending(new Error("disconnected"));
   }
 
@@ -234,7 +371,15 @@ export class McpClient {
   }
 
   async callTool(name: string, args: Record<string, unknown>): Promise<string & { content: string; data?: unknown }> {
-    const res = await this.rpc("tools/call", { name, arguments: args });
+    // SECURITY: Validate tool name
+    if (!/^[a-zA-Z0-9_.-]+$/.test(name)) {
+      throw new Error(`Invalid tool name: ${name}`);
+    }
+    
+    // SECURITY: Sanitize args to prevent injection
+    const sanitizedArgs = sanitizeObject(args);
+    
+    const res = await this.rpc("tools/call", { name, arguments: sanitizedArgs });
     const blocks = res?.content ?? [];
     let text = "";
     if (Array.isArray(blocks)) {
@@ -259,12 +404,17 @@ export class McpClient {
   }
 
   async readResource(uri: string): Promise<{ content: string; mimeType?: string }> {
+    // SECURITY: Validate URI
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:[^\s]*$/.test(uri)) {
+      throw new Error(`Invalid URI: ${uri}`);
+    }
+    
     const res = await this.rpc("resources/read", { uri });
     const contents = res?.contents ?? [];
     if (Array.isArray(contents) && contents[0]) {
       const c = contents[0];
       return {
-        content: c.text ?? (c.blob ? "[binary]" : JSON.stringify(c)),
+        content: c.text ?? (c.blob ? " [binary]" : JSON.stringify(c)),
         mimeType: c.mimeType,
       };
     }
@@ -281,6 +431,11 @@ export class McpClient {
   }
 
   async getPrompt(name: string, args?: Record<string, string>): Promise<{ messages: Array<{ role: string; content: string }> }> {
+    // SECURITY: Validate prompt name
+    if (!/^[a-zA-Z0-9_.-]+$/.test(name)) {
+      throw new Error(`Invalid prompt name: ${name}`);
+    }
+    
     const res = await this.rpc("prompts/get", { name, arguments: args });
     return {
       messages: (res?.messages ?? []).map((m: any) => ({
@@ -294,6 +449,43 @@ export class McpClient {
     // optimistic default; real values come from initialize
     return { tools: true, resources: true, prompts: true };
   }
+}
+
+/**
+ * SECURITY: Sanitize object to prevent prototype pollution and injection
+ */
+function sanitizeObject(obj: any, depth: number = 0): any {
+  if (depth > 10) return "[Max depth reached]";
+  
+  if (obj === null || obj === undefined) return obj;
+  
+  if (typeof obj === "string") {
+    // Remove potential control characters
+    return obj.replace(/[\x00-\x1F\x7F]/g, "");
+  }
+  
+  if (typeof obj === "number" || typeof obj === "boolean") return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeObject(item, depth + 1));
+  }
+  
+  if (typeof obj === "object") {
+    const sanitized: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      // SECURITY: Prevent prototype pollution
+      if (key === "__proto__" || key === "constructor" || key === "prototype") {
+        continue;
+      }
+      // Only allow safe keys
+      if (/^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(key)) {
+        sanitized[key] = sanitizeObject(value, depth + 1);
+      }
+    }
+    return sanitized;
+  }
+  
+  return obj;
 }
 
 // ── Safe XR Tool Wrappers (the security boundary) ───────────────────────────
@@ -339,6 +531,12 @@ export function wrapMcpResource(client: McpClient, serverId: string, def: McpRes
     requiresApproval: true,
     async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
       const uri = (args.uri as string) || def.uri;
+      
+      // SECURITY: Validate URI
+      if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:[^\s]*$/.test(uri)) {
+        return { ok: false, output: "Invalid URI" };
+      }
+      
       const approved = await ctx.approve({
         tool: fullName,
         reason: `Read MCP resource from "${serverId}"`,

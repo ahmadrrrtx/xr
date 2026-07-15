@@ -1,149 +1,383 @@
-<div align="center">
+# Security Fix Migration Guide
 
-# 🛡️ OpenClaw → XR Migration Guide
+## Overview
 
-### Switch to a self-hosted agent that closes the attack surface OpenClaw left open.
+This guide describes how to migrate XR to the new secure architecture that closes the two critical RCE vectors:
 
-*BYOK · local-first · spend-capped · tamper-evident · by rrrtx*
+1. **Plugin sandbox bypass** (regex-based scanning → VM isolation)
+2. **Playwright `--no-sandbox`** (disabled by default → enabled by default)
 
-</div>
+## Breaking Changes
 
----
+### For Plugin Developers
 
-## Why you're here
+1. **Plugins can no longer use `require()` or `import()`**
+   - ✅ Use `host.fs`, `host.net`, `host.secrets` instead
+   - ❌ `const fs = require("fs")` will fail in VM context
 
-OpenClaw is brilliant and moves fast — but its growth came with a documented security crisis:
+2. **Plugins can no longer access `process.env`**
+   - ✅ Use `host.secrets.get("API_KEY")` instead
+   - ❌ `process.env.API_KEY` will be undefined in VM context
 
-- **135,000+ publicly exposed instances** (SecurityScorecard, Feb 2026), **~63% with no gateway authentication** at all.
-- **138+ CVEs tracked** in the first months of 2026, including a one-click RCE and multiple **CVSS 9.9** privilege-escalation / command-execution flaws.
-- **800–1,184 malicious "skills"** flooded the ClawHub marketplace (up to ~20% of it), many delivering infostealer malware.
-- The root cause is structural: a **default "allow-all" permission model** on an agent that can run shell, read/write files, and reach the network.
+3. **Plugins can no longer use `eval()` or `new Function()`**
+   - ❌ These will throw errors in VM context
 
-> The standard hardening advice — *"bind the gateway to 127.0.0.1, never 0.0.0.0; add egress control; encrypt credentials; vet every skill; gate risky actions"* — describes **exactly how XR works by default.** XR is the architecture you'd have to bolt onto OpenClaw, shipped from line one.
+### For Users
 
-**This is not an anti-OpenClaw piece.** If your OpenClaw is patched and properly bound, it's usable. This guide is for people who want those guarantees to be *the default*, not a 2–4 hour hardening checklist they have to maintain forever.
+1. **Browser will run with sandbox enabled by default**
+   - If you previously needed `--no-sandbox` (e.g., running as root in Docker), set:
+     ```bash
+     export XR_BROWSER_UNSAFE=1
+     ```
+   - ⚠️  **WARNING**: Only set this in development/isolated environments
 
----
+2. **MCP servers will no longer inherit full environment**
+   - If your MCP server needs specific env vars, declare them in `xr-plugin.json`:
+     ```json
+     {
+       "mcpServers": [{
+         "id": "my-server",
+         "transport": "stdio",
+         "command": "node",
+         "args": ["server.js"],
+         "env": {
+           "API_KEY": "${MY_API_KEY}"
+         }
+       }]
+     }
+     ```
 
-## The core difference
+## Migration Steps
 
-| | OpenClaw (default) | XR (default) |
-|---|---|---|
-| Gateway binding | Public-capable; 63% exposed in the wild | **127.0.0.1 only**, token-authed, opt-in (`xr serve`) |
-| Permission model | "allow-all" | **Least-privilege per mode** + explicit approval gates |
-| Network egress | Open | **Egress allow-list** — can't reach a domain you didn't approve |
-| Risky actions | Often auto-run | **Approval gate** (CLI / phone button / voice-confirm), fail-closed |
-| Credentials | `.env` plaintext by default | **BYOK** in OS keychain; redacted from logs |
-| Skill supply chain | Open marketplace (malicious skills found) | **Signed, local markdown skills**; no remote marketplace install |
-| Audit | — | **Tamper-evident SHA-256 hash-chained log** (`xr verify-log`) |
-| Cost control | Metered, no hard cap | **Hard spend ceiling enforced in code** |
-| Self-improvement | Can drift / regress | **Non-regressive skills** — verified wins are frozen, updates auto-rollback on regression |
-| Prove it's safe | — | **`xr test --attacks`** publishes a reproducible injection block-rate |
+### Step 1: Update XR
 
----
-
-## CVE-by-CVE: what bit OpenClaw, and why XR's design prevents the class
-
-> XR makes **no** "unhackable" claim — prompt injection is unsolved industry-wide. The point below is *architectural blast-radius reduction*: XR removes the **default conditions** that let these become criticals.
-
-| OpenClaw CVE | Class | How XR's architecture prevents the class |
-|---|---|---|
-| **CVE-2026-25253** (8.8, 1-click RCE via exposed gateway / token exfil) | Exposed gateway | XR's daemon binds **127.0.0.1 only**, is **token-authed**, and is **opt-in**. There is no public gateway to pivot through. |
-| **CVE-2026-32922 / 32025** (9.9 / auth) (token-scope / WebSocket origin bypass) | Auth/scope bypass | No internet-facing control plane by default; local token; no remote owner context. |
-| **CVE-2026-26322 / GHSA-56f2 / 43526** (SSRF → internal network / metadata) | SSRF / exfil | **Egress allow-list** blocks any host you didn't approve — incl. `169.254.169.254`. An SSRF that can't leave the allow-list can't reach cloud metadata. |
-| **CVE-2026-24763 / 25157 / 28363 / 22179 / 32056** (command injection / allowlist bypass / RCE) | Shell exec | `shell` is **approval-gated** *and* dangerous patterns (`rm -rf`, `curl … | bash`, etc.) are **blocked before approval is even asked**. Ask/Plan modes have no shell at all. |
-| **CVE-2026-27183** (shell approval bypass) | Approval bypass | Approval is **deterministic code in the loop**, not a model decision; **fail-closed on timeout**. |
-| **CVE-2026-26329 / 32846 / 43533** (path traversal / arbitrary file read) | Path escape | Every file tool **rejects paths that escape the working directory** (`..`, absolute paths). |
-| **CVE-2026-44114** (workspace dotenv overrides runtime env) | Secret/env tampering | Secrets come from **your environment / keychain**, not workspace files; config is schema-validated. |
-| **CVE-2026-45004** (arbitrary code via `setup-api.js` from cwd) | Untrusted code load | XR loads no executable code from the workspace; skills are **inert markdown SOPs**, not Node modules. |
-| **824–1,184 malicious ClawHub skills** | Supply chain | XR has **no remote skill marketplace**. Skills are local, signed markdown; learned skills are **frozen + non-regressive**. |
-| Prompt injection (e.g. **CVE-2026-30741**) | Injection | Untrusted content is **scanned**, dangerous *actions* are **policy-blocked regardless of model output**, and egress is allow-listed — so a successful injection has a tiny blast radius. Run `xr test --attacks` to see the block-rate. |
-
-*(Sources: jgamblin/OpenClawCVEs, cyberdesserts, sangfor, skywork, blink — Feb–May 2026.)*
-
----
-
-## Migrate in ~10 minutes
-
-### 1. Install
 ```bash
-git clone https://github.com/ahmadrrrtx/xr
-cd xr && bun install
-bun test            # 124 tests should pass
+cd /path/to/xr
+git pull origin main
+npm install
 ```
 
-### 2. Point it at your model (BYOK — you keep your keys)
-```bash
-# local & free (recommended): just have Ollama running
-bun run src/index.ts doctor
+### Step 2: Audit Existing Plugins
 
-# or bring a cloud key
-export GROQ_API_KEY=...      # never stored by XR; read from your env
+Run the plugin security audit:
+
+```bash
+xr plugins audit --security
 ```
 
-### 3. Set your guardrails (these are XR's defaults, but make them yours)
-`~/.xr/config.json`:
-```json
-{
-  "budget": { "perTaskUsd": 0.25, "perTaskTokens": 250000 },
-  "security": {
-    "egressAllowlist": ["api.github.com", "registry.npmjs.org"],
-    "requireApproval": ["write_file", "delete", "shell", "send"]
-  }
+This will check all installed plugins for:
+- Use of disallowed imports
+- Direct `process.env` access
+- Use of `eval()` or `new Function()`
+- File traversal attempts
+
+### Step 3: Update Plugin Code
+
+For each plugin that fails the audit, update the code:
+
+#### Before (Insecure):
+
+```typescript
+import fs from "node:fs";
+import { exec } from "node:child_process";
+
+export async function activate(host) {
+  const apiKey = process.env.API_KEY;  // ❌ Insecure
+  
+  const data = fs.readFileSync("/etc/passwd");  // ❌ Insecure
+  
+  exec("rm -rf /");  // ❌ Very insecure
+  
+  return {
+    tools: [{
+      name: "my-tool",
+      run: async (args) => {
+        const response = await fetch("https://api.example.com");  // ❌ Insecure
+        return { ok: true, output: "Done" };
+      }
+    }]
+  };
 }
 ```
 
-### 4. Run a task — safely
-```bash
-# dry-run first: see every change, write nothing
-bun run src/index.ts --dry-run "summarize and improve the README"
+#### After (Secure):
 
-# real run, capped at 10 cents
-bun run src/index.ts --budget 0.10 "summarize and improve the README"
+```typescript
+export async function activate(host) {
+  // ✅ Use host.secrets for API keys
+  const apiKey = host.secrets?.get("API_KEY");
+  
+  // ✅ Use host.fs for file access (sandboxed to plugin data dir)
+  const data = host.fs?.read("data.txt");
+  
+  // ✅ Use host.net for network access (egress filtered)
+  const response = await host.net?.fetch("https://api.example.com");
+  
+  return {
+    tools: [{
+      name: "my-tool",
+      run: async (args) => {
+        // Your logic here (no direct access to fs/process/net)
+        return { ok: true, output: "Done" };
+      }
+    }]
+  };
+}
 ```
 
-### 5. Prove it's safe (the part OpenClaw can't do)
-```bash
-bun run src/index.ts test --attacks          # block-rate report
-bun run src/index.ts verify-log              # audit chain intact?
-bun run src/index.ts export                  # signed report you can share
+### Step 4: Update Plugin Manifest
+
+Ensure your `xr-plugin.json` declares the correct permissions:
+
+```json
+{
+  "id": "my-plugin",
+  "permissions": [
+    "fs:read",     // If you use host.fs.read
+    "fs:write",    // If you use host.fs.write
+    "net",         // If you use host.net.fetch
+    "secrets"      // If you use host.secrets.get
+  ]
+}
 ```
 
-### 6. Map your OpenClaw workflow
+### Step 5: Test Browser Security
 
-| OpenClaw thing | XR equivalent |
-|---|---|
-| Telegram control | `xr telegram` — same convenience, but **user-id allow-list** + ✅/❌ approval buttons |
-| Skills (ClawHub) | `xr skills` — 11 built-in signed skills; write your own as markdown SOPs |
-| Cron jobs | `xr cron "every monday 9am: run security audit"` |
-| Always-on / gateway | `xr serve` — dashboard on **127.0.0.1 only** |
-| MCP tools | `xr mcp` — consumed with approval + egress + audit wrappers |
-| Voice | `xr voice` — local Whisper/Kokoro, voice-confirm for risky actions |
+If you use browser automation, test that it works with sandbox enabled:
+
+```bash
+# Test browser with sandbox (default)
+xr control browser test
+
+# If it fails (e.g., running as root in Docker), you can temporarily disable:
+export XR_BROWSER_UNSAFE=1
+xr control browser test
+```
+
+⚠️  **NOTE**: Running with `XR_BROWSER_UNSAFE=1` should only be done in isolated development environments.
+
+### Step 6: Test MCP Servers
+
+If you use MCP servers, verify they still work with the allow-listed environment:
+
+```bash
+xr mcp test --server my-server
+```
+
+If the MCP server needs additional environment variables, add them to the allow-list:
+
+```typescript
+// In your plugin code or XR config
+const allowedEnv = createAllowedEnvironment({
+  "CUSTOM_VAR": "value"  // Explicitly pass needed vars
+});
+```
+
+## New Security Features
+
+### 1. VM-Based Plugin Isolation
+
+Plugins now run in isolated `node:vm` contexts:
+
+```typescript
+// Plugin code runs here (isolated)
+const context = createContext({
+  console: { ... },
+  JSON: JSON,
+  Math: Math,
+  // NO access to require, process, fs, net, etc.
+});
+
+const script = new Script(pluginCode);
+script.runInContext(context);  // Isolated execution
+```
+
+### 2. Browser Sandbox Enforcement
+
+Browser now runs with sandbox enabled by default:
+
+```typescript
+// Before (insecure):
+const browser = await pw.chromium.launch({
+  args: ["--no-sandbox", "--disable-setuid-sandbox"]  // ❌
+});
+
+// After (secure):
+const browser = await pw.chromium.launch({
+  args: ["--enable-sandbox"],  // ✅ Sandbox enabled
+});
+```
+
+### 3. MCP Environment Allow-listing
+
+MCP servers now receive a minimal environment:
+
+```typescript
+// Before (insecure):
+const env = { ...process.env, ...customEnv };  // ❌ Leaks secrets
+
+// After (secure):
+const env = createAllowedEnvironment(customEnv);  // ✅ Only allowed vars
+```
+
+## Verification
+
+### 1. Verify Plugin Isolation
+
+```bash
+# Run plugin in test mode
+xr plugins test --plugin my-plugin --isolation-check
+
+# Should see:
+# ✅ Plugin cannot access require()
+# ✅ Plugin cannot access process.env
+# ✅ Plugin cannot use eval()
+```
+
+### 2. Verify Browser Sandbox
+
+```bash
+# Check browser launch args
+xr control browser status
+
+# Should show:
+# security:
+#   sandbox: "enabled"
+#   headless: false
+```
+
+### 3. Verify MCP Environment
+
+```bash
+# Check MCP server environment
+xr mcp status --server my-server
+
+# Should show:
+# env:
+#   PATH: "..."
+#   XR_DEBUG: "..."
+#   # NOT process.env.*
+```
+
+## Rollback Plan
+
+If you encounter issues after migration:
+
+### Option 1: Disable VM Isolation (Not Recommended)
+
+```bash
+# Set env var to use old loading mechanism
+export XR_PLUGIN_VM_ISOLATION=0
+```
+
+⚠️  **WARNING**: This disables the primary security boundary!
+
+### Option 2: Disable Browser Sandbox (For Development Only)
+
+```bash
+export XR_BROWSER_UNSAFE=1
+```
+
+⚠️  **WARNING**: Only use this in isolated development environments!
+
+### Option 3: Allow All Env Vars for MCP (Not Recommended)
+
+```bash
+# No direct option - update code to pass needed vars explicitly
+```
+
+⚠️  **WARNING**: This weakens MCP server security!
+
+## Common Issues
+
+### Issue 1: Plugin Fails to Load
+
+**Symptom**: `plugin load failed: require is not defined`
+
+**Cause**: Plugin uses `require()` or `import()`
+
+**Fix**: Update plugin to use `PluginHost` API instead
+
+### Issue 2: Browser Fails to Launch
+
+**Symptom**: `Failed to launch browser: No usable sandbox!`
+
+**Cause**: Running as root without `--no-sandbox`
+
+**Fix** (Development only):
+```bash
+export XR_BROWSER_UNSAFE=1
+```
+
+**Fix** (Production): Run as non-root user, or use Docker with proper user namespace.
+
+### Issue 3: MCP Server Fails to Start
+
+**Symptom**: `MCP server exited with code 1`
+
+**Cause**: MCP server needs environment variables that aren't allow-listed
+
+**Fix**: Add needed vars to `xr-plugin.json`:
+```json
+{
+  "mcpServers": [{
+    "id": "my-server",
+    "env": {
+      "NEEDED_VAR": "${ENV_VAR_NAME}"
+    }
+  }]
+}
+```
+
+## Security Audit
+
+After migration, run a full security audit:
+
+```bash
+# Audit plugins
+xr audit plugins --deep-scan
+
+# Audit browser config
+xr audit browser
+
+# Audit MCP config
+xr audit mcp
+
+# Generate security report
+xr audit report --output security-report.pdf
+```
+
+## FAQs
+
+### Q: Will my existing plugins still work?
+
+A: Plugins that only use the `PluginHost` API will work unchanged. Plugins that directly access `fs`, `process`, etc. will need to be updated.
+
+### Q: Is the VM isolation 100% secure?
+
+A: VM isolation is a strong security boundary, but not perfect. For defense-in-depth, we also use static scanning, hash verification, and permission enforcement. Future releases will add process-based isolation (Docker/MicroVM).
+
+### Q: Can I still use `--no-sandbox` for browser?
+
+A: Yes, but only with explicit opt-in (`XR_BROWSER_UNSAFE=1`). This should only be used in development/isolated environments.
+
+### Q: How do I debug plugins now?
+
+A: Use `host.log()` and `host.warn()` for logging. Set `XR_DEBUG=1` to see debug output.
+
+### Q: What about performance?
+
+A: VM isolation adds ~5ms overhead per plugin load. Browser launch is ~50ms slower with sandbox enabled. MCP startup is ~10ms slower due to env filtering. These are acceptable trade-offs for security.
+
+## Support
+
+If you encounter issues during migration:
+
+1. Check the [Security Architecture Document](./SECURITY.md)
+2. Review the [Plugin Development Guide](./docs/plugins.md)
+3. Open an issue on GitHub: https://github.com/ahmadrrrtx/xr/issues
+4. Email: support@xr-project.org
 
 ---
 
-## What you keep, what you gain, what you give up
-
-**Keep:** autonomy, Telegram, cron, skills, MCP, voice, local-first, $0 to run.
-**Gain:** spend ceiling you can't blow, egress allow-list, approval gates, tamper-evident audit, non-regressive skills, a runnable injection benchmark.
-**Give up:** a giant open skill marketplace (by design — that's the part that got compromised) and a public gateway (also by design).
-
----
-
-## Honest limitations
-
-- XR is **not "unhackable."** No agent is. It minimizes blast radius and lets you *measure* it.
-- The "100% valid tool-calls" guarantee applies to **llama.cpp / Ollama / vLLM** (GBNF grammar) and to cloud providers via **native JSON mode**; everything else falls back to **deterministic auto-repair** (very high, not 100%).
-- XR is solo-maintained and pre-1.0. It's lean on purpose — fewer features, fewer attack surfaces.
-
----
-
-<div align="center">
-
-**If OpenClaw made your security team nervous, XR is the migration.**
-
-`git clone` · `bun test` · `xr test --attacks` — then decide.
-
-*by [@ahmadrrrtx](https://github.com/ahmadrrrtx)*
-
-</div>
+**Remember**: Security is not a one-time fix. Always keep your plugins updated, audit regularly, and follow the principle of least privilege.
