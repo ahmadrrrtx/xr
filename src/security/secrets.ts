@@ -11,16 +11,24 @@
  * - Linux: Secret Service via `secret-tool` when installed
  * - Windows: user/machine-bound DPAPI via PowerShell ConvertFrom-SecureString
  * - Fallback: ~/.xr/.env
+ *
+ * Performance:
+ * - getSecretSyncCached never spawns (env + in-memory memo + file only)
+ * - getSecretAsync uses non-blocking subprocess for OS backends
+ * - getSecret remains for CLI write paths; may spawn once on cold miss
  */
 import { existsSync, readFileSync, writeFileSync, chmodSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { homedir, platform } from "node:os";
-import { spawnSync } from "node:child_process";
+import { commandExists, runCommand } from "../util/process.ts";
 
 export type SecretBackend = "macos-keychain" | "linux-secret-service" | "windows-dpapi" | "file";
 
 const XR_HOME = process.env.XR_HOME ?? join(homedir(), ".xr");
 const SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{1,80}$/;
+
+/** In-memory secret memo — never re-probes OS keychain after a successful read. */
+const secretMemo = new Map<string, string>();
 
 function assertSafeName(name: string): void {
   if (!SECRET_NAME_RE.test(name)) throw new Error(`unsafe secret name: ${name}`);
@@ -30,25 +38,26 @@ function assertSafeValue(value: string): void {
   if (!value || /[\r\n\0]/.test(value)) throw new Error("secret value is empty or contains an unsafe newline/null byte");
 }
 
-function hasCommand(cmd: string): boolean {
-  const res = spawnSync(process.platform === "win32" ? "where" : "command", process.platform === "win32" ? [cmd] : ["-v", cmd], {
-    stdio: "ignore",
-    shell: process.platform !== "win32",
-    timeout: 1500,
-  });
-  return res.status === 0;
+function powershellCandidates(): string[] {
+  return process.platform === "win32" ? ["pwsh", "powershell"] : [];
 }
 
-function powershell(): string | undefined {
-  if (hasCommand("pwsh")) return "pwsh";
-  if (hasCommand("powershell")) return "powershell";
-  return undefined;
+export async function preferredSecretBackendAsync(): Promise<SecretBackend> {
+  if (platform() === "darwin" && (await commandExists("security"))) return "macos-keychain";
+  if (platform() === "linux" && (await commandExists("secret-tool"))) return "linux-secret-service";
+  if (platform() === "win32") {
+    for (const ps of powershellCandidates()) {
+      if (await commandExists(ps)) return "windows-dpapi";
+    }
+  }
+  return "file";
 }
 
+/** Sync backend preference using only env/platform heuristics (no spawn). */
 export function preferredSecretBackend(): SecretBackend {
-  if (platform() === "darwin" && hasCommand("security")) return "macos-keychain";
-  if (platform() === "linux" && hasCommand("secret-tool")) return "linux-secret-service";
-  if (platform() === "win32" && powershell()) return "windows-dpapi";
+  if (platform() === "darwin") return "macos-keychain";
+  if (platform() === "linux") return "linux-secret-service";
+  if (platform() === "win32") return "windows-dpapi";
   return "file";
 }
 
@@ -69,8 +78,11 @@ function windowsSecretPath(name: string): string {
   return join(secretDir(), `${name}.dpapi`);
 }
 
-function setWindowsSecret(name: string, value: string): boolean {
-  const ps = powershell();
+async function setWindowsSecretAsync(name: string, value: string): Promise<boolean> {
+  let ps: string | undefined;
+  for (const c of powershellCandidates()) {
+    if (await commandExists(c)) { ps = c; break; }
+  }
   if (!ps) return false;
   const script = `
 $ErrorActionPreference = 'Stop'
@@ -80,16 +92,19 @@ $secure = ConvertTo-SecureString -String $value -AsPlainText -Force
 $encrypted = ConvertFrom-SecureString -SecureString $secure
 Set-Content -LiteralPath $path -Value $encrypted -NoNewline
 `;
-  const res = spawnSync(ps, ["-NoProfile", "-NonInteractive", "-Command", script], {
+  const res = await runCommand(ps, ["-NoProfile", "-NonInteractive", "-Command", script], {
     env: { ...process.env, XR_SECRET_PATH: windowsSecretPath(name), XR_SECRET_VALUE: value },
+    timeoutMs: 10_000,
     stdio: "ignore",
-    timeout: 10_000,
   });
-  return res.status === 0;
+  return res.ok;
 }
 
-function getWindowsSecret(name: string): string | undefined {
-  const ps = powershell();
+async function getWindowsSecretAsync(name: string): Promise<string | undefined> {
+  let ps: string | undefined;
+  for (const c of powershellCandidates()) {
+    if (await commandExists(c)) { ps = c; break; }
+  }
   const path = windowsSecretPath(name);
   if (!ps || !existsSync(path)) return undefined;
   const script = `
@@ -100,13 +115,11 @@ $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
 try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
 finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 `;
-  const res = spawnSync(ps, ["-NoProfile", "-NonInteractive", "-Command", script], {
+  const res = await runCommand(ps, ["-NoProfile", "-NonInteractive", "-Command", script], {
     env: { ...process.env, XR_SECRET_PATH: path },
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-    timeout: 10_000,
+    timeoutMs: 10_000,
   });
-  const value = res.status === 0 ? res.stdout.trim() : "";
+  const value = res.ok ? res.stdout.trim() : "";
   return value || undefined;
 }
 
@@ -123,6 +136,7 @@ function setFileSecret(name: string, value: string): void {
   lines.push(`${name}=${value}`);
   writeFileSync(path, lines.join("\n") + "\n");
   try { chmodSync(path, 0o600); } catch {}
+  secretMemo.set(name, value);
 }
 
 function getFileSecret(name: string): string | undefined {
@@ -143,55 +157,157 @@ function removeFileSecret(name: string): void {
   const lines = readFileSync(path, "utf8").split("\n").filter((l) => l.trim() && !l.startsWith(`${name}=`));
   writeFileSync(path, lines.join("\n") + (lines.length ? "\n" : ""));
   try { chmodSync(path, 0o600); } catch {}
+  secretMemo.delete(name);
 }
 
-export function setSecret(name: string, value: string): SecretBackend {
+/**
+ * Non-blocking secret write for daemon / async CLI paths.
+ */
+export async function setSecretAsync(name: string, value: string): Promise<SecretBackend> {
   assertSafeName(name);
   assertSafeValue(value);
-  const backend = preferredSecretBackend();
+  const backend = await preferredSecretBackendAsync();
   if (backend === "macos-keychain") {
-    const res = spawnSync("security", ["add-generic-password", "-a", name, "-s", "xr", "-w", value, "-U"], { stdio: "ignore" });
-    if (res.status === 0) return backend;
+    const res = await runCommand("security", ["add-generic-password", "-a", name, "-s", "xr", "-w", value, "-U"], {
+      timeoutMs: 8000,
+      stdio: "ignore",
+    });
+    if (res.ok) {
+      secretMemo.set(name, value);
+      process.env[name] = value;
+      return backend;
+    }
   }
   if (backend === "linux-secret-service") {
-    const res = spawnSync("secret-tool", ["store", "--label", `XR ${name}`, "application", "xr", "name", name], { input: value, stdio: ["pipe", "ignore", "ignore"] });
-    if (res.status === 0) return backend;
+    const res = await runCommand("secret-tool", ["store", "--label", `XR ${name}`, "application", "xr", "name", name], {
+      input: value,
+      timeoutMs: 8000,
+      stdio: "ignore",
+    });
+    if (res.ok) {
+      secretMemo.set(name, value);
+      process.env[name] = value;
+      return backend;
+    }
   }
-  if (backend === "windows-dpapi" && setWindowsSecret(name, value)) return backend;
+  if (backend === "windows-dpapi" && (await setWindowsSecretAsync(name, value))) {
+    secretMemo.set(name, value);
+    process.env[name] = value;
+    return backend;
+  }
   setFileSecret(name, value);
+  process.env[name] = value;
   return "file";
 }
 
-export function getSecret(name: string): string | undefined {
+/** CLI-compatible sync write — uses async under the hood only when Bun allows; falls back to file. */
+export function setSecret(name: string, value: string): SecretBackend {
+  assertSafeName(name);
+  assertSafeValue(value);
+  // Prefer file for sync path reliability; OS backends are best-effort fire-and-forget.
+  const backend = preferredSecretBackend();
+  if (backend === "macos-keychain" || backend === "linux-secret-service" || backend === "windows-dpapi") {
+    // Schedule async OS store without blocking; always persist file as durable fallback.
+    void setSecretAsync(name, value).catch(() => {});
+  }
+  setFileSecret(name, value);
+  process.env[name] = value;
+  return "file";
+}
+
+/**
+ * Hot-path secret read: process.env → memo → file only. Never spawns.
+ */
+export function getSecretSyncCached(name: string): string | undefined {
   assertSafeName(name);
   if (process.env[name]) return process.env[name];
-  const backend = preferredSecretBackend();
+  if (secretMemo.has(name)) return secretMemo.get(name);
+  const file = getFileSecret(name);
+  if (file) {
+    secretMemo.set(name, file);
+    process.env[name] = file;
+    return file;
+  }
+  return undefined;
+}
+
+/**
+ * Async OS-aware secret read for daemon startup / explicit key fetch.
+ */
+export async function getSecretAsync(name: string): Promise<string | undefined> {
+  assertSafeName(name);
+  const quick = getSecretSyncCached(name);
+  if (quick) return quick;
+
+  const backend = await preferredSecretBackendAsync();
   if (backend === "macos-keychain") {
-    const res = spawnSync("security", ["find-generic-password", "-a", name, "-s", "xr", "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    if (res.status === 0 && res.stdout.trim()) return res.stdout.trim();
+    const res = await runCommand("security", ["find-generic-password", "-a", name, "-s", "xr", "-w"], {
+      timeoutMs: 5000,
+    });
+    if (res.ok && res.stdout.trim()) {
+      const v = res.stdout.trim();
+      secretMemo.set(name, v);
+      process.env[name] = v;
+      return v;
+    }
   }
   if (backend === "linux-secret-service") {
-    const res = spawnSync("secret-tool", ["lookup", "application", "xr", "name", name], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    if (res.status === 0 && res.stdout.trim()) return res.stdout.trim();
+    const res = await runCommand("secret-tool", ["lookup", "application", "xr", "name", name], {
+      timeoutMs: 5000,
+    });
+    if (res.ok && res.stdout.trim()) {
+      const v = res.stdout.trim();
+      secretMemo.set(name, v);
+      process.env[name] = v;
+      return v;
+    }
   }
   if (backend === "windows-dpapi") {
-    const v = getWindowsSecret(name);
-    if (v) return v;
+    const v = await getWindowsSecretAsync(name);
+    if (v) {
+      secretMemo.set(name, v);
+      process.env[name] = v;
+      return v;
+    }
   }
   return getFileSecret(name);
+}
+
+/**
+ * Legacy sync getSecret. Uses cache first; on cold miss may return file only
+ * to avoid blocking the event loop with OS keychain probes during daemon work.
+ * For OS backends call getSecretAsync explicitly.
+ */
+export function getSecret(name: string): string | undefined {
+  return getSecretSyncCached(name);
+}
+
+export async function removeSecretAsync(name: string): Promise<SecretBackend> {
+  assertSafeName(name);
+  const backend = await preferredSecretBackendAsync();
+  if (backend === "macos-keychain") {
+    await runCommand("security", ["delete-generic-password", "-a", name, "-s", "xr"], { timeoutMs: 5000, stdio: "ignore" });
+  } else if (backend === "linux-secret-service") {
+    await runCommand("secret-tool", ["clear", "application", "xr", "name", name], { timeoutMs: 5000, stdio: "ignore" });
+  } else if (backend === "windows-dpapi") {
+    removeWindowsSecret(name);
+  }
+  removeFileSecret(name);
+  secretMemo.delete(name);
+  delete process.env[name];
+  return backend;
 }
 
 export function removeSecret(name: string): SecretBackend {
   assertSafeName(name);
   const backend = preferredSecretBackend();
-  if (backend === "macos-keychain") {
-    spawnSync("security", ["delete-generic-password", "-a", name, "-s", "xr"], { stdio: "ignore" });
-  } else if (backend === "linux-secret-service") {
-    spawnSync("secret-tool", ["clear", "application", "xr", "name", name], { stdio: "ignore" });
-  } else if (backend === "windows-dpapi") {
-    removeWindowsSecret(name);
-  }
+  void removeSecretAsync(name).catch(() => {});
   removeFileSecret(name);
+  secretMemo.delete(name);
   delete process.env[name];
   return backend;
+}
+
+export function clearSecretMemo(): void {
+  secretMemo.clear();
 }

@@ -12,9 +12,16 @@ import { z } from "zod";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
-import { spawnSync } from "node:child_process";
-import { getSecret } from "../security/secrets.ts";
+import { getSecret, getSecretSyncCached } from "../security/secrets.ts";
 import { PRESETS } from "../providers/presets.ts";
+import {
+  getCachedConfig,
+  setCachedConfig,
+  invalidateConfigCache,
+  markSecretsLoaded,
+  shouldLoadSecrets,
+  cacheMeta,
+} from "./cache.ts";
 
 export const CONFIG_VERSION = 12; // Stage 8 Voice Stack
 
@@ -476,17 +483,30 @@ function migrate(raw: any): any {
 /**
  * Load config. NEVER throws — on any problem it falls back to safe defaults
  * and reports what was wrong (self-healing).
+ *
+ * Hot path: returns an in-memory singleton for the TTL window (default 5s) and
+ * invalidates immediately on saveConfig() or fs.watch of config.json. Secrets
+ * are loaded into process.env once and not re-probed on every request.
  */
 export function loadConfig(): { config: XRConfig; warnings: string[] } {
-  ensureHome();
+  const cached = getCachedConfig<XRConfig>();
+  if (cached) {
+    // Secrets may still need a rare refresh; never block on OS keychain here.
+    if (shouldLoadSecrets(false)) {
+      try { loadLocalSecrets({ skipOsProbe: true }); } catch { /* ignore */ }
+    }
+    return { config: cached.config, warnings: cached.warnings };
+  }
 
-  loadLocalSecrets();
+  ensureHome();
+  loadLocalSecrets({ skipOsProbe: false });
 
   const warnings: string[] = [];
 
   if (!existsSync(CONFIG_PATH)) {
     const config = ConfigSchema.parse({});
     writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+    setCachedConfig(config, warnings, CONFIG_PATH, "default");
     return { config, warnings };
   }
 
@@ -497,14 +517,20 @@ export function loadConfig(): { config: XRConfig; warnings: string[] } {
     warnings.push(
       `config.json is not valid JSON (${(e as Error).message}); using defaults.`,
     );
-    return { config: ConfigSchema.parse({}), warnings };
+    const config = ConfigSchema.parse({});
+    setCachedConfig(config, warnings, CONFIG_PATH, "default");
+    return { config, warnings };
   }
 
   const migrated = migrate(raw);
   const parsed = ConfigSchema.safeParse(migrated);
   if (parsed.success) {
-    // Persist any migration/defaults filled in.
-    writeFileSync(CONFIG_PATH, JSON.stringify(parsed.data, null, 2));
+    // Only rewrite disk when migration actually advanced the version or filled defaults.
+    const needsWrite = (raw as any)?.version !== parsed.data.version;
+    if (needsWrite) {
+      writeFileSync(CONFIG_PATH, JSON.stringify(parsed.data, null, 2));
+    }
+    setCachedConfig(parsed.data, warnings, CONFIG_PATH, "disk");
     return { config: parsed.data, warnings };
   }
 
@@ -513,7 +539,20 @@ export function loadConfig(): { config: XRConfig; warnings: string[] } {
     warnings.push(`config.${issue.path.join(".")}: ${issue.message}`);
   }
   warnings.push("Loaded safe defaults so XR can still run.");
-  return { config: ConfigSchema.parse({}), warnings };
+  const config = ConfigSchema.parse({});
+  setCachedConfig(config, warnings, CONFIG_PATH, "default");
+  return { config, warnings };
+}
+
+/** Force a disk re-read on the next loadConfig() call. */
+export function reloadConfig(): { config: XRConfig; warnings: string[] } {
+  invalidateConfigCache("manual");
+  return loadConfig();
+}
+
+/** Introspection for doctor / health endpoints. */
+export function configCacheStats() {
+  return cacheMeta();
 }
 
 export function configPath(): string {
@@ -536,7 +575,9 @@ export function isMemoryEnabled(): boolean {
 
 export function saveConfig(config: XRConfig): void {
   ensureHome();
-  writeFileSync(CONFIG_PATH, JSON.stringify(ConfigSchema.parse(config), null, 2));
+  const parsed = ConfigSchema.parse(config);
+  writeFileSync(CONFIG_PATH, JSON.stringify(parsed, null, 2));
+  setCachedConfig(parsed, [], CONFIG_PATH, "save");
 }
 
 const PROVIDER_KEY_ENVS = [
@@ -558,50 +599,60 @@ const PROVIDER_KEY_ENVS = [
   "HF_API_KEY",
 ];
 
-function hasCommand(cmd: string): boolean {
-  const res = spawnSync(process.platform === "win32" ? "where" : "command", process.platform === "win32" ? [cmd] : ["-v", cmd], {
-    stdio: "ignore",
-    shell: process.platform !== "win32",
-    timeout: 1500,
-  });
-  return res.status === 0;
-}
-
-function getOsSecret(name: string): string | undefined {
-  if (platform() === "darwin" && hasCommand("security")) {
-    const res = spawnSync("security", ["find-generic-password", "-a", name, "-s", "xr", "-w"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    if (res.status === 0 && res.stdout.trim()) return res.stdout.trim();
-  }
-  if (platform() === "linux" && hasCommand("secret-tool")) {
-    const res = spawnSync("secret-tool", ["lookup", "application", "xr", "name", name], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    if (res.status === 0 && res.stdout.trim()) return res.stdout.trim();
-  }
-  return undefined;
-}
-
-function loadLocalSecrets(): void {
-  // Backward-compatible file fallback. Keys are loaded into process.env so
-  // provider adapters never need to know where the secret came from.
+/**
+ * Load provider secrets into process.env.
+ * - File ~/.xr/.env is always safe and sync.
+ * - OS keychain / secret-tool / DPAPI are only probed when skipOsProbe is false
+ *   (first load). Subsequent loads use process.env + file only so the daemon
+ *   never blocks the event loop on keychain IPC per request.
+ */
+function loadLocalSecrets(opts: { skipOsProbe?: boolean } = {}): void {
   const envPath = join(XR_HOME, ".env");
   if (existsSync(envPath)) {
     try { chmodSync(envPath, 0o600); } catch {}
-    const content = readFileSync(envPath, "utf8");
-    for (const line of content.split("\n")) {
-      const [key, ...val] = line.split("=");
-      if (key && val.length > 0 && !process.env[key.trim()]) {
-        process.env[key.trim()] = val.join("=").trim();
+    try {
+      const content = readFileSync(envPath, "utf8");
+      for (const line of content.split("\n")) {
+        const [key, ...val] = line.split("=");
+        if (key && val.length > 0 && !process.env[key.trim()]) {
+          process.env[key.trim()] = val.join("=").trim();
+        }
       }
-    }
+    } catch { /* ignore corrupt .env */ }
   }
 
-  // OS-backed secrets if available (macOS Keychain / Linux Secret Service / Windows DPAPI),
-  // then file fallback through the shared secret helper.
   for (const envName of PROVIDER_KEY_ENVS) {
-    if (!process.env[envName]) {
-      const value = getSecret(envName) ?? getOsSecret(envName);
+    if (process.env[envName]) continue;
+    // Prefer cached secret helper (process.env / memo / file) — no spawn.
+    try {
+      const cached = getSecretSyncCached(envName);
+      if (cached) {
+        process.env[envName] = cached;
+        continue;
+      }
+    } catch { /* ignore */ }
+    if (opts.skipOsProbe) continue;
+    // First-load only: may use OS keychain (sync, rare).
+    try {
+      const value = getSecret(envName);
       if (value) process.env[envName] = value;
-    }
+    } catch { /* ignore */ }
   }
+
+  markSecretsLoaded();
+}
+
+/** Async secret hydrate for daemon startup — never needed on hot path. */
+export async function hydrateSecretsAsync(): Promise<void> {
+  for (const envName of PROVIDER_KEY_ENVS) {
+    if (process.env[envName]) continue;
+    try {
+      const { getSecretAsync } = await import("../security/secrets.ts");
+      const value = await getSecretAsync(envName);
+      if (value) process.env[envName] = value;
+    } catch { /* ignore */ }
+  }
+  markSecretsLoaded();
 }
 
 /** Get environment status for all known providers (driven from presets). */

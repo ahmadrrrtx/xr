@@ -83,14 +83,10 @@ export class BedrockProvider implements Provider {
 
     // Try to get token from STS (for IAM roles)
     try {
-      const { execSync } = await import("node:child_process");
-      const creds = execSync(
-        "aws sts get-caller-identity --query Arn --output text 2>/dev/null",
-        { timeout: 5000 }
-      ).toString().trim();
-      
-      if (creds) {
-        // We're authenticated via IAM - get temp credentials
+      const { runCommand } = await import("../../util/process.ts");
+      const credsRes = await runCommand("aws", ["sts", "get-caller-identity", "--query", "Arn", "--output", "text"], { timeoutMs: 5000 });
+      const creds = credsRes.stdout.trim();
+      if (credsRes.ok && creds) {
         const tokenRes = await this.getSTSToken();
         if (tokenRes) return tokenRes;
       }
@@ -134,12 +130,12 @@ export class BedrockProvider implements Provider {
 
   private async getSTSToken(): Promise<string | null> {
     try {
-      const { execSync } = await import("node:child_process");
-      const result = execSync(
-        `aws sts assume-role --role-arn "${process.env.AWS_ROLE_ARN ?? ""}" --role-session-name xr-agent 2>/dev/null`,
-        { timeout: 10000, encoding: "utf8" }
-      );
-      const json = JSON.parse(result);
+      const { runCommand } = await import("../../util/process.ts");
+      const roleArn = process.env.AWS_ROLE_ARN ?? "";
+      if (!roleArn) return null;
+      const result = await runCommand("aws", ["sts", "assume-role", "--role-arn", roleArn, "--role-session-name", "xr-agent"], { timeoutMs: 10000 });
+      if (!result.ok) return null;
+      const json = JSON.parse(result.stdout);
       this.accessKey = json.Credentials?.AccessKeyId;
       this.secretKey = json.Credentials?.SecretAccessKey;
       this.sessionToken = json.Credentials?.SessionToken;
@@ -350,9 +346,10 @@ export class BedrockProvider implements Provider {
     if (!this.accessKey && !process.env.AWS_WEB_IDENTITY_TOKEN_FILE) {
       // Check if AWS CLI is configured
       try {
-        const { execSync } = await import("node:child_process");
-        execSync("aws sts get-caller-identity 2>/dev/null", { timeout: 5000 });
-        return { ok: true, detail: `region: ${this.region} (IAM role)` };
+        const { runCommand } = await import("../../util/process.ts");
+        const r = await runCommand("aws", ["sts", "get-caller-identity"], { timeoutMs: 5000 });
+        if (r.ok) return { ok: true, detail: `region: ${this.region} (IAM role)` };
+        return { ok: false, detail: "AWS credentials not configured" };
       } catch {
         return { ok: false, detail: "AWS credentials not configured" };
       }

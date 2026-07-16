@@ -4,13 +4,13 @@
 import type { Store } from "../state/db.ts";
 import { banner, ok, warn, info, colors as C } from "../interfaces/cli.ts";
 import { loadConfig, saveConfig } from "../config/config.ts";
-import { detectCapabilities } from "./adapter.ts";
+import { detectCapabilities, detectCapabilitiesAsync } from "./adapter.ts";
+import { runCommand } from "../util/process.ts";
 import { isDisabled, runAction, runTypedPlan, runComputerUse } from "./service.ts";
 import type { Action, ControlOptions, ExecutionMode } from "./types.ts";
 import { planActions } from "./planner.ts";
 import { browserStatus, shutdownBrowser } from "./browser.ts";
 import { buildProvider } from "../providers/factory.ts";
-import { spawnSync } from "node:child_process";
 
 interface ParsedFlags {
   mode: ExecutionMode;
@@ -104,7 +104,7 @@ async function cmdBrowser(flags: ParsedFlags): Promise<void> {
   const sub = flags.rest[0];
   if (sub === "install") {
     info("Installing browser dependencies...");
-    spawnSync("npx", ["playwright", "install", "chromium"], { stdio: "inherit" });
+    await runCommand("npx", ["playwright", "install", "chromium"], { stdio: "inherit", timeoutMs: 600_000 });
     ok("Browser engine ready.");
   } else if (sub === "close") {
     await shutdownBrowser();

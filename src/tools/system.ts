@@ -1,11 +1,12 @@
 /**
  * XR — system tools: list_dir (safe), delete_file (approval), shell (sandboxed
- * + approval + dangerous-command block + dry-run aware).
+ * + approval + dangerous-command block + dry-run aware). Fully async.
  */
-import { readdirSync, statSync, existsSync, rmSync } from "node:fs";
+import { promises as fsp } from "node:fs";
 import { resolve, relative, isAbsolute, join } from "node:path";
-import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
+import type { Tool, ToolResult } from "../core/types.ts";
 import { checkAction } from "../security/guard.ts";
+import { runCommand } from "../util/process.ts";
 
 function safe(cwd: string, p: string): string | null {
   const abs = isAbsolute(p) ? p : resolve(cwd, p);
@@ -21,11 +22,21 @@ export const listDirTool: Tool = {
   requiresApproval: false,
   async run(args, ctx): Promise<ToolResult> {
     const p = safe(ctx.cwd, String(args.path ?? "."));
-    if (!p || !existsSync(p)) return { ok: false, output: `not found: ${args.path}` };
-    const entries = readdirSync(p).map((n) => {
-      const isDir = statSync(join(p, n)).isDirectory();
-      return isDir ? n + "/" : n;
-    });
+    if (!p) return { ok: false, output: `not found: ${args.path}` };
+    try {
+      await fsp.access(p);
+    } catch {
+      return { ok: false, output: `not found: ${args.path}` };
+    }
+    const names = await fsp.readdir(p);
+    const entries = await Promise.all(names.map(async (n) => {
+      try {
+        const st = await fsp.stat(join(p, n));
+        return st.isDirectory() ? n + "/" : n;
+      } catch {
+        return n;
+      }
+    }));
     ctx.audit("list_dir", { path: String(args.path ?? ".") });
     return { ok: true, output: entries.join("\n") || "(empty)", data: { count: entries.length } };
   },
@@ -39,7 +50,11 @@ export const deleteFileTool: Tool = {
   async run(args, ctx): Promise<ToolResult> {
     const p = safe(ctx.cwd, String(args.path ?? ""));
     if (!p) return { ok: false, output: "unsafe path" };
-    if (!existsSync(p)) return { ok: false, output: `not found: ${args.path}` };
+    try {
+      await fsp.access(p);
+    } catch {
+      return { ok: false, output: `not found: ${args.path}` };
+    }
     const approved = await ctx.approve({ tool: "delete_file", reason: `delete ${args.path}` });
     if (!approved) {
       ctx.audit("delete_file.denied", { path: String(args.path) });
@@ -49,7 +64,7 @@ export const deleteFileTool: Tool = {
       ctx.audit("delete_file.dryrun", { path: String(args.path) });
       return { ok: true, output: `[dry-run] would delete ${args.path}` };
     }
-    rmSync(p);
+    await fsp.rm(p);
     ctx.audit("delete_file.applied", { path: String(args.path) });
     return { ok: true, output: `deleted ${args.path}` };
   },
@@ -62,7 +77,6 @@ export const shellTool: Tool = {
   requiresApproval: true,
   async run(args, ctx): Promise<ToolResult> {
     const cmd = String(args.cmd ?? "");
-    // Deterministic policy block FIRST (architecture > behavior).
     const decision = checkAction({ tool: "shell", args: { cmd } }, {
       egressAllowlist: ctx.egressAllowlist ?? [],
       requireApproval: ["shell"],
@@ -81,10 +95,10 @@ export const shellTool: Tool = {
       return { ok: true, output: `[dry-run] would run: ${cmd}` };
     }
     try {
-      const proc = Bun.spawnSync(["bash", "-lc", cmd], { cwd: ctx.cwd });
-      const out = new TextDecoder().decode(proc.stdout) + new TextDecoder().decode(proc.stderr);
-      ctx.audit("shell.run", { cmd, exit: proc.exitCode });
-      return { ok: proc.exitCode === 0, output: out.slice(0, 4000) || `(exit ${proc.exitCode})` };
+      const proc = await runCommand("bash", ["-lc", cmd], { cwd: ctx.cwd, timeoutMs: 120_000, maxBuffer: 4 * 1024 * 1024 });
+      const out = proc.stdout + proc.stderr;
+      ctx.audit("shell.run", { cmd, exit: proc.status });
+      return { ok: proc.ok, output: out.slice(0, 4000) || `(exit ${proc.status})` };
     } catch (e) {
       return { ok: false, output: `shell error: ${(e as Error).message}` };
     }

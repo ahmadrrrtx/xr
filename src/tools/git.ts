@@ -1,39 +1,22 @@
 /**
- * XR — Git Integration Tools
- * 
+ * XR — Git Integration Tools (async, non-blocking).
+ *
  * Full Git workflow without leaving XR:
  * - git_status: show working tree state
- * - git_diff: show unstaged/staged changes  
+ * - git_diff: show unstaged/staged changes
  * - git_commit: stage and commit changes
  * - git_branch: list/create/switch branches
  * - git_log: show recent commits
  * - git_stash: stash/unstash working changes
- * 
- * These mirror what Claude Code does with its git integration.
  */
-import { execSync, spawn } from "node:child_process";
-import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
+import { runCommand } from "../util/process.ts";
+import type { Tool } from "../core/types.ts";
 
-// ── Safe exec that captures both stdout and stderr ─────────────────────────────
-function gitExec(args: string[], cwd: string, timeout = 10000): string {
-  try {
-    return execSync(`git ${args.join(" ")}`, { cwd, timeout, maxBuffer: 1024 * 1024 }).toString();
-  } catch (e) {
-    const err = e as any;
-    return err.stdout?.toString() ?? err.message ?? "Git command failed";
-  }
-}
-
-function execGitAsync(args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  return new Promise((resolve) => {
-    const proc = spawn("git", args, { cwd, timeout: 15000 });
-    let stdout = "";
-    let stderr = "";
-    proc.stdout?.on("data", (d) => { stdout += d.toString(); });
-    proc.stderr?.on("data", (d) => { stderr += d.toString(); });
-    proc.on("close", (code) => resolve({ stdout, stderr, exitCode: code ?? 1 }));
-    proc.on("error", (e) => resolve({ stdout, stderr: (e as Error).message, exitCode: 1 }));
-  });
+async function gitExec(args: string[], cwd: string, timeout = 15000): Promise<string> {
+  const r = await runCommand("git", args, { cwd, timeoutMs: timeout, maxBuffer: 1024 * 1024 });
+  if (r.ok) return r.stdout;
+  // Prefer stdout on non-zero (git often writes useful status there)
+  return r.stdout || r.stderr || r.error || "Git command failed";
 }
 
 // ── Git Status Tool ────────────────────────────────────────────────────────────
@@ -43,7 +26,7 @@ export const gitStatusTool: Tool = {
   parameters: {},
   requiresApproval: false,
   async run(_args, ctx) {
-    const out = gitExec(["status", "--porcelain"], ctx.cwd);
+    const out = await gitExec(["status", "--porcelain"], ctx.cwd);
     if (!out.trim()) {
       return { ok: true, output: "✓ Working tree clean — nothing to commit.", data: { clean: true } };
     }
@@ -67,7 +50,7 @@ export const gitDiffTool: Tool = {
   async run(args, ctx) {
     const file = args.file ? String(args.file) : "";
     const diffArgs = file ? ["diff", "--", file] : ["diff"];
-    const out = gitExec(diffArgs, ctx.cwd);
+    const out = await gitExec(diffArgs, ctx.cwd);
     ctx.audit("git.diff", { file: args.file });
     return { ok: true, output: out || "(no changes)", data: { chars: out.length } };
   },
@@ -82,11 +65,11 @@ export const gitCommitTool: Tool = {
   async run(args, ctx) {
     const msg = String(args.message || "chore: update via XR");
     const sanitized = msg.replace(/"/g, '\\"').slice(0, 200);
-    gitExec(["add", "-A"], ctx.cwd);
-    const out = gitExec(["commit", "-m", sanitized], ctx.cwd);
+    await gitExec(["add", "-A"], ctx.cwd);
+    const out = await gitExec(["commit", "-m", sanitized], ctx.cwd);
     ctx.audit("git.commit", { message: sanitized });
     return {
-      ok: out.includes("nothing to commit") ? true : !out.includes("error"),
+      ok: out.includes("nothing to commit") ? true : !out.toLowerCase().includes("error"),
       output: out || `Committed: "${sanitized}"`,
       data: { message: sanitized },
     };
@@ -102,19 +85,19 @@ export const gitBranchTool: Tool = {
   async run(args, ctx) {
     const action = String(args.action || "list");
     const name = String(args.name || "");
-    
+
     if (action === "list") {
-      const out = gitExec(["branch", "-a"], ctx.cwd);
+      const out = await gitExec(["branch", "-a"], ctx.cwd);
       const current = out.split("\n").find(l => l.startsWith("*"));
       return { ok: true, output: (current ? `* ${current.slice(2)}\n` : "") + out, data: { current: current?.slice(2) } };
     }
     if (action === "create" && name) {
-      const out = gitExec(["checkout", "-b", name], ctx.cwd);
+      await gitExec(["checkout", "-b", name], ctx.cwd);
       ctx.audit("git.branch.create", { name });
       return { ok: true, output: `Created and switched to branch: ${name}`, data: { name } };
     }
     if (action === "switch" && name) {
-      const out = gitExec(["checkout", name], ctx.cwd);
+      await gitExec(["checkout", name], ctx.cwd);
       ctx.audit("git.branch.switch", { name });
       return { ok: true, output: `Switched to branch: ${name}`, data: { name } };
     }
@@ -130,7 +113,7 @@ export const gitLogTool: Tool = {
   requiresApproval: false,
   async run(args, ctx) {
     const n = Math.min(Number(args.count ?? 10), 50);
-    const out = gitExec(["log", `--oneline`, `-n${n}`, `--format=%h %s (%an)`], ctx.cwd);
+    const out = await gitExec(["log", `--oneline`, `-n${n}`, `--format=%h %s (%an)`], ctx.cwd);
     ctx.audit("git.log", { count: n });
     return { ok: true, output: out || "(no commits)", data: { count: n } };
   },
@@ -145,20 +128,20 @@ export const gitStashTool: Tool = {
   async run(args, ctx) {
     const action = String(args.action || "save");
     const msg = String(args.message || "");
-    
+
     if (action === "save") {
       const stashArgs = msg ? ["stash", "push", "-m", msg] : ["stash", "push"];
-      const out = gitExec(stashArgs, ctx.cwd);
+      const out = await gitExec(stashArgs, ctx.cwd);
       ctx.audit("git.stash.save", { message: msg });
       return { ok: true, output: out || "✓ Changes stashed", data: { action: "save" } };
     }
     if (action === "pop") {
-      const out = gitExec(["stash", "pop"], ctx.cwd);
+      const out = await gitExec(["stash", "pop"], ctx.cwd);
       ctx.audit("git.stash.pop", {});
       return { ok: true, output: out || "✓ Stashed changes restored", data: { action: "pop" } };
     }
     if (action === "list") {
-      const out = gitExec(["stash", "list"], ctx.cwd);
+      const out = await gitExec(["stash", "list"], ctx.cwd);
       return { ok: true, output: out || "(no stashed changes)", data: { action: "list" } };
     }
     return { ok: false, output: "Usage: git_stash(action='save'|'pop'|'list', message='...')" };
@@ -175,7 +158,7 @@ export const gitPushTool: Tool = {
     const branch = String(args.branch || "");
     const remote = String(args.remote || "origin");
     const pushArgs = branch ? ["push", remote, branch] : ["push"];
-    const out = gitExec(pushArgs, ctx.cwd);
+    const out = await gitExec(pushArgs, ctx.cwd, 60000);
     ctx.audit("git.push", { remote, branch });
     return { ok: !out.toLowerCase().includes("error"), output: out || "✓ Pushed", data: { remote, branch } };
   },
@@ -190,7 +173,7 @@ export const gitPullTool: Tool = {
     const branch = String(args.branch || "");
     const remote = String(args.remote || "origin");
     const pullArgs = branch ? ["pull", remote, branch] : ["pull"];
-    const out = gitExec(pullArgs, ctx.cwd);
+    const out = await gitExec(pullArgs, ctx.cwd, 60000);
     ctx.audit("git.pull", { remote, branch });
     return { ok: !out.toLowerCase().includes("error"), output: out || "✓ Pulled", data: { remote, branch } };
   },

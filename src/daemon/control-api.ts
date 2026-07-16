@@ -4,11 +4,12 @@ import { approvals } from "../control/approvals.ts";
 import { listPermissions, grantPermission, revokePermission } from "../control/permissions.ts";
 import { loadConfig } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
-import { detectCapabilities } from "../control/adapter.ts";
+
 
 export async function handleControlApi(req: Request, url: URL, store: Store): Promise<Response | null> {
   if (url.pathname === "/api/control/status" && req.method === "GET") {
-    return Response.json({ caps: detectCapabilities(), permissions: listPermissions(), pending: approvals.list() });
+    const { detectCapabilitiesAsync } = await import("../control/adapter.ts");
+    return Response.json({ caps: await detectCapabilitiesAsync(), permissions: listPermissions(), pending: approvals.list() });
   }
   if (url.pathname === "/api/control/plan" && req.method === "POST") {
     const body = (await req.json().catch(()=>({}))) as { task?: string };

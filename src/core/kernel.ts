@@ -177,7 +177,7 @@ export class XRKernel {
       run: async () => {
         try {
           const shield = this.container.resolve<XRShieldService>("shield");
-          const threats = shield.runScan("quick");
+          const threats = await shield.runScan("quick");
           if (threats.length > 0) {
             this.events.emit("security.threats_detected", { threats });
           }

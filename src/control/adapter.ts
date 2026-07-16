@@ -1,12 +1,14 @@
 /**
  * XR v0.8 — Computer Control: platform + dependency probe.
  *
- * Pure introspection.  No actions executed.  Used by `xr control status` and
+ * Pure introspection. No actions executed. Used by `xr control status` and
  * `xr doctor` to tell the user *exactly* what is or isn't available on their
  * machine — and what to install to get the rest working.
+ *
+ * Async probes use non-blocking spawn; sync wrappers cache the last result
+ * for CLI/status paths that cannot await.
  */
-
-import { spawnSync } from "node:child_process";
+import { commandExists } from "../util/process.ts";
 import type { ControlCapabilities } from "./types.ts";
 
 export function detectOS(): "linux" | "macos" | "windows" {
@@ -16,48 +18,35 @@ export function detectOS(): "linux" | "macos" | "windows" {
   return "linux";
 }
 
-function hasCommand(cmd: string): boolean {
-  try {
-    const which = process.platform === "win32" ? "where" : "command";
-    const args = process.platform === "win32" ? [cmd] : ["-v", cmd];
-    const res = spawnSync(which, args, {
-      stdio: "ignore",
-      shell: process.platform !== "win32",
-      timeout: 1500,
-    });
-    return res.status === 0;
-  } catch {
-    return false;
-  }
-}
+let capsCache: { value: ControlCapabilities; at: number } | null = null;
+const CAPS_TTL_MS = 30_000;
 
-export function detectCapabilities(): ControlCapabilities {
+export async function detectCapabilitiesAsync(): Promise<ControlCapabilities> {
+  if (capsCache && Date.now() - capsCache.at < CAPS_TTL_MS) return capsCache.value;
+
   const os = detectOS();
   const missing: string[] = [];
   let keyboard = false;
   let mouse = false;
-  let launcher = true; // open/start/xdg-open is essentially always present
+  let launcher = true;
   let windows = false;
 
   if (os === "linux") {
-    keyboard = hasCommand("xdotool");
+    keyboard = await commandExists("xdotool");
     mouse = keyboard;
-    windows = hasCommand("wmctrl");
-    launcher = hasCommand("xdg-open") || hasCommand("gtk-launch");
+    windows = await commandExists("wmctrl");
+    launcher = (await commandExists("xdg-open")) || (await commandExists("gtk-launch"));
     if (!keyboard) missing.push('xdotool   (install: "sudo apt install xdotool" or distro equivalent)');
-    if (!windows)  missing.push('wmctrl    (install: "sudo apt install wmctrl")');
+    if (!windows) missing.push('wmctrl    (install: "sudo apt install wmctrl")');
     if (!launcher) missing.push('xdg-utils (install: "sudo apt install xdg-utils")');
   } else if (os === "macos") {
-    // macOS ships everything we need (osascript, open). The user just has to
-    // grant Accessibility + Screen Recording permissions on first prompt.
-    keyboard = hasCommand("osascript");
+    keyboard = await commandExists("osascript");
     mouse = keyboard;
     windows = keyboard;
-    launcher = hasCommand("open") && keyboard;
+    launcher = (await commandExists("open")) && keyboard;
     if (!keyboard) missing.push("osascript (should be built-in; macOS is broken?)");
   } else {
-    // Windows: PowerShell is required.  Newer machines have `pwsh` too.
-    const ps = hasCommand("powershell") || hasCommand("pwsh");
+    const ps = (await commandExists("powershell")) || (await commandExists("pwsh"));
     keyboard = ps;
     mouse = ps;
     windows = ps;
@@ -65,10 +54,47 @@ export function detectCapabilities(): ControlCapabilities {
     if (!ps) missing.push("PowerShell (install Windows PowerShell 5+ or pwsh)");
   }
 
-  return {
+  const value: ControlCapabilities = {
     os,
     tools: { keyboard, mouse, launcher, windows },
     missing,
+  };
+  capsCache = { value, at: Date.now() };
+  return value;
+}
+
+/**
+ * Sync status for CLI. Returns last async probe if fresh; otherwise a
+ * platform-optimistic snapshot without spawning (never blocks the event loop).
+ * Call detectCapabilitiesAsync() for a live probe.
+ */
+export function detectCapabilities(): ControlCapabilities {
+  if (capsCache && Date.now() - capsCache.at < CAPS_TTL_MS) return capsCache.value;
+
+  const os = detectOS();
+  // Optimistic defaults — tools are almost always present on macOS/Windows;
+  // Linux marks keyboard unknown-as-false until async probe runs.
+  if (os === "macos") {
+    return {
+      os,
+      tools: { keyboard: true, mouse: true, launcher: true, windows: true },
+      missing: [],
+    };
+  }
+  if (os === "windows") {
+    return {
+      os,
+      tools: { keyboard: true, mouse: true, launcher: true, windows: true },
+      missing: [],
+    };
+  }
+  return {
+    os,
+    tools: { keyboard: false, mouse: false, launcher: true, windows: false },
+    missing: [
+      'xdotool   (install: "sudo apt install xdotool" or distro equivalent)',
+      'wmctrl    (install: "sudo apt install wmctrl")',
+    ],
   };
 }
 
@@ -76,4 +102,13 @@ export function detectCapabilities(): ControlCapabilities {
 export function isControlReady(caps?: ControlCapabilities): boolean {
   const c = caps ?? detectCapabilities();
   return c.tools.launcher && c.tools.keyboard;
+}
+
+export async function isControlReadyAsync(): Promise<boolean> {
+  const c = await detectCapabilitiesAsync();
+  return c.tools.launcher && c.tools.keyboard;
+}
+
+export function invalidateCapabilitiesCache(): void {
+  capsCache = null;
 }

@@ -124,7 +124,7 @@ export class ShieldCommand implements Command {
   private async handleStatus(service: XRShieldService): Promise<void> {
     heading("XR Shield Protection Status");
     const state = service.getState();
-    const scoreResult = service.getPrivacyScore();
+    const scoreResult = await service.getPrivacyScore();
 
     console.log(`  Active Modules:`);
     console.log(`    ${SYM.secure} Process Inspector ........ ${C.green("Online")}`);
@@ -140,7 +140,7 @@ export class ShieldCommand implements Command {
     console.log(`    ${SYM.info} Last Scan Performed ...... ${state.history.length > 0 ? C.dim(new Date(state.history[state.history.length - 1].timestamp).toLocaleString()) : C.dim("Never")}`);
     console.log();
 
-    const pendingThreats = service.runScan("quick");
+    const pendingThreats = await service.runScan("quick");
     if (pendingThreats.length > 0) {
       warn(`${pendingThreats.length} potential security anomalies detected!`);
       tip(`Run ${C.cyan("xr shield quick-scan")} to view threat details and isolate them.`);
@@ -153,7 +153,7 @@ export class ShieldCommand implements Command {
     heading(`XR Shield — Performing ${mode === "full" ? "Full Deep" : "Quick Heuristic"} Scan`);
     info("  Initializing local agent heuristics databases...");
 
-    const threats = service.runScan(mode);
+    const threats = await service.runScan(mode);
 
     if (threats.length === 0) {
       console.log();
@@ -207,7 +207,7 @@ export class ShieldCommand implements Command {
     heading("XR Shield — Running System Processes");
     info("  Scanning processes and verifying authenticode signatures...");
 
-    const procs = service.getSystemProcesses();
+    const procs = await service.getSystemProcesses();
     const suspicious = procs.filter(p => {
       // Re-run simple checking
       const lower = p.name.toLowerCase();
@@ -240,7 +240,7 @@ export class ShieldCommand implements Command {
     heading("XR Shield — Startup & Persistence Audit");
     info("  Querying system registration nodes and autostart tasks...");
 
-    const items = service.getStartupEntries();
+    const items = await service.getStartupEntries();
     console.log();
 
     for (const i of items) {
@@ -256,7 +256,7 @@ export class ShieldCommand implements Command {
 
   private async handlePrivacy(service: XRShieldService): Promise<void> {
     heading("XR Shield — Privacy Controls Audit");
-    const result = service.getPrivacyScore();
+    const result = await service.getPrivacyScore();
 
     console.log(`  Overall Privacy Rating:`);
     const scoreColor = result.score >= 80 ? C.green : result.score >= 50 ? C.amber : C.red;
@@ -274,7 +274,7 @@ export class ShieldCommand implements Command {
 
   private async handleDownloads(service: XRShieldService): Promise<void> {
     heading("XR Shield — Downloads Folder Inspection");
-    const downloads = service.getDownloads();
+    const downloads = await service.getDownloads();
 
     console.log();
     let suspiciousCount = 0;
@@ -303,7 +303,7 @@ export class ShieldCommand implements Command {
 
   private async handleBrowser(service: XRShieldService): Promise<void> {
     heading("XR Shield — Browser Integrity & Extensions");
-    const browsers = service.getBrowserSecurity();
+    const browsers = await service.getBrowserSecurity();
 
     for (const b of browsers) {
       console.log(`  ${C.bold(b.browser.toUpperCase())} Profile Security Check:`);
@@ -361,7 +361,7 @@ export class ShieldCommand implements Command {
     info(`  Querying specialized security agents for context (ID: ${threatId})...`);
 
     // Run a quick scan to retrieve the threat
-    const threats = service.runScan("full");
+    const threats = await service.runScan("full");
     const threat = threats.find(t => t.id === threatId);
 
     if (!threat) {
@@ -462,11 +462,12 @@ export class ShieldCommand implements Command {
     // Integrity Check 3: Host Command Probe
     const osPlatform = platform();
     if (osPlatform === "win32") {
-      const hasPS = spawnSync("where", ["powershell.exe"]).status === 0;
+      const { commandExists } = await import("../util/process.ts");
+      const hasPS = await commandExists("powershell");
       if (hasPS) ok("Shell Environment: Valid (PowerShell command engine responsive)");
       else { warn("Shell Environment: Partial (PowerShell not in system PATH)"); passed = false; }
     } else {
-      const hasPSCmd = spawnSync("which", ["ps"]).status === 0;
+      const hasPSCmd = await commandExists("ps");
       if (hasPSCmd) ok("Shell Environment: Valid (POSIX process reporting available)");
       else { warn("Shell Environment: Partial (ps reporting not found)"); passed = false; }
     }

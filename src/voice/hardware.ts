@@ -8,8 +8,9 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type { VoiceDeviceRef, VoiceHealthCheck } from "./types.ts";
+import { commandExists as commandExistsAsync, runCommand } from "../util/process.ts";
 
 export interface RecordOptions {
   durationMs?: number;
@@ -27,17 +28,12 @@ export interface PlaybackHandle {
   done: Promise<void>;
 }
 
-function commandExists(cmd: string): boolean {
-  const res = spawnSync(process.platform === "win32" ? "where" : "command", process.platform === "win32" ? [cmd] : ["-v", cmd], {
-    stdio: "ignore",
-    shell: process.platform !== "win32",
-    timeout: 1500,
-  });
-  return res.status === 0;
+async function commandExists(cmd: string): Promise<boolean> {
+  return commandExistsAsync(cmd);
 }
 
-function runCapture(cmd: string, args: string[], timeoutMs = 3000): string {
-  const r = spawnSync(cmd, args, { encoding: "utf8", timeout: timeoutMs, maxBuffer: 1024 * 1024 });
+async function runCapture(cmd: string, args: string[], timeoutMs = 3000): Promise<string> {
+  const r = await runCommand(cmd, args, { timeoutMs, maxBuffer: 1024 * 1024 });
   return `${r.stdout ?? ""}\n${r.stderr ?? ""}`.trim();
 }
 
@@ -72,22 +68,22 @@ function spawnChecked(cmd: string, args: string[], timeoutMs: number): Promise<v
 }
 
 export class VoiceHardware {
-  hasCommand(cmd: string): boolean {
+  async hasCommand(cmd: string): Promise<boolean> {
     return commandExists(cmd);
   }
 
-  listInputDevices(): VoiceDeviceRef[] {
+  async listInputDevices(): Promise<VoiceDeviceRef[]> {
     const out: VoiceDeviceRef[] = [{ id: "default", label: "System default microphone", kind: "input", isDefault: true }];
     if (process.platform === "linux") {
-      if (commandExists("arecord")) {
-        const text = runCapture("arecord", ["-l"]);
+      if (await commandExists("arecord")) {
+        const text = await runCapture("arecord", ["-l"]);
         for (const line of text.split(/\r?\n/)) {
           const m = line.match(/^card\s+(\d+):\s*([^,]+),\s*device\s+(\d+):\s*(.+)$/i);
           if (m) out.push({ id: `plughw:${m[1]},${m[3]}`, label: `${m[2]} — ${m[4]}`, kind: "input", transport: "alsa" });
         }
       }
-      if (commandExists("pactl")) {
-        const text = runCapture("pactl", ["list", "short", "sources"]);
+      if (await commandExists("pactl")) {
+        const text = await runCapture("pactl", ["list", "short", "sources"]);
         for (const line of text.split(/\r?\n/)) {
           const cols = line.split(/\t+/);
           if (cols[1] && !cols[1].includes(".monitor")) out.push({ id: cols[1], label: cols[1], kind: "input", transport: "pulse" });
@@ -101,10 +97,10 @@ export class VoiceHardware {
     return dedupeDevices(out);
   }
 
-  listOutputDevices(): VoiceDeviceRef[] {
+  async listOutputDevices(): Promise<VoiceDeviceRef[]> {
     const out: VoiceDeviceRef[] = [{ id: "default", label: "System default speaker", kind: "output", isDefault: true }];
-    if (process.platform === "linux" && commandExists("pactl")) {
-      const text = runCapture("pactl", ["list", "short", "sinks"]);
+    if (process.platform === "linux" && (await commandExists("pactl"))) {
+      const text = await runCapture("pactl", ["list", "short", "sinks"]);
       for (const line of text.split(/\r?\n/)) {
         const cols = line.split(/\t+/);
         if (cols[1]) out.push({ id: cols[1], label: cols[1], kind: "output", transport: "pulse" });
@@ -117,13 +113,16 @@ export class VoiceHardware {
     return dedupeDevices(out);
   }
 
-  devices(): { inputs: VoiceDeviceRef[]; outputs: VoiceDeviceRef[] } {
-    return { inputs: this.listInputDevices(), outputs: this.listOutputDevices() };
+  async devices(): Promise<{ inputs: VoiceDeviceRef[]; outputs: VoiceDeviceRef[] }> {
+    const [inputs, outputs] = await Promise.all([this.listInputDevices(), this.listOutputDevices()]);
+    return { inputs, outputs };
   }
 
-  health(): VoiceHealthCheck[] {
+  async health(): Promise<VoiceHealthCheck[]> {
     const checks: VoiceHealthCheck[] = [];
-    const recTools = ["ffmpeg", "arecord", "rec"].filter(commandExists);
+    const recCandidates = ["ffmpeg", "arecord", "rec"];
+    const recTools: string[] = [];
+    for (const c of recCandidates) if (await commandExists(c)) recTools.push(c);
     checks.push({
       id: "voice-microphone-tools",
       label: "Microphone capture",
@@ -131,7 +130,9 @@ export class VoiceHardware {
       detail: recTools.length ? recTools.join(", ") : "no recorder found",
       remediation: recTools.length ? undefined : "Install ffmpeg or SoX. Linux can also use alsa-utils (arecord).",
     });
-    const playTools = ["ffplay", "afplay", "aplay", "paplay", "play", "powershell"].filter(commandExists);
+    const playCandidates = ["ffplay", "afplay", "aplay", "paplay", "play", "powershell"];
+    const playTools: string[] = [];
+    for (const c of playCandidates) if (await commandExists(c)) playTools.push(c);
     checks.push({
       id: "voice-speaker-tools",
       label: "Speaker playback",
@@ -139,8 +140,8 @@ export class VoiceHardware {
       detail: playTools.length ? playTools.join(", ") : "no player found",
       remediation: playTools.length ? undefined : "Install ffmpeg or SoX; macOS uses afplay, Linux can use aplay/paplay.",
     });
-    const inputs = this.listInputDevices();
-    const outputs = this.listOutputDevices();
+    const inputs = await this.listInputDevices();
+    const outputs = await this.listOutputDevices();
     checks.push({ id: "voice-input-devices", label: "Input devices", state: inputs.length ? "ok" : "fail", detail: `${inputs.length} detected` });
     checks.push({ id: "voice-output-devices", label: "Output devices", state: outputs.length ? "ok" : "warn", detail: `${outputs.length} detected` });
     return checks;
@@ -157,7 +158,7 @@ export class VoiceHardware {
     const seconds = (durationMs / 1000).toFixed(2);
     const attempts: Array<{ label: string; cmd: string; args: string[]; timeoutMs: number }> = [];
 
-    if (commandExists("ffmpeg")) {
+    if (await commandExists("ffmpeg")) {
       const args = ["-hide_banner", "-loglevel", "error", "-y"];
       if (process.platform === "darwin") {
         args.push("-f", "avfoundation", "-i", opts.inputDevice && opts.inputDevice !== "default" ? opts.inputDevice : ":0");
@@ -174,13 +175,13 @@ export class VoiceHardware {
       });
     }
 
-    if (process.platform === "linux" && commandExists("arecord")) {
+    if (process.platform === "linux" && (await commandExists("arecord"))) {
       const args = ["-q", "-d", String(Math.ceil(durationMs / 1000)), "-f", "S16_LE", "-r", String(sampleRate), "-c", String(channels), "-t", "wav"];
       if (opts.inputDevice && opts.inputDevice !== "default") args.push("-D", opts.inputDevice);
       attempts.push({ label: "arecord", cmd: "arecord", args: [...args, "__OUT__"], timeoutMs: durationMs + 5000 });
     }
 
-    if (commandExists("rec")) {
+    if (await commandExists("rec")) {
       attempts.push({
         label: "rec",
         cmd: "rec",
@@ -213,24 +214,29 @@ export class VoiceHardware {
   play(audio: Uint8Array, opts: PlayOptions = {}): PlaybackHandle {
     const path = tempWavPath();
     writeFileSync(path, audio);
-    const { cmd, args } = this.playCommand(path, opts.outputDevice);
-    const child = spawn(cmd, args, { stdio: "ignore" }) as ChildProcessWithoutNullStreams;
+    // Start playback asynchronously without blocking; resolve command selection in background.
+    let child: ChildProcessWithoutNullStreams | null = null;
     let stopped = false;
-    const done = new Promise<void>((resolve) => {
-      child.on("close", () => {
+    const done = (async () => {
+      try {
+        const { cmd, args } = await this.playCommand(path, opts.outputDevice);
+        if (stopped) { cleanup(path); return; }
+        child = spawn(cmd, args, { stdio: "ignore" }) as ChildProcessWithoutNullStreams;
+        await new Promise<void>((resolve) => {
+          child!.on("close", () => resolve());
+          child!.on("error", () => resolve());
+        });
+      } catch {
+        /* ignore playback errors */
+      } finally {
         cleanup(path);
-        resolve();
-      });
-      child.on("error", () => {
-        cleanup(path);
-        resolve();
-      });
-    });
+      }
+    })();
     return {
       stop: () => {
         if (!stopped) {
           stopped = true;
-          try { child.kill("SIGKILL"); } catch {}
+          try { child?.kill("SIGKILL"); } catch {}
           cleanup(path);
         }
       },
@@ -238,8 +244,8 @@ export class VoiceHardware {
     };
   }
 
-  private playCommand(path: string, outputDevice?: string): { cmd: string; args: string[] } {
-    if (commandExists("ffplay")) {
+  private async playCommand(path: string, outputDevice?: string): Promise<{ cmd: string; args: string[] }> {
+    if (await commandExists("ffplay")) {
       const args = ["-nodisp", "-autoexit", "-loglevel", "quiet"];
       if (process.platform === "linux" && outputDevice && outputDevice !== "default") {
         process.env.PULSE_SINK = outputDevice;
@@ -247,13 +253,13 @@ export class VoiceHardware {
       args.push(path);
       return { cmd: "ffplay", args };
     }
-    if (process.platform === "darwin" && commandExists("afplay")) return { cmd: "afplay", args: [path] };
-    if (process.platform === "linux" && commandExists("aplay")) return { cmd: "aplay", args: ["-q", path] };
-    if (process.platform === "linux" && commandExists("paplay")) {
+    if (process.platform === "darwin" && (await commandExists("afplay"))) return { cmd: "afplay", args: [path] };
+    if (process.platform === "linux" && (await commandExists("aplay"))) return { cmd: "aplay", args: ["-q", path] };
+    if (process.platform === "linux" && (await commandExists("paplay"))) {
       const args = outputDevice && outputDevice !== "default" ? ["--device", outputDevice, path] : [path];
       return { cmd: "paplay", args };
     }
-    if (commandExists("play")) return { cmd: "play", args: ["-q", path] };
+    if (await commandExists("play")) return { cmd: "play", args: ["-q", path] };
     if (process.platform === "win32") {
       return { cmd: "powershell", args: ["-NoProfile", "-Command", `(New-Object System.Media.SoundPlayer('${path.replace(/'/g, "''")}')).PlaySync()`] };
     }

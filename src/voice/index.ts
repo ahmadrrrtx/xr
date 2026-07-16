@@ -87,7 +87,7 @@ export function getVoiceConfig(): VoiceSettings {
   return { ...defaultVoiceSettings(), ...getVoiceSettings() };
 }
 
-export function checkVoiceStack(settings = getVoiceSettings()): {
+export async function checkVoiceStack(settings = getVoiceSettings()): {
   stt: boolean;
   tts: boolean;
   wakeWord: boolean;
@@ -98,7 +98,7 @@ export function checkVoiceStack(settings = getVoiceSettings()): {
   const stt = sttFromSettings(settings).describe();
   const tts = ttsFromSettings(settings).describe();
   const checks: VoiceHealthCheck[] = [
-    ...hw.health(),
+    ...(await hw.health()),
     {
       id: "voice-stt",
       label: "Speech-to-text",

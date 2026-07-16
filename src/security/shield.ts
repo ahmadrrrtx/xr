@@ -11,12 +11,15 @@
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { promises as fsp } from "node:fs";
 import { join } from "node:path";
-import { homedir, platform, release, tmpdir, cpus, totalmem, freemem } from "node:os";
-import { spawnSync } from "node:child_process";
+import { homedir, platform, totalmem } from "node:os";
 import { createHash } from "node:crypto";
-import { XR_HOME, loadConfig } from "../config/config.ts";
+import { XR_HOME } from "../config/config.ts";
 import type { Store } from "../state/db.ts";
+import { runCommand } from "../util/process.ts";
+import { shieldIoLimit } from "../util/concurrency.ts";
+import { pathExists, readText, listDir } from "../util/fs-async.ts";
 
 // --- TYPE DEFINITIONS ---
 
@@ -183,13 +186,15 @@ export class XRShieldService {
 
   // --- CORE UTILITY ROUTINES ---
 
-  private runShellCommand(cmd: string, args: string[]): string {
-    try {
-      const res = spawnSync(cmd, args, { encoding: "utf8", timeout: 5000, windowsHide: true });
-      return (res.stdout ?? "") + (res.stderr ?? "");
-    } catch {
-      return "";
-    }
+  private async runShellCommand(cmd: string, args: string[]): Promise<string> {
+    return shieldIoLimit.run(async () => {
+      try {
+        const res = await runCommand(cmd, args, { timeoutMs: 5000, windowsHide: true });
+        return (res.stdout ?? "") + (res.stderr ?? "");
+      } catch {
+        return "";
+      }
+    });
   }
 
   private isWhitelisted(type: string, value: string): boolean {
@@ -200,14 +205,14 @@ export class XRShieldService {
 
   // --- MODULE 1: PROCESS ENUMERATION & DETECTION ---
 
-  public getSystemProcesses(): ProcessInfo[] {
+  public async getSystemProcesses(): Promise<ProcessInfo[]> {
     const list: ProcessInfo[] = [];
     const osPlatform = platform();
 
     if (osPlatform === "win32") {
       // Execute Powershell process list to get actual processes
       const psCommand = `Get-Process | Where-Object {$_.Id -gt 0} | ForEach-Object { [PSCustomObject]@{Id=$_.Id; PPId=(Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)" | Select-Object -ExpandProperty ParentProcessId -ErrorAction SilentlyContinue); Name=$_.Name; Path=$_.Path; CPU=[Math]::Round($_.CPU, 1); Memory=[Math]::Round($_.WorkingSet / 1MB, 1) } } | ConvertTo-Json -Compress`;
-      const output = this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
+      const output = await this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
       if (output.trim()) {
         try {
           const raw = JSON.parse(output);
@@ -222,7 +227,7 @@ export class XRShieldService {
                 cpu: Number(p.CPU ?? 0),
                 memory: Number(p.Memory ?? 0),
                 path: p.Path ? String(p.Path) : undefined,
-                unsigned: p.Path ? !this.windowsCheckSigned(p.Path) : true
+                unsigned: p.Path ? !(await this.windowsCheckSigned(p.Path)) : true
               });
             }
           }
@@ -234,7 +239,7 @@ export class XRShieldService {
       }
     } else if (osPlatform === "darwin" || osPlatform === "linux") {
       // Execute standard Unix ps command
-      const output = this.runShellCommand("ps", ["-eo", "pid,ppid,%cpu,%mem,comm,command"]);
+      const output = await this.runShellCommand("ps", ["-eo", "pid,ppid,%cpu,%mem,comm,command"]);
       if (output.trim()) {
         const lines = output.split("\n").slice(1); // skip header
         for (const line of lines) {
@@ -298,11 +303,11 @@ export class XRShieldService {
     }
   }
 
-  private windowsCheckSigned(filePath: string): boolean {
+  private async windowsCheckSigned(filePath: string): Promise<boolean> {
     if (platform() !== "win32") return true;
     try {
       const psCommand = `(Get-AuthenticodeSignature -FilePath "${filePath}").Status -eq 'Valid'`;
-      const output = this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
+      const output = await this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
       return output.trim().toLowerCase() === "true";
     } catch {
       return false;
@@ -311,7 +316,7 @@ export class XRShieldService {
 
   // --- MODULE 2: STARTUP PERSISTENCE ---
 
-  public getStartupEntries(): StartupEntry[] {
+  public async getStartupEntries(): Promise<StartupEntry[]> {
     const list: StartupEntry[] = [];
     const osPlatform = platform();
 
@@ -323,7 +328,7 @@ export class XRShieldService {
       ];
       for (const loc of locations) {
         const psCommand = `Get-ItemProperty -Path "${loc}" | Get-Member -MemberType NoteProperty | ForEach-Object { [PSCustomObject]@{Name=$_.Name; Command=(Get-ItemProperty -Path "${loc}").$($_.Name)} } | ConvertTo-Json -Compress`;
-        const output = this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
+        const output = await this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
         if (output.trim()) {
           try {
             const raw = JSON.parse(output);
@@ -355,7 +360,7 @@ export class XRShieldService {
       for (const dir of plistDirs) {
         if (existsSync(dir)) {
           try {
-            const files = spawnSync("ls", [dir], { encoding: "utf8" }).stdout?.split("\n").filter(Boolean) ?? [];
+            const files = (await listDir(dir).catch(() => [] as string[])).filter(Boolean);
             for (const f of files) {
               if (f.endsWith(".plist")) {
                 const filePath = join(dir, f);
@@ -382,11 +387,11 @@ export class XRShieldService {
       for (const dir of autostartDirs) {
         if (existsSync(dir)) {
           try {
-            const files = spawnSync("ls", [dir], { encoding: "utf8" }).stdout?.split("\n").filter(Boolean) ?? [];
+            const files = (await listDir(dir).catch(() => [] as string[])).filter(Boolean);
             for (const f of files) {
               if (f.endsWith(".desktop")) {
                 const filePath = join(dir, f);
-                const content = readFileSync(filePath, "utf8");
+                const content = await readText(filePath);
                 const execLine = content.split("\n").find(l => l.startsWith("Exec="));
                 const cmd = execLine ? execLine.substring(5) : "unknown";
                 const isSuspicious = this.isSuspiciousCommandLine(cmd);
@@ -429,13 +434,13 @@ export class XRShieldService {
 
   // --- MODULE 3: SCHEDULED TASKS ---
 
-  public getScheduledTasks(): ScheduledTask[] {
+  public async getScheduledTasks(): Promise<ScheduledTask[]> {
     const list: ScheduledTask[] = [];
     const osPlatform = platform();
 
     if (osPlatform === "win32") {
       const psCommand = `Get-ScheduledTask | Where-Object {$_.State -ne 'Disabled' -and $_.TaskPath -notlike '\\Microsoft*'} | ForEach-Object { [PSCustomObject]@{Name=$_.TaskName; Command=$_.Actions.Execute; Trigger=$_.Triggers.ToString()} } | ConvertTo-Json -Compress`;
-      const output = this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
+      const output = await this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
       if (output.trim()) {
         try {
           const raw = JSON.parse(output);
@@ -458,7 +463,7 @@ export class XRShieldService {
     } else {
       // Read crontab files
       try {
-        const cron = this.runShellCommand("crontab", ["-l"]);
+        const cron = await this.runShellCommand("crontab", ["-l"]);
         if (cron.trim() && !cron.includes("no crontab")) {
           const lines = cron.split("\n");
           for (const line of lines) {
@@ -504,13 +509,14 @@ export class XRShieldService {
 
   // --- MODULE 4: DOWNLOADS INSPECTION ---
 
-  public getDownloads(): DownloadItem[] {
+  public async getDownloads(): Promise<DownloadItem[]> {
     const list: DownloadItem[] = [];
     const downloadsDir = join(homedir(), "Downloads");
 
     if (existsSync(downloadsDir)) {
       try {
-        const files = spawnSync("ls", ["-lat", downloadsDir], { encoding: "utf8" }).stdout?.split("\n").filter(Boolean).slice(0, 30) ?? [];
+        const lsOut = await this.runShellCommand("ls", ["-lat", downloadsDir]);
+        const files = lsOut.split("\n").filter(Boolean).slice(0, 30);
         for (const line of files) {
           const parts = line.trim().split(/\s+/);
           // Quick parse standard Unix ls line
@@ -582,7 +588,7 @@ export class XRShieldService {
 
   // --- MODULE 5: BROWSER SECURITY ---
 
-  public getBrowserSecurity(): BrowserSecurityInfo[] {
+  public async getBrowserSecurity(): Promise<BrowserSecurityInfo[]> {
     const list: BrowserSecurityInfo[] = [];
 
     // Probe standard chrome profile directories if exist
@@ -600,7 +606,7 @@ export class XRShieldService {
         const extensions: BrowserSecurityInfo["extensions"] = [];
         if (existsSync(extDir)) {
           try {
-            const exts = spawnSync("ls", [extDir], { encoding: "utf8" }).stdout?.split("\n").filter(Boolean) ?? [];
+            const exts = (await listDir(extDir).catch(() => [] as string[])).filter(Boolean);
             for (const extId of exts) {
               if (extId.length === 32) {
                 // Read manifest of extension if reachable
@@ -648,13 +654,13 @@ export class XRShieldService {
 
   // --- MODULE 6: PRIVACY CONTROLS & SCORE ---
 
-  public checkTelemetry(): TelemetryCheck[] {
+  public async checkTelemetry(): Promise<TelemetryCheck[]> {
     const list: TelemetryCheck[] = [];
     const osPlatform = platform();
 
     if (osPlatform === "win32") {
       const psCommand = `(Get-ItemProperty -Path "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection" -Name "AllowTelemetry" -ErrorAction SilentlyContinue).AllowTelemetry`;
-      const output = this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
+      const output = await this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
       const telVal = output.trim();
       const enabled = telVal === "" || parseInt(telVal) > 0;
 
@@ -687,10 +693,10 @@ export class XRShieldService {
     return list;
   }
 
-  public getPrivacyScore(): PrivacyScoreResult {
+  public async getPrivacyScore(): Promise<PrivacyScoreResult> {
     const checks: PrivacyScoreResult["checks"] = [];
-    const browserSec = this.getBrowserSecurity();
-    const telemetry = this.checkTelemetry();
+    const browserSec = await this.getBrowserSecurity();
+    const telemetry = await this.checkTelemetry();
 
     // Check 1: Microphone and Camera gate
     const micCamBlocked = browserSec.every(b => b.permissionsCheck.micCamBlocked);
@@ -704,7 +710,7 @@ export class XRShieldService {
     // Check 2: Clipboard safety
     let clipboardSafe = true;
     try {
-      const clip = this.runShellCommand(platform() === "win32" ? "powershell.exe" : "pbpaste", platform() === "win32" ? ["-NoProfile", "-Command", "Get-Clipboard"] : []);
+      const clip = await this.runShellCommand(platform() === "win32" ? "powershell.exe" : "pbpaste", platform() === "win32" ? ["-NoProfile", "-Command", "Get-Clipboard"] : []);
       if (clip.match(/(sk-[A-Za-z0-9]{20,}|AIzaSy[A-Za-z0-9_-]{35})/)) {
         clipboardSafe = false;
       }
@@ -813,11 +819,11 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
 
   // --- MODULE 8: FULL SYSTEM SCANNING ---
 
-  public runScan(mode: "quick" | "full" = "quick"): ShieldThreat[] {
+  public async runScan(mode: "quick" | "full" = "quick"): Promise<ShieldThreat[]> {
     const threats: ShieldThreat[] = [];
 
     // 1. Process Scan (Always runs)
-    const processes = this.getSystemProcesses();
+    const processes = await this.getSystemProcesses();
     for (const p of processes) {
       const cmdSuspicious = this.isSuspiciousCommandLine(p.command);
       const isMiner = KNOWN_MINER_NAMES.some(m => p.name.toLowerCase().includes(m)) || KNOWN_MINER_NAMES.some(m => p.command.toLowerCase().includes(m));
@@ -859,7 +865,7 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
     }
 
     // 2. Startup Entries Scan (Only on full scan or if suspicious)
-    const startup = this.getStartupEntries();
+    const startup = await this.getStartupEntries();
     for (const s of startup) {
       if (s.suspicious) {
         if (this.isWhitelisted("startup", s.name)) continue;
@@ -883,7 +889,7 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
     }
 
     // 3. Scheduled Tasks Scan
-    const tasks = this.getScheduledTasks();
+    const tasks = await this.getScheduledTasks();
     for (const t of tasks) {
       if (t.suspicious) {
         if (this.isWhitelisted("task", t.name)) continue;
@@ -908,7 +914,7 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
 
     // 4. Downloads Scan (Only runs on full-scan)
     if (mode === "full") {
-      const downloads = this.getDownloads();
+      const downloads = await this.getDownloads();
       for (const d of downloads) {
         if (d.suspicious) {
           if (this.isWhitelisted("file", d.path)) continue;

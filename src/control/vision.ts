@@ -1,7 +1,10 @@
-import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+/**
+ * XR screen capture + OCR — fully async subprocess I/O.
+ */
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runCommand } from "../util/process.ts";
+import { pathExists, readBytes, writeBytes, removePath } from "../util/fs-async.ts";
 
 function detectOS(): "macos" | "linux" | "windows" {
   const p = process.platform;
@@ -13,16 +16,16 @@ function detectOS(): "macos" | "linux" | "windows" {
 export async function captureScreen(savePath?: string): Promise<{ ok: boolean; path?: string; base64?: string; message: string }> {
   const os = detectOS();
   const path = savePath || join(tmpdir(), `xr-screen-${Date.now()}.png`);
-  
+
   try {
     if (os === "macos") {
-      execSync(`screencapture -x "${path}"`, { timeout: 8000 });
+      const r = await runCommand("screencapture", ["-x", path], { timeoutMs: 8000 });
+      if (!r.ok) return { ok: false, message: `Capture failed: ${r.stderr || r.error || `exit ${r.status}`}` };
     } else if (os === "linux") {
-      try { execSync(`gnome-screenshot -f "${path}"`, { timeout: 8000 }); }
-      catch {
-        try { execSync(`scrot "${path}"`, { timeout: 8000 }); }
-        catch { execSync(`import -window root "${path}"`, { timeout: 8000 }); }
-      }
+      let r = await runCommand("gnome-screenshot", ["-f", path], { timeoutMs: 8000 });
+      if (!r.ok) r = await runCommand("scrot", [path], { timeoutMs: 8000 });
+      if (!r.ok) r = await runCommand("import", ["-window", "root", path], { timeoutMs: 8000 });
+      if (!r.ok) return { ok: false, message: `Capture failed: ${r.stderr || r.error || "no screenshot tool"}` };
     } else {
       const ps = `
         Add-Type -AssemblyName System.Windows.Forms;
@@ -39,19 +42,20 @@ export async function captureScreen(savePath?: string): Promise<{ ok: boolean; p
         $graphics.Dispose();
         $bitmap.Dispose();
       `;
-      execSync(`powershell -NoProfile -Command "${ps}"`, { timeout: 10000 });
+      const r = await runCommand("powershell", ["-NoProfile", "-Command", ps], { timeoutMs: 10000 });
+      if (!r.ok) return { ok: false, message: `Capture failed: ${r.stderr || r.error || `exit ${r.status}`}` };
     }
 
-    if (!existsSync(path)) return { ok: false, message: "Screenshot file not created." };
-    
-    const buf = readFileSync(path);
-    setTimeout(() => { try { if (existsSync(path)) unlinkSync(path); } catch { } }, 60000);
-    
-    return { 
-      ok: true, 
-      path, 
-      base64: buf.toString("base64"), 
-      message: `Captured screen to ${path}` 
+    if (!(await pathExists(path))) return { ok: false, message: "Screenshot file not created." };
+
+    const buf = await readBytes(path);
+    setTimeout(() => { void removePath(path, { force: true }); }, 60000);
+
+    return {
+      ok: true,
+      path,
+      base64: Buffer.from(buf).toString("base64"),
+      message: `Captured screen to ${path}`,
     };
   } catch (e) {
     return { ok: false, message: `Capture failed: ${(e as Error).message}` };
@@ -72,10 +76,10 @@ export async function cloudVision(provider: any, prompt: string, base64Png: stri
           source: {
             type: "base64",
             media_type: "image/png",
-            data: base64Png
-          }
-        }
-      ]
+            data: base64Png,
+          },
+        },
+      ],
     }];
 
     const turn = await provider.chat(messages as any, []);
@@ -88,14 +92,20 @@ export async function cloudVision(provider: any, prompt: string, base64Png: stri
 export async function ocrImage(base64OrPath: string): Promise<string> {
   let imgPath = base64OrPath;
   let tmp = false;
-  if (!existsSync(base64OrPath) && base64OrPath.length > 200) {
+  if (!(await pathExists(base64OrPath)) && base64OrPath.length > 200) {
     imgPath = join(tmpdir(), `xr-ocr-${Date.now()}.png`);
-    writeFileSync(imgPath, Buffer.from(base64OrPath, "base64"));
+    await writeBytes(imgPath, Buffer.from(base64OrPath, "base64"));
     tmp = true;
   }
   try {
-    const out = execSync(`tesseract "${imgPath}" stdout -l eng 2>/dev/null`, { timeout: 12000 }).toString();
-    return out.trim();
-  } catch { return "[OCR unavailable]"; }
-  finally { if (tmp) try { unlinkSync(imgPath) } catch { } }
+    const r = await runCommand("tesseract", [imgPath, "stdout", "-l", "eng"], { timeoutMs: 12000 });
+    if (!r.ok) return "[OCR unavailable]";
+    return r.stdout.trim();
+  } catch {
+    return "[OCR unavailable]";
+  } finally {
+    if (tmp) {
+      try { await removePath(imgPath, { force: true }); } catch { /* ignore */ }
+    }
+  }
 }

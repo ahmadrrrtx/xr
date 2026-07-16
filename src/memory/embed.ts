@@ -1,16 +1,31 @@
 /**
- * XR — embeddings layer for local RAG.
+ * XR — embeddings layer for local RAG (async, cached config, concurrency-limited).
  *
  * Stage 4: local-runtime aware. XR tries the configured local embedding model
  * through Ollama's native API or an OpenAI-compatible /embeddings endpoint.
  * If unavailable, XR falls back to deterministic lexical vectors so memory/RAG
  * never crashes and local-only mode never depends on cloud.
+ *
+ * Config is read once per process TTL via loadConfig()'s in-memory cache —
+ * never re-parsed from disk for every chunk.
  */
 import { loadConfig } from "../config/config.ts";
+import { embedLimit } from "../util/concurrency.ts";
 
 const FALLBACK_DIM = 256;
 
-function configuredEmbeddingTarget(): { runtime: string; baseUrl: string; model: string } {
+interface EmbedTarget {
+  runtime: string;
+  baseUrl: string;
+  model: string;
+}
+
+let targetCache: { value: EmbedTarget; at: number } | null = null;
+const TARGET_TTL_MS = 10_000;
+
+function configuredEmbeddingTarget(): EmbedTarget {
+  if (targetCache && Date.now() - targetCache.at < TARGET_TTL_MS) return targetCache.value;
+
   const { config } = loadConfig();
   const local: any = config.localModels;
   const runtime = process.env.XR_EMBED_RUNTIME ?? local.runtime ?? "ollama";
@@ -19,15 +34,29 @@ function configuredEmbeddingTarget(): { runtime: string; baseUrl: string; model:
   const runtimeUrl = local.runtimes?.[runtime]?.baseUrl;
   const providerUrl = (config.providers as any)?.[providerId]?.baseUrl;
   const baseUrl = (process.env.XR_EMBED_URL ?? runtimeUrl ?? providerUrl ?? (runtime === "ollama" ? "http://localhost:11434" : "http://localhost:8000/v1")).replace(/\/$/, "");
-  return { runtime, baseUrl, model };
+  const value = { runtime, baseUrl, model };
+  targetCache = { value, at: Date.now() };
+  return value;
+}
+
+/** Drop cached embed target (after model switch). */
+export function invalidateEmbedTargetCache(): void {
+  targetCache = null;
 }
 
 export async function embed(text: string): Promise<number[]> {
-  const target = configuredEmbeddingTarget();
-  const vec = target.runtime === "ollama"
-    ? await tryOllamaEmbedding(target.baseUrl, target.model, text)
-    : await tryOpenAIEmbedding(target.baseUrl, target.model, text);
-  return vec ?? lexicalVector(text);
+  return embedLimit.run(async () => {
+    const target = configuredEmbeddingTarget();
+    const vec = target.runtime === "ollama"
+      ? await tryOllamaEmbedding(target.baseUrl, target.model, text)
+      : await tryOpenAIEmbedding(target.baseUrl, target.model, text);
+    return vec ?? lexicalVector(text);
+  });
+}
+
+/** Concurrent batch embed with the same concurrency limit. */
+export async function embedMany(texts: string[]): Promise<number[][]> {
+  return Promise.all(texts.map((t) => embed(t)));
 }
 
 async function tryOllamaEmbedding(baseUrl: string, model: string, text: string): Promise<number[] | undefined> {
@@ -43,7 +72,7 @@ async function tryOllamaEmbedding(baseUrl: string, model: string, text: string):
       const json: any = await res.json();
       if (Array.isArray(json.embedding) && json.embedding.length) return json.embedding as number[];
     }
-  } catch {}
+  } catch { /* fall through */ }
   return undefined;
 }
 
@@ -60,7 +89,7 @@ async function tryOpenAIEmbedding(baseUrl: string, model: string, text: string):
       const v = json?.data?.[0]?.embedding;
       if (Array.isArray(v) && v.length) return v as number[];
     }
-  } catch {}
+  } catch { /* fall through */ }
   return undefined;
 }
 

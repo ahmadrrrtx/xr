@@ -316,9 +316,10 @@ export class GoogleProvider implements Provider {
 
   private async getVertexToken(): Promise<string | null> {
     try {
-      const { execSync } = await import("node:child_process");
-      const token = execSync("gcloud auth print-access-token", { timeout: 10000 }).toString().trim();
-      return token || null;
+      const { runCommand } = await import("../../util/process.ts");
+      const r = await runCommand("gcloud", ["auth", "print-access-token"], { timeoutMs: 10000 });
+      const token = r.stdout.trim();
+      return r.ok && token ? token : null;
     } catch {
       return null;
     }

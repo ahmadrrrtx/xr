@@ -22,7 +22,8 @@ import { handlePluginApi } from "./plugin-api.ts";
 import { handleSkillsApi } from "./skills-api.ts";
 import { randomBytes } from "node:crypto";
 import { Store } from "../state/db.ts";
-import { loadConfig, saveConfig, isMemoryEnabled } from "../config/config.ts";
+import { loadConfig, saveConfig, isMemoryEnabled, configCacheStats, hydrateSecretsAsync } from "../config/config.ts";
+import { isLocal } from "../cost/pricing.ts";
 import { runLab } from "../security/lab.ts";
 import { XRShieldService } from "../security/shield.ts";
 import { fingerprint } from "../memory/rag.ts";
@@ -59,14 +60,17 @@ export interface DaemonHandle {
 
 const HOST = "127.0.0.1";
 
-function gitSummary(cwd: string): { branch: string; dirty: boolean } {
+async function gitSummary(cwd: string): Promise<{ branch: string; dirty: boolean }> {
   try {
-    const branch = Bun.spawnSync(["git", "rev-parse", "--abbrev-ref", "HEAD"], { cwd, stdout: "pipe", stderr: "ignore" });
-    const status = Bun.spawnSync(["git", "status", "--porcelain"], { cwd, stdout: "pipe", stderr: "ignore" });
-    if (branch.exitCode !== 0 || status.exitCode !== 0) return { branch: "no git", dirty: false };
+    const { runCommand } = await import("../util/process.ts");
+    const [branch, status] = await Promise.all([
+      runCommand("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd, timeoutMs: 3000 }),
+      runCommand("git", ["status", "--porcelain"], { cwd, timeoutMs: 3000 }),
+    ]);
+    if (!branch.ok || !status.ok) return { branch: "no git", dirty: false };
     return {
-      branch: branch.stdout.toString().trim() || "detached",
-      dirty: status.stdout.toString().trim().length > 0,
+      branch: branch.stdout.trim() || "detached",
+      dirty: status.stdout.trim().length > 0,
     };
   } catch {
     return { branch: "no git", dirty: false };
@@ -135,7 +139,13 @@ export function makeHandler(initialStore: Store, token: string) {
 
     // ── Open endpoints (no auth) ──────────────────────────────────────────
     if (path === "/api/health") {
-      return json({ ok: true, name: "xr", host: HOST, ts: Date.now() });
+      return json({
+        ok: true,
+        name: "xr",
+        host: HOST,
+        ts: Date.now(),
+        configCache: configCacheStats(),
+      });
     }
 
     // ── Auth gate ─────────────────────────────────────────────────────────
@@ -256,7 +266,7 @@ export function makeHandler(initialStore: Store, token: string) {
       const project = basename(process.cwd());
       const fp = fingerprint(process.cwd());
       const memory = new MemoryStore(store);
-      const git = gitSummary(process.cwd());
+      const git = await gitSummary(process.cwd());
       return json({
         project,
         workspace: new WorkspaceManager().getActiveId(),
@@ -383,39 +393,39 @@ export function makeHandler(initialStore: Store, token: string) {
     if (path === "/api/shield/status") {
       return json({
         state: shieldService.getState(),
-        score: shieldService.getPrivacyScore(),
+        score: await shieldService.getPrivacyScore(),
         activeModules: ["Process Inspector", "Startup & Persist", "Privacy Advisor", "Ad & Tracker Filter", "Forensic Quarantine"]
       });
     }
 
     if (path === "/api/shield/scan") {
       const mode = url.searchParams.get("mode") === "full" ? "full" : "quick";
-      const threats = shieldService.runScan(mode);
+      const threats = await shieldService.runScan(mode);
       return json({ threats });
     }
 
     if (path === "/api/shield/processes") {
-      return json({ processes: shieldService.getSystemProcesses() });
+      return json({ processes: await shieldService.getSystemProcesses() });
     }
 
     if (path === "/api/shield/startup") {
-      return json({ startup: shieldService.getStartupEntries() });
+      return json({ startup: await shieldService.getStartupEntries() });
     }
 
     if (path === "/api/shield/privacy") {
       return json({
-        score: shieldService.getPrivacyScore(),
-        telemetry: shieldService.checkTelemetry(),
+        score: await shieldService.getPrivacyScore(),
+        telemetry: await shieldService.checkTelemetry(),
         adBlock: shieldService.getHostsAdBlockData()
       });
     }
 
     if (path === "/api/shield/downloads") {
-      return json({ downloads: shieldService.getDownloads() });
+      return json({ downloads: await shieldService.getDownloads() });
     }
 
     if (path === "/api/shield/browser") {
-      return json({ browser: shieldService.getBrowserSecurity() });
+      return json({ browser: await shieldService.getBrowserSecurity() });
     }
 
     if (path === "/api/shield/explain" && method === "POST") {
@@ -424,7 +434,7 @@ export function makeHandler(initialStore: Store, token: string) {
         if (!body?.id) return json({ error: "id parameter required" }, 400);
 
         // Find the threat by scanning
-        const threats = shieldService.runScan("full");
+        const threats = await shieldService.runScan("full");
         const threat = threats.find(t => t.id === body.id);
 
         if (!threat) return json({ error: "threat not found" }, 404);
@@ -827,7 +837,8 @@ export function makeHandler(initialStore: Store, token: string) {
     // ── Computer Control ──────────────────────────────────────────────────
     if (path === "/api/control/status") {
       const kill   = isDisabled();
-      const caps   = detectCapabilities();
+      const { detectCapabilitiesAsync } = await import("../control/adapter.ts");
+      const caps   = await detectCapabilitiesAsync();
       const browser = browserStatus();
       return json({
         enabled:        !kill.disabled,
@@ -972,6 +983,9 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const token = opts.token ?? randomBytes(24).toString("hex");
   const workspaceManager = new WorkspaceManager();
   const store = opts.store ?? workspaceManager.getStore(workspaceManager.getActiveId());
+
+  // Prefetch secrets into process.env without blocking the first health check.
+  void hydrateSecretsAsync().catch(() => {});
 
   const handler = makeHandler(store, token);
 

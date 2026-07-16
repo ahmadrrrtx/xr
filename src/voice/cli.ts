@@ -66,10 +66,10 @@ export function printVoiceStatus(): void {
   if (!settings.enabled) info("Voice is disabled until you run xr voice start or enable it in setup.");
 }
 
-export function printDevices(): void {
+export async function printDevices(): void {
   banner();
   const hw = new VoiceHardware();
-  const devices = hw.devices();
+  const devices = await hw.devices();
   console.log(C.bold("Input devices"));
   for (const d of devices.inputs) console.log(`  ${d.isDefault ? C.green("●") : " "} ${C.cyan(d.id.padEnd(24))} ${d.label}`);
   console.log("");
@@ -106,7 +106,7 @@ async function setupVoiceInteractive(yes: boolean): Promise<void> {
   }
 
   const hw = new VoiceHardware();
-  const devices = hw.devices();
+  const devices = await hw.devices();
   if (devices.inputs.length > 1 && !yes) {
     printDevices();
     const input = await ask("Input device id", { default: current.inputDevice ?? "default" });
