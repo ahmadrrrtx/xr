@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — Session command
+ * XR 3.1.5 (Helios) — Session command
  *
  * xr session list|show|export
  * Spec: IA §1.2 Session, §5 CLI site map

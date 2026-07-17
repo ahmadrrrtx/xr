@@ -14,6 +14,7 @@
  *  - Preserves 100% backward compatibility with frozen server-side REST APIs.
  */
 
+import { DISPLAY_VERSION, CORE_VERSION, PKG, versionInfo } from "../core/version.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +32,11 @@ function assetDataUri(name: string): string {
 export function dashboardHtml(token: string): string {
   return PAGE
     .replaceAll("__TOKEN__", token)
+    .replaceAll("__XR_VERSION__", DISPLAY_VERSION)
+    .replaceAll("__XR_CORE_VERSION__", CORE_VERSION)
+    .replaceAll("__XR_PKG_NAME__", PKG.name)
+    .replaceAll("__XR_REPO__", PKG.repo)
+    .replaceAll("__XR_HOMEPAGE__", PKG.homepage)
     .replaceAll("__XR_LOGO__", assetDataUri("logo.png"))
     .replaceAll("__XR_AVATAR__", assetDataUri("avatar.png"));
 }
@@ -1825,7 +1831,7 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
             <div class="logo-mark" style="font-size: 48px;">▀▄▀</div>
             <div>
               <h2>XR Unified AI OS Control Center</h2>
-              <p class="muted">Version 3.1.5-Definitive (Experience Redesign Polish)</p>
+              <p class="muted">__XR_VERSION__ — Control Center</p>
               <p class="muted">Server location: Islamabad, PK (Asia/Karachi timezone)</p>
             </div>
           </div>

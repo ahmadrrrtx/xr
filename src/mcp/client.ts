@@ -16,6 +16,7 @@
 
 import { spawn, ChildProcess } from "node:child_process";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
+import { CORE_VERSION, PKG } from "../core/version.ts";
 
 // ── Environment Allow-list ───────────────────────────────────────────────────
 
@@ -267,7 +268,7 @@ export class McpClient {
     try {
       const init = await this.rpc("initialize", {
         protocolVersion: "2025-06-18",
-        clientInfo: { name: "xr", version: "3.1.5" },
+        clientInfo: { name: PKG.name, version: CORE_VERSION },
         capabilities: { tools: {}, resources: {}, prompts: {} },
       });
       this.connected = true;

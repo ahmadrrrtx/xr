@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — Logs command
+ * XR 3.1.5 (Helios) — Logs command
  *
  * Surfaces recent audit/runtime activity in a CLI-friendly form.
  * Spec: IA CLI site map — xr logs

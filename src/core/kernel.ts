@@ -1,6 +1,8 @@
 /**
- * XR 3.0 — The Unified XR OS Kernel
+ * XR — The Unified XR OS Kernel (v3.1.5 Helios)
  * Orchestrates and integrates every major subsystem of the AI Operating System.
+ *
+ * Version is now derived from src/core/version.ts single source of truth.
  */
 
 import { Container } from "./container.ts";
@@ -9,6 +11,7 @@ import { CommandRegistry } from "./command-registry.ts";
 import { LifecycleManager, RuntimeState } from "./lifecycle.ts";
 import { WorkspaceManager } from "./workspace.ts";
 import { BackgroundServiceManager } from "./services.ts";
+import { CORE_VERSION, PKG, versionInfo } from "./version.ts";
 
 import { Store } from "../state/db.ts";
 import { ConfigService } from "../services/config-service.ts";
@@ -30,13 +33,18 @@ import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
 import { WorkflowStore } from "../state/stores/workflow-store.ts";
 
 export class XRKernel {
-  public static readonly VERSION = "3.1.5";
-  
+  /** @deprecated Use CORE_VERSION from src/core/version.ts — kept for backward compat */
+  public static readonly VERSION = CORE_VERSION;
+
+  /** Canonical version identity (single source of truth) */
+  public static readonly PKG = PKG;
+  public static readonly CORE_VERSION = CORE_VERSION;
+
   public readonly container = new Container();
   public readonly events = new EventBus();
   public readonly commands = new CommandRegistry();
   public readonly lifecycle = new LifecycleManager();
-  
+
   public readonly workspaces = new WorkspaceManager();
   public readonly services: BackgroundServiceManager;
 
@@ -120,7 +128,7 @@ export class XRKernel {
     this.lifecycle.register(multiAgentService);
 
     await this.lifecycle.init();
-    this.events.emit("kernel.bootstrapped", { version: XRKernel.VERSION });
+    this.events.emit("kernel.bootstrapped", { version: CORE_VERSION, ...versionInfo() });
   }
 
   /**
@@ -128,13 +136,13 @@ export class XRKernel {
    */
   async start(): Promise<void> {
     await this.lifecycle.start();
-    
+
     // Register background jobs
     this.registerCoreBackgroundJobs();
-    
+
     // Start services manager
     this.services.startAll();
-    
+
     this.events.emit("kernel.started", { timestamp: Date.now() });
   }
 
@@ -145,7 +153,7 @@ export class XRKernel {
     this.services.stopAll();
     await this.lifecycle.stop();
     this.events.emit("kernel.stopped", { timestamp: Date.now() });
-    
+
     // Close Database & Specialized Stores
     try {
       this.container.resolve<Store>("store").close();
@@ -182,7 +190,7 @@ export class XRKernel {
             this.events.emit("security.threats_detected", { threats });
           }
         } catch {}
-      }
+      },
     });
 
     // 2. Budget Spent Governor Guard (runs every 10 seconds)
@@ -195,7 +203,7 @@ export class XRKernel {
           const budget = this.container.resolve<BudgetService>("budget");
           await budget.checkSpendLimits();
         } catch {}
-      }
+      },
     });
 
     // 3. Durable Memory Expiry and Pruning Loop (runs every 5 minutes)
@@ -211,7 +219,7 @@ export class XRKernel {
             this.events.emit("memory.pruned", { pruned, timestamp: Date.now() });
           }
         } catch {}
-      }
+      },
     });
   }
 
@@ -220,21 +228,21 @@ export class XRKernel {
    */
   async switchWorkspace(id: string): Promise<void> {
     this.events.emit("workspace.switching", { from: this.workspaces.getActiveId(), to: id });
-    
+
     // Shutdown services first
     this.services.stopAll();
-    
+
     // Unregister current DB
     try {
       this.container.resolve<Store>("store").close();
     } catch {}
-    
+
     this.workspaces.setActiveId(id);
-    
+
     // Bootstrap workspace-specific resources
     const activeWorkspace = this.workspaces.getActiveContext();
     const newStore = new Store(activeWorkspace.dbPath);
-    
+
     this.container.unregister("legacyStore");
     this.container.unregister("store");
     this.container.register("legacyStore", newStore);
@@ -243,7 +251,7 @@ export class XRKernel {
     // Re-register Shield and Business OS with the new DB
     this.container.unregister("shield");
     this.container.unregister("business");
-    
+
     const shieldService = new XRShieldService(newStore);
     this.container.register("shield", shieldService);
 
@@ -252,7 +260,7 @@ export class XRKernel {
 
     // Restart background jobs on the new workspace database
     this.services.startAll();
-    
+
     this.events.emit("workspace.switched", { active: id });
   }
 

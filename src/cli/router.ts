@@ -1,8 +1,9 @@
 /**
- * XR 3.1C — CLI router
+ * XR 3.1.5 (Helios) — CLI router
  *
  * Resolves argv → fast path | registered command | default `run` task.
  * Preserves full backwards compatibility with legacy command names.
+ * Version is now derived from src/core/version.ts single source of truth.
  */
 
 import { XRKernel } from "../core/kernel.ts";
@@ -38,26 +39,19 @@ import { AttacksCommand } from "../commands/attacks.ts";
 import { AskCommand, PlanCommand } from "../commands/ask-plan.ts";
 import { LogsCommand } from "../commands/logs.ts";
 import { serve } from "../daemon/server.ts";
+import { CORE_VERSION, CODENAME, PKG, versionInfo } from "../core/version.ts";
 import {
   resolveCommandName,
   getCatalogEntry,
   allAliasesAndNames,
   XR_VERSION,
+  XR_CLI_CODENAME,
+  DISPLAY_VERSION,
   type CatalogEntry,
 } from "./catalog.ts";
 import { showHelp, showCommandHelp } from "./help.ts";
-import {
-  parseGlobalFlags,
-  EXIT,
-  type GlobalFlags,
-} from "./flags.ts";
-import {
-  setOutputFlags,
-  emitJson,
-  isJsonMode,
-  printDidYouMean,
-  printError,
-} from "./output.ts";
+import { parseGlobalFlags, EXIT, type GlobalFlags } from "./flags.ts";
+import { setOutputFlags, emitJson, isJsonMode, printDidYouMean, printError } from "./output.ts";
 import { handleFatal, usageError, CliError } from "./errors.ts";
 
 // ── Command registration ──────────────────────────────────────────────────────
@@ -206,10 +200,7 @@ async function runServeCommand(args: string[]): Promise<void> {
 
 // ── Kernel helpers ────────────────────────────────────────────────────────────
 
-async function withKernel(
-  flags: GlobalFlags,
-  fn: (kernel: XRKernel) => Promise<void>,
-): Promise<void> {
+async function withKernel(flags: GlobalFlags, fn: (kernel: XRKernel) => Promise<void>): Promise<void> {
   const kernel = new XRKernel();
   registerCommands(kernel);
   await kernel.bootstrap();
@@ -279,10 +270,7 @@ function unknownCommand(name: string): never {
     id: "unknown_command",
     what: `Unknown command: ${name}`,
     why: "That name is not a registered XR command or legacy alias.",
-    fix: [
-      "Run xr help to browse commands.",
-      "Free-form tasks go through: xr \"your task\"",
-    ],
+    fix: ["Run xr help to browse commands.", 'Free-form tasks go through: xr "your task"'],
     related: ["xr help", "xr doctor"],
     code: EXIT.USAGE,
   });
@@ -306,23 +294,24 @@ export async function runCli(argv: string[]): Promise<number> {
 
   try {
     // ── Version (fast) ────────────────────────────────────────────────────
-    if (
-      flags.version ||
-      head === "version" ||
-      head === "--version" ||
-      head === "-v"
-    ) {
+    if (flags.version || head === "version" || head === "--version" || head === "-v") {
       if (isJsonMode()) {
         emitJson({
-          name: "@rrrtx/xr",
-          version: XR_VERSION,
-          cli: "3.1C",
+          name: PKG.name,
+          version: CORE_VERSION,
+          codename: CODENAME,
+          display: DISPLAY_VERSION,
+          cli: CODENAME,
           node: process.version,
           platform: process.platform,
           arch: process.arch,
+          repo: PKG.repo,
+          homepage: PKG.homepage,
+          npm: PKG.npm,
+          pluginApi: versionInfo().pluginApi,
         });
       } else {
-        console.log(`v${XR_VERSION}`);
+        console.log(`v${CORE_VERSION} (${CODENAME})`);
       }
       return EXIT.OK;
     }
@@ -346,12 +335,7 @@ export async function runCli(argv: string[]): Promise<number> {
     }
 
     // ── Shell (fast, default) ─────────────────────────────────────────────
-    if (
-      !head ||
-      head === "shell" ||
-      head === "--tui" ||
-      head === "tui"
-    ) {
+    if (!head || head === "shell" || head === "--tui" || head === "tui") {
       const { runTUI } = await import("../interfaces/tui.ts");
       await runTUI();
       return EXIT.OK;
@@ -380,8 +364,6 @@ export async function runCli(argv: string[]): Promise<number> {
         commandArgs = injectRunOverrides(commandArgs, flags);
       }
 
-      // doctor --perf handled inside doctor after kernel (lightweight enough)
-
       await withKernel(flags, async (kernel) => {
         if (kernel.commands.get(regName)) {
           await kernel.executeCommand(regName, commandArgs, process.cwd());
@@ -394,18 +376,15 @@ export async function runCli(argv: string[]): Promise<number> {
     }
 
     // ── Default: free-form task → run ─────────────────────────────────────
-    // If head looks like a flag-only or unknown short word that is clearly a typo
-    // for a command, suggest. Otherwise treat entire args as a task.
     if (head && !head.startsWith("-")) {
-      // Heuristic: single token that closely matches a command → unknown command
-      // Multi-word or quoted natural language → run
       const maybeCmd = resolveCommandName(head);
       if (!maybeCmd && rest.length === 0 && head.length < 24 && !head.includes(" ")) {
-        // Could be typo or a one-word task. Prefer did-you-mean if close.
         const { didYouMean } = await import("./output.ts");
-        const suggestions = didYouMean(head, allAliasesAndNames().filter((n) => !n.startsWith("-")));
+        const suggestions = didYouMean(
+          head,
+          allAliasesAndNames().filter((n) => !n.startsWith("-")),
+        );
         if (suggestions.length && suggestions[0] !== head) {
-          // If very close (distance handled inside), treat as unknown
           const { editDistance } = await import("./output.ts");
           if (editDistance(head.toLowerCase(), suggestions[0]!.toLowerCase()) <= 2) {
             unknownCommand(head);

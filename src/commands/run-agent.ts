@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — RunAgent Command
+ * XR 3.1.5 (Helios) — RunAgent Command
  * Default command to execute a task via the AI agent.
  *
  * Human-readable by default; never dumps raw stacks without --debug.

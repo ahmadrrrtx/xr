@@ -17,6 +17,7 @@
  *  - /api/config returns safe (redacted) config subset
  *  - Improved CORS and CSP headers
  */
+import { CORE_VERSION, DISPLAY_VERSION, PKG, versionInfo } from "../core/version.ts";
 import { handleControlApi } from "./control-api.ts";
 import { handlePluginApi } from "./plugin-api.ts";
 import { handleSkillsApi } from "./skills-api.ts";
@@ -268,6 +269,7 @@ export function makeHandler(initialStore: Store, token: string) {
       const memory = new MemoryStore(store);
       const git = await gitSummary(process.cwd());
       return json({
+        version: versionInfo(),
         project,
         workspace: new WorkspaceManager().getActiveId(),
         cwd: process.cwd(),

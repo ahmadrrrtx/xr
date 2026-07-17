@@ -9,7 +9,7 @@
 
 # XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine` · `XR 2.1 Skills Marketplace`**
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine` · `XR 3.1.5 Helios · 65+ Skills` · `@rrrtx/xr`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
@@ -17,10 +17,12 @@
 [![Tests](https://img.shields.io/badge/tests-255%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-v1.0-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-XR%202.1%20Skills%20Marketplace-00FF88?style=flat-square)](#-xr-21--skills-marketplace-good-to-go)
+[![Version](https://img.shields.io/badge/version-v3.1.5%20Helios-22e0ff?style=flat-square)](#)
+[![Stage](https://img.shields.io/badge/stage-XR%203.1.5%20Helios-00FF88?style=flat-square)](#-xr-31--unified-ai-os)
 
 </div>
+
+> **Version Source of Truth:** `3.1.5 (Helios)` — canonical version from `src/core/version.ts`, stamped from `package.json` via `bun run scripts/set-version.ts`. All CLI, dashboard, MCP, and website surfaces import from this single source.
 
 ---
 
@@ -29,9 +31,9 @@
 
 ---
 
-## ✅ XR 2.1 — Skills Marketplace Good To Go
+## ✅ XR 3.1.5 (Helios) — Unified AI OS — Skills Marketplace Good To Go
 
-**Status: XR 2.1 is implemented successfully on `main` and is ready to move forward.**
+**Status: XR 3.1.5 (Helios) is the current stable release on `main`. XR 2.1 Skills Marketplace foundation is complete and integrated.**
 
 XR 2.1 turns XR from an assistant into an extensible AI operating system with a complete Skill layer:
 
@@ -537,7 +539,7 @@ Doctor includes Voice Stack health: capture tools, playback tools, device count,
 
 ---
 
-## 🏛️ v1.0 Foundation Runtime — AI OS Kernel
+## 🏛️ v3.1.5 (Helios) Foundation Runtime — AI OS Kernel
 
 XR has evolved into a **True AI Operating System**. The v1.0 kernel introduces:
 

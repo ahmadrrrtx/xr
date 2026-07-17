@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
   "version": "3.1.5",
-  "description": "XR 3.0 — The Unified AI Operating System. Local-first, BYOK, secure desktop automation, persistent RAG memories, and workflow supervisor.",
+  "description": "XR 3.1.5 (Helios) — The Unified AI Operating System. Local-first, BYOK, secure desktop automation, persistent RAG memories, and workflow supervisor.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr.cjs"
@@ -25,7 +25,10 @@
     "typecheck": "tsc --noEmit",
     "xr": "bun run src/index.ts",
     "cli:help": "bun run src/index.ts help",
-    "cli:doctor": "bun run src/index.ts doctor"
+    "cli:doctor": "bun run src/index.ts doctor",
+    "set-version": "bun run scripts/set-version.ts",
+    "set-version:check": "bun run scripts/set-version.ts --check",
+    "prepublishOnly": "bun run scripts/set-version.ts --check"
   },
   "repository": {
     "type": "git",
@@ -60,5 +63,6 @@
   },
   "engines": {
     "bun": ">=1.0.0"
-  }
+  },
+  "packageManager": "bun@1.2.0"
 }

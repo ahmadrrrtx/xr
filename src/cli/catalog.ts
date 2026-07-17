@@ -1,11 +1,14 @@
 /**
- * XR 3.1C — Canonical command catalog
+ * XR 3.1.5 (Helios) — Canonical command catalog
  *
  * Single source of truth for help, discovery, aliases, and routing metadata.
- * Aligned with IA §5 (CLI site map) and Navigation vocabulary.
+ * Version and codename are now derived from src/core/version.ts — no hardcodes.
  *
+ * Aligned with IA §5 (CLI site map) and Navigation vocabulary.
  * Do not invent UX — this mirrors docs/xr-3.1/* terminology exactly.
  */
+
+import { CORE_VERSION, CODENAME, DISPLAY_VERSION } from "../core/version.ts";
 
 export type CommandGroup =
   | "start"
@@ -51,13 +54,13 @@ export interface CatalogEntry {
 }
 
 export const GROUP_LABELS: Record<CommandGroup, string> = {
-  start:        "Get started",
-  work:         "Work",
-  context:      "Context",
+  start: "Get started",
+  work: "Work",
+  context: "Context",
   intelligence: "Intelligence",
-  extensions:   "Extensions",
-  trust:        "Trust & safety",
-  system:       "System",
+  extensions: "Extensions",
+  trust: "Trust & safety",
+  system: "System",
 };
 
 export const GROUP_ORDER: CommandGroup[] = [
@@ -668,6 +671,14 @@ export function searchCatalog(query: string): CatalogEntry[] {
   });
 }
 
-/** Product version shown by `xr --version` (kept in sync with package / kernel). */
-export const XR_VERSION = "3.1.5";
-export const XR_CLI_CODENAME = "3.1C";
+/**
+ * Canonical product version and codename — single source of truth is src/core/version.ts
+ * Everyone must import CORE_VERSION/CODENAME/DISPLAY_VERSION from there.
+ * These re-exports exist for backward compat and for `xr version` fast path.
+ */
+export const XR_VERSION: string = CORE_VERSION;
+export const XR_CLI_CODENAME: string = CODENAME;
+export const XR_DISPLAY_VERSION: string = DISPLAY_VERSION;
+
+/** Full identity re-export for convenience */
+export { CORE_VERSION, CODENAME, DISPLAY_VERSION } from "../core/version.ts";

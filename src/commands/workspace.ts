@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — Workspace Command
+ * XR 3.1.5 (Helios) — Workspace Command
  * list | create | use/switch | delete
  * Spec: IA §1.2 Workspace, Navigation workspace switching
  */

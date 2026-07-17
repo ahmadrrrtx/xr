@@ -1,4 +1,5 @@
 /** XR — Doctor Command */
+import { CORE_VERSION } from "../core/version.ts";
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { printStatus, probeHealth, detectPlatform } from "../install/system.ts";
 import { ProviderService } from "../services/provider-service.ts";
@@ -128,7 +129,7 @@ async function runPerfBenchmarks(asJson: boolean): Promise<void> {
   const { parseGlobalFlags } = await loadFlags();
 
   const versionMs = measure(() => {
-    void `v3.1.5`;
+    void `v${CORE_VERSION}`;
   });
 
   const helpMs = measure(() => {
@@ -153,7 +154,7 @@ async function runPerfBenchmarks(asJson: boolean): Promise<void> {
 
   banner();
   console.log(C.bold("CLI performance microbenchmarks"));
-  console.log(C.dim(`  ${samples}-run median · targets from XR 3.1 performance standards\n`));
+  console.log(C.dim(`  ${samples}-run median · targets from XR 3.1.5 (Helios) performance standards\n`));
   for (const r of results) {
     const mark = r.pass ? C.green("PASS") : C.red("FAIL");
     console.log(

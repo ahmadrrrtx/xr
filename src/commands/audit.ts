@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — Audit command
+ * XR 3.1.5 (Helios) — Audit command
  *
  * Canonical: xr audit [tail|verify|export]
  * Legacy alias: xr verify-log → audit verify

@@ -29,8 +29,8 @@ describe('XR Business OS Core', () => {
 
     test('should return correct version', () => {
       const version = biz.getVersion();
-      expect(version.version).toBe('15.0.0');
-      expect(version.stage).toBe('XR 15 Business OS');
+      expect(version.version).toBe('3.1.5');
+      expect(version.stage).toContain('XR 3.1.5');
       expect(version.modules.length).toBe(15);
     });
   });

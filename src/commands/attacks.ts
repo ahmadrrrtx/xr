@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — Injection defense lab
+ * XR 3.1.5 (Helios) — Injection defense lab
  *
  * Canonical: xr attacks
  * Spec: security lab, IA trust vocabulary

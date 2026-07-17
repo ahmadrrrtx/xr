@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — Professional CLI output layer
+ * XR 3.1.5 (Helios) — Professional CLI output layer
  *
  * Shares design language with Shell: tokens, glyphs, status vocabulary.
  * Human-readable by default; machine-readable with --json.

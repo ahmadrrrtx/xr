@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — CLI error types
+ * XR 3.1.5 (Helios) — CLI error types
  *
  * Errors explain: What happened · Why · How to fix.
  * Never print raw stack traces for normal users (XR_DEBUG=1 / --debug only).

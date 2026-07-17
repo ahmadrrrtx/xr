@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — Budget Command
+ * XR 3.1.5 (Helios) — Budget Command
  * View and manage spend caps. Glyph/color aligned with Shell status bar.
  */
 

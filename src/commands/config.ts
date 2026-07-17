@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — Config Command
+ * XR 3.1.5 (Helios) — Config Command
  *
  * xr config [get|set|path|reset]
  * Spec: IA settings architecture

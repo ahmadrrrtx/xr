@@ -2,6 +2,8 @@
  * XR Business OS — Main Entry Point
  * 
  * Stage 15: Business OS
+ * Version is now derived from src/core/version.ts single source of truth.
+ * BusinessOS is a module within XR 3.1.5 (Helios), not a separate version.
  * 
  * This is the unified API for XR Business OS.
  * It initializes all modules and provides a single entry point
@@ -44,6 +46,7 @@ import { ConnectorRegistry } from '../integrations/registry.js';
 import { OAuthManager } from '../integrations/oauth.js';
 import { CredentialVault } from '../integrations/credentials.js';
 import { BusinessSecurityPolicies } from '../security/policies.js';
+import { CORE_VERSION, CODENAME, PKG } from '../core/version.ts';
 
 export interface BusinessOSConfig {
   /** XR's existing SQLite database instance */
@@ -185,12 +188,15 @@ export class BusinessOS {
   }
 
   /**
-   * Get version info.
+   * Get version info — now unified with XR core version.
+   * BusinessOS is a module inside XR, not a separate product version.
    */
-  getVersion(): { version: string; stage: string; modules: string[] } {
+  getVersion(): { version: string; codename: string; stage: string; modules: string[]; pkg: string } {
     return {
-      version: '15.0.0',
-      stage: 'XR 15 Business OS',
+      version: CORE_VERSION,
+      codename: CODENAME,
+      stage: `XR ${CORE_VERSION} (${CODENAME}) — Business OS Module`,
+      pkg: PKG.name,
       modules: [
         'crm', 'sales', 'marketing', 'support', 'projects', 'knowledge',
         'finance', 'hr', 'analytics', 'automation', 'scheduling',

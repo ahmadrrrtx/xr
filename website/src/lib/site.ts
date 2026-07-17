@@ -1,14 +1,29 @@
+/**
+ * XR Website — Single Source of Truth for marketing identity.
+ *
+ * This file must stay in sync with src/core/version.ts and package.json.
+ * Run `bun run scripts/set-version.ts` to stamp version, repo, npm, homepage.
+ *
+ * Real project identity:
+ *   GitHub: https://github.com/ahmadrrrtx/xr
+ *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
+ *   Homepage: https://xr-gules.vercel.app
+ *   Version: 3.1.5 (Helios) — from src/core/version.ts
+ */
+
 export const site = {
   name: "XR",
-  tagline: "The Agentic Runtime for Software",
+  tagline: "The AI Agent You Can Actually Trust — BYOK, local-first, secure",
   description:
-    "XR is an open-source agentic runtime that turns your terminal, editor, and workflow into an AI-native development environment. Build, extend, and ship with 12,000+ skills and models.",
-  url: "https://xr.dev",
-  twitter: "@xr_runtime",
-  github: "https://github.com/xr-dev/xr",
-  npm: "https://www.npmjs.com/package/@xr/agent",
-  installCmd: "npm i -g @xr/agent && xr",
-  version: "3.1.0",
+    "XR is an open-source, local-first AI operating system — BYOK, secure, with persistent memory, research, voice, plugins, MCP, multi-agent runtime, and workflow automation. Built on Bun + TypeScript + SQLite.",
+  url: "https://xr-gules.vercel.app",
+  twitter: "@ahmadrrrtx",
+  github: "https://github.com/ahmadrrrtx/xr",
+  npm: "https://www.npmjs.com/package/@rrrtx/xr",
+  installCmd: "npm i -g @rrrtx/xr && xr",
+  version: "3.1.5",
+  codename: "Helios",
+  displayVersion: "3.1.5 (Helios)",
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },
@@ -51,4 +66,6 @@ export const site = {
       { label: "Terms", href: "/terms" },
     ],
   },
-};
+} as const;
+
+export type SiteConfig = typeof site;

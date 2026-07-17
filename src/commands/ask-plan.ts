@@ -1,5 +1,5 @@
 /**
- * XR 3.1C — Ask & Plan convenience commands
+ * XR 3.1.5 (Helios) — Ask & Plan convenience commands
  *
  * xr ask  "<question>"  → run with --mode ask
  * xr plan "<task>"      → run with --mode plan
