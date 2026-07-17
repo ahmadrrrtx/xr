@@ -6,14 +6,14 @@
 import { CostRepo } from "../state/repos/cost-repo.ts";
 import { BudgetManager, BudgetStatus } from "../cost/manager.ts";
 import { CostGovernor, Budget, Pricing, CostSnapshot, GovernorDecision } from "../cost/governor.ts";
-import { Container } from "../core/container.ts";
+import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 
 export class BudgetService implements LifecycleHook {
-  private container: Container;
+  private container: ServiceRegistry;
   private budgetManager: BudgetManager;
 
-  constructor(container: Container) {
+  constructor(container: ServiceRegistry) {
     this.container = container;
     const costStore = this.container.resolve<CostRepo>("costStore");
     this.budgetManager = new BudgetManager(costStore as any); 

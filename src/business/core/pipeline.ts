@@ -5,8 +5,8 @@
  * Integrates with XR Automation for workflow triggers.
  */
 
-import { BusinessDatabase } from './database.js';
-import type { Pipeline, PipelineStage, Deal, DealStage, PaginatedResult, PaginationParams } from './types.js';
+import { BusinessDatabase } from './database.ts';
+import type { Pipeline, PipelineStage, Deal, DealStage, PaginatedResult, PaginationParams } from './types.ts';
 
 const DEFAULT_STAGES: PipelineStage[] = [
   { id: 'lead', name: 'Lead', order: 0, probability: 10, color: '#94a3b8' },

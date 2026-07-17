@@ -17,11 +17,11 @@
  * - XR Shield: All actions audited and policy-checked
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { AuditTrail } from '../../core/audit.js';
-import type { RBACManager } from '../../core/rbac.js';
-import type { AIWorker, WorkerRole, WorkerConversation, WorkerMessage, WorkerContext, WorkerCapability, Permission } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { AuditTrail } from '../../core/audit.ts';
+import type { RBACManager } from '../../core/rbac.ts';
+import type { AIWorker, WorkerRole, WorkerConversation, WorkerMessage, WorkerContext, WorkerCapability, Permission } from '../../core/types.ts';
 
 export interface AIWorkersModuleConfig {
   db: BusinessDatabase;

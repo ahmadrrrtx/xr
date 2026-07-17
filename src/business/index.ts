@@ -10,7 +10,7 @@
  * that integrates with XR's existing architecture.
  * 
  * Usage:
- *   import { BusinessOS } from './business/index.js';
+ *   import { BusinessOS } from './business/index.ts';
  *   const biz = new BusinessOS(db);
  *   await biz.initialize();
  *   biz.crm.createContact(workspaceId, { name: 'John' });
@@ -18,35 +18,36 @@
  *   biz.workers.deployWorker(workspaceId, 'sales_director');
  */
 
-import { BusinessDatabase } from './core/database.js';
-import { OrganizationManager } from './core/organization.js';
-import { RBACManager } from './core/rbac.js';
-import { ContactManager } from './core/contacts.js';
-import { PipelineManager } from './core/pipeline.js';
-import { BusinessEventBus } from './core/bus.js';
-import { AuditTrail } from './core/audit.js';
+import { BusinessDatabase } from './core/database.ts';
+import { OrganizationManager } from './core/organization.ts';
+import { RBACManager } from './core/rbac.ts';
+import { ContactManager } from './core/contacts.ts';
+import { PipelineManager } from './core/pipeline.ts';
+import { BusinessEventBus } from './core/bus.ts';
+import { AuditTrail } from './core/audit.ts';
 
-import { CRMModule } from './modules/crm/index.js';
-import { SalesModule } from './modules/sales/index.js';
-import { MarketingModule } from './modules/marketing/index.js';
-import { SupportModule } from './modules/support/index.js';
-import { ProjectsModule } from './modules/projects/index.js';
-import { KnowledgeModule } from './modules/knowledge/index.js';
-import { FinanceModule } from './modules/finance/index.js';
-import { HRModule } from './modules/hr/index.js';
-import { AnalyticsModule } from './modules/analytics/index.js';
-import { AutomationEngine } from './modules/automation/engine.js';
-import { SchedulingModule } from './modules/scheduling/index.js';
-import { CommunicationModule } from './modules/communication/index.js';
-import { DocumentsModule } from './modules/documents/index.js';
-import { MeetingsModule } from './modules/meetings/index.js';
-import { AIWorkersModule, WORKER_DEFINITIONS } from './modules/ai-workers/index.js';
+import { CRMModule } from './modules/crm/index.ts';
+import { SalesModule } from './modules/sales/index.ts';
+import { MarketingModule } from './modules/marketing/index.ts';
+import { SupportModule } from './modules/support/index.ts';
+import { ProjectsModule } from './modules/projects/index.ts';
+import { KnowledgeModule } from './modules/knowledge/index.ts';
+import { FinanceModule } from './modules/finance/index.ts';
+import { HRModule } from './modules/hr/index.ts';
+import { AnalyticsModule } from './modules/analytics/index.ts';
+import { AutomationEngine } from './modules/automation/engine.ts';
+import { SchedulingModule } from './modules/scheduling/index.ts';
+import { CommunicationModule } from './modules/communication/index.ts';
+import { DocumentsModule } from './modules/documents/index.ts';
+import { MeetingsModule } from './modules/meetings/index.ts';
+import { AIWorkersModule, WORKER_DEFINITIONS } from './modules/ai-workers/index.ts';
 
-import { ConnectorRegistry } from '../integrations/registry.js';
-import { OAuthManager } from '../integrations/oauth.js';
-import { CredentialVault } from '../integrations/credentials.js';
-import { BusinessSecurityPolicies } from '../security/policies.js';
+import { ConnectorRegistry } from '../integrations/registry.ts';
+import { OAuthManager } from '../integrations/oauth.ts';
+import { CredentialVault } from '../integrations/credentials.ts';
+import { BusinessSecurityPolicies } from '../security/policies.ts';
 import { CORE_VERSION, CODENAME, PKG } from '../core/version.ts';
+import type { LifecycleHook } from '../core/lifecycle.ts';
 
 export interface BusinessOSConfig {
   /** XR's existing SQLite database instance */
@@ -57,7 +58,7 @@ export interface BusinessOSConfig {
   modules?: string[];
 }
 
-export class BusinessOS {
+export class BusinessOS implements LifecycleHook {
   // Core
   readonly db: BusinessDatabase;
   readonly orgs: OrganizationManager;
@@ -130,6 +131,18 @@ export class BusinessOS {
 
     // Initialize security
     this.security = new BusinessSecurityPolicies(this.db, this.rbac, this.audit);
+  }
+
+  async onInit(): Promise<void> {
+    await this.initialize();
+  }
+
+  async onStart(): Promise<void> {
+    // Business OS is ready; no special startup actions needed.
+  }
+
+  async onStop(): Promise<void> {
+    // Graceful shutdown for business modules (best-effort).
   }
 
   /**
@@ -214,25 +227,25 @@ export class BusinessOS {
 }
 
 // Re-export everything
-export * from './core/types.js';
-export * from './core/index.js';
-export { CRMModule } from './modules/crm/index.js';
-export { SalesModule } from './modules/sales/index.js';
-export { MarketingModule } from './modules/marketing/index.js';
-export { SupportModule } from './modules/support/index.js';
-export { ProjectsModule } from './modules/projects/index.js';
-export { KnowledgeModule } from './modules/knowledge/index.js';
-export { FinanceModule } from './modules/finance/index.js';
-export { HRModule } from './modules/hr/index.js';
-export { AnalyticsModule } from './modules/analytics/index.js';
-export { AutomationEngine } from './modules/automation/engine.js';
-export { SchedulingModule } from './modules/scheduling/index.js';
-export { CommunicationModule } from './modules/communication/index.js';
-export { DocumentsModule } from './modules/documents/index.js';
-export { MeetingsModule } from './modules/meetings/index.js';
-export { AIWorkersModule, WORKER_DEFINITIONS } from './modules/ai-workers/index.js';
-export { ConnectorRegistry, CONNECTORS } from '../integrations/registry.js';
-export { OAuthManager } from '../integrations/oauth.js';
-export { CredentialVault } from '../integrations/credentials.js';
-export { BusinessSecurityPolicies } from '../security/policies.js';
-export { BUSINESS_CLI_COMMANDS, BUSINESS_MODULE_IDS } from './cli.js';
+export * from './core/types.ts';
+export * from './core/index.ts';
+export { CRMModule } from './modules/crm/index.ts';
+export { SalesModule } from './modules/sales/index.ts';
+export { MarketingModule } from './modules/marketing/index.ts';
+export { SupportModule } from './modules/support/index.ts';
+export { ProjectsModule } from './modules/projects/index.ts';
+export { KnowledgeModule } from './modules/knowledge/index.ts';
+export { FinanceModule } from './modules/finance/index.ts';
+export { HRModule } from './modules/hr/index.ts';
+export { AnalyticsModule } from './modules/analytics/index.ts';
+export { AutomationEngine } from './modules/automation/engine.ts';
+export { SchedulingModule } from './modules/scheduling/index.ts';
+export { CommunicationModule } from './modules/communication/index.ts';
+export { DocumentsModule } from './modules/documents/index.ts';
+export { MeetingsModule } from './modules/meetings/index.ts';
+export { AIWorkersModule, WORKER_DEFINITIONS } from './modules/ai-workers/index.ts';
+export { ConnectorRegistry, CONNECTORS } from '../integrations/registry.ts';
+export { OAuthManager } from '../integrations/oauth.ts';
+export { CredentialVault } from '../integrations/credentials.ts';
+export { BusinessSecurityPolicies } from '../security/policies.ts';
+export { BUSINESS_CLI_COMMANDS, BUSINESS_MODULE_IDS } from './cli.ts';

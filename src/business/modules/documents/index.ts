@@ -10,9 +10,9 @@
  * - Integrations: Google Drive, OneDrive sync
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { Document, DocumentTemplate, TemplateVariable, PaginatedResult, PaginationParams } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { Document, DocumentTemplate, TemplateVariable, PaginatedResult, PaginationParams } from '../../core/types.ts';
 
 export interface DocumentsModuleConfig {
   db: BusinessDatabase;

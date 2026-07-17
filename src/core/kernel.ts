@@ -13,7 +13,7 @@
  * Version is now derived from src/core/version.ts single source of truth.
  */
 
-import { Container } from "./container.ts";
+import { ServiceRegistry, ServiceRegistryImpl } from "./service-registry.ts";
 import { EventBus } from "./event-bus.ts";
 import { CommandRegistry } from "./command-registry.ts";
 import { LifecycleManager } from "./lifecycle.ts";
@@ -48,7 +48,7 @@ export class XRKernel {
   public static readonly PKG = PKG;
   public static readonly CORE_VERSION = CORE_VERSION;
 
-  public readonly container = new Container();
+  public readonly container = new ServiceRegistryImpl();
   public readonly events = new EventBus();
   public readonly commands = new CommandRegistry();
   public readonly lifecycle = new LifecycleManager();
@@ -124,6 +124,12 @@ export class XRKernel {
     const businessOS = new BusinessOS({ db: workspaceStore });
     this.container.register("business", businessOS);
 
+    const businessEnabled = configService.get().business?.enabled ?? false;
+
+    if (businessEnabled) {
+      await businessOS.initialize();
+    }
+
     // Register with Lifecycle Manager
     this.lifecycle.register(configService);
     this.lifecycle.register(providerService);
@@ -133,6 +139,9 @@ export class XRKernel {
     this.lifecycle.register(skillService);
     this.lifecycle.register(agentService);
     this.lifecycle.register(multiAgentService);
+    if (businessEnabled) {
+      this.lifecycle.register(businessOS);
+    }
 
     await this.lifecycle.init();
     this.events.emit("kernel.bootstrapped", { version: CORE_VERSION, ...versionInfo() });
@@ -272,6 +281,18 @@ export class XRKernel {
 
     const businessOS = new BusinessOS({ db: newStore });
     this.container.register("business", businessOS);
+
+    // Check feature flag and initialize if enabled
+    try {
+      const configS = this.container.resolve<any>("config");
+      const businessEnabled = (configS?.get ? configS.get().business?.enabled : false) ?? false;
+      if (businessEnabled) {
+        await businessOS.initialize();
+        this.lifecycle.register(businessOS);
+      }
+    } catch {
+      // Best-effort on workspace switch
+    }
 
     // Restart background jobs on the new workspace database
     this.services.startAll();

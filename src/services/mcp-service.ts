@@ -2,7 +2,7 @@
  * XR Stage 11 — MCP Service (lifecycle integration)
  */
 import { McpManager } from "../mcp/manager.ts";
-import { Container } from "../core/container.ts";
+import { ServiceRegistry } from "../core/service-registry.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { Tool } from "../core/types.ts";
 import { Store } from "../state/workspace-store.ts";

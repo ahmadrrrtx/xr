@@ -1,6 +1,6 @@
 /** XR Stage 10 — Plugin Service. */
 import { PluginManager, type InstallResult } from "../plugins/manager.ts";
-import { Container } from "../core/container.ts";
+import { ServiceRegistry } from "../core/service-registry.ts";
 import { ConfigService } from "./config-service.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { PermissionScope } from "../plugins/types.ts";

@@ -849,7 +849,20 @@ function createSecureSandbox(pluginId: string): any {
       }
       delete target[prop];
       return true;
-    }
+    },
+
+    defineProperty(target: any, prop: string | symbol, descriptor: PropertyDescriptor): boolean {
+      // Prevent redefinition of blocked globals
+      if (typeof prop === "string" && BLOCKED_GLOBALS.has(prop)) {
+        return false;
+      }
+      return Reflect.defineProperty(target, prop, descriptor);
+    },
+
+    setPrototypeOf(target: any, proto: object | null): boolean {
+      // Lock prototype to prevent prototype injection attacks
+      return false;
+    },
   };
 
   // Set globalThis and self to the proxied sandbox

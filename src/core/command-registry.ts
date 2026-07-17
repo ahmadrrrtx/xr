@@ -3,10 +3,10 @@
  * Decouples CLI command parsing from command implementation.
  */
 
-import { Container } from "./container.ts";
+import { ServiceRegistry } from "./service-registry.ts";
 
 export interface CommandContext {
-  container: Container;
+  container: ServiceRegistry;
   args: string[];
   cwd: string;
 }

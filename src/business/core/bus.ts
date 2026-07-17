@@ -5,8 +5,8 @@
  * Business modules emit events here; automation engine subscribes.
  */
 
-import { BusinessDatabase } from './database.js';
-import type { BusinessEvent } from './types.js';
+import { BusinessDatabase } from './database.ts';
+import type { BusinessEvent } from './types.ts';
 
 export type EventHandler = (event: BusinessEvent) => void | Promise<void>;
 

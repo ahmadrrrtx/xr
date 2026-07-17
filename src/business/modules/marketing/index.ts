@@ -11,10 +11,10 @@
  * - Communication: Email sending via connected providers
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { AuditTrail } from '../../core/audit.js';
-import type { ContactManager } from '../../core/contacts.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { AuditTrail } from '../../core/audit.ts';
+import type { ContactManager } from '../../core/contacts.ts';
 
 export interface Campaign {
   id: string;

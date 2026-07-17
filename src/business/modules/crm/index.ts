@@ -12,12 +12,12 @@
  * - MCP Platform: HubSpot, Salesforce sync
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { ContactManager } from '../../core/contacts.js';
-import type { PipelineManager } from '../../core/pipeline.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { AuditTrail } from '../../core/audit.js';
-import type { Contact, Deal, Pipeline, PaginatedResult, PaginationParams, FilterParams, SearchResult } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { ContactManager } from '../../core/contacts.ts';
+import type { PipelineManager } from '../../core/pipeline.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { AuditTrail } from '../../core/audit.ts';
+import type { Contact, Deal, Pipeline, PaginatedResult, PaginationParams, FilterParams, SearchResult } from '../../core/types.ts';
 
 export interface CRMModuleConfig {
   db: BusinessDatabase;

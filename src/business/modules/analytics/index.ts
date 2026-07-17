@@ -10,9 +10,9 @@
  * - Research Engine: Market benchmarking
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { Dashboard, DashboardWidget, Report, ReportConfig } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { Dashboard, DashboardWidget, Report, ReportConfig } from '../../core/types.ts';
 
 export interface AnalyticsModuleConfig {
   db: BusinessDatabase;

@@ -12,12 +12,12 @@
  * - Finance: Invoice generation from closed deals
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { PipelineManager } from '../../core/pipeline.js';
-import type { ContactManager } from '../../core/contacts.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { AuditTrail } from '../../core/audit.js';
-import type { Deal, Pipeline, PipelineStage, PaginatedResult, PaginationParams } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { PipelineManager } from '../../core/pipeline.ts';
+import type { ContactManager } from '../../core/contacts.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { AuditTrail } from '../../core/audit.ts';
+import type { Deal, Pipeline, PipelineStage, PaginatedResult, PaginationParams } from '../../core/types.ts';
 
 export interface SalesModuleConfig {
   db: BusinessDatabase;

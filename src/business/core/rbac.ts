@@ -5,8 +5,8 @@
  * All business operations check permissions before execution.
  */
 
-import { BusinessDatabase } from './database.js';
-import type { Member, OrgRole, Permission, PermissionAction } from './types.js';
+import { BusinessDatabase } from './database.ts';
+import type { Member, OrgRole, Permission, PermissionAction } from './types.ts';
 
 // Default permissions per role
 const ROLE_HIERARCHY: Record<OrgRole, number> = {

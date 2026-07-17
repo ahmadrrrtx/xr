@@ -2,14 +2,14 @@
  * XR Business OS — Core Barrel Export
  */
 
-export * from './types.js';
-export { BUSINESS_SCHEMA_VERSION, BUSINESS_TABLES, BUSINESS_TABLE_NAMES } from './schema.js';
-export { BusinessDatabase } from './database.js';
-export { OrganizationManager } from './organization.js';
-export { RBACManager } from './rbac.js';
-export type { AccessCheckResult } from './rbac.js';
-export { ContactManager } from './contacts.js';
-export { PipelineManager } from './pipeline.js';
-export { BusinessEventBus } from './bus.js';
-export type { EventHandler } from './bus.js';
-export { AuditTrail } from './audit.js';
+export * from './types.ts';
+export { BUSINESS_SCHEMA_VERSION, BUSINESS_TABLES, BUSINESS_TABLE_NAMES } from './schema.ts';
+export { BusinessDatabase } from './database.ts';
+export { OrganizationManager } from './organization.ts';
+export { RBACManager } from './rbac.ts';
+export type { AccessCheckResult } from './rbac.ts';
+export { ContactManager } from './contacts.ts';
+export { PipelineManager } from './pipeline.ts';
+export { BusinessEventBus } from './bus.ts';
+export type { EventHandler } from './bus.ts';
+export { AuditTrail } from './audit.ts';

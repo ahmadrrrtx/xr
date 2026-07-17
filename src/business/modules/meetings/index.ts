@@ -11,9 +11,9 @@
  * - Integrations: Zoom, Google Meet, Cal.com
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { Meeting, MeetingAttendee } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { Meeting, MeetingAttendee } from '../../core/types.ts';
 
 export interface MeetingsModuleConfig {
   db: BusinessDatabase;

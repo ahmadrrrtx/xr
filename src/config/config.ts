@@ -23,7 +23,7 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 12; // Stage 8 Voice Stack
+export const CONFIG_VERSION = 13; // Business OS feature flag
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -297,6 +297,11 @@ const ConfigSchema = z.object({
       deniedPermissions: z.array(z.string()).default([]),
     })
     .default({}),
+  business: z
+    .object({
+      enabled: z.boolean().default(false),
+    })
+    .default({}),
 });
 
 export type XRConfig = z.infer<typeof ConfigSchema>;
@@ -422,6 +427,12 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       saveSessionSummaries: raw.memory?.saveSessionSummaries ?? false,
       sessionSummaryMinTurns: raw.memory?.sessionSummaryMinTurns ?? 6,
     },
+  }),
+  // 12 -> 13: Business OS feature flag.
+  12: (raw) => ({
+    ...raw,
+    version: 13,
+    business: raw.business ?? { enabled: false },
   }),
   // 11 -> 12: Stage 8 Voice Stack — safe, disabled-by-default, local-first.
   11: (raw) => ({

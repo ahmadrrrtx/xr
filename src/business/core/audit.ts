@@ -6,8 +6,8 @@
  */
 
 import { createHash } from 'crypto';
-import { BusinessDatabase } from './database.js';
-import type { AuditEntry } from './types.js';
+import { BusinessDatabase } from './database.ts';
+import type { AuditEntry } from './types.ts';
 
 export class AuditTrail {
   constructor(private db: BusinessDatabase) {}

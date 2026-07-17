@@ -10,9 +10,9 @@
  * - Support Module: Public KB for customers
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { KnowledgeArticle, PaginatedResult, PaginationParams } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { KnowledgeArticle, PaginatedResult, PaginationParams } from '../../core/types.ts';
 
 export interface KnowledgeModuleConfig {
   db: BusinessDatabase;

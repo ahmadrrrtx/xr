@@ -10,10 +10,10 @@
  * - HR: Time tracking for employees
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { AuditTrail } from '../../core/audit.js';
-import type { Project, Task, Milestone, TaskStatus, TaskPriority, PaginatedResult, PaginationParams } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { AuditTrail } from '../../core/audit.ts';
+import type { Project, Task, Milestone, TaskStatus, TaskPriority, PaginatedResult, PaginationParams } from '../../core/types.ts';
 
 export interface ProjectsModuleConfig {
   db: BusinessDatabase;

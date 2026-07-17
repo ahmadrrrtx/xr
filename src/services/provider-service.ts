@@ -18,14 +18,14 @@ import {
 } from "../providers/factory.ts";
 import type { Provider } from "../core/types.ts";
 import { ConfigService } from "./config-service.ts";
-import { Container } from "../core/container.ts";
+import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 import { setSecret, getSecret } from "../security/secrets.ts";
 
 export class ProviderService implements LifecycleHook {
-  private container: Container;
+  private container: ServiceRegistry;
 
-  constructor(container: Container) {
+  constructor(container: ServiceRegistry) {
     this.container = container;
   }
 

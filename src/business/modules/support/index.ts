@@ -11,10 +11,10 @@
  * - Automation: Ticket routing, SLA alerts
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { AuditTrail } from '../../core/audit.js';
-import type { Ticket, TicketMessage, TicketStatus, TicketPriority, SLAPolicy, PaginatedResult, PaginationParams } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { AuditTrail } from '../../core/audit.ts';
+import type { Ticket, TicketMessage, TicketStatus, TicketPriority, SLAPolicy, PaginatedResult, PaginationParams } from '../../core/types.ts';
 
 export interface SupportModuleConfig {
   db: BusinessDatabase;

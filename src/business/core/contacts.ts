@@ -5,8 +5,8 @@
  * Contacts are the central entity that connects everything.
  */
 
-import { BusinessDatabase } from './database.js';
-import type { Contact, ContactNote, ContactActivity, ContactType, ContactStatus, PaginatedResult, PaginationParams, FilterParams } from './types.js';
+import { BusinessDatabase } from './database.ts';
+import type { Contact, ContactNote, ContactActivity, ContactType, ContactStatus, PaginatedResult, PaginationParams, FilterParams } from './types.ts';
 
 export class ContactManager {
   constructor(private db: BusinessDatabase) {}

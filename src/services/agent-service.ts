@@ -3,7 +3,7 @@
  * Orchestrates the reasoning-action loop for the AI agent.
  */
 
-import { Container } from "../core/container.ts";
+import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 import { runAgent, type AgentDeps, type AgentResult } from "../core/agent.ts";
 import { ProviderService } from "./provider-service.ts";
@@ -21,9 +21,9 @@ import { priceFor } from "../cost/pricing.ts";
 import type { Mode, Provider } from "../core/types.ts";
 
 export class AgentService implements LifecycleHook {
-  private container: Container;
+  private container: ServiceRegistry;
 
-  constructor(container: Container) {
+  constructor(container: ServiceRegistry) {
     this.container = container;
   }
 

@@ -11,10 +11,10 @@
  * - Integrations: Stripe, PayPal for payments
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { AuditTrail } from '../../core/audit.js';
-import type { Invoice, InvoiceLineItem, InvoiceStatus, Expense, PaginatedResult, PaginationParams } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { AuditTrail } from '../../core/audit.ts';
+import type { Invoice, InvoiceLineItem, InvoiceStatus, Expense, PaginatedResult, PaginationParams } from '../../core/types.ts';
 
 export interface FinanceModuleConfig {
   db: BusinessDatabase;

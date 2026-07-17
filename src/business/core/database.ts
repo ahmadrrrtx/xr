@@ -5,7 +5,7 @@
  * Adds business tables without modifying existing XR tables.
  */
 
-import { BUSINESS_SCHEMA_VERSION, BUSINESS_TABLES, BUSINESS_TABLE_NAMES } from './schema.js';
+import { BUSINESS_SCHEMA_VERSION, BUSINESS_TABLES, BUSINESS_TABLE_NAMES } from './schema.ts';
 
 export class BusinessDatabase {
   private db: any; // XR's existing Database instance

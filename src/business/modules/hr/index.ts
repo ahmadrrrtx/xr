@@ -10,9 +10,9 @@
  * - Projects: Time tracking
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { Employee, TimeOffRequest, TimeOffType } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { Employee, TimeOffRequest, TimeOffType } from '../../core/types.ts';
 
 export interface HRModuleConfig {
   db: BusinessDatabase;

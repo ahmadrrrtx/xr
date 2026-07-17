@@ -38,6 +38,7 @@ import { SessionCommand } from "../commands/session.ts";
 import { AttacksCommand } from "../commands/attacks.ts";
 import { AskCommand, PlanCommand } from "../commands/ask-plan.ts";
 import { LogsCommand } from "../commands/logs.ts";
+import { BusinessCommand, BizAliasCommand } from "../commands/business.ts";
 import { serve } from "../daemon/server.ts";
 import { CORE_VERSION, CODENAME, PKG, versionInfo } from "../core/version.ts";
 import {
@@ -89,6 +90,8 @@ function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new SessionCommand());
   kernel.commands.register(new AttacksCommand());
   kernel.commands.register(new LogsCommand());
+  kernel.commands.register(new BusinessCommand());
+  kernel.commands.register(new BizAliasCommand());
 }
 
 // ── Alias → registry name ─────────────────────────────────────────────────────
@@ -157,6 +160,8 @@ const REGISTRY_NAME: Record<string, string> = {
   onboarding: "onboarding",
   setup: "onboarding",
   init: "onboarding",
+  business: "business",
+  biz: "business",
   task: "run",
   do: "run",
   exec: "run",

@@ -5,8 +5,8 @@
  * Integrates with XR's Memory Engine for persistence.
  */
 
-import { BusinessDatabase } from './database.js';
-import type { Organization, OrgSettings, OrgRole } from './types.js';
+import { BusinessDatabase } from './database.ts';
+import type { Organization, OrgSettings, OrgRole } from './types.ts';
 
 const DEFAULT_ORG_SETTINGS: OrgSettings = {
   defaultCurrency: 'USD',

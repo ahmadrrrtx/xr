@@ -10,9 +10,9 @@
  * - Automation: Reminders and follow-ups
  */
 
-import type { BusinessDatabase } from '../../core/database.js';
-import type { BusinessEventBus } from '../../core/bus.js';
-import type { CalendarEvent } from '../../core/types.js';
+import type { BusinessDatabase } from '../../core/database.ts';
+import type { BusinessEventBus } from '../../core/bus.ts';
+import type { CalendarEvent } from '../../core/types.ts';
 
 export interface SchedulingModuleConfig {
   db: BusinessDatabase;

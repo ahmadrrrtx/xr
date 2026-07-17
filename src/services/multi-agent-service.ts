@@ -11,7 +11,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { Container } from "../core/container.ts";
+import { ServiceRegistry } from "../core/service-registry.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { EventBus } from "../core/event-bus.ts";
 import { AgentService } from "./agent-service.ts";
