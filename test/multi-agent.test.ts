@@ -5,12 +5,14 @@ import { join } from "node:path";
 
 import { listAgents, getAgentDefinition } from "../src/agents/registry.ts";
 import { compileWorkflowPlan } from "../src/agents/planner.ts";
-import { WorkflowStore } from "../src/state/stores/workflow-store.ts";
-import { MultiAgentService } from "../src/services/multi-agent-service.ts";
-import { Container } from "../src/core/container.ts";
+// 0.2 Storage Unification: repos are views over the single WorkspaceStore.
+import { WorkspaceStore } from "../src/state/workspace-store.ts";
+import { WorkflowRepo } from "../src/state/repos/workflow-repo.ts";
+import { AuditRepo } from "../src/state/repos/audit-repo.ts";
+// 0.6 Runtime/DI cleanup: typed ServiceRegistry replaces the legacy Container.
+import { ServiceRegistryImpl } from "../src/core/service-registry.ts";
 import { EventBus } from "../src/core/event-bus.ts";
-import { AuditStore } from "../src/state/stores/audit-store.ts";
-import { Store } from "../src/state/db.ts";
+import { MultiAgentService } from "../src/services/multi-agent-service.ts";
 
 let HOME: string;
 
@@ -60,19 +62,20 @@ test("workflow compiler creates explicit review + synthesis stages for build wor
 });
 
 test("workflow store persists and reloads task graphs", () => {
-  const store = new WorkflowStore(join(HOME, "workflows.db"));
+  const store = new WorkspaceStore(join(HOME, "workflows.db"));
+  const workflows = new WorkflowRepo(store);
   try {
     const plan = compileWorkflowPlan({
       goal: "Research package choices for this repo",
       cwd: process.cwd(),
     });
-    store.saveWorkflow(plan);
-    const loaded = store.getWorkflow(plan.workflowId);
+    workflows.saveWorkflow(plan);
+    const loaded = workflows.getWorkflow(plan.workflowId);
     expect(loaded).not.toBeNull();
     expect(loaded!.workflowId).toBe(plan.workflowId);
     expect(loaded!.tasks.length).toBe(plan.tasks.length);
 
-    const rows = store.listWorkflowSummaries(10);
+    const rows = workflows.listWorkflowSummaries(10);
     expect(rows.some((r) => r.workflowId === plan.workflowId)).toBe(true);
   } finally {
     store.close();
@@ -80,14 +83,15 @@ test("workflow store persists and reloads task graphs", () => {
 });
 
 test("multi-agent service can plan and request cancellation without execution", () => {
-  const container = new Container();
-  const workflowStore = new WorkflowStore(join(HOME, "service-workflows.db"));
-  const auditStore = new AuditStore(join(HOME, "service-audit.db"));
-  const legacyStore = new Store(join(HOME, "service-legacy.db"));
+  const container = new ServiceRegistryImpl();
+  // One unified store; the repos and services are views over it.
+  const store = new WorkspaceStore(join(HOME, "service.db"));
+  const workflowStore = new WorkflowRepo(store);
+  const auditStore = new AuditRepo(store);
   const events = new EventBus();
+  container.register("store", store);
   container.register("workflowStore", workflowStore);
   container.register("auditStore", auditStore);
-  container.register("legacyStore", legacyStore);
   container.register("events", events);
 
   try {
@@ -97,8 +101,6 @@ test("multi-agent service can plan and request cancellation without execution", 
     const stopped = svc.stopWorkflow(record.workflowId);
     expect(stopped.cancellationState).toBe("requested");
   } finally {
-    workflowStore.close();
-    auditStore.close();
-    legacyStore.close();
+    store.close();
   }
 });

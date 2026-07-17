@@ -74,9 +74,17 @@ export function peekCachedConfig<T = unknown>(): T | null {
 }
 
 export function invalidateConfigCache(reason = "manual"): void {
+  // "secrets" invalidates ONLY the secrets cache — the config snapshot stays
+  // valid so the daemon hot path is not forced back to disk. Callers that
+  // need both gone pass "all".
+  if (reason === "secrets") {
+    secretsLoaded = false;
+    secretsLoadedAt = 0;
+    return;
+  }
   holder = null;
   // secrets stay in process.env; only re-read file backends when forced
-  if (reason === "secrets" || reason === "all") {
+  if (reason === "all") {
     secretsLoaded = false;
     secretsLoadedAt = 0;
   }

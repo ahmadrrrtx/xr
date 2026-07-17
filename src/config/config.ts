@@ -302,6 +302,19 @@ const ConfigSchema = z.object({
       enabled: z.boolean().default(false),
     })
     .default({}),
+  // Onboarding-persisted user profile (written by src/interfaces/onboard.ts).
+  workspace: z
+    .object({
+      name: z.string().min(1).max(120).default("My Workspace"),
+    })
+    .default({}),
+  theme: z.enum(["dark", "high-contrast", "reduced-motion"]).default("dark"),
+  accessibility: z
+    .object({
+      largeText: z.boolean().default(false),
+      screenReader: z.boolean().default(false),
+    })
+    .default({}),
 });
 
 export type XRConfig = z.infer<typeof ConfigSchema>;

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CostGovernor } from "../src/cost/governor.ts";
 import { priceFor, isLocal } from "../src/cost/pricing.ts";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { runAgent } from "../src/core/agent.ts";
 import type { Provider } from "../src/core/types.ts";
 

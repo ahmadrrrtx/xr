@@ -156,7 +156,11 @@ describe("Config Cache — Performance & Security", () => {
 
   describe("File watcher (non-blocking)", () => {
     test("stopWatcher stops active watcher and clears pending reload", () => {
-      setCachedConfig({ watch: true }, [], join(TEST_HOME, "watch-test.json"));
+      // fs.watch throws on a non-existent target (Node + Bun), so a real
+      // config file must exist for a watcher to be establishable.
+      const watchedFile = join(TEST_HOME, "watch-test.json");
+      writeFileSync(watchedFile, JSON.stringify({ watch: true }));
+      setCachedConfig({ watch: true }, [], watchedFile);
       const meta = cacheMeta();
       expect(meta.watchActive).toBe(true);
       stopWatcher();
@@ -165,8 +169,17 @@ describe("Config Cache — Performance & Security", () => {
     });
 
     test("setCachedConfig starts a new watcher for the given path", () => {
-      setCachedConfig({ w: 1 }, [], join(TEST_HOME, "watch-new.json"));
+      const watchedFile = join(TEST_HOME, "watch-new.json");
+      writeFileSync(watchedFile, JSON.stringify({ w: 1 }));
+      setCachedConfig({ w: 1 }, [], watchedFile);
       expect(cacheMeta().watchActive).toBe(true);
+    });
+
+    test("watcher on a missing file is handled gracefully (no throw, no watcher)", () => {
+      // Honesty check: not throwing is the contract, and watchActive stays
+      // false so cacheMeta() never claims a watcher it does not have.
+      setCachedConfig({ w: 2 }, [], join(TEST_HOME, "does-not-exist.json"));
+      expect(cacheMeta().watchActive).toBe(false);
     });
   });
 

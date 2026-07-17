@@ -10,6 +10,7 @@ import { Store } from "../state/workspace-store.ts";
 import { XRShieldService, ShieldThreat, KNOWN_MINER_NAMES, SHIELD_STATE_PATH } from "../security/shield.ts";
 import { platform } from "node:os";
 import { existsSync } from "node:fs";
+import { commandExists } from "../util/process.ts";
 import {
   banner,
   heading,
@@ -262,7 +263,7 @@ export class ShieldCommand implements Command {
 
     console.log(`  Overall Privacy Rating:`);
     const scoreColor = result.score >= 80 ? C.green : result.score >= 50 ? C.amber : C.red;
-    console.log(`  ${scoreColor(A.bold(`[ ${result.score} / 100 ]`))} — ${result.score >= 80 ? "Excellent Gating" : "Exposure Warning"}\n`);
+    console.log(`  ${scoreColor(C.bold(`[ ${result.score} / 100 ]`))} — ${result.score >= 80 ? "Excellent Gating" : "Exposure Warning"}\n`);
 
     console.log(`  Privacy Checklist:`);
     for (const c of result.checks) {
@@ -496,7 +497,7 @@ export class ShieldCommand implements Command {
 
     const toggle = subArgs[0].toLowerCase();
     if (toggle === "on" || toggle === "enable") {
-      const auth = await confirm("Enabling this activates ad-block state in Shield configuration. A hosts file reference template is available via "xr shield adblock". Approve?", true);
+      const auth = await confirm("Enabling this activates ad-block state in Shield configuration. A hosts file reference template is available via 'xr shield adblock'. Approve?", true);
       if (auth) {
         await service.toggleAdBlock(true);
         success("Hosts-based ad and tracker protection activated successfully.");

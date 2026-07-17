@@ -15,7 +15,7 @@ export interface ConnectorDefinition {
   description: string;
   category: 'communication' | 'calendar' | 'development' | 'storage' | 'crm_erp' | 'automation' | 'analytics' | 'payments' | 'commerce' | 'design' | 'infrastructure';
   icon: string;
-  authType: 'oauth2' | 'api_key' | 'basic' | 'bearer' | 'none';
+  authType: 'oauth2' | 'api_key' | 'basic' | 'bearer' | 'bot_token' | 'none';
   scopes?: string[];
   configFields: ConnectorConfigField[];
   capabilities: string[];

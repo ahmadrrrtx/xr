@@ -34,9 +34,10 @@ import {
   hashPluginTree,
   hashPluginTreeAsync,
   loadPlugin,
+  describePlugin,
 } from "../../src/plugins/loader.ts";
 import { loadConfig } from "../../src/config/config.ts";
-import { Store } from "../../src/state/db.ts";
+import { Store } from "../../src/state/workspace-store.ts";
 
 // Ensure XR_HOME exists before any config/store initialization.
 const TEST_TMP = mkdtempSync(join(tmpdir(), "xr-loader-test-"));
@@ -453,6 +454,223 @@ describe("Plugin Loader — Security Isolation", () => {
     expect(record!.id).toBe("describe-test");
     expect(record!.enabled).toBe(false);
     expect(record!.status.kind).toBe("disabled");
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+/**
+ * 0.4 Plugin Sandbox Hardening — RUNTIME escape suppression.
+ *
+ * The tests above mostly exercise the static scan. The tests below bypass
+ * the static scan deliberately (computed expressions the regexes cannot
+ * match) to prove the VM runtime itself is the primary security boundary:
+ * blocked globals, blocked constructor-chain escapes, frozen prototypes,
+ * and a require() that only resolves relative files inside the plugin root.
+ *
+ * Convention: each probe plugin reports an `outcome` string through a tool
+ * run. "escaped"/"polluted"/"leaked" would mean the sandbox FAILED.
+ */
+describe("Plugin Loader — 0.4 VM Runtime Hardening", () => {
+  /** Writes a probe plugin whose activate() measures one sandbox property. */
+  function probePluginDir(parent: string, id: string, probeBody: string): string {
+    const dir = mkdtempSync(join(parent, `probe-${id}-`));
+    writeFileSync(join(dir, "xr-plugin.json"), safeManifest(dir, { id }));
+    writeFileSync(
+      join(dir, "index.ts"),
+      `export async function activate(host) {
+         let outcome = "untested";
+         ${probeBody}
+         return {
+           tools: [{
+             name: "probe",
+             description: "sandbox probe",
+             requiresApproval: false,
+             run() { return { ok: true, output: outcome }; },
+           }],
+         };
+       }
+       export default activate;`,
+    );
+    return dir;
+  }
+
+  async function runProbe(dir: string): Promise<string> {
+    const result = await loadPlugin(dir, {
+      store: new Store(join(TEST_TMP, `db-probe-${Math.random().toString(36).slice(2)}.db`)),
+      config: loadConfig().config,
+      cwd: dir,
+      granted: [],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(`probe plugin failed to load: ${(result as any).reason}`);
+    const tool = result.contributions.tools?.find((t: any) => t.name === "probe");
+    expect(tool).toBeDefined();
+    const out = await tool!.run({});
+    expect(out.ok).toBe(true);
+    return String(out.output);
+  }
+
+  test("constructor-chain escape ({}).constructor.constructor is neutralized", async () => {
+    const dir = probePluginDir(
+      TEST_TMP,
+      "ctor-chain",
+      `try {
+         const Fn = ({} as any).constructor.constructor;
+         if (!Fn) {
+           outcome = "blocked:no-constructor";
+         } else {
+           const proc = Fn("return (typeof process !== 'undefined') ? process : null")();
+           outcome = proc && proc.env ? "escaped" : "blocked:no-process";
+         }
+       } catch (e: any) {
+         outcome = "blocked:" + String(e && e.message ? e.message : e).slice(0, 80);
+       }`,
+    );
+    const output = await runProbe(dir);
+    expect(output).not.toBe("escaped");
+    expect(output.startsWith("blocked")).toBe(true);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("prototype pollution via Object.prototype fails inside the sandbox", async () => {
+    const dir = probePluginDir(
+      TEST_TMP,
+      "proto-pollution",
+      `try {
+         (Object.prototype as any).__xrPolluted = 1;
+         outcome = ({} as any).__xrPolluted === 1 ? "polluted" : "clean";
+       } catch (e: any) {
+         // Frozen prototype → strict-mode TypeError or silent rejection are both safe.
+         outcome = "clean";
+       }`,
+    );
+    const output = await runProbe(dir);
+    expect(output).toBe("clean");
+    // Critical: the pollution must not leak into the HOST realm either.
+    expect(({} as any).__xrPolluted).toBeUndefined();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("require() with a computed (non-literal) specifier is blocked at runtime", async () => {
+    const dir = probePluginDir(
+      TEST_TMP,
+      "computed-require",
+      `try {
+         // Bypasses the static scan (regexes only match literal specifiers).
+         const mod = ["node", "fs"].join(":");
+         const fs = (require as any)(mod);
+         outcome = fs ? "escaped" : "blocked:empty";
+       } catch (e: any) {
+         outcome = "blocked:" + String(e && e.message ? e.message : e).slice(0, 80);
+       }`,
+    );
+    const output = await runProbe(dir);
+    expect(output).not.toBe("escaped");
+    expect(output).toContain("blocked");
+    expect(output).toContain("bare specifiers are not allowed");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("globalThis access with a dynamic key cannot reach process", async () => {
+    const dir = probePluginDir(
+      TEST_TMP,
+      "dynamic-global",
+      `try {
+         // Bypasses the static scan (literal globalThis["process"] is caught).
+         const key = ["pro", "cess"].join("");
+         const p = (globalThis as any)[key];
+         outcome = p && p.env ? "leaked" : "undefined";
+       } catch (e: any) {
+         outcome = "undefined";
+       }`,
+    );
+    const output = await runProbe(dir);
+    expect(output).toBe("undefined");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("plugin cannot overwrite or detect blocked globals on the sandbox", async () => {
+    const dir = probePluginDir(
+      TEST_TMP,
+      "global-tamper",
+      `try {
+         (globalThis as any).process = { fake: true };
+       } catch {}
+       try {
+         const still = (globalThis as any).process;
+         const visible = ("pro" + "cess") in globalThis;
+         outcome = still === undefined && !visible ? "sealed" : "tampered";
+       } catch (e: any) {
+         outcome = "sealed";
+       }`,
+    );
+    const output = await runProbe(dir);
+    expect(output).toBe("sealed");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("relative multi-file requires work inside the sandbox (happy path)", async () => {
+    const dir = mkdtempSync(join(TEST_TMP, "probe-multifile-"));
+    writeFileSync(join(dir, "xr-plugin.json"), safeManifest(dir, { id: "multifile" }));
+    writeFileSync(
+      join(dir, "helper.ts"),
+      `export const greeting = "xr-multifile-ok";
+       export const data = { nested: true };`,
+    );
+    writeFileSync(
+      join(dir, "index.ts"),
+      `import { greeting, data } from "./helper.ts";
+       export async function activate(host) {
+         return {
+           tools: [{
+             name: "probe",
+             description: "multifile probe",
+             requiresApproval: false,
+             run() { return { ok: true, output: greeting + (data.nested ? "+nested" : "") }; },
+           }],
+         };
+       }
+       export default activate;`,
+    );
+    const output = await (async () => {
+      const result = await loadPlugin(dir, {
+        store: new Store(join(TEST_TMP, "db-multifile.db")),
+        config: loadConfig().config,
+        cwd: dir,
+        granted: [],
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error((result as any).reason);
+      const tool = result.contributions.tools?.find((t: any) => t.name === "probe");
+      const out = await tool!.run({});
+      return String(out.output);
+    })();
+    expect(output).toBe("xr-multifile-ok+nested");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("validatePlugin on a non-existent directory fails honestly", () => {
+    const result = validatePlugin(join(TEST_TMP, "definitely-missing-plugin"));
+    expect(result.ok).toBe(false);
+    expect(result.errors.some((e) => e.includes("not a directory"))).toBe(true);
+  });
+
+  test("hashPluginTree and hashPluginTreeAsync agree on the same tree", async () => {
+    const dir = safePluginDir(TEST_TMP, "tree-consistency", { manifest: { id: "tree-consistency" } });
+    const syncHash = hashPluginTree(dir);
+    const asyncHash = await hashPluginTreeAsync(dir);
+    expect(syncHash).toBeDefined();
+    expect(asyncHash).toBe(syncHash);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("describePlugin marks a broken plugin as status 'error'", () => {
+    const dir = mkdtempSync(join(TEST_TMP, "describe-broken-"));
+    writeFileSync(join(dir, "xr-plugin.json"), safeManifest(dir, { id: "describe-broken", entrypoint: "missing.ts" }));
+    const record = describePlugin(dir, true, [], Date.now(), Date.now());
+    expect(record).not.toBeNull();
+    expect(record!.status.kind).toBe("error");
+    expect(record!.reason ?? "").toContain("entrypoint");
     rmSync(dir, { recursive: true, force: true });
   });
 });

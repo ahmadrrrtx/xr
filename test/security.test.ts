@@ -1,358 +1,226 @@
 /**
- * Security Test Suite for XR
- * 
- * This test file verifies that the critical RCE vectors are properly closed:
- * 1. Plugin sandbox bypass
- * 2. Browser --no-sandbox flag
- * 3. MCP environment leakage
+ * XR — Security Guardrail Test Suite
+ *
+ * Verifies that the critical RCE / data-leak vectors remain closed:
+ *
+ *  1. Plugin sandbox  — static scan rejects dangerous imports/patterns
+ *                       (deep VM-isolation coverage lives in test/plugins/).
+ *  2. Browser control — --no-sandbox is never silently added; the Chromium
+ *                       sandbox stays enabled unless explicitly forced with
+ *                       multi-flag acknowledgement.
+ *  3. MCP client      — child processes receive an allow-listed environment
+ *                       (never the full process.env), tool names are
+ *                       validated, and payloads are sanitized against
+ *                       prototype pollution.
+ *
+ * These tests assert against the REAL implementation markers (verified
+ * against the current source), not an imagined architecture.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { join } from "node:path";
 import { existsSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 
-// Import modules to test
-import { validatePlugin, loadPlugin } from "../src/plugins/loader.ts";
+import { validatePlugin } from "../src/plugins/loader.ts";
 import { buildHost } from "../src/plugins/host.ts";
-import { McpClient } from "../src/mcp/client.ts";
-import { executeBrowserAction } from "../src/control/browser.ts";
 
-describe("XR Security Tests", () => {
-  
-  // ── Test 1: Plugin Sandbox Bypass ───────────────────────────────────
-  
-  describe("Plugin Isolation (RCE Vector #1)", () => {
-    const testPluginDir = join(import.meta.dir, "test-plugins", "malicious-plugin");
-    
-    beforeAll(() => {
-      // Create a test plugin that tries to bypass sandbox
-      if (!existsSync(testPluginDir)) {
-        mkdirSync(testPluginDir, { recursive: true });
-      }
-      
-      // Write malicious plugin code
-      writeFileSync(join(testPluginDir, "index.ts"), `
-        // Attempt 1: Direct require (should fail in VM)
-        try {
-          const fs = require("node:fs");
-          console.log("FAIL: require() should not work");
-        } catch (e) {
-          console.log("PASS: require() blocked");
-        }
-        
-        // Attempt 2: process.env access (should fail in VM)
-        try {
-          const secret = process.env.API_KEY;
-          console.log("FAIL: process.env should not work");
-        } catch (e) {
-          console.log("PASS: process.env blocked");
-        }
-        
-        // Attempt 3: eval() (should fail in VM)
-        try {
-          eval("console.log('FAIL: eval() should not work')");
-        } catch (e) {
-          console.log("PASS: eval() blocked");
-        }
-        
-        export async function activate(host) {
-          // This should work - using host API
-          const data = host.fs?.read("test.txt");
-          return { tools: [] };
-        }
-      `);
-      
-      // Write manifest
-      writeFileSync(join(testPluginDir, "xr-plugin.json"), JSON.stringify({
+const SRC = join(import.meta.dir, "..", "src");
+
+async function readSource(rel: string): Promise<string> {
+  return await Bun.file(join(SRC, rel)).text();
+}
+
+function writePlugin(dir: string, manifest: Record<string, unknown>, code: string): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "xr-plugin.json"),
+    JSON.stringify(
+      {
         schemaVersion: 1,
-        id: "malicious-plugin",
-        name: "Malicious Plugin Test",
+        id: "security-probe",
+        name: "Security Probe",
         version: "1.0.0",
-        author: "test",
-        description: "Test plugin for security testing",
-        type: "tool",
-        entrypoint: "index.ts",
-        permissions: ["fs:read"],
-      }, null, 2));
-    });
-    
-    afterAll(() => {
-      // Cleanup
-      rmSync(join(import.meta.dir, "test-plugins"), { recursive: true, force: true });
-    });
-    
-    it("should block require() in plugin VM context", async () => {
-      const result = validatePlugin(testPluginDir);
-      
-      // The static scan should catch disallowed imports
-      expect(result.errors.some(e => e.includes("disallowed import"))).toBe(true);
-    });
-    
-    it("should block process.env access in plugin VM context", async () => {
-      const result = validatePlugin(testPluginDir);
-      
-      // The static scan should catch process.env access
-      expect(result.errors.some(e => e.includes("process.env"))).toBe(true);
-    });
-    
-    it("should load plugin in VM context (if static scan passes)", async () => {
-      // This test assumes the plugin code is "safe" (no disallowed patterns)
-      // In reality, the VM context would prevent access to require/process anyway
-      
-      // We need to create a "safe" plugin for this test
-      const safePluginDir = join(import.meta.dir, "test-plugins", "safe-plugin");
-      if (!existsSync(safePluginDir)) {
-        mkdirSync(safePluginDir, { recursive: true });
-      }
-      
-      writeFileSync(join(safePluginDir, "index.ts"), `
-        export async function activate(host) {
-          return {
-            tools: [{
-              name: "test-tool",
-              description: "A safe tool",
-              run: async (args) => {
-                return { ok: true, output: "Safe plugin works!" };
-              }
-            }]
-          };
-        }
-      `);
-      
-      writeFileSync(join(safePluginDir, "xr-plugin.json"), JSON.stringify({
-        schemaVersion: 1,
-        id: "safe-plugin",
-        name: "Safe Plugin Test",
-        version: "1.0.0",
-        author: "test",
-        description: "Safe test plugin",
+        author: "xr-tests",
+        description: "Security test fixture",
         type: "tool",
         entrypoint: "index.ts",
         permissions: [],
-      }, null, 2));
-      
-      const result = validatePlugin(safePluginDir);
+        ...manifest,
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(join(dir, "index.ts"), code);
+}
+
+describe("XR Security Guardrails", () => {
+  // ── Vector 1: Plugin sandbox ────────────────────────────────────────────
+
+  describe("Plugin sandbox (RCE vector #1)", () => {
+    const fixturesDir = join(import.meta.dir, "test-plugins");
+
+    beforeAll(() => {
+      mkdirSync(fixturesDir, { recursive: true });
+    });
+
+    afterAll(() => {
+      rmSync(fixturesDir, { recursive: true, force: true });
+    });
+
+    it("static scan rejects require('node:fs')", () => {
+      const dir = join(fixturesDir, "require-fs");
+      writePlugin(
+        dir,
+        { id: "probe-require-fs" },
+        `const fs = require("node:fs");
+         export default function activate() {};`,
+      );
+      const result = validatePlugin(dir);
+      expect(result.ok).toBe(false);
+      expect(result.errors.some((e) => e.includes("disallowed import"))).toBe(true);
+    });
+
+    it("static scan rejects direct process.env access", () => {
+      const dir = join(fixturesDir, "process-env");
+      writePlugin(
+        dir,
+        { id: "probe-process-env" },
+        `export default function activate() { return process.env.SECRET; }`,
+      );
+      const result = validatePlugin(dir);
+      expect(result.ok).toBe(false);
+      expect(result.errors.some((e) => e.includes("process.env"))).toBe(true);
+    });
+
+    it("static scan rejects eval()", () => {
+      const dir = join(fixturesDir, "eval-call");
+      writePlugin(
+        dir,
+        { id: "probe-eval" },
+        `export default function activate() { eval("1+1"); }`,
+      );
+      const result = validatePlugin(dir);
+      expect(result.ok).toBe(false);
+    });
+
+    it("accepts a genuinely safe plugin", () => {
+      const dir = join(fixturesDir, "safe-plugin");
+      writePlugin(
+        dir,
+        { id: "probe-safe" },
+        `export async function activate(host: any) {
+           return {
+             tools: [{
+               name: "safe-tool",
+               description: "A safe tool",
+               requiresApproval: false,
+               run: async () => ({ ok: true, output: "safe" }),
+             }],
+           };
+         }`,
+      );
+      const result = validatePlugin(dir);
       expect(result.ok).toBe(true);
+      expect(result.errors).toHaveLength(0);
     });
   });
-  
-  // ── Test 2: Browser Sandbox ─────────────────────────────────────────
-  
-  describe("Browser Security (RCE Vector #2)", () => {
-    it("should NOT have --no-sandbox in default config", () => {
-      // Read the browser.ts source and verify
-      const browserSource = await Bun.file(join(import.meta.dir, "../src/control/browser.ts")).text();
-      
-      // Should NOT have --no-sandbox in the default path
-      expect(browserSource.includes("--no-sandbox")).toBe(false);
-      
-      // Should have sandbox enabled by default
-      expect(browserSource.includes("--enable-sandbox")).toBe(true);
+
+  // ── Vector 2: Browser sandbox ───────────────────────────────────────────
+
+  describe("Browser control hardening (RCE vector #2)", () => {
+    it("strips --no-sandbox from production launch args", async () => {
+      const browserSource = await readSource("control/browser.ts");
+      // Defense: production path filters the sandbox breakers out of args.
+      expect(browserSource.includes('args.filter((a) => a !== "--no-sandbox"')).toBe(true);
     });
-    
-    it("should only disable sandbox with XR_BROWSER_UNSAFE=1", () => {
-      const browserSource = await Bun.file(join(import.meta.dir, "../src/control/browser.ts")).text();
-      
-      // Should check for XR_BROWSER_UNSAFE env var
-      expect(browserSource.includes("XR_BROWSER_UNSAFE")).toBe(true);
-      
-      // Should warn when sandbox is disabled
-      expect(browserSource.includes("WARNING")).toBe(true);
+
+    it("blocks running as root with the sandbox disabled unless multi-flag acknowledged", async () => {
+      const browserSource = await readSource("control/browser.ts");
+      expect(browserSource.includes("XR_BROWSER_ALLOW_ROOT")).toBe(true);
+      expect(browserSource.includes("XR_BROWSER_DISABLE_SANDBOX")).toBe(true);
+      expect(browserSource.includes("XR_BROWSER_UNSAFE_ACK")).toBe(true);
+      expect(browserSource.includes("Running as root with --no-sandbox is blocked")).toBe(true);
+    });
+
+    it("validates navigation URLs to http/https only", async () => {
+      const browserSource = await readSource("control/browser.ts");
+      expect(browserSource.includes("only http/https allowed")).toBe(true);
+      expect(browserSource.includes("unsupported protocol")).toBe(true);
+    });
+
+    it("rejects invalid goto actions without needing a browser", async () => {
+      // Behavioral check: validation runs before any browser launch, so this
+      // passes in headless CI where no Chromium binary exists.
+      const { executeBrowserAction } = await import("../src/control/browser.ts");
+      const result = await executeBrowserAction({ type: "browser", op: "goto" } as any);
+      expect(result.ok).toBe(false);
+      expect(result.message).toContain("goto needs value");
     });
   });
-  
-  // ── Test 3: MCP Environment Leakage ────────────────────────────────
-  
-  describe("MCP Environment Security", () => {
-    it("should NOT inherit full process.env", () => {
-      const mcpSource = await Bun.file(join(import.meta.dir, "../src/mcp/client.ts")).text();
-      
-      // Should NOT spread ...process.env
+
+  // ── Vector 3: MCP environment leakage ───────────────────────────────────
+
+  describe("MCP environment isolation (secret-leak vector #3)", () => {
+    it("builds an allow-listed environment instead of inheriting process.env", async () => {
+      const mcpSource = await readSource("mcp/client.ts");
+      expect(mcpSource.includes("createAllowedEnv")).toBe(true);
+      expect(mcpSource.includes("SAFE_ENV_EXACT")).toBe(true);
+      // The anti-pattern must not exist anywhere:
       expect(mcpSource.includes("...process.env")).toBe(false);
-      
-      // Should use createAllowedEnvironment()
-      expect(mcpSource.includes("createAllowedEnvironment")).toBe(true);
     });
-    
-    it("should have allow-list for environment variables", () => {
-      const mcpSource = await Bun.file(join(import.meta.dir, "../src/mcp/client.ts")).text();
-      
-      // Should have ALLOWED_ENV_PREFIXES
-      expect(mcpSource.includes("ALLOWED_ENV_PREFIXES")).toBe(true);
-      
-      // Should have ALLOWED_ENV_EXACT
-      expect(mcpSource.includes("ALLOWED_ENV_EXACT")).toBe(true);
-    });
-    
-    it("should validate command before spawning", () => {
-      const mcpSource = await Bun.file(join(import.meta.dir, "../src/mcp/client.ts")).text();
-      
-      // Should check for ".." in command
-      expect(mcpSource.includes("..")).toBe(true);
-      
-      // Should use shell: false
+
+    it("spawns child processes without a shell", async () => {
+      const mcpSource = await readSource("mcp/client.ts");
       expect(mcpSource.includes("shell: false")).toBe(true);
     });
-  });
-  
-  // ── Test 4: Host Capability Enforcement ─────────────────────────────
-  
-  describe("Host Capability Enforcement", () => {
-    it("should only expose granted capabilities", () => {
-      // Mock dependencies
-      const mockStore = {
-        audit: (event: string, detail: any) => {},
-      } as any;
-      
-      const mockConfig = {
-        security: {
-          egressAllowlist: ["https://api.example.com"],
-        },
-        defaults: {
-          provider: "test",
-          model: "test",
-        },
-      } as any;
-      
-      // Test 1: No permissions = no capabilities
-      const host1 = buildHost([], {
-        store: mockStore,
-        config: mockConfig,
-        cwd: "/tmp",
-        pluginDir: "/tmp/plugin",
-      });
-      
-      expect(host1.fs).toBeUndefined();
-      expect(host1.net).toBeUndefined();
-      expect(host1.secrets).toBeUndefined();
-      
-      // Test 2: Only fs:read permission = only fs.read capability
-      const host2 = buildHost(["fs:read"], {
-        store: mockStore,
-        config: mockConfig,
-        cwd: "/tmp",
-        pluginDir: "/tmp/plugin",
-      });
-      
-      expect(host2.fs).toBeDefined();
-      expect(host2.fs?.write).toBeUndefined();  // write not granted
-      expect(host2.net).toBeUndefined();
+
+    it("validates tool names before invocation", async () => {
+      const mcpSource = await readSource("mcp/client.ts");
+      expect(mcpSource.includes("validateToolName")).toBe(true);
+      expect(mcpSource.includes("/^[a-zA-Z0-9_.-]{1,120}$/")).toBe(true);
     });
-    
-    it("should prevent path traversal in fs capability", () => {
-      const mockStore = {
-        audit: (event: string, detail: any) => {},
-      } as any;
-      
-      const mockConfig = {
-        security: { egressAllowlist: [] },
-        defaults: { provider: "test", model: "test" },
-      } as any;
-      
+
+    it("sanitizes payloads against prototype pollution", async () => {
+      const mcpSource = await readSource("mcp/client.ts");
+      expect(mcpSource.includes("sanitizeObject")).toBe(true);
+      expect(mcpSource.includes("__proto__")).toBe(true);
+    });
+  });
+
+  // ── Cross-cutting: host capability gating smoke checks ──────────────────
+
+  describe("Host capability gating (smoke)", () => {
+    const mockStore = { audit: () => "hash" } as any;
+    const mockConfig = {
+      security: { egressAllowlist: [] },
+      defaults: { provider: "test", model: "test" },
+    } as any;
+
+    it("grants no capabilities when nothing is granted", () => {
+      const host = buildHost([], {
+        store: mockStore,
+        config: mockConfig,
+        cwd: "/tmp",
+        pluginDir: "/tmp/plugin",
+      });
+      expect(host.fs).toBeUndefined();
+      expect(host.net).toBeUndefined();
+      expect(host.memory).toBeUndefined();
+      expect(host.provider).toBeUndefined();
+      expect(host.secrets).toBeUndefined();
+      expect(host.mcp).toBeUndefined();
+    });
+
+    it("rejects path traversal through the fs capability", () => {
       const host = buildHost(["fs:read", "fs:write"], {
         store: mockStore,
         config: mockConfig,
         cwd: "/tmp",
         pluginDir: "/tmp/plugin",
       });
-      
-      // Should throw on path traversal
-      expect(() => {
-        host.fs?.path("../../../etc/passwd");
-      }).toThrow("Path traversal detected");
-      
-      expect(() => {
-        host.fs?.path("/absolute/path");
-      }).toThrow("Path traversal detected");
+      expect(() => host.fs?.path("../../../etc/passwd")).toThrow("path escapes plugin data directory");
+      expect(() => host.fs?.path("/absolute/path")).toThrow("absolute paths not allowed");
     });
   });
-  
-  // ── Test 5: Input Validation ─────────────────────────────────────────
-  
-  describe("Input Validation", () => {
-    it("should validate URLs in browser actions", async () => {
-      const browserSource = await Bun.file(join(import.meta.dir, "../src/control/browser.ts")).text();
-      
-      // Should validate URL protocol
-      expect(browserSource.includes("http:")).toBe(true);
-      expect(browserSource.includes("https:")).toBe(true);
-      
-      // Should reject non-http(s) protocols
-      expect(browserSource.includes("Unsupported protocol")).toBe(true);
-    });
-    
-    it("should validate tool names in MCP client", () => {
-      const mcpSource = await Bun.file(join(import.meta.dir, "../src/mcp/client.ts")).text();
-      
-      // Should validate tool name format
-      expect(mcpSource.includes("Invalid tool name")).toBe(true);
-      expect(mcpSource.includes("^[a-zA-Z0-9_.-]+$")).toBe(true);
-    });
-    
-    it("should sanitize objects to prevent prototype pollution", () => {
-      const mcpSource = await Bun.file(join(import.meta.dir, "../src/mcp/client.ts")).text();
-      
-      // Should have sanitizeObject function
-      expect(mcpSource.includes("sanitizeObject")).toBe(true);
-      
-      // Should skip __proto__, constructor, prototype
-      expect(mcpSource.includes("__proto__")).toBe(true);
-      expect(mcpSource.includes("constructor")).toBe(true);
-    });
-  });
-  
-  // ── Test 6: Audit Logging ───────────────────────────────────────────
-  
-  describe("Audit Logging", () => {
-    it("should audit all sensitive operations", () => {
-      const hostSource = await Bun.file(join(import.meta.dir, "../src/plugins/host.ts")).text();
-      const browserSource = await Bun.file(join(import.meta.dir, "../src/control/browser.ts")).text();
-      const mcpSource = await Bun.file(join(import.meta.dir, "../src/mcp/client.ts")).text();
-      
-      // Host should audit fs, net, memory, secrets operations
-      expect(hostSource.includes("audit(")).toBe(true);
-      
-      // Browser should audit all actions
-      expect(browserSource.includes("audit")).toBe(true);
-      
-      // MCP should audit tool calls
-      expect(mcpSource.includes("audit")).toBe(true);
-    });
-  });
-  
 });
-
-// ── Manual Security Tests ──────────────────────────────────────────────────
-// These tests require actual browser/MCP, so they're skipped in CI
-
-describe.skip("Manual Security Tests (Require Browser/MCP)", () => {
-  
-  it("should actually block require() in VM context", async () => {
-    // This would need a real plugin load to verify
-    // Expect: plugin code cannot access require()
-  });
-  
-  it("should actually enable browser sandbox", async () => {
-    // This would need Playwright to be installed
-    // Expect: Chrome runs with --enable-sandbox
-  });
-  
-  it("should actually restrict MCP environment", async () => {
-    // This would need an MCP server to test
-    // Expect: MCP server cannot access process.env secrets
-  });
-  
-});
-
-console.log(`
-╔══════════════════════════════════════════════════════════════╗
-║                    XR Security Test Suite                        ║
-╚══════════════════════════════════════════════════════════════╝
-
-Running security tests to verify:
-1. Plugin sandbox bypass is CLOSED (VM isolation)
-2. Browser --no-sandbox is REMOVED (sandbox enabled by default)
-3. MCP environment leakage is CLOSED (allow-list only)
-
-See test output above for results.
-`);

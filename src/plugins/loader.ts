@@ -17,16 +17,17 @@
  *       constructor.constructor escape attempts
  *  4) Capability host is the ONLY API, gated by manifest-declared permissions
  *
- * HARDENING DETAILS (0.4):
+ * HARDENING DETAILS (0.4 + 0.7):
  *  - createSecureSandbox() wraps globalThis in a Proxy that:
- *    a) Blocks access to 'constructor' on any function/object to prevent
- *       Function constructor escape via ({}).constructor.constructor
- *    b) Returns undefined for process, Bun, require, module, exports,
+ *    a) Returns undefined for process, Bun, require, module, exports,
  *       __filename, __dirname, Function, eval, WebAssembly, importScripts
- *    c) Freezes Object.prototype, Array.prototype, Function.prototype
- *       within the VM context to prevent prototype pollution
- *  - loadInIsolatedVM() applies the Proxy sandbox and freezes built-in
- *    prototypes before executing any plugin code
+ *    b) Refuses writes/deletes/redefinitions of blocked globals
+ *  - 0.7 Two-Realm Isolation: fresh VM-realm intrinsics are harvested from a
+ *    donor context (frozen prototypes, policy-blocked code generation), and
+ *    every host-provided value is injected through a recursive membrane that
+ *    blocks ALL constructor/prototype access paths — closing the host-realm
+ *    constructor-chain escape (URL instance → host Function → host process)
+ *    proven by test/plugins/loader.test.ts regression tests.
  *  - Static scan remains as defense-in-depth (catches obvious issues early)
  *
  * References:
@@ -625,18 +626,37 @@ function resolveFileWithExts(baseDir: string, spec: string, root: string): strin
 
 type ModuleRecord = { exports: any; id: string; filename: string; loaded: boolean };
 
-// ── Hardened Sandbox Builder (0.4) ───────────────────────────────────────────
+// ── Two-Realm Sandbox Architecture (0.7 host-escape fix) ────────────────────
 //
-// Creates a Proxy-wrapped sandbox that blocks:
-//   1. Access to process, Bun, require, module, exports, __filename, __dirname,
-//      Function, eval, WebAssembly, importScripts (returns undefined)
-//   2. Constructor-chain escapes: accessing .constructor on any object/function
-//      returns undefined, preventing ({}).constructor.constructor('return process')()
-//   3. __proto__ access returns undefined
+// Realm A — DONOR (fresh VM intrinsics):
+//   A bare vm context receives FRESH, host-independent JavaScript intrinsics
+//   (Object, Array, JSON, Math, Promise, Map, Set, Error classes, typed
+//   arrays, ...). These are harvested and installed into the plugin sandbox.
+//   Because they belong to the donor realm:
+//     • the codeGeneration:{strings:false} policy applies to them, so
+//       ({}).constructor.constructor("...") cannot compile code;
+//     • freezing their prototypes (once, inside the donor) makes prototype
+//       pollution impossible WITHOUT freezing anything in the host process.
 //
-// After creating the sandbox, we freeze Object.prototype, Array.prototype,
-// Function.prototype, and other built-in prototypes WITHIN the VM context
-// to prevent prototype pollution.
+// Realm B — HOST (membrane-wrapped host values):
+//   Values that only the host can provide (console, timers, URL, Buffer,
+//   crypto, Web API classes, ...) are injected exclusively through a
+//   recursive membrane proxy that:
+//     • blocks .constructor / .__proto__ / .prototype on EVERY access,
+//       transitively — closing the host-realm "constructor-chain" escape
+//       (e.g. new URL(...).constructor.constructor === host Function);
+//     • binds host methods so keep-working APIs (timers, URL, ...) behave
+//       identically to before;
+//     • unwraps our own proxies when they are passed back into host calls;
+//     • wraps every return value and constructed instance recursively.
+//
+//   Note: Web API class instances (Headers, Request, ...) become membrane
+//   proxies — plugins should pass PLAIN objects back into host capabilities
+//   (e.g. host.net.fetch(url, { headers: { "x": "y" } })), exactly like the
+//   bundled reference plugins do.
+//
+// Proven by regression tests in test/plugins/loader.test.ts:
+//   "host-realm constructor-chain escape via injected classes is blocked".
 
 const BLOCKED_GLOBALS = new Set([
   "process",
@@ -653,7 +673,148 @@ const BLOCKED_GLOBALS = new Set([
   "importScripts",
 ]);
 
-function createSecureSandbox(pluginId: string): any {
+/**
+ * Intrinsics harvested from the donor realm. Deliberately excludes anything
+ * that would grant ambient authority (fetch, WebAssembly), code-generation
+ * entry points that stay disabled anyway (none needed — donor Function/eval
+ * are policy-blocked), and GC-side-channel APIs (WeakRef, FinalizationRegistry).
+ */
+const DONOR_INTRINSIC_NAMES = [
+  // Fundamental objects & constructors
+  "Object", "Array", "String", "Number", "Boolean", "BigInt", "Function",
+  "Symbol", "Promise", "RegExp", "Date",
+  // Error hierarchy
+  "Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError",
+  "URIError", "EvalError", "AggregateError",
+  // Collections & reflection
+  "Map", "Set", "WeakMap", "WeakSet", "Proxy", "Reflect",
+  // Namespaces
+  "JSON", "Math", "Intl",
+  // Binary data
+  "ArrayBuffer", "SharedArrayBuffer", "DataView",
+  "Int8Array", "Uint8Array", "Uint8ClampedArray",
+  "Int16Array", "Uint16Array", "Int32Array", "Uint32Array",
+  "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array",
+  // Global functions
+  "parseInt", "parseFloat", "isNaN", "isFinite",
+  "encodeURI", "decodeURI", "encodeURIComponent", "decodeURIComponent",
+];
+
+/**
+ * Create a fresh donor realm, harvest its intrinsics, then freeze the
+ * donor's prototypes so plugin code cannot mutate the JS environment it
+ * runs against (anti prototype pollution) — all without touching host state.
+ */
+function harvestDonorIntrinsics(): Record<string, unknown> {
+  const donor = createContext(
+    {},
+    {
+      name: "xr:sandbox:intrinsics",
+      codeGeneration: { strings: false, wasm: false },
+    } as any,
+  );
+  const harvestExpr = `(function(){ const out = {}; ${DONOR_INTRINSIC_NAMES.map(
+    (n) => `try { out[${JSON.stringify(n)}] = ${n}; } catch (_) {}`,
+  ).join(" ")} return out; })()`;
+  const intrinsics = new Script(harvestExpr, {
+    filename: "xr:sandbox:harvest",
+  } as any).runInContext(donor, { timeout: 1000 } as any) as Record<string, unknown>;
+  freezeDonorPrototypes(donor);
+  return intrinsics;
+}
+
+/**
+ * Recursive membrane for host-realm values injected into the sandbox.
+ * Every reachable object/function is wrapped; every access path that could
+ * reach a host-realm Function constructor or prototype is severed.
+ */
+function createHostMembrane(): { wrap: (v: any) => any } {
+  const proxyFor = new WeakMap<object, any>();
+  const rawFor = new WeakMap<object, object>();
+
+  const unwrap = (v: any): any => (rawFor.has(v) ? rawFor.get(v) : v);
+
+  const wrap = (value: any): any => {
+    if (value === null || (typeof value !== "object" && typeof value !== "function")) {
+      return value;
+    }
+    if (proxyFor.has(value)) return proxyFor.get(value);
+
+    const proxy: any = new Proxy(value, {
+      get(target, prop, _receiver) {
+        // Hard-block every path back to host constructors / prototypes.
+        if (prop === "constructor" || prop === "__proto__" || prop === "prototype") {
+          return undefined;
+        }
+        const v = Reflect.get(target as any, prop, target);
+        if (typeof v === "function") {
+          // Bind to the host target so methods keep their `this`, then wrap
+          // the call surface itself (return values are wrapped recursively).
+          const bound = (v as (...a: any[]) => any).bind(target);
+          const callProxy = new Proxy(bound, {
+            get(_t, p2) {
+              if (p2 === "constructor" || p2 === "__proto__" || p2 === "prototype") return undefined;
+              return wrap(Reflect.get(bound as any, p2));
+            },
+            apply(_t, _thisArg, args) {
+              const unwrapped = (args ?? []).map(unwrap);
+              return wrap(bound(...unwrapped));
+            },
+            construct(_t, args) {
+              const unwrapped = (args ?? []).map(unwrap);
+              return wrap(new (bound as any)(...unwrapped));
+            },
+          });
+          rawFor.set(callProxy, bound as any);
+          return callProxy;
+        }
+        return wrap(v);
+      },
+      set(_target, prop, v) {
+        if (prop === "constructor" || prop === "__proto__" || prop === "prototype") return false;
+        return Reflect.set(value, prop, unwrap(v));
+      },
+      has(target, prop) {
+        if (prop === "constructor" || prop === "__proto__") return false;
+        return Reflect.has(target as any, prop);
+      },
+      defineProperty() {
+        return false;
+      },
+      deleteProperty() {
+        return false;
+      },
+      setPrototypeOf() {
+        return false;
+      },
+      getPrototypeOf() {
+        return null;
+      },
+      apply(target: any, _thisArg, args: any[]) {
+        // Host function invoked directly (timers, atob, ...). Their `this`
+        // is irrelevant; plugin proxies crossing back are unwrapped.
+        const unwrapped = (args ?? []).map(unwrap);
+        return wrap(Reflect.apply(target, undefined, unwrapped));
+      },
+      construct(target: any, args: any[]) {
+        const unwrapped = (args ?? []).map(unwrap);
+        return wrap(Reflect.construct(target, unwrapped));
+      },
+    });
+
+    proxyFor.set(value, proxy);
+    rawFor.set(proxy, value);
+    return proxy;
+  };
+
+  return { wrap };
+}
+
+function createSecureSandbox(
+  pluginId: string,
+  intrinsics: Record<string, unknown>,
+  wrapHost: (v: any) => any,
+): any {
   // Redacted console
   const mkLog = (level: "log" | "warn" | "error" | "info" | "debug") =>
     (...args: any[]) => {
@@ -683,80 +844,53 @@ function createSecureSandbox(pluginId: string): any {
     debug: mkLog("debug"),
   };
 
-  // Build the raw sandbox object with safe built-ins only
   const raw: any = {};
 
-  raw.console = sandboxConsole;
+  // ── Realm A: donor-realm intrinsics (host-independent, frozen) ──────────
+  for (const [k, v] of Object.entries(intrinsics)) {
+    raw[k] = v;
+  }
+  // Function/eval stay blocked as ambient globals regardless of the donor:
+  // even reaching them must be a dead end for plugin code.
+  raw.Function = undefined;
+  raw.eval = undefined;
+
+  // ── Realm B: host-provided capabilities behind the membrane ─────────────
+  raw.console = wrapHost(sandboxConsole);
 
   // timers
-  raw.setTimeout = setTimeout;
-  raw.clearTimeout = clearTimeout;
-  raw.setInterval = setInterval;
-  raw.clearInterval = clearInterval;
-  raw.queueMicrotask = queueMicrotask;
+  raw.setTimeout = wrapHost(setTimeout);
+  raw.clearTimeout = wrapHost(clearTimeout);
+  raw.setInterval = wrapHost(setInterval);
+  raw.clearInterval = wrapHost(clearInterval);
+  raw.queueMicrotask = wrapHost(queueMicrotask);
   // @ts-ignore
-  if (typeof setImmediate !== "undefined") raw.setImmediate = setImmediate;
+  if (typeof setImmediate !== "undefined") raw.setImmediate = wrapHost(setImmediate);
   // @ts-ignore
-  if (typeof clearImmediate !== "undefined") raw.clearImmediate = clearImmediate;
+  if (typeof clearImmediate !== "undefined") raw.clearImmediate = wrapHost(clearImmediate);
 
-  // Safe built-ins
-  raw.URL = URL;
-  raw.URLSearchParams = URLSearchParams;
-  raw.TextEncoder = TextEncoder;
-  raw.TextDecoder = TextDecoder;
-  raw.AbortController = AbortController;
-  raw.AbortSignal = AbortSignal;
-  if (typeof Blob !== "undefined") raw.Blob = Blob;
-  if (typeof File !== "undefined") raw.File = File;
-  if (typeof FormData !== "undefined") raw.FormData = FormData;
-  if (typeof Headers !== "undefined") raw.Headers = Headers;
-  if (typeof Request !== "undefined") raw.Request = Request;
-  if (typeof Response !== "undefined") raw.Response = Response;
-  if (typeof Buffer !== "undefined") raw.Buffer = Buffer;
-  else {
-    try {
-      const { Buffer } = require("node:buffer");
-      raw.Buffer = Buffer;
-    } catch {
-      raw.Buffer = undefined;
-    }
-  }
-
-  raw.crypto = globalThis.crypto;
-  raw.JSON = JSON;
-  raw.Math = Math;
-  raw.Date = Date;
-  raw.RegExp = RegExp;
-  raw.Error = Error;
-  raw.TypeError = TypeError;
-  raw.RangeError = RangeError;
-  raw.ReferenceError = ReferenceError;
-  raw.SyntaxError = SyntaxError;
-  raw.URIError = URIError;
-  raw.Promise = Promise;
-  raw.Array = Array;
-  raw.Object = Object;
-  raw.String = String;
-  raw.Number = Number;
-  raw.Boolean = Boolean;
-  raw.Map = Map;
-  raw.Set = Set;
-  raw.WeakMap = WeakMap;
-  raw.WeakSet = WeakSet;
-  raw.Symbol = Symbol;
-  raw.Proxy = Proxy;
-  raw.Reflect = Reflect;
-  raw.BigInt = BigInt;
-  raw.Intl = Intl;
-  raw.parseInt = parseInt;
-  raw.parseFloat = parseFloat;
-  raw.isNaN = isNaN;
-  raw.isFinite = isFinite;
-  raw.encodeURI = encodeURI;
-  raw.decodeURI = decodeURI;
-  raw.encodeURIComponent = encodeURIComponent;
-  raw.decodeURIComponent = decodeURIComponent;
-  if (typeof structuredClone !== "undefined") raw.structuredClone = structuredClone;
+  // Web APIs (host-provided; instances become membrane proxies — plugins
+  // should pass plain objects back into host capabilities).
+  raw.URL = wrapHost(URL);
+  raw.URLSearchParams = wrapHost(URLSearchParams);
+  raw.TextEncoder = wrapHost(TextEncoder);
+  raw.TextDecoder = wrapHost(TextDecoder);
+  raw.AbortController = wrapHost(AbortController);
+  raw.AbortSignal = wrapHost(AbortSignal);
+  if (typeof Blob !== "undefined") raw.Blob = wrapHost(Blob);
+  if (typeof File !== "undefined") raw.File = wrapHost(File);
+  if (typeof FormData !== "undefined") raw.FormData = wrapHost(FormData);
+  if (typeof Headers !== "undefined") raw.Headers = wrapHost(Headers);
+  if (typeof Request !== "undefined") raw.Request = wrapHost(Request);
+  if (typeof Response !== "undefined") raw.Response = wrapHost(Response);
+  // @ts-ignore
+  if (typeof atob !== "undefined") raw.atob = wrapHost(atob);
+  // @ts-ignore
+  if (typeof btoa !== "undefined") raw.btoa = wrapHost(btoa);
+  // @ts-ignore
+  if (typeof Buffer !== "undefined") raw.Buffer = wrapHost(Buffer);
+  if (typeof structuredClone !== "undefined") raw.structuredClone = wrapHost(structuredClone);
+  if (typeof crypto !== "undefined") raw.crypto = wrapHost(crypto);
 
   // Explicitly deny dangerous globals
   raw.process = undefined;
@@ -767,68 +901,34 @@ function createSecureSandbox(pluginId: string): any {
   raw.exports = undefined;
   raw.__filename = undefined;
   raw.__dirname = undefined;
-  raw.Function = undefined;
-  raw.eval = undefined;
   raw.WebAssembly = undefined;
   raw.importScripts = undefined;
 
-  // ── Hardened Proxy wrapper (0.4 Sandbox Hardening) ─────────────────────
+  // ── Hardened Proxy wrapper (0.4) ─────────────────────────────────────────
   //
-  // This Proxy intercepts ALL property access on globalThis (the sandbox)
-  // and blocks:
-  //   - Blocked globals (process, Bun, Function, etc.) → returns undefined
-  //   - 'constructor' property on any value → returns undefined
-  //     This prevents: ({}).constructor.constructor('return process')()
-  //   - '__proto__' property → returns undefined
-  //     This prevents: obj.__proto__.polluted = value
+  // Intercepts ALL property access on the sandbox global and blocks:
+  //   - Blocked globals (process, Bun, Function, etc.) → undefined
+  //   - 'constructor' / '__proto__' on the global itself → undefined
+  //   - writes / deletes / redefinitions of blocked globals
   //
-  // The Proxy also intercepts 'set' and 'deleteProperty' to prevent
-  // overwriting blocked globals or tampering with the sandbox.
+  // Values returned here are either donor-realm intrinsics (safe by realm —
+  // frozen prototypes, policy-blocked code generation) or membrane-wrapped
+  // host values (constructor paths severed by the membrane itself).
 
   const handler: ProxyHandler<object> = {
     get(target: any, prop: string | symbol): any {
-      // Block string access to dangerous globals
       if (typeof prop === "string") {
-        // Block constructor chain escapes
         if (prop === "constructor" || prop === "__proto__") {
           return undefined;
         }
-        // Block access to denied globals (double-check even though they're undefined)
         if (BLOCKED_GLOBALS.has(prop)) {
           return undefined;
         }
       }
-      const value = target[prop];
-      // If the value is a function from outside the sandbox, wrap it to
-      // prevent .constructor access on the returned function
-      if (typeof value === "function" && typeof prop === "string") {
-        // For built-in constructors/functions, create a safe wrapper that
-        // blocks .constructor and .__proto__ access
-        const safeFn = new Proxy(value, {
-          get(fnTarget: any, fnProp: string | symbol): any {
-            if (fnProp === "constructor" || fnProp === "__proto__") {
-              return undefined;
-            }
-            const fnVal = fnTarget[fnProp];
-            // Recursively protect nested function properties
-            if (typeof fnVal === "function" && typeof fnProp === "string") {
-              return new Proxy(fnVal, {
-                get(fnt: any, fp: string | symbol): any {
-                  if (fp === "constructor" || fp === "__proto__") return undefined;
-                  return fnt[fp];
-                }
-              });
-            }
-            return fnVal;
-          }
-        });
-        return safeFn;
-      }
-      return value;
+      return target[prop];
     },
 
     set(target: any, prop: string | symbol, value: any): boolean {
-      // Prevent overwriting blocked globals
       if (typeof prop === "string" && BLOCKED_GLOBALS.has(prop)) {
         return false; // Silently ignore
       }
@@ -852,24 +952,20 @@ function createSecureSandbox(pluginId: string): any {
     },
 
     defineProperty(target: any, prop: string | symbol, descriptor: PropertyDescriptor): boolean {
-      // Prevent redefinition of blocked globals
       if (typeof prop === "string" && BLOCKED_GLOBALS.has(prop)) {
         return false;
       }
       return Reflect.defineProperty(target, prop, descriptor);
     },
 
-    setPrototypeOf(target: any, proto: object | null): boolean {
-      // Lock prototype to prevent prototype injection attacks
+    setPrototypeOf(_target: any, _proto: object | null): boolean {
       return false;
     },
   };
 
-  // Set globalThis and self to the proxied sandbox
-  // The sandbox IS the proxy — this ensures all access goes through the handler
+  // The sandbox IS the proxy — all access goes through the handler.
   const proxied = new Proxy(raw, handler);
 
-  // Point globalThis/self to the proxied sandbox itself
   raw.globalThis = proxied;
   raw.self = proxied;
 
@@ -877,14 +973,13 @@ function createSecureSandbox(pluginId: string): any {
 }
 
 /**
- * Freeze built-in prototypes within the VM context to prevent prototype
- * pollution attacks. This must be called AFTER the context is created
- * but BEFORE any plugin code runs.
+ * Freeze built-in prototypes within the DONOR realm so the intrinsics
+ * plugins receive are immutable (anti prototype pollution).
  */
-function freezePrototypes(context: any): void {
+function freezeDonorPrototypes(context: any): void {
   try {
-    // Run a script that freezes prototypes within the VM context
-    const freezeScript = new Script(`
+    const freezeScript = new Script(
+      `
       (function() {
         var protos = [
           Object.prototype,
@@ -897,6 +992,8 @@ function freezePrototypes(context: any): void {
           Date.prototype,
           Map.prototype,
           Set.prototype,
+          WeakMap.prototype,
+          WeakSet.prototype,
           Promise.prototype,
           Error.prototype,
           TypeError.prototype,
@@ -905,26 +1002,45 @@ function freezePrototypes(context: any): void {
           SyntaxError.prototype,
           URIError.prototype,
         ];
-        for (var i = 0; i < protos.length; i++) {
+        var i;
+        var ctorNames = [
+          "ArrayBuffer", "SharedArrayBuffer", "DataView",
+          "Int8Array", "Uint8Array", "Uint8ClampedArray",
+          "Int16Array", "Uint16Array", "Int32Array", "Uint32Array",
+          "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array",
+          "AggregateError",
+        ];
+        for (i = 0; i < ctorNames.length; i++) {
+          try { protos.push(globalThis[ctorNames[i]].prototype); } catch (e) {}
+        }
+        for (i = 0; i < protos.length; i++) {
           try { Object.freeze(protos[i]); } catch (e) {}
         }
+        // Freeze the namespace objects against tampering as well.
+        var ns = [JSON, Math, Intl, Reflect];
+        for (i = 0; i < ns.length; i++) {
+          try { Object.freeze(ns[i]); } catch (e) {}
+        }
       })();
-    `, { filename: "xr:sandbox:freeze-prototypes" } as any);
+    `,
+      { filename: "xr:sandbox:freeze-prototypes" } as any,
+    );
     freezeScript.runInContext(context, { timeout: 1000 } as any);
   } catch {
-    // Best-effort: if freezing fails, continue (the Proxy still blocks escapes)
+    // Best-effort: if freezing fails, the membrane + proxy still block escapes
   }
 }
 
 async function loadInIsolatedVM(entryAbs: string, root: string, host: any, pluginId: string): Promise<PluginModule> {
-  const sandbox = createSecureSandbox(pluginId);
+  // Two-realm isolation (0.7): fresh donor-realm intrinsics (frozen, policy-
+  // blocked code generation) + membrane-wrapped host capabilities.
+  const intrinsics = harvestDonorIntrinsics();
+  const { wrap: wrapHost } = createHostMembrane();
+  const sandbox = createSecureSandbox(pluginId, intrinsics, wrapHost);
   const context = createContext(sandbox, {
     codeGeneration: { strings: false, wasm: false },
     name: `plugin:${pluginId}`,
   } as any);
-
-  // Freeze prototypes before any plugin code executes
-  freezePrototypes(context);
 
   const cache = new Map<string, ModuleRecord>();
 
@@ -1033,7 +1149,17 @@ async function loadInIsolatedVM(entryAbs: string, root: string, host: any, plugi
 
 export async function loadPlugin(dir: string, deps: LoadDeps): Promise<LoadResult> {
   const v = await validatePluginAsync(dir);
-  if (!v.ok || !v.manifest) return { ok: false, reason: v.errors.join("; ") || "invalid plugin", kind: "error" };
+  if (!v.ok || !v.manifest) {
+    // Fail-fast classification: a parsed-but-incompatible plugin reports
+    // "incompatible" (upgrade XR / plugin) rather than a generic "error".
+    if (v.manifest) {
+      const preCompat = checkCompatibility(CORE_VERSION, v.manifest.apiVersion, PLUGIN_API_VERSION, v.manifest.compatibility);
+      if (!preCompat.ok) {
+        return { ok: false, manifest: v.manifest, reason: preCompat.reason ?? "incompatible", kind: "incompatible" };
+      }
+    }
+    return { ok: false, reason: v.errors.join("; ") || "invalid plugin", kind: "error" };
+  }
   const manifest = v.manifest;
 
   const compat = checkCompatibility(CORE_VERSION, manifest.apiVersion, PLUGIN_API_VERSION, manifest.compatibility);

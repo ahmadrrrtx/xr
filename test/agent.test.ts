@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { runAgent } from "../src/core/agent.ts";
 import { parseTurn } from "../src/providers/openai-compat.ts";
 import type { Provider, Message, Tool, ModelTurn } from "../src/core/types.ts";

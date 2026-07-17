@@ -5,7 +5,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { McpClient, wrapMcpTool } from "../src/mcp/client.ts";
 import { parseSchedule, isDue, describe } from "../src/automation/cron.ts";
 import { sendWebhook } from "../src/automation/webhook.ts";

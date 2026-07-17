@@ -1,0 +1,46 @@
+# Dependencies (installed by `bun install` / CI)
+node_modules/
+
+# Bun local state
+.bun/
+
+# Built binary
+xr-bin
+
+# Build output
+dist/
+build/
+out/
+
+# TypeScript incremental state
+*.tsbuildinfo
+
+# Test / coverage artifacts
+coverage/
+*.log
+
+# XR local runtime state (databases, workspaces, secrets)
+.xr/
+*.db
+*.db-shm
+*.db-wal
+
+# Environment files (secrets)
+.env
+.env.local
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor noise
+*.swp
+*.swo
+*.sublime-*
+.vscode/
+.idea/
+
+# Temp files
+*.tmp
+*.bak
+*.orig

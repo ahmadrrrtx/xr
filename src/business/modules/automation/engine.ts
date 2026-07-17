@@ -226,10 +226,9 @@ export class AutomationEngine {
               break;
             } catch {
               if (retry === step.retryCount - 1) {
-                if (step.onError === 'stop') {
-                  run.status = 'failed';
-                  run.error = `Step "${step.name ?? step.id}" failed after ${step.retryCount} retries`;
-                }
+                // Retries exhausted — the step failed permanently, so the run fails.
+                run.status = 'failed';
+                run.error = `Step "${step.name ?? step.id}" failed after ${step.retryCount} retries`;
               }
             }
           }

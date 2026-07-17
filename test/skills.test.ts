@@ -6,7 +6,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { SkillEngine } from "../src/skills/engine.ts";
 import { verify, isVerifiable, type VerifierSpec } from "../src/skills/verifier.ts";
 

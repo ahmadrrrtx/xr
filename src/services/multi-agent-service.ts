@@ -46,7 +46,7 @@ import type {
 } from "../agents/types.ts";
 
 export class MultiAgentService implements LifecycleHook {
-  constructor(private container: Container) {}
+  constructor(private container: ServiceRegistry) {}
 
   private get workflowStore(): WorkflowRepo {
     return this.container.resolve<WorkflowRepo>("workflowStore");

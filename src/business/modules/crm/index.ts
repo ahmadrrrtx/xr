@@ -84,7 +84,7 @@ export class CRMModule {
         action: 'update',
         resource: 'contacts',
         resourceId: id,
-        changes: { before, after: contact },
+        changes: { contact: { before, after: contact } },
       });
     }
 
@@ -182,7 +182,7 @@ export class CRMModule {
    */
   getCompany(workspaceId: string, companyName: string) {
     const contacts = this.config.contacts.getByCompany(workspaceId, companyName);
-    const deals = this.config.pipelines.listDeals(workspaceId, { contactId: contacts[0]?.id });
+    const deals = this.config.pipelines.listDeals(workspaceId, { contactId: contacts[0]?.id, page: 1, limit: 100 });
     return {
       name: companyName,
       contacts,

@@ -149,7 +149,8 @@ export async function runAction(
       return { action, risk: { level: "safe", reason: "forbidden", reversible: true }, result };
     }
   } else if (!perm.allowed) {
-    const result: ActionResult = { ok: false, skipped: true, message: perm.reason! };
+    const permReason = "reason" in perm && perm.reason ? perm.reason : "action not permitted by control permissions";
+    const result: ActionResult = { ok: false, skipped: true, message: permReason };
     return { action, risk: { level: "safe", reason: "forbidden", reversible: true }, result };
   }
 

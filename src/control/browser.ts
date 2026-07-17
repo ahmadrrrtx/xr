@@ -335,12 +335,9 @@ export async function executeBrowserAction(action: Extract<Action, { type: "brow
     return ok("browser closed");
   }
 
-  const res = await ensurePage(action.tabIndex || 0);
-  if ("error" in res) return fail(res.error!);
-  const page = (res as any).page as AnyPage;
-  const timeout = Math.min(Math.max(action.timeoutMs ?? 15_000, 100), 60_000);
-
-  // Input validation defense-in-depth
+  // Input validation FIRST — reject malformed actions before paying the cost
+  // (and side effects) of launching a browser. This keeps behavior correct in
+  // headless/CI environments where a browser may not exist at all.
   if (action.selector) {
     if (typeof action.selector !== "string") return fail("selector must be string");
     if (action.selector.length > 500) return fail("selector too long (max 500)");
@@ -350,6 +347,30 @@ export async function executeBrowserAction(action: Extract<Action, { type: "brow
     if (typeof action.value !== "string") return fail("value must be string");
     if (action.value.length > 10_000) return fail("value too long (max 10000)");
   }
+
+  // Per-op required-field validation (fast, no browser needed).
+  switch (action.op) {
+    case "goto": {
+      if (!action.value) return fail("goto needs value");
+      try {
+        validateBrowserUrl(action.value);
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+      break;
+    }
+    case "click":
+      if (!action.selector) return fail("click needs selector");
+      break;
+    case "fill":
+      if (!action.selector || action.value == null) return fail("fill needs selector+value");
+      break;
+  }
+
+  const res = await ensurePage(action.tabIndex || 0);
+  if ("error" in res) return fail(res.error!);
+  const page = (res as any).page as AnyPage;
+  const timeout = Math.min(Math.max(action.timeoutMs ?? 15_000, 100), 60_000);
 
   try {
     switch (action.op) {

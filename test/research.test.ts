@@ -22,7 +22,7 @@ import { extractJson } from "../src/research/llm.ts";
 import { renderReport, verifyReport } from "../src/research/report.ts";
 import { runResearch } from "../src/research/engine.ts";
 import { LocalResearchBudget } from "../src/research/budget.ts";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import type { Provider, Message, ModelTurn } from "../src/core/types.ts";
 
 // ── search parsing ────────────────────────────────────────────────────────────

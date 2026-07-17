@@ -11,7 +11,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { MemoryStore } from "../src/memory/store.ts";
 import { planSummarization, applySummarization } from "../src/memory/summarize.ts";
 

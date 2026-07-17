@@ -14,7 +14,7 @@ import { describe, it, expect } from "bun:test";
 import { ActionSchema, type Action } from "../src/control/types.ts";
 import { classify } from "../src/control/classify.ts";
 import { isDisabled, runAction } from "../src/control/service.ts";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

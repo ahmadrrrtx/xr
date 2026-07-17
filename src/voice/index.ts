@@ -87,13 +87,13 @@ export function getVoiceConfig(): VoiceSettings {
   return { ...defaultVoiceSettings(), ...getVoiceSettings() };
 }
 
-export async function checkVoiceStack(settings = getVoiceSettings()): {
+export async function checkVoiceStack(settings = getVoiceSettings()): Promise<{
   stt: boolean;
   tts: boolean;
   wakeWord: boolean;
   details: string[];
   checks: VoiceHealthCheck[];
-} {
+}> {
   const hw = new VoiceHardware();
   const stt = sttFromSettings(settings).describe();
   const tts = ttsFromSettings(settings).describe();

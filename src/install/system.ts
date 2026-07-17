@@ -201,10 +201,11 @@ async function checkInternet(): Promise<boolean> {
 
 async function auditStatus(): Promise<HealthCheck> {
   try {
-    const { AuditStore } = await import("../state/stores/audit-store.ts");
-    const store = new AuditStore();
+    // 0.2 Storage Unification: read the single unified workspace store.
+    const { WorkspaceStore } = await import("../state/workspace-store.ts");
+    const store = new WorkspaceStore();
     const chain = store.verifyChain();
-    const count = store.count();
+    const count = store.auditCount();
     store.close();
     return chain.valid
       ? { id: "audit", label: "Audit chain", state: "ok", detail: `${count} entries intact` }

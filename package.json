@@ -23,6 +23,7 @@
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "ci": "bun run typecheck && bun test && bun run set-version:check",
     "xr": "bun run src/index.ts",
     "cli:help": "bun run src/index.ts help",
     "cli:doctor": "bun run src/index.ts doctor",

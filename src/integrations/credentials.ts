@@ -7,7 +7,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
-import type { BusinessDatabase } from '../core/database.js';
+import type { BusinessDatabase } from '../business/core/database.ts';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;

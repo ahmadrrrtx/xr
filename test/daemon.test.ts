@@ -6,7 +6,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { makeHandler } from "../src/daemon/server.ts";
 import { dashboardHtml } from "../src/daemon/dashboard.ts";
 
@@ -91,9 +91,9 @@ test("unknown route 404s (authed)", async () => {
 test("dashboard html embeds the token and has no external assets", () => {
   const html = dashboardHtml(TOKEN);
   expect(html).toContain(TOKEN);
-  // Stable Stage 5/6 dashboard copy (rendered statically, not via JS).
+  // Stable dashboard copy (rendered statically, not via JS).
   expect(html).toContain("Control Center");
-  expect(html).toContain("Security Posture");
+  expect(html).toContain("Security EDR");
   expect(html).toContain("Audit Log");
   // No external script/style/link tags (sandbox-safe, offline).
   expect(html).not.toMatch(/<script[^>]+src=/i);
@@ -110,11 +110,11 @@ test("agents endpoint returns the built-in workforce and workflow counters", asy
 
 test("agents workflow detail endpoint returns a persisted workflow", async () => {
   const { compileWorkflowPlan } = await import("../src/agents/planner.ts");
-  const { WorkflowStore } = await import("../src/state/stores/workflow-store.ts");
-  const wf = new WorkflowStore();
+  const { WorkflowRepo } = await import("../src/state/repos/workflow-repo.ts");
+  // 0.2 Storage Unification: persist into the SAME unified store the handler serves.
+  const wf = new WorkflowRepo(store);
   const plan = compileWorkflowPlan({ goal: "Implement a safe feature", cwd: process.cwd() });
   wf.saveWorkflow(plan);
-  wf.close();
 
   const h = makeHandler(store, TOKEN);
   const res = await h(req(`/api/agents/workflows/${plan.workflowId}`));
@@ -196,7 +196,8 @@ test("memory DELETE of a missing id 404s", async () => {
 
 test("dashboard html includes the durable memory viewer", () => {
   const html = dashboardHtml(TOKEN);
-  // Stage 6 — the memory panel now shows health cards + search + the viewer.
-  expect(html).toContain("Search Memory");
+  // The memory panel shows the durable ledger + search + the viewer.
+  expect(html).toContain("Durable Memory");
+  expect(html).toContain("Search memory ledger");
   expect(html).toContain("/api/memory");
 });

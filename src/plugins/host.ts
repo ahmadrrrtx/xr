@@ -358,8 +358,15 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
         const clean = name.replace(/[^A-Za-z0-9_:-]/g, "").slice(0, 120);
         if (!clean) throw new Error("invalid secret name");
         audit("secrets.get", { name: clean });
-        const v = getSecret(clean);
-        return v || undefined;
+        try {
+          return getSecret(clean) || undefined;
+        } catch {
+          // src/security/secrets.ts enforces a stricter name policy
+          // (^[A-Z][A-Z0-9_]{1,80}$) than the host sanitizer allows through.
+          // The plugin contract is string | undefined, so an unusable name is
+          // "no secret", never a crash inside the plugin VM.
+          return undefined;
+        }
       }),
     });
   }

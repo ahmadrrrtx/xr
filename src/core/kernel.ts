@@ -144,7 +144,8 @@ export class XRKernel {
     }
 
     await this.lifecycle.init();
-    this.events.emit("kernel.bootstrapped", { version: CORE_VERSION, ...versionInfo() });
+    // versionInfo() is the single source of truth (already carries version).
+    this.events.emit("kernel.bootstrapped", { ...versionInfo() });
   }
 
   /**
@@ -214,7 +215,10 @@ export class XRKernel {
       run: async () => {
         try {
           const budget = this.container.resolve<BudgetService>("budget");
-          await budget.checkSpendLimits();
+          const status = budget.getStatus();
+          if (status.isOverBudget) {
+            this.events.emit("budget.over_limit", { status });
+          }
         } catch {}
       },
     });

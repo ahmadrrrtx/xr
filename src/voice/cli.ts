@@ -43,7 +43,7 @@ function printVoiceUsage(): void {
   ]) console.log(`  ${C.cyan(line)}`);
 }
 
-export function printVoiceStatus(): void {
+export async function printVoiceStatus(): Promise<void> {
   banner();
   console.log(C.bold("🎤 XR Voice Stack"));
   const settings = getVoiceSettings();
@@ -56,7 +56,7 @@ export function printVoiceStatus(): void {
   console.log(`  confirmation ... ${C.cyan(settings.confirmationPolicy)}`);
   console.log(`  interruption ... ${C.cyan(settings.interruptionPolicy)}`);
   console.log("");
-  const health = checkVoiceStack(settings);
+  const health = await checkVoiceStack(settings);
   for (const c of health.checks) {
     const icon = c.state === "ok" ? C.green("✓") : c.state === "warn" ? C.amber("!") : C.red("✗");
     console.log(`  ${icon} ${c.label.padEnd(20)} ${C.dim(c.detail)}`);
@@ -66,7 +66,7 @@ export function printVoiceStatus(): void {
   if (!settings.enabled) info("Voice is disabled until you run xr voice start or enable it in setup.");
 }
 
-export async function printDevices(): void {
+export async function printDevices(): Promise<void> {
   banner();
   const hw = new VoiceHardware();
   const devices = await hw.devices();

@@ -18,7 +18,29 @@ import { CostRepo } from "../state/repos/cost-repo.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { priceFor } from "../cost/pricing.ts";
-import type { Mode, Provider } from "../core/types.ts";
+import type { ApprovalRequest, Mode, Provider } from "../core/types.ts";
+
+/**
+ * Overrides accepted by both runTask and runScopedTask. runTask is a thin
+ * passthrough to runScopedTask, so it must accept the full override surface —
+ * declaring a narrower type dropped options (say/approve/systemPrompt/…) that
+ * the runtime forwards and honors.
+ */
+export interface AgentRunOverrides {
+  provider?: string;
+  model?: string;
+  budget?: number;
+  maxTokens?: number;
+  maxSteps?: number;
+  dryRun?: boolean;
+  json?: boolean;
+  systemPrompt?: string;
+  toolsAllow?: string[];
+  toolsDeny?: string[];
+  say?: (line: string) => void;
+  approve?: (req: ApprovalRequest) => Promise<boolean>;
+  memoryEnabled?: boolean;
+}
 
 export class AgentService implements LifecycleHook {
   private container: ServiceRegistry;
@@ -33,15 +55,7 @@ export class AgentService implements LifecycleHook {
   async runTask(
     task: string,
     mode: Mode,
-    overrides: {
-      provider?: string;
-      model?: string;
-      budget?: number;
-      maxTokens?: number;
-      maxSteps?: number;
-      dryRun?: boolean;
-      json?: boolean;
-    } = {},
+    overrides: AgentRunOverrides = {},
   ): Promise<AgentResult> {
     return this.runScopedTask(task, mode, overrides);
   }
@@ -49,21 +63,7 @@ export class AgentService implements LifecycleHook {
   async runScopedTask(
     task: string,
     mode: Mode,
-    overrides: {
-      provider?: string;
-      model?: string;
-      budget?: number;
-      maxTokens?: number;
-      maxSteps?: number;
-      dryRun?: boolean;
-      json?: boolean;
-      systemPrompt?: string;
-      toolsAllow?: string[];
-      toolsDeny?: string[];
-      say?: (line: string) => void;
-      approve?: (req: any) => Promise<boolean>;
-      memoryEnabled?: boolean;
-    } = {},
+    overrides: AgentRunOverrides = {},
   ): Promise<AgentResult> {
     const configService = this.container.resolve<ConfigService>("config");
     const providerService = this.container.resolve<ProviderService>("providers");

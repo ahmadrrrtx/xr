@@ -6,7 +6,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { lexicalVector, cosine, sameSpace } from "../src/memory/embed.ts";
 import { fingerprint, indexProject, retrieve } from "../src/memory/rag.ts";
 import { compact, totalChars } from "../src/memory/compact.ts";

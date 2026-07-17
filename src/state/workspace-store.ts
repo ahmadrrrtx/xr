@@ -1066,6 +1066,23 @@ export class WorkspaceStore {
   get dbPath(): string {
     return this.openedPath;
   }
+
+  // ---- 0.5 Business OS adapter surface ----
+
+  /**
+   * Narrow prepared-statement passthrough required by BusinessDatabase
+   * (src/business/core/database.ts), which is intentionally adapter-based so
+   * Business OS runs on the SAME unified connection as everything else.
+   * New XR code should use the typed repos — not raw SQL.
+   */
+  prepare(sql: string): ReturnType<Database["prepare"]> {
+    return this.db.prepare(sql);
+  }
+
+  /** Transaction passthrough for BusinessDatabase migrations. */
+  transaction<F extends (...args: any[]) => any>(fn: F): (...args: Parameters<F>) => ReturnType<F> {
+    return this.db.transaction(fn) as any;
+  }
 }
 
 export { WorkspaceStore as Store };

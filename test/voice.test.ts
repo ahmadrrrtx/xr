@@ -5,7 +5,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { detectWake, parseConfirmation } from "../src/voice/wake.ts";
 import { shapeForPersona, TextToSpeech } from "../src/voice/tts.ts";
 import { SpeechToText } from "../src/voice/stt.ts";

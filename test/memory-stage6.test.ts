@@ -10,7 +10,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { MemoryStore, projectScopeFromCwd } from "../src/memory/store.ts";
 import {
   RECALL_FLOOR,

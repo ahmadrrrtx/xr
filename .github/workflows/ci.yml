@@ -1,0 +1,138 @@
+# =============================================================================
+# XR — Continuous Integration (Phase 0.7)
+#
+# Every pull request targeting `main` runs the full quality battery:
+#
+#   1. typecheck     — bunx tsc --noEmit        (static type safety)
+#   2. test          — bun test                 (unit + integration suite)
+#   3. version-sync  — bun run set-version:check (0.1 identity invariant:
+#                                                 package.json, version.ts and
+#                                                 website must never drift)
+#   4. quality-gate  — aggregation job; THIS is the check to mark as required
+#                      in branch protection so a failure in any of the above
+#                      blocks the merge (OpenHands pattern).
+#
+# Triggered on every pull_request to main and every push to main; also supports
+# manual runs via workflow_dispatch.
+#
+# Design notes:
+#   - Bun version is pinned by the `packageManager: bun@1.2.0` field in
+#     package.json; oven-sh/setup-bun reads it automatically (single source of
+#     truth for the toolchain version).
+#   - Dependencies are installed with --frozen-lockfile: the PR fails fast if
+#     bun.lock and package.json disagree.
+#   - The global Bun cache (~/.bun/install/cache) is cached between runs, keyed
+#     on the lockfile hash.
+#   - `bun test` automatically emits GitHub Actions annotations for failures.
+#   - permissions is restricted to contents:read (least privilege).
+#   - concurrency cancels superseded runs on PR branches to save runner time,
+#     but always lets runs on main complete (auditability of every merge).
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # ── 1. Static type safety ──────────────────────────────────────────────────
+  typecheck:
+    name: Typecheck (tsc --noEmit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Cache Bun global install cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+  # ── 2. Identity invariant (0.1): version single source of truth ────────────
+  version-sync:
+    name: Version sync (set-version --check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+
+      # No bun install needed: scripts/set-version.ts only uses node builtins.
+      - name: Verify package.json ↔ version.ts ↔ website are in sync
+        run: bun run set-version:check
+
+  # ── 3. Test suite ──────────────────────────────────────────────────────────
+  test:
+    name: Test (bun test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Cache Bun global install cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Run test suite
+        run: bun test
+
+  # ── 4. Aggregation: the single status check required by branch protection ──
+  # Runs even when a dependency fails (if: always()), then asserts every
+  # upstream job succeeded. Mark "Quality Gate" as a required status check in
+  # Settings → Branches so failing typecheck/tests/version-sync blocks merges.
+  quality-gate:
+    name: Quality Gate
+    if: always()
+    needs: [typecheck, version-sync, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify all required jobs succeeded
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "Upstream job results: ${results}"
+          for r in ${results}; do
+            if [ "${r}" != "success" ]; then
+              echo "::error::A required job did not succeed (result: ${r}). Merge blocked."
+              exit 1
+            fi
+          done
+          echo "All required checks passed — merge may proceed."

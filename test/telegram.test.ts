@@ -6,7 +6,7 @@ import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { parseAllowedIds, isAllowed } from "../src/telegram/auth.ts";
 import { parseCommand, extractBudget } from "../src/telegram/commands.ts";
 import { approvalMessage, parseCallback, statusMessage } from "../src/telegram/render.ts";

@@ -16,7 +16,7 @@ const tmp = mkdtempSync(join(tmpdir(), "xr-plugins-"));
 process.env.XR_HOME = join(tmp, "home");
 mkdirSync(process.env.XR_HOME, { recursive: true });
 
-import { Store } from "../src/state/db.ts";
+import { Store } from "../src/state/workspace-store.ts";
 import { parseManifestObject, validatePermissions, effectiveGrant } from "../src/plugins/manifest.ts";
 import { satisfies, checkCompatibility, parseSemver } from "../src/plugins/compat.ts";
 import { buildHost } from "../src/plugins/host.ts";
