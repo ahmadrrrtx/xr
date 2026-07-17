@@ -69,7 +69,7 @@ function FooterCol({
   links,
 }: {
   title: string;
-  links: { label: string; href: string }[];
+  links: readonly { label: string; href: string }[];
 }) {
   return (
     <div>
