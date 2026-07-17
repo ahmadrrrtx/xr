@@ -7,7 +7,7 @@
 import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { join, relative, extname } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { embed, cosine, lexicalVector, sameSpace } from "./embed.ts";
 
 const SKIP_DIRS = new Set([

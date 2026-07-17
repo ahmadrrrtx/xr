@@ -30,7 +30,7 @@
  */
 
 import { randomUUID, createHash } from "node:crypto";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { ActionSchema, type Action, type Plan } from "./types.ts";
 import { classify } from "./classify.ts";
 

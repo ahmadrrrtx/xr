@@ -1,7 +1,7 @@
 /** XR Stage 7 — Research Engine orchestrator. */
 import { randomUUID } from "node:crypto";
 import type { Provider } from "../core/types.ts";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import type { StructuredCallDeps } from "./llm.ts";
 import type { SearchCapability } from "./search.ts";
 import { extractUrls } from "./search.ts";

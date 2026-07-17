@@ -18,7 +18,7 @@ import {
   unlinkSync,
 } from "node:fs";
 import { XR_HOME, loadConfig, type XRConfig } from "../config/config.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 
 export interface WorkspaceContext {
   id: string;

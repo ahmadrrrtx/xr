@@ -1,5 +1,5 @@
 /** XR Stage 10 — `xr plugins …` command handlers. */
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { banner, ok, warn, info, confirm, colors as C } from "../interfaces/cli.ts";
 import { CORE_VERSION } from "../core/version.ts";
 import { PluginManager } from "./manager.ts";

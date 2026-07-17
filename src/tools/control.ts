@@ -20,7 +20,7 @@
 import type { Tool, ToolResult, ToolContext } from "../core/types.ts";
 import { loadConfig } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 import { planActions } from "../control/planner.ts";
 import { runTypedPlan, isDisabled } from "../control/service.ts";
 import type { ControlOptions } from "../control/types.ts";

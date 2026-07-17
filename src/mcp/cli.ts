@@ -2,7 +2,7 @@
  * XR Stage 11 — `xr mcp` command handlers
  */
 
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { banner, ok, warn, info, confirm, colors as C } from "../interfaces/cli.ts";
 import { McpManager } from "./manager.ts";
 import type { McpServerConfigInput } from "./types.ts";

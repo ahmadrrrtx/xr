@@ -3,7 +3,7 @@
  * Handles monthly/daily spend caps and usage accounting.
  * (TRD §3.1 / Spend Cap & Governance)
  */
-import type { BudgetConfig } from "../state/stores/cost-store.ts";
+import type { BudgetConfig } from "../state/repos/cost-repo.ts";
 import { colors as C } from "../interfaces/cli.ts";
 
 

@@ -12,7 +12,7 @@
  */
 import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
 import { BudgetManager } from "../cost/manager.ts";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import type { ResearchBudgetGuard } from "./engine.ts";
 
 export class GovernedResearchBudget implements ResearchBudgetGuard {

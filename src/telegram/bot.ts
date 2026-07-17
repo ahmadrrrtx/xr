@@ -9,7 +9,7 @@
  * Token + allowed ids come from env (BYO, like everything in XR):
  *   XR_TELEGRAM_TOKEN, XR_TELEGRAM_ALLOWED (comma-separated user ids)
  */
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { parseAllowedIds, isAllowed } from "./auth.ts";
 import { parseCommand, helpText } from "./commands.ts";
 import {

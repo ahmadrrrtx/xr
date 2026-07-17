@@ -18,7 +18,7 @@
  */
 import { join } from "node:path";
 import { writeFileSync, existsSync, mkdirSync } from "node:fs";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { loadConfig, XR_HOME } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";

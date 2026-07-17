@@ -8,7 +8,7 @@
  * through to the agent and ran the subcommand as a task).
  */
 import { Command, CommandContext } from "../core/command-registry.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 
 function legacyStore(ctx: CommandContext): Store {
   try {

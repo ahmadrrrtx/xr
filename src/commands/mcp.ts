@@ -2,7 +2,7 @@
  * XR Stage 11 — MCP Command
  */
 import { Command, CommandContext } from "../core/command-registry.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 import { handleMcpCommand } from "../mcp/cli.ts";
 
 function resolveStore(ctx: CommandContext): Store {

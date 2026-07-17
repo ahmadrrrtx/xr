@@ -6,7 +6,7 @@ import { VoicePipeline } from "./pipeline.ts";
 import { getVoiceSettings } from "./settings.ts";
 import { VoiceActivityDetector } from "./vad.ts";
 import { detectWake } from "./wake.ts";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import type { VoiceHealthCheck, VoiceSettings } from "./types.ts";
 import { defaultVoiceSettings } from "./types.ts";
 

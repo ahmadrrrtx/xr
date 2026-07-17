@@ -5,7 +5,7 @@
  * transcript privacy are coordinated here.  The pipeline is still dependency
  * injected for tests and desktop/dashboard frontends.
  */
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { SpeechToText } from "./stt.ts";
 import { TextToSpeech } from "./tts.ts";
 import { detectWake, parseConfirmation, parseSpokenMetaCommand } from "./wake.ts";

@@ -9,7 +9,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { McpClient } from "./client.ts";
 import { McpRegistry, type McpRegistryEntry } from "./registry.ts";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import type { Tool, ToolContext } from "../core/types.ts";
 import {
   type McpServerConfigInput,

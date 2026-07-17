@@ -1,5 +1,5 @@
 import type { Provider } from "../core/types.ts";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { captureScreen, cloudVision } from "./vision.ts";
 import { execute } from "./executor.ts";
 import { ActionSchema, type Action } from "./types.ts";

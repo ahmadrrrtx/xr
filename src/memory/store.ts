@@ -25,7 +25,8 @@
  */
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
-import type { MemoryRow, Store } from "../state/db.ts";
+import type { MemoryRow } from "../state/workspace-store.ts";
+import type { WorkspaceStore as Store } from "../state/workspace-store.ts";
 import { lexicalVector, cosine, embed, sameSpace } from "./embed.ts";
 import { compact, totalChars } from "./compact.ts";
 import type { Message } from "../core/types.ts";

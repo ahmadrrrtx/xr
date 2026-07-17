@@ -3,7 +3,7 @@ import { CORE_VERSION } from "../core/version.ts";
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { printStatus, probeHealth, detectPlatform } from "../install/system.ts";
 import { ProviderService } from "../services/provider-service.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";

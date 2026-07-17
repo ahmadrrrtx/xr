@@ -26,7 +26,7 @@ import { join, resolve, relative, isAbsolute, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { createContext, Script, compileFunction } from "node:vm";
 import { pluginIoLimit, yieldEventLoop } from "../util/concurrency.ts";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import type { XRConfig } from "../config/config.ts";
 import { CORE_VERSION, PLUGIN_API_VERSION } from "../core/version.ts";
 import { readManifest, validatePermissions, effectiveGrant } from "./manifest.ts";

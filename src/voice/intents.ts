@@ -1,5 +1,5 @@
 /** XR Stage 9 — deterministic voice intent router. */
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { loadConfig, saveConfig } from "../config/config.ts";
 import { runAction } from "../control/service.ts";
 import { parseMemoryIntent } from "../memory/intent.ts";

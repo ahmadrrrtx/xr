@@ -11,11 +11,11 @@ import type {
   Tool,
 } from "./types.ts";
 import { getTool, toolsForMode } from "../tools/registry.ts";
-import type { SessionStore } from "../state/stores/session-store.ts";
-import type { AuditStore } from "../state/stores/audit-store.ts";
-import type { CostStore } from "../state/stores/cost-store.ts";
-import type { UserMemoryStore } from "../state/stores/user-memory-store.ts";
-import type { Store } from "../state/db.ts";
+import type { SessionRepo } from "../state/repos/session-repo.ts";
+import type { AuditRepo } from "../state/repos/audit-repo.ts";
+import type { CostRepo } from "../state/repos/cost-repo.ts";
+import type { UserMemoryRepo } from "../state/repos/user-memory-repo.ts";
+import type { WorkspaceStore as Store } from "../state/workspace-store.ts";
 import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
 import { BudgetManager } from "../cost/manager.ts";
 import { compact } from "../memory/compact.ts";
@@ -26,10 +26,10 @@ export interface AgentDeps {
   provider: Provider;
   /** Legacy monolithic store (kept for older CLI/test call-sites during the runtime-store migration). */
   store?: Store;
-  sessionStore?: SessionStore;
-  auditStore?: AuditStore;
-  costStore?: CostStore;
-  userMemoryStore?: UserMemoryStore;
+  sessionStore?: SessionRepo;
+  auditStore?: AuditRepo;
+  costStore?: CostRepo;
+  userMemoryStore?: UserMemoryRepo;
   cwd: string;
   /** Extra system guidance for role-scoped or workflow-scoped agents. */
   systemPrompt?: string;

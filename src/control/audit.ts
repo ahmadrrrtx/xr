@@ -8,7 +8,7 @@
  * so we redact them here, at the source.
  */
 
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import type { Action, ActionResult, RiskAssessment } from "./types.ts";
 
 function redactAction(action: Action): Record<string, unknown> {

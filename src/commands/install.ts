@@ -1,6 +1,6 @@
 /** XR Stage 2 — command adapters for the installation subsystem. */
 import { Command, CommandContext } from "../core/command-registry.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 import { installComponent, printStatus, repairXR, resetXR, runInstallWizard, updateXR } from "../install/system.ts";
 
 function legacyStore(ctx: CommandContext): Store {

@@ -1,5 +1,5 @@
 /** XR Stage 10 — local dashboard plugin management API. */
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { PluginManager } from "../plugins/manager.ts";
 import { searchCatalog } from "../plugins/catalog.ts";
 import { isPermissionScope, type PermissionScope } from "../plugins/types.ts";

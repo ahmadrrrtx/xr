@@ -12,10 +12,10 @@ import { ConfigService } from "./config-service.ts";
 import { PluginService } from "./plugin-service.ts";
 import { McpService } from "./mcp-service.ts";
 import { SkillService } from "./skill-service.ts";
-import { SessionStore } from "../state/stores/session-store.ts";
-import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
-import { CostStore } from "../state/stores/cost-store.ts";
-import { Store } from "../state/db.ts";
+import { SessionRepo } from "../state/repos/session-repo.ts";
+import { UserMemoryRepo } from "../state/repos/user-memory-repo.ts";
+import { CostRepo } from "../state/repos/cost-repo.ts";
+import { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { priceFor } from "../cost/pricing.ts";
 import type { Mode, Provider } from "../core/types.ts";
@@ -72,16 +72,16 @@ export class AgentService implements LifecycleHook {
     const mcpService = this.container.resolve<McpService>("mcp");
     let skillService: SkillService | undefined;
     try { skillService = this.container.resolve<SkillService>("skills"); } catch { skillService = undefined; }
-    const sessionStore = this.container.resolve<SessionStore>("sessionStore");
-    const memoryStore = this.container.resolve<UserMemoryStore>("userMemoryStore");
-    const costStore = this.container.resolve<CostStore>("costStore");
+    const sessionStore = this.container.resolve<SessionRepo>("sessionStore");
+    const memoryStore = this.container.resolve<UserMemoryRepo>("userMemoryStore");
+    const costStore = this.container.resolve<CostRepo>("costStore");
 
     const config = configService.get();
 
-    // Stage 6 — the canonical memory engine, backed by the same Store the rest
+    // Stage 6 — the canonical memory engine, backed by the same WorkspaceStore the rest
     // of the system uses, so CLI / TUI / voice / dashboard / agent all share ONE
-    // memory. (The legacy UserMemoryStore stays registered for backward compat.)
-    const legacyStore = this.container.resolve<Store>("legacyStore");
+    // memory. (The legacy UserMemoryRepo stays registered for backward compat.)
+    const legacyStore = this.container.resolve<WorkspaceStore>("legacyStore");
     const engine = new MemoryStore(legacyStore);
     const provider = providerService.getProvider({
       provider: overrides.provider,

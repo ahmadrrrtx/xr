@@ -22,7 +22,7 @@ import { handleControlApi } from "./control-api.ts";
 import { handlePluginApi } from "./plugin-api.ts";
 import { handleSkillsApi } from "./skills-api.ts";
 import { randomBytes } from "node:crypto";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 import { loadConfig, saveConfig, isMemoryEnabled, configCacheStats, hydrateSecretsAsync } from "../config/config.ts";
 import { isLocal } from "../cost/pricing.ts";
 import { runLab } from "../security/lab.ts";
@@ -39,6 +39,8 @@ import { buildProvider, knownProviders, PRESETS } from "../providers/factory.ts"
 import { getProviderEnvStatus } from "../config/config.ts";
 import { listRemembered, forgetPlan, clearAllMemory } from "../control/memory.ts";
 import { MemoryStore } from "../memory/store.ts";
+import { WorkflowRepo } from "../state/repos/workflow-repo.ts";
+import { AuditRepo } from "../state/repos/audit-repo.ts";
 import { WorkspaceManager } from "../core/workspace.ts";
 import { detectHardwareSpecs, formatHardwareSummary } from "../local/hardware.ts";
 import { recommendLocalAI } from "../local/recommend.ts";
@@ -234,10 +236,8 @@ export function makeHandler(initialStore: Store, token: string) {
 
     // ── Agents Workforce & Workflows ──────────────────────────────────────
     if (path === "/api/agents" && method === "GET") {
-      const { WorkflowStore } = await import("../state/stores/workflow-store.ts");
-      const wfStore = new WorkflowStore();
+      const wfStore = new WorkflowRepo(store);
       const health = wfStore.health();
-      wfStore.close();
 
       return json({
         agents: [
@@ -251,10 +251,8 @@ export function makeHandler(initialStore: Store, token: string) {
 
     if (path.startsWith("/api/agents/workflows/") && method === "GET") {
       const id = path.slice("/api/agents/workflows/".length);
-      const { WorkflowStore } = await import("../state/stores/workflow-store.ts");
-      const wfStore = new WorkflowStore();
+      const wfStore = new WorkflowRepo(store);
       const record = wfStore.getWorkflow(id);
-      wfStore.close();
 
       if (!record) {
         return json({ error: "Workflow not found" }, 404);

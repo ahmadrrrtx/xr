@@ -22,7 +22,7 @@
 
 import { join, resolve, relative, isAbsolute, dirname, normalize } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import type { XRConfig } from "../config/config.ts";
 import { hostAllowed } from "../tools/egress.ts";
 import { getSecret } from "../security/secrets.ts";

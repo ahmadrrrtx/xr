@@ -13,7 +13,13 @@ import { WorkspaceManager } from "./workspace.ts";
 import { BackgroundServiceManager } from "./services.ts";
 import { CORE_VERSION, PKG, versionInfo } from "./version.ts";
 
-import { Store } from "../state/db.ts";
+import { WorkspaceStore } from "../state/workspace-store.ts";
+import { SessionRepo } from "../state/repos/session-repo.ts";
+import { AuditRepo } from "../state/repos/audit-repo.ts";
+import { CostRepo } from "../state/repos/cost-repo.ts";
+import { UserMemoryRepo } from "../state/repos/user-memory-repo.ts";
+import { SkillRepo } from "../state/repos/skill-repo.ts";
+import { WorkflowRepo } from "../state/repos/workflow-repo.ts";
 import { ConfigService } from "../services/config-service.ts";
 import { ProviderService } from "../services/provider-service.ts";
 import { BudgetService } from "../services/budget-service.ts";
@@ -25,12 +31,6 @@ import { MultiAgentService } from "../services/multi-agent-service.ts";
 import { XRShieldService } from "../security/shield.ts";
 import { BusinessOS } from "../business/index.ts";
 
-import { SessionStore } from "../state/stores/session-store.ts";
-import { AuditStore } from "../state/stores/audit-store.ts";
-import { MemoryStore } from "../state/stores/memory-store.ts";
-import { CostStore } from "../state/stores/cost-store.ts";
-import { UserMemoryStore } from "../state/stores/user-memory-store.ts";
-import { WorkflowStore } from "../state/stores/workflow-store.ts";
 
 export class XRKernel {
   /** @deprecated Use CORE_VERSION from src/core/version.ts — kept for backward compat */
@@ -71,19 +71,14 @@ export class XRKernel {
    */
   async bootstrap(): Promise<void> {
     const activeWorkspace = this.workspaces.getActiveContext();
-    const workspaceStore = new Store(activeWorkspace.dbPath);
+    const workspaceStore = new WorkspaceStore(activeWorkspace.id, activeWorkspace.dbPath);
 
     // Core Stores
     this.container.register("legacyStore", workspaceStore);
     this.container.register("store", workspaceStore);
 
-    // Specialized Stores for backward compatibility
-    this.container.register("sessionStore", new SessionStore());
-    this.container.register("auditStore", new AuditStore(activeWorkspace.dbPath));
-    this.container.register("memoryStore", new MemoryStore());
-    this.container.register("costStore", new CostStore());
-    this.container.register("userMemoryStore", new UserMemoryStore());
-    this.container.register("workflowStore", new WorkflowStore(activeWorkspace.dbPath));
+    // Repositories are views over the single workspace connection.
+    this.registerWorkspaceRepos(workspaceStore);
 
     // Core Services
     const configService = new ConfigService();
@@ -156,26 +151,23 @@ export class XRKernel {
 
     // Close Database & Specialized Stores
     try {
-      this.container.resolve<Store>("store").close();
+      this.container.resolve<WorkspaceStore>("store").close();
     } catch {}
 
-    for (const name of [
-      "sessionStore",
-      "auditStore",
-      "memoryStore",
-      "costStore",
-      "userMemoryStore",
-      "workflowStore",
-    ]) {
-      try {
-        this.container.resolve<{ close(): void }>(name).close();
-      } catch {}
-    }
   }
 
   /**
    * Registers default OS background maintenance & monitor routines.
    */
+  private registerWorkspaceRepos(store: WorkspaceStore): void {
+    this.container.register("sessionStore", new SessionRepo(store));
+    this.container.register("auditStore", new AuditRepo(store));
+    this.container.register("costStore", new CostRepo(store));
+    this.container.register("userMemoryStore", new UserMemoryRepo(store));
+    this.container.register("skillStore", new SkillRepo(store));
+    this.container.register("workflowStore", new WorkflowRepo(store));
+  }
+
   private registerCoreBackgroundJobs(): void {
     // 1. Health Status & Security Scanner (runs every 30 seconds)
     this.services.registerJob({
@@ -213,7 +205,7 @@ export class XRKernel {
       intervalMs: 300000,
       run: async () => {
         try {
-          const store = this.container.resolve<Store>("store");
+          const store = this.container.resolve<WorkspaceStore>("store");
           const pruned = store.pruneExpiredMemory();
           if (pruned > 0) {
             this.events.emit("memory.pruned", { pruned, timestamp: Date.now() });
@@ -234,19 +226,22 @@ export class XRKernel {
 
     // Unregister current DB
     try {
-      this.container.resolve<Store>("store").close();
+      this.container.resolve<WorkspaceStore>("store").close();
     } catch {}
 
     this.workspaces.setActiveId(id);
 
     // Bootstrap workspace-specific resources
     const activeWorkspace = this.workspaces.getActiveContext();
-    const newStore = new Store(activeWorkspace.dbPath);
+    const newStore = new WorkspaceStore(activeWorkspace.id, activeWorkspace.dbPath);
 
     this.container.unregister("legacyStore");
     this.container.unregister("store");
     this.container.register("legacyStore", newStore);
     this.container.register("store", newStore);
+    this.registerWorkspaceRepos(newStore);
+    this.container.unregister("budget");
+    this.container.register("budget", new BudgetService(this.container));
 
     // Re-register Shield and Business OS with the new DB
     this.container.unregister("shield");

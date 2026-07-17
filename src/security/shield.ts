@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { homedir, platform, totalmem } from "node:os";
 import { createHash } from "node:crypto";
 import { XR_HOME } from "../config/config.ts";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { runCommand } from "../util/process.ts";
 import { shieldIoLimit } from "../util/concurrency.ts";
 import { pathExists, readText, listDir } from "../util/fs-async.ts";

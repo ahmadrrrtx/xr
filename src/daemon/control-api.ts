@@ -1,4 +1,4 @@
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { planActions } from "../control/planner.ts";
 import { approvals } from "../control/approvals.ts";
 import { listPermissions, grantPermission, revokePermission } from "../control/permissions.ts";

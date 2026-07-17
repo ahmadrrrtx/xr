@@ -5,7 +5,7 @@ import { ConfigService } from "./config-service.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { PermissionScope } from "../plugins/types.ts";
 import type { Tool } from "../core/types.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 
 export class PluginService implements LifecycleHook {
   private manager: PluginManager;

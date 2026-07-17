@@ -1,7 +1,7 @@
 /** XR Stage 8 — Voice CLI handlers. */
 import { VoiceSession, checkVoiceStack } from "./index.ts";
 import { VoicePipeline } from "./pipeline.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 import { sttFromSettings } from "./stt.ts";
 import { ttsFromSettings } from "./tts.ts";
 import { VoiceHardware } from "./hardware.ts";

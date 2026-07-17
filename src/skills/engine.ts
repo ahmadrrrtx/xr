@@ -14,7 +14,7 @@
  *  decision-context-graph "freeze validated sequences".)
  */
 import { randomUUID } from "node:crypto";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { verify, isVerifiable, type VerifierSpec, type VerifyResult } from "./verifier.ts";
 
 /** A recorded action sequence from a run (what the agent did). */

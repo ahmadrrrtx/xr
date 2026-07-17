@@ -1,6 +1,6 @@
 /** XR Stage 10 — plugin command registry adapters. */
 import type { Command, CommandContext } from "../core/command-registry.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 import { handlePluginsCommand } from "../plugins/cli.ts";
 
 function resolveStore(ctx: CommandContext): Store {

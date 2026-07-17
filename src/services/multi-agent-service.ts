@@ -15,9 +15,9 @@ import { Container } from "../core/container.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { EventBus } from "../core/event-bus.ts";
 import { AgentService } from "./agent-service.ts";
-import { AuditStore } from "../state/stores/audit-store.ts";
-import { WorkflowStore } from "../state/stores/workflow-store.ts";
-import { Store } from "../state/db.ts";
+import { AuditRepo } from "../state/repos/audit-repo.ts";
+import { WorkflowRepo } from "../state/repos/workflow-repo.ts";
+import { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
 import { loadConfig } from "../config/config.ts";
 import { scanUntrusted } from "../security/guard.ts";
@@ -48,16 +48,16 @@ import type {
 export class MultiAgentService implements LifecycleHook {
   constructor(private container: Container) {}
 
-  private get workflowStore(): WorkflowStore {
-    return this.container.resolve<WorkflowStore>("workflowStore");
+  private get workflowStore(): WorkflowRepo {
+    return this.container.resolve<WorkflowRepo>("workflowStore");
   }
 
-  private get auditStore(): AuditStore {
-    return this.container.resolve<AuditStore>("auditStore");
+  private get auditStore(): AuditRepo {
+    return this.container.resolve<AuditRepo>("auditStore");
   }
 
-  private get legacyStore(): Store {
-    return this.container.resolve<Store>("legacyStore");
+  private get legacyStore(): WorkspaceStore {
+    return this.container.resolve<WorkspaceStore>("legacyStore");
   }
 
   private get events(): EventBus {

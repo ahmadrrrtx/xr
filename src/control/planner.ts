@@ -14,7 +14,7 @@
 
 import type { Provider, Message } from "../core/types.ts";
 import { ActionSchema, type Action, type Plan } from "./types.ts";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { recallPlan } from "./memory.ts";
 
 const SYSTEM_PROMPT = `You are XR's Computer-Control Planner.

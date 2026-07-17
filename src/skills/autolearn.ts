@@ -17,7 +17,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { loadSkills, type LoadedSkill } from "./loader.ts";
 import { verify, isVerifiable, type VerifierSpec } from "./verifier.ts";
 import { SkillEngine } from "./engine.ts";

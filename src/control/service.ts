@@ -5,7 +5,7 @@
 
 import { confirm, colors as C } from "../interfaces/cli.ts";
 import { loadConfig } from "../config/config.ts";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { ActionSchema, type Action, type ActionResult, type ControlOptions, type RiskAssessment, type Plan } from "./types.ts";
 import { classify } from "./classify.ts";
 import { execute } from "./executor.ts";

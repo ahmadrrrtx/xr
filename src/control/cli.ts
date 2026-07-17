@@ -1,7 +1,7 @@
 /**
  * XR Stage 9 — Computer Control: CLI handlers.
  */
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { banner, ok, warn, info, colors as C } from "../interfaces/cli.ts";
 import { loadConfig, saveConfig } from "../config/config.ts";
 import { detectCapabilities, detectCapabilitiesAsync } from "./adapter.ts";

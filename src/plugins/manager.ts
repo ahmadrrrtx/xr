@@ -1,7 +1,7 @@
 /** XR Stage 10 — high-level plugin platform manager. */
 import { cpSync, existsSync, mkdirSync, rmSync, renameSync, statSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { loadConfig, type XRConfig } from "../config/config.ts";
 import { CORE_VERSION, PLUGIN_API_VERSION } from "../core/version.ts";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";

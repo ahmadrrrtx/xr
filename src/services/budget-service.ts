@@ -3,7 +3,7 @@
  * Manages spending caps, cost accounting, and governs per-task usage.
  */
 
-import { CostStore } from "../state/stores/cost-store.ts";
+import { CostRepo } from "../state/repos/cost-repo.ts";
 import { BudgetManager, BudgetStatus } from "../cost/manager.ts";
 import { CostGovernor, Budget, Pricing, CostSnapshot, GovernorDecision } from "../cost/governor.ts";
 import { Container } from "../core/container.ts";
@@ -15,10 +15,10 @@ export class BudgetService implements LifecycleHook {
 
   constructor(container: Container) {
     this.container = container;
-    const costStore = this.container.resolve<CostStore>("costStore");
+    const costStore = this.container.resolve<CostRepo>("costStore");
     this.budgetManager = new BudgetManager(costStore as any); 
-    // Note: BudgetManager was written against old Store, cast to any for now 
-    // but we'll fix the BudgetManager to use CostStore.
+    // Note: BudgetManager was written against old store, cast to any for now 
+    // but we'll fix the BudgetManager to use CostRepo.
   }
 
   /**

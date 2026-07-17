@@ -5,7 +5,7 @@ import { McpManager } from "../mcp/manager.ts";
 import { Container } from "../core/container.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { Tool } from "../core/types.ts";
-import { Store } from "../state/db.ts";
+import { Store } from "../state/workspace-store.ts";
 
 export class McpService implements LifecycleHook {
   private manager: McpManager;

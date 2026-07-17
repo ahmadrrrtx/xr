@@ -16,7 +16,7 @@
  *   xr memory clear           delete everything (asks confirmation)
  *   xr memory summaries       list / clear session summaries
  */
-import type { Store } from "../state/db.ts";
+import type { Store } from "../state/workspace-store.ts";
 import { MemoryStore, projectScopeFromCwd } from "./store.ts";
 import { MEMORY_CATEGORIES, isCategory, type MemoryCategory, type MemoryEntry } from "./types.ts";
 import { banner, ok, warn, info, confirm, colors as C } from "../interfaces/cli.ts";

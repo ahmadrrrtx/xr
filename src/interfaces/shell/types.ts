@@ -5,7 +5,7 @@
 
 import type { ShellViewId } from "../../ui/icons.ts";
 import type { WorkspaceManager } from "../../core/workspace.ts";
-import type { Store } from "../../state/db.ts";
+import type { Store } from "../../state/workspace-store.ts";
 
 export type { ShellViewId };
 
