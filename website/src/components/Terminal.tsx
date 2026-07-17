@@ -12,7 +12,7 @@ const LINES: Array<{ prompt?: string; text: string; kind?: "out" | "ok" | "info"
   { prompt: "$", text: "npm i -g @xr/agent" },
   { text: "added 1 package in 2.1s", kind: "dim" },
   { prompt: "$", text: "xr", delay: 300 },
-  { text: "XR 3.1.0 — ready.", kind: "ok" },
+  { text: "XR 3.1.5 (Helios) — ready.", kind: "ok" },
   { text: "→ Connecting to model: XR Core 1", kind: "info" },
   { text: "→ Skills loaded: 214", kind: "info" },
   { prompt: "λ", text: "refactor src/auth —target ts" },
