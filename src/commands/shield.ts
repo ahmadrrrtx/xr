@@ -7,7 +7,9 @@
 
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Store } from "../state/workspace-store.ts";
-import { XRShieldService, ShieldThreat } from "../security/shield.ts";
+import { XRShieldService, ShieldThreat, KNOWN_MINER_NAMES, SHIELD_STATE_PATH } from "../security/shield.ts";
+import { platform } from "node:os";
+import { existsSync } from "node:fs";
 import {
   banner,
   heading,
@@ -24,17 +26,17 @@ import {
 } from "../interfaces/cli.ts";
 import { SYM, A } from "../ui/theme.ts";
 
+/**
+ * 0.2 Storage Unification: Resolve the single workspace store from the
+ * container. Never creates a new Store() as a fallback.
+ */
 function resolveStore(ctx: CommandContext): Store {
-  try {
-    return ctx.container.resolve<Store>("legacyStore");
-  } catch {
-    return new Store();
-  }
+  return ctx.container.resolve<Store>("store");
 }
 
 export class ShieldCommand implements Command {
   name = "shield";
-  description = "AI-powered Local Security, Privacy, and System Integrity Layer";
+  description = "Local-First Security, Privacy, and System Integrity Layer (heuristic-based, no fabricated threats)";
   usage = "xr shield [status|scan|quick-scan|full-scan|processes|startup|privacy|downloads|browser|logs|explain|quarantine-review|doctor|adblock]";
 
   async execute(ctx: CommandContext): Promise<void> {
@@ -357,8 +359,8 @@ export class ShieldCommand implements Command {
     }
 
     const threatId = subArgs[0];
-    heading(`XR Shield — AI-Assisted Threat Analysis`);
-    info(`  Querying specialized security agents for context (ID: ${threatId})...`);
+    heading(`XR Shield — Heuristic Threat Analysis`);
+    info(`  Analyzing threat with deterministic heuristics (ID: ${threatId})...`);
 
     // Run a quick scan to retrieve the threat
     const threats = await service.runScan("full");
@@ -374,7 +376,7 @@ export class ShieldCommand implements Command {
     const analysis = service.analyzeThreatWithAgent(agentName, threat);
 
     console.log();
-    console.log(`  ${C.cyan("Agent:")}       ${C.bold(analysis.agentName)}`);
+    console.log(`  ${C.cyan("Agent:")}       ${C.bold(analysis.heuristicName ?? (analysis as any).agentName)}`);
     console.log(`  ${C.cyan("Confidence:")}  ${Math.round(analysis.confidence * 100)}%`);
     console.log(`  ${C.cyan("Risk Level:")}  ${threat.severity.toUpperCase()}`);
     console.log(`  ${C.cyan("Evidence:")}    ${C.dim(threat.evidence)}`);
@@ -494,7 +496,7 @@ export class ShieldCommand implements Command {
 
     const toggle = subArgs[0].toLowerCase();
     if (toggle === "on" || toggle === "enable") {
-      const auth = await confirm("Enabling this writes tracker-blocking entries to your local hosts file. Approve?", true);
+      const auth = await confirm("Enabling this activates ad-block state in Shield configuration. A hosts file reference template is available via "xr shield adblock". Approve?", true);
       if (auth) {
         await service.toggleAdBlock(true);
         success("Hosts-based ad and tracker protection activated successfully.");

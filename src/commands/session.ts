@@ -26,12 +26,9 @@ import {
 } from "../cli/output.ts";
 import { usageError, notFoundError } from "../cli/errors.ts";
 
+/** 0.2 Storage Unification: Always resolve from container, never create new Store(). */
 function resolveStore(ctx: CommandContext): Store {
-  try {
-    return ctx.container.resolve<Store>("legacyStore");
-  } catch {
-    return new Store();
-  }
+  return ctx.container.resolve<Store>("store");
 }
 
 function statusPaint(status: string): string {

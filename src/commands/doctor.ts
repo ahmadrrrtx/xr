@@ -29,8 +29,8 @@ export class DoctorCommand implements Command {
       await runPerfBenchmarks(json);
       return;
     }
-    let store: Store;
-    try { store = ctx.container.resolve<Store>("legacyStore"); } catch { store = new Store(); }
+    /** 0.2 Storage Unification: Always resolve from container, never create new Store(). */
+    const store = ctx.container.resolve<Store>("store");
     const mem = new MemoryStore(store);
     const memHealth = mem.health();
     const memEnabled = isMemoryEnabled();

@@ -170,6 +170,11 @@ export class WorkspaceManager {
 
   /**
    * Retrieve a localized SQLite store for the workspace.
+   *
+   * 0.2 Storage Unification: WARNING — this creates a NEW Store instance
+   * each time it's called. Prefer resolving the kernel's single "store"
+   * from the DI container instead. This method exists only for standalone
+   * CLI usage outside the kernel lifecycle.
    */
   getStore(id: string): Store {
     const ctx = this.ensureWorkspace(id, id === "default" ? "Default Workspace" : id);

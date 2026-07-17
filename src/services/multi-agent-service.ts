@@ -56,8 +56,8 @@ export class MultiAgentService implements LifecycleHook {
     return this.container.resolve<AuditRepo>("auditStore");
   }
 
-  private get legacyStore(): WorkspaceStore {
-    return this.container.resolve<WorkspaceStore>("legacyStore");
+  private get unifiedStore(): WorkspaceStore {
+    return this.container.resolve<WorkspaceStore>("store");
   }
 
   private get events(): EventBus {
@@ -638,7 +638,7 @@ export class MultiAgentService implements LifecycleHook {
     }
 
     const scope = projectScopeFromCwd(record.metadata.cwd);
-    const engine = new MemoryStore(this.legacyStore);
+    const engine = new MemoryStore(this.unifiedStore);
     const recalled = engine.recall(record.goal, {
       scope,
       k: 5,

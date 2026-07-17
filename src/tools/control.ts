@@ -54,9 +54,11 @@ export const computerControlTool: Tool = {
     // If the agent is in dry-run, force the planner's execution into dry-run too.
     const effectiveMode: ControlOptions["mode"] = ctx.dryRun ? "dry-run" : mode;
 
-    // Open a store handle scoped to this tool call. Sharing the agent's
-    // store would require plumbing — we keep audit isolation simple.
-    const store = new Store();
+    // 0.2 Storage Unification: Reuse the singleton Store that the kernel
+    // bootstrapped. The WorkspaceStore module tracks the last-opened store,
+    // which is the kernel's single instance. Do NOT create new Store().
+    const store = Store.lastOpened() ?? new Store();
+    const storeIsOwned = !Store.lastOpened(); // Only close if we created it
     try {
       // Reuse the same provider the agent is using. Pass the store so the
       // planner can consult memory before billing an LLM call.
@@ -99,7 +101,9 @@ export const computerControlTool: Tool = {
         (failed ? ` last error: ${results.find((r) => !r.result.ok && !r.result.skipped)?.result.message ?? ""}` : "");
       return { ok: failed === 0, output: summary, data: { plan: planned.plan, source: planned.source, results: results.map((r) => ({ ok: r.result.ok, skipped: r.result.skipped, message: r.result.message })) } };
     } finally {
-      store.close();
+      // 0.2 Storage Unification: Only close the store if we created it,
+      // not if it's the kernel's singleton.
+      if (storeIsOwned) store.close();
     }
   },
 };

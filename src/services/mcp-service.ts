@@ -12,8 +12,8 @@ export class McpService implements LifecycleHook {
   private loaded = false;
 
   constructor(private container: Container) {
-    let store: Store;
-    try { store = container.resolve<Store>("legacyStore"); } catch { store = new Store(); }
+    /** 0.2 Storage Unification: Always resolve the single workspace store from container. */
+    const store = container.resolve<Store>("store");
     this.manager = new McpManager(store, process.cwd());
   }
 

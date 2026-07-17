@@ -40,6 +40,8 @@ export interface SummaryRow {
 
 export class WorkspaceStore {
   private static openConnections = 0;
+  /** 0.2 Storage Unification: Track the last-opened instance for singleton access. */
+  private static _lastOpened: WorkspaceStore | null = null;
   private db: Database;
   private readonly openedPath: string;
 
@@ -56,6 +58,7 @@ export class WorkspaceStore {
     this.openedPath = path;
     this.db = new Database(path, { create: true });
     WorkspaceStore.openConnections += 1;
+    WorkspaceStore._lastOpened = this;
     this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.migrate();
   }
@@ -1041,10 +1044,23 @@ export class WorkspaceStore {
   close(): void {
     this.db.close();
     WorkspaceStore.openConnections = Math.max(0, WorkspaceStore.openConnections - 1);
+    if (WorkspaceStore._lastOpened === this) {
+      WorkspaceStore._lastOpened = null;
+    }
   }
 
   static connectionCount(): number {
     return WorkspaceStore.openConnections;
+  }
+
+  /**
+   * 0.2 Storage Unification: Returns the most recently opened WorkspaceStore
+   * instance (the kernel's single store), or null if none has been opened yet.
+   * This allows tool implementations and other code that doesn't have direct
+   * access to the DI container to reuse the same database connection.
+   */
+  static lastOpened(): WorkspaceStore | null {
+    return WorkspaceStore._lastOpened;
   }
 
   get dbPath(): string {

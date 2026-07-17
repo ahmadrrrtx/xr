@@ -5,12 +5,9 @@ import { Command, CommandContext } from "../core/command-registry.ts";
 import { Store } from "../state/workspace-store.ts";
 import { handleMcpCommand } from "../mcp/cli.ts";
 
+/** 0.2 Storage Unification: Always resolve from container, never create new Store(). */
 function resolveStore(ctx: CommandContext): Store {
-  try {
-    return ctx.container.resolve<Store>("legacyStore");
-  } catch {
-    return new Store();
-  }
+  return ctx.container.resolve<Store>("store");
 }
 
 export class McpCommand implements Command {

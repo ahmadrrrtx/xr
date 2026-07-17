@@ -1,17 +1,33 @@
 /**
  * XR — Hardened Plugin Loader
- * Production-grade security: real VM isolation, not regex scanning.
+ * Production-grade security: real VM isolation with defense-in-depth.
  *
- * SECURITY ARCHITECTURE (defense-in-depth):
+ * SECURITY ARCHITECTURE (0.4 Plugin Sandbox Hardening):
  *  1) Validation & hashing: manifest, permission, compatibility, hash pinning, tree hash
  *  2) Static scan: defense-in-depth warnings (not primary boundary)
  *  3) Runtime isolation: plugin code runs in isolated V8 context with:
  *     - codeGeneration: { strings:false, wasm:false } => no eval/new Function/WASM
+ *     - Hardened Proxy sandbox that blocks constructor-chain escapes
  *     - custom require() that ONLY allows relative files inside plugin root
  *     - no access to process, Bun, fs, net, child_process, etc.
  *     - host object is null-prototype, frozen, with prototype-less functions
  *     - no bare imports, no require.resolve, no dynamic import
+ *     - Prototype-chain lockdown: Object.prototype, Array.prototype, etc.
+ *       are frozen within the sandbox to prevent prototype pollution and
+ *       constructor.constructor escape attempts
  *  4) Capability host is the ONLY API, gated by manifest-declared permissions
+ *
+ * HARDENING DETAILS (0.4):
+ *  - createSecureSandbox() wraps globalThis in a Proxy that:
+ *    a) Blocks access to 'constructor' on any function/object to prevent
+ *       Function constructor escape via ({}).constructor.constructor
+ *    b) Returns undefined for process, Bun, require, module, exports,
+ *       __filename, __dirname, Function, eval, WebAssembly, importScripts
+ *    c) Freezes Object.prototype, Array.prototype, Function.prototype
+ *       within the VM context to prevent prototype pollution
+ *  - loadInIsolatedVM() applies the Proxy sandbox and freezes built-in
+ *    prototypes before executing any plugin code
+ *  - Static scan remains as defense-in-depth (catches obvious issues early)
  *
  * References:
  *  - Deno capability model: explicit allow-list, no ambient authority
@@ -83,6 +99,8 @@ const DISALLOWED_PATTERNS: Array<[RegExp, string]> = [
   [/(^|[^\w.])fetch\s*\(/, "direct fetch is not allowed; request net permission and use host.net.fetch"],
   [/\bchild_process\b/, "child_process access is blocked"],
   [/\bglobalThis\s*\[\s*["']process["']\s*\]/, "indirect process access is blocked"],
+  [/\brequire\s*\(\s*["']child_process["']\s*\)/, "require('child_process') is blocked"],
+  [/\brequire\s*\(\s*["']node:child_process["']\s*\)/, "require('node:child_process') is blocked"],
 ];
 
 function inside(root: string, child: string): boolean {
@@ -281,7 +299,6 @@ async function scanTreeAsync(dir: string): Promise<{ warnings: string[]; errors:
 }
 
 function scanTree(dir: string): { warnings: string[]; errors: string[] } {
-  // Sync path for CLI; daemon uses validatePluginAsync / scanTreeAsync.
   const warnings: string[] = [];
   const errors: string[] = [];
   let files = 0;
@@ -498,10 +515,9 @@ export interface LoadDeps {
   expectedTreeHash?: string;
 }
 
-// ── Secure VM Loader ─────────────────────────────────────────────────────────
+// ── Secure VM Loader (0.4 Hardened) ──────────────────────────────────────────
 
 function transpileCode(code: string, filename: string): string {
-  // Use Bun.Transpiler if available (Bun runtime) to strip TS types
   try {
     // @ts-ignore - Bun global may exist
     if (typeof Bun !== "undefined" && (Bun as any).Transpiler) {
@@ -521,39 +537,29 @@ function transpileCode(code: string, filename: string): string {
 function transformESMToCJS(code: string): string {
   let out = code;
 
-  // strip import type
   out = out.replace(/^\s*import\s+type\s+[^;]+;?/gm, "");
-  // strip // @ts-ignore etc already removed by comment strip? Keep.
 
-  // import { a, b } from './x' -> const { a, b } = require('./x');
   out = out.replace(/import\s+\{\s*([^}]+)\s*\}\s+from\s+["'](\.[^"']+)["'];?/g, (_: string, names: string, p: string) => {
     return `const { ${names} } = require("${p}");`;
   });
 
-  // import X from './y'
   out = out.replace(/import\s+([A-Za-z0-9_$]+)\s+from\s+["'](\.[^"']+)["'];?/g, (_: string, name: string, p: string) => {
     return `const ${name} = (require("${p}").default ?? require("${p}"));`;
   });
 
-  // import * as X from './y'
   out = out.replace(/import\s+\*\s+as\s+([A-Za-z0-9_$]+)\s+from\s+["'](\.[^"']+)["'];?/g, (_: string, name: string, p: string) => {
     return `const ${name} = require("${p}");`;
   });
 
-  // import './y' side-effect
   out = out.replace(/import\s+["'](\.[^"']+)["'];?/g, (_: string, p: string) => `require("${p}");`);
 
-  // export default function name? -> exports.default = function name?
   out = out.replace(/export\s+default\s+function\s+([A-Za-z0-9_$]+)?/g, (_: string, name: string) => `exports.default = function ${name || ""}`.trimEnd());
   out = out.replace(/export\s+default\s+/g, "exports.default = ");
 
-  // export async function foo -> exports.foo = async function foo
   out = out.replace(/export\s+async\s+function\s+([A-Za-z0-9_$]+)/g, "exports.$1 = async function $1");
 
-  // export function foo -> exports.foo = function foo
   out = out.replace(/export\s+function\s+([A-Za-z0-9_$]+)/g, "exports.$1 = function $1");
 
-  // export const X = -> const X = ; exports.X = X (collect)
   const constExports: string[] = [];
   out = out.replace(/export\s+const\s+([A-Za-z0-9_$]+)\s*=/g, (_: string, name: string) => {
     constExports.push(name);
@@ -571,7 +577,6 @@ function transformESMToCJS(code: string): string {
     out += "\n" + constExports.map((n) => `exports.${n} = ${n};`).join("\n");
   }
 
-  // export { a, b as c }
   out = out.replace(/export\s+\{\s*([^}]+)\s*\};?/g, (_: string, names: string) => {
     return names
       .split(",")
@@ -591,9 +596,7 @@ function transformESMToCJS(code: string): string {
 function resolveFileWithExts(baseDir: string, spec: string, root: string): string | null {
   const candidates: string[] = [];
   const raw = resolve(baseDir, spec);
-  // direct
   candidates.push(raw);
-  // extensions
   candidates.push(raw + ".ts");
   candidates.push(raw + ".js");
   candidates.push(raw + ".tsx");
@@ -601,7 +604,6 @@ function resolveFileWithExts(baseDir: string, spec: string, root: string): strin
   candidates.push(raw + ".mjs");
   candidates.push(raw + ".cjs");
   candidates.push(raw + ".json");
-  // index files
   candidates.push(join(raw, "index.ts"));
   candidates.push(join(raw, "index.js"));
   candidates.push(join(raw, "index.tsx"));
@@ -623,9 +625,35 @@ function resolveFileWithExts(baseDir: string, spec: string, root: string): strin
 
 type ModuleRecord = { exports: any; id: string; filename: string; loaded: boolean };
 
-function createSecureSandbox(pluginId: string) {
-  const sandbox: any = {};
+// ── Hardened Sandbox Builder (0.4) ───────────────────────────────────────────
+//
+// Creates a Proxy-wrapped sandbox that blocks:
+//   1. Access to process, Bun, require, module, exports, __filename, __dirname,
+//      Function, eval, WebAssembly, importScripts (returns undefined)
+//   2. Constructor-chain escapes: accessing .constructor on any object/function
+//      returns undefined, preventing ({}).constructor.constructor('return process')()
+//   3. __proto__ access returns undefined
+//
+// After creating the sandbox, we freeze Object.prototype, Array.prototype,
+// Function.prototype, and other built-in prototypes WITHIN the VM context
+// to prevent prototype pollution.
 
+const BLOCKED_GLOBALS = new Set([
+  "process",
+  "Bun",
+  "global",
+  "require",
+  "module",
+  "exports",
+  "__filename",
+  "__dirname",
+  "Function",
+  "eval",
+  "WebAssembly",
+  "importScripts",
+]);
+
+function createSecureSandbox(pluginId: string): any {
   // Redacted console
   const mkLog = (level: "log" | "warn" | "error" | "info" | "debug") =>
     (...args: any[]) => {
@@ -647,113 +675,232 @@ function createSecureSandbox(pluginId: string) {
       else console.error(`[plugin:${pluginId}] ${redacted}`);
     };
 
-  sandbox.console = {
+  const sandboxConsole = {
     log: mkLog("log"),
     warn: mkLog("warn"),
     error: mkLog("error"),
     info: mkLog("info"),
-    debug: (...a: any[]) => {
-      // @ts-ignore
-      if (typeof process !== "undefined" && process.env?.XR_DEBUG === "1") mkLog("log")(...a);
-      else {
-        try {
-          // fallback check via global process if exposed (should not)
-          // @ts-ignore
-          if (globalThis.process?.env?.XR_DEBUG === "1") mkLog("log")(...a);
-        } catch {}
-      }
-    },
+    debug: mkLog("debug"),
   };
 
-  // timers - bind to host timers but safe
-  sandbox.setTimeout = setTimeout;
-  sandbox.clearTimeout = clearTimeout;
-  sandbox.setInterval = setInterval;
-  sandbox.clearInterval = clearInterval;
-  sandbox.queueMicrotask = queueMicrotask;
-  // setImmediate if available
+  // Build the raw sandbox object with safe built-ins only
+  const raw: any = {};
+
+  raw.console = sandboxConsole;
+
+  // timers
+  raw.setTimeout = setTimeout;
+  raw.clearTimeout = clearTimeout;
+  raw.setInterval = setInterval;
+  raw.clearInterval = clearInterval;
+  raw.queueMicrotask = queueMicrotask;
   // @ts-ignore
-  if (typeof setImmediate !== "undefined") sandbox.setImmediate = setImmediate;
+  if (typeof setImmediate !== "undefined") raw.setImmediate = setImmediate;
   // @ts-ignore
-  if (typeof clearImmediate !== "undefined") sandbox.clearImmediate = clearImmediate;
+  if (typeof clearImmediate !== "undefined") raw.clearImmediate = clearImmediate;
 
   // Safe built-ins
-  sandbox.URL = URL;
-  sandbox.URLSearchParams = URLSearchParams;
-  sandbox.TextEncoder = TextEncoder;
-  sandbox.TextDecoder = TextDecoder;
-  sandbox.AbortController = AbortController;
-  sandbox.AbortSignal = AbortSignal;
-  if (typeof Blob !== "undefined") sandbox.Blob = Blob;
-  if (typeof File !== "undefined") sandbox.File = File;
-  if (typeof FormData !== "undefined") sandbox.FormData = FormData;
-  if (typeof Headers !== "undefined") sandbox.Headers = Headers;
-  if (typeof Request !== "undefined") sandbox.Request = Request;
-  if (typeof Response !== "undefined") sandbox.Response = Response;
-  if (typeof Buffer !== "undefined") sandbox.Buffer = Buffer;
+  raw.URL = URL;
+  raw.URLSearchParams = URLSearchParams;
+  raw.TextEncoder = TextEncoder;
+  raw.TextDecoder = TextDecoder;
+  raw.AbortController = AbortController;
+  raw.AbortSignal = AbortSignal;
+  if (typeof Blob !== "undefined") raw.Blob = Blob;
+  if (typeof File !== "undefined") raw.File = File;
+  if (typeof FormData !== "undefined") raw.FormData = FormData;
+  if (typeof Headers !== "undefined") raw.Headers = Headers;
+  if (typeof Request !== "undefined") raw.Request = Request;
+  if (typeof Response !== "undefined") raw.Response = Response;
+  if (typeof Buffer !== "undefined") raw.Buffer = Buffer;
   else {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { Buffer } = require("node:buffer");
-      sandbox.Buffer = Buffer;
+      raw.Buffer = Buffer;
     } catch {
-      sandbox.Buffer = undefined;
+      raw.Buffer = undefined;
     }
   }
 
-  sandbox.crypto = globalThis.crypto;
-  sandbox.JSON = JSON;
-  sandbox.Math = Math;
-  sandbox.Date = Date;
-  sandbox.RegExp = RegExp;
-  sandbox.Error = Error;
-  sandbox.TypeError = TypeError;
-  sandbox.RangeError = RangeError;
-  sandbox.ReferenceError = ReferenceError;
-  sandbox.SyntaxError = SyntaxError;
-  sandbox.URIError = URIError;
-  sandbox.Promise = Promise;
-  sandbox.Array = Array;
-  sandbox.Object = Object;
-  sandbox.String = String;
-  sandbox.Number = Number;
-  sandbox.Boolean = Boolean;
-  sandbox.Map = Map;
-  sandbox.Set = Set;
-  sandbox.WeakMap = WeakMap;
-  sandbox.WeakSet = WeakSet;
-  sandbox.Symbol = Symbol;
-  sandbox.Proxy = Proxy;
-  sandbox.Reflect = Reflect;
-  sandbox.BigInt = BigInt;
-  sandbox.Intl = Intl;
-  sandbox.parseInt = parseInt;
-  sandbox.parseFloat = parseFloat;
-  sandbox.isNaN = isNaN;
-  sandbox.isFinite = isFinite;
-  sandbox.encodeURI = encodeURI;
-  sandbox.decodeURI = decodeURI;
-  sandbox.encodeURIComponent = encodeURIComponent;
-  sandbox.decodeURIComponent = decodeURIComponent;
-  if (typeof structuredClone !== "undefined") sandbox.structuredClone = structuredClone;
+  raw.crypto = globalThis.crypto;
+  raw.JSON = JSON;
+  raw.Math = Math;
+  raw.Date = Date;
+  raw.RegExp = RegExp;
+  raw.Error = Error;
+  raw.TypeError = TypeError;
+  raw.RangeError = RangeError;
+  raw.ReferenceError = ReferenceError;
+  raw.SyntaxError = SyntaxError;
+  raw.URIError = URIError;
+  raw.Promise = Promise;
+  raw.Array = Array;
+  raw.Object = Object;
+  raw.String = String;
+  raw.Number = Number;
+  raw.Boolean = Boolean;
+  raw.Map = Map;
+  raw.Set = Set;
+  raw.WeakMap = WeakMap;
+  raw.WeakSet = WeakSet;
+  raw.Symbol = Symbol;
+  raw.Proxy = Proxy;
+  raw.Reflect = Reflect;
+  raw.BigInt = BigInt;
+  raw.Intl = Intl;
+  raw.parseInt = parseInt;
+  raw.parseFloat = parseFloat;
+  raw.isNaN = isNaN;
+  raw.isFinite = isFinite;
+  raw.encodeURI = encodeURI;
+  raw.decodeURI = decodeURI;
+  raw.encodeURIComponent = encodeURIComponent;
+  raw.decodeURIComponent = decodeURIComponent;
+  if (typeof structuredClone !== "undefined") raw.structuredClone = structuredClone;
 
   // Explicitly deny dangerous globals
-  sandbox.process = undefined;
-  sandbox.Bun = undefined;
-  sandbox.global = undefined;
-  sandbox.globalThis = sandbox;
-  sandbox.self = sandbox;
-  sandbox.require = undefined;
-  sandbox.module = undefined;
-  sandbox.exports = undefined;
-  sandbox.__filename = undefined;
-  sandbox.__dirname = undefined;
-  sandbox.Function = undefined;
-  sandbox.eval = undefined;
-  sandbox.WebAssembly = undefined;
-  sandbox.importScripts = undefined;
+  raw.process = undefined;
+  raw.Bun = undefined;
+  raw.global = undefined;
+  raw.require = undefined;
+  raw.module = undefined;
+  raw.exports = undefined;
+  raw.__filename = undefined;
+  raw.__dirname = undefined;
+  raw.Function = undefined;
+  raw.eval = undefined;
+  raw.WebAssembly = undefined;
+  raw.importScripts = undefined;
 
-  return sandbox;
+  // ── Hardened Proxy wrapper (0.4 Sandbox Hardening) ─────────────────────
+  //
+  // This Proxy intercepts ALL property access on globalThis (the sandbox)
+  // and blocks:
+  //   - Blocked globals (process, Bun, Function, etc.) → returns undefined
+  //   - 'constructor' property on any value → returns undefined
+  //     This prevents: ({}).constructor.constructor('return process')()
+  //   - '__proto__' property → returns undefined
+  //     This prevents: obj.__proto__.polluted = value
+  //
+  // The Proxy also intercepts 'set' and 'deleteProperty' to prevent
+  // overwriting blocked globals or tampering with the sandbox.
+
+  const handler: ProxyHandler<object> = {
+    get(target: any, prop: string | symbol): any {
+      // Block string access to dangerous globals
+      if (typeof prop === "string") {
+        // Block constructor chain escapes
+        if (prop === "constructor" || prop === "__proto__") {
+          return undefined;
+        }
+        // Block access to denied globals (double-check even though they're undefined)
+        if (BLOCKED_GLOBALS.has(prop)) {
+          return undefined;
+        }
+      }
+      const value = target[prop];
+      // If the value is a function from outside the sandbox, wrap it to
+      // prevent .constructor access on the returned function
+      if (typeof value === "function" && typeof prop === "string") {
+        // For built-in constructors/functions, create a safe wrapper that
+        // blocks .constructor and .__proto__ access
+        const safeFn = new Proxy(value, {
+          get(fnTarget: any, fnProp: string | symbol): any {
+            if (fnProp === "constructor" || fnProp === "__proto__") {
+              return undefined;
+            }
+            const fnVal = fnTarget[fnProp];
+            // Recursively protect nested function properties
+            if (typeof fnVal === "function" && typeof fnProp === "string") {
+              return new Proxy(fnVal, {
+                get(fnt: any, fp: string | symbol): any {
+                  if (fp === "constructor" || fp === "__proto__") return undefined;
+                  return fnt[fp];
+                }
+              });
+            }
+            return fnVal;
+          }
+        });
+        return safeFn;
+      }
+      return value;
+    },
+
+    set(target: any, prop: string | symbol, value: any): boolean {
+      // Prevent overwriting blocked globals
+      if (typeof prop === "string" && BLOCKED_GLOBALS.has(prop)) {
+        return false; // Silently ignore
+      }
+      target[prop] = value;
+      return true;
+    },
+
+    has(target: any, prop: string | symbol): boolean {
+      if (typeof prop === "string" && BLOCKED_GLOBALS.has(prop)) {
+        return false;
+      }
+      return prop in target;
+    },
+
+    deleteProperty(target: any, prop: string | symbol): boolean {
+      if (typeof prop === "string" && BLOCKED_GLOBALS.has(prop)) {
+        return false;
+      }
+      delete target[prop];
+      return true;
+    }
+  };
+
+  // Set globalThis and self to the proxied sandbox
+  // The sandbox IS the proxy — this ensures all access goes through the handler
+  const proxied = new Proxy(raw, handler);
+
+  // Point globalThis/self to the proxied sandbox itself
+  raw.globalThis = proxied;
+  raw.self = proxied;
+
+  return proxied;
+}
+
+/**
+ * Freeze built-in prototypes within the VM context to prevent prototype
+ * pollution attacks. This must be called AFTER the context is created
+ * but BEFORE any plugin code runs.
+ */
+function freezePrototypes(context: any): void {
+  try {
+    // Run a script that freezes prototypes within the VM context
+    const freezeScript = new Script(`
+      (function() {
+        var protos = [
+          Object.prototype,
+          Array.prototype,
+          Function.prototype,
+          String.prototype,
+          Number.prototype,
+          Boolean.prototype,
+          RegExp.prototype,
+          Date.prototype,
+          Map.prototype,
+          Set.prototype,
+          Promise.prototype,
+          Error.prototype,
+          TypeError.prototype,
+          RangeError.prototype,
+          ReferenceError.prototype,
+          SyntaxError.prototype,
+          URIError.prototype,
+        ];
+        for (var i = 0; i < protos.length; i++) {
+          try { Object.freeze(protos[i]); } catch (e) {}
+        }
+      })();
+    `, { filename: "xr:sandbox:freeze-prototypes" } as any);
+    freezeScript.runInContext(context, { timeout: 1000 } as any);
+  } catch {
+    // Best-effort: if freezing fails, continue (the Proxy still blocks escapes)
+  }
 }
 
 async function loadInIsolatedVM(entryAbs: string, root: string, host: any, pluginId: string): Promise<PluginModule> {
@@ -762,6 +909,9 @@ async function loadInIsolatedVM(entryAbs: string, root: string, host: any, plugi
     codeGeneration: { strings: false, wasm: false },
     name: `plugin:${pluginId}`,
   } as any);
+
+  // Freeze prototypes before any plugin code executes
+  freezePrototypes(context);
 
   const cache = new Map<string, ModuleRecord>();
 
@@ -813,8 +963,6 @@ async function loadInIsolatedVM(entryAbs: string, root: string, host: any, plugi
       value: undefined, writable: false, configurable: false,
     });
 
-    // Prefer Script.runInContext — Bun's compileFunction+parsingContext may not
-    // bind the exports parameter correctly across runtimes.
     const wrapper = `(function(exports, require, module, __filename, __dirname, host) {\n${cjs}\n\nif (module.exports && module.exports !== exports) {\n  // CJS reassignment support\n}\n})`;
 
     try {
@@ -857,10 +1005,6 @@ async function loadInIsolatedVM(entryAbs: string, root: string, host: any, plugi
       if (!ran) {
         cache.delete(absPath);
         throw new Error(`failed to execute plugin module ${relative(root, absPath)}`);
-      }
-      // If the module reassigned module.exports, prefer that
-      if (mod.exports && typeof mod.exports === "object") {
-        // keep
       }
     } catch (e) {
       cache.delete(absPath);

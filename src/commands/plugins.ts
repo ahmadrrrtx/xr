@@ -3,12 +3,12 @@ import type { Command, CommandContext } from "../core/command-registry.ts";
 import { Store } from "../state/workspace-store.ts";
 import { handlePluginsCommand } from "../plugins/cli.ts";
 
+/**
+ * 0.2 Storage Unification: Resolve the single workspace store from the
+ * container. Never creates a new Store() as a fallback.
+ */
 function resolveStore(ctx: CommandContext): Store {
-  try {
-    return ctx.container.resolve<Store>("legacyStore");
-  } catch {
-    return new Store();
-  }
+  return ctx.container.resolve<Store>("store");
 }
 
 export class PluginsCommand implements Command {

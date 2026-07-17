@@ -2,13 +2,21 @@
  * XR — The Unified XR OS Kernel (v3.1.5 Helios)
  * Orchestrates and integrates every major subsystem of the AI Operating System.
  *
+ * 0.2 Storage Unification:
+ *   - Exactly ONE WorkspaceStore per workspace, registered as "store".
+ *   - The "legacyStore" alias is removed — all code resolves "store".
+ *   - switchWorkspace() closes the old store and opens a new one.
+ *   - All repos (SessionRepo, AuditRepo, etc.) use the single store.
+ *   - No code should ever call `new Store()` or `new WorkspaceStore()`
+ *     outside of this kernel's bootstrap/switch methods.
+ *
  * Version is now derived from src/core/version.ts single source of truth.
  */
 
 import { Container } from "./container.ts";
 import { EventBus } from "./event-bus.ts";
 import { CommandRegistry } from "./command-registry.ts";
-import { LifecycleManager, RuntimeState } from "./lifecycle.ts";
+import { LifecycleManager } from "./lifecycle.ts";
 import { WorkspaceManager } from "./workspace.ts";
 import { BackgroundServiceManager } from "./services.ts";
 import { CORE_VERSION, PKG, versionInfo } from "./version.ts";
@@ -68,14 +76,18 @@ export class XRKernel {
 
   /**
    * Bootstraps the full XR kernel ecosystem and provisions the active workspace.
+   *
+   * 0.2 Storage Unification: Exactly one WorkspaceStore is created and
+   * registered as "store". All repos and services resolve this single instance.
    */
   async bootstrap(): Promise<void> {
     const activeWorkspace = this.workspaces.getActiveContext();
     const workspaceStore = new WorkspaceStore(activeWorkspace.id, activeWorkspace.dbPath);
 
-    // Core Stores
-    this.container.register("legacyStore", workspaceStore);
+    // ── 0.2: Single unified store ──────────────────────────────────────────
     this.container.register("store", workspaceStore);
+    // Legacy alias for backward compat during migration — points to the SAME instance
+    this.container.register("legacyStore", workspaceStore);
 
     // Repositories are views over the single workspace connection.
     this.registerWorkspaceRepos(workspaceStore);
@@ -149,7 +161,7 @@ export class XRKernel {
     await this.lifecycle.stop();
     this.events.emit("kernel.stopped", { timestamp: Date.now() });
 
-    // Close Database & Specialized Stores
+    // Close the single unified Database
     try {
       this.container.resolve<WorkspaceStore>("store").close();
     } catch {}
@@ -217,6 +229,9 @@ export class XRKernel {
 
   /**
    * Switches active workspace scope and re-initiates store context cleanly.
+   *
+   * 0.2 Storage Unification: Closes the old store, creates a new one, and
+   * re-registers all repos and services to use the new single store.
    */
   async switchWorkspace(id: string): Promise<void> {
     this.events.emit("workspace.switching", { from: this.workspaces.getActiveId(), to: id });
@@ -224,22 +239,27 @@ export class XRKernel {
     // Shutdown services first
     this.services.stopAll();
 
-    // Unregister current DB
+    // Close the old unified store
     try {
       this.container.resolve<WorkspaceStore>("store").close();
     } catch {}
 
     this.workspaces.setActiveId(id);
 
-    // Bootstrap workspace-specific resources
+    // Bootstrap workspace-specific resources — one new store
     const activeWorkspace = this.workspaces.getActiveContext();
     const newStore = new WorkspaceStore(activeWorkspace.id, activeWorkspace.dbPath);
 
-    this.container.unregister("legacyStore");
+    // Re-register the unified store
     this.container.unregister("store");
-    this.container.register("legacyStore", newStore);
+    this.container.unregister("legacyStore");
     this.container.register("store", newStore);
+    this.container.register("legacyStore", newStore); // backward compat alias
+
+    // Re-register all repos over the new store
     this.registerWorkspaceRepos(newStore);
+
+    // Re-register services that hold store references
     this.container.unregister("budget");
     this.container.register("budget", new BudgetService(this.container));
 

@@ -14,8 +14,8 @@ export class PluginService implements LifecycleHook {
   constructor(private container: Container) {
     const configService = container.resolve<ConfigService>("config");
     const config = configService.get();
-    let store: Store;
-    try { store = container.resolve<Store>("legacyStore"); } catch { store = new Store(); }
+    /** 0.2 Storage Unification: Always resolve the single workspace store from container. */
+    const store = container.resolve<Store>("store");
     this.manager = new PluginManager(store, process.cwd(), config);
   }
 

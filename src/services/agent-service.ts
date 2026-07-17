@@ -81,8 +81,9 @@ export class AgentService implements LifecycleHook {
     // Stage 6 — the canonical memory engine, backed by the same WorkspaceStore the rest
     // of the system uses, so CLI / TUI / voice / dashboard / agent all share ONE
     // memory. (The legacy UserMemoryRepo stays registered for backward compat.)
-    const legacyStore = this.container.resolve<WorkspaceStore>("legacyStore");
-    const engine = new MemoryStore(legacyStore);
+    /** 0.2 Storage Unification: Resolve the single workspace store. */
+    const unifiedStore = this.container.resolve<WorkspaceStore>("store");
+    const engine = new MemoryStore(unifiedStore);
     const provider = providerService.getProvider({
       provider: overrides.provider,
       model: overrides.model,
