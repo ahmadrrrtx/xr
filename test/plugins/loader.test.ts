@@ -39,6 +39,22 @@ import {
 import { loadConfig } from "../../src/config/config.ts";
 import { Store } from "../../src/state/workspace-store.ts";
 
+// ── Runtime guard: bun <1.3 cannot execute the VM sandbox ───────────────────
+// bun 1.2.x's node:vm implementation segfaults (SIGILL, exit 132) when the
+// plugin sandbox runs — the panic kills the ENTIRE `bun test` process, hiding
+// every other file's result (this is what took CI down). Fixed in bun ≥1.3,
+// which is also the repo's pinned toolchain (packageManager: bun@1.3.14).
+// On an old local bun, VM-executing tests are SKIPPED so the run stays
+// informative; static-analysis tests (validatePlugin / hashing) still run.
+const VM_RUNTIME_SAFE = (() => {
+  const parts = (typeof Bun !== "undefined" && Bun.version ? Bun.version : "0.0.0")
+    .split(".")
+    .map((p) => Number.parseInt(p, 10) || 0);
+  const [maj, min] = [parts[0] ?? 0, parts[1] ?? 0];
+  return maj > 1 || (maj === 1 && min >= 3);
+})();
+const vmTest = (VM_RUNTIME_SAFE ? test : test.skip) as typeof test;
+
 // Ensure XR_HOME exists before any config/store initialization.
 const TEST_TMP = mkdtempSync(join(tmpdir(), "xr-loader-test-"));
 process.env.XR_HOME = join(TEST_TMP, "home");
@@ -302,7 +318,7 @@ describe("Plugin Loader — Security Isolation", () => {
 
   // ── Load lifecycle — security guarantees ───────────────────────────────────
 
-  test("loadPlugin: valid plugin loads and activates", async () => {
+  vmTest("loadPlugin: valid plugin loads and activates", async () => {
     const dir = safePluginDir(TEST_TMP, "valid-load", { manifest: { id: "valid-load" } });
     const result = await loadPlugin(dir, {
       store: new Store(join(TEST_TMP, "db-valid.db")),
@@ -318,7 +334,7 @@ describe("Plugin Loader — Security Isolation", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("loadPlugin: rejects plugin with wrong entry hash (untrusted)", async () => {
+  vmTest("loadPlugin: rejects plugin with wrong entry hash (untrusted)", async () => {
     const dir = safePluginDir(TEST_TMP, "untrusted", { manifest: { id: "untrusted" } });
     const result = await loadPlugin(dir, {
       store: new Store(join(TEST_TMP, "db-untrusted.db")),
@@ -332,7 +348,7 @@ describe("Plugin Loader — Security Isolation", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("loadPlugin: rejects plugin with wrong tree hash (untrusted)", async () => {
+  vmTest("loadPlugin: rejects plugin with wrong tree hash (untrusted)", async () => {
     const dir = safePluginDir(TEST_TMP, "untrusted-tree", { manifest: { id: "untrusted-tree" } });
     const result = await loadPlugin(dir, {
       store: new Store(join(TEST_TMP, "db-untrusted-tree.db")),
@@ -346,7 +362,7 @@ describe("Plugin Loader — Security Isolation", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("loadPlugin: rejects incompatible plugin (fail-fast)", async () => {
+  vmTest("loadPlugin: rejects incompatible plugin (fail-fast)", async () => {
     const dir = safePluginDir(TEST_TMP, "incompatible", {
       manifest: { id: "incompatible", compatibility: ">=99.0.0" },
     });
@@ -361,7 +377,7 @@ describe("Plugin Loader — Security Isolation", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("loadPlugin: plugin VM isolates process/eval access", async () => {
+  vmTest("loadPlugin: plugin VM isolates process/eval access", async () => {
     const dir = isolationPluginDir(TEST_TMP);
     const result = await loadPlugin(dir, {
       store: new Store(join(TEST_TMP, "db-isolation.db")),
@@ -388,7 +404,7 @@ describe("Plugin Loader — Security Isolation", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("loadPlugin: contributions sanitized (invalid names removed)", async () => {
+  vmTest("loadPlugin: contributions sanitized (invalid names removed)", async () => {
     const dir = mkdtempSync(join(TEST_TMP, "bad-contrib-"));
     writeFileSync(
       join(dir, "xr-plugin.json"),
@@ -510,7 +526,7 @@ describe("Plugin Loader — 0.4 VM Runtime Hardening", () => {
     return String(out.output);
   }
 
-  test("constructor-chain escape ({}).constructor.constructor is neutralized", async () => {
+  vmTest("constructor-chain escape ({}).constructor.constructor is neutralized", async () => {
     const dir = probePluginDir(
       TEST_TMP,
       "ctor-chain",
@@ -532,7 +548,7 @@ describe("Plugin Loader — 0.4 VM Runtime Hardening", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("prototype pollution via Object.prototype fails inside the sandbox", async () => {
+  vmTest("prototype pollution via Object.prototype fails inside the sandbox", async () => {
     const dir = probePluginDir(
       TEST_TMP,
       "proto-pollution",
@@ -551,7 +567,7 @@ describe("Plugin Loader — 0.4 VM Runtime Hardening", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("require() with a computed (non-literal) specifier is blocked at runtime", async () => {
+  vmTest("require() with a computed (non-literal) specifier is blocked at runtime", async () => {
     const dir = probePluginDir(
       TEST_TMP,
       "computed-require",
@@ -571,7 +587,7 @@ describe("Plugin Loader — 0.4 VM Runtime Hardening", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("globalThis access with a dynamic key cannot reach process", async () => {
+  vmTest("globalThis access with a dynamic key cannot reach process", async () => {
     const dir = probePluginDir(
       TEST_TMP,
       "dynamic-global",
@@ -589,7 +605,7 @@ describe("Plugin Loader — 0.4 VM Runtime Hardening", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("plugin cannot overwrite or detect blocked globals on the sandbox", async () => {
+  vmTest("plugin cannot overwrite or detect blocked globals on the sandbox", async () => {
     const dir = probePluginDir(
       TEST_TMP,
       "global-tamper",
@@ -609,7 +625,7 @@ describe("Plugin Loader — 0.4 VM Runtime Hardening", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("relative multi-file requires work inside the sandbox (happy path)", async () => {
+  vmTest("relative multi-file requires work inside the sandbox (happy path)", async () => {
     const dir = mkdtempSync(join(TEST_TMP, "probe-multifile-"));
     writeFileSync(join(dir, "xr-plugin.json"), safeManifest(dir, { id: "multifile" }));
     writeFileSync(
