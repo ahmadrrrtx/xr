@@ -46,11 +46,11 @@ describe("Async Utilities — Process Handling", () => {
   });
 
   test("runCommand completes for a short-lived process", async () => {
-    const result = await runCommand("node", ["-e", "console.log('bun-ok')"], {
+    const result = await runCommand("echo", ["short-lived-ok"], {
       timeoutMs: 3000,
     });
     expect(result.ok).toBe(true);
-    expect(result.stdout).toContain("bun-ok");
+    expect(result.stdout).toContain("short-lived-ok");
   });
 
   // ── Timeout enforcement ─────────────────────────────────────────────────────
