@@ -204,9 +204,9 @@ export class MultiAgentServiceProvider implements ServiceProvider {
 }
 
 /**
- * Security shield — bound to the store. Not a lifecycle participant (matches
- * the prior kernel, which did not lifecycle-register the shield).
- * Workspace-scoped so it rebinds to the new store after a switch.
+ * Security shield — bound to the store and participates in lifecycle so scans
+ * and state persistence follow the same onInit/onStart/onStop contract as the
+ * rest of the runtime. Workspace-scoped so it rebinds after a switch.
  */
 export class ShieldServiceProvider implements ServiceProvider {
   readonly id = "shield";
@@ -215,6 +215,7 @@ export class ShieldServiceProvider implements ServiceProvider {
   register(ctx: ProviderContext): void {
     const store = ctx.registry.resolve(Tokens.Store);
     ctx.registry.registerValue(Tokens.Shield, new XRShieldService(store), {
+      lifecycle: true,
       dependsOn: [Tokens.Store],
     });
   }

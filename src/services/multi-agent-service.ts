@@ -14,7 +14,7 @@ import { randomUUID } from "node:crypto";
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
-import type { EventBus } from "../core/event-bus.ts";
+import { CoreEvents, type EventBus } from "../core/event-bus.ts";
 import { AgentService } from "./agent-service.ts";
 import { AuditRepo } from "../state/repos/audit-repo.ts";
 import { WorkflowRepo } from "../state/repos/workflow-repo.ts";
@@ -253,7 +253,7 @@ export class MultiAgentService implements LifecycleHook {
     record.updatedAt = Date.now();
     this.workflowStore.saveWorkflow(record);
     this.auditStore.audit(`agents.${event}`, detail, record.workflowId);
-    this.events.emit("agents.workflow.updated", workflowSummary(record));
+    this.events.emit(CoreEvents.AgentWorkflowUpdated, workflowSummary(record));
   }
 
   private emitTaskEvent(
@@ -262,7 +262,8 @@ export class MultiAgentService implements LifecycleHook {
     record: WorkflowRecord,
     extra: Record<string, unknown> = {},
   ): void {
-    this.events.emit(name, {
+    const eventName = this.normalizeTaskEvent(name);
+    this.events.emit(eventName, {
       workflowId: record.workflowId,
       taskId: task.taskId,
       agentId: task.agentId,
@@ -272,8 +273,23 @@ export class MultiAgentService implements LifecycleHook {
       status: task.status,
       reviewState: task.reviewState,
       blockedReason: task.blockedReason,
+      timestamp: Date.now(),
       ...extra,
     });
+  }
+
+  private normalizeTaskEvent(name: string): string {
+    switch (name) {
+      case CoreEvents.AgentTaskStarted:
+      case CoreEvents.AgentTaskReady:
+      case CoreEvents.AgentTaskBlocked:
+      case CoreEvents.AgentTaskCompleted:
+      case CoreEvents.AgentTaskFailed:
+      case CoreEvents.AgentTaskNote:
+        return name;
+      default:
+        return CoreEvents.AgentTaskNote;
+    }
   }
 
   private appendWorkflowEvent(record: WorkflowRecord, actor: string, kind: any, message: string, detail?: Record<string, unknown>): void {
@@ -328,7 +344,7 @@ export class MultiAgentService implements LifecycleHook {
         task.blockedReason = `blocked by ${failedGate.taskId} (${failedGate.reviewState})`;
         task.updatedAt = Date.now();
         this.appendTaskEvent(task, "supervisor", "task.blocked", task.blockedReason, { dependency: failedGate.taskId });
-        this.emitTaskEvent("agents.task.blocked", task, record, { dependency: failedGate.taskId });
+        this.emitTaskEvent(CoreEvents.AgentTaskBlocked, task, record, { dependency: failedGate.taskId });
         continue;
       }
       if (deps.every((dep) => dep.status === "completed")) {
@@ -336,9 +352,9 @@ export class MultiAgentService implements LifecycleHook {
         task.updatedAt = Date.now();
         if (task.status === "ready") {
           this.appendTaskEvent(task, "supervisor", "task.ready", `${task.name} is ready`, { dependencies: task.dependencies });
-          this.emitTaskEvent("agents.task.ready", task, record, { dependencies: task.dependencies });
+          this.emitTaskEvent(CoreEvents.AgentTaskReady, task, record, { dependencies: task.dependencies });
         } else {
-          this.emitTaskEvent("agents.task.blocked", task, record, { dependencies: task.dependencies });
+          this.emitTaskEvent(CoreEvents.AgentTaskBlocked, task, record, { dependencies: task.dependencies });
         }
       }
     }
@@ -393,9 +409,10 @@ export class MultiAgentService implements LifecycleHook {
         record.status = "cancelled";
         record.endedAt = Date.now();
         record.errors.push(`cancelled:${record.workflowId}`);
-        this.events.emit("agents.workflow.cancelled", {
+        this.events.emit(CoreEvents.AgentWorkflowCancelled, {
           workflowId: record.workflowId,
           status: record.status,
+          timestamp: Date.now(),
         });
         this.persist(record, "workflow.cancelled", { workflowId: record.workflowId });
         return record;
@@ -444,7 +461,7 @@ export class MultiAgentService implements LifecycleHook {
       ts: Date.now(),
       payloadSummary: task.description.slice(0, 200),
     });
-    this.emitTaskEvent("agents.task.started", task, record);
+    this.emitTaskEvent(CoreEvents.AgentTaskStarted, task, record);
     this.persist(record, "workflow.updated", {
       workflowId: record.workflowId,
       taskId: task.taskId,
@@ -468,7 +485,7 @@ export class MultiAgentService implements LifecycleHook {
       this.appendTaskEvent(task, task.agentId, "task.completed", `${task.name} completed`, {
         reviewState: task.reviewState,
       });
-      this.emitTaskEvent("agents.task.completed", task, record, {
+      this.emitTaskEvent(CoreEvents.AgentTaskCompleted, task, record, {
         reviewState: task.reviewState,
         summary: output.summary,
       });
@@ -480,7 +497,7 @@ export class MultiAgentService implements LifecycleHook {
       task.endedAt = Date.now();
       task.updatedAt = task.endedAt;
       this.appendTaskEvent(task, task.agentId, "task.failed", message);
-      this.emitTaskEvent("agents.task.failed", task, record, { error: message });
+      this.emitTaskEvent(CoreEvents.AgentTaskFailed, task, record, { error: message });
       record.errors.push(`${task.taskId}:${message}`);
     }
   }
@@ -614,7 +631,7 @@ export class MultiAgentService implements LifecycleHook {
           const clean = line.replace(/\x1b\[[0-9;]*m/g, "");
           const text = clean.slice(0, 400);
           this.appendTaskEvent(task, task.agentId, "note", text);
-          this.emitTaskEvent("agents.task.note", task, record, { note: text });
+          this.emitTaskEvent(CoreEvents.AgentTaskNote, task, record, { note: text });
         },
         memoryEnabled: false,
       },
