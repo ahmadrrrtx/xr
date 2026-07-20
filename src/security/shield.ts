@@ -25,6 +25,7 @@ import type { Store } from "../state/workspace-store.ts";
 import { runCommand } from "../util/process.ts";
 import { shieldIoLimit } from "../util/concurrency.ts";
 import { pathExists, readText, listDir } from "../util/fs-async.ts";
+import type { LifecycleHook } from "../core/lifecycle.ts";
 
 // --- TYPE DEFINITIONS ---
 
@@ -151,7 +152,7 @@ const SUSPICIOUS_DOMAINS = [
 
 // --- SHIELD SERVICE IMPLEMENTATION ---
 
-export class XRShieldService {
+export class XRShieldService implements LifecycleHook {
   private store: Store;
   private state: ShieldState;
 
@@ -187,6 +188,18 @@ export class XRShieldService {
 
   public getState(): ShieldState {
     return this.state;
+  }
+
+  async onInit(): Promise<void> {
+    this.state = this.loadState();
+  }
+
+  async onStart(): Promise<void> {
+    this.saveState();
+  }
+
+  async onStop(): Promise<void> {
+    this.saveState();
   }
 
   // --- CORE UTILITY ROUTINES ---

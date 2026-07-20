@@ -26,9 +26,9 @@
  */
 
 import { ServiceRegistry } from "./service-registry.ts";
-import { EventBus } from "./event-bus.ts";
+import { CoreEvents, EventBus } from "./event-bus.ts";
 import { CommandRegistry, type CommandContext } from "./command-registry.ts";
-import { LifecycleManager, type LifecycleHook } from "./lifecycle.ts";
+import { LifecycleManager } from "./lifecycle.ts";
 import { WorkspaceManager } from "./workspace.ts";
 import { BackgroundServiceManager } from "./services.ts";
 import { Tokens } from "./tokens.ts";
@@ -83,7 +83,7 @@ export class XRApp {
   public readonly registry = new ServiceRegistry();
   public readonly events = new EventBus();
   public readonly commands = new CommandRegistry();
-  public readonly lifecycle = new LifecycleManager();
+  public readonly lifecycle = new LifecycleManager(this.events, this.registry);
   public readonly workspaces = new WorkspaceManager();
   public readonly backgroundServices: BackgroundServiceManager;
 
@@ -135,15 +135,13 @@ export class XRApp {
     // 3. Lifecycle wiring — derive participants from the registry in
     //    dependency order and feed them to the LifecycleManager. This removes
     //    every manual lifecycle.register() call the old kernel needed.
-    const lifecycleHooks = this.registry
-      .lifecycleTokens()
-      .map((serviceToken) => this.registry.resolve(serviceToken) as LifecycleHook);
+    const lifecycleHooks = this.registry.lifecycleParticipants();
     this.lifecycle.setParticipants(lifecycleHooks);
 
     await this.lifecycle.init();
 
     this.booted = true;
-    this.events.emit("kernel.bootstrapped", { ...versionInfo() });
+    this.events.emit(CoreEvents.KernelBootstrapped, { ...versionInfo(), timestamp: Date.now() });
     return this;
   }
 
@@ -157,12 +155,11 @@ export class XRApp {
     }
     if (this.started) return this;
 
-    await this.lifecycle.start();
     this.registerCoreBackgroundJobs();
-    this.backgroundServices.startAll();
+    await this.lifecycle.start();
 
     this.started = true;
-    this.events.emit("kernel.started", { timestamp: Date.now() });
+    this.events.emit(CoreEvents.KernelStarted, { timestamp: Date.now() });
     return this;
   }
 
@@ -173,7 +170,7 @@ export class XRApp {
   async shutdown(): Promise<this> {
     this.backgroundServices.stopAll();
     await this.lifecycle.stop();
-    this.events.emit("kernel.stopped", { timestamp: Date.now() });
+    this.events.emit(CoreEvents.KernelStopped, { timestamp: Date.now() });
 
     // Close the single unified database connection.
     const store = this.registry.tryResolve(Tokens.Store);
@@ -197,9 +194,10 @@ export class XRApp {
    * store-backed services over it.
    */
   async switchWorkspace(id: string): Promise<this> {
-    this.events.emit("workspace.switching", {
+    this.events.emit(CoreEvents.WorkspaceSwitching, {
       from: this.workspaces.getActiveId(),
       to: id,
+      timestamp: Date.now(),
     });
 
     // 1. Stop background work against the outgoing store.
@@ -230,10 +228,14 @@ export class XRApp {
       if (provider.init) await provider.init(ctx);
     }
 
-    // 5. Resume background work against the new store.
+    // 5. Refresh lifecycle participants so workspace-scoped replacements are
+    //    the instances that will receive future onStop calls.
+    this.lifecycle.setParticipants(this.registry.lifecycleParticipants());
+
+    // 6. Resume background work against the new store.
     this.backgroundServices.startAll();
 
-    this.events.emit("workspace.switched", { active: id });
+    this.events.emit(CoreEvents.WorkspaceSwitched, { active: id, timestamp: Date.now() });
     return this;
   }
 
@@ -278,7 +280,11 @@ export class XRApp {
     this.registry.registerValue(Tokens.Commands, this.commands);
     this.registry.registerValue(Tokens.Lifecycle, this.lifecycle);
     this.registry.registerValue(Tokens.Workspaces, this.workspaces);
-    this.registry.registerValue(Tokens.BackgroundServices, this.backgroundServices);
+    this.registry.registerValue(Tokens.BackgroundServices, this.backgroundServices, {
+      lifecycle: true,
+      dependsOn: [Tokens.Shield, Tokens.Budget, Tokens.Store],
+      description: "background service / job manager",
+    });
   }
 
   private providerContext(): ProviderContext {
@@ -301,7 +307,7 @@ export class XRApp {
           const shield = this.registry.resolve(Tokens.Shield);
           const threats = await shield.runScan("quick");
           if (threats.length > 0) {
-            this.events.emit("security.threats_detected", { threats });
+            this.events.emit(CoreEvents.SecurityThreatsDetected, { threats, timestamp: Date.now() });
           }
         } catch {
           /* best-effort monitor — never crash the job loop */
@@ -319,7 +325,7 @@ export class XRApp {
           const budget = this.registry.resolve(Tokens.Budget);
           const status = budget.getStatus();
           if (status.isOverBudget) {
-            this.events.emit("budget.over_limit", { status });
+            this.events.emit(CoreEvents.BudgetOverLimit, { status, timestamp: Date.now() });
           }
         } catch {
           /* best-effort */
@@ -337,7 +343,7 @@ export class XRApp {
           const store = this.registry.resolve(Tokens.Store);
           const pruned = store.pruneExpiredMemory();
           if (pruned > 0) {
-            this.events.emit("memory.pruned", { pruned, timestamp: Date.now() });
+            this.events.emit(CoreEvents.MemoryPruned, { pruned, timestamp: Date.now() });
           }
         } catch {
           /* best-effort */
