@@ -18,13 +18,19 @@ import { join } from "node:path";
 
 import { AgentService } from "../../src/services/agent-service.ts";
 import { BudgetService } from "../../src/services/budget-service.ts";
-import { ServiceRegistryImpl } from "../../src/core/service-registry.ts";
+import { ServiceRegistry } from "../../src/core/service-registry.ts";
+import { Tokens } from "../../src/core/tokens.ts";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
 import { SessionRepo } from "../../src/state/repos/session-repo.ts";
 import { AuditRepo } from "../../src/state/repos/audit-repo.ts";
 import { CostRepo } from "../../src/state/repos/cost-repo.ts";
 import { UserMemoryRepo } from "../../src/state/repos/user-memory-repo.ts";
 import type { Message, ModelTurn, Provider, Tool } from "../../src/core/types.ts";
+import type { ConfigService } from "../../src/services/config-service.ts";
+import type { ProviderService } from "../../src/services/provider-service.ts";
+import type { PluginService } from "../../src/services/plugin-service.ts";
+import type { McpService } from "../../src/services/mcp-service.ts";
+import type { SkillService } from "../../src/services/skill-service.ts";
 
 let tmp: string;
 let store: WorkspaceStore;
@@ -81,35 +87,35 @@ function configFake() {
   };
 }
 
-function wiredContainer(provider: Provider): ServiceRegistryImpl {
-  const container = new ServiceRegistryImpl();
-  // Repos first: BudgetService resolves "costStore" in its constructor.
-  container.register("sessionStore", new SessionRepo(store));
-  container.register("userMemoryStore", new UserMemoryRepo(store));
-  container.register("costStore", new CostRepo(store));
-  container.register("auditStore", new AuditRepo(store));
-  container.register("store", store);
-  container.register("config", configFake());
-  container.register("providers", { getProvider: () => provider });
-  container.register("budget", new BudgetService(container));
-  container.register("plugins", { ensureLoaded: async () => {}, getPluginTools: () => [] });
-  container.register("mcp", { ensureLoaded: async () => {}, getMcpTools: () => [] });
-  container.register("skills", { executionContext: () => undefined });
-  return container;
+function wiredRegistry(provider: Provider): ServiceRegistry {
+  const registry = new ServiceRegistry();
+  // Repos first: BudgetService resolves Tokens.CostStore in its constructor.
+  registry.registerValue(Tokens.SessionStore, new SessionRepo(store));
+  registry.registerValue(Tokens.UserMemoryStore, new UserMemoryRepo(store));
+  registry.registerValue(Tokens.CostStore, new CostRepo(store));
+  registry.registerValue(Tokens.AuditStore, new AuditRepo(store));
+  registry.registerValue(Tokens.Store, store);
+  registry.registerValue(Tokens.Config, configFake() as unknown as ConfigService);
+  registry.registerValue(Tokens.Providers, { getProvider: () => provider } as unknown as ProviderService);
+  registry.registerValue(Tokens.Budget, new BudgetService(registry));
+  registry.registerValue(Tokens.Plugins, { ensureLoaded: async () => {}, getPluginTools: () => [] } as unknown as PluginService);
+  registry.registerValue(Tokens.Mcp, { ensureLoaded: async () => {}, getMcpTools: () => [] } as unknown as McpService);
+  registry.registerValue(Tokens.Skills, { executionContext: () => undefined } as unknown as SkillService);
+  return registry;
 }
 
 describe("AgentService — DI wiring", () => {
   test("rejects fast and precisely when a required service is missing", async () => {
-    const container = new ServiceRegistryImpl();
-    const svc = new AgentService(container);
+    const registry = new ServiceRegistry();
+    const svc = new AgentService(registry);
     await expect(
       svc.runScopedTask("hello", "ask", { say: () => {}, approve: async () => false }),
-    ).rejects.toThrow("Service config not found in registry");
+    ).rejects.toThrow("Service xr.config not found in registry");
   });
 
   test("happy path completes: session, audit chain, and cost land in the unified store", async () => {
-    const container = wiredContainer(cannedProvider());
-    const svc = new AgentService(container);
+    const registry = wiredRegistry(cannedProvider());
+    const svc = new AgentService(registry);
 
     const approvalCalls: unknown[] = [];
     const result = await svc.runTask("say hi", "ask", {
@@ -150,7 +156,7 @@ describe("AgentService — DI wiring", () => {
       seen.push(messages);
       return originalChat(messages, tools);
     };
-    const svc = new AgentService(wiredContainer(provider));
+    const svc = new AgentService(wiredRegistry(provider));
     await svc.runScopedTask("task", "ask", {
       say: () => {},
       approve: async () => false,
@@ -164,7 +170,7 @@ describe("AgentService — DI wiring", () => {
 describe("AgentService — deterministic rails", () => {
   test("max_steps stops a provider that never finishes", async () => {
     const neverDone = cannedProvider([{ message: "working…", toolCalls: [], done: false }]);
-    const svc = new AgentService(wiredContainer(neverDone));
+    const svc = new AgentService(wiredRegistry(neverDone));
     const result = await svc.runScopedTask("loop", "ask", {
       say: () => {},
       approve: async () => false,
@@ -179,7 +185,7 @@ describe("AgentService — deterministic rails", () => {
     // Governor.checkBeforeStep estimates the first step at 2000 tokens
     // (Math.max(avg, 500) with no history). With maxTokens = 50 the run is
     // denied BEFORE step 0 executes — zero steps, zero recorded spend.
-    const svc = new AgentService(wiredContainer(cannedProvider()));
+    const svc = new AgentService(wiredRegistry(cannedProvider()));
     const result = await svc.runScopedTask("spend", "ask", {
       say: () => {},
       approve: async () => false,

@@ -10,6 +10,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { Store } from "../state/workspace-store.ts";
 import { buildAuditReport } from "../export/report.ts";
 import {
@@ -33,7 +34,7 @@ import { usageError } from "../cli/errors.ts";
 
 /** 0.2 Storage Unification: Always resolve from container, never create new Store(). */
 function resolveStore(ctx: CommandContext): Store {
-  return ctx.container.resolve<Store>("store");
+  return ctx.registry.resolve(Tokens.Store);
 }
 
 function parseLimit(args: string[], fallback = 30): number {

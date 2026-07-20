@@ -1,11 +1,12 @@
 /** XR Stage 2 — command adapters for the installation subsystem. */
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { Store } from "../state/workspace-store.ts";
 import { installComponent, printStatus, repairXR, resetXR, runInstallWizard, updateXR } from "../install/system.ts";
 
 /** 0.2 Storage Unification: Always resolve from container, never create new Store(). */
 function legacyStore(ctx: CommandContext): Store {
-  return ctx.container.resolve<Store>("store");
+  return ctx.registry.resolve(Tokens.Store);
 }
 
 export class InstallCommand implements Command {

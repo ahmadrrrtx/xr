@@ -8,6 +8,7 @@
  */
 
 import type { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { AgentService } from "../services/agent-service.ts";
 import type { Mode } from "../core/types.ts";
 import {
@@ -54,7 +55,7 @@ async function runInMode(
   forcedMode: Mode,
   emptyUsage: string,
 ): Promise<void> {
-  const agentService = ctx.container.resolve<AgentService>("agent");
+  const agentService = ctx.registry.resolve(Tokens.Agent);
   const { task, overrides } = parseTaskArgs(ctx.args);
 
   if (!task) {

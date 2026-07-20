@@ -1,5 +1,6 @@
 /** XR Stage 10 — plugin command registry adapters. */
 import type { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { Store } from "../state/workspace-store.ts";
 import { handlePluginsCommand } from "../plugins/cli.ts";
 
@@ -8,7 +9,7 @@ import { handlePluginsCommand } from "../plugins/cli.ts";
  * container. Never creates a new Store() as a fallback.
  */
 function resolveStore(ctx: CommandContext): Store {
-  return ctx.container.resolve<Store>("store");
+  return ctx.registry.resolve(Tokens.Store);
 }
 
 export class PluginsCommand implements Command {

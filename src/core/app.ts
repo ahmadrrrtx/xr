@@ -1,0 +1,348 @@
+/**
+ * XR — XRApp (Runtime Bootstrap Engine)
+ *
+ * The single, permanent entry point for bringing the XR runtime online.
+ * XRApp owns the typed ServiceRegistry, the event bus, the command registry,
+ * the lifecycle manager, the workspace manager, and the background-service
+ * manager — and it orchestrates them through a deterministic, dependency-
+ * ordered bootstrap → start → shutdown sequence.
+ *
+ * Service wiring is declarative, not imperative. Each subsystem is a
+ * ServiceProvider (see src/core/providers.ts) that registers its own
+ * services and declares their dependencies. XRApp simply:
+ *
+ *   1. runs every provider's register() (in order) to populate the registry;
+ *   2. derives the lifecycle participant set from the registry in dependency
+ *      order (no manual lifecycle.register() bookkeeping);
+ *   3. drives onInit → onStart → onStop through the LifecycleManager.
+ *
+ * Adding a future stage (memory engine, research, plugin marketplace, …) is
+ * additive: write a provider and call app.use(provider). The bootstrap
+ * sequence itself never needs to change — which is exactly what stabilizes
+ * the runtime for every stage to come.
+ *
+ * XRKernel (./kernel.ts) is a thin backward-compatible facade over XRApp so
+ * existing consumers keep working unchanged.
+ */
+
+import { ServiceRegistry } from "./service-registry.ts";
+import { EventBus } from "./event-bus.ts";
+import { CommandRegistry, type CommandContext } from "./command-registry.ts";
+import { LifecycleManager, type LifecycleHook } from "./lifecycle.ts";
+import { WorkspaceManager } from "./workspace.ts";
+import { BackgroundServiceManager } from "./services.ts";
+import { Tokens } from "./tokens.ts";
+import { CORE_VERSION, PKG, versionInfo } from "./version.ts";
+// Static import is cycle-free: providers.ts only imports *types* from this
+// module (erased at compile time), so there is no runtime back-edge.
+import {
+  StateServiceProvider,
+  ConfigServiceProvider,
+  LlmServiceProvider,
+  BudgetServiceProvider,
+  PluginServiceProvider,
+  McpServiceProvider,
+  SkillServiceProvider,
+  AgentServiceProvider,
+  MultiAgentServiceProvider,
+  ShieldServiceProvider,
+  BusinessServiceProvider,
+} from "./providers.ts";
+
+/**
+ * Context handed to a ServiceProvider. Providers register services into the
+ * typed registry and may read workspace/app state to construct them.
+ */
+export interface ProviderContext {
+  readonly registry: ServiceRegistry;
+  readonly app: XRApp;
+}
+
+/**
+ * Extensibility point for the runtime. A provider owns one subsystem and is
+ * the only place that knows how to construct and register its services.
+ *
+ *   • register() — synchronously register tokens into the registry.
+ *   • init()     — optional async initialization (e.g. conditional table setup).
+ *   • workspaceScoped — when true, the provider is re-run on workspace switch
+ *     so workspace-bound resources (store, repos, store-backed services) are
+ *     rebound to the new workspace.
+ */
+export interface ServiceProvider {
+  readonly id: string;
+  register(ctx: ProviderContext): void;
+  init?(ctx: ProviderContext): Promise<void>;
+  readonly workspaceScoped?: boolean;
+}
+
+export class XRApp {
+  /** Canonical version identity (single source of truth lives in version.ts). */
+  public static readonly PKG = PKG;
+  public static readonly CORE_VERSION = CORE_VERSION;
+
+  public readonly registry = new ServiceRegistry();
+  public readonly events = new EventBus();
+  public readonly commands = new CommandRegistry();
+  public readonly lifecycle = new LifecycleManager();
+  public readonly workspaces = new WorkspaceManager();
+  public readonly backgroundServices: BackgroundServiceManager;
+
+  private readonly providers: ServiceProvider[] = [];
+  private booted = false;
+  private started = false;
+
+  constructor() {
+    this.backgroundServices = new BackgroundServiceManager(this.events);
+    this.registerInfrastructure();
+  }
+
+  /**
+   * Add a service provider. Providers are run in insertion order during
+   * bootstrap, so callers control the construction order by the order in
+   * which they call use(). The standard provider set is registered by
+   * registerDefaultProviders() (invoked from bootstrap() unless overridden).
+   */
+  use(provider: ServiceProvider): this {
+    this.providers.push(provider);
+    return this;
+  }
+
+  /**
+   * Bootstraps the full runtime: registers the standard providers, runs them,
+   * wires lifecycle participants in dependency order, and runs onInit.
+   *
+   * Storage contract: exactly one WorkspaceStore connection is opened (by the
+   * state provider) and shared by every repo and service.
+   */
+  async bootstrap(): Promise<this> {
+    if (this.booted) return this;
+
+    if (this.providers.length === 0) {
+      this.registerDefaultProviders();
+    }
+
+    // 1. Registration pass — populate the registry in construction order.
+    const ctx = this.providerContext();
+    for (const provider of this.providers) {
+      provider.register(ctx);
+    }
+
+    // 2. Async init pass — optional, in provider order (e.g. Business OS).
+    for (const provider of this.providers) {
+      if (provider.init) await provider.init(ctx);
+    }
+
+    // 3. Lifecycle wiring — derive participants from the registry in
+    //    dependency order and feed them to the LifecycleManager. This removes
+    //    every manual lifecycle.register() call the old kernel needed.
+    const lifecycleHooks = this.registry
+      .lifecycleTokens()
+      .map((serviceToken) => this.registry.resolve(serviceToken) as LifecycleHook);
+    this.lifecycle.setParticipants(lifecycleHooks);
+
+    await this.lifecycle.init();
+
+    this.booted = true;
+    this.events.emit("kernel.bootstrapped", { ...versionInfo() });
+    return this;
+  }
+
+  /**
+   * Starts long-running background services and runs onStart hooks.
+   * Requires bootstrap() to have completed.
+   */
+  async start(): Promise<this> {
+    if (!this.booted) {
+      throw new Error("XRApp.start() called before bootstrap() completed.");
+    }
+    if (this.started) return this;
+
+    await this.lifecycle.start();
+    this.registerCoreBackgroundJobs();
+    this.backgroundServices.startAll();
+
+    this.started = true;
+    this.events.emit("kernel.started", { timestamp: Date.now() });
+    return this;
+  }
+
+  /**
+   * Gracefully shuts the runtime down: stops background jobs, runs onStop
+   * hooks in reverse dependency order, and closes the unified store.
+   */
+  async shutdown(): Promise<this> {
+    this.backgroundServices.stopAll();
+    await this.lifecycle.stop();
+    this.events.emit("kernel.stopped", { timestamp: Date.now() });
+
+    // Close the single unified database connection.
+    const store = this.registry.tryResolve(Tokens.Store);
+    if (store) {
+      try {
+        store.close();
+      } catch {
+        /* best-effort close — never crash shutdown */
+      }
+    }
+
+    this.started = false;
+    this.booted = false;
+    return this;
+  }
+
+  /**
+   * Switches the active workspace scope and rebinds workspace-bound resources
+   * to a fresh, isolated store. Mirrors the kernel's 0.2 storage hand-off:
+   * close the old store, open a new one, and re-register the repos and
+   * store-backed services over it.
+   */
+  async switchWorkspace(id: string): Promise<this> {
+    this.events.emit("workspace.switching", {
+      from: this.workspaces.getActiveId(),
+      to: id,
+    });
+
+    // 1. Stop background work against the outgoing store.
+    this.backgroundServices.stopAll();
+
+    // 2. Close the outgoing unified store.
+    const oldStore = this.registry.tryResolve(Tokens.Store);
+    if (oldStore) {
+      try {
+        oldStore.close();
+      } catch {
+        /* best-effort */
+      }
+    }
+
+    // 3. Activate the new workspace.
+    this.workspaces.setActiveId(id);
+
+    // 4. Re-run workspace-scoped providers so the store, repos, and
+    //    store-backed services are rebound to the new workspace connection.
+    const ctx = this.providerContext();
+    for (const provider of this.providers) {
+      if (!provider.workspaceScoped) continue;
+      provider.register(ctx);
+    }
+    for (const provider of this.providers) {
+      if (!provider.workspaceScoped) continue;
+      if (provider.init) await provider.init(ctx);
+    }
+
+    // 5. Resume background work against the new store.
+    this.backgroundServices.startAll();
+
+    this.events.emit("workspace.switched", { active: id });
+    return this;
+  }
+
+  /**
+   * Execute a registered CLI/TUI command.
+   */
+  async executeCommand(name: string, args: string[], cwd: string): Promise<void> {
+    const commandContext: CommandContext = {
+      registry: this.registry,
+      args,
+      cwd,
+    };
+    await this.commands.run(name, args, commandContext);
+  }
+
+  // ── Default provider set ────────────────────────────────────────────────
+
+  /**
+   * Registers the standard XR provider set in construction order. Order
+   * matters because some services resolve collaborators in their constructor.
+   * Override (clear + use(...)) to customize the runtime composition.
+   */
+  protected registerDefaultProviders(): void {
+    this.use(new StateServiceProvider());
+    this.use(new ConfigServiceProvider());
+    this.use(new LlmServiceProvider());
+    this.use(new BudgetServiceProvider());
+    this.use(new PluginServiceProvider());
+    this.use(new McpServiceProvider());
+    this.use(new SkillServiceProvider());
+    this.use(new AgentServiceProvider());
+    this.use(new MultiAgentServiceProvider());
+    this.use(new ShieldServiceProvider());
+    this.use(new BusinessServiceProvider());
+  }
+
+  /** Registers the infra services XRApp itself owns. */
+  private registerInfrastructure(): void {
+    this.registry.registerValue(Tokens.App, this, { description: "XR runtime application" });
+    this.registry.registerValue(Tokens.Registry, this.registry);
+    this.registry.registerValue(Tokens.Events, this.events);
+    this.registry.registerValue(Tokens.Commands, this.commands);
+    this.registry.registerValue(Tokens.Lifecycle, this.lifecycle);
+    this.registry.registerValue(Tokens.Workspaces, this.workspaces);
+    this.registry.registerValue(Tokens.BackgroundServices, this.backgroundServices);
+  }
+
+  private providerContext(): ProviderContext {
+    return { registry: this.registry, app: this };
+  }
+
+  /**
+   * Registers the default OS background maintenance & monitor routines.
+   * Each job resolves its collaborators lazily through typed tokens, so a job
+   * never holds a stale reference after a workspace switch.
+   */
+  private registerCoreBackgroundJobs(): void {
+    // 1. Security monitor — quick shield scan every 30s.
+    this.backgroundServices.registerJob({
+      id: "security_monitor",
+      name: "Shield Security Threat and Lolbins Monitor",
+      intervalMs: 30000,
+      run: async () => {
+        try {
+          const shield = this.registry.resolve(Tokens.Shield);
+          const threats = await shield.runScan("quick");
+          if (threats.length > 0) {
+            this.events.emit("security.threats_detected", { threats });
+          }
+        } catch {
+          /* best-effort monitor — never crash the job loop */
+        }
+      },
+    });
+
+    // 2. Budget governor — spend guard every 10s.
+    this.backgroundServices.registerJob({
+      id: "budget_checker",
+      name: "Spend Governor and Budget Safety Guard",
+      intervalMs: 10000,
+      run: async () => {
+        try {
+          const budget = this.registry.resolve(Tokens.Budget);
+          const status = budget.getStatus();
+          if (status.isOverBudget) {
+            this.events.emit("budget.over_limit", { status });
+          }
+        } catch {
+          /* best-effort */
+        }
+      },
+    });
+
+    // 3. Memory pruner — expiry loop every 5 minutes.
+    this.backgroundServices.registerJob({
+      id: "memory_pruner",
+      name: "Durable Memory Expiry & Pruner",
+      intervalMs: 300000,
+      run: async () => {
+        try {
+          const store = this.registry.resolve(Tokens.Store);
+          const pruned = store.pruneExpiredMemory();
+          if (pruned > 0) {
+            this.events.emit("memory.pruned", { pruned, timestamp: Date.now() });
+          }
+        } catch {
+          /* best-effort */
+        }
+      },
+    });
+  }
+}

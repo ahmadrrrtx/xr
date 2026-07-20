@@ -1,12 +1,17 @@
 /**
  * XR — Command Registry
  * Decouples CLI command parsing from command implementation.
+ *
+ * Commands receive a strongly-typed CommandContext whose `registry` is the
+ * XR ServiceRegistry. Commands resolve collaborators through typed tokens,
+ * e.g. `const store = ctx.registry.resolve(Tokens.Store)`.
  */
 
 import { ServiceRegistry } from "./service-registry.ts";
 
 export interface CommandContext {
-  container: ServiceRegistry;
+  /** The typed runtime service registry. */
+  registry: ServiceRegistry;
   args: string[];
   cwd: string;
 }
@@ -17,9 +22,9 @@ export interface Command {
   usage?: string;
   /**
    * Execute the command.
-   * @param ctx Execution context including services and arguments.
+   * @param ctx Execution context including the service registry and arguments.
    */
-  execute(ctx: CommandContext): Promise<void>;
+  execute(ctx: CommandContext): Promise<void> | void;
 }
 
 export class CommandRegistry {
@@ -28,8 +33,9 @@ export class CommandRegistry {
   /**
    * Register a command.
    */
-  register(command: Command): void {
+  register(command: Command): this {
     this.commands.set(command.name, command);
+    return this;
   }
 
   /**
@@ -61,7 +67,13 @@ export class CommandRegistry {
   /**
    * Remove a command.
    */
-  unregister(name: string): void {
+  unregister(name: string): this {
     this.commands.delete(name);
+    return this;
+  }
+
+  /** Number of registered commands. */
+  get size(): number {
+    return this.commands.size;
   }
 }

@@ -4,6 +4,7 @@
  */
 
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { BusinessOS } from "../business/index.ts";
 import { banner, ok, info, warn, xrBold, xrDim, xrGreen } from "../cli/output.ts";
 
@@ -13,7 +14,7 @@ export class BusinessCommand implements Command {
   usage = "xr business [status|init]";
 
   async execute(ctx: CommandContext): Promise<void> {
-    const businessOS = ctx.container.resolve<BusinessOS>("business");
+    const businessOS = ctx.registry.resolve(Tokens.Business);
     const sub = ctx.args[0] ?? "status";
 
     if (sub === "status") {

@@ -8,16 +8,19 @@
  *
  * Protocol: prints "CHECK <name>" per passed assertion; exits non-zero with
  * "FAIL <name>: <err>" on the first failure; finishes with "ALL CHECKS PASSED".
+ *
+ * Now resolves services through the typed token registry (XRApp +
+ * ServiceRegistry + Tokens) instead of magic strings.
  */
 
 import { existsSync } from "node:fs";
 
 // Type-only aliases: `import type` is fully erased at compile time, so these
 // carry no module-load side effects (XR_HOME binding stays hermetic). The
-// runtime VALUES below come from dynamic `await import()` — destructured
-// dynamic imports lose the class's type meaning, hence the aliases.
+// runtime VALUES below come from dynamic `await import()`.
 import type { WorkspaceStore as WorkspaceStoreT } from "../../../src/state/workspace-store.ts";
 import type { AuditRepo as AuditRepoT } from "../../../src/state/repos/audit-repo.ts";
+import type { ServiceToken } from "../../../src/core/service-registry.ts";
 
 if (!process.env.XR_HOME) {
   console.error("FAIL env: XR_HOME must be set by the parent test");
@@ -39,6 +42,7 @@ const { CORE_VERSION, PKG } = await import("../../../src/core/version.ts");
 const { SessionRepo } = await import("../../../src/state/repos/session-repo.ts");
 const { AuditRepo } = await import("../../../src/state/repos/audit-repo.ts");
 const { XRShieldService } = await import("../../../src/security/shield.ts");
+const { Tokens } = await import("../../../src/core/tokens.ts");
 
 const events: string[] = [];
 const kernel = new XRKernel();
@@ -56,35 +60,57 @@ await kernel.bootstrap();
 
 check("bootstrap-event-emitted", events.includes("kernel.bootstrapped"));
 
-const store = kernel.container.resolve<WorkspaceStoreT>("store");
+const store = kernel.registry.resolve<WorkspaceStoreT>(Tokens.Store);
 check("store-is-workspace-store", store instanceof WorkspaceStore);
 check("store-path-inside-xr-home", store.dbPath.startsWith(process.env.XR_HOME!));
-check("legacy-alias-is-same-instance", kernel.container.resolve<WorkspaceStoreT>("legacyStore") === store);
+check("legacy-alias-is-same-instance", kernel.registry.resolve<WorkspaceStoreT>(Tokens.LegacyStore) === store);
 
-// Core service wiring (0.6 DI): every id the kernel promises.
-for (const id of [
-  "kernel", "container", "events", "commands", "lifecycle", "workspaces", "services",
-  "config", "providers", "budget", "plugins", "mcp", "skills", "agent", "multiAgents",
-  "shield", "business",
-  "sessionStore", "auditStore", "costStore", "userMemoryStore", "skillStore", "workflowStore",
-]) {
+// Core service wiring: every token the runtime promises resolves cleanly.
+const coreTokens: Array<{ name: string; token: ServiceToken<unknown> }> = [
+  { name: "app", token: Tokens.App },
+  { name: "registry", token: Tokens.Registry },
+  { name: "events", token: Tokens.Events },
+  { name: "commands", token: Tokens.Commands },
+  { name: "lifecycle", token: Tokens.Lifecycle },
+  { name: "workspaces", token: Tokens.Workspaces },
+  { name: "services", token: Tokens.BackgroundServices },
+  { name: "config", token: Tokens.Config },
+  { name: "providers", token: Tokens.Providers },
+  { name: "budget", token: Tokens.Budget },
+  { name: "plugins", token: Tokens.Plugins },
+  { name: "mcp", token: Tokens.Mcp },
+  { name: "skills", token: Tokens.Skills },
+  { name: "agent", token: Tokens.Agent },
+  { name: "multiAgents", token: Tokens.MultiAgents },
+  { name: "shield", token: Tokens.Shield },
+  { name: "business", token: Tokens.Business },
+  { name: "store", token: Tokens.Store },
+  { name: "legacyStore", token: Tokens.LegacyStore },
+  { name: "sessionStore", token: Tokens.SessionStore },
+  { name: "auditStore", token: Tokens.AuditStore },
+  { name: "costStore", token: Tokens.CostStore },
+  { name: "userMemoryStore", token: Tokens.UserMemoryStore },
+  { name: "skillStore", token: Tokens.SkillStore },
+  { name: "workflowStore", token: Tokens.WorkflowStore },
+];
+for (const { name, token } of coreTokens) {
   let ok = true;
   try {
-    kernel.container.resolve(id);
+    kernel.registry.resolve(token);
   } catch {
     ok = false;
   }
-  check(`service-registered:${id}`, ok);
+  check(`service-registered:${name}`, ok);
 }
 
-check("shield-rides-unified-store", kernel.container.resolve("shield") instanceof XRShieldService);
-check("repos-are-views-over-one-store", kernel.container.resolve("sessionStore") instanceof SessionRepo
-  && kernel.container.resolve("auditStore") instanceof AuditRepo);
+check("shield-rides-unified-store", kernel.registry.resolve(Tokens.Shield) instanceof XRShieldService);
+check("repos-are-views-over-one-store", kernel.registry.resolve(Tokens.SessionStore) instanceof SessionRepo
+  && kernel.registry.resolve(Tokens.AuditStore) instanceof AuditRepo);
 check("single-connection", WorkspaceStore.connectionCount() === 1);
 
 // Repos write through the SAME unified connection.
 store.createSession("k1", "kernel-test", "chat");
-kernel.container.resolve<AuditRepoT>("auditStore").audit("kernel.test", { ok: true }, "k1");
+kernel.registry.resolve<AuditRepoT>(Tokens.AuditStore).audit("kernel.test", { ok: true }, "k1");
 check("repo-writes-share-connection", store.recentSessions().some((s) => s.id === "k1")
   && store.recentAudit().some((a) => a.event === "kernel.test"));
 check("audit-chain-intact", store.verifyChain().valid);
@@ -93,14 +119,14 @@ check("audit-chain-intact", store.verifyChain().valid);
 const oldStore = store;
 await kernel.switchWorkspace("qa");
 
-const newStore = kernel.container.resolve<WorkspaceStoreT>("store");
+const newStore = kernel.registry.resolve<WorkspaceStoreT>(Tokens.Store);
 check("switch-emits-events", events.includes("workspace.switching") && events.includes("workspace.switched"));
 check("switch-installs-new-store", newStore !== oldStore);
-check("switch-keeps-legacy-alias", kernel.container.resolve<WorkspaceStoreT>("legacyStore") === newStore);
+check("switch-keeps-legacy-alias", kernel.registry.resolve<WorkspaceStoreT>(Tokens.LegacyStore) === newStore);
 check("switch-fresh-db-is-empty", newStore.recentSessions().length === 0 && newStore.auditCount() === 0);
 check("switch-db-path-scoped", newStore.dbPath.includes("workspaces") && newStore.dbPath.includes("qa"));
 check("old-store-closed-single-connection", WorkspaceStore.connectionCount() === 1);
-check("repos-rebound-after-switch", kernel.container.resolve("auditStore") instanceof AuditRepo);
+check("repos-rebound-after-switch", kernel.registry.resolve(Tokens.AuditStore) instanceof AuditRepo);
 
 // New workspace is isolated: the write lands in the fresh store (the old
 // store is closed by design; touching it would throw — that IS the contract).

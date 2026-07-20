@@ -3,6 +3,7 @@
  */
 
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { MultiAgentService } from "../services/multi-agent-service.ts";
 import { banner, colors as C, info, ok, warn } from "../interfaces/cli.ts";
 import type { WorkflowKind } from "../agents/types.ts";
@@ -77,7 +78,7 @@ export class AgentsCommand implements Command {
   usage = "xr agents [list|status|plan|run|delegate|review|synthesize|stop|resume|inspect]";
 
   async execute(ctx: CommandContext): Promise<void> {
-    const svc = ctx.container.resolve<MultiAgentService>("multiAgents");
+    const svc = ctx.registry.resolve(Tokens.MultiAgents);
     const sub = ctx.args[0] ?? "help";
     const rest = ctx.args.slice(1);
     const flags = parseFlags(rest);
@@ -172,7 +173,7 @@ export class AgentsCommand implements Command {
       const goal = flags.positionals.join(" ").trim();
       if (!goal) throw new Error('Usage: xr agents run "your task"');
       banner("Running Multi-Agent Workflow");
-      const events = ctx.container.resolve<EventBus>("events");
+      const events = ctx.registry.resolve(Tokens.Events);
       const startedAt = Date.now();
       let activeWorkflowId: string | null = null;
 
