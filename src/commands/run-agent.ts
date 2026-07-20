@@ -6,6 +6,7 @@
  */
 
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { AgentService } from "../services/agent-service.ts";
 import { Mode } from "../core/types.ts";
 import {
@@ -27,8 +28,8 @@ export class RunAgentCommand implements Command {
     'xr run "<task>" [--mode agent|plan|ask] [--budget usd] [--model name] [--provider id] [--max-tokens n] [--dry-run]';
 
   async execute(ctx: CommandContext): Promise<void> {
-    const { container, args } = ctx;
-    const agentService = container.resolve<AgentService>("agent");
+    const { registry, args } = ctx;
+    const agentService = registry.resolve(Tokens.Agent);
 
     const taskArgs: string[] = [];
     const overrides: Record<string, unknown> = {};

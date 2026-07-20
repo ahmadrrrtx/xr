@@ -6,6 +6,7 @@
  */
 
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { ConfigService } from "../services/config-service.ts";
 import {
   banner,
@@ -58,7 +59,7 @@ export class ConfigCommand implements Command {
   usage = "xr config [get|set|path|reset] [key] [value]";
 
   async execute(ctx: CommandContext): Promise<void> {
-    const configService = ctx.container.resolve<ConfigService>("config");
+    const configService = ctx.registry.resolve(Tokens.Config);
     const sub = ctx.args[0];
 
     if (!sub || sub === "show" || sub === "list" || sub === "dump") {

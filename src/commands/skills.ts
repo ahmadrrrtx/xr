@@ -1,5 +1,6 @@
 /** XR 2.1A — Unified Skill Runtime CLI. */
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { SkillService } from "../services/skill-service.ts";
 import { colors as C, heading, ok, warn, error, tip } from "../interfaces/cli.ts";
 import { SKILL_CATEGORIES, type SkillCategory, type SkillPermissionScope } from "../skills/schema.ts";
@@ -68,7 +69,7 @@ export class SkillsCommand implements Command {
   usage = "xr skills <list|inspect|validate|enable|disable|install-local|remove|migrate|doctor>";
 
   async execute(ctx: CommandContext): Promise<void> {
-    const service = ctx.container.resolve<SkillService>("skills");
+    const service = ctx.registry.resolve(Tokens.Skills);
     const parsed = parse(ctx.args);
     const action = parsed.positional[0] ?? "list";
     const rest = parsed.positional.slice(1);

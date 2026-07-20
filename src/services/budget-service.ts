@@ -8,14 +8,15 @@ import { BudgetManager, BudgetStatus } from "../cost/manager.ts";
 import { CostGovernor, Budget, Pricing, CostSnapshot, GovernorDecision } from "../cost/governor.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
+import { Tokens } from "../core/tokens.ts";
 
 export class BudgetService implements LifecycleHook {
-  private container: ServiceRegistry;
+  private registry: ServiceRegistry;
   private budgetManager: BudgetManager;
 
-  constructor(container: ServiceRegistry) {
-    this.container = container;
-    const costStore = this.container.resolve<CostRepo>("costStore");
+  constructor(registry: ServiceRegistry) {
+    this.registry = registry;
+    const costStore = this.registry.resolve(Tokens.CostStore);
     this.budgetManager = new BudgetManager(costStore as any); 
     // Note: BudgetManager was written against old store, cast to any for now 
     // but we'll fix the BudgetManager to use CostRepo.

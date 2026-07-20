@@ -4,6 +4,7 @@
  */
 
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { BudgetService } from "../services/budget-service.ts";
 import {
   banner,
@@ -26,8 +27,8 @@ export class BudgetCommand implements Command {
   usage = "xr budget [status|set|reset] [amount] [--json]";
 
   async execute(ctx: CommandContext): Promise<void> {
-    const { container, args } = ctx;
-    const budgetService = container.resolve<BudgetService>("budget");
+    const { registry, args } = ctx;
+    const budgetService = registry.resolve(Tokens.Budget);
     const KNOWN = new Set(["status", "show", "set", "reset", "help"]);
     const sub = args.find((a) => !a.startsWith("-") && KNOWN.has(a));
 

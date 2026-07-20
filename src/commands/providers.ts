@@ -3,6 +3,7 @@
  * Manage and inspect LLM providers: list, add, remove, set, test, status, refresh.
  */
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { ProviderService } from "../services/provider-service.ts";
 import { ConfigService } from "../services/config-service.ts";
 import { PRESETS } from "../providers/presets.ts";
@@ -24,9 +25,9 @@ export class ProvidersCommand implements Command {
   usage = "xr providers [list|add|remove|set|test|status|refresh]";
 
   async execute(ctx: CommandContext): Promise<void> {
-    const { container, args } = ctx;
-    const providerService = container.resolve<ProviderService>("providers");
-    const configService = container.resolve<ConfigService>("config");
+    const { registry, args } = ctx;
+    const providerService = registry.resolve(Tokens.Providers);
+    const configService = registry.resolve(Tokens.Config);
     const sub = args[0] || "status";
 
     switch (sub) {

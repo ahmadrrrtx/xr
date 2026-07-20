@@ -5,6 +5,7 @@
 
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
+import { Tokens } from "../core/tokens.ts";
 import { runAgent, type AgentDeps, type AgentResult } from "../core/agent.ts";
 import { ProviderService } from "./provider-service.ts";
 import { BudgetService } from "./budget-service.ts";
@@ -43,10 +44,10 @@ export interface AgentRunOverrides {
 }
 
 export class AgentService implements LifecycleHook {
-  private container: ServiceRegistry;
+  private registry: ServiceRegistry;
 
-  constructor(container: ServiceRegistry) {
-    this.container = container;
+  constructor(registry: ServiceRegistry) {
+    this.registry = registry;
   }
 
   /**
@@ -65,16 +66,16 @@ export class AgentService implements LifecycleHook {
     mode: Mode,
     overrides: AgentRunOverrides = {},
   ): Promise<AgentResult> {
-    const configService = this.container.resolve<ConfigService>("config");
-    const providerService = this.container.resolve<ProviderService>("providers");
-    const budgetService = this.container.resolve<BudgetService>("budget");
-    const pluginService = this.container.resolve<PluginService>("plugins");
-    const mcpService = this.container.resolve<McpService>("mcp");
+    const configService = this.registry.resolve(Tokens.Config);
+    const providerService = this.registry.resolve(Tokens.Providers);
+    const budgetService = this.registry.resolve(Tokens.Budget);
+    const pluginService = this.registry.resolve(Tokens.Plugins);
+    const mcpService = this.registry.resolve(Tokens.Mcp);
     let skillService: SkillService | undefined;
-    try { skillService = this.container.resolve<SkillService>("skills"); } catch { skillService = undefined; }
-    const sessionStore = this.container.resolve<SessionRepo>("sessionStore");
-    const memoryStore = this.container.resolve<UserMemoryRepo>("userMemoryStore");
-    const costStore = this.container.resolve<CostRepo>("costStore");
+    skillService = this.registry.tryResolve(Tokens.Skills);
+    const sessionStore = this.registry.resolve(Tokens.SessionStore);
+    const memoryStore = this.registry.resolve(Tokens.UserMemoryStore);
+    const costStore = this.registry.resolve(Tokens.CostStore);
 
     const config = configService.get();
 
@@ -82,7 +83,7 @@ export class AgentService implements LifecycleHook {
     // of the system uses, so CLI / TUI / voice / dashboard / agent all share ONE
     // memory. (The legacy UserMemoryRepo stays registered for backward compat.)
     /** 0.2 Storage Unification: Resolve the single workspace store. */
-    const unifiedStore = this.container.resolve<WorkspaceStore>("store");
+    const unifiedStore = this.registry.resolve(Tokens.Store);
     const engine = new MemoryStore(unifiedStore);
     const provider = providerService.getProvider({
       provider: overrides.provider,
@@ -118,7 +119,7 @@ export class AgentService implements LifecycleHook {
     const deps: AgentDeps = {
       provider,
       sessionStore,
-      auditStore: this.container.resolve<any>("auditStore"),
+      auditStore: this.registry.resolve(Tokens.AuditStore),
       costStore,
       userMemoryStore: memoryStore,
       cwd: process.cwd(),

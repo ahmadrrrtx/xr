@@ -5,7 +5,8 @@
  */
 
 import { Command, CommandContext } from "../core/command-registry.ts";
-import { XRKernel } from "../core/kernel.ts";
+import { Tokens } from "../core/tokens.ts";
+import type { XRApp } from "../core/app.ts";
 import {
   banner,
   heading,
@@ -27,9 +28,9 @@ export class WorkspaceCommand implements Command {
   usage = "xr workspace [list|create|use|switch|delete] [arguments]";
 
   async execute(ctx: CommandContext): Promise<void> {
-    const { container, args } = ctx;
-    const kernel = container.resolve<XRKernel>("kernel");
-    const wm = kernel.workspaces;
+    const { registry, args } = ctx;
+    const app: XRApp = registry.resolve(Tokens.App);
+    const wm = app.workspaces;
 
     const action = (args[0] ?? "list").toLowerCase();
 
@@ -100,7 +101,7 @@ export class WorkspaceCommand implements Command {
             "xr workspace list",
           ]);
         }
-        await kernel.switchWorkspace(id);
+        await app.switchWorkspace(id);
         emit({ ok: true, active: id }, () => {
           ok(`Switched to workspace "${id}".`);
         });

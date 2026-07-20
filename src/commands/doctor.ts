@@ -1,6 +1,7 @@
 /** XR — Doctor Command */
 import { CORE_VERSION } from "../core/version.ts";
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { printStatus, probeHealth, detectPlatform } from "../install/system.ts";
 import { ProviderService } from "../services/provider-service.ts";
 import { Store } from "../state/workspace-store.ts";
@@ -30,7 +31,7 @@ export class DoctorCommand implements Command {
       return;
     }
     /** 0.2 Storage Unification: Always resolve from container, never create new Store(). */
-    const store = ctx.container.resolve<Store>("store");
+    const store = ctx.registry.resolve(Tokens.Store);
     const mem = new MemoryStore(store);
     const memHealth = mem.health();
     const memEnabled = isMemoryEnabled();
@@ -42,7 +43,7 @@ export class DoctorCommand implements Command {
       const opts: any = {}; for (const a of ctx.args) if (a === "--network") opts.network = true;
       const checks = await probeHealth(opts);
       try {
-        const providerService = ctx.container.resolve<ProviderService>("providers");
+        const providerService = ctx.registry.resolve(Tokens.Providers);
         const reports = await providerService.checkAllProviders();
         for (const r of reports) checks.push({ id: `provider-${r.id}`, label: `Provider: ${r.id}`, state: r.ok ? "ok" : r.authOk ? "warn" : "fail", detail: r.detail });
       } catch(e){ checks.push({ id:"providers", label:"Provider health", state:"warn", detail:(e as Error).message });}
@@ -51,7 +52,7 @@ export class DoctorCommand implements Command {
       checks.push({ id:"memory", label:"Memory engine", state: memEnabled ? "ok" : "warn", detail: `${memHealth.total} entries` });
       try { const { PluginManager } = await import("../plugins/manager.ts"); const pm = new PluginManager(store, ctx.cwd); await pm.loadEnabled(); const ps = pm.summary(); checks.push({ id:"plugins", label:"Plugin platform", state: ps.errored ? "warn" : "ok", detail: `${ps.installed} installed, ${ps.enabled} enabled, ${ps.errored} need attention` }); } catch(e){ checks.push({ id:"plugins", label:"Plugin platform", state:"warn", detail:(e as Error).message }); }
       try { const { McpManager } = await import("../mcp/manager.ts"); const mm = new McpManager(store, ctx.cwd); await mm.loadEnabled(); const ms = mm.summary(); checks.push({ id:"mcp", label:"MCP platform", state: ms.errored ? "warn" : "ok", detail: `${ms.installed} servers, ${ms.enabled} enabled, ${ms.healthy} healthy` }); } catch(e){ checks.push({ id:"mcp", label:"MCP platform", state:"warn", detail:(e as Error).message }); }
-      try { const wf = ctx.container.resolve<any>("workflowStore"); const { listAgents } = await import("../agents/registry.ts"); const health = wf.health(); checks.push({ id:"multi-agent", label:"Multi-agent runtime", state: health.workflows.failed ? "warn" : "ok", detail: `${listAgents({ includeDisabled: true }).length} agents, ${health.workflows.total} workflows, ${health.workflows.running} running` }); } catch(e){ checks.push({ id:"multi-agent", label:"Multi-agent runtime", state:"warn", detail:(e as Error).message }); }
+      try { const wf = ctx.registry.resolve(Tokens.WorkflowStore); const { listAgents } = await import("../agents/registry.ts"); const health = wf.health(); checks.push({ id:"multi-agent", label:"Multi-agent runtime", state: health.workflows.failed ? "warn" : "ok", detail: `${listAgents({ includeDisabled: true }).length} agents, ${health.workflows.total} workflows, ${health.workflows.running} running` }); } catch(e){ checks.push({ id:"multi-agent", label:"Multi-agent runtime", state:"warn", detail:(e as Error).message }); }
       // control
       try { const { detectCapabilities } = await import("../control/adapter.ts"); const caps = detectCapabilities(); checks.push({ id:"control", label:"Computer Control", state: caps.tools.keyboard ? "ok":"warn", detail: `${caps.os} · keyboard:${caps.tools.keyboard} mouse:${caps.tools.mouse}` }); } catch {}
       console.log(JSON.stringify({ platform: detectPlatform(), checks }, null, 2)); return;
@@ -60,7 +61,7 @@ export class DoctorCommand implements Command {
     await printStatus(ctx.args);
 
     try {
-      const providerService = ctx.container.resolve<ProviderService>("providers");
+      const providerService = ctx.registry.resolve(Tokens.Providers);
       const reports = await providerService.checkAllProviders();
       if (reports.length) { console.log(""); console.log(C.bold("Provider Health")); for (const r of reports) { const status = r.ok ? C.green("✓") : r.authOk ? C.amber("!") : C.red("✗"); console.log(`  ${r.id.padEnd(12)} ${status}  ${r.detail}`); } }
     } catch(e){ warn(`Provider health check failed: ${(e as Error).message}`); }
@@ -91,7 +92,7 @@ export class DoctorCommand implements Command {
 
     console.log(""); console.log(C.bold("Multi-Agent Runtime"));
     try {
-      const wf = ctx.container.resolve<any>("workflowStore");
+      const wf = ctx.registry.resolve(Tokens.WorkflowStore);
       const { listAgents } = await import("../agents/registry.ts");
       const health = wf.health();
       console.log(`  agents ......... ${C.green(`✓ ${listAgents({ includeDisabled: true }).length} registered`)}`);

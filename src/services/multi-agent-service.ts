@@ -12,6 +12,7 @@
 
 import { randomUUID } from "node:crypto";
 import { ServiceRegistry } from "../core/service-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { EventBus } from "../core/event-bus.ts";
 import { AgentService } from "./agent-service.ts";
@@ -46,26 +47,26 @@ import type {
 } from "../agents/types.ts";
 
 export class MultiAgentService implements LifecycleHook {
-  constructor(private container: ServiceRegistry) {}
+  constructor(private registry: ServiceRegistry) {}
 
   private get workflowStore(): WorkflowRepo {
-    return this.container.resolve<WorkflowRepo>("workflowStore");
+    return this.registry.resolve(Tokens.WorkflowStore);
   }
 
   private get auditStore(): AuditRepo {
-    return this.container.resolve<AuditRepo>("auditStore");
+    return this.registry.resolve(Tokens.AuditStore);
   }
 
   private get unifiedStore(): WorkspaceStore {
-    return this.container.resolve<WorkspaceStore>("store");
+    return this.registry.resolve(Tokens.Store);
   }
 
   private get events(): EventBus {
-    return this.container.resolve<EventBus>("events");
+    return this.registry.resolve(Tokens.Events);
   }
 
   private get agentService(): AgentService {
-    return this.container.resolve<AgentService>("agent");
+    return this.registry.resolve(Tokens.Agent);
   }
 
   listAgents(includeDisabled = true): AgentDefinition[] {

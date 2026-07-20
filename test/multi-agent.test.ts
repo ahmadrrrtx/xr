@@ -10,7 +10,8 @@ import { WorkspaceStore } from "../src/state/workspace-store.ts";
 import { WorkflowRepo } from "../src/state/repos/workflow-repo.ts";
 import { AuditRepo } from "../src/state/repos/audit-repo.ts";
 // 0.6 Runtime/DI cleanup: typed ServiceRegistry replaces the legacy Container.
-import { ServiceRegistryImpl } from "../src/core/service-registry.ts";
+import { ServiceRegistry } from "../src/core/service-registry.ts";
+import { Tokens } from "../src/core/tokens.ts";
 import { EventBus } from "../src/core/event-bus.ts";
 import { MultiAgentService } from "../src/services/multi-agent-service.ts";
 
@@ -83,19 +84,19 @@ test("workflow store persists and reloads task graphs", () => {
 });
 
 test("multi-agent service can plan and request cancellation without execution", () => {
-  const container = new ServiceRegistryImpl();
+  const registry = new ServiceRegistry();
   // One unified store; the repos and services are views over it.
   const store = new WorkspaceStore(join(HOME, "service.db"));
   const workflowStore = new WorkflowRepo(store);
   const auditStore = new AuditRepo(store);
   const events = new EventBus();
-  container.register("store", store);
-  container.register("workflowStore", workflowStore);
-  container.register("auditStore", auditStore);
-  container.register("events", events);
+  registry.registerValue(Tokens.Store, store);
+  registry.registerValue(Tokens.WorkflowStore, workflowStore);
+  registry.registerValue(Tokens.AuditStore, auditStore);
+  registry.registerValue(Tokens.Events, events);
 
   try {
-    const svc = new MultiAgentService(container);
+    const svc = new MultiAgentService(registry);
     const record = svc.planWorkflow({ goal: "Refactor the repo safely", cwd: process.cwd() });
     expect(record.status).toBe("planned");
     const stopped = svc.stopWorkflow(record.workflowId);

@@ -1,6 +1,7 @@
 /** XR Stage 10 — Plugin Service. */
 import { PluginManager, type InstallResult } from "../plugins/manager.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { ConfigService } from "./config-service.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { PermissionScope } from "../plugins/types.ts";
@@ -11,11 +12,11 @@ export class PluginService implements LifecycleHook {
   private manager: PluginManager;
   private loaded = false;
 
-  constructor(private container: ServiceRegistry) {
-    const configService = container.resolve<ConfigService>("config");
+  constructor(private registry: ServiceRegistry) {
+    const configService: ConfigService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
-    /** 0.2 Storage Unification: Always resolve the single workspace store from container. */
-    const store = container.resolve<Store>("store");
+    /** 0.2 Storage Unification: Always resolve the single workspace store. */
+    const store: Store = this.registry.resolve(Tokens.Store);
     this.manager = new PluginManager(store, process.cwd(), config);
   }
 

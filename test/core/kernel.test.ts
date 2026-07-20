@@ -53,7 +53,7 @@ describe("XRKernel bootstrap (hermetic)", () => {
       "bootstrap-event-emitted",
       "store-is-workspace-store",
       "legacy-alias-is-same-instance",
-      "service-registered:kernel",
+      "service-registered:app",
       "service-registered:shield",
       "service-registered:business",
       "service-registered:agent",

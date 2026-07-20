@@ -20,18 +20,19 @@ import type { Provider } from "../core/types.ts";
 import { ConfigService } from "./config-service.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
+import { Tokens } from "../core/tokens.ts";
 import { setSecret, getSecret } from "../security/secrets.ts";
 
 export class ProviderService implements LifecycleHook {
-  private container: ServiceRegistry;
+  private registry: ServiceRegistry;
 
-  constructor(container: ServiceRegistry) {
-    this.container = container;
+  constructor(registry: ServiceRegistry) {
+    this.registry = registry;
   }
 
   private sync(): void {
     try {
-      const configService = this.container.resolve<ConfigService>("config");
+      const configService = this.registry.resolve(Tokens.Config);
       registry.syncCustom(configService.get());
     } catch {
       // Config service may not be available during very early init
@@ -47,7 +48,7 @@ export class ProviderService implements LifecycleHook {
     strategy?: RoutingStrategy;
   }): Provider {
     this.sync();
-    const configService = this.container.resolve<ConfigService>("config");
+    const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
     return buildProvider(config, overrides);
   }
@@ -76,7 +77,7 @@ export class ProviderService implements LifecycleHook {
     model?: string,
   ): Promise<ProviderHealthReport> {
     this.sync();
-    const configService = this.container.resolve<ConfigService>("config");
+    const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
     const checker = new ProviderHealthChecker(config);
     return await checker.check(
@@ -90,7 +91,7 @@ export class ProviderService implements LifecycleHook {
    */
   async checkAllProviders(): Promise<ProviderHealthReport[]> {
     this.sync();
-    const configService = this.container.resolve<ConfigService>("config");
+    const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
     const checker = new ProviderHealthChecker(config);
     return await checker.checkAll();
@@ -100,7 +101,7 @@ export class ProviderService implements LifecycleHook {
    * Get active provider ID from config.
    */
   getActiveProviderId(): string {
-    const configService = this.container.resolve<ConfigService>("config");
+    const configService = this.registry.resolve(Tokens.Config);
     return configService.get().defaults.provider;
   }
 
@@ -109,7 +110,7 @@ export class ProviderService implements LifecycleHook {
    */
   async setActiveProvider(id: string, model?: string): Promise<void> {
     this.sync();
-    const configService = this.container.resolve<ConfigService>("config");
+    const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
 
     if (!registry.has(id) && !PRESETS[id]) {
@@ -138,7 +139,7 @@ export class ProviderService implements LifecycleHook {
     headers?: Record<string, string>;
     capabilities?: any;
   }): Promise<void> {
-    const configService = this.container.resolve<ConfigService>("config");
+    const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
 
     const existing = config.providerEngine?.customProviders ?? [];
@@ -172,7 +173,7 @@ export class ProviderService implements LifecycleHook {
    * Remove a custom provider. Persists to config.
    */
   async removeCustomProvider(id: string): Promise<void> {
-    const configService = this.container.resolve<ConfigService>("config");
+    const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
 
     const existing = config.providerEngine?.customProviders ?? [];

@@ -3,6 +3,7 @@
  */
 import { McpManager } from "../mcp/manager.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { Tool } from "../core/types.ts";
 import { Store } from "../state/workspace-store.ts";
@@ -11,9 +12,9 @@ export class McpService implements LifecycleHook {
   private manager: McpManager;
   private loaded = false;
 
-  constructor(private container: ServiceRegistry) {
-    /** 0.2 Storage Unification: Always resolve the single workspace store from container. */
-    const store = container.resolve<Store>("store");
+  constructor(private registry: ServiceRegistry) {
+    /** 0.2 Storage Unification: Always resolve the single workspace store. */
+    const store: Store = this.registry.resolve(Tokens.Store);
     this.manager = new McpManager(store, process.cwd());
   }
 

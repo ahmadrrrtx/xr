@@ -6,6 +6,7 @@
  */
 
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { Tokens } from "../core/tokens.ts";
 import { Store } from "../state/workspace-store.ts";
 import { XRShieldService, ShieldThreat, KNOWN_MINER_NAMES, SHIELD_STATE_PATH } from "../security/shield.ts";
 import { platform } from "node:os";
@@ -32,7 +33,7 @@ import { SYM, A } from "../ui/theme.ts";
  * container. Never creates a new Store() as a fallback.
  */
 function resolveStore(ctx: CommandContext): Store {
-  return ctx.container.resolve<Store>("store");
+  return ctx.registry.resolve(Tokens.Store);
 }
 
 export class ShieldCommand implements Command {
