@@ -133,6 +133,7 @@ const shield = new XRShieldService(store);
     (t) => typeof t.id === "string" && t.id.length > 0
       && typeof t.title === "string" && typeof t.evidence === "string"
       && typeof t.confidence === "number" && t.confidence > 0 && t.confidence <= 1
+      && typeof t.confidenceSource === "string" && t.confidenceSource.length > 0
       && Array.isArray(t.recommendations) && t.recommendations.length > 0
       && typeof t.remediable === "boolean",
   );
@@ -166,6 +167,7 @@ const shield = new XRShieldService(store);
     evidence: "e",
     recommendations: ["Quarantine"],
     confidence: 0.95,
+    confidenceSource: "double_extension_spoofing",
     agent: "Download Inspector",
     remediable: true,
     remediationAction: "quarantine-file:/home/user/Downloads/invoice.pdf.exe",
@@ -185,15 +187,16 @@ const shield = new XRShieldService(store);
   const threat = {
     id: "t", type: "crypto_miner" as const, title: "Potential Crypto Miner: xmrig",
     severity: "high" as const, details: "", evidence: "", recommendations: [],
-    confidence: 0.85, agent: "Crypto Miner Detection Heuristic", remediable: true,
+    confidence: 0.85, confidenceSource: "name_signature_match:xmrig",
+    agent: "Crypto Miner Detection Heuristic", remediable: true,
   };
   const a = shield.analyzeThreatHeuristic("Crypto Miner Detection Heuristic", threat);
   const b = shield.analyzeThreatHeuristic("Crypto Miner Detection Heuristic", threat);
   check("heuristic-deterministic", a.explanation === b.explanation && a.remedy === b.remedy);
   check("heuristic-sync-not-async", !(a as any instanceof Promise));
   check("heuristic-confidence-passes-through", a.confidence === 0.85);
-  const deprecated = shield.analyzeThreatWithAgent("Crypto Miner Detection Heuristic", threat);
-  check("deprecated-alias-delegates", deprecated.explanation === a.explanation);
+  // analyzeThreatWithAgent has been REMOVED in v2 — verify it no longer exists
+  check("analyzeThreatWithAgent-removed", typeof (shield as any).analyzeThreatWithAgent === "undefined");
   const fallback = shield.analyzeThreatHeuristic("Some Unknown Heuristic", threat);
   check("heuristic-unknown-uses-fallback", fallback.explanation.includes("Some Unknown Heuristic")
     && fallback.explanation.includes("not AI analysis"));
