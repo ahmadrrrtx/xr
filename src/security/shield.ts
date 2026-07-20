@@ -1,22 +1,26 @@
 /**
- * XR Stage 14 — XR Shield Service
+ * XR Stage 14 — XR Shield Service v2
  * Local-First Security, Privacy, and System Integrity Layer.
  *
- * HONESTY DOCTRINE (0.3 Shield Honesty Fix):
- *   - Zero fabricated threats. No mock data. No fake processes.
+ * HONESTY DOCTRINE v2 (Phase 2 Security Hardening):
+ *   - Zero fabricated threats. No mock data. No fake processes. No estimated file stats.
  *   - If a system command fails or returns no data, the result is EMPTY.
- *   - analyzeThreatHeuristic() is a static heuristic explainer, NOT an AI agent.
+ *   - analyzeThreatHeuristic() is a deterministic static heuristic explainer, NOT an AI.
  *   - toggleAdBlock() honestly manages state only — it does NOT modify /etc/hosts.
- *   - runScan() on a clean/empty system MUST return zero threats.
+ *   - runScan() on a clean/empty system returns zero threats.
+ *   - All file statistics use REAL statSync() data (not hardcoded estimates).
+ *   - Every threat carries a confidenceSource explaining how confidence was derived.
+ *   - analyzeThreatWithAgent() has been REMOVED entirely (no misleading AI implications).
  *
  * Implements:
  * - Deterministic heuristic and signature scanning.
  * - Fully transparent, permission-gated quarantine and whitelist management.
  * - Complete offline-ready operations.
  * - Deep audit trail integration.
+ * - Explainable confidence with source attribution.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir, platform, totalmem } from "node:os";
 import { createHash } from "node:crypto";
@@ -96,6 +100,8 @@ export interface ShieldThreat {
   evidence: string;
   recommendations: string[];
   confidence: number; // 0..1
+  /** Explains HOW the confidence value was derived (e.g., "name_signature_match:xmrig"). Phase 2 addition. */
+  confidenceSource: string;
   agent: string; // The specialist heuristic reporting it
   remediable: boolean;
   remediationAction?: string;
@@ -470,8 +476,12 @@ export class XRShieldService implements LifecycleHook {
   // --- MODULE 4: DOWNLOADS INSPECTION ---
 
   /**
-   * Inspect real downloads only. Returns empty array if the downloads
-   * directory doesn't exist or can't be read. NEVER fabricates download items.
+   * Inspect real downloads only. Uses REAL file statistics (statSync).
+   * Returns empty array if the downloads directory doesn't exist or can't be read.
+   * NEVER fabricates download items or file metadata.
+   *
+   * HONESTY FIX v2: Replaced hardcoded sizeBytes/addedAt estimates with
+   * real statSync() data for file size and modification time.
    */
   public async getDownloads(): Promise<DownloadItem[]> {
     const list: DownloadItem[] = [];
@@ -479,39 +489,47 @@ export class XRShieldService implements LifecycleHook {
 
     if (existsSync(downloadsDir)) {
       try {
-        const lsOut = await this.runShellCommand("ls", ["-lat", downloadsDir]);
-        const files = lsOut.split("\n").filter(Boolean).slice(0, 30);
-        for (const line of files) {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length >= 9) {
-            const name = parts.slice(8).join(" ");
-            if (name === "." || name === "..") continue;
+        // Use readdirSync + statSync for real file data instead of parsing `ls` output
+        const entries = readdirSync(downloadsDir);
+        // Sort by modification time (newest first), take top 30
+        const withStats = entries
+          .map((name) => {
             const filePath = join(downloadsDir, name);
-            const ext = name.split(".").pop()?.toLowerCase() ?? "";
+            try {
+              const st = statSync(filePath);
+              return { name, filePath, st };
+            } catch {
+              return null;
+            }
+          })
+          .filter((e): e is { name: string; filePath: string; st: any } => e !== null && e.st.isFile())
+          .sort((a, b) => b.st.mtimeMs - a.st.mtimeMs)
+          .slice(0, 30);
 
-            const isDoubleExt = name.match(/\.[a-zA-Z0-9]+\.[a-zA-Z0-9]+$/) !== null &&
-              (name.endsWith(".exe") || name.endsWith(".scr") || name.endsWith(".bat") || name.endsWith(".js") || name.endsWith(".ps1") || name.endsWith(".sh"));
+        for (const { name, filePath, st } of withStats) {
+          if (name === "." || name === "..") continue;
+          const ext = name.split(".").pop()?.toLowerCase() ?? "";
 
-            const isDangerousExt = ["exe", "scr", "bat", "cmd", "ps1", "sh", "vbs", "msi", "dmg", "pkg", "js", "vbe", "hta"].includes(ext);
+          const isDoubleExt = name.match(/\.[a-zA-Z0-9]+\.[a-zA-Z0-9]+$/) !== null &&
+            (name.endsWith(".exe") || name.endsWith(".scr") || name.endsWith(".bat") || name.endsWith(".js") || name.endsWith(".ps1") || name.endsWith(".sh"));
 
-            const isHackingName = /crack|patch|keygen|bypass|hack|exploit|cheat|miner|xmrig/i.test(name);
+          const isDangerousExt = ["exe", "scr", "bat", "cmd", "ps1", "sh", "vbs", "msi", "dmg", "pkg", "js", "vbe", "hta"].includes(ext);
+          const isHackingName = /crack|patch|keygen|bypass|hack|exploit|cheat|miner|xmrig/i.test(name);
+          const isSuspicious = isDoubleExt || (isDangerousExt && isHackingName);
 
-            const isSuspicious = isDoubleExt || (isDangerousExt && isHackingName);
+          let reason: string | undefined;
+          if (isDoubleExt) reason = "Double-extension spoofing (e.g. invoice.pdf.exe) detected";
+          else if (isDangerousExt && isHackingName) reason = "Dangerous file extension coupled with crack/hack keywords";
 
-            let reason: string | undefined;
-            if (isDoubleExt) reason = "Double-extension spoofing (e.g. invoice.pdf.exe) detected";
-            else if (isDangerousExt && isHackingName) reason = "Dangerous file extension coupled with crack/hack keywords";
-
-            list.push({
-              name,
-              path: filePath,
-              sizeBytes: 1024 * 1024 * 3, // estimated
-              addedAt: Date.now() - 3600000 * 24, // approximated
-              extension: ext,
-              suspicious: isSuspicious,
-              reason
-            });
-          }
+          list.push({
+            name,
+            path: filePath,
+            sizeBytes: st.size, // REAL file size from statSync
+            addedAt: st.mtimeMs, // REAL modification time from statSync
+            extension: ext,
+            suspicious: isSuspicious,
+            reason
+          });
         }
       } catch {}
     }
@@ -762,14 +780,39 @@ ${rules.join("\n")}
     return false;
   }
 
+  /**
+   * Determine the confidence source string for a process threat.
+   * This explains HOW the confidence value was derived.
+   */
+  private getProcessConfidenceSource(p: ProcessInfo, isMiner: boolean, cmdSuspicious: boolean): string {
+    if (isMiner) {
+      const minerMatch = KNOWN_MINER_NAMES.find(m =>
+        p.name.toLowerCase().includes(m) || p.command.toLowerCase().includes(m)
+      );
+      if (minerMatch) return `name_signature_match:${minerMatch}`;
+      if (p.cpu > 70 && p.memory > 50) return "high_resource_heuristic:cpu>70%,mem>50MB";
+      return "behavioral_heuristic:resource_consumption";
+    }
+    if (cmdSuspicious) {
+      const lolbins = platform() === "win32" ? LOLBINS_WINDOWS : LOLBINS_UNIX;
+      const match = lolbins.find(b => b.pattern.test(p.command));
+      if (match) return `lolbin_signature:${match.name}`;
+      if (SUSPICIOUS_DOMAINS.some(d => p.command.toLowerCase().includes(d))) return "suspicious_domain_in_cmdline";
+      return "pattern_match:suspicious_command_line";
+    }
+    return "combined_heuristic";
+  }
+
   // --- MODULE 8: FULL SYSTEM SCANNING ---
 
   /**
    * Run a security scan using deterministic heuristics only.
    *
-   * HONESTY NOTE (0.3): On a clean system where no real suspicious processes,
+   * HONESTY DOCTRINE v2: On a clean system where no real suspicious processes,
    * startup entries, scheduled tasks, or downloads exist, this method returns
    * an EMPTY threats array. Zero fabricated results.
+   *
+   * Every threat includes a confidenceSource explaining how confidence was derived.
    */
   public async runScan(mode: "quick" | "full" = "quick"): Promise<ShieldThreat[]> {
     const threats: ShieldThreat[] = [];
@@ -784,16 +827,27 @@ ${rules.join("\n")}
       if (cmdSuspicious || isMiner || highResourceMiner) {
         if (this.isWhitelisted("process", p.name)) continue;
 
+        const confidenceSource = this.getProcessConfidenceSource(p, isMiner, cmdSuspicious);
+        let confidence = 0.7;
         let threatTitle = `Suspicious Process: ${p.name}`;
         let details = `Heuristics flagged unusual activity: cmdline '${p.command}'`;
         let severity: ShieldThreat["severity"] = "medium";
         let agent = "Process Inspector";
 
-        if (isMiner || highResourceMiner) {
+        if (isMiner) {
           threatTitle = `Potential Crypto Miner: ${p.name}`;
-          details = `High sustained background resource execution matches known miner signatures. CPU: ${p.cpu}%, Memory: ${p.memory}MB.`;
+          details = `Process name or command matches known crypto-miner signatures. CPU: ${p.cpu}%, Memory: ${p.memory}MB.`;
           severity = "high";
           agent = "Crypto Miner Detection Heuristic";
+          confidence = 0.95;
+        } else if (highResourceMiner) {
+          threatTitle = `High Resource Suspicious Process: ${p.name}`;
+          details = `Sustained high resource consumption with suspicious command patterns. CPU: ${p.cpu}%, Memory: ${p.memory}MB.`;
+          severity = "high";
+          agent = "Crypto Miner Detection Heuristic";
+          confidence = 0.8;
+        } else if (cmdSuspicious) {
+          confidence = 0.75;
         }
 
         threats.push({
@@ -808,7 +862,8 @@ ${rules.join("\n")}
             `Perform a full antivirus scan`,
             `Add to whitelist if this is a verified developer utility`
           ],
-          confidence: 0.85,
+          confidence,
+          confidenceSource,
           agent,
           remediable: true,
           remediationAction: `kill-process:${p.pid}`
@@ -821,6 +876,17 @@ ${rules.join("\n")}
     for (const s of startup) {
       if (s.suspicious) {
         if (this.isWhitelisted("startup", s.name)) continue;
+
+        let confidenceSource = "pattern_match:suspicious_startup_command";
+        let confidence = 0.85;
+        if (KNOWN_MINER_NAMES.some(m => s.command.toLowerCase().includes(m))) {
+          confidenceSource = "name_signature_match:miner_in_startup";
+          confidence = 0.95;
+        } else if (SUSPICIOUS_DOMAINS.some(d => s.command.toLowerCase().includes(d))) {
+          confidenceSource = "suspicious_domain_in_startup";
+          confidence = 0.9;
+        }
+
         threats.push({
           id: `start-${createHash("md5").update(s.name).digest("hex").substring(0, 8)}`,
           type: "startup",
@@ -832,7 +898,8 @@ ${rules.join("\n")}
             `Disable startup entry using system configurations`,
             `Audit file path contents and check for malware signatures`
           ],
-          confidence: 0.9,
+          confidence,
+          confidenceSource,
           agent: "Startup Inspector",
           remediable: true,
           remediationAction: `disable-startup:${s.name}`
@@ -845,6 +912,14 @@ ${rules.join("\n")}
     for (const t of tasks) {
       if (t.suspicious) {
         if (this.isWhitelisted("task", t.name)) continue;
+
+        let confidenceSource = "pattern_match:suspicious_task_command";
+        let confidence = 0.75;
+        if (KNOWN_MINER_NAMES.some(m => t.command.toLowerCase().includes(m))) {
+          confidenceSource = "name_signature_match:miner_in_task";
+          confidence = 0.9;
+        }
+
         threats.push({
           id: `task-${createHash("md5").update(t.name).digest("hex").substring(0, 8)}`,
           type: "scheduled_task",
@@ -856,7 +931,8 @@ ${rules.join("\n")}
             `Delete scheduled task using system tools`,
             `Audit command script to understand background actions`
           ],
-          confidence: 0.8,
+          confidence,
+          confidenceSource,
           agent: "System Auditor",
           remediable: true,
           remediationAction: `delete-task:${t.name}`
@@ -870,6 +946,17 @@ ${rules.join("\n")}
       for (const d of downloads) {
         if (d.suspicious) {
           if (this.isWhitelisted("file", d.path)) continue;
+
+          let confidenceSource = "file_extension_heuristic";
+          let confidence = 0.85;
+          if (d.reason?.includes("Double-extension")) {
+            confidenceSource = "double_extension_spoofing";
+            confidence = 0.95;
+          } else if (d.reason?.includes("crack/hack")) {
+            confidenceSource = "dangerous_extension_plus_suspicious_name";
+            confidence = 0.9;
+          }
+
           threats.push({
             id: `down-${createHash("md5").update(d.name).digest("hex").substring(0, 8)}`,
             type: "download",
@@ -882,7 +969,8 @@ ${rules.join("\n")}
               `Do not execute under any circumstances`,
               `Verify signature of downloaded package`
             ],
-            confidence: 0.95,
+            confidence,
+            confidenceSource,
             agent: "Download Inspector",
             remediable: true,
             remediationAction: `quarantine-file:${d.path}`
@@ -904,7 +992,7 @@ ${rules.join("\n")}
     this.store.audit("shield.scan", {
       mode,
       threatsFound: threats.length,
-      details: threats.map(t => ({ id: t.id, title: t.title, severity: t.severity }))
+      details: threats.map(t => ({ id: t.id, title: t.title, severity: t.severity, confidenceSource: t.confidenceSource }))
     });
 
     return threats;
@@ -1002,22 +1090,22 @@ ${rules.join("\n")}
   /**
    * Heuristic-based threat explanation (NOT an AI agent).
    *
-   * HONESTY NOTE (0.3): This method provides static heuristic explanations
+   * HONESTY NOTE v2: This method provides static heuristic explanations
    * based on the threat type and the reporting heuristic name. It does NOT
    * use any AI model, LLM, or agent system. The explanations are deterministic
    * lookup-based descriptions of why the heuristic flagged the threat.
    *
-   * Renamed from `analyzeThreatWithAgent` to `analyzeThreatHeuristic` to
-   * accurately reflect that this is heuristic analysis, not AI-powered.
+   * The former analyzeThreatWithAgent() has been REMOVED entirely in v2
+   * to eliminate any misleading implication of AI-powered analysis.
    */
   public analyzeThreatHeuristic(heuristicName: string, threat: ShieldThreat): HeuristicAnalysisResult {
     const explanationCorpus: Record<string, { explanation: string; remedy: string }> = {
       "Crypto Miner Detection Heuristic": {
-        explanation: `The crypto-miner detection heuristic analyzed process "${threat.title}". It displays a sustained high-resource consumption signature (>70% CPU) with argument links pointing to cryptographic mining algorithms or pools. Background crypto-mining without user authorization is a critical resource-hijacking threat that compromises stability, elevates temperatures, and degrades hardware lifecycle.`,
+        explanation: `The crypto-miner detection heuristic analyzed process "${threat.title}". It displays a sustained high-resource consumption signature (>70% CPU) with argument links pointing to cryptographic mining algorithms or pools, or the process name/command matches a known miner signature. Background crypto-mining without user authorization is a critical resource-hijacking threat that compromises stability, elevates temperatures, and degrades hardware lifecycle.`,
         remedy: `Use the 'xr shield' command to terminate PID immediately, then audit startup files or cron records to disable automatic relaunching.`
       },
       "Process Inspector": {
-        explanation: `Analyzing running command paths and parameters, the process inspector heuristic flagged process parameters referencing un-restricted scripts or Dual-Use administration binaries (LOLBins). These tools, while native to the OS, are frequently weaponized by intrusion agents to fetch remote code or manipulate local folders.`,
+        explanation: `Analyzing running command paths and parameters, the process inspector heuristic flagged process parameters referencing unrestricted scripts or Dual-Use administration binaries (LOLBins). These tools, while native to the OS, are frequently weaponized by intrusion agents to fetch remote code or manipulate local folders.`,
         remedy: `Shut down the target PID, verify process ownership, and add it to your whitelist only if this was triggered by active development utilities.`
       },
       "Startup Inspector": {
@@ -1031,7 +1119,7 @@ ${rules.join("\n")}
     };
 
     const exp = explanationCorpus[heuristicName] ?? {
-      explanation: `Heuristic "${heuristicName}" analyzed the threat "${threat.title}" and found elevated risk indicators. The detection is based on deterministic signature and pattern matching, not AI analysis.`,
+      explanation: `Heuristic "${heuristicName}" analyzed the threat "${threat.title}" and found elevated risk indicators. The detection is based on deterministic signature and pattern matching, not AI analysis. Confidence source: ${threat.confidenceSource ?? "unknown"}.`,
       remedy: `We recommend isolating the file/process, reviewing the logs, and enabling tracker block filters for enhanced protection.`
     };
 
@@ -1042,13 +1130,5 @@ ${rules.join("\n")}
       explanation: exp.explanation,
       remedy: exp.remedy
     };
-  }
-
-  /**
-   * @deprecated Use analyzeThreatHeuristic() instead.
-   * Kept for backward compatibility — delegates to the renamed method.
-   */
-  public analyzeThreatWithAgent(agentName: string, threat: ShieldThreat): HeuristicAnalysisResult {
-    return this.analyzeThreatHeuristic(agentName, threat);
   }
 }

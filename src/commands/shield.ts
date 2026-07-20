@@ -375,7 +375,7 @@ export class ShieldCommand implements Command {
 
     // Determine target agent
     const agentName = threat.agent;
-    const analysis = service.analyzeThreatWithAgent(agentName, threat);
+    const analysis = service.analyzeThreatHeuristic(agentName, threat);
 
     console.log();
     console.log(`  ${C.cyan("Agent:")}       ${C.bold(analysis.heuristicName ?? (analysis as any).agentName)}`);

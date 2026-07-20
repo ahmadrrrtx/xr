@@ -89,7 +89,7 @@ describe("XR Shield — honesty doctrine (hermetic)", () => {
       "restore-missing-id-honest-false",
       "heuristic-deterministic",
       "heuristic-sync-not-async",
-      "deprecated-alias-delegates",
+      "analyzeThreatWithAgent-removed",
       "heuristic-unknown-uses-fallback",
       "privacy-score-bounded",
       "privacy-score-additive",

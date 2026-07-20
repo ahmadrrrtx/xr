@@ -48,7 +48,7 @@ export function shieldRoutes(): DaemonRoute[] {
           const threats = await state.shield.runScan("full");
           const threat = threats.find((t) => t.id === body.id);
           if (!threat) return json({ error: "threat not found" }, 404);
-          return json({ analysis: state.shield.analyzeThreatWithAgent(threat.agent, threat) });
+          return json({ analysis: state.shield.analyzeThreatHeuristic(threat.agent, threat) });
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }
