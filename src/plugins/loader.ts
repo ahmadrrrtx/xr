@@ -1445,7 +1445,7 @@ async function loadViaWorker(
     });
 
     worker.on("error", (err) => {
-      fail(`worker error: ${err.message}`);
+      fail(`worker error: ${(err as Error).message}`);
     });
 
     worker.on("exit", (code) => {
