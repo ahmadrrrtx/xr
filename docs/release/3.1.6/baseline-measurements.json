@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-22T09:48:14.551Z",
+  "version": {
+    "name": "@rrrtx/xr",
+    "version": "3.1.6",
+    "codename": "Baseline Integrity",
+    "display": "3.1.6 (Baseline Integrity)",
+    "displayVersion": "3.1.6 (Baseline Integrity)",
+    "repo": "https://github.com/ahmadrrrtx/xr",
+    "homepage": "https://xr-gules.vercel.app",
+    "npm": "https://www.npmjs.com/package/@rrrtx/xr",
+    "description": "XR 3.1.6 (Baseline Integrity) — verified local-first AI runtime baseline with reproducible validation, diagnostics, support matrix, and release artifacts.",
+    "author": "Muhammad Ahmad (@ahmadrrrtx)",
+    "license": "MIT",
+    "pluginApi": 2
+  },
+  "environment": {
+    "bun": "1.3.14",
+    "node": "v24.3.0",
+    "os": "linux",
+    "arch": "x64",
+    "release": "6.1.158+",
+    "cpu": "linux/x64",
+    "memory": {
+      "totalBytes": 2088390656,
+      "freeBytes": 1547616256
+    },
+    "ci": false,
+    "tty": false
+  },
+  "methodology": {
+    "samples": 3,
+    "cwd": "/home/user/xr",
+    "isolatedHome": "/tmp/xr-baseline-1784713691031",
+    "network": "not required; doctor runs without --network",
+    "precision": "wall-clock process duration on this host; not a hardware-independent benchmark"
+  },
+  "scenarios": [
+    {
+      "id": "cli-version",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "--version"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "medianMs": 132.37563999999998,
+      "p95Ms": 149.529394,
+      "minMs": 121.12537699999996,
+      "maxMs": 149.529394,
+      "peakRssBytes": 46018560,
+      "exitCodes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "cli-help",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "help"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "medianMs": 119.4214750000001,
+      "p95Ms": 122.513439,
+      "minMs": 117.94071299999996,
+      "maxMs": 122.513439,
+      "peakRssBytes": 55074816,
+      "exitCodes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "doctor-json",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "doctor",
+        "--json"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "medianMs": 348.01593,
+      "p95Ms": 352.15059499999995,
+      "minMs": 347.7989910000001,
+      "maxMs": 352.15059499999995,
+      "peakRssBytes": 57245696,
+      "exitCodes": [
+        0,
+        0,
+        0
+      ],
+      "limitation": "Optional local runtimes/providers may warn when not installed; required failures are what gate release."
+    },
+    {
+      "id": "workspace-list",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "workspace",
+        "list",
+        "--json"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "medianMs": 287.88542800000005,
+      "p95Ms": 288.01920799999994,
+      "minMs": 283.9935480000004,
+      "maxMs": 288.01920799999994,
+      "peakRssBytes": 59576320,
+      "exitCodes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "doctor-perf",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "doctor",
+        "--perf",
+        "--json"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "medianMs": 287.94852100000026,
+      "p95Ms": 289.83101899999974,
+      "minMs": 270.1081799999997,
+      "maxMs": 289.83101899999974,
+      "peakRssBytes": 56102912,
+      "exitCodes": [
+        0,
+        0,
+        0
+      ],
+      "limitation": "In-process CLI microbenchmarks; not full cold-start precision."
+    }
+  ]
+}

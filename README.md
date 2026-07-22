@@ -9,7 +9,7 @@
 
 # XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine` · `XR 3.1.5 Helios · 65+ Skills` · `@rrrtx/xr`**
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine` · `XR 3.1.6 Baseline Integrity · 65+ Skills` · `@rrrtx/xr`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
@@ -17,12 +17,12 @@
 [![Tests](https://img.shields.io/badge/tests-255%20passing-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-v3.1.5%20Helios-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-XR%203.1.5%20Helios-00FF88?style=flat-square)](#-xr-31--unified-ai-os)
+[![Version](https://img.shields.io/badge/version-v3.1.6%20Baseline%20Integrity-22e0ff?style=flat-square)](#)
+[![Stage](https://img.shields.io/badge/stage-XR%203.1.6%20Baseline%20Integrity-00FF88?style=flat-square)](#-xr-31--unified-ai-os)
 
 </div>
 
-> **Version Source of Truth:** `3.1.5 (Helios)` — canonical version from `src/core/version.ts`, stamped from `package.json` via `bun run scripts/set-version.ts`. All CLI, dashboard, MCP, and website surfaces import from this single source.
+> **Version Source of Truth:** `3.1.6 (Baseline Integrity)` — canonical version from `src/core/version.ts`, stamped from `package.json` via `bun run scripts/set-version.ts`. All CLI, dashboard, MCP, and website surfaces import from this single source.
 
 ---
 
@@ -31,9 +31,32 @@
 
 ---
 
-## ✅ XR 3.1.5 (Helios) — Unified AI OS — Skills Marketplace Good To Go
+## ✅ XR 3.1.6 (Baseline Integrity) — Verified Baseline Release
 
-**Status: XR 3.1.5 (Helios) is the current stable release on `main`. XR 2.1 Skills Marketplace foundation is complete and integrated.**
+**Status: XR 3.1.6 (Baseline Integrity) is the current Phase 0 baseline release on `main`. It focuses on reproducible validation, diagnostics, support classification, migration/rollback documentation, and truthful release evidence. It does not ship the XR 4.0 Runtime Kernel or later roadmap architecture.**
+
+### XR 3.1.6 Phase 0 baseline artifacts
+
+Release evidence for this version lives in [`docs/release/3.1.6/`](docs/release/3.1.6/):
+
+- repository inventory (`INVENTORY.md`, `inventory.json`);
+- support matrix (`SUPPORT_MATRIX.md`);
+- validation report (`VALIDATION_REPORT.md`, `validation-report.json`);
+- baseline measurements (`BASELINE_MEASUREMENTS.md`, `baseline-measurements.json`);
+- release checklist, release notes, and rollback guide.
+
+Run the local baseline gates with:
+
+```bash
+bun install --frozen-lockfile
+bun run baseline:validate
+bun run baseline:measure
+```
+
+`xr doctor --json` is the stable local diagnostic entrypoint for automation. It reports version, Bun/OS/architecture, workspace/database status, redacted configuration, provider/local runtime readiness, plugin/skill/MCP status, security/budget readiness, daemon-relevant status, and actionable health checks. Secret values are never printed; only presence is reported.
+
+Truth boundaries for 3.1.6: XR is a sophisticated local AI runtime/application platform. The current daemon/dashboard is local and process-local; workspace isolation is a data/configuration boundary; the event bus is in-memory; security approval/audit controls are meaningful but not VM/container isolation.
+
 
 XR 2.1 turns XR from an assistant into an extensible AI operating system with a complete Skill layer:
 
@@ -539,7 +562,7 @@ Doctor includes Voice Stack health: capture tools, playback tools, device count,
 
 ---
 
-## 🏛️ v3.1.5 (Helios) Foundation Runtime — AI OS Kernel
+## 🏛️ v3.1.6 (Baseline Integrity) Foundation Runtime — Verified Current Runtime
 
 XR has evolved into a **True AI Operating System**. The v1.0 kernel introduces:
 

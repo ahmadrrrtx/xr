@@ -163,8 +163,11 @@ function updateWebsiteSiteTs(pkg: PkgJson, codename: string): void {
   const homepage = pkg.homepage ?? "https://xr-gules.vercel.app";
   const npmUrl = `https://www.npmjs.com/package/${pkg.name}`;
 
-  // Replace version
+  // Replace version identity
   src = src.replace(/version:\s*["'][^"']+["']/, `version: "${pkg.version}"`);
+  src = src.replace(/codename:\s*["'][^"']+["']/, `codename: "${codename}"`);
+  src = src.replace(/displayVersion:\s*["'][^"']+["']/, `displayVersion: "${pkg.version} (${codename})"`);
+  src = src.replace(/Version:\s*[^\n*]+— from src\/core\/version\.ts/, `Version: ${pkg.version} (${codename}) — from src/core/version.ts`);
 
   // Replace github
   src = src.replace(/github:\s*["'][^"']+["']/, `github: "${repoUrl}"`);
@@ -217,6 +220,8 @@ function main(): void {
         const siteContent = readFileSync(SITE_TS_PATH, "utf8");
         if (
           siteContent.includes(`version: "${pkg.version}"`) &&
+          siteContent.includes(`codename: "${codename}"`) &&
+          siteContent.includes(`displayVersion: "${pkg.version} (${codename})"`) &&
           siteContent.includes(pkg.name) &&
           siteContent.includes("github.com/ahmadrrrtx/xr")
         ) {

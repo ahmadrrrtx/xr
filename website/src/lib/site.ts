@@ -8,7 +8,7 @@
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 3.1.5 (Helios) — from src/core/version.ts
+ *   Version: 3.1.6 (Baseline Integrity) — from src/core/version.ts
  */
 
 export const site = {
@@ -21,9 +21,9 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "3.1.5",
-  codename: "Helios",
-  displayVersion: "3.1.5 (Helios)",
+  version: "3.1.6",
+  codename: "Baseline Integrity",
+  displayVersion: "3.1.6 (Baseline Integrity)",
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },

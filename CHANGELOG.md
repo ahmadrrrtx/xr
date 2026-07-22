@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.6] - 2026-07-22
+
+### Added
+- **Phase 0 verified baseline artifacts** under `docs/release/3.1.6/`: source-derived inventory, support matrix, validation report, baseline measurements, release notes, release checklist, audit/design review, and rollback guide.
+- **Baseline validation scripts**: `baseline:inventory`, `baseline:validate`, and `baseline:measure` for reproducible local release evidence.
+- **Stable doctor JSON schema** (`schemaVersion: 1`) reporting version, environment, workspace/database status, redacted configuration, summary, and health checks.
+- **Daemon health metadata**: `/api/health` now includes version, localhost binding, and auth-policy metadata for smoke validation.
+- **Bun tool pin file** `.bun-version` set to `1.3.14`.
+
+### Changed
+- Version identity updated to `3.1.6 (Baseline Integrity)` across package/runtime/website surfaces.
+- `xr doctor` and system status set a nonzero exit code when required baseline checks fail, while optional provider/local-runtime/browser/voice/control warnings remain non-fatal.
+- Docker default command now starts `xr serve --port 7842`, matching the exposed and compose-mapped port.
+- Documentation now distinguishes current verified implementation from roadmap intent, including process-local runtime, in-memory event bus, local daemon/dashboard, and security/isolation limitations.
+
+### Compatibility
+- No workspace database schema migration is introduced by 3.1.6.
+- Public package name, bin name, existing CLI command names, daemon token behavior, provider configuration, memory consent behavior, budget checks, and plugin/skill/MCP compatibility are preserved.
+
+### Known limitations
+- Linux x64 with Bun 1.3.14 is the verified environment for this release artifact; macOS/Windows require separate validation before being claimed verified.
+- Cloud providers, local model runtimes, browser automation, voice, and desktop control remain optional/environment-dependent.
+- XR 4.0 Runtime Kernel, durable event sourcing, container/VM isolation, unified execution fabric, and enterprise control-plane architecture are explicitly deferred.
+
 ## [3.1.5] - 2026-07-09
 
 ### Added
