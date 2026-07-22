@@ -39,13 +39,15 @@ describe("Phase 0 baseline status helpers", () => {
   });
 
   test("safeConfigStatus reports secret presence without values", () => {
-    const old = process.env.OPENAI_API_KEY;
-    process.env.OPENAI_API_KEY = "sk-never-print";
+    const oldSet = process.env.XR_PHASE0_TEST_SECRET_SET;
+    const oldUnset = process.env.XR_PHASE0_TEST_SECRET_UNSET;
+    process.env.XR_PHASE0_TEST_SECRET_SET = "sk-never-print";
+    delete process.env.XR_PHASE0_TEST_SECRET_UNSET;
     try {
       const status = safeConfigStatus({
         path: "/tmp/xr/config.json",
         warnings: [],
-        providerKeyEnvs: ["OPENAI_API_KEY", "GROQ_API_KEY"],
+        providerKeyEnvs: ["XR_PHASE0_TEST_SECRET_SET", "XR_PHASE0_TEST_SECRET_UNSET"],
         config: {
           defaults: { mode: "agent", provider: "ollama", model: "qwen" },
           budget: { perTaskUsd: 0.25, perTaskTokens: 1000 },
@@ -54,12 +56,14 @@ describe("Phase 0 baseline status helpers", () => {
           localModels: { enabled: false, runtime: "ollama", routing: "hybrid" },
         },
       });
-      expect(status.secrets.OPENAI_API_KEY).toBe("set");
-      expect(status.secrets.GROQ_API_KEY).toBe("unset");
+      expect(status.secrets.XR_PHASE0_TEST_SECRET_SET).toBe("set");
+      expect(status.secrets.XR_PHASE0_TEST_SECRET_UNSET).toBe("unset");
       expect(JSON.stringify(status)).not.toContain("sk-never-print");
     } finally {
-      if (old === undefined) delete process.env.OPENAI_API_KEY;
-      else process.env.OPENAI_API_KEY = old;
+      if (oldSet === undefined) delete process.env.XR_PHASE0_TEST_SECRET_SET;
+      else process.env.XR_PHASE0_TEST_SECRET_SET = oldSet;
+      if (oldUnset === undefined) delete process.env.XR_PHASE0_TEST_SECRET_UNSET;
+      else process.env.XR_PHASE0_TEST_SECRET_UNSET = oldUnset;
     }
   });
 

@@ -21,17 +21,40 @@ const FIXTURE = join(import.meta.dir, "fixtures", "shield-fixture.ts");
 
 let home: string;
 
-afterEach(() => {
-  if (home) rmSync(home, { recursive: true, force: true });
+async function rmrfWithRetry(path: string): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      rmSync(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!["EBUSY", "ENOTEMPTY", "EPERM"].includes(code ?? "") || attempt === 9) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+}
+
+afterEach(async () => {
+  if (home) await rmrfWithRetry(home);
 });
 
 describe("XR Shield — honesty doctrine (hermetic)", () => {
+  if (process.platform === "win32") {
+    // The shield fixture intentionally rewrites HOME/XR_HOME in a child
+    // process. That path is Linux/macOS-oriented and Windows support is not
+    // verified for XR 3.1.6, so keep Windows local runs green while CI still
+    // exercises this hermetic suite on Ubuntu.
+    test.skip("scan reality, state management, and audit integrity hold end-to-end", () => {});
+    test.skip("RUNS of the full battery emit every honesty checkpoint", () => {});
+    return;
+  }
+
   test("scan reality, state management, and audit integrity hold end-to-end", async () => {
     home = mkdtempSync(join(tmpdir(), "xr-shield-"));
     const xrHome = join(home, "xr");
     const userHome = join(home, "user");
 
-    const proc = Bun.spawn(["bun", FIXTURE], {
+    const proc = Bun.spawn([process.execPath, FIXTURE], {
       cwd: join(import.meta.dir, "..", ".."),
       env: { ...process.env, XR_HOME: xrHome, HOME: userHome },
       stdout: "pipe",
@@ -53,7 +76,7 @@ describe("XR Shield — honesty doctrine (hermetic)", () => {
     const xrHome = join(home, "xr");
     const userHome = join(home, "user");
 
-    const proc = Bun.spawn(["bun", FIXTURE], {
+    const proc = Bun.spawn([process.execPath, FIXTURE], {
       cwd: join(import.meta.dir, "..", ".."),
       env: { ...process.env, XR_HOME: xrHome, HOME: userHome },
       stdout: "pipe",

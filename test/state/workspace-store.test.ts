@@ -38,8 +38,21 @@ beforeEach(() => {
   dbPath = join(dir, "workspace.db");
 });
 
-afterEach(() => {
-  rmSync(dir, { recursive: true, force: true });
+async function rmrfWithRetry(path: string): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      rmSync(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!["EBUSY", "ENOTEMPTY", "EPERM"].includes(code ?? "") || attempt === 9) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+}
+
+afterEach(async () => {
+  await rmrfWithRetry(dir);
 });
 
 // ── 0.2 unification ─────────────────────────────────────────────────────────

@@ -154,8 +154,10 @@ export class BusinessOS implements LifecycleHook {
     await this.db.initialize();
     this.initialized = true;
 
-    console.log('[XR Business OS] Initialized successfully');
-    console.log(`[XR Business OS] ${Object.keys(this.db.getStats()).length} tables created`);
+    // Startup diagnostics go to stderr so machine-readable CLI stdout
+    // (notably `xr doctor --json`) remains parseable in CI and automation.
+    console.error('[XR Business OS] Initialized successfully');
+    console.error(`[XR Business OS] ${Object.keys(this.db.getStats()).length} tables created`);
   }
 
   /**
