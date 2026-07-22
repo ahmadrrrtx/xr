@@ -1,25 +1,29 @@
 /**
- * XR — XRApp (Runtime Bootstrap Engine)
+ * XR 4.0 — XRApp (Runtime Composition Root)
  *
- * The single, permanent entry point for bringing the XR runtime online.
+ * The single, canonical entry point for bringing the XR runtime online.
  * XRApp owns the typed ServiceRegistry, the event bus, the command registry,
  * the lifecycle manager, the workspace manager, and the background-service
  * manager — and it orchestrates them through a deterministic, dependency-
  * ordered bootstrap → start → shutdown sequence.
  *
  * Service wiring is declarative, not imperative. Each subsystem is a
- * ServiceProvider (see src/core/providers.ts) that registers its own
- * services and declares their dependencies. XRApp simply:
+ * ServiceProvider that registers its own services and declares their
+ * dependencies. XRApp simply:
  *
  *   1. runs every provider's register() (in order) to populate the registry;
  *   2. derives the lifecycle participant set from the registry in dependency
  *      order (no manual lifecycle.register() bookkeeping);
  *   3. drives onInit → onStart → onStop through the LifecycleManager.
  *
- * Adding a future stage (memory engine, research, plugin marketplace, …) is
- * additive: write a provider and call app.use(provider). The bootstrap
- * sequence itself never needs to change — which is exactly what stabilizes
- * the runtime for every stage to come.
+ * XR 4.0 Runtime Kernel additions:
+ *   - Explicit lifecycle state machine (via RuntimeState)
+ *   - Deterministic bootstrap/start/shutdown guards
+ *   - Workspace switch safety (failure recovery, state tracking)
+ *   - Kernel health and diagnostics
+ *   - Structured kernel errors
+ *   - Background service ownership
+ *   - Partial-failure cleanup
  *
  * XRKernel (./kernel.ts) is a thin backward-compatible facade over XRApp so
  * existing consumers keep working unchanged.
@@ -28,11 +32,28 @@
 import { ServiceRegistry } from "./service-registry.ts";
 import { CoreEvents, EventBus } from "./event-bus.ts";
 import { CommandRegistry, type CommandContext } from "./command-registry.ts";
-import { LifecycleManager } from "./lifecycle.ts";
+import { LifecycleManager, RuntimeState } from "./lifecycle.ts";
 import { WorkspaceManager } from "./workspace.ts";
 import { BackgroundServiceManager } from "./services.ts";
 import { Tokens } from "./tokens.ts";
 import { CORE_VERSION, PKG, versionInfo } from "./version.ts";
+import {
+  buildHealthSnapshot,
+  type KernelHealth,
+  type ServiceHealthEntry,
+  type BackgroundJobHealthEntry,
+  type WorkspaceHealthEntry,
+} from "./health.ts";
+import {
+  StartBeforeBootstrapError,
+  DuplicateStartError,
+  ShutdownBeforeBootstrapError,
+  WorkspaceSwitchFailedError,
+  WorkspaceNotFoundError,
+  RuntimeFailedError,
+  ProviderRegistrationFailedError,
+  ProviderInitFailedError,
+} from "./errors.ts";
 // Static import is cycle-free: providers.ts only imports *types* from this
 // module (erased at compile time), so there is no runtime back-edge.
 import {
@@ -90,6 +111,8 @@ export class XRApp {
   private readonly providers: ServiceProvider[] = [];
   private booted = false;
   private started = false;
+  /** Tracks the last workspace switch error for health reporting. */
+  private lastWorkspaceSwitchError?: { from: string; to: string; step: string; error: string };
 
   constructor() {
     this.backgroundServices = new BackgroundServiceManager(this.events);
@@ -115,26 +138,50 @@ export class XRApp {
    * state provider) and shared by every repo and service.
    */
   async bootstrap(): Promise<this> {
-    if (this.booted) return this;
+    if (this.booted) return this; // Idempotent
 
     if (this.providers.length === 0) {
       this.registerDefaultProviders();
     }
 
-    // 1. Registration pass — populate the registry in construction order.
     const ctx = this.providerContext();
-    for (const provider of this.providers) {
-      provider.register(ctx);
+
+    // 1. Registration pass — populate the registry in construction order.
+    try {
+      for (const provider of this.providers) {
+        provider.register(ctx);
+      }
+    } catch (error) {
+      this.events.emit(CoreEvents.KernelFailed, {
+        error: error instanceof Error ? error.message : String(error),
+        timestamp: Date.now(),
+      });
+      throw new ProviderRegistrationFailedError(
+        "unknown",
+        error instanceof Error ? error : undefined,
+      );
     }
 
-    // 2. Async init pass — optional, in provider order (e.g. Business OS).
+    // 2. Async init pass — optional, in provider order.
     for (const provider of this.providers) {
-      if (provider.init) await provider.init(ctx);
+      if (provider.init) {
+        try {
+          await provider.init(ctx);
+        } catch (error) {
+          this.events.emit(CoreEvents.KernelFailed, {
+            error: `Provider "${provider.id}" init failed: ${error instanceof Error ? error.message : String(error)}`,
+            timestamp: Date.now(),
+          });
+          throw new ProviderInitFailedError(
+            provider.id,
+            error instanceof Error ? error : undefined,
+          );
+        }
+      }
     }
 
     // 3. Lifecycle wiring — derive participants from the registry in
-    //    dependency order and feed them to the LifecycleManager. This removes
-    //    every manual lifecycle.register() call the old kernel needed.
+    //    dependency order and feed them to the LifecycleManager.
     const lifecycleHooks = this.registry.lifecycleParticipants();
     this.lifecycle.setParticipants(lifecycleHooks);
 
@@ -151,9 +198,9 @@ export class XRApp {
    */
   async start(): Promise<this> {
     if (!this.booted) {
-      throw new Error("XRApp.start() called before bootstrap() completed.");
+      throw new StartBeforeBootstrapError();
     }
-    if (this.started) return this;
+    if (this.started) return this; // Idempotent
 
     this.registerCoreBackgroundJobs();
     await this.lifecycle.start();
@@ -168,8 +215,13 @@ export class XRApp {
    * hooks in reverse dependency order, and closes the unified store.
    */
   async shutdown(): Promise<this> {
+    // Best-effort: stop even if not fully booted.
     this.backgroundServices.stopAll();
-    await this.lifecycle.stop();
+    try {
+      await this.lifecycle.stop();
+    } catch {
+      /* best-effort stop */
+    }
     this.events.emit(CoreEvents.KernelStopped, { timestamp: Date.now() });
 
     // Close the single unified database connection.
@@ -189,51 +241,100 @@ export class XRApp {
 
   /**
    * Switches the active workspace scope and rebinds workspace-bound resources
-   * to a fresh, isolated store. Mirrors the kernel's 0.2 storage hand-off:
-   * close the old store, open a new one, and re-register the repos and
-   * store-backed services over it.
+   * to a fresh, isolated store.
+   *
+   * XR 4.0: Full error handling with failure recovery. If the switch fails
+   * midway, the runtime enters FAILED state and the error is recorded.
+   * Old workspace data is preserved; the runtime does not silently use a
+   * partially-rebound workspace.
    */
   async switchWorkspace(id: string): Promise<this> {
+    const fromId = this.workspaces.getActiveId();
+
     this.events.emit(CoreEvents.WorkspaceSwitching, {
-      from: this.workspaces.getActiveId(),
+      from: fromId,
       to: id,
       timestamp: Date.now(),
     });
 
-    // 1. Stop background work against the outgoing store.
-    this.backgroundServices.stopAll();
+    // Enter switching state (validates transition).
+    try {
+      this.lifecycle.enterWorkspaceSwitch();
+    } catch (error) {
+      const err = new WorkspaceSwitchFailedError(fromId, id, "state transition", error instanceof Error ? error : undefined);
+      this.lastWorkspaceSwitchError = { from: fromId, to: id, step: "state_transition", error: err.message };
+      this.events.emit(CoreEvents.WorkspaceSwitchFailed, {
+        from: fromId, to: id, error: err.message, step: "state_transition", timestamp: Date.now(),
+      });
+      throw err;
+    }
 
-    // 2. Close the outgoing unified store.
+    // Step 1: Stop background work against the outgoing store.
+    try {
+      this.backgroundServices.stopWorkspaceJobs(fromId);
+    } catch (error) {
+      this.handleWorkspaceSwitchFailure(fromId, id, "stop_background_jobs", error);
+    }
+
+    // Step 2: Get the old store reference BEFORE marking stale.
     const oldStore = this.registry.tryResolve(Tokens.Store);
+
+    // Step 3: Mark workspace-scoped services as stale (prevents use of old resources).
+    this.registry.markWorkspaceScopedStale();
+
+    // Step 4: Close the outgoing unified store.
     if (oldStore) {
       try {
         oldStore.close();
       } catch {
-        /* best-effort */
+        /* best-effort — the store may already be closed */
       }
     }
 
-    // 3. Activate the new workspace.
-    this.workspaces.setActiveId(id);
-
-    // 4. Re-run workspace-scoped providers so the store, repos, and
-    //    store-backed services are rebound to the new workspace connection.
-    const ctx = this.providerContext();
-    for (const provider of this.providers) {
-      if (!provider.workspaceScoped) continue;
-      provider.register(ctx);
-    }
-    for (const provider of this.providers) {
-      if (!provider.workspaceScoped) continue;
-      if (provider.init) await provider.init(ctx);
+    // Step 4: Activate the new workspace.
+    try {
+      this.workspaces.setActiveId(id);
+    } catch (error) {
+      this.handleWorkspaceSwitchFailure(fromId, id, "activate_workspace", error);
     }
 
-    // 5. Refresh lifecycle participants so workspace-scoped replacements are
+    // Step 5: Re-run workspace-scoped providers (store, repos, store-backed services).
+    try {
+      this.registry.beginRebinding();
+      const ctx = this.providerContext();
+      for (const provider of this.providers) {
+        if (!provider.workspaceScoped) continue;
+        provider.register(ctx);
+      }
+      for (const provider of this.providers) {
+        if (!provider.workspaceScoped) continue;
+        if (provider.init) await provider.init(ctx);
+      }
+      this.registry.endRebinding();
+    } catch (error) {
+      this.registry.endRebinding();
+      this.handleWorkspaceSwitchFailure(fromId, id, "rebind_providers", error);
+    }
+
+    // Step 6: Refresh lifecycle participants so workspace-scoped replacements are
     //    the instances that will receive future onStop calls.
-    this.lifecycle.setParticipants(this.registry.lifecycleParticipants());
+    try {
+      this.lifecycle.setParticipants(this.registry.lifecycleParticipants());
+    } catch (error) {
+      this.handleWorkspaceSwitchFailure(fromId, id, "refresh_lifecycle", error);
+    }
 
-    // 6. Resume background work against the new store.
-    this.backgroundServices.startAll();
+    // Step 7: Resume background work against the new store.
+    try {
+      this.backgroundServices.setCurrentWorkspace(id);
+      this.backgroundServices.startWorkspaceJobs(id);
+    } catch (error) {
+      this.handleWorkspaceSwitchFailure(fromId, id, "start_background_jobs", error);
+    }
+
+    // Success — exit switching state.
+    this.lifecycle.exitWorkspaceSwitch(true);
+    this.lastWorkspaceSwitchError = undefined;
 
     this.events.emit(CoreEvents.WorkspaceSwitched, { active: id, timestamp: Date.now() });
     return this;
@@ -249,6 +350,115 @@ export class XRApp {
       cwd,
     };
     await this.commands.run(name, args, commandContext);
+  }
+
+  // ── Health & Diagnostics ────────────────────────────────────────────────
+
+  /**
+   * Get the current lifecycle state.
+   */
+  getState(): RuntimeState {
+    return this.lifecycle.getState();
+  }
+
+  /**
+   * Whether the runtime is fully operational.
+   */
+  isReady(): boolean {
+    return this.lifecycle.isOperational();
+  }
+
+  /**
+   * Whether the runtime has been bootstrapped.
+   */
+  isBootstrapped(): boolean {
+    return this.booted;
+  }
+
+  /**
+   * Whether the runtime has been started.
+   */
+  isStarted(): boolean {
+    return this.started;
+  }
+
+  /**
+   * Build a kernel health snapshot. This is a pure, cheap operation that
+   * reads current state without mutating anything.
+   */
+  getHealth(): KernelHealth {
+    const state = this.lifecycle.getState();
+
+    // Build service health entries from registry inspection.
+    const serviceEntries: ServiceHealthEntry[] = this.registry.inspectionSnapshot().map((entry) => {
+      let readiness: ServiceHealthEntry["readiness"];
+      if (entry.stale) {
+        readiness = "failed"; // stale = unusable
+      } else if (entry.resolved || entry.scope === "value") {
+        readiness = "ready";
+      } else if (this.registry.has({ id: entry.id } as any)) {
+        readiness = "pending"; // registered but not yet resolved
+      } else {
+        readiness = "not_registered";
+      }
+      return {
+        id: entry.id,
+        description: entry.description,
+        readiness,
+        scope: entry.kernelScope ?? entry.scope,
+        lifecycle: entry.lifecycle,
+        resolved: entry.resolved,
+      };
+    });
+
+    // Build background job health.
+    const jobEntries: BackgroundJobHealthEntry[] = this.backgroundServices.listJobs().map((job) => ({
+      id: job.id,
+      name: job.name,
+      active: job.active,
+      intervalMs: job.intervalMs,
+      owner: job.owner,
+      workspaceId: job.workspaceId,
+      failureCount: job.failureCount,
+    }));
+
+    // Workspace health.
+    const store = this.registry.tryResolve(Tokens.Store);
+    const workspace: WorkspaceHealthEntry = {
+      activeId: this.workspaces.getActiveId(),
+      storeOpen: !!store,
+      connectionCount: store ? 1 : 0,
+      dbPath: store?.dbPath,
+    };
+
+    // Collect errors.
+    const errors: Array<{ service?: string; detail?: string }> = [];
+    if (this.lastWorkspaceSwitchError) {
+      errors.push({
+        service: "workspace.switch",
+        detail: `${this.lastWorkspaceSwitchError.from} → ${this.lastWorkspaceSwitchError.to}: ${this.lastWorkspaceSwitchError.error}`,
+      });
+    }
+    for (const result of this.lifecycle.getHookResults()) {
+      if (!result.success) {
+        errors.push({ service: result.service, detail: result.error });
+      }
+    }
+
+    return buildHealthSnapshot({
+      runtimeState: state,
+      bootstrapped: this.booted,
+      started: this.started,
+      version: {
+        version: PKG.version,
+        codename: PKG.codename,
+        display: `${PKG.version} (${PKG.codename})`,
+      },
+      services: serviceEntries,
+      backgroundJobs: jobEntries,
+      workspace,
+      errors: errors.length ? errors : undefined,
+    });
   }
 
   // ── Default provider set ────────────────────────────────────────────────
@@ -292,6 +502,25 @@ export class XRApp {
   }
 
   /**
+   * Handle workspace switch failure: record the error, emit event,
+   * mark lifecycle as failed.
+   */
+  private handleWorkspaceSwitchFailure(
+    from: string,
+    to: string,
+    step: string,
+    error: unknown,
+  ): never {
+    const msg = error instanceof Error ? error.message : String(error);
+    this.lastWorkspaceSwitchError = { from, to, step, error: msg };
+    this.lifecycle.exitWorkspaceSwitch(false);
+    this.events.emit(CoreEvents.WorkspaceSwitchFailed, {
+      from, to, error: msg, step, timestamp: Date.now(),
+    });
+    throw new WorkspaceSwitchFailedError(from, to, step, error instanceof Error ? error : undefined);
+  }
+
+  /**
    * Registers the default OS background maintenance & monitor routines.
    * Each job resolves its collaborators lazily through typed tokens, so a job
    * never holds a stale reference after a workspace switch.
@@ -302,6 +531,8 @@ export class XRApp {
       id: "security_monitor",
       name: "Shield Security Threat and Lolbins Monitor",
       intervalMs: 30000,
+      owner: "xr.kernel",
+      restartOnWorkspaceSwitch: true,
       run: async () => {
         try {
           const shield = this.registry.resolve(Tokens.Shield);
@@ -320,6 +551,8 @@ export class XRApp {
       id: "budget_checker",
       name: "Spend Governor and Budget Safety Guard",
       intervalMs: 10000,
+      owner: "xr.kernel",
+      restartOnWorkspaceSwitch: true,
       run: async () => {
         try {
           const budget = this.registry.resolve(Tokens.Budget);
@@ -338,6 +571,8 @@ export class XRApp {
       id: "memory_pruner",
       name: "Durable Memory Expiry & Pruner",
       intervalMs: 300000,
+      owner: "xr.kernel",
+      restartOnWorkspaceSwitch: true,
       run: async () => {
         try {
           const store = this.registry.resolve(Tokens.Store);

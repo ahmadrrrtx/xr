@@ -12,6 +12,8 @@
  * Providers reference service implementations directly, but the token/type
  * plumbing in ./app.ts and ./tokens.ts is imported as types only, so there is
  * no runtime import cycle back into the core bootstrap.
+ *
+ * XR 4.0: Providers now declare `kernelScope` metadata for diagnostics.
  */
 
 import type { ProviderContext, ServiceProvider } from "./app.ts";
@@ -53,18 +55,42 @@ export class StateServiceProvider implements ServiceProvider {
     const store = new WorkspaceStore(activeWorkspace.id, activeWorkspace.dbPath);
 
     // One unified store; LegacyStore is the same instance for back-compat.
-    ctx.registry.registerValue(Tokens.Store, store, { description: "unified workspace store" });
+    ctx.registry.registerValue(Tokens.Store, store, {
+      description: "unified workspace store",
+      kernelScope: "workspace",
+      owner: "state",
+    });
     ctx.registry.registerValue(Tokens.LegacyStore, store, {
       description: "alias of Store (back-compat)",
+      kernelScope: "workspace",
+      owner: "state",
     });
 
     // Repos are typed views over the single connection.
-    ctx.registry.registerValue(Tokens.SessionStore, new SessionRepo(store));
-    ctx.registry.registerValue(Tokens.AuditStore, new AuditRepo(store));
-    ctx.registry.registerValue(Tokens.CostStore, new CostRepo(store));
-    ctx.registry.registerValue(Tokens.UserMemoryStore, new UserMemoryRepo(store));
-    ctx.registry.registerValue(Tokens.SkillStore, new SkillRepo(store));
-    ctx.registry.registerValue(Tokens.WorkflowStore, new WorkflowRepo(store));
+    ctx.registry.registerValue(Tokens.SessionStore, new SessionRepo(store), {
+      kernelScope: "workspace",
+      owner: "state",
+    });
+    ctx.registry.registerValue(Tokens.AuditStore, new AuditRepo(store), {
+      kernelScope: "workspace",
+      owner: "state",
+    });
+    ctx.registry.registerValue(Tokens.CostStore, new CostRepo(store), {
+      kernelScope: "workspace",
+      owner: "state",
+    });
+    ctx.registry.registerValue(Tokens.UserMemoryStore, new UserMemoryRepo(store), {
+      kernelScope: "workspace",
+      owner: "state",
+    });
+    ctx.registry.registerValue(Tokens.SkillStore, new SkillRepo(store), {
+      kernelScope: "workspace",
+      owner: "state",
+    });
+    ctx.registry.registerValue(Tokens.WorkflowStore, new WorkflowRepo(store), {
+      kernelScope: "workspace",
+      owner: "state",
+    });
   }
 }
 
@@ -76,7 +102,7 @@ export class ConfigServiceProvider implements ServiceProvider {
     ctx.registry.registerSingleton(
       Tokens.Config,
       () => new ConfigService(),
-      { lifecycle: true, dependsOn: [] },
+      { lifecycle: true, dependsOn: [], kernelScope: "process", owner: "config" },
     );
   }
 }
@@ -89,7 +115,7 @@ export class LlmServiceProvider implements ServiceProvider {
     ctx.registry.registerSingleton(
       Tokens.Providers,
       (registry) => new ProviderService(registry),
-      { lifecycle: true, dependsOn: [Tokens.Config] },
+      { lifecycle: true, dependsOn: [Tokens.Config], kernelScope: "process", owner: "providers" },
     );
   }
 }
@@ -106,7 +132,7 @@ export class BudgetServiceProvider implements ServiceProvider {
     ctx.registry.registerSingleton(
       Tokens.Budget,
       (registry) => new BudgetService(registry),
-      { lifecycle: true, dependsOn: [Tokens.CostStore] },
+      { lifecycle: true, dependsOn: [Tokens.CostStore], kernelScope: "workspace", owner: "budget" },
     );
   }
 }
@@ -119,7 +145,7 @@ export class PluginServiceProvider implements ServiceProvider {
     ctx.registry.registerSingleton(
       Tokens.Plugins,
       (registry) => new PluginService(registry),
-      { lifecycle: true, dependsOn: [Tokens.Config, Tokens.Store] },
+      { lifecycle: true, dependsOn: [Tokens.Config, Tokens.Store], kernelScope: "process", owner: "plugins" },
     );
   }
 }
@@ -132,7 +158,7 @@ export class McpServiceProvider implements ServiceProvider {
     ctx.registry.registerSingleton(
       Tokens.Mcp,
       (registry) => new McpService(registry),
-      { lifecycle: true, dependsOn: [Tokens.Store] },
+      { lifecycle: true, dependsOn: [Tokens.Store], kernelScope: "process", owner: "mcp" },
     );
   }
 }
@@ -145,7 +171,7 @@ export class SkillServiceProvider implements ServiceProvider {
     ctx.registry.registerSingleton(
       Tokens.Skills,
       () => new SkillService(),
-      { lifecycle: true, dependsOn: [] },
+      { lifecycle: true, dependsOn: [], kernelScope: "process", owner: "skills" },
     );
   }
 }
@@ -176,6 +202,8 @@ export class AgentServiceProvider implements ServiceProvider {
           Tokens.AuditStore,
           Tokens.Store,
         ],
+        kernelScope: "workspace",
+        owner: "agent",
       },
     );
   }
@@ -198,6 +226,8 @@ export class MultiAgentServiceProvider implements ServiceProvider {
           Tokens.Events,
           Tokens.Agent,
         ],
+        kernelScope: "workspace",
+        owner: "multi-agents",
       },
     );
   }
@@ -217,6 +247,8 @@ export class ShieldServiceProvider implements ServiceProvider {
     ctx.registry.registerValue(Tokens.Shield, new XRShieldService(store), {
       lifecycle: true,
       dependsOn: [Tokens.Store],
+      kernelScope: "workspace",
+      owner: "shield",
     });
   }
 }
@@ -241,6 +273,8 @@ export class BusinessServiceProvider implements ServiceProvider {
     ctx.registry.registerValue(Tokens.Business, this.instance, {
       lifecycle: this.enabled,
       dependsOn: [Tokens.Store],
+      kernelScope: "workspace",
+      owner: "business",
     });
   }
 
