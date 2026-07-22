@@ -61,7 +61,7 @@ describe("xr doctor --json baseline contract", () => {
     const result = await runDoctor();
     expect(result.code).toBe(0);
     expect(result.json.schemaVersion).toBe(1);
-    expect(result.json.version.version).toBe("3.1.6");
+    expect(result.json.version.version).toBe("4.0.0");
     expect(result.json.environment.bun).toBeString();
     expect(result.json.workspace.dbPath).toBeString();
     expect(result.json.config.secrets).toBeObject();

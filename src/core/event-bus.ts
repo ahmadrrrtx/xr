@@ -6,6 +6,9 @@
  * XRCoreEventMap. Unknown extension events are still supported for plugins and
  * future stages, but core runtime code should emit through CoreEvents so event
  * naming and payload shape stay consistent.
+ *
+ * XR 4.0: Added kernel health, workspace switch safety, and background job
+ * owner events.
  */
 
 import type { VersionInfo } from "./version.ts";
@@ -22,9 +25,11 @@ export const CoreEvents = {
   KernelBootstrapped: "kernel.bootstrapped",
   KernelStarted: "kernel.started",
   KernelStopped: "kernel.stopped",
+  KernelFailed: "kernel.failed",
 
   WorkspaceSwitching: "workspace.switching",
   WorkspaceSwitched: "workspace.switched",
+  WorkspaceSwitchFailed: "workspace.switch_failed",
 
   ServicesStarted: "services.started",
   ServicesStopped: "services.stopped",
@@ -58,6 +63,7 @@ export interface LifecycleEventPayload {
   service?: string;
   index?: number;
   total?: number;
+  detail?: string;
   timestamp: number;
 }
 
@@ -70,16 +76,18 @@ export interface XRCoreEventMap {
   [CoreEvents.KernelBootstrapped]: VersionInfo & { timestamp: number };
   [CoreEvents.KernelStarted]: { timestamp: number };
   [CoreEvents.KernelStopped]: { timestamp: number };
+  [CoreEvents.KernelFailed]: { error: string; timestamp: number };
 
   [CoreEvents.WorkspaceSwitching]: { from: string; to: string; timestamp: number };
   [CoreEvents.WorkspaceSwitched]: { active: string; timestamp: number };
+  [CoreEvents.WorkspaceSwitchFailed]: { from: string; to: string; error: string; step: string; timestamp: number };
 
   [CoreEvents.ServicesStarted]: { timestamp: number; jobs: number };
   [CoreEvents.ServicesStopped]: { timestamp: number };
-  [CoreEvents.ServiceJobRegistered]: { id: string; name: string; intervalMs: number; timestamp: number };
+  [CoreEvents.ServiceJobRegistered]: { id: string; name: string; intervalMs: number; owner?: string; workspaceId?: string; timestamp: number };
   [CoreEvents.ServiceJobUnregistered]: { id: string; timestamp: number };
   [CoreEvents.ServiceJobSucceeded]: { id: string; name: string; timestamp: number };
-  [CoreEvents.ServiceJobFailed]: { id: string; name: string; error: string; timestamp: number };
+  [CoreEvents.ServiceJobFailed]: { id: string; name: string; error: string; failureCount?: number; timestamp: number };
 
   [CoreEvents.SecurityThreatsDetected]: { threats: unknown[]; timestamp: number };
   [CoreEvents.BudgetOverLimit]: { status: unknown; timestamp: number };

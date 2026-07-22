@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "3.1.6",
-  codename: "Baseline Integrity",
+  version: "4.0.0",
+  codename: "Runtime Kernel",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 3.1.6 (Baseline Integrity) — verified local-first AI runtime baseline with reproducible validation, diagnostics, support matrix, and release artifacts.",
+  description: "XR 4.0 (Runtime Kernel) — stable, coherent, observable runtime kernel with explicit lifecycle, dependency-safe service registry, workspace-safe rebinding, owned background services, and kernel health diagnostics.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;

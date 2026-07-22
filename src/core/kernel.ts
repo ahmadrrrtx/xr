@@ -1,5 +1,5 @@
 /**
- * XR — XRKernel (Backward-Compatible Facade over XRApp)
+ * XR 4.0 — XRKernel (Backward-Compatible Facade over XRApp)
  *
  * XRApp (./app.ts) is the real runtime bootstrap engine. XRKernel remains as
  * a thin, stable facade so existing consumers — the CLI router, the workspace
@@ -10,16 +10,19 @@
  * class exists to make the Phase 1 stabilization a non-breaking migration.
  *
  * Version identity is the single source of truth in src/core/version.ts.
+ *
+ * XR 4.0: Forwards new health, lifecycle state, and diagnostic methods.
  */
 
 import { XRApp } from "./app.ts";
 import { ServiceRegistry } from "./service-registry.ts";
 import { EventBus } from "./event-bus.ts";
 import { CommandRegistry } from "./command-registry.ts";
-import { LifecycleManager } from "./lifecycle.ts";
+import { LifecycleManager, RuntimeState } from "./lifecycle.ts";
 import { WorkspaceManager } from "./workspace.ts";
 import { BackgroundServiceManager } from "./services.ts";
 import { CORE_VERSION, PKG } from "./version.ts";
+import type { KernelHealth } from "./health.ts";
 
 export class XRKernel {
   /** @deprecated Use CORE_VERSION from src/core/version.ts — kept for backward compat. */
@@ -101,5 +104,35 @@ export class XRKernel {
   /** Execute a registered CLI/TUI command. */
   async executeCommand(name: string, args: string[], cwd: string): Promise<void> {
     await this.app.executeCommand(name, args, cwd);
+  }
+
+  // ── XR 4.0: New kernel API methods ─────────────────────────────────────
+
+  /** Get the current lifecycle state. */
+  getState(): RuntimeState {
+    return this.app.getState();
+  }
+
+  /** Whether the runtime is fully operational. */
+  isReady(): boolean {
+    return this.app.isReady();
+  }
+
+  /** Whether the runtime has been bootstrapped. */
+  isBootstrapped(): boolean {
+    return this.app.isBootstrapped();
+  }
+
+  /** Whether the runtime has been started. */
+  isStarted(): boolean {
+    return this.app.isStarted();
+  }
+
+  /**
+   * Build a kernel health snapshot. Cheap, pure operation — reads current
+   * state without side effects. Suitable for CLI, daemon API, and tests.
+   */
+  getHealth(): KernelHealth {
+    return this.app.getHealth();
   }
 }
