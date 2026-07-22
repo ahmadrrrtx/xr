@@ -16,9 +16,10 @@ COPY tsconfig.json ./
 ENV XR_HOME=/data
 VOLUME ["/data"]
 
-# Dashboard port (127.0.0.1 inside the container; map with -p 127.0.0.1:7842:7842)
+# Dashboard port. The daemon binds to 127.0.0.1 inside the container; publish
+# the container port to 127.0.0.1 on the host (see docker-compose.yml).
 EXPOSE 7842
 
-# Default: start the local dashboard daemon.
+# Default: start the local dashboard daemon on the documented container port.
 ENTRYPOINT ["bun", "run", "src/index.ts"]
-CMD ["serve"]
+CMD ["serve", "--port", "7842"]

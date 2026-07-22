@@ -5,10 +5,11 @@
 #
 #   1. typecheck     — bunx tsc --noEmit        (static type safety)
 #   2. test          — bun test                 (unit + integration suite)
-#   3. version-sync  — bun run set-version:check (0.1 identity invariant:
+#   3. version-sync  — bun run set-version:check (identity invariant:
 #                                                 package.json, version.ts and
 #                                                 website must never drift)
-#   4. quality-gate  — aggregation job; THIS is the check to mark as required
+#   4. baseline      — bun run baseline:inventory (Phase 0 source-derived inventory)
+#   5. quality-gate  — aggregation job; THIS is the check to mark as required
 #                      in branch protection so a failure in any of the above
 #                      blocks the merge (OpenHands pattern).
 #
@@ -16,9 +17,9 @@
 # manual runs via workflow_dispatch.
 #
 # Design notes:
-#   - Bun version is pinned by the `packageManager: bun@1.2.0` field in
-#     package.json; oven-sh/setup-bun reads it automatically (single source of
-#     truth for the toolchain version).
+#   - Bun version is pinned by the `packageManager: bun@1.3.14` field in
+#     package.json and `.bun-version`; oven-sh/setup-bun reads package metadata
+#     as the single source of truth for CI toolchain setup.
 #   - Dependencies are installed with --frozen-lockfile: the PR fails fast if
 #     bun.lock and package.json disagree.
 #   - The global Bun cache (~/.bun/install/cache) is cached between runs, keyed
@@ -88,7 +89,25 @@ jobs:
       - name: Verify package.json ↔ version.ts ↔ website are in sync
         run: bun run set-version:check
 
-  # ── 3. Test suite ──────────────────────────────────────────────────────────
+  # ── 3. Phase 0 source-derived baseline inventory ──────────────────────────
+  baseline:
+    name: Baseline inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Generate source-derived inventory
+        run: bun run baseline:inventory
+
+  # ── 4. Test suite ──────────────────────────────────────────────────────────
   test:
     name: Test (bun test)
     runs-on: ubuntu-latest
@@ -114,14 +133,14 @@ jobs:
       - name: Run test suite
         run: bun test
 
-  # ── 4. Aggregation: the single status check required by branch protection ──
+  # ── 5. Aggregation: the single status check required by branch protection ──
   # Runs even when a dependency fails (if: always()), then asserts every
   # upstream job succeeded. Mark "Quality Gate" as a required status check in
   # Settings → Branches so failing typecheck/tests/version-sync blocks merges.
   quality-gate:
     name: Quality Gate
     if: always()
-    needs: [typecheck, version-sync, test]
+    needs: [typecheck, version-sync, baseline, test]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

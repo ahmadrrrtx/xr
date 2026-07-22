@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-22T09:50:10.476Z",
+  "version": {
+    "name": "@rrrtx/xr",
+    "version": "3.1.6",
+    "codename": "Baseline Integrity",
+    "display": "3.1.6 (Baseline Integrity)",
+    "displayVersion": "3.1.6 (Baseline Integrity)",
+    "repo": "https://github.com/ahmadrrrtx/xr",
+    "homepage": "https://xr-gules.vercel.app",
+    "npm": "https://www.npmjs.com/package/@rrrtx/xr",
+    "description": "XR 3.1.6 (Baseline Integrity) — verified local-first AI runtime baseline with reproducible validation, diagnostics, support matrix, and release artifacts.",
+    "author": "Muhammad Ahmad (@ahmadrrrtx)",
+    "license": "MIT",
+    "pluginApi": 2
+  },
+  "environment": {
+    "bun": "1.3.14",
+    "node": "v24.3.0",
+    "os": "linux",
+    "arch": "x64",
+    "release": "6.1.158+",
+    "cpu": "linux/x64",
+    "memory": {
+      "totalBytes": 2088390656,
+      "freeBytes": 1344999424
+    },
+    "ci": false,
+    "tty": false
+  },
+  "commit": "450263690fd0e9f6e649e20b635be95450d2136c",
+  "isolatedHome": "/tmp/xr-validate-1784713797479",
+  "status": "pass",
+  "steps": [
+    {
+      "id": "version-sync",
+      "command": [
+        "bun",
+        "run",
+        "set-version:check"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 34.201769,
+      "stdoutTail": "[set-version] package.json → @rrrtx/xr@3.1.6\n[set-version] ✓ src/core/version.ts is in sync (v3.1.6 Baseline Integrity)\n[set-version] ✓ website/src/lib/site.ts looks in sync\n",
+      "stderrTail": "$ bun run scripts/set-version.ts --check\n"
+    },
+    {
+      "id": "typecheck",
+      "command": [
+        "bun",
+        "run",
+        "typecheck"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 8026.933785,
+      "stdoutTail": "",
+      "stderrTail": "$ tsc --noEmit\n"
+    },
+    {
+      "id": "test",
+      "command": [
+        "bun",
+        "test"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 3922.777846,
+      "stdoutTail": "bun test v1.3.14 (0d9b296a)\n  [sensitive] Open https://example.com — opens https://example.com\n[XR Business OS] Initialized successfully\n[XR Business OS] 33 tables created\n\u001b[32m[browser] sandbox ENABLED (secure production mode)\u001b[0m\n",
+      "stderrTail": "s detected [12.12ms]\n(pass) tamper-evident audit chain > API keys and bearer tokens are redacted before persistence [1.74ms]\n(pass) durable user memory (Stage 6 retention) > listMemory hides exclusions unless explicitly requested [1.86ms]\n(pass) durable user memory (Stage 6 retention) > scope filter returns global + the scope, never another scope [3.36ms]\n(pass) durable user memory (Stage 6 retention) > expired entries vanish from recall and are pruned permanently [1.89ms]\n(pass) durable user memory (Stage 6 retention) > touchMemoryAccess bumps access_count and last_accessed_at [1.61ms]\n(pass) durable user memory (Stage 6 retention) > editing content/tags invalidates the cached embedding [1.55ms]\n(pass) durable user memory (Stage 6 retention) > session summaries stay separate from long-term memory [1.65ms]\n(pass) budget configuration singleton > upsert keeps exactly one row and preserves unset fields [1.39ms]\n(pass) budget configuration singleton > getSpendForPeriod only aggregates costs inside the window [1.44ms]\n(pass) workflow persistence > saveWorkflow persists parent + tasks and upserts idempotently [1.85ms]\n(pass) workflow persistence > research sessions insert then update without duplicating [1.51ms]\n(pass) workflow persistence > schedules CRUD round-trips [1.53ms]\n(pass) 0.5 Business OS adapter surface > prepare() + transaction() expose the raw statement surface [1.46ms]\n(pass) 0.5 Business OS adapter surface > project memory is deduped by (project, kind, content) [1.42ms]\n\ntest/util/process.test.ts:\n(pass) Async Utilities — Process Handling > runCommand does not block the event loop [2.00ms]\n(pass) Async Utilities — Process Handling > runCommand completes for a short-lived process [1.93ms]\n(pass) Async Utilities — Process Handling > runCommand kills process after timeout and reports timeout [301.10ms]\n(pass) Async Utilities — Process Handling > runCommand writes input to child stdin [2.29ms]\n(pass) Async Utilities — Process Handling > runCommand handles Uint8Array input [1.90ms]\n(pass) Async Utilities — Process Handling > runCommand respects maxBuffer and truncates output [32.24ms]\n(pass) Async Utilities — Process Handling > runCommand handles non-existent command gracefully [0.47ms]\n(pass) Async Utilities — Process Handling > runCommand handles invalid command name gracefully [0.12ms]\n(pass) Async Utilities — Process Handling > runCommand supports shell option [5.34ms]\n(pass) Async Utilities — Process Handling > commandExists > commandExists caches positive result [1.63ms]\n(pass) Async Utilities — Process Handling > commandExists > commandExists caches negative result [1.48ms]\n(pass) Async Utilities — Process Handling > commandExists > clearCommandExistsCache resets memo [4.86ms]\n(pass) Async Utilities — Process Handling > spawnAndWait > spawnAndWait completes for quick command [1.74ms]\n(pass) Async Utilities — Process Handling > spawnAndWait > spawnAndWait reports timeout for long command [202.13ms]\n(pass) Async Utilities — Process Handling > runCapture > runCapture returns combined stdout+stderr [2.22ms]\n(pass) Async Utilities — Process Handling > multiple concurrent runCommand calls do not block each other [5.06ms]\n\ntest/baseline/status.test.ts:\n(pass) Phase 0 baseline status helpers > summarizeHealthChecks allows optional warnings but fails required checks [1.72ms]\n(pass) Phase 0 baseline status helpers > redactValue redacts secret-like keys recursively [0.33ms]\n(pass) Phase 0 baseline status helpers > safeConfigStatus reports secret presence without values [0.26ms]\n(pass) Phase 0 baseline status helpers > workspaceStatus is deterministic for missing database [0.08ms]\n\ntest/baseline/doctor.test.ts:\n(pass) xr doctor --json baseline contract > emits schema version, version, environment, workspace, config, summary, and checks [375.83ms]\n(pass) xr doctor --json baseline contract > does not leak configured provider secret values [679.94ms]\n\n 464 pass\n 0 fail\n 2193 expect() calls\nRan 464 tests across 42 files. [3.89s]\n"
+    },
+    {
+      "id": "inventory",
+      "command": [
+        "bun",
+        "run",
+        "scripts/baseline-inventory.ts"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 43.2227469999998,
+      "stdoutTail": "wrote docs/release/3.1.6/inventory.json and INVENTORY.md\n",
+      "stderrTail": ""
+    },
+    {
+      "id": "cli-version",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "--version"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 125.07417200000054,
+      "stdoutTail": "v3.1.6 (Baseline Integrity)\n",
+      "stderrTail": ""
+    },
+    {
+      "id": "cli-help",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "help"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 130.71925399999964,
+      "stdoutTail": "                   run a task in agent mode (default for free-form input)\n  xr ask                                 answer a question without tools (read-only, cheap)\n  xr plan                                produce a step-by-step plan without executing tools\n  xr research                            source-first research with citable reports\n  xr agents                              multi-agent supervisor workflows\n  xr control                             safe desktop and browser computer control\n  xr voice                               voice input/output (opt-in)\n\n  Context\n  ──────────────────────────────────────────────\n  xr workspace                           list, create, switch, or delete workspaces\n  xr session                             list, inspect, or export past sessions\n  xr memory                              durable, inspectable, user-controlled memory\n  xr config                              view or update configuration\n\n  Intelligence\n  ──────────────────────────────────────────────\n  xr providers                           manage LLM providers — list, set primary model, add keys, test\n  xr models                              local models — recommend, install, list, set, test (change model anytime)\n  xr budget                              view and set spend caps\n\n  Extensions\n  ──────────────────────────────────────────────\n  xr skills                              unified skills runtime + marketplace\n  xr plugins                             discover, install, enable, and manage plugins\n  xr mcp                                 Model Context Protocol servers\n\n  Trust & safety\n  ──────────────────────────────────────────────\n  xr shield                              local security, privacy, and system integrity\n  xr audit                               tamper-evident audit log: tail, verify, export\n  xr attacks                             run prompt-injection defense benchmark\n\n  System\n  ──────────────────────────────────────────────\n  xr doctor                              full system health check + repair hints\n  xr status                              installation and component status\n  xr update                              check for updates and install with rollback guard\n  xr repair                              repair config, permissions, and dependencies safely\n  xr logs                                show recent XR runtime / audit activity\n\n  Global flags\n  ──────────────────────────────────────────────\n  --help, -h                           show help\n  --version, -v                        print version\n  --json                               machine-readable JSON on stdout\n  --yaml                               YAML output (where supported)\n  --format text|json|yaml|markdown     output format\n  --quiet, -q                          suppress non-essential output\n  --verbose                            extra detail\n  --debug                              debug mode (also XR_DEBUG=1)\n  --no-color                           disable ANSI color (also NO_COLOR=1)\n  --yes, -y                            assume yes for confirmations\n  --workspace <id>                     target workspace\n  --mode agent|plan|ask                execution mode\n  --model <name>                       model override\n  --provider <id>                      provider override\n  --budget <usd>                       per-task spend ceiling\n  --dry-run                            simulate without side effects\n\n  Modes  (same in Shell · Control Center · CLI)\n  ──────────────────────────────────────────────\n  agent  execute tools, write files, run shell (approvals enforced)\n  plan   produce a plan only — no tool execution\n  ask    answer-only, read-only, cheap\n\n  Topic help:  xr help <topic>\n  Topics:  shell  providers  models  memory  security  skills  research  workspace  budget  scripting\n\n  Docs     https://github.com/ahmadrrrtx/xr\n  Website  https://xr-gules.vercel.app\n\n  › A user should not need docs for common tasks — try xr doctor and xr \"hello\".\n\n",
+      "stderrTail": ""
+    },
+    {
+      "id": "doctor-json",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "doctor",
+        "--json"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 368.095996,
+      "stdoutTail": "d\": \"provider-together\",\n      \"label\": \"Provider: together\",\n      \"state\": \"fail\",\n      \"detail\": \"API key TOGETHER_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-fireworks\",\n      \"label\": \"Provider: fireworks\",\n      \"state\": \"fail\",\n      \"detail\": \"API key FIREWORKS_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-sambanova\",\n      \"label\": \"Provider: sambanova\",\n      \"state\": \"fail\",\n      \"detail\": \"API key SAMBANOVA_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-xai\",\n      \"label\": \"Provider: xai\",\n      \"state\": \"fail\",\n      \"detail\": \"API key XAI_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-perplexity\",\n      \"label\": \"Provider: perplexity\",\n      \"state\": \"fail\",\n      \"detail\": \"API key PERPLEXITY_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-huggingface\",\n      \"label\": \"Provider: huggingface\",\n      \"state\": \"fail\",\n      \"detail\": \"API key HF_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-cerebras\",\n      \"label\": \"Provider: cerebras\",\n      \"state\": \"fail\",\n      \"detail\": \"API key CEREBRAS_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-anthropic\",\n      \"label\": \"Provider: anthropic\",\n      \"state\": \"fail\",\n      \"detail\": \"API key ANTHROPIC_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-google\",\n      \"label\": \"Provider: google\",\n      \"state\": \"fail\",\n      \"detail\": \"API key GOOGLE_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-mistral\",\n      \"label\": \"Provider: mistral\",\n      \"state\": \"fail\",\n      \"detail\": \"API key MISTRAL_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-cohere\",\n      \"label\": \"Provider: cohere\",\n      \"state\": \"fail\",\n      \"detail\": \"API key COHERE_API_KEY not set\"\n    },\n    {\n      \"id\": \"provider-bedrock\",\n      \"label\": \"Provider: bedrock\",\n      \"state\": \"warn\",\n      \"detail\": \"AWS credentials not configured\"\n    },\n    {\n      \"id\": \"provider-openai\",\n      \"label\": \"Provider: openai\",\n      \"state\": \"fail\",\n      \"detail\": \"API key OPENAI_API_KEY not set\"\n    },\n    {\n      \"id\": \"research\",\n      \"label\": \"Research engine\",\n      \"state\": \"ok\",\n      \"detail\": \"0 sessions\"\n    },\n    {\n      \"id\": \"voice-microphone-tools\",\n      \"label\": \"Microphone capture\",\n      \"state\": \"fail\",\n      \"detail\": \"no recorder found\"\n    },\n    {\n      \"id\": \"voice-speaker-tools\",\n      \"label\": \"Speaker playback\",\n      \"state\": \"warn\",\n      \"detail\": \"no player found\"\n    },\n    {\n      \"id\": \"voice-input-devices\",\n      \"label\": \"Input devices\",\n      \"state\": \"ok\",\n      \"detail\": \"1 detected\"\n    },\n    {\n      \"id\": \"voice-output-devices\",\n      \"label\": \"Output devices\",\n      \"state\": \"ok\",\n      \"detail\": \"1 detected\"\n    },\n    {\n      \"id\": \"voice-stt\",\n      \"label\": \"Speech-to-text\",\n      \"state\": \"ok\",\n      \"detail\": \"auto: run transcribe() / describeAsync() for live probe\"\n    },\n    {\n      \"id\": \"voice-tts\",\n      \"label\": \"Text-to-speech\",\n      \"state\": \"ok\",\n      \"detail\": \"auto: run speak() / describeAsync() for live probe\"\n    },\n    {\n      \"id\": \"voice-mode\",\n      \"label\": \"Voice mode\",\n      \"state\": \"warn\",\n      \"detail\": \"disabled by default\"\n    },\n    {\n      \"id\": \"voice-privacy\",\n      \"label\": \"Voice privacy\",\n      \"state\": \"ok\",\n      \"detail\": \"alwaysListen=false, cloudStt=false, transcripts=session\"\n    },\n    {\n      \"id\": \"memory\",\n      \"label\": \"Memory engine\",\n      \"state\": \"ok\",\n      \"detail\": \"0 entries\"\n    },\n    {\n      \"id\": \"plugins\",\n      \"label\": \"Plugin platform\",\n      \"state\": \"ok\",\n      \"detail\": \"0 installed, 0 enabled, 0 need attention\"\n    },\n    {\n      \"id\": \"mcp\",\n      \"label\": \"MCP platform\",\n      \"state\": \"ok\",\n      \"detail\": \"0 servers, 0 enabled, 0 healthy\"\n    },\n    {\n      \"id\": \"multi-agent\",\n      \"label\": \"Multi-agent runtime\",\n      \"state\": \"ok\",\n      \"detail\": \"23 agents, 0 workflows, 0 running\"\n    },\n    {\n      \"id\": \"control\",\n      \"label\": \"Computer Control\",\n      \"state\": \"warn\",\n      \"detail\": \"linux · keyboard:false mouse:false\"\n    }\n  ]\n}\n",
+      "stderrTail": ""
+    },
+    {
+      "id": "daemon-unit",
+      "command": [
+        "bun",
+        "test",
+        "test/daemon.test.ts"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 316.5235840000005,
+      "stdoutTail": "bun test v1.3.14 (0d9b296a)\n",
+      "stderrTail": "\ntest/daemon.test.ts:\n(pass) health endpoint is open (no auth) and reports localhost [13.15ms]\n(pass) API requires the local token (401 without it) [1.93ms]\n(pass) API works with the token [23.38ms]\n(pass) wrong token is rejected [1.90ms]\n(pass) token via query string works for the dashboard page [18.80ms]\n(pass) security endpoint returns a block-rate report [2.88ms]\n(pass) cost endpoint aggregates recorded events [2.15ms]\n(pass) unknown route 404s (authed) [1.76ms]\n(pass) dashboard html embeds the token and has no external assets [25.82ms]\n(pass) agents endpoint returns the built-in workforce and workflow counters [3.45ms]\n(pass) agents workflow detail endpoint returns a persisted workflow [6.06ms]\n(pass) memory endpoint requires the token (401 without it) [1.94ms]\n(pass) memory endpoint lists entries but hides exclusions [3.53ms]\n(pass) memory DELETE removes a single entry [2.56ms]\n(pass) memory DELETE all clears everything [2.68ms]\n(pass) memory DELETE of a missing id 404s [2.03ms]\n(pass) dashboard html includes the durable memory viewer [16.13ms]\n\n 17 pass\n 0 fail\n 50 expect() calls\nRan 17 tests across 1 file. [286.00ms]\n"
+    },
+    {
+      "id": "install-sh-syntax",
+      "command": [
+        "bash",
+        "-n",
+        "install.sh"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 2.4072940000005474,
+      "stdoutTail": "",
+      "stderrTail": ""
+    },
+    {
+      "id": "package-dry-run",
+      "command": [
+        "bun",
+        "pm",
+        "pack",
+        "--dry-run"
+      ],
+      "required": true,
+      "status": "pass",
+      "code": 0,
+      "durationMs": 27.204999000001408,
+      "stdoutTail": "B src/services/agent-service.ts\npacked 1.77KB src/services/budget-service.ts\npacked 1.32KB src/services/config-service.ts\npacked 1.63KB src/services/mcp-service.ts\npacked 27.30KB src/services/multi-agent-service.ts\npacked 2.56KB src/services/plugin-service.ts\npacked 6.52KB src/services/provider-service.ts\npacked 5.38KB src/services/skill-service.ts\npacked 10.55KB src/skills/adapters.ts\npacked 12.20KB src/skills/autolearn.ts\npacked 1.11KB src/skills/compatibility.ts\npacked 3.97KB src/skills/dependencies.ts\npacked 2.0KB src/skills/download-engine.ts\npacked 5.22KB src/skills/engine.ts\npacked 0.88KB src/skills/installer.ts\npacked 2.95KB src/skills/lifecycle.ts\npacked 2.82KB src/skills/loader-runtime.ts\npacked 2.0KB src/skills/loader.ts\npacked 5.99KB src/skills/manifest.ts\npacked 5.65KB src/skills/marketplace-backend-store.ts\npacked 2.67KB src/skills/marketplace-backend-types.ts\npacked 9.94KB src/skills/marketplace-backend.ts\npacked 1.64KB src/skills/marketplace-dependency-solver.ts\npacked 5.75KB src/skills/marketplace-store.ts\npacked 17.1KB src/skills/marketplace.ts\npacked 6.0KB src/skills/online-registry.ts\npacked 1.83KB src/skills/permissions.ts\npacked 1.90KB src/skills/registry.ts\npacked 0.93KB src/skills/resolver.ts\npacked 4.31KB src/skills/runtime.ts\npacked 10.10KB src/skills/schema.ts\npacked 22.70KB src/skills/sdk.ts\npacked 3.81KB src/skills/search-index.ts\npacked 2.63KB src/skills/semver.ts\npacked 2.30KB src/skills/signing.ts\npacked 1.65KB src/skills/validator.ts\npacked 3.44KB src/skills/verifier.ts\npacked 1.19KB src/skills/version-resolver.ts\npacked 0.66KB src/state/repos/audit-repo.ts\npacked 0.81KB src/state/repos/cost-repo.ts\npacked 351B src/state/repos/index.ts\npacked 1.0KB src/state/repos/project-memory-repo.ts\npacked 0.82KB src/state/repos/session-repo.ts\npacked 1.14KB src/state/repos/skill-repo.ts\npacked 2.36KB src/state/repos/user-memory-repo.ts\npacked 0.68KB src/state/repos/workflow-repo.ts\npacked 430B src/state/store.ts\npacked 39.96KB src/state/workspace-store.ts\npacked 0.78KB src/telegram/auth.ts\npacked 7.27KB src/telegram/bot.ts\npacked 2.33KB src/telegram/commands.ts\npacked 2.29KB src/telegram/render.ts\npacked 0.87KB src/templates/workflows/competitor-monitoring.json\npacked 0.80KB src/templates/workflows/content-calendar.json\npacked 1.36KB src/templates/workflows/customer-onboarding.json\npacked 0.75KB src/templates/workflows/email-campaign.json\npacked 1.98KB src/templates/workflows/invoice-generation.json\npacked 1.92KB src/templates/workflows/lead-qualification.json\npacked 0.84KB src/templates/workflows/market-research.json\npacked 1.28KB src/templates/workflows/meeting-prep.json\npacked 1.40KB src/templates/workflows/sales-followup.json\npacked 1.52KB src/templates/workflows/support-routing.json\npacked 0.85KB src/templates/workflows/weekly-reports.json\npacked 5.55KB src/tools/control.ts\npacked 0.92KB src/tools/egress.ts\npacked 2.95KB src/tools/files.ts\npacked 9.63KB src/tools/git.ts\npacked 1.85KB src/tools/registry.ts\npacked 4.1KB src/tools/system.ts\npacked 4.33KB src/tools/web.ts\npacked 4.55KB src/ui/ansi.ts\npacked 20.39KB src/ui/brand.ts\npacked 2.10KB src/ui/css-vars.css\npacked 5.45KB src/ui/icons.ts\npacked 2.1KB src/ui/index.ts\npacked 10.51KB src/ui/layout.ts\npacked 13.0KB src/ui/primitives.ts\npacked 7.37KB src/ui/spinner.ts\npacked 12.23KB src/ui/terminal.ts\npacked 9.78KB src/ui/theme.ts\npacked 9.60KB src/ui/tokens.ts\npacked 2.1KB src/update/selfheal.ts\npacked 1.95KB src/util/concurrency.ts\npacked 2.0KB src/util/fs-async.ts\npacked 8.23KB src/util/process.ts\npacked 4.67KB src/voice/audio.ts\npacked 12.33KB src/voice/cli.ts\npacked 11.92KB src/voice/hardware.ts\npacked 6.1KB src/voice/index.ts\npacked 6.78KB src/voice/intents.ts\npacked 9.57KB src/voice/pipeline.ts\npacked 2.60KB src/voice/settings.ts\npacked 11.28KB src/voice/stt.ts\npacked 12.16KB src/voice/tts.ts\npacked 3.64KB src/voice/types.ts\npacked 1.91KB src/voice/vad.ts\npacked 2.22KB src/voice/wake.ts\n\nrrrtx-xr-3.1.6.tgz\n\nTotal files: 1271\nUnpacked size: 6.92MB\n",
+      "stderrTail": ""
+    },
+    {
+      "id": "windows-install-ps1",
+      "command": [
+        "powershell",
+        "-File",
+        "install.ps1"
+      ],
+      "required": false,
+      "status": "skip",
+      "code": null,
+      "durationMs": 0,
+      "stdoutTail": "",
+      "stderrTail": "",
+      "reason": "Windows validation requires a Windows runner; support matrix marks Windows as not verified in this Linux run."
+    },
+    {
+      "id": "docker-build",
+      "command": [
+        "docker",
+        "build",
+        "."
+      ],
+      "required": false,
+      "status": "skip",
+      "code": null,
+      "durationMs": 0,
+      "stdoutTail": "",
+      "stderrTail": "",
+      "reason": "Docker CLI/daemon is unavailable in this environment; Docker remains blocked for release sign-off until run on a Docker-capable host."
+    },
+    {
+      "id": "optional-cloud-providers",
+      "command": [
+        "xr",
+        "providers",
+        "test"
+      ],
+      "required": false,
+      "status": "skip",
+      "code": null,
+      "durationMs": 0,
+      "stdoutTail": "",
+      "stderrTail": "",
+      "reason": "Required baseline must not depend on cloud credentials or network."
+    }
+  ],
+  "artifacts": {
+    "packageJsonSha256": "90b6fb73ebbfd6910fde825a2e026b4a7b28d0483cbf85595cedeaa139e461e4",
+    "bunLockSha256": "97f7a99d14cfcdd1a27f334f5851c2574a0d9d64c1c392b55d8dbb1e098faaee",
+    "inventorySha256": "ab02b0d62cb01202424a1be8cec2cb26cb5854e8cf913583f44f2ed3123d853d"
+  },
+  "skipped": [
+    {
+      "id": "windows-install-ps1",
+      "reason": "Windows validation requires a Windows runner; support matrix marks Windows as not verified in this Linux run."
+    },
+    {
+      "id": "docker-build",
+      "reason": "Docker CLI/daemon is unavailable in this environment; Docker remains blocked for release sign-off until run on a Docker-capable host."
+    },
+    {
+      "id": "optional-cloud-providers",
+      "reason": "Required baseline must not depend on cloud credentials or network."
+    }
+  ],
+  "knownLimitations": [
+    "This validation run is Linux-only unless a Windows/macOS runner executes the same command.",
+    "Cloud providers and local model servers are discovery/health-checked but not required without user credentials/runtimes.",
+    "Performance numbers are produced by scripts/measure-baseline.ts and are host-specific."
+  ]
+}

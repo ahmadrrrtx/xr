@@ -30,7 +30,16 @@ export function systemRoutes(): DaemonRoute[] {
       id: "health.get",
       path: "/api/health",
       method: "GET",
-      handle: ({ json, host }) => json({ ok: true, name: "xr", host, ts: Date.now(), configCache: configCacheStats() }),
+      handle: ({ json, host }) => json({
+        ok: true,
+        name: "xr",
+        version: versionInfo(),
+        host,
+        binding: "localhost-only",
+        auth: "required-except-health",
+        ts: Date.now(),
+        configCache: configCacheStats(),
+      }),
     }),
     route({
       id: "dashboard.get",

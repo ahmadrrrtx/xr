@@ -1,3 +1,52 @@
+# XR Migration Guide
+
+## XR 3.1.5 → XR 3.1.6 (Baseline Integrity)
+
+XR 3.1.6 is a Phase 0 baseline release. It adds diagnostics, validation/release artifacts, support classification, and documentation corrections. It does **not** introduce a destructive workspace database migration.
+
+### Compatibility
+
+- Package name remains `@rrrtx/xr` and CLI bin remains `xr`.
+- Existing workspace SQLite data remains compatible.
+- Existing provider configuration, memory consent behavior, budget controls, daemon localhost/token behavior, and plugin/skill/MCP compatibility are preserved.
+- Docker default daemon port is now explicitly `7842` to match the Dockerfile/compose mapping.
+
+### Upgrade steps
+
+```bash
+cd /path/to/xr
+git pull --ff-only origin main
+bun install --frozen-lockfile
+bun run set-version:check
+bun run baseline:validate
+xr doctor --json
+```
+
+For package-manager installs, install `@rrrtx/xr@3.1.6` using your package manager, then run `xr doctor --json`.
+
+### Backup before upgrade
+
+Back up `XR_HOME` before upgrading. Default is `~/.xr` unless overridden.
+
+```bash
+XR_HOME_DIR="${XR_HOME:-$HOME/.xr}"
+tar --exclude='.env' -czf "xr-backup-$(date +%Y%m%d-%H%M%S).tgz" -C "$(dirname "$XR_HOME_DIR")" "$(basename "$XR_HOME_DIR")"
+```
+
+The backup should include workspace databases, workspace configuration, installed capability metadata, and non-secret config references. Do not export plaintext secrets unless your local security policy requires an encrypted full backup.
+
+### Rollback
+
+If validation fails, stop XR processes, restore the pre-upgrade backup, and reinstall/check out the known-good 3.1.5 artifact or commit. See `docs/release/3.1.6/ROLLBACK.md`.
+
+### Known upgrade failures and recovery
+
+- `bun install --frozen-lockfile` fails: do not continue; restore code/package to the previous release or regenerate lockfile only as an explicit release decision.
+- `xr doctor --json` reports a required failure (`platform`, `bun`, `package-manager`, `config`, `audit`): follow the remediation in the JSON output before publishing or continuing upgrade.
+- Optional provider/local-runtime/browser/voice/control warnings do not block core local operation unless your workflow depends on that optional component.
+
+---
+
 # Security Fix Migration Guide
 
 ## Overview

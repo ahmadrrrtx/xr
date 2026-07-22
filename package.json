@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
-  "version": "3.1.5",
-  "description": "XR 3.1.5 (Helios) — The Unified AI Operating System. Local-first, BYOK, secure desktop automation, persistent RAG memories, and workflow supervisor.",
+  "version": "3.1.6",
+  "description": "XR 3.1.6 (Baseline Integrity) \u2014 verified local-first AI runtime baseline with reproducible validation, diagnostics, support matrix, and release artifacts.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr.cjs"
@@ -23,13 +23,16 @@
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "ci": "bun run typecheck && bun test && bun run set-version:check",
+    "ci": "bun run typecheck && bun test && bun run set-version:check && bun run baseline:inventory",
     "xr": "bun run src/index.ts",
     "cli:help": "bun run src/index.ts help",
     "cli:doctor": "bun run src/index.ts doctor",
     "set-version": "bun run scripts/set-version.ts",
     "set-version:check": "bun run scripts/set-version.ts --check",
-    "prepublishOnly": "bun run scripts/set-version.ts --check"
+    "prepublishOnly": "bun run scripts/set-version.ts --check",
+    "baseline:inventory": "bun run scripts/baseline-inventory.ts",
+    "baseline:measure": "bun run scripts/measure-baseline.ts",
+    "baseline:validate": "bun run scripts/validate-baseline.ts"
   },
   "repository": {
     "type": "git",

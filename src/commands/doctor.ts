@@ -1,14 +1,21 @@
 /** XR — Doctor Command */
-import { CORE_VERSION } from "../core/version.ts";
+import { CORE_VERSION, versionInfo } from "../core/version.ts";
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import { printStatus, probeHealth, detectPlatform } from "../install/system.ts";
-import { ProviderService } from "../services/provider-service.ts";
-import { Store } from "../state/workspace-store.ts";
+import { configPath, loadConfig } from "../config/config.ts";
+import { PRESETS } from "../providers/presets.ts";
+import { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore } from "../memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";
 import { pluginDoctorLine } from "../plugins/cli.ts";
+import {
+  runtimeEnvironment,
+  safeConfigStatus,
+  summarizeHealthChecks,
+  workspaceStatus,
+} from "../baseline/status.ts";
 
 // Bun-friendly dynamic import helper for perf benches (avoid require in types)
 async function loadCatalog() {
@@ -55,7 +62,28 @@ export class DoctorCommand implements Command {
       try { const wf = ctx.registry.resolve(Tokens.WorkflowStore); const { listAgents } = await import("../agents/registry.ts"); const health = wf.health(); checks.push({ id:"multi-agent", label:"Multi-agent runtime", state: health.workflows.failed ? "warn" : "ok", detail: `${listAgents({ includeDisabled: true }).length} agents, ${health.workflows.total} workflows, ${health.workflows.running} running` }); } catch(e){ checks.push({ id:"multi-agent", label:"Multi-agent runtime", state:"warn", detail:(e as Error).message }); }
       // control
       try { const { detectCapabilities } = await import("../control/adapter.ts"); const caps = detectCapabilities(); checks.push({ id:"control", label:"Computer Control", state: caps.tools.keyboard ? "ok":"warn", detail: `${caps.os} · keyboard:${caps.tools.keyboard} mouse:${caps.tools.mouse}` }); } catch {}
-      console.log(JSON.stringify({ platform: detectPlatform(), checks }, null, 2)); return;
+      const configResult = loadConfig();
+      const workspaceContext = ctx.registry.resolve(Tokens.Workspaces).getActiveContext();
+      const providerKeyEnvs = [...new Set(Object.values(PRESETS).map((p) => p.apiKeyEnv).filter((v): v is string => Boolean(v)))];
+      const summary = summarizeHealthChecks(checks);
+      if (summary.exitCode !== 0) process.exitCode = summary.exitCode;
+      console.log(JSON.stringify({
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        version: versionInfo(),
+        environment: runtimeEnvironment(),
+        platform: detectPlatform(),
+        workspace: workspaceStatus({
+          id: workspaceContext.id,
+          rootDir: workspaceContext.rootDir,
+          configPath: workspaceContext.configPath,
+          dbPath: store.dbPath,
+          connectionCount: WorkspaceStore.connectionCount(),
+        }),
+        config: safeConfigStatus({ path: configPath(), warnings: configResult.warnings, config: configResult.config, providerKeyEnvs }),
+        summary,
+        checks,
+      }, null, 2)); return;
     }
 
     await printStatus(ctx.args);
