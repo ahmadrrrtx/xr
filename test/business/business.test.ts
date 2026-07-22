@@ -33,11 +33,24 @@ beforeAll(async () => {
   await biz.initialize();
 });
 
-afterAll(() => {
+async function rmrfWithRetry(path: string): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      rmSync(path, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(code ?? '') || attempt === 9) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+    }
+  }
+}
+
+afterAll(async () => {
   try {
     store.close();
   } catch {}
-  rmSync(tmp, { recursive: true, force: true });
+  await rmrfWithRetry(tmp);
 });
 
 function workspaceIdFor(userId: string, orgIndex = 0): string {

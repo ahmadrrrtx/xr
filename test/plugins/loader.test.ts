@@ -271,15 +271,20 @@ describe("Plugin Loader — Security Isolation", () => {
 
   test("validatePlugin detects too many files (>500)", () => {
     const dir = mkdtempSync(join(TEST_TMP, "bad-count-"));
-    writeFileSync(join(dir, "xr-plugin.json"), safeManifest(dir, { id: "bad-count" }));
-    // Create 501 small files to exceed the file count limit.
-    for (let i = 0; i < 501; i++) {
-      writeFileSync(join(dir, `file-${i}.txt`), `content ${i}`);
+    try {
+      writeFileSync(join(dir, "xr-plugin.json"), safeManifest(dir, { id: "bad-count" }));
+      // Create 501 small files to exceed the file count limit. This can be
+      // slower on Windows antivirus-scanned temp directories, so the test has
+      // an explicit timeout below.
+      for (let i = 0; i < 501; i++) {
+        writeFileSync(join(dir, `file-${i}.txt`), `content ${i}`);
+      }
+      const result = validatePlugin(dir);
+      expect(result.errors.some((e) => e.includes("too many files"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
-    const result = validatePlugin(dir);
-    expect(result.errors.some((e) => e.includes("too many files"))).toBe(true);
-    rmSync(dir, { recursive: true, force: true });
-  });
+  }, 30_000);
 
   // ── Hash integrity ──────────────────────────────────────────────────────────
 
