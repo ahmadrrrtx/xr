@@ -45,6 +45,7 @@ import type { MultiAgentService } from "../services/multi-agent-service.ts";
 // Cross-cutting subsystems.
 import type { XRShieldService } from "../security/shield.ts";
 import type { BusinessOS } from "../business/index.ts";
+import type { ExecutionService } from "../execution/service.ts";
 
 /**
  * The complete service catalogue. Add new tokens here when a new stage
@@ -88,6 +89,7 @@ export const Tokens = {
   // ── Cross-cutting subsystems ────────────────────────────────────────────
   Shield: token<XRShieldService>("xr.shield", "security shield service"),
   Business: token<BusinessOS>("xr.business", "Business OS"),
+  Execution: token<ExecutionService>("xr.execution", "Unified Execution Fabric service"),
 } as const;
 
 export type ServiceTokenId = keyof typeof Tokens;

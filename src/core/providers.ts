@@ -38,6 +38,8 @@ import { MultiAgentService } from "../services/multi-agent-service.ts";
 
 import { XRShieldService } from "../security/shield.ts";
 import { BusinessOS } from "../business/index.ts";
+import { ExecutionService } from "../execution/service.ts";
+import { ExecutionRepo, adaptWorkspaceStore } from "../execution/repository.ts";
 
 /**
  * State layer: opens exactly one WorkspaceStore for the active workspace and
@@ -201,6 +203,7 @@ export class AgentServiceProvider implements ServiceProvider {
           Tokens.CostStore,
           Tokens.AuditStore,
           Tokens.Store,
+          Tokens.Execution,
         ],
         kernelScope: "workspace",
         owner: "agent",
@@ -250,6 +253,44 @@ export class ShieldServiceProvider implements ServiceProvider {
       kernelScope: "workspace",
       owner: "shield",
     });
+  }
+}
+
+/**
+ * Execution Fabric — the canonical execution service. Workspace-scoped so
+ * that its repository rebinds to the active workspace store on switch.
+ * Depends on the audit repo (for correlation) and is available to agent,
+ * control, MCP, plugin, skill, research, and business services.
+ */
+export class ExecutionServiceProvider implements ServiceProvider {
+  readonly id = "execution";
+  readonly workspaceScoped = true;
+
+  register(ctx: ProviderContext): void {
+    ctx.registry.registerSingleton(
+      Tokens.Execution,
+      (registry) => {
+        const store = registry.resolve(Tokens.Store);
+        const audit = registry.resolve(Tokens.AuditStore);
+        const repo = new ExecutionRepo(adaptWorkspaceStore(store));
+        return new ExecutionService({
+          repo,
+          audit: (event, detail) => {
+            try {
+              audit.audit(event, detail, null);
+            } catch {
+              /* best-effort */
+            }
+          },
+        });
+      },
+      {
+        lifecycle: true,
+        dependsOn: [Tokens.Store, Tokens.AuditStore],
+        kernelScope: "workspace",
+        owner: "execution",
+      },
+    );
   }
 }
 
