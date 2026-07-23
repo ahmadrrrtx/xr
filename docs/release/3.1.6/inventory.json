@@ -1,23 +1,23 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T09:50:09.492Z",
+  "generatedAt": "2026-07-22T14:55:41.865Z",
   "version": {
     "name": "@rrrtx/xr",
-    "version": "3.1.6",
-    "codename": "Baseline Integrity",
-    "display": "3.1.6 (Baseline Integrity)",
-    "displayVersion": "3.1.6 (Baseline Integrity)",
+    "version": "4.1.0",
+    "codename": "Unified Execution Fabric",
+    "display": "4.1.0 (Unified Execution Fabric)",
+    "displayVersion": "4.1.0 (Unified Execution Fabric)",
     "repo": "https://github.com/ahmadrrrtx/xr",
     "homepage": "https://xr-gules.vercel.app",
     "npm": "https://www.npmjs.com/package/@rrrtx/xr",
-    "description": "XR 3.1.6 (Baseline Integrity) — verified local-first AI runtime baseline with reproducible validation, diagnostics, support matrix, and release artifacts.",
+    "description": "XR 4.1 (Unified Execution Fabric) — one canonical execution contract for every consequential action, with explicit lifecycle, policy/approval/budget gates, idempotency, cancellation/timeout/retry, and bounded local execution history.",
     "author": "Muhammad Ahmad (@ahmadrrrtx)",
     "license": "MIT",
     "pluginApi": 2
   },
   "package": {
     "name": "@rrrtx/xr",
-    "version": "3.1.6",
+    "version": "4.1.0",
     "packageManager": "bun@1.3.14",
     "engines": {
       "bun": ">=1.3.0"
@@ -49,8 +49,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 292,
-    "testFiles": 42,
+    "sourceFiles": 311,
+    "testFiles": 51,
     "cliCommands": 34,
     "daemonRoutes": 52,
     "providers": 26,
@@ -69,7 +69,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 6386
+      "bytes": 9417
     },
     {
       "path": "CRITICAL_FIXES.md",
@@ -169,7 +169,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 1916
+      "bytes": 1995
     },
     {
       "path": "tsconfig.json",
@@ -225,6 +225,7 @@
     "src/commands/business.ts",
     "src/commands/config.ts",
     "src/commands/doctor.ts",
+    "src/commands/execution.ts",
     "src/commands/help.ts",
     "src/commands/install.ts",
     "src/commands/logs.ts",
@@ -259,7 +260,9 @@
     "src/core/agent.ts",
     "src/core/app.ts",
     "src/core/command-registry.ts",
+    "src/core/errors.ts",
     "src/core/event-bus.ts",
+    "src/core/health.ts",
     "src/core/kernel.ts",
     "src/core/lifecycle.ts",
     "src/core/providers.ts",
@@ -289,6 +292,22 @@
     "src/daemon/routes/system.routes.ts",
     "src/daemon/server.ts",
     "src/daemon/skills-api.ts",
+    "src/execution/adapters/agent-adapter.ts",
+    "src/execution/adapters/common.ts",
+    "src/execution/adapters/control-adapter.ts",
+    "src/execution/adapters/domain-adapter.ts",
+    "src/execution/adapters/index.ts",
+    "src/execution/adapters/mcp-adapter.ts",
+    "src/execution/adapters/plugin-adapter.ts",
+    "src/execution/adapters/tool-adapter.ts",
+    "src/execution/adapters/workflow-adapter.ts",
+    "src/execution/errors.ts",
+    "src/execution/index.ts",
+    "src/execution/inspection.ts",
+    "src/execution/repository.ts",
+    "src/execution/service.ts",
+    "src/execution/state-machine.ts",
+    "src/execution/types.ts",
     "src/export/report.ts",
     "src/i18n/strings.ts",
     "src/index.ts",
@@ -480,11 +499,20 @@
     "test/control-plan.test.ts",
     "test/control.test.ts",
     "test/control/browser.test.ts",
+    "test/core/background-services.test.ts",
+    "test/core/errors.test.ts",
+    "test/core/health.test.ts",
     "test/core/kernel.test.ts",
+    "test/core/lifecycle.test.ts",
+    "test/core/registry-v2.test.ts",
     "test/core/service-registry.test.ts",
     "test/cost.test.ts",
     "test/daemon.test.ts",
     "test/ecosystem.test.ts",
+    "test/execution/adapters.test.ts",
+    "test/execution/repository.test.ts",
+    "test/execution/service.test.ts",
+    "test/execution/state-machine.test.ts",
     "test/memory-semantic.test.ts",
     "test/memory-stage6.test.ts",
     "test/memory-summarize.test.ts",

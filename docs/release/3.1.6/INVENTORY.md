@@ -1,13 +1,13 @@
 # XR 3.1.6 Repository Inventory
 
-Generated: 2026-07-22T09:50:09.492Z
+Generated: 2026-07-22T14:55:41.865Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 292 |
-| Test files | 42 |
+| Source files | 311 |
+| Test files | 51 |
 | CLI commands | 34 |
 | Daemon routes | 52 |
 | Providers | 26 |

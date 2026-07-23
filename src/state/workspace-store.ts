@@ -213,6 +213,42 @@ export class WorkspaceStore {
         summary TEXT NOT NULL,
         created_at INTEGER NOT NULL
       );
+      -- XR 4.1: Unified Execution Fabric records (one row per execution).
+      -- Additive migration — no existing table is modified.
+      CREATE TABLE IF NOT EXISTS execution_records (
+        run_id TEXT PRIMARY KEY,
+        correlation_id TEXT NOT NULL,
+        parent_run_id TEXT,
+        retry_of TEXT,
+        workspace_id TEXT NOT NULL,
+        session_id TEXT,
+        workflow_id TEXT,
+        task_id TEXT,
+        attempt INTEGER NOT NULL DEFAULT 1,
+        state TEXT NOT NULL,
+        outcome_kind TEXT,
+        actor_kind TEXT NOT NULL,
+        actor_name TEXT,
+        capability_kind TEXT NOT NULL,
+        capability_name TEXT NOT NULL,
+        placement TEXT NOT NULL DEFAULT 'in_process',
+        is_dry_run INTEGER NOT NULL DEFAULT 0,
+        duration_ms INTEGER,
+        cost_usd REAL,
+        message TEXT,
+        adapter_version TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        started_at INTEGER,
+        ended_at INTEGER,
+        record_json TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_exec_workspace ON execution_records(workspace_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_exec_session ON execution_records(session_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_exec_workflow ON execution_records(workflow_id, task_id);
+      CREATE INDEX IF NOT EXISTS idx_exec_correlation ON execution_records(correlation_id);
+      CREATE INDEX IF NOT EXISTS idx_exec_state ON execution_records(workspace_id, state);
+      CREATE INDEX IF NOT EXISTS idx_exec_capability ON execution_records(workspace_id, capability_kind, created_at DESC);
     `);
 
     // v0.9 semantic recall: ensure the embedding column exists on DBs created
@@ -1082,6 +1118,11 @@ export class WorkspaceStore {
   /** Transaction passthrough for BusinessDatabase migrations. */
   transaction<F extends (...args: any[]) => any>(fn: F): (...args: Parameters<F>) => ReturnType<F> {
     return this.db.transaction(fn) as any;
+  }
+
+  /** Execution-fabric passthrough: run arbitrary DDL/DML. */
+  exec(sql: string): void {
+    this.db.exec(sql);
   }
 }
 

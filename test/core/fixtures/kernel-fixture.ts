@@ -42,6 +42,7 @@ const { CORE_VERSION, PKG } = await import("../../../src/core/version.ts");
 const { SessionRepo } = await import("../../../src/state/repos/session-repo.ts");
 const { AuditRepo } = await import("../../../src/state/repos/audit-repo.ts");
 const { XRShieldService } = await import("../../../src/security/shield.ts");
+const { ExecutionService } = await import("../../../src/execution/service.ts");
 const { Tokens } = await import("../../../src/core/tokens.ts");
 
 const events: string[] = [];
@@ -84,6 +85,7 @@ const coreTokens: Array<{ name: string; token: ServiceToken<unknown> }> = [
   { name: "multiAgents", token: Tokens.MultiAgents },
   { name: "shield", token: Tokens.Shield },
   { name: "business", token: Tokens.Business },
+  { name: "execution", token: Tokens.Execution },
   { name: "store", token: Tokens.Store },
   { name: "legacyStore", token: Tokens.LegacyStore },
   { name: "sessionStore", token: Tokens.SessionStore },
@@ -104,6 +106,7 @@ for (const { name, token } of coreTokens) {
 }
 
 check("shield-rides-unified-store", kernel.registry.resolve(Tokens.Shield) instanceof XRShieldService);
+check("execution-service-registered", kernel.registry.resolve(Tokens.Execution) instanceof ExecutionService);
 check("repos-are-views-over-one-store", kernel.registry.resolve(Tokens.SessionStore) instanceof SessionRepo
   && kernel.registry.resolve(Tokens.AuditStore) instanceof AuditRepo);
 check("single-connection", WorkspaceStore.connectionCount() === 1);

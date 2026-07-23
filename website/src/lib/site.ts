@@ -8,22 +8,22 @@
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 4.0.0 (Runtime Kernel) — from src/core/version.ts
+ *   Version: 4.1.0 (Unified Execution Fabric) — from src/core/version.ts
  */
 
 export const site = {
   name: "XR",
   tagline: "The AI Agent You Can Actually Trust — BYOK, local-first, secure",
   description:
-    "XR is an open-source, local-first AI operating system — BYOK, secure, with persistent memory, research, voice, plugins, MCP, multi-agent runtime, and workflow automation. Built on Bun + TypeScript + SQLite.",
+    "XR is an open-source, local-first AI operating system — BYOK, secure, with a Unified Execution Fabric, persistent memory, research, voice, plugins, MCP, multi-agent runtime, and workflow automation. Built on Bun + TypeScript + SQLite.",
   url: "https://xr-gules.vercel.app",
   twitter: "@ahmadrrrtx",
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "4.0.0",
-  codename: "Runtime Kernel",
-  displayVersion: "4.0.0 (Runtime Kernel)",
+  version: "4.1.0",
+  codename: "Unified Execution Fabric",
+  displayVersion: "4.1.0 (Unified Execution Fabric)",
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },

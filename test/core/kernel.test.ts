@@ -56,6 +56,7 @@ describe("XRKernel bootstrap (hermetic)", () => {
       "service-registered:app",
       "service-registered:shield",
       "service-registered:business",
+      "service-registered:execution",
       "service-registered:agent",
       "service-registered:workflowStore",
       "shield-rides-unified-store",

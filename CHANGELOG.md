@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-07-22 — Unified Execution Fabric
+
+### Added
+- **Canonical execution contract** (`src/execution/`): one typed lifecycle for every
+  consequential action (intent → plan → policy → placement → action → observation →
+  evidence/artifact → outcome).
+- **Bounded state machine** (`src/execution/state-machine.ts`) validating all
+  transitions deterministically, with distinct states for approval, budget block,
+  cancellation, timeout, partial completion, and reconciliation.
+- **`ExecutionService`** registered workspace-scoped under `Tokens.Execution` via the
+  Phase 1 kernel. Coordinates policy/approval/budget, timeout, cancellation,
+  retry, idempotency/caching, cost charging, and persistence without duplicating
+  existing gates.
+- **`ExecutionRepo`** with additive `execution_records` table (redacted/truncated
+  payloads, workspace/session/workflow indexes, bounded history).
+- **Adapters** for agent/model turns, core tools, control/computer actions, MCP
+  tools/resources/prompts, plugin/skill operations, workflow tasks, research and
+  business actions — all preserving existing `AgentResult`/`ToolResult`/
+  `ActionResult` compatibility.
+- **Idempotency model**: `naturally_idempotent | idempotent_with_key |
+  non_idempotent | unknown_unsafe` with duplicate suppression and honest
+  reconciliation for unknown side effects.
+- **Cancellation/timeout/retry semantics** cooperative and honest — never silently
+  retries non-idempotent actions when side effects are unknown.
+- **Safe inspection** (`src/execution/inspection.ts`) and `xr execution` CLI
+  command for bounded secret-free execution history.
+- **Phase 2 documentation**: `docs/EXECUTION_FABRIC.md`,
+  `docs/MIGRATION_GUIDE_4.0_TO_4.1.md`, validation report.
+
+### Changed
+- Version identity updated to `4.1.0 (Unified Execution Fabric)` across
+  package/runtime/website surfaces.
+- Workspace store migration adds `execution_records` and its indexes additively;
+  no existing data is modified.
+- Execution events are added to the existing audit log (correlated, not
+  duplicated).
+
+### Compatibility
+- All Phase 0/1 tests remain green (546 → 577 passing with 31 new fabric tests).
+- Existing agent, tool, control, MCP, plugin, skill, workflow, research, and
+  business APIs are unchanged at the type level; canonical records are additive.
+- Cost is charged exactly once per operation; no duplicate model/tool calls.
+
+### Security
+- Existing approval, budget, egress, audit, plugin/MCP permission gates are
+  preserved — the fabric records and correlates them, never bypasses them.
+- Execution records redact secrets and bound payloads; no credentials, full
+  prompts, arbitrary binary data, or full browser pages are persisted.
+- **Explicit limitation**: in-process execution is not a Phase 3 sandbox. Phase 3
+  Trust and Isolation adds enforceable isolation for high-risk operations.
+
+## [4.0.0] - 2026-07-22 — Runtime Kernel
+- Stable XR 4.0 Runtime Kernel baseline (commit `c563ff3`); see Phase 1
+  validation report.
+
 ## [3.1.6] - 2026-07-22
 
 ### Added
