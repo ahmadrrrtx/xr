@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "4.0.0",
-  codename: "Runtime Kernel",
+  version: "4.1.0",
+  codename: "Unified Execution Fabric",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 4.0 (Runtime Kernel) — stable, coherent, observable runtime kernel with explicit lifecycle, dependency-safe service registry, workspace-safe rebinding, owned background services, and kernel health diagnostics.",
+  description: "XR 4.1 (Unified Execution Fabric) — one canonical execution contract for every consequential action, with explicit lifecycle, policy/approval/budget gates, idempotency, cancellation/timeout/retry, and bounded local execution history.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;
