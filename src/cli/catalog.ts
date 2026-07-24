@@ -481,6 +481,21 @@ export const CATALOG: CatalogEntry[] = [
     topics: ["shield", "security", "trust"],
   },
   {
+    name: "trust",
+    description: "trust & isolation: risk tiers, placement backends, pre-action decisions",
+    usage: "xr trust [status|classify <command...>] [--json]",
+    group: "trust",
+    glyph: "shield",
+    aliases: ["isolation"],
+    needsKernel: true,
+    examples: [
+      { cmd: "xr trust", description: "isolation backend availability + health" },
+      { cmd: "xr trust classify rm -rf /tmp/x", description: "risk tier + placement for a shell command" },
+    ],
+    related: ["shield", "execution", "doctor"],
+    topics: ["trust", "security", "isolation", "sandbox"],
+  },
+  {
     name: "audit",
     description: "tamper-evident audit log: tail, verify, export",
     usage: "xr audit [tail|verify|export] [--limit n]",

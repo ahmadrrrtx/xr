@@ -17,6 +17,7 @@ import {
   sizeBytes,
   userActor,
 } from "./common.ts";
+import { controlTrustRequest } from "../../trust/tool-support.ts";
 
 export interface ControlAdapterOptions {
   service: ExecutionService;
@@ -67,6 +68,9 @@ export async function executeControlAction(
     },
     capability: { kind: "control_action", name: action.type },
     placement: IN_PROCESS_PLACEMENT,
+    // XR 4.2 — record the control risk tier/placement. Destructive (GUI/browser)
+    // actions are host-authority: admitted with an elevated gate, not blocked.
+    trust: { request: controlTrustRequest(action.type, risk.level, opts.cwd ?? process.cwd()) },
     idempotency: "unknown_unsafe",
     inputSummary: redact(safeJson(action)),
     inputBytes: sizeBytes(safeJson(action)),

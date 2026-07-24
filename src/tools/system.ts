@@ -7,6 +7,7 @@ import { resolve, relative, isAbsolute, join } from "node:path";
 import type { Tool, ToolResult } from "../core/types.ts";
 import { checkAction } from "../security/guard.ts";
 import { runCommand } from "../util/process.ts";
+import { shellTrustSpec } from "../trust/tool-support.ts";
 
 function safe(cwd: string, p: string): string | null {
   const abs = isAbsolute(p) ? p : resolve(cwd, p);
@@ -93,6 +94,28 @@ export const shellTool: Tool = {
     if (ctx.dryRun) {
       ctx.audit("shell.dryrun", { cmd });
       return { ok: true, output: `[dry-run] would run: ${cmd}` };
+    }
+    // XR 4.2 — when the runtime provides an isolated runner, execute the shell
+    // command inside a verified environment (Tier 2). This FAILS CLOSED if the
+    // required isolation is unavailable; it never silently runs in-process.
+    if (ctx.runIsolated) {
+      const { request, executable } = shellTrustSpec(cmd, ctx.cwd, {
+        timeoutMs: 120_000,
+        maxOutputBytes: 4 * 1024 * 1024,
+        networkTargets: ctx.egressAllowlist ?? [],
+      });
+      const r = await ctx.runIsolated(request, executable);
+      if (r.blocked) {
+        ctx.audit("shell.isolated_blocked", { cmd, reason: r.reason });
+        return { ok: false, output: `blocked: ${r.reason ?? "isolation unavailable"}` };
+      }
+      const out = r.stdout + r.stderr;
+      ctx.audit("shell.run_isolated", { cmd, exit: r.exitCode, placement: r.placement, verified: r.verified });
+      return {
+        ok: r.ok,
+        output: out.slice(0, 4000) || `(exit ${r.exitCode})`,
+        data: { isolated: true, placement: r.placement, verified: r.verified, exit: r.exitCode },
+      };
     }
     try {
       const proc = await runCommand("bash", ["-lc", cmd], { cwd: ctx.cwd, timeoutMs: 120_000, maxBuffer: 4 * 1024 * 1024 });

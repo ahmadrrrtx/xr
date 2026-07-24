@@ -4,11 +4,14 @@ import type { Store } from "../../state/workspace-store.ts";
 import type { XRConfig } from "../../config/config.ts";
 import type { XRShieldService } from "../../security/shield.ts";
 import type { WorkspaceManager } from "../../core/workspace.ts";
+import type { TrustService } from "../../trust/service.ts";
 
 export interface DaemonState {
   store: Store;
   shield: XRShieldService;
   workspaceManager: WorkspaceManager;
+  /** XR 4.2 — Trust & Isolation service (backend availability, health, classify). */
+  trust?: TrustService;
 }
 
 export interface DaemonResponseHelpers {

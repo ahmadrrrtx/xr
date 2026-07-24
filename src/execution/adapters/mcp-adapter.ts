@@ -20,6 +20,7 @@ import {
   sizeBytes,
   systemActor,
 } from "./common.ts";
+import { mcpTrustRequest } from "../../trust/tool-support.ts";
 
 export interface McpAdapterOptions {
   service: ExecutionService;
@@ -73,6 +74,8 @@ async function runMcp<T>(
     },
     capability: { kind: capKind, name, owner: opts.serverId },
     placement: IN_PROCESS_PLACEMENT,
+    // XR 4.2 — classify the MCP operation and record its risk tier/placement.
+    trust: { request: mcpTrustRequest(capKind, name, opts.serverId, opts.transport, process.cwd()) },
     idempotency: capKind === "mcp_tool" ? "unknown_unsafe" : "naturally_idempotent",
     inputSummary,
     inputBytes: sizeBytes(inputSummary),

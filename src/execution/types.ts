@@ -10,6 +10,13 @@
  *   - No `unknown` at the contract boundary without an explicit `kind`.
  */
 
+import type {
+  CredentialRef,
+  EnvironmentExecutable,
+  TrustRecord,
+  TrustRequest,
+} from "../trust/types.ts";
+
 // ── Identity ──────────────────────────────────────────────────────────────
 
 /** Stable identifiers for a unit of execution. */
@@ -70,6 +77,12 @@ export interface CapabilityIdentity {
 export type Placement =
   | { kind: "in_process"; description?: string }
   | { kind: "local"; description?: string }
+  // XR 4.2 — risk-tiered placements (see src/trust). Only local placements
+  // ship in Phase 3; the contract stays extensible for remote (Phase 11+).
+  | { kind: "restricted_process"; description?: string }   // Tier 1 (process restriction, NOT a hard boundary)
+  | { kind: "namespace_sandbox"; description?: string }    // Tier 2 (OS namespace sandbox)
+  | { kind: "container"; description?: string }            // Tier 2 (container runtime)
+  | { kind: "browser_isolated"; description?: string }     // Tier 2 (isolated browser profile)
   /** Extension boundary for Phase 4/5+ placements. */
   | { kind: "future"; kindName: string; description: string };
 
@@ -344,6 +357,14 @@ export interface ExecutionRecord {
   /** Retry linkage. */
   retryOf?: string;
   retryCount?: number;
+  /**
+   * XR 4.2 — Trust & Isolation metadata: deterministic risk tier, the
+   * policy-to-placement decision, authority grant reference, credential scope,
+   * resource policy, isolation verification, and cleanup/quarantine result.
+   * Present only for actions that opted into the trust gate (opts.trust).
+   * Contains NO raw secrets.
+   */
+  trust?: TrustRecord;
 }
 
 // ── Safe summaries (for CLI/daemon/UX) ────────────────────────────────────
@@ -386,6 +407,24 @@ export interface ExecuteOptions {
   plan?: ExecutionPlan;
   capability: CapabilityIdentity;
   placement?: Placement;
+  /**
+   * XR 4.2 — opt this action into deterministic risk classification and
+   * risk-tiered placement. When provided (and a TrustService is wired into the
+   * ExecutionService), the fabric will classify risk, decide placement, admit
+   * and verify an environment for Tier 1/2 work, and FAIL CLOSED when required
+   * isolation is unavailable. Tier 0 stays on the fast in-process `run` path.
+   *
+   *   - request: objective, already-redacted facts about the action.
+   *   - executable: the command form for Tier 1/2 execution inside an
+   *     environment. Required for high-risk actions (else they are blocked).
+   *   - credentialRefs: broker references for task-scoped secrets (names/refs
+   *     only; raw values never enter the record).
+   */
+  trust?: {
+    request: TrustRequest;
+    executable?: EnvironmentExecutable;
+    credentialRefs?: CredentialRef[];
+  };
   /**
    * Idempotency classification and key. The fabric will refuse a retry that
    * would silently duplicate a non-idempotent side effect.
@@ -478,5 +517,5 @@ export const EXECUTION_BOUNDS = {
   MAX_ATTEMPTS: 5,
 } as const;
 
-/** Adapter version stamped on every execution record in 4.1. */
-export const EXECUTION_ADAPTER_VERSION = "xr-4.1.0";
+/** Adapter version stamped on every execution record. 4.1 → 4.2 adds trust metadata. */
+export const EXECUTION_ADAPTER_VERSION = "xr-4.2.0";

@@ -17,6 +17,13 @@
 import { spawn, ChildProcess } from "node:child_process";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { CORE_VERSION, PKG } from "../core/version.ts";
+import {
+  buildIsolatedStdioSpawn,
+  decideMcpStdioPlacement,
+  detectBwrap,
+  mcpServerRisk,
+  type McpStdioFlags,
+} from "../trust/isolated-spawn.ts";
 
 // ── Environment Allow-list ───────────────────────────────────────────────────
 
@@ -226,6 +233,19 @@ export class McpClient {
   private proc?: ChildProcess;
   private stdin?: NodeJS.WritableStream;
   private stdout?: NodeJS.ReadableStream;
+  /** XR 4.2 — true when the stdio server runs inside a namespace sandbox. */
+  private isolated = false;
+  private sandboxWarning?: string;
+
+  /** Whether the stdio server process is isolated in a namespace sandbox. */
+  get isIsolated(): boolean {
+    return this.isolated;
+  }
+
+  /** Security warning when a high-risk server runs unisolated by explicit ack. */
+  get isolationWarning(): string | undefined {
+    return this.sandboxWarning;
+  }
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: any) => void }>();
   private buffer = "";
   private connected = false;
@@ -283,11 +303,63 @@ export class McpClient {
     // SECURITY: Use allow-listed env only (CRITICAL FIX)
     const env = this.allowedEnv;
 
-    this.proc = spawn(this.cfg.command!, this.cfg.args || [], {
-      stdio: ["pipe", "pipe", "pipe"],
-      env,
-      shell: false,
-    });
+    // XR 4.2 — Trust & Isolation: high-risk (credential-bearing) stdio servers
+    // run inside a namespace sandbox; without one they FAIL CLOSED unless the
+    // operator explicitly acknowledges an unisolated spawn. Low-risk servers
+    // keep the existing confined spawn (or isolation when forced).
+    const risk = mcpServerRisk(this.cfg);
+    const flags: McpStdioFlags = {
+      isolateStdio: process.env.XR_MCP_ISOLATE_STDIO === "1",
+      allowNet: process.env.XR_MCP_ISOLATED_NET === "1",
+      allowUnisolated: process.env.XR_MCP_ALLOW_UNISOLATED === "1",
+    };
+    const sandboxAvailable = await detectBwrap();
+    const placement = decideMcpStdioPlacement(risk, sandboxAvailable, flags);
+
+    if (placement === "blocked") {
+      throw new Error(
+        `MCP stdio server "${this.cfg.id}" is high-risk (carries credentials) and requires isolation, ` +
+          `but no namespace sandbox (bubblewrap) is available. Install bubblewrap, or set XR_MCP_ALLOW_UNISOLATED=1 ` +
+          `to explicitly accept the confined (non-kernel-isolated) spawn.`,
+      );
+    }
+
+    let spawned = false;
+    if (placement === "isolated") {
+      const spec = await buildIsolatedStdioSpawn(this.cfg.command!, this.cfg.args || [], env, {
+        writableRoot: process.cwd(),
+        allowNet: flags.allowNet,
+      });
+      if (spec) {
+        this.proc = spawn(spec.argv[0], spec.argv.slice(1), {
+          stdio: ["pipe", "pipe", "pipe"],
+          env: spec.outerEnv,
+          shell: false,
+        });
+        this.isolated = true;
+        spawned = true;
+      } else if (risk === "high" && !flags.allowUnisolated) {
+        throw new Error(`MCP stdio server "${this.cfg.id}" requires isolation but the sandbox could not be prepared.`);
+      }
+    }
+
+    if (!spawned) {
+      if (risk === "high" && flags.allowUnisolated) {
+        this.sandboxWarning =
+          `high-risk MCP stdio server "${this.cfg.id}" running WITHOUT kernel isolation (XR_MCP_ALLOW_UNISOLATED=1). ` +
+          `Env is allow-listed but the process is not sandboxed.`;
+        console.error(`[MCP security] WARNING: ${this.sandboxWarning}`);
+      }
+      this.proc = spawn(this.cfg.command!, this.cfg.args || [], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env,
+        shell: false,
+      });
+    }
+
+    if (!this.proc) {
+      throw new Error(`MCP stdio server "${this.cfg.id}" failed to spawn`);
+    }
 
     this.stdin = this.proc.stdin!;
     this.stdout = this.proc.stdout!;

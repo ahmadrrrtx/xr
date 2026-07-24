@@ -2004,8 +2004,38 @@ async function loadDashboard() {
       : "<div class='muted'>No logs recorded yet.</div>";
 
     await loadProviderChip();
+    await loadTrustPanel();
   } catch(e) {
     toast("Dashboard load failed: " + e.message, "err");
+  }
+}
+
+// XR 4.2 — Trust & Isolation status card (guarded; never breaks the dashboard).
+async function loadTrustPanel() {
+  try {
+    const grid = document.getElementById("dashboard-health-matrix");
+    if (!grid) return;
+    let cell = document.getElementById("trust-matrix-cell");
+    if (!cell) {
+      cell = document.createElement("div");
+      cell.className = "matrix-cell";
+      cell.id = "trust-matrix-cell";
+      cell.innerHTML =
+        '<div class="matrix-cell-head"><span class="matrix-cell-title">Trust &amp; Isolation</span><div class="matrix-cell-status" id="h-cell-trust"></div></div>' +
+        '<div class="matrix-cell-val" id="h-val-trust">…</div>' +
+        '<div class="matrix-cell-sub">Risk-tiered placement · Tier-2 fail-closed</div>';
+      grid.appendChild(cell);
+    }
+    const t = await api("/api/trust");
+    const backends = (t && t.backends) || [];
+    const avail = backends.filter(function (b) { return b.available; }).map(function (b) { return b.placement; });
+    const hasTier2 = avail.indexOf("namespace_sandbox") >= 0 || avail.indexOf("container") >= 0;
+    const valEl = document.getElementById("h-val-trust");
+    const statusEl = document.getElementById("h-cell-trust");
+    if (valEl) valEl.textContent = hasTier2 ? "Tier-2 sandbox ready" : (avail.length ? "Restricted only" : "In-process only");
+    if (statusEl) statusEl.className = "matrix-cell-status " + (hasTier2 ? "green" : "red");
+  } catch (e) {
+    /* never break the dashboard */
   }
 }
 
@@ -2285,7 +2315,7 @@ async function streamChat(text, assistantMsg) {
 async function handleSlashCommand(text, assistantMsg) {
   const parts=text.split(/\\s+/); const cmd=parts[0].toLowerCase(); const arg=text.slice(cmd.length).trim();
   if(cmd==='/plan'){ const id=addToolEvent('Control Planner','Dry-run checklists plan','running',arg); const j=await apiPost('/api/control/plan',{ task:arg || 'Build code project', noMemory:!chatState.toggles.memory }); updateToolEvent(id,'done','Plan synthesized'); assistantMsg.content = '### Planned automation checkpoints\\n\\n' + formatPlan(j.plan || []) + '\\n\\n_Planner routing: '+(j.source || 'default')+'_'; return; }
-  if(cmd==='/status'){ const id=addToolEvent('System status','Load core status cards','running','Loading...'); const all=await Promise.allSettled([api('/api/overview'),api('/api/cost'),api('/api/control/status'),api('/api/providers'),api('/api/models')]); updateToolEvent(id,'done','Complete status'); assistantMsg.content=formatStatus(all); return; }
+  if(cmd==='/status'){ const id=addToolEvent('System status','Load core status cards','running','Loading...'); const all=await Promise.allSettled([api('/api/overview'),api('/api/cost'),api('/api/control/status'),api('/api/providers'),api('/api/models'),api('/api/trust')]); updateToolEvent(id,'done','Complete status'); assistantMsg.content=formatStatus(all); return; }
   if(cmd==='/memory'){ const id=addToolEvent('RAG Memory','Fetch memory lists','running',arg || 'all'); const q=arg ? await api('/api/memory/search?q='+encodeURIComponent(arg)) : await api('/api/memory'); updateToolEvent(id,'done','Memory fetched'); assistantMsg.content=formatMemory(q, arg); loadMemoryPeek(); return; }
   if(cmd==='/budget'){ const id=addToolEvent('Governor budget','Assess spend ceilings','running','Checking...'); const j=await api('/api/cost'); updateToolEvent(id,'done','Budget check finished'); assistantMsg.content='### Budget controls\\n- Spent: **$'+Number(j.totalUsd||0).toFixed(6)+'**\\n- Tokens processed: **'+Number(j.totalTokens||0).toLocaleString()+'**'; return; }
   if(cmd==='/clear'){ activeChat().messages=[]; assistantMsg.content='Workspace chat cleared.'; return; }
@@ -2293,7 +2323,7 @@ async function handleSlashCommand(text, assistantMsg) {
 }
 
 function formatPlan(plan){ if(Array.isArray(plan)) return plan.map((s,i)=> (typeof s==='string' ? (i+1)+'. '+s : (i+1)+'. **'+(s.kind||s.action||'Step')+'** — '+(s.summary||s.command||JSON.stringify(s)))).join('\\n'); return typeof plan==='string'?plan:JSON.stringify(plan,null,2); }
-function formatStatus(all){ const val=i=>all[i].status==='fulfilled'?all[i].value:null; const ov=val(0), cost=val(1), ctrl=val(2), providers=val(3), models=val(4); return '### XR System Status\\n\\n- **Workspace active directory**: '+(ov?.project||'default')+'\\n- **Durable Ledger checks**: '+(ov?.audit?.chain?.valid?'✓ cryptographic chain OK':'⚠ Chain modified')+'\\n- **Spend Governor**: $'+Number(cost?.totalUsd||0).toFixed(6)+' spend\\n- **Provider / Model**: '+(providers?.primary || 'ollama')+' · '+(models?.selected?.model || 'qwen2.5:7b')+'\\n- **Computer Use state**: '+(ctrl?.enabled?'opt-in authorized':'disabled'); }
+function formatStatus(all){ const val=i=>all[i].status==='fulfilled'?all[i].value:null; const ov=val(0), cost=val(1), ctrl=val(2), providers=val(3), models=val(4), trust=val(5); return '### XR System Status\\n\\n- **Workspace active directory**: '+(ov?.project||'default')+'\\n- **Durable Ledger checks**: '+(ov?.audit?.chain?.valid?'✓ cryptographic chain OK':'⚠ Chain modified')+'\\n- **Spend Governor**: $'+Number(cost?.totalUsd||0).toFixed(6)+' spend\\n- **Provider / Model**: '+(providers?.primary || 'ollama')+' · '+(models?.selected?.model || 'qwen2.5:7b')+'\\n- **Computer Use state**: '+(ctrl?.enabled?'opt-in authorized':'disabled')+'\\n- **Trust & Isolation**: '+(((trust&&trust.backends)||[]).filter(function(b){return b.available;}).map(function(b){return b.placement;}).join(', ')||'none')+' available (Tier-2 fail-closed)'; }
 function formatMemory(j,q){ const entries=j.results || j.entries || []; if(!entries.length) return 'No vector memories found.'; return '### Vector Memories stored:\\n\\n'+entries.slice(0,10).map(e=>'- **'+(e.category||'node')+'**: '+(e.content||'')).join('\\n'); }
 
 function addToolEvent(tool, purpose, status, result){ const id='tool_'+(++chatToolSeq); const box=document.getElementById('tool-timeline'); if(box){ const el=document.createElement('div'); el.className='tool-card '+status; el.id=id; el.innerHTML='<div class="tool-head" onclick="this.parentElement.classList.toggle(\'open\')"><span class="tool-summary"><svg viewBox="0 0 24 24" style="width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2;"><polygon points="12 2 2 7 12 12 22 7 12 2z"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> <b>'+escapeHtml(tool)+'</b></span><span class="tool-indicator">'+escapeHtml(status)+'</span></div><div class="tool-body">'+escapeHtml(result||'')+'</div>'; if(box.querySelector('.muted')) box.innerHTML=''; box.prepend(el); } return id; }

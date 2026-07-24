@@ -4,6 +4,7 @@
  */
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { hostAllowed, htmlToText } from "./egress.ts";
+import { networkTrustRequest } from "../trust/tool-support.ts";
 
 const DEFAULT_SEARXNG = process.env.XR_SEARXNG ?? "https://searx.be";
 
@@ -25,6 +26,7 @@ export const fetchUrlTool: Tool = {
   description: "Fetch a web page (allow-listed domains only) and return clean text.",
   parameters: { url: "string (http/https url)" },
   requiresApproval: false,
+  trustRequest: (args, ctx) => networkTrustRequest("fetch_url", ctx.cwd, [String(args.url ?? "")]),
   async run(args, ctx): Promise<ToolResult> {
     const url = String(args.url ?? "");
     const blocked = egressOk(url, ctx);
@@ -49,6 +51,7 @@ export const webSearchTool: Tool = {
   description: "Search the web via a SearXNG instance. Returns titles + snippets + urls.",
   parameters: { query: "string", max_results: "number (optional, default 5)" },
   requiresApproval: false,
+  trustRequest: (_args, ctx) => networkTrustRequest("web_search", ctx.cwd, ["searxng"]),
   async run(args, ctx): Promise<ToolResult> {
     const query = String(args.query ?? "");
     const max = Number(args.max_results ?? 5);
@@ -78,6 +81,8 @@ export const checkPackageTool: Tool = {
   description: "Look up a package's latest version & info (npm or pypi). Egress-gated.",
   parameters: { name: "string", registry: "string ('npm' | 'pypi')" },
   requiresApproval: false,
+  trustRequest: (args, ctx) =>
+    networkTrustRequest("check_package", ctx.cwd, [String(args.registry ?? "npm") === "pypi" ? "pypi.org" : "registry.npmjs.org"]),
   async run(args, ctx): Promise<ToolResult> {
     const name = String(args.name ?? "");
     const registry = String(args.registry ?? "npm");

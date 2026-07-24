@@ -5,6 +5,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, relative, isAbsolute } from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
+import { readTrustRequest, workspaceWriteTrustRequest } from "../trust/tool-support.ts";
 
 /** Keep the agent inside its working directory (no escaping with ../). */
 function safePath(cwd: string, p: string): string {
@@ -21,6 +22,7 @@ export const readFileTool: Tool = {
   description: "Read a UTF-8 text file inside the working directory.",
   parameters: { path: "string (relative path)" },
   requiresApproval: false,
+  trustRequest: (_args, ctx) => readTrustRequest("read_file", ctx.cwd),
   async run(args, ctx): Promise<ToolResult> {
     const p = safePath(ctx.cwd, String(args.path ?? ""));
     if (!existsSync(p)) return { ok: false, output: `file not found: ${args.path}` };
@@ -50,6 +52,7 @@ export const writeFileTool: Tool = {
   description: "Create or overwrite a text file inside the working directory. Requires approval.",
   parameters: { path: "string (relative path)", content: "string (full new content)" },
   requiresApproval: true,
+  trustRequest: (args, ctx) => workspaceWriteTrustRequest("write_file", ctx.cwd, [String(args.path ?? "")]),
   async run(args, ctx: ToolContext): Promise<ToolResult> {
     const p = safePath(ctx.cwd, String(args.path ?? ""));
     const newContent = String(args.content ?? "");

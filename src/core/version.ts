@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "4.1.0",
-  codename: "Unified Execution Fabric",
+  version: "4.2.0",
+  codename: "Trust and Isolation",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 4.1 (Unified Execution Fabric) — one canonical execution contract for every consequential action, with explicit lifecycle, policy/approval/budget gates, idempotency, cancellation/timeout/retry, and bounded local execution history.",
+  description: "XR 4.2 (Trust and Isolation) — risk-tiered execution placement that makes authority enforceable: deterministic risk classification, policy-to-placement decisions, task-scoped authority and credentials, enforceable filesystem/network/process boundaries via local OS sandboxing (bubblewrap/user namespaces/container), placement verification, cleanup/quarantine, and fail-closed high-risk behavior — integrated with the Unified Execution Fabric.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;

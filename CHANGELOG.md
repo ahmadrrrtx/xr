@@ -5,6 +5,103 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] - 2026-07-24 — Trust and Isolation
+
+### Added
+- **Trust & Isolation subsystem** (`src/trust/`): makes XR authority enforceable
+  by risk tier. A policy decision is now bound to the authority of the
+  environment that executes the action — a record saying "allowed" is no longer
+  treated as sufficient.
+- **Deterministic risk classifier** (`classify.ts`): maps objective action facts
+  to `tier0_in_process | tier1_restricted | tier2_isolated` plus required
+  fs/net/process policy, resource limits, credential mode, and approval level.
+  A model cannot choose or downgrade a tier.
+- **Fail-closed policy-to-placement** (`policy.ts`): Tier 0 stays in-process;
+  Tier 1 uses a restricted process; Tier 2 uses a namespace sandbox or container
+  and is **blocked** when no enforceable backend exists — never silently
+  downgraded to in-process. Root voids restricted/isolated placement.
+- **Real OS isolation backends** (`environment/`): `namespace_sandbox`
+  (bubblewrap primary; raw user/mount/pid/net namespaces fallback) with a
+  minimal rebuilt root, no network, stripped env, and `ulimit` cpu/mem/proc;
+  `container` (Docker/Podman when present); `restricted_process` (Tier 1,
+  honestly labeled process restriction, not a boundary); `in_process`.
+- **Task-scoped authority grants** (`authority.ts`): bounded, TTL, revocable,
+  bound to execution + workspace; stale/expired/revoked grants are rejected.
+- **Credential broker** (`credentials.ts`): reference-only secrets, transient
+  injection into the sandbox env, redaction of registered + generic secret
+  shapes, `assertClean`, and revocation on cleanup. Raw values never enter
+  records/logs/output.
+- **Isolation verification** (`verify.ts`): proves actual placement matches the
+  policy decision and guarantees meet the tier before execution; blocks
+  otherwise (incl. Tier-2 network allowlists that local backends can't enforce).
+- **Environment manager** (`environment/manager.ts`): capability detection,
+  selection, execute-with-verification-and-cleanup, quarantine, health, shutdown.
+- **`TrustService`** with lifecycle/health, registered under `Tokens.Trust` via
+  `TrustServiceProvider` and wired into `ExecutionService`.
+- **Execution-fabric integration**: `ExecutionRecord.trust` (risk, placement
+  decision, authority-grant id, credential scope, resource policy, verification,
+  cleanup/quarantine); `ExecuteOptions.trust`; new `Placement` kinds; trust gate
+  runs after policy/approval and before the action (blocked → `denied`/`TRUST_BLOCKED`).
+- **Tool wiring**: `ToolContext.runIsolated`; the `shell` tool runs in the
+  namespace sandbox in the full runtime (legacy fallback when no Trust service).
+- **Adapter-level risk classification** recorded on every consequential action:
+  file/web/git tools (Tier 0/1), control/computer-use/browser (mapped from the
+  existing safe/sensitive/destructive classifier; destructive host-authority
+  actions admitted with an explicit elevated gate, not blocked).
+- **MCP isolation**: high-risk (credential-bearing) **stdio** servers now run
+  **inside the namespace sandbox** for their lifetime (stdio passes through
+  bwrap; verified), and **fail closed** when no sandbox exists unless explicitly
+  acknowledged (`XR_MCP_ALLOW_UNISOLATED=1`, warned). `XR_MCP_ISOLATE_STDIO=1`
+  force-isolates low-risk servers; `XR_MCP_ISOLATED_NET=1` opts into in-sandbox
+  network. HTTP/SSE servers remain egress-gated (Tier 1).
+- **Plugin permission-aware risk model**: operations classified by **effective
+  (granted)** permissions; hard-boundary capabilities (`shell`/`control`/
+  `browser`) are Tier 2 and **membrane-blocked** (declared ≠ authority); `secrets`
+  → Tier 2 mediated, `net` → Tier 1 egress-gated.
+- **`requiresHostAuthority`** distinction: sandboxable high-risk work (shell/code)
+  must be isolated or blocked; inherently host-bound work (GUI/browser) is
+  admitted with an explicit elevated gate and never treated as low-risk.
+- **Trust metadata durability**: the `trust` block round-trips through the
+  execution repository (`record_json`); 4.1-shaped records still load.
+- **UX**: `xr trust` CLI command (status / classify / --json), daemon
+  `/api/trust` + `/api/trust/classify` routes (secret-free, token-gated), a
+  **dashboard Trust & Isolation matrix card**, and a dashboard `/status` line.
+- **Performance script**: `scripts/measure-trust-perf.ts` (per-tier latency).
+- **Phase 3 documentation**: `docs/phase3/TRUST_ARCHITECTURE.md`,
+  `PLATFORM_SUPPORT.md`, `THREAT_MODEL.md`, `MIGRATION_4.1_to_4.2.md`,
+  `VALIDATION_REPORT.md`.
+- **88 new tests** (deterministic classifier, fail-closed policy, authority,
+  credential redaction, verification, **real-sandbox adversarial** proofs,
+  end-to-end execution-fabric integration, per-tool/adapter classification,
+  daemon/CLI UX, durability, and migration/rollback safety).
+
+### Changed
+- Version identity updated to `4.2.0 (Trust and Isolation)` across
+  package/runtime/website surfaces.
+- `EXECUTION_ADAPTER_VERSION` bumped `xr-4.1.0` → `xr-4.2.0`.
+- All changes are additive: actions without `opts.trust`, and runtimes without a
+  wired Trust service, behave exactly as in 4.1.
+
+### Security
+- High-risk actions can no longer rely on in-process checks alone: they execute
+  inside a verified OS boundary or are blocked (fail closed).
+- No ambient host authority is inherited by high-risk execution; credentials are
+  scoped, injected transiently, redacted from records, and revoked on cleanup.
+- Documented honest limits: Tier 1 is process restriction (not a boundary);
+  sandbox network is `none` (no in-boundary allowlist); Linux-only Tier 2 in
+  4.2; no claim against host-kernel 0-days.
+
+### Documented limitations (out-of-scope / procedural, not technical blockers)
+- **Cross-platform Tier-2 backends** (macOS Seatbelt / Windows AppContainer) are
+  out of scope for 4.2 (local Linux isolation); those platforms **fail closed**
+  for high-risk actions (see `docs/phase3/PLATFORM_SUPPORT.md`).
+- **Running plugin VM code itself inside a kernel namespace** is future
+  hardening; the "isolate-or-block" criterion is met via the **blocked** branch
+  (the VM membrane denies raw process/GUI/web authority; declared ≠ authority).
+- **Production rollback drill + human security/release owner sign-off** are
+  operational steps; rollback **safety** is tested (no unsafe high-risk fallback,
+  4.1 records load, fail-closed default).
+
 ## [4.1.0] - 2026-07-22 — Unified Execution Fabric
 
 ### Added
