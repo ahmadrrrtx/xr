@@ -1,11 +1,14 @@
 /**
- * XR 4.1 — Execution State Machine
+ * XR 4.3 — Execution State Machine (extended for Durable Agency)
  *
  * Deterministic, unit-testable state transitions for the Unified Execution
  * Fabric. Every transition validates against an explicit allowed-set.
+ *
+ * XR 4.3 additions: recovery-aware transitions (interrupted, recoverable,
+ * resuming, recovery_blocked) plus checkpoint lifecycle events.
  */
 import { InvalidExecutionTransitionError } from "./errors.ts";
-import type { ExecutionState, ExecutionTransition } from "./types.ts";
+import type { ExecutionState, ExecutionTransition, RecoveryState } from "./types.ts";
 
 /**
  * The (state, event) → next-state mapping. "event" is the logical transition
@@ -30,7 +33,15 @@ type Event =
   | "mark_unavailable"
   | "reconcile"
   | "retry"
-  | "mark_dry_run";
+  | "mark_dry_run"
+  // XR 4.3 — Durable Agency transitions
+  | "interrupt"           // Process crash / unexpected termination
+  | "mark_recoverable"    // Classified as safe to resume
+  | "begin_resume"        // Recovery is starting
+  | "resume_complete"     // Recovery finished; back to running
+  | "block_recovery"      // Recovery blocked (authority, env, policy)
+  | "mark_paused"         // User explicitly paused
+  | "checkpoint";         // Checkpoint written (side-effect free transition)
 
 const TRANSITIONS: Record<ExecutionState, Partial<Record<Event, ExecutionState>>> = {
   created: {
@@ -109,6 +120,13 @@ const TRANSITIONS: Record<ExecutionState, Partial<Record<Event, ExecutionState>>
   budget_blocked: {},
   unavailable: {},
   reconciliation_required: {},
+
+  // ── XR 4.3 — Recovery-aware states ─────────────────────────────────────
+  // These are synthetic states that only appear in recovery context. They
+  // augment the execution state for durability without replacing it.
+  // The recovery state machine is separate and operates on RecoveryState
+  // (see ./recovery.ts), not ExecutionState. Checkpoint transitions do not
+  // change the execution state — they are side-effect-free metadata.
 };
 
 /** Set of terminal states. No action may run once in a terminal state. */
@@ -190,3 +208,31 @@ export const STATE_CLASS: Record<ExecutionState, "active" | "waiting" | "termina
   unavailable: "terminal",
   reconciliation_required: "terminal",
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// XR 4.3 — Recovery state helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** States that indicate the execution was in progress when interrupted. */
+export const IN_FLIGHT_STATES: ReadonlySet<ExecutionState> = new Set<ExecutionState>([
+  "queued",
+  "running",
+  "observing",
+  "awaiting_approval",
+]);
+
+/** States that indicate the action may have produced a side effect. */
+export const SIDE_EFFECT_POSSIBLE_STATES: ReadonlySet<ExecutionState> = new Set<ExecutionState>([
+  "running",
+  "observing",
+]);
+
+/** True when the state indicates the execution was active at crash time. */
+export function wasInFlight(s: ExecutionState): boolean {
+  return IN_FLIGHT_STATES.has(s);
+}
+
+/** True when a side effect may have occurred given the state at crash. */
+export function sideEffectPossible(s: ExecutionState): boolean {
+  return SIDE_EFFECT_POSSIBLE_STATES.has(s);
+}

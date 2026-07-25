@@ -185,6 +185,30 @@ export function systemRoutes(): DaemonRoute[] {
       },
     }),
     route({
+      id: "recovery.status.get",
+      path: "/api/recovery",
+      method: "GET",
+      handle: ({ json, state }) => {
+        try {
+          const execService = (state as any).registry?.tryResolve?.((state as any).registry?.Tokens?.Execution);
+          if (!execService || typeof execService.getRecoveryPending !== "function") {
+            return json({ recovery: [], summary: { pending: 0, blocked: 0, safeToResume: 0 } });
+          }
+          const pending = execService.getRecoveryPending((state as any).workspaceManager.getActiveId());
+          return json({
+            recovery: pending,
+            summary: {
+              pending: pending.length,
+              blocked: pending.filter((r: any) => r.recoveryState === "recovery_blocked").length,
+              safeToResume: pending.filter((r: any) => r.safeToResume).length,
+            },
+          });
+        } catch (e) {
+          return json({ error: (e as Error).message }, 500);
+        }
+      },
+    }),
+    route({
       id: "config.safe.get",
       path: "/api/config",
       method: "GET",
