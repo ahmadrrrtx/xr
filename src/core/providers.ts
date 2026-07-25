@@ -41,6 +41,16 @@ import { BusinessOS } from "../business/index.ts";
 import { ExecutionService } from "../execution/service.ts";
 import { ExecutionRepo, adaptWorkspaceStore } from "../execution/repository.ts";
 
+// XR 4.2 — Trust & Isolation.
+import { TrustService } from "../trust/service.ts";
+import { CredentialBroker } from "../trust/credentials.ts";
+import { AuthorityRegistry } from "../trust/authority.ts";
+import { EnvironmentManager } from "../trust/environment/manager.ts";
+import { InProcessBackend } from "../trust/environment/in-process.ts";
+import { RestrictedProcessBackend } from "../trust/environment/restricted-process.ts";
+import { NamespaceSandboxBackend } from "../trust/environment/namespace.ts";
+import { ContainerBackend } from "../trust/environment/container.ts";
+
 /**
  * State layer: opens exactly one WorkspaceStore for the active workspace and
  * registers it (plus its backward-compat alias) and the typed repos that are
@@ -257,10 +267,49 @@ export class ShieldServiceProvider implements ServiceProvider {
 }
 
 /**
+ * XR 4.2 — Trust & Isolation. Process-scoped (backends/broker/registry are
+ * host-level, not workspace-level). Its onInit detects which local isolation
+ * backends are actually usable (bubblewrap/userns/container) so high-risk
+ * placement decisions are grounded in reality and can FAIL CLOSED. Authority
+ * grants remain ephemeral and workspace-tagged; the ExecutionService consumes
+ * this service to admit/verify/clean high-risk actions.
+ */
+export class TrustServiceProvider implements ServiceProvider {
+  readonly id = "trust";
+
+  register(ctx: ProviderContext): void {
+    ctx.registry.registerSingleton(
+      Tokens.Trust,
+      () => {
+        const broker = new CredentialBroker();
+        const registry = new AuthorityRegistry();
+        const manager = new EnvironmentManager(
+          [
+            new InProcessBackend(),
+            new RestrictedProcessBackend(),
+            new NamespaceSandboxBackend(),
+            new ContainerBackend(),
+          ],
+          broker,
+        );
+        return new TrustService({ manager, registry, broker });
+      },
+      {
+        lifecycle: true,
+        dependsOn: [],
+        kernelScope: "process",
+        owner: "trust",
+      },
+    );
+  }
+}
+
+/**
  * Execution Fabric — the canonical execution service. Workspace-scoped so
  * that its repository rebinds to the active workspace store on switch.
- * Depends on the audit repo (for correlation) and is available to agent,
- * control, MCP, plugin, skill, research, and business services.
+ * Depends on the audit repo (for correlation) and, in XR 4.2, on the Trust &
+ * Isolation service (for risk-tiered placement). Available to agent, control,
+ * MCP, plugin, skill, research, and business services.
  */
 export class ExecutionServiceProvider implements ServiceProvider {
   readonly id = "execution";
@@ -272,9 +321,11 @@ export class ExecutionServiceProvider implements ServiceProvider {
       (registry) => {
         const store = registry.resolve(Tokens.Store);
         const audit = registry.resolve(Tokens.AuditStore);
+        const trust = registry.resolve(Tokens.Trust);
         const repo = new ExecutionRepo(adaptWorkspaceStore(store));
         return new ExecutionService({
           repo,
+          trust,
           audit: (event, detail) => {
             try {
               audit.audit(event, detail, null);
@@ -286,7 +337,7 @@ export class ExecutionServiceProvider implements ServiceProvider {
       },
       {
         lifecycle: true,
-        dependsOn: [Tokens.Store, Tokens.AuditStore],
+        dependsOn: [Tokens.Store, Tokens.AuditStore, Tokens.Trust],
         kernelScope: "workspace",
         owner: "execution",
       },

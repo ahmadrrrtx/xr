@@ -64,6 +64,7 @@ import {
   PluginServiceProvider,
   McpServiceProvider,
   SkillServiceProvider,
+  TrustServiceProvider,
   ExecutionServiceProvider,
   AgentServiceProvider,
   MultiAgentServiceProvider,
@@ -477,6 +478,7 @@ export class XRApp {
     this.use(new PluginServiceProvider());
     this.use(new McpServiceProvider());
     this.use(new SkillServiceProvider());
+    this.use(new TrustServiceProvider());
     this.use(new ExecutionServiceProvider());
     this.use(new AgentServiceProvider());
     this.use(new MultiAgentServiceProvider());

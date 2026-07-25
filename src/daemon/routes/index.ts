@@ -9,6 +9,7 @@ import { memoryRoutes } from "./memory.routes.ts";
 import { providersRoutes } from "./providers.routes.ts";
 import { shieldRoutes } from "./shield.routes.ts";
 import { systemRoutes } from "./system.routes.ts";
+import { trustRoutes } from "./trust.routes.ts";
 import { createDaemonRouter, type DaemonRouteHandler } from "./router.ts";
 
 export function createRouteHandler(): DaemonRouteHandler {
@@ -18,6 +19,7 @@ export function createRouteHandler(): DaemonRouteHandler {
     ...agentsRoutes(),
     ...budgetRoutes(),
     ...shieldRoutes(),
+    ...trustRoutes(),
     ...providersRoutes(),
     ...extensionRoutes(),
     ...controlRoutes(),

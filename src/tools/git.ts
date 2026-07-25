@@ -10,6 +10,7 @@
  * - git_stash: stash/unstash working changes
  */
 import { runCommand } from "../util/process.ts";
+import { readTrustRequest, gitMutateTrustRequest } from "../trust/tool-support.ts";
 import type { Tool } from "../core/types.ts";
 
 async function gitExec(args: string[], cwd: string, timeout = 15000): Promise<string> {
@@ -25,6 +26,7 @@ export const gitStatusTool: Tool = {
   description: "Show the current Git working tree status — staged, unstaged, and untracked files.",
   parameters: {},
   requiresApproval: false,
+  trustRequest: (_args, ctx) => readTrustRequest("git_status", ctx.cwd),
   async run(_args, ctx) {
     const out = await gitExec(["status", "--porcelain"], ctx.cwd);
     if (!out.trim()) {
@@ -47,6 +49,7 @@ export const gitDiffTool: Tool = {
   description: "Show unstaged changes. Pass a filename to diff a specific file, or leave empty for all.",
   parameters: { file: "string (optional — diff a specific file)" },
   requiresApproval: false,
+  trustRequest: (_args, ctx) => readTrustRequest("git_diff", ctx.cwd),
   async run(args, ctx) {
     const file = args.file ? String(args.file) : "";
     const diffArgs = file ? ["diff", "--", file] : ["diff"];
@@ -62,6 +65,7 @@ export const gitCommitTool: Tool = {
   description: "Stage all changes and commit with a message. Requires a commit message. Destructive — requires approval.",
   parameters: { message: "string (required — commit message)" },
   requiresApproval: true,
+  trustRequest: (_args, ctx) => gitMutateTrustRequest("git_commit", ctx.cwd),
   async run(args, ctx) {
     const msg = String(args.message || "chore: update via XR");
     const sanitized = msg.replace(/"/g, '\\"').slice(0, 200);
@@ -82,6 +86,7 @@ export const gitBranchTool: Tool = {
   description: "List all branches, or create/switch to a branch. Usage: list (no args), create <name>, switch <name>.",
   parameters: { action: "string ('list' | 'create' | 'switch')", name: "string (branch name)" },
   requiresApproval: false,
+  trustRequest: (_args, ctx) => gitMutateTrustRequest("git_branch", ctx.cwd),
   async run(args, ctx) {
     const action = String(args.action || "list");
     const name = String(args.name || "");
@@ -111,6 +116,7 @@ export const gitLogTool: Tool = {
   description: "Show recent commit history. Pass a number for how many commits to show (default: 10).",
   parameters: { count: "number (how many commits to show, default 10)" },
   requiresApproval: false,
+  trustRequest: (_args, ctx) => readTrustRequest("git_log", ctx.cwd),
   async run(args, ctx) {
     const n = Math.min(Number(args.count ?? 10), 50);
     const out = await gitExec(["log", `--oneline`, `-n${n}`, `--format=%h %s (%an)`], ctx.cwd);
@@ -125,6 +131,7 @@ export const gitStashTool: Tool = {
   description: "Stash current changes (save without committing) or restore stashed changes.",
   parameters: { action: "string ('save' | 'pop' | 'list' | 'drop')", message: "string (optional stash description)" },
   requiresApproval: true,
+  trustRequest: (_args, ctx) => gitMutateTrustRequest("git_stash", ctx.cwd),
   async run(args, ctx) {
     const action = String(args.action || "save");
     const msg = String(args.message || "");

@@ -7,7 +7,28 @@
 export type Mode = "agent" | "plan" | "ask";
 
 /** Trust level of a value/step — basis of the Dual-LLM separation (later phase). */
+import type { EnvironmentExecutable, TrustRequest } from "../trust/types.ts";
+
 export type Trust = "trusted" | "quarantined";
+
+/**
+ * XR 4.2 — result of running a high-risk command inside an isolated
+ * environment via ToolContext.runIsolated. Secret-free; safe to audit/display.
+ */
+export interface IsolatedRunResult {
+  ok: boolean;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  /** True when the action was BLOCKED (fail closed) rather than executed. */
+  blocked: boolean;
+  reason?: string;
+  /** Placement actually used (e.g. "namespace_sandbox"). */
+  placement?: string;
+  /** Whether isolation verification passed before execution. */
+  verified?: boolean;
+}
 
 /** A tool the agent can call. */
 export interface Tool {
@@ -17,6 +38,14 @@ export interface Tool {
   parameters: Record<string, unknown>;
   /** Is this action risky enough to require human approval? */
   requiresApproval: boolean;
+  /**
+   * XR 4.2 — declare this tool's objective risk facts so the execution fabric's
+   * trust gate can classify and place it. Return undefined to opt out (legacy
+   * behavior). Tools that need a real boundary (e.g. shell) isolate via
+   * ToolContext.runIsolated; tools that only need classification/recording
+   * (reads, in-workspace writes, egress-gated network) return a TrustRequest.
+   */
+  trustRequest?: (args: Record<string, unknown>, ctx: ToolContext) => TrustRequest | undefined;
   /** Run the tool. May throw; caller handles. */
   run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult>;
 }
@@ -32,6 +61,14 @@ export interface ToolContext {
   egressAllowlist?: string[];
   /** Dry-run: simulate side effects, never actually write/execute. */
   dryRun?: boolean;
+  /**
+   * XR 4.2 — run a high-risk command inside an isolated environment when the
+   * runtime provides a Trust service. ABSENT when no Trust service is wired,
+   * in which case tools use their legacy in-process path. Implementations FAIL
+   * CLOSED: if required isolation is unavailable they return { blocked: true }
+   * rather than executing in the unrestricted host process.
+   */
+  runIsolated?: (req: TrustRequest, exec: EnvironmentExecutable) => Promise<IsolatedRunResult>;
 }
 
 export interface ApprovalRequest {

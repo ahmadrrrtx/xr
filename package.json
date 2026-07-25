@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
-  "version": "4.1.0",
-  "description": "XR 4.1 (Unified Execution Fabric) \u2014 one canonical execution contract for every consequential action, with explicit lifecycle, policy/approval/budget gates, idempotency, cancellation/timeout/retry, and bounded local execution history.",
+  "version": "4.2.0",
+  "description": "XR 4.2 (Trust and Isolation) — risk-tiered execution placement that makes authority enforceable: deterministic risk classification, policy-to-placement decisions, task-scoped authority and credentials, enforceable filesystem/network/process boundaries via local OS sandboxing (bubblewrap/user namespaces/container), placement verification, cleanup/quarantine, and fail-closed high-risk behavior — integrated with the Unified Execution Fabric.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr.cjs"

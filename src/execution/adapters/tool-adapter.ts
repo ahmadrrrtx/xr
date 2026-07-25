@@ -5,6 +5,7 @@
  * the execution fabric while preserving the existing ToolContext contract.
  * Existing callers keep receiving ToolResult; the fabric gets a canonical record.
  */
+import { randomUUID } from "node:crypto";
 import type { Tool, ToolContext, ToolResult, ApprovalRequest } from "../../core/types.ts";
 import type { ExecutionService } from "../service.ts";
 import type {
@@ -107,9 +108,51 @@ export async function executeTool(
       opts.audit?.(event, detail);
     },
     dryRun: !!opts.dryRun,
+    // XR 4.2 — when a Trust service is wired, expose an isolated runner so
+    // high-risk tools (e.g. shell) execute inside a verified environment and
+    // FAIL CLOSED when required isolation is unavailable. Absent otherwise,
+    // which keeps the legacy in-process path for callers without a Trust service.
+    runIsolated: service.trust
+      ? async (req, exec) => {
+          const trustSvc = service.trust!;
+          const runId = `ex_${randomUUID().slice(0, 10)}`;
+          const ev = await trustSvc.evaluate({
+            request: req,
+            runId,
+            correlationId: runId,
+            workspaceId: opts.workspaceId,
+            actor: `${actor.kind}`,
+            capability: `${capability.kind}:${capability.name}`,
+            executable: exec,
+          });
+          if (ev.outcome.kind === "blocked") {
+            return { ok: false, exitCode: null, stdout: "", stderr: ev.outcome.reason, timedOut: false, blocked: true, reason: ev.outcome.reason };
+          }
+          if (ev.outcome.kind === "ran_in_environment") {
+            const o = ev.outcome.observation;
+            return {
+              ok: o.transportOk,
+              exitCode: typeof o.statusCode === "number" ? o.statusCode : null,
+              stdout: String(o.meta?.stdout ?? ""),
+              stderr: (o.logs ?? []).join("\n"),
+              timedOut: Boolean(o.meta?.timedOut),
+              blocked: false,
+              placement: ev.trust.decision.placement,
+              verified: ev.trust.verification?.verified ?? false,
+            };
+          }
+          // A tool that asked for isolation must not be served in-process.
+          return { ok: false, exitCode: null, stdout: "", stderr: "expected isolated placement for high-risk tool", timedOut: false, blocked: true, reason: "expected isolated placement" };
+        }
+      : undefined,
   };
 
   let result: ToolResult = { ok: false, output: "tool did not return a result" };
+
+  // XR 4.2 — let the tool declare its objective risk facts for the trust gate.
+  // Tools that isolate themselves (e.g. shell via runIsolated) return undefined
+  // here; the rest get classified/placed/recorded by the fabric.
+  const declaredTrust = tool.trustRequest ? tool.trustRequest(args, toolCtx) : undefined;
 
   const record = await service.execute({
     workspaceId: opts.workspaceId,
@@ -139,6 +182,7 @@ export async function executeTool(
         : undefined,
     checkBudget: opts.checkBudget,
     audit: opts.audit,
+    trust: declaredTrust ? { request: declaredTrust } : undefined,
     run: async (ctx) => {
       let obs: ExecutionObservation;
       try {

@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import {
   EXECUTION_ADAPTER_VERSION,
   EXECUTION_BOUNDS,
+  type ActorIdentity,
   type ExecutionEvent,
   type ExecutionListener,
   type ExecutionRecord,
@@ -27,6 +28,8 @@ import {
   type PolicyDecision,
   type Placement,
 } from "./types.ts";
+import type { TrustService } from "../trust/service.ts";
+import type { PlacementKind } from "../trust/types.ts";
 import type { ExecutionRepo } from "./repository.ts";
 import { canRun, isTerminal, transition } from "./state-machine.ts";
 import {
@@ -40,6 +43,13 @@ export interface ExecutionServiceDeps {
   repo: ExecutionRepo;
   /** Optional audit bridge (existing audit repo). */
   audit?: (event: string, detail: Record<string, unknown>) => void;
+  /**
+   * XR 4.2 — optional Trust & Isolation service. When present AND an action
+   * supplies `opts.trust`, the fabric classifies risk, decides placement, and
+   * runs Tier 1/2 work inside a verified environment (fail closed otherwise).
+   * When absent, behavior is identical to XR 4.1.
+   */
+  trust?: TrustService;
 }
 
 export class ExecutionService {
@@ -78,6 +88,11 @@ export class ExecutionService {
       listenerCount: this.listeners.size,
       ready: true,
     };
+  }
+
+  /** XR 4.2 — the wired Trust & Isolation service, if any (used by adapters). */
+  get trust(): TrustService | undefined {
+    return this.deps.trust;
   }
 
   // ── Public API ──────────────────────────────────────────────────────────
@@ -167,6 +182,16 @@ export class ExecutionService {
       // 2. Policy/budget/approval phase.
       await this.applyPolicy(runId, record, opts);
       if (isTerminal(record.state)) {
+        return this.finalize(runId, record);
+      }
+
+      // 2b. XR 4.2 — Trust & Isolation gate (opt-in via opts.trust).
+      //     Classifies risk, decides placement, and for Tier 1/2 runs the
+      //     action inside a verified environment. Fails closed (denied) when
+      //     required isolation is unavailable. Tier 0 continues on the fast
+      //     in-process path below. No-op when no TrustService is wired.
+      const trustGate = await this.runTrustGate(runId, record, opts);
+      if (trustGate === "finalize") {
         return this.finalize(runId, record);
       }
 
@@ -542,6 +567,144 @@ export class ExecutionService {
     }
   }
 
+  /**
+   * XR 4.2 — Trust & Isolation gate. Returns "finalize" when the action was
+   * fully handled here (blocked, or executed inside an environment) and the
+   * caller should finalize+return; or "continue" to use the fast in-process
+   * path. Never runs high-risk work in-process: missing isolation → denied.
+   */
+  private async runTrustGate(
+    runId: string,
+    rec: ExecutionRecord,
+    opts: ExecuteOptions,
+  ): Promise<"continue" | "finalize"> {
+    if (!opts.trust || !this.deps.trust) return "continue";
+    const t = opts.trust;
+    const capability = `${opts.capability.kind}:${opts.capability.name}`;
+    const approvalRef = rec.policy
+      .filter((p) => p.kind === "approval_granted")
+      .map((p) => (p as { requestId?: string }).requestId)
+      .filter((x): x is string => !!x)
+      .pop();
+
+    const evaluation = await this.deps.trust.evaluate({
+      request: t.request,
+      runId,
+      correlationId: rec.id.correlationId,
+      workspaceId: opts.workspaceId,
+      actor: actorString(opts.actor),
+      capability,
+      approvalRef,
+      executable: t.executable,
+      credentialRefs: t.credentialRefs,
+    });
+    rec.trust = evaluation.trust;
+    this.persist(runId);
+
+    if (evaluation.outcome.kind === "blocked") {
+      rec.action = this.buildAction(opts, rec, { kind: "in_process", description: "blocked before placement" });
+      rec.outcome = {
+        kind: "denied",
+        message: `Blocked by Trust & Isolation: ${evaluation.outcome.reason}`,
+        stoppedReason: "approval",
+        at: Date.now(),
+        error: {
+          code: "TRUST_BLOCKED",
+          message: evaluation.outcome.reason,
+          retryable: false,
+          sideEffectUnknown: false,
+          category: "policy",
+          detail: {
+            remediation: evaluation.outcome.remediation,
+            tier: evaluation.trust.classification.tier,
+          },
+        },
+      };
+      this.applyTransition(runId, rec, "deny", "trust/isolation blocked");
+      this.deps.audit?.("execution.trust_blocked", {
+        runId,
+        tier: evaluation.trust.classification.tier,
+        reason: evaluation.outcome.reason,
+      });
+      return "finalize";
+    }
+
+    if (evaluation.outcome.kind === "ran_in_environment") {
+      const obs = evaluation.outcome.observation;
+      // Normalize to authorized before dispatching.
+      if (rec.state !== "authorized") {
+        this.applyTransition(runId, rec, "authorize", "trust admission");
+      }
+      rec.action = this.buildAction(
+        opts,
+        rec,
+        trustPlacementToExecution(evaluation.trust.decision.placement, evaluation.trust.decision.reason),
+      );
+      this.applyTransition(runId, rec, "queue", "dispatching to environment");
+      rec.startedAt = Date.now();
+      this.applyTransition(runId, rec, "start", "environment execution");
+      rec.observation = obs;
+      this.applyTransition(runId, rec, "observe", "environment observation collected");
+      if (obs.transportOk) {
+        rec.outcome = {
+          kind: "succeeded",
+          message: obs.summary || "Isolated action completed.",
+          stoppedReason: "done",
+          at: Date.now(),
+        };
+        this.applyTransition(runId, rec, "succeed", "environment action succeeded");
+      } else {
+        rec.outcome = {
+          kind: "failed",
+          message: obs.summary || "Isolated action failed.",
+          at: Date.now(),
+          error: {
+            code: "ENV_ACTION_FAILED",
+            message: obs.summary || "Isolated action failed.",
+            retryable: false,
+            sideEffectUnknown: false,
+            category: "unknown",
+          },
+        };
+        this.applyTransition(runId, rec, "fail", "environment action failed");
+      }
+      this.deps.audit?.("execution.trust_environment", {
+        runId,
+        placement: evaluation.trust.decision.placement,
+        ok: obs.transportOk,
+        environmentId: evaluation.trust.decision.environmentId,
+        verified: evaluation.trust.verification?.verified ?? false,
+        quarantined: evaluation.trust.quarantined ?? false,
+      });
+      return "finalize";
+    }
+
+    // in_process_ok → fast path.
+    return "continue";
+  }
+
+  /** Build an ExecutionAction descriptor (shared by trust + normal paths). */
+  private buildAction(opts: ExecuteOptions, rec: ExecutionRecord, placement: Placement): import("./types.ts").ExecutionAction {
+    const last = rec.policy.length ? rec.policy[rec.policy.length - 1] : undefined;
+    return {
+      capability: opts.capability,
+      inputSummary: opts.inputSummary,
+      inputBytes: opts.inputBytes,
+      idempotency: opts.idempotency,
+      idempotencyKey: opts.idempotencyKey,
+      timeoutMs: opts.timeoutMs,
+      dryRun: !!opts.dryRun,
+      placement,
+      authorizedBy: last
+        ? {
+            decisionKind: last.kind,
+            at: last.at,
+            requestId: "requestId" in last ? (last as { requestId?: string }).requestId : undefined,
+          }
+        : undefined,
+    };
+  }
+
   private async runWithGuards(
     runId: string,
     rec: ExecutionRecord,
@@ -712,4 +875,44 @@ function capabilityRequiresApproval(cap: { kind: string; name: string }): boolea
   if (cap.kind === "mcp_tool") return true; // MCP tools default to approval-gated
   if (cap.kind === "plugin_operation") return true;
   return false;
+}
+
+/** XR 4.2 — compact, secret-free actor identifier for authority grants. */
+function actorString(a: ActorIdentity): string {
+  switch (a.kind) {
+    case "user":
+      return `user:${a.userId ?? a.source}`;
+    case "agent":
+      return `agent:${a.agentId}`;
+    case "system":
+      return `system:${a.component}`;
+    case "workflow":
+      return `workflow:${a.workflowId}`;
+    case "plugin":
+      return `plugin:${a.pluginId}`;
+    case "skill":
+      return `skill:${a.skillId}`;
+    case "mcp":
+      return `mcp:${a.serverId}`;
+    case "research":
+      return `research:${a.sessionId}`;
+    case "business":
+      return `business:${a.module}`;
+  }
+}
+
+/** XR 4.2 — map a trust PlacementKind to the execution Placement union. */
+function trustPlacementToExecution(kind: PlacementKind, description?: string): Placement {
+  switch (kind) {
+    case "in_process":
+      return { kind: "in_process", description };
+    case "restricted_process":
+      return { kind: "restricted_process", description };
+    case "namespace_sandbox":
+      return { kind: "namespace_sandbox", description };
+    case "container":
+      return { kind: "container", description };
+    case "browser_isolated":
+      return { kind: "browser_isolated", description };
+  }
 }

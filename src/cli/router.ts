@@ -33,6 +33,7 @@ import {
 import { AgentsCommand } from "../commands/agents.ts";
 import { SkillsCommand, SkillsAliasCommand } from "../commands/skills.ts";
 import { ShieldCommand } from "../commands/shield.ts";
+import { TrustCommand } from "../commands/trust.ts";
 import { AuditCommand } from "../commands/audit.ts";
 import { SessionCommand } from "../commands/session.ts";
 import { AttacksCommand } from "../commands/attacks.ts";
@@ -85,6 +86,7 @@ function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new SkillsAliasCommand());
   kernel.commands.register(new AgentsCommand());
   kernel.commands.register(new ShieldCommand());
+  kernel.commands.register(new TrustCommand());
   kernel.commands.register(new WorkspaceCommand());
   kernel.commands.register(new AuditCommand());
   kernel.commands.register(new SessionCommand());
@@ -126,6 +128,8 @@ const REGISTRY_NAME: Record<string, string> = {
   config: "config",
   cfg: "config",
   settings: "config",
+  trust: "trust",
+  isolation: "trust",
   providers: "providers",
   provider: "providers",
   models: "models",

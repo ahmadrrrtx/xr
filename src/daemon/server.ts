@@ -11,6 +11,14 @@ import { hydrateSecretsAsync, loadConfig } from "../config/config.ts";
 import { WorkspaceManager } from "../core/workspace.ts";
 import { XRShieldService } from "../security/shield.ts";
 import type { Store } from "../state/workspace-store.ts";
+import { TrustService } from "../trust/service.ts";
+import { CredentialBroker } from "../trust/credentials.ts";
+import { AuthorityRegistry } from "../trust/authority.ts";
+import { EnvironmentManager } from "../trust/environment/manager.ts";
+import { InProcessBackend } from "../trust/environment/in-process.ts";
+import { RestrictedProcessBackend } from "../trust/environment/restricted-process.ts";
+import { NamespaceSandboxBackend } from "../trust/environment/namespace.ts";
+import { ContainerBackend } from "../trust/environment/container.ts";
 import {
   createRouteHandler,
   htmlResponse,
@@ -50,6 +58,17 @@ function isAuthorized(req: Request, token: string): boolean {
   return url.searchParams.get("token") === token;
 }
 
+/** Build a daemon-scoped Trust service (backends are detected lazily on first use). */
+function makeDaemonTrust(): TrustService {
+  const broker = new CredentialBroker();
+  const registry = new AuthorityRegistry();
+  const manager = new EnvironmentManager(
+    [new InProcessBackend(), new RestrictedProcessBackend(), new NamespaceSandboxBackend(), new ContainerBackend()],
+    broker,
+  );
+  return new TrustService({ manager, registry, broker });
+}
+
 /** Build the request handler (pure; used by both serve() and tests). */
 export function makeHandler(initialStore: Store, token: string) {
   const workspaceManager = new WorkspaceManager();
@@ -57,6 +76,7 @@ export function makeHandler(initialStore: Store, token: string) {
     store: initialStore,
     shield: new XRShieldService(initialStore),
     workspaceManager,
+    trust: makeDaemonTrust(),
   };
   const routes = createRouteHandler();
 
