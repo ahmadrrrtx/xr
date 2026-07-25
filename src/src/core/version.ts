@@ -24,7 +24,7 @@ export const PKG = {
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 4.3 (Durable Agency) — long-running XR work survives process failure and interruption without losing task identity, authority context, execution history, or outcome integrity: durable checkpoints at safe semantic boundaries, startup recovery with explicit classification, local ownership/leases preventing duplicate execution, durable cancellation, bounded retry with idempotency safety, partial-result persistence, environment reattachment or quarantine, and authority revalidation on resume — built on the Unified Execution Fabric and Trust & Isolation substrate.",
+  description: "XR 4.3 (Durable Agency) — long-running XR work survives process failure and interruption without losing task identity, authority context, execution history, or outcome integrity: durable checkpoints at safe semantic boundaries, startup recovery with explicit classification, local ownership/leases preventing duplicate execution, durable cancellation, bounded retry with idempotency safety, partial-result persistence, environment reattachment or quarantine, and authority revalidation on resume.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;
