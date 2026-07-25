@@ -517,5 +517,220 @@ export const EXECUTION_BOUNDS = {
   MAX_ATTEMPTS: 5,
 } as const;
 
-/** Adapter version stamped on every execution record. 4.1 → 4.2 adds trust metadata. */
-export const EXECUTION_ADAPTER_VERSION = "xr-4.2.0";
+/** Adapter version stamped on every execution record. 4.2 → 4.3 adds durable agency metadata. */
+export const EXECUTION_ADAPTER_VERSION = "xr-4.3.0";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// XR 4.3 — Durable Agency: Recovery, Checkpoint, Lease, and associated types
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Recovery State ────────────────────────────────────────────────────────
+
+/**
+ * Recovery-specific classification. These extend the execution state model
+ * to represent what happens between a process crash and a successful resume.
+ */
+export type RecoveryState =
+  | "running"                    // normal execution
+  | "checkpointed"               // checkpoint written, may resume
+  | "interrupted"                // process died, recovery needed
+  | "startup_recovery_pending"   // discovered at startup, not yet classified
+  | "recoverable"                // can auto-resume
+  | "resuming"                   // recovery in progress
+  | "resumed"                    // recovery successful
+  | "paused"                     // user paused
+  | "cancellation_requested"    // cancel asked for (durable)
+  | "recovery_blocked";          // cannot resume (authority/env/policy)
+
+/** Classification of what should happen to an interrupted execution. */
+export type RecoveryAction =
+  | "auto_resume"             // safe to resume automatically
+  | "requires_approval"       // needs user to approve resume
+  | "blocked"                 // cannot resume
+  | "quarantined";            // environment/quarantine issue
+
+/** Reason for the recovery classification. */
+export type RecoveryClassification =
+  | "safe"                    // action hadn't started or is naturally idempotent
+  | "unknown_side_effect"     // action may have executed; side effect unknown
+  | "authority_expired"       // credentials/grants expired
+  | "environment_lost"        // isolation environment was lost
+  | "cancellation_pending"    // cancellation was requested before crash
+  | "non_idempotent_unsafe";  // non-idempotent action with unknown result
+
+// ── Checkpoint ────────────────────────────────────────────────────────────
+
+/** Kinds of checkpoints that can be taken at safe semantic boundaries. */
+export type CheckpointKind =
+  | "task_accepted"
+  | "plan_recorded"
+  | "policy_admitted"
+  | "env_admitted"
+  | "step_started"
+  | "step_completed"
+  | "model_turn_completed"
+  | "tool_call_completed"
+  | "cancellation_requested"
+  | "review_checkpoint_reached"
+  | "cleanup_completed"
+  | "recovery_decided";
+
+/** A durable checkpoint representing a safe semantic boundary. */
+export interface ExecutionCheckpoint {
+  readonly checkpointId: string;
+  readonly runId: string;
+  readonly workflowId?: string;
+  readonly taskId?: string;
+  readonly kind: CheckpointKind;
+  /** True if execution can be safely auto-resumed from this boundary. */
+  readonly sideEffectSafe: boolean;
+  /** Snapshot of authority state at checkpoint time (for revalidation). */
+  readonly authoritySnapshot?: {
+    readonly policyVersion: string;
+    readonly placement: string;
+    readonly credentialRefs: readonly string[];
+    readonly checkedAt: number;
+  };
+  /** Environment reference if attached. */
+  readonly environmentRef?: string;
+  /** The last known execution state at this checkpoint. */
+  readonly executionState: ExecutionState;
+  /** Human-readable progress summary. */
+  readonly progressSummary: string;
+  /** Full snapshot of relevant execution state (bounded). */
+  readonly payload: Record<string, unknown>;
+  readonly attempt: number;
+  readonly createdAt: number;
+}
+
+// ── Lease / Ownership ─────────────────────────────────────────────────────
+
+/** Target type for a lease. */
+export type LeaseTargetType = "execution" | "workflow" | "task" | "recovery";
+
+/** Durable ownership lease preventing duplicate local execution. */
+export interface ExecutionLease {
+  readonly leaseId: string;
+  readonly targetType: LeaseTargetType;
+  readonly targetId: string;
+  readonly workspaceId: string;
+  readonly ownerPid: number;
+  readonly ownerInstanceId: string;
+  readonly acquiredAt: number;
+  readonly expiresAt?: number;
+  releasedAt?: number;
+  releaseReason?: string;
+  /** True if the lease owner is known to be dead. */
+  stale: boolean;
+}
+
+// ── Recovery Decision ─────────────────────────────────────────────────────
+
+/** A durable record of what was decided about an interrupted execution. */
+export interface RecoveryDecision {
+  readonly recoveryId: string;
+  readonly targetType: LeaseTargetType;
+  readonly targetId: string;
+  readonly action: RecoveryAction;
+  readonly classification: RecoveryClassification;
+  readonly reason: string;
+  /** Who made the decision. */
+  readonly decidedBy: "system" | "user";
+  readonly decidedAt: number;
+  readonly metadata?: Record<string, unknown>;
+}
+
+// ── Durable Cancellation ──────────────────────────────────────────────────
+
+/** A durable cancellation request that survives process restart. */
+export interface DurableCancellation {
+  readonly cancellationId: string;
+  readonly targetType: LeaseTargetType;
+  readonly targetId: string;
+  readonly requestedAt: number;
+  readonly requestedBy: string;
+  readonly reason?: string;
+  acknowledged: boolean;
+  acknowledgedAt?: number;
+  sideEffectPossible: boolean;
+  finalState?: "cancelled" | "reconciliation_required";
+}
+
+// ── Environment Attachment ────────────────────────────────────────────────
+
+/** Durable record of an environment attached to an execution. */
+export interface EnvironmentAttachment {
+  readonly attachmentId: string;
+  readonly environmentId: string;
+  readonly executionId: string;
+  readonly workspaceId: string;
+  readonly backendId: string;
+  readonly placement: string;
+  readonly tier: string;
+  lifecycleState: "created" | "starting" | "ready" | "running" | "stopping" | "stopped" | "failed" | "quarantined";
+  /** PID of the environment process, if known. */
+  pid?: number;
+  readonly createdAt: number;
+  lastKnownAt: number;
+  cleanupState?: "not_required" | "succeeded" | "partial" | "failed" | "pending";
+  quarantined: boolean;
+  quarantineReason?: string;
+}
+
+// ── Backpressure / Concurrency Limits ─────────────────────────────────────
+
+export const DURABILITY_BOUNDS = {
+  /** Maximum concurrent active executions across the runtime. */
+  MAX_ACTIVE_EXECUTIONS: 50,
+  /** Maximum concurrent recovery operations (prevents recovery storms). */
+  MAX_RECOVERY_OPERATIONS: 5,
+  /** Maximum active isolated environments. */
+  MAX_ACTIVE_ENVIRONMENTS: 10,
+  /** Maximum queued (backpressured) work items. */
+  MAX_QUEUED_WORK: 100,
+  /** Per-workspace maximum concurrent executions. */
+  PER_WORKSPACE_CONCURRENT: 20,
+  /** Checkpoint retention: keep for this many ms after terminal state (7 days). */
+  CHECKPOINT_RETENTION_MS: 7 * 24 * 60 * 60 * 1000,
+  /** Maximum checkpoint payload size in chars (before truncation). */
+  MAX_CHECKPOINT_PAYLOAD_CHARS: 8000,
+  /** Lease TTL: 5 minutes without renewal. */
+  LEASE_TTL_MS: 5 * 60 * 1000,
+  /** Maximum recovery retries. */
+  MAX_RECOVERY_RETRIES: 3,
+  /** Startup recovery timeout (ms). Recovery must complete within this. */
+  RECOVERY_TIMEOUT_MS: 30_000,
+} as const;
+
+// ── Extended Query ────────────────────────────────────────────────────────
+
+/** Query filter extended for recovery awareness. */
+export interface RecoveryQuery extends ExecutionQuery {
+  /** Filter by recovery-specific states. */
+  recoveryState?: RecoveryState | RecoveryState[];
+  /** Only return executions needing attention (interrupted, recoverable, blocked). */
+  needsAttention?: boolean;
+}
+
+// ── Recovery Status for UX ────────────────────────────────────────────────
+
+/** User-facing recovery status for CLI/daemon/dashboard. */
+export interface RecoveryStatus {
+  runId: string;
+  targetType: LeaseTargetType;
+  targetId: string;
+  recoveryState: RecoveryState;
+  lastCheckpoint?: CheckpointKind;
+  lastCheckpointAt?: number;
+  checkpointProgress?: string;
+  classification?: RecoveryClassification;
+  action?: RecoveryAction;
+  sideEffectUnknown: boolean;
+  safeToResume: boolean;
+  blockedReason?: string;
+  environmentState?: string;
+  createdAt: number;
+  interruptedAt?: number;
+  decidedAt?: number;
+  decidedBy?: string;
+}

@@ -89,6 +89,14 @@ export interface ConfigHealthEntry {
   warnings?: string[];
 }
 
+/** Optional health summary for XR 4.3 recovery status. */
+export interface RecoveryHealthEntry {
+  /** Number of interrupted executions pending recovery. */
+  pending: number;
+  /** Number of executions blocked from recovery. */
+  blocked: number;
+}
+
 /** Complete kernel health snapshot. */
 export interface KernelHealth {
   /** Timestamp of the snapshot. */
@@ -115,6 +123,8 @@ export interface KernelHealth {
   workspace: WorkspaceHealthEntry;
   /** Configuration summary. */
   config?: ConfigHealthEntry;
+  /** XR 4.3 — Recovery health (interrupted work pending). */
+  recovery?: RecoveryHealthEntry;
   /** Optional errors (safe, no secrets). */
   errors?: KernelErrorContext[];
   /** Optional human-readable summary. */
@@ -135,8 +145,9 @@ export function buildHealthSnapshot(input: {
   workspace: WorkspaceHealthEntry;
   config?: ConfigHealthEntry;
   errors?: KernelErrorContext[];
+  recovery?: RecoveryHealthEntry;
 }): KernelHealth {
-  const { runtimeState, bootstrapped, started, version, services, backgroundJobs, workspace, config, errors } = input;
+  const { runtimeState, bootstrapped, started, version, services, backgroundJobs, workspace, config, errors, recovery } = input;
 
   // Derive overall status from component states.
   let status: HealthStatus;
@@ -190,6 +201,7 @@ export function buildHealthSnapshot(input: {
     backgroundJobs,
     workspace,
     config,
+    recovery,
     errors: errors?.length ? errors : undefined,
     summary: parts.join(" · "),
   };
@@ -240,6 +252,13 @@ export function formatHealthHuman(health: KernelHealth): string {
   if (health.config) {
     lines.push("");
     lines.push(`  Config:      ${health.config.loaded ? "loaded" : "error"} (v${health.config.version ?? "?"}, ${health.config.warningCount} warnings)`);
+  }
+
+  if (health.recovery && (health.recovery.pending > 0 || health.recovery.blocked > 0)) {
+    lines.push("");
+    lines.push("  Recovery:");
+    if (health.recovery.pending > 0) lines.push(`    ! ${health.recovery.pending} execution(s) pending recovery`);
+    if (health.recovery.blocked > 0) lines.push(`    ✗ ${health.recovery.blocked} execution(s) blocked`);
   }
 
   if (health.errors?.length) {

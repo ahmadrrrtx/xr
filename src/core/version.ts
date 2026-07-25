@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "4.2.0",
-  codename: "Trust and Isolation",
+  version: "4.3.0",
+  codename: "Durable Agency",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 4.2 (Trust and Isolation) — risk-tiered execution placement that makes authority enforceable: deterministic risk classification, policy-to-placement decisions, task-scoped authority and credentials, enforceable filesystem/network/process boundaries via local OS sandboxing (bubblewrap/user namespaces/container), placement verification, cleanup/quarantine, and fail-closed high-risk behavior — integrated with the Unified Execution Fabric.",
+  description: "XR 4.3 (Durable Agency) — long-running XR work survives process failure and interruption without losing task identity, authority context, execution history, or outcome integrity: durable checkpoints at safe semantic boundaries, startup recovery with explicit classification, local ownership/leases preventing duplicate execution, durable cancellation, bounded retry with idempotency safety, partial-result persistence, environment reattachment or quarantine, and authority revalidation on resume.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;

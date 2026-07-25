@@ -1,5 +1,5 @@
 /**
- * XR 4.1 — Execution Service (the "Fabric")
+ * XR 4.3 — Execution Service (the "Fabric" with Durable Agency)
  *
  * Owns the canonical orchestration of every execution:
  *   - create execution
@@ -10,6 +10,7 @@
  *   - normalize observation/outcome
  *   - record cost/audit/history without double-charging
  *   - apply timeout/cancellation/retry rules
+ *   - XR 4.3: checkpoints, leases, durable cancellation, and recovery
  *
  * Does NOT own model routing, isolation, memory redesign, or business
  * workflow planning — that is for later phases.
@@ -27,17 +28,21 @@ import {
   type ExecutionOutcome,
   type PolicyDecision,
   type Placement,
+  type RecoveryStatus,
 } from "./types.ts";
 import type { TrustService } from "../trust/service.ts";
 import type { PlacementKind } from "../trust/types.ts";
 import type { ExecutionRepo } from "./repository.ts";
-import { canRun, isTerminal, transition } from "./state-machine.ts";
+import { canRun, isTerminal, transition, wasInFlight } from "./state-machine.ts";
 import {
   BudgetExceededError,
   CancellationUnsupportedError,
   ExecutionTimeoutError,
   NonIdempotentRetryBlockedError,
 } from "./errors.ts";
+import { CheckpointManager } from "./checkpoint.ts";
+import { LeaseManager } from "./lease.ts";
+import { RecoveryManager } from "./recovery.ts";
 
 export interface ExecutionServiceDeps {
   repo: ExecutionRepo;
@@ -50,6 +55,11 @@ export interface ExecutionServiceDeps {
    * When absent, behavior is identical to XR 4.1.
    */
   trust?: TrustService;
+  /**
+   * XR 4.3 — optional recovery callback for notifying the runtime about
+   * recovery status changes (for daemon/CLI UX updates).
+   */
+  onRecoveryStatus?: (status: RecoveryStatus) => void;
 }
 
 export class ExecutionService {
@@ -59,8 +69,23 @@ export class ExecutionService {
   /** Cancellation flags keyed by run id. */
   private readonly cancelFlags = new Map<string, { cancelled: boolean; reason?: string }>();
 
+  // XR 4.3 — Durable Agency managers
+  readonly checkpoints: CheckpointManager;
+  readonly leases: LeaseManager;
+  readonly recovery: RecoveryManager;
+
   constructor(private readonly deps: ExecutionServiceDeps) {
     deps.repo.migrate();
+
+    // XR 4.3 — Initialize durable agency managers
+    const db = deps.repo.rawDb;
+    this.checkpoints = new CheckpointManager(db);
+    this.leases = new LeaseManager(db);
+    this.recovery = new RecoveryManager(db, this.checkpoints, this.leases);
+    // Migration: ensure all Phase 4 tables exist
+    this.checkpoints.migrate();
+    this.leases.migrate();
+    this.recovery.migrate();
   }
 
   // ── Lifecycle hooks (registered as a lifecycle participant) ─────────────
@@ -74,9 +99,10 @@ export class ExecutionService {
   }
 
   async onStop(): Promise<void> {
-    // Request cancellation on all live executions so they can wind down
-    // gracefully during shutdown. We don't force-terminate them.
+    // XR 4.3 — Mark active executions as interrupted before shutdown.
+    // Request cancellation so they can wind down gracefully.
     for (const [runId] of this.live) {
+      this.markInterrupted(runId);
       this.cancel(runId, "runtime_shutdown");
     }
   }
@@ -109,6 +135,134 @@ export class ExecutionService {
     flag.cancelled = true;
     flag.reason = reason;
     this.cancelFlags.set(runId, flag);
+
+    // XR 4.3 — Durable cancellation: persist so it survives restart
+    const liveRec = this.live.get(runId);
+    if (liveRec) {
+      this.checkpoints.createCheckpoint(liveRec, "cancellation_requested", {
+        progressSummary: `Cancellation requested: ${reason}`,
+        payload: { reason },
+      });
+    }
+    this.recovery.requestCancellation("execution", runId, "user", reason);
+  }
+
+  /** Get recovery status for a specific execution. */
+  getRecoveryStatus(runId: string): RecoveryStatus | null {
+    const record = this.deps.repo.get(runId);
+    if (!record) return null;
+    return this.recovery.buildStatus(record);
+  }
+
+  /** Get all executions needing recovery attention. */
+  getRecoveryPending(workspaceId: string): RecoveryStatus[] {
+    const interrupted = this.deps.repo.findInterrupted(workspaceId);
+    return interrupted.map((r) => this.recovery.buildStatus(r));
+  }
+
+  /**
+   * Resume a recoverable execution from its last checkpoint.
+   * Only succeeds if the recovery classification is "auto_resume" or 
+   * the user has explicitly approved the resume.
+   */
+  async resumeRecoverable(runId: string, opts?: { force?: boolean }): Promise<ExecutionRecord | null> {
+    const record = this.deps.repo.get(runId);
+    if (!record) return null;
+
+    const classification = this.recovery.classify(record);
+    if (classification.action === "blocked" && !opts?.force) return null;
+    if (classification.action === "requires_approval" && !opts?.force) return null;
+
+    // Record the recovery decision
+    this.recovery.recordDecision(
+      "execution", runId,
+      "auto_resume", classification.classification,
+      classification.reason,
+      opts?.force ? "user" : "system",
+    );
+
+    // For recoverable executions that were pre-action, reset to queued
+    if (!wasInFlight(record.state) || record.state === "awaiting_approval") {
+      // Reset state to queued for re-execution
+      const t = transition(runId, record.state, "retry", "recovery resume");
+      record.state = t.next;
+      record.history.push(t.entry);
+      record.observation = undefined;
+      record.outcome = undefined;
+      record.updatedAt = Date.now();
+      this.deps.repo.save(record);
+      return record;
+    }
+
+    return record;
+  }
+
+  /**
+   * Run startup recovery: discover interrupted work, classify, and
+   * record recovery decisions. Does NOT automatically resume unsafe work.
+   */
+  async startupRecovery(workspaceId: string): Promise<RecoveryStatus[]> {
+    const results: RecoveryStatus[] = [];
+
+    // Acquire recovery lease to prevent duplicate startup recovery
+    const recoveryLease = this.leases.acquire("recovery", workspaceId, workspaceId, { ttlMs: 60000 });
+    if (!recoveryLease) return results; // Another process is handling recovery
+
+    try {
+      // Discover unfinished work
+      const interrupted = this.deps.repo.findInterrupted(workspaceId);
+
+      // Classify and record decisions
+      for (const record of interrupted) {
+        const classification = this.recovery.classify(record);
+
+        // Record the decision
+        this.recovery.recordDecision(
+          "execution", record.id.runId,
+          classification.action, classification.classification,
+          classification.reason,
+          "system",
+        );
+
+        // Build status
+        const status = this.recovery.buildStatus(record);
+        results.push(status);
+
+        // Notify
+        this.deps.onRecoveryStatus?.(status);
+
+        // Auto-resume safe work
+        if (classification.action === "auto_resume") {
+          await this.resumeRecoverable(record.id.runId, { force: true });
+          status.recoveryState = "resumed";
+        }
+      }
+
+      // Clean up dirty environments
+      const dirtyEnvs = this.recovery.getDirtyEnvironments(workspaceId);
+      for (const env of dirtyEnvs) {
+        this.recovery.updateEnvironmentState(env.environmentId, "quarantined", {
+          quarantined: true,
+          quarantineReason: "Process crash during active environment use",
+          cleanupState: "failed",
+        });
+      }
+    } finally {
+      this.leases.release("recovery", workspaceId, "recovery_complete");
+    }
+
+    return results;
+  }
+
+  /** Mark an execution as interrupted (called on graceful shutdown for active work). */
+  markInterrupted(runId: string): void {
+    const record = this.live.get(runId);
+    if (record) {
+      this.checkpoints.createCheckpoint(record, "recovery_decided", {
+        progressSummary: "Runtime shutdown — execution interrupted",
+      });
+    }
+    this.deps.repo.markInterrupted(runId);
   }
 
   /** Retrieve a record from the repo. */
@@ -172,10 +326,14 @@ export class ExecutionService {
       dryRun: !!opts.dryRun,
     });
 
+    // XR 4.3 — Checkpoint: task accepted
+    this.checkpoints.createCheckpoint(record, "task_accepted");
+
     try {
       // 1. Optional plan transition.
       if (opts.plan) {
         this.applyTransition(runId, record, "plan", "plan registered");
+        this.checkpoints.createCheckpoint(record, "plan_recorded");
         this.persist(runId);
       }
 
@@ -184,6 +342,8 @@ export class ExecutionService {
       if (isTerminal(record.state)) {
         return this.finalize(runId, record);
       }
+      // XR 4.3 — Checkpoint: policy admitted
+      this.checkpoints.createCheckpoint(record, "policy_admitted");
 
       // 2b. XR 4.2 — Trust & Isolation gate (opt-in via opts.trust).
       //     Classifies risk, decides placement, and for Tier 1/2 runs the
@@ -222,6 +382,11 @@ export class ExecutionService {
       }
       this.applyTransition(runId, record, "queue", "ready for execution");
       this.persist(runId);
+
+      // XR 4.3 — Checkpoint: step started (before action execution)
+      this.checkpoints.createCheckpoint(record, "step_started", {
+        progressSummary: `Starting ${opts.capability.kind}:${opts.capability.name}`,
+      });
 
       // 4. Duplicate/idempotency check.
       if (opts.idempotencyKey && opts.idempotency !== "naturally_idempotent") {
@@ -273,6 +438,14 @@ export class ExecutionService {
           record.observation = observation;
           record.startedAt = record.startedAt ?? startedAt;
           this.applyTransition(runId, record, "observe", "observation collected");
+
+          // XR 4.3 — Checkpoint: step completed
+          const cpKind = opts.capability.kind === "model_call" ? "model_turn_completed" as const :
+            (opts.capability.kind === "core_tool" || opts.capability.kind === "mcp_tool") ? "tool_call_completed" as const :
+            "step_completed" as const;
+          this.checkpoints.createCheckpoint(record, cpKind, {
+            progressSummary: `${cpKind} — ${observation.transportOk ? "ok" : "failed"}`,
+          });
           // Determine outcome.
           if (opts.dryRun) {
             record.outcome = {

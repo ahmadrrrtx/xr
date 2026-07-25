@@ -63,7 +63,7 @@ describe("XR 4.1 ExecutionService", () => {
     expect(rec.observation!.summary).toBe("file contents here");
     expect(rec.observation!.transportOk).toBe(true);
     expect(rec.id.runId).toStartWith("ex_");
-    expect(rec.adapterVersion).toBe("xr-4.2.0"); // XR 4.2 — adapter version bump (trust metadata)
+    expect(rec.adapterVersion).toBe("xr-4.3.0"); // XR 4.3 — adapter version bump (durable agency)
     expect(rec.durationMs).toBeGreaterThanOrEqual(0);
     expect(rec.startedAt).toBeDefined();
     expect(rec.endedAt).toBeDefined();

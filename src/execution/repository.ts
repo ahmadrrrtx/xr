@@ -1,15 +1,16 @@
 /**
- * XR 4.1 — Execution Repository
+ * XR 4.3 — Execution Repository
  *
  * Persists canonical execution records to the workspace SQLite store.
  * Uses the existing WorkspaceStore patterns: one table per aggregate,
  * additive migration, redaction/truncation of large payloads, safe failure
  * handling (persistence failure does not fabricate success).
  *
- * No event sourcing. One row per execution. Blob columns are bounded JSON.
+ * XR 4.3 additions: recovery queries (find interrupted), active execution
+ * discovery for startup recovery.
  */
 import { EXECUTION_BOUNDS } from "./types.ts";
-import type { ExecutionRecord, ExecutionQuery, ExecutionSummary } from "./types.ts";
+import type { ExecutionRecord, ExecutionQuery, ExecutionSummary, ExecutionState } from "./types.ts";
 import { ExecutionPersistenceError } from "./errors.ts";
 
 const TABLE = "execution_records";
@@ -58,6 +59,11 @@ export function adaptWorkspaceStore(store: {
 
 export class ExecutionRepo {
   constructor(private readonly db: ExecutionDb) {}
+
+  /** XR 4.3 — expose the raw db handle for checkpoint/lease/recovery managers. */
+  get rawDb(): ExecutionDb {
+    return this.db;
+  }
 
   /**
    * Idempotent schema migration. Called from WorkspaceStore.migrate() for
@@ -337,6 +343,60 @@ export class ExecutionRepo {
       .prepare(`SELECT COUNT(*) c FROM ${TABLE} WHERE workspace_id = ?`)
       .get<{ c: number }>(workspaceId);
     return row?.c ?? 0;
+  }
+
+  // ── XR 4.3 — Recovery-aware queries ────────────────────────────────────
+
+  /**
+   * Find all executions that were in-flight and need recovery attention.
+   * Returns records ordered by priority (running > queued > awaiting).
+   */
+  findInterrupted(workspaceId: string, limit = 100): ExecutionRecord[] {
+    const activeStates: ExecutionState[] = [
+      "queued", "running", "observing", "awaiting_approval",
+      "awaiting_policy", "authorized",
+    ];
+    const placeholders = activeStates.map(() => "?").join(",");
+    const rows = this.db
+      .prepare(
+        `SELECT record_json FROM ${TABLE}
+         WHERE workspace_id = ? AND state IN (${placeholders})
+         ORDER BY
+           CASE state
+             WHEN 'running' THEN 0 WHEN 'observing' THEN 0
+             WHEN 'awaiting_approval' THEN 1 WHEN 'awaiting_policy' THEN 2
+             WHEN 'authorized' THEN 3 WHEN 'queued' THEN 4 ELSE 5 END,
+           created_at DESC LIMIT ?`,
+      )
+      .all<{ record_json: string }>(workspaceId, ...activeStates, limit);
+    return rows
+      .map((r) => {
+        try { return JSON.parse(r.record_json) as ExecutionRecord; }
+        catch { return null; }
+      })
+      .filter((r): r is ExecutionRecord => r !== null);
+  }
+
+  /** Count of active (in-flight) executions in a workspace. */
+  countActive(workspaceId: string): number {
+    const activeStates = ["queued", "running", "observing", "awaiting_approval", "awaiting_policy", "authorized"];
+    const row = this.db
+      .prepare(
+        `SELECT COUNT(*) c FROM ${TABLE} WHERE workspace_id = ? AND state IN (${activeStates.map(() => "?").join(",")})`,
+      )
+      .get<{ c: number }>(workspaceId, ...activeStates);
+    return row?.c ?? 0;
+  }
+
+  /** Mark an execution as interrupted (for records that were running at crash). */
+  markInterrupted(runId: string): void {
+    try {
+      this.db
+        .prepare(`UPDATE ${TABLE} SET outcome_kind = 'reconciliation_required' WHERE run_id = ? AND state IN ('running','observing','queued')`)
+        .run(runId);
+    } catch {
+      // best-effort
+    }
   }
 
   // ── Serialization with redaction/bounds ─────────────────────────────────

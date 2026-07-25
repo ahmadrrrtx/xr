@@ -195,7 +195,8 @@ export class XRApp {
   }
 
   /**
-   * Starts long-running background services and runs onStart hooks.
+   * Starts long-running background services, runs onStart hooks,
+   * and performs XR 4.3 startup recovery.
    * Requires bootstrap() to have completed.
    */
   async start(): Promise<this> {
@@ -209,14 +210,64 @@ export class XRApp {
 
     this.started = true;
     this.events.emit(CoreEvents.KernelStarted, { timestamp: Date.now() });
+
+    // XR 4.3 — Startup Recovery: discover and classify interrupted work
+    await this.runStartupRecovery();
+
     return this;
   }
 
   /**
-   * Gracefully shuts the runtime down: stops background jobs, runs onStop
-   * hooks in reverse dependency order, and closes the unified store.
+   * XR 4.3 — Discover unfinished work and classify recovery.
+   * Runs after the runtime is started but before reporting full readiness
+   * if unresolved work affects safety.
+   */
+  private async runStartupRecovery(): Promise<void> {
+    try {
+      const execService = this.registry.tryResolve(Tokens.Execution);
+      if (!execService || typeof (execService as any).startupRecovery !== "function") return;
+
+      const workspaceId = this.workspaces.getActiveId();
+      const results = await (execService as any).startupRecovery(workspaceId);
+
+      if (results && results.length > 0) {
+        const blocked = results.filter((r: any) => r.recoveryState === "recovery_blocked");
+        const pending = results.filter((r: any) => r.recoveryState === "startup_recovery_pending");
+
+        if (blocked.length > 0 || pending.length > 0) {
+          this.events.emit("recovery.pending" as any, {
+            total: results.length,
+            blocked: blocked.length,
+            needsApproval: pending.length,
+            timestamp: Date.now(),
+          });
+        }
+      }
+    } catch (err) {
+      // Startup recovery is best-effort — never prevent the runtime from starting.
+      this.events.emit("recovery.failed" as any, {
+        error: err instanceof Error ? err.message : String(err),
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  /**
+   * Gracefully shuts the runtime down: interrupts active execution work,
+   * stops background jobs, runs onStop hooks in reverse dependency order,
+   * and closes the unified store.
    */
   async shutdown(): Promise<this> {
+    // XR 4.3 — Mark active executions as interrupted before stopping services
+    const execService = this.registry.tryResolve(Tokens.Execution);
+    if (execService && typeof (execService as any).onStop === "function") {
+      try {
+        await (execService as any).onStop();
+      } catch {
+        /* best-effort */
+      }
+    }
+
     // Best-effort: stop even if not fully booted.
     this.backgroundServices.stopAll();
     try {
@@ -447,6 +498,20 @@ export class XRApp {
       }
     }
 
+    // XR 4.3 — Recovery health
+    let recoveryPending = 0;
+    let recoveryBlocked = 0;
+    try {
+      const execService = this.registry.tryResolve(Tokens.Execution);
+      if (execService && typeof (execService as any).getRecoveryPending === "function") {
+        const pending = (execService as any).getRecoveryPending(this.workspaces.getActiveId());
+        recoveryPending = pending.filter((r: any) => r.recoveryState === "startup_recovery_pending" || r.safeToResume).length;
+        recoveryBlocked = pending.filter((r: any) => r.recoveryState === "recovery_blocked").length;
+      }
+    } catch {
+      // best-effort
+    }
+
     return buildHealthSnapshot({
       runtimeState: state,
       bootstrapped: this.booted,
@@ -460,6 +525,10 @@ export class XRApp {
       backgroundJobs: jobEntries,
       workspace,
       errors: errors.length ? errors : undefined,
+      recovery: {
+        pending: recoveryPending,
+        blocked: recoveryBlocked,
+      },
     });
   }
 

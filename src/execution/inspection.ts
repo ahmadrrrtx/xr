@@ -118,6 +118,30 @@ export function actorString(a: ExecutionRecord["actor"]): string {
   }
 }
 
+/** XR 4.3 — Recovery state labels for UX. */
+export const RECOVERY_STATE_LABEL: Record<string, string> = {
+  running: "running",
+  checkpointed: "checkpointed",
+  interrupted: "interrupted",
+  startup_recovery_pending: "recovery needed",
+  recoverable: "recoverable",
+  resuming: "resuming",
+  resumed: "resumed",
+  paused: "paused",
+  cancellation_requested: "cancelling",
+  recovery_blocked: "blocked",
+};
+
+/** XR 4.3 — Recovery classification labels for UX. */
+export const RECOVERY_CLASSIFICATION_LABEL: Record<string, string> = {
+  safe: "safe to resume",
+  unknown_side_effect: "side effect unknown",
+  authority_expired: "authority expired",
+  environment_lost: "environment lost",
+  cancellation_pending: "cancellation pending",
+  non_idempotent_unsafe: "unsafe to retry",
+};
+
 /** Single-line pretty-print for CLI/TUI. Non-color when stream is not a TTY. */
 export function formatLine(s: ExecutionSummary, opts: { color?: boolean } = {}): string {
   const c = opts.color ? STATE_COLOR[s.state] : "";

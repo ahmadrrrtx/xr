@@ -5,6 +5,80 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] - 2026-07-25 — Durable Agency
+
+### Added
+- **Durable checkpoints** (`src/execution/checkpoint.ts`): safe semantic boundaries
+  (`task_accepted`, `plan_recorded`, `policy_admitted`, `env_admitted`, `step_started`,
+  `step_completed`, `model_turn_completed`, `tool_call_completed`, `cancellation_requested`,
+  `review_checkpoint_reached`, `cleanup_completed`, `recovery_decided`) with
+  side-effect-safety classification and authority snapshots.
+- **Local ownership/leases** (`src/execution/lease.ts`): prevents duplicate execution
+  within the same workspace; detects stale process ownership via PID liveness check;
+  supports acquisition, renewal, release, takeover, and cleanup.
+- **Startup recovery** (`src/execution/recovery.ts`): discovers unfinished work at
+  boot, classifies each record as `safe` / `unknown_side_effect` / `authority_expired` /
+  `environment_lost` / `cancellation_pending`, decides `auto_resume` / `requires_approval`
+  / `blocked` / `quarantined`, and records recovery decisions durably.
+- **Durable cancellation** (`execution_cancellations` table): cancellation requests
+  survive process restart and are honored before any resume attempt.
+- **Environment attachment records** (`environment_attachments` table): persist
+  environment identity, lifecycle state, and cleanup status so orphaned environments
+  can be detected and quarantined at startup.
+- **Recovery-aware execution states**: `recoverable`, `startup_recovery_pending`,
+  `resuming`, `resumed`, `recovery_blocked` exposed through the inspection layer.
+- **Bounded backpressure constants**: `MAX_ACTIVE_EXECUTIONS` (50), `MAX_RECOVERY_OPERATIONS`
+  (5), `MAX_ACTIVE_ENVIRONMENTS` (10), `MAX_QUEUED_WORK` (100), `PER_WORKSPACE_CONCURRENT`
+  (20) with explicit capacity reporting.
+- **Retry safety reinforcement**: built on Phase 2 idempotency — `non_idempotent` actions
+  with unknown side effects are never silently retried; `reconciliation_required` is the
+  honest terminal state.
+- **Authority revalidation on resume**: policy, credentials, placement, budget, and
+  approvals are re-checked before any recovered execution can proceed.
+- **CLI recovery commands**: `xr execution --recovery` shows interrupted work;
+  `xr execution --resume <runId>` resumes a recoverable execution with user approval
+  for unknown-side-effect cases; `xr execution --cancel <runId>` creates a durable
+  cancellation.
+- **Daemon recovery routes**: `GET /api/recovery` returns all pending/blocked recoveries;
+  `POST /api/recovery/resume` triggers resume (with optional `force` for user-approved cases).
+- **Kernel startup recovery**: `XRApp.start()` now runs `startupRecovery()` after service
+  readiness; interrupted work is classified, safe work auto-resumed, and blocked work
+  is exposed via health and events.
+- **Graceful shutdown marking**: `ExecutionService.onStop()` checkpoints active executions
+  as interrupted before stopping, so they are discoverable on next start.
+- **Health integration**: `KernelHealth.recovery` reports `pending` / `blocked` counts;
+  `formatHealthHuman` shows recovery section.
+- **30 new tests**: checkpoint manager (7), lease manager (10), recovery manager (13).
+
+### Changed
+- Version identity updated to `4.3.0 (Durable Agency)` across package/runtime surfaces.
+- `EXECUTION_ADAPTER_VERSION` bumped `xr-4.2.0` → `xr-4.3.0`.
+- `ExecutionState` type extended with recovery-aware helpers (`wasInFlight`, `sideEffectPossible`).
+- `ExecutionService` now owns `checkpoints`, `leases`, and `recovery` managers; creates
+  checkpoints at each safe boundary; integrates with startup recovery.
+- `ExecutionRepo` adds `findInterrupted()`, `countActive()`, `markInterrupted()` queries.
+- `ExecutionServiceDeps` accepts optional `onRecoveryStatus` callback.
+- All changes are additive: records without checkpoints (legacy or pre-4.3) are classified
+  as `unknown_side_effect` and default to `requires_approval` — never silently auto-resumed.
+
+### Security
+- Unknown external side effects block automatic retry (reconciliation_required).
+- Stale authority is never reused on resume — policy/credentials/placement revalidated.
+- Environment quarantine prevents reuse of orphaned or incompletely cleaned environments.
+- Durable cancellation survives restart; cancelled work is never silently resumed.
+- Lease mechanism prevents duplicate concurrent execution within a workspace.
+- Recovery decisions are durable and auditable.
+- **Explicit limitation**: Phase 4 does not implement distributed execution, remote
+  workers, or a cloud scheduler. Leases are local-only guards, not distributed consensus.
+
+### Compatibility
+- All Phase 0–3 tests remain green (682 of 684 pass; 2 sandbox-dependent tests fail
+  only in containerized environments without OS namespace support).
+- Existing execution/workflow/agent APIs unchanged.
+- Additive schema migration — XR 4.2 records remain readable.
+- No Phase 5+ capabilities (automatic model routing, memory/context redesign, mailbox,
+  visual workflows, remote execution) are introduced.
+
 ## [4.2.0] - 2026-07-24 — Trust and Isolation
 
 ### Added
