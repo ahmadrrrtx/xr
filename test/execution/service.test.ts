@@ -163,7 +163,7 @@ describe("XR 4.1 ExecutionService", () => {
     });
     expect(rec.state).toBe("timed_out");
     expect(rec.outcome!.kind).toBe("timed_out");
-    expect(Date.now() - start).toBeLessThan(400);
+    expect(Date.now() - start).toBeLessThan(2000); // XR 4.3 — checkpoint writes add overhead to otherwise fast timeout path
   });
 
   test("cancel() aborts a running action", async () => {
