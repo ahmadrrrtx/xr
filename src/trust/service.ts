@@ -19,6 +19,7 @@ import type { CredentialBroker } from "./credentials.ts";
 import type { EnvironmentManager } from "./environment/manager.ts";
 import { decidePlacement, type PlacementPolicyConfig } from "./policy.ts";
 import {
+  TRUST_POLICY_VERSION,
   type AuthorityGrant,
   type CredentialRef,
   type EnvironmentExecutable,
@@ -128,6 +129,29 @@ export class TrustService {
       },
     } as const;
 
+    // 0. Host-authority short-circuit. Actions that legitimately require host
+    //    authority (GUI / computer-use / host browser) are inherently host-bound
+    //    and CANNOT run in a sandbox. They are admitted in-process with an
+    //    explicit elevated gate — REGARDLESS of whether an isolation backend
+    //    exists — while still classified high-risk for approval/audit. This must
+    //    precede the placement decision so it is not mistaken for a
+    //    "no backend → blocked" case on hosts without a sandbox (e.g. Windows).
+    if (params.request.requiresHostAuthority) {
+      const hostDecision = {
+        kind: "admitted" as const,
+        requestedTier: classification.tier,
+        placement: "in_process" as const,
+        reason: "host-authority action (cannot be isolated): admitted in-process with elevated human gate + full audit",
+        remediation: "Ensure elevated approval and review; this action retains host authority by necessity.",
+        decidedAt: Date.now(),
+        policyVersion: TRUST_POLICY_VERSION,
+      };
+      return {
+        trust: { ...baseTrust, decision: hostDecision },
+        outcome: { kind: "in_process_ok" },
+      };
+    }
+
     // 1. Placement decision (fail-closed for unavailable high-risk isolation).
     const decision = decidePlacement(classification, manager.capabilities(), config);
 
@@ -148,10 +172,11 @@ export class TrustService {
     }
 
     // 4. Admitted, but the adapter provided no isolated-executable form.
+    //    (requiresHostAuthority was already handled in step 0.)
     if (!params.executable) {
       // 4a. Sandboxable HIGH-RISK work (shell/code) MUST be isolated. With no
       //     executable there is no isolated path → FAIL CLOSED (never in-process).
-      if (classification.tier === "tier2_isolated" && !params.request.requiresHostAuthority) {
+      if (classification.tier === "tier2_isolated") {
         const reason = `action classified ${classification.tier} requires an isolated execution path, but the adapter provided none (refusing in-process execution)`;
         return {
           trust: {
@@ -161,15 +186,9 @@ export class TrustService {
           outcome: { kind: "blocked", reason, remediation: "Adapter must supply an EnvironmentExecutable for high-risk actions." },
         };
       }
-      // 4b. Tier-1 (medium-risk, capability-confined) OR Tier-2 that legitimately
-      //     requires host authority (GUI/browser) runs in-process with an
-      //     EXPLICIT, RECORDED boundary decision. This is not a silent downgrade
-      //     of sandboxable high-risk work; it is the documented posture for
-      //     capability-confined medium-risk and inherently host-bound actions.
-      const hostAuthority = !!params.request.requiresHostAuthority;
-      const reason = hostAuthority
-        ? "host-authority action (cannot be isolated): admitted in-process with elevated human gate + full audit"
-        : "tier1 policy-only boundary (in-process; capability performs its own confinement)";
+      // 4b. Tier-1 (medium-risk, capability-confined) runs in-process with an
+      //     EXPLICIT, RECORDED policy-only boundary decision. Not a silent
+      //     downgrade of high-risk work — the capability does its own confinement.
       return {
         trust: {
           ...baseTrust,
@@ -177,10 +196,8 @@ export class TrustService {
             ...decision,
             kind: "admitted",
             placement: "in_process",
-            reason,
-            remediation: hostAuthority
-              ? "Ensure elevated approval and review; this action retains host authority by necessity."
-              : "Provide an EnvironmentExecutable to enforce a real OS boundary.",
+            reason: "tier1 policy-only boundary (in-process; capability performs its own confinement)",
+            remediation: "Provide an EnvironmentExecutable to enforce a real OS boundary.",
           },
         },
         outcome: { kind: "in_process_ok" },

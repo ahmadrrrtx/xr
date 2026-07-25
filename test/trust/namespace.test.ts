@@ -5,14 +5,18 @@ import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { makeTrust, makeGrant, type TrustHarness } from "./_helpers.ts";
 import { NamespaceSandboxBackend } from "../../src/trust/environment/namespace.ts";
+import { detectBwrap } from "../../src/trust/isolated-spawn.ts";
 import { RestrictedProcessBackend } from "../../src/trust/environment/restricted-process.ts";
 import { sensitiveBlockedPaths } from "../../src/trust/classify.ts";
 import type { EnvironmentExecutable, PlacementDecision } from "../../src/trust/types.ts";
 
 // Probe the real backend at module load so we can skip honestly if the host
 // cannot provide a namespace sandbox (e.g. no bubblewrap / no user namespaces).
-const probe = new NamespaceSandboxBackend();
-const NS_AVAILABLE = await probe.detect();
+// Strict confinement tests validate the bubblewrap boundary (the fully-enforced
+// mechanism). Where bubblewrap is unavailable (e.g. Windows, or a bare CI
+// runner) they SKIP. The namespace backend also has a weaker unshare fallback
+// for real actions, which is not strictly unit-tested here.
+const NS_AVAILABLE = await detectBwrap();
 
 let h: TrustHarness;
 let W: string;

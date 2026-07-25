@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Database } from "bun:sqlite";
-import { ExecutionRepo, adaptWorkspaceStore } from "../../src/execution/repository.ts";
+import { ExecutionRepo, adaptWorkspaceStore, truncateRecord } from "../../src/execution/repository.ts";
 import { ExecutionService } from "../../src/execution/service.ts";
 import { decidePlacement } from "../../src/trust/policy.ts";
 import { classifyRisk } from "../../src/trust/classify.ts";
@@ -23,11 +23,6 @@ function highRiskReq(): TrustRequest {
 
 describe("XR 4.2 migration & rollback safety", () => {
   test("a 4.1-shaped record (no trust field) still loads (backward-compatible read)", () => {
-    const dir = mkdtempSync(join(tmpdir(), "xr-mig-"));
-    const db = new Database(join(dir, "m.db"), { create: true });
-    db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
-    const repo = new ExecutionRepo(adaptWorkspaceStore({ exec: (s: string) => db.exec(s), prepare: (s: string) => db.prepare(s) }));
-    repo.migrate();
     const now = Date.now();
     // A record exactly as XR 4.1 would have written it — NO `trust` property.
     const rec41: any = {
@@ -44,13 +39,34 @@ describe("XR 4.2 migration & rollback safety", () => {
       updatedAt: now,
       adapterVersion: "xr-4.1.0",
     };
-    repo.save(rec41);
-    const loaded = repo.get("ex_41");
-    expect(loaded).not.toBeNull();
-    expect(loaded!.trust).toBeUndefined(); // 4.1 records have no trust metadata
-    expect(loaded!.adapterVersion).toBe("xr-4.1.0");
-    try { db.close(); } catch { /* noop */ }
-    rmSync(dir, { recursive: true, force: true });
+
+    // (a) Serialization contract — the actual compatibility mechanism, and
+    //     platform-independent: a record without `trust` round-trips with
+    //     `trust` undefined and all other fields intact.
+    const roundTripped = JSON.parse(JSON.stringify(truncateRecord(rec41)));
+    expect(roundTripped.trust).toBeUndefined();
+    expect(roundTripped.adapterVersion).toBe("xr-4.1.0");
+    expect(roundTripped.state).toBe("succeeded");
+    expect(roundTripped.action.placement.kind).toBe("in_process");
+
+    // (b) Storage round-trip through the repository. Uses the default rollback
+    //     journal (NOT WAL, which is flaky under some Windows setups) and mirrors
+    //     the production save → record_json → get path.
+    const dir = mkdtempSync(join(tmpdir(), "xr-mig-"));
+    const db = new Database(join(dir, "m.db"), { create: true });
+    try {
+      db.exec("PRAGMA foreign_keys = ON;");
+      const repo = new ExecutionRepo(adaptWorkspaceStore({ exec: (s: string) => db.exec(s), prepare: (s: string) => db.prepare(s) }));
+      repo.migrate();
+      repo.save(rec41);
+      const loaded = repo.get("ex_41");
+      expect(loaded).not.toBeNull();
+      expect(loaded!.trust).toBeUndefined(); // 4.1 records have no trust metadata
+      expect(loaded!.adapterVersion).toBe("xr-4.1.0");
+    } finally {
+      try { db.close(); } catch { /* noop */ }
+      try { rmSync(dir, { recursive: true, force: true }); } catch { /* noop */ }
+    }
   });
 
   test("rollback safety: the Tier-1 fallback flag can NEVER enable an unsafe high-risk fallback", () => {

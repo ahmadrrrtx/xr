@@ -13,7 +13,7 @@ import { classifyRisk } from "../../src/trust/classify.ts";
 import { InProcessBackend } from "../../src/trust/environment/in-process.ts";
 import { RestrictedProcessBackend } from "../../src/trust/environment/restricted-process.ts";
 import { NamespaceSandboxBackend } from "../../src/trust/environment/namespace.ts";
-import { makeTrust, type TrustHarness } from "./_helpers.ts";
+import { makeTrust, makeTrustNoSandbox, type TrustHarness } from "./_helpers.ts";
 import type { ToolContext } from "../../src/core/types.ts";
 import type { TrustRequest } from "../../src/trust/types.ts";
 
@@ -72,6 +72,22 @@ describe("XR 4.2 requiresHostAuthority refinement", () => {
     expect(ev.outcome.kind).toBe("in_process_ok");
     expect(ev.trust.classification.tier).toBe("tier2_isolated");
     expect(ev.trust.decision.placement).toBe("in_process");
+    expect(ev.trust.decision.reason).toContain("host-authority");
+  });
+
+  test("requiresHostAuthority is admitted in-process EVEN WITH NO sandbox backend (Windows scenario)", async () => {
+    // Simulates a host with no namespace/container backend (e.g. Windows): the
+    // host-authority action must still be admitted in-process, NOT blocked.
+    const noSandbox = makeTrustNoSandbox();
+    await noSandbox.trust.onInit();
+    expect(noSandbox.trust.capabilities().namespaceSandbox).toBe(false);
+    expect(noSandbox.trust.capabilities().container).toBe(false);
+    const ev = await noSandbox.trust.evaluate({
+      request: req({ requiresHostAuthority: true, controlRisk: "destructive" }),
+      runId: "ex_win", correlationId: "ex_win", workspaceId: "ws", actor: "user:u", capability: "control_action:computer_use",
+    });
+    expect(ev.outcome.kind).toBe("in_process_ok"); // NOT blocked despite no sandbox
+    expect(ev.trust.classification.tier).toBe("tier2_isolated");
     expect(ev.trust.decision.reason).toContain("host-authority");
   });
 });

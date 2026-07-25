@@ -242,13 +242,18 @@ export class NamespaceSandboxBackend implements EnvironmentBackend {
     // Build an inner shell that hides sensitive paths under tmpfs, sets a
     // clean env, applies ulimits, then execs the command. (No pivot_root: the
     // base rootfs stays visible read-only — a weaker boundary than bwrap.)
-    const mounts = [
-      "mount --make-rprivate / 2>/dev/null || true",
-      "mount -t tmpfs tmpfs /home 2>/dev/null || true",
-      "mount -t tmpfs tmpfs /root 2>/dev/null || true",
-      "mount -t tmpfs tmpfs /tmp 2>/dev/null || true",
-    ];
-    // Re-bind granted writable roots (they may live under a hidden mount).
+    const mounts = ["mount --make-rprivate / 2>/dev/null || true"];
+    // Hide sensitive dirs under tmpfs — but NEVER tmpfs a directory that is an
+    // ancestor of a granted writable root, or we would hide the workspace itself
+    // (a tmpfs over /tmp would swallow a workspace under /tmp before we bind it).
+    for (const d of ["/home", "/root", "/tmp", "/var", "/run"]) {
+      const ancestorOfWritable = writableRoots.some((w) => w === d || w.startsWith(d + "/"));
+      if (!ancestorOfWritable) {
+        mounts.push(`mount -t tmpfs tmpfs ${d} 2>/dev/null || true`);
+      }
+    }
+    // Bind granted writable roots. Their parent was not tmpfs'd above, so the
+    // host content stays accessible and the bind references the real path.
     for (const r of writableRoots) {
       mounts.push(`mkdir -p ${shellQuote(r)} 2>/dev/null || true`);
       mounts.push(`mount --bind ${shellQuote(r)} ${shellQuote(r)} 2>/dev/null || true`);
