@@ -39,11 +39,46 @@ import {
   ttlToExpiresAt,
   type MemoryCategory,
   type MemoryEntry,
+  type MemoryEntryWithContext,
   type MemoryExport,
   type MemorySource,
   type RecallHit,
 } from "./types.ts";
 import { parseMemoryIntent } from "./intent.ts";
+import { admitContextWrite } from "../context/poison.ts";
+import type {
+  ActorKind,
+  ConsentState,
+  ProvenanceKind,
+  TrustStatus,
+} from "../context/types.ts";
+
+/**
+ * XR 4.5 — honest mapping from the legacy `source` enum to context metadata.
+ * Identical to the migration mapping in `src/context/memory-adapter.ts`, so a
+ * row written now and a row migrated from 4.4 are described the same way.
+ */
+const SOURCE_TRUST: Record<string, TrustStatus> = {
+  user: "approved_memory",
+  chat: "approved_memory",
+  voice: "approved_memory",
+  research: "generated_synthesis",
+  import: "unknown",
+};
+const SOURCE_PROVENANCE: Record<string, ProvenanceKind> = {
+  user: "user_input",
+  chat: "user_input",
+  voice: "user_input",
+  research: "research",
+  import: "import",
+};
+const SOURCE_ACTOR: Record<string, ActorKind> = {
+  user: "user",
+  chat: "user",
+  voice: "user",
+  research: "system",
+  import: "system",
+};
 
 const MAX_CONTENT = 2000;
 
@@ -67,9 +102,25 @@ export interface AddInput {
    * absolute `expiresAt` and becomes eligible for pruning after it elapses.
    */
   ttlMs?: number | null;
+
+  // ── XR 4.5 — optional context metadata ────────────────────────────────
+  /**
+   * Consent to record. Defaults to `approved` for a direct add (an explicit
+   * user action). The admission gate downgrades this to `proposed` for actors
+   * that cannot self-approve, so a caller cannot escalate by passing it.
+   */
+  consentState?: ConsentState;
+  /** Who performed the action (recorded as the consent actor). */
+  actor?: string;
+  /** Typed provenance kind. Defaults to the mapping for `source`. */
+  provenanceKind?: ProvenanceKind;
+  /** A URL, path, run id, or claim id. Never invented. */
+  provenanceRef?: string | null;
+  /** When the underlying source was observed in the world. */
+  sourceObservedAt?: number | null;
 }
 
-function rowToEntry(r: MemoryRow): MemoryEntry {
+function rowToEntry(r: MemoryRow): MemoryEntryWithContext {
   return {
     id: r.id,
     category: r.category as MemoryCategory,
@@ -83,6 +134,27 @@ function rowToEntry(r: MemoryRow): MemoryEntry {
     lastAccessedAt: r.last_accessed_at ?? null,
     accessCount: r.access_count ?? 0,
     expiresAt: r.expires_at ?? null,
+    // XR 4.5 — additive context metadata. Undefined on a pre-migration read.
+    consentState: (r.consent_state as MemoryEntryWithContext["consentState"]) ?? "legacy_unknown",
+    consentActor: r.consent_actor ?? null,
+    consentAt: r.consent_at ?? null,
+    trustStatus: (r.trust_status as MemoryEntryWithContext["trustStatus"]) ?? undefined,
+    confidence: (r.confidence as MemoryEntryWithContext["confidence"]) ?? "unknown",
+    sensitivity: (r.sensitivity as MemoryEntryWithContext["sensitivity"]) ?? "unknown",
+    provenanceKind: (r.provenance_kind as MemoryEntryWithContext["provenanceKind"]) ?? undefined,
+    provenanceRef: r.provenance_ref ?? null,
+    actorKind: r.actor_kind ?? null,
+    actorName: r.actor_name ?? null,
+    sourceObservedAt: r.source_observed_at ?? null,
+    staleAfter: r.stale_after ?? null,
+    revokedAt: r.revoked_at ?? null,
+    revokedReason: r.revoked_reason ?? null,
+    supersededBy: r.superseded_by ?? null,
+    retentionPolicy: r.retention_policy ?? "durable",
+    indexState: r.index_state ?? "none",
+    embeddingModel: r.embedding_model ?? null,
+    embeddingDim: r.embedding_dim ?? null,
+    workspaceId: r.workspace_id ?? null,
   };
 }
 
@@ -155,6 +227,61 @@ export class MemoryStore {
       importance,
       expiresAt,
     });
+
+    // ── XR 4.5 — stamp real consent, trust, and provenance on a NEW entry ──
+    //
+    // The `legacy_unknown` column default exists for rows that predate 4.5.
+    // Anything written NOW has a knowable origin, so recording it as unknown
+    // would be just as dishonest as fabricating approval.
+    //
+    // Deterministic policy decides; the caller cannot assert trust directly.
+    try {
+      const admission = admitContextWrite({
+        content,
+        type: category === "exclusion" ? "knowledge" : "memory",
+        requestedTrust: SOURCE_TRUST[source] ?? "unknown",
+        provenanceKind: SOURCE_PROVENANCE[source] ?? "unknown",
+        actorKind: SOURCE_ACTOR[source] ?? "unknown",
+        // A direct `add()` is an explicit user/system act; plugin and model
+        // paths are downgraded to `proposed` inside the admission gate.
+        requestedConsent: input.consentState ?? "approved",
+      });
+
+      // An exclusion rule is a user POLICY, not a memory — it is the one write
+      // that legitimately carries instruction trust, and it only ever reduces
+      // what XR retains.
+      const trust =
+        category === "exclusion" ? "trusted_instruction" : admission.trustStatus;
+      const consent = admission.consentState;
+
+      this.store.setMemoryConsent(
+        id,
+        consent,
+        consent === "approved" ? (input.actor ?? "user") : (input.actor ?? source),
+      );
+      this.store.setMemoryProvenance(id, {
+        provenanceKind: input.provenanceKind ?? SOURCE_PROVENANCE[source] ?? "unknown",
+        provenanceRef: input.provenanceRef ?? null,
+        actorKind: SOURCE_ACTOR[source] ?? "unknown",
+        actorName: input.actor ?? null,
+        trustStatus: trust,
+        confidence: importance >= 4 ? "high" : importance <= 2 ? "low" : "medium",
+        sourceObservedAt: input.sourceObservedAt ?? null,
+      });
+
+      if (admission.scan.flagged) {
+        this.store.audit("memory.add.scanned", {
+          id,
+          severity: admission.scan.severity,
+          signatures: admission.scan.signatures,
+          consent,
+          trust,
+        });
+      }
+    } catch {
+      // Never fail a write because metadata stamping failed — the conservative
+      // column defaults (legacy_unknown / unknown) already apply.
+    }
     this.store.audit("memory.add", {
       id,
       category,
@@ -236,20 +363,22 @@ export class MemoryStore {
       category?: MemoryCategory;
       includeExclusions?: boolean;
       includeExpired?: boolean;
+      /** XR 4.5 — include revoked/quarantined/proposed rows (inspection only). */
+      includeRevoked?: boolean;
     } = {},
-  ): MemoryEntry[] {
+  ): MemoryEntryWithContext[] {
     return this.store.listMemory(opts).map(rowToEntry);
   }
 
-  get(id: string): MemoryEntry | null {
+  get(id: string): MemoryEntryWithContext | null {
     const resolved = this.resolveId(id);
     if (!resolved.ok) return null;
     const row = this.store.getMemory(resolved.id!);
     return row ? rowToEntry(row) : null;
   }
 
-  /** Plain substring/keyword search (deterministic). Excludes expired. */
-  search(query: string, opts: { scope?: string } = {}): MemoryEntry[] {
+  /** Plain substring/keyword search (deterministic). Excludes expired + revoked. */
+  search(query: string, opts: { scope?: string } = {}): MemoryEntryWithContext[] {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const all = this.list({ scope: opts.scope });
@@ -271,7 +400,7 @@ export class MemoryStore {
   recall(
     query: string,
     opts: { scope?: string; k?: number; floor?: number } = {},
-  ): MemoryEntry[] {
+  ): MemoryEntryWithContext[] {
     return this.recallExplain(query, opts).map((h) => h.entry);
   }
 
@@ -333,7 +462,7 @@ export class MemoryStore {
   async recallSemantic(
     query: string,
     opts: { scope?: string; k?: number; floor?: number } = {},
-  ): Promise<MemoryEntry[]> {
+  ): Promise<MemoryEntryWithContext[]> {
     return (await this.recallSemanticExplain(query, opts)).map((h) => h.entry);
   }
 
@@ -426,6 +555,149 @@ export class MemoryStore {
       if (phrase && lc.includes(phrase)) return r.content;
     }
     return null;
+  }
+
+  // ── XR 4.5: consent, revocation, correction (§9.2 / §9.8) ─────────────
+
+  /**
+   * Grant explicit consent for an entry. This is the ONLY way an entry reaches
+   * `approved` — nothing self-approves (§9.2 consent-first retention).
+   */
+  approveConsent(id: string, actor = "user"): { ok: boolean; reason?: string } {
+    const resolved = this.resolveId(id);
+    if (!resolved.ok) return { ok: false, reason: resolved.reason };
+    const realId = resolved.id!;
+    const row = this.store.getMemory(realId);
+    if (!row) return { ok: false, reason: "not found" };
+    if (row.revoked_at) return { ok: false, reason: "entry was revoked; add a new one instead" };
+    if (row.consent_state === "quarantined") {
+      return { ok: false, reason: "entry is quarantined pending safety review" };
+    }
+    const ok = this.store.setMemoryConsent(realId, "approved", actor);
+    if (ok) this.store.audit("memory.consent.approve", { id: realId, actor });
+    return ok ? { ok: true } : { ok: false, reason: "not found" };
+  }
+
+  /**
+   * Revoke consent. The entry is excluded from ALL future retrieval and its
+   * cached embedding is destroyed so no index path can resurrect it.
+   * The row itself is retained so the user can still see and export it.
+   */
+  revoke(
+    id: string,
+    reason = "user_revoked",
+    actor = "user",
+  ): { ok: boolean; reason?: string; indexInvalidated: boolean } {
+    const resolved = this.resolveId(id);
+    if (!resolved.ok) return { ok: false, reason: resolved.reason, indexInvalidated: false };
+    const realId = resolved.id!;
+    const ok = this.store.revokeMemory(realId, reason, actor);
+    if (ok) {
+      this.store.audit("memory.revoke", { id: realId, reason, actor, indexInvalidated: true });
+    }
+    return ok
+      ? { ok: true, indexInvalidated: true }
+      : { ok: false, reason: "not found", indexInvalidated: false };
+  }
+
+  /**
+   * Correct an entry. Creates a NEW entry and marks the old one superseded so
+   * the correction lineage survives (§9.6) instead of overwriting history.
+   * A user correction must never be silently outranked by the stale original.
+   */
+  correct(
+    id: string,
+    newContent: string,
+    actor = "user",
+  ): { ok: boolean; newId?: string; reason?: string } {
+    const resolved = this.resolveId(id);
+    if (!resolved.ok) return { ok: false, reason: resolved.reason };
+    const realId = resolved.id!;
+    const old = this.get(realId);
+    if (!old) return { ok: false, reason: "not found" };
+
+    const added = this.add({
+      content: newContent,
+      category: old.category,
+      scope: old.scope,
+      source: "user",
+      tags: [...old.tags, "correction"],
+      importance: old.importance,
+    });
+    if (!added.ok || !added.entry) {
+      return { ok: false, reason: added.reason ?? "could not store the correction" };
+    }
+
+    // Approve the correction (an explicit user action) and mark the original.
+    this.store.setMemoryConsent(added.entry.id, "approved", actor);
+    this.store.setMemoryProvenance(added.entry.id, {
+      provenanceKind: "user_input",
+      provenanceRef: `correction-of:${realId}`,
+      actorKind: "user",
+      actorName: actor,
+    });
+    this.store.supersedeMemory(realId, added.entry.id);
+    this.store.audit("memory.correct", { oldId: realId, newId: added.entry.id, actor });
+    return { ok: true, newId: added.entry.id };
+  }
+
+  /** Mark an entry stale from a given moment. Stale is shown, never hidden. */
+  markStale(id: string, at: number = Date.now()): { ok: boolean; reason?: string } {
+    const resolved = this.resolveId(id);
+    if (!resolved.ok) return { ok: false, reason: resolved.reason };
+    const ok = this.store.setMemoryStaleAfter(resolved.id!, at);
+    if (ok) this.store.audit("memory.mark_stale", { id: resolved.id, at });
+    return ok ? { ok: true } : { ok: false, reason: "not found" };
+  }
+
+  /**
+   * Entries the user has not yet decided on (`proposed`) plus quarantined
+   * items awaiting review. Surfaced by `xr memory pending`.
+   */
+  pending(): { proposed: MemoryEntryWithContext[]; quarantined: MemoryEntryWithContext[] } {
+    const all = this.store
+      .listMemory({ includeExclusions: true, includeExpired: true, includeRevoked: true })
+      .map(rowToEntry);
+    return {
+      proposed: all.filter((e) => e.consentState === "proposed"),
+      quarantined: all.filter((e) => e.consentState === "quarantined"),
+    };
+  }
+
+  /** Every entry whose consent could not be reconstructed at migration time. */
+  legacyUnknown(): MemoryEntryWithContext[] {
+    return this.store
+      .listMemory({ includeExclusions: true, includeExpired: true, includeRevoked: true })
+      .map(rowToEntry)
+      .filter((e) => e.consentState === "legacy_unknown");
+  }
+
+  /**
+   * Consent breakdown for `xr memory status` / doctor / dashboard.
+   *
+   * This is an INSPECTION surface, so it deliberately includes revoked and
+   * quarantined rows. Hiding them here would conceal exactly the information
+   * the user opened the view to see.
+   */
+  consentSummary(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const r of this.store.listMemory({
+      includeExclusions: true,
+      includeExpired: true,
+      includeRevoked: true,
+    })) {
+      const k = r.consent_state ?? "legacy_unknown";
+      out[k] = (out[k] ?? 0) + 1;
+    }
+    return out;
+  }
+
+  /** Entries superseded by a correction (kept for lineage, never retrieved as current). */
+  superseded(): MemoryEntryWithContext[] {
+    return this.store
+      .listMemory({ includeExclusions: true, includeExpired: true, includeRevoked: true })
+      .map(rowToEntry)
+      .filter((e) => Boolean(e.supersededBy));
   }
 
   // ── import / export ───────────────────────────────────────────────────
@@ -564,6 +836,53 @@ export class MemoryStore {
       return { handled: true, kind: "forget", removed, matched: matches.length };
     }
 
+    // ── XR 4.5 verbs ────────────────────────────────────────────────────
+    // Revoke ≠ forget. Revoking withdraws consent (the entry stops being used
+    // but stays inspectable/exportable); forgetting erases it.
+    if (intent.kind === "revoke") {
+      const matches = this.search(intent.query, { scope });
+      let revoked = 0;
+      for (const m of matches) if (this.revoke(m.id, "user_revoked", "user").ok) revoked++;
+      return { handled: true, kind: "revoke", removed: revoked, matched: matches.length };
+    }
+
+    if (intent.kind === "correct") {
+      const matches = this.search(intent.query, { scope });
+      if (matches.length === 0) {
+        return { handled: true, kind: "correct", ok: false, matched: 0, reason: "no matching entry to correct" };
+      }
+      // Correct only an unambiguous single match — never guess which fact the
+      // user meant. Ambiguity is reported, not resolved silently.
+      if (matches.length > 1) {
+        return {
+          handled: true,
+          kind: "correct",
+          ok: false,
+          matched: matches.length,
+          reason: `ambiguous — ${matches.length} entries match; correct one explicitly by id`,
+        };
+      }
+      const res = this.correct(matches[0]!.id, intent.replacement, "user");
+      return {
+        handled: true,
+        kind: "correct",
+        ok: res.ok,
+        matched: 1,
+        reason: res.reason,
+        content: intent.replacement,
+        entry: res.newId ? this.get(res.newId) ?? undefined : undefined,
+      };
+    }
+
+    if (intent.kind === "export") {
+      return { handled: true, kind: "export", ok: true, content: intent.target };
+    }
+
+    if (intent.kind === "inspect") {
+      const results = this.search(intent.query, { scope });
+      return { handled: true, kind: "inspect", entries: results, matched: results.length };
+    }
+
     // intent.kind === "add"
     // Exclusions reduce stored data → always honour immediately, no prompt.
     if (intent.category === "exclusion") {
@@ -639,6 +958,47 @@ export class MemoryStore {
       for (const m of matches) if (this.remove(m.id).ok) removed++;
       return { handled: true, kind: "forget", removed, matched: matches.length };
     }
+
+    // XR 4.5 consent verbs (async path — mirrors the sync `captureIntent`).
+    if (intent.kind === "revoke") {
+      const matches = this.search(intent.query, { scope });
+      let revoked = 0;
+      for (const m of matches) if (this.revoke(m.id, "user_revoked", "user").ok) revoked++;
+      return { handled: true, kind: "revoke", removed: revoked, matched: matches.length };
+    }
+    if (intent.kind === "correct") {
+      const matches = this.search(intent.query, { scope });
+      if (matches.length === 0) {
+        return { handled: true, kind: "correct", ok: false, matched: 0, reason: "no matching entry to correct" };
+      }
+      if (matches.length > 1) {
+        return {
+          handled: true,
+          kind: "correct",
+          ok: false,
+          matched: matches.length,
+          reason: `ambiguous — ${matches.length} entries match; correct one explicitly by id`,
+        };
+      }
+      const res = this.correct(matches[0]!.id, intent.replacement, "user");
+      return {
+        handled: true,
+        kind: "correct",
+        ok: res.ok,
+        matched: 1,
+        reason: res.reason,
+        content: intent.replacement,
+        entry: res.newId ? this.get(res.newId) ?? undefined : undefined,
+      };
+    }
+    if (intent.kind === "export") {
+      return { handled: true, kind: "export", ok: true, content: intent.target };
+    }
+    if (intent.kind === "inspect") {
+      const results = this.search(intent.query, { scope });
+      return { handled: true, kind: "inspect", entries: results, matched: results.length };
+    }
+
     if (intent.category === "exclusion") {
       const res = this.add({ content: intent.content, category: "exclusion", scope: GLOBAL_SCOPE, source });
       return { handled: true, kind: "exclusion", ok: res.ok, duplicate: res.duplicate, reason: res.reason, content: intent.content };
@@ -752,7 +1112,18 @@ export class MemoryStore {
 /** Outcome of a live capture flow (chat/TUI/voice). */
 export interface CaptureOutcome {
   handled: boolean;
-  kind?: "add" | "add-pending" | "exclusion" | "forget" | "recall";
+  kind?:
+    | "add"
+    | "add-pending"
+    | "exclusion"
+    | "forget"
+    | "recall"
+    // XR 4.5 — consent verbs are distinct outcomes so a caller can never
+    // confuse "stopped using it" with "erased it".
+    | "revoke"
+    | "correct"
+    | "export"
+    | "inspect";
   ok?: boolean;
   duplicate?: boolean;
   declined?: boolean;

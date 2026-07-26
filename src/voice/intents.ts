@@ -94,6 +94,47 @@ export async function handleDeterministicVoiceIntent(store: Store, text: string,
       await speak(matches.length ? `Forgotten ${matches.length} note${matches.length === 1 ? "" : "s"}.` : "I have no note matching that.");
       return true;
     }
+    // XR 4.5 — revoke withdraws consent but keeps the record inspectable.
+    if (parsed.kind === "revoke") {
+      const matches = mem.search(parsed.query, { scope });
+      let revoked = 0;
+      for (const x of matches) if (mem.revoke(x.id, "user_revoked", "voice").ok) revoked++;
+      await speak(
+        revoked
+          ? `Revoked ${revoked} note${revoked === 1 ? "" : "s"}. I will not use ${revoked === 1 ? "it" : "them"} again, but ${revoked === 1 ? "it is" : "they are"} still listed if you want to review or delete.`
+          : "I have no note matching that.",
+      );
+      return true;
+    }
+    // Corrections must be unambiguous — XR never guesses which fact you meant.
+    if (parsed.kind === "correct") {
+      const matches = mem.search(parsed.query, { scope });
+      if (matches.length === 0) {
+        await speak("I have no note matching that, so there is nothing to correct.");
+      } else if (matches.length > 1) {
+        await speak(`${matches.length} notes match that. Please correct one by name in the terminal so I don't change the wrong thing.`);
+      } else {
+        const res = mem.correct(matches[0]!.id, parsed.replacement, "voice");
+        await speak(res.ok ? "Corrected. I kept the old version marked as superseded." : `I could not correct that. ${res.reason ?? ""}`);
+      }
+      return true;
+    }
+    if (parsed.kind === "export") {
+      await speak("You can export your memory with: x r memory export. I won't write files from voice without a confirmation.");
+      return true;
+    }
+    if (parsed.kind === "inspect") {
+      const found = mem.search(parsed.query, { scope });
+      if (!found.length) {
+        await speak("I have nothing saved about that.");
+      } else {
+        const e = found[0]!;
+        await speak(
+          `I have: ${e.content}. Source: ${e.source}. Consent: ${e.consentState ?? "unknown"}. Say "x r memory inspect" in the terminal for full provenance.`,
+        );
+      }
+      return true;
+    }
     const results = mem.recall(parsed.query || "preferences", { scope });
     await speak(results.length ? `Here's what I remember. ${results.slice(0, 4).map((e) => e.content).join(". ")}.` : "I don't have anything saved that's relevant.");
     return true;

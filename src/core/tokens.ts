@@ -48,6 +48,7 @@ import type { XRShieldService } from "../security/shield.ts";
 import type { BusinessOS } from "../business/index.ts";
 import type { ExecutionService } from "../execution/service.ts";
 import type { TrustService } from "../trust/service.ts";
+import type { ContextService } from "../context/service.ts";
 
 /**
  * The complete service catalogue. Add new tokens here when a new stage
@@ -96,6 +97,8 @@ export const Tokens = {
   Execution: token<ExecutionService>("xr.execution", "Unified Execution Fabric service"),
   // XR 4.2 — Trust & Isolation (risk-tiered placement + enforceable boundaries).
   Trust: token<TrustService>("xr.trust", "Trust & Isolation service"),
+  // XR 4.5 — Knowledge and Context OS (taxonomy, provenance, scope-first retrieval).
+  Context: token<ContextService>("xr.context", "Knowledge and Context OS service"),
 } as const;
 
 export type ServiceTokenId = keyof typeof Tokens;

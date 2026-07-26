@@ -13,6 +13,7 @@ import { ConfigCommand } from "../commands/config.ts";
 import { BudgetCommand } from "../commands/budget.ts";
 import { ProvidersCommand } from "../commands/providers.ts";
 import { MemoryCommand } from "../commands/memory.ts";
+import { ContextCommand } from "../commands/context.ts";
 import { PluginsCommand, PluginRunCommand } from "../commands/plugins.ts";
 import { McpCommand } from "../commands/mcp.ts";
 import { WorkspaceCommand } from "../commands/workspace.ts";
@@ -79,6 +80,7 @@ function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new ControlCommand());
   kernel.commands.register(new ResearchCommand());
   kernel.commands.register(new MemoryCommand());
+  kernel.commands.register(new ContextCommand());
   kernel.commands.register(new PluginsCommand());
   kernel.commands.register(new PluginRunCommand());
   kernel.commands.register(new McpCommand());
@@ -125,6 +127,9 @@ const REGISTRY_NAME: Record<string, string> = {
   sessions: "session",
   memory: "memory",
   mem: "memory",
+  context: "context",
+  ctx: "context",
+  knowledge: "context",
   config: "config",
   cfg: "config",
   settings: "config",

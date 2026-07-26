@@ -36,6 +36,7 @@ import { SkillService } from "../services/skill-service.ts";
 import { AgentService } from "../services/agent-service.ts";
 import { MultiAgentService } from "../services/multi-agent-service.ts";
 import { IntelligenceService } from "../intelligence/service.ts";
+import { ContextService } from "../context/service.ts";
 
 import { XRShieldService } from "../security/shield.ts";
 import { BusinessOS } from "../business/index.ts";
@@ -363,6 +364,35 @@ export class ExecutionServiceProvider implements ServiceProvider {
         dependsOn: [Tokens.Store, Tokens.AuditStore, Tokens.Trust],
         kernelScope: "workspace",
         owner: "execution",
+      },
+    );
+  }
+}
+
+/**
+ * XR 4.5 — Knowledge and Context OS. Workspace-scoped so the context
+ * repository, grants, and provenance ledger rebind to the active workspace
+ * store on switch (cross-workspace contamination is impossible by construction).
+ *
+ * Depends on Store (schema + items) and Intelligence (embedding/reranking model
+ * selection — this service NEVER selects a provider itself).
+ */
+export class ContextServiceProvider implements ServiceProvider {
+  readonly id = "context";
+  readonly workspaceScoped = true;
+
+  register(ctx: ProviderContext): void {
+    ctx.registry.registerSingleton(
+      Tokens.Context,
+      (registry) => {
+        const store = registry.resolve(Tokens.Store);
+        return new ContextService(registry, store);
+      },
+      {
+        lifecycle: true,
+        dependsOn: [Tokens.Store, Tokens.Intelligence],
+        kernelScope: "workspace",
+        owner: "context",
       },
     );
   }

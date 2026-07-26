@@ -367,12 +367,94 @@ async function doRemember(store: Store, id: string | undefined): Promise<void> {
     tags: ["research", session.depth],
     importance: 3,
   });
-  if (!res.ok) warn(`not saved: ${res.reason}`);
-  else if (res.duplicate) info("already in memory — no duplicate created.");
-  else {
-    ok(`saved to memory ${C.dim(res.entry!.id)}`);
-    info(`recall later with:  xr memory recall "${session.topic}"`);
+  if (!res.ok) {
+    warn(`not saved: ${res.reason}`);
+    return;
   }
+  if (res.duplicate) {
+    info("already in memory — no duplicate created.");
+    return;
+  }
+
+  // ── XR 4.5 — link the saved finding to its evidence ──────────────────
+  //
+  // A research finding is model SYNTHESIS over sources, not a user fact.
+  // Recording it honestly means:
+  //   • trust  = generated_synthesis (never approved_memory)
+  //   • consent = approved (the user ran `remember` deliberately)
+  //   • provenance = the research session, plus a reference per source
+  // so the claim can always be traced back and never silently hardens
+  // into "the user told me this".
+  const memId = res.entry!.id;
+  let linkedSources = 0;
+  try {
+    store.setMemoryProvenance(memId, {
+      provenanceKind: "research",
+      provenanceRef: `research:${session.id}`,
+      actorKind: "model",
+      actorName: "research-engine",
+      trustStatus: "generated_synthesis",
+      confidence:
+        session.synthesis?.overallConfidence === "high"
+          ? "high"
+          : session.synthesis?.overallConfidence === "low"
+            ? "low"
+            : "medium",
+      sourceObservedAt: session.updatedAt,
+    });
+    store.setMemoryConsent(memId, "approved", "user");
+
+    const { ContextRepository, adaptStoreForContext } = await import(
+      "../context/repository.ts"
+    );
+    const { ProvenanceService, provenanceFromResearchSource } = await import(
+      "../context/provenance.ts"
+    );
+    const repo = new ContextRepository(adaptStoreForContext(store), store.workspaceId);
+    repo.migrate();
+    const prov = new ProvenanceService(repo);
+
+    // Record the finding as an evidence-class context item carrying citations.
+    const itemId = repo.insertItem({
+      type: "evidence",
+      content: content.slice(0, 4000),
+      title: session.topic.slice(0, 72),
+      scope: { workspaceId: store.workspaceId, projectScope: "global", userId: "local" },
+      trustStatus: "generated_synthesis",
+      consentState: "approved",
+      consentActor: "user",
+      consentAt: Date.now(),
+      provenanceKind: "research",
+      provenanceRef: `research:${session.id}`,
+      actorKind: "model",
+      actorName: "research-engine",
+      sourceObservedAt: session.updatedAt,
+      confidence: session.synthesis?.overallConfidence ?? "unknown",
+      links: { researchSessionId: session.id, derivedFrom: memId },
+      tags: ["research", session.depth],
+    });
+
+    for (const src of session.sources.slice(0, 32)) {
+      if (prov.link(itemId, provenanceFromResearchSource(src))) linkedSources++;
+    }
+    // Claims carry their own citations so a report can cite line by line.
+    for (const claim of (session.claims ?? []).slice(0, 32)) {
+      prov.link(itemId, {
+        kind: "research",
+        ref: `claim:${claim.id}`,
+        label: claim.text.slice(0, 120),
+      });
+    }
+  } catch {
+    /* provenance linkage is best-effort — the memory entry is already saved */
+  }
+
+  ok(`saved to memory ${C.dim(memId)}`);
+  if (linkedSources) {
+    info(`linked ${linkedSources} source citation(s) — inspect with: xr context explain ${memId}`);
+  }
+  info("recorded as model synthesis, not a user fact — its sources stay traceable.");
+  info(`recall later with:  xr memory recall "${session.topic}"`);
 }
 
 function doList(store: Store): void {

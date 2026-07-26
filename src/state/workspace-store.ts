@@ -8,6 +8,9 @@ import { createHash } from "node:crypto";
 import { join, dirname } from "node:path";
 import { existsSync, mkdirSync } from "node:fs";
 import { XR_HOME } from "../config/config.ts";
+// XR 4.5 — context schema. `context/repository.ts` imports only `context/types.ts`
+// (dependency-free), so this static import introduces no cycle.
+import { ContextRepository, adaptStoreForContext } from "../context/repository.ts";
 
 const GENESIS = "xr-genesis";
 
@@ -28,6 +31,32 @@ export interface MemoryRow {
   last_accessed_at: number | null;
   access_count: number;
   expires_at: number | null;
+  /**
+   * XR 4.5 (Knowledge and Context OS) — additive context metadata.
+   * All are nullable/defaulted so pre-4.5 databases read unchanged.
+   * `consent_state` defaults to 'legacy_unknown' and is NEVER backfilled to
+   * 'approved' — XR cannot reconstruct historical consent (see MIGRATION).
+   */
+  consent_state: string | null;
+  consent_actor: string | null;
+  consent_at: number | null;
+  trust_status: string | null;
+  confidence: string | null;
+  sensitivity: string | null;
+  provenance_kind: string | null;
+  provenance_ref: string | null;
+  actor_kind: string | null;
+  actor_name: string | null;
+  source_observed_at: number | null;
+  stale_after: number | null;
+  revoked_at: number | null;
+  revoked_reason: string | null;
+  superseded_by: string | null;
+  retention_policy: string | null;
+  index_state: string | null;
+  embedding_model: string | null;
+  embedding_dim: number | null;
+  workspace_id: string | null;
 }
 
 /** v0.9: a session summary row (kept separate from long-term memory). */
@@ -272,8 +301,85 @@ export class WorkspaceStore {
       if (!have.has("expires_at")) {
         this.db.exec(`ALTER TABLE user_memory ADD COLUMN expires_at INTEGER`);
       }
+
+      // ── XR 4.5 Knowledge and Context OS — additive context metadata ────
+      // Every column is nullable or has a default, so an existing 4.4 database
+      // opens unchanged. `consent_state` seeds to 'legacy_unknown' rather than
+      // 'approved': XR must not fabricate consent it cannot verify.
+      const ADDITIVE_45: Array<[string, string]> = [
+        ["consent_state", "TEXT NOT NULL DEFAULT 'legacy_unknown'"],
+        ["consent_actor", "TEXT"],
+        ["consent_at", "INTEGER"],
+        ["trust_status", "TEXT"],
+        ["confidence", "TEXT NOT NULL DEFAULT 'unknown'"],
+        ["sensitivity", "TEXT NOT NULL DEFAULT 'unknown'"],
+        ["provenance_kind", "TEXT"],
+        ["provenance_ref", "TEXT"],
+        ["actor_kind", "TEXT"],
+        ["actor_name", "TEXT"],
+        ["source_observed_at", "INTEGER"],
+        ["stale_after", "INTEGER"],
+        ["revoked_at", "INTEGER"],
+        ["revoked_reason", "TEXT"],
+        ["superseded_by", "TEXT"],
+        ["retention_policy", "TEXT NOT NULL DEFAULT 'durable'"],
+        ["index_state", "TEXT NOT NULL DEFAULT 'none'"],
+        ["embedding_model", "TEXT"],
+        ["embedding_dim", "INTEGER"],
+        ["workspace_id", "TEXT"],
+      ];
+      for (const [col, decl] of ADDITIVE_45) {
+        if (!have.has(col)) {
+          this.db.exec(`ALTER TABLE user_memory ADD COLUMN ${col} ${decl}`);
+        }
+      }
+
+      // Derive trust/provenance from the EXISTING, honest `source` column.
+      // Only fills rows where the value is still NULL, so it is idempotent and
+      // never overwrites a user decision.
+      this.db.exec(`
+        UPDATE user_memory SET
+          trust_status = CASE
+            WHEN category = 'exclusion' THEN 'trusted_instruction'
+            WHEN source IN ('user','chat','voice') THEN 'approved_memory'
+            WHEN source = 'research' THEN 'generated_synthesis'
+            ELSE 'unknown' END
+        WHERE trust_status IS NULL;
+        UPDATE user_memory SET
+          provenance_kind = CASE
+            WHEN source IN ('user','chat','voice') THEN 'user_input'
+            WHEN source = 'research' THEN 'research'
+            WHEN source = 'import' THEN 'import'
+            ELSE 'unknown' END
+        WHERE provenance_kind IS NULL;
+        UPDATE user_memory SET
+          actor_kind = CASE
+            WHEN source IN ('user','chat','voice') THEN 'user'
+            WHEN source IN ('research','import') THEN 'system'
+            ELSE 'unknown' END
+        WHERE actor_kind IS NULL;
+        UPDATE user_memory SET
+          index_state = CASE WHEN embedding IS NOT NULL THEN 'indexed' ELSE 'none' END
+        WHERE index_state = 'none' AND embedding IS NOT NULL;
+      `);
+      this.db.exec(
+        `UPDATE user_memory SET workspace_id = '${this.workspaceId.replace(/'/g, "''")}' WHERE workspace_id IS NULL`,
+      );
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_user_memory_consent ON user_memory(consent_state);
+        CREATE INDEX IF NOT EXISTS idx_user_memory_workspace ON user_memory(workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_user_memory_revoked ON user_memory(revoked_at);
+      `);
     } catch {
       /* never block startup on a migration probe */
+    }
+
+    // XR 4.5 — context subsystem tables (additive, idempotent, fail-soft).
+    try {
+      new ContextRepository(adaptStoreForContext(this), this.workspaceId).migrate();
+    } catch {
+      /* context tables are created lazily by ContextService when unavailable here */
     }
   }
 
@@ -405,6 +511,8 @@ export class WorkspaceStore {
       category?: string;
       includeExclusions?: boolean;
       includeExpired?: boolean;
+      /** XR 4.5 — include revoked/quarantined/proposed rows (inspection only). */
+      includeRevoked?: boolean;
     } = {},
   ): MemoryRow[] {
     const clauses: string[] = [];
@@ -422,6 +530,12 @@ export class WorkspaceStore {
     if (!opts.includeExpired) {
       clauses.push(`(expires_at IS NULL OR expires_at > ?)`);
       params.push(String(Date.now()));
+    }
+    // XR 4.5 — a revoked or quarantined entry is NEVER a retrieval candidate.
+    // `includeRevoked` exists only for inspection/export surfaces.
+    if (!opts.includeRevoked) {
+      clauses.push(`revoked_at IS NULL`);
+      clauses.push(`(consent_state IS NULL OR consent_state NOT IN ('revoked','deleted','quarantined','proposed','not_eligible'))`);
     }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
     return this.db
@@ -503,6 +617,108 @@ export class WorkspaceStore {
         `SELECT category, COUNT(*) c FROM user_memory GROUP BY category ORDER BY c DESC`,
       )
       .all();
+  }
+
+  // ---- XR 4.5: consent / revocation / provenance on user memory ----
+
+  /** Set the consent state (and who set it). Idempotent. */
+  setMemoryConsent(id: string, state: string, actor: string | null = null): boolean {
+    const now = Date.now();
+    const r = this.db
+      .query(
+        `UPDATE user_memory SET consent_state=?, consent_actor=?, consent_at=?, updated_at=? WHERE id=?`,
+      )
+      .run(state, actor, now, now, id);
+    return ((r as any).changes ?? 0) > 0;
+  }
+
+  /**
+   * Revoke an entry: excluded from retrieval AND its cached vector destroyed,
+   * so no index path can resurrect it (§9.8 cache/index invalidation).
+   * The row survives so the user can still inspect and export it.
+   */
+  revokeMemory(id: string, reason: string, actor: string | null = null): boolean {
+    const now = Date.now();
+    const r = this.db
+      .query(
+        `UPDATE user_memory SET revoked_at=?, revoked_reason=?, consent_state='revoked',
+         embedding=NULL, embedding_model=NULL, embedding_dim=NULL, index_state='invalidated',
+         consent_actor=?, updated_at=? WHERE id=?`,
+      )
+      .run(now, reason.slice(0, 256), actor, now, id);
+    return ((r as any).changes ?? 0) > 0;
+  }
+
+  /** Record a correction pointer from the old entry to its replacement. */
+  supersedeMemory(oldId: string, newId: string): boolean {
+    const r = this.db
+      .query(`UPDATE user_memory SET superseded_by=?, updated_at=? WHERE id=?`)
+      .run(newId, Date.now(), oldId);
+    return ((r as any).changes ?? 0) > 0;
+  }
+
+  /** Soft staleness boundary — the entry is labelled stale, never hidden. */
+  setMemoryStaleAfter(id: string, at: number | null): boolean {
+    const r = this.db
+      .query(`UPDATE user_memory SET stale_after=?, updated_at=? WHERE id=?`)
+      .run(at, Date.now(), id);
+    return ((r as any).changes ?? 0) > 0;
+  }
+
+  /** Attach typed provenance to a memory row. Never invents a reference. */
+  setMemoryProvenance(
+    id: string,
+    p: {
+      provenanceKind?: string;
+      provenanceRef?: string | null;
+      actorKind?: string;
+      actorName?: string | null;
+      sourceObservedAt?: number | null;
+      trustStatus?: string;
+      confidence?: string;
+      sensitivity?: string;
+    },
+  ): boolean {
+    const cur = this.getMemory(id);
+    if (!cur) return false;
+    const r = this.db
+      .query(
+        `UPDATE user_memory SET provenance_kind=?, provenance_ref=?, actor_kind=?, actor_name=?,
+         source_observed_at=?, trust_status=?, confidence=?, sensitivity=?, updated_at=? WHERE id=?`,
+      )
+      .run(
+        p.provenanceKind ?? cur.provenance_kind,
+        p.provenanceRef !== undefined ? p.provenanceRef : cur.provenance_ref,
+        p.actorKind ?? cur.actor_kind,
+        p.actorName !== undefined ? p.actorName : cur.actor_name,
+        p.sourceObservedAt !== undefined ? p.sourceObservedAt : cur.source_observed_at,
+        p.trustStatus ?? cur.trust_status,
+        p.confidence ?? cur.confidence,
+        p.sensitivity ?? cur.sensitivity,
+        Date.now(),
+        id,
+      );
+    return ((r as any).changes ?? 0) > 0;
+  }
+
+  /** Consent-state breakdown (for status/doctor/dashboard). */
+  memoryConsentStats(): Array<{ consent_state: string; c: number }> {
+    return this.db
+      .query<{ consent_state: string; c: number }, []>(
+        `SELECT COALESCE(consent_state,'legacy_unknown') consent_state, COUNT(*) c
+         FROM user_memory GROUP BY consent_state ORDER BY c DESC`,
+      )
+      .all();
+  }
+
+  /** Invalidate every cached memory vector (e.g. after an embedding change). */
+  invalidateMemoryIndex(): number {
+    const r = this.db
+      .query(
+        `UPDATE user_memory SET embedding=NULL, index_state='invalidated' WHERE embedding IS NOT NULL`,
+      )
+      .run();
+    return (r as any).changes ?? 0;
   }
 
   // ---- v0.9: session summaries (separate from long-term memory) ----

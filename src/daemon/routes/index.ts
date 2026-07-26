@@ -6,6 +6,7 @@ import { chatRoutes } from "./chat.routes.ts";
 import { controlRoutes } from "./control.routes.ts";
 import { extensionRoutes } from "./extensions.routes.ts";
 import { memoryRoutes } from "./memory.routes.ts";
+import { contextRoutes } from "./context.routes.ts";
 import { providersRoutes } from "./providers.routes.ts";
 import { shieldRoutes } from "./shield.routes.ts";
 import { systemRoutes } from "./system.routes.ts";
@@ -24,6 +25,7 @@ export function createRouteHandler(): DaemonRouteHandler {
     ...extensionRoutes(),
     ...controlRoutes(),
     ...memoryRoutes(),
+    ...contextRoutes(),
   ], ({ json }) => json({ error: "not found" }, 404));
 }
 

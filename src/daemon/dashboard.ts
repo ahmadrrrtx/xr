@@ -1194,6 +1194,20 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
           <div class="card"><div class="card-title">Expired entries</div><div class="card-value" id="mem-h-expired">0</div></div>
           <div class="card"><div class="card-title">Unused never recalled</div><div class="card-value" id="mem-h-never">0</div></div>
         </div>
+        <!-- XR 4.5 — consent disclosure. Progressive: counts here, full
+             provenance via the 'xr context inspect' command. -->
+        <div class="grid grid-3" style="margin-bottom: 20px;">
+          <div class="card"><div class="card-title">Approved by you</div><div class="card-value" id="mem-c-approved">0</div></div>
+          <div class="card"><div class="card-title">Awaiting your decision</div><div class="card-value" id="mem-c-proposed">0</div></div>
+          <div class="card"><div class="card-title">Legacy consent unknown</div><div class="card-value" id="mem-c-legacy">0</div></div>
+        </div>
+        <div class="card" id="mem-pending-card" style="margin-bottom:20px; display:none;">
+          <div class="card-header"><span class="card-title">Awaiting your decision</span></div>
+          <div class="muted" style="font-size:12px; margin-bottom:8px;">
+            XR will not use these until you approve them. Nothing self-approves.
+          </div>
+          <div id="mem-pending-list"></div>
+        </div>
         <div class="card" style="margin-bottom: 20px;">
           <div class="card-header"><span class="card-title">Search memory ledger</span></div>
           <div style="display:flex; gap:8px;">
@@ -2622,12 +2636,76 @@ async function testModelSelection() {
 }
 
 // ── Durable memory
+// XR 4.5 — consent/trust labels. Symbols carry the meaning, never colour
+// alone, so the panel stays readable for screen readers and monochrome.
+function consentBadge(state) {
+  const map = {
+    approved:       ["[ok]",       "badge-green",  "You approved retaining this"],
+    limited:        ["[ok]",       "badge-green",  "Approved within a narrower scope"],
+    proposed:       ["[?]",        "badge-yellow", "Awaiting your decision — not used for recall"],
+    quarantined:    ["[!]",        "badge-red",    "Held for review after a safety signature matched"],
+    revoked:        ["[revoked]",  "badge-red",    "You withdrew consent"],
+    deleted:        ["[deleted]",  "badge-red",    "Deleted"],
+    legacy_unknown: ["[legacy]",   "badge-yellow", "Created before XR 4.5 — consent history unknown, not assumed"],
+  };
+  const [glyph, cls, title] = map[state] || ["[?]", "badge-yellow", "Unknown consent state"];
+  return \`<span class="badge \${cls}" title="\${escapeHtml(title)}">\${glyph} \${escapeHtml(state || "unknown")}</span>\`;
+}
+
+function trustBadge(trust) {
+  const map = {
+    trusted_instruction: "trusted instruction",
+    approved_memory:     "user-approved",
+    source_evidence:     "source-linked",
+    generated_synthesis: "model-generated",
+    untrusted_external:  "untrusted",
+    unknown:             "trust unknown",
+  };
+  if (!trust) return "";
+  return \`<span class="badge" title="Trust status — only trusted instructions may direct behavior">\${escapeHtml(map[trust] || trust)}</span>\`;
+}
+
 async function loadMemory() {
   try {
     const mem = await api("/api/memory");
     document.getElementById("mem-h-total").textContent = mem.health?.total ?? mem.count;
     document.getElementById("mem-h-expired").textContent = mem.health?.expired ?? 0;
     document.getElementById("mem-h-never").textContent = mem.health?.neverAccessed ?? 0;
+
+    // XR 4.5 consent summary + pending review queue.
+    let consent = {};
+    try {
+      const ctx = await api("/api/context");
+      consent = ctx.memory?.consent ?? {};
+      document.getElementById("mem-c-approved").textContent =
+        (consent.approved ?? 0) + (consent.limited ?? 0);
+      document.getElementById("mem-c-proposed").textContent = consent.proposed ?? 0;
+      document.getElementById("mem-c-legacy").textContent = consent.legacy_unknown ?? 0;
+    } catch {}
+
+    try {
+      const pending = await api("/api/context/pending");
+      const items = [...(pending.proposed ?? []), ...(pending.quarantined ?? [])];
+      const card = document.getElementById("mem-pending-card");
+      if (items.length) {
+        card.style.display = "";
+        document.getElementById("mem-pending-list").innerHTML = items.map(e => \`
+          <div class="stat-row" style="padding:8px 0;">
+            <div>
+              \${consentBadge(e.consentState)} \${trustBadge(e.trustStatus)}
+              <p style="font-size:12px;">\${escapeHtml(e.content)}</p>
+              <div class="muted" style="font-size:11px;">from \${escapeHtml(e.provenanceKind || "unknown")}\${e.actorName ? " · " + escapeHtml(e.actorName) : ""}</div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button class="btn btn-primary" onclick="approveMemory('\${e.id}')" style="padding:2px 8px;">Approve</button>
+              <button class="btn btn-danger" onclick="revokeMemory('\${e.id}')" style="padding:2px 8px;">Reject</button>
+            </div>
+          </div>
+        \`).join("");
+      } else {
+        card.style.display = "none";
+      }
+    } catch {}
 
     const list = mem.entries ?? [];
     document.getElementById("mem-list").innerHTML = list.length ? list.map(e => \`
@@ -2636,9 +2714,32 @@ async function loadMemory() {
           <span class="badge badge-cyan" style="margin-bottom:4px;">\${escapeHtml(e.category)}</span>
           <p style="font-size:12px;">\${escapeHtml(e.content)}</p>
         </div>
-        <button class="btn btn-danger" onclick="deleteMemory('\${e.id}')" style="padding:2px 6px;">✕</button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn" onclick="revokeMemory('\${e.id}')" style="padding:2px 8px;" title="Stop XR using this, but keep the record">Revoke</button>
+          <button class="btn btn-danger" onclick="deleteMemory('\${e.id}')" style="padding:2px 6px;" title="Delete permanently">✕</button>
+        </div>
       </div>
     \`).join("") : "<div class='muted'>Durable vector memory is empty.</div>";
+  } catch {}
+}
+
+async function approveMemory(id) {
+  try {
+    await apiPost("/api/context/approve/" + encodeURIComponent(id), {});
+    loadMemory();
+  } catch {}
+}
+
+// Revoke is distinct from delete: it stops future use but keeps the record so
+// the action stays auditable and reversible-by-inspection.
+async function revokeMemory(id) {
+  if (!confirm("Revoke consent for this entry?\\n\\nXR will stop using it and its cached embedding will be destroyed. The record stays visible so you can still inspect or export it.")) return;
+  try {
+    const res = await apiPost("/api/context/revoke/" + encodeURIComponent(id), {});
+    if (res?.residual?.length) {
+      alert("Revoked.\\n\\nWhat this does and does not remove:\\n\\n· " + res.residual.join("\\n· "));
+    }
+    loadMemory();
   } catch {}
 }
 

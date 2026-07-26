@@ -23,7 +23,7 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 14; // XR 4.4 Universal Intelligence Plane
+export const CONFIG_VERSION = 15; // XR 4.5 Knowledge and Context OS
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -299,6 +299,56 @@ const ConfigSchema = z.object({
       sessionSummaryMinTurns: z.number().int().min(2).max(100).default(6),
     })
     .default({}),
+  // XR 4.5 — Knowledge and Context OS. Additive: every default preserves 4.4
+  // behavior, so an upgraded install behaves identically until opted in.
+  knowledge: z
+    .object({
+      /**
+       * Master switch for the context layer. When false XR falls back to the
+       * 4.4 memory injection path exactly (rollback lever, §19).
+       */
+      enabled: z.boolean().default(true),
+      /**
+       * Injection mode.
+       *  - "legacy"  : 4.4 behavior (single unlabelled memory block)
+       *  - "context" : 4.5 typed, channel-separated context packages
+       *  - "both"    : context packages, with the legacy block appended
+       *                (transition aid; doubles context cost — not a default)
+       */
+      injectionMode: z.enum(["legacy", "context", "both"]).default("context"),
+      /**
+       * Enforce scope/authorization before ranking. Disabling this is UNSAFE
+       * and exists only for incident diagnosis; it is logged loudly and must
+       * never be used as a rollback path (§19).
+       */
+      enforceScope: z.boolean().default(true),
+      /** Quarantine untrusted external content rather than dropping it. */
+      quarantineUntrusted: z.boolean().default(true),
+      /** Use the intelligence plane to route embedding/reranking models. */
+      routeEmbeddings: z.boolean().default(true),
+      /** Force deterministic lexical retrieval (no embedding calls at all). */
+      lexicalOnly: z.boolean().default(false),
+      /** Enable the deterministic reranking stage. */
+      rerank: z.boolean().default(true),
+      /** Hard cap on items in one assembled context package. */
+      maxPackageItems: z.number().int().min(0).max(200).default(48),
+      /** Hard cap on characters in one assembled context package. */
+      maxPackageChars: z.number().int().min(0).max(200_000).default(24_000),
+      /** Evidence-preserving compression for long tasks. */
+      compression: z.boolean().default(true),
+      /**
+       * Refuse to compress when a required evidence invariant would be lost.
+       * Turning this off permits lossy summaries — not recommended (§9.6).
+       */
+      compressionFailSafe: z.boolean().default(true),
+      /** Persist context packages so a resumed task can revalidate them. */
+      durablePackages: z.boolean().default(true),
+      /** Revalidate consent/revocation/scope when a task resumes. */
+      revalidateOnResume: z.boolean().default(true),
+      /** Metadata verbosity in normal (non-inspection) output. */
+      disclosure: z.enum(["concise", "detailed"]).default("concise"),
+    })
+    .default({}),
   // v0.8: Computer control (safe desktop automation).  Disabled by default —
   // the user must opt in via `xr control start` or by setting `enabled: true`.
   control: z
@@ -548,6 +598,34 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       lastUsedAt: raw.voice?.lastUsedAt,
     },
   }),
+  // 14 -> 15: XR 4.5 Knowledge and Context OS.
+  //
+  // Additive and behavior-preserving:
+  //   • memory.enabled / injectInChat / recallLimit / semanticRecall untouched
+  //   • local-only installs stay local-only (lexicalOnly follows the existing
+  //     local_only locality policy so no upgrade can introduce a cloud call)
+  //   • nothing is auto-captured; consent behavior is unchanged
+  14: (raw) => ({
+    ...raw,
+    version: 15,
+    knowledge: raw.knowledge ?? {
+      enabled: true,
+      injectionMode: "context",
+      enforceScope: true,
+      quarantineUntrusted: true,
+      // Respect an existing local-only posture rather than overriding it.
+      routeEmbeddings: raw.intelligencePlane?.localityPolicy !== "local_only",
+      lexicalOnly: false,
+      rerank: true,
+      maxPackageItems: 48,
+      maxPackageChars: 24_000,
+      compression: true,
+      compressionFailSafe: true,
+      durablePackages: true,
+      revalidateOnResume: true,
+      disclosure: "concise",
+    },
+  }),
 
 };
 
@@ -638,6 +716,32 @@ export function configCacheStats() {
 
 export function configPath(): string {
   return CONFIG_PATH;
+}
+
+/**
+ * XR 4.5 — is the Knowledge and Context OS active?
+ * Requires BOTH memory to be enabled and the knowledge layer to be on, so the
+ * existing memory off-switch keeps working exactly as it did in 4.4.
+ */
+export function isKnowledgeEnabled(): boolean {
+  try {
+    const { config } = loadConfig();
+    return config.memory.enabled && config.knowledge.enabled;
+  } catch {
+    return false;
+  }
+}
+
+/** The effective injection mode, honouring the memory/knowledge off-switches. */
+export function contextInjectionMode(): "legacy" | "context" | "both" {
+  try {
+    const { config } = loadConfig();
+    if (!config.memory.enabled) return "legacy";
+    if (!config.knowledge.enabled) return "legacy";
+    return config.knowledge.injectionMode;
+  } catch {
+    return "legacy";
+  }
 }
 
 /**
