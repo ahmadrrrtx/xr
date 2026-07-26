@@ -1,5 +1,80 @@
 # XR Migration Guide
 
+## XR 5.0.0 → XR 5.1.0 (Environment Interaction OS)
+
+XR 5.1 adds the Environment Interaction OS: one governed contract over the
+existing browser/desktop/filesystem/application/voice/vision primitives. It is
+**additive** — no existing API, approval flow, config key, or database schema
+was removed or changed incompatibly.
+
+### Compatibility
+
+- Package name remains `@rrrtx/xr`, CLI bin remains `xr`.
+- All XR 5.0 (Phase 7 Agent and Workflow OS) semantics are preserved: workflows,
+  agents, execution fabric, trust/placement, durability, intelligence routing,
+  and context contracts are unchanged.
+- Existing workspace SQLite data remains compatible; **no destructive database
+  migration** is introduced.
+- Config migrates **15 → 16** automatically and additively (new `environment`
+  block with safe defaults; a pre-existing `environment` block is respected,
+  never overwritten). No action needed.
+- Existing `xr control` commands, permission grants, and approval prompts work
+  exactly as before — 5.1 routes them through the governed environment gate,
+  which can only *add* refusals with reasons, never remove protections.
+- Browser, desktop, voice, and vision remain **capabilities, not authority**;
+  everything approval-gated stays approval-gated.
+
+### Upgrade steps
+
+```bash
+cd /path/to/xr
+git pull --ff-only origin main
+bun install --frozen-lockfile
+bun run set-version:check
+bun run typecheck && bun test
+xr doctor --json          # environment check included
+xr env status             # honest per-platform capability truth
+xr env capabilities --json
+```
+
+For package-manager installs, install `@rrrtx/xr@5.1.0`, then run
+`xr doctor --json` and `xr env status`.
+
+### Backup before upgrade
+
+Back up `XR_HOME` (default `~/.xr`) before upgrading — same procedure as the
+3.1.5 → 3.1.6 section below. Do not export plaintext secrets.
+
+### Rollback
+
+Rollback is granular and never falls back to unsafe host authority:
+
+| Goal | How |
+|---|---|
+| Disable the whole environment layer | `XR_ENVIRONMENT_DISABLED=1` in the process environment, **or** `"environment": { "enabled": false }` in `config.json` |
+| Disable one modality only (e.g. browser) | `"environment": { "modalities": { "browser": false } }` |
+| Disable cloud vision only | `"environment": { "vision": { "allowCloud": false } }` (this is the default) |
+| Fully revert | stop XR processes, restore the pre-upgrade backup, check out / reinstall the XR 5.0.0 artifact |
+
+Disabling the layer (or any modality) fails **closed**: governed actions are
+refused with an explicit reason. Core XR — chat, memory/context, workflows,
+daemon, CLI text mode — keeps running. There is no path where a disabled
+environment silently degrades into an ungoverned one.
+
+### Known upgrade failures and recovery
+
+- `bun install --frozen-lockfile` fails: do not continue; restore the previous
+  release. The lockfile was not modified by 5.1.
+- `xr doctor --json` reports the `environment` check failing to detect an
+  optional tool (xdotool, playwright browsers, whisper, tesseract): these are
+  **capabilities, not core**; the matrix reports them as `unsupported`/`partial`
+  with remediation. Core operation is unaffected.
+- Existing optional-component behavior from earlier guides (browser root/sandbox
+  posture, voice local-first posture) is unchanged; if anything, refusal
+  messages are more explicit in 5.1.
+
+---
+
 ## XR 3.1.5 → XR 3.1.6 (Baseline Integrity)
 
 XR 3.1.6 is a Phase 0 baseline release. It adds diagnostics, validation/release artifacts, support classification, and documentation corrections. It does **not** introduce a destructive workspace database migration.

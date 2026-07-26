@@ -1,23 +1,23 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-26T15:32:24.543Z",
+  "generatedAt": "2026-07-26T21:45:49.246Z",
   "version": {
     "name": "@rrrtx/xr",
-    "version": "4.5.0",
-    "codename": "Knowledge and Context OS",
-    "display": "4.5.0 (Knowledge and Context OS)",
-    "displayVersion": "4.5.0 (Knowledge and Context OS)",
+    "version": "5.1.0",
+    "codename": "Environment Interaction OS",
+    "display": "5.1.0 (Environment Interaction OS)",
+    "displayVersion": "5.1.0 (Environment Interaction OS)",
     "repo": "https://github.com/ahmadrrrtx/xr",
     "homepage": "https://xr-gules.vercel.app",
     "npm": "https://www.npmjs.com/package/@rrrtx/xr",
-    "description": "XR 4.5 (Knowledge and Context OS) — a trusted long-term intelligence layer: explicit context taxonomy (instruction/memory/knowledge/evidence/artifact/task/untrusted), typed provenance, freshness and confidence, consent-first retention with revocation and correction lineage, scope-first retrieval that authorizes before ranking, deterministic anti-poisoning, channel-separated safe injection where untrusted content can never become an instruction, evidence-preserving compression that fails safe, enforced cross-agent context scopes, and durable context packages revalidated on resume.",
+    "description": "XR 5.1 (Environment Interaction OS) — a universal governed contract for acting in digital environments: one typed action contract (environment, session, target, interaction, confidence, reversibility, approval) across browser, desktop, filesystem, application, voice, and vision; honest platform capability reporting (partial never rounds up); coordinate actions bound to fresh observation evidence; typed observations that are evidence, never instructions; honest reversibility classes with real compensation (no fake rollback); bounded recovery (one re-observe retry, circuit breaker, quarantine on cleanup defects); dual-consent cloud privacy (no ambient credentials, no raw screenshot/transcript retention); and per-modality kill switches for safe rollback — all routed through the existing risk, approval, trust, durability, intelligence, context, and workflow contracts.",
     "author": "Muhammad Ahmad (@ahmadrrrtx)",
     "license": "MIT",
     "pluginApi": 2
   },
   "package": {
     "name": "@rrrtx/xr",
-    "version": "4.5.0",
+    "version": "5.1.0",
     "packageManager": "bun@1.3.14",
     "engines": {
       "bun": ">=1.3.0"
@@ -49,16 +49,157 @@
     ]
   },
   "counts": {
-    "sourceFiles": 360,
-    "testFiles": 81,
-    "cliCommands": 36,
-    "daemonRoutes": 65,
+    "sourceFiles": 386,
+    "testFiles": 94,
+    "cliCommands": 37,
+    "daemonRoutes": 72,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
     "skills": 65
   },
-  "rootFiles": [],
+  "rootFiles": [
+    {
+      "path": ".bun-version",
+      "bytes": 7
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 491
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 35577
+    },
+    {
+      "path": "CRITICAL_FIXES.md",
+      "bytes": 13098
+    },
+    {
+      "path": "DELIVERABLE.md",
+      "bytes": 19438
+    },
+    {
+      "path": "Dockerfile",
+      "bytes": 831
+    },
+    {
+      "path": "LAUNCH-POSTS.md",
+      "bytes": 7445
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1071
+    },
+    {
+      "path": "MCP-STAGE11-IMPLEMENTED.md",
+      "bytes": 2769
+    },
+    {
+      "path": "MIGRATION.md",
+      "bytes": 14780
+    },
+    {
+      "path": "PHASE4_ARCHITECTURE_DESIGN.md",
+      "bytes": 6295
+    },
+    {
+      "path": "PHASE4_AUDIT_DELIVERABLE.md",
+      "bytes": 16639
+    },
+    {
+      "path": "PHASE5_AUDIT_DELIVERABLE.md",
+      "bytes": 13004
+    },
+    {
+      "path": "PHASE5_VALIDATION_REPORT.md",
+      "bytes": 1510
+    },
+    {
+      "path": "PHASE6_AUDIT_DELIVERABLE.md",
+      "bytes": 28657
+    },
+    {
+      "path": "PHASE6_VALIDATION_REPORT.md",
+      "bytes": 2979
+    },
+    {
+      "path": "README.md",
+      "bytes": 64247
+    },
+    {
+      "path": "README_SECURITY.md",
+      "bytes": 9121
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 15366
+    },
+    {
+      "path": "SECURITY_IMPLEMENTATION.md",
+      "bytes": 18834
+    },
+    {
+      "path": "XR-2.1-MARKETPLACE-COMPLETE-IMPLEMENTATION.md",
+      "bytes": 2530
+    },
+    {
+      "path": "XR-2.1A-IMPLEMENTATION.md",
+      "bytes": 7259
+    },
+    {
+      "path": "XR-2.1B-IMPLEMENTATION.md",
+      "bytes": 4897
+    },
+    {
+      "path": "XR-2.1C-IMPLEMENTATION.md",
+      "bytes": 5198
+    },
+    {
+      "path": "XR-2.1D-MARKETPLACE-UI-IMPLEMENTATION.md",
+      "bytes": 3124
+    },
+    {
+      "path": "XR-2.1E-OFFICIAL-SKILL-PACKS-IMPLEMENTATION.md",
+      "bytes": 3626
+    },
+    {
+      "path": "XR-ASYNC-PERFORMANCE-REPORT.md",
+      "bytes": 10639
+    },
+    {
+      "path": "XR-MODEL-SWITCH-FIX-REPORT.md",
+      "bytes": 12723
+    },
+    {
+      "path": "bun.lock",
+      "bytes": 2090
+    },
+    {
+      "path": "docker-compose.yml",
+      "bytes": 670
+    },
+    {
+      "path": "install.ps1",
+      "bytes": 5919
+    },
+    {
+      "path": "install.sh",
+      "bytes": 6339
+    },
+    {
+      "path": "next-env.d.ts",
+      "bytes": 247
+    },
+    {
+      "path": "package.json",
+      "bytes": 2643
+    },
+    {
+      "path": "tsconfig.json",
+      "bytes": 594
+    }
+  ],
   "sourceFiles": [
     "src/agents/planner.ts",
     "src/agents/registry.ts",
@@ -109,6 +250,7 @@
     "src/commands/config.ts",
     "src/commands/context.ts",
     "src/commands/doctor.ts",
+    "src/commands/environment.ts",
     "src/commands/execution.ts",
     "src/commands/help.ts",
     "src/commands/install.ts",
@@ -184,6 +326,7 @@
     "src/daemon/routes/chat.routes.ts",
     "src/daemon/routes/context.routes.ts",
     "src/daemon/routes/control.routes.ts",
+    "src/daemon/routes/environment.routes.ts",
     "src/daemon/routes/extensions.routes.ts",
     "src/daemon/routes/index.ts",
     "src/daemon/routes/memory.routes.ts",
@@ -194,6 +337,22 @@
     "src/daemon/routes/trust.routes.ts",
     "src/daemon/server.ts",
     "src/daemon/skills-api.ts",
+    "src/environment/audit.ts",
+    "src/environment/capabilities.ts",
+    "src/environment/classify.ts",
+    "src/environment/index.ts",
+    "src/environment/lifecycle.ts",
+    "src/environment/observations.ts",
+    "src/environment/privacy.ts",
+    "src/environment/providers/browser.ts",
+    "src/environment/providers/desktop.ts",
+    "src/environment/providers/filesystem.ts",
+    "src/environment/providers/vision.ts",
+    "src/environment/providers/voice.ts",
+    "src/environment/recovery.ts",
+    "src/environment/service.ts",
+    "src/environment/types.ts",
+    "src/environment/workflow-binding.ts",
     "src/execution/adapters/agent-adapter.ts",
     "src/execution/adapters/common.ts",
     "src/execution/adapters/control-adapter.ts",
@@ -419,7 +578,15 @@
     "src/voice/tts.ts",
     "src/voice/types.ts",
     "src/voice/vad.ts",
-    "src/voice/wake.ts"
+    "src/voice/wake.ts",
+    "src/workflow/engine.ts",
+    "src/workflow/index.ts",
+    "src/workflow/inspection.ts",
+    "src/workflow/nodes.ts",
+    "src/workflow/repository.ts",
+    "src/workflow/state-machine.ts",
+    "src/workflow/types.ts",
+    "src/workflow/versioning.ts"
   ],
   "tests": [
     "test/agent.test.ts",
@@ -449,6 +616,17 @@
     "test/cost.test.ts",
     "test/daemon.test.ts",
     "test/ecosystem.test.ts",
+    "test/environment/adversarial.test.ts",
+    "test/environment/browser-policy.test.ts",
+    "test/environment/capabilities.test.ts",
+    "test/environment/classify.test.ts",
+    "test/environment/lifecycle.test.ts",
+    "test/environment/migration.test.ts",
+    "test/environment/privacy.test.ts",
+    "test/environment/recovery.test.ts",
+    "test/environment/service.test.ts",
+    "test/environment/types.test.ts",
+    "test/environment/workflow-binding.test.ts",
     "test/execution/adapters.test.ts",
     "test/execution/checkpoint.test.ts",
     "test/execution/lease.test.ts",
@@ -502,7 +680,9 @@
     "test/trust/ux.test.ts",
     "test/trust/verify.test.ts",
     "test/util/process.test.ts",
-    "test/voice.test.ts"
+    "test/voice.test.ts",
+    "test/workflow/engine.test.ts",
+    "test/workflow/types.test.ts"
   ],
   "cliCommands": [
     {
@@ -620,6 +800,17 @@
       ],
       "group": "work",
       "usage": "xr control [status|start|stop|plan|setup|browser|…]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "env",
+      "aliases": [
+        "environment"
+      ],
+      "group": "work",
+      "usage": "xr env [status|capabilities|sessions|close|close-all|history|observations|policy] [--json]",
       "needsKernel": true,
       "fastPath": false,
       "classification": "supported"
@@ -1073,6 +1264,55 @@
       "id": "cost.get",
       "method": "GET",
       "path": "/api/cost",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.capabilities",
+      "method": "GET",
+      "path": "/api/environment/capabilities",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.close",
+      "method": "POST",
+      "path": "/api/environment/close",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.history",
+      "method": "GET",
+      "path": "/api/environment/history",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.observations",
+      "method": "GET",
+      "path": "/api/environment/observations",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.policy",
+      "method": "GET",
+      "path": "/api/environment/policy",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.sessions",
+      "method": "GET",
+      "path": "/api/environment/sessions",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.status",
+      "method": "GET",
+      "path": "/api/environment/status",
       "auth": "local bearer token or dashboard query token"
     },
     {

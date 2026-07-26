@@ -1,10 +1,13 @@
-/** XR Stage 9 — deterministic voice intent router. */
+/** XR Stage 9 / XR 5.1 — deterministic voice intent router. */
 import type { Store } from "../state/workspace-store.ts";
 import { loadConfig, saveConfig } from "../config/config.ts";
-import { runAction } from "../control/service.ts";
+import { runEnvironmentAction } from "../environment/service.ts";
+import { environmentForAction } from "../environment/classify.ts";
+import { ActionSchema } from "../control/types.ts";
 import { parseMemoryIntent } from "../memory/intent.ts";
 import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
+import { getVoiceSettings } from "./settings.ts";
 
 export type VoiceIntentKind =
   | "control"
@@ -73,8 +76,39 @@ export async function handleDeterministicVoiceIntent(store: Store, text: string,
       await speak("Computer control is off. Enable it with xr control start before I can control the desktop.");
       return true;
     }
-    const result = await runAction(store, intent.action, { mode: "auto", autoApproveSensitive: false, delayMs: config.control.stepDelayMs });
-    await speak(result.result.ok ? `Done. ${result.result.message}` : `I could not do that. ${result.result.message}`);
+    // XR 5.1 — voice is an interface, not an authority bypass (§7.5). Control
+    // intents pass through the Environment Interaction OS gate with voice
+    // provenance: confidence threshold, confirmation policy (including
+    // never-execute-risky), and stronger-channel rules for high-risk actions.
+    const parsed = ActionSchema.safeParse(intent.action);
+    if (!parsed.success) {
+      await speak("I understood a control command, but it was not a valid action. Please rephrase.");
+      return true;
+    }
+    const settings = getVoiceSettings();
+    const run = await runEnvironmentAction(
+      store,
+      {
+        environment: environmentForAction(parsed.data) === "vision" ? "desktop" : environmentForAction(parsed.data),
+        action: parsed.data,
+        target: { kind: "none" },
+        sourceActor: "voice",
+        confidence: intent.confidence >= 0.85 ? "medium" : "low",
+        dryRun: false,
+      },
+      {
+        workspaceId: process.cwd(),
+        voice: { confidence: intent.confidence, confirmationPolicy: settings.confirmationPolicy },
+        delayMs: config.control.stepDelayMs,
+      },
+    );
+    if (run.record.outcome === "denied" && run.spokenRefusal) {
+      await speak(run.spokenRefusal);
+    } else if (run.record.outcome === "succeeded") {
+      await speak(`Done. ${run.record.message}`);
+    } else {
+      await speak(`I could not do that. ${run.record.message}`);
+    }
     return true;
   }
   if (intent.kind === "memory") {

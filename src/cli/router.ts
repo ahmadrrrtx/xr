@@ -19,6 +19,7 @@ import { McpCommand } from "../commands/mcp.ts";
 import { WorkspaceCommand } from "../commands/workspace.ts";
 import {
   ControlCommand,
+  EnvironmentCommand,
   InstallCommand,
   ModelsCommand,
   OnboardingCommand,
@@ -78,6 +79,7 @@ function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new SpeakCommand());
   kernel.commands.register(new ListenCommand());
   kernel.commands.register(new ControlCommand());
+  kernel.commands.register(new EnvironmentCommand());
   kernel.commands.register(new ResearchCommand());
   kernel.commands.register(new MemoryCommand());
   kernel.commands.register(new ContextCommand());
@@ -117,6 +119,8 @@ const REGISTRY_NAME: Record<string, string> = {
   agent: "agents",
   control: "control",
   computer: "control",
+  env: "env",
+  environment: "env",
   voice: "voice",
   speak: "speak",
   listen: "listen",

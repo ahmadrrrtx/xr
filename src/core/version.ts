@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "4.5.0",
-  codename: "Knowledge and Context OS",
+  version: "5.1.0",
+  codename: "Environment Interaction OS",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 4.5 (Knowledge and Context OS) — a trusted long-term intelligence layer: explicit context taxonomy (instruction/memory/knowledge/evidence/artifact/task/untrusted), typed provenance, freshness and confidence, consent-first retention with revocation and correction lineage, scope-first retrieval that authorizes before ranking, deterministic anti-poisoning, channel-separated safe injection where untrusted content can never become an instruction, evidence-preserving compression that fails safe, enforced cross-agent context scopes, and durable context packages revalidated on resume.",
+  description: "XR 5.1 (Environment Interaction OS) — a universal governed contract for acting in digital environments: one typed action contract (environment, session, target, interaction, confidence, reversibility, approval) across browser, desktop, filesystem, application, voice, and vision; honest platform capability reporting (partial never rounds up); coordinate actions bound to fresh observation evidence; typed observations that are evidence, never instructions; honest reversibility classes with real compensation (no fake rollback); bounded recovery (one re-observe retry, circuit breaker, quarantine on cleanup defects); dual-consent cloud privacy (no ambient credentials, no raw screenshot/transcript retention); and per-modality kill switches for safe rollback — all routed through the existing risk, approval, trust, durability, intelligence, context, and workflow contracts.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;
