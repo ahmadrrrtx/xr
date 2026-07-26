@@ -248,6 +248,22 @@ export const CATALOG: CatalogEntry[] = [
     topics: ["control", "computer", "work"],
   },
   {
+    name: "env",
+    description: "environment interaction OS: governed sessions, capabilities, policy, history",
+    usage: "xr env [status|capabilities|sessions|close|close-all|history|observations|policy] [--json]",
+    group: "work",
+    glyph: "computer",
+    aliases: ["environment"],
+    needsKernel: true,
+    examples: [
+      { cmd: "xr env status", description: "environment layer overview" },
+      { cmd: 'xr env capabilities --json', description: "honest platform support matrix" },
+      { cmd: "xr env history", description: "governed action records" },
+    ],
+    related: ["control", "trust"],
+    topics: ["control", "computer", "work"],
+  },
+  {
     name: "voice",
     description: "voice input/output (opt-in)",
     usage: "xr voice [setup|status|start|stop|test|devices|config]",

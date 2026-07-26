@@ -23,7 +23,7 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 15; // XR 4.5 Knowledge and Context OS
+export const CONFIG_VERSION = 16; // XR 5.1 Environment Interaction OS
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -367,6 +367,66 @@ const ConfigSchema = z.object({
         .default({}),
     })
     .default({}),
+  // XR 5.1 (v16): Environment Interaction OS. Adds one governed contract over
+  // browser/desktop/filesystem/application/voice/vision. Enabled by default —
+  // the layer only GATES existing control/voice primitives (it cannot widen
+  // them), so a local-only, control-disabled install is unaffected. Per-
+  // modality switches are the supported Phase 8 rollback granularity (§17).
+  environment: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** Per-modality kill switches (rollback without touching core XR). */
+      modalities: z
+        .object({
+          browser: z.boolean().default(true),
+          desktop: z.boolean().default(true),
+          filesystem: z.boolean().default(true),
+          application: z.boolean().default(true),
+          voice: z.boolean().default(true),
+          vision: z.boolean().default(true),
+        })
+        .default({}),
+      browser: z
+        .object({
+          /** Session domain policy (applies to governed isolated sessions). */
+          allowedDomains: z.array(z.string().max(200)).max(200).default([]),
+          blockedDomains: z.array(z.string().max(200)).max(500).default([]),
+          /** Governed sessions fail closed on private/localhost navigation. */
+          blockPrivateNetworks: z.boolean().default(true),
+          maxDownloadBytes: z.number().int().min(0).max(100 * 1024 * 1024).default(50 * 1024 * 1024),
+        })
+        .default({}),
+      vision: z
+        .object({
+          /** Cloud vision model calls: explicit opt-in, default off. */
+          allowCloud: z.boolean().default(false),
+          maxImageBytes: z.number().int().min(262_144).max(25 * 1024 * 1024).default(5 * 1024 * 1024),
+          /** Observations older than this cannot justify coordinate actions. */
+          staleObservationMs: z.number().int().min(1_000).max(300_000).default(30_000),
+        })
+        .default({}),
+      voice: z
+        .object({
+          /** Minimum deterministic intent confidence for voice control actions. */
+          minControlConfidence: z.number().min(0).max(1).default(0.6),
+        })
+        .default({}),
+      recovery: z
+        .object({
+          /** Bounded self-healing only (§7.7). Hard cap 1 re-observe retry. */
+          maxReobserveRetries: z.number().int().min(0).max(1).default(1),
+          circuitFailures: z.number().int().min(2).max(10).default(3),
+          circuitCooldownMs: z.number().int().min(5_000).max(600_000).default(60_000),
+        })
+        .default({}),
+      sessions: z
+        .object({
+          maxActive: z.number().int().min(1).max(20).default(5),
+          idleTimeoutMs: z.number().int().min(30_000).max(3_600_000).default(300_000),
+        })
+        .default({}),
+    })
+    .default({}),
   // XR 1.0 — plugin ecosystem. Local-first and explicit by design. The plugin
   // SYSTEM is always available (so `xr plugins …` works), but whether enabled
   // plugins are LOADED into the agent's tool list is governed here.
@@ -626,6 +686,54 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       disclosure: "concise",
     },
   }),
+  // 15 -> 16: XR 5.1 Environment Interaction OS.
+  //
+  // Additive and behavior-preserving:
+  //   • control.enabled / voice consent flags / budget are untouched —
+  //     the environment layer only gates existing primitives, never widens them.
+  //   • cloud vision defaults OFF, matching the existing cloud STT/TTS posture.
+  //   • governed browser sessions block private-network navigation by default
+  //     (legacy shared browser path keeps its existing env-flag behavior).
+  //   • per-modality switches are the supported rollback granularity (§17):
+  //     disabling a modality never disables core XR or other modalities.
+  15: (raw) => ({
+    ...raw,
+    version: 16,
+    environment: raw.environment ?? {
+      enabled: true,
+      modalities: {
+        browser: true,
+        desktop: true,
+        filesystem: true,
+        application: true,
+        voice: true,
+        vision: true,
+      },
+      browser: {
+        allowedDomains: [],
+        blockedDomains: [],
+        blockPrivateNetworks: true,
+        maxDownloadBytes: 50 * 1024 * 1024,
+      },
+      vision: {
+        allowCloud: false,
+        maxImageBytes: 5 * 1024 * 1024,
+        staleObservationMs: 30_000,
+      },
+      voice: {
+        minControlConfidence: 0.6,
+      },
+      recovery: {
+        maxReobserveRetries: 1,
+        circuitFailures: 3,
+        circuitCooldownMs: 60_000,
+      },
+      sessions: {
+        maxActive: 5,
+        idleTimeoutMs: 300_000,
+      },
+    },
+  }),
 
 };
 
@@ -637,6 +745,11 @@ function migrate(raw: any): any {
     v = cur.version;
   }
   return cur;
+}
+
+/** Test/dev handle: run the raw config migration chain without touching disk. */
+export function migrateRawConfig(raw: unknown): unknown {
+  return migrate(raw);
 }
 
 /**

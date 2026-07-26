@@ -105,6 +105,16 @@ export class ControlCommand implements Command {
   }
 }
 
+export class EnvironmentCommand implements Command {
+  name = "env";
+  description = "environment interaction OS: sessions, capabilities, policy, history";
+  usage = "xr env [status|capabilities|sessions|close <id>|close-all|history|observations|policy] [--json]";
+  async execute(ctx: CommandContext): Promise<void> {
+    const { handleEnvironmentCommand } = await import("./environment.ts");
+    await handleEnvironmentCommand(ctx.args, legacyStore(ctx));
+  }
+}
+
 export class ResearchCommand implements Command {
   name = "research";
   description = "research mode and setup";

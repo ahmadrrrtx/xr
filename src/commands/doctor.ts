@@ -62,6 +62,23 @@ export class DoctorCommand implements Command {
       try { const wf = ctx.registry.resolve(Tokens.WorkflowStore); const { listAgents } = await import("../agents/registry.ts"); const health = wf.health(); checks.push({ id:"multi-agent", label:"Multi-agent runtime", state: health.workflows.failed ? "warn" : "ok", detail: `${listAgents({ includeDisabled: true }).length} agents, ${health.workflows.total} workflows, ${health.workflows.running} running` }); } catch(e){ checks.push({ id:"multi-agent", label:"Multi-agent runtime", state:"warn", detail:(e as Error).message }); }
       // control
       try { const { detectCapabilities } = await import("../control/adapter.ts"); const caps = detectCapabilities(); checks.push({ id:"control", label:"Computer Control", state: caps.tools.keyboard ? "ok":"warn", detail: `${caps.os} · keyboard:${caps.tools.keyboard} mouse:${caps.tools.mouse}` }); } catch {}
+      // XR 5.1 — environment interaction OS capability summary
+      try {
+        const { detectEnvironmentCapabilities, environmentDisabled } = await import("../environment/service.ts");
+        const kill = environmentDisabled();
+        if (kill.disabled) {
+          checks.push({ id:"environment", label:"Environment OS", state:"warn", detail:`disabled (${kill.reason})` });
+        } else {
+          const report = await detectEnvironmentCapabilities();
+          const unsupported = report.entries.filter((e) => e.support === "unsupported").map((e) => e.environment);
+          const partial = report.entries.filter((e) => e.support === "partial").map((e) => e.environment);
+          const state = unsupported.length ? "warn" : partial.length ? "ok" : "ok";
+          const parts = [] as string[];
+          if (unsupported.length) parts.push(`unsupported: ${unsupported.join(",")}`);
+          if (partial.length) parts.push(`partial: ${partial.join(",")}`);
+          checks.push({ id:"environment", label:"Environment OS", state, detail: parts.join(" · ") || "all modalities supported" });
+        }
+      } catch(e){ checks.push({ id:"environment", label:"Environment OS", state:"warn", detail:(e as Error).message }); }
       const configResult = loadConfig();
       const workspaceContext = ctx.registry.resolve(Tokens.Workspaces).getActiveContext();
       const providerKeyEnvs = [...new Set(Object.values(PRESETS).map((p) => p.apiKeyEnv).filter((v): v is string => Boolean(v)))];

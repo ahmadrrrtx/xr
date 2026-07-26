@@ -85,6 +85,14 @@ export interface ControlOptions {
   mode: ExecutionMode;
   autoApproveSensitive?: boolean;
   delayMs?: number;
+  /**
+   * XR 5.1 — optional executor override used by the Environment Interaction
+   * OS to route actions through governed session providers (e.g. isolated
+   * browser contexts) while keeping every existing gate in service.runAction
+   * (kill-switch, schema, permissions, risk, approval, readiness, audit).
+   * Never settable from user input or config.
+   */
+  execOverride?: (action: Action) => Promise<ActionResult>;
 }
 export interface ActionResult { ok: boolean; message: string; skipped?: boolean; data?: unknown }
 

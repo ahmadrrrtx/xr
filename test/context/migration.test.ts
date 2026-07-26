@@ -212,14 +212,25 @@ describe("XR 4.5 migration: existing XR 4.4 workspace", () => {
 // ── Config migration ───────────────────────────────────────────────────────
 
 describe("XR 4.5 config migration 14 → 15", () => {
-  test("the config version is 15 and the knowledge block exists with safe defaults", () => {
+  test("the config version is 16 (XR 5.1) and the knowledge block exists with safe defaults", () => {
     const { config } = loadConfig();
-    expect(CONFIG_VERSION).toBe(15);
+    expect(CONFIG_VERSION).toBe(16);
     expect(config.knowledge.enabled).toBe(true);
     expect(config.knowledge.enforceScope).toBe(true);
     expect(config.knowledge.compressionFailSafe).toBe(true);
     expect(config.knowledge.quarantineUntrusted).toBe(true);
     expect(config.knowledge.revalidateOnResume).toBe(true);
+  });
+
+  test("XR 5.1 environment block exists with privacy-preserving defaults", () => {
+    const { config } = loadConfig();
+    expect(config.environment.enabled).toBe(true);
+    // Cloud vision remains OFF by default, matching the cloud STT/TTS posture.
+    expect(config.environment.vision.allowCloud).toBe(false);
+    // Governed browser sessions block private-network navigation by default.
+    expect(config.environment.browser.blockPrivateNetworks).toBe(true);
+    // Bounded recovery only.
+    expect(config.environment.recovery.maxReobserveRetries).toBe(1);
   });
 
   test("existing memory settings are untouched by the upgrade", () => {

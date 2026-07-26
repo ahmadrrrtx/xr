@@ -5,6 +5,107 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.1.0] - 2026-07-27 — Environment Interaction OS
+
+XR becomes able to act in digital environments under one governed contract.
+This release does not add "more browser/voice/vision features" — it gives every
+environment action one answerable envelope: what it is, what authorizes it, how
+certain perception was, whether it can be undone, and what happens when it
+fails.
+
+> **Environment interfaces are capabilities, not authority.** Perception is
+> evidence, never an instruction; a coordinate is never proof of a target.
+
+Builds on the Phase 7 (Agent and Workflow OS) baseline in `main`.
+
+### Added
+
+- **Environment module** (`src/environment/`): universal typed contract
+  (`types.ts`) over the existing control Action union — closed environment set
+  (`browser`/`desktop`/`filesystem`/`application`/`voice`/`vision`), session
+  lifecycle state machine, target identity (**coordinate targets require
+  evidence**), interaction kind, perception confidence (`unknown` is a real
+  value), honest reversibility classes (`reversible`/`compensatable`/
+  `irreversible`/`unknown`), compensation specs, approval strengths
+  (`none`/`standard`/`strong`), and outcome taxonomy including
+  **`uncertain` = side effect unknown, always user-visible**.
+- **`runEnvironmentAction` gate** (`service.ts`): kill-switch → schema →
+  compatibility → target proof → staleness → capability → privacy/consent →
+  risk+reversibility+approval → permission → session → execution (via the
+  existing `control.runAction`, never a private executor) → bounded recovery →
+  recorded history.
+- **Session registry**: max-active bound, idle sweep, circuit breaker
+  (3 failures / 60 s cooldown / half-open probe), cleanup states, and
+  **quarantine on cleanup defects** — a session whose cleanup failed is
+  contained, never auto-revived.
+- **Bounded recovery** (`recovery.ts`): at most ONE automatic re-observe retry
+  for perception-shaped failures, never for irreversible/unknown/unknown-side-
+  effect actions. No unrestricted autonomous repair anywhere.
+- **Honest capability matrix** (`capabilities.ts`): six environments probed
+  (`partial` never rounds up; `unsupported` carries remediation), including a
+  real Playwright import probe replacing the legacy optimistic check.
+- **Governed browser sessions** (`control/browser.ts`): isolated per-session
+  contexts (no cookie/storage import-export), domain allow/block policy,
+  private-network navigation blocked by default, per-session downloads root
+  with byte cap (oversize deleted), page-crash detection, sandboxed launch.
+- **Privacy layer** (`privacy.ts`): structural secret redaction (private-key
+  armor first), redacted action echoes, dual-gate cloud consent for
+  STT/TTS/vision (settings AND session policy; no ambient or inferred consent),
+  retention decisions — screenshots are referenced by path+hash, never copied
+  into records; raw transcripts persist only under the existing local-private
+  mode-0600 policy.
+- **Vision provider**: typed observations with provenance/confidence/
+  sensitivity (full screens declared `private` honestly) and staleness; local
+  OCR (tesseract-or-nothing, no silent cloud fallback); consent-gated cloud
+  routing.
+- **Voice gate**: deterministic intent confidence floor (default 0.6, spoken
+  refusal below it), `never-execute-risky` extended to deterministic control
+  intents, strong-approval actions forced to the text/dashboard channel.
+- **Workflow binding** (`workflow-binding.ts`): environment actions compile to
+  canonical Phase 7 `tool_action` nodes with risk tier, idempotency class, and
+  compensation policy.
+- **`xr env` command** (`status`/`capabilities`/`sessions`/`close`/`close-all`/
+  `history`/`observations`/`policy`, all `--json`), daemon routes
+  `/api/environment/*`, and an `environment` check in `xr doctor`.
+- **Config v16**: additive `environment` block — per-modality kill switches,
+  browser domain/download policy, cloud-vision consent (default off), image
+  size cap (default 5 MiB), observation staleness window, voice confidence
+  floor, recovery bounds, session bounds. Automatic migration 15 → 16.
+- **Kill switches**: `XR_ENVIRONMENT_DISABLED=1`, `environment.enabled:false`,
+  or per-modality `false` — rollback without touching core XR.
+- **145 tests** across 11 new files in `test/environment/`, including a
+  dedicated adversarial suite (cloud-consent, voice-bypass, instruction-
+  injection framing, sandbox posture, filesystem boundary, stale-observation
+  protection). Full suite: **1122 pass / 0 fail**.
+- **Docs**: `docs/environment/` — contract guide, BROWSER, DESKTOP, VOICE,
+  VISION, REVERSIBILITY, RECOVERY, PLATFORM_SUPPORT, TESTING, USER_GUIDE;
+  Phase 8 audit report and architecture in `docs/phase8/`; XR 5.0 → 5.1
+  migration section in `MIGRATION.md`.
+
+### Fixed (audited pre-existing defects)
+
+- Desktop **`move` no longer clicks** — it was routed through the click
+  executor, performing a left-click at the target coordinates.
+- Desktop **scroll on macOS/Windows no longer fakes success** — it reports an
+  honest unsupported/skip outcome; the capability matrix reports scroll
+  injection off-Linux as missing.
+- **`xr control computer` (computer-use) bypassed the approval gate entirely**
+  — each loop step raw-executed. Now the run requires outer destructive
+  approval and every step goes through `runEnvironmentAction` with observation
+  references and declared confidence; the loop stops on deny/block/uncertain/
+  circuit-open.
+- **`computer_use` cloud vision had no consent parameter** — cloud routing is
+  now blocked without explicit dual consent (default: blocked).
+- **Vision images had no size cap** — captures above
+  `environment.vision.maxImageBytes` (default 5 MiB) are deleted immediately
+  and reported as failures.
+
+### Changed
+
+- Voice control intents and the computer-use loop route through the
+  environment gate; approval channels, trust records, and Phase 7 workflow
+  semantics are otherwise untouched. All changes are additive over XR 5.0.
+
 ## [4.5.0] - 2026-07-26 — Knowledge and Context OS
 
 XR becomes a trusted long-term intelligence layer. This release does not add

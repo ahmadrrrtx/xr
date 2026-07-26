@@ -77,6 +77,26 @@ async function execClick(x: number, y: number, button: "left" | "right" | "doubl
   return r.code === 0 ? ok(`${button}-click at (${x},${y})`) : fail(r.err);
 }
 
+async function execMove(x: number, y: number): Promise<ActionResult> {
+  // XR 5.1 fix: `move` must move the cursor only — the previous implementation
+  // routed through execClick and produced an unrequested click side effect.
+  if (OS === "macos") {
+    const s = await run("cliclick", [`m:${x},${y}`]);
+    return s.code === 0 ? ok(`moved to (${x},${y})`) : fail(`mouse move requires cliclick: brew install cliclick`);
+  }
+  if (OS === "linux") {
+    const r = await run("xdotool", ["mousemove", String(x), String(y)]);
+    return r.code === 0 ? ok(`moved to (${x},${y})`) : fail(r.err);
+  }
+  const ps = `
+    Add-Type -AssemblyName System.Drawing;
+    [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point(${x}, ${y});
+  `;
+  const wrapped = `Add-Type -AssemblyName System.Windows.Forms; ${ps}`;
+  const r = await run("powershell", ["-NoProfile", "-Command", wrapped]);
+  return r.code === 0 ? ok(`moved to (${x},${y})`) : fail(r.err);
+}
+
 async function execDrag(x1: number, y1: number, x2: number, y2: number, holdMs?: number): Promise<ActionResult> {
   if (OS === "linux") {
     await run("xdotool", ["mousemove", String(x1), String(y1)]);
@@ -138,14 +158,19 @@ export async function execute(action: Action): Promise<ActionResult> {
         case "type": return await execType(action.text);
         case "click": return await execClick(action.x ?? 0, action.y ?? 0, action.button);
         case "drag_drop": return await execDrag(action.x1, action.y1, action.x2, action.y2, action.holdMs);
-        case "move": return await execClick(action.x, action.y, "left");
+        case "move": return await execMove(action.x, action.y);
         case "scroll": {
           if (OS === "linux") {
             const btn = action.direction === "up" ? "4" : action.direction === "down" ? "5" : action.direction === "left" ? "6" : "7";
             const r = await run("xdotool", ["click", "--repeat", String(action.amount), btn]);
             return r.code === 0 ? ok(`scrolled ${action.direction}`) : fail(r.err);
           }
-          return ok(`scrolled ${action.direction} x${action.amount}`);
+          // XR 5.1 fix: report honestly instead of claiming success without acting.
+          return {
+            ok: false,
+            skipped: true,
+            message: `scroll injection is not supported on ${OS} in this build (no backend); use browser scroll or key-based paging`,
+          };
         }
         case "key": return await execKey(action.keys);
         case "wait_ms": await new Promise(r => setTimeout(r, action.ms)); return ok(`waited ${action.ms}ms`);

@@ -1,15 +1,15 @@
 # XR 3.1.6 Repository Inventory
 
-Generated: 2026-07-26T15:32:24.543Z
+Generated: 2026-07-26T21:45:49.246Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 360 |
-| Test files | 81 |
-| CLI commands | 36 |
-| Daemon routes | 65 |
+| Source files | 386 |
+| Test files | 94 |
+| CLI commands | 37 |
+| Daemon routes | 72 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -35,6 +35,7 @@ Generated: 2026-07-26T15:32:24.543Z
 - `research` (work, supported) — xr research "<topic>" [quick|deep|plan|status|setup]
 - `agents` (work, supported) — xr agents [list|plan|run|status|stop|resume|inspect]
 - `control` (work, supported) — xr control [status|start|stop|plan|setup|browser|…]
+- `env` (work, supported) — xr env [status|capabilities|sessions|close|close-all|history|observations|policy] [--json]
 - `voice` (work, supported) — xr voice [setup|status|start|stop|test|devices|config]
 - `speak` (work, supported) — xr speak <text>
 - `listen` (work, supported) — xr listen
@@ -89,6 +90,13 @@ Generated: 2026-07-26T15:32:24.543Z
 - POST `/api/control/plan` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
 - GET `/api/control/status` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
 - GET `/api/cost` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api/environment/capabilities` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- POST `/api/environment/close` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/history` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/observations` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/policy` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/sessions` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/status` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
 - GET `/api/health` — open (src/daemon/routes/system.routes.ts)
 - GET `/api/memory` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
 - DELETE `/api/memory/*` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)

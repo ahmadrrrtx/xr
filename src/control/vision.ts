@@ -49,6 +49,13 @@ export async function captureScreen(savePath?: string): Promise<{ ok: boolean; p
     if (!(await pathExists(path))) return { ok: false, message: "Screenshot file not created." };
 
     const buf = await readBytes(path);
+    // XR 5.1 — image size bound (default 5 MiB). Oversized captures are
+    // deleted immediately rather than shipped to OCR/vision pipelines.
+    const maxBytes = Math.max(256 * 1024, Number(process.env.XR_VISION_MAX_IMAGE_BYTES ?? 5 * 1024 * 1024) || 5 * 1024 * 1024);
+    if (buf.byteLength > maxBytes) {
+      await removePath(path, { force: true });
+      return { ok: false, message: `screenshot rejected: ${buf.byteLength} bytes exceeds vision limit of ${maxBytes} bytes` };
+    }
     setTimeout(() => { void removePath(path, { force: true }); }, 60000);
 
     return {
@@ -62,8 +69,28 @@ export async function captureScreen(savePath?: string): Promise<{ ok: boolean; p
   }
 }
 
-export async function cloudVision(provider: any, prompt: string, base64Png: string): Promise<string> {
+/**
+ * Route a prompt + screenshot to a vision-capable model.
+ *
+ * XR 5.1 — explicit consent is mandatory: `consent.cloudAllowed` must be true
+ * when the provider is non-local. There is no ambient or inferred consent for
+ * sending screen content off-device. Callers decide locality via
+ * `provider.isLocal` / cost pricing `isLocal` and pass the decision in.
+ */
+export async function cloudVision(
+  provider: any,
+  prompt: string,
+  base64Png: string,
+  consent?: { cloudAllowed: boolean; providerIsLocal?: boolean },
+): Promise<string> {
   try {
+    const isLocalProvider = consent?.providerIsLocal ?? (provider as any).isLocal?.() ?? false;
+    if (!isLocalProvider && consent && !consent.cloudAllowed) {
+      return "[Vision blocked: explicit consent for cloud vision is not granted — enable environment.vision.allowCloud after reviewing the privacy guide]";
+    }
+    if (!isLocalProvider && !consent) {
+      return "[Vision blocked: caller did not declare a cloud-consent decision]";
+    }
     const supports = (provider as any).supportsVision?.() ?? true;
     if (!supports) return "[Provider does not support vision]";
 

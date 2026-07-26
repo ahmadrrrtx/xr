@@ -106,6 +106,21 @@ async function raceApproval(
   return await Promise.race([cli, dash]);
 }
 
+/**
+ * XR 5.1 — exported for the governed environment/computer-use paths so they
+ * use the SAME approval racing (CLI prompt + dashboard queue) as runAction.
+ * Approval flow has exactly one implementation; this is its public handle.
+ */
+export function requestControlApproval(
+  action: Action,
+  risk: RiskAssessment,
+  preview: string,
+  prompt: string,
+  defaultYes: boolean,
+): Promise<boolean> {
+  return raceApproval(action, risk, preview, prompt, defaultYes);
+}
+
 export interface RunResult {
   action: Action;
   risk: RiskAssessment;
@@ -183,7 +198,8 @@ export async function runAction(
     return { action, risk, result };
   }
 
-  const result = await execute(action);
+  const runner = opts.execOverride ?? execute;
+  const result = await runner(action);
   auditExecuted(store, action, risk, result);
 
   if (opts.delayMs && opts.delayMs > 0) {
