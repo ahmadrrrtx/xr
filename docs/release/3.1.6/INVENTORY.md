@@ -1,15 +1,15 @@
 # XR 3.1.6 Repository Inventory
 
-Generated: 2026-07-22T14:55:41.865Z
+Generated: 2026-07-26T15:32:24.543Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 311 |
-| Test files | 51 |
-| CLI commands | 34 |
-| Daemon routes | 52 |
+| Source files | 360 |
+| Test files | 81 |
+| CLI commands | 36 |
+| Daemon routes | 65 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -41,6 +41,7 @@ Generated: 2026-07-22T14:55:41.865Z
 - `workspace` (context, supported) — xr workspace [list|create|use|switch|delete] …
 - `session` (context, supported) — xr session [list|show|export] [id]
 - `memory` (context, supported) — xr memory [list|add|search|recall|remove|health|export|…]
+- `context` (context, supported) — xr context [list|inspect|explain|pending|approve|revoke|correct|export]
 - `config` (context, supported) — xr config [get|set|path|reset] [key] [value]
 - `providers` (intelligence, supported) — xr providers [list|set|add|remove|test|status|refresh]
 - `models` (intelligence, supported) — xr models [status|list|recommend|install|remove|set|test|runtimes]
@@ -49,6 +50,7 @@ Generated: 2026-07-22T14:55:41.865Z
 - `plugins` (extensions, supported) — xr plugins [list|search|install|enable|disable|remove|status]
 - `mcp` (extensions, supported) — xr mcp [list|add|remove|enable|disable|tools|health|doctor]
 - `shield` (trust, supported) — xr shield [status|scan|processes|startup|privacy|doctor|…]
+- `trust` (trust, supported) — xr trust [status|classify <command...>] [--json]
 - `audit` (trust, supported) — xr audit [tail|verify|export] [--limit n]
 - `attacks` (trust, supported) — xr attacks [--json]
 - `doctor` (system, supported) — xr doctor [--network] [--json] [--perf]
@@ -69,6 +71,14 @@ Generated: 2026-07-22T14:55:41.865Z
 - POST `/api/budget/set` — local bearer token or dashboard query token (src/daemon/routes/budget.routes.ts)
 - POST `/api/chat` — local bearer token or dashboard query token (src/daemon/routes/chat.routes.ts)
 - GET `/api/config` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api/context` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- POST `/api/context/approve/*` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/export` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/item/*` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/items` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/pending` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/policy` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- POST `/api/context/revoke/*` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
 - POST `/api/control/approve` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
 - GET `/api/control/events` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
 - GET `/api/control/history` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
@@ -90,7 +100,10 @@ Generated: 2026-07-22T14:55:41.865Z
 - GET `/api/overview` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - ANY `/api/plugins*` — local bearer token or dashboard query token (src/daemon/routes/extensions.routes.ts)
 - GET `/api/providers` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/providers/catalog` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/providers/route` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/providers/set` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/recovery` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/research` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/research/*` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/security` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
@@ -108,6 +121,8 @@ Generated: 2026-07-22T14:55:41.865Z
 - GET `/api/shield/status` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
 - POST `/api/shield/whitelist` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
 - ANY `/api/skills*` — local bearer token or dashboard query token (src/daemon/routes/extensions.routes.ts)
+- GET `/api/trust` — local bearer token or dashboard query token (src/daemon/routes/trust.routes.ts)
+- POST `/api/trust/classify` — local bearer token or dashboard query token (src/daemon/routes/trust.routes.ts)
 - GET `/api/workspaces` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/workspaces/create` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/workspaces/switch` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)

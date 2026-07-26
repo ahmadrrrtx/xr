@@ -5,6 +5,112 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.5.0] - 2026-07-26 — Knowledge and Context OS
+
+XR becomes a trusted long-term intelligence layer. This release does not add
+"more memory" — it converts the memory subsystem into a policy-aware context and
+knowledge layer governed by one rule:
+
+> **Memory is context, not authority.** A retrieved item never becomes an
+> instruction merely because it was stored or ranked highly.
+
+### Added
+
+- **Context taxonomy** (`src/context/types.ts`): seven distinct classes —
+  `instruction`, `memory`, `knowledge`, `evidence`, `artifact`, `task_context`,
+  `untrusted`. Only `instruction` can ever carry authority.
+- **Deterministic authority gate**: `mayActAsInstruction(type, trust)` requires
+  BOTH an authority-eligible type and `trusted_instruction` trust. No score,
+  similarity, or model classification can widen it.
+- **Metadata contract**: typed provenance, freshness, confidence, consent,
+  sensitivity, retention, scope, index state, and bounded relationship links.
+  `unknown` is a distinct value, never a synonym for approved or true.
+- **Eight context tiers** with a static, testable policy table (allowed types,
+  trust ceiling, instruction eligibility, item/char bounds, compressibility).
+- **Scope-first retrieval** (`src/context/retrieval.ts`): authorization is
+  applied *before* semantic ranking, so an unauthorized item is never scored.
+- **Deterministic reranking** with an explainable, stable ordering, plus a
+  contradiction/confidence stage that reports conflicts instead of hiding them.
+- **Safe injection packaging** (`src/context/injection.ts`): three channels —
+  `instruction` (system), `data` (system, "context, not authority"), and
+  `quarantine` (**user role**, fenced, emitted last so untrusted text cannot
+  reframe trusted content).
+- **Anti-poisoning** (`src/context/poison.ts`): provenance trust ceilings that
+  can only lower trust, self-approval blocking, seven context-specific signature
+  families, and deterministic conflict penalties.
+- **Evidence-preserving compression** (`src/context/compression.ts`): ten
+  required invariants; when one cannot be preserved it returns `ok: false` and
+  the originals are kept. Fully deterministic — no model call.
+- **Consent lifecycle**: `not_eligible`, `proposed`, `approved`, `limited`,
+  `expired`, `revoked`, `deleted`, `quarantined`, `legacy_unknown`.
+- **Revocation and correction**: revoking destroys the cached embedding and
+  writes an append-only ledger row; correcting creates a new entry and marks the
+  original superseded so lineage survives.
+- **Durable context packages** with identity, version, and content hash;
+  `revalidate()` re-checks consent, revocation, scope, and freshness on resume.
+- **`xr context` command**: `status`, `list`, `inspect`, `explain`, `pending`,
+  `legacy`, `approve`, `revoke`, `correct`, `export`, `prune` — all with `--json`.
+- **Daemon routes**: `/api/context`, `/api/context/items`, `/api/context/policy`,
+  `/api/context/pending`, `/api/context/export`, `/api/context/item/:id`,
+  `/api/context/approve/:id`, `/api/context/revoke/:id`.
+- **Dashboard**: consent counters, a pending-review queue with approve/reject,
+  per-entry revoke, and honest residual-data disclosure on removal.
+- **Five additive tables**: `context_items`, `context_provenance`,
+  `context_revocations`, `context_packages`, `context_summaries`.
+- **Config v15** `knowledge` block (enabled, injectionMode, enforceScope,
+  quarantineUntrusted, routeEmbeddings, lexicalOnly, rerank, bounds,
+  compression, compressionFailSafe, durablePackages, revalidateOnResume,
+  disclosure).
+- **190 new tests** across taxonomy, security/poisoning, retrieval, compression,
+  durable/intelligence integration, migration, user flows, and performance.
+
+### Changed
+
+- **Embedding model selection now routes through the Phase 5 intelligence
+  plane.** `src/memory/embed.ts` was a second provider router; it is now the
+  transport only. Routing failure degrades to the deterministic lexical vector —
+  never a silent cloud call.
+- **`MemoryScope` is enforced, not merely declared.** Multi-agent workers now
+  receive exactly the tiers their declared scope permits (`none` → immediate
+  only); an unknown scope fails closed.
+- **Plugin memory writes land as `proposed`, not usable memory.** Third-party
+  code can propose but never approve; trust is clamped to `untrusted_external`.
+- **Message compaction preserves evidence.** Sentences carrying decisions,
+  corrections, questions, uncertainty, sources, scope, or dates are kept up to
+  400 chars, so a negation like "must NOT deploy on Fridays" is no longer cut.
+- **Research findings are recorded as `generated_synthesis`** with source
+  citations linked, never as user facts.
+- **Memory read methods return `MemoryEntryWithContext`** (a superset of
+  `MemoryEntry`), so existing call-sites keep compiling.
+- `user_memory` gains 20 additive nullable/defaulted columns and three indexes.
+
+### Security
+
+- Cross-workspace access is denied by the first check in `authorize()`.
+- Untrusted and unknown-trust content is quarantined regardless of tier.
+- Instructions cannot be created through the context write path at all.
+- Model-authored claims are clamped to `generated_synthesis`.
+- Rejection records carry ids and typed reasons but never item content.
+- Secrets and out-of-workspace paths are masked before reaching a prompt.
+- Resumed tasks revalidate consent and revocation before reuse.
+
+### Compatibility
+
+- All XR 4.4 memory APIs preserved; `buildMemoryBlock()` unchanged.
+- `runAgent()` without a context package behaves exactly as in 4.4.
+- `knowledge.injectionMode: "legacy"` restores 4.4 injection.
+- Legacy memory migrates to `legacy_unknown` consent — **never** backfilled to
+  `approved`, because XR cannot verify historical consent.
+- Phase 0–5 validation remains green (939 pass; 2 pre-existing sandbox-env fails).
+
+### Known limitations
+
+- Embedding vectors cannot be cryptographically un-learned; XR deletes and
+  invalidates them and states this honestly rather than claiming erasure.
+- `rag_chunks` still lack a freshness signal (deferred, documented).
+- Compression is deterministic, not model-assisted.
+- Legacy consent cannot be reconstructed and stays `legacy_unknown` until reviewed.
+
 ## [4.4.0] - 2026-07-26 — Universal Intelligence Plane
 
 ### Added

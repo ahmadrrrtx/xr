@@ -61,7 +61,7 @@ describe("xr doctor --json baseline contract", () => {
     const result = await runDoctor();
     expect(result.code).toBe(0);
     expect(result.json.schemaVersion).toBe(1);
-    expect(result.json.version.version).toBe("4.4.0"); // XR 4.4 — version bump (Universal Intelligence Plane)
+    expect(result.json.version.version).toBe("4.5.0"); // XR 4.5 — version bump (Knowledge and Context OS)
     expect(result.json.environment.bun).toBeString();
     expect(result.json.workspace.dbPath).toBeString();
     expect(result.json.config.secrets).toBeObject();

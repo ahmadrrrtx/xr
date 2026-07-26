@@ -62,7 +62,8 @@ export interface MemoryEntry {
  * human-readable reason. Retrieval is never a black box.
  */
 export interface RecallHit {
-  entry: MemoryEntry;
+  /** XR 4.5: carries context metadata (consent/trust/provenance) when present. */
+  entry: MemoryEntryWithContext;
   /** Raw similarity to the query (0..1, lexical or embedding cosine). */
   sim: number;
   /** Importance-adjusted score used for ranking. */
@@ -119,3 +120,70 @@ export function isExpired(entry: { expiresAt?: number | null }, now: number = Da
 
 /** Default relevance floor for recall (conservative: weak hits are dropped). */
 export const RECALL_FLOOR = 0.12;
+
+// ── XR 4.5 (Knowledge and Context OS) — additive context metadata ──────────
+//
+// These fields extend `MemoryEntry` WITHOUT breaking the 4.4 contract: every
+// one is optional, and code that ignores them behaves exactly as before.
+// The canonical vocabulary lives in `src/context/types.ts`; these are the
+// projections the memory layer persists and returns.
+//
+// Honesty rule: `consentState` is `legacy_unknown` for pre-4.5 rows. XR does
+// not fabricate consent it cannot verify.
+
+/** Re-exported context vocabulary so memory callers need one import. */
+export type {
+  ConsentState,
+  ConfidenceLevel,
+  ProvenanceKind,
+  SensitivityLevel,
+  TrustStatus,
+} from "../context/types.ts";
+
+/**
+ * Context metadata attached to a memory entry (XR 4.5).
+ * Present on rows written by 4.5+; absent/`legacy_unknown` on older rows.
+ */
+export interface MemoryContextMeta {
+  /** Consent lifecycle. `legacy_unknown` for pre-4.5 entries. */
+  consentState?: import("../context/types.ts").ConsentState;
+  consentActor?: string | null;
+  consentAt?: number | null;
+  /** Trust status. Derived from `source` for legacy rows. */
+  trustStatus?: import("../context/types.ts").TrustStatus;
+  /** Confidence in the content — NOT a truth claim. */
+  confidence?: import("../context/types.ts").ConfidenceLevel;
+  sensitivity?: import("../context/types.ts").SensitivityLevel;
+  /** Typed provenance. Mapped from `source` for legacy rows. */
+  provenanceKind?: import("../context/types.ts").ProvenanceKind;
+  /** A URL, path, run id, or claim id. Never invented during migration. */
+  provenanceRef?: string | null;
+  actorKind?: string | null;
+  actorName?: string | null;
+  /** When the underlying source was observed in the world. */
+  sourceObservedAt?: number | null;
+  /** Soft staleness boundary (distinct from the hard `expiresAt`). */
+  staleAfter?: number | null;
+  revokedAt?: number | null;
+  revokedReason?: string | null;
+  /** Id of the entry that corrected this one. */
+  supersededBy?: string | null;
+  retentionPolicy?: string | null;
+  indexState?: string | null;
+  embeddingModel?: string | null;
+  embeddingDim?: number | null;
+  workspaceId?: string | null;
+}
+
+/** A memory entry with its XR 4.5 context metadata. */
+export interface MemoryEntryWithContext extends MemoryEntry, MemoryContextMeta {}
+
+/**
+ * Memory categories that are actually POLICY INSTRUCTIONS, not memories.
+ * `exclusion` is a do-not-remember rule: the audit flagged storing it in the
+ * memory table as a taxonomy error. It keeps its storage location for
+ * compatibility, but the context layer types it as `instruction`.
+ */
+export function categoryIsInstruction(c: MemoryCategory): boolean {
+  return c === "exclusion";
+}

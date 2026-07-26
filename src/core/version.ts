@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "4.4.0",
-  codename: "Universal Intelligence Plane",
+  version: "4.5.0",
+  codename: "Knowledge and Context OS",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 4.4 (Universal Intelligence Plane) — any supported model class/provider can be discovered, evaluated, selected, invoked, observed, and failed over through one extensible intelligence contract with automatic routing and complete expert override: capability-aware catalog, task-requirement filtering, explainable deterministic scoring, locality/privacy/budget policy hard gates, safe fallback without silent cloud escalation, bounded historical metrics, and durable routing decision records.",
+  description: "XR 4.5 (Knowledge and Context OS) — a trusted long-term intelligence layer: explicit context taxonomy (instruction/memory/knowledge/evidence/artifact/task/untrusted), typed provenance, freshness and confidence, consent-first retention with revocation and correction lineage, scope-first retrieval that authorizes before ranking, deterministic anti-poisoning, channel-separated safe injection where untrusted content can never become an instruction, evidence-preserving compression that fails safe, enforced cross-agent context scopes, and durable context packages revalidated on resume.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;

@@ -48,6 +48,20 @@ export interface AgentRunOverrides {
   requirements?: Partial<import("../intelligence/types.ts").TaskRequirements>;
   /** XR 4.4 — force a routing mode for this run. */
   routingMode?: import("../intelligence/types.ts").RoutingMode;
+
+  // ── XR 4.5 — Knowledge and Context OS scoping ──────────────────────────
+  /** Agent role name, recorded on the context grant for audit. */
+  agentRole?: string;
+  /**
+   * Declared memory-scope kind (`none|workflow|project|research|user`) from
+   * `src/agents/types.ts`. Phase 6 ENFORCES this at retrieval time rather than
+   * treating it as documentation. Defaults to "user" for the primary agent.
+   */
+  memoryScopeKind?: string;
+  /** Bind the context grant to a specific task; task-scoped items follow it. */
+  taskId?: string;
+  /** Durable run id, so the assembled package can be checkpointed. */
+  runId?: string;
 }
 
 export class AgentService implements LifecycleHook {
@@ -172,6 +186,8 @@ export class AgentService implements LifecycleHook {
         semantic: config.memory.semanticRecall,
       },
       memoryStore: engine,
+      // XR 4.5 — populated below when the knowledge layer is enabled.
+      contextMode: "legacy",
       sessionSummary: {
         enabled: config.memory.enabled && config.memory.saveSessionSummaries,
         minTurns: config.memory.sessionSummaryMinTurns,
@@ -180,6 +196,42 @@ export class AgentService implements LifecycleHook {
       // XR 4.4 — attach routing decision for durable execution records
       routingDecision: routingDecision ?? undefined,
     };
+
+    // ── XR 4.5 — assemble a scope-filtered context package ──────────────
+    //
+    // The package replaces the legacy memory block when the knowledge layer is
+    // enabled. Assembly is best-effort: a failure degrades to the 4.4 path
+    // rather than failing the run, and the degradation is recorded.
+    const memoryOn = overrides.memoryEnabled ?? (config.memory.enabled && config.memory.injectInChat);
+    if (config.knowledge?.enabled && config.memory.enabled) {
+      try {
+        const contextSvc = this.registry.tryResolve(Tokens.Context);
+        if (contextSvc) {
+          const pkg = await contextSvc.requestContext(
+            {
+              requester: { kind: "agent", id: "primary", role: overrides.agentRole ?? "agent" },
+              intent: task.slice(0, 200),
+              query: task,
+              cwd: process.cwd(),
+              ...(overrides.taskId ? { taskId: overrides.taskId } : {}),
+              // The primary agent acts directly for the user, so it may see
+              // long-term memory — subject to the same authorization gate.
+              memoryScopeKind: overrides.memoryScopeKind ?? "user",
+              includeUserMemory: memoryOn,
+              maxItems: config.knowledge.maxPackageItems,
+              maxChars: config.knowledge.maxPackageChars,
+              lexicalOnly: config.knowledge.lexicalOnly,
+              ...(overrides.runId ? { runId: overrides.runId } : {}),
+            },
+            { memoryEnabled: memoryOn, memoryStore: engine },
+          );
+          deps.contextPackage = pkg;
+          deps.contextMode = config.knowledge.injectionMode;
+        }
+      } catch {
+        /* context assembly is best-effort — the legacy path still applies */
+      }
+    }
 
     // Best-effort audit of routing (secret-free)
     try {

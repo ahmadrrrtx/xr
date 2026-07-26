@@ -8,7 +8,7 @@
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 4.4.0 (Universal Intelligence Plane) — from src/core/version.ts
+ *   Version: 4.5.0 (Knowledge and Context OS) — from src/core/version.ts
  */
 
 export const site = {
@@ -21,9 +21,9 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "4.4.0",
-  codename: "Universal Intelligence Plane",
-  displayVersion: "4.4.0 (Universal Intelligence Plane)",
+  version: "4.5.0",
+  codename: "Knowledge and Context OS",
+  displayVersion: "4.5.0 (Knowledge and Context OS)",
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },

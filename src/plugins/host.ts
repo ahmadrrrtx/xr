@@ -27,6 +27,7 @@ import type { XRConfig } from "../config/config.ts";
 import { hostAllowed } from "../tools/egress.ts";
 import { getSecret } from "../security/secrets.ts";
 import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { admitContextWrite } from "../context/poison.ts";
 import { BudgetManager } from "../cost/manager.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
@@ -296,6 +297,26 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
       memCap.add = secureFn((content: string, opts?: { category?: string; importance?: number; tags?: string[] }) => {
         if (typeof content !== "string" || !content.trim()) throw new Error("invalid content");
         if (content.length > MAX_MEMORY_CONTENT) throw new Error(`content too large (max ${MAX_MEMORY_CONTENT})`);
+
+        // ── XR 4.5 — plugin writes PROPOSE, they never approve ───────────
+        //
+        // Third-party code cannot create user-approved memory. The write is
+        // admitted through the same deterministic gate everything else uses:
+        // trust is clamped to the plugin provenance ceiling, consent is forced
+        // to `proposed`, and poisoning signatures quarantine the entry.
+        const decision = admitContextWrite({
+          content,
+          type: "memory",
+          requestedTrust: "approved_memory",
+          provenanceKind: "plugin_output",
+          actorKind: "plugin",
+          requestedConsent: "approved",
+        });
+        if (!decision.admit) {
+          audit("memory.add.blocked", { reason: decision.reason, signatures: decision.scan.signatures });
+          return { ok: false, reason: decision.reason };
+        }
+
         const r = mem.add({
           content,
           category: (opts?.category as any) ?? "fact",
@@ -304,8 +325,41 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
           importance: opts?.importance,
           tags: [...(opts?.tags ?? []), `plugin:${pluginId}`],
         });
-        audit("memory.add", { ok: r.ok, duplicate: r.duplicate ?? false });
-        return { ok: r.ok, reason: r.reason };
+
+        // Stamp the honest consent/trust/provenance onto the stored row so it
+        // can never be recalled as if the user had approved it.
+        if (r.ok && r.entry) {
+          try {
+            store.setMemoryConsent(r.entry.id, decision.consentState, `plugin:${pluginId}`);
+            store.setMemoryProvenance(r.entry.id, {
+              provenanceKind: "plugin_output",
+              provenanceRef: `plugin:${pluginId}`,
+              actorKind: "plugin",
+              actorName: pluginId,
+              trustStatus: decision.trustStatus,
+              confidence: "unknown",
+            });
+          } catch {
+            /* stamping is best-effort; the conservative default already applies */
+          }
+        }
+
+        audit("memory.add", {
+          ok: r.ok,
+          duplicate: r.duplicate ?? false,
+          consent: decision.consentState,
+          trust: decision.trustStatus,
+          adjustments: decision.adjustments,
+        });
+        return {
+          ok: r.ok,
+          reason:
+            r.reason ??
+            (decision.consentState === "quarantined"
+              ? "stored as quarantined pending user review"
+              : "stored as proposed — the user must approve it before XR will recall it"),
+          consentState: decision.consentState,
+        };
       });
     }
 

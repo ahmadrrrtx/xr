@@ -20,7 +20,8 @@ import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
 import { BudgetManager } from "../cost/manager.ts";
 import { compact } from "../memory/compact.ts";
 import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
-import { buildMemoryBlock } from "../memory/inject.ts";
+import { buildMemoryBlock, buildContextMessages } from "../memory/inject.ts";
+import type { ContextPackage, InjectionPackage } from "../context/types.ts";
 
 export interface AgentDeps {
   provider: Provider;
@@ -88,6 +89,24 @@ export interface AgentDeps {
    * Secret-free; safe to audit and attach to execution records.
    */
   routingDecision?: import("../intelligence/types.ts").RoutingDecision;
+  /**
+   * XR 4.5 — a pre-assembled, scope-filtered context package.
+   *
+   * When present, the agent injects THIS instead of the legacy memory block:
+   * items arrive already authorized, tiered, trust-labelled, and explainable,
+   * and untrusted content is delimited in a non-instruction channel.
+   *
+   * When absent, the agent falls back to the 4.4 recall path unchanged, so
+   * `injectionMode: "legacy"` and every older call-site keep working (§10.2).
+   */
+  contextPackage?: ContextPackage;
+  /**
+   * XR 4.5 — injection mode. Defaults to "legacy" when no package is supplied
+   * so behavior never changes implicitly.
+   */
+  contextMode?: "legacy" | "context" | "both";
+  /** XR 4.5 — receives the rendered injection for inspection/audit surfaces. */
+  onContextInjected?(injection: InjectionPackage): void;
 }
 
 export interface AgentResult {
@@ -150,7 +169,55 @@ export async function runAgent(
 
   const messages: Message[] = [];
 
-  if (deps.memory?.enabled) {
+  // ── XR 4.5 — context injection ────────────────────────────────────────
+  //
+  // Two paths, chosen explicitly (never implicitly):
+  //   • context package supplied → typed, channel-separated injection
+  //   • otherwise                → the unchanged 4.4 memory block
+  //
+  // The context path is strictly safer: items are already scope-authorized,
+  // trust-labelled, and split across instruction / data / quarantine channels,
+  // so a retrieved item cannot occupy the instruction channel.
+  const contextMode = deps.contextMode ?? (deps.contextPackage ? "context" : "legacy");
+  let injectedContext = false;
+
+  if (deps.contextPackage && contextMode !== "legacy") {
+    try {
+      const { messages: ctxMessages, injection } = buildContextMessages(deps.contextPackage, {
+        workspaceRoot: cwd,
+      });
+      for (const m of ctxMessages) messages.push({ role: m.role, content: m.content });
+      injectedContext = ctxMessages.length > 0;
+      deps.onContextInjected?.(injection);
+
+      auditStore.audit(
+        "context.inject",
+        {
+          packageId: deps.contextPackage.packageId,
+          packageVersion: deps.contextPackage.version,
+          contentHash: deps.contextPackage.contentHash,
+          items: injection.allItemIds.length,
+          chars: injection.totalChars,
+          // Channel counts prove the authority separation held.
+          channels: injection.blocks.map((b) => ({
+            channel: b.channel,
+            tier: b.tier,
+            role: b.role,
+            items: b.itemIds.length,
+          })),
+          degraded: deps.contextPackage.degraded,
+          degradedReasons: deps.contextPackage.degradedReasons,
+          revalidated: deps.contextPackage.revalidation?.note,
+        },
+        sessionId,
+      );
+    } catch {
+      /* best-effort: context injection must never break a run */
+    }
+  }
+
+  // Legacy path — runs when no package was supplied, or in "both" mode.
+  if (deps.memory?.enabled && (!injectedContext || contextMode === "both")) {
     try {
       const scope = projectScopeFromCwd(cwd);
       const limit = deps.memory.recallLimit ?? 5;
@@ -175,6 +242,7 @@ export async function runAgent(
             count: recalled.length,
             ids: recalled.map((e) => e.id),
             scores: hits.map((h) => ({ id: h.entry.id, sim: Math.round(h.sim * 100) })),
+            mode: contextMode,
           },
           sessionId,
         );
