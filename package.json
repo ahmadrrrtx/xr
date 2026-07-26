@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
-  "version": "5.1.0",
-  "description": "XR 5.1 (Environment Interaction OS) \u2014 a universal governed contract for acting in digital environments: one typed action contract (environment, session, target, interaction, confidence, reversibility, approval) across browser, desktop, filesystem, application, voice, and vision; honest platform capability reporting (partial never rounds up); coordinate actions bound to fresh observation evidence; typed observations that are evidence, never instructions; honest reversibility classes with real compensation (no fake rollback); bounded recovery (one re-observe retry, circuit breaker, quarantine on cleanup defects); dual-consent cloud privacy (no ambient credentials, no raw screenshot/transcript retention); and per-modality kill switches for safe rollback \u2014 all routed through the existing risk, approval, trust, durability, intelligence, context, and workflow contracts.",
+  "version": "5.2.0",
+  "description": "XR 5.2 (Capability Ecosystem) — a trusted, discoverable, testable, composable XR capability ecosystem: common descriptor/provenance/effective-authority/dependency/compatibility/certification/lifecycle/verification/interoperability/contracts; evidence-based trust; safe install/update/disable/rollback/quarantine; plugin/skill/MCP/provider/tool/workflow/integration/artifact interoperability — integrated with existing execution/trust/durable/intelligence/context/workflow contracts.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr.cjs"
