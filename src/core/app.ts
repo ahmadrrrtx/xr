@@ -60,6 +60,7 @@ import {
   StateServiceProvider,
   ConfigServiceProvider,
   LlmServiceProvider,
+  IntelligenceServiceProvider,
   BudgetServiceProvider,
   PluginServiceProvider,
   McpServiceProvider,
@@ -543,6 +544,7 @@ export class XRApp {
     this.use(new StateServiceProvider());
     this.use(new ConfigServiceProvider());
     this.use(new LlmServiceProvider());
+    this.use(new IntelligenceServiceProvider());
     this.use(new BudgetServiceProvider());
     this.use(new PluginServiceProvider());
     this.use(new McpServiceProvider());

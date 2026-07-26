@@ -41,6 +41,13 @@ export interface AgentRunOverrides {
   say?: (line: string) => void;
   approve?: (req: ApprovalRequest) => Promise<boolean>;
   memoryEnabled?: boolean;
+  /**
+   * XR 4.4 — optional task requirements for the intelligence plane.
+   * Explicit provider/model pins still win.
+   */
+  requirements?: Partial<import("../intelligence/types.ts").TaskRequirements>;
+  /** XR 4.4 — force a routing mode for this run. */
+  routingMode?: import("../intelligence/types.ts").RoutingMode;
 }
 
 export class AgentService implements LifecycleHook {
@@ -85,13 +92,31 @@ export class AgentService implements LifecycleHook {
     /** 0.2 Storage Unification: Resolve the single workspace store. */
     const unifiedStore = this.registry.resolve(Tokens.Store);
     const engine = new MemoryStore(unifiedStore);
+
+    // XR 4.4 — capability-aware routing; explicit provider/model pins preserved.
+    const agentReqs = {
+      modelClass: "chat" as const,
+      require: { toolUse: true },
+      summary: task.slice(0, 120),
+      ...(overrides.requirements ?? {}),
+    };
     const provider = providerService.getProvider({
       provider: overrides.provider,
       model: overrides.model,
+      requirements: agentReqs,
+      mode: overrides.routingMode,
     });
+    const routingDecision =
+      typeof (providerService as any).getLastDecision === "function"
+        ? (providerService as any).getLastDecision()
+        : null;
 
     // Determine pricing for this provider
-    const pricing = priceFor(provider.id, (overrides.model ?? config.defaults.model));
+    const selectedModel =
+      routingDecision?.selected?.modelId ??
+      overrides.model ??
+      config.defaults.model;
+    const pricing = priceFor(provider.id, selectedModel);
 
     const budget = {
       maxUsd: overrides.budget ?? config.budget.perTaskUsd,
@@ -152,7 +177,31 @@ export class AgentService implements LifecycleHook {
         minTurns: config.memory.sessionSummaryMinTurns,
       },
       extraTools: [...pluginService.getPluginTools(), ...mcpService.getMcpTools()],
+      // XR 4.4 — attach routing decision for durable execution records
+      routingDecision: routingDecision ?? undefined,
     };
+
+    // Best-effort audit of routing (secret-free)
+    try {
+      const audit = this.registry.resolve(Tokens.AuditStore);
+      if (routingDecision) {
+        audit.audit(
+          "intelligence.route",
+          {
+            decisionId: routingDecision.decisionId,
+            providerId: routingDecision.selected?.providerId,
+            modelId: routingDecision.selected?.modelId,
+            mode: routingDecision.mode,
+            manual: routingDecision.manual,
+            explanation: routingDecision.explanation,
+            localityPolicy: routingDecision.constraints?.localityPolicy,
+          },
+          null,
+        );
+      }
+    } catch {
+      /* audit is best-effort */
+    }
 
     return await runAgent(task, mode, deps);
   }

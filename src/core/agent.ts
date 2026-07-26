@@ -83,6 +83,11 @@ export interface AgentDeps {
    * XR 1.0 — extra tools contributed by enabled plugins.
    */
   extraTools?: Tool[];
+  /**
+   * XR 4.4 — routing decision from the Universal Intelligence Plane.
+   * Secret-free; safe to audit and attach to execution records.
+   */
+  routingDecision?: import("../intelligence/types.ts").RoutingDecision;
 }
 
 export interface AgentResult {
@@ -95,8 +100,9 @@ export interface AgentResult {
   outputTokens?: number;
   /** Final cost meter string. */
   meter?: string;
+  /** XR 4.4 — routing decision id when intelligence plane selected the model. */
+  routingDecisionId?: string;
 }
-
 export async function runAgent(
   task: string,
   mode: Mode,
@@ -228,6 +234,7 @@ export async function runAgent(
             finalMessage: finalMessage || `Stopped to respect your budget. ${governor.meter()}`,
             steps: stepIdx,
             stopped: "budget",
+            routingDecisionId: deps.routingDecision?.decisionId,
           };
         }
         governor.raise(extra);
@@ -262,7 +269,14 @@ export async function runAgent(
         maybeSaveSessionSummary();
         sessionStore.endSession(sessionId, "done");
         auditStore.audit("session.done", { steps: stepIdx + 1, snapshot: governor.snapshot() }, sessionId);
-        return { sessionId, finalMessage, steps: stepIdx + 1, stopped: "done", meter: governor.meter() };
+        return {
+          sessionId,
+          finalMessage,
+          steps: stepIdx + 1,
+          stopped: "done",
+          meter: governor.meter(),
+          routingDecisionId: deps.routingDecision?.decisionId,
+        };
       }
 
       for (const call of turn.toolCalls) {
@@ -294,11 +308,25 @@ export async function runAgent(
 
     sessionStore.endSession(sessionId, "stopped");
     auditStore.audit("session.max_steps", { steps: maxSteps }, sessionId);
-    return { sessionId, finalMessage: finalMessage || "(stopped at step limit)", steps: stepIdx, stopped: "max_steps", meter: governor.meter() };
+    return {
+      sessionId,
+      finalMessage: finalMessage || "(stopped at step limit)",
+      steps: stepIdx,
+      stopped: "max_steps",
+      meter: governor.meter(),
+      routingDecisionId: deps.routingDecision?.decisionId,
+    };
   } catch (e) {
     sessionStore.endSession(sessionId, "error");
     auditStore.audit("session.error", { error: (e as Error).message }, sessionId);
     say(`\x1b[31m✗ error: ${(e as Error).message}\x1b[0m`);
-    return { sessionId, finalMessage: (e as Error).message, steps: stepIdx, stopped: "error", meter: governor.meter() };
+    return {
+      sessionId,
+      finalMessage: (e as Error).message,
+      steps: stepIdx,
+      stopped: "error",
+      meter: governor.meter(),
+      routingDecisionId: deps.routingDecision?.decisionId,
+    };
   }
 }

@@ -124,10 +124,31 @@ registerBuiltins();
 
 export function buildProvider(
   config: XRConfig,
-  override?: { provider?: string; model?: string },
+  override?: {
+    provider?: string;
+    model?: string;
+    strategy?: import("./routing.ts").RoutingStrategy;
+    requirements?: Partial<import("../intelligence/types.ts").TaskRequirements>;
+    mode?: import("../intelligence/types.ts").RoutingMode;
+  },
 ): Provider {
   const router = new ProviderRouter(config);
   return router.resolve(override);
+}
+
+/** XR 4.4 — resolve provider + routing decision (for diagnostics / durable records). */
+export function buildProviderWithDecision(
+  config: XRConfig,
+  override?: {
+    provider?: string;
+    model?: string;
+    strategy?: import("./routing.ts").RoutingStrategy;
+    requirements?: Partial<import("../intelligence/types.ts").TaskRequirements>;
+    mode?: import("../intelligence/types.ts").RoutingMode;
+  },
+) {
+  const router = new ProviderRouter(config);
+  return router.resolveWithDecision(override);
 }
 
 /** List all known provider IDs (built-in only). */

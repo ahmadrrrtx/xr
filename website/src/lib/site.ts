@@ -8,7 +8,7 @@
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 4.3.0 (Durable Agency) — from src/core/version.ts
+ *   Version: 4.4.0 (Universal Intelligence Plane) — from src/core/version.ts
  */
 
 export const site = {
@@ -21,9 +21,9 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "4.3.0",
-  codename: "Durable Agency",
-  displayVersion: "4.3.0 (Durable Agency)",
+  version: "4.4.0",
+  codename: "Universal Intelligence Plane",
+  displayVersion: "4.4.0 (Universal Intelligence Plane)",
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },

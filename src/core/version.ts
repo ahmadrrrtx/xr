@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "4.3.0",
-  codename: "Durable Agency",
+  version: "4.4.0",
+  codename: "Universal Intelligence Plane",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 4.3 (Durable Agency) — long-running XR work survives process failure and interruption without losing task identity, authority context, execution history, or outcome integrity: durable checkpoints at safe semantic boundaries, startup recovery with explicit classification, local ownership/leases preventing duplicate execution, durable cancellation, bounded retry with idempotency safety, partial-result persistence, environment reattachment or quarantine, and authority revalidation on resume.",
+  description: "XR 4.4 (Universal Intelligence Plane) — any supported model class/provider can be discovered, evaluated, selected, invoked, observed, and failed over through one extensible intelligence contract with automatic routing and complete expert override: capability-aware catalog, task-requirement filtering, explainable deterministic scoring, locality/privacy/budget policy hard gates, safe fallback without silent cloud escalation, bounded historical metrics, and durable routing decision records.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;

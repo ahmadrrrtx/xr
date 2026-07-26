@@ -23,7 +23,7 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 13; // Business OS feature flag
+export const CONFIG_VERSION = 14; // XR 4.4 Universal Intelligence Plane
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -112,6 +112,45 @@ const ConfigSchema = z.object({
         )
         .default([]),
       providerCapabilities: z.record(z.any()).default({}),
+    })
+    .default({}),
+  // ── XR 4.4: Universal Intelligence Plane ────────────────────────────────
+  // Additive routing preferences. Defaults preserve XR 4.3 behavior:
+  // hybrid strategy via providerEngine, explicit pins still win.
+  intelligencePlane: z
+    .object({
+      /** High-level routing mode. When unset, providerEngine.routingStrategy maps in. */
+      mode: z
+        .enum([
+          "manual",
+          "preferred_with_fallback",
+          "local_only",
+          "private_only",
+          "automatic",
+          "cost_constrained",
+          "latency_constrained",
+          "quality_constrained",
+          "disabled",
+        ])
+        .optional(),
+      localityPolicy: z
+        .enum(["any", "local_only", "private_only", "no_cloud"])
+        .default("any"),
+      allowFallback: z.boolean().default(true),
+      /** Explicit opt-in to escalate local/private work to cloud on failure. */
+      allowCloudFallback: z.boolean().default(false),
+      preferFree: z.boolean().default(true),
+      maxCostUsd: z.number().min(0).optional(),
+      latencyPreference: z
+        .enum(["any", "realtime", "fast", "standard", "slow"])
+        .default("any"),
+      qualityPreference: z
+        .enum(["any", "basic", "standard", "high", "frontier"])
+        .default("any"),
+      /** Opt out of historical outcome influence (safe default remains on with confidence gates). */
+      disableHistorical: z.boolean().default(false),
+      /** When false, automatic routing is off — only explicit/default pins. */
+      enableAutomatic: z.boolean().default(true),
     })
     .default({}),
   localModels: z
@@ -318,6 +357,8 @@ const ConfigSchema = z.object({
 });
 
 export type XRConfig = z.infer<typeof ConfigSchema>;
+/** Exposed for tests and tooling that need schema-validated config fixtures. */
+export { ConfigSchema };
 
 export const XR_HOME = process.env.XR_HOME ?? join(homedir(), ".xr");
 const CONFIG_PATH = join(XR_HOME, "config.json");
@@ -446,6 +487,22 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
     ...raw,
     version: 13,
     business: raw.business ?? { enabled: false },
+  }),
+  // 13 -> 14: XR 4.4 Universal Intelligence Plane (additive routing preferences).
+  13: (raw) => ({
+    ...raw,
+    version: 14,
+    intelligencePlane: raw.intelligencePlane ?? {
+      localityPolicy:
+        raw.localModels?.routing === "local-only" ? "local_only" : "any",
+      allowFallback: true,
+      allowCloudFallback: false,
+      preferFree: raw.preferFreeProviders ?? true,
+      latencyPreference: "any",
+      qualityPreference: "any",
+      disableHistorical: false,
+      enableAutomatic: true,
+    },
   }),
   // 11 -> 12: Stage 8 Voice Stack — safe, disabled-by-default, local-first.
   11: (raw) => ({

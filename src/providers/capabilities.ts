@@ -1,6 +1,10 @@
 /**
  * XR — Provider Capability Schema
  * Defines what each provider can do, used for routing and UI.
+ *
+ * XR 4.4: retains boolean ProviderCapabilities for backward compatibility.
+ * The intelligence plane uses tri-state CapabilitySupport via
+ * src/intelligence/capability.ts (unknown ≠ unsupported ≠ supported).
  */
 
 export interface ProviderCapabilities {
@@ -12,6 +16,13 @@ export interface ProviderCapabilities {
   jsonMode?: boolean;
   functionCalling?: boolean;
   streaming?: boolean;
+  /** XR 4.4 optional extensions (legacy boolean; prefer intelligence descriptors). */
+  reranking?: boolean;
+  speechToText?: boolean;
+  textToSpeech?: boolean;
+  imageGeneration?: boolean;
+  /** Optional context window hint (tokens). */
+  contextWindow?: number;
 }
 
 export function defaultCapabilities(): ProviderCapabilities {
@@ -20,9 +31,21 @@ export function defaultCapabilities(): ProviderCapabilities {
 
 export function supportsTask(
   caps: ProviderCapabilities,
-  task: "chat" | "reasoning" | "vision" | "embeddings" | "toolUse" | "jsonMode" | "functionCalling" | "streaming",
+  task:
+    | "chat"
+    | "reasoning"
+    | "vision"
+    | "embeddings"
+    | "toolUse"
+    | "jsonMode"
+    | "functionCalling"
+    | "streaming"
+    | "reranking"
+    | "speechToText"
+    | "textToSpeech"
+    | "imageGeneration",
 ): boolean {
-  return Boolean((caps as any)[task]);
+  return Boolean((caps as unknown as Record<string, unknown>)[task]);
 }
 
 export function capabilityLabels(caps: ProviderCapabilities): string[] {
@@ -35,5 +58,17 @@ export function capabilityLabels(caps: ProviderCapabilities): string[] {
   if (caps.jsonMode) labels.push("json-mode");
   if (caps.functionCalling) labels.push("functions");
   if (caps.streaming) labels.push("streaming");
+  if (caps.reranking) labels.push("rerank");
+  if (caps.speechToText) labels.push("stt");
+  if (caps.textToSpeech) labels.push("tts");
+  if (caps.imageGeneration) labels.push("image-gen");
   return labels;
+}
+
+/**
+ * XR 4.4 — map a boolean capability bag to a safe list of *known-supported*
+ * labels only. Absent/undefined fields are treated as unknown (omitted), not as false labels.
+ */
+export function knownSupportedLabels(caps: ProviderCapabilities): string[] {
+  return capabilityLabels(caps);
 }
