@@ -41,6 +41,7 @@ import type { McpService } from "../services/mcp-service.ts";
 import type { SkillService } from "../services/skill-service.ts";
 import type { AgentService } from "../services/agent-service.ts";
 import type { MultiAgentService } from "../services/multi-agent-service.ts";
+import type { IntelligenceService } from "../intelligence/service.ts";
 
 // Cross-cutting subsystems.
 import type { XRShieldService } from "../security/shield.ts";
@@ -80,6 +81,8 @@ export const Tokens = {
   // ── Domain services ─────────────────────────────────────────────────────
   Config: token<ConfigService>("xr.config", "configuration service"),
   Providers: token<ProviderService>("xr.providers", "LLM provider service"),
+  /** XR 4.4 — Universal Intelligence Plane (capability catalog + routing). */
+  Intelligence: token<IntelligenceService>("xr.intelligence", "Universal Intelligence Plane service"),
   Budget: token<BudgetService>("xr.budget", "budget / spend service"),
   Plugins: token<PluginService>("xr.plugins", "plugin service"),
   Mcp: token<McpService>("xr.mcp", "MCP service"),

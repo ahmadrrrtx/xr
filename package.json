@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
-  "version": "4.3.0",
-  "description": "XR 4.3 (Durable Agency) — long-running XR work survives process failure and interruption without losing task identity, authority context, execution history, or outcome integrity: durable checkpoints at safe semantic boundaries, startup recovery with explicit classification, local ownership/leases preventing duplicate execution, durable cancellation, bounded retry with idempotency safety, partial-result persistence, environment reattachment or quarantine, and authority revalidation on resume.",
+  "version": "4.4.0",
+  "description": "XR 4.4 (Universal Intelligence Plane) \u2014 any supported model class/provider can be discovered, evaluated, selected, invoked, observed, and failed over through one extensible intelligence contract with automatic routing and complete expert override: capability-aware catalog, task-requirement filtering, explainable deterministic scoring, locality/privacy/budget policy hard gates, safe fallback without silent cloud escalation, bounded historical metrics, and durable routing decision records.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr.cjs"

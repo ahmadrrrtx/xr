@@ -365,6 +365,12 @@ export interface ExecutionRecord {
    * Contains NO raw secrets.
    */
   trust?: TrustRecord;
+  /**
+   * XR 4.4 — Universal Intelligence Plane routing decision (secret-free).
+   * Captures why a provider/model was selected for this execution attempt.
+   * Optional for backward compatibility with XR 4.3 records.
+   */
+  routing?: import("../intelligence/types.ts").RoutingDecisionRecord;
 }
 
 // ── Safe summaries (for CLI/daemon/UX) ────────────────────────────────────

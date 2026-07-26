@@ -22,7 +22,7 @@ import {
 export class ProvidersCommand implements Command {
   name = "providers";
   description = "manage and inspect LLM providers";
-  usage = "xr providers [list|add|remove|set|test|status|refresh]";
+  usage = "xr providers [list|add|remove|set|test|status|refresh|route|explain|catalog]";
 
   async execute(ctx: CommandContext): Promise<void> {
     const { registry, args } = ctx;
@@ -46,6 +46,13 @@ export class ProvidersCommand implements Command {
       case "test":
         await testProvider(providerService, args.slice(1));
         break;
+      case "route":
+      case "explain":
+        await explainRoute(registry, providerService, configService, args.slice(1), sub === "explain");
+        break;
+      case "catalog":
+        await showCatalog(registry, args.slice(1));
+        break;
       case "status":
         await providerStatus(providerService, configService);
         break;
@@ -66,12 +73,15 @@ export class ProvidersCommand implements Command {
 
 function printUsage(): void {
   console.log(
-    `Usage: xr providers [list|add|remove|set|test|status|refresh]
+    `Usage: xr providers [list|add|remove|set|test|status|refresh|route|explain|catalog]
 
   ${C.bold("Discover")}
   xr providers list              show all providers and key status
   xr providers status            show active provider and routing
   xr providers test [id]         test provider health (default: all)
+  xr providers catalog [--json]  intelligence-plane provider/model catalog
+  xr providers route [--json]    explain automatic selection
+  xr providers explain [--json]  detailed routing decision
 
   ${C.bold("Change model / provider (never stuck on default)")}
   xr providers set <id> [model]  set active provider and optional model
@@ -79,10 +89,16 @@ function printUsage(): void {
   xr providers remove <id>       remove a custom provider
   xr providers refresh           re-sync custom providers from config
 
+  ${C.bold("Route options")}
+  --provider <id> --model <id>   pin for this decision
+  --class <modelClass>           chat|tool_use|vision|embeddings|reasoning
+  --local-only                   force local_only locality policy
+
   ${C.bold("Examples")}
   xr providers set ollama qwen2.5:7b
   xr providers set openai gpt-4o-mini
-  xr providers set anthropic claude-3-5-sonnet-latest
+  xr providers route --local-only
+  xr providers explain --class tool_use --json
 
   ${C.bold("Also change via")}
   xr models set <runtime> <model>
@@ -297,6 +313,7 @@ async function providerStatus(
   const fallbackId = config.defaults.fallbackProvider;
   const fallbackModel = config.defaults.fallbackModel;
   const strategy = config.providerEngine?.routingStrategy ?? "hybrid";
+  const intel = (config as any).intelligencePlane ?? {};
 
   console.log(C.bold("Provider Status"));
   console.log(`  active ........... ${C.green(activeId)} (${activeModel})`);
@@ -305,20 +322,141 @@ async function providerStatus(
   );
   console.log(`  routing .......... ${strategy}`);
   console.log(
+    `  intelligence ..... mode=${intel.mode ?? "(from strategy)"} locality=${intel.localityPolicy ?? "any"} fallback=${intel.allowFallback !== false ? "on" : "off"}`,
+  );
+  console.log(
     `  custom providers . ${(config.providerEngine?.customProviders ?? []).length}`,
   );
   console.log();
   console.log(C.bold("Change model"));
   console.log(`  ${C.cyan("xr providers set <id> [model]")}   e.g. xr providers set ollama llama3.2`);
+  console.log(`  ${C.cyan("xr providers route [--json]")}     explain automatic selection`);
+  console.log(`  ${C.cyan("xr providers explain")}            detailed routing decision`);
   console.log(`  ${C.cyan("xr models set <runtime> <model>")} local runtime selection`);
   console.log(`  Shell: ${C.cyan("Alt+P")} · ${C.cyan("/model <provider> [model]")}`);
   console.log(`  Control Center: ${C.cyan("xr serve")} → Providers / Models`);
+
+  // XR 4.4 — show current route explanation (concise)
+  try {
+    const { decision } = ps.route({});
+    if (decision.selected) {
+      console.log(
+        `  selected ......... ${C.green(decision.selected.providerId)}/${decision.selected.modelId} ${C.dim(`(${decision.mode})`)}`,
+      );
+      if (!decision.manual) {
+        console.log(`  why .............. ${C.dim(decision.explanation)}`);
+      }
+    } else if (decision.unavailable) {
+      console.log(`  selected ......... ${C.red("unavailable")} — ${decision.explanation}`);
+    }
+  } catch {
+    /* best-effort */
+  }
 
   const report = await ps.checkHealth(activeId, activeModel);
   const status = report.ok ? C.green("✓ healthy") : C.red("✗ failed");
   console.log(
     `  health ........... ${status}  ${report.detail}${report.latencyMs ? ` (${report.latencyMs}ms)` : ""}`,
   );
+  console.log("");
+}
+
+async function explainRoute(
+  registry: import("../core/service-registry.ts").ServiceRegistry,
+  ps: ProviderService,
+  cs: ConfigService,
+  args: string[],
+  detailed: boolean,
+): Promise<void> {
+  const jsonMode = args.includes("--json") || args.includes("-j");
+  const providerIdx = args.findIndex((a) => a === "--provider" || a === "-p");
+  const modelIdx = args.findIndex((a) => a === "--model" || a === "-m");
+  const classIdx = args.findIndex((a) => a === "--class" || a === "-c");
+  const localOnly = args.includes("--local-only");
+  const pinProvider = providerIdx >= 0 ? args[providerIdx + 1] : undefined;
+  const pinModel = modelIdx >= 0 ? args[modelIdx + 1] : undefined;
+  const modelClass = (classIdx >= 0 ? args[classIdx + 1] : "chat") as any;
+
+  const { decision, record } = ps.route({
+    provider: pinProvider,
+    model: pinModel,
+    requirements: {
+      modelClass,
+      localityPolicy: localOnly ? "local_only" : undefined,
+      require: modelClass === "chat" ? { toolUse: true } : undefined,
+    },
+  });
+
+  if (jsonMode) {
+    console.log(JSON.stringify(detailed ? decision : record, null, 2));
+    return;
+  }
+
+  banner();
+  console.log(C.bold(detailed ? "Routing Decision (detailed)" : "Route"));
+  if (decision.selected) {
+    console.log(`  selected .... ${C.green(decision.selected.providerId)} / ${decision.selected.modelId}`);
+    const loc = decision.constraints.localityPolicy;
+    console.log(`  locality .... ${loc}`);
+    console.log(`  mode ........ ${decision.mode}${decision.manual ? " (manual pin)" : ""}`);
+    console.log(`  confidence .. ${decision.confidence}`);
+    console.log(`  why ......... ${decision.explanation}`);
+    if (decision.fallbackChain.length) {
+      console.log(`  fallback .... ${decision.fallbackChain.map((s) => `${s.providerId}/${s.modelId}`).join(" → ")}`);
+    }
+    if (detailed && decision.selected.score) {
+      const s = decision.selected.score;
+      console.log(C.bold("\n  Score breakdown"));
+      console.log(`    taskFit=${s.taskFit} quality=${s.quality} latency=${s.latency} cost=${s.cost}`);
+      console.log(`    locality=${s.locality} preference=${s.preference} historical=${s.historical} availability=${s.availability}`);
+      console.log(`    total=${s.total}`);
+      if (s.notes.length) console.log(`    notes: ${s.notes.join("; ")}`);
+    }
+    if (detailed && decision.rejected.length) {
+      console.log(C.bold("\n  Rejected (sample)"));
+      for (const r of decision.rejected.slice(0, 8)) {
+        console.log(`    ${r.providerId}/${r.modelId}: ${r.reasons.map((x) => x.message).join("; ")}`);
+      }
+    }
+    if (detailed && decision.considered.length) {
+      console.log(C.bold("\n  Other candidates"));
+      for (const c of decision.considered) {
+        console.log(`    ${c.providerId}/${c.modelId} score=${c.score.total.toFixed(3)}`);
+      }
+    }
+  } else {
+    console.log(`  ${C.red("unavailable")} — ${decision.explanation}`);
+    if (decision.humanHandoff?.required) {
+      console.log(`  handoff ..... ${decision.humanHandoff.reason}`);
+    }
+  }
+  console.log("");
+}
+
+async function showCatalog(
+  registry: import("../core/service-registry.ts").ServiceRegistry,
+  args: string[],
+): Promise<void> {
+  let intel: import("../intelligence/service.ts").IntelligenceService | null = null;
+  try {
+    intel = registry.resolve(Tokens.Intelligence);
+  } catch {
+    warn("Intelligence service not registered.");
+    return;
+  }
+  const jsonMode = args.includes("--json");
+  const models = intel.listModels();
+  const providers = intel.listProviders();
+  if (jsonMode) {
+    console.log(JSON.stringify({ providers, models }, null, 2));
+    return;
+  }
+  banner();
+  console.log(C.bold(`Intelligence Catalog — ${providers.length} providers, ${models.length} models`));
+  for (const p of providers) {
+    const auth = p.auth.credentialAvailable ? C.green("key✓") : p.auth.type === "none" ? C.dim("no-key") : C.red("key✗");
+    console.log(`  ${p.providerId.padEnd(14)} ${p.locality.locality.padEnd(8)} ${auth}  ${C.dim(p.label)}`);
+  }
   console.log("");
 }
 

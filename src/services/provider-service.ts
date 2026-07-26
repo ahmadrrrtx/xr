@@ -2,10 +2,13 @@
  * XR — Provider Service
  * Manages LLM providers, handles routing, fallback, health checks,
  * custom provider registration, and secure key storage.
+ *
+ * XR 4.4: routing goes through the Universal Intelligence Plane when available,
+ * while preserving getProvider({ provider, model, strategy }) compatibility.
  */
 
 import { registry } from "../providers/registry.ts";
-import { ProviderRouter, type RoutingStrategy } from "../providers/routing.ts";
+import { ProviderRouter, type RoutingStrategy, type ResolveOptions } from "../providers/routing.ts";
 import {
   ProviderHealthChecker,
   type ProviderHealthReport,
@@ -17,14 +20,20 @@ import {
   providerList,
 } from "../providers/factory.ts";
 import type { Provider } from "../core/types.ts";
-import { ConfigService } from "./config-service.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
 import { setSecret, getSecret } from "../security/secrets.ts";
+import type {
+  RouteRequest,
+  RouteResult,
+  RoutingDecision,
+  TaskRequirements,
+} from "../intelligence/types.ts";
 
 export class ProviderService implements LifecycleHook {
   private registry: ServiceRegistry;
+  private lastDecision: RoutingDecision | null = null;
 
   constructor(registry: ServiceRegistry) {
     this.registry = registry;
@@ -39,18 +48,98 @@ export class ProviderService implements LifecycleHook {
     }
   }
 
+  /** Last routing decision from getProvider / route. */
+  getLastDecision(): RoutingDecision | null {
+    return this.lastDecision;
+  }
+
   /**
    * Resolve the active provider based on current config and optional overrides.
+   * XR 4.4: accepts requirements/mode for capability-aware automatic routing.
    */
   getProvider(overrides?: {
     provider?: string;
     model?: string;
     strategy?: RoutingStrategy;
+    requirements?: Partial<TaskRequirements>;
+    mode?: RouteRequest["mode"];
   }): Provider {
     this.sync();
     const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
-    return buildProvider(config, overrides);
+
+    // Prefer IntelligenceService when registered
+    const intel = this.registry.tryResolve?.(Tokens.Intelligence) ?? this.tryIntel();
+    if (intel && !overrides?.strategy) {
+      try {
+        const result = intel.resolveProvider({
+          provider: overrides?.provider,
+          model: overrides?.model,
+          mode: overrides?.mode,
+          requirements: overrides?.requirements,
+        });
+        this.lastDecision = result.decision;
+        return result.provider;
+      } catch {
+        // Fall through to classic router
+      }
+    }
+
+    const router = new ProviderRouter(config);
+    const { provider, decision } = router.resolveWithDecision(overrides as ResolveOptions);
+    this.lastDecision = decision;
+    return provider;
+  }
+
+  private tryIntel(): import("../intelligence/service.ts").IntelligenceService | null {
+    try {
+      return this.registry.resolve(Tokens.Intelligence);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * XR 4.4 — compute routing decision (no provider construction required).
+   */
+  route(request: RouteRequest = {}): RouteResult {
+    this.sync();
+    const intel = this.tryIntel();
+    if (intel) {
+      const result = intel.route(request);
+      this.lastDecision = result.decision;
+      return result;
+    }
+    const configService = this.registry.resolve(Tokens.Config);
+    const config = configService.get();
+    const router = new ProviderRouter(config);
+    const { decision } = router.resolveWithDecision({
+      provider: request.provider,
+      model: request.model,
+      mode: request.mode,
+      requirements: request.requirements,
+    });
+    this.lastDecision = decision;
+    return {
+      decision,
+      record: {
+        decisionId: decision.decisionId,
+        version: 1,
+        timestamp: decision.timestamp,
+        mode: decision.mode,
+        providerId: decision.selected?.providerId,
+        modelId: decision.selected?.modelId,
+        manual: decision.manual,
+        unavailable: decision.unavailable,
+        explanation: decision.explanation,
+        factors: decision.factors,
+        fallbackChain: decision.fallbackChain,
+        localityPolicy: decision.constraints.localityPolicy,
+        confidence: decision.confidence,
+        rejectedCount: decision.rejected.length,
+        humanHandoff: decision.humanHandoff?.required,
+      },
+    };
   }
 
   /**
@@ -125,6 +214,7 @@ export class ProviderService implements LifecycleHook {
     }
 
     await configService.update(config);
+    this.tryIntel()?.invalidateCatalog();
   }
 
   /**
@@ -167,6 +257,7 @@ export class ProviderService implements LifecycleHook {
       ...config,
       providerEngine: patch.providerEngine,
     } as any);
+    this.tryIntel()?.invalidateCatalog();
   }
 
   /**
@@ -195,6 +286,7 @@ export class ProviderService implements LifecycleHook {
       ...config,
       providerEngine: patch.providerEngine,
     } as any);
+    this.tryIntel()?.invalidateCatalog();
   }
 
   /**
@@ -203,6 +295,7 @@ export class ProviderService implements LifecycleHook {
   async storeKey(envName: string, value: string): Promise<string> {
     const backend = setSecret(envName, value);
     process.env[envName] = value;
+    this.tryIntel()?.invalidateCatalog();
     return backend;
   }
 

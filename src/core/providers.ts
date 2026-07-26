@@ -35,6 +35,7 @@ import { McpService } from "../services/mcp-service.ts";
 import { SkillService } from "../services/skill-service.ts";
 import { AgentService } from "../services/agent-service.ts";
 import { MultiAgentService } from "../services/multi-agent-service.ts";
+import { IntelligenceService } from "../intelligence/service.ts";
 
 import { XRShieldService } from "../security/shield.ts";
 import { BusinessOS } from "../business/index.ts";
@@ -128,6 +129,28 @@ export class LlmServiceProvider implements ServiceProvider {
       Tokens.Providers,
       (registry) => new ProviderService(registry),
       { lifecycle: true, dependsOn: [Tokens.Config], kernelScope: "process", owner: "providers" },
+    );
+  }
+}
+
+/**
+ * XR 4.4 — Universal Intelligence Plane.
+ * Capability catalog, candidate filtering, explainable routing, fallback policy.
+ * Degraded catalog state must not mark XR core unhealthy — reported via detail.
+ */
+export class IntelligenceServiceProvider implements ServiceProvider {
+  readonly id = "intelligence";
+
+  register(ctx: ProviderContext): void {
+    ctx.registry.registerSingleton(
+      Tokens.Intelligence,
+      (registry) => new IntelligenceService(registry),
+      {
+        lifecycle: true,
+        dependsOn: [Tokens.Config, Tokens.Providers],
+        kernelScope: "process",
+        owner: "intelligence",
+      },
     );
   }
 }

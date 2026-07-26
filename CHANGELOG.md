@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2026-07-26 — Universal Intelligence Plane
+
+### Added
+- **Universal Intelligence Plane** (`src/intelligence/`): provider-neutral capability
+  catalog, task-requirement filtering, deterministic explainable scoring, routing modes,
+  safe fallback policy, bounded historical metrics, and durable routing decision records.
+- **Capability tri-state** (`supported` | `unsupported` | `unknown`) so unknown is never
+  treated as true; legacy boolean presets remain compatible.
+- **Model/provider descriptors** with model classes, modalities, context limits, cost,
+  latency, quality, locality/privacy, and hardware hints.
+- **Routing modes**: manual, preferred_with_fallback, local_only, private_only, automatic,
+  cost_constrained, latency_constrained, quality_constrained, disabled.
+- **Policy hard gates**: local-only / private-only / no-cloud, credentials, budget,
+  health, context limits, capability requirements — applied before scoring.
+- **IntelligenceService** registered on the Phase 1 kernel (`Tokens.Intelligence`).
+- **Config `intelligencePlane`** block (config version 14) — additive; defaults preserve
+  XR 4.3 hybrid behavior. `allowCloudFallback` defaults false.
+- **CLI**: `xr providers route`, `explain`, `catalog` (+ status shows selection/why).
+- **Daemon**: `GET /api/providers/route`, `GET /api/providers/catalog`.
+- **Durable wiring**: optional `ExecutionRecord.routing`, audit `intelligence.route`,
+  agent fabric routing evidence.
+- **Docs**: `docs/phase5/` architecture, developer, user, migration, validation, checklist.
+- **Tests**: 34 new intelligence/routing/privacy/performance tests.
+
+### Changed
+- `ProviderRouter` / `buildProvider` delegate selection to the intelligence plane while
+  preserving public APIs; explicit provider/model pins outrank automatic preferences.
+- Agent service passes tool-use task requirements and records routing decisions.
+- Version identity → **4.4.0 (Universal Intelligence Plane)**.
+
+### Security
+- Automatic routing cannot move local-only work to cloud without explicit
+  `allowCloudFallback`.
+- Manual pins cannot bypass locality/security policy.
+- Fallback refuses `unknown_completion` to avoid duplicate side effects.
+- Decision records are secret-free (no keys, no raw prompts).
+
+### Migration
+- See `docs/phase5/MIGRATION_4.3_to_4.4.md`. Config migrates 13→14 automatically.
+
 ## [4.3.0] - 2026-07-25 — Durable Agency
 
 ### Added

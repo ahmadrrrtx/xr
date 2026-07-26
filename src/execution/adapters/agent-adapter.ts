@@ -93,11 +93,29 @@ export async function runAgentWithFabric(
             });
           }
           ctx.addEvidence({ kind: "model_response", reference: deps.provider.id });
+          // XR 4.4 — attach routing decision evidence (secret-free)
+          if (deps.routingDecision) {
+            ctx.addEvidence({
+              kind: "audit_entry",
+              reference: `routing:${deps.routingDecision.decisionId}`,
+              meta: {
+                providerId: deps.routingDecision.selected?.providerId,
+                modelId: deps.routingDecision.selected?.modelId,
+                mode: deps.routingDecision.mode,
+                manual: deps.routingDecision.manual,
+                explanation: deps.routingDecision.explanation,
+              },
+            });
+          }
           return okObservation(
             turn.message?.slice(0, 1000) ?? (turn.done ? "(done)" : `(tool calls: ${turn.toolCalls.length})`),
             {
               modelFeedback: turn.message,
-              meta: { toolCalls: turn.toolCalls.map((c) => c.tool), done: turn.done },
+              meta: {
+                toolCalls: turn.toolCalls.map((c) => c.tool),
+                done: turn.done,
+                routingDecisionId: deps.routingDecision?.decisionId,
+              },
             },
           );
         },

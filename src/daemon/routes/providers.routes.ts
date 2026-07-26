@@ -1,12 +1,14 @@
 /** XR Daemon — providers, local models, and workspace routes. */
 
 import { loadConfig, saveConfig, getProviderEnvStatus } from "../../config/config.ts";
-import { buildProvider } from "../../providers/factory.ts";
+import { buildProvider, buildProviderWithDecision } from "../../providers/factory.ts";
 import { detectHardwareSpecs, formatHardwareSummary } from "../../local/hardware.ts";
 import { recommendLocalAI } from "../../local/recommend.ts";
 import { detectAllRuntimes, detectRuntime, testLocalModel } from "../../local/runtimes.ts";
 import { isLocalRuntimeId, providerIdForRuntime, validateLocalModelId } from "../../local/registry.ts";
 import { XRShieldService } from "../../security/shield.ts";
+import { IntelligenceRouter } from "../../intelligence/router.ts";
+import { buildCatalog } from "../../intelligence/catalog.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
 export function providersRoutes(): DaemonRoute[] {
@@ -69,6 +71,52 @@ export function providersRoutes(): DaemonRoute[] {
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }
+      },
+    }),
+    // XR 4.4 — Intelligence plane route explain
+    route({
+      id: "providers.route",
+      path: "/api/providers/route",
+      method: "GET",
+      handle: async ({ json, config, url }) => {
+        const params = url.searchParams;
+        const provider = params.get("provider") ?? undefined;
+        const model = params.get("model") ?? undefined;
+        const modelClass = (params.get("class") ?? "chat") as any;
+        const localOnly = params.get("localOnly") === "1" || params.get("localOnly") === "true";
+        const detailed = params.get("detailed") === "1" || params.get("detailed") === "true";
+        const router = new IntelligenceRouter({ catalog: buildCatalog(config) });
+        const { decision, record } = router.route(config, {
+          provider,
+          model,
+          requirements: {
+            modelClass,
+            localityPolicy: localOnly ? "local_only" : undefined,
+            require: modelClass === "tool_use" || modelClass === "chat" ? { toolUse: modelClass === "tool_use" ? true : undefined } : undefined,
+          },
+        });
+        return json(detailed ? { decision, record } : { record, summary: decision.explanation });
+      },
+    }),
+    route({
+      id: "providers.catalog",
+      path: "/api/providers/catalog",
+      method: "GET",
+      handle: async ({ json, config }) => {
+        const catalog = buildCatalog(config);
+        return json({
+          builtAt: catalog.builtAt,
+          providers: catalog.providers.map((p) => ({
+            id: p.providerId,
+            label: p.label,
+            kind: p.kind,
+            tier: p.tier,
+            locality: p.locality.locality,
+            credentialAvailable: p.auth.credentialAvailable,
+            defaultModel: p.defaultModelId,
+          })),
+          modelCount: catalog.models.length,
+        });
       },
     }),
     route({
