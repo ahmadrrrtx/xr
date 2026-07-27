@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "5.3.0",
-  codename: "Work",
+  version: "6.0.0",
+  codename: "Hybrid",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 5.3 (Personal and Business Operating Layer) — runs durable, governed, evidence-linked intelligent work for individuals, developers, researchers, operators, and organizations via outcome-oriented journeys, governed AI workers, authoritative records, artifacts/evidence, organization/role authority, human approval/escalation, measurable outcomes, local/private operation, audit/provenance, CLI/daemon/dashboard, integrated with canonical workflow/execution/trust/intelligence/context/capability contracts without introducing Phase 11 remote/cloud/hybrid control plane.",
+  description: "XR 6.0 (Local, Cloud, and Hybrid Operating Plane) — one XR operating semantics across personal local, private server, team private, managed cloud, and hybrid deployment profiles. Portable task capsules, placement policy, secure worker lifecycle, control/data plane separation, data residency, synchronization, offline continuity, and backup/restore — all preserving canonical execution/trust/workflow/context/capability semantics.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;
