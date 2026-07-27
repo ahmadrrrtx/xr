@@ -6,6 +6,9 @@
  */
 
 import { BUSINESS_SCHEMA_VERSION, BUSINESS_TABLES, BUSINESS_TABLE_NAMES } from './schema.ts';
+import { BUSINESS_OPERATING_LAYER_TABLES, BUSINESS_OPERATING_LAYER_TABLE_NAMES, applyOperatingLayerMigration } from './migration.ts';
+
+export const BUSINESS_ALL_TABLE_NAMES = [...BUSINESS_TABLE_NAMES, ...BUSINESS_OPERATING_LAYER_TABLE_NAMES] as const;
 
 export class BusinessDatabase {
   private db: any; // XR's existing Database instance
@@ -49,26 +52,49 @@ export class BusinessDatabase {
 
   /**
    * Run migrations from current version to latest.
+   * XR 5.3: includes operating layer tables + audit extensions.
    */
   private async migrate(fromVersion: number): Promise<void> {
     const tx = this.db.transaction(() => {
-      // Create all tables
+      // Create base business tables
       const statements = BUSINESS_TABLES
         .split(';')
         .map(s => s.trim())
         .filter(s => s.length > 0);
 
       for (const stmt of statements) {
-        this.db.prepare(stmt).run();
+        try {
+          this.db.prepare(stmt).run();
+        } catch (e) {
+          if (!(e as Error).message.includes('already exists')) throw e;
+        }
+      }
+
+      // Create operating layer tables (XR 5.3)
+      try {
+        applyOperatingLayerMigration(this.db);
+      } catch (e) {
+        console.warn('[BusinessDatabase] Operating layer migration warning:', (e as Error).message);
       }
 
       // Record schema version
-      this.db.prepare(
-        'INSERT INTO biz_schema_version (version) VALUES (?)'
-      ).run(BUSINESS_SCHEMA_VERSION);
+      try {
+        this.db.prepare(
+          'INSERT INTO biz_schema_version (version) VALUES (?)'
+        ).run(BUSINESS_SCHEMA_VERSION);
+      } catch {}
     });
 
     tx();
+  }
+
+  /**
+   * Ensure operating layer tables exist (idempotent) — called after init.
+   */
+  ensureOperatingLayer(): void {
+    try {
+      applyOperatingLayerMigration(this.db);
+    } catch {}
   }
 
   /**
@@ -88,7 +114,23 @@ export class BusinessDatabase {
    */
   getStats(): Record<string, number> {
     const stats: Record<string, number> = {};
-    for (const table of BUSINESS_TABLE_NAMES) {
+    for (const table of [...BUSINESS_TABLE_NAMES, ...BUSINESS_OPERATING_LAYER_TABLE_NAMES]) {
+      try {
+        const row = this.db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get();
+        stats[table] = row?.count ?? 0;
+      } catch {
+        stats[table] = 0;
+      }
+    }
+    return stats;
+  }
+
+  /**
+   * Get operating layer stats.
+   */
+  getOperatingLayerStats(): Record<string, number> {
+    const stats: Record<string, number> = {};
+    for (const table of BUSINESS_OPERATING_LAYER_TABLE_NAMES) {
       try {
         const row = this.db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get();
         stats[table] = row?.count ?? 0;

@@ -49,6 +49,19 @@ import { BusinessSecurityPolicies } from '../security/policies.ts';
 import { CORE_VERSION, CODENAME, PKG } from '../core/version.ts';
 import type { LifecycleHook } from '../core/lifecycle.ts';
 
+// XR 5.3 — Operating Layer
+import { BusinessRecordMutationService } from './core/record-mutation.ts';
+import { OutcomeTracker } from './core/outcome.ts';
+import { WorkerGovernanceService } from './core/worker-contract.ts';
+import { AuthorityBoundaryService } from './core/authority-boundaries.ts';
+import { ArtifactEvidenceService } from './core/artifact-evidence.ts';
+import { ApprovalEscalationService } from './core/approval-escalation.ts';
+import { LocalPrivacyService } from './core/local-privacy.ts';
+import { ExecutionBridge } from './core/execution-bridge.ts';
+import { BusinessOperatingLayer } from './core/operating-layer.ts';
+import { applyOperatingLayerMigration } from './core/migration.ts';
+import { JOURNEY_DEFINITIONS } from './core/journeys.ts';
+
 export interface BusinessOSConfig {
   /** XR's existing SQLite database instance */
   db: any;
@@ -93,6 +106,17 @@ export class BusinessOS implements LifecycleHook {
   // Security
   readonly security: BusinessSecurityPolicies;
 
+  // XR 5.3 — Personal and Business Operating Layer
+  readonly recordMutations: BusinessRecordMutationService;
+  readonly outcomes: OutcomeTracker;
+  readonly workerGovernance: WorkerGovernanceService;
+  readonly authority: AuthorityBoundaryService;
+  readonly artifacts: ArtifactEvidenceService;
+  readonly approvals: ApprovalEscalationService;
+  readonly privacy: LocalPrivacyService;
+  readonly executionBridge: ExecutionBridge;
+  readonly operatingLayer: BusinessOperatingLayer;
+
   private initialized = false;
 
   constructor(config: BusinessOSConfig) {
@@ -104,6 +128,22 @@ export class BusinessOS implements LifecycleHook {
     this.pipelines = new PipelineManager(this.db);
     this.bus = new BusinessEventBus(this.db);
     this.audit = new AuditTrail(this.db);
+
+    // XR 5.3 — Operating Layer Services (created first to be injected into modules)
+    this.recordMutations = new BusinessRecordMutationService({ db: this.db, audit: this.audit });
+    this.outcomes = new OutcomeTracker({ db: this.db });
+    this.workerGovernance = new WorkerGovernanceService({ db: this.db, audit: this.audit });
+    this.authority = new AuthorityBoundaryService({ db: this.db, rbac: this.rbac });
+    this.artifacts = new ArtifactEvidenceService({ db: this.db });
+    this.approvals = new ApprovalEscalationService({ db: this.db });
+    this.privacy = new LocalPrivacyService({ db: this.db });
+    this.executionBridge = new ExecutionBridge({ db: this.db, audit: this.audit });
+    this.operatingLayer = new BusinessOperatingLayer({
+      db: this.db,
+      audit: this.audit,
+      bus: this.bus,
+      rbac: this.rbac,
+    });
 
     // Initialize modules
     const moduleConfig = { db: this.db, bus: this.bus, audit: this.audit };
@@ -122,7 +162,7 @@ export class BusinessOS implements LifecycleHook {
     this.communication = new CommunicationModule({ db: this.db, bus: this.bus });
     this.documents = new DocumentsModule({ db: this.db, bus: this.bus });
     this.meetings = new MeetingsModule({ db: this.db, bus: this.bus });
-    this.workers = new AIWorkersModule({ ...moduleConfig, rbac: this.rbac });
+    this.workers = new AIWorkersModule({ ...moduleConfig, rbac: this.rbac, governance: this.workerGovernance });
 
     // Initialize integrations
     this.connectors = new ConnectorRegistry();
@@ -131,6 +171,19 @@ export class BusinessOS implements LifecycleHook {
 
     // Initialize security
     this.security = new BusinessSecurityPolicies(this.db, this.rbac, this.audit);
+
+    // Wire business modules into operating layer
+    this.operatingLayer.setBusinessModules({
+      crm: this.crm,
+      sales: this.sales,
+      projects: this.projects,
+      documents: this.documents,
+      meetings: this.meetings,
+      knowledge: this.knowledge,
+      finance: this.finance,
+      support: this.support,
+      scheduling: this.scheduling,
+    });
   }
 
   async onInit(): Promise<void> {
@@ -147,17 +200,32 @@ export class BusinessOS implements LifecycleHook {
 
   /**
    * Initialize Business OS — creates database tables.
+   * XR 5.3: also initializes operating layer (journeys, workflows, privacy).
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
     await this.db.initialize();
+
+    // XR 5.3: ensure operating layer tables
+    try {
+      this.db.ensureOperatingLayer();
+    } catch {}
+
+    // XR 5.3: initialize operating layer (publish templates, subscribe events)
+    try {
+      await this.operatingLayer.initialize();
+    } catch (e) {
+      console.warn('[XR Business OS] Operating layer init warning:', (e as Error).message);
+    }
+
     this.initialized = true;
 
     // Startup diagnostics go to stderr so machine-readable CLI stdout
     // (notably `xr doctor --json`) remains parseable in CI and automation.
     console.error('[XR Business OS] Initialized successfully');
     console.error(`[XR Business OS] ${Object.keys(this.db.getStats()).length} tables created`);
+    console.error(`[XR Business OS] Operating Layer — ${JOURNEY_DEFINITIONS.length} journeys, templates published`);
   }
 
   /**
@@ -230,6 +298,7 @@ export class BusinessOS implements LifecycleHook {
 
 // Re-export everything
 export * from './core/types.ts';
+export * from './core/operating-types.ts';
 export * from './core/index.ts';
 export { CRMModule } from './modules/crm/index.ts';
 export { SalesModule } from './modules/sales/index.ts';
@@ -251,3 +320,16 @@ export { OAuthManager } from '../integrations/oauth.ts';
 export { CredentialVault } from '../integrations/credentials.ts';
 export { BusinessSecurityPolicies } from '../security/policies.ts';
 export { BUSINESS_CLI_COMMANDS, BUSINESS_MODULE_IDS } from './cli.ts';
+
+// XR 5.3 Operating Layer Exports
+export { BusinessRecordMutationService } from './core/record-mutation.ts';
+export { OutcomeTracker } from './core/outcome.ts';
+export { WorkerGovernanceService } from './core/worker-contract.ts';
+export { AuthorityBoundaryService } from './core/authority-boundaries.ts';
+export { ArtifactEvidenceService } from './core/artifact-evidence.ts';
+export { ApprovalEscalationService } from './core/approval-escalation.ts';
+export { LocalPrivacyService } from './core/local-privacy.ts';
+export { ExecutionBridge } from './core/execution-bridge.ts';
+export { BusinessOperatingLayer } from './core/operating-layer.ts';
+export { JOURNEY_DEFINITIONS, getJourneyById, listAllJourneys } from './core/journeys.ts';
+export { getAllBusinessWorkflowTemplates, createWorkflowTemplateForJourney } from './core/workflow-templates.ts';
