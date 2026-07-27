@@ -8,7 +8,7 @@
 import type { EnterpriseService } from "../../enterprise/index.ts";
 
 export function registerEnterpriseRoutes(
-  app: { get: (path: string, handler: (req: any, res: any) => Promise<void>) => void },
+  app: { get: (path: string, handler: (req: any, res: any) => Promise<void><void>) => void },
   enterprise: EnterpriseService,
 ) {
   // ── Health ───────────────────────────────────────────────────────────
