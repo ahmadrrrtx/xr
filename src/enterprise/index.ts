@@ -1,5 +1,5 @@
 /**
- * XR 6.1 — Enterprise Trust and Operations
+ * XR 6.1 — Enterprise Trust & Operations (Phase 12)
  *
  * Public entry point for all enterprise governance, audit, SLO,
  * incident, supply-chain, release, backup/DR, diagnostics, security
