@@ -16,9 +16,9 @@ import type {
   PolicyTier,
   PolicyBundle,
   PolicyEvaluation,
-  DeploymentProfileKind,
 } from "./types.ts";
 import { POLICY_PRECEDENCE, ENTERPRISE_BOUNDS } from "./types.ts";
+import type { DeploymentProfileKind } from "../deployment/types.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Default Platform Policies

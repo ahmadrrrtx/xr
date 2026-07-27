@@ -24,9 +24,6 @@
 import type { DeploymentProfileKind } from "../deployment/types.ts";
 import type { RiskTier } from "../trust/types.ts";
 
-// Re-export types needed by other enterprise modules.
-export type { DeploymentProfileKind };
-
 // ═══════════════════════════════════════════════════════════════════════════
 // 1. Organization Policy
 // ═══════════════════════════════════════════════════════════════════════════

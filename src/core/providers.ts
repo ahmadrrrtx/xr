@@ -56,7 +56,6 @@ import { ContainerBackend } from "../trust/environment/container.ts";
 
 // XR 6.1 — Enterprise Trust & Operations.
 import { EnterpriseService } from "../enterprise/index.ts";
-import { CORE_VERSION } from "./version.ts";
 
 /**
  * State layer: opens exactly one WorkspaceStore for the active workspace and
@@ -492,8 +491,8 @@ export class EnterpriseServiceProvider implements ServiceProvider {
       (registry) => {
         return new EnterpriseService({
           profile: "team_private",
-          currentVersion: CORE_VERSION,
-          audit: (event, detail) => {
+          currentVersion: "6.1.0",
+          audit: (event: string, detail: Record<string, unknown>) => {
             try {
               const audit = registry.resolve(Tokens.AuditStore);
               audit.audit(event, detail, null);
