@@ -218,8 +218,8 @@ export class OrganizationPolicyService {
     }
 
     // Register built-in bundles.
-    for (const [key, bundle] of Object.entries(ENTERPRISE_POLICY_BUNDLES)) {
-      this.bundles.set(key, bundle);
+    for (const bundle of Object.values(ENTERPRISE_POLICY_BUNDLES)) {
+      this.bundles.set(bundle.id, bundle);
     }
   }
 

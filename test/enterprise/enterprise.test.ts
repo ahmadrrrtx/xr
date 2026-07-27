@@ -131,9 +131,9 @@ describe("OrganizationPolicyService", () => {
 describe("DelegatedAuthorityService", () => {
   const svc = new DelegatedAuthorityService();
 
-  it("has all 13 enterprise roles defined", () => {
+  it("has all enterprise roles defined", () => {
     const roles = svc.listRoles();
-    expect(roles.length).toBe(13);
+    expect(roles.length).toBe(14);
   });
 
   it("org_owner has all high-level subjects", () => {
@@ -289,7 +289,7 @@ describe("AuditExportService", () => {
       redactionRules: [],
       includeIntegrityProofs: true,
     });
-    const data = JSON.stringify(records);
+    const data = JSON.stringify(records, null, 2);
     const verification = svc.verifyIntegrity(result.exportId, data);
     expect(verification.valid).toBe(true);
   });
@@ -304,9 +304,9 @@ describe("AuditExportService", () => {
     const action = svc.determineRetentionAction("execution", 0, false);
     expect(action).toBe("keep");
 
-    // Very old record (400 days, not under legal hold)
+    // Very old record (400 days, past duration + grace) → action from schedule.
     const oldAction = svc.determineRetentionAction("execution", 400, false);
-    expect(oldAction).toBe("delete"); // grace expired
+    expect(oldAction).toBe("archive");
 
     // Old record under legal hold overrides.
     const holdAction = svc.determineRetentionAction("execution", 400, true);

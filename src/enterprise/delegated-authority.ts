@@ -131,8 +131,8 @@ export const ENTERPRISE_ROLES: Record<EnterpriseRole, RoleDefinition> = {
     inherits: [],
     allowedSubjects: ["backup.create", "backup.restore", "backup.delete"],
     maxRiskTier: "medium",
-    canDelegate: false,
-    maxDelegationDepth: 0,
+    canDelegate: true,
+    maxDelegationDepth: 1,
     requiresMfa: false,
   },
   capability_manager: {
