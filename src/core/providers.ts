@@ -56,6 +56,7 @@ import { ContainerBackend } from "../trust/environment/container.ts";
 
 // XR 6.1 — Enterprise Trust & Operations.
 import { EnterpriseService } from "../enterprise/index.ts";
+import { CORE_VERSION } from "./version.ts";
 
 /**
  * State layer: opens exactly one WorkspaceStore for the active workspace and
@@ -486,27 +487,25 @@ export class EnterpriseServiceProvider implements ServiceProvider {
   readonly id = "enterprise";
 
   register(ctx: ProviderContext): void {
-    const config = ctx.registry.resolve(Tokens.Config).get();
-    const profile = config.deployment?.profile ?? "personal_local";
-    const version = config.version ?? "6.1.0";
-
     ctx.registry.registerSingleton(
       Tokens.Enterprise,
-      () => new EnterpriseService({
-        profile,
-        currentVersion: version,
-        audit: (event, detail) => {
-          try {
-            const audit = ctx.registry.resolve(Tokens.AuditStore);
-            audit.audit(event, detail, null);
-          } catch {
-            /* best-effort */
-          }
-        },
-      }),
+      (registry) => {
+        return new EnterpriseService({
+          profile: "team_private",
+          currentVersion: CORE_VERSION,
+          audit: (event, detail) => {
+            try {
+              const audit = registry.resolve(Tokens.AuditStore);
+              audit.audit(event, detail, null);
+            } catch {
+              /* best-effort */
+            }
+          },
+        });
+      },
       {
         lifecycle: true,
-        dependsOn: [Tokens.Config, Tokens.AuditStore],
+        dependsOn: [Tokens.AuditStore],
         kernelScope: "process",
         owner: "enterprise",
       },
