@@ -54,6 +54,9 @@ import { RestrictedProcessBackend } from "../trust/environment/restricted-proces
 import { NamespaceSandboxBackend } from "../trust/environment/namespace.ts";
 import { ContainerBackend } from "../trust/environment/container.ts";
 
+// XR 6.1 — Enterprise Trust & Operations.
+import { EnterpriseService } from "../enterprise/index.ts";
+
 /**
  * State layer: opens exactly one WorkspaceStore for the active workspace and
  * registers it (plus its backward-compat alias) and the typed repos that are
@@ -464,5 +467,49 @@ export class BusinessServiceProvider implements ServiceProvider {
       // Config unavailable during very early init — default to off.
       return false;
     }
+  }
+}
+
+/**
+ * XR 6.1 — Enterprise Trust & Operations.
+ *
+ * Composes all Phase 12 services (policy, authority, audit export, SLO,
+ * incident response, vulnerability disclosure, supply-chain response,
+ * release channels, backup/DR, deployment diagnostics, security assessment,
+ * governance) into a single EnterpriseService facade.
+ *
+ * Process-scoped because enterprise policies and operational state are
+ * deployment-wide, not workspace-scoped. Local deployments retain full
+ * autonomy — enterprise features are additive.
+ */
+export class EnterpriseServiceProvider implements ServiceProvider {
+  readonly id = "enterprise";
+
+  register(ctx: ProviderContext): void {
+    const config = ctx.registry.resolve(Tokens.Config).get();
+    const profile = config.deployment?.profile ?? "personal_local";
+    const version = config.version ?? "6.1.0";
+
+    ctx.registry.registerSingleton(
+      Tokens.Enterprise,
+      () => new EnterpriseService({
+        profile,
+        currentVersion: version,
+        audit: (event, detail) => {
+          try {
+            const audit = ctx.registry.resolve(Tokens.AuditStore);
+            audit.audit(event, detail, null);
+          } catch {
+            /* best-effort */
+          }
+        },
+      }),
+      {
+        lifecycle: true,
+        dependsOn: [Tokens.Config, Tokens.AuditStore],
+        kernelScope: "process",
+        owner: "enterprise",
+      },
+    );
   }
 }

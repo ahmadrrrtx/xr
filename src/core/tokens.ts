@@ -50,6 +50,7 @@ import type { BusinessOS } from "../business/index.ts";
 import type { ExecutionService } from "../execution/service.ts";
 import type { TrustService } from "../trust/service.ts";
 import type { ContextService } from "../context/service.ts";
+import type { EnterpriseService } from "../enterprise/index.ts";
 
 /**
  * The complete service catalogue. Add new tokens here when a new stage
@@ -102,6 +103,8 @@ export const Tokens = {
   Trust: token<TrustService>("xr.trust", "Trust & Isolation service"),
   // XR 4.5 — Knowledge and Context OS (taxonomy, provenance, scope-first retrieval).
   Context: token<ContextService>("xr.context", "Knowledge and Context OS service"),
+  // XR 6.1 — Enterprise Trust and Operations (policy, audit, SLO, incident, supply-chain, governance).
+  Enterprise: token<EnterpriseService>("xr.enterprise", "Enterprise Trust and Operations service"),
 } as const;
 
 export type ServiceTokenId = keyof typeof Tokens;

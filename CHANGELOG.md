@@ -4,7 +4,47 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
-## [6.0.0] — XR 6.0 Hybrid — Local, Cloud, and Hybrid Operating Plane (Phase 11)
+## [6.1.0] — XR 6.1 Enterprise — Enterprise Trust and Operations (Phase 12)
+
+### Added
+- **Organization Policy Administration** (`src/enterprise/organization-policy.ts`): Seven-tier policy precedence (task_override → user → workspace → project → organization → deployment → platform_default), immutable platform defaults, three pre-built policy bundles (enterprise_baseline, compliance_baseline, local_autonomy), 30+ policy subjects, conflict resolution with explicit DENY always winning
+- **Delegated Authority** (`src/enterprise/delegated-authority.ts`): 13 enterprise roles with inheritance, 5-level delegation depth enforcement, MFA requirements per role, periodic authority review tracking, scoped subjects/workspaces/capabilities
+- **Verified Audit Export** (`src/enterprise/audit-export.ts`): 14 event classes with default retention schedules (90d to 7yr), 4 export formats (json, json_lines, csv, signed_bundle), 5 redaction strategies (full_mask, partial_mask, hash, remove, tokenize), SHA-256 integrity verification, legal hold support with scope/time filtering
+- **SLOs and Operational Metrics** (`src/enterprise/slo-operations.ts`): 14 measurable SLOs (availability, completion, recovery, approval delivery, worker health, routing, backup, audit, security detection/response, upgrade/rollback, sync latency/conflict), percentile/minimum/maximum/rate targets, trend analysis, operational health computation
+- **Incident Response** (`src/enterprise/incident-response.ts`): 12 incident classes (capability_abuse, credential_exposure, isolation_failure, tenant_leakage, data_leakage, provider_compromise, malicious_package, audit_failure, worker_compromise, policy_bypass, supply_chain, network_intrusion), 7 lifecycle states (detected → triaged → contained → quarantined → remediating → resolved → postmortem), containment actions, remediation steps, postmortem reports
+- **Vulnerability Disclosure** (`src/enterprise/vulnerability-disclosure.ts`): Coordinated disclosure with 90-day embargo default, CVSS scoring, full lifecycle tracking
+- **Capability Supply-Chain Response** (`src/enterprise/supply-chain-response.ts`): Revoke publisher/capability, quarantine package/version, notify affected deployments, block installation/update, preserve evidence, restore safe version, record incidents
+- **Release Channels** (`src/enterprise/release-channels.ts`): 5 channels (stable:12mo, lts:36mo, candidate:3mo, beta, edge), compatibility matrices, migration validation, rollback safety checks, SBOM references
+- **Backup/DR Operations** (`src/enterprise/backup-dr.ts`): Backup schedules with frequency/retention/encryption/verification, 2 DR plans (default: 60min RPO/240min RTO, business_critical: 15min/60min), restore verification tracking, RPO/RTO achievable status
+- **Deployment Diagnostics** (`src/enterprise/deployment-diagnostics.ts`): 9 diagnostic categories, quick health checks, diagnostic report history
+- **Security Assessment** (`src/enterprise/security-assessment.ts`): Evidence preparation for independent review, finding management, certification readiness check (with explicit disclaimer — does NOT claim external certification)
+- **Governance** (`src/enterprise/governance.ts`): Proposal lifecycle (draft → open → accepted/rejected → implemented), architecture exception tracking, contribution procedures, category-based approval requirements
+- **EnterpriseService Composition Root** (`src/enterprise/index.ts`): Binds all 12 sub-services into one façade for the runtime kernel
+- **CLI Commands** (`src/commands/enterprise.ts`): 20 administrative commands for enterprise surfaces
+- **Daemon Routes** (`src/daemon/routes/enterprise.routes.ts`): 20 REST endpoints for enterprise dashboard
+- **Enterprise Tests** (`test/enterprise/enterprise.test.ts`): 969 lines of tests covering all 12 modules (68 test cases)
+- **Documentation** (`docs/enterprise/`): Enterprise Trust Architecture, Validation Report
+
+### Changed
+- Version bump from 6.0.0 to 6.1.0
+- Codename from "Hybrid" to "Enterprise"
+- Updated package description
+- `src/core/tokens.ts`: Added `Tokens.Enterprise` service token
+- `src/core/providers.ts`: Added `EnterpriseServiceProvider`
+
+### Security
+- Organization/workspace/tenant separation enforced at policy + identity layers
+- Admin privilege boundaries with role-based access and delegation depth limits
+- Delegated AI-worker authority with scoped subjects and bounded risk tiers
+- Policy precedence preserving task-level least privilege
+- Audit export with controlled redaction and integrity verification
+- Incident quarantine/revocation with reversible containment actions
+- Capability supply-chain response with quarantine, block, and restore
+- Backup credential protection with encryption option and integrity verification
+- Local/private autonomy guaranteed via local_autonomy policy bundle
+- No silent admin override — all decisions audited with reasons
+
+
 
 ### Added
 - **Deployment Profiles**: Five canonical profiles (Personal Local, Private Local Server, Team Private, Managed Cloud, Hybrid) with explicit capabilities, limitations, identity models, and recovery semantics
