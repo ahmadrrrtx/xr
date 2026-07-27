@@ -23,7 +23,7 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 16; // XR 5.1 Environment Interaction OS
+export const CONFIG_VERSION = 17; // XR 5.2 Capability Ecosystem
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -427,6 +427,25 @@ const ConfigSchema = z.object({
         .default({}),
     })
     .default({}),
+  // XR 5.2 (v17): Capability Ecosystem. Additive inspection/policy
+  // overlay over existing plugin/skill/MCP/provider/tool/workflow systems.
+  // It never grants authority by itself; it only controls verification/review
+  // defaults used by installers and the common capability inspector.
+  capabilities: z
+    .object({
+      enabled: z.boolean().default(true),
+      /** Require package signatures for remote/registry installs. Local packages remain inspectable but marked unsigned. */
+      requireSignedPackages: z.boolean().default(false),
+      /** Require explicit review before an update can gain new effective authority. */
+      updateRequiresReview: z.boolean().default(true),
+      /** Quarantine capabilities on package/signature/contract verification failure. */
+      quarantineOnVerificationFailure: z.boolean().default(true),
+      /** Workspace-level denied permissions; denied always wins over user grants. */
+      deniedPermissions: z.array(z.string()).default([]),
+      /** Discovery never ranks by popularity alone; this keeps evidence-biased ranking enabled. */
+      evidenceWeightedDiscovery: z.boolean().default(true),
+    })
+    .default({}),
   // XR 1.0 — plugin ecosystem. Local-first and explicit by design. The plugin
   // SYSTEM is always available (so `xr plugins …` works), but whether enabled
   // plugins are LOADED into the agent's tool list is governed here.
@@ -734,6 +753,25 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
       },
     },
   }),
+  // 16 -> 17: XR 5.2 Capability Ecosystem.
+  //
+  // Additive only: the common descriptor/metadata layer does not change any
+  // plugin, skill, MCP, provider, tool, workflow, memory, context, trust, or
+  // execution semantics. Defaults preserve local-first operation while making
+  // verification/review policy explicit for capability installers.
+  16: (raw) => ({
+    ...raw,
+    version: 17,
+    capabilities: raw.capabilities ?? {
+      enabled: true,
+      requireSignedPackages: false,
+      updateRequiresReview: true,
+      quarantineOnVerificationFailure: true,
+      deniedPermissions: [],
+      evidenceWeightedDiscovery: true,
+    },
+  }),
+
 
 };
 

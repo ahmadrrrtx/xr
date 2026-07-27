@@ -98,6 +98,8 @@ export interface McpServerConfig {
   // Declared capabilities & permissions (from server or manifest)
   declaredCapabilities: McpCapability;
   declaredPermissions: McpPermissionScope[];
+  /** XR 5.2: effective user-granted subset; declarations are requests, not authority. */
+  grantedPermissions?: McpPermissionScope[];
   tools?: McpTool[];
   resources?: McpResource[];
   prompts?: McpPrompt[];
@@ -109,6 +111,8 @@ export interface McpServerConfig {
   lastHealthCheckAt?: number;
   health: McpHealthState;
   healthDetail?: string;
+  lifecycleState?: "installed" | "enabled" | "disabled" | "quarantined" | "error";
+  quarantineReason?: string;
 
   // Usage stats
   invocationCount: number;
@@ -185,6 +189,7 @@ export const McpServerConfigSchema = z.object({
     roots: z.boolean().optional(),
   }).default({}),
   declaredPermissions: z.array(z.enum(MCP_PERMISSION_SCOPES)).default([]),
+  grantedPermissions: z.array(z.enum(MCP_PERMISSION_SCOPES)).default([]).optional(),
   tools: z.array(z.object({ name: z.string(), description: z.string().optional(), inputSchema: z.any().optional() })).default([]),
   resources: z.array(z.object({ uri: z.string(), name: z.string().optional(), description: z.string().optional(), mimeType: z.string().optional() })).default([]),
   prompts: z.array(z.object({ name: z.string(), description: z.string().optional(), arguments: z.array(z.any()).optional() })).default([]),
@@ -195,6 +200,8 @@ export const McpServerConfigSchema = z.object({
   lastHealthCheckAt: z.number().optional(),
   health: z.enum(MCP_HEALTH_STATES).default("unknown"),
   healthDetail: z.string().optional(),
+  lifecycleState: z.enum(["installed", "enabled", "disabled", "quarantined", "error"]).optional(),
+  quarantineReason: z.string().optional(),
 
   invocationCount: z.number().default(0),
   lastInvokedAt: z.number().optional(),

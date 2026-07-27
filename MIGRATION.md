@@ -1,5 +1,76 @@
 # XR Migration Guide
 
+## XR 5.1.0 → XR 5.2.0 (Capability Ecosystem)
+
+XR 5.2 adds a trusted capability ecosystem over existing plugins, skills, MCP servers, providers, tools, workflows, integrations, and artifact transforms. It is **additive**: native registries remain authoritative, and descriptors cannot grant authority.
+
+### Compatibility
+
+- Package name remains `@rrrtx/xr`, CLI bin remains `xr`.
+- Existing plugin, skill, MCP, provider, workflow, memory/context, execution, trust, and environment semantics are preserved.
+- Config migrates **16 → 17** automatically and additively with a new `capabilities` block. A pre-existing block is respected.
+- Existing installations continue to load through their native systems. They become inspectable through `xr capabilities`.
+- Rollback/quarantine metadata is additive.
+
+### Upgrade steps
+
+```bash
+cd /path/to/xr
+git pull --ff-only origin main
+bun install --frozen-lockfile
+bun run set-version:check
+bun run typecheck && bun test
+xr capabilities health
+xr capabilities list --json
+```
+
+For package-manager installs, install `@rrrtx/xr@5.2.0`, then run `xr doctor --json` and `xr capabilities health`.
+
+### New config defaults
+
+```json
+{
+  "capabilities": {
+    "enabled": true,
+    "requireSignedPackages": false,
+    "updateRequiresReview": true,
+    "quarantineOnVerificationFailure": true,
+    "deniedPermissions": [],
+    "evidenceWeightedDiscovery": true
+  }
+}
+```
+
+### Operational review after upgrade
+
+- Inspect high-risk capabilities:
+  `xr capabilities discover "" --max-risk tier2 --json`
+- Review effective authority for installed extensions:
+  `xr capabilities list --installed --json`
+- Certify a capability locally:
+  `xr capabilities certify <type:id>`
+- Quarantine a suspicious capability:
+  `xr capabilities quarantine <type:id> --reason "review required"`
+
+### Rollback
+
+| Goal | How |
+|---|---|
+| Disable a plugin/MCP capability | `xr capabilities disable <type:id>` |
+| Quarantine a suspicious capability | `xr capabilities quarantine <type:id> --reason <reason>` |
+| Roll back a plugin/skill package | `xr capabilities rollback plugin:<id> [--version x.y.z]` or `xr capabilities rollback skill:<id> [--version x.y.z]` |
+| Fully revert XR | stop XR processes, restore the pre-upgrade `XR_HOME` backup, check out/reinstall XR 5.1.0 |
+
+Rollback restores package files where a snapshot exists, but **never restores authority silently**. Re-enable and re-grant permissions only after review.
+
+### Known upgrade failures and recovery
+
+- Capability inspection reports unsigned packages: not automatically malicious. Review provenance, publisher, hash, and policy; set `requireSignedPackages` only if your workspace requires signed registry packages.
+- Update fails with "new permissions": inspect the new descriptor and reinstall/update with explicit grants only if acceptable.
+- Quarantined capability will not enable/load until quarantine is cleared and reviewed.
+
+---
+
 ## XR 5.0.0 → XR 5.1.0 (Environment Interaction OS)
 
 XR 5.1 adds the Environment Interaction OS: one governed contract over the

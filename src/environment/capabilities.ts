@@ -10,6 +10,8 @@ import { commandExists } from "../util/process.ts";
 import type { EnvironmentCapabilityEntry, EnvironmentCapabilityReport, EnvironmentType } from "./types.ts";
 
 let playwrightProbe: { at: number; available: boolean; detail: string } | null = null;
+let environmentCapabilityCache: { at: number; report: EnvironmentCapabilityReport } | null = null;
+const ENV_CAPABILITY_TTL_MS = 30_000;
 
 /** Real Playwright availability probe (replaces the optimistic legacy check). */
 export async function probePlaywright(): Promise<{ available: boolean; detail: string }> {
@@ -32,20 +34,31 @@ export async function probePlaywright(): Promise<{ available: boolean; detail: s
 }
 
 async function anyCommand(cmds: string[]): Promise<string | null> {
-  for (const c of cmds) {
-    if (await commandExists(c)) return c;
-  }
-  return null;
+  const results = await Promise.all(cmds.map(async (cmd) => ({ cmd, ok: await commandExists(cmd) })));
+  return results.find((row) => row.ok)?.cmd ?? null;
 }
 
 export async function detectEnvironmentCapabilities(): Promise<EnvironmentCapabilityReport> {
+  if (environmentCapabilityCache && Date.now() - environmentCapabilityCache.at < ENV_CAPABILITY_TTL_MS) return environmentCapabilityCache.report;
   const os = detectOS();
-  const desktop = await detectCapabilitiesAsyncSafe();
   const entries: EnvironmentCapabilityEntry[] = [];
 
-  // ── Browser ──
-  const pw = await probePlaywright();
-  const chromiumBinary = await anyCommand(["chromium", "chromium-browser", "google-chrome", "chrome"]);
+  // Kick off all PATH probes concurrently. On Windows, missing command probes
+  // can be slow under Git Bash, so sequential probing can exceed Bun's default
+  // per-test timeout even though the final capability report is correct.
+  const desktopPromise = detectCapabilitiesAsyncSafe();
+  const pwPromise = probePlaywright();
+  const chromiumPromise = anyCommand(["chromium", "chromium-browser", "google-chrome", "chrome"]);
+  const screenshotPromise = anyCommand(["screencapture", "gnome-screenshot", "scrot", "import", "powershell"]);
+  const micPromise = anyCommand(["arecord", "afrecord", "rec", "sox"]);
+  const speakerPromise = anyCommand(["afplay", "aplay", "paplay", "play", "powershell"]);
+  const sttPromise = anyCommand(["whisper", "whisper-cli", "main", "whisper-cpp"]);
+  const ttsPromise = anyCommand(["say", "espeak", "espeak-ng", "piper", "kokoro", "powershell"]);
+  const tesseractPromise = commandExists("tesseract");
+
+  const [desktop, pw, chromiumBinary, screenshotTool, mic, speaker, sttLocal, ttsLocal, ocr] = await Promise.all([
+    desktopPromise, pwPromise, chromiumPromise, screenshotPromise, micPromise, speakerPromise, sttPromise, ttsPromise, tesseractPromise,
+  ]);
   entries.push({
     environment: "browser",
     support: pw.available ? "supported" : "unsupported",
@@ -80,9 +93,7 @@ export async function detectEnvironmentCapabilities(): Promise<EnvironmentCapabi
       ...(desktop.tools.keyboard ? ["keyboard input"] : []),
       ...(desktop.tools.mouse ? ["mouse input"] : []),
       ...(desktop.tools.windows ? ["window focus"] : []),
-      ...(await anyCommand(["screencapture", "gnome-screenshot", "scrot", "import", "powershell"])
-        ? ["screen capture"]
-        : []),
+      ...(screenshotTool ? ["screen capture"] : []),
     ],
     missing: [...desktopMissing, ...extraMissing],
   });
@@ -104,10 +115,6 @@ export async function detectEnvironmentCapabilities(): Promise<EnvironmentCapabi
   });
 
   // ── Voice ──
-  const mic = await anyCommand(["arecord", "afrecord", "rec", "sox"]);
-  const speaker = await anyCommand(["afplay", "aplay", "paplay", "play", "powershell"]);
-  const sttLocal = await anyCommand(["whisper", "whisper-cli", "main", "whisper-cpp"]);
-  const ttsLocal = await anyCommand(["say", "espeak", "espeak-ng", "piper", "kokoro", "powershell"]);
   const voiceWorking: string[] = [];
   if (mic) voiceWorking.push(`capture (${mic})`);
   if (speaker) voiceWorking.push(`playback (${speaker})`);
@@ -130,8 +137,7 @@ export async function detectEnvironmentCapabilities(): Promise<EnvironmentCapabi
   });
 
   // ── Vision ──
-  const shot = await anyCommand(["screencapture", "gnome-screenshot", "scrot", "import", "powershell"]);
-  const ocr = await commandExists("tesseract");
+  const shot = screenshotTool;
   entries.push({
     environment: "vision",
     support: shot ? (ocr ? "supported" : "partial") : "unsupported",
@@ -142,7 +148,9 @@ export async function detectEnvironmentCapabilities(): Promise<EnvironmentCapabi
     ],
   });
 
-  return { os, generatedAt: Date.now(), entries };
+  const report = { os, generatedAt: Date.now(), entries };
+  environmentCapabilityCache = { at: Date.now(), report };
+  return report;
 }
 
 async function detectCapabilitiesAsyncSafe() {
@@ -164,4 +172,5 @@ export function capabilityFor(
 
 export function invalidateEnvironmentCapabilityCache(): void {
   playwrightProbe = null;
+  environmentCapabilityCache = null;
 }

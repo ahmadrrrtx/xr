@@ -34,6 +34,7 @@ import {
 } from "../commands/install.ts";
 import { AgentsCommand } from "../commands/agents.ts";
 import { SkillsCommand, SkillsAliasCommand } from "../commands/skills.ts";
+import { CapabilitiesCommand, CapabilityAliasCommand } from "../commands/capabilities.ts";
 import { ShieldCommand } from "../commands/shield.ts";
 import { TrustCommand } from "../commands/trust.ts";
 import { AuditCommand } from "../commands/audit.ts";
@@ -88,6 +89,8 @@ function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new McpCommand());
   kernel.commands.register(new SkillsCommand());
   kernel.commands.register(new SkillsAliasCommand());
+  kernel.commands.register(new CapabilitiesCommand());
+  kernel.commands.register(new CapabilityAliasCommand());
   kernel.commands.register(new AgentsCommand());
   kernel.commands.register(new ShieldCommand());
   kernel.commands.register(new TrustCommand());
@@ -149,6 +152,9 @@ const REGISTRY_NAME: Record<string, string> = {
   skills: "skills",
   skill: "skill",
   marketplace: "skills",
+  capabilities: "capabilities",
+  capability: "capability",
+  caps: "capabilities",
   plugins: "plugins",
   plugin: "plugin",
   mcp: "mcp",

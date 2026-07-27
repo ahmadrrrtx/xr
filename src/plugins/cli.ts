@@ -69,6 +69,8 @@ export async function handlePluginsCommand(argv: string[], store: Store): Promis
     case "permissions": case "perms": return cmdPermissions(mgr, flags);
     case "enable": return cmdEnable(mgr, flags);
     case "disable": return cmdDisable(mgr, flags);
+    case "quarantine": return cmdQuarantine(mgr, flags);
+    case "rollback": return cmdRollback(mgr, flags);
     case "update": case "upgrade": return cmdUpdate(mgr, flags);
     case "remove": case "uninstall": case "rm": return cmdRemove(mgr, flags);
     case "run": return cmdRun(mgr, flags);
@@ -91,6 +93,8 @@ function printPluginsHelp(): void {
   xr plugins permissions <id>             show requested/granted permissions
   xr plugins enable <id>                  enable a plugin
   xr plugins disable <id>                 disable a plugin
+  xr plugins quarantine <id> <reason>     disable and quarantine a plugin
+  xr plugins rollback <id> [version]      restore prior package; permissions reset
   xr plugins update <id> [path]           update after review; blocks new permissions
   xr plugins remove <id>                  uninstall and delete plugin files
   xr plugins run <id> <cmd> [args...]     run a contributed command
@@ -208,6 +212,23 @@ async function cmdDisable(mgr: PluginManager, flags: Flags): Promise<void> {
   if (!id) return void warn("usage: xr plugins disable <id>");
   const r = await mgr.disable(id);
   if (r.ok) ok(`disabled ${id}`); else warn(`could not disable ${id}: ${r.reason}`);
+}
+
+async function cmdQuarantine(mgr: PluginManager, flags: Flags): Promise<void> {
+  const id = flags.rest[0];
+  const reason = flags.rest.slice(1).join(" ") || "manual quarantine";
+  if (!id) return void warn("usage: xr plugins quarantine <id> <reason>");
+  const r = await mgr.quarantine(id, reason);
+  if (r.ok) ok(`quarantined ${id}`); else warn(`could not quarantine ${id}: ${r.reason}`);
+}
+
+function cmdRollback(mgr: PluginManager, flags: Flags): void {
+  const id = flags.rest[0];
+  const version = flags.rest[1];
+  if (!id) return void warn("usage: xr plugins rollback <id> [version]");
+  const r = mgr.rollback(id, version);
+  if (r.ok) ok(`rolled back ${id}; permissions were reset, review before enable`);
+  else warn(`rollback failed: ${r.reason}`);
 }
 
 async function cmdUpdate(mgr: PluginManager, flags: Flags): Promise<void> {

@@ -1,12 +1,12 @@
 /** XR Stage 10 — high-level plugin platform manager. */
 import { cpSync, existsSync, mkdirSync, rmSync, renameSync, statSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import type { Store } from "../state/workspace-store.ts";
 import { loadConfig, type XRConfig } from "../config/config.ts";
 import { CORE_VERSION, PLUGIN_API_VERSION } from "../core/version.ts";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { McpClient, wrapMcpTool } from "../mcp/client.ts";
-import { PluginRegistry, type RegistryEntry } from "./registry.ts";
+import { PluginRegistry, type PluginRollbackSnapshot, type RegistryEntry } from "./registry.ts";
 import { effectiveGrant } from "./manifest.ts";
 import { checkCompatibility } from "./compat.ts";
 import { hashEntrypoint, hashPluginTree, loadPlugin, validatePlugin, type LoadResult } from "./loader.ts";
@@ -21,6 +21,15 @@ export interface LoadedPlugin {
   granted: PermissionScope[];
   mcpTools: Tool[];
   skills: LoadedSkill[];
+}
+
+
+function safeRollbackVersion(version: string | undefined): string {
+  return (version ?? "unknown").replace(/[^a-z0-9._-]/gi, "_").slice(0, 80);
+}
+
+function rollbackSnapshotDir(dest: string, version: string | undefined): string {
+  return `${dest}.rollback/${Date.now()}-${safeRollbackVersion(version)}`;
 }
 
 export interface InstallResult {
@@ -75,6 +84,7 @@ export class PluginManager {
     const tmp = `${dest}.stage-${Date.now()}`;
     const bak = `${dest}.bak-${Date.now()}`;
     const hadPrevious = existsSync(dest);
+    const previousEntry = this.registry.get(manifest.id);
 
     try {
       if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
@@ -87,6 +97,21 @@ export class PluginManager {
 
       if (hadPrevious) renameSync(dest, bak);
       renameSync(tmp, dest);
+
+      const rollbackSnapshots: PluginRollbackSnapshot[] = [...(previousEntry?.rollback ?? [])];
+      if (existsSync(bak) && previousEntry) {
+        const snapDir = rollbackSnapshotDir(dest, previousEntry.version);
+        mkdirSync(dirname(snapDir), { recursive: true });
+        cpSync(bak, snapDir, { recursive: true, dereference: false });
+        rollbackSnapshots.unshift({
+          version: previousEntry.version ?? "unknown",
+          dir: snapDir,
+          treeHash: previousEntry.treeHash,
+          installedHash: previousEntry.installedHash,
+          grantedPermissions: previousEntry.grantedPermissions,
+          at: Date.now(),
+        });
+      }
       if (existsSync(bak)) rmSync(bak, { recursive: true, force: true });
 
       const granted = effectiveGrant(manifest.permissions, grantedPermissions);
@@ -99,6 +124,8 @@ export class PluginManager {
         source: typeof manifest.source === "string" ? manifest.source : manifest.source?.url ?? src,
         updateSource: opts.updateSource ?? manifest.updateSource ?? src,
       });
+      entry.rollback = rollbackSnapshots.slice(0, 10);
+      entry.history = [...(previousEntry?.history ?? []), ...(entry.history ?? [])].slice(-100);
       this.registry.upsert(entry);
       this.store.audit("plugin.install", { plugin: manifest.id, version: manifest.version, granted, enabled: entry.enabled, treeHash });
       return { ok: true, manifest, requestedPermissions: granted, warnings: prep.warnings };
@@ -123,6 +150,7 @@ export class PluginManager {
   enable(id: string): { ok: boolean; reason?: string } {
     const entry = this.registry.get(id);
     if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
+    if (entry.lifecycleState === "quarantined") return { ok: false, reason: `plugin is quarantined: ${entry.quarantineReason ?? "review required"}` };
     const v = validatePlugin(this.registry.dirFor(id));
     if (!v.ok || !v.manifest) return { ok: false, reason: v.errors.join("; ") || "invalid plugin" };
     const compat = checkCompatibility(CORE_VERSION, v.manifest.apiVersion, PLUGIN_API_VERSION, v.manifest.compatibility);
@@ -151,6 +179,65 @@ export class PluginManager {
     return { ok: true };
   }
 
+  async quarantine(id: string, reason: string): Promise<{ ok: boolean; reason?: string }> {
+    const entry = this.registry.get(id);
+    if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
+    await this.disposeOne(id);
+    this.registry.quarantine(id, reason);
+    this.registry.record(id, "quarantine", reason);
+    this.store.audit("plugin.quarantine", { plugin: id, reason });
+    return { ok: true };
+  }
+
+  rollback(id: string, version?: string): { ok: boolean; reason?: string } {
+    const entry = this.registry.get(id);
+    if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
+    const snapshot = (entry.rollback ?? []).find((s) => !version || s.version === version);
+    if (!snapshot) return { ok: false, reason: `no rollback snapshot for ${id}${version ? `@${version}` : ""}` };
+    if (!existsSync(snapshot.dir)) return { ok: false, reason: "rollback snapshot files are missing" };
+
+    const dest = this.registry.dirFor(id);
+    const currentBackup = existsSync(dest) ? rollbackSnapshotDir(dest, entry.version) : undefined;
+    try {
+      if (currentBackup && existsSync(dest)) {
+        mkdirSync(dirname(currentBackup), { recursive: true });
+        cpSync(dest, currentBackup, { recursive: true, dereference: false });
+      }
+      if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
+      cpSync(snapshot.dir, dest, { recursive: true, dereference: false });
+      const v = validatePlugin(dest);
+      if (!v.ok || !v.manifest) throw new Error(v.errors.join("; ") || "rollback snapshot failed validation");
+      const installedHash = hashEntrypoint(dest, v.manifest);
+      const treeHash = hashPluginTree(dest);
+      const remaining = (entry.rollback ?? []).filter((s) => s !== snapshot);
+      if (currentBackup) remaining.unshift({
+        version: entry.version ?? "unknown",
+        dir: currentBackup,
+        treeHash: entry.treeHash,
+        installedHash: entry.installedHash,
+        grantedPermissions: entry.grantedPermissions,
+        at: Date.now(),
+      });
+      const next = PluginRegistry.newEntry(v.manifest, [], {
+        enabled: false,
+        installedHash,
+        treeHash,
+        source: entry.source,
+        updateSource: entry.updateSource,
+      });
+      next.installedAt = entry.installedAt;
+      next.rollback = remaining.slice(0, 10);
+      next.lifecycleState = "disabled";
+      next.health = { state: "disabled", checkedAt: Date.now(), detail: "rolled back; permissions require review before enable" };
+      next.history = [...(entry.history ?? []), { at: Date.now(), action: "rollback" as const, detail: snapshot.version }].slice(-100);
+      this.registry.upsert(next);
+      this.store.audit("plugin.rollback", { plugin: id, version: snapshot.version, restoredAuthority: false });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: (e as Error).message };
+    }
+  }
+
   private dependsOn(id: string, dep: string): boolean {
     const v = validatePlugin(this.registry.dirFor(id));
     return Boolean(v.manifest?.dependencies.includes(dep));
@@ -164,8 +251,15 @@ export class PluginManager {
     const prep = this.prepareInstall(src);
     if (!prep.ok || !prep.manifest) return prep;
     if (prep.manifest.id !== id) return { ok: false, reason: `update source id "${prep.manifest.id}" does not match "${id}"` };
-    const newPerms = prep.manifest.permissions.filter((p) => !entry.grantedPermissions.includes(p));
-    if (newPerms.length) return { ok: false, manifest: prep.manifest, reason: "update requests new permissions — re-install to approve", newPermissions: newPerms };
+    const current = validatePlugin(this.registry.dirFor(id));
+    const currentDeclared = new Set(current.manifest?.permissions ?? []);
+    const newPerms = prep.manifest.permissions.filter((p) => !currentDeclared.has(p));
+    if (newPerms.length) {
+      this.registry.patch(id, { lifecycleState: "update_pending_review" });
+      this.registry.record(id, "review", `update requests new permissions: ${newPerms.join(",")}`);
+      this.store.audit("plugin.update_review_required", { plugin: id, newPermissions: newPerms });
+      return { ok: false, manifest: prep.manifest, reason: "update requests new permissions — re-install to approve", newPermissions: newPerms };
+    }
     const res = this.commitInstall(src, entry.grantedPermissions, { enable: entry.enabled, updateSource: src });
     if (res.ok) {
       this.registry.record(id, "update", `v${prep.manifest.version}`);
@@ -191,7 +285,7 @@ export class PluginManager {
     this.loaded.clear();
     this.loadErrors.clear();
     if ((this.config as any).plugins?.enabled === false) return;
-    const ordered = this.topoSort(this.registry.list().filter((e) => e.enabled));
+    const ordered = this.topoSort(this.registry.list().filter((e) => e.enabled && e.lifecycleState !== "quarantined"));
     for (const entry of ordered) await this.loadOne(entry);
   }
 

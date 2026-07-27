@@ -38,6 +38,21 @@ export class McpManager {
   private clients: Map<string, McpClient> = new Map();
   private config: any;
 
+  private authorityProblem(entry: McpRegistryEntry): string | null {
+    if (entry.lifecycleState === "quarantined") return `server is quarantined: ${entry.quarantineReason ?? "review required"}`;
+    const declared = entry.declaredPermissions ?? [];
+    const granted = entry.grantedPermissions ?? [];
+    const denied = new Set([
+      ...(((this.config as any).capabilities?.deniedPermissions ?? []) as string[]),
+      ...(((this.config as any).mcp?.deniedPermissions ?? []) as string[]),
+    ]);
+    const missing = declared.filter((p) => !granted.includes(p));
+    const deniedDeclared = declared.filter((p) => denied.has(p));
+    if (deniedDeclared.length) return `declared permission denied by policy: ${deniedDeclared.join(", ")}`;
+    if (missing.length) return `declared permission not approved: ${missing.join(", ")}`;
+    return null;
+  }
+
   constructor(private store: Store, private cwd = process.cwd()) {
     this.registry = new McpRegistry();
     try {
@@ -90,6 +105,8 @@ export class McpManager {
   enable(id: string): { ok: boolean; reason?: string } {
     const e = this.registry.get(id);
     if (!e) return { ok: false, reason: "server not found" };
+    const problem = this.authorityProblem(e);
+    if (problem) return { ok: false, reason: problem };
     this.registry.setEnabled(id, true);
     this.registry.record(id, "enable");
     this.store.audit("mcp.enable", { id });
@@ -104,6 +121,28 @@ export class McpManager {
     this.registry.setHealth(id, "disabled");
     this.registry.record(id, "disable");
     this.store.audit("mcp.disable", { id });
+    return { ok: true };
+  }
+
+  setPermissions(id: string, permissions: McpPermissionScope[]): { ok: boolean; reason?: string; granted?: McpPermissionScope[] } {
+    const e = this.registry.get(id);
+    if (!e) return { ok: false, reason: "server not found" };
+    const declared = new Set(e.declaredPermissions ?? []);
+    const denied = new Set((((this.config as any).capabilities?.deniedPermissions ?? []) as string[]));
+    const granted = permissions.filter((p) => declared.has(p) && !denied.has(p));
+    this.registry.setPermissions(id, granted);
+    this.registry.record(id, "permissions", granted.join(","));
+    this.store.audit("mcp.permissions", { id, granted });
+    return { ok: true, granted };
+  }
+
+  async quarantine(id: string, reason: string): Promise<{ ok: boolean; reason?: string }> {
+    const e = this.registry.get(id);
+    if (!e) return { ok: false, reason: "server not found" };
+    await this.unloadOne(id);
+    this.registry.quarantine(id, reason);
+    this.registry.record(id, "quarantine", reason);
+    this.store.audit("mcp.quarantine", { id, reason });
     return { ok: true };
   }
 
@@ -227,6 +266,14 @@ export class McpManager {
 
   private async loadOne(entry: McpRegistryEntry): Promise<void> {
     if (!entry.enabled) return;
+    const problem = this.authorityProblem(entry);
+    if (problem) {
+      this.loaded.delete(entry.id);
+      this.registry.setHealth(entry.id, entry.lifecycleState === "quarantined" ? "untrusted" : "error", problem);
+      this.registry.record(entry.id, "load_error", problem);
+      this.store.audit("mcp.load_error", { id: entry.id, reason: problem });
+      return;
+    }
     try {
       const client = await this.getOrCreateClient(entry);
       const caps = await client.connect();

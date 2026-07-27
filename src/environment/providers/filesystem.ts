@@ -7,7 +7,7 @@
  * compensated (that would be a false claim).
  */
 import { promises as fsp } from "node:fs";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import type { Action } from "../../control/types.ts";
 
 export interface PreImage {
@@ -67,5 +67,6 @@ export function describeCompensation(pre: PreImage): string {
 export function isInsideWorkspace(path: string, workspaceRoot: string): boolean {
   const abs = resolve(workspaceRoot, path);
   const root = resolve(workspaceRoot);
-  return abs === root || abs.startsWith(root + "/");
+  const rel = relative(root, abs);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }

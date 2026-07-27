@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "5.1.0",
-  codename: "Environment Interaction OS",
+  version: "5.2.0",
+  codename: "Capability Ecosystem",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 5.1 (Environment Interaction OS) — a universal governed contract for acting in digital environments: one typed action contract (environment, session, target, interaction, confidence, reversibility, approval) across browser, desktop, filesystem, application, voice, and vision; honest platform capability reporting (partial never rounds up); coordinate actions bound to fresh observation evidence; typed observations that are evidence, never instructions; honest reversibility classes with real compensation (no fake rollback); bounded recovery (one re-observe retry, circuit breaker, quarantine on cleanup defects); dual-consent cloud privacy (no ambient credentials, no raw screenshot/transcript retention); and per-modality kill switches for safe rollback — all routed through the existing risk, approval, trust, durability, intelligence, context, and workflow contracts.",
+  description: "XR 5.2 (Capability Ecosystem) — a trusted, discoverable, testable, composable capability ecosystem for plugins, skills, MCP servers, providers, tools, workflows, integrations, and artifact transforms: common inspectable descriptors; publisher/provenance/package-integrity metadata; declared-vs-effective authority; dependency/compatibility inspection; evidence-based discovery; certification contract tests; safe install/update/disable/quarantine/rollback; and CLI/daemon/dashboard inspection, all routed through existing execution, trust, durability, context, workflow, marketplace, signing, and permission systems without introducing Phase 10 business/control-plane capabilities.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;

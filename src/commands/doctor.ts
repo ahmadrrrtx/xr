@@ -59,6 +59,7 @@ export class DoctorCommand implements Command {
       checks.push({ id:"memory", label:"Memory engine", state: memEnabled ? "ok" : "warn", detail: `${memHealth.total} entries` });
       try { const { PluginManager } = await import("../plugins/manager.ts"); const pm = new PluginManager(store, ctx.cwd); await pm.loadEnabled(); const ps = pm.summary(); checks.push({ id:"plugins", label:"Plugin platform", state: ps.errored ? "warn" : "ok", detail: `${ps.installed} installed, ${ps.enabled} enabled, ${ps.errored} need attention` }); } catch(e){ checks.push({ id:"plugins", label:"Plugin platform", state:"warn", detail:(e as Error).message }); }
       try { const { McpManager } = await import("../mcp/manager.ts"); const mm = new McpManager(store, ctx.cwd); await mm.loadEnabled(); const ms = mm.summary(); checks.push({ id:"mcp", label:"MCP platform", state: ms.errored ? "warn" : "ok", detail: `${ms.installed} servers, ${ms.enabled} enabled, ${ms.healthy} healthy` }); } catch(e){ checks.push({ id:"mcp", label:"MCP platform", state:"warn", detail:(e as Error).message }); }
+      try { const caps = ctx.registry.resolve(Tokens.Capabilities).health(); checks.push({ id:"capabilities", label:"Capability Ecosystem", state: caps.quarantined ? "warn" : "ok", detail: `${caps.total} capabilities, ${caps.certified} certified, ${caps.quarantined} quarantined` }); } catch(e){ checks.push({ id:"capabilities", label:"Capability Ecosystem", state:"warn", detail:(e as Error).message }); }
       try { const wf = ctx.registry.resolve(Tokens.WorkflowStore); const { listAgents } = await import("../agents/registry.ts"); const health = wf.health(); checks.push({ id:"multi-agent", label:"Multi-agent runtime", state: health.workflows.failed ? "warn" : "ok", detail: `${listAgents({ includeDisabled: true }).length} agents, ${health.workflows.total} workflows, ${health.workflows.running} running` }); } catch(e){ checks.push({ id:"multi-agent", label:"Multi-agent runtime", state:"warn", detail:(e as Error).message }); }
       // control
       try { const { detectCapabilities } = await import("../control/adapter.ts"); const caps = detectCapabilities(); checks.push({ id:"control", label:"Computer Control", state: caps.tools.keyboard ? "ok":"warn", detail: `${caps.os} · keyboard:${caps.tools.keyboard} mouse:${caps.tools.mouse}` }); } catch {}
@@ -120,6 +121,14 @@ export class DoctorCommand implements Command {
 
     console.log(""); console.log(C.bold("Plugin Platform"));
     console.log(`  health ......... ${await pluginDoctorLine(store)}`);
+
+    console.log(""); console.log(C.bold("Capability Ecosystem"));
+    try {
+      const caps = ctx.registry.resolve(Tokens.Capabilities).health();
+      console.log(`  indexed ........ ${C.green(`✓ ${caps.total}`)}`);
+      console.log(`  certified ...... ${C.green(String(caps.certified))}`);
+      console.log(`  quarantined .... ${caps.quarantined ? C.amber(String(caps.quarantined)) : C.green("0")}`);
+    } catch(e){ warn(`Capability health failed: ${(e as Error).message}`); }
 
     // Stage 9 — Control Health
     console.log(""); console.log(C.bold("Computer Control"));

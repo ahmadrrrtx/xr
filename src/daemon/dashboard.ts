@@ -711,6 +711,10 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
         <span class="nav-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
         Sandboxed Plugins
       </a>
+      <a class="nav-item" data-panel="capabilities">
+        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg></span>
+        Capability Ecosystem
+      </a>
       <a class="nav-item" data-panel="mcp">
         <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span>
         MCP Servers
@@ -1356,7 +1360,33 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
         </div>
       </div>
 
-      <!-- Panel 12: MCP Servers -->
+      <!-- Panel 12: Capability Ecosystem -->
+      <div class="panel" id="panel-capabilities">
+        <div class="section-header">
+          <div><h1>Capability Ecosystem</h1><div class="section-sub">Common descriptors, provenance, permissions, certification, quarantine and rollback</div></div>
+          <button class="btn" onclick="loadCapabilities()">↻ Refresh</button>
+        </div>
+        <div class="grid grid-4" style="margin-bottom: 20px;">
+          <div class="card"><div class="card-title">Total</div><div class="card-value" id="cap-total">0</div></div>
+          <div class="card"><div class="card-title">Enabled</div><div class="card-value" id="cap-enabled">0</div></div>
+          <div class="card"><div class="card-title">Certified</div><div class="card-value text-green" id="cap-certified">0</div></div>
+          <div class="card"><div class="card-title">Quarantined</div><div class="card-value text-amber" id="cap-quarantined">0</div></div>
+        </div>
+        <div class="card" style="margin-bottom: 20px;">
+          <div class="card-header"><span class="card-title">Discovery by task / trust constraints</span></div>
+          <div style="display:flex; gap:8px; margin-bottom: 12px;">
+            <input id="cap-search" class="input" placeholder="e.g. summarize repository, send email, local OCR" />
+            <button class="btn btn-primary" onclick="loadCapabilities(true)">Discover</button>
+          </div>
+          <div class="muted">Evidence-weighted ranking only — no popularity-only trust score.</div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Capabilities</span></div>
+          <div id="capabilities-list"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Panel 13: MCP Servers -->
       <div class="panel" id="panel-mcp">
         <div class="section-header">
           <div><h1>Model Context Protocol (MCP)</h1><div class="section-sub">Add external server toolkits (Github, Postgres, etc)</div></div>
@@ -1891,7 +1921,7 @@ function toast(msg, type = "info") {
 const NAV_LABELS = {
   dashboard: "Home", chat: "Chat Sessions", sessions: "Recent Sessions", status: "System Status", budget: "Cost & Budget", workspaces: "Workspaces",
   providers: "Providers (BYOK)", models: "Models (Local AI)", memory: "Durable Memory",
-  research: "Research Runs", plugins: "Sandboxed Plugins", skills: "Skills Marketplace", voice: "Voice Pipeline",
+  research: "Research Runs", plugins: "Sandboxed Plugins", capabilities: "Capability Ecosystem", skills: "Skills Marketplace", voice: "Voice Pipeline",
   security: "Shield (Security)", audit: "Audit Log", settings: "Core Settings", about: "About Build",
   mcp: "MCP Servers", business: "Business OS CRM", files: "Files & Artifacts", downloads: "Downloads Security",
   devices: "Devices Link", automation: "Scheduled Tasks", integrations: "Webhooks API", notifications: "Alerts Hub"
@@ -1932,6 +1962,7 @@ function navigateTo(id) {
     case "research": loadResearchPanel(); break;
     case "skills": loadMarketplace(); break;
     case "plugins": loadPlugins(); break;
+    case "capabilities": loadCapabilities(); break;
     case "mcp": loadMcp(); break;
     case "control": loadComputerControl(); break;
     case "shield": loadSecurity(); break;
@@ -2946,6 +2977,52 @@ async function syncMarketplace() {
     await api("/api/skills/marketplace/sync", { method:"POST" });
     toast("Synchronized online registries", "ok");
     loadMarketplace();
+  } catch {}
+}
+
+// ── Capability Ecosystem
+async function loadCapabilities(searchMode=false) {
+  try {
+    const q = searchMode ? (document.getElementById("cap-search")?.value || "") : "";
+    const url = q ? "/api/capabilities?task=" + encodeURIComponent(q) : "/api/capabilities";
+    const data = await api(url);
+    const health = data.health || {};
+    const list = data.capabilities || [];
+    document.getElementById("cap-total").textContent = health.total ?? list.length;
+    document.getElementById("cap-enabled").textContent = health.enabled ?? list.filter(c => c.lifecycle && c.lifecycle.enabled).length;
+    document.getElementById("cap-certified").textContent = health.certified ?? list.filter(c => c.certification && ["verified","xr-tested","self-tested"].includes(c.certification.status)).length;
+    document.getElementById("cap-quarantined").textContent = health.quarantined ?? list.filter(c => c.lifecycle && c.lifecycle.state === "quarantined").length;
+    document.getElementById("capabilities-list").innerHTML = list.length ? list.slice(0,100).map(c => \`
+      <div class="stat-row" style="padding:10px 0; align-items:flex-start;">
+        <div>
+          <strong>\${escapeHtml(c.name)}</strong> <span class="mono text-cyan">\${escapeHtml(c.id)}</span>
+          <div class="muted" style="font-size:11px; margin-top:2px;">\${escapeHtml(c.type)} · \${escapeHtml(c.version)} · risk \${escapeHtml(c.placement?.riskTier || "unknown")} · cert \${escapeHtml(c.certification?.status || "unknown")}</div>
+          <div class="muted" style="font-size:11px; margin-top:2px;">effective: \${escapeHtml((c.permissions?.effective?.effective || []).join(", ") || "none")}</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+          <span class="badge badge-gray">\${escapeHtml(c.lifecycle?.state || "unknown")}</span>
+          <button class="btn btn-ghost" onclick="capabilityInspect('\${escapeHtml(c.id)}')">Inspect</button>
+          \${c.lifecycle?.state === "quarantined" ? "" : \`<button class="btn btn-danger" onclick="capabilityQuarantine('\${escapeHtml(c.id)}')">Quarantine</button>\`}
+        </div>
+      </div>
+    \`).join("") : "<div class='muted'>No capabilities match the current constraints.</div>";
+  } catch (e) {
+    document.getElementById("capabilities-list").innerHTML = "<div class='muted'>Capability inspection unavailable.</div>";
+  }
+}
+async function capabilityInspect(id) {
+  try {
+    const c = await api("/api/capabilities/inspect?id=" + encodeURIComponent(id));
+    alert(c.id + "\npublisher: " + (c.publisher?.name || "unknown") + "\neffective: " + ((c.permissions?.effective?.effective || []).join(", ") || "none") + "\nsignature: " + (c.package?.signatureStatus || "unknown") + "\ncertification: " + (c.certification?.status || "unknown"));
+  } catch {}
+}
+async function capabilityQuarantine(id) {
+  const reason = prompt("Quarantine reason", "manual dashboard quarantine");
+  if (!reason) return;
+  try {
+    await api("/api/capabilities/quarantine", { method:"POST", body:{ id, reason } });
+    toast("Capability quarantined", "ok");
+    loadCapabilities();
   } catch {}
 }
 

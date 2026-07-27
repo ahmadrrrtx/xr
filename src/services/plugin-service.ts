@@ -40,6 +40,8 @@ export class PluginService implements LifecycleHook {
   async remove(id: string) { this.loaded = false; return await this.manager.remove(id); }
   enable(id: string) { this.loaded = false; return this.manager.enable(id); }
   async disable(id: string) { this.loaded = false; return await this.manager.disable(id); }
+  async quarantine(id: string, reason: string) { this.loaded = false; return await this.manager.quarantine(id, reason); }
+  rollback(id: string, version?: string) { this.loaded = false; return this.manager.rollback(id, version); }
   update(id: string, source?: string) { this.loaded = false; return this.manager.update(id, source); }
   setPermissions(id: string, perms: PermissionScope[]) { this.loaded = false; return this.manager.setPermissions(id, perms); }
   listInstalled() { return this.manager.listInstalled(); }
