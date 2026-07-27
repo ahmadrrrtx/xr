@@ -8,7 +8,7 @@
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 5.3.0 (Work) — from src/core/version.ts
+ *   Version: 6.0.0 (Hybrid) — from src/core/version.ts
  */
 
 export const site = {
@@ -21,9 +21,9 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "5.3.0",
-  codename: "Work",
-  displayVersion: "5.3.0 (Work)",
+  version: "6.0.0",
+  codename: "Hybrid",
+  displayVersion: "6.0.0 (Hybrid)",
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },

@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+
+## [6.0.0] — XR 6.0 Hybrid — Local, Cloud, and Hybrid Operating Plane (Phase 11)
+
+### Added
+- **Deployment Profiles**: Five canonical profiles (Personal Local, Private Local Server, Team Private, Managed Cloud, Hybrid) with explicit capabilities, limitations, identity models, and recovery semantics
+- **Portable Task Capsules**: Versioned, integrity-hashed (SHA-256), secret-free capsule format for portable work across deployment modes
+- **Placement Policy Engine**: Weighted multi-factor placement decisions with explainability, user overrides, residency gates, and hardware scoring
+- **Worker Registry**: Secure worker registration, attestation, admission, heartbeat, drain, revoke, quarantine, and stale detection
+- **Control/Data Plane Separation**: Control plane handles identity/placement/policy/status; data plane handles execution; local plane handles offline operation
+- **Synchronization Engine**: Bidirectional sync with conflict detection, multiple resolution strategies, offline support, and retry/backoff
+- **Offline Mode Service**: Full local operation when disconnected with task queuing, priority ordering, and safe resynchronization
+- **Data Residency Policy Engine**: Classification-based residency enforcement, retention policies, region restrictions
+- **Remote Identity Service**: Scoped time-limited revocable identity tokens, organization management, tenant boundary definitions
+- **Backup Service**: Local backup/restore with pre-restore safety, retention-based cleanup, export
+- **Deployment Status**: Comprehensive status reporting for CLI/daemon/dashboard
+
+### Changed
+- Version bump from 5.3.0 to 6.0.0
+- Codename from "Work" to "Hybrid"
+- Updated package description
+
+### Security
+- Capsule integrity verification prevents tampering
+- Control plane redaction prevents sensitive data exposure
+- Worker attestation and identity verification
+- Tenant/workspace isolation enforcement
+- Data residency policy enforcement
+- Secret non-transfer in capsules
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [5.3.0] - 2026-07-27 — Personal and Business Operating Layer (Work)
