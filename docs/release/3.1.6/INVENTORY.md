@@ -1,15 +1,15 @@
 # XR 3.1.6 Repository Inventory
 
-Generated: 2026-07-26T21:45:49.246Z
+Generated: 2026-07-27T00:03:22.079Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 386 |
-| Test files | 94 |
-| CLI commands | 37 |
-| Daemon routes | 72 |
+| Source files | 395 |
+| Test files | 95 |
+| CLI commands | 38 |
+| Daemon routes | 81 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -47,6 +47,7 @@ Generated: 2026-07-26T21:45:49.246Z
 - `providers` (intelligence, supported) — xr providers [list|set|add|remove|test|status|refresh]
 - `models` (intelligence, supported) — xr models [status|list|recommend|install|remove|set|test|runtimes]
 - `budget` (intelligence, supported) — xr budget [status|set|reset] [amount]
+- `capabilities` (extensions, supported) — xr capabilities [list|discover|inspect|permissions|certify|enable|disable|quarantine|rollback]
 - `skills` (extensions, supported) — xr skills [list|search|install|enable|disable|inspect|doctor|…]
 - `plugins` (extensions, supported) — xr plugins [list|search|install|enable|disable|remove|status]
 - `mcp` (extensions, supported) — xr mcp [list|add|remove|enable|disable|tools|health|doctor]
@@ -70,6 +71,15 @@ Generated: 2026-07-26T21:45:49.246Z
 - GET `/api/audit` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/budget` — local bearer token or dashboard query token (src/daemon/routes/budget.routes.ts)
 - POST `/api/budget/set` — local bearer token or dashboard query token (src/daemon/routes/budget.routes.ts)
+- GET `/api/capabilities` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/certify` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/disable` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/enable` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- GET `/api/capabilities/health` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- GET `/api/capabilities/inspect` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- GET `/api/capabilities/permissions` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/quarantine` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/rollback` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
 - POST `/api/chat` — local bearer token or dashboard query token (src/daemon/routes/chat.routes.ts)
 - GET `/api/config` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/context` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)

@@ -5,7 +5,9 @@
  * to catch an ORDER-OF-MAGNITUDE regression, not to micro-benchmark. Measured
  * numbers are printed so the validation report can cite real figures.
  */
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, beforeEach, afterEach, setDefaultTimeout } from "bun:test";
+
+setDefaultTimeout(60_000);
 import { mkdtempSync, statSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

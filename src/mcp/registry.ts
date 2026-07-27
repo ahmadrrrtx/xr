@@ -122,15 +122,24 @@ export class McpRegistry {
   }
 
   setEnabled(id: string, enabled: boolean): boolean {
-    return this.patch(id, { enabled });
+    return this.patch(id, { enabled, lifecycleState: enabled ? "enabled" : "disabled", quarantineReason: enabled ? undefined : this.file.servers[id]?.quarantineReason });
   }
 
   setHealth(id: string, health: McpHealthState, detail?: string): boolean {
     return this.patch(id, {
       health,
       healthDetail: detail,
+      lifecycleState: health === "error" || health === "untrusted" ? "error" : this.file.servers[id]?.lifecycleState,
       lastHealthCheckAt: Date.now(),
     });
+  }
+
+  setPermissions(id: string, grantedPermissions: McpPermissionScope[]): boolean {
+    return this.patch(id, { grantedPermissions });
+  }
+
+  quarantine(id: string, reason: string): boolean {
+    return this.patch(id, { enabled: false, lifecycleState: "quarantined", quarantineReason: reason, health: "untrusted", healthDetail: reason });
   }
 
   recordInvocation(id: string): void {
@@ -173,6 +182,8 @@ export class McpRegistry {
       updatedAt: now,
       enabled: input.enabled ?? false,
       health: "unknown",
+      lifecycleState: input.enabled ? "enabled" : "disabled",
+      grantedPermissions: input.grantedPermissions ?? [],
       invocationCount: 0,
       history: [{ at: now, action: "install", detail: input.version }],
     } as McpRegistryEntry;

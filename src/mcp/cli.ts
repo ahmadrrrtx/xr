@@ -5,9 +5,9 @@
 import type { Store } from "../state/workspace-store.ts";
 import { banner, ok, warn, info, confirm, colors as C } from "../interfaces/cli.ts";
 import { McpManager } from "./manager.ts";
-import type { McpServerConfigInput } from "./types.ts";
+import { isMcpPermissionScope, type McpPermissionScope, type McpServerConfigInput } from "./types.ts";
 
-interface Flags { json: boolean; yes: boolean; enable: boolean; rest: string[] }
+interface Flags { json: boolean; yes: boolean; enable: boolean; grant?: McpPermissionScope[]; rest: string[] }
 
 function parseFlags(argv: string[]): Flags {
   const f: Flags = { json: false, yes: false, enable: false, rest: [] };
@@ -16,6 +16,10 @@ function parseFlags(argv: string[]): Flags {
     if (a === "--json") f.json = true;
     else if (a === "--yes" || a === "-y") f.yes = true;
     else if (a === "--enable") f.enable = true;
+    else if (a === "--grant") {
+      const v = argv[++i] ?? "";
+      f.grant = v.split(",").map((s) => s.trim()).filter((s): s is McpPermissionScope => isMcpPermissionScope(s));
+    }
     else f.rest.push(a);
   }
   return f;
@@ -40,6 +44,7 @@ export async function handleMcpCommand(argv: string[], store: Store): Promise<vo
     case "remove": case "rm": return cmdRemove(mgr, flags);
     case "enable": return cmdEnable(mgr, flags);
     case "disable": return cmdDisable(mgr, flags);
+    case "quarantine": return cmdQuarantine(mgr, flags);
     case "inspect": case "info": return cmdInspect(mgr, flags);
     case "permissions": return cmdPermissions(mgr, flags);
     case "tools": return cmdTools(mgr, flags);
@@ -64,6 +69,7 @@ function printHelp(): void {
   xr mcp inspect <id>             inspect capabilities + tools/resources/prompts
   xr mcp enable <id>              enable server
   xr mcp disable <id>             disable server
+  xr mcp quarantine <id> <reason> disable and quarantine server
   xr mcp remove <id>              remove server cleanly
   xr mcp tools <id>               list tools from server
   xr mcp resources <id>           list resources
@@ -117,7 +123,8 @@ async function cmdAdd(mgr: McpManager, flags: Flags) {
     trustLevel: "unknown",
     invocationCount: 0,
     declaredCapabilities: { tools: true, resources: true, prompts: true },
-    declaredPermissions: [],
+    declaredPermissions: flags.grant ?? [],
+    grantedPermissions: flags.grant ?? [],
   };
 
   if (transport === "http" || transport === "sse" || transport === "streamable-http") {
@@ -182,6 +189,14 @@ async function cmdDisable(mgr: McpManager, flags: Flags) {
   if (!id) return warn("xr mcp disable <id>");
   const r = await mgr.disable(id);
   if (r.ok) ok(`disabled ${id}`); else warn(r.reason ?? "MCP operation failed");
+}
+
+async function cmdQuarantine(mgr: McpManager, flags: Flags) {
+  const id = flags.rest[0];
+  const reason = flags.rest.slice(1).join(" ") || "manual quarantine";
+  if (!id) return warn("xr mcp quarantine <id> <reason>");
+  const r = await mgr.quarantine(id, reason);
+  if (r.ok) ok(`quarantined ${id}`); else warn(r.reason ?? "MCP operation failed");
 }
 
 async function cmdRemove(mgr: McpManager, flags: Flags) {
@@ -278,14 +293,20 @@ async function cmdDoctor(mgr: McpManager) {
 
 async function cmdPermissions(mgr: McpManager, flags: Flags) {
   const id = flags.rest[0];
-  if (!id) return warn("usage: xr mcp permissions <id>");
+  if (!id) return warn("usage: xr mcp permissions <id> [--grant a,b]");
   const entry = mgr.getServer(id);
   if (!entry) return warn("MCP server not found");
+  if (flags.grant) {
+    const r = mgr.setPermissions(id, flags.grant);
+    if (!r.ok) return warn(r.reason ?? "could not update MCP permissions");
+    ok(`updated MCP effective permissions: ${(r.granted ?? []).join(", ") || "none"}`);
+  }
 
   if (flags.json) {
     return console.log(JSON.stringify({
       id: entry.id,
       declaredPermissions: entry.declaredPermissions || [],
+      grantedPermissions: entry.grantedPermissions || [],
       trustLevel: entry.trustLevel,
       health: entry.health,
     }, null, 2));
@@ -294,12 +315,13 @@ async function cmdPermissions(mgr: McpManager, flags: Flags) {
   banner();
   console.log(`${C.bold("MCP Permissions")} — ${C.cyan(entry.id)}`);
   const perms = entry.declaredPermissions || [];
+  const granted = new Set(entry.grantedPermissions || []);
   if (!perms.length) {
     console.log("  No permissions declared (safe / read-only server).");
   } else {
     for (const p of perms) {
       const sensitive = ["fs:write","net","control","secrets","shell","browser"].includes(p);
-      console.log(`  ${sensitive ? C.yellow("⚠") : C.green("•")} ${p}`);
+      console.log(`  ${granted.has(p) ? C.green("✓") : C.dim("·")} ${sensitive ? C.yellow(p) : p}`);
     }
   }
   console.log(`\n  Trust: ${entry.trustLevel}   Enabled: ${entry.enabled ? C.green("yes") : C.dim("no")}   Health: ${healthTag(entry.health)}`);

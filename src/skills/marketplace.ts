@@ -1,6 +1,6 @@
 /** XR Stage 13 — Skills Marketplace domain service. */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -76,6 +76,22 @@ function copyDir(src: string, dst: string): void {
     mkdirSync(dirname(out), { recursive: true });
     copyFileSync(file, out);
   }
+}
+
+function rollbackDir(skillId: string, version: string, now = Date.now()): string {
+  return join(packageCacheDir(), "rollback", skillDirName(skillId), `${now}-${version.replace(/[^a-z0-9._-]/gi, "_")}`);
+}
+
+function grantedFor(manifest: SkillManifest, options: SkillInstallOptions, existing?: SkillInstallation): SkillPermissionScope[] {
+  const declared = new Set(manifest.permissions.map((p) => p.scope));
+  const requested = options.grantPermissions ?? existing?.grantedPermissions ?? manifest.permissions.filter((p) => !p.dangerous).map((p) => p.scope);
+  return [...new Set(requested.filter((p) => declared.has(p)))];
+}
+
+function updatePermissionEscalation(manifest: SkillManifest, existing?: SkillInstallation, options: SkillInstallOptions = {}): string[] {
+  if (!existing || options.grantPermissions) return [];
+  const prev = new Set(existing.grantedPermissions ?? []);
+  return [...new Set(manifest.permissions.map((p) => p.scope).filter((p) => !prev.has(p)))];
 }
 
 function tokenize(text: string): string[] {
@@ -234,10 +250,20 @@ export class SkillMarketplace {
     if (existing?.pinned && !options.force) throw new Error(`${manifest.id} is pinned; use --force to replace`);
     if (existing && !options.force && existing.version === manifest.version) return existing;
 
+    const escalation = updatePermissionEscalation(manifest, existing, options);
+    if (escalation.length) throw new Error(`update requests new permissions — review with --grant before update: ${escalation.join(", ")}`);
+
     const dest = sourceKind === "bundled" ? loaded.dir : join(installedSkillsDir(), skillDirName(manifest.id));
-    if (sourceKind !== "bundled") copyDir(loaded.dir, dest);
-    const granted = options.grantPermissions ?? manifest.permissions.filter((p) => !p.dangerous).map((p) => p.scope);
-    const rollback = existing ? [{ version: existing.version, dir: existing.dir, at: now }, ...existing.rollback].slice(0, 10) : [];
+    const rollback = existing ? [...existing.rollback] : [];
+    if (sourceKind !== "bundled") {
+      if (existing && existsSync(existing.dir)) {
+        const snap = rollbackDir(manifest.id, existing.version, now);
+        copyDir(existing.dir, snap);
+        rollback.unshift({ version: existing.version, dir: snap, at: now });
+      }
+      copyDir(loaded.dir, dest);
+    }
+    const granted = grantedFor(manifest, options, existing);
     const entry: SkillInstallation = {
       id: manifest.id,
       version: manifest.version,
@@ -250,7 +276,7 @@ export class SkillMarketplace {
       grantedPermissions: [...new Set(granted)],
       installedAt: existing?.installedAt ?? now,
       updatedAt: now,
-      rollback,
+      rollback: rollback.slice(0, 10),
     };
     this.store.upsertInstallation(entry);
     return entry;
@@ -283,7 +309,20 @@ export class SkillMarketplace {
     if (!install) throw new Error(`skill is not installed: ${id}`);
     const target = install.rollback.find((r) => !version || r.version === version);
     if (!target) throw new Error(`no rollback version available for ${id}${version ? `@${version}` : ""}`);
-    const entry: SkillInstallation = { ...install, version: target.version, dir: target.dir, updatedAt: Date.now(), rollback: install.rollback.filter((r) => r !== target) };
+    if (!existsSync(target.dir)) throw new Error("rollback snapshot files are missing");
+    const loaded = readSkillManifest(target.dir);
+    if (!loaded.ok || !loaded.manifest) throw new Error(`rollback snapshot invalid: ${loaded.errors.join("; ")}`);
+    const dest = install.source === "bundled" ? target.dir : join(installedSkillsDir(), skillDirName(id));
+    if (install.source !== "bundled") copyDir(target.dir, dest);
+    const entry: SkillInstallation = {
+      ...install,
+      version: loaded.manifest.version,
+      dir: dest,
+      enabled: false,
+      grantedPermissions: [],
+      updatedAt: Date.now(),
+      rollback: install.rollback.filter((r) => r !== target),
+    };
     this.store.upsertInstallation(entry);
     return entry;
   }
@@ -313,34 +352,64 @@ export class SkillMarketplace {
     const pkg = JSON.parse(readFileSync(file, "utf8")) as SkillPackageFile;
     if (pkg.type !== "xr.skill.package" || pkg.schemaVersion !== 1) throw new Error("not an XR skill package");
     const manifest = SkillManifestSchema.parse(pkg.manifest);
+    const existing = this.store.getInstallation(manifest.id);
+    if (existing?.pinned && !options.force) throw new Error(`${manifest.id} is pinned; use --force to replace`);
+    const escalation = updatePermissionEscalation(manifest, existing, options);
+    if (escalation.length) throw new Error(`update requests new permissions — review with --grant before update: ${escalation.join(", ")}`);
+
     const dest = join(installedSkillsDir(), skillDirName(manifest.id));
-    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
-    mkdirSync(dest, { recursive: true });
-    for (const f of pkg.files) {
-      const out = safeResolve(dest, f.path);
-      if (!out) throw new Error(`unsafe package path: ${f.path}`);
-      mkdirSync(dirname(out), { recursive: true });
-      writeFileSync(out, Buffer.from(f.contentBase64, "base64"));
-    }
-    const actual = hashSkillTree(dest);
-    if (actual !== pkg.treeSha256) throw new Error("package checksum mismatch after extraction");
+    const tmp = `${dest}.stage-${Date.now()}`;
+    const bak = `${dest}.bak-${Date.now()}`;
     const now = Date.now();
-    const entry: SkillInstallation = {
-      id: manifest.id,
-      version: manifest.version,
-      source: "package",
-      sourceUrl: file,
-      dir: dest,
-      enabled: options.enable ?? true,
-      pinned: options.pin ?? false,
-      favorite: false,
-      grantedPermissions: options.grantPermissions ?? manifest.permissions.filter((p) => !p.dangerous).map((p) => p.scope),
-      installedAt: now,
-      updatedAt: now,
-      rollback: [],
-    };
-    this.store.upsertInstallation(entry);
-    return entry;
+    try {
+      if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
+      mkdirSync(tmp, { recursive: true });
+      for (const f of pkg.files) {
+        const out = safeResolve(tmp, f.path);
+        if (!out) throw new Error(`unsafe package path: ${f.path}`);
+        mkdirSync(dirname(out), { recursive: true });
+        writeFileSync(out, Buffer.from(f.contentBase64, "base64"));
+      }
+      const actual = hashSkillTree(tmp);
+      if (actual !== pkg.treeSha256) throw new Error("package checksum mismatch after extraction");
+      const loaded = readSkillManifest(tmp);
+      if (!loaded.ok || !loaded.manifest) throw new Error(`package manifest invalid after extraction: ${loaded.errors.join("; ")}`);
+      if (loaded.manifest.id !== manifest.id || loaded.manifest.version !== manifest.version) throw new Error("package manifest changed during extraction");
+
+      if (existsSync(dest)) renameSync(dest, bak);
+      renameSync(tmp, dest);
+
+      const rollback = existing ? [...existing.rollback] : [];
+      if (existing && existsSync(bak)) {
+        const snap = rollbackDir(manifest.id, existing.version, now);
+        mkdirSync(dirname(snap), { recursive: true });
+        renameSync(bak, snap);
+        rollback.unshift({ version: existing.version, dir: snap, at: now });
+      } else if (existsSync(bak)) {
+        rmSync(bak, { recursive: true, force: true });
+      }
+
+      const entry: SkillInstallation = {
+        id: manifest.id,
+        version: manifest.version,
+        source: "package",
+        sourceUrl: file,
+        dir: dest,
+        enabled: options.enable ?? true,
+        pinned: options.pin ?? existing?.pinned ?? false,
+        favorite: existing?.favorite ?? false,
+        grantedPermissions: grantedFor(manifest, options, existing),
+        installedAt: existing?.installedAt ?? now,
+        updatedAt: now,
+        rollback: rollback.slice(0, 10),
+      };
+      this.store.upsertInstallation(entry);
+      return entry;
+    } catch (e) {
+      try { if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true }); } catch {}
+      try { if (existsSync(bak) && !existsSync(dest)) renameSync(bak, dest); } catch {}
+      throw e;
+    }
   }
 
   export(id: string, outFile?: string): string {

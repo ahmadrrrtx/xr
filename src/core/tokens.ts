@@ -42,6 +42,7 @@ import type { SkillService } from "../services/skill-service.ts";
 import type { AgentService } from "../services/agent-service.ts";
 import type { MultiAgentService } from "../services/multi-agent-service.ts";
 import type { IntelligenceService } from "../intelligence/service.ts";
+import type { CapabilityService } from "../capabilities/service.ts";
 
 // Cross-cutting subsystems.
 import type { XRShieldService } from "../security/shield.ts";
@@ -90,6 +91,8 @@ export const Tokens = {
   Skills: token<SkillService>("xr.skills", "skill service"),
   Agent: token<AgentService>("xr.agent", "agent service"),
   MultiAgents: token<MultiAgentService>("xr.multi-agents", "multi-agent service"),
+  /** XR 5.2 — Common capability ecosystem descriptor/discovery service. */
+  Capabilities: token<CapabilityService>("xr.capabilities", "Capability Ecosystem service"),
 
   // ── Cross-cutting subsystems ────────────────────────────────────────────
   Shield: token<XRShieldService>("xr.shield", "security shield service"),

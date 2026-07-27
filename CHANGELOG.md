@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.2.0] - 2026-07-27 — Capability Ecosystem
+
+XR now exposes plugins, skills, MCP servers, providers, tools, workflows, integrations, and artifact transforms through one trusted capability ecosystem. Capability metadata is inspectable, but it never grants authority. Native execution semantics and existing security contracts remain the source of truth.
+
+### Added
+
+- **Capability descriptor layer** (`src/capabilities/`): common schema for publisher identity, provenance, package integrity, compatibility, dependencies, declared permissions, effective authority, data scopes, network/credential/provider requirements, placement/risk, interfaces, certification, lifecycle, support, and cost.
+- **Declared vs effective authority resolver**: effective authority is declaration ∩ policy ∩ user/task grants ∩ placement limits, minus denied permissions. Denied always wins.
+- **Adapters** for existing planes: plugins, skills, MCP servers, providers, tools, workflows, integrations, and artifact transforms. No second registry or permission engine was introduced.
+- **Capability discovery** by task, type, required capability, excluded permissions, max risk tier, locality, publisher/trust, certification, installed/enabled state. Ranking is evidence-weighted and not popularity-only.
+- **Certification contract tests** distinguishing `unknown`, `self-tested`, `xr-tested`, `verified`, `quarantined`, and `legacy`.
+- **Capability CLI**: `xr capabilities list|discover|inspect|permissions|certify|enable|disable|quarantine|rollback|health` with JSON output; alias `xr capability`.
+- **Daemon/dashboard inspection**: `/api/capabilities*` routes and a Capability Ecosystem dashboard panel with inspection, effective-authority visibility, discovery, and quarantine controls.
+- **Config v17**: additive `capabilities` policy block (`requireSignedPackages`, `updateRequiresReview`, `quarantineOnVerificationFailure`, `deniedPermissions`, `evidenceWeightedDiscovery`).
+- **Tests**: new Phase 9 coverage for authority intersection, descriptors, discovery, plugin update review, rollback without silent authority restoration, and skill package path traversal.
+
+### Changed
+
+- Plugin registry/manager now records lifecycle state, update-review state, rollback snapshots, and quarantine state. Plugin rollback restores files but disables the plugin and clears grants.
+- Skill package import is transactional: stage extraction, reject unsafe paths, verify tree hash, re-read manifest, then swap. Skill updates requesting new permissions require explicit grant review. Skill rollback disables and clears grants.
+- MCP registry now separates `declaredPermissions` from `grantedPermissions`; enable/load fail closed if authority cannot be determined or the server is quarantined.
+- Online skill installs can enforce signed-package policy through `capabilities.requireSignedPackages`; unsigned/invalid/unknown signatures are represented clearly.
+
+### Security
+
+- New permission escalation gates for plugin and skill updates.
+- Quarantined plugin/MCP capabilities cannot be enabled or loaded.
+- Rollback never restores authority silently.
+- Package path traversal is blocked transactionally.
+- Capability metadata cannot grant authority or bypass existing execution/trust/context/workflow contracts.
+
+---
+
 ## [5.1.0] - 2026-07-27 — Environment Interaction OS
 
 XR becomes able to act in digital environments under one governed contract.

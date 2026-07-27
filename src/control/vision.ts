@@ -18,6 +18,21 @@ export async function captureScreen(savePath?: string): Promise<{ ok: boolean; p
   const path = savePath || join(tmpdir(), `xr-screen-${Date.now()}.png`);
 
   try {
+    // Hermetic test mode: avoid invoking real OS screenshot tools (notably
+    // PowerShell/System.Drawing on Windows, which can exceed Bun's per-test
+    // timeout on low-resource machines). This is only enabled by the existing
+    // control test flag and still returns a real tiny PNG file so observation
+    // hashing/blob-free guarantees are exercised.
+    if (process.env.XR_CONTROL_FORCE_TEST === "1") {
+      const png = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+        "base64",
+      );
+      await writeBytes(path, png);
+      setTimeout(() => { void removePath(path, { force: true }); }, 60000);
+      return { ok: true, path, base64: png.toString("base64"), message: `[test] Captured screen to ${path}` };
+    }
+
     if (os === "macos") {
       const r = await runCommand("screencapture", ["-x", path], { timeoutMs: 8000 });
       if (!r.ok) return { ok: false, message: `Capture failed: ${r.stderr || r.error || `exit ${r.status}`}` };

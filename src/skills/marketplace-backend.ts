@@ -10,6 +10,7 @@ import { SkillDownloadEngine } from "./download-engine.ts";
 import { checkSkillCompatibility } from "./compatibility.ts";
 import { sha256File, verifyPackageSignature, type PackageSignatureEnvelope } from "./signing.ts";
 import { compareSemver } from "./semver.ts";
+import { loadConfig } from "../config/config.ts";
 
 export interface OnlineInstallOptions {
   versionRange?: string;
@@ -69,7 +70,11 @@ export class SkillMarketplaceBackend {
   private verifySignatureIfPresent(version: OnlineSkillVersion, packagePath: string): { ok: boolean; warnings: string[]; errors: string[] } {
     const warnings: string[] = [];
     const errors: string[] = [];
-    if (!version.signature) return { ok: true, warnings: ["package is unsigned"], errors };
+    const requireSigned = loadConfig().config.capabilities?.requireSignedPackages ?? false;
+    if (!version.signature) {
+      if (requireSigned) return { ok: false, warnings, errors: ["package is unsigned and policy requires signatures"] };
+      return { ok: true, warnings: ["package is unsigned"], errors };
+    }
     const publisher = this.store.publisher(version.publisherId);
     if (!publisher?.publicKeyPem) return { ok: false, warnings, errors: [`publisher ${version.publisherId} has no trusted public key`] };
     const envelope: PackageSignatureEnvelope = {

@@ -37,6 +37,7 @@ import { AgentService } from "../services/agent-service.ts";
 import { MultiAgentService } from "../services/multi-agent-service.ts";
 import { IntelligenceService } from "../intelligence/service.ts";
 import { ContextService } from "../context/service.ts";
+import { CapabilityService } from "../capabilities/service.ts";
 
 import { XRShieldService } from "../security/shield.ts";
 import { BusinessOS } from "../business/index.ts";
@@ -208,6 +209,32 @@ export class SkillServiceProvider implements ServiceProvider {
       Tokens.Skills,
       () => new SkillService(),
       { lifecycle: true, dependsOn: [], kernelScope: "process", owner: "skills" },
+    );
+  }
+}
+
+
+/** XR 5.2 — Capability Ecosystem service. Workspace-scoped because descriptors
+ * include workspace-owned plugin/MCP/workflow state, but it does not own those
+ * registries. */
+export class CapabilityServiceProvider implements ServiceProvider {
+  readonly id = "capabilities";
+  readonly workspaceScoped = true;
+
+  register(ctx: ProviderContext): void {
+    ctx.registry.registerSingleton(
+      Tokens.Capabilities,
+      (registry) => {
+        const store = registry.resolve(Tokens.Store);
+        const config = registry.resolve(Tokens.Config).get();
+        return new CapabilityService(store, config);
+      },
+      {
+        lifecycle: true,
+        dependsOn: [Tokens.Store, Tokens.Config],
+        kernelScope: "workspace",
+        owner: "capabilities",
+      },
     );
   }
 }

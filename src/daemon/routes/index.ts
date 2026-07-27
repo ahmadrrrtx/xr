@@ -3,6 +3,7 @@
 import { agentsRoutes } from "./agents.routes.ts";
 import { budgetRoutes } from "./budget.routes.ts";
 import { chatRoutes } from "./chat.routes.ts";
+import { capabilityRoutes } from "./capabilities.routes.ts";
 import { controlRoutes } from "./control.routes.ts";
 import { environmentRoutes } from "./environment.routes.ts";
 import { extensionRoutes } from "./extensions.routes.ts";
@@ -22,6 +23,7 @@ export function createRouteHandler(): DaemonRouteHandler {
     ...budgetRoutes(),
     ...shieldRoutes(),
     ...trustRoutes(),
+    ...capabilityRoutes(),
     ...providersRoutes(),
     ...extensionRoutes(),
     ...controlRoutes(),

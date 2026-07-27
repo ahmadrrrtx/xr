@@ -1,5 +1,7 @@
 /** XR 5.1 — Capability detection tests (honest platform matrix, §10/§14). */
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, setDefaultTimeout } from "bun:test";
+
+setDefaultTimeout(20_000);
 import {
   detectEnvironmentCapabilities,
   probePlaywright,

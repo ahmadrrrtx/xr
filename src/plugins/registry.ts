@@ -23,8 +23,17 @@ export function safePluginDirName(id: string): string {
 
 export interface LifecycleEvent {
   at: number;
-  action: "install" | "enable" | "disable" | "update" | "remove" | "load" | "load_error" | "permissions" | "health";
+  action: "install" | "enable" | "disable" | "update" | "remove" | "load" | "load_error" | "permissions" | "health" | "quarantine" | "rollback" | "review";
   detail?: string;
+}
+
+export interface PluginRollbackSnapshot {
+  version: string;
+  dir: string;
+  treeHash?: string;
+  installedHash?: string;
+  grantedPermissions: PermissionScope[];
+  at: number;
 }
 
 export interface RegistryEntry {
@@ -44,6 +53,9 @@ export interface RegistryEntry {
   treeHash?: string;
   capabilities?: Array<{ kind: string; name: string; description?: string }>;
   health?: PluginHealth;
+  lifecycleState?: "installed" | "enabled" | "disabled" | "quarantined" | "removed" | "error" | "update_pending_review";
+  quarantineReason?: string;
+  rollback?: PluginRollbackSnapshot[];
   history?: LifecycleEvent[];
 }
 
@@ -64,6 +76,9 @@ const RegistryEntrySchema = z.object({
   treeHash: z.string().optional(),
   capabilities: z.array(z.any()).optional(),
   health: z.any().optional(),
+  lifecycleState: z.string().optional(),
+  quarantineReason: z.string().optional(),
+  rollback: z.array(z.any()).optional(),
   history: z.array(z.any()).optional(),
 });
 
@@ -98,6 +113,9 @@ function normalizeEntry(raw: unknown): RegistryEntry | null {
     treeHash: e.treeHash,
     capabilities: e.capabilities ?? [],
     health: e.health,
+    lifecycleState: e.lifecycleState,
+    quarantineReason: e.quarantineReason,
+    rollback: Array.isArray(e.rollback) ? e.rollback.slice(0, 10) : [],
     history: Array.isArray(e.history) ? e.history.slice(-100) : [],
   };
 }
@@ -159,6 +177,8 @@ export class PluginRegistry {
     this.file.plugins[entry.id] = {
       ...entry,
       dirName: entry.dirName ?? safePluginDirName(entry.id),
+      lifecycleState: entry.lifecycleState ?? (entry.enabled ? "enabled" : "disabled"),
+      rollback: (entry.rollback ?? []).slice(0, 10),
       history: (entry.history ?? []).slice(-100),
     };
     this.flush();
@@ -173,7 +193,7 @@ export class PluginRegistry {
   }
 
   setEnabled(id: string, enabled: boolean): boolean {
-    return this.patch(id, { enabled });
+    return this.patch(id, { enabled, lifecycleState: enabled ? "enabled" : "disabled", quarantineReason: enabled ? undefined : this.file.plugins[id]?.quarantineReason });
   }
 
   setPermissions(id: string, perms: PermissionScope[]): boolean {
@@ -181,7 +201,20 @@ export class PluginRegistry {
   }
 
   setHealth(id: string, health: PluginHealth): boolean {
-    return this.patch(id, { health });
+    return this.patch(id, { health, lifecycleState: health.state === "error" ? "error" : this.file.plugins[id]?.lifecycleState });
+  }
+
+  quarantine(id: string, reason: string): boolean {
+    return this.patch(id, { enabled: false, lifecycleState: "quarantined", quarantineReason: reason, health: { state: "untrusted", checkedAt: Date.now(), detail: reason, errors: [reason] } as any });
+  }
+
+  addRollback(id: string, snapshot: PluginRollbackSnapshot): boolean {
+    const e = this.file.plugins[id];
+    if (!e) return false;
+    e.rollback = [snapshot, ...(e.rollback ?? [])].slice(0, 10);
+    e.updatedAt = Date.now();
+    this.flush();
+    return true;
   }
 
   record(id: string, action: LifecycleEvent["action"], detail?: string): void {
@@ -222,6 +255,8 @@ export class PluginRegistry {
       treeHash: opts.treeHash,
       capabilities: manifest.capabilities,
       health: { state: opts.enabled ? "unknown" : "disabled", checkedAt: now },
+      lifecycleState: opts.enabled ? "enabled" : "disabled",
+      rollback: [],
       history: [{ at: now, action: "install", detail: `v${manifest.version}` }],
     };
   }

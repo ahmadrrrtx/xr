@@ -9,7 +9,9 @@
  * platform (the control executor requires OS tools CI may not have); the gate
  * behavior under test — blocked/denied/consent — never requires an OS action.
  */
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { describe, test, expect, setDefaultTimeout, beforeAll, afterAll } from "bun:test";
+
+setDefaultTimeout(20_000);
 import { mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

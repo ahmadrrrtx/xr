@@ -212,9 +212,9 @@ describe("XR 4.5 migration: existing XR 4.4 workspace", () => {
 // ── Config migration ───────────────────────────────────────────────────────
 
 describe("XR 4.5 config migration 14 → 15", () => {
-  test("the config version is 16 (XR 5.1) and the knowledge block exists with safe defaults", () => {
+  test("the config version is 17 (XR 5.2) and the knowledge block exists with safe defaults", () => {
     const { config } = loadConfig();
-    expect(CONFIG_VERSION).toBe(16);
+    expect(CONFIG_VERSION).toBe(17);
     expect(config.knowledge.enabled).toBe(true);
     expect(config.knowledge.enforceScope).toBe(true);
     expect(config.knowledge.compressionFailSafe).toBe(true);
@@ -222,7 +222,7 @@ describe("XR 4.5 config migration 14 → 15", () => {
     expect(config.knowledge.revalidateOnResume).toBe(true);
   });
 
-  test("XR 5.1 environment block exists with privacy-preserving defaults", () => {
+  test("XR 5.1 environment and XR 5.2 capability blocks exist with safe defaults", () => {
     const { config } = loadConfig();
     expect(config.environment.enabled).toBe(true);
     // Cloud vision remains OFF by default, matching the cloud STT/TTS posture.
@@ -231,6 +231,11 @@ describe("XR 4.5 config migration 14 → 15", () => {
     expect(config.environment.browser.blockPrivateNetworks).toBe(true);
     // Bounded recovery only.
     expect(config.environment.recovery.maxReobserveRetries).toBe(1);
+    // Capability Ecosystem is metadata/policy only and cannot grant authority.
+    expect(config.capabilities.enabled).toBe(true);
+    expect(config.capabilities.updateRequiresReview).toBe(true);
+    expect(config.capabilities.quarantineOnVerificationFailure).toBe(true);
+    expect(config.capabilities.deniedPermissions).toEqual([]);
   });
 
   test("existing memory settings are untouched by the upgrade", () => {

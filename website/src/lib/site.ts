@@ -8,7 +8,7 @@
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 5.1.0 (Environment Interaction OS) — from src/core/version.ts
+ *   Version: 5.2.0 (Capability Ecosystem) — from src/core/version.ts
  */
 
 export const site = {
@@ -21,9 +21,9 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "5.1.0",
-  codename: "Environment Interaction OS",
-  displayVersion: "5.1.0 (Environment Interaction OS)",
+  version: "5.2.0",
+  codename: "Capability Ecosystem",
+  displayVersion: "5.2.0 (Capability Ecosystem)",
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },

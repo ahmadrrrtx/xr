@@ -464,6 +464,22 @@ export const CATALOG: CatalogEntry[] = [
 
   // ── Extensions ────────────────────────────────────────────────────────────
   {
+    name: "capabilities",
+    description: "inspect, discover, certify, quarantine, and roll back capabilities",
+    usage: "xr capabilities [list|discover|inspect|permissions|certify|enable|disable|quarantine|rollback]",
+    group: "extensions",
+    glyph: "activity",
+    aliases: ["capability", "caps"],
+    needsKernel: true,
+    examples: [
+      { cmd: "xr capabilities list", description: "all plugin/skill/MCP/provider/tool/workflow capabilities" },
+      { cmd: 'xr capabilities discover "send email" --local --max-risk tier1', description: "discover by task and constraints" },
+      { cmd: "xr capabilities inspect skill:research:deep", description: "common descriptor + authority" },
+    ],
+    related: ["skills", "plugins", "mcp", "trust"],
+    topics: ["capabilities", "extensions", "marketplace", "trust"],
+  },
+  {
     name: "skills",
     description: "unified skills runtime + marketplace",
     usage: "xr skills [list|search|install|enable|disable|inspect|doctor|…]",
