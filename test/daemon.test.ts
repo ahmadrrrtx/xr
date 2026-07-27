@@ -32,7 +32,7 @@ test("health endpoint is open (no auth) and reports localhost", async () => {
   const j: any = await res.json();
   expect(j.ok).toBe(true);
   expect(j.host).toBe("127.0.0.1");
-  expect(j.version.version).toBe("5.2.0"); // XR 5.2 — version bump (Capability Ecosystem)
+  expect(j.version.version).toBe("5.3.0"); // XR 5.3 — version bump (Work — Personal and Business Operating Layer)
   expect(j.binding).toBe("localhost-only");
   expect(j.auth).toBe("required-except-health");
 });

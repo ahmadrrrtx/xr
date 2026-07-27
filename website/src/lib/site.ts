@@ -8,7 +8,7 @@
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 5.2.0 (Capability Ecosystem) — from src/core/version.ts
+ *   Version: 5.3.0 (Work) — from src/core/version.ts
  */
 
 export const site = {
@@ -21,9 +21,9 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "5.2.0",
-  codename: "Capability Ecosystem",
-  displayVersion: "5.2.0 (Capability Ecosystem)",
+  version: "5.3.0",
+  codename: "Work",
+  displayVersion: "5.3.0 (Work)",
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },

@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.0] - 2026-07-27 — Personal and Business Operating Layer (Work)
+
+XR now runs durable, governed, evidence-linked intelligent work for individuals, developers, researchers, operators, and organizations via outcome-oriented journeys. This is not more modules — it is complete journeys through canonical workflow, execution, trust, intelligence, context, capability contracts.
+
+### Added
+
+- **Personal and Business Operating Layer (`src/business/core/operating-layer.ts`)**: Central orchestrator that makes business modules use canonical workflow/execution/trust/intelligence/context/capability contracts. Outcome-oriented journeys, governed workers, authoritative records, artifacts/evidence, organization/role authority, human approval/escalation, measurable outcomes, local/private operation, audit/provenance, CLI/daemon/dashboard.
+- **Operating Types (`operating-types.ts`)**: Outcome, RecordMutation, WorkerAuthorityProfile, BusinessArtifact, ApprovalRequest, PrivacyPolicy, JourneyDefinition, OperatingLayerStatus — all typed, no placeholders.
+- **Record Mutation Authority (`record-mutation.ts`)**: Canonical mutation contract per spec 6.3 — every consequential mutation links actor/worker, workflow/task/execution, policy/approval, source/evidence/context, timestamp/version, previous value/change history, reversibility/restore path. Model output is proposal until policy/workflow/human commits. No direct DB mutations outside contract. Propose→commit→revert with hash chain.
+- **Outcome Tracking (`outcome.ts`)**: VerifiedOutcome with journeyId, workflowRunId, recordsChanged, artifacts, evidenceRefs, metrics, cost (est/actual, tokens, duration), verifiedAt, reversibility. Measurable business outcomes.
+- **Worker Governance (`worker-contract.ts`)**: Narrow authority per spec 6.2 — role/identity, org/workspace scope, allowed workflows, context scope, capabilities/tools, model/provider scope (local-first, local-only, cost-constrained), budget per task/day, risk/placement tier0-3, approval/review requirements, data access field-level, success criteria, escalation channels, revocation/disable behavior (disable removes authority, revokes credentials, audits, no silent restoration). Effective authority = declared ∩ policy ∩ grants - denied.
+- **Authority Boundaries (`authority-boundaries.ts`)**: Organization/workspace/role/worker delegated authority, record/data scope, approval authority, audit visibility — reuses existing RBAC/business foundations, no second identity system.
+- **Artifact & Evidence (`artifact-evidence.ts`)**: Documents, research reports, meeting notes, communications, analytics, records use existing context/artifact/provenance contracts (WorkflowArtifact, EvidenceRef). Create artifact with SHA-256 hash, provenance (actor, sources, contextPackageIds, executionRefs, workflowRef), linkedRecords, sensitivity public/internal/confidential/restricted, content preview. Verify hash, list by workspace/run.
+- **Approval/Escalation (`approval-escalation.ts`)**: Human attention — what requires approval (high-value finance >$5k, deal >$10k, external write, sensitive data, public KB), what auto (low-risk), what review (low confidence <0.7, delete), what informational (KPI, forecast). Grouping/deferral 5min window max 20 per group, avoid fatigue, uncertainty display confidence/reasons/budget/evidence. ApprovalRequest with expiry, channels dashboard/cli/webhook/email/telegram, recipients user/role/webhook_url, evidence, artifacts, context summary.
+- **Local/Private (`local-privacy.ts`)**: Sensitive journeys operate locally/private where providers support it, cloud transfer requires policy/consent. Privacy modes local (no cloud), private (restricted deny, confidential require approval), hybrid (allow with policy). Sensitivity public/internal/confidential/restricted. Default rules per mode, checkPrivacy returns allow/deny/require_approval/require_consent/localOnly/remediation/redactedFields. Enforces context scope before retrieval/injection, isCloudProvider heuristic, intelligence router local-only policy.
+- **Execution Bridge (`execution-bridge.ts`)**: Bridges business events to ExecutionService and WorkflowEngine — records execution per business operation, leases prevent duplicate mutation, checkpoints for recovery, trust classification, idempotency keys prevent duplicate record mutation. Persist to biz_execution_records, biz_execution_leases, biz_execution_idempotency.
+- **Journeys (`journeys.ts`)**: 8 representative journeys — personal-knowledge-capture, developer-project-delivery, research-evidence-report, customer-support-triage, sales-deal-progression, project-meeting-to-doc, scheduling-meeting-coordination, finance-invoice-from-deal. Each defines trigger/intent, context package (tiers, locality, sensitivity, memory), workflow version (nodes, capabilities, authority), outcomes (metrics, verifiedOutcomeType, costBudget, successCriteria), artifacts, privacy, version, active.
+- **Workflow Templates (`workflow-templates.ts`)**: Canonical workflow definitions for each journey using WorkflowDefinition types — trigger→deterministic→agentic→human_approval/human_review→business_record→tool_action→notification→artifact_output→branch/join→completion. Versioned, content hash FNV-1a, entryNodeIds, retry/backoff/timeout/cost/tags, active, published via WorkflowEngine. No visual editor.
+- **Operating Layer Migration (`migration.ts`)**: 9 new tables — biz_record_mutations, biz_outcomes, biz_worker_authority, biz_artifacts, biz_approvals, biz_privacy_policies, biz_execution_records, biz_execution_leases, biz_execution_idempotency — total 42 tables. Idempotent, extends biz_audit with workflow_id, execution_id, context_package_ids, evidence_refs, policy_decision, reversible via ALTER TABLE.
+- **Business DB Integration (`database.ts`)**: ensureOperatingLayer, getOperatingLayerStats, 42 tables migration, preserves existing 33.
+- **BusinessOS Wiring (`index.ts`)**: Initializes operating layer services first, then modules, sets business modules into operating layer, sets governance into workers module. initialize() calls operating layer initialize which migrates and publishes templates and subscribes to events (deal.created→sales, deal.won→finance, ticket.created→support, etc).
+- **AI Workers Governed (`ai-workers/index.ts` + 11 roles)**: Deploy creates both biz_workers and governance profile via WorkerGovernanceService. Toggle via governance revokes authority and audits. Chat checks enabled, budget, context scope maxItems/sensitivity. inspectWorker returns effective authority, budget status, risk status. List inspections. narrowDefaultsForRole defines sales_director single-workspace $0.50/day, ceo_advisor org-read $2/day tier0, financial_analyst local-only private, hr_manager restricted etc. 11 roles now.
+- **Daemon Business Routes (`daemon/routes/business.routes.ts`)**: 13 routes — /api/business/status (workspace view), /api/business/journeys list, /api/business/journeys/:id/start, /api/business/outcomes list/:id, /api/business/approvals list/:id/decide, /api/business/artifacts, /api/business/workers list/:id/:id/disable|enable, /api/business/mutations, /api/business/privacy/:workspaceId. Uses canonical `route({ id, path/prefix, method, handle })`, no Phase 11 control plane. Wired in routes/index.ts.
+- **CLI Business Commands (`commands/business.ts`)**: Outcome-centered views — status (health, tables 42, journeys 8, outcomes stats, pending approvals, privacy mode, cost), journeys list/start/show, outcomes list/show, approvals/work-queue with grouping and uncertainty, workers list/inspect/enable/disable with narrow authority, artifacts with hash/sensitivity/provenance, mutations with workflow/execution/evidence/reversible, privacy, audit verify. JSON mode via --json/-j, workspace/org flags, non-TTY machine readable, progressive disclosure, keyboard operation, accessibility via output.ts theme.
+- **Tests (`test/business/operating-layer.test.ts`)**: 23 new tests — module inventory journeys complete + workflow templates valid, record mutation propose/commit/deny/revert with provenance, outcome create/update/verify cost/time, worker governance narrow authority + enable/disable revokes + budget, authority boundaries RBAC+isolation+sensitivity, artifacts creation+provenance+hash verification, approvals create/list/decide expiry + classify attention avoids fatigue, privacy enforcement local/private/hybrid + context leakage prevented, execution bridge lease+idempotency, complete journeys end-to-end personal/developer/research/finance with artifacts/outcomes/approvals, security unauthorized access denied + worker escalation + context leakage, reliability checkpoint recovery.
+- **Docs (`docs/phase10/`)**: AUDIT_DELIVERABLE.md 41KB, ARCHITECTURE_DESIGN.md 26KB, AI_WORKER_CONTRACT.md, ORGANIZATION_RBAC_DATA_SCOPE.md, OUTCOME_JOURNEY_GUIDES.md, BUSINESS_WORKFLOW_INTEGRATION.md, EVIDENCE_ARTIFACT_PROVENANCE.md, APPROVALS_ESCALATIONS.md, LOCAL_PRIVATE_PRIVACY.md, DEVELOPER_INTEGRATION_GUIDE.md, USER_GUIDES.md, MIGRATION_BACKUP_RESTORE.md, README.md, RELEASE_VALIDATION.md — covering personal/business operating architecture, worker contract, org/RBAC/data scope, journey guides, workflow integration, evidence/artifact/provenance, approvals/escalations, local/private privacy, developer integration, user guides, migration/backup/restore, changelog/release/validation. No enterprise control plane claims.
+- **Version Bump**: package.json 5.2.0 → 5.3.0, description XR 5.3 Personal and Business Operating Layer, src/core/version.ts 5.3.0 Work, codename Work, DISPLAY_VERSION.
+
+### Changed
+
+- BusinessDatabase now 42 tables (33+9), ensureOperatingLayer idempotent
+- BusinessOS now exposes operating layer services: recordMutations, outcomes, workerGovernance, authority, artifacts, approvals, privacy, executionBridge, operatingLayer — plus existing modules
+- AIWorkersModule now governed with narrow authority, inspection, budget, enable/disable revokes
+- Daemon routes index now includes businessRoutes
+- CLI BusinessCommand now outcome-centered with journeys, outcomes, approvals, workers, artifacts, mutations, privacy, audit verify
+- daemon.test.ts expects version 5.3.0 (was 5.2.0)
+
+### Security
+
+- Authoritative records protected by RBAC + workflow policy + approval + trust classification + privacy enforcement
+- AI workers have narrow declared scope, effective authority = declared ∩ policy ∩ grants - denied, not free-form autonomous
+- Model output is proposal/evidence until committed via record mutation contract
+- External writes require elevated approval + credential scoping via trust/credential contracts + privacy policy
+- Every consequential change attributable: actor/worker, workflow/task/execution, policy/approval, evidence/context, timestamp/version, previous value/change history, reversibility/restore path
+- Context scope enforced before retrieval/injection via LocalPrivacyService + context policy
+- Capability authority effective, not merely declared, via WorkerGovernanceService.inspect + authority boundaries
+- Sensitive business/personal data respects locality/privacy policy — local-only blocks cloud provider, private denies restricted external_write, confidential requires approval
+- Disabled/revoked workers cannot execute, credentials revoked, audit preserved
+- Audit history tamper-evident and exportable, hash chain SHA-256, mutation chain content hash, outcome verification
+
+### Fixed
+
+- daemon.test.ts version expectation 5.2.0 → 5.3.0
+- OutcomeTracker.getStats column cost_duration_ms → duration_ms (bug fix)
+
+### Migration
+
+- Additive migration 5.2 → 5.3, no breaking changes, existing business.test.ts 21 PASS still, total tests 1151 PASS 0 FAIL
+- Rollback safe: new tables independent, old code ignores them, audit chain still valid, worker enabled flag respected, no silent authority restoration or record revert
+
 ## [5.2.0] - 2026-07-27 — Capability Ecosystem
 
 XR now exposes plugins, skills, MCP servers, providers, tools, workflows, integrations, and artifact transforms through one trusted capability ecosystem. Capability metadata is inspectable, but it never grants authority. Native execution semantics and existing security contracts remain the source of truth.

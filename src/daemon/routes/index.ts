@@ -7,6 +7,7 @@ import { capabilityRoutes } from "./capabilities.routes.ts";
 import { controlRoutes } from "./control.routes.ts";
 import { environmentRoutes } from "./environment.routes.ts";
 import { extensionRoutes } from "./extensions.routes.ts";
+import { businessRoutes } from "./business.routes.ts";
 import { memoryRoutes } from "./memory.routes.ts";
 import { contextRoutes } from "./context.routes.ts";
 import { providersRoutes } from "./providers.routes.ts";
@@ -30,6 +31,7 @@ export function createRouteHandler(): DaemonRouteHandler {
     ...environmentRoutes(),
     ...memoryRoutes(),
     ...contextRoutes(),
+    ...businessRoutes(),
   ], ({ json }) => json({ error: "not found" }, 404));
 }
 

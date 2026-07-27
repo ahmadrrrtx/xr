@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "5.2.0",
-  codename: "Capability Ecosystem",
+  version: "5.3.0",
+  codename: "Work",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 5.2 (Capability Ecosystem) — a trusted, discoverable, testable, composable capability ecosystem for plugins, skills, MCP servers, providers, tools, workflows, integrations, and artifact transforms: common inspectable descriptors; publisher/provenance/package-integrity metadata; declared-vs-effective authority; dependency/compatibility inspection; evidence-based discovery; certification contract tests; safe install/update/disable/quarantine/rollback; and CLI/daemon/dashboard inspection, all routed through existing execution, trust, durability, context, workflow, marketplace, signing, and permission systems without introducing Phase 10 business/control-plane capabilities.",
+  description: "XR 5.3 (Personal and Business Operating Layer) — runs durable, governed, evidence-linked intelligent work for individuals, developers, researchers, operators, and organizations via outcome-oriented journeys, governed AI workers, authoritative records, artifacts/evidence, organization/role authority, human approval/escalation, measurable outcomes, local/private operation, audit/provenance, CLI/daemon/dashboard, integrated with canonical workflow/execution/trust/intelligence/context/capability contracts without introducing Phase 11 remote/cloud/hybrid control plane.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;
