@@ -4,6 +4,102 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## [6.1.0] — XR 6.1 Enterprise — Enterprise Trust and Operations (Phase 12)
+
+Makes XR governable, supportable, measurable, and operable by organizations —
+**without weakening local autonomy or user trust**. All enterprise features are
+additive; `personal_local` continues to operate fully offline with no control plane.
+
+### Added
+
+**Organization policy (`src/enterprise/policy/`)**
+- Six-layer policy model: platform default → deployment → organization → workspace → user/task → capability, with separate *privilege* (who may author) and *specificity* (what wins) orderings
+- Safety-relevant keys resolve **most-restrictive-wins** across all layers — a privileged layer may tighten but never loosen
+- **Non-overridable user-visibility invariants**: `showApprovalRequests`, `showPolicyEffects`, `showDataScope`, `showActionProvenance`, `showCapabilityTrust`, `showIncidentImpact` cannot be disabled by any layer, including platform defaults
+- Every weakening attempt is **rejected and recorded**, never silently dropped
+- Full decision traces: every candidate value, whether it applied, and why
+- Versioned, content-hashed, reversible policy bundles; rollback re-validates the target
+
+**Delegated authority (`src/enterprise/authority/`)**
+- Delegation is always a **strict subset** of the delegator's authority — unheld scopes are stripped, not granted
+- Risk-tier ceilings only narrow down a chain; depth bounded at 4
+- Immediate revocation that **cascades** to all descendant delegations
+- Periodic access reviews that may only reduce scope
+- Policy restrictions on authority are recorded with reasons, so users can always see why an action was blocked
+- **No new identity system** — subjects reference existing Phase 11 `RemoteIdentity` and business `Member`/`AIWorker` ids
+
+**Audit export, redaction, retention (`src/enterprise/audit/`)**
+- **Verifiable redaction**: redacted fields carry a SHA-256 digest of the original value and the record's chain hashes are preserved, so a redacted export still verifies
+- `proveRedactionFaithful()` detects forged digests *and* records that claim redaction while retaining the value
+- Controlled export with access control, integrity manifest, chain verification, and access logging
+- Truncation, withholding, and source failure are **always explicit** — never a silent short export
+- Retention schedules per event class; legal hold **blocks** deletion and reports the conflict; dry-run by default
+- `WorkspaceStore.auditChainRange()` — ascending audit reader that includes `prev_hash`
+
+**Operations and SLOs (`src/enterprise/operations/`)**
+- Ten SLOs, each declaring whether XR can actually measure it and from which signal
+- No samples ⇒ `unmeasurable`, never a fabricated "meeting"; profile-inapplicable SLOs report `not_applicable`
+- Error budgets, aggregate operational status, and alert-worthy conditions
+
+**Incident response (`src/enterprise/incidents/`)**
+- Seven-state lifecycle with an enforced transition table and fast paths for contain-first response
+- Hash-committed, verifiable evidence
+- Response actions bridged to real subsystems via injected handlers
+- Data leakage, credential exposure, isolation failure, and audit failure **always** set user-visible impact, which an administrator cannot clear
+
+**Capability supply chain (`src/enterprise/supplychain/`)**
+- Revocation by capability, semver version range, or entire publisher
+- **Evidence is snapshotted before quarantine**, so a malicious capability cannot erase its own trail
+- Install/update blocking, affected-deployment notices, safe-version restore that refuses revoked versions
+- Organization capability catalogs (allowlist/denylist/open) evaluated *after* revocation
+
+**Backup and disaster recovery (`src/enterprise/recovery/`)**
+- Backup verification: digest recomputation, component checks, and credential-safety scanning
+- **Restore preflight gate** — a restore is refused unless the backup verifies (anti restore-poisoning)
+- Cross-deployment compatibility rules; partial-restore consistency reporting
+- RPO/RTO measured against declared targets; unmeasured values report `unknown`
+- Recorded restore drills as evidence that backups actually work
+
+**Release and support (`src/enterprise/release/`)**
+- Channels: `stable`, `lts`, `beta`, `edge` with computed support windows
+- Compatibility checks across plugin API, capsule, backup, policy, and audit-export schemas
+- **Rollback validation** enforcing six invariants: local operation, policy safety, audit integrity, backups, incident evidence, capability revocation
+- Release artifact digest recording and verification
+
+**Certification evidence (`src/enterprise/certification/`)**
+- 36 controls, each declaring assurance as **technical** / **operational** / **external_required**
+- Eight-entry threat model with residual-risk ratings
+- `assertNoFalseCertificationClaim()` — a CI-enforced guard against compliance theater
+- Source and test paths in the catalog are verified to exist by test
+
+**CLI**
+- `xr enterprise` (alias `xr ent`) covering status, policy, authority, audit, slo, incident, supplychain, recovery, release, evidence
+
+**Documentation** — `docs/phase12/`: enterprise trust architecture, policy/authority, audit export, incident response, supply-chain response, backup/recovery, SLO/observability, release/support, certification evidence, governance
+
+### Changed
+- Version 6.0.0 → 6.1.0; codename "Hybrid" → "Enterprise"
+- `test/daemon.test.ts` now derives the expected version from `CORE_VERSION` instead of a hardcoded string
+
+### Fixed
+- **Redaction-claim bypass**: `proveRedactionFaithful()` verified digests but not that the redaction was actually applied, so a record could claim a field was redacted while still carrying the plaintext. Found by the adversarial suite; fixed with regression tests.
+- **False audit chain break**: the CLI export read via `recentAudit()`, which omits `prev_hash` and returns newest-first, producing a spurious `partial` status. Fixed by adding `auditChainRange()`.
+
+### Security
+- Organization policy cannot silently override user-visible safety information — enforced at every layer and tested adversarially
+- Task-level least privilege (Phase 3) is preserved; delegation can only narrow it
+- Adversarial coverage for all nine roadmap attack classes: privilege escalation, tenant leakage, hidden policy override, audit tampering, redaction bypass, compromised capability, compromised worker, restore poisoning, revoked identity reuse
+- Local/private deployments verified to require no network and no control plane
+
+### Not included — stated explicitly
+- **XR holds no external certification.** No SOC 2, ISO 27001, HIPAA, PCI-DSS, or FedRAMP. No independent security assessment or third-party penetration test has been performed. The evidence pack is a self-assessment prepared *for* such an assessment.
+- Controls EX-01, EX-02, EX-03 are `not_implemented` and say so.
+- No Phase 13 supremacy benchmarks or comparative performance claims.
+
+### Testing
+- **1636 tests pass, 0 fail** (from 1256 at 6.0.0) — 380 new tests, 6004 assertions, 113 files
+- Zero regressions in prior phases
+
 ## [6.0.0] — XR 6.0 Hybrid — Local, Cloud, and Hybrid Operating Plane (Phase 11)
 
 ### Added

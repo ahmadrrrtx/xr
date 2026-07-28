@@ -1196,6 +1196,28 @@ export class WorkspaceStore {
       .all(limit);
   }
 
+  /**
+   * Audit entries in ASCENDING id order, including `prev_hash`.
+   *
+   * XR 6.1: the enterprise audit export needs the full chain link to verify
+   * contiguity. `recentAudit` omits `prev_hash` and reverses order for the
+   * dashboard, which would make a legitimate export look like a chain break.
+   */
+  auditChainRange(
+    opts: { fromId?: number; limit?: number } = {},
+  ): Array<{ id: number; session_id: string | null; event: string; detail: string; prev_hash: string; hash: string; created_at: number }> {
+    const fromId = opts.fromId ?? 0;
+    const limit = opts.limit ?? 10_000;
+    return this.db
+      .query<
+        { id: number; session_id: string | null; event: string; detail: string; prev_hash: string; hash: string; created_at: number },
+        [number, number]
+      >(
+        `SELECT id,session_id,event,detail,prev_hash,hash,created_at FROM audit_log WHERE id > ? ORDER BY id ASC LIMIT ?`,
+      )
+      .all(fromId, limit);
+  }
+
   recentSessions(limit = 50): Array<{ id: string; title: string; mode: string; status: string; created_at: number }> {
     return this.db
       .query<{ id: string; title: string; mode: string; status: string; created_at: number }, [number]>(

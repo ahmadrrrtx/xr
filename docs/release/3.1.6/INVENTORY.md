@@ -1,15 +1,15 @@
 # XR 3.1.6 Repository Inventory
 
-Generated: 2026-07-27T00:03:22.079Z
+Generated: 2026-07-28T09:20:20.100Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 395 |
-| Test files | 95 |
-| CLI commands | 38 |
-| Daemon routes | 81 |
+| Source files | 438 |
+| Test files | 113 |
+| CLI commands | 39 |
+| Daemon routes | 95 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -55,6 +55,7 @@ Generated: 2026-07-27T00:03:22.079Z
 - `trust` (trust, supported) — xr trust [status|classify <command...>] [--json]
 - `audit` (trust, supported) — xr audit [tail|verify|export] [--limit n]
 - `attacks` (trust, supported) — xr attacks [--json]
+- `enterprise` (trust, supported) — xr enterprise [status|policy|authority|audit|slo|incident|supplychain|recovery|release|evidence]
 - `doctor` (system, supported) — xr doctor [--network] [--json] [--perf]
 - `status` (system, supported) — xr status [--json] [--network]
 - `update` (system, supported) — xr update [--yes]
@@ -71,6 +72,20 @@ Generated: 2026-07-27T00:03:22.079Z
 - GET `/api/audit` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/budget` — local bearer token or dashboard query token (src/daemon/routes/budget.routes.ts)
 - POST `/api/budget/set` — local bearer token or dashboard query token (src/daemon/routes/budget.routes.ts)
+- GET `/api/business/approvals` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- POST `/api/business/approvals/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/artifacts` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/journeys` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- POST `/api/business/journeys/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/mutations` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/outcomes` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/outcomes/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/privacy/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/status` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/workers` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/workers/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- POST `/api/business/workers/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- POST `/api/business/workers/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
 - GET `/api/capabilities` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
 - POST `/api/capabilities/certify` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
 - POST `/api/capabilities/disable` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)

@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { Store } from "../src/state/workspace-store.ts";
 import { makeHandler } from "../src/daemon/server.ts";
 import { dashboardHtml } from "../src/daemon/dashboard.ts";
+import { CORE_VERSION } from "../src/core/version.ts";
 
 let tmp: string;
 let store: Store;
@@ -32,7 +33,9 @@ test("health endpoint is open (no auth) and reports localhost", async () => {
   const j: any = await res.json();
   expect(j.ok).toBe(true);
   expect(j.host).toBe("127.0.0.1");
-  expect(j.version.version).toBe("6.0.0"); // XR 6.0 — Hybrid (Local, Cloud, and Hybrid Operating Plane)
+  // Derived from the single source of truth (src/core/version.ts) so a release
+  // bump never breaks this test.
+  expect(j.version.version).toBe(CORE_VERSION);
   expect(j.binding).toBe("localhost-only");
   expect(j.auth).toBe("required-except-health");
 });
