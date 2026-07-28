@@ -1,0 +1,57 @@
+# XR — line ending policy
+#
+# WHY THIS FILE EXISTS
+#
+# `scripts/set-version.ts --check` regenerates src/core/version.ts in memory and
+# compares it to the file on disk. The generated string uses LF. On Windows,
+# Git's default `core.autocrlf=true` rewrites checked-out files to CRLF, so the
+# on-disk file no longer matches the generated one and the CI identity check
+# fails with "src/core/version.ts out of sync" even though the version is
+# correct.
+#
+# Normalising text files to LF in the working tree makes the repository behave
+# identically on Linux, macOS, and Windows, and keeps the version-sync
+# invariant meaningful rather than platform-dependent.
+
+# Default: treat as text, normalise to LF in the repo AND in the working tree.
+* text=auto eol=lf
+
+# Source and config — always LF.
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.cjs   text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.jsonc text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.sql   text eol=lf
+*.sh    text eol=lf
+*.lock  text eol=lf
+
+# Windows-only scripts genuinely need CRLF.
+*.ps1   text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Binaries — never touch.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.db    binary
+*.sqlite binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary

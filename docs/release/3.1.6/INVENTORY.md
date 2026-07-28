@@ -1,14 +1,14 @@
 # XR 3.1.6 Repository Inventory
 
-Generated: 2026-07-28T09:20:20.100Z
+Generated: 2026-07-28T11:07:40.463Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 438 |
-| Test files | 113 |
-| CLI commands | 39 |
+| Source files | 463 |
+| Test files | 116 |
+| CLI commands | 41 |
 | Daemon routes | 95 |
 | Providers | 26 |
 | Local runtimes | 11 |
@@ -55,6 +55,8 @@ Generated: 2026-07-28T09:20:20.100Z
 - `trust` (trust, supported) — xr trust [status|classify <command...>] [--json]
 - `audit` (trust, supported) — xr audit [tail|verify|export] [--limit n]
 - `attacks` (trust, supported) — xr attacks [--json]
+- `business` (work, supported) — xr business [status|init|journeys|outcomes|approvals|workers|artifacts|mutations|privacy|work-queue|audit]
+- `evaluate` (trust, supported) — xr evaluate [run|suites|list|inspect|compare|regressions|export|verify|certify|compatibility|claims|limitations|gaps|reproduce]
 - `enterprise` (trust, supported) — xr enterprise [status|policy|authority|audit|slo|incident|supplychain|recovery|release|evidence]
 - `doctor` (system, supported) — xr doctor [--network] [--json] [--perf]
 - `status` (system, supported) — xr status [--json] [--network]

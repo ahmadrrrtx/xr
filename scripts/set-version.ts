@@ -42,6 +42,19 @@ function readJson(path: string): PkgJson {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+/**
+ * Normalise line endings before comparing generated content to disk content.
+ *
+ * The generated string always uses LF. On Windows, Git's default
+ * `core.autocrlf=true` checks files out with CRLF, which would make this check
+ * fail on a correctly-versioned file. `.gitattributes` pins LF for this repo,
+ * but normalising here means the identity invariant holds even when a
+ * contributor's local Git config differs.
+ */
+function normalizeEol(text: string): string {
+  return text.replace(/\r\n/g, "\n").trim();
+}
+
 function extractCodename(versionTsContent: string): string {
   const m = versionTsContent.match(/codename:\s*["']([^"']+)["']/);
   return m?.[1] ?? "Helios";
@@ -213,11 +226,11 @@ function main(): void {
   const nextContent = buildVersionTs(pkg, codename);
 
   if (checkMode) {
-    if (existingVersionTs.trim() === nextContent.trim()) {
+    if (normalizeEol(existingVersionTs) === normalizeEol(nextContent)) {
       console.log(`[set-version] ✓ src/core/version.ts is in sync (v${pkg.version} ${codename})`);
       // Also check website?
       if (existsSync(SITE_TS_PATH)) {
-        const siteContent = readFileSync(SITE_TS_PATH, "utf8");
+        const siteContent = normalizeEol(readFileSync(SITE_TS_PATH, "utf8"));
         if (
           siteContent.includes(`version: "${pkg.version}"`) &&
           siteContent.includes(`codename: "${codename}"`) &&

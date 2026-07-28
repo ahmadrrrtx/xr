@@ -1,5 +1,90 @@
 # Changelog
 
+## XR 7.0.0 — "Supremacy" (Phase 13: XR OS Supremacy)
+
+**XR becomes a measurable platform.** This release adds no product features. It
+adds the layer that proves what XR can do, states plainly what it cannot, and
+detects when a change makes it worse.
+
+### Added — evaluation subsystem (`src/evaluation/`)
+
+- **Outcome-based benchmark harness** — 14 suites, 38 versioned scenarios across
+  runtime, execution, trust, durability, intelligence, context, workflow,
+  environment, capability, business, deployment, enterprise, DX, and UX.
+  Scenarios verify artifacts, records, states, policies, and side effects —
+  never response text.
+- **Nine hard safety gates** evaluated by the runner, not the scenario. A
+  scenario that leaks a credential, performs undeclared network access, bypasses
+  a policy, or escapes its fixture is `blocked` regardless of how well it scored.
+- **Scorecard with un-averageable gates** — a critical safety failure nulls the
+  headline score rather than lowering it. `not_applicable` is excluded from
+  scoring, never counted as zero. Weights are always published.
+- **Append-only result storage** with recompute-on-read integrity. Runs can be
+  invalidated but never deleted, so negative results cannot be erased.
+- **Longitudinal regression detection** with strict comparability rules, always-
+  critical security/privacy regressions, and benchmark-overfitting detection.
+- **Evidence-backed certification** for providers, capabilities, workflows,
+  deployment profiles, and runtime versions. Certifications expire, are
+  revocable, and cannot be granted from self-reported evidence alone.
+- **Compatibility contract tests** over public APIs, CLI commands, and data
+  schemas.
+- **Machine-checked claim/evidence matrix** — every public claim is classified
+  and bound to evidence, or labelled product vision. A guard prevents shipping
+  any comparative superiority claim as fact.
+- **Governance** — scenario semantic fingerprinting rejects unversioned meaning
+  changes; discovered gaps must be classified and owned.
+- **`xr evaluate` CLI** — run, suites, list, inspect, compare, regressions,
+  export, verify, certify, compatibility, claims, limitations, gaps, reproduce.
+
+### Fixed
+
+- **SECURITY: workflow definitions were not tamper-evident for their executable
+  content.** `hashDefinition()` covered only node ids and kinds, so a published
+  workflow's shell command, target capability, risk tier, or `requiresApproval`
+  flag could be modified while `verifyIntegrity()` still returned true. The hash
+  now covers the full definition. `hashDefinitionLegacyV1()` is retained and
+  `inspectIntegrity()` reports which scheme matched, so definitions published
+  before 7.0 keep loading. Found by the Phase 13 benchmark suite.
+- **`xr business` was missing from the CLI help catalog** — the Phase 10 command
+  worked but was undiscoverable. Found by the CLI compatibility contract test.
+- **Contradictory provider counts in README** ("20+" and "12+"). Corrected to
+  26 (16 hosted + 10 local), counted from `PRESETS`, with an explicit note that
+  provider count is not a quality measure.
+
+### Fixed — cross-platform / CI (post-review)
+
+- **`set-version:check` failed on Windows.** Git for Windows' default
+  `core.autocrlf=true` rewrote `src/core/version.ts` to CRLF, so the identity
+  check compared LF-generated content against a CRLF file and reported "out of
+  sync" on a correctly-versioned file. Added `.gitattributes` pinning text files
+  to LF, and made the comparison line-ending tolerant.
+- **`no_real_user_data` and `no_workspace_escape` gates were vacuous.** They
+  tested for the redaction marker `<home>`, which never appears in the raw
+  values gates actually receive. They now compare real paths against the fixture
+  root, with an explicit carve-out for the OS temp directory (on Windows the
+  temp dir lives inside the user profile, so "under homedir" is not a valid
+  escape test). Three regression tests added.
+- **Evaluation created the real `~/.xr` directory.** `buildCatalog()` probes the
+  OS key store, which creates `XR_HOME` as a side effect — so merely measuring
+  XR touched real user state. The intelligence scenarios now short-circuit the
+  probe with synthetic key values and restore the environment afterwards.
+- **Fixture isolation test assumed a Linux layout.** It asserted the fixture
+  root is not under `homedir()`, which is false on Windows. Now asserts
+  containment in `tmpdir()` and exclusion from the real XR home.
+- **Workflow benchmark used `WorkspaceStore`**, which unconditionally creates
+  `XR_HOME`. Replaced with a fixture-local SQLite store.
+
+### Notes
+
+- Verified green under both Linux and a simulated Windows layout (temp inside
+  the user profile).
+- No new runtime, workflow engine, policy system, or telemetry pipeline.
+- No destructive migration. Evaluation storage is created lazily and only when
+  `--save` is used.
+- The entire benchmark suite runs fully offline with no network.
+- Tests: 1636 → **1771 pass / 0 fail**.
+
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
