@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "6.0.0",
-  codename: "Hybrid",
+  version: "6.1.0",
+  codename: "Enterprise",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 6.0 (Local, Cloud, and Hybrid Operating Plane) — one XR operating semantics across personal local, private server, team private, managed cloud, and hybrid deployment profiles. Portable task capsules, placement policy, secure worker lifecycle, control/data plane separation, data residency, synchronization, offline continuity, and backup/restore — all preserving canonical execution/trust/workflow/context/capability semantics.",
+  description: "XR 6.1 (Enterprise Trust and Operations) — organization policy administration, delegated authority, verifiable audit export/retention, measurable SLOs, incident response, capability supply-chain response, tested disaster recovery, and release/support policy. Enterprise-grade governance that never overrides user-visible safety and never makes a hosted control plane mandatory for local operation.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;

@@ -43,6 +43,7 @@ import { AttacksCommand } from "../commands/attacks.ts";
 import { AskCommand, PlanCommand } from "../commands/ask-plan.ts";
 import { LogsCommand } from "../commands/logs.ts";
 import { BusinessCommand, BizAliasCommand } from "../commands/business.ts";
+import { EnterpriseCommand, EnterpriseAliasCommand } from "../commands/enterprise.ts";
 import { serve } from "../daemon/server.ts";
 import { CORE_VERSION, CODENAME, PKG, versionInfo } from "../core/version.ts";
 import {
@@ -101,6 +102,8 @@ function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new LogsCommand());
   kernel.commands.register(new BusinessCommand());
   kernel.commands.register(new BizAliasCommand());
+  kernel.commands.register(new EnterpriseCommand());
+  kernel.commands.register(new EnterpriseAliasCommand());
 }
 
 // ── Alias → registry name ─────────────────────────────────────────────────────

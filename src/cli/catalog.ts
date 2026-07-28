@@ -592,6 +592,35 @@ export const CATALOG: CatalogEntry[] = [
     related: ["shield", "audit", "doctor"],
     topics: ["security", "trust", "attacks"],
   },
+  {
+    name: "enterprise",
+    description: "organization policy, delegated authority, audit export, SLOs, incidents, recovery",
+    usage: "xr enterprise [status|policy|authority|audit|slo|incident|supplychain|recovery|release|evidence]",
+    group: "trust",
+    glyph: "shield",
+    aliases: ["ent"],
+    needsKernel: true,
+    examples: [
+      { cmd: "xr enterprise status", description: "operational status, SLOs, and alert conditions" },
+      { cmd: "xr enterprise policy show", description: "effective policy with a full decision trace" },
+      { cmd: "xr enterprise audit export --out audit.jsonl", description: "redacted, integrity-verified export" },
+      { cmd: "xr enterprise evidence", description: "certification evidence pack and its limitations" },
+    ],
+    related: ["audit", "trust", "capabilities", "shield"],
+    topics: ["enterprise", "policy", "audit", "compliance", "operations", "trust"],
+    subcommands: [
+      { name: "status", description: "operational status, SLOs, alerts" },
+      { name: "policy", description: "layers, effective policy, bundles, rollback" },
+      { name: "authority", description: "delegations, effective authority, reviews, revocation" },
+      { name: "audit", description: "export, verify, access log, retention, legal hold" },
+      { name: "slo", description: "service level objectives and error budgets" },
+      { name: "incident", description: "declare, inspect, transition, search incidents" },
+      { name: "supplychain", description: "capability revocation, quarantine, notices" },
+      { name: "recovery", description: "backup verification, restore drills, RPO/RTO" },
+      { name: "release", description: "channels, support windows, rollback checks" },
+      { name: "evidence", description: "certification evidence pack" },
+    ],
+  },
 
   // ── System ────────────────────────────────────────────────────────────────
   {
