@@ -19,12 +19,12 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "6.1.0",
-  codename: "Enterprise",
+  version: "7.0.0",
+  codename: "Supremacy",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 6.1 (Enterprise Trust and Operations) — organization policy administration, delegated authority, verifiable audit export/retention, measurable SLOs, incident response, capability supply-chain response, tested disaster recovery, and release/support policy. Enterprise-grade governance that never overrides user-visible safety and never makes a hosted control plane mandatory for local operation.",
+  description: "XR 7.0 (XR OS Supremacy) — outcome-based evaluation harness, hard security/correctness gates, evidence-backed certification, compatibility contracts, longitudinal regression detection, and a claim/evidence matrix. XR now proves what it can do, states what it cannot, and detects when a change makes it worse.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;

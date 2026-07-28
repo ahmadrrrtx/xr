@@ -129,7 +129,7 @@ xr serve             # start local dashboard + chat in browser
 
 |  | Most AI agents | **XR** |
 |---|---|---|
-| **Provider** | locked to vendor | BYOK — **any of 20+ providers**, or **fully local** via Ollama, LM Studio, llama.cpp, Jan, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, SGLang |
+| **Provider** | locked to vendor | BYOK — **any of 26 built-in providers** (16 hosted + 10 local runtimes), or **fully local** via Ollama, LM Studio, llama.cpp, Jan, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, SGLang |
 | **Cost** | "soft" warnings | **hard ceiling enforced in code** (`checkBeforeStep()`) |
 | **Security** | trust us | **deterministic injection benchmark**, signed block-rate report |
 | **Audit** | scrollback only | **SHA-256 hash chain** — tamper-evident, offline, free |
@@ -228,7 +228,7 @@ A **mission-control dashboard** with 16 navigation panels:
 | **Status** | Complete system health grid |
 | **Budget** | Spend controls, recent cost events, by-model and by-provider usage, soft-cap settings |
 | **Workspaces** | Create and switch isolated XR workspaces |
-| **Providers** | All 12+ providers with status, tier, key configuration, plus provider manager controls |
+| **Providers** | All 26 built-in providers with status, tier, key configuration, plus provider manager controls |
 | **Models** | Local runtime status, installed models |
 | **Memory** | Health cards (total/expired/never-recalled), live search, all entries with inline delete, expiry badges |
 | **Research** | Research mode quick reference |
@@ -710,9 +710,48 @@ SHA-256 hash chain on every action — git's trick, $0, offline. Any tampering d
 
 ---
 
+## 🔬 Evaluation — how XR proves what it claims
+
+XR 7.0 ships an outcome-based benchmark harness. It measures whether XR produces
+**verified outcomes**, not whether a model sounded confident.
+
+```bash
+xr evaluate run --offline      # 14 suites, 38 scenarios, no network required
+xr evaluate claims             # every public claim mapped to its evidence
+xr evaluate limitations        # what the benchmarks do NOT measure
+xr evaluate compare <a> <b>    # regression detection between releases
+xr evaluate export <runId>     # hash-verifiable evidence bundle
+```
+
+What makes it trustworthy rather than marketing:
+
+- **Outcomes are verified, not asserted.** A scenario passes only when the
+  harness inspects reality — the artifact on disk, the durable record, the state
+  transition, the audit chain.
+- **Security failures cannot be averaged away.** Nine hard safety gates are
+  evaluated by the harness, not by the code under test. A critical violation
+  nulls the headline score instead of lowering it.
+- **`not applicable` is never scored as zero**, and weights are always published.
+- **Negative results cannot be deleted** — only invalidated, with the reason and
+  original hash preserved.
+- **Claims are machine-checked.** `xr evaluate claims` fails if a
+  benchmark-verified claim's supporting scenario stopped passing.
+- **XR makes no comparative superiority claim.** No competitor is executed, so
+  no such claim is possible — and a test enforces that none is ever shipped.
+
+The harness found real defects in XR itself on its first run, including a
+workflow integrity gap where a published automation's shell command could be
+swapped without breaking its content hash. See
+[`PHASE13_VALIDATION_REPORT.md`](PHASE13_VALIDATION_REPORT.md) §4 and
+[`docs/phase13/`](docs/phase13/).
+
+---
+
 ## 📡 Providers
 
-XR supports **20+ providers**. Swap anytime — no restart, no re-config.
+XR supports **26 built-in providers** — 16 hosted and 10 local runtimes. Swap anytime — no restart, no re-config.
+
+> Counted from `PRESETS` in `src/providers/presets.ts`. Provider count is not a measure of product quality and is deliberately not scored by `xr evaluate`.
 
 | Provider | Type | Notes |
 |---|---|---|

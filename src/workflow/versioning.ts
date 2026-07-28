@@ -7,9 +7,10 @@
  */
 
 import type {
+  DefinitionIntegrityResult,
   WorkflowDefinition,
 } from "./types.ts";
-import { WORKFLOW_DEFINITION_SCHEMA_VERSION, hashDefinition } from "./types.ts";
+import { WORKFLOW_DEFINITION_SCHEMA_VERSION, checkDefinitionIntegrity, hashDefinition } from "./types.ts";
 
 /**
  * Create a new draft definition (version 0, not published).
@@ -132,8 +133,19 @@ export function publishNewVersion(
  * Verify that a definition's content hash matches.
  */
 export function verifyIntegrity(def: WorkflowDefinition): boolean {
-  const computed = hashDefinition(def);
-  return computed === def.contentHash;
+  return checkDefinitionIntegrity(def).valid;
+}
+
+/**
+ * Verify integrity AND report which hashing scheme matched.
+ *
+ * XR 7.0: definitions published before this release carry a legacy hash that
+ * only covered node ids and kinds. They remain loadable (no destructive
+ * migration) but are reported as `legacy_v1` so operators can re-publish them
+ * to obtain full-content coverage.
+ */
+export function inspectIntegrity(def: WorkflowDefinition): DefinitionIntegrityResult {
+  return checkDefinitionIntegrity(def);
 }
 
 /**

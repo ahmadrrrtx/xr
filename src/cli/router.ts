@@ -44,6 +44,7 @@ import { AskCommand, PlanCommand } from "../commands/ask-plan.ts";
 import { LogsCommand } from "../commands/logs.ts";
 import { BusinessCommand, BizAliasCommand } from "../commands/business.ts";
 import { EnterpriseCommand, EnterpriseAliasCommand } from "../commands/enterprise.ts";
+import { EvaluateCommand, EvalAliasCommand } from "../commands/evaluate.ts";
 import { serve } from "../daemon/server.ts";
 import { CORE_VERSION, CODENAME, PKG, versionInfo } from "../core/version.ts";
 import {
@@ -104,6 +105,8 @@ function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new BizAliasCommand());
   kernel.commands.register(new EnterpriseCommand());
   kernel.commands.register(new EnterpriseAliasCommand());
+  kernel.commands.register(new EvaluateCommand());
+  kernel.commands.register(new EvalAliasCommand());
 }
 
 // ── Alias → registry name ─────────────────────────────────────────────────────
@@ -184,6 +187,11 @@ const REGISTRY_NAME: Record<string, string> = {
   init: "onboarding",
   business: "business",
   biz: "business",
+  enterprise: "enterprise",
+  ent: "enterprise",
+  evaluate: "evaluate",
+  eval: "eval",
+  benchmark: "evaluate",
   task: "run",
   do: "run",
   exec: "run",

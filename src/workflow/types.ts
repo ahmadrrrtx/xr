@@ -729,18 +729,123 @@ export function isAwaitingHuman(state: WorkflowRunState): boolean {
   return HUMAN_WAITING_STATES.has(state);
 }
 
-/** Compute a deterministic content hash over a definition (FNV-1a). */
-export function hashDefinition(def: Omit<WorkflowDefinition, "contentHash" | "publishedAt">): string {
+/**
+ * Deterministic canonical JSON: object keys sorted recursively, so two
+ * structurally identical definitions always serialize identically.
+ */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(sortDeep(value));
+}
+
+function sortDeep(value: unknown): unknown {
+  if (value === null || typeof value !== "object") {
+    return typeof value === "number" && value === 0 ? 0 : value;
+  }
+  if (Array.isArray(value)) return value.map(sortDeep);
+  if (value instanceof Map) {
+    return Object.fromEntries([...value.entries()].sort(([a], [b]) => String(a).localeCompare(String(b))).map(([k, v]) => [k, sortDeep(v)]));
+  }
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+    out[key] = sortDeep((value as Record<string, unknown>)[key]);
+  }
+  return out;
+}
+
+/**
+ * LEGACY (XR 5.0–6.1) content hash.
+ *
+ * It covered only `definitionId`, `version`, node `id`+`kind`, and
+ * `entryNodeIds`. That means a published definition could be modified —
+ * changing a tool's command inputs, its target capability, its risk tier, or
+ * flipping `requiresApproval` to false — and still pass `verifyIntegrity`.
+ *
+ * Retained ONLY so definitions published before XR 7.0 continue to load
+ * (no destructive migration). Never use it to hash new definitions.
+ *
+ * @deprecated Use {@link hashDefinition}.
+ */
+export function hashDefinitionLegacyV1(def: Omit<WorkflowDefinition, "contentHash" | "publishedAt">): string {
   const canonical = JSON.stringify({
     definitionId: def.definitionId,
     version: def.version,
     nodes: def.nodes.map(n => ({ id: n.id, kind: n.kind })),
     entryNodeIds: def.entryNodeIds,
   });
+  return fnv1a(canonical);
+}
+
+function fnv1a(input: string): string {
   let h = 2166136261 >>> 0;
-  for (let i = 0; i < canonical.length; i++) {
-    h ^= canonical.charCodeAt(i);
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
     h = Math.imul(h, 16777619) >>> 0;
   }
   return h.toString(16).padStart(8, "0");
+}
+
+/**
+ * Compute a deterministic content hash over a definition.
+ *
+ * XR 7.0: this now covers the FULL executable semantics of the definition —
+ * every node in its entirety, plus the graph and the definition metadata that
+ * affects behaviour. Previously only node id + kind were hashed, so a
+ * published workflow's actual commands could be altered undetected.
+ *
+ * Note on threat model: this is a non-keyed hash, so it provides tamper
+ * EVIDENCE against modification of stored/transported definitions, not
+ * authenticated integrity against an attacker who can also rewrite the stored
+ * hash. Capability/package signing covers that separate case.
+ */
+export function hashDefinition(def: Omit<WorkflowDefinition, "contentHash" | "publishedAt">): string {
+  const canonical = canonicalJson({
+    schema: "xr-7.0.0/wf-hash-v2",
+    definitionId: def.definitionId,
+    name: def.name,
+    description: def.description ?? null,
+    version: def.version,
+    schemaVersion: def.schemaVersion,
+    // Full node content — not just id and kind.
+    nodes: def.nodes,
+    entryNodeIds: def.entryNodeIds,
+    expectedArtifacts: def.expectedArtifacts ?? null,
+    parameters: def.parameters ?? null,
+    tags: def.tags,
+    authoredBy: def.authoredBy,
+    active: def.active,
+    supersedes: def.supersedes ?? null,
+  });
+  return `v2:${fnv1a(canonical)}${fnv1a(`${canonical.length}:${canonical}`)}`;
+}
+
+/** How a definition's stored hash was verified. */
+export type DefinitionIntegrityLevel = "v2" | "legacy_v1" | "invalid";
+
+export interface DefinitionIntegrityResult {
+  /** True when the stored hash matches under v2 or the retained legacy scheme. */
+  valid: boolean;
+  level: DefinitionIntegrityLevel;
+  detail: string;
+}
+
+/**
+ * Verify a definition's content hash, reporting WHICH scheme matched.
+ *
+ * `legacy_v1` means the definition predates XR 7.0 and is only weakly
+ * covered: re-publishing it upgrades it to full coverage.
+ */
+export function checkDefinitionIntegrity(def: WorkflowDefinition): DefinitionIntegrityResult {
+  if (def.contentHash === hashDefinition(def)) {
+    return { valid: true, level: "v2", detail: "content hash covers the full definition (XR 7.0 scheme)" };
+  }
+  if (def.contentHash === hashDefinitionLegacyV1(def)) {
+    return {
+      valid: true,
+      level: "legacy_v1",
+      detail:
+        "definition was published before XR 7.0 and carries a legacy hash that covers only the graph shape " +
+        "(node ids and kinds). Re-publish this definition to obtain full-content integrity coverage.",
+    };
+  }
+  return { valid: false, level: "invalid", detail: "content hash does not match the definition" };
 }
