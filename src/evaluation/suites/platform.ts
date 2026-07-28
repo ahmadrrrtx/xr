@@ -10,6 +10,7 @@
 
 import { CORE_VERSION, PKG, versionInfo } from "../../core/version.ts";
 import { IntelligenceRouter } from "../../intelligence/router.ts";
+import type { IntelligenceCatalog } from "../../intelligence/catalog.ts";
 import { assessEnvironmentAction } from "../../environment/classify.ts";
 import { EnvironmentActionRequestSchema } from "../../environment/types.ts";
 import {
@@ -146,6 +147,45 @@ function localOnlyConfig(): Record<string, unknown> {
   };
 }
 
+/**
+ * Build the routing catalog WITHOUT probing the host credential store.
+ *
+ * `buildCatalog()` calls `credentialAvailable()`, which resolves the OS key
+ * store; `src/security/secrets.ts` creates `XR_HOME` as a side effect of that
+ * lookup and captures the path at module load, so it cannot be redirected
+ * afterwards. A benchmark must never create or read real user state.
+ *
+ * `credentialAvailable()` short-circuits on `process.env[preset.apiKeyEnv]`
+ * BEFORE touching the key store, so the scenario sets a synthetic value for
+ * each provider's key variable while the catalog is built, then restores the
+ * environment exactly. No real key is read, and none is written.
+ *
+ * This measures the routing DECISION — what these scenarios assert — without
+ * depending on, or mutating, the operator's configured credentials.
+ */
+async function catalogWithoutKeyProbe(): Promise<IntelligenceCatalog> {
+  const { PRESETS } = await import("../../providers/presets.ts");
+  const { buildCatalog } = await import("../../intelligence/catalog.ts");
+
+  const touched: { key: string; prior: string | undefined }[] = [];
+  for (const preset of Object.values(PRESETS)) {
+    const envVar = (preset as { apiKeyEnv?: string }).apiKeyEnv;
+    if (!envVar) continue;
+    touched.push({ key: envVar, prior: process.env[envVar] });
+    // Synthetic, non-functional placeholder. Never leaves this process.
+    process.env[envVar] = "xr-evaluation-synthetic-not-a-real-key";
+  }
+
+  try {
+    return buildCatalog();
+  } finally {
+    for (const { key, prior } of touched) {
+      if (prior === undefined) delete process.env[key];
+      else process.env[key] = prior;
+    }
+  }
+}
+
 const localityEnforced: ScenarioDefinition = {
   id: "intelligence.locality-policy-enforced",
   version: 1,
@@ -168,8 +208,9 @@ const localityEnforced: ScenarioDefinition = {
     "Evaluates the routing DECISION, not the provider transport. A provider adapter that ignores the decision is out of scope here.",
     "No model is actually invoked, so this measures policy compliance rather than answer quality.",
   ],
-  run: (ctx) => {
-    const router = new IntelligenceRouter();
+  run: async (ctx) => {
+    const catalog = await catalogWithoutKeyProbe();
+    const router = new IntelligenceRouter({ catalog });
     const result = router.route(localOnlyConfig() as never, {});
     const decision = result.decision;
 
@@ -242,7 +283,8 @@ const routingIsExplainable: ScenarioDefinition = {
   blindSpots: ["Verifies the presence and shape of the explanation, not whether a human finds it persuasive."],
   run: async (ctx) => {
     const { routingDecisionToRecord } = await import("../../intelligence/router.ts");
-    const router = new IntelligenceRouter();
+    const catalog = await catalogWithoutKeyProbe();
+    const router = new IntelligenceRouter({ catalog });
     const { decision } = router.route(localOnlyConfig() as never, {});
     const record = routingDecisionToRecord(decision);
 

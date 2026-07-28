@@ -276,6 +276,44 @@ export const PHASE13_DISCOVERED_GAPS: readonly DiscoveredGap[] = Object.freeze([
       "subcommands, examples, and topics was added.",
   }),
   classifyGap({
+    id: "gap.evaluation-created-real-xr-home",
+    summary: "Building the routing catalog created the real ~/.xr directory during a benchmark run.",
+    classification: "correctness_defect",
+    owner: "evaluation",
+    detail:
+      "buildCatalog() calls credentialAvailable(), which resolves the OS key store; " +
+      "src/security/secrets.ts creates XR_HOME as a side effect and captures the path at module load, so it " +
+      "cannot be redirected afterwards. Merely MEASURING XR therefore touched real user state, violating the " +
+      "Phase 13 invariant. Found by running the suite under a Windows-like layout where the temp directory sits " +
+      "inside the user profile. FIXED IN PHASE 13: the intelligence scenarios set synthetic values for provider " +
+      "key env vars (which credentialAvailable() short-circuits on, before any key-store access) and restore the " +
+      "environment afterwards. No real key is read and none is written.",
+  }),
+  classifyGap({
+    id: "gap.workspace-escape-gates-were-vacuous",
+    summary: "The no_real_user_data and no_workspace_escape gates could never fire.",
+    classification: "security_defect",
+    owner: "evaluation",
+    detail:
+      "When gates were switched to inspect UNREDACTED evidence (so the secret-leak gate would not be vacuous), " +
+      "the two filesystem gates still tested for the redaction marker '<home>', which by definition never appears " +
+      "in a raw path. Both gates silently passed everything. FIXED IN PHASE 13: they now compare real paths " +
+      "against the fixture root, with an explicit carve-out for the OS temp directory — necessary because on " +
+      "Windows the temp dir legitimately lives inside the user profile, so 'is under homedir' is not a valid " +
+      "escape test. Three regression tests assert the gates both fire and do not false-positive.",
+  }),
+  classifyGap({
+    id: "gap.crlf-broke-version-sync-on-windows",
+    summary: "set-version:check failed on Windows because Git rewrote line endings.",
+    classification: "correctness_defect",
+    owner: "release",
+    detail:
+      "The check regenerates src/core/version.ts in memory (LF) and compares it to disk. With Git for Windows' " +
+      "default core.autocrlf=true the checked-out file is CRLF, so a correctly-versioned file reported 'out of " +
+      "sync' and blocked CI. FIXED IN PHASE 13: a .gitattributes pins text files to LF, and the comparison " +
+      "normalises line endings so the identity invariant holds regardless of a contributor's local Git config.",
+  }),
+  classifyGap({
     id: "gap.cancellation-cannot-abort-uncooperative-work",
     summary: "Cancellation stops XR waiting, but cannot abort JavaScript that ignores the signal.",
     classification: "future_product_work",

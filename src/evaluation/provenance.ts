@@ -12,7 +12,7 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import { cpus, totalmem, platform, arch } from "node:os";
+import { cpus, totalmem, platform, arch, homedir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { CORE_VERSION } from "../core/version.ts";
 import {
@@ -84,11 +84,23 @@ export function redactEvidence(text: string): string {
   let out = text;
   for (const re of SECRET_PATTERNS) out = out.replace(re, "[redacted]");
 
-  // Home directories and user names → stable placeholder.
+  // Fixture roots FIRST. On Windows the OS temp dir lives inside the user
+  // profile, so if home were redacted first a fixture path would be mislabelled
+  // as a home path — and the workspace-escape gate reads these markers.
+  out = out.replace(/[^\s"']*xr-eval-[A-Za-z0-9]+/g, "<fixture>");
+
+  // The ACTUAL home directory — covers non-standard locations on any platform.
+  const realHome = homedir();
+  if (realHome && realHome.length > 1) {
+    out = out.split(realHome).join("<home>");
+    const altHome = realHome.replace(/\\/g, "/");
+    if (altHome !== realHome) out = out.split(altHome).join("<home>");
+  }
+
+  // Conventional home directory shapes → stable placeholder.
   out = out.replace(/\/(?:home|Users)\/[^/\s"']+/g, "/<home>");
   out = out.replace(/[A-Za-z]:\\Users\\[^\\\s"']+/g, "<home>");
-  // Temp fixture roots → placeholder (keeps the tail for readability).
-  out = out.replace(/\/(?:tmp|var\/folders)\/[^\s"']*?xr-eval-[A-Za-z0-9]+/g, "<fixture>");
+
   // IPv4 literals other than loopback.
   out = out.replace(/\b(?!127\.0\.0\.1\b)(?:\d{1,3}\.){3}\d{1,3}\b/g, "<ip>");
   return out;

@@ -51,13 +51,38 @@ detects when a change makes it worse.
   26 (16 hosted + 10 local), counted from `PRESETS`, with an explicit note that
   provider count is not a quality measure.
 
+### Fixed — cross-platform / CI (post-review)
+
+- **`set-version:check` failed on Windows.** Git for Windows' default
+  `core.autocrlf=true` rewrote `src/core/version.ts` to CRLF, so the identity
+  check compared LF-generated content against a CRLF file and reported "out of
+  sync" on a correctly-versioned file. Added `.gitattributes` pinning text files
+  to LF, and made the comparison line-ending tolerant.
+- **`no_real_user_data` and `no_workspace_escape` gates were vacuous.** They
+  tested for the redaction marker `<home>`, which never appears in the raw
+  values gates actually receive. They now compare real paths against the fixture
+  root, with an explicit carve-out for the OS temp directory (on Windows the
+  temp dir lives inside the user profile, so "under homedir" is not a valid
+  escape test). Three regression tests added.
+- **Evaluation created the real `~/.xr` directory.** `buildCatalog()` probes the
+  OS key store, which creates `XR_HOME` as a side effect — so merely measuring
+  XR touched real user state. The intelligence scenarios now short-circuit the
+  probe with synthetic key values and restore the environment afterwards.
+- **Fixture isolation test assumed a Linux layout.** It asserted the fixture
+  root is not under `homedir()`, which is false on Windows. Now asserts
+  containment in `tmpdir()` and exclusion from the real XR home.
+- **Workflow benchmark used `WorkspaceStore`**, which unconditionally creates
+  `XR_HOME`. Replaced with a fixture-local SQLite store.
+
 ### Notes
 
+- Verified green under both Linux and a simulated Windows layout (temp inside
+  the user profile).
 - No new runtime, workflow engine, policy system, or telemetry pipeline.
 - No destructive migration. Evaluation storage is created lazily and only when
   `--save` is used.
 - The entire benchmark suite runs fully offline with no network.
-- Tests: 1636 → **1767 pass / 0 fail**.
+- Tests: 1636 → **1771 pass / 0 fail**.
 
 
 All notable changes to this project will be documented in this file.

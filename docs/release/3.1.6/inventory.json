@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T10:41:29.632Z",
+  "generatedAt": "2026-07-28T11:07:40.463Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.0.0",
@@ -62,6 +62,10 @@
     {
       "path": ".bun-version",
       "bytes": 7
+    },
+    {
+      "path": ".gitattributes",
+      "bytes": 1483
     },
     {
       "path": ".gitignore",

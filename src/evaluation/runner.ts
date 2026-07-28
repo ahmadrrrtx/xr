@@ -168,6 +168,7 @@ export async function executeScenario(
   const notes: string[] = [];
   const random = seededRandom(`${opts.seed}:${scenario.id}:${scenario.version}`);
 
+
   const ctx: ScenarioContext = Object.freeze({
     fixtureRoot: workspace.root,
     recordEffect: (e: Parameters<ScenarioContext["recordEffect"]>[0]) => effects.record(e),

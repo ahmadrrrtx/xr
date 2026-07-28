@@ -235,6 +235,28 @@ credential-shaped value while reporting perfect verifications is now `blocked`.
 
 ---
 
+### 4.5 Cross-platform defects found in Windows review
+
+Running the delivered branch on Windows surfaced four further defects. All are
+fixed; the suite is now verified green under both Linux and a simulated Windows
+layout (temp directory inside the user profile).
+
+| # | Defect | Class | Fix |
+|---|---|---|---|
+| 1 | `set-version:check` failed on Windows — Git's `core.autocrlf=true` rewrote `version.ts` to CRLF, so LF-generated content never matched | correctness | `.gitattributes` pins text to LF + line-ending-tolerant comparison |
+| 2 | **`no_real_user_data` / `no_workspace_escape` gates were vacuous** — they tested for the redaction marker `<home>`, which never appears in the raw values gates receive | **security** | gates now compare real paths against the fixture root, with an OS-temp carve-out; 3 regression tests added |
+| 3 | **Evaluation created the real `~/.xr`** — `buildCatalog()` probes the OS key store, which creates `XR_HOME` as a side effect | correctness | intelligence scenarios short-circuit the probe with synthetic key values and restore the environment |
+| 4 | Fixture-isolation test assumed a Linux layout (`fixtureRoot` not under `homedir()`), false on Windows where temp lives inside the profile | correctness | asserts containment in `tmpdir()` and exclusion from the real XR home |
+
+Defect 2 is the most serious: it meant two of the nine hard safety gates were
+silently passing everything. It was introduced by my own earlier fix that made
+gates read unredacted evidence, and was caught only by running under a
+Windows-like path layout.
+
+**Final test count: 1636 → 1771 pass / 0 fail** (+135), green on both platforms.
+
+---
+
 ## 7. Unresolved blockers
 
 **None.**

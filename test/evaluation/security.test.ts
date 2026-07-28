@@ -11,8 +11,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   ALL_SUITES,
   EvaluationRunner,
@@ -86,9 +86,96 @@ describe("harness cannot touch real user data", () => {
     });
 
     expect(seen.length).toBe(1);
-    expect(seen[0]!.startsWith(homedir())).toBe(false);
+
+    // The fixture must live in the OS temp directory — NOT directly in the
+    // user profile, and never in the real XR home.
+    //
+    // Note: on Windows the OS temp dir is legitimately *inside* the user
+    // profile (C:\Users\<name>\AppData\Local\Temp), so "starts with homedir"
+    // is not a valid escape test. Asserting containment in tmpdir() is both
+    // correct and portable.
+    const root = resolve(seen[0]!);
+    expect(root.startsWith(resolve(tmpdir()))).toBe(true);
+    expect(root.startsWith(resolve(join(homedir(), ".xr")))).toBe(false);
+    expect(root).not.toBe(resolve(homedir()));
+    expect(root.includes("xr-eval-")).toBe(true);
+
     // The fixture is removed after the run.
     expect(existsSync(seen[0]!)).toBe(false);
+  });
+
+  test("a write to real user data outside the fixture TRIPS the gate", () => {
+    const ws = FixtureWorkspace.create();
+    try {
+      const gates = evaluateSafetyGates({
+        scenario: {
+          id: "x", version: 1, title: "x", intent: "x", expectedOutcome: "x",
+          dimension: "runtime", set: "development", determinism: "deterministic",
+          contracts: [], profiles: [], offlineCapable: true,
+          allowedEffects: NO_EXTERNAL_EFFECTS,
+          budget: { wallClockMs: 1000, maxEffects: 10 }, blindSpots: [],
+          run: () => ({ verifications: [] }),
+        },
+        workspace: ws,
+        // A REAL user-data path, unredacted (gates see raw values).
+        effects: [{ kind: "fs_write", target: join(homedir(), "Documents", "taxes.xlsx"), allowed: true, at: 0 }],
+        evidence: [],
+        offline: true,
+      });
+      expect(gates.find((g) => g.gateId === "no_real_user_data")!.held).toBe(false);
+      expect(gates.find((g) => g.gateId === "no_workspace_escape")!.held).toBe(false);
+    } finally {
+      ws.dispose();
+    }
+  });
+
+  test("a write inside the fixture does NOT trip the gate (portable across OSes)", () => {
+    const ws = FixtureWorkspace.create();
+    try {
+      const gates = evaluateSafetyGates({
+        scenario: {
+          id: "x", version: 1, title: "x", intent: "x", expectedOutcome: "x",
+          dimension: "runtime", set: "development", determinism: "deterministic",
+          contracts: [], profiles: [], offlineCapable: true,
+          allowedEffects: NO_EXTERNAL_EFFECTS,
+          budget: { wallClockMs: 1000, maxEffects: 10 }, blindSpots: [],
+          run: () => ({ verifications: [] }),
+        },
+        workspace: ws,
+        // On Windows this path is under the user profile, yet it is a
+        // legitimate fixture write and must NOT be treated as an escape.
+        effects: [{ kind: "fs_write", target: ws.resolve("out.txt"), allowed: true, at: 0 }],
+        evidence: [],
+        offline: true,
+      });
+      expect(gates.find((g) => g.gateId === "no_real_user_data")!.held).toBe(true);
+      expect(gates.find((g) => g.gateId === "no_workspace_escape")!.held).toBe(true);
+    } finally {
+      ws.dispose();
+    }
+  });
+
+  test("a read of the real XR home TRIPS the gate", () => {
+    const ws = FixtureWorkspace.create();
+    try {
+      const gates = evaluateSafetyGates({
+        scenario: {
+          id: "x", version: 1, title: "x", intent: "x", expectedOutcome: "x",
+          dimension: "runtime", set: "development", determinism: "deterministic",
+          contracts: [], profiles: [], offlineCapable: true,
+          allowedEffects: NO_EXTERNAL_EFFECTS,
+          budget: { wallClockMs: 1000, maxEffects: 10 }, blindSpots: [],
+          run: () => ({ verifications: [] }),
+        },
+        workspace: ws,
+        effects: [{ kind: "fs_read", target: join(homedir(), ".xr", "xr.db"), allowed: true, at: 0 }],
+        evidence: [],
+        offline: true,
+      });
+      expect(gates.find((g) => g.gateId === "no_real_user_data")!.held).toBe(false);
+    } finally {
+      ws.dispose();
+    }
   });
 
   test("the harness refuses a protected directory as a fixture root", () => {
@@ -355,7 +442,9 @@ describe("score integrity", () => {
 
   test("redaction is applied to every evidence string", () => {
     expect(redactEvidence("sk-ABCDEFGHIJKLMNOPQRSTUVWX")).not.toContain("sk-ABCDEFGH");
-    expect(redactEvidence(`${homedir()}/x`)).not.toContain(homedir());
+    const red = redactEvidence(`${homedir()}/x`);
+    expect(red).not.toContain(homedir());
+    expect(/<home>|<fixture>/.test(red)).toBe(true);
   });
 });
 

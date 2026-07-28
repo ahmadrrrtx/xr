@@ -7,7 +7,8 @@
  *   - src/business/core/* (journeys, authority boundaries)
  */
 
-import { WorkspaceStore } from "../../state/workspace-store.ts";
+import { Database } from "bun:sqlite";
+import type { WorkspaceStore } from "../../state/workspace-store.ts";
 import { WorkflowRepository } from "../../workflow/repository.ts";
 import { WorkflowEngine } from "../../workflow/engine.ts";
 import * as n from "../../workflow/nodes.ts";
@@ -34,8 +35,36 @@ const BUDGET = { wallClockMs: 30_000, maxEffects: 80 } as const;
 // Workflow
 // ═══════════════════════════════════════════════════════════════════════════
 
-function setupEngine(fixtureRoot: string): { engine: WorkflowEngine; store: WorkspaceStore } {
-  const store = new WorkspaceStore(`${fixtureRoot}/workflows.db`);
+/**
+ * A minimal store facade over a fixture-local SQLite file.
+ *
+ * `WorkspaceStore` unconditionally creates the real `XR_HOME` directory in its
+ * constructor ("never breaks" rule), which would violate the Phase 13
+ * invariant that evaluation never touches real user data. `WorkflowRepository`
+ * only needs `exec`/`prepare`, so the benchmark supplies exactly that against
+ * a database inside the disposable fixture.
+ */
+function fixtureStore(dbPath: string): { store: WorkspaceStore; close: () => void } {
+  const db = new Database(dbPath, { create: true });
+  db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+  const facade = {
+    exec: (sql: string) => db.exec(sql),
+    prepare: (sql: string) => db.prepare(sql),
+  } as unknown as WorkspaceStore;
+  return {
+    store: facade,
+    close: () => {
+      try {
+        db.close();
+      } catch {
+        /* noop */
+      }
+    },
+  };
+}
+
+function setupEngine(fixtureRoot: string): { engine: WorkflowEngine; store: { close: () => void } } {
+  const { store, close } = fixtureStore(`${fixtureRoot}/workflows.db`);
   const repo = new WorkflowRepository(store);
   const engine = new WorkflowEngine({
     agentRunner: {
@@ -53,7 +82,7 @@ function setupEngine(fixtureRoot: string): { engine: WorkflowEngine; store: Work
     },
     runStore: repo,
   } as never);
-  return { engine, store };
+  return { engine, store: { close } };
 }
 
 const humanGateHolds: ScenarioDefinition = {
@@ -150,11 +179,7 @@ const humanGateHolds: ScenarioDefinition = {
 
       return { verifications, evidence: [`workflow run final state = ${finalState}`] };
     } finally {
-      try {
-        store.close();
-      } catch {
-        /* noop */
-      }
+      store.close();
     }
   },
 };

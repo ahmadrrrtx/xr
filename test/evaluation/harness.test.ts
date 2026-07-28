@@ -420,8 +420,20 @@ describe("effect recording", () => {
   test("effect targets are redacted on the way in", () => {
     const r = new EffectRecorder(() => 0);
     r.record({ kind: "fs_read", target: `${homedir()}/secret.txt`, allowed: true });
-    expect(r.list()[0]!.target).toContain("<home>");
-    expect(r.list()[0]!.target).not.toContain(homedir());
+    const redacted = r.list()[0]!.target;
+    // The invariant that matters: the real home path never survives into a
+    // stored effect. The exact placeholder (<home> or <fixture>) depends on
+    // platform layout, since Windows places the temp dir inside the profile.
+    expect(redacted).not.toContain(homedir());
+    expect(/<home>|<fixture>/.test(redacted)).toBe(true);
+  });
+
+  test("gates still receive the UNREDACTED target", () => {
+    const r = new EffectRecorder(() => 0);
+    const raw = `${homedir()}/secret.txt`;
+    r.record({ kind: "fs_read", target: raw, allowed: true });
+    // Otherwise the secret-detection gate would be vacuous.
+    expect(r.listRawForGates()[0]!.target).toBe(raw);
   });
 
   test("declared-vs-actual violations are detected", () => {
@@ -635,8 +647,8 @@ describe("provenance", () => {
 
   test("redaction removes host home paths", () => {
     const out = redactEvidence(`${homedir()}/projects/secret`);
-    expect(out).toContain("<home>");
     expect(out).not.toContain(homedir());
+    expect(/<home>|<fixture>/.test(out)).toBe(true);
   });
 
   test("seeded random is reproducible", () => {
