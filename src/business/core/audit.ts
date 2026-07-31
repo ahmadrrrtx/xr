@@ -29,27 +29,34 @@ export class AuditTrail {
     const id = BusinessDatabase.generateId();
     const now = BusinessDatabase.now();
 
-    // Get previous hash for chain
-    const previousEntry = this.db.prepare(
-      'SELECT hash FROM biz_audit WHERE org_id = ? ORDER BY timestamp DESC LIMIT 1'
-    ).get(params.orgId) as any;
-    const previousHash = previousEntry?.hash ?? '0'.repeat(64);
+    // Phase 1 (T1): the read-previous-hash → compute → insert sequence is one
+    // atomic transaction (serialized through the single writer), so concurrent
+    // writers cannot fork the Business OS chain.
+    let hash = '';
+    let previousHash = '0'.repeat(64);
+    this.db.transaction(() => {
+      // Get previous hash for chain
+      const previousEntry = this.db.prepare(
+        'SELECT hash FROM biz_audit WHERE org_id = ? ORDER BY timestamp DESC LIMIT 1'
+      ).get(params.orgId) as any;
+      previousHash = previousEntry?.hash ?? '0'.repeat(64);
 
-    // Compute hash: SHA-256(previous_hash + action + resource + resource_id + timestamp)
-    const hashInput = `${previousHash}${params.action}${params.resource}${params.resourceId}${now}`;
-    const hash = createHash('sha256').update(hashInput).digest('hex');
+      // Compute hash: SHA-256(previous_hash + action + resource + resource_id + timestamp)
+      const hashInput = `${previousHash}${params.action}${params.resource}${params.resourceId}${now}`;
+      hash = createHash('sha256').update(hashInput).digest('hex');
 
-    this.db.prepare(`
-      INSERT INTO biz_audit (id, org_id, workspace_id, actor_id, actor_type, action, resource, resource_id, changes, metadata, hash, previous_hash, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id, params.orgId, params.workspaceId ?? null,
-      params.actorId, params.actorType, params.action,
-      params.resource, params.resourceId,
-      params.changes ? JSON.stringify(params.changes) : null,
-      params.metadata ? JSON.stringify(params.metadata) : null,
-      hash, previousHash, now
-    );
+      this.db.prepare(`
+        INSERT INTO biz_audit (id, org_id, workspace_id, actor_id, actor_type, action, resource, resource_id, changes, metadata, hash, previous_hash, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id, params.orgId, params.workspaceId ?? null,
+        params.actorId, params.actorType, params.action,
+        params.resource, params.resourceId,
+        params.changes ? JSON.stringify(params.changes) : null,
+        params.metadata ? JSON.stringify(params.metadata) : null,
+        hash, previousHash, now
+      );
+    });
 
     return {
       id,

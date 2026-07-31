@@ -245,6 +245,16 @@ export class XRApp {
             timestamp: Date.now(),
           });
         }
+
+        // Phase 1 UX: crash-recovery banner on next launch (Part 22).
+        if (blocked.length > 0 || pending.length > 0) {
+          // eslint-disable-next-line no-console
+          console.warn(
+            `\n  ⚠ XR recovered ${results.length} interrupted execution(s) from a previous run. ` +
+              `${blocked.length} blocked (needs review), ${pending.length} awaiting approval. ` +
+              `Run \`xr status\` or \`xr execution list\` for details.\n`,
+          );
+        }
       }
     } catch (err) {
       // Startup recovery is best-effort — never prevent the runtime from starting.
@@ -661,6 +671,31 @@ export class XRApp {
           }
         } catch {
           /* best-effort */
+        }
+      },
+    });
+
+    // Phase 1 (T2): WAL maintenance — periodic checkpoint(RESTART) so the WAL
+    // stays bounded. RESTART only succeeds when no readers are attached; the
+    // store falls back to TRUNCATE internally.
+    this.backgroundServices.registerJob({
+      id: "wal_maintenance",
+      name: "WAL Checkpoint Maintenance",
+      intervalMs: 900000, // every 15 minutes
+      owner: "xr.kernel",
+      restartOnWorkspaceSwitch: true,
+      run: async () => {
+        try {
+          const store = this.registry.resolve(Tokens.Store);
+          const result = store.checkpointWal("RESTART");
+          if (!result.ok) {
+            this.events.emit("wal.checkpoint_failed" as any, {
+              detail: result.detail,
+              timestamp: Date.now(),
+            });
+          }
+        } catch {
+          /* best-effort maintenance */
         }
       },
     });

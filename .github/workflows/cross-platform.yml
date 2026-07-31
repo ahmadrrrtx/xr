@@ -1,0 +1,63 @@
+# =============================================================================
+# XR Phase 1 · T7 — Cross-platform CI (macOS + Windows)
+#
+# Phase-0 discipline: green, or honestly gapped. The full suite runs on Linux;
+# these jobs run typecheck + unit + reliability subset on macOS and Windows so
+# platform-specific breakage surfaces in CI instead of on users' machines.
+#
+# Honest gap note (recorded in docs/phase-1/FINAL_REVIEW.md): the crash-
+# injection matrix uses SIGKILL child processes and POSIX-only path/symlink
+# semantics, so it is Linux/macOS only; Windows runs the typecheck + unit +
+# golden-path subset (which are platform-agnostic).
+# =============================================================================
+name: Cross-Platform CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS (typecheck + unit + reliability subset)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bunx tsc --noEmit
+      - name: Unit + Phase 0 suite
+        run: bun test test/state test/phase0 test/core test/execution test/reliability/single-writer.test.ts test/reliability/idempotency.test.ts test/reliability/migrations.test.ts test/reliability/rpo-rto.test.ts
+      - name: Golden path
+        run: bun run golden-path
+
+  windows:
+    name: Windows (typecheck + unit + golden-path subset)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bunx tsc --noEmit
+      - name: Unit + Phase 0 suite
+        run: bun test test/state test/phase0 test/core test/reliability/single-writer.test.ts test/reliability/idempotency.test.ts test/reliability/migrations.test.ts test/reliability/rpo-rto.test.ts
+      - name: Golden path
+        run: bun run golden-path
+        env:
+          HOME: ${{ runner.temp }}\xr-home
+          XR_HOME: ${{ runner.temp }}\xr-data

@@ -2,17 +2,49 @@
  * XR — state store (SQLite via Bun's built-in driver).
  * Sessions + steps + the tamper-evident, hash-chained audit log.
  * (TRD §1 / schema doc 05. This is our "blockchain-grade" tamper evidence — free & offline.)
+ *
+ * Phase 1 (Reliability & Persistence Core):
+ *   - SQLite configured for safe local concurrency: WAL, synchronous=NORMAL,
+ *     busy_timeout≥3000, foreign_keys=ON, wal_autocheckpoint set.
+ *   - Exactly ONE read-write connection per database file per process
+ *     (shared through a per-file registry); reads use the same connection
+ *     (WAL readers never block the writer) and dedicated read-only helpers
+ *     are available for long-lived readers.
+ *   - Every mutating statement through this connection is executed inside a
+ *     serialized `BEGIN IMMEDIATE … COMMIT` transaction (the WriteGate) — the
+ *     connection itself is the single writer. Multi-statement trust-critical
+ *     writes (audit append, workflow save, dedup check-then-insert) wrap
+ *     their whole read-modify-write in one transaction.
+ *   - The audit hash-chain append is atomic (lastHash→compute→insert in one
+ *     IMMEDIATE transaction) and appends FAIL CLOSED on a broken chain until
+ *     an explicit `repairChain()` re-seeds it.
+ *   - Periodic `wal_checkpoint(RESTART)` (fallback TRUNCATE) bounds WAL
+ *     growth; a checkpoint runs on close.
  */
 import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
-import { join, dirname } from "node:path";
-import { existsSync, mkdirSync } from "node:fs";
+import { join, dirname, resolve } from "node:path";
+import { existsSync, mkdirSync, copyFileSync, readFileSync, rmSync } from "node:fs";
 import { XR_HOME } from "../config/config.ts";
 // XR 4.5 — context schema. `context/repository.ts` imports only `context/types.ts`
 // (dependency-free), so this static import introduces no cycle.
 import { ContextRepository, adaptStoreForContext } from "../context/repository.ts";
+import {
+  AuditChainCorruptedError,
+  WriteGate,
+  gateConnection,
+  openDatabase,
+} from "./write-gate.ts";
+import { runMigrationsUp } from "./migrations.ts";
 
 const GENESIS = "xr-genesis";
+
+/** A process-shared read-write connection for one database file (max 1 RW per file). */
+interface SharedConnection {
+  db: Database;
+  gate: WriteGate;
+  refs: number;
+}
 
 /** v0.9: a row in the durable user-memory table. */
 export interface MemoryRow {
@@ -68,11 +100,17 @@ export interface SummaryRow {
 }
 
 export class WorkspaceStore {
-  private static openConnections = 0;
+  /** Phase 1: one shared read-write connection per database file per process. */
+  private static readonly shared = new Map<string, SharedConnection>();
   /** 0.2 Storage Unification: Track the last-opened instance for singleton access. */
   private static _lastOpened: WorkspaceStore | null = null;
   private db: Database;
+  private gate: WriteGate;
   private readonly openedPath: string;
+  private readonly sharedKey: string;
+  private closed = false;
+  /** Phase 1: first broken audit index detected (null = chain intact). */
+  private chainBrokenAt: number | null = null;
 
   public readonly workspaceId: string;
 
@@ -85,11 +123,39 @@ export class WorkspaceStore {
     const parent = dirname(path);
     if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
     this.openedPath = path;
-    this.db = new Database(path, { create: true });
-    WorkspaceStore.openConnections += 1;
+    this.sharedKey = resolve(path);
+
+    // Phase 1 (T2): enforce max-1 read-write connection per DB file per
+    // process. A second open of the same file shares the existing connection
+    // (and its WriteGate), so two store instances can never become two
+    // concurrent writers within one process.
+    let shared = WorkspaceStore.shared.get(this.sharedKey);
+    if (!shared) {
+      const db = openDatabase(path);
+      const gate = new WriteGate(db);
+      shared = { db, gate, refs: 0 };
+      WorkspaceStore.shared.set(this.sharedKey, shared);
+    }
+    shared.refs += 1;
+    this.gate = shared.gate;
+    // The gated connection is the single writer: every mutation through it is
+    // serialized + transactional by construction (T3).
+    this.db = gateConnection(shared.db, shared.gate);
     WorkspaceStore._lastOpened = this;
-    this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.migrate();
+    runMigrationsUp(this);
+    // Phase 1 (T1): fail-closed detection of a pre-existing broken chain.
+    this.chainBrokenAt = this.verifyChain().valid ? null : (this.verifyChain().brokenAt ?? null);
+  }
+
+  /** Execute a mutating block inside the serialized write gate (single writer). */
+  write<T>(fn: () => T): T {
+    return this.gate.run(fn);
+  }
+
+  /** True when the audit chain is corrupted and appends are refused. */
+  get auditChainCorrupted(): boolean {
+    return this.chainBrokenAt !== null;
   }
 
   private migrate(): void {
@@ -810,21 +876,37 @@ export class WorkspaceStore {
     return JSON.parse(json);
   }
 
+  /**
+   * Append one audit entry. The chain append (read last hash → compute →
+   * insert) is ONE atomic `IMMEDIATE` transaction (T1): concurrent writers —
+   * in-process through the gate, or cross-process through SQLite's
+   * IMMEDIATE lock + busy_timeout — can never fork the chain.
+   *
+   * Fails CLOSED with `AuditChainCorruptedError` while the chain is broken;
+   * run `xr audit repair --yes` (or `repairChain()`) to truncate suspect
+   * entries and re-seed.
+   */
   audit(
     event: string,
     detail: Record<string, unknown>,
     sessionId: string | null = null,
   ): string {
-    const prev = this.lastHash();
-    const ts = Date.now();
+    if (this.chainBrokenAt !== null) {
+      throw new AuditChainCorruptedError(this.chainBrokenAt);
+    }
     const safe = this.redact(detail);
-    const payload = JSON.stringify({ event, detail: safe, prev, ts });
-    const hash = createHash("sha256").update(payload).digest("hex");
-    this.db
-      .query(
-        `INSERT INTO audit_log (session_id,event,detail,prev_hash,hash,created_at) VALUES (?,?,?,?,?,?)`,
-      )
-      .run(sessionId, event, JSON.stringify(safe), prev, hash, ts);
+    let hash = "";
+    this.write(() => {
+      const prev = this.lastHash();
+      const ts = Date.now();
+      const payload = JSON.stringify({ event, detail: safe, prev, ts });
+      hash = createHash("sha256").update(payload).digest("hex");
+      this.db
+        .query(
+          `INSERT INTO audit_log (session_id,event,detail,prev_hash,hash,created_at) VALUES (?,?,?,?,?,?)`,
+        )
+        .run(sessionId, event, JSON.stringify(safe), prev, hash, ts);
+    });
     return hash;
   }
 
@@ -853,11 +935,57 @@ export class WorkspaceStore {
       });
       const expected = createHash("sha256").update(payload).digest("hex");
       if (expected !== r.hash || r.prev_hash !== prev) {
+        this.chainBrokenAt = r.id;
         return { valid: false, brokenAt: r.id };
       }
       prev = r.hash;
     }
+    this.chainBrokenAt = null;
     return { valid: true };
+  }
+
+  /** Chain metadata for status/operator tooling. */
+  chainStatus(): {
+    valid: boolean;
+    count: number;
+    brokenAt?: number;
+    headHash: string;
+    genesis: string;
+  } {
+    const status = this.verifyChain();
+    const count = this.auditCount();
+    const head = this.db
+      .query<{ hash: string }, []>(`SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1`)
+      .get();
+    return {
+      valid: status.valid,
+      count,
+      brokenAt: status.brokenAt,
+      headHash: head?.hash ?? GENESIS,
+      genesis: GENESIS,
+    };
+  }
+
+  /**
+   * Explicit chain repair: truncate suspect entries from the first broken
+   * index onward, then append a re-seeding `audit.repair` event (which is
+   * itself chained). Destructive — callers must require explicit user
+   * confirmation (CLI `xr audit repair --yes`). Nothing is ever rewritten:
+   * intact history is preserved verbatim.
+   */
+  repairChain(actor = "xr"): { repaired: boolean; brokenAt?: number; removed: number; hash?: string } {
+    const status = this.verifyChain();
+    if (status.valid) return { repaired: false, removed: 0 };
+    const brokenAt = status.brokenAt!;
+    let removed = 0;
+    this.write(() => {
+      const r = this.db.query(`DELETE FROM audit_log WHERE id >= ?`).run(brokenAt);
+      removed = (r as { changes?: number }).changes ?? 0;
+    });
+    // Refresh the fail-closed flag (chain is now intact), then re-seed.
+    this.verifyChain();
+    const hash = this.audit("audit.repair", { brokenAt, removed, actor });
+    return { repaired: true, brokenAt, removed, hash };
   }
 
   auditCount(): number {
@@ -896,8 +1024,10 @@ export class WorkspaceStore {
 
   /** Deactivate all versions except the given one (used on rollback). */
   setActiveSkillVersion(id: string, version: number): void {
-    this.db.query(`UPDATE skills SET active=0 WHERE id=?`).run(id);
-    this.db.query(`UPDATE skills SET active=1 WHERE id=? AND version=?`).run(id, version);
+    this.write(() => {
+      this.db.query(`UPDATE skills SET active=0 WHERE id=?`).run(id);
+      this.db.query(`UPDATE skills SET active=1 WHERE id=? AND version=?`).run(id, version);
+    });
   }
 
   freezeBaseline(
@@ -971,15 +1101,17 @@ export class WorkspaceStore {
 
   /** Upsert a memory entry. Same (project,kind,content) is deduped. */
   remember(id: string, project: string, kind: string, content: string): void {
-    const exists = this.db
-      .query<{ c: number }, [string, string, string]>(
-        `SELECT COUNT(*) c FROM memory WHERE project=? AND kind=? AND content=?`,
-      )
-      .get(project, kind, content);
-    if (exists && exists.c > 0) return;
-    this.db
-      .query(`INSERT INTO memory (id,project,kind,content,created_at) VALUES (?,?,?,?,?)`)
-      .run(id, project, kind, content, Date.now());
+    this.write(() => {
+      const exists = this.db
+        .query<{ c: number }, [string, string, string]>(
+          `SELECT COUNT(*) c FROM memory WHERE project=? AND kind=? AND content=?`,
+        )
+        .get(project, kind, content);
+      if (exists && exists.c > 0) return;
+      this.db
+        .query(`INSERT INTO memory (id,project,kind,content,created_at) VALUES (?,?,?,?,?)`)
+        .run(id, project, kind, content, Date.now());
+    });
   }
 
   recall(project: string, kind?: string): Array<{ id: string; kind: string; content: string }> {
@@ -1083,28 +1215,30 @@ export class WorkspaceStore {
   }
 
   setBudgetConfig(config: { monthly_cap: number; daily_cap?: number | null; warnings_enabled?: boolean; auto_fallback?: boolean }): void {
-    const current = this.getBudgetConfig();
-    if (!current) {
-      this.db.query(
-        `INSERT INTO budget_config (id, monthly_cap, daily_cap, warnings_enabled, auto_fallback, created_at) VALUES (1, ?, ?, ?, ?, ?)`,
-      ).run(
-        config.monthly_cap,
-        config.daily_cap ?? null,
-        config.warnings_enabled ?? 1,
-        config.auto_fallback ?? 1,
-        Date.now()
-      );
-    } else {
-      this.db.query(
-        `UPDATE budget_config SET monthly_cap=?, daily_cap=?, warnings_enabled=?, auto_fallback=?, created_at=? WHERE id=1`,
-      ).run(
-        config.monthly_cap,
-        config.daily_cap ?? current.daily_cap,
-        config.warnings_enabled !== undefined ? (config.warnings_enabled ? 1 : 0) : current.warnings_enabled ? 1 : 0,
-        config.auto_fallback !== undefined ? (config.auto_fallback ? 1 : 0) : current.auto_fallback ? 1 : 0,
-        Date.now()
-      );
-    }
+    this.write(() => {
+      const current = this.getBudgetConfig();
+      if (!current) {
+        this.db.query(
+          `INSERT INTO budget_config (id, monthly_cap, daily_cap, warnings_enabled, auto_fallback, created_at) VALUES (1, ?, ?, ?, ?, ?)`,
+        ).run(
+          config.monthly_cap,
+          config.daily_cap ?? null,
+          config.warnings_enabled ?? 1,
+          config.auto_fallback ?? 1,
+          Date.now()
+        );
+      } else {
+        this.db.query(
+          `UPDATE budget_config SET monthly_cap=?, daily_cap=?, warnings_enabled=?, auto_fallback=?, created_at=? WHERE id=1`,
+        ).run(
+          config.monthly_cap,
+          config.daily_cap ?? current.daily_cap,
+          config.warnings_enabled !== undefined ? (config.warnings_enabled ? 1 : 0) : current.warnings_enabled ? 1 : 0,
+          config.auto_fallback !== undefined ? (config.auto_fallback ? 1 : 0) : current.auto_fallback ? 1 : 0,
+          Date.now()
+        );
+      }
+    });
   }
 
   getSpendForPeriod(startMs: number): number {
@@ -1119,20 +1253,22 @@ export class WorkspaceStore {
   /** Insert or update a research session (stored as a JSON blob + columns). */
   saveResearch(id: string, topic: string, depth: string, status: string, dataJson: string): void {
     const now = Date.now();
-    const exists = this.db
-      .query<{ c: number }, [string]>(`SELECT COUNT(*) c FROM research_sessions WHERE id=?`)
-      .get(id);
-    if (exists && exists.c > 0) {
-      this.db
-        .query(`UPDATE research_sessions SET topic=?, depth=?, status=?, data=?, updated_at=? WHERE id=?`)
-        .run(topic, depth, status, dataJson, now, id);
-    } else {
-      this.db
-        .query(
-          `INSERT INTO research_sessions (id,topic,depth,status,data,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`,
-        )
-        .run(id, topic, depth, status, dataJson, now, now);
-    }
+    this.write(() => {
+      const exists = this.db
+        .query<{ c: number }, [string]>(`SELECT COUNT(*) c FROM research_sessions WHERE id=?`)
+        .get(id);
+      if (exists && exists.c > 0) {
+        this.db
+          .query(`UPDATE research_sessions SET topic=?, depth=?, status=?, data=?, updated_at=? WHERE id=?`)
+          .run(topic, depth, status, dataJson, now, id);
+      } else {
+        this.db
+          .query(
+            `INSERT INTO research_sessions (id,topic,depth,status,data,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`,
+          )
+          .run(id, topic, depth, status, dataJson, now, now);
+      }
+    });
   }
 
   getResearch(id: string): { id: string; data: string } | null {
@@ -1304,27 +1440,133 @@ export class WorkspaceStore {
 
   saveWorkflow(record: any): void {
     const now = Date.now();
-    this.db.transaction(() => {
+    this.write(() => {
       this.db.query(`INSERT INTO agent_workflows (workflow_id,kind,goal,status,review_state,approval_state,cancellation_state,current_agent_id,plan_summary,final_output,data_json,created_at,updated_at,started_at,ended_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(workflow_id) DO UPDATE SET kind=excluded.kind,goal=excluded.goal,status=excluded.status,review_state=excluded.review_state,approval_state=excluded.approval_state,cancellation_state=excluded.cancellation_state,current_agent_id=excluded.current_agent_id,plan_summary=excluded.plan_summary,final_output=excluded.final_output,data_json=excluded.data_json,updated_at=excluded.updated_at,started_at=excluded.started_at,ended_at=excluded.ended_at`).run(record.workflowId,record.kind,record.goal,record.status,record.reviewState,record.approvalState,record.cancellationState,record.currentAgentId ?? null,record.planSummary,record.finalOutput ? JSON.stringify(record.finalOutput) : null,JSON.stringify(record),record.createdAt ?? now,record.updatedAt ?? now,record.startedAt ?? null,record.endedAt ?? null);
       this.db.query(`DELETE FROM agent_tasks WHERE workflow_id=?`).run(record.workflowId);
       const q=this.db.query(`INSERT INTO agent_tasks (task_id,workflow_id,parent_task_id,agent_id,role,name,status,review_state,approval_state,phase,parallel_key,dependencies_json,data_json,created_at,updated_at,started_at,ended_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
       for (const t of record.tasks ?? []) q.run(t.taskId,t.workflowId,t.parentTaskId??null,t.agentId,t.role,t.name,t.status,t.reviewState,t.approvalState,t.phase??null,t.parallelKey??null,JSON.stringify(t.dependencies??[]),JSON.stringify(t),t.createdAt,t.updatedAt,t.startedAt??null,t.endedAt??null);
-    })();
+    });
   }
   getWorkflow(id:string): any { const r=this.db.query<any,[string]>(`SELECT data_json FROM agent_workflows WHERE workflow_id=?`).get(id); try{return r ? JSON.parse(r.data_json) : null}catch{return null} }
   listWorkflowSummaries(limit=20): any[] { return this.db.query<any,[number]>(`SELECT data_json FROM agent_workflows ORDER BY updated_at DESC LIMIT ?`).all(limit).flatMap((r:any)=>{try{return [JSON.parse(r.data_json)]}catch{return []}}); }
   workflowHealth(): any { const total=this.db.query<{c:number},[]>(`SELECT COUNT(*) c FROM agent_workflows`).get()?.c??0; const count=(s:string)=>this.db.query<{c:number},[string]>(`SELECT COUNT(*) c FROM agent_workflows WHERE status=?`).get(s)?.c??0; return {enabledAgents:0,totalAgents:0,workflows:{total,running:count("running"),paused:count("paused"),blocked:count("blocked"),failed:count("failed")}}; }
 
+  /**
+   * WAL maintenance: `PRAGMA wal_checkpoint(RESTART)` when no readers are
+   * attached; falls back to TRUNCATE otherwise. Bounds WAL growth (T2).
+   */
+  checkpointWal(mode: "RESTART" | "TRUNCATE" = "RESTART"): { ok: boolean; used: string; detail: string } {
+    try {
+      const row = this.gate.rawDb
+        .query<{ busy: number; log: number; checkpointed: number }, []>(`PRAGMA wal_checkpoint(${mode})`)
+        .get();
+      if (mode === "RESTART" && row && (row.busy > 0 || row.log > 0)) {
+        const row2 = this.gate.rawDb
+          .query<{ busy: number; log: number; checkpointed: number }, []>(`PRAGMA wal_checkpoint(TRUNCATE)`)
+          .get();
+        return { ok: true, used: "TRUNCATE", detail: JSON.stringify(row2) };
+      }
+      return { ok: true, used: mode, detail: JSON.stringify(row) };
+    } catch (e) {
+      return { ok: false, used: mode, detail: String((e as Error)?.message ?? e) };
+    }
+  }
+
+  /**
+   * Crash-consistent single-file backup via `VACUUM INTO` under the write
+   * gate (T13). The snapshot is verified by returning its SHA-256.
+   */
+  createBackup(destPath: string): { ok: boolean; path: string; size: number; sha256: string } {
+    const dir = dirname(destPath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    // VACUUM INTO takes its own consistent snapshot and cannot run inside a
+    // transaction — run it directly on the raw handle (it reads a consistent
+    // database snapshot, so no write gate is required for correctness).
+    this.gate.rawDb.exec(`VACUUM INTO '${destPath.replace(/'/g, "''")}'`);
+    const buf = readFileSync(destPath);
+    return { ok: true, path: destPath, size: buf.length, sha256: createHash("sha256").update(buf).digest("hex") };
+  }
+
+  /**
+   * Restore from a backup snapshot: closes the current connection, replaces
+   * the database file (+ sidecars), and rebinds THIS instance to a fresh
+   * connection, so callers keep a valid store. Verifies the audit chain.
+   */
+  restoreFrom(srcPath: string): { ok: boolean; chainValid: boolean; error?: string } {
+    if (!existsSync(srcPath)) return { ok: false, chainValid: false, error: `backup not found: ${srcPath}` };
+    const path = this.openedPath;
+    const workspaceId = this.workspaceId;
+    const key = this.sharedKey;
+    this.close();
+    for (const sidecar of [`${path}-wal`, `${path}-shm`]) {
+      try {
+        rmSync(sidecar, { force: true });
+      } catch {
+        /* best-effort (Windows may hold handles briefly) */
+      }
+    }
+    copyFileSync(srcPath, path);
+    // Re-open this instance against the restored file.
+    const shared = WorkspaceStore.shared.get(key);
+    if (!shared) {
+      const db = openDatabase(path);
+      const gate = new WriteGate(db);
+      WorkspaceStore.shared.set(key, { db, gate, refs: 1 });
+    } else {
+      shared.refs += 1;
+    }
+    this.closed = false;
+    this.gate = WorkspaceStore.shared.get(key)!.gate;
+    this.db = gateConnection(WorkspaceStore.shared.get(key)!.db, this.gate);
+    this.migrate();
+    runMigrationsUp(this);
+    const chain = this.verifyChain();
+    return { ok: true, chainValid: chain.valid };
+  }
+
   close(): void {
-    this.db.close();
-    WorkspaceStore.openConnections = Math.max(0, WorkspaceStore.openConnections - 1);
+    if (this.closed) return;
+    this.closed = true;
+    const shared = WorkspaceStore.shared.get(this.sharedKey);
+    if (shared) {
+      shared.refs -= 1;
+      if (shared.refs <= 0) {
+        WorkspaceStore.shared.delete(this.sharedKey);
+        try {
+          this.gate.finalizeAll(); // bun: prepared statements hold the file lock otherwise
+        } catch {
+          /* best-effort */
+        }
+        try {
+          this.gate.rawDb.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+        } catch {
+          /* best-effort */
+        }
+        try {
+          shared.db.close();
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
     if (WorkspaceStore._lastOpened === this) {
       WorkspaceStore._lastOpened = null;
     }
   }
 
+  /** Number of open read-write connections (per-file, per process). */
   static connectionCount(): number {
-    return WorkspaceStore.openConnections;
+    return WorkspaceStore.shared.size;
+  }
+
+  /**
+   * Phase 1 (T3): total mutating statements that ran outside the write gate
+   * across all live connections. The property test asserts this is zero.
+   */
+  static unsafeWriteCount(): number {
+    let n = 0;
+    for (const s of WorkspaceStore.shared.values()) n += s.gate.executedOutsideTxn;
+    return n;
   }
 
   /**
@@ -1353,9 +1595,9 @@ export class WorkspaceStore {
     return this.db.prepare(sql);
   }
 
-  /** Transaction passthrough for BusinessDatabase migrations. */
+  /** Transaction passthrough for BusinessDatabase migrations (single writer). */
   transaction<F extends (...args: any[]) => any>(fn: F): (...args: Parameters<F>) => ReturnType<F> {
-    return this.db.transaction(fn) as any;
+    return (...args: Parameters<F>) => this.write(() => fn(...args));
   }
 
   /** Execution-fabric passthrough: run arbitrary DDL/DML. */

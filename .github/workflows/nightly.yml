@@ -1,0 +1,62 @@
+# =============================================================================
+# XR Phase 1 · T6 — Nightly golden path (Linux + container)
+#
+# Every night: run the full golden path (install → verify → first answer →
+# restart → resume → second answer → uninstall) twice:
+#   1. directly on the Linux runner;
+#   2. inside the XR container image (proves the shipped image carries a
+#      working, durable runtime — the dashboard is not the only surface).
+# Failures emit the FAIL <step>: <reason> diagnostics from golden-path.ts.
+# =============================================================================
+name: Nightly Golden Path
+
+on:
+  schedule:
+    - cron: "23 2 * * *" # 02:23 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  golden-path-linux:
+    name: Golden path (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+
+      - name: Run golden path
+        run: bun run golden-path
+        env:
+          HOME: /tmp/xr-nightly-home
+          XR_HOME: /tmp/xr-nightly-data
+
+  golden-path-container:
+    name: Golden path (container)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t xr:nightly .
+
+      - name: Run golden path inside the container
+        run: |
+          # The image mounts the repo as the workdir with the data volume at
+          # /data; golden-path runs the CLI + runtime against a hermetic home.
+          docker run --rm \
+            -e HOME=/tmp/xr-home \
+            -e XR_HOME=/tmp/xr-data \
+            -v "$PWD":/app \
+            -w /app \
+            xr:nightly bun run scripts/golden-path.ts

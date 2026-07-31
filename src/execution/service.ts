@@ -33,6 +33,7 @@ import {
 import type { TrustService } from "../trust/service.ts";
 import type { PlacementKind } from "../trust/types.ts";
 import type { ExecutionRepo } from "./repository.ts";
+import type { IdempotencyStore } from "../state/idempotency.ts";
 import { canRun, isTerminal, transition, wasInFlight } from "./state-machine.ts";
 import {
   BudgetExceededError,
@@ -48,6 +49,13 @@ export interface ExecutionServiceDeps {
   repo: ExecutionRepo;
   /** Optional audit bridge (existing audit repo). */
   audit?: (event: string, detail: Record<string, unknown>) => void;
+  /**
+   * Phase 1 (T5) — claim-first idempotency slots. When present, non-idempotent
+   * executions with an idempotency key claim their slot BEFORE the side effect
+   * so a crash between effect and completion record can never duplicate the
+   * effect (effective exactly-once; at-most-once + reconciliation otherwise).
+   */
+  idempotency?: IdempotencyStore;
   /**
    * XR 4.2 — optional Trust & Isolation service. When present AND an action
    * supplies `opts.trust`, the fabric classifies risk, decides placement, and
@@ -288,6 +296,7 @@ export class ExecutionService {
    */
   async execute(opts: ExecuteOptions): Promise<ExecutionRecord> {
     const now = Date.now();
+    let claimedKey: string | null = null; // Phase 1 (T5): idempotency slot claimed before the effect
     const runId = opts.runId ?? `ex_${randomUUID().slice(0, 10)}`;
     const correlationId = opts.correlationId ?? runId;
     const placement: Placement = opts.placement ?? { kind: "in_process" };
@@ -388,7 +397,10 @@ export class ExecutionService {
         progressSummary: `Starting ${opts.capability.kind}:${opts.capability.name}`,
       });
 
-      // 4. Duplicate/idempotency check.
+      // 4. Claim-first idempotency (Phase 1 · T5). Effective exactly-once:
+      //    the slot is INSERTed BEFORE the side effect. Completed slots are
+      //    replayed (dedup); an interrupted non-idempotent effect is NEVER
+      //    re-run — it is surfaced as reconciliation-required.
       if (opts.idempotencyKey && opts.idempotency !== "naturally_idempotent") {
         const prior = this.deps.repo.findCompletedByIdempotencyKey(
           opts.workspaceId,
@@ -410,6 +422,66 @@ export class ExecutionService {
           this.applyTransition(runId, record, "succeed", "idempotent cache hit");
           this.deps.audit?.("execution.duplicate", { runId, priorRunId: prior.id.runId });
           return this.finalize(runId, record);
+        }
+        if (this.deps.idempotency) {
+          const claim = this.deps.idempotency.claim(opts.idempotencyKey, opts.capability.kind, runId);
+          if (claim.requiresReconciliation) {
+            record.outcome = {
+              kind: "failed",
+              message: "Prior attempt left an unresolved side effect requiring reconciliation — this execution is not re-run.",
+              at: Date.now(),
+              error: {
+                code: "RECONCILIATION_REQUIRED",
+                message: "requires reconciliation; not re-run",
+                retryable: false,
+                sideEffectUnknown: true,
+                category: "reconciliation",
+              },
+            };
+            this.applyTransition(runId, record, "fail", "reconciliation required");
+            this.deps.audit?.("execution.reconciliation_required", { runId, idempotencyKey: opts.idempotencyKey });
+            return this.finalize(runId, record);
+          }
+          if (claim.cachedResult) {
+            record.duplicateOf = record.duplicateOf ?? runId;
+            record.observation = {
+              summary: `(idempotent slot hit) ${claim.cachedResult}`,
+              transportOk: true,
+            };
+            record.outcome = {
+              kind: "succeeded",
+              message: `Idempotent slot already completed; side effect not replayed.`,
+              at: Date.now(),
+            };
+            this.applyTransition(runId, record, "start", "replaying cached slot");
+            this.applyTransition(runId, record, "succeed", "idempotent slot hit");
+            this.deps.audit?.("execution.duplicate", { runId, idempotencyKey: opts.idempotencyKey });
+            return this.finalize(runId, record);
+          }
+          if (claim.crashedPending && opts.idempotency !== "idempotent_with_key") {
+            this.deps.idempotency.requireReconciliation(
+              opts.idempotencyKey,
+              "interrupted non-idempotent effect — never re-run",
+            );
+            record.outcome = {
+              kind: "failed",
+              message:
+                "A prior run claimed this effect and was interrupted; the effect is non-idempotent and will not be re-run. Requires reconciliation.",
+              at: Date.now(),
+              error: {
+                code: "RECONCILIATION_REQUIRED",
+                message: "interrupted non-idempotent effect",
+                retryable: false,
+                sideEffectUnknown: true,
+                category: "reconciliation",
+              },
+            };
+            this.applyTransition(runId, record, "fail", "reconciliation required");
+            this.deps.audit?.("execution.reconciliation_required", { runId, idempotencyKey: opts.idempotencyKey });
+            return this.finalize(runId, record);
+          }
+          // crashedPending + idempotent_with_key, or a fresh claim → run now.
+          if (claim.proceed || claim.crashedPending) claimedKey = opts.idempotencyKey;
         }
       }
 
@@ -589,6 +661,7 @@ export class ExecutionService {
         if (record.state !== "failed") this.applyTransition(runId, record, "fail", "no outcome recorded");
       }
 
+      this.settleIdempotencySlot(claimedKey, record);
       return this.finalize(runId, record);
     } catch (topErr) {
       // Catastrophic error during orchestration itself.
@@ -611,10 +684,34 @@ export class ExecutionService {
           // Best effort.
         }
       }
+      this.settleIdempotencySlot(claimedKey, record);
       return this.finalize(runId, record);
     } finally {
       this.live.delete(runId);
       this.cancelFlags.delete(runId);
+    }
+  }
+
+  /**
+   * Phase 1 (T5) — settle a claimed idempotency slot after the effect:
+   * complete on success, fail on failure, reconciliation on unknown.
+   */
+  private settleIdempotencySlot(claimedKey: string | null, record: ExecutionRecord): void {
+    if (!claimedKey || !this.deps.idempotency) return;
+    const kind = record.outcome?.kind;
+    try {
+      if (kind === "succeeded" || kind === "partially_completed" || kind === "dry_run_simulated") {
+        this.deps.idempotency.complete(claimedKey, record.outcome?.message ?? "ok", record.id.runId);
+      } else if (kind === "reconciliation_required" || record.outcome?.error?.sideEffectUnknown) {
+        this.deps.idempotency.requireReconciliation(
+          claimedKey,
+          record.outcome?.message ?? "side-effect status unknown",
+        );
+      } else {
+        this.deps.idempotency.fail(claimedKey, record.outcome?.message ?? "failed");
+      }
+    } catch {
+      /* slot settlement is best-effort; the execution record is authoritative */
     }
   }
 

@@ -43,6 +43,7 @@ import { XRShieldService } from "../security/shield.ts";
 import { BusinessOS } from "../business/index.ts";
 import { ExecutionService } from "../execution/service.ts";
 import { ExecutionRepo, adaptWorkspaceStore } from "../execution/repository.ts";
+import { IdempotencyStore } from "../state/idempotency.ts";
 
 // XR 4.2 — Trust & Isolation.
 import { TrustService } from "../trust/service.ts";
@@ -374,9 +375,11 @@ export class ExecutionServiceProvider implements ServiceProvider {
         const audit = registry.resolve(Tokens.AuditStore);
         const trust = registry.resolve(Tokens.Trust);
         const repo = new ExecutionRepo(adaptWorkspaceStore(store));
+        const idempotency = new IdempotencyStore(store);
         return new ExecutionService({
           repo,
           trust,
+          idempotency,
           audit: (event, detail) => {
             try {
               audit.audit(event, detail, null);

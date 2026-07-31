@@ -32,6 +32,7 @@ import {
   SpeakCommand,
   ListenCommand,
 } from "../commands/install.ts";
+import { UninstallCommand } from "../commands/uninstall.ts";
 import { AgentsCommand } from "../commands/agents.ts";
 import { SkillsCommand, SkillsAliasCommand } from "../commands/skills.ts";
 import { CapabilitiesCommand, CapabilityAliasCommand } from "../commands/capabilities.ts";
@@ -74,6 +75,7 @@ function registerCommands(kernel: XRKernel): void {
   kernel.commands.register(new RepairCommand());
   kernel.commands.register(new UpdateCommand());
   kernel.commands.register(new ResetCommand());
+  kernel.commands.register(new UninstallCommand());
   kernel.commands.register(new ConfigCommand());
   kernel.commands.register(new BudgetCommand());
   kernel.commands.register(new ProvidersCommand());

@@ -9,6 +9,7 @@
 
 import { Database } from "bun:sqlite";
 import type { WorkspaceStore } from "../../state/workspace-store.ts";
+import { openDatabase } from "../../state/write-gate.ts";
 import { WorkflowRepository } from "../../workflow/repository.ts";
 import { WorkflowEngine } from "../../workflow/engine.ts";
 import * as n from "../../workflow/nodes.ts";
@@ -45,8 +46,7 @@ const BUDGET = { wallClockMs: 30_000, maxEffects: 80 } as const;
  * a database inside the disposable fixture.
  */
 function fixtureStore(dbPath: string): { store: WorkspaceStore; close: () => void } {
-  const db = new Database(dbPath, { create: true });
-  db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+  const db = openDatabase(dbPath);
   const facade = {
     exec: (sql: string) => db.exec(sql),
     prepare: (sql: string) => db.prepare(sql),

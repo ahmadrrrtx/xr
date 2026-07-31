@@ -44,3 +44,5 @@ Thumbs.db
 *.tmp
 *.bak
 *.orig
+mutation-report.json
+xr-audit-*.md

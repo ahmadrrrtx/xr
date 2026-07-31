@@ -33,7 +33,10 @@
     "baseline:validate": "bun run scripts/validate-baseline.ts",
     "release:stamp": "bun run scripts/release-manifest.ts --write",
     "release:check": "bun run scripts/release-manifest.ts --check",
-    "claim-lint": "bun run scripts/claim-lint.ts"
+    "claim-lint": "bun run scripts/claim-lint.ts",
+    "mutation:run": "bun run scripts/mutate.ts --threshold 0.6",
+    "golden-path": "bun run scripts/golden-path.ts",
+    "reliability:test": "bun test test/reliability/"
   },
   "repository": {
     "type": "git",
