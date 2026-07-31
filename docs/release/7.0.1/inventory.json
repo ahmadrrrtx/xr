@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-31T17:25:45.628Z",
+  "generatedAt": "2026-07-31T18:39:48.611Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.0.1",
@@ -33,6 +33,7 @@
     },
     "devDependencies": {
       "@types/bun": "latest",
+      "dependency-cruiser": "^17.0.0",
       "typescript": "^5.5.0"
     },
     "files": [
@@ -49,8 +50,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 477,
-    "testFiles": 141,
+    "sourceFiles": 483,
+    "testFiles": 145,
     "cliCommands": 41,
     "daemonRoutes": 95,
     "providers": 26,
@@ -62,6 +63,10 @@
     {
       "path": ".bun-version",
       "bytes": 7
+    },
+    {
+      "path": ".dependency-cruiser.cjs",
+      "bytes": 13413
     },
     {
       "path": ".gitattributes",
@@ -221,7 +226,7 @@
     },
     {
       "path": "bun.lock",
-      "bytes": 2090
+      "bytes": 10686
     },
     {
       "path": "docker-compose.yml",
@@ -236,12 +241,16 @@
       "bytes": 6339
     },
     {
+      "path": "mutation-report.json",
+      "bytes": 1289
+    },
+    {
       "path": "next-env.d.ts",
       "bytes": 247
     },
     {
       "path": "package.json",
-      "bytes": 2143
+      "bytes": 2563
     },
     {
       "path": "release.manifest.json",
@@ -399,6 +408,9 @@
     "src/cost/pricing.ts",
     "src/daemon/control-api.ts",
     "src/daemon/dashboard.ts",
+    "src/daemon/dashboard/client-script.ts",
+    "src/daemon/dashboard/markup.ts",
+    "src/daemon/dashboard/styles.ts",
     "src/daemon/plugin-api.ts",
     "src/daemon/routes/agents.routes.ts",
     "src/daemon/routes/budget.routes.ts",
@@ -564,6 +576,9 @@
     "src/plugins/compat.ts",
     "src/plugins/host.ts",
     "src/plugins/loader.ts",
+    "src/plugins/loader/sandbox.ts",
+    "src/plugins/loader/validation.ts",
+    "src/plugins/loader/worker-loader.ts",
     "src/plugins/manager.ts",
     "src/plugins/manifest.ts",
     "src/plugins/registry.ts",
@@ -733,6 +748,8 @@
   ],
   "tests": [
     "test/agent.test.ts",
+    "test/architecture/boundaries.test.ts",
+    "test/architecture/size-gate.test.ts",
     "test/baseline/doctor.test.ts",
     "test/baseline/status.test.ts",
     "test/business/business.test.ts",
@@ -752,6 +769,7 @@
     "test/control.test.ts",
     "test/control/browser.test.ts",
     "test/core/background-services.test.ts",
+    "test/core/envelope.test.ts",
     "test/core/errors.test.ts",
     "test/core/health.test.ts",
     "test/core/kernel.test.ts",
@@ -761,6 +779,7 @@
     "test/core/service-registry.test.ts",
     "test/cost.test.ts",
     "test/daemon.test.ts",
+    "test/daemon/dashboard-split.test.ts",
     "test/deployment/capsule.test.ts",
     "test/deployment/placement-engine.test.ts",
     "test/deployment/profiles.test.ts",
