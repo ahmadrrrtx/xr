@@ -120,6 +120,71 @@ export function strategyToMode(
   }
 }
 
+/**
+ * Is this provider id a LOCAL runtime, per the preset catalogue?
+ *
+ * Exported as a pure function (Phase 2 · T7/T8): it was a private method, which
+ * made the local-runtime classification reachable only through a code path that
+ * the current catalogue makes practically unreachable — so a mutation of the
+ * comparison went undetected. A pure, exported predicate is both better design
+ * and directly testable.
+ */
+export function isLocalPreset(id: string): boolean {
+  return registry.getPreset(id)?.kind === "local" || PRESETS[id]?.kind === "local";
+}
+
+/**
+ * Pick the best local runtime for a workspace, preferring the configured one.
+ * Pure and exported for the same reason as `isLocalPreset`.
+ */
+export function findBestLocalTarget(
+  localCfg: Record<string, string | undefined>,
+  defaultProvider: string,
+  defaultModel?: string,
+): { id: string; model: string } | undefined {
+  const configuredProvider = localCfg.provider ?? localCfg.runtime ?? defaultProvider;
+  const preset = registry.getPreset(configuredProvider) ?? PRESETS[configuredProvider];
+  if (preset?.kind === "local") {
+    return { id: preset.id, model: localCfg.selected ?? defaultModel ?? preset.defaultModel };
+  }
+  for (const id of [
+    "ollama", "lmstudio", "llamacpp", "jan", "localai",
+    "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang",
+  ]) {
+    const p = registry.getPreset(id) ?? PRESETS[id];
+    if (p?.kind === "local") return { id: p.id, model: localCfg.selected ?? p.defaultModel };
+  }
+  return undefined;
+}
+
+/**
+ * Decide whether a legacy fallback target may be wired.
+ *
+ * Two independent conditions, both required (Phase 0 · T11 + Phase 2 · T3):
+ *   1. DIVERSITY  — the fallback must change the destination: a different
+ *      provider, or at minimum a different model on the same provider. The
+ *      shipped defaults made same-provider/same-model the common case, which
+ *      is how "falling back to ollama" came to describe retrying a dead
+ *      endpoint against itself.
+ *   2. LOCALITY   — the fallback must satisfy the workspace's locality policy,
+ *      so a fallback can never be the egress bypass the primary path forbids.
+ *
+ * Pure and exported so both conditions are directly testable.
+ */
+export function legacyFallbackAllowed(params: {
+  fallbackId?: string;
+  fallbackModel?: string;
+  primaryId: string;
+  primaryModel: string;
+  policy: "any" | "local_only" | "private_only" | "no_cloud";
+}): boolean {
+  const { fallbackId, primaryId, primaryModel, policy } = params;
+  if (!fallbackId) return false;
+  const resolvedModel = params.fallbackModel ?? primaryModel;
+  const isDifferentTarget = fallbackId !== primaryId || resolvedModel !== primaryModel;
+  return isDifferentTarget && localityAllowed(policy, localityOf(fallbackId));
+}
+
 /** Locality of a provider id, from the preset catalogue. */
 function localityOf(providerId: string): Locality | "unknown" {
   const preset = registry.getPreset(providerId) ?? PRESETS[providerId];
@@ -300,11 +365,8 @@ export class RoutingService {
      * the shipped defaults made exactly that the common case.
      */
     const resolvedFallbackModel = fallbackModel ?? primaryModel;
-    const isDifferentTarget =
-      Boolean(fallbackId) && (fallbackId !== primaryId || resolvedFallbackModel !== primaryModel);
 
-    // Phase 2 · T3 — and it must satisfy the locality policy.
-    if (isDifferentTarget && localityAllowed(policy, localityOf(fallbackId!))) {
+    if (legacyFallbackAllowed({ fallbackId, fallbackModel, primaryId, primaryModel, policy })) {
       try {
         const fallback = registry.createProvider(fallbackId!, this.config, resolvedFallbackModel);
         return new FallbackProvider(primary, fallback);
@@ -316,40 +378,13 @@ export class RoutingService {
   }
 
   private isLocal(id: string): boolean {
-    return registry.getPreset(id)?.kind === "local" || PRESETS[id]?.kind === "local";
+    return isLocalPreset(id);
   }
 
   private findBestLocal(): { id: string; model: string } | undefined {
-    // `localModels` mixes booleans and strings; only the string fields are read here.
+    // `localModels` mixes booleans and strings; only the string fields are read.
     const localCfg = (this.config.localModels ?? {}) as unknown as Record<string, string | undefined>;
-    const configuredProvider =
-      localCfg.provider ?? localCfg.runtime ?? this.config.defaults.provider;
-    const preset = registry.getPreset(configuredProvider) ?? PRESETS[configuredProvider];
-    if (preset?.kind === "local") {
-      return {
-        id: preset.id,
-        model: localCfg.selected ?? this.config.defaults.model ?? preset.defaultModel,
-      };
-    }
-
-    for (const id of [
-      "ollama",
-      "lmstudio",
-      "llamacpp",
-      "jan",
-      "localai",
-      "vllm",
-      "gpt4all",
-      "koboldcpp",
-      "textgenwebui",
-      "sglang",
-    ]) {
-      const p = registry.getPreset(id) ?? PRESETS[id];
-      if (p?.kind === "local") {
-        return { id: p.id, model: localCfg.selected ?? p.defaultModel };
-      }
-    }
-    return undefined;
+    return findBestLocalTarget(localCfg, this.config.defaults.provider, this.config.defaults.model);
   }
 }
 

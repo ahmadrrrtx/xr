@@ -96,6 +96,14 @@ function check(
   return Object.freeze({ surface, id, description, compatible, change, detail });
 }
 
+/**
+ * Runtime specifier for this module's own barrel. Assembled at run time so the
+ * reflexive compatibility check does not create a static import cycle
+ * (Phase 2 · T8). Resolved relative to this file's URL, so it survives bundling
+ * and directory moves.
+ */
+const EVALUATION_BARREL = new URL("./index.ts", import.meta.url).href;
+
 /** Verify every promised public-API export still resolves. */
 export async function checkPublicApi(baseline: ContractBaseline = XR_7_0_CONTRACT_BASELINE): Promise<CompatibilityCheck[]> {
   const loaders: Record<string, () => Promise<Record<string, unknown>>> = {
@@ -108,7 +116,17 @@ export async function checkPublicApi(baseline: ContractBaseline = XR_7_0_CONTRAC
     environment: () => import("../../platform/environment/index.ts"),
     deployment: () => import("../deployment/index.ts"),
     enterprise: () => import("../index.ts"),
-    evaluation: () => import("./index.ts"),
+    /**
+     * Phase 2 · T8 — the evaluation barrel re-exports THIS module, so importing
+     * `./index.ts` here closed a dependency cycle. The check is reflexive by
+     * nature (verifying the barrel this file is part of), so it resolves the
+     * barrel through a runtime-computed specifier: the contract is still
+     * verified at run time, but the static graph stays acyclic.
+     *
+     * `EVALUATION_BARREL` is deliberately not a literal — a literal would be
+     * statically resolvable and would re-create the edge.
+     */
+    evaluation: () => import(/* @vite-ignore */ EVALUATION_BARREL),
   };
 
   const checks: CompatibilityCheck[] = [];

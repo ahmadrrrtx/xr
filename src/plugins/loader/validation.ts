@@ -1,0 +1,503 @@
+/**
+ * XR — plugin validation, hashing and static scanning.
+ *
+ * Phase 2 · T7: `src/plugins/loader.ts` was 1 586 lines spanning three
+ * unrelated responsibilities — manifest validation/hashing, the in-process VM
+ * sandbox, and worker-based process isolation. Split by responsibility so a
+ * change to one cannot silently affect the others; the security architecture
+ * itself is unchanged (no behaviour edits were made during the split).
+ *
+ * Owns step (1) and (2) of the security architecture: manifest, permission and
+ * compatibility validation, hash pinning, tree hashing, and the defence-in-depth
+ * static scan. It performs NO code loading, so it is safe to call on untrusted
+ * plugin directories.
+ */
+
+import { existsSync, readFileSync, statSync, readdirSync, lstatSync, realpathSync } from "node:fs";
+import { promises as fsp } from "node:fs";
+import { join, resolve, relative, isAbsolute, dirname } from "node:path";
+import { createHash } from "node:crypto";
+import { createContext, Script, compileFunction } from "node:vm";
+import { Worker } from "node:worker_threads";
+import { pluginIoLimit, yieldEventLoop } from "../../util/concurrency.ts";
+import type { Store } from "../../state/workspace-store.ts";
+import type { XRConfig } from "../../config/config.ts";
+import { CORE_VERSION, PLUGIN_API_VERSION } from "../../core/version.ts";
+import { readManifest, validatePermissions, effectiveGrant } from "../manifest.ts";
+import { checkCompatibility } from "../compat.ts";
+import { buildHost } from "../host.ts";
+import { getSecret } from "../../security/secrets.ts";
+import type { PermissionScope, PluginContributions, PluginManifest, PluginModule, PluginRecord, PluginCommand, PluginTool, PluginPrompt } from "../types.ts";
+import type {
+  MainToWorkerMessage, WorkerToMainMessage, SerializedContributions,
+} from "../worker-protocol.ts";
+import {
+  ACTIVATE_TIMEOUT_MS, INVOKE_TIMEOUT_MS, INIT_TIMEOUT_MS,
+} from "../worker-protocol.ts";
+
+// ── Validation & hashing ─────────────────────────────────────────────────────
+
+export interface ValidateResult {
+  ok: boolean;
+  manifest?: PluginManifest;
+  entryHash?: string;
+  treeHash?: string;
+  warnings: string[];
+  errors: string[];
+}
+
+const MAX_PLUGIN_FILES = 500;
+const MAX_PLUGIN_BYTES = 10 * 1024 * 1024;
+const SCANNED_EXT = /\.(ts|tsx|js|jsx|mjs|cjs)$/i;
+
+// Defense-in-depth only — primary security is VM isolation
+const DISALLOWED_IMPORTS = [
+  "node:child_process",
+  "child_process",
+  "node:fs",
+  "fs",
+  "node:fs/promises",
+  "fs/promises",
+  "bun:sqlite",
+  "node:net",
+  "net",
+  "node:tls",
+  "tls",
+  "node:http",
+  "http",
+  "node:https",
+  "https",
+  "node:process",
+  "process",
+  "node:os",
+  "os",
+  "node:worker_threads",
+  "worker_threads",
+  "node:vm",
+  "vm",
+];
+
+const DISALLOWED_PATTERNS: Array<[RegExp, string]> = [
+  [/\bprocess\.env\b/, "direct process.env access is not allowed; request host.secrets or declared permissions"],
+  [/\bBun\.(spawn|spawnSync|file|write|serve)\b/, "direct Bun host APIs are not allowed in plugins"],
+  [/\b(eval|Function)\s*\(/, "dynamic code execution is not allowed in plugins (blocked by VM codeGeneration policy too)"],
+  [/(^|[^\w.])fetch\s*\(/, "direct fetch is not allowed; request net permission and use host.net.fetch"],
+  [/\bchild_process\b/, "child_process access is blocked"],
+  [/\bglobalThis\s*\[\s*["']process["']\s*\]/, "indirect process access is blocked"],
+  [/\brequire\s*\(\s*["']child_process["']\s*\)/, "require('child_process') is blocked"],
+  [/\brequire\s*\(\s*["']node:child_process["']\s*\)/, "require('node:child_process') is blocked"],
+];
+
+/** @internal Shared with the sandbox and worker loaders (Phase 2 · T7 split). */
+export function inside(root: string, child: string): boolean {
+  const rel = relative(root, child);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
+/** @internal Shared with the sandbox and worker loaders (Phase 2 · T7 split). */
+export function containedPath(root: string, relPath: string): string | null {
+  const abs = resolve(root, relPath);
+  return inside(root, abs) ? abs : null;
+}
+
+export async function hashEntrypointAsync(dir: string, manifest: PluginManifest): Promise<string | undefined> {
+  const entry = containedPath(dir, manifest.entrypoint);
+  if (!entry) return undefined;
+  try {
+    await fsp.access(entry);
+    const buf = await fsp.readFile(entry);
+    return createHash("sha256").update(buf).digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
+/** Sync hash for install/CLI paths that cannot await. Prefer hashEntrypointAsync in daemon. */
+export function hashEntrypoint(dir: string, manifest: PluginManifest): string | undefined {
+  const entry = containedPath(dir, manifest.entrypoint);
+  if (!entry || !existsSync(entry)) return undefined;
+  try {
+    return createHash("sha256").update(readFileSync(entry)).digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
+export async function hashPluginTreeAsync(dir: string): Promise<string | undefined> {
+  return pluginIoLimit.run(async () => {
+    try {
+      const root = await fsp.realpath(dir);
+      const rows: Array<{ rel: string; hash: string }> = [];
+      let ops = 0;
+      const walk = async (cur: string): Promise<void> => {
+        let names: string[];
+        try {
+          names = (await fsp.readdir(cur)).sort();
+        } catch {
+          return;
+        }
+        for (const name of names) {
+          if (name === "data" || name === ".git" || name === "node_modules") continue;
+          const p = join(cur, name);
+          let st;
+          try {
+            st = await fsp.lstat(p);
+          } catch {
+            continue;
+          }
+          if (st.isSymbolicLink()) continue;
+          if (st.isDirectory()) {
+            await walk(p);
+          } else if (st.isFile()) {
+            try {
+              const real = await fsp.realpath(p);
+              if (!inside(root, real)) continue;
+              const buf = await fsp.readFile(real);
+              rows.push({
+                rel: relative(root, real).replace(/\\/g, "/"),
+                hash: createHash("sha256").update(buf).digest("hex"),
+              });
+            } catch {
+              continue;
+            }
+            ops++;
+            if (ops % 25 === 0) await yieldEventLoop();
+          }
+        }
+      };
+      await walk(root);
+      const h = createHash("sha256");
+      for (const row of rows.sort((a, b) => a.rel.localeCompare(b.rel))) h.update(`${row.rel}:${row.hash}\n`);
+      return h.digest("hex");
+    } catch {
+      return undefined;
+    }
+  });
+}
+
+/**
+ * Sync tree hash kept for CLI install commit. Bounded yield is not possible
+ * synchronously; prefer hashPluginTreeAsync for daemon / large plugins.
+ */
+export function hashPluginTree(dir: string): string | undefined {
+  try {
+    const root = realpathSync(dir);
+    const rows: Array<{ rel: string; hash: string }> = [];
+    const walk = (cur: string) => {
+      for (const name of readdirSync(cur).sort()) {
+        if (name === "data" || name === ".git" || name === "node_modules") continue;
+        const p = join(cur, name);
+        const st = lstatSync(p);
+        if (st.isSymbolicLink()) continue;
+        if (st.isDirectory()) walk(p);
+        else if (st.isFile()) {
+          const real = realpathSync(p);
+          if (!inside(root, real)) continue;
+          rows.push({ rel: relative(root, real).replace(/\\/g, "/"), hash: createHash("sha256").update(readFileSync(real)).digest("hex") });
+        }
+      }
+    };
+    walk(root);
+    const h = createHash("sha256");
+    for (const row of rows.sort((a, b) => a.rel.localeCompare(b.rel))) h.update(`${row.rel}:${row.hash}\n`);
+    return h.digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
+async function scanTreeAsync(dir: string): Promise<{ warnings: string[]; errors: string[] }> {
+  return pluginIoLimit.run(async () => {
+    const warnings: string[] = [];
+    const errors: string[] = [];
+    let files = 0;
+    let bytes = 0;
+    let root: string;
+    try {
+      root = await fsp.realpath(dir);
+    } catch {
+      return { warnings: [], errors: [`cannot resolve plugin root: ${dir}`] };
+    }
+
+    const scanFile = async (file: string) => {
+      if (!SCANNED_EXT.test(file)) return;
+      const rel = relative(root, file).replace(/\\/g, "/");
+      let rawText: string;
+      try {
+        rawText = (await fsp.readFile(file, "utf8")).slice(0, 1_000_000);
+      } catch {
+        return;
+      }
+      const body = rawText.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\n)\s*\/\/.*(?=\n|$)/g, "\n");
+      for (const mod of DISALLOWED_IMPORTS) {
+        const esc = mod.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const re = new RegExp(`(?:from\\s+["']${esc}["']|import\\s*\\(["']${esc}["']\\)|require\\s*\\(["']${esc}["']\\))`);
+        if (re.test(body)) errors.push(`${rel}: disallowed import "${mod}" — use PluginHost capabilities`);
+      }
+      for (const [re, msg] of DISALLOWED_PATTERNS) {
+        if (re.test(body)) errors.push(`${rel}: ${msg}`);
+      }
+    };
+
+    const walk = async (cur: string): Promise<void> => {
+      let entries: string[];
+      try {
+        entries = await fsp.readdir(cur);
+      } catch {
+        return;
+      }
+      for (const name of entries) {
+        if (name === ".git" || name === "node_modules") {
+          warnings.push(`${relative(root, join(cur, name))}: ignored dependency/VCS directory`);
+          continue;
+        }
+        const p = join(cur, name);
+        let st;
+        try {
+          st = await fsp.lstat(p);
+        } catch {
+          continue;
+        }
+        if (st.isSymbolicLink()) {
+          errors.push(`${relative(root, p)}: symlinks are not allowed in plugin packages`);
+          continue;
+        }
+        if (st.isDirectory()) await walk(p);
+        else if (st.isFile()) {
+          files++;
+          bytes += st.size;
+          if (files > MAX_PLUGIN_FILES) errors.push(`plugin has too many files (>${MAX_PLUGIN_FILES})`);
+          if (bytes > MAX_PLUGIN_BYTES) errors.push(`plugin package is too large (>${MAX_PLUGIN_BYTES} bytes)`);
+          try {
+            const real = await fsp.realpath(p);
+            if (!inside(root, real)) errors.push(`${relative(root, p)}: file resolves outside plugin root`);
+            await scanFile(real);
+          } catch {
+            errors.push(`${relative(root, p)}: cannot resolve realpath`);
+          }
+          if (files % 20 === 0) await yieldEventLoop();
+        }
+      }
+    };
+
+    await walk(root);
+    return { warnings, errors: [...new Set(errors)] };
+  });
+}
+
+function scanTree(dir: string): { warnings: string[]; errors: string[] } {
+  const warnings: string[] = [];
+  const errors: string[] = [];
+  let files = 0;
+  let bytes = 0;
+  let root: string;
+  try {
+    root = realpathSync(dir);
+  } catch {
+    return { warnings: [], errors: [`cannot resolve plugin root: ${dir}`] };
+  }
+
+  const scanFile = (file: string) => {
+    if (!SCANNED_EXT.test(file)) return;
+    const rel = relative(root, file).replace(/\\/g, "/");
+    let rawText: string;
+    try {
+      rawText = readFileSync(file, "utf8").slice(0, 1_000_000);
+    } catch {
+      return;
+    }
+    const body = rawText.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\n)\s*\/\/.*(?=\n|$)/g, "\n");
+    for (const mod of DISALLOWED_IMPORTS) {
+      const esc = mod.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const re = new RegExp(`(?:from\\s+["']${esc}["']|import\\s*\\(["']${esc}["']\\)|require\\s*\\(["']${esc}["']\\))`);
+      if (re.test(body)) errors.push(`${rel}: disallowed import "${mod}" — use PluginHost capabilities`);
+    }
+    for (const [re, msg] of DISALLOWED_PATTERNS) {
+      if (re.test(body)) errors.push(`${rel}: ${msg}`);
+    }
+  };
+
+  const walk = (cur: string) => {
+    let entries: string[];
+    try {
+      entries = readdirSync(cur);
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      if (name === ".git" || name === "node_modules") {
+        warnings.push(`${relative(root, join(cur, name))}: ignored dependency/VCS directory`);
+        continue;
+      }
+      const p = join(cur, name);
+      let st;
+      try {
+        st = lstatSync(p);
+      } catch {
+        continue;
+      }
+      if (st.isSymbolicLink()) {
+        errors.push(`${relative(root, p)}: symlinks are not allowed in plugin packages`);
+        continue;
+      }
+      if (st.isDirectory()) walk(p);
+      else if (st.isFile()) {
+        files++;
+        bytes += st.size;
+        if (files > MAX_PLUGIN_FILES) errors.push(`plugin has too many files (>${MAX_PLUGIN_FILES})`);
+        if (bytes > MAX_PLUGIN_BYTES) errors.push(`plugin package is too large (>${MAX_PLUGIN_BYTES} bytes)`);
+        try {
+          const real = realpathSync(p);
+          if (!inside(root, real)) errors.push(`${relative(root, p)}: file resolves outside plugin root`);
+          scanFile(real);
+        } catch {
+          errors.push(`${relative(root, p)}: cannot resolve realpath`);
+        }
+      }
+    }
+  };
+
+  walk(root);
+  return { warnings, errors: [...new Set(errors)] };
+}
+
+export function validatePlugin(dir: string): ValidateResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) {
+    return { ok: false, warnings, errors: [`not a directory: ${dir}`] };
+  }
+
+  const parsed = readManifest(dir);
+  if (!parsed.ok || !parsed.manifest) return { ok: false, warnings, errors: parsed.errors };
+  const manifest = parsed.manifest;
+
+  const perms = validatePermissions(manifest.permissions);
+  if (!perms.ok) errors.push(...perms.errors);
+
+  const compat = checkCompatibility(CORE_VERSION, manifest.apiVersion, PLUGIN_API_VERSION, manifest.compatibility);
+  if (!compat.ok && compat.reason) errors.push(compat.reason);
+
+  const entry = containedPath(dir, manifest.entrypoint);
+  if (!entry) errors.push(`entrypoint escapes plugin root: ${manifest.entrypoint}`);
+  else if (!existsSync(entry)) errors.push(`entrypoint not found: ${manifest.entrypoint}`);
+
+  for (const skillPath of manifest.skillPaths) {
+    const p = containedPath(dir, skillPath);
+    if (!p) errors.push(`skill path escapes plugin root: ${skillPath}`);
+    else if (!existsSync(p) || !statSync(p).isDirectory()) errors.push(`skill path not found: ${skillPath}`);
+  }
+  for (const s of manifest.mcpServers) {
+    if (s.transport === "http" && !s.url) errors.push(`mcp server ${s.id}: http transport requires url`);
+    if (s.transport === "stdio" && !s.command) errors.push(`mcp server ${s.id}: stdio transport requires command`);
+    if (s.command && /[;&|`$(){}<>]/.test(s.command)) errors.push(`mcp server ${s.id}: command contains shell metacharacters`);
+  }
+
+  try {
+    const scan = scanTree(dir);
+    warnings.push(...scan.warnings);
+    errors.push(...scan.errors);
+  } catch (e) {
+    errors.push(`security scan failed: ${(e as Error).message}`);
+  }
+
+  return {
+    ok: errors.length === 0,
+    manifest,
+    entryHash: hashEntrypoint(dir, manifest),
+    treeHash: hashPluginTree(dir),
+    warnings,
+    errors,
+  };
+}
+
+/** Non-blocking plugin validation for daemon / concurrent installs. */
+export async function validatePluginAsync(dir: string): Promise<ValidateResult> {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  try {
+    const st = await fsp.stat(dir);
+    if (!st.isDirectory()) return { ok: false, warnings, errors: [`not a directory: ${dir}`] };
+  } catch {
+    return { ok: false, warnings, errors: [`not a directory: ${dir}`] };
+  }
+
+  const parsed = readManifest(dir);
+  if (!parsed.ok || !parsed.manifest) return { ok: false, warnings, errors: parsed.errors };
+  const manifest = parsed.manifest;
+
+  const perms = validatePermissions(manifest.permissions);
+  if (!perms.ok) errors.push(...perms.errors);
+
+  const compat = checkCompatibility(CORE_VERSION, manifest.apiVersion, PLUGIN_API_VERSION, manifest.compatibility);
+  if (!compat.ok && compat.reason) errors.push(compat.reason);
+
+  const entry = containedPath(dir, manifest.entrypoint);
+  if (!entry) errors.push(`entrypoint escapes plugin root: ${manifest.entrypoint}`);
+  else {
+    try { await fsp.access(entry); } catch { errors.push(`entrypoint not found: ${manifest.entrypoint}`); }
+  }
+
+  for (const skillPath of manifest.skillPaths) {
+    const p = containedPath(dir, skillPath);
+    if (!p) errors.push(`skill path escapes plugin root: ${skillPath}`);
+    else {
+      try {
+        const st = await fsp.stat(p);
+        if (!st.isDirectory()) errors.push(`skill path not found: ${skillPath}`);
+      } catch {
+        errors.push(`skill path not found: ${skillPath}`);
+      }
+    }
+  }
+  for (const s of manifest.mcpServers) {
+    if (s.transport === "http" && !s.url) errors.push(`mcp server ${s.id}: http transport requires url`);
+    if (s.transport === "stdio" && !s.command) errors.push(`mcp server ${s.id}: stdio transport requires command`);
+    if (s.command && /[;&|`$(){}<>]/.test(s.command)) errors.push(`mcp server ${s.id}: command contains shell metacharacters`);
+  }
+
+  try {
+    const scan = await scanTreeAsync(dir);
+    warnings.push(...scan.warnings);
+    errors.push(...scan.errors);
+  } catch (e) {
+    errors.push(`security scan failed: ${(e as Error).message}`);
+  }
+
+  const [entryHash, treeHash] = await Promise.all([
+    hashEntrypointAsync(dir, manifest),
+    hashPluginTreeAsync(dir),
+  ]);
+
+  return {
+    ok: errors.length === 0,
+    manifest,
+    entryHash,
+    treeHash,
+    warnings,
+    errors,
+  };
+}
+
+export interface LoadOk {
+  ok: true;
+  manifest: PluginManifest;
+  contributions: PluginContributions;
+  granted: PermissionScope[];
+}
+export interface LoadErr {
+  ok: false;
+  manifest?: PluginManifest;
+  reason: string;
+  kind: "incompatible" | "untrusted" | "error";
+}
+export type LoadResult = LoadOk | LoadErr;
+
+export interface LoadDeps {
+  store: Store;
+  config: XRConfig;
+  cwd: string;
+  granted: PermissionScope[];
+  expectedHash?: string;
+  expectedTreeHash?: string;
+}
