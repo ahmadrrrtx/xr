@@ -13,6 +13,22 @@ Ran 2032 tests across 136 files. [~31s]
 `CI=true` on consecutive full-suite runs and 5 consecutive
 concurrency-stress runs.
 
+## Cross-platform review round 4 (Windows golden path)
+
+After round 3, Linux/macOS are green and the Windows unit suite passes; only
+the Windows **golden-path** step failed. Root cause (by analysis): the golden
+path spawned the install wizard with the bare command `"bun"`, which is not
+reliably resolved via PATH/PATHEXT when spawned from inside bun on Windows —
+every subsequent step depends on that spawn, so the whole step failed. Fixes
+in scripts/golden-path.ts:
+- spawn uses `process.execPath` (absolute bun binary path) instead of `"bun"`;
+- `FAIL <step>: <reason>` is printed to stdout as well as stderr, so GitHub
+  Actions surfaces the exact failing step in the truncated step output;
+- the whole script is wrapped in a top-level try/catch so any thrown error
+  becomes a clean FAIL line instead of an uncaught stack;
+- install-wizard failures include the child's stdout/stderr/exit code;
+- wizard timeout raised to 240s (Windows bun cold-start is slower).
+
 ## Cross-platform review round 3 (Windows EBUSY)
 
 After the macOS policy fix, only Windows failed: `helpers.ts:24` — the `rmrf`

@@ -81,6 +81,12 @@ from the CI annotations:
 - macOS golden-path step was missing HOME/XR_HOME env. Fixed in
   cross-platform.yml.
 
+Round 4 (Windows golden path): the golden-path wizard subprocess used a bare
+`"bun"` command which is not reliably resolvable via PATH on Windows; it now
+spawns `process.execPath` (absolute bun path), prints FAIL lines to stdout,
+and wraps the script in a top-level try/catch so any failure is visible and
+actionable.
+
 Linux remains fully green (2033/2033). Round 3 closed the last Windows
 failure: the `rmrf` retry helper now uses async `setTimeout` backoff (spin-loop
 blocked bun from releasing SQLite handles on Windows), and a latent Windows
