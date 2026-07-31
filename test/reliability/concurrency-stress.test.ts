@@ -8,12 +8,13 @@
  * 0 locked, 0 lost, chain valid.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+import { rmrf } from "./helpers.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPRO = join(__dirname, "repro", "concurrency-repro.ts");
@@ -45,7 +46,7 @@ async function runRepro(writers: number, perWriter: number): Promise<Record<stri
       `stderr=${res.stderr.slice(0, 400)} | errors=${JSON.stringify(parsed.errors ?? []).slice(0, 600)} | perWriter=${JSON.stringify(parsed.perWriterWritten ?? [])}`;
     return parsed;
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    rmrf(dir);
   }
 }
 
@@ -104,7 +105,7 @@ describe("Phase 1 · concurrency-safe audit + SQLite", () => {
       expect(store.sessionStatusCounts().reduce((a, r) => a + r.c, 0)).toBe(writers * perWriter);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   }, 180_000);
 });

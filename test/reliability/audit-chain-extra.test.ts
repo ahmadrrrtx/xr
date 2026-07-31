@@ -4,12 +4,13 @@
  * prefix preserved, WAL checkpoint maintenance, and boundary predicates.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
 import { AuditChainCorruptedError } from "../../src/state/write-gate.ts";
+import { rmrf } from "./helpers.ts";
 
 function fresh(dbName = "xr.db"): { store: WorkspaceStore; dbPath: string; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), "xr-chain-"));
@@ -54,7 +55,7 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(reopened.verifyChain().valid).toBe(true);
       reopened.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -67,7 +68,7 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -82,7 +83,7 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(status.genesis).toBe("xr-genesis");
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -98,7 +99,7 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -118,7 +119,7 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(store.expiredMemoryCount(now)).toBe(0);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 });

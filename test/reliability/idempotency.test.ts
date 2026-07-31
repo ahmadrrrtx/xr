@@ -9,7 +9,7 @@
  *   - the ExecutionService wires the primitive around its adapter boundary.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
@@ -17,6 +17,7 @@ import { IdempotencyStore } from "../../src/state/idempotency.ts";
 import { ExecutionRepo, adaptWorkspaceStore } from "../../src/execution/repository.ts";
 import { ExecutionService } from "../../src/execution/service.ts";
 import type { ExecuteOptions } from "../../src/execution/types.ts";
+import { rmrf } from "./helpers.ts";
 
 function freshStore(): { store: WorkspaceStore; dir: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), "xr-idem-"));
@@ -26,7 +27,7 @@ function freshStore(): { store: WorkspaceStore; dir: string; cleanup: () => void
     dir,
     cleanup: () => {
       store.close();
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     },
   };
 }

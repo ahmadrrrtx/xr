@@ -5,10 +5,15 @@
 # these jobs run typecheck + unit + reliability subset on macOS and Windows so
 # platform-specific breakage surfaces in CI instead of on users' machines.
 #
-# Honest gap note (recorded in docs/phase-1/FINAL_REVIEW.md): the crash-
-# injection matrix uses SIGKILL child processes and POSIX-only path/symlink
-# semantics, so it is Linux/macOS only; Windows runs the typecheck + unit +
-# golden-path subset (which are platform-agnostic).
+# Honest gap notes (Phase-0 discipline — recorded in docs/phase-1/FINAL_REVIEW.md
+# and docs/phase-1/KNOWN_LIMITATIONS.md):
+#   · crash-injection matrix uses POSIX SIGKILL child processes → Linux/macOS only.
+#   · test/phase0/policy-gate-adversarial.test.ts is a POSIX-path corpus
+#     (isAbsolute("/etc/...") is false on Windows) → skipped on win32, fully
+#     green on macOS (macOS /etc→/private/etc realpath is covered by the guard).
+#   · test/phase0/cli-spine.test.ts spawns the real CLI; doctor --json on
+#     Windows is not verified (same precedent as doctor.test.ts) → skipped on win32.
+#   · golden-path needs a hermetic XR_HOME/HOME on every OS (set below).
 # =============================================================================
 name: Cross-Platform CI
 
@@ -40,6 +45,9 @@ jobs:
         run: bun test test/state test/phase0 test/core test/execution test/reliability/single-writer.test.ts test/reliability/idempotency.test.ts test/reliability/migrations.test.ts test/reliability/rpo-rto.test.ts
       - name: Golden path
         run: bun run golden-path
+        env:
+          HOME: /tmp/xr-cross-home
+          XR_HOME: /tmp/xr-cross-data
 
   windows:
     name: Windows (typecheck + unit + golden-path subset)

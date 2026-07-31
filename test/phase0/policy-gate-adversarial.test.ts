@@ -14,6 +14,13 @@ import { describe, expect, test } from "bun:test";
 import { checkAction, canonicalPath, normalizeHost, fullyDecode, isSecretPath } from "../../src/security/guard.ts";
 import type { PolicyContext } from "../../src/security/guard.ts";
 
+// Phase 0 POSIX-only guard corpus. The cases below are POSIX-path-centric
+// (isAbsolute("/etc/...") is false on Windows, where these become relative
+// cwd-joined paths), so the corpus is Linux/macOS-only — the same honest
+// discipline doctor.test.ts and shield.test.ts already apply. macOS is fully
+// covered (realpath /etc → /private/etc is handled by the guard patterns).
+const POSIX_ONLY = process.platform === "win32";
+
 const ctx: PolicyContext = {
   egressAllowlist: ["api.openai.com", "githubusercontent.com"],
   requireApproval: [],
@@ -40,7 +47,7 @@ function expectAllowed(tool: string, args: Record<string, unknown>, context: Pol
   expect(decision.allowed).toBe(true);
 }
 
-describe("T9 · secret paths — alternate key names", () => {
+describe.skipIf(POSIX_ONLY)("T9 · secret paths — alternate key names", () => {
   const keys = [
     "~/.ssh/id_rsa",
     "~/.ssh/id_dsa",
@@ -55,13 +62,25 @@ describe("T9 · secret paths — alternate key names", () => {
   }
 });
 
-describe("T9 · secret paths — system credential stores", () => {
+describe.skipIf(POSIX_ONLY)("T9 · secret paths — system credential stores", () => {
   for (const path of ["/etc/shadow", "/etc/passwd", "/etc/gshadow", "/etc/sudoers", "/etc/ssh/sshd_config"]) {
     test(`blocks read of ${path}`, () => expectBlocked("read_file", { path }));
   }
+
+  // Phase 1 · cross-platform hardening: on macOS realpath resolves /etc →
+  // /private/etc, so the canonical form must be blocked too. This was a real
+  // policy bypass on macOS — canonicalPath("/etc/passwd") = "/private/etc/passwd"
+  // escaped the ^/etc/... patterns.
+  test("macOS realpath form (/private/etc/...) is blocked too", () => {
+    expect(isSecretPath("/private/etc/passwd")).toBe(true);
+    expect(isSecretPath("/private/etc/shadow")).toBe(true);
+    expect(isSecretPath("/private/etc/gshadow")).toBe(true);
+    expect(isSecretPath("/private/etc/sudoers")).toBe(true);
+    expect(isSecretPath("/private/etc/ssh/sshd_config")).toBe(true);
+  });
 });
 
-describe("T9 · secret paths — cloud and tooling credentials", () => {
+describe.skipIf(POSIX_ONLY)("T9 · secret paths — cloud and tooling credentials", () => {
   const paths = [
     "~/.aws/credentials",
     "~/.aws/config",
@@ -84,7 +103,7 @@ describe("T9 · secret paths — cloud and tooling credentials", () => {
   }
 });
 
-describe("T9 · secret paths — encoding and traversal bypasses", () => {
+describe.skipIf(POSIX_ONLY)("T9 · secret paths — encoding and traversal bypasses", () => {
   test("blocks percent-encoded traversal to .ssh", () => {
     expectBlocked("read_file", { path: "%2e%2e%2f%2e%2e%2f.ssh%2fid_rsa" });
   });
@@ -126,7 +145,7 @@ describe("T9 · secret paths — encoding and traversal bypasses", () => {
   });
 });
 
-describe("T9 · egress — scheme coverage", () => {
+describe.skipIf(POSIX_ONLY)("T9 · egress — scheme coverage", () => {
   for (const url of [
     "file:///etc/shadow",
     "data:text/html;base64,PHNjcmlwdD4=",
@@ -144,7 +163,7 @@ describe("T9 · egress — scheme coverage", () => {
   }
 });
 
-describe("T9 · egress — raw IP and numeric host encodings", () => {
+describe.skipIf(POSIX_ONLY)("T9 · egress — raw IP and numeric host encodings", () => {
   const hosts = [
     "http://127.0.0.1/admin",
     "http://2130706433/admin",          // decimal
@@ -169,7 +188,7 @@ describe("T9 · egress — raw IP and numeric host encodings", () => {
   });
 });
 
-describe("T9 · egress — domain allow-list semantics", () => {
+describe.skipIf(POSIX_ONLY)("T9 · egress — domain allow-list semantics", () => {
   test("allows an exact allow-listed domain", () => {
     expectAllowed("fetch_url", { url: "https://api.openai.com/v1/models" });
   });
@@ -208,7 +227,7 @@ describe("T9 · egress — domain allow-list semantics", () => {
   });
 });
 
-describe("T9 · dangerous shell commands", () => {
+describe.skipIf(POSIX_ONLY)("T9 · dangerous shell commands", () => {
   for (const cmd of [
     "rm -rf /",
     "rm -fr ~/projects",
@@ -226,7 +245,7 @@ describe("T9 · dangerous shell commands", () => {
   }
 });
 
-describe("T9 · legitimate actions are not over-blocked", () => {
+describe.skipIf(POSIX_ONLY)("T9 · legitimate actions are not over-blocked", () => {
   test("allows reading an ordinary project file", () => {
     expectAllowed("read_file", { path: "src/index.ts" });
   });
@@ -248,7 +267,7 @@ describe("T9 · legitimate actions are not over-blocked", () => {
   });
 });
 
-describe("T9 · canonicalisation primitives", () => {
+describe.skipIf(POSIX_ONLY)("T9 · canonicalisation primitives", () => {
   test("fullyDecode collapses repeated percent-encoding", () => {
     expect(fullyDecode("%252e%252e%252f")).toBe("../");
   });

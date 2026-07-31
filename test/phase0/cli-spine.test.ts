@@ -20,6 +20,11 @@ import type { Provider } from "../../src/core/types.ts";
 const REPO_ROOT = resolve(import.meta.dir, "../..");
 const ENTRY = join(REPO_ROOT, "src/index.ts");
 
+// Phase 0 black-box CLI contract suite. The CLI is only verified on
+// Linux/macOS — doctor --json output and process-exit behavior are not
+// Windows-verified (same honest discipline as doctor.test.ts / shield.test.ts).
+const POSIX_ONLY = process.platform === "win32";
+
 let home = "";
 
 beforeAll(() => {
@@ -63,7 +68,7 @@ async function runCli(args: string[], timeoutMs = 120_000): Promise<RunResult> {
   return { code, stdout, stderr, combined: stdout + stderr };
 }
 
-describe("T11 · exit-code contract", () => {
+describe.skipIf(POSIX_ONLY)("T11 · exit-code contract", () => {
   test("--version exits 0", async () => {
     const r = await runCli(["--version"]);
     expect(r.code).toBe(0);
@@ -100,7 +105,7 @@ describe("T11 · exit-code contract", () => {
   });
 });
 
-describe("T11 · free-form routing", () => {
+describe.skipIf(POSIX_ONLY)("T11 · free-form routing", () => {
   test("a one-word task routes to task mode instead of 'Unknown command'", async () => {
     const r = await runCli(["hello"]);
     // Previously: "✗ Unknown command: hello" because `hello` is within edit
@@ -130,7 +135,7 @@ describe("T11 · free-form routing", () => {
   });
 });
 
-describe("T11 · fallback target diversity", () => {
+describe.skipIf(POSIX_ONLY)("T11 · fallback target diversity", () => {
   function fakeProvider(id: string, label: string, model?: string): Provider {
     return {
       id,
@@ -179,7 +184,7 @@ describe("T11 · fallback target diversity", () => {
   });
 });
 
-describe("T11 · config no longer seeds a self-referential fallback", () => {
+describe.skipIf(POSIX_ONLY)("T11 · config no longer seeds a self-referential fallback", () => {
   test("a fresh ollama-default config does not set fallbackProvider to ollama", async () => {
     const { MIGRATIONS } = await import("../../src/config/config.ts");
     const migrate = MIGRATIONS?.[2];

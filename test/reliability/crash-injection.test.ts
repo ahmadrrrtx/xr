@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { spawn } from "node:child_process";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
+import { rmrf } from "./helpers.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCENARIOS = join(__dirname, "crash-injection");
@@ -71,7 +72,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(store.auditCount()).toBe(count + 1);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -90,7 +91,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -106,7 +107,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(wf === null || wf.workflowId === "wf_crash").toBe(true);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -131,7 +132,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       }
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -150,7 +151,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -182,7 +183,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(slot?.state).toBe("requires_reconciliation");
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -205,7 +206,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 });

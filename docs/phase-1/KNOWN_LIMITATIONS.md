@@ -18,6 +18,8 @@ entry has an owner and a review date.
 | L10 | Multi-node / distributed durability / full HA | **open — out of scope** | Single-node scope per Phase 1 contract; full HA is Phase 10. Owner: architecture · review: Phase 10. |
 | L11 | Release signing | **open — out of scope** | Signing enforced in Phase 9; identity unified but unsigned (Phase 0/1). Owner: security · review: Phase 9. |
 | L12 | Windows CI runs a subset (crash matrix uses POSIX SIGKILL) | **open — honest gap** | Documented in cross-platform.yml + FINAL_REVIEW. Owner: ci-eng · review: Phase 2. |
+| L16 | Phase-0 POSIX-only test corpora skipped on Windows | **open — honest gap** | `policy-gate-adversarial.test.ts` (POSIX-path corpus) and `cli-spine.test.ts` (CLI-on-Windows unverified) are `describe.skipIf(win32)` with documentation — same discipline as the existing doctor.test.ts/shield.test.ts. macOS runs both fully. Owner: ci-eng · review: Phase 2. |
+| L17 | macOS realpath policy-bypass (fixed in review) | **closed** | Phase 0 guard allowed `realpath("/etc/passwd")` = `/private/etc/passwd` to escape the `^/etc/…` secret patterns — a real policy bypass on macOS, exposed by the new macOS CI. Fixed: `/private/etc/…` patterns added to SECRET_PATH_PATTERNS + regression test. |
 | L13 | Legacy `src/state/store.ts` remains as a deprecated re-export | **open — intentional** | Back-compat surface; do not extend. Owner: architecture. |
 | L14 | `syncSleep` busy-retry uses Atomics.wait (synchronous sleep) | **open — accepted** | Only triggers when busy_timeout is exhausted; bounded (≤3 retries). Owner: reliability-eng. |
 | L15 | Memory recall scoring is heuristic (lexical) | **open — pre-existing** | Not a Phase-1 defect; unchanged. Owner: context-eng. |

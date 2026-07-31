@@ -137,6 +137,12 @@ const SECRET_PATH_PATTERNS: RegExp[] = [
   // System credential stores.
   /^([\\/])etc([\\/])(shadow|gshadow|passwd|sudoers)$/i,
   /^([\\/])etc([\\/])ssh([\\/])/i,
+  // macOS realpath resolves /etc → /private/etc (and /tmp → /private/tmp), so
+  // the canonical form of a system credential file must be blocked too.
+  // Without these, `realpath("/etc/passwd")` = "/private/etc/passwd" escapes
+  // the /etc patterns above (Phase 1 · cross-platform hardening).
+  /^([\\/])private([\\/])etc([\\/])(shadow|gshadow|passwd|sudoers)$/i,
+  /^([\\/])private([\\/])etc([\\/])ssh([\\/])/i,
   // Cloud provider credentials.
   /(^|[\\/])\.aws([\\/]|$)/i,
   /(^|[\\/])\.kube([\\/])config$/i,

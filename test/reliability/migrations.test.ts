@@ -10,7 +10,7 @@
  *   - the audit chain continues across migration boundaries (additive format).
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
@@ -21,6 +21,7 @@ import {
   runMigrationsUp,
 } from "../../src/state/migrations.ts";
 import { IdempotencyStore } from "../../src/state/idempotency.ts";
+import { rmrf } from "./helpers.ts";
 
 describe("Phase 1 · reversible migrations", () => {
   test("up: baseline → latest creates idempotency_slots and records versions", () => {
@@ -43,7 +44,7 @@ describe("Phase 1 · reversible migrations", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -78,7 +79,7 @@ describe("Phase 1 · reversible migrations", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -104,7 +105,7 @@ describe("Phase 1 · reversible migrations", () => {
       expect(old.verifyChain().valid).toBe(true);
       old.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -118,7 +119,7 @@ describe("Phase 1 · reversible migrations", () => {
       expect(currentSchemaVersion(store)).toBe(LATEST_SCHEMA_VERSION);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 });

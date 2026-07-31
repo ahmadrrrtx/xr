@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
 import { BackupService } from "../../src/deployment/backup/service.ts";
+import { rmrf } from "./helpers.ts";
 
 /** RTO budget for a cold restart of the store (opened + migrated + verified). */
 const RTO_BUDGET_MS = 2000;
@@ -74,7 +75,7 @@ describe("Phase 1 · RPO/RTO drill", () => {
       expect(store.auditCount()).toBeLessThan(mutatedCount);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -91,7 +92,7 @@ describe("Phase 1 · RPO/RTO drill", () => {
       expect(service.listBackups().length).toBe(before + 1); // pre-restore backup
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -110,7 +111,7 @@ describe("Phase 1 · RPO/RTO drill", () => {
       expect(b.verifyChain().valid).toBe(true);
       b.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -133,7 +134,7 @@ describe("Phase 1 · RPO/RTO drill", () => {
       // eslint-disable-next-line no-console
       console.log(`[RTO] cold restart ${Math.round(t1 - t0)}ms (open ${Math.round(opened - t0)}ms + verify)`);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 });

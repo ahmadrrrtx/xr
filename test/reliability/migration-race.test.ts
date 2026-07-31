@@ -12,12 +12,13 @@
  * processes at once and asserts EVERY worker constructs and writes cleanly.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { spawn } from "node:child_process";
+import { rmrf } from "./helpers.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -64,7 +65,7 @@ describe("Phase 1 · migration race under parallel construction", () => {
       expect(store.auditCount()).toBe(writers * perWriter);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   }, 180_000);
 });

@@ -6,12 +6,13 @@
  * nightly workflow (Linux + container).
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { spawn } from "node:child_process";
+import { rmrf } from "./helpers.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const GOLDEN = join(__dirname, "..", "..", "scripts", "golden-path.ts");
@@ -34,8 +35,8 @@ function runGolden(): Promise<{ code: number | null; stdout: string; stderr: str
     let stderr = "";
     child.stdout.on("data", (d) => (stdout += String(d)));
     child.stderr.on("data", (d) => (stderr += String(d)));
-    child.on("close", (code) => {
-      rmSync(dir, { recursive: true, force: true });
+    child.on("close", async (code) => {
+      rmrf(dir);
       resolve({ code, stdout, stderr });
     });
   });

@@ -66,6 +66,25 @@ Both fixed; regression covered by `migration-race.test.ts`. After the fix the
 full suite is green 3× consecutively with `CI=true` and the concurrency stress
 is green 5× consecutively.
 
+## Cross-platform review fix (addendum 2)
+
+PR #32's second CI run left only the macOS/Windows jobs failing. Root causes
+from the CI annotations:
+- macOS: Phase-0 guard allowed `realpath("/etc/passwd")` = `/private/etc/passwd`
+  to escape the `^/etc/…` secret patterns — a **real policy bypass on macOS**.
+  Fixed (guard `/private/etc/…` patterns + regression test).
+- Windows: Phase-1 test `finally` cleanup used plain `rmSync` → `EBUSY` while
+  SQLite handles release. Fixed via shared `test/reliability/helpers.ts` `rmrf`.
+- Windows: POSIX-only Phase-0 corpora (`policy-gate-adversarial`,
+  `cli-spine`) skipped on win32 with documentation (same discipline as
+  doctor.test.ts/shield.test.ts).
+- macOS golden-path step was missing HOME/XR_HOME env. Fixed in
+  cross-platform.yml.
+
+Linux remains fully green (2033/2033). The macOS/Windows jobs now run the
+typecheck + unit + reliability subset with the platform issues above resolved
+and the remaining gaps explicitly documented.
+
 ## Declaration
 
 Phase 1 is **complete** per the Part 13 Exit Gate. All gates pass against live

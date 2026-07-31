@@ -4,10 +4,11 @@
  * expiry semantics, provenance undefined-propagation, memory content-touch).
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceStore, Store } from "../../src/state/workspace-store.ts";
+import { rmrf } from "./helpers.ts";
 
 function fresh(dbName = "xr.db"): { store: WorkspaceStore; dbPath: string; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), "xr-edge-"));
@@ -28,7 +29,7 @@ describe("Phase 1 · store edge cases", () => {
       expect(legacy.dbPath).toBe(join(dir, "nested", "dir", "data"));
       legacy.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -43,7 +44,7 @@ describe("Phase 1 · store edge cases", () => {
       expect(store.getMemory("m")?.embedding).toBe("[0.1,0.2]");
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -67,7 +68,7 @@ describe("Phase 1 · store edge cases", () => {
       expect(store.updateMemory("missing", { content: "x" })).toBe(false);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -86,7 +87,7 @@ describe("Phase 1 · store edge cases", () => {
       expect(store.setMemoryProvenance("missing", { provenanceKind: "x" })).toBe(false);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -99,7 +100,7 @@ describe("Phase 1 · store edge cases", () => {
       expect(store.memoryCount("p")).toBe(2);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 });

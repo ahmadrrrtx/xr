@@ -13,6 +13,27 @@ Ran 2032 tests across 136 files. [~31s]
 `CI=true` on 3 consecutive full-suite runs and 5 consecutive
 concurrency-stress runs.
 
+## Cross-platform review (PR #32 second CI run)
+
+macOS + Windows exposed real platform issues (annotations pulled from CI):
+
+1. **macOS policy bypass (real security gap):** on macOS `realpath("/etc/passwd")`
+   = `/private/etc/passwd`, which escaped the guard's `^/etc/…` patterns —
+   `checkAction` allowed reading a system credential file. Fixed in
+   `src/security/guard.ts` (additive `/private/etc/…` patterns) + regression
+   test. This is exactly the kind of defect T7's cross-platform CI exists to
+   surface.
+2. **Windows EBUSY in Phase-1 test cleanup:** plain `rmSync` in `finally`
+   blocks throws `EBUSY: resource busy or locked` on Windows while SQLite
+   handles release. Fixed: shared `test/reliability/helpers.ts` `rmrf`
+   (retry-based, same pattern as the repo's `rmrfWithRetry`).
+3. **Windows POSIX-only Phase-0 corpora:** `policy-gate-adversarial.test.ts`
+   (isAbsolute("/etc/…") is false on Windows) and `cli-spine.test.ts`
+   (doctor --json not Windows-verified) are skipped on win32 with
+   documentation — the same honest discipline the repo already applies in
+   doctor.test.ts / shield.test.ts.
+4. **macOS golden path lacked HOME/XR_HOME env** — fixed in cross-platform.yml.
+
 ## CI review fix (cross-process migration race)
 
 The first CI run (PR #32) failed the concurrency stress on the 4-vCPU runner.
@@ -37,6 +58,7 @@ set after `journal_mode=WAL`. Both fixed; regression covered by
 | `update-uninstall.test.ts` | 11 | applyUpdate state machine; git blue-green swap + rollback; uninstall per mode |
 | `artifact-e2e.test.ts` | 1 | pack → install → drive the artifact (identity + audit + durability) |
 | `migration-race.test.ts` | 1 | 16 processes open one fresh DB concurrently → 0 migration races, 0 lost writes |
+| `helpers.ts` | — | shared retry-based `rmrf` (Windows EBUSY-safe test cleanup) |
 
 ## Concurrency reproduction (before → after)
 

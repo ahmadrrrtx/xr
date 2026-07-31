@@ -6,7 +6,7 @@
  * claim is made anywhere (Phase 9).
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -21,6 +21,7 @@ import {
   resolveUninstallPaths,
   isRunningCheckout,
 } from "../../src/install/uninstall.ts";
+import { rmrf } from "./helpers.ts";
 
 // ── T11: applyUpdate state machine (unit) ─────────────────────────────────
 
@@ -136,7 +137,7 @@ describe("Phase 1 · atomic update — git checkout integration", () => {
       // No leftover worktree debris in the install dir.
       expect(readdirSync(installDir).filter((f) => f.startsWith("xr-update-"))).toHaveLength(0);
     } finally {
-      rmSync(installDir, { recursive: true, force: true });
+      rmrf(installDir);
     }
   });
 
@@ -158,7 +159,7 @@ describe("Phase 1 · atomic update — git checkout integration", () => {
       // There may be unrelated temp dirs; assert none references our install dir.
       expect(leftovers.length).toBeGreaterThanOrEqual(0);
     } finally {
-      rmSync(installDir, { recursive: true, force: true });
+      rmrf(installDir);
     }
   });
 
@@ -169,7 +170,7 @@ describe("Phase 1 · atomic update — git checkout integration", () => {
       writeFileSync(join(dir, "package.json"), "{}");
       expect(detectInstallLayout(dir)).toBe("npm");
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 });
@@ -213,7 +214,7 @@ describe("Phase 1 · uninstall", () => {
       const rc = readFileSync(join(home, ".bashrc"), "utf8");
       expect(rc).not.toContain("XR launcher");
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -229,7 +230,7 @@ describe("Phase 1 · uninstall", () => {
       expect(existsSync(join(home, ".xr"))).toBe(false);
       expect(existsSync(join(home, ".xr-agent"))).toBe(false);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -248,7 +249,7 @@ describe("Phase 1 · uninstall", () => {
       expect(summary.skippedInstallDir).toBe(paths.installDir);
       expect(existsSync(paths.installDir)).toBe(true);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -260,7 +261,7 @@ describe("Phase 1 · uninstall", () => {
       expect(paths.installDir).toBe(join(dir, ".xr-agent"));
       expect(paths.dataHome).toBe(join(dir, ".xr"));
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 });

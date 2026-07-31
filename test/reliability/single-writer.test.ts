@@ -19,6 +19,7 @@ import { CostRepo } from "../../src/state/repos/cost-repo.ts";
 import { IdempotencyStore } from "../../src/state/idempotency.ts";
 import { ExecutionRepo, adaptWorkspaceStore } from "../../src/execution/repository.ts";
 import { ExecutionService } from "../../src/execution/service.ts";
+import { rmrf } from "./helpers.ts";
 
 function walk(dir: string, acc: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -95,7 +96,7 @@ describe("Phase 1 · single-writer invariant", () => {
       expect(WorkspaceStore.unsafeWriteCount()).toBe(0);
       void r;
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -116,7 +117,7 @@ describe("Phase 1 · single-writer invariant", () => {
       b.close();
       expect(WorkspaceStore.connectionCount()).toBe(baseline);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 
@@ -149,7 +150,7 @@ describe("Phase 1 · single-writer invariant", () => {
       expect(WorkspaceStore.unsafeWriteCount()).toBe(0);
       store.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmrf(dir);
     }
   });
 });
