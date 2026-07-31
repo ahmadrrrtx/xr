@@ -1,6 +1,16 @@
 /**
  * XR — the agent loop: Observe → Think → Act, repeat until done.
- * This is the universal engine every agent harness runs.
+ *
+ * ── Phase 2 · T1: this is a LOOP, not an ENTRY POINT ────────────────────────
+ *
+ * `runAgentLoop` implements the ACTION phase of the canonical execution
+ * envelope (src/core/execution/envelope.ts). The ONLY module permitted to call
+ * it is src/core/execution/runner.ts; every surface reaches it through
+ * `AgentService.execute()`. `test/core/no-bypass.test.ts` fails the build if
+ * any other module imports it.
+ *
+ * The historical name `runAgent` is retained as a deprecated alias for
+ * out-of-tree callers and is scheduled for removal in 8.0.0 (ADR-0002).
  */
 import { randomUUID } from "node:crypto";
 import type {
@@ -82,8 +92,23 @@ export interface AgentDeps {
   };
   /**
    * XR 1.0 — extra tools contributed by enabled plugins.
+   *
+   * @deprecated Phase 2 · T2. Superseded by `toolRegistry`, which namespaces
+   * contributions and arbitrates collisions instead of concatenating a flat
+   * list whose bare names could shadow core tools. Still honoured for
+   * out-of-tree callers; removed in 8.0.0 (ADR-0003).
    */
   extraTools?: Tool[];
+  /**
+   * Phase 2 · T2 — the single tool registry for this run. When supplied it is
+   * the authority for both discovery and call resolution, and `extraTools` is
+   * ignored. Supplied by the execution envelope on every in-tree path.
+   */
+  toolRegistry?: import("../tools/registry-service.ts").ToolRegistryService;
+  /** Phase 2 · T1 — envelope identity, recorded on audit entries. */
+  envelopeId?: string;
+  /** Phase 2 · T1 — originating surface, recorded on audit entries. */
+  surface?: string;
   /**
    * XR 4.4 — routing decision from the Universal Intelligence Plane.
    * Secret-free; safe to audit and attach to execution records.
@@ -122,7 +147,7 @@ export interface AgentResult {
   /** XR 4.4 — routing decision id when intelligence plane selected the model. */
   routingDecisionId?: string;
 }
-export async function runAgent(
+export async function runAgentLoop(
   task: string,
   mode: Mode,
   deps: AgentDeps,
@@ -148,16 +173,47 @@ export async function runAgent(
   sessionStore.createSession(sessionId, task.slice(0, 80), mode);
   auditStore.audit("session.start", { task, mode, provider: provider.id }, sessionId);
 
-  const coreTools: Tool[] = toolsForMode(mode);
-  const extraTools: Tool[] = mode === "agent" ? deps.extraTools ?? [] : [];
+  /**
+   * Phase 2 · T2 — tool discovery.
+   *
+   * With a registry (every in-tree path), discovery and call resolution share
+   * ONE arbitrated view: a contested bare name is advertised under its
+   * qualified id and resolves to exactly one entry, or to nothing. Without a
+   * registry (deprecated out-of-tree callers passing `extraTools`), the
+   * pre-Phase-2 behaviour is preserved verbatim so nothing breaks.
+   */
+  const registry = deps.toolRegistry;
   const filteredAllow = deps.tools?.allow ? new Set(deps.tools.allow) : null;
   const filteredDeny = deps.tools?.deny ? new Set(deps.tools.deny) : null;
-  const tools: Tool[] = [...coreTools, ...extraTools].filter((tool) => {
-    if (filteredAllow && !filteredAllow.has(tool.name)) return false;
-    if (filteredDeny && filteredDeny.has(tool.name)) return false;
-    return true;
-  });
-  const extraToolMap = new Map(extraTools.map((t) => [t.name, t]));
+
+  let tools: Tool[];
+  let resolveTool: (name: string) => Tool | undefined;
+
+  if (registry) {
+    tools = registry.discover({
+      mode,
+      ...(deps.tools?.allow ? { allow: deps.tools.allow } : {}),
+      ...(deps.tools?.deny ? { deny: deps.tools.deny } : {}),
+    });
+    const offered = new Set(tools.map((t) => t.name));
+    resolveTool = (name: string) => {
+      // Only a name actually offered for this mode may resolve — a shadowed or
+      // out-of-mode entry is never reachable, even by qualified id.
+      if (!offered.has(name)) return undefined;
+      const entry = registry.resolve(name);
+      return entry ? entry.tool : tools.find((t) => t.name === name);
+    };
+  } else {
+    const coreTools: Tool[] = toolsForMode(mode);
+    const extraTools: Tool[] = mode === "agent" ? deps.extraTools ?? [] : [];
+    tools = [...coreTools, ...extraTools].filter((tool) => {
+      if (filteredAllow && !filteredAllow.has(tool.name)) return false;
+      if (filteredDeny && filteredDeny.has(tool.name)) return false;
+      return true;
+    });
+    const extraToolMap = new Map(extraTools.map((t) => [t.name, t]));
+    resolveTool = (name: string) => getTool(name) ?? extraToolMap.get(name);
+  }
   const toolCtx = {
     cwd,
     approve: deps.approve,
@@ -348,7 +404,7 @@ export async function runAgent(
       }
 
       for (const call of turn.toolCalls) {
-        const tool = getTool(call.tool) ?? extraToolMap.get(call.tool);
+        const tool = resolveTool(call.tool);
         if (!tool || !tools.some((t) => t.name === call.tool)) {
           const msg = `tool "${call.tool}" is not available in ${mode} mode`;
           say(`\x1b[31m✗ ${msg}\x1b[0m`);
@@ -398,3 +454,15 @@ export async function runAgent(
     };
   }
 }
+
+/**
+ * @deprecated Phase 2 · T1 — use `AgentService.execute()` / the execution
+ * envelope. Retained ONLY as a compatibility alias for out-of-tree callers and
+ * for the pre-existing unit tests that exercise the loop in isolation.
+ *
+ * In-tree surfaces MUST NOT call this: `test/core/no-bypass.test.ts` asserts
+ * that no production module outside `src/core/execution/` imports the loop.
+ *
+ * Removal: 8.0.0 (ADR-0002).
+ */
+export const runAgent = runAgentLoop;
