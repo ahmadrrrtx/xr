@@ -92,42 +92,56 @@ export function currentSchemaVersion(store: WorkspaceStore): number {
   return row?.v ?? 0;
 }
 
-/** Apply pending migrations up to `target` (default: latest). Idempotent. */
+/**
+ * Apply pending migrations up to `target` (default: latest). Idempotent AND
+ * race-safe across processes: the applied-check runs INSIDE the serialized
+ * write transaction (`BEGIN IMMEDIATE` serializes writers), and the
+ * bookkeeping insert is `INSERT OR IGNORE`, so two processes racing to apply
+ * migration N on a fresh database cannot produce a UNIQUE violation (the
+ * loser's transaction sees the winner's committed row and no-ops).
+ */
 export function runMigrationsUp(store: WorkspaceStore, target: number = LATEST_SCHEMA_VERSION): string[] {
   ensureMigrationTable(store);
-  const applied = new Set<number>(
-    (store.prepare(`SELECT version FROM ${MIGRATIONS_TABLE}`).all() as Array<{ version: number }>).map(
-      (r) => r.version,
-    ),
-  );
   const ran: string[] = [];
   for (const m of [...MIGRATIONS].sort((a, b) => a.version - b.version)) {
     if (m.version > target) break;
-    if (applied.has(m.version)) continue;
     store.write(() => {
-      m.up(store);
+      // Re-check inside the transaction: IMMEDIATE serializes writers, so the
+      // check-then-record below is atomic with respect to other processes.
+      const already = store
+        .prepare(`SELECT 1 FROM ${MIGRATIONS_TABLE} WHERE version = ?`)
+        .get(m.version);
+      if (already) return;
+      m.up(store); // idempotent DDL (CREATE ... IF NOT EXISTS)
       store
-        .prepare(`INSERT INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (?, ?, ?)`)
+        .prepare(`INSERT OR IGNORE INTO ${MIGRATIONS_TABLE} (version, name, applied_at) VALUES (?, ?, ?)`)
         .run(m.version, m.name, Date.now());
+      ran.push(m.name);
     });
-    ran.push(m.name);
   }
   return ran;
 }
 
-/** Reverse migrations down to `target` (default: 0 = baseline). Idempotent. */
+/**
+ * Reverse migrations down to `target` (default: 0 = baseline). Idempotent and
+ * race-safe across processes: the presence check runs inside the write
+ * transaction and the reversal DDL is idempotent (DROP TABLE IF EXISTS).
+ */
 export function runMigrationsDown(store: WorkspaceStore, target: number = 0): string[] {
   ensureMigrationTable(store);
-  const current = currentSchemaVersion(store);
   const reverted: string[] = [];
-  for (let v = current; v > target; v--) {
+  for (let v = LATEST_SCHEMA_VERSION; v > target; v--) {
     const m = MIGRATIONS.find((x) => x.version === v);
     if (!m) throw new MigrationError(`no migration registered for version ${v}`);
     store.write(() => {
+      const present = store
+        .prepare(`SELECT 1 FROM ${MIGRATIONS_TABLE} WHERE version = ?`)
+        .get(v);
+      if (!present) return; // another process already reverted it
       m.down(store);
       store.prepare(`DELETE FROM ${MIGRATIONS_TABLE} WHERE version = ?`).run(v);
+      reverted.push(m.name);
     });
-    reverted.push(m.name);
   }
   return reverted;
 }

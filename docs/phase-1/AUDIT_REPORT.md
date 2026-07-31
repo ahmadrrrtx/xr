@@ -118,6 +118,39 @@ errors: ["database is locked", … (6×)]
 
 ---
 
+## 4b. CI-discovered cross-process migration race (fixed in review)
+
+The first PR run of the Phase-1 CI (ahmadrrrtx/xr#32) failed the concurrency
+stress on the GitHub Actions runner (4 vCPU — higher true parallelism than the
+dev sandbox). Live evidence from the CI annotations:
+
+```
+Reliability job:   concurrency-stress.test.ts#L51   Expected 400,  Received 347
+Reliability job:   concurrency-stress.test.ts#L90   Expected 1600, Received 1595
+Test (bun test):   concurrency-stress.test.ts#L59   Expected 1440, Received 456
+```
+
+Two root causes, both fixed:
+
+1. **`schema_migrations` UNIQUE race** — `runMigrationsUp` checked "applied?"
+   OUTSIDE the write transaction, so two processes racing on a fresh DB both
+   tried to record migration 1 and one hit
+   `UNIQUE constraint failed: schema_migrations.version`; its constructor
+   threw and it lost writes. Fixed (src/state/migrations.ts): the applied
+   check now runs INSIDE the serialized `BEGIN IMMEDIATE` transaction and the
+   bookkeeping insert is `INSERT OR IGNORE`. Regression proof:
+   `test/reliability/migration-race.test.ts` (16 processes open one fresh DB
+   concurrently → 0 races, 0 lost).
+
+2. **`busy_timeout` set AFTER `journal_mode=WAL`** — switching to WAL takes a
+   brief exclusive lock; with the default busy_timeout (0) it failed instantly
+   with SQLITE_BUSY under contention, so workers' constructors failed
+   repeatedly and dropped ~2/3 of writes at high parallelism. Fixed
+   (src/state/write-gate.ts): `busy_timeout` is set FIRST, before WAL.
+
+After the fix: 3 consecutive clean full-suite runs (2032/2032) with `CI=true`,
+plus 5 consecutive clean concurrency-stress runs.
+
 ## 5. Other findings (Phase-1 relevant, not in hypothesis)
 
 - `src/business/core/audit.ts` `AuditTrail.log` has the same read-then-write gap on the Business OS chain.

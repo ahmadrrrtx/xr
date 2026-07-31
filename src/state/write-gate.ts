@@ -110,12 +110,17 @@ export interface WriteGateOptions {
  * Phase-1 safe-concurrency PRAGMA set (WAL, synchronous=NORMAL,
  * busy_timeout=5000, foreign_keys=ON, wal_autocheckpoint=1000).
  * All other code must go through WorkspaceStore (the single writer).
+ *
+ * Order matters: `busy_timeout` is set BEFORE `journal_mode=WAL` because
+ * switching to WAL takes a brief exclusive lock and must wait for other
+ * connections under contention — with the default busy_timeout (0) that
+ * switch fails instantly with SQLITE_BUSY.
  */
 export function openDatabase(path: string, opts: { create?: boolean; readonly?: boolean } = {}): Database {
   const db = new Database(path, { create: opts.create ?? true, readonly: opts.readonly ?? false });
+  db.exec("PRAGMA busy_timeout = 5000;");
   if (!opts.readonly) db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA synchronous = NORMAL;");
-  db.exec("PRAGMA busy_timeout = 5000;");
   db.exec("PRAGMA foreign_keys = ON;");
   if (!opts.readonly) db.exec("PRAGMA wal_autocheckpoint = 1000;");
   return db;

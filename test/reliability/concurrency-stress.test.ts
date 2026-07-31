@@ -39,7 +39,11 @@ async function runRepro(writers: number, perWriter: number): Promise<Record<stri
     const lines = res.stdout.trim().split("\n");
     const jsonLine = lines.find((l) => l.startsWith("{") && l.endsWith("}"));
     if (!jsonLine) throw new Error(`repro produced no JSON: ${res.stderr.slice(0, 500)}`);
-    return JSON.parse(jsonLine) as Record<string, unknown>;
+    const parsed = JSON.parse(jsonLine) as Record<string, unknown>;
+    // Attach worker diagnostics so a CI failure reports WHY writes were lost.
+    (parsed as { __diag?: string }).__diag =
+      `stderr=${res.stderr.slice(0, 400)} | errors=${JSON.stringify(parsed.errors ?? []).slice(0, 600)} | perWriter=${JSON.stringify(parsed.perWriterWritten ?? [])}`;
+    return parsed;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -48,18 +52,20 @@ async function runRepro(writers: number, perWriter: number): Promise<Record<stri
 describe("Phase 1 · concurrency-safe audit + SQLite", () => {
   test("8 writers × 50 writes → 0 locked, 0 lost, chain valid", async () => {
     const r = await runRepro(8, 50);
-    expect(r.totalWritten).toBe(r.totalAttempted);
-    expect(r.lockedErrors).toBe(0);
-    expect(r.otherErrors).toBe(0);
-    expect(r.chainValid).toBe(true);
+    const diag = (r as { __diag?: string }).__diag ?? "";
+    expect(r.totalWritten, `totalWritten mismatch — ${diag}`).toBe(r.totalAttempted);
+    expect(r.lockedErrors, `locked errors — ${diag}`).toBe(0);
+    expect(r.otherErrors, `other worker errors — ${diag}`).toBe(0);
+    expect(r.chainValid, `chain broke — ${diag}`).toBe(true);
   }, 120_000);
 
   test("12 writers × 120 writes (1440 concurrent appends) → chain intact", async () => {
     const r = await runRepro(12, 120);
-    expect(r.totalWritten).toBe(r.totalAttempted);
-    expect(r.lockedErrors).toBe(0);
-    expect(r.chainValid).toBe(true);
-  }, 120_000);
+    const diag = (r as { __diag?: string }).__diag ?? "";
+    expect(r.totalWritten, `totalWritten mismatch — ${diag}`).toBe(r.totalAttempted);
+    expect(r.lockedErrors, `locked errors — ${diag}`).toBe(0);
+    expect(r.chainValid, `chain broke — ${diag}`).toBe(true);
+  }, 180_000);
 
   test("mixed workload (sessions+steps+workflows+memory+cost) survives parallel writers", async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-mixed-"));

@@ -2,14 +2,24 @@
 
 All results captured on 2026-07-31 against the Phase-1 implementation.
 
-## Full suite
+## Full suite (final, after CI review fix)
 
 ```
-2031 pass / 0 fail  (baseline before Phase 1: 1980 pass / 0 fail)
-Ran 2031 tests across 135 files. [26.46s]
+2032 pass / 0 fail  (baseline before Phase 1: 1980 pass / 0 fail)
+Ran 2032 tests across 136 files. [~31s]
 ```
 
-51 new reliability tests added (test/reliability/*).
+52 new reliability tests added (test/reliability/*). Verified clean with
+`CI=true` on 3 consecutive full-suite runs and 5 consecutive
+concurrency-stress runs.
+
+## CI review fix (cross-process migration race)
+
+The first CI run (PR #32) failed the concurrency stress on the 4-vCPU runner.
+Root causes and fix are recorded in AUDIT_REPORT.md §4b: a
+`schema_migrations` UNIQUE race in `runMigrationsUp` and `busy_timeout` being
+set after `journal_mode=WAL`. Both fixed; regression covered by
+`test/reliability/migration-race.test.ts`.
 
 ## Reliability suite (test/reliability/)
 
@@ -26,6 +36,7 @@ Ran 2031 tests across 135 files. [26.46s]
 | `golden-path.test.ts` | 1 | full journey: install → answer → restart → resume → answer → uninstall |
 | `update-uninstall.test.ts` | 11 | applyUpdate state machine; git blue-green swap + rollback; uninstall per mode |
 | `artifact-e2e.test.ts` | 1 | pack → install → drive the artifact (identity + audit + durability) |
+| `migration-race.test.ts` | 1 | 16 processes open one fresh DB concurrently → 0 migration races, 0 lost writes |
 
 ## Concurrency reproduction (before → after)
 

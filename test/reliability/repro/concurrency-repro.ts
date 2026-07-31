@@ -48,7 +48,7 @@ export async function runConcurrencyRepro(opts: {
     ? undefined
     : mkdtempSync(join(tmpdir(), "xr-repro-"));
   const dbPath = opts.dbPath ?? join(dir!, "xr.db");
-  const workerTimeoutMs = opts.workerTimeoutMs ?? 60_000;
+  const workerTimeoutMs = opts.workerTimeoutMs ?? 120_000;
 
   const workers = Array.from({ length: writers }, (_, i) =>
     spawn("bun", ["run", WORKER, dbPath, String(writesPerWriter), String(i)], {

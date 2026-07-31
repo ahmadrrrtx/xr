@@ -57,6 +57,15 @@
 - Windows CI runs a subset: the crash matrix uses POSIX SIGKILL child processes. Documented in cross-platform.yml + KNOWN_LIMITATIONS (L12).
 - Power-loss RPO > 0 with `synchronous=NORMAL` (L9) — documented with the FULL option.
 
+## CI review fix (addendum)
+
+PR #32's first CI run exposed a cross-process migration race on the 4-vCPU
+runner (see AUDIT_REPORT.md §4b): a `schema_migrations` UNIQUE violation in
+`runMigrationsUp` and `busy_timeout` being set after `journal_mode=WAL`.
+Both fixed; regression covered by `migration-race.test.ts`. After the fix the
+full suite is green 3× consecutively with `CI=true` and the concurrency stress
+is green 5× consecutively.
+
 ## Declaration
 
 Phase 1 is **complete** per the Part 13 Exit Gate. All gates pass against live
