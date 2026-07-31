@@ -6,6 +6,7 @@
  * in src/daemon/routes/.
  */
 
+import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { hydrateSecretsAsync, loadConfig } from "../config/config.ts";
 import { WorkspaceManager } from "../core/workspace.ts";
@@ -41,7 +42,49 @@ export interface DaemonHandle {
   handle: (req: Request) => Response | Promise<Response>;
 }
 
-const HOST = "127.0.0.1";
+/**
+ * Bind address resolution (Phase 0 · T12).
+ *
+ * The daemon hard-bound `127.0.0.1`. Inside a container that address is the
+ * container's own loopback, so a published port (`-p 127.0.0.1:7842:7842`)
+ * could never reach it — the documented Docker path was broken.
+ *
+ * A process must bind `0.0.0.0` inside its namespace to be reachable, and
+ * safety comes from where the port is PUBLISHED on the host, not from the
+ * in-container bind address. So:
+ *
+ *   · default (bare metal)  → 127.0.0.1, unchanged; no new exposure.
+ *   · inside a container    → 0.0.0.0, with the host publishing loopback-only.
+ *   · XR_DAEMON_HOST=<addr> → explicit operator override, always wins.
+ *
+ * The default is still loopback, so an ordinary local install gains no network
+ * exposure from this change (Article IX; Commandment 13).
+ */
+export const DEFAULT_LOOPBACK = "127.0.0.1";
+export const CONTAINER_BIND = "0.0.0.0";
+
+/** Detect a container namespace using the standard container markers. */
+export function isContainerRuntime(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.XR_IN_CONTAINER === "1" || env.XR_IN_CONTAINER === "true") return true;
+  if (env.KUBERNETES_SERVICE_HOST) return true;
+  try {
+    // Docker writes /.dockerenv; Podman writes /run/.containerenv.
+    return existsSync("/.dockerenv") || existsSync("/run/.containerenv");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the address the daemon should bind to.
+ *
+ * Exported so the behaviour is directly testable without starting a server.
+ */
+export function resolveBindHost(env: NodeJS.ProcessEnv = process.env): string {
+  const explicit = env.XR_DAEMON_HOST?.trim();
+  if (explicit) return explicit;
+  return isContainerRuntime(env) ? CONTAINER_BIND : DEFAULT_LOOPBACK;
+}
 
 const responseHelpers: DaemonResponseHelpers = {
   json: safeJson,
@@ -98,7 +141,7 @@ export function makeHandler(initialStore: Store, token: string) {
       path,
       method,
       token,
-      host: HOST,
+      host: resolveBindHost(),
       state,
       config,
     });
@@ -117,17 +160,24 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   void hydrateSecretsAsync().catch(() => {});
 
   const handler = makeHandler(store, token);
-  const server = Bun.serve({ hostname: HOST, port, fetch: handler });
-  const url = `http://${HOST}:${port}/?token=${token}`;
+  const bindHost = resolveBindHost();
+  const server = Bun.serve({ hostname: bindHost, port, fetch: handler });
+  // Always show a reachable URL: 0.0.0.0 is a bind address, not a destination.
+  const displayHost = bindHost === CONTAINER_BIND ? DEFAULT_LOOPBACK : bindHost;
+  const url = `http://${displayHost}:${port}/?token=${token}`;
 
   const { xrCyan, xrGreen, xrDim, xrBold } = await import("../ui/theme.ts");
   console.log(`
   ${xrBold(xrCyan("XR"))} ${xrDim("—")} Local Server
-  ${xrGreen("✓")} Listening on  ${xrCyan(`http://${HOST}:${port}`)}
+  ${xrGreen("✓")} Listening on  ${xrCyan(`http://${displayHost}:${port}`)}
   ${xrGreen("✓")} Dashboard     ${xrCyan(url)}
-  ${xrGreen("✓")} Chat          ${xrCyan(`http://${HOST}:${port}/chat?token=${token}`)}
+  ${xrGreen("✓")} Chat          ${xrCyan(`http://${displayHost}:${port}/chat?token=${token}`)}
   ${xrDim("Token:")} ${xrDim(token)}
-  ${xrDim("Binding: localhost only — never exposed to network")}
+  ${xrDim(
+    bindHost === CONTAINER_BIND
+      ? `Binding: ${bindHost} inside the container — publish it loopback-only on the host (127.0.0.1:${port}:${port})`
+      : `Binding: ${bindHost} only — not exposed to the network`,
+  )}
 `);
 
   return {

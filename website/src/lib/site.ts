@@ -21,9 +21,11 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "7.0.0",
-  codename: "Supremacy",
-  displayVersion: "7.0.0 (Supremacy)",
+  version: "7.0.1",
+  codename: "Truth",
+  displayVersion: "7.0.1 (Truth)",
+  /** Bundled skills, mechanically counted from skills/ at stamp time. */
+  skillCount: 65,
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },

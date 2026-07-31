@@ -1,0 +1,55 @@
+# XR — Code Owners
+#
+# Every subsystem has exactly one accountable owner (Constitution: "one
+# responsibility, one owner, per subsystem"). Listed owners are requested for
+# review automatically on any PR touching these paths.
+#
+# Syntax: https://docs.github.com/articles/about-code-owners
+
+# ── Default owner for anything not matched below ────────────────────────────
+*                               @ahmadrrrtx
+
+# ── L0 Kernel: composition, lifecycle, identity, claims ─────────────────────
+# Highest-authority surfaces. Changes here need extra scrutiny.
+/src/core/                      @ahmadrrrtx
+/release.manifest.json          @ahmadrrrtx
+/scripts/release-manifest.ts    @ahmadrrrtx
+/scripts/claim-lint.ts          @ahmadrrrtx
+
+# ── Trust boundary: policy, secrets, review ─────────────────────────────────
+# Fail-closed code. Never merge without an adversarial test.
+/src/security/                  @ahmadrrrtx
+/src/trust/                     @ahmadrrrtx
+/src/integrations/credentials.ts @ahmadrrrtx
+/src/services/review-decision.ts @ahmadrrrtx
+
+# ── L1 Runtime: agent loop, execution, providers, workflow ──────────────────
+/src/execution/                 @ahmadrrrtx
+/src/workflow/                  @ahmadrrrtx
+/src/providers/                 @ahmadrrrtx
+/src/intelligence/              @ahmadrrrtx
+
+# ── L2 Platform: tools, plugins, MCP, skills ────────────────────────────────
+/src/plugins/                   @ahmadrrrtx
+/src/mcp/                       @ahmadrrrtx
+/src/skills/                    @ahmadrrrtx
+/src/tools/                     @ahmadrrrtx
+
+# ── Surfaces ────────────────────────────────────────────────────────────────
+/src/cli/                       @ahmadrrrtx
+/src/interfaces/                @ahmadrrrtx
+/src/daemon/                    @ahmadrrrtx
+
+# ── Public claims: docs, website, installers ────────────────────────────────
+# Claim-governed under Article XIX. Every change is claim-linted.
+/README.md                      @ahmadrrrtx
+/website/                       @ahmadrrrtx
+/install.sh                     @ahmadrrrtx
+/install.ps1                    @ahmadrrrtx
+/docs/release/                  @ahmadrrrtx
+
+# ── CI and supply chain ─────────────────────────────────────────────────────
+/.github/                       @ahmadrrrtx
+/Dockerfile                     @ahmadrrrtx
+/docker-compose.yml             @ahmadrrrtx
+/package.json                   @ahmadrrrtx

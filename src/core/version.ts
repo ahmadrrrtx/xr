@@ -1,30 +1,23 @@
 /**
- * XR — SINGLE SOURCE OF TRUTH for version + identity.
+ * XR — SINGLE SOURCE OF TRUTH for version + identity (runtime view).
  *
- * This file is the authoritative runtime source for all version and identity
- * information. Every other module (CLI, TUI, dashboard, website, MCP, docs)
- * must import from here — no hardcoded duplicates.
+ * GENERATED FILE — do not edit by hand.
+ * Source: release.manifest.json  ·  Regenerate: bun run release:stamp
  *
- * At release time, `bun run scripts/set-version.ts` stamps this file from
- * `package.json`, so package.json remains the ultimate source but the runtime
- * always reads from here. This mirrors how Goose stamps Cargo.toml,
- * how Tailwind/Vercel CLI stamp from package.json, and how Deno maintains
- * a single source of truth for its emulated Node version.
- *
- * Replaces six contradictory version strings previously found across:
- *   package.json (3.1.5), src/core/kernel.ts (3.1.5),
- *   src/core/version.ts (1.0.0), src/cli/catalog.ts (3.1.5 + 3.1C),
- *   src/business/index.ts (15.0.0), website/src/lib/site.ts (3.1.0)
+ * Constitution Article XXII.1 requires one release manifest to stamp version
+ * across version.ts, package.json, README, installers and website, with CI
+ * failing on drift. Editing this file directly reintroduces the drift that
+ * Phase 0 exists to eliminate.
  */
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "7.0.0",
-  codename: "Supremacy",
+  version: "7.0.1",
+  codename: "Truth",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
-  description: "XR 7.0 (XR OS Supremacy) — outcome-based evaluation harness, hard security/correctness gates, evidence-backed certification, compatibility contracts, longitudinal regression detection, and a claim/evidence matrix. XR now proves what it can do, states what it cannot, and detects when a change makes it worse.",
+  description: "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
   author: "Muhammad Ahmad (@ahmadrrrtx)",
   license: "MIT",
 } as const;
@@ -59,8 +52,23 @@ export const PKG_IDENTITY = {
   license: PKG.license,
 } as const;
 
-/** Used by `xr version --json`, `xr --json`, and the daemon /api/overview. */
-export function versionInfo() {
+export interface VersionInfo {
+  name: string;
+  version: string;
+  codename: string;
+  display: string;
+  displayVersion: string;
+  repo: string;
+  homepage: string;
+  npm: string;
+  description: string;
+  author: string;
+  license: string;
+  pluginApi: number;
+}
+
+/** Structured version payload for `--json` surfaces. */
+export function versionInfo(): VersionInfo {
   return {
     name: PKG.name,
     version: PKG.version,
@@ -74,12 +82,5 @@ export function versionInfo() {
     author: PKG.author,
     license: PKG.license,
     pluginApi: PLUGIN_API_VERSION,
-  } as const;
+  };
 }
-
-export type VersionInfo = ReturnType<typeof versionInfo>;
-
-/** Legacy exports for backward-compat — do not use in new code, use PKG / CORE_VERSION. */
-export const VERSION = CORE_VERSION;
-export const XR_VERSION_LEGACY = CORE_VERSION;
-export const XR_CODENAME_LEGACY = CODENAME;

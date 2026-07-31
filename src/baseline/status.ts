@@ -19,6 +19,19 @@ export interface BaselineSummary {
   requiredFailures: string[];
   warnings: string[];
   skipped: string[];
+  /**
+   * Phase 0 · T4 — can XR actually complete a task right now?
+   *
+   * Installation health and task readiness are different questions, and XR
+   * previously answered only the first while reporting it as the second: with
+   * zero reachable providers `doctor` printed `ok: true` and exited 0.
+   * `runnable` answers the question a user actually asks, and `ok` is now
+   * conjoined with it so no caller can read success from a system that cannot
+   * execute work (Commandment 2 — no success without a verified effect).
+   */
+  runnable: boolean;
+  /** Human-readable explanation of the runnable verdict, always populated. */
+  runnableReason: string;
 }
 
 export interface RuntimeEnvironment {
@@ -92,24 +105,112 @@ export interface BaselineDoctorReport {
 
 export const REQUIRED_HEALTH_CHECK_IDS = ["platform", "bun", "package-manager", "config", "audit"] as const;
 
+/** Health-check ids that carry provider reachability, by convention `provider-<id>`. */
+export const PROVIDER_CHECK_PREFIX = "provider-";
+
+/**
+ * Determine whether XR can complete a task right now.
+ *
+ * Readiness requires BOTH:
+ *   1. no required installation check failed, and
+ *   2. at least one provider is actually usable (`state === "ok"`).
+ *
+ * A provider in `warn` is explicitly NOT runnable: warn means "configured but
+ * unreachable / unauthenticated", which is precisely the state that produced a
+ * false green before. Fail closed (Commandment 13).
+ *
+ * When no provider check was performed at all (e.g. a probe-less summary), the
+ * verdict is unknown rather than assumed-good, and unknown resolves to not
+ * runnable.
+ */
+export function evaluateRunnable(
+  checks: HealthCheck[],
+  requiredFailures: string[],
+): { runnable: boolean; runnableReason: string } {
+  if (requiredFailures.length > 0) {
+    return {
+      runnable: false,
+      runnableReason: `required check(s) failed: ${requiredFailures.join(", ")}`,
+    };
+  }
+
+  const providerChecks = checks.filter((check) => check.id.startsWith(PROVIDER_CHECK_PREFIX));
+  if (providerChecks.length === 0) {
+    return {
+      runnable: false,
+      runnableReason: "no provider was probed — run `xr doctor` to evaluate provider readiness",
+    };
+  }
+
+  const usable = providerChecks.filter((check) => check.state === "ok");
+  if (usable.length === 0) {
+    const configured = providerChecks.filter((check) => check.state === "warn").length;
+    return {
+      runnable: false,
+      runnableReason:
+        configured > 0
+          ? `no provider is reachable (${configured} configured but unavailable) — check credentials or start a local runtime`
+          : "no provider is configured — run `xr config` or set a provider API key",
+    };
+  }
+
+  return {
+    runnable: true,
+    runnableReason: `${usable.length} provider(s) ready: ${usable
+      .map((check) => check.id.slice(PROVIDER_CHECK_PREFIX.length))
+      .join(", ")}`,
+  };
+}
+
+export interface SummarizeOptions {
+  /**
+   * Whether task-readiness gates `ok`/`exitCode`.
+   *
+   * `true`  — the caller is answering "can XR do work?" (`xr doctor`). A system
+   *           with no reachable provider is NOT ok and exits non-zero.
+   * `false` — the caller is answering "is XR installed correctly?"
+   *           (`xr status`, installer probes). Provider reachability is still
+   *           reported via `runnable`, but does not fail the command.
+   *
+   * Defaults to `true`: the safe answer is the strict one, and a caller that
+   * wants the weaker question must ask for it explicitly (fail closed).
+   */
+  requireRunnable?: boolean;
+}
+
 export function summarizeHealthChecks(
   checks: HealthCheck[],
   requiredIds: readonly string[] = REQUIRED_HEALTH_CHECK_IDS,
+  options: SummarizeOptions = {},
 ): BaselineSummary {
+  const requireRunnable = options.requireRunnable ?? true;
   const required = new Set(requiredIds);
   const requiredFailures = checks
     .filter((check) => required.has(check.id) && check.state === "fail")
     .map((check) => check.id);
   const warnings = checks.filter((check) => check.state === "warn").map((check) => check.id);
   const skipped = checks.filter((check) => check.state === "skip").map((check) => check.id);
-  const state: BaselineSummary["state"] = requiredFailures.length > 0 ? "fail" : warnings.length > 0 ? "warn" : "ok";
+
+  const { runnable, runnableReason } = evaluateRunnable(checks, requiredFailures);
+
+  // `ok` means "installed correctly AND (when asked) able to do work". Reporting
+  // ok:true for a system that cannot execute a single task is the exact defect
+  // Phase 0 exists to remove, so for readiness callers the two conditions are
+  // conjoined rather than reported apart.
+  const runnableBlocks = requireRunnable && !runnable;
+  const ok = requiredFailures.length === 0 && !runnableBlocks;
+  const state: BaselineSummary["state"] =
+    requiredFailures.length > 0 || runnableBlocks ? "fail" : warnings.length > 0 ? "warn" : "ok";
+
   return {
-    ok: requiredFailures.length === 0,
+    ok,
     state,
-    exitCode: requiredFailures.length === 0 ? 0 : 1,
+    exitCode: ok ? 0 : 1,
     requiredFailures,
     warnings,
     skipped,
+    runnable,
+    runnableReason,
   };
 }
 

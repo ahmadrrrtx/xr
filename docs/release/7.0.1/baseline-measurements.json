@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-31T09:34:33.456Z",
+  "version": {
+    "name": "@rrrtx/xr",
+    "version": "7.0.1",
+    "codename": "Truth",
+    "display": "7.0.1 (Truth)",
+    "displayVersion": "7.0.1 (Truth)",
+    "repo": "https://github.com/ahmadrrrtx/xr",
+    "homepage": "https://xr-gules.vercel.app",
+    "npm": "https://www.npmjs.com/package/@rrrtx/xr",
+    "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
+    "author": "Muhammad Ahmad (@ahmadrrrtx)",
+    "license": "MIT",
+    "pluginApi": 2
+  },
+  "environment": {
+    "bun": "1.3.14",
+    "node": "v24.3.0",
+    "os": "linux",
+    "arch": "x64",
+    "release": "6.1.158+",
+    "cpu": "linux/x64",
+    "memory": {
+      "totalBytes": 2081390592,
+      "freeBytes": 1328586752
+    },
+    "ci": false,
+    "tty": false
+  },
+  "methodology": {
+    "samples": 3,
+    "cwd": "/home/user/xr",
+    "isolatedHome": "/tmp/xr-baseline-1785490468599",
+    "network": "not required; doctor runs without --network",
+    "precision": "wall-clock process duration on this host; not a hardware-independent benchmark"
+  },
+  "scenarios": [
+    {
+      "id": "cli-version",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "--version"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "expectedExitCodes": [
+        0
+      ],
+      "medianMs": 174.77220699999998,
+      "p95Ms": 177.544779,
+      "minMs": 173.298539,
+      "maxMs": 177.544779,
+      "peakRssBytes": 46456832,
+      "exitCodes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "cli-help",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "help"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "expectedExitCodes": [
+        0
+      ],
+      "medianMs": 176.57856400000003,
+      "p95Ms": 177.97011299999997,
+      "minMs": 171.412646,
+      "maxMs": 177.97011299999997,
+      "peakRssBytes": 54419456,
+      "exitCodes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "doctor-json",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "doctor",
+        "--json"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "expectedExitCodes": [
+        0,
+        1
+      ],
+      "medianMs": 459.91036699999995,
+      "p95Ms": 460.25587700000005,
+      "minMs": 452.69390499999986,
+      "maxMs": 460.25587700000005,
+      "peakRssBytes": 56586240,
+      "exitCodes": [
+        1,
+        1,
+        1
+      ],
+      "limitation": "Exit 1 is the CORRECT result on a host with no reachable provider (Phase 0 · T4): doctor reports task-readiness, not installation status. Exit 0 here would mean XR is lying about being able to work."
+    },
+    {
+      "id": "workspace-list",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "workspace",
+        "list",
+        "--json"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "expectedExitCodes": [
+        0
+      ],
+      "medianMs": 407.20957799999996,
+      "p95Ms": 407.9550330000002,
+      "minMs": 391.90320999999994,
+      "maxMs": 407.9550330000002,
+      "peakRssBytes": 58937344,
+      "exitCodes": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "doctor-perf",
+      "command": [
+        "bun",
+        "run",
+        "src/index.ts",
+        "doctor",
+        "--perf",
+        "--json"
+      ],
+      "samples": 3,
+      "successes": 3,
+      "failures": 0,
+      "expectedExitCodes": [
+        0
+      ],
+      "medianMs": 404.0136790000006,
+      "p95Ms": 415.95006100000046,
+      "minMs": 403.967216,
+      "maxMs": 415.95006100000046,
+      "peakRssBytes": 55640064,
+      "exitCodes": [
+        0,
+        0,
+        0
+      ],
+      "limitation": "In-process CLI microbenchmarks; not full cold-start precision."
+    }
+  ]
+}

@@ -11,19 +11,70 @@ const checks = [
   { id: "network", label: "Network", state: "skip" as const, detail: "not probed" },
 ];
 
+/** A reachable provider — the difference between "installed" and "can work". */
+const readyProvider = { id: "provider-ollama", label: "Provider: ollama", state: "ok" as const, detail: "reachable" };
+
 describe("Phase 0 baseline status helpers", () => {
-  test("summarizeHealthChecks allows optional warnings but fails required checks", () => {
-    const warnOnly = summarizeHealthChecks(checks);
+  /**
+   * Phase 0 · T4 — this test was updated deliberately.
+   *
+   * It previously asserted `ok: true` for a check set containing NO provider,
+   * which is exactly the false green the phase exists to remove: XR reported
+   * itself healthy while being unable to complete a single task. The summary
+   * now answers two separate questions, and the test covers both.
+   */
+  test("installation-health mode allows optional warnings but fails required checks", () => {
+    const warnOnly = summarizeHealthChecks(checks, undefined, { requireRunnable: false });
     expect(warnOnly.ok).toBe(true);
     expect(warnOnly.state).toBe("warn");
     expect(warnOnly.exitCode).toBe(0);
     expect(warnOnly.warnings).toContain("local-runtime");
 
-    const requiredFail = summarizeHealthChecks(checks.map((c) => c.id === "audit" ? { ...c, state: "fail" as const } : c));
+    const requiredFail = summarizeHealthChecks(
+      checks.map((c) => (c.id === "audit" ? { ...c, state: "fail" as const } : c)),
+      undefined,
+      { requireRunnable: false },
+    );
     expect(requiredFail.ok).toBe(false);
     expect(requiredFail.state).toBe("fail");
     expect(requiredFail.exitCode).toBe(1);
     expect(requiredFail.requiredFailures).toEqual(["audit"]);
+  });
+
+  test("readiness mode is NOT ok when no provider can run a task", () => {
+    const summary = summarizeHealthChecks(checks);
+    expect(summary.ok).toBe(false);
+    expect(summary.runnable).toBe(false);
+    expect(summary.exitCode).toBe(1);
+    expect(summary.runnableReason).toMatch(/no provider/i);
+  });
+
+  test("readiness mode is ok once a provider is reachable", () => {
+    const summary = summarizeHealthChecks([...checks, readyProvider]);
+    expect(summary.ok).toBe(true);
+    expect(summary.runnable).toBe(true);
+    expect(summary.exitCode).toBe(0);
+    expect(summary.runnableReason).toContain("ollama");
+  });
+
+  test("a configured-but-unreachable provider is not runnable (fail closed)", () => {
+    const summary = summarizeHealthChecks([
+      ...checks,
+      { id: "provider-openai", label: "Provider: openai", state: "warn" as const, detail: "auth ok, unreachable" },
+    ]);
+    expect(summary.runnable).toBe(false);
+    expect(summary.ok).toBe(false);
+    expect(summary.runnableReason).toMatch(/configured but unavailable/i);
+  });
+
+  test("a required failure outranks a reachable provider", () => {
+    const summary = summarizeHealthChecks([
+      ...checks.map((c) => (c.id === "audit" ? { ...c, state: "fail" as const } : c)),
+      readyProvider,
+    ]);
+    expect(summary.ok).toBe(false);
+    expect(summary.runnable).toBe(false);
+    expect(summary.requiredFailures).toEqual(["audit"]);
   });
 
   test("redactValue redacts secret-like keys recursively", () => {

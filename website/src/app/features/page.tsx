@@ -38,7 +38,7 @@ export default function FeaturesPage() {
       <PageHeader
         eyebrow="Features"
         title="Everything you need to build with agents."
-        subtitle="XR is a complete runtime: a shell, an editor layer, a skill graph, a model gateway, and a security core — all working together."
+        subtitle="XR is a runtime: a shell, a skill layer, a model router, and a policy gate — all working together."
       />
       <section className="py-12">
         <div className="mx-auto max-w-7xl px-6">

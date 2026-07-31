@@ -9,20 +9,31 @@
 
 # XR — The AI Agent You Can Actually Trust
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine` · `XR 3.1.6 Baseline Integrity · 65+ Skills` · `@rrrtx/xr`**
+**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine` · `@rrrtx/xr`**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![Tests](https://img.shields.io/badge/tests-255%20passing-34e2a0?style=flat-square)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/tests-bun%20test-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
-[![Version](https://img.shields.io/badge/version-v3.1.6%20Baseline%20Integrity-22e0ff?style=flat-square)](#)
-[![Stage](https://img.shields.io/badge/stage-XR%203.1.6%20Baseline%20Integrity-00FF88?style=flat-square)](#-xr-31--unified-ai-os)
 
 </div>
 
-> **Version Source of Truth:** `3.1.6 (Baseline Integrity)` — canonical version from `src/core/version.ts`, stamped from `package.json` via `bun run scripts/set-version.ts`. All CLI, dashboard, MCP, and website surfaces import from this single source.
+<!-- XR:RELEASE-IDENTITY:BEGIN -->
+<!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
+
+**Version:** `7.0.1 (Truth)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
+
+> **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
+> `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
+> is stamped from that one file, and CI fails the build if any of them drift
+> (Constitution Article XXII.1).
+
+XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.
+
+**Bundled skills:** 65 (counted from `skills/` at release time.)
+<!-- XR:RELEASE-IDENTITY:END -->
 
 ---
 
@@ -31,34 +42,68 @@
 
 ---
 
-## ✅ XR 3.1.6 (Baseline Integrity) — Verified Baseline Release
+## What XR is — and what it is not
 
-**Status: XR 3.1.6 (Baseline Integrity) is the current Phase 0 baseline release on `main`. It focuses on reproducible validation, diagnostics, support classification, migration/rollback documentation, and truthful release evidence. It does not ship the XR 4.0 Runtime Kernel or later roadmap architecture.**
+XR is honest about its boundaries before it describes its features. Every capability claim below is
+backed by evidence recorded in [`release.manifest.json`](release.manifest.json) and enforced in CI
+by `bun run claim-lint`.
 
-### XR 3.1.6 Phase 0 baseline artifacts
+**XR is:**
 
-Release evidence for this version lives in [`docs/release/3.1.6/`](docs/release/3.1.6/):
+- a **local-first CLI agent runtime** you self-host — no mandatory cloud, no telemetry;
+- **provider-neutral** — cloud APIs (BYOK) or fully local models via Ollama, LM Studio, llama.cpp,
+  vLLM and others;
+- **governed** — a deterministic policy gate, human approval on consequential actions, per-task
+  spend ceilings, and a hash-chained audit log you can verify;
+- **extensible** — skills, plugins and MCP servers, reachable identically from the CLI, Shell,
+  Telegram and Voice;
+- **MIT-licensed** and readable end to end.
+
+**XR is not:**
+
+- **not certified** against SOC 2, ISO 27001, HIPAA, PCI-DSS or FedRAMP. No external audit exists;
+- **not a sandbox.** It enforces in-process policy, not kernel or VM isolation. Strong guard rail,
+  not a confinement boundary;
+- **not a hosted product.** There is no XR cloud;
+- **not a substitute** for a human reviewing consequential actions;
+- **not finished** — see the
+  [known-limitations register](docs/release/7.0.1/known-limitations.md), which is maintained as a
+  first-class release artifact.
+
+### Release evidence
+
+Evidence for this release lives in [`docs/release/7.0.1/`](docs/release/7.0.1/):
 
 - repository inventory (`INVENTORY.md`, `inventory.json`);
-- support matrix (`SUPPORT_MATRIX.md`);
-- validation report (`VALIDATION_REPORT.md`, `validation-report.json`);
 - baseline measurements (`BASELINE_MEASUREMENTS.md`, `baseline-measurements.json`);
-- release checklist, release notes, and rollback guide.
+- **known limitations** (`known-limitations.md`) — the honest list of what is not yet real.
 
-Run the local baseline gates with:
+Reproduce the local gates with:
 
 ```bash
 bun install --frozen-lockfile
-bun run baseline:validate
-bun run baseline:measure
+bun run ci                 # typecheck + tests + release:check + claim-lint + inventory
+bun run baseline:measure   # reproducible performance baseline
 ```
 
-`xr doctor --json` is the stable local diagnostic entrypoint for automation. It reports version, Bun/OS/architecture, workspace/database status, redacted configuration, provider/local runtime readiness, plugin/skill/MCP status, security/budget readiness, daemon-relevant status, and actionable health checks. Secret values are never printed; only presence is reported.
+### Readiness and exit codes
 
-Truth boundaries for 3.1.6: XR is a sophisticated local AI runtime/application platform. The current daemon/dashboard is local and process-local; workspace isolation is a data/configuration boundary; the event bus is in-memory; security approval/audit controls are meaningful but not VM/container isolation.
+`xr doctor` answers one question: **can XR actually run a task right now?**
 
+- It exits **non-zero** when no provider is reachable, and says why plus one next action.
+- It never prints `ok: true` for a system that cannot do work.
+- `--deep` adds voice, control, capability and environment probes; the default checks only the
+  active path.
 
-XR 2.1 turns XR from an assistant into an extensible AI operating system with a complete Skill layer:
+Failed tasks exit non-zero (`1`), usage errors exit `2`, so XR is safe to wrap in CI.
+
+`xr doctor --json` is the stable machine-readable diagnostic entrypoint. It reports version,
+runtime, workspace/database status, redacted configuration, provider readiness, plugin/skill/MCP
+status, and a `summary.runnable` verdict. Secret values are never printed — only presence.
+
+---
+
+XR 2.1 turns XR from an assistant into an extensible AI runtime with a manifest-governed Skill layer:
 
 | Phase | Status | What shipped |
 |---|---:|---|
@@ -152,7 +197,7 @@ xr serve             # start local dashboard + chat in browser
 
 ## 🖥️ Stage 5 — User Interfaces
 
-Stage 5 gives XR a **complete, polished UI layer** across every user-facing surface. XR now feels like a real product.
+Stage 5 gives XR a **consistent UI layer** across the user-facing surfaces listed below.
 
 ### Terminal Interface (Claude Code–style TUI)
 
@@ -225,7 +270,7 @@ A **mission-control dashboard** with 16 navigation panels:
 | **Dashboard** | 4 stat cards (spend, security score, audit chain, skills) + provider health + local AI + memory + recent audit |
 | **Chat** | Full streaming chat UI |
 | **Sessions** | Recent chats/tasks, session detail, step timeline, research runs |
-| **Status** | Complete system health grid |
+| **Status** | System health grid |
 | **Budget** | Spend controls, recent cost events, by-model and by-provider usage, soft-cap settings |
 | **Workspaces** | Create and switch isolated XR workspaces |
 | **Providers** | All 26 built-in providers with status, tier, key configuration, plus provider manager controls |
@@ -562,7 +607,7 @@ Doctor includes Voice Stack health: capture tools, playback tools, device count,
 
 ---
 
-## 🏛️ v3.1.6 (Baseline Integrity) Foundation Runtime — Verified Current Runtime
+## 🏛️ Foundation Runtime — Current Runtime Surfaces
 
 XR has evolved into a **True AI Operating System**. The v1.0 kernel introduces:
 
@@ -1145,7 +1190,7 @@ xr doctor
 ```
 
 ### Dashboard
-MCP servers will appear in future dashboard updates (core is complete).
+MCP servers are managed from the CLI today; dashboard surfacing is not yet implemented.
 
 See `xr mcp --help` for the full surface.
 
@@ -1256,12 +1301,12 @@ XR 15 transforms XR from an AI agent into an **AI Business Operating System**. I
 
 | Phase | Status | What shipped |
 | --- | --: | --- |
-| **XR 15A — Business Core** | ✅ Done | Organization management, workspace isolation, RBAC (6 roles), unified contact model, sales pipeline engine, business event bus, SHA-256 audit trail with hash chain verification, encrypted credential vault (AES-256-GCM) |
+| **XR 15A — Business Core** | ✅ Done | Organization management, workspace data scoping, RBAC (6 roles), unified contact model, sales pipeline engine, business event bus, SHA-256 audit trail with hash chain verification, encrypted credential vault (AES-256-GCM) |
 | **XR 15B — Business Modules** | ✅ Done | 15 production modules: CRM, Sales, Marketing, Support, Projects, Knowledge, Finance, HR, Analytics, Automation, Scheduling, Communication, Documents, Meetings, AI Workers — each with full CRUD, pagination, filtering, search, and statistics |
 | **XR 15C — AI Business Team** | ✅ Done | 11 specialized AI Workers: CEO Advisor, Sales Director, Marketing Director, Financial Analyst, HR Manager, Project Manager, Support Manager, Operations Manager, Legal Assistant, Research Analyst, Growth Strategist — each with system prompts, capability matrices, permission sets, and live business context |
 | **XR 15D — Integration Layer** | ✅ Done | 30+ optional BYOK integrations: Gmail, Outlook, Slack, Discord, Teams, Telegram, WhatsApp, Google Calendar, Cal.com, GitHub, GitLab, Jira, Linear, Google Drive, OneDrive, Dropbox, Nextcloud, HubSpot, Salesforce, ERPNext, Twenty, Stripe, PayPal, Plausible, PostHog, Shopify, WooCommerce, n8n, Activepieces, Coolify, Docker — OAuth2 flow manager, credential vault |
 | **XR 15E — Automation Engine** | ✅ Done | Workflow engine with event/schedule/webhook/manual triggers, conditional steps, retry logic, error handling (stop/skip/retry). 12 pre-built templates: Lead Qualification, Sales Follow-up, Meeting Preparation, Proposal Generation, Invoice Generation, Customer Onboarding, Weekly Reports, Competitor Monitoring, Market Research, Content Calendar, Email Campaign, Support Ticket Routing |
-| **XR 15F — Security & CLI** | ✅ Done | 7 security policies (least privilege, workspace isolation, export approval, integration consent, credential protection, automation budget, worker permission approval). Full CLI: `xr biz` with 40+ subcommands. Migration guide, architecture docs, test suite |
+| **XR 15F — Security & CLI** | ✅ Done | 7 security policies (least privilege, workspace data scoping, export approval, integration consent, credential protection, automation budget, worker permission approval). Full CLI: `xr biz` with 40+ subcommands. Migration guide, architecture docs, test suite |
 
 ### What's new in Stage 15
 
@@ -1436,7 +1481,7 @@ MCP (Model Context Protocol) lets XR connect to any compliant server for tools, 
 **Core capabilities delivered:**
 - Full MCP 2025-06-18 client (tools/list, tools/call, resources, prompts)
 - 4 transports: stdio, http, sse, streamable-http
-- Persistent registry + complete lifecycle (`add` / `enable` / `disable` / `remove` / `inspect`)
+- Persistent registry + lifecycle commands (`add` / `enable` / `disable` / `remove` / `inspect`)
 - Explicit permission model (15 scopes) + trust levels
 - Every MCP invocation is **approval-gated**, audited, budget-aware, and egress-controlled
 - MCP tools/resources/prompts surface automatically into the agent as `mcp.<server>.<name>`

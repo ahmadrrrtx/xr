@@ -84,10 +84,6 @@ export function defaultIdempotency(cap: CapabilityIdentity): IdempotencyClass {
       case "web_search":
       case "system_apps":
       case "system_clipboard_read":
-      case "system_volume":
-      case "system_screenshot":
-      case "system_battery":
-      case "system_wifi":
         return "naturally_idempotent";
       case "write_file":
       case "delete_file":

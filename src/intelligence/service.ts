@@ -149,13 +149,28 @@ export class IntelligenceService implements LifecycleHook {
       decision.fallbackChain.length > 0 &&
       (decision.requirements.allowFallback ?? decision.constraints.allowFallback)
     ) {
-      const step = decision.fallbackChain[0]!;
-      try {
-        const fb = this.construct(config, step.providerId, step.modelId);
-        provider = new FallbackProvider(primary, fb);
-      } catch {
-        // Fallback construction failed — primary only
-        provider = primary;
+      /**
+       * Phase 0 · T11 — fallback targets must differ from the primary.
+       *
+       * This is the live routing path used by the agent loop. It took
+       * `fallbackChain[0]` unconditionally, so with the shipped defaults
+       * (provider = fallbackProvider = "ollama") XR advertised
+       * "Ollama (Local) → fallback Ollama (Local)" and, on failure, retried the
+       * same dead endpoint while telling the user it was falling back.
+       */
+      const selected = decision.selected;
+      const step = decision.fallbackChain.find(
+        (candidate) =>
+          candidate.providerId !== selected.providerId || candidate.modelId !== selected.modelId,
+      );
+      if (step) {
+        try {
+          const fb = this.construct(config, step.providerId, step.modelId);
+          provider = new FallbackProvider(primary, fb);
+        } catch {
+          // Fallback construction failed — primary only
+          provider = primary;
+        }
       }
     }
 

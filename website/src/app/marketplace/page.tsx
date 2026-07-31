@@ -10,7 +10,7 @@ export default function MarketplacePage() {
       <PageHeader
         eyebrow="Marketplace"
         title="Skills and extensions for everything."
-        subtitle="Browse 12,000+ verified skills and extensions. Install with one command. Build your own in minutes."
+        subtitle="Browse the bundled skills, plugins and MCP servers. Install with one command. Build your own in minutes."
       />
       <section className="pb-24">
         <div className="mx-auto max-w-7xl px-6">

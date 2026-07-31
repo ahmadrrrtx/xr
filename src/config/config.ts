@@ -497,7 +497,8 @@ function ensureHome(): void {
 }
 
 /** Ordered migrations: key = from-version, transforms raw object. */
-const MIGRATIONS: Record<number, (raw: any) => any> = {
+/** Exported for Phase 0 migration tests (test/phase0/cli-spine.test.ts). */
+export const MIGRATIONS: Record<number, (raw: any) => any> = {
   // 0 -> 1: example placeholder
   0: (raw) => ({ ...raw, version: 1 }),
   // 1 -> 2: add provider-specific settings, preferFreeProviders
@@ -506,16 +507,33 @@ const MIGRATIONS: Record<number, (raw: any) => any> = {
     version: 2,
     preferFreeProviders: raw.preferFreeProviders ?? true,
   }),
-  // 2 -> 3: add fallback settings
-  2: (raw) => ({
-    ...raw,
-    version: 3,
-    defaults: {
-      ...raw.defaults,
-      fallbackProvider: raw.defaults?.fallbackProvider ?? "ollama",
-      fallbackModel: raw.defaults?.fallbackModel ?? "qwen2.5:7b",
-    },
-  }),
+  /**
+   * 2 -> 3: add fallback settings.
+   *
+   * Phase 0 · T11 — do not default the fallback to the primary target.
+   *
+   * This migration used to set `fallbackProvider: "ollama"` unconditionally,
+   * which for the (very common) `defaults.provider === "ollama"` install made
+   * the fallback identical to the primary. XR then reported
+   * "Ollama (Local) → fallback Ollama (Local)" and retried a dead endpoint
+   * against itself. A fallback that cannot change the outcome is not a
+   * fallback, so it is now only seeded when it is genuinely a different target.
+   *
+   * Existing explicit user values are preserved untouched (Article XXIII).
+   */
+  2: (raw) => {
+    const primaryProvider = raw.defaults?.provider ?? "ollama";
+    const seedFallback = primaryProvider !== "ollama";
+    return {
+      ...raw,
+      version: 3,
+      defaults: {
+        ...raw.defaults,
+        fallbackProvider: raw.defaults?.fallbackProvider ?? (seedFallback ? "ollama" : undefined),
+        fallbackModel: raw.defaults?.fallbackModel ?? (seedFallback ? "qwen2.5:7b" : undefined),
+      },
+    };
+  },
   // 3 -> 4: add local model intelligence config
   3: (raw) => ({
     ...raw,

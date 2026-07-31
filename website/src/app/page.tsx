@@ -20,6 +20,7 @@ export default function Home() {
       <Hero />
       <Logos />
       <Stats />
+      <WhatXrIsAndIsNot />
       <Showcase />
       <Features />
       <Architecture />
@@ -42,7 +43,7 @@ function Hero() {
               className="inline-flex items-center gap-2 text-xs text-zinc-300 glass px-3 py-1.5 rounded-full hover:border-white/20 transition-colors"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-              XR 3.1.6 (Baseline Integrity) is now available
+              XR {site.version} ({site.codename}) is now available
               <ArrowRight className="h-3 w-3 text-zinc-400" />
             </Link>
             <h1 className="mt-6 text-[44px] sm:text-6xl lg:text-[76px] leading-[1.02] font-semibold tracking-tight text-gradient">
@@ -50,9 +51,9 @@ function Hero() {
               <span className="text-gradient-violet">for building software.</span>
             </h1>
             <p className="mt-6 text-lg text-zinc-400 max-w-xl leading-relaxed">
-              XR turns your terminal, editor, and workflow into an AI-native development
-              environment. Plan, execute, and ship — with 12,000+ skills, any model,
-              and security built in from the core.
+              XR turns your terminal into an AI-native working environment. Plan, execute,
+              and ship — with bundled skills, your choice of model, and a policy gate in
+              front of every consequential action.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -64,16 +65,13 @@ function Hero() {
               </Link>
               <a href={site.github} target="_blank" rel="noreferrer" className="btn btn-ghost">
                 <GithubIcon className="h-4 w-4" /> GitHub
-                <span className="ml-1 inline-flex items-center gap-1 text-zinc-400">
-                  <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" /> 74k
-                </span>
               </a>
             </div>
 
             <div className="mt-7 flex flex-wrap items-center gap-6 text-xs text-zinc-500">
               <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> MIT-licensed core</span>
               <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> Local-first</span>
-              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> SOC 2 Type II</span>
+              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> BYOK — no keys leave your machine</span>
             </div>
 
             <div className="mt-10">
@@ -151,6 +149,67 @@ function Stats() {
   );
 }
 
+/**
+ * "What XR is / is not" — required public honesty surface (Phase 0 · T3).
+ *
+ * Constitution P2 ("What XR is not") and Article XIX ("honest scope language")
+ * require the public surface to state boundaries as prominently as capabilities.
+ * This section is deliberately placed above the feature marketing.
+ */
+function WhatXrIsAndIsNot() {
+  const is = [
+    "A local-first CLI agent runtime you self-host",
+    "Provider-neutral — cloud APIs or fully local models",
+    "Governed: policy gate, approval prompts, spend ceilings, audit log",
+    "Extensible through skills, plugins and MCP servers",
+    "MIT-licensed and readable end to end",
+  ];
+  const isNot = [
+    "Not certified against SOC 2, ISO 27001 or HIPAA — no third-party audit exists",
+    "Not a sandbox: it enforces in-process policy, not kernel or VM isolation",
+    "Not a hosted product — there is no XR cloud and no telemetry",
+    "Not a drop-in replacement for a human reviewing consequential actions",
+    "Not finished — see the known-limitations register in the repository",
+  ];
+  return (
+    <section className="py-20">
+      <div className="mx-auto max-w-7xl px-6">
+        <SectionHeader
+          eyebrow="Honest scope"
+          title="What XR is — and what it is not."
+          subtitle="Every capability claim on this site is backed by evidence in the repository. Here are the boundaries, stated as plainly as the features."
+        />
+        <div className="mt-12 grid md:grid-cols-2 gap-5">
+          <div className="card p-7">
+            <h3 className="text-white font-semibold flex items-center gap-2">
+              <Check className="h-4 w-4 text-emerald-400" /> What XR is
+            </h3>
+            <ul className="mt-4 space-y-3 text-sm text-zinc-300">
+              {is.map((t) => (
+                <li key={t} className="flex items-start gap-2">
+                  <Check className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" /> {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="card p-7">
+            <h3 className="text-white font-semibold flex items-center gap-2">
+              <span className="text-rose-400 font-bold leading-none">—</span> What XR is not
+            </h3>
+            <ul className="mt-4 space-y-3 text-sm text-zinc-400">
+              {isNot.map((t) => (
+                <li key={t} className="flex items-start gap-2">
+                  <span className="text-rose-400/80 mt-0.5 shrink-0">—</span> {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Showcase() {
   return (
     <section className="py-24">
@@ -164,14 +223,14 @@ function Showcase() {
           <LargeCard
             icon={TermIcon}
             title="Shell-native"
-            desc="A real terminal. Real pipes. Real tools. Sub-10ms cold start, with streaming agents that respond like a teammate."
+            desc="A real terminal. Real pipes. Real tools. Streaming agents that respond like a teammate."
           >
             <Terminal className="mt-6" />
           </LargeCard>
           <LargeCard
             icon={Package}
             title="Marketplace"
-            desc="12,000+ verified skills and extensions. Type-safe, versioned, and signed. Compose them in seconds."
+            desc="Manifest-declared skills plus plugins and MCP servers. Install what you need; nothing is enabled by default."
           >
             <div className="mt-6 space-y-2">
               {["pr-reviewer", "deep-research", "smart-refactor", "live-preview"].map((n) => (
@@ -194,10 +253,10 @@ function Showcase() {
           >
             <ul className="mt-6 space-y-3 text-sm text-zinc-300">
               {[
-                "Sandboxed execution per skill",
-                "Granular capability tokens",
-                "Signed, verifiable skills",
-                "SOC 2 Type II & HIPAA ready",
+                "Approval gate on consequential actions",
+                "Per-task spend ceilings",
+                "Deterministic egress + secret-path policy",
+                "Tamper-evident local audit log",
               ].map((t) => (
                 <li key={t} className="flex items-start gap-2">
                   <Check className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" /> {t}
@@ -243,19 +302,19 @@ function Architecture() {
         <SectionHeader
           eyebrow="Architecture"
           title="Designed like a modern kernel."
-          subtitle="XR has a Rust core, a typed skill layer, and a model router — with a permission boundary between every component."
+          subtitle="XR is TypeScript on Bun: a typed composition kernel, a skill layer, and a model router — with a policy gate between intent and action."
         />
         <div className="mt-14 rounded-3xl border border-white/10 p-2 bg-gradient-to-b from-white/[0.04] to-transparent">
           <div className="rounded-2xl bg-[#0c0c0f] p-8 md:p-12">
             <StackLayer name="Apps" desc="CLI · Editor extensions · Dashboard · API" tone="from-violet-500/20 to-transparent" />
             <StackConnector />
-            <StackLayer name="Skill Graph" desc="12,000+ typed, versioned, composable units of work" tone="from-sky-500/20 to-transparent" />
+            <StackLayer name="Skill Layer" desc="Manifest-governed, composable units of work" tone="from-sky-500/20 to-transparent" />
             <StackConnector />
             <StackLayer name="Agent Runtime" desc="Planner · Executor · Memory · Replay · Audit" tone="from-emerald-500/15 to-transparent" />
             <StackConnector />
             <StackLayer name="Model Gateway" desc="XR Core · Claude · GPT · Gemini · Open-weight · Local" tone="from-amber-500/15 to-transparent" />
             <StackConnector />
-            <StackLayer name="Security Core" desc="Capabilities · Sandbox · Signing · Policies · IAM" tone="from-rose-500/15 to-transparent" last />
+            <StackLayer name="Security Gate" desc="Policy · Approval · Budget · Audit (in-process)" tone="from-rose-500/15 to-transparent" last />
           </div>
         </div>
       </div>
@@ -287,7 +346,7 @@ function StackConnector() {
 function Workflow() {
   const steps = [
     { n: "01", title: "Install", desc: "One command. Works on macOS, Linux, and Windows (WSL)." },
-    { n: "02", title: "Add skills", desc: "Pick from 12,000+ skills in the marketplace — or write your own." },
+    { n: "02", title: "Add skills", desc: "Enable a bundled skill, install a plugin, or connect an MCP server." },
     { n: "03", title: "Pick a model", desc: "Use any major model, route by task, or run open-weight locally." },
     { n: "04", title: "Ship", desc: "Stream replays, share sessions, and deploy straight from XR." },
   ];

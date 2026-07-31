@@ -11,6 +11,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { parseReviewDecision, REVIEW_OUTPUT_CONTRACT } from "./review-decision.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
@@ -480,7 +481,11 @@ export class MultiAgentService implements LifecycleHook {
           task.blockedReason = output.summary.slice(0, 300);
         }
       } else {
-        task.reviewState = task.reviewState === "pending" ? "approved" : task.reviewState;
+        // Phase 0 · T10 (audit finding N4): a non-reviewer task completing does
+        // not constitute review approval. Leaving it "pending" keeps approval
+        // something a reviewer must grant explicitly, not a side effect of
+        // finishing work.
+        task.reviewState = task.reviewState === "pending" ? "not_required" : task.reviewState;
       }
       this.appendTaskEvent(task, task.agentId, "task.completed", `${task.name} completed`, {
         reviewState: task.reviewState,
@@ -503,13 +508,7 @@ export class MultiAgentService implements LifecycleHook {
   }
 
   private inferReviewState(text: string): ReviewState {
-    const t = text.toLowerCase();
-    if (/\bdecision\s*:\s*rejected\b|\breject(ed)?\b/.test(t)) return "rejected";
-    if (/\bdecision\s*:\s*changes_requested\b|changes requested|request changes|needs changes|blocked/i.test(text)) {
-      return "changes_requested";
-    }
-    if (/\bdecision\s*:\s*approved\b|\bapproved\b|\bpass(ed)?\b/.test(t)) return "approved";
-    return "approved";
+    return parseReviewDecision(text).decision;
   }
 
   private buildTaskPacket(record: WorkflowRecord, task: WorkflowTask): string {
@@ -533,6 +532,10 @@ export class MultiAgentService implements LifecycleHook {
       memoryBrief ? `Scoped memory brief:\n${memoryBrief}` : "",
       depSummaries ? `Dependency outputs:\n${depSummaries}` : "",
       `Constraints: remain within your role (${task.role}), respect your tool scope, do not impersonate the supervisor, and do not produce a final user answer unless you are the synthesizer.`,
+      // Phase 0 · T10 — reviewers are told the strict output contract their
+      // response is parsed against, so failing closed is a contract violation
+      // on their side rather than a surprise on ours.
+      task.role === "reviewer" || task.role === "security_checker" ? REVIEW_OUTPUT_CONTRACT : "",
     ]
       .filter(Boolean)
       .join("\n\n");

@@ -16,8 +16,14 @@ COPY tsconfig.json ./
 ENV XR_HOME=/data
 VOLUME ["/data"]
 
-# Dashboard port. The daemon binds to 127.0.0.1 inside the container; publish
-# the container port to 127.0.0.1 on the host (see docker-compose.yml).
+# Dashboard port.
+#
+# Phase 0 · T12: the daemon detects the container (via /.dockerenv) and binds
+# 0.0.0.0 INSIDE the namespace, because a process bound to the container's own
+# loopback can never be reached through a published port. Safety comes from the
+# host-side publish being loopback-only — see docker-compose.yml, which maps
+# 127.0.0.1:7842:7842 so the dashboard is not exposed to the network.
+ENV XR_IN_CONTAINER=1
 EXPOSE 7842
 
 # Default: start the local dashboard daemon on the documented container port.

@@ -1,0 +1,60 @@
+name: Feature request
+description: Propose a capability. Note that XR's default answer is "prove it earns its place."
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        XR is deliberately conservative: **subtraction before addition**. A proposal is
+        accepted only if it strengthens what XR already is, cannot live as a plugin or
+        skill, and does not add a second implementation of an existing concern.
+
+        Requests that read "XR should also be an X" are usually declined — not because
+        they are bad ideas, but because a broader catalog makes the platform worse.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What concrete, reproducible problem does this solve? Describe the situation, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Measurable outcome
+      description: What improves, and how would we know? "No measurable outcome" means this is research, not a build.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Where would this live?
+      description: A concern has exactly one home. Kernel residency needs a ratified decision record.
+      options:
+        - Plugin (L3) — I could build this myself as an extension
+        - Skill (L4) — a packaged capability
+        - Platform (L2) — tools, MCP, providers
+        - Runtime (L1) — agent loop, execution, workflow
+        - Kernel (L0) — requires a decision record
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: existing
+    attributes:
+      label: Why can't an existing subsystem do this?
+      description: Which existing part of XR did you try first, and where did it fall short?
+    validations:
+      required: true
+
+  - type: textarea
+    id: subtraction
+    attributes:
+      label: What does this replace or retire?
+      description: Optional but valued. Additions that supersede something are much easier to accept.
+    validations:
+      required: false

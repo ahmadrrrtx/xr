@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
+import { site } from "@/lib/site";
 import { research } from "@/lib/data";
 import { FileText, ExternalLink } from "lucide-react";
 
@@ -11,12 +12,18 @@ export default function ResearchPage() {
       <PageHeader
         eyebrow="Research"
         title="Pushing agentic systems forward."
-        subtitle="XR Research publishes open work on agent architectures, tool use, inference, and security — to move the field forward for everyone."
+        subtitle="Design notes and architecture documents that ship inside the repository. These are engineering write-ups, not peer-reviewed papers."
       />
       <section className="pb-24">
         <div className="mx-auto max-w-5xl px-6 space-y-4">
           {research.map((r) => (
-            <a key={r.title} href="#" className="card p-6 flex items-start gap-4 group">
+            <a
+              key={r.title}
+              href={`${site.github}/tree/main/docs`}
+              target="_blank"
+              rel="noreferrer"
+              className="card p-6 flex items-start gap-4 group"
+            >
               <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-sky-500/20 to-violet-500/10 border border-white/10 shrink-0">
                 <FileText className="h-5 w-5 text-sky-300" />
               </div>

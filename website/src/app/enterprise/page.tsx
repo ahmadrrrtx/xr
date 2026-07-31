@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/PageHeader";
+import { site } from "@/lib/site";
 import {
   Building2,
   ShieldCheck,
@@ -13,15 +14,17 @@ import {
 } from "lucide-react";
 
 const pillars = [
-  { icon: ShieldCheck, title: "Enterprise-grade security", desc: "SOC 2 Type II, ISO 27001, HIPAA readiness. End-to-end audit, RBAC, and data residency controls." },
-  { icon: KeyRound, title: "SSO & identity", desc: "SAML, OIDC, SCIM, Okta, Azure AD, Google Workspace. Just-in-time provisioning." },
-  { icon: Server, title: "Self-hosted runtime", desc: "Deploy XR inside your VPC, on-prem, or air-gapped. Full control of data and models." },
+  { icon: ShieldCheck, title: "Governed execution", desc: "Deterministic policy gate, human approval on consequential actions, per-task spend ceilings, and a hash-chained audit log." },
+  { icon: KeyRound, title: "Your keys, your models", desc: "BYOK across cloud providers, or run entirely on local models with no external calls." },
+  { icon: Server, title: "Self-hosted by design", desc: "XR runs on your machine or your server. There is no XR cloud to depend on." },
   { icon: Network, title: "Private model gateway", desc: "Bring your own models, route through private endpoints, and enforce corporate LLM policies." },
-  { icon: BarChart3, title: "Observability & governance", desc: "Full audit logs, cost controls, DLP, and OpenTelemetry export to your SIEM." },
-  { icon: Users, title: "Dedicated partnership", desc: "Solutions engineers, 24/7 support, custom skills, and a shared roadmap." },
+  { icon: BarChart3, title: "Cost + audit visibility", desc: "Per-task cost accounting and a local audit trail you can verify with one command." },
+  { icon: Users, title: "Open development", desc: "Public roadmap, public issue tracker, MIT licence. Fork it if you need to." },
 ];
 
-const logos = ["Fortune 500 Fintech", "Global Healthcare", "Top-3 Cloud", "Aerospace & Defense", "Major Retailer", "Leading University"];
+// XR does not publish customer names it does not have. These are the deployment
+// targets XR actually supports today.
+const deploymentTargets = ["Linux", "macOS", "Windows", "Termux/Android", "Docker", "Air-gapped"];
 
 export default function EnterprisePage() {
   return (
@@ -29,7 +32,7 @@ export default function EnterprisePage() {
       <PageHeader
         eyebrow="Enterprise"
         title="XR for the enterprise."
-        subtitle="Deploy the agentic runtime across your organization with security, governance, and support built in."
+        subtitle="XR is self-hosted and local-first. This page describes what it does today — not a roadmap, and not a certification."
       />
 
       <section className="pb-8">
@@ -54,7 +57,7 @@ export default function EnterprisePage() {
             Trusted by regulated industries
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {logos.map((l) => (
+            {deploymentTargets.map((l) => (
               <div key={l} className="card p-5 text-center text-zinc-400 text-sm">
                 {l}
               </div>
@@ -68,27 +71,24 @@ export default function EnterprisePage() {
           <div className="grid md:grid-cols-2 gap-8 card p-8 md:p-12">
             <div>
               <Building2 className="h-6 w-6 text-violet-300" />
-              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gradient">Let&rsquo;s talk.</h2>
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gradient">Deploy it yourself.</h2>
               <p className="mt-3 text-zinc-400 text-sm leading-relaxed">
-                Tell us about your team and the problems you&rsquo;re solving. We&rsquo;ll set up a tailored demo and a deployment plan.
+                XR is self-hosted and open source. Read the deployment docs, run it, and open an
+                issue if something does not work.
               </p>
             </div>
-            <form
-              className="space-y-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-              }}
-            >
-              <Field label="Work email" type="email" placeholder="you@company.com" />
-              <Field label="Company" placeholder="Acme Inc." />
-              <Field label="Team size" as="select">
-                <option>1–10</option><option>11–50</option><option>51–200</option><option>201–1000</option><option>1000+</option>
-              </Field>
-              <button className="btn btn-primary w-full">
-                Contact sales <ArrowRight className="h-4 w-4" />
-              </button>
-              <p className="text-[11px] text-zinc-500">By submitting you agree to our privacy policy.</p>
-            </form>
+            <div className="space-y-4">
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                There is no sales team and no lead-capture form. XR is MIT-licensed software you can
+                deploy today without talking to anyone.
+              </p>
+              <a href={site.github} target="_blank" rel="noreferrer" className="btn btn-primary w-full">
+                Get XR on GitHub <ArrowRight className="h-4 w-4" />
+              </a>
+              <a href={`${site.github}/issues`} target="_blank" rel="noreferrer" className="btn btn-ghost w-full">
+                Ask a deployment question
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -96,25 +96,3 @@ export default function EnterprisePage() {
   );
 }
 
-function Field({
-  label, children, as = "input", type = "text", placeholder,
-}: {
-  label: string; children?: React.ReactNode; as?: "input" | "select"; type?: string; placeholder?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[11px] uppercase tracking-wider text-zinc-500">{label}</span>
-      {as === "input" ? (
-        <input
-          type={type}
-          placeholder={placeholder}
-          className="mt-1 w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-violet-400/50 outline-none"
-        />
-      ) : (
-        <select className="mt-1 w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:border-violet-400/50">
-          {children}
-        </select>
-      )}
-    </label>
-  );
-}

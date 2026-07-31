@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-/** XR 3.1.6 Phase 0 validation runner.
+/** XR Phase 0 validation runner.
  * Local-only required checks; optional integrations are reported as skipped.
  */
 import { createHash } from "node:crypto";
@@ -10,7 +10,15 @@ import { versionInfo } from "../src/core/version.ts";
 import { runtimeEnvironment } from "../src/baseline/status.ts";
 
 const ROOT = join(import.meta.dir, "..");
-const OUT_DIR = join(ROOT, "docs", "release", "3.1.6");
+/**
+ * Phase 0 · T13 — release artifacts follow the manifest, never a literal.
+ * Hardcoding "3.1.6" is what left docs/release/ stamped to a version the code
+ * no longer had.
+ */
+const RELEASE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, "release.manifest.json"), "utf8"),
+).identity.version as string;
+const OUT_DIR = join(ROOT, "docs", "release", RELEASE_VERSION);
 const isolatedHome = join(tmpdir(), `xr-validate-${Date.now()}`);
 
 type Step = { id: string; command: string[]; required: boolean; status: "pass" | "fail" | "skip"; code: number | null; durationMs: number; stdoutTail: string; stderrTail: string; reason?: string };
@@ -29,7 +37,8 @@ function sha256(path: string): string | null {
 }
 
 const steps: Step[] = [];
-steps.push(await runStep("version-sync", ["bun", "run", "set-version:check"]));
+steps.push(await runStep("release-check", ["bun", "run", "release:check"]));
+steps.push(await runStep("claim-lint", ["bun", "run", "claim-lint"]));
 steps.push(await runStep("typecheck", ["bun", "run", "typecheck"]));
 steps.push(await runStep("test", ["bun", "test"]));
 steps.push(await runStep("inventory", ["bun", "run", "scripts/baseline-inventory.ts"]));
@@ -73,6 +82,6 @@ const report = {
 
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, "validation-report.json"), JSON.stringify(report, null, 2));
-writeFileSync(join(OUT_DIR, "VALIDATION_REPORT.md"), `# XR 3.1.6 Validation Report\n\nGenerated: ${report.generatedAt}\n\nStatus: **${report.status.toUpperCase()}**\n\nCommit: \`${report.commit}\`\n\nEnvironment: Bun ${report.environment.bun}, Node ${report.environment.node}, ${report.environment.os}/${report.environment.arch}.\n\nIsolated XR_HOME: \`${isolatedHome}\`\n\n| Step | Required | Status | Duration ms | Command |\n|---|---:|---|---:|---|\n${steps.map((s) => `| ${s.id} | ${s.required ? "yes" : "no"} | ${s.status} | ${s.durationMs.toFixed(1)} | \`${s.command.join(" ")}\` |`).join("\n")}\n\n## Skipped optional checks\n\n${report.skipped.map((s) => `- ${s.id}: ${s.reason}`).join("\n")}\n\n## Known limitations\n\n${report.knownLimitations.map((l) => `- ${l}`).join("\n")}\n\nMachine-readable report: \`validation-report.json\`.\n`);
+writeFileSync(join(OUT_DIR, "VALIDATION_REPORT.md"), `# XR ${RELEASE_VERSION} Validation Report\n\nGenerated: ${report.generatedAt}\n\nStatus: **${report.status.toUpperCase()}**\n\nCommit: \`${report.commit}\`\n\nEnvironment: Bun ${report.environment.bun}, Node ${report.environment.node}, ${report.environment.os}/${report.environment.arch}.\n\nIsolated XR_HOME: \`${isolatedHome}\`\n\n| Step | Required | Status | Duration ms | Command |\n|---|---:|---|---:|---|\n${steps.map((s) => `| ${s.id} | ${s.required ? "yes" : "no"} | ${s.status} | ${s.durationMs.toFixed(1)} | \`${s.command.join(" ")}\` |`).join("\n")}\n\n## Skipped optional checks\n\n${report.skipped.map((s) => `- ${s.id}: ${s.reason}`).join("\n")}\n\n## Known limitations\n\n${report.knownLimitations.map((l) => `- ${l}`).join("\n")}\n\nMachine-readable report: \`validation-report.json\`.\n`);
 console.log(`wrote ${relative(ROOT, OUT_DIR)}/validation-report.json and VALIDATION_REPORT.md`);
 if (requiredFailures.length > 0) process.exit(1);

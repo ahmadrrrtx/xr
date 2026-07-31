@@ -1,0 +1,59 @@
+name: False or unsupported claim
+description: XR (docs, website, README, CLI output) states something that is not true.
+labels: ["false-claim", "priority:high"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template exists because XR treats an untrue claim as a **defect of the same
+        severity as a crash**. The project's constitution forbids claiming what has not
+        been verified, so these reports are prioritised accordingly.
+
+  - type: textarea
+    id: claim
+    attributes:
+      label: The claim
+      description: Quote it exactly.
+      placeholder: '"SOC 2 Type II" listed under certifications on /security'
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Where it appears
+      description: URL, file path, or the command that printed it.
+      placeholder: "website/src/app/security/page.tsx:17"
+    validations:
+      required: true
+
+  - type: textarea
+    id: reality
+    attributes:
+      label: What is actually true
+      description: What the code or the project actually supports, and how you verified it.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of claim
+      options:
+        - Certification or compliance
+        - Scale or count (skills, users, stars)
+        - Capability that does not work
+        - Performance number
+        - Security guarantee stronger than reality
+        - Version or release identity
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested honest wording
+      description: Optional. What should it say instead?
+    validations:
+      required: false

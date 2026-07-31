@@ -4,12 +4,16 @@ services:
   xr:
     build: .
     container_name: xr
-    # Bind ONLY to localhost on the host — never expose the dashboard publicly.
+    # The daemon binds 0.0.0.0 inside the container (otherwise the published
+    # port cannot reach it); this mapping keeps it reachable ONLY from the
+    # host's loopback, so the dashboard is never exposed to the network.
     ports:
       - "127.0.0.1:7842:7842"
     volumes:
       - xr-data:/data
     environment:
+      # Tell XR it is containerised (also set in the image).
+      - XR_IN_CONTAINER=1
       # BYO keys (optional) — local Ollama needs none.
       - XR_OLLAMA=${XR_OLLAMA:-http://host.docker.internal:11434}
       # - GROQ_API_KEY=...
