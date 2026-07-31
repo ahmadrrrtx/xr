@@ -125,7 +125,62 @@ A full published-image smoke test in CI does not exist yet.
 
 ---
 
-## 7. What XR is — and is not
+## 7. Architecture (Phase 2 outcomes and remaining gaps)
+
+Phase 2 unified XR's execution substrate: one execution envelope, one tool
+registry, one routing authority, one planner, one context store, one execution
+engine, and enforced acyclic L0–L6 boundaries. What that does **not** mean:
+
+### Placement is recorded, not enforced
+The execution envelope carries a `placement` field (`in_process` today) so the
+fabric can reason about where work ran. XR does **not** yet enforce risk-tiered
+isolation: a high-risk tool is not automatically confined to a stronger
+boundary. **Phase 4** owns that. Until then, §1 "Policy is not isolation"
+remains fully in force.
+
+*To close:* risk classification driving placement, with verification before
+execution.
+
+### Unification's performance gain is incidental, not tuned
+A single arbitrated tool registry is smaller than four ad-hoc lists, and startup
+was measured as unchanged. XR does **not** claim optimised performance: no
+profiling, no caching strategy, no hot-path tuning was performed. **Phase 3**
+owns that.
+
+### Type-only import cycles exist (by design, bounded)
+The dependency gate enforces **zero runtime cycles**. Cycles closed solely by
+`import type` are permitted, because the compiler erases them and they cannot
+occur at run time — the typed service-token catalogue depends on this. They are
+reported at `warn` and bounded by an architectural test, not silently ignored.
+See ADR-0005.
+
+### `eslint-plugin-boundaries` is not used
+The boundary table is enforced by `dependency-cruiser` plus a native
+architectural test, from one rule set. Adding ESLint solely to duplicate those
+rules would create a second source of truth for one concern. This is a recorded,
+owned deviation from the Phase-2 specification — see ADR-0005 (review: 8.0.0).
+
+### 17 modules remain over the 800-LOC threshold
+Each carries an **owned, dated split plan** in `docs/phase2/SIZE-WAIVERS.json`,
+which Art. V.3 permits. The gate fails if any of them grows, if a waiver goes
+stale, or if a new module lands over threshold unwaived. The two worst offenders
+were split in Phase 2 (dashboard 3 619 → 48; plugin loader 1 586 → 89).
+
+### The legacy `user_memory` table still exists
+`src/memory/` is retired and durable context has one home, but the legacy table
+is retained as the system of record for pre-Phase-2 rows. Dropping it would make
+the migration's `down()` lossy and break the documented downgrade path. Removal
+is scheduled for 8.0.0 behind its own reversible migration. See ADR-0006.
+
+### Consent for pre-Phase-2 memory is unknown
+Rows migrated from `user_memory` carry `consent_state: legacy_unknown`. XR
+cannot reconstruct how consent was originally given, so it does **not** claim
+those items were approved. They remain retrievable and flagged for
+re-affirmation.
+
+---
+
+## 8. What XR is — and is not
 
 **XR is:** a local-first, provider-neutral CLI agent runtime you self-host; governed by a policy
 gate, approval prompts, spend ceilings and a hash-chained audit log; extensible through skills,
