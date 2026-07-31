@@ -11,13 +11,13 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/state/workspace-store.ts";
-import { MemoryStore, projectScopeFromCwd } from "../src/memory/store.ts";
+import { MemoryStore, projectScopeFromCwd } from "../src/context/memory/store.ts";
 import {
   RECALL_FLOOR,
   clampImportance,
   isExpired,
   ttlToExpiresAt,
-} from "../src/memory/types.ts";
+} from "../src/context/memory/types.ts";
 import { loadConfig, isMemoryEnabled } from "../src/config/config.ts";
 
 let tmp: string;

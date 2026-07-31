@@ -138,7 +138,7 @@ export type {
   ProvenanceKind,
   SensitivityLevel,
   TrustStatus,
-} from "../context/types.ts";
+} from "../types.ts";
 
 /**
  * Context metadata attached to a memory entry (XR 4.5).
@@ -146,16 +146,16 @@ export type {
  */
 export interface MemoryContextMeta {
   /** Consent lifecycle. `legacy_unknown` for pre-4.5 entries. */
-  consentState?: import("../context/types.ts").ConsentState;
+  consentState?: import("../types.ts").ConsentState;
   consentActor?: string | null;
   consentAt?: number | null;
   /** Trust status. Derived from `source` for legacy rows. */
-  trustStatus?: import("../context/types.ts").TrustStatus;
+  trustStatus?: import("../types.ts").TrustStatus;
   /** Confidence in the content — NOT a truth claim. */
-  confidence?: import("../context/types.ts").ConfidenceLevel;
-  sensitivity?: import("../context/types.ts").SensitivityLevel;
+  confidence?: import("../types.ts").ConfidenceLevel;
+  sensitivity?: import("../types.ts").SensitivityLevel;
   /** Typed provenance. Mapped from `source` for legacy rows. */
-  provenanceKind?: import("../context/types.ts").ProvenanceKind;
+  provenanceKind?: import("../types.ts").ProvenanceKind;
   /** A URL, path, run id, or claim id. Never invented during migration. */
   provenanceRef?: string | null;
   actorKind?: string | null;

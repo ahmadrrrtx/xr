@@ -9,7 +9,7 @@
 import { ContextRepository, adaptStoreForContext } from "./repository.ts";
 import { ContextInspection, residualDisclosure } from "./inspection.ts";
 import { ProvenanceService } from "./provenance.ts";
-import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { MemoryStore, projectScopeFromCwd } from "./memory/store.ts";
 import { isKnowledgeEnabled, loadConfig } from "../config/config.ts";
 import { CONTEXT_BOUNDS, CONTEXT_POLICY_VERSION, TIER_POLICIES, CONTEXT_TIERS } from "./types.ts";
 import { tierCeilingFor, tiersForMemoryScopeKind } from "./policy.ts";

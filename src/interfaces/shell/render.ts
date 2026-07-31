@@ -16,7 +16,7 @@ import { isLocal } from "../../cost/pricing.ts";
 import type { ShellState, ChatMessage, Severity } from "./types.ts";
 import type { LayoutGeom } from "./layout.ts";
 import { loadConfig } from "../../config/config.ts";
-import { MemoryStore } from "../../memory/store.ts";
+import { MemoryStore } from "../../context/memory/store.ts";
 
 function humanTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

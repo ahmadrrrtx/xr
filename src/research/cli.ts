@@ -31,7 +31,7 @@ import { runResearch, summarizeExisting, refreshResearch, type ResearchEngineDep
 import { makePlan } from "./plan.ts";
 import { DEPTH_BUDGETS } from "./types.ts";
 import { renderReport, renderSourcesList, renderTerminalSummary } from "./report.ts";
-import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
 
 /** Build engine deps with the same routing/budget logic the agent uses. */
@@ -354,7 +354,7 @@ async function doRemember(store: Store, id: string | undefined): Promise<void> {
     warn("Memory is disabled. Enable it in config to save research findings.");
     return;
   }
-  const { MemoryStore } = await import("../memory/store.ts");
+  const { MemoryStore } = await import("../context/memory/store.ts");
   const mem = new MemoryStore(store);
   const finding =
     session.synthesis?.shortAnswer?.trim() ||

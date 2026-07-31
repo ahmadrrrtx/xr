@@ -4,8 +4,8 @@ import { loadConfig, saveConfig } from "../config/config.ts";
 import { runEnvironmentAction } from "../environment/service.ts";
 import { environmentForAction } from "../environment/classify.ts";
 import { ActionSchema } from "../control/types.ts";
-import { parseMemoryIntent } from "../memory/intent.ts";
-import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { parseMemoryIntent } from "../context/memory/intent.ts";
+import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
 import { getVoiceSettings } from "./settings.ts";
 

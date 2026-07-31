@@ -102,3 +102,32 @@ export {
   contextTypeToMemoryCategory,
   LEGACY_SOURCE_MAP,
 } from "./memory-adapter.ts";
+
+/**
+ * Phase 2 · T5 — the memory engine, now owned by the context layer.
+ *
+ * `src/memory/` is retired; these live at `context/memory/*`. They remain
+ * exported because the legacy `user_memory` table is still the system of
+ * record for pre-Phase-2 rows (a lossless migration must not delete the
+ * source), and the agent's recall path reads through this engine.
+ */
+export {
+  MemoryStore,
+  projectScopeFromCwd,
+  summarizeConversation,
+  type AddInput,
+  type AddResult,
+  type CaptureOutcome,
+  type MemoryHealth,
+} from "./memory/store.ts";
+
+export {
+  MEMORY_CATEGORIES,
+  MEMORY_SOURCES,
+  GLOBAL_SCOPE,
+  type MemoryCategory,
+  type MemoryEntry,
+  type MemoryExport,
+  type MemorySource,
+  type RecallHit,
+} from "./memory/types.ts";

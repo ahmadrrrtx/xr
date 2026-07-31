@@ -20,7 +20,7 @@ import { AgentService } from "./agent-service.ts";
 import { AuditRepo } from "../state/repos/audit-repo.ts";
 import { WorkflowRepo } from "../state/repos/workflow-repo.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
-import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { loadConfig } from "../config/config.ts";
 import { scanUntrusted } from "../security/guard.ts";
 import {

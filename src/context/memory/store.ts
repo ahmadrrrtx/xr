@@ -1,6 +1,24 @@
 /**
  * XR Stage 6 — the Memory Engine (store facade).
  *
+ * ── Phase 2 · T5: this module now lives under `context/` ────────────────────
+ *
+ * `src/memory/` was a SECOND durable-context authority alongside `src/context/`
+ * — two stores, two CLIs, overlapping concerns. The Constitution names this
+ * exact consolidation as the compliant design (Art. V, "Compliant Designs":
+ * *"A `context/` module that owns all durable context, with `memory/` retired
+ * on a dated schedule."*).
+ *
+ * `src/memory/` is retired: this engine is now an implementation detail OWNED
+ * by the context layer, and the legacy `user_memory` rows are projected into
+ * the canonical `context_items` store by the reversible migration
+ * `memory_to_context_projection` (src/state/migrations.ts, version 2).
+ *
+ * The engine itself is unchanged. It continues to serve the `user_memory`
+ * table because that is where the data lives and a lossless migration must not
+ * delete it (Art. XXIII: every migration reversible; a downgrade must remain
+ * readable). New durable-context work belongs in `ContextService`.
+ *
  * A clean abstraction that sits ON TOP of the SQLite Store. It owns the WRITE
  * RULES, the RECALL layer (now EXPLAINABLE), scope handling, retention/expiry,
  * access tracking, the live "remember this?" capture flow, session summaries,
@@ -25,11 +43,11 @@
  */
 import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
-import type { MemoryRow } from "../state/workspace-store.ts";
-import type { WorkspaceStore as Store } from "../state/workspace-store.ts";
+import type { MemoryRow } from "../../state/workspace-store.ts";
+import type { WorkspaceStore as Store } from "../../state/workspace-store.ts";
 import { lexicalVector, cosine, embed, sameSpace } from "./embed.ts";
 import { compact, totalChars } from "./compact.ts";
-import type { Message } from "../core/types.ts";
+import type { Message } from "../../core/types.ts";
 import {
   GLOBAL_SCOPE,
   RECALL_FLOOR,
@@ -45,13 +63,13 @@ import {
   type RecallHit,
 } from "./types.ts";
 import { parseMemoryIntent } from "./intent.ts";
-import { admitContextWrite } from "../context/poison.ts";
+import { admitContextWrite } from "../poison.ts";
 import type {
   ActorKind,
   ConsentState,
   ProvenanceKind,
   TrustStatus,
-} from "../context/types.ts";
+} from "../types.ts";
 
 /**
  * XR 4.5 — honest mapping from the legacy `source` enum to context metadata.

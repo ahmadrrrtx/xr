@@ -5,8 +5,8 @@ import { CORE_VERSION, DISPLAY_VERSION, PKG, versionInfo } from "../../core/vers
 import { configCacheStats, isMemoryEnabled } from "../../config/config.ts";
 import { isLocal } from "../../cost/pricing.ts";
 import { runLab } from "../../security/lab.ts";
-import { fingerprint } from "../../memory/rag.ts";
-import { MemoryStore } from "../../memory/store.ts";
+import { fingerprint } from "../../context/memory/rag.ts";
+import { MemoryStore } from "../../context/memory/store.ts";
 import { dashboardHtml } from "../dashboard.ts";
 import { route, type DaemonRoute } from "./router.ts";
 

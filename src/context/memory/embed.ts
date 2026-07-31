@@ -9,8 +9,8 @@
  * Config is read once per process TTL via loadConfig()'s in-memory cache —
  * never re-parsed from disk for every chunk.
  */
-import { loadConfig } from "../config/config.ts";
-import { embedLimit } from "../util/concurrency.ts";
+import { loadConfig } from "../../config/config.ts";
+import { embedLimit } from "../../util/concurrency.ts";
 
 const FALLBACK_DIM = 256;
 

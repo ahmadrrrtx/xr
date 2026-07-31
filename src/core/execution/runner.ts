@@ -13,7 +13,7 @@
 
 import { runAgentLoop, type AgentDeps } from "../agent.ts";
 import type { ContextPackage } from "../../context/types.ts";
-import type { MemoryStore } from "../../memory/store.ts";
+import type { MemoryStore } from "../../context/memory/store.ts";
 import type { AuditRepo } from "../../state/repos/audit-repo.ts";
 import type { CostRepo } from "../../state/repos/cost-repo.ts";
 import type { SessionRepo } from "../../state/repos/session-repo.ts";

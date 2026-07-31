@@ -7,9 +7,9 @@ import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/state/workspace-store.ts";
-import { lexicalVector, cosine, sameSpace } from "../src/memory/embed.ts";
-import { fingerprint, indexProject, retrieve } from "../src/memory/rag.ts";
-import { compact, totalChars } from "../src/memory/compact.ts";
+import { lexicalVector, cosine, sameSpace } from "../src/context/memory/embed.ts";
+import { fingerprint, indexProject, retrieve } from "../src/context/memory/rag.ts";
+import { compact, totalChars } from "../src/context/memory/compact.ts";
 import type { Message } from "../src/core/types.ts";
 
 let tmp: string;

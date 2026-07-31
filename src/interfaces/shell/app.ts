@@ -11,7 +11,7 @@ import { loadConfig, saveConfig, isMemoryEnabled } from "../../config/config.ts"
 import { buildProvider, knownProviders } from "../../providers/factory.ts";
 import { priceFor, isLocal } from "../../cost/pricing.ts";
 import { Store } from "../../state/workspace-store.ts";
-import { MemoryStore, projectScopeFromCwd, type CaptureOutcome } from "../../memory/store.ts";
+import { MemoryStore, projectScopeFromCwd, type CaptureOutcome } from "../../context/memory/store.ts";
 import { detectRuntime } from "../../local/runtimes.ts";
 import { runLab } from "../../security/lab.ts";
 import { buildAuditReport } from "../../export/report.ts";

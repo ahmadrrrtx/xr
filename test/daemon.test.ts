@@ -133,7 +133,7 @@ test("agents workflow detail endpoint returns a persisted workflow", async () =>
 
 // ── v0.9: durable memory endpoints ──────────────────────────────────────────
 
-import { MemoryStore } from "../src/memory/store.ts";
+import { MemoryStore } from "../src/context/memory/store.ts";
 
 test("memory endpoint requires the token (401 without it)", async () => {
   const h = makeHandler(store, TOKEN);

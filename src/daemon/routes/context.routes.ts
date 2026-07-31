@@ -6,7 +6,7 @@ import { ContextInspection, residualDisclosure } from "../../context/inspection.
 import { ProvenanceService } from "../../context/provenance.ts";
 import { CONTEXT_POLICY_VERSION, CONTEXT_TIERS, TIER_POLICIES } from "../../context/types.ts";
 import { tierCeilingFor } from "../../context/policy.ts";
-import { MemoryStore } from "../../memory/store.ts";
+import { MemoryStore } from "../../context/memory/store.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
 function repoFor(store: Parameters<typeof adaptStoreForContext>[0] & { workspaceId: string }) {

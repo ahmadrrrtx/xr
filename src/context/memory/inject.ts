@@ -49,8 +49,8 @@ export function buildMemoryBlock(
 // carry the metadata that makes "memory is context, not authority" mechanical
 // rather than a sentence of English in a prompt.
 
-import type { ContextPackage, InjectionPackage } from "../context/types.ts";
-import { buildInjectionPackage, type InjectionOptions } from "../context/injection.ts";
+import type { ContextPackage, InjectionPackage } from "../types.ts";
+import { buildInjectionPackage, type InjectionOptions } from "../injection.ts";
 
 /** Message shape the agent loop consumes. */
 export interface InjectableMessage {

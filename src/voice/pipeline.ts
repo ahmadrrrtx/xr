@@ -13,7 +13,7 @@ import { executeOnSurface } from "../services/surface-execution.ts";
 import { loadConfig, isMemoryEnabled } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
-import { MemoryStore } from "../memory/store.ts";
+import { MemoryStore } from "../context/memory/store.ts";
 import type { ApprovalRequest } from "../core/types.ts";
 import { appendTranscript, markVoiceUsed } from "./settings.ts";
 import { defaultVoiceSettings, type VoiceSettings } from "./types.ts";

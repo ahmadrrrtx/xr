@@ -20,7 +20,7 @@
 
 import type { ServiceRegistry } from "../core/service-registry.ts";
 import { Tokens } from "../core/tokens.ts";
-import { embed as legacyEmbed, lexicalVector, cosine, sameSpace } from "../memory/embed.ts";
+import { embed as legacyEmbed, lexicalVector, cosine, sameSpace } from "./memory/embed.ts";
 import type { ModelClass, RoutingDecision } from "../intelligence/types.ts";
 
 /** The embedding space actually used for a call. */

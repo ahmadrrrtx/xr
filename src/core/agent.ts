@@ -28,9 +28,9 @@ import type { UserMemoryRepo } from "../state/repos/user-memory-repo.ts";
 import type { WorkspaceStore as Store } from "../state/workspace-store.ts";
 import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
 import { BudgetManager } from "../cost/manager.ts";
-import { compact } from "../memory/compact.ts";
-import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
-import { buildMemoryBlock, buildContextMessages } from "../memory/inject.ts";
+import { compact } from "../context/memory/compact.ts";
+import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
+import { buildMemoryBlock, buildContextMessages } from "../context/memory/inject.ts";
 import type { ContextPackage, InjectionPackage } from "../context/types.ts";
 
 export interface AgentDeps {

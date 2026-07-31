@@ -6,7 +6,7 @@ import { printStatus, probeHealth, detectPlatform, type HealthCheck } from "../i
 import { configPath, loadConfig } from "../config/config.ts";
 import { PRESETS } from "../providers/presets.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
-import { MemoryStore } from "../memory/store.ts";
+import { MemoryStore } from "../context/memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";
 import { pluginDoctorLine } from "../plugins/cli.ts";

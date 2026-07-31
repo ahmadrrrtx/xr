@@ -36,7 +36,7 @@ import { SessionRepo } from "../state/repos/session-repo.ts";
 import { UserMemoryRepo } from "../state/repos/user-memory-repo.ts";
 import { CostRepo } from "../state/repos/cost-repo.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
-import { MemoryStore } from "../memory/store.ts";
+import { MemoryStore } from "../context/memory/store.ts";
 import { priceFor } from "../cost/pricing.ts";
 import type { ApprovalRequest, Mode, Provider } from "../core/types.ts";
 

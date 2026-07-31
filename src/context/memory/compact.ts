@@ -7,7 +7,7 @@
  * Deterministic (no model call): keeps the most recent N messages verbatim,
  * summarizes the rest into bullet notes. (Block 4 / TRD cost layer.)
  */
-import type { Message } from "../core/types.ts";
+import type { Message } from "../../core/types.ts";
 
 export interface CompactOptions {
   /** Approx char budget before we compact. */

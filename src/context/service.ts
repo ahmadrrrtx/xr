@@ -15,7 +15,7 @@ import type { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
 import type { WorkspaceStore } from "../state/workspace-store.ts";
-import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { MemoryStore, projectScopeFromCwd } from "./memory/store.ts";
 import {
   CONTEXT_POLICY_VERSION,
   DEFAULT_USER_ID,

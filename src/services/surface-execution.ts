@@ -29,7 +29,7 @@
 
 import type { ApprovalRequest, Mode, Provider } from "../core/types.ts";
 import type { Store } from "../state/workspace-store.ts";
-import type { MemoryStore } from "../memory/store.ts";
+import type { MemoryStore } from "../context/memory/store.ts";
 import {
   assembleEnvelope,
   newEvidence,
