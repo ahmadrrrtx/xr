@@ -4,8 +4,8 @@ import {
   assessPluginRisk,
   pluginTrustRequestFromPerms,
   PLUGIN_HARD_BOUNDARY_PERMS,
-} from "../../src/trust/tool-support.ts";
-import { classifyRisk } from "../../src/trust/classify.ts";
+} from "../../src/runtime/trust/tool-support.ts";
+import { classifyRisk } from "../../src/runtime/trust/classify.ts";
 
 describe("XR 4.2 plugin capability tier model", () => {
   test("hard-boundary capabilities (shell/control/browser) are Tier 2", () => {

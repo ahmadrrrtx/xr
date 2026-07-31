@@ -2,10 +2,10 @@
  * XR 6.0 — Phase 11 Tests: Placement Engine
  */
 import { describe, expect, test } from "bun:test";
-import { PlacementEngine } from "../../src/deployment/placement/engine.ts";
-import { buildCapsule } from "../../src/deployment/capsule.ts";
-import type { CapsuleBuildInput } from "../../src/deployment/capsule.ts";
-import type { WorkerIdentity, PlacementPolicyInput } from "../../src/deployment/types.ts";
+import { PlacementEngine } from "../../src/enterprise/deployment/placement/engine.ts";
+import { buildCapsule } from "../../src/enterprise/deployment/capsule.ts";
+import type { CapsuleBuildInput } from "../../src/enterprise/deployment/capsule.ts";
+import type { WorkerIdentity, PlacementPolicyInput } from "../../src/enterprise/deployment/types.ts";
 
 function makeCapsule(overrides: Partial<CapsuleBuildInput> = {}) {
   return buildCapsule({

@@ -1,5 +1,5 @@
 /** XR Daemon — Capability Ecosystem API routes. */
-import { CapabilityService, type CapabilityDiscoverQuery } from "../../capabilities/service.ts";
+import { CapabilityService, type CapabilityDiscoverQuery } from "../../platform/capabilities/service.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
 async function readJson(req: Request): Promise<any> {

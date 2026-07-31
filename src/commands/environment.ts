@@ -15,8 +15,8 @@ import {
   listEnvironmentSessions,
   closeEnvironmentSession,
   detectEnvironmentCapabilities,
-} from "../environment/service.ts";
-import { environmentObservations } from "../environment/observations.ts";
+} from "../platform/environment/service.ts";
+import { environmentObservations } from "../platform/environment/observations.ts";
 
 function json(v: unknown): void {
   console.log(JSON.stringify(v, null, 2));

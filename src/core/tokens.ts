@@ -42,13 +42,13 @@ import type { SkillService } from "../services/skill-service.ts";
 import type { AgentService } from "../services/agent-service.ts";
 import type { MultiAgentService } from "../services/multi-agent-service.ts";
 import type { IntelligenceService } from "../intelligence/service.ts";
-import type { CapabilityService } from "../capabilities/service.ts";
+import type { CapabilityService } from "../platform/capabilities/service.ts";
 
 // Cross-cutting subsystems.
 import type { XRShieldService } from "../security/shield.ts";
 import type { BusinessOS } from "../business/index.ts";
 import type { ExecutionService } from "../execution/service.ts";
-import type { TrustService } from "../trust/service.ts";
+import type { TrustService } from "../runtime/trust/service.ts";
 import type { ContextService } from "../context/service.ts";
 
 /**

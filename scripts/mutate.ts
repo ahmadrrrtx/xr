@@ -32,6 +32,10 @@ const GATED: GatedModule[] = [
   { path: "src/execution/state-machine.ts", tests: ["test/execution/state-machine.test.ts"] },
   { path: "src/services/review-decision.ts", tests: ["test/phase0/reviewer-fail-closed.test.ts"] },
   { path: "src/integrations/credentials.ts", tests: ["test/phase0/credential-vault.test.ts"] },
+  // ── Phase 2 authorities (Part 10: mutation on envelope / registry / router) ──
+  { path: "src/tools/registry-service.ts", tests: ["test/tools/semantics-contract.test.ts"] },
+  { path: "src/intelligence/routing-service.ts", tests: ["test/intelligence/locality-invariant.test.ts", "test/intelligence/integration.test.ts"] },
+  { path: "src/core/execution/envelope.ts", tests: ["test/core/no-bypass.test.ts", "test/core/envelope.test.ts"] },
 ];
 
 /** Simple text-level mutation operators (code patterns, not comments/strings). */

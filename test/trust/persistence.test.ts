@@ -6,11 +6,11 @@ import { randomUUID } from "node:crypto";
 import { Database } from "bun:sqlite";
 import { ExecutionRepo, adaptWorkspaceStore } from "../../src/execution/repository.ts";
 import { ExecutionService } from "../../src/execution/service.ts";
-import { NamespaceSandboxBackend } from "../../src/trust/environment/namespace.ts";
-import { RestrictedProcessBackend } from "../../src/trust/environment/restricted-process.ts";
-import { InProcessBackend } from "../../src/trust/environment/in-process.ts";
+import { NamespaceSandboxBackend } from "../../src/runtime/trust/environment/namespace.ts";
+import { RestrictedProcessBackend } from "../../src/runtime/trust/environment/restricted-process.ts";
+import { InProcessBackend } from "../../src/runtime/trust/environment/in-process.ts";
 import { makeTrust, type TrustHarness } from "./_helpers.ts";
-import type { TrustRequest } from "../../src/trust/types.ts";
+import type { TrustRequest } from "../../src/runtime/trust/types.ts";
 
 let NS_AVAILABLE = false;
 try {

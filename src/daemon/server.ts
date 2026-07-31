@@ -12,14 +12,14 @@ import { hydrateSecretsAsync, loadConfig } from "../config/config.ts";
 import { WorkspaceManager } from "../core/workspace.ts";
 import { XRShieldService } from "../security/shield.ts";
 import type { Store } from "../state/workspace-store.ts";
-import { TrustService } from "../trust/service.ts";
-import { CredentialBroker } from "../trust/credentials.ts";
-import { AuthorityRegistry } from "../trust/authority.ts";
-import { EnvironmentManager } from "../trust/environment/manager.ts";
-import { InProcessBackend } from "../trust/environment/in-process.ts";
-import { RestrictedProcessBackend } from "../trust/environment/restricted-process.ts";
-import { NamespaceSandboxBackend } from "../trust/environment/namespace.ts";
-import { ContainerBackend } from "../trust/environment/container.ts";
+import { TrustService } from "../runtime/trust/service.ts";
+import { CredentialBroker } from "../runtime/trust/credentials.ts";
+import { AuthorityRegistry } from "../runtime/trust/authority.ts";
+import { EnvironmentManager } from "../runtime/trust/environment/manager.ts";
+import { InProcessBackend } from "../runtime/trust/environment/in-process.ts";
+import { RestrictedProcessBackend } from "../runtime/trust/environment/restricted-process.ts";
+import { NamespaceSandboxBackend } from "../runtime/trust/environment/namespace.ts";
+import { ContainerBackend } from "../runtime/trust/environment/container.ts";
 import {
   createRouteHandler,
   htmlResponse,

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { homedir } from "node:os";
-import { verifyEnvironment } from "../../src/trust/verify.ts";
-import { NO_ENFORCEMENT } from "../../src/trust/resources.ts";
-import type { EnvironmentBackend } from "../../src/trust/environment/backend.ts";
-import type { EnvironmentExecutable, PlacementGuarantees, PlacementKind } from "../../src/trust/types.ts";
+import { verifyEnvironment } from "../../src/runtime/trust/verify.ts";
+import { NO_ENFORCEMENT } from "../../src/runtime/trust/resources.ts";
+import type { EnvironmentBackend } from "../../src/runtime/trust/environment/backend.ts";
+import type { EnvironmentExecutable, PlacementGuarantees, PlacementKind } from "../../src/runtime/trust/types.ts";
 import { makeGrant } from "./_helpers.ts";
 
 function fakeBackend(g: PlacementGuarantees, placement: PlacementKind = "namespace_sandbox"): EnvironmentBackend {

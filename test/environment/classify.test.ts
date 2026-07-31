@@ -5,8 +5,8 @@ import {
   environmentForAction,
   interactionFor,
   reversibilityFor,
-} from "../../src/environment/classify.ts";
-import type { EnvironmentActionRequest } from "../../src/environment/types.ts";
+} from "../../src/platform/environment/classify.ts";
+import type { EnvironmentActionRequest } from "../../src/platform/environment/types.ts";
 import type { Action } from "../../src/control/types.ts";
 
 function req(over: Partial<EnvironmentActionRequest> & { action: Action }): EnvironmentActionRequest {

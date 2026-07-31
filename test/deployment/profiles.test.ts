@@ -9,7 +9,7 @@ import {
   defaultProfileForEnvironment,
   validateProfileCompatibility,
   isCapabilityAvailable,
-} from "../../src/deployment/profiles.ts";
+} from "../../src/enterprise/deployment/profiles.ts";
 
 describe("Deployment Profiles", () => {
   test("all five profiles are defined", () => {

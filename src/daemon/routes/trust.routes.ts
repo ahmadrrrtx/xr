@@ -8,8 +8,8 @@
  *                               decision (accepts a TrustRequest or {cmd,cwd})
  */
 import { route, type DaemonRoute } from "./router.ts";
-import { shellTrustSpec } from "../../trust/tool-support.ts";
-import type { TrustRequest } from "../../trust/types.ts";
+import { shellTrustSpec } from "../../runtime/trust/tool-support.ts";
+import type { TrustRequest } from "../../runtime/trust/types.ts";
 
 export function trustRoutes(): DaemonRoute[] {
   return [

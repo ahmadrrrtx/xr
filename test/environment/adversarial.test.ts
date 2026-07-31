@@ -12,14 +12,14 @@ import { join } from "node:path";
 import type { Store } from "../../src/state/workspace-store.ts";
 
 const COMPUTER_USE_SRC = readFileSync(join(import.meta.dir, "../../src/control/computer-use.ts"), "utf8");
-const SERVICE_SRC = readFileSync(join(import.meta.dir, "../../src/environment/service.ts"), "utf8");
+const SERVICE_SRC = readFileSync(join(import.meta.dir, "../../src/platform/environment/service.ts"), "utf8");
 const VISION_SRC = readFileSync(join(import.meta.dir, "../../src/control/vision.ts"), "utf8");
 const BROWSER_SRC = readFileSync(join(import.meta.dir, "../../src/control/browser.ts"), "utf8");
 
-let svc: typeof import("../../src/environment/service.ts");
-let visionProviderMod: typeof import("../../src/environment/providers/vision.ts");
-let fsProvider: typeof import("../../src/environment/providers/filesystem.ts");
-let voiceGate: typeof import("../../src/environment/providers/voice.ts");
+let svc: typeof import("../../src/platform/environment/service.ts");
+let visionProviderMod: typeof import("../../src/platform/environment/providers/vision.ts");
+let fsProvider: typeof import("../../src/platform/environment/providers/filesystem.ts");
+let voiceGate: typeof import("../../src/platform/environment/providers/voice.ts");
 let vision: typeof import("../../src/control/vision.ts");
 
 let tmp: string;
@@ -36,10 +36,10 @@ beforeAll(async () => {
   process.env.HOME = tmp;
   process.env.XR_CONTROL_FORCE_TEST = "1";
   mkdirSync(process.env.XR_HOME, { recursive: true });
-  svc = await import("../../src/environment/service.ts");
-  visionProviderMod = await import("../../src/environment/providers/vision.ts");
-  fsProvider = await import("../../src/environment/providers/filesystem.ts");
-  voiceGate = await import("../../src/environment/providers/voice.ts");
+  svc = await import("../../src/platform/environment/service.ts");
+  visionProviderMod = await import("../../src/platform/environment/providers/vision.ts");
+  fsProvider = await import("../../src/platform/environment/providers/filesystem.ts");
+  voiceGate = await import("../../src/platform/environment/providers/voice.ts");
   vision = await import("../../src/control/vision.ts");
 });
 
@@ -173,7 +173,7 @@ describe("prompt / visual instruction injection", () => {
   });
 
   test("the environment service has no private execution path — everything goes through runAction", () => {
-    expect(SERVICE_SRC).toContain('import { runAction } from "../control/service.ts"');
+    expect(SERVICE_SRC).toContain('import { runAction } from "../../control/service.ts"');
     expect(SERVICE_SRC).not.toContain('from "../control/executor.ts"');
   });
 });
@@ -221,7 +221,7 @@ describe("stale observation protection on destructive classes", () => {
   test("a stale observation can never justify a coordinate action", async () => {
     // drag_drop is coordinate + unknown→irreversible-adjacent: gate must block.
     const staleId = "obs_adv_stale";
-    const { environmentObservations } = await import("../../src/environment/observations.ts");
+    const { environmentObservations } = await import("../../src/platform/environment/observations.ts");
     environmentObservations.put({
       observationId: staleId,
       source: "screen",

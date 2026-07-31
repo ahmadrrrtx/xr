@@ -3,8 +3,8 @@ import { describe, test, expect } from "bun:test";
 import {
   EnvironmentSessionRegistry,
   transitionSession,
-} from "../../src/environment/lifecycle.ts";
-import { defaultEnvironmentPolicy, type EnvironmentSession } from "../../src/environment/types.ts";
+} from "../../src/platform/environment/lifecycle.ts";
+import { defaultEnvironmentPolicy, type EnvironmentSession } from "../../src/platform/environment/types.ts";
 
 function makeSession(registry: EnvironmentSessionRegistry, type = "browser", workspaceId = "/ws/a"): EnvironmentSession {
   return registry.create({

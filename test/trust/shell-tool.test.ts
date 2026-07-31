@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { shellTool } from "../../src/tools/system.ts";
 import type { ToolContext, IsolatedRunResult } from "../../src/core/types.ts";
-import type { TrustRequest, EnvironmentExecutable } from "../../src/trust/types.ts";
+import type { TrustRequest, EnvironmentExecutable } from "../../src/runtime/trust/types.ts";
 
 function ctxWith(over: Partial<ToolContext> = {}): ToolContext & { events: Array<{ event: string; detail: Record<string, unknown> }> } {
   const events: Array<{ event: string; detail: Record<string, unknown> }> = [];

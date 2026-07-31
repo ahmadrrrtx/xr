@@ -7,7 +7,7 @@ import { resolve, relative, isAbsolute, join } from "node:path";
 import type { Tool, ToolResult } from "../core/types.ts";
 import { checkAction } from "../security/guard.ts";
 import { runCommand } from "../util/process.ts";
-import { shellTrustSpec } from "../trust/tool-support.ts";
+import { shellTrustSpec } from "../runtime/trust/tool-support.ts";
 
 function safe(cwd: string, p: string): string | null {
   const abs = isAbsolute(p) ? p : resolve(cwd, p);

@@ -11,7 +11,7 @@
  *   - "Unknown" is never rendered as "healthy".
  */
 
-import type { DeploymentProfileKind, DeploymentStatus } from "../../deployment/types.ts";
+import type { DeploymentProfileKind, DeploymentStatus } from "../deployment/types.ts";
 import type {
   AlertCondition,
   AlertSeverity,

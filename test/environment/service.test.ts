@@ -17,9 +17,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Store } from "../../src/state/workspace-store.ts";
 
-let svc: typeof import("../../src/environment/service.ts");
-let obs: typeof import("../../src/environment/observations.ts");
-let lifecycle: typeof import("../../src/environment/lifecycle.ts");
+let svc: typeof import("../../src/platform/environment/service.ts");
+let obs: typeof import("../../src/platform/environment/observations.ts");
+let lifecycle: typeof import("../../src/platform/environment/lifecycle.ts");
 let cfg: typeof import("../../src/config/config.ts");
 let perms: typeof import("../../src/control/permissions.ts");
 
@@ -53,9 +53,9 @@ beforeAll(async () => {
   perms.grantPermission("files_write");
   perms.grantPermission("desktop");
   perms.grantPermission("browser");
-  svc = await import("../../src/environment/service.ts");
-  obs = await import("../../src/environment/observations.ts");
-  lifecycle = await import("../../src/environment/lifecycle.ts");
+  svc = await import("../../src/platform/environment/service.ts");
+  obs = await import("../../src/platform/environment/observations.ts");
+  lifecycle = await import("../../src/platform/environment/lifecycle.ts");
   cfg = await import("../../src/config/config.ts");
 });
 

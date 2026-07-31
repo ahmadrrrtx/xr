@@ -7,7 +7,7 @@ import {
   probePlaywright,
   capabilityFor,
   invalidateEnvironmentCapabilityCache,
-} from "../../src/environment/capabilities.ts";
+} from "../../src/platform/environment/capabilities.ts";
 
 describe("probePlaywright (real, not optimistic)", () => {
   test("reports the true module state", async () => {

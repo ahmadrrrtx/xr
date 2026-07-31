@@ -20,7 +20,7 @@ import {
   sizeBytes,
   systemActor,
 } from "./common.ts";
-import { mcpTrustRequest } from "../../trust/tool-support.ts";
+import { mcpTrustRequest } from "../../runtime/trust/tool-support.ts";
 
 export interface McpAdapterOptions {
   service: ExecutionService;

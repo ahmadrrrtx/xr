@@ -3,13 +3,13 @@
  *
  * ── Phase 2 · T5: this module now lives under `context/` ────────────────────
  *
- * `src/memory/` was a SECOND durable-context authority alongside `src/context/`
+ * `src/context/memory/` was a SECOND durable-context authority alongside `src/context/`
  * — two stores, two CLIs, overlapping concerns. The Constitution names this
  * exact consolidation as the compliant design (Art. V, "Compliant Designs":
  * *"A `context/` module that owns all durable context, with `memory/` retired
  * on a dated schedule."*).
  *
- * `src/memory/` is retired: this engine is now an implementation detail OWNED
+ * `src/context/memory/` is retired: this engine is now an implementation detail OWNED
  * by the context layer, and the legacy `user_memory` rows are projected into
  * the canonical `context_items` store by the reversible migration
  * `memory_to_context_projection` (src/state/migrations.ts, version 2).

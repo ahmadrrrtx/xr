@@ -9,13 +9,13 @@ import { executeTool } from "../../src/execution/adapters/tool-adapter.ts";
 import { readFileTool, writeFileTool } from "../../src/tools/files.ts";
 import { fetchUrlTool } from "../../src/tools/web.ts";
 import { gitStatusTool, gitCommitTool } from "../../src/tools/git.ts";
-import { classifyRisk } from "../../src/trust/classify.ts";
-import { InProcessBackend } from "../../src/trust/environment/in-process.ts";
-import { RestrictedProcessBackend } from "../../src/trust/environment/restricted-process.ts";
-import { NamespaceSandboxBackend } from "../../src/trust/environment/namespace.ts";
+import { classifyRisk } from "../../src/runtime/trust/classify.ts";
+import { InProcessBackend } from "../../src/runtime/trust/environment/in-process.ts";
+import { RestrictedProcessBackend } from "../../src/runtime/trust/environment/restricted-process.ts";
+import { NamespaceSandboxBackend } from "../../src/runtime/trust/environment/namespace.ts";
 import { makeTrust, makeTrustNoSandbox, type TrustHarness } from "./_helpers.ts";
 import type { ToolContext } from "../../src/core/types.ts";
-import type { TrustRequest } from "../../src/trust/types.ts";
+import type { TrustRequest } from "../../src/runtime/trust/types.ts";
 
 let h: TrustHarness;
 let service: ExecutionService;

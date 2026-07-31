@@ -3,7 +3,7 @@
  *
  * §8.3 / §6.3: "Do not create a second provider selection system."
  *
- * XR 4.4 shipped `src/memory/embed.ts`, which read `config.localModels` and
+ * XR 4.4 shipped `src/context/memory/embed.ts`, which read `config.localModels` and
  * `XR_EMBED_*` directly and hand-rolled provider choice — a second router.
  * This module makes the intelligence plane the decision-maker while keeping
  * `embed()`'s existing behaviour (and its deterministic lexical fallback) as the
@@ -110,7 +110,7 @@ export function routeModelClass(
 /**
  * Embed text using the routed model.
  *
- * The transport is the existing `src/memory/embed.ts` implementation (Ollama /
+ * The transport is the existing `src/context/memory/embed.ts` implementation (Ollama /
  * OpenAI-compatible + lexical fallback). We point it at the routed model via
  * the documented `XR_EMBED_MODEL` override for the duration of the call, so
  * there is exactly one HTTP path and one fallback path in the codebase.

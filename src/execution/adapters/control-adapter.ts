@@ -17,7 +17,7 @@ import {
   sizeBytes,
   userActor,
 } from "./common.ts";
-import { controlTrustRequest } from "../../trust/tool-support.ts";
+import { controlTrustRequest } from "../../runtime/trust/tool-support.ts";
 
 export interface ControlAdapterOptions {
   service: ExecutionService;

@@ -9,7 +9,7 @@ import {
   scanObjectForCredentials,
   digestBackupContent,
 } from "../../src/enterprise/index.ts";
-import type { BackupManifest } from "../../src/deployment/backup/service.ts";
+import type { BackupManifest } from "../../src/enterprise/deployment/backup/service.ts";
 
 const NOW = 1_800_000_000_000;
 const MINUTE = 60 * 1000;

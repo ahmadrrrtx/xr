@@ -11,7 +11,7 @@ import { mkdtempSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
-import { BackupService } from "../../src/deployment/backup/service.ts";
+import { BackupService } from "../../src/enterprise/deployment/backup/service.ts";
 import { rmrf } from "./helpers.ts";
 
 /** RTO budget for a cold restart of the store (opened + migrated + verified). */

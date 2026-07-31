@@ -66,7 +66,7 @@ const MIGRATION_1: Migration = {
 
 /**
  * Migration 2 — Phase 2 · T5: project `user_memory` into the canonical
- * `context_items` store, so `src/memory/` can be retired.
+ * `context_items` store, so `src/context/memory/` can be retired.
  *
  * ── Why a migration and not a copy ──────────────────────────────────────────
  *

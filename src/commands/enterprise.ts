@@ -44,8 +44,8 @@ import {
   type ExportFormat,
   type AuthoritySubject,
 } from "../enterprise/index.ts";
-import type { DeploymentProfileKind } from "../deployment/types.ts";
-import { defaultProfileForEnvironment } from "../deployment/profiles.ts";
+import type { DeploymentProfileKind } from "../enterprise/deployment/types.ts";
+import { defaultProfileForEnvironment } from "../enterprise/deployment/profiles.ts";
 
 // ── Arg parsing (mirrors src/commands/capabilities.ts) ────────────────────────
 

@@ -36,7 +36,7 @@ import {
   verifyEvidenceBundle,
   XR_CLAIMS,
   type EvaluationRun,
-} from "../../src/evaluation/index.ts";
+} from "../../src/enterprise/evaluation/index.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helpers
@@ -209,7 +209,7 @@ describe("result repository", () => {
       })),
     };
     // Recompute against the ORIGINAL digest — must not match.
-    const { verifyRunIntegrity } = await import("../../src/evaluation/index.ts");
+    const { verifyRunIntegrity } = await import("../../src/enterprise/evaluation/index.ts");
     const check = verifyRunIntegrity({ ...mutated, integrity: stored.run.integrity });
     if (JSON.stringify(mutated.suites) !== JSON.stringify(stored.run.suites)) {
       expect(check.valid).toBe(false);

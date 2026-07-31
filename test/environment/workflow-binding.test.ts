@@ -4,9 +4,9 @@ import {
   buildEnvironmentActionNode,
   idempotencyFor,
   riskTierFor,
-} from "../../src/environment/workflow-binding.ts";
-import { assessEnvironmentAction } from "../../src/environment/classify.ts";
-import type { EnvironmentActionRequest } from "../../src/environment/types.ts";
+} from "../../src/platform/environment/workflow-binding.ts";
+import { assessEnvironmentAction } from "../../src/platform/environment/classify.ts";
+import type { EnvironmentActionRequest } from "../../src/platform/environment/types.ts";
 
 function req(over: Partial<EnvironmentActionRequest> & { action: EnvironmentActionRequest["action"] }): EnvironmentActionRequest {
   return {

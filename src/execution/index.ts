@@ -5,11 +5,11 @@
  *
  * XR had two run authorities: `ExecutionService` (durable records, leases,
  * checkpoints, recovery) and `WorkflowEngine` (DAG, human approval, versioning)
- * in a separate top-level `src/workflow/`. Both defined a run lifecycle and
+ * in a separate top-level `src/execution/workflow/`. Both defined a run lifecycle and
  * both persisted run state — a duplicate L1 concern, which Art. VI.3 forbids
  * ("one durable-execution path … one workflow substrate").
  *
- * `src/workflow/` is retired. The DAG substrate now lives at
+ * `src/execution/workflow/` is retired. The DAG substrate now lives at
  * `src/execution/workflow/`, owned by this module, and is re-exported below
  * under the `workflow` namespace so the two models compose explicitly instead
  * of competing:

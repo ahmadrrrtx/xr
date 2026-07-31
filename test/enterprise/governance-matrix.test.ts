@@ -16,8 +16,8 @@ import {
   NON_OVERRIDABLE_VISIBILITY_KEYS,
   type EnterpriseServices,
 } from "../../src/enterprise/index.ts";
-import { getDeploymentProfile, listDeploymentProfiles } from "../../src/deployment/profiles.ts";
-import type { DeploymentProfileKind } from "../../src/deployment/types.ts";
+import { getDeploymentProfile, listDeploymentProfiles } from "../../src/enterprise/deployment/profiles.ts";
+import type { DeploymentProfileKind } from "../../src/enterprise/deployment/types.ts";
 
 const NOW = 1_800_000_000_000;
 const DAY = 24 * 60 * 60 * 1000;

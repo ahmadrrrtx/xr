@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { makeTrust, makeGrant, type TrustHarness } from "./_helpers.ts";
-import { NamespaceSandboxBackend } from "../../src/trust/environment/namespace.ts";
-import { detectBwrap } from "../../src/trust/isolated-spawn.ts";
-import { RestrictedProcessBackend } from "../../src/trust/environment/restricted-process.ts";
-import { sensitiveBlockedPaths } from "../../src/trust/classify.ts";
-import type { EnvironmentExecutable, PlacementDecision } from "../../src/trust/types.ts";
+import { NamespaceSandboxBackend } from "../../src/runtime/trust/environment/namespace.ts";
+import { detectBwrap } from "../../src/runtime/trust/isolated-spawn.ts";
+import { RestrictedProcessBackend } from "../../src/runtime/trust/environment/restricted-process.ts";
+import { sensitiveBlockedPaths } from "../../src/runtime/trust/classify.ts";
+import type { EnvironmentExecutable, PlacementDecision } from "../../src/runtime/trust/types.ts";
 
 // Probe the real backend at module load so we can skip honestly if the host
 // cannot provide a namespace sandbox (e.g. no bubblewrap / no user namespaces).

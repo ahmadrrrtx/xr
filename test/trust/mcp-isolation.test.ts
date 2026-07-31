@@ -9,7 +9,7 @@ import {
   decideMcpStdioPlacement,
   detectBwrap,
   mcpServerRisk,
-} from "../../src/trust/isolated-spawn.ts";
+} from "../../src/runtime/trust/isolated-spawn.ts";
 import { McpClient } from "../../src/mcp/client.ts";
 
 const NS_AVAILABLE = await detectBwrap();

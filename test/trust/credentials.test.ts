@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CredentialBroker } from "../../src/trust/credentials.ts";
+import { CredentialBroker } from "../../src/runtime/trust/credentials.ts";
 
 describe("XR 4.2 credential broker (reference-only, redacting)", () => {
   test("register returns a reference that carries NO raw value", () => {

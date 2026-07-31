@@ -8,9 +8,9 @@ const root = mkdtempSync(join(tmpdir(), "xr-capabilities-"));
 process.env.XR_HOME = join(root, "home");
 mkdirSync(process.env.XR_HOME, { recursive: true });
 
-import { resolveEffectiveAuthority, riskTierForPermissions } from "../../src/capabilities/authority.ts";
-import { CapabilityService } from "../../src/capabilities/service.ts";
-import { validateCapabilityDescriptor } from "../../src/capabilities/types.ts";
+import { resolveEffectiveAuthority, riskTierForPermissions } from "../../src/platform/capabilities/authority.ts";
+import { CapabilityService } from "../../src/platform/capabilities/service.ts";
+import { validateCapabilityDescriptor } from "../../src/platform/capabilities/types.ts";
 import { PluginManager } from "../../src/plugins/manager.ts";
 import { SkillMarketplace } from "../../src/skills/marketplace.ts";
 import type { SkillPackageFile } from "../../src/skills/marketplace.ts";

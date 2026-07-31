@@ -7,9 +7,9 @@ import {
   WorkerNotFoundError,
   WorkerRegistrationError,
   WorkerLifecycleError,
-} from "../../src/deployment/workers/registry.ts";
-import type { WorkerRegistration, WorkerHeartbeat } from "../../src/deployment/types.ts";
-import { DEPLOYMENT_BOUNDS } from "../../src/deployment/types.ts";
+} from "../../src/enterprise/deployment/workers/registry.ts";
+import type { WorkerRegistration, WorkerHeartbeat } from "../../src/enterprise/deployment/types.ts";
+import { DEPLOYMENT_BOUNDS } from "../../src/enterprise/deployment/types.ts";
 
 function makeRegistration(id: string, overrides: Partial<WorkerRegistration> = {}): WorkerRegistration {
   return {

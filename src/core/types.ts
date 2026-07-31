@@ -7,7 +7,7 @@
 export type Mode = "agent" | "plan" | "ask";
 
 /** Trust level of a value/step — basis of the Dual-LLM separation (later phase). */
-import type { EnvironmentExecutable, TrustRequest } from "../trust/types.ts";
+import type { EnvironmentExecutable, TrustRequest } from "../runtime/trust/types.ts";
 
 export type Trust = "trusted" | "quarantined";
 

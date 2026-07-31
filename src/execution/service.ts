@@ -30,8 +30,8 @@ import {
   type Placement,
   type RecoveryStatus,
 } from "./types.ts";
-import type { TrustService } from "../trust/service.ts";
-import type { PlacementKind } from "../trust/types.ts";
+import type { TrustService } from "../runtime/trust/service.ts";
+import type { PlacementKind } from "../runtime/trust/types.ts";
 import type { ExecutionRepo } from "./repository.ts";
 import type { IdempotencyStore } from "../state/idempotency.ts";
 import { canRun, isTerminal, transition, wasInFlight } from "./state-machine.ts";

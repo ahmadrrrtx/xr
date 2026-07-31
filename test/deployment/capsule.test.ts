@@ -15,9 +15,9 @@ import {
   isCapsuleCompatibleWithProfile,
   CapsuleValidationError,
   CapsuleIntegrityError,
-} from "../../src/deployment/capsule.ts";
-import type { CapsuleBuildInput } from "../../src/deployment/capsule.ts";
-import { CAPSULE_SCHEMA_VERSION } from "../../src/deployment/types.ts";
+} from "../../src/enterprise/deployment/capsule.ts";
+import type { CapsuleBuildInput } from "../../src/enterprise/deployment/capsule.ts";
+import { CAPSULE_SCHEMA_VERSION } from "../../src/enterprise/deployment/types.ts";
 
 function makeValidInput(overrides: Partial<CapsuleBuildInput> = {}): CapsuleBuildInput {
   return {
