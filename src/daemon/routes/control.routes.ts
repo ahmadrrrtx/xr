@@ -3,7 +3,7 @@
 import { approvals } from "../../control/approvals.ts";
 import { listPermissions } from "../../control/permissions.ts";
 import { isDisabled } from "../../control/service.ts";
-import { planActions } from "../../control/planner.ts";
+import { planningService } from "../../services/planning-service.ts";
 import { browserStatus } from "../../control/browser.ts";
 import { buildProvider } from "../../providers/factory.ts";
 import { listRemembered, forgetPlan, clearAllMemory } from "../../control/memory.ts";
@@ -74,7 +74,7 @@ export function controlRoutes(): DaemonRoute[] {
           const body = await req.json() as { task?: string; noMemory?: boolean };
           if (!body?.task) return json({ error: "expected { task: string }" }, 400);
           const provider = buildProvider(config, {});
-          const result = await planActions(provider, body.task, { store: state.store, noMemory: body.noMemory === true });
+          const result = await planningService.planControl({ provider, task: body.task, store: state.store, noMemory: body.noMemory === true });
           if ("error" in result) return json({ error: result.error }, 422);
           return json({ plan: result.plan, source: result.source });
         } catch (e) {

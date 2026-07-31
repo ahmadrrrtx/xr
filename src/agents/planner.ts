@@ -130,6 +130,12 @@ function planSummary(kind: WorkflowKind): string {
   }
 }
 
+/**
+ * @internal Phase 2 · T4 — a STRATEGY of `PlanningService`, not an entry point.
+ * Call `planningService.planWorkflow()` instead: it applies the schema +
+ * referential-integrity gate this function does not. Direct use is retained
+ * only for the unit tests that exercise compilation in isolation.
+ */
 export function compileWorkflowPlan(req: WorkflowPlanRequest): WorkflowRecord {
   const workflowId = `wf_${randomUUID().slice(0, 8)}`;
   const kind = req.kind ?? detectWorkflowKind(req.goal);

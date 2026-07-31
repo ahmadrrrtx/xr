@@ -6,7 +6,7 @@
  * task, handoff, permission, and review checkpoint is first-class data.
  */
 
-import type { RoutingStrategy } from "../providers/routing.ts";
+import type { RoutingStrategy } from "../intelligence/routing-service.ts";
 
 export type AgentRole =
   | "supervisor"

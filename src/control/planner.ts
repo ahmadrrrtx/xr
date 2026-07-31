@@ -111,6 +111,10 @@ function parsePlan(raw: string, task: string, maxActions: number): { plan: Plan 
  *
  * The planner NEVER executes — service.ts decides what runs.
  */
+/**
+ * @internal Phase 2 · T4 — a STRATEGY of `PlanningService`, not an entry point.
+ * Call `planningService.planControl()` instead.
+ */
 export async function planActions(
   provider: Provider,
   task: string,

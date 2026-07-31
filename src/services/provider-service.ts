@@ -8,7 +8,11 @@
  */
 
 import { registry } from "../providers/registry.ts";
-import { ProviderRouter, type RoutingStrategy, type ResolveOptions } from "../providers/routing.ts";
+import {
+  RoutingService,
+  type RoutingStrategy,
+  type ResolveOptions,
+} from "../intelligence/routing-service.ts";
 import {
   ProviderHealthChecker,
   type ProviderHealthReport,
@@ -85,7 +89,7 @@ export class ProviderService implements LifecycleHook {
       }
     }
 
-    const router = new ProviderRouter(config);
+    const router = new RoutingService(config);
     const { provider, decision } = router.resolveWithDecision(overrides as ResolveOptions);
     this.lastDecision = decision;
     return provider;
@@ -112,7 +116,7 @@ export class ProviderService implements LifecycleHook {
     }
     const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
-    const router = new ProviderRouter(config);
+    const router = new RoutingService(config);
     const { decision } = router.resolveWithDecision({
       provider: request.provider,
       model: request.model,
