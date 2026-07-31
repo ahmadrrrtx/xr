@@ -10,7 +10,7 @@
  * - git_stash: stash/unstash working changes
  */
 import { runCommand } from "../util/process.ts";
-import { readTrustRequest, gitMutateTrustRequest } from "../trust/tool-support.ts";
+import { readTrustRequest, gitMutateTrustRequest } from "../runtime/trust/tool-support.ts";
 import type { Tool } from "../core/types.ts";
 
 async function gitExec(args: string[], cwd: string, timeout = 15000): Promise<string> {

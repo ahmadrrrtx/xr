@@ -17,7 +17,7 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import type { DeploymentProfileKind } from "../../deployment/types.ts";
+import type { DeploymentProfileKind } from "../deployment/types.ts";
 import {
   EVIDENCE_PACK_VERSION,
   type AssuranceKind,
@@ -287,7 +287,7 @@ export const PHASE12_CONTROLS: readonly ControlEvidence[] = Object.freeze([
     description: "Publisher identity, package integrity, and signature status are recorded and enforced.",
     assurance: "technical",
     status: "implemented",
-    implementedIn: ["src/capabilities/types.ts", "src/capabilities/certification.ts"],
+    implementedIn: ["src/platform/capabilities/types.ts", "src/platform/capabilities/certification.ts"],
     testedBy: ["test/capabilities"],
     limitations: [
       "Signature verification proves package integrity and publisher identity. It does not prove the code is benign.",

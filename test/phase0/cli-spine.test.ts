@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { FallbackProvider } from "../../src/providers/routing.ts";
+import { FallbackProvider } from "../../src/intelligence/routing-service.ts";
 import type { Provider } from "../../src/core/types.ts";
 
 const REPO_ROOT = resolve(import.meta.dir, "../..");

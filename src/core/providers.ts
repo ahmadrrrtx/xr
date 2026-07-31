@@ -37,7 +37,7 @@ import { AgentService } from "../services/agent-service.ts";
 import { MultiAgentService } from "../services/multi-agent-service.ts";
 import { IntelligenceService } from "../intelligence/service.ts";
 import { ContextService } from "../context/service.ts";
-import { CapabilityService } from "../capabilities/service.ts";
+import { CapabilityService } from "../platform/capabilities/service.ts";
 
 import { XRShieldService } from "../security/shield.ts";
 import { BusinessOS } from "../business/index.ts";
@@ -46,14 +46,14 @@ import { ExecutionRepo, adaptWorkspaceStore } from "../execution/repository.ts";
 import { IdempotencyStore } from "../state/idempotency.ts";
 
 // XR 4.2 — Trust & Isolation.
-import { TrustService } from "../trust/service.ts";
-import { CredentialBroker } from "../trust/credentials.ts";
-import { AuthorityRegistry } from "../trust/authority.ts";
-import { EnvironmentManager } from "../trust/environment/manager.ts";
-import { InProcessBackend } from "../trust/environment/in-process.ts";
-import { RestrictedProcessBackend } from "../trust/environment/restricted-process.ts";
-import { NamespaceSandboxBackend } from "../trust/environment/namespace.ts";
-import { ContainerBackend } from "../trust/environment/container.ts";
+import { TrustService } from "../runtime/trust/service.ts";
+import { CredentialBroker } from "../runtime/trust/credentials.ts";
+import { AuthorityRegistry } from "../runtime/trust/authority.ts";
+import { EnvironmentManager } from "../runtime/trust/environment/manager.ts";
+import { InProcessBackend } from "../runtime/trust/environment/in-process.ts";
+import { RestrictedProcessBackend } from "../runtime/trust/environment/restricted-process.ts";
+import { NamespaceSandboxBackend } from "../runtime/trust/environment/namespace.ts";
+import { ContainerBackend } from "../runtime/trust/environment/container.ts";
 
 /**
  * State layer: opens exactly one WorkspaceStore for the active workspace and

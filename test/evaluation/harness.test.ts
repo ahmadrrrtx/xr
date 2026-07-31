@@ -43,7 +43,7 @@ import {
   type ScenarioDefinition,
   type ScenarioResult,
   type SafetyGateResult,
-} from "../../src/evaluation/index.ts";
+} from "../../src/enterprise/evaluation/index.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Scenario registry validation

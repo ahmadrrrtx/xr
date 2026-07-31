@@ -21,7 +21,7 @@ import type { Tool, ToolResult, ToolContext } from "../core/types.ts";
 import { loadConfig } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { Store } from "../state/workspace-store.ts";
-import { planActions } from "../control/planner.ts";
+import { planningService } from "../services/planning-service.ts";
 import { runTypedPlan, isDisabled } from "../control/service.ts";
 import type { ControlOptions } from "../control/types.ts";
 
@@ -65,7 +65,7 @@ export const computerControlTool: Tool = {
       const { config } = loadConfig();
       const provider = buildProvider(config, {});
       const memoryEnabled = config.control?.memory?.enabled !== false;
-      const planned = await planActions(provider, task, { store, noMemory: !memoryEnabled });
+      const planned = await planningService.planControl({ provider, task, store, noMemory: !memoryEnabled });
       if ("error" in planned) {
         ctx.audit("computer_control.plan_error", { task, error: planned.error });
         return { ok: false, output: `planner failed: ${planned.error}` };

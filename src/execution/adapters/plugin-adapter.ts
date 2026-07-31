@@ -15,7 +15,7 @@ import {
   sizeBytes,
   systemActor,
 } from "./common.ts";
-import { pluginTrustRequest, pluginTrustRequestFromPerms, skillTrustRequest } from "../../trust/tool-support.ts";
+import { pluginTrustRequest, pluginTrustRequestFromPerms, skillTrustRequest } from "../../runtime/trust/tool-support.ts";
 
 export interface OpAdapterOptions {
   service: ExecutionService;

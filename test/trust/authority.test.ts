@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { AuthorityRegistry, createGrant, validateGrant } from "../../src/trust/authority.ts";
-import { classifyRisk } from "../../src/trust/classify.ts";
-import type { TrustRequest } from "../../src/trust/types.ts";
+import { AuthorityRegistry, createGrant, validateGrant } from "../../src/runtime/trust/authority.ts";
+import { classifyRisk } from "../../src/runtime/trust/classify.ts";
+import type { TrustRequest } from "../../src/runtime/trust/types.ts";
 
 const baseReq: TrustRequest = {
   capability: { kind: "core_tool", name: "shell" },

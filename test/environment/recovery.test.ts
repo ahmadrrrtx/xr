@@ -6,12 +6,12 @@ import {
   recordOutcomeOnCircuit,
   circuitState,
   newRecoveryBudget,
-} from "../../src/environment/recovery.ts";
+} from "../../src/platform/environment/recovery.ts";
 import {
   EnvironmentSessionRegistry,
   transitionSession,
-} from "../../src/environment/lifecycle.ts";
-import { defaultEnvironmentPolicy, type EnvironmentSession } from "../../src/environment/types.ts";
+} from "../../src/platform/environment/lifecycle.ts";
+import { defaultEnvironmentPolicy, type EnvironmentSession } from "../../src/platform/environment/types.ts";
 
 function liveSession(): EnvironmentSession {
   const r = new EnvironmentSessionRegistry({ idleTimeoutMs: 3_600_000 });

@@ -6,7 +6,7 @@ import { printStatus, probeHealth, detectPlatform, type HealthCheck } from "../i
 import { configPath, loadConfig } from "../config/config.ts";
 import { PRESETS } from "../providers/presets.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
-import { MemoryStore } from "../memory/store.ts";
+import { MemoryStore } from "../context/memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";
 import { pluginDoctorLine } from "../plugins/cli.ts";
@@ -16,7 +16,7 @@ import {
   safeConfigStatus,
   summarizeHealthChecks,
   workspaceStatus,
-} from "../baseline/status.ts";
+} from "../enterprise/baseline/status.ts";
 
 // Bun-friendly dynamic import helper for perf benches (avoid require in types)
 async function loadCatalog() {
@@ -75,7 +75,7 @@ export class DoctorCommand implements Command {
       if (deep) { try { const { detectCapabilities } = await import("../control/adapter.ts"); const caps = detectCapabilities(); checks.push({ id:"control", label:"Computer Control", state: caps.tools.keyboard ? "ok":"warn", detail: `${caps.os} · keyboard:${caps.tools.keyboard} mouse:${caps.tools.mouse}` }); } catch(e){ checks.push({ id:"control", label:"Computer Control", state:"warn", detail:(e as Error).message }); } }
       // XR 5.1 — environment interaction OS capability summary
       if (deep) try {
-        const { detectEnvironmentCapabilities, environmentDisabled } = await import("../environment/service.ts");
+        const { detectEnvironmentCapabilities, environmentDisabled } = await import("../platform/environment/service.ts");
         const kill = environmentDisabled();
         if (kill.disabled) {
           checks.push({ id:"environment", label:"Environment OS", state:"warn", detail:`disabled (${kill.reason})` });

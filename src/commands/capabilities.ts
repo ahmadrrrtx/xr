@@ -2,8 +2,8 @@
 import type { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import { colors as C, heading, ok, warn, error } from "../interfaces/cli.ts";
-import { CapabilityService, type CapabilityDiscoverQuery } from "../capabilities/service.ts";
-import type { CapabilityDescriptor, CapabilityType } from "../capabilities/types.ts";
+import { CapabilityService, type CapabilityDiscoverQuery } from "../platform/capabilities/service.ts";
+import type { CapabilityDescriptor, CapabilityType } from "../platform/capabilities/types.ts";
 
 type Parsed = { positional: string[]; flags: Record<string, string | boolean> };
 

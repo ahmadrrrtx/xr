@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, relative, isAbsolute } from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
-import { readTrustRequest, workspaceWriteTrustRequest } from "../trust/tool-support.ts";
+import { readTrustRequest, workspaceWriteTrustRequest } from "../runtime/trust/tool-support.ts";
 
 /** Keep the agent inside its working directory (no escaping with ../). */
 function safePath(cwd: string, p: string): string {

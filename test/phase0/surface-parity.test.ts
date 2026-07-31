@@ -1,17 +1,26 @@
 /**
  * Phase 0 · T8 — interactive-surface parity with the one-shot CLI.
+ * Phase 2 · T1 — re-based onto the canonical execution envelope.
  *
- * Acceptance criterion: "shell tool-set equals one-shot CLI tool-set after a
- * plugin install".
+ * ── The guarantee (unchanged since Phase 0) ─────────────────────────────────
  *
- * This is an effect test, not a wiring test: it performs a REAL plugin install
- * into a temporary workspace, then asserts that the tool list the interactive
- * surfaces receive contains the tool that plugin contributes. Before Phase 0
- * the interactive surfaces passed no `extraTools` at all, so the plugin's tool
- * was reachable from `xr run` and invisible in the Shell, Telegram and Voice.
+ * "What works in one surface works in all": the tool-set an interactive
+ * surface receives must equal the tool-set the one-shot CLI receives, after a
+ * REAL plugin install. Before Phase 0 the interactive surfaces passed no
+ * `extraTools` at all, so a plugin's tool was reachable from `xr run` and
+ * invisible in the Shell, Telegram and Voice.
  *
- * Scope guard: this validates the T8 *bridge*. Full execution-envelope
- * unification is Phase 2 and is deliberately NOT asserted here.
+ * ── What Phase 2 changed (mechanism, not guarantee) ─────────────────────────
+ *
+ * Phase 0 delivered the guarantee with a tools-only bridge
+ * (`services/extensibility-bridge.ts`) while each surface still called
+ * `runAgent` itself. Phase 2 · T1 replaced that with the execution envelope:
+ * every surface now goes through `executeOnSurface` → `runEnvelope`, and the
+ * tool-set comes from the single `ToolRegistryService` (T2).
+ *
+ * So the assertions below are STRONGER than Phase 0's: they check parity of the
+ * arbitrated registry contents AND that no surface constructs its own execution
+ * path. The Phase-0 effect is preserved; the Phase-0 wiring is gone by design.
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -20,7 +29,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
 import { PluginManager } from "../../src/plugins/manager.ts";
-import { resolveExtensibility } from "../../src/services/extensibility-bridge.ts";
+import { buildToolRegistry } from "../../src/tools/registry-builder.ts";
 
 const REPO_ROOT = resolve(import.meta.dir, "../..");
 const HELLO_PLUGIN = join(REPO_ROOT, "plugins/hello");
@@ -46,11 +55,10 @@ afterAll(() => {
 });
 
 /**
- * The tool-set the one-shot CLI exposes: core tools plus plugin and MCP tools.
- * `AgentService.runScopedTask` composes exactly this via
- * `extraTools: [...pluginService.getPluginTools(), ...mcpService.getMcpTools()]`.
+ * The raw contribution set the one-shot CLI composes: plugin tools plus MCP
+ * tools, exactly as the plugin/MCP managers report them.
  */
-async function cliToolNames(): Promise<string[]> {
+async function cliContributionNames(): Promise<string[]> {
   const manager = new PluginManager(store, workDir);
   await manager.loadEnabled();
   const { McpManager } = await import("../../src/mcp/manager.ts");
@@ -59,22 +67,24 @@ async function cliToolNames(): Promise<string[]> {
   return [...manager.pluginTools(), ...mcp.mcpTools()].map((t) => t.name).sort();
 }
 
-/** The tool-set an interactive surface now receives through the T8 bridge. */
-async function surfaceToolNames(task: string): Promise<string[]> {
-  const ctx = await resolveExtensibility(store, task);
-  return ctx.extraTools.map((t) => t.name).sort();
+/** The non-core tool-set a surface receives through the Phase-2 registry. */
+async function surfaceContributionNames(task: string): Promise<string[]> {
+  const { registry } = await buildToolRegistry({ store, task });
+  return [...registry.listByKind("plugin"), ...registry.listByKind("mcp")]
+    .map((e) => e.name)
+    .sort();
 }
 
-describe("Phase 0 · T8 — extensibility parity across surfaces", () => {
+describe("Phase 0 · T8 / Phase 2 · T1 — extensibility parity across surfaces", () => {
   test("the installed plugin really contributes a tool to the CLI tool-set", async () => {
-    const names = await cliToolNames();
+    const names = await cliContributionNames();
     // The `hello` plugin declares a tool capability named `echo`.
     expect(names.some((n) => n.includes("echo"))).toBe(true);
   });
 
   test("PARITY: the interactive-surface tool-set equals the one-shot CLI tool-set", async () => {
-    const cli = await cliToolNames();
-    const surface = await surfaceToolNames("say hello to the user");
+    const cli = await cliContributionNames();
+    const surface = await surfaceContributionNames("say hello to the user");
 
     expect(surface).toEqual(cli);
     // Guard against a vacuous pass: the sets must be non-empty.
@@ -82,21 +92,30 @@ describe("Phase 0 · T8 — extensibility parity across surfaces", () => {
   });
 
   test("the plugin tool is reachable from the surface by name", async () => {
-    const surface = await surfaceToolNames("echo something");
+    const surface = await surfaceContributionNames("echo something");
     expect(surface.some((n) => n.includes("echo"))).toBe(true);
   });
 
-  test("resolveExtensibility is best-effort and never throws", async () => {
-    // Even with a nonsense task the bridge must return a usable context.
-    const ctx = await resolveExtensibility(store, "");
-    expect(Array.isArray(ctx.extraTools)).toBe(true);
-    expect(typeof ctx.skillPrompt).toBe("string");
-    expect(Array.isArray(ctx.diagnostics)).toBe(true);
+  test("registry assembly is best-effort and never throws", async () => {
+    // Even with a nonsense task the builder must return a usable registry.
+    const { registry, diagnostics } = await buildToolRegistry({ store, task: "" });
+    expect(registry.size).toBeGreaterThan(0);
+    expect(typeof registry.skillPrompt()).toBe("string");
+    expect(Array.isArray(diagnostics)).toBe(true);
   });
 
-  test("all three interactive surfaces pass extraTools into the agent", async () => {
-    // Source-level assertion: the three call-sites named in the audit must now
-    // forward extraTools. This is the regression guard for the exact defect.
+  test("the plugin tool is actually DISCOVERABLE to the model in agent mode", async () => {
+    // Effect assertion, not a wiring assertion: the tool must appear in the
+    // set handed to the provider, which is what the surface actually runs with.
+    const { registry } = await buildToolRegistry({ store, task: "echo something" });
+    const offered = registry.discover({ mode: "agent" }).map((t) => t.name);
+    expect(offered.some((n) => n.includes("echo"))).toBe(true);
+  });
+
+  test("PHASE 2: all three interactive surfaces execute through the envelope", async () => {
+    // Regression guard for the exact Phase-0 defect, restated in Phase-2 terms:
+    // the three surfaces must reach execution through the shared envelope entry
+    // and must NOT construct an agent run themselves.
     const surfaces = [
       "src/interfaces/shell/app.ts",
       "src/telegram/bot.ts",
@@ -104,8 +123,10 @@ describe("Phase 0 · T8 — extensibility parity across surfaces", () => {
     ];
     for (const rel of surfaces) {
       const source = await Bun.file(join(REPO_ROOT, rel)).text();
-      expect(source).toContain("resolveExtensibility");
-      expect(source).toContain("extraTools: extensibility.extraTools");
+      expect(source).toContain("executeOnSurface");
+      // The Phase-0 bridge and the direct loop call are both gone.
+      expect(source).not.toContain("resolveExtensibility");
+      expect(source).not.toContain("runAgent(");
     }
   });
 });

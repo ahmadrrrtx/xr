@@ -11,11 +11,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { Store } from "../../src/state/workspace-store.ts";
-import { MemoryStore } from "../../src/memory/store.ts";
+import { MemoryStore } from "../../src/context/memory/store.ts";
 import { ContextRepository, adaptStoreForContext } from "../../src/context/repository.ts";
 import { ContextInspection, residualDisclosure } from "../../src/context/inspection.ts";
 import { memoryEntryToContextItem } from "../../src/context/memory-adapter.ts";
-import { parseMemoryIntent } from "../../src/memory/intent.ts";
+import { parseMemoryIntent } from "../../src/context/memory/intent.ts";
 import { CONFIG_VERSION, loadConfig } from "../../src/config/config.ts";
 
 let tmp: string;

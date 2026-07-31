@@ -23,7 +23,7 @@ import {
   detectBwrap,
   mcpServerRisk,
   type McpStdioFlags,
-} from "../trust/isolated-spawn.ts";
+} from "../runtime/trust/isolated-spawn.ts";
 
 // ── Environment Allow-list ───────────────────────────────────────────────────
 

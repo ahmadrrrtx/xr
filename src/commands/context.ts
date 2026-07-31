@@ -2,7 +2,7 @@
  * XR 4.5 — `xr context …` command.
  *
  * Thin Command-registry adapter over `src/context/cli.ts`, mirroring how
- * `MemoryCommand` delegates to `src/memory/cli.ts`.
+ * `MemoryCommand` delegates to `src/context/memory/cli.ts`.
  */
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";

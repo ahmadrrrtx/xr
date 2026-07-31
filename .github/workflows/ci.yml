@@ -14,6 +14,9 @@
 #   4b. website      — npx tsc --noEmit && npm run build   (website/ is a separate
 #                                                 Next.js project the root
 #                                                 tsconfig does not cover)
+#   4c. boundaries   — bun run boundaries (acyclic deps + the enforced L0-L6
+#                      boundary table) and bun run size-gate (no module over
+#                      threshold without an owned split plan)   [Phase 2 - T7/T8]
 #   5. quality-gate  — aggregation job; THIS is the check to mark as required
 #                      in branch protection so a failure in any of the above
 #                      blocks the merge (OpenHands pattern).
@@ -200,6 +203,39 @@ jobs:
       - name: Reliability suite
         run: bun run reliability:test
 
+
+  # ── 5b. Phase 2 architectural gates ────────────────────────────────────────
+  # Art. V.2: "Dependency direction is explicit and acyclic; an architectural
+  # test enforces it." Art. V.3: no module over the size threshold without an
+  # owned plan. Both rule sets have exactly one source of truth:
+  #   .dependency-cruiser.cjs      — the L0-L6 boundary table + no-circular
+  #   docs/phase2/SIZE-WAIVERS.json — the owned split plans
+  # test/architecture/*.test.ts enforces the SAME rules inside `bun test`, so a
+  # contributor sees the failure locally, and the gate survives even if the
+  # optional dev dependency is unavailable.
+  boundaries:
+    name: Architecture (boundaries + size gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+      - name: Cache Bun global install cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+      - name: Acyclic dependencies + L0-L6 boundary table
+        run: bun run boundaries
+      - name: Module size gate (owned split plans)
+        run: bun run size-gate
+
   # ── 6. Mutation gate on trust/execution/persistence/credential modules ───
   mutation-gate:
     name: Mutation gate (T8)
@@ -222,7 +258,7 @@ jobs:
   quality-gate:
     name: Quality Gate
     if: always()
-    needs: [typecheck, truth-gate, baseline, website, test, reliability, mutation-gate]
+    needs: [typecheck, truth-gate, baseline, website, test, reliability, boundaries, mutation-gate]
 
     runs-on: ubuntu-latest
     timeout-minutes: 5

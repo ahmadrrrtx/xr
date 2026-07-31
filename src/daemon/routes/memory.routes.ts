@@ -1,7 +1,7 @@
 /** XR Daemon — durable memory routes. */
 
 import { isMemoryEnabled } from "../../config/config.ts";
-import { MemoryStore } from "../../memory/store.ts";
+import { MemoryStore } from "../../context/memory/store.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
 export function memoryRoutes(): DaemonRoute[] {

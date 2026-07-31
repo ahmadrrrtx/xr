@@ -16,8 +16,8 @@
  */
 
 import { createHash, randomUUID } from "node:crypto";
-import type { DeploymentProfileKind } from "../../deployment/types.ts";
-import type { BackupManifest } from "../../deployment/backup/service.ts";
+import type { DeploymentProfileKind } from "../deployment/types.ts";
+import type { BackupManifest } from "../deployment/backup/service.ts";
 import type {
   BackupVerification,
   BackupVerificationStatus,

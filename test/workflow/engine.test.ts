@@ -6,19 +6,19 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
-import { WorkflowRepository } from "../../src/workflow/repository.ts";
-import { WorkflowEngine } from "../../src/workflow/engine.ts";
-import * as n from "../../src/workflow/nodes.ts";
+import { WorkflowRepository } from "../../src/execution/workflow/repository.ts";
+import { WorkflowEngine } from "../../src/execution/workflow/engine.ts";
+import * as n from "../../src/execution/workflow/nodes.ts";
 import {
   createDraft,
   publishDraft,
-} from "../../src/workflow/versioning.ts";
-import { applyRunEvent } from "../../src/workflow/state-machine.ts";
+} from "../../src/execution/workflow/versioning.ts";
+import { applyRunEvent } from "../../src/execution/workflow/state-machine.ts";
 import type {
   WorkflowDefinition,
   WorkflowRun,
   HumanDecision,
-} from "../../src/workflow/types.ts";
+} from "../../src/execution/workflow/types.ts";
 
 // ── Test doubles ───────────────────────────────────────────────────────────
 

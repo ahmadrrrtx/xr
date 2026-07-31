@@ -10,9 +10,9 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/state/workspace-store.ts";
-import { MemoryStore, projectScopeFromCwd } from "../src/memory/store.ts";
-import { parseMemoryIntent, classify } from "../src/memory/intent.ts";
-import { buildMemoryBlock } from "../src/memory/inject.ts";
+import { MemoryStore, projectScopeFromCwd } from "../src/context/memory/store.ts";
+import { parseMemoryIntent, classify } from "../src/context/memory/intent.ts";
+import { buildMemoryBlock } from "../src/context/memory/inject.ts";
 
 let tmp: string;
 beforeEach(() => {

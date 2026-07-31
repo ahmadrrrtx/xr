@@ -1,12 +1,31 @@
 /**
- * XR — Agent Service
- * Orchestrates the reasoning-action loop for the AI agent.
+ * XR — Agent Service: THE SOLE ENTRY POINT for agent execution.
+ *
+ * Phase 2 · T1. Constitution Art. VI.3 ("one execution envelope") and Art. VI
+ * Violations ("a surface calling `runAgent` directly, bypassing the service").
+ *
+ * Two entry shapes, one path:
+ *
+ *   · `execute(request)`  — the canonical envelope entry. Every surface
+ *     (CLI, Shell, Telegram, Voice, daemon) calls this.
+ *   · `runTask` / `runScopedTask` — the pre-Phase-2 signatures, retained as a
+ *     stable compatibility surface (Art. XXVII: no stable surface broken
+ *     without a deprecation cycle). They now DELEGATE to `execute()`, so there
+ *     is exactly one code path, not two.
  */
 
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
-import { runAgent, type AgentDeps, type AgentResult } from "../core/agent.ts";
+import type { AgentResult } from "../core/agent.ts";
+import {
+  assembleEnvelope,
+  newEvidence,
+  type EnvelopeOutcome,
+  type SurfaceId,
+} from "../core/execution/envelope.ts";
+import { runEnvelope, type EnvelopeContext, type EnvelopeStores } from "../core/execution/runner.ts";
+import { buildToolRegistry } from "../tools/registry-builder.ts";
 import { ProviderService } from "./provider-service.ts";
 import { BudgetService } from "./budget-service.ts";
 import { ConfigService } from "./config-service.ts";
@@ -17,7 +36,7 @@ import { SessionRepo } from "../state/repos/session-repo.ts";
 import { UserMemoryRepo } from "../state/repos/user-memory-repo.ts";
 import { CostRepo } from "../state/repos/cost-repo.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
-import { MemoryStore } from "../memory/store.ts";
+import { MemoryStore } from "../context/memory/store.ts";
 import { priceFor } from "../cost/pricing.ts";
 import type { ApprovalRequest, Mode, Provider } from "../core/types.ts";
 
@@ -62,6 +81,18 @@ export interface AgentRunOverrides {
   taskId?: string;
   /** Durable run id, so the assembled package can be checkpointed. */
   runId?: string;
+  /**
+   * Phase 2 · T1 — which surface originated this run. Recorded on the envelope
+   * and on every audit entry, so "which surface did this?" is answerable from
+   * the audit log alone. Defaults to "cli".
+   */
+  surface?: SurfaceId;
+}
+
+/** Phase 2 · T1 — the canonical execution request. */
+export interface ExecuteRequest extends AgentRunOverrides {
+  readonly task: string;
+  readonly mode: Mode;
 }
 
 export class AgentService implements LifecycleHook {
@@ -73,6 +104,9 @@ export class AgentService implements LifecycleHook {
 
   /**
    * Execute a task using the agent loop.
+   *
+   * Compatibility surface — delegates to `execute()`. Kept because the CLI,
+   * daemon and several tests call it by this name (Art. XXVII).
    */
   async runTask(
     task: string,
@@ -82,11 +116,23 @@ export class AgentService implements LifecycleHook {
     return this.runScopedTask(task, mode, overrides);
   }
 
+  /** Compatibility surface — delegates to `execute()`. */
   async runScopedTask(
     task: string,
     mode: Mode,
     overrides: AgentRunOverrides = {},
   ): Promise<AgentResult> {
+    return this.execute({ ...overrides, task, mode });
+  }
+
+  /**
+   * THE canonical entry point (Phase 2 · T1).
+   *
+   * Assembles the eight-phase execution envelope and runs it. Every surface
+   * reaches agent execution through here; nothing else may call the loop.
+   */
+  async execute(request: ExecuteRequest): Promise<EnvelopeOutcome> {
+    const { task, mode, ...overrides } = request;
     const configService = this.registry.resolve(Tokens.Config);
     const providerService = this.registry.resolve(Tokens.Providers);
     const budgetService = this.registry.resolve(Tokens.Budget);
@@ -142,59 +188,56 @@ export class AgentService implements LifecycleHook {
 
     const { confirm } = await import("../interfaces/cli.ts");
 
-    let skillPrompt = "";
-    try {
-      const ctx = skillService?.executionContext(task, 4);
-      if (ctx?.prompt) skillPrompt = ctx.prompt;
-    } catch {
-      /* skills are best-effort; they must never break the agent */
-    }
+    /**
+     * Phase 2 · T2 — PLACEMENT: build the ONE tool registry from the already
+     * loaded hosts. Passing the hosts (rather than letting the builder
+     * construct managers) means the kernel path reuses the services it already
+     * booted — no second plugin load, no second MCP handshake, no second DB
+     * connection.
+     */
+    const { registry: toolRegistry, diagnostics } = await buildToolRegistry({
+      store: this.registry.resolve(Tokens.Store),
+      task,
+      hosts: {
+        pluginTools: () => pluginService.getPluginTools(),
+        mcpTools: () => mcpService.getMcpTools(),
+        skillContext: () => {
+          try {
+            return skillService?.executionContext(task, 4);
+          } catch {
+            // Skills are best-effort; the degradation is reported as a
+            // diagnostic by the builder rather than failing the run.
+            return undefined;
+          }
+        },
+      },
+    });
 
-    const scopedSystemPrompt = [skillPrompt, overrides.systemPrompt]
+    const scopedSystemPrompt = [toolRegistry.skillPrompt(), overrides.systemPrompt]
       .map((s) => s?.trim())
       .filter(Boolean)
       .join("\n\n");
 
-    const deps: AgentDeps = {
-      provider,
+    const stores: EnvelopeStores = {
       sessionStore,
       auditStore: this.registry.resolve(Tokens.AuditStore),
       costStore,
       userMemoryStore: memoryStore,
-      cwd: process.cwd(),
-      systemPrompt: scopedSystemPrompt || undefined,
-      tools: {
-        allow: overrides.toolsAllow,
-        deny: overrides.toolsDeny,
-      },
-      say: overrides.say ?? ((line: string) => console.log(line)),
-      approve: overrides.approve ?? (async (req) => {
-        const preview = req.preview ? `\n${req.preview}` : "";
-        return await confirm(`Approve ${req.tool}? ${req.reason}${preview}`, false);
-      }),
-      onOverBudget: async (meter, reason) => {
-        return null; // Default to stop
-      },
-      budget,
-      pricing,
-      maxSteps: overrides.maxSteps ?? 12,
-      egressAllowlist: config.security.egressAllowlist,
-      dryRun: overrides.dryRun,
+    };
+
+    const envelopeContext: EnvelopeContext = {
       memory: {
         enabled: overrides.memoryEnabled ?? (config.memory.enabled && config.memory.injectInChat),
         recallLimit: config.memory.recallLimit,
         semantic: config.memory.semanticRecall,
       },
       memoryStore: engine,
-      // XR 4.5 — populated below when the knowledge layer is enabled.
+      // XR 4.5 — upgraded to "context" below when the knowledge layer is enabled.
       contextMode: "legacy",
       sessionSummary: {
         enabled: config.memory.enabled && config.memory.saveSessionSummaries,
         minTurns: config.memory.sessionSummaryMinTurns,
       },
-      extraTools: [...pluginService.getPluginTools(), ...mcpService.getMcpTools()],
-      // XR 4.4 — attach routing decision for durable execution records
-      routingDecision: routingDecision ?? undefined,
     };
 
     // ── XR 4.5 — assemble a scope-filtered context package ──────────────
@@ -225,11 +268,15 @@ export class AgentService implements LifecycleHook {
             },
             { memoryEnabled: memoryOn, memoryStore: engine },
           );
-          deps.contextPackage = pkg;
-          deps.contextMode = config.knowledge.injectionMode;
+          (envelopeContext as { contextPackage?: unknown }).contextPackage = pkg;
+          (envelopeContext as { contextMode?: string }).contextMode = config.knowledge.injectionMode;
         }
-      } catch {
-        /* context assembly is best-effort — the legacy path still applies */
+      } catch (err) {
+        // Context assembly is best-effort — the legacy path still applies.
+        // Recorded rather than swallowed (Art. IV: no empty catch).
+        diagnostics.push(
+          `context assembly degraded: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
@@ -251,11 +298,88 @@ export class AgentService implements LifecycleHook {
           null,
         );
       }
-    } catch {
-      /* audit is best-effort */
+    } catch (err) {
+      diagnostics.push(
+        `routing audit degraded: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
-    return await runAgent(task, mode, deps);
+    // ── Assemble and run the canonical envelope ─────────────────────────────
+    const surface: SurfaceId = overrides.surface ?? "cli";
+    const evidence = newEvidence(diagnostics);
+
+    /**
+     * Phase 2 · T2 — collision transparency. If the registry had to arbitrate
+     * a bare name (a plugin/MCP tool claiming a core tool's name), that is a
+     * security-relevant event: it is audited, not hidden.
+     */
+    const collisions = toolRegistry.listCollisions();
+    if (collisions.length > 0) {
+      try {
+        this.registry.resolve(Tokens.AuditStore).audit(
+          "tools.collision",
+          { envelopeId: evidence.envelopeId, surface, collisions },
+          null,
+        );
+      } catch (err) {
+        diagnostics.push(
+          `collision audit degraded: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    const envelope = assembleEnvelope({
+      intent: {
+        task,
+        mode,
+        surface,
+        cwd: process.cwd(),
+        ...(overrides.agentRole ? { agentRole: overrides.agentRole } : {}),
+        ...(overrides.taskId ? { taskId: overrides.taskId } : {}),
+        ...(overrides.runId ? { runId: overrides.runId } : {}),
+      },
+      plan: {
+        provider,
+        providerId: provider.id,
+        modelId: selectedModel,
+        maxSteps: overrides.maxSteps ?? 12,
+        ...(scopedSystemPrompt ? { systemPrompt: scopedSystemPrompt } : {}),
+        ...(routingDecision ? { routingDecision } : {}),
+      },
+      policy: {
+        budget,
+        pricing,
+        egressAllowlist: config.security.egressAllowlist,
+        dryRun: overrides.dryRun ?? false,
+        ...(overrides.toolsAllow ? { toolsAllow: overrides.toolsAllow } : {}),
+        ...(overrides.toolsDeny ? { toolsDeny: overrides.toolsDeny } : {}),
+        approve:
+          overrides.approve ??
+          (async (req) => {
+            const preview = req.preview ? `\n${req.preview}` : "";
+            return await confirm(`Approve ${req.tool}? ${req.reason}${preview}`, false);
+          }),
+      },
+      placement: {
+        // Phase 2 records placement; risk-tiered isolation is Phase 4 and is
+        // NOT claimed here.
+        placement: "in_process",
+        registry: toolRegistry,
+        tools: toolRegistry.discover({
+          mode,
+          ...(overrides.toolsAllow ? { allow: overrides.toolsAllow } : {}),
+          ...(overrides.toolsDeny ? { deny: overrides.toolsDeny } : {}),
+        }),
+        collisions,
+      },
+      observation: {
+        say: overrides.say ?? ((line: string) => console.log(line)),
+        onOverBudget: async () => null, // Default to stop.
+      },
+      evidence,
+    });
+
+    return await runEnvelope(envelope, stores, envelopeContext);
   }
 
   async onInit(): Promise<void> {}

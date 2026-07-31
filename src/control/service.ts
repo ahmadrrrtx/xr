@@ -254,8 +254,14 @@ export async function runTypedPlan(
   return results;
 }
 
-// Stage 9 – computer-use wrapper
-export async function runComputerUse(store: Store, task: string, provider: any): Promise<string> {
-  const { runComputerUse: runCU } = await import("./computer-use.ts");
-  return runCU({ provider, store, task, maxSteps: 20 });
-}
+/**
+ * Stage 9 computer-use previously had a pass-through wrapper here that lazily
+ * imported `./computer-use.ts`. Because computer-use imports this module back
+ * (for `isDisabled` / `requestControlApproval`), that wrapper was the edge that
+ * closed a `service -> computer-use -> service` dependency cycle.
+ *
+ * Phase 2 · T8 removes it: `runComputerUse` is re-exported from the module
+ * barrel (`control/index.ts`), which nothing inside the cycle imports, so the
+ * capability is unchanged and the graph is acyclic. Callers import it from
+ * `control/computer-use.ts` or `control/index.ts`.
+ */

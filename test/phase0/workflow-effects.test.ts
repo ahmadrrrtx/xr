@@ -23,10 +23,10 @@ import {
   type WorkflowRunStore,
   type WorkflowTimerScheduler,
   type WorkflowToolExecutor,
-} from "../../src/workflow/engine.ts";
-import { createDraft, publishDraft } from "../../src/workflow/versioning.ts";
-import * as n from "../../src/workflow/nodes.ts";
-import type { HumanDecision, WorkflowDefinition, WorkflowRun, WorkflowRunSummary } from "../../src/workflow/types.ts";
+} from "../../src/execution/workflow/engine.ts";
+import { createDraft, publishDraft } from "../../src/execution/workflow/versioning.ts";
+import * as n from "../../src/execution/workflow/nodes.ts";
+import type { HumanDecision, WorkflowDefinition, WorkflowRun, WorkflowRunSummary } from "../../src/execution/workflow/types.ts";
 
 // ── Minimal in-memory store ──────────────────────────────────────────────────
 

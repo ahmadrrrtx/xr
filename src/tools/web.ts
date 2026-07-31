@@ -4,7 +4,7 @@
  */
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { hostAllowed, htmlToText } from "./egress.ts";
-import { networkTrustRequest } from "../trust/tool-support.ts";
+import { networkTrustRequest } from "../runtime/trust/tool-support.ts";
 
 const DEFAULT_SEARXNG = process.env.XR_SEARXNG ?? "https://searx.be";
 

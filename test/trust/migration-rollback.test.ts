@@ -5,12 +5,12 @@ import { tmpdir } from "node:os";
 import { Database } from "bun:sqlite";
 import { ExecutionRepo, adaptWorkspaceStore, truncateRecord } from "../../src/execution/repository.ts";
 import { ExecutionService } from "../../src/execution/service.ts";
-import { decidePlacement } from "../../src/trust/policy.ts";
-import { classifyRisk } from "../../src/trust/classify.ts";
+import { decidePlacement } from "../../src/runtime/trust/policy.ts";
+import { classifyRisk } from "../../src/runtime/trust/classify.ts";
 import { makeTrust } from "./_helpers.ts";
-import { InProcessBackend } from "../../src/trust/environment/in-process.ts";
-import { RestrictedProcessBackend } from "../../src/trust/environment/restricted-process.ts";
-import type { TrustRequest } from "../../src/trust/types.ts";
+import { InProcessBackend } from "../../src/runtime/trust/environment/in-process.ts";
+import { RestrictedProcessBackend } from "../../src/runtime/trust/environment/restricted-process.ts";
+import type { TrustRequest } from "../../src/runtime/trust/types.ts";
 
 function highRiskReq(): TrustRequest {
   return {

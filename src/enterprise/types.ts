@@ -23,8 +23,8 @@
  *   - Phase 11 Deployment plane  — profiles, tenancy, identity, backup
  */
 
-import type { RiskTier } from "../trust/types.ts";
-import type { DeploymentProfileKind } from "../deployment/types.ts";
+import type { RiskTier } from "../runtime/trust/types.ts";
+import type { DeploymentProfileKind } from "./deployment/types.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 0. Versions and bounds

@@ -23,7 +23,7 @@ export class MemoryCommand implements Command {
     'xr memory [status|list|add|edit|remove|search|recall|reindex|summarize|prune|health|export|import|clear|summaries]';
 
   async execute(ctx: CommandContext): Promise<void> {
-    const { handleMemoryCommand } = await import("../memory/cli.ts");
+    const { handleMemoryCommand } = await import("../context/memory/cli.ts");
     await handleMemoryCommand(ctx.args, legacyStore(ctx));
   }
 }

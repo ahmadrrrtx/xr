@@ -15,7 +15,7 @@ import type {
   EnvironmentExecutable,
   TrustRecord,
   TrustRequest,
-} from "../trust/types.ts";
+} from "../runtime/trust/types.ts";
 
 // ── Identity ──────────────────────────────────────────────────────────────
 

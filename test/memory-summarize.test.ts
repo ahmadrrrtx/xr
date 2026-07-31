@@ -12,8 +12,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/state/workspace-store.ts";
-import { MemoryStore } from "../src/memory/store.ts";
-import { planSummarization, applySummarization } from "../src/memory/summarize.ts";
+import { MemoryStore } from "../src/context/memory/store.ts";
+import { planSummarization, applySummarization } from "../src/context/memory/summarize.ts";
 
 let tmp: string;
 beforeEach(() => {

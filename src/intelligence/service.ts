@@ -10,7 +10,7 @@ import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
 import { registry as providerRegistry } from "../providers/registry.ts";
-import { FallbackProvider } from "../providers/routing.ts";
+import { FallbackProvider } from "./routing-service.ts";
 import {
   buildCatalog,
   findModel,

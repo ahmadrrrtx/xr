@@ -1,13 +1,13 @@
-import { CredentialBroker } from "../../src/trust/credentials.ts";
-import { AuthorityRegistry } from "../../src/trust/authority.ts";
-import { EnvironmentManager } from "../../src/trust/environment/manager.ts";
-import { TrustService } from "../../src/trust/service.ts";
-import { InProcessBackend } from "../../src/trust/environment/in-process.ts";
-import { RestrictedProcessBackend } from "../../src/trust/environment/restricted-process.ts";
-import { NamespaceSandboxBackend } from "../../src/trust/environment/namespace.ts";
-import { ContainerBackend } from "../../src/trust/environment/container.ts";
-import type { EnvironmentBackend } from "../../src/trust/environment/backend.ts";
-import type { AuthorityGrant } from "../../src/trust/types.ts";
+import { CredentialBroker } from "../../src/runtime/trust/credentials.ts";
+import { AuthorityRegistry } from "../../src/runtime/trust/authority.ts";
+import { EnvironmentManager } from "../../src/runtime/trust/environment/manager.ts";
+import { TrustService } from "../../src/runtime/trust/service.ts";
+import { InProcessBackend } from "../../src/runtime/trust/environment/in-process.ts";
+import { RestrictedProcessBackend } from "../../src/runtime/trust/environment/restricted-process.ts";
+import { NamespaceSandboxBackend } from "../../src/runtime/trust/environment/namespace.ts";
+import { ContainerBackend } from "../../src/runtime/trust/environment/container.ts";
+import type { EnvironmentBackend } from "../../src/runtime/trust/environment/backend.ts";
+import type { AuthorityGrant } from "../../src/runtime/trust/types.ts";
 
 export interface TrustHarness {
   trust: TrustService;

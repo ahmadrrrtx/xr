@@ -443,7 +443,7 @@ export interface MessageLike {
  * questions, uncertainty, and sources INTACT, and drops only redundant
  * low-value detail.
  *
- * `compact()` in `src/memory/compact.ts` is preserved unchanged for
+ * `compact()` in `src/context/memory/compact.ts` is preserved unchanged for
  * compatibility; callers opt into this one.
  */
 export function compressMessages(

@@ -306,8 +306,8 @@ export {
 // Composed service bundle
 // ═══════════════════════════════════════════════════════════════════════════
 
-import type { DeploymentProfileKind } from "../deployment/types.ts";
-import { getDeploymentProfile } from "../deployment/profiles.ts";
+import type { DeploymentProfileKind } from "./deployment/types.ts";
+import { getDeploymentProfile } from "./deployment/profiles.ts";
 import { PolicyBundleStore } from "./policy/bundles.ts";
 import { DelegationRegistry } from "./authority/delegation.ts";
 import { AuditExportService, type AuditExportAuthorizer } from "./audit/export.ts";

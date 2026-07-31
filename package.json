@@ -23,7 +23,7 @@
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "ci": "bun run typecheck && bun test && bun run release:check && bun run claim-lint && bun run baseline:inventory",
+    "ci": "bun run typecheck && bun test && bun run release:check && bun run claim-lint && bun run baseline:inventory && bun run boundaries && bun run size-gate",
     "xr": "bun run src/index.ts",
     "cli:help": "bun run src/index.ts help",
     "cli:doctor": "bun run src/index.ts doctor",
@@ -36,7 +36,10 @@
     "claim-lint": "bun run scripts/claim-lint.ts",
     "mutation:run": "bun run scripts/mutate.ts --threshold 0.6",
     "golden-path": "bun run scripts/golden-path.ts",
-    "reliability:test": "bun test test/reliability/"
+    "reliability:test": "bun test test/reliability/",
+    "boundaries": "bun ./node_modules/dependency-cruiser/bin/dependency-cruise.mjs --config .dependency-cruiser.cjs --output-type err-long src",
+    "boundaries:graph": "bun ./node_modules/dependency-cruiser/bin/dependency-cruise.mjs --config .dependency-cruiser.cjs --output-type dot src",
+    "size-gate": "bun run scripts/size-gate.ts"
   },
   "repository": {
     "type": "git",
@@ -67,6 +70,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "dependency-cruiser": "^17.0.0",
     "typescript": "^5.5.0"
   },
   "engines": {

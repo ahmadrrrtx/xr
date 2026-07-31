@@ -64,7 +64,172 @@ const MIGRATION_1: Migration = {
   },
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_1];
+/**
+ * Migration 2 — Phase 2 · T5: project `user_memory` into the canonical
+ * `context_items` store, so `src/context/memory/` can be retired.
+ *
+ * ── Why a migration and not a copy ──────────────────────────────────────────
+ *
+ * `context/` is the canonical durable-context authority (Constitution Art. V
+ * names this exact consolidation: *"A `context/` module that owns all durable
+ * context, with `memory/` retired on a dated schedule."*). The legacy rows must
+ * become first-class context items, or the retirement would lose user data.
+ *
+ * ── Reversibility (Art. XXIII) ──────────────────────────────────────────────
+ *
+ * `up()` is ADDITIVE: it inserts projections and never mutates or deletes a
+ * `user_memory` row. The legacy table survives the migration untouched, which
+ * is what makes `down()` exact: it deletes only the rows this migration
+ * created, identified by the `legacy:user_memory` tag marker. A downgraded
+ * database is byte-identical in `user_memory` and has no orphan context rows.
+ *
+ * Both directions run inside the Phase-1 `WriteGate` (a single serialized
+ * `BEGIN IMMEDIATE` transaction per migration), so a concurrent XR process can
+ * never observe a half-migrated store.
+ *
+ * ── Migration honesty (Art. IV.5, Inviolable P5) ────────────────────────────
+ *
+ * XR cannot reconstruct how consent was given for a legacy row, so
+ * `consent_state` is `legacy_unknown` — NEVER `approved`. The item stays
+ * retrievable and every explanation flags it for re-affirmation. This mirrors
+ * the rule already implemented in `src/context/memory-adapter.ts`.
+ */
+const LEGACY_TAG = "legacy:user_memory";
+
+const MIGRATION_2: Migration = {
+  version: 2,
+  name: "memory_to_context_projection",
+  up(store: WorkspaceStore) {
+    // The context tables are created by ContextRepository.migrate() during the
+    // baseline. If they are absent (a store opened without the context layer),
+    // there is nothing to project into and the migration is a no-op — it must
+    // never block startup.
+    const hasContext = store
+      .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='context_items'`)
+      .get();
+    const hasMemory = store
+      .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_memory'`)
+      .get();
+    if (!hasContext || !hasMemory) return;
+
+    const rows = store
+      .prepare(
+        `SELECT id, category, content, scope, source, tags, importance,
+                created_at, updated_at, last_accessed_at, access_count, expires_at
+         FROM user_memory`,
+      )
+      .all() as Array<{
+      id: string;
+      category: string;
+      content: string;
+      scope: string;
+      source: string;
+      tags: string;
+      importance: number;
+      created_at: number;
+      updated_at: number;
+      last_accessed_at: number | null;
+      access_count: number;
+      expires_at: number | null;
+    }>;
+
+    const insert = store.prepare(
+      `INSERT OR IGNORE INTO context_items
+         (id, version, type, title, content, workspace_id, project_scope, user_id,
+          trust_status, consent_state, provenance_kind, actor_kind,
+          expires_at, confidence, sensitivity, retention, links_json, index_state,
+          tags, created_at, updated_at, last_accessed_at, access_count)
+       VALUES (?, 1, ?, ?, ?, ?, ?, 'local', ?, 'legacy_unknown', ?, ?, ?, ?, ?, ?, '{}', 'none', ?, ?, ?, ?, ?)`,
+    );
+
+    for (const r of rows) {
+      // An `exclusion` is a user policy directive, not a memory — the taxonomy
+      // fix the context model already encodes.
+      const isExclusion = r.category === "exclusion";
+      const type = isExclusion ? "instruction" : "memory";
+      const trust = isExclusion
+        ? "trusted_instruction"
+        : SOURCE_TRUST[r.source] ?? "unknown";
+      const provenance = SOURCE_PROVENANCE[r.source] ?? "unknown";
+      const actor = SOURCE_ACTOR[r.source] ?? "unknown";
+      const confidence = r.importance >= 4 ? "high" : r.importance <= 2 ? "low" : "medium";
+      const title = r.content.length > 72 ? `${r.content.slice(0, 71)}…` : r.content;
+      const tags = [...r.tags.split(",").map((t) => t.trim()).filter(Boolean), LEGACY_TAG].join(",");
+
+      insert.run(
+        // The context item REUSES the legacy id, so the projection is stable
+        // across re-runs and `down()` can identify it exactly.
+        r.id,
+        type,
+        title,
+        r.content,
+        store.workspaceId,
+        r.scope,
+        trust,
+        provenance,
+        actor,
+        r.expires_at,
+        confidence,
+        inferSensitivity(`${r.content} ${r.tags}`),
+        r.expires_at ? "ttl" : "durable",
+        tags,
+        r.created_at,
+        r.updated_at,
+        r.last_accessed_at,
+        r.access_count,
+      );
+    }
+  },
+  down(store: WorkspaceStore) {
+    const hasContext = store
+      .prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='context_items'`)
+      .get();
+    if (!hasContext) return;
+    // Delete ONLY what this migration created. Rows authored natively in the
+    // context store (no legacy marker) are untouched, and `user_memory` was
+    // never modified, so the pre-migration state is restored exactly.
+    store
+      .prepare(`DELETE FROM context_items WHERE tags LIKE ?`)
+      .run(`%${LEGACY_TAG}%`);
+  },
+};
+
+/** Honest mapping from the legacy `source` enum (mirrors context/memory-adapter.ts). */
+const SOURCE_TRUST: Record<string, string> = {
+  user: "approved_memory",
+  chat: "approved_memory",
+  voice: "approved_memory",
+  research: "generated_synthesis",
+  import: "unknown",
+};
+const SOURCE_PROVENANCE: Record<string, string> = {
+  user: "user_input",
+  chat: "user_input",
+  voice: "user_input",
+  research: "research",
+  import: "import",
+};
+const SOURCE_ACTOR: Record<string, string> = {
+  user: "user",
+  chat: "user",
+  voice: "user",
+  research: "system",
+  import: "system",
+};
+
+/** Conservative: never claim an item is "public" without evidence. */
+function inferSensitivity(text: string): string {
+  const t = text.toLowerCase();
+  if (/\b(password|secret|api[_ -]?key|token|credential|private key|ssn|passport)\b/.test(t)) {
+    return "secret";
+  }
+  if (/\b(personal|private|home address|phone number|medical|salary|bank)\b/.test(t)) {
+    return "private";
+  }
+  return "unknown";
+}
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2];
 
 /** Latest known schema version. */
 export const LATEST_SCHEMA_VERSION: number = MIGRATIONS.reduce(

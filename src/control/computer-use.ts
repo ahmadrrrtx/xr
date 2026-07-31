@@ -30,7 +30,7 @@ import {
   closeEnvironmentSession,
   environmentDisabled,
   visionCloudDecision,
-} from "../environment/service.ts";
+} from "../platform/environment/service.ts";
 import { requestControlApproval } from "./service.ts";
 
 export interface ComputerUseOptions {

@@ -2,10 +2,10 @@
  * XR 6.0 — Phase 11 Tests: Security, Identity, and Backup
  */
 import { describe, expect, test } from "bun:test";
-import { IdentityService } from "../../src/deployment/identity/service.ts";
-import { BackupService } from "../../src/deployment/backup/service.ts";
-import { buildCapsule, verifyCapsuleIntegrity, deserializeCapsule, serializeCapsule } from "../../src/deployment/capsule.ts";
-import type { CapsuleBuildInput } from "../../src/deployment/capsule.ts";
+import { IdentityService } from "../../src/enterprise/deployment/identity/service.ts";
+import { BackupService } from "../../src/enterprise/deployment/backup/service.ts";
+import { buildCapsule, verifyCapsuleIntegrity, deserializeCapsule, serializeCapsule } from "../../src/enterprise/deployment/capsule.ts";
+import type { CapsuleBuildInput } from "../../src/enterprise/deployment/capsule.ts";
 
 // ── Identity Service Tests ─────────────────────────────────────────────
 
@@ -304,7 +304,7 @@ describe("Security: Capsule Tampering Prevention", () => {
   });
 
   test("control plane redaction hides context details", () => {
-    const { redactCapsuleForControlPlane } = require("../../src/deployment/capsule.ts");
+    const { redactCapsuleForControlPlane } = require("../../src/enterprise/deployment/capsule.ts");
     const capsule = buildCapsule({
       ...makeValidInput(),
       context: {

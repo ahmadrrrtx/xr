@@ -2,7 +2,7 @@
  * XR 4.4 — ProviderRouter + factory integration + buildProvider pin compatibility.
  */
 import { describe, test, expect, beforeEach } from "bun:test";
-import { ProviderRouter, FallbackProvider } from "../../src/providers/routing.ts";
+import { RoutingService as ProviderRouter, FallbackProvider } from "../../src/intelligence/routing-service.ts";
 import { buildProvider, buildProviderWithDecision } from "../../src/providers/factory.ts";
 import { ConfigSchema, type XRConfig } from "../../src/config/config.ts";
 import { registry } from "../../src/providers/registry.ts";

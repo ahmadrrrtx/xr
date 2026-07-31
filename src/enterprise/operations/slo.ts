@@ -13,7 +13,7 @@
  * profile reports `not_applicable`.
  */
 
-import type { DeploymentProfileKind } from "../../deployment/types.ts";
+import type { DeploymentProfileKind } from "../deployment/types.ts";
 import {
   SLO_IDS,
   type SloDefinition,

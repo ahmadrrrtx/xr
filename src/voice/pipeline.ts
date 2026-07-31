@@ -9,12 +9,11 @@ import type { Store } from "../state/workspace-store.ts";
 import { SpeechToText } from "./stt.ts";
 import { TextToSpeech } from "./tts.ts";
 import { detectWake, parseConfirmation, parseSpokenMetaCommand } from "./wake.ts";
-import { runAgent } from "../core/agent.ts";
-import { resolveExtensibility } from "../services/extensibility-bridge.ts";
+import { executeOnSurface } from "../services/surface-execution.ts";
 import { loadConfig, isMemoryEnabled } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
-import { MemoryStore } from "../memory/store.ts";
+import { MemoryStore } from "../context/memory/store.ts";
 import type { ApprovalRequest } from "../core/types.ts";
 import { appendTranscript, markVoiceUsed } from "./settings.ts";
 import { defaultVoiceSettings, type VoiceSettings } from "./types.ts";
@@ -150,15 +149,19 @@ export class VoicePipeline {
     const memoryEngine = new MemoryStore(this.deps.store);
     const memEnabled = isMemoryEnabled();
 
-    // Phase 0 · T8 — plugins/MCP/skills reach the Voice surface too.
-    const extensibility = await resolveExtensibility(this.deps.store, command);
-    const result = await runAgent(command, "agent", {
+    /**
+     * Phase 2 · T1 — Voice runs through the canonical execution envelope
+     * (Phase 0 · T8 had bridged only its tool set).
+     */
+    const result = await executeOnSurface({
+      task: command,
+      mode: "agent",
+      surface: "voice",
       store: this.deps.store,
       provider,
+      modelId: model,
       cwd: process.cwd(),
       say: () => {},
-      extraTools: extensibility.extraTools,
-      systemPrompt: extensibility.skillPrompt || undefined,
       approve: this.voiceApprover(),
       budget: {
         maxUsd: isLocal(providerId) ? undefined : config.budget.perTaskUsd,

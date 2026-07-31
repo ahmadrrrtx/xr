@@ -6,9 +6,10 @@ import { banner, ok, warn, info, colors as C } from "../interfaces/cli.ts";
 import { loadConfig, saveConfig } from "../config/config.ts";
 import { detectCapabilities, detectCapabilitiesAsync } from "./adapter.ts";
 import { runCommand } from "../util/process.ts";
-import { isDisabled, runAction, runTypedPlan, runComputerUse } from "./service.ts";
+import { isDisabled, runAction, runTypedPlan } from "./service.ts";
+import { runComputerUse } from "./computer-use.ts";
 import type { Action, ControlOptions, ExecutionMode } from "./types.ts";
-import { planActions } from "./planner.ts";
+import { planningService } from "../services/planning-service.ts";
 import { browserStatus, shutdownBrowser } from "./browser.ts";
 import { buildProvider } from "../providers/factory.ts";
 
@@ -81,7 +82,7 @@ async function cmdPlan(store: Store, flags: ParsedFlags): Promise<void> {
   const provider = buildProvider(config, {});
   
   info(`Planning: ${task}...`);
-  const planned = await planActions(provider, task, { store, noMemory: flags.noMemory });
+  const planned = await planningService.planControl({ provider, task, store, noMemory: flags.noMemory });
   if ("error" in planned) { warn(planned.error); return; }
 
   const opts = { ...makeOpts(flags), memory: !flags.noMemory };
@@ -95,7 +96,7 @@ async function cmdComputer(store: Store, flags: ParsedFlags): Promise<void> {
   const { config } = loadConfig();
   const provider = buildProvider(config, {});
   banner();
-  const result = await runComputerUse(store, task, provider);
+  const result = await runComputerUse({ provider, store, task, maxSteps: 20 });
   console.log("");
   ok(`Task Complete: ${result}`);
 }

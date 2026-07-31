@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { homedir } from "node:os";
-import { classifyRisk, sensitiveBlockedPaths } from "../../src/trust/classify.ts";
-import type { TrustRequest } from "../../src/trust/types.ts";
+import { classifyRisk, sensitiveBlockedPaths } from "../../src/runtime/trust/classify.ts";
+import type { TrustRequest } from "../../src/runtime/trust/types.ts";
 
 function req(over: Partial<TrustRequest> = {}): TrustRequest {
   return {

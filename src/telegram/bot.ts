@@ -19,8 +19,7 @@ import {
   parseCallback,
   type OutgoingMessage,
 } from "./render.ts";
-import { runAgent } from "../core/agent.ts";
-import { resolveExtensibility } from "../services/extensibility-bridge.ts";
+import { executeOnSurface } from "../services/surface-execution.ts";
 import { loadConfig } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
@@ -174,15 +173,19 @@ export class TelegramBot {
         const providerId = config.defaults.provider;
         const model = config.defaults.model;
         const provider = buildProvider(config, {});
-        // Phase 0 · T8 — plugins/MCP/skills reach the Telegram surface too.
-        const extensibility = await resolveExtensibility(this.deps.store, cmd.text);
-        const result = await runAgent(cmd.text, "agent", {
-          provider,
+        /**
+         * Phase 2 · T1 — Telegram runs through the canonical execution
+         * envelope (Phase 0 · T8 had bridged only its tool set).
+         */
+        const result = await executeOnSurface({
+          task: cmd.text,
+          mode: "agent",
+          surface: "telegram",
           store: this.deps.store,
+          provider,
+          modelId: model,
           cwd: process.cwd(),
           say: () => {}, // streamed lines suppressed on mobile
-          extraTools: extensibility.extraTools,
-          systemPrompt: extensibility.skillPrompt || undefined,
           approve: this.approver(chatId),
           budget: {
             maxUsd: isLocal(providerId) ? undefined : (cmd.budgetUsd ?? config.budget.perTaskUsd),

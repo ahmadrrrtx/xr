@@ -1,5 +1,5 @@
 import type { Store } from "../state/workspace-store.ts";
-import { planActions } from "../control/planner.ts";
+import { planningService } from "../services/planning-service.ts";
 import { approvals } from "../control/approvals.ts";
 import { listPermissions, grantPermission, revokePermission } from "../control/permissions.ts";
 import { loadConfig } from "../config/config.ts";
@@ -16,7 +16,7 @@ export async function handleControlApi(req: Request, url: URL, store: Store): Pr
     const task = body.task || "";
     const { config } = loadConfig();
     const provider = buildProvider(config, {});
-    const planned = await planActions(provider, task, { store });
+    const planned = await planningService.planControl({ provider, task, store });
     return Response.json(planned);
   }
   if (url.pathname === "/api/control/approve" && req.method === "POST") {

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { classifyRisk } from "../../src/trust/classify.ts";
+import { classifyRisk } from "../../src/runtime/trust/classify.ts";
 import {
   mcpTrustRequest,
   controlTrustRequest,
   pluginTrustRequest,
   skillTrustRequest,
-} from "../../src/trust/tool-support.ts";
+} from "../../src/runtime/trust/tool-support.ts";
 import { makeTrust } from "./_helpers.ts";
 
 describe("XR 4.2 adapter risk classification", () => {

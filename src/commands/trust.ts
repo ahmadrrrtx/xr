@@ -10,7 +10,7 @@
  */
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
-import { shellTrustSpec } from "../trust/tool-support.ts";
+import { shellTrustSpec } from "../runtime/trust/tool-support.ts";
 
 export class TrustCommand implements Command {
   name = "trust";

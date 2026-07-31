@@ -6,7 +6,7 @@ import {
   checkCloudConsent,
   screenshotRetention,
   transcriptRetention,
-} from "../../src/environment/privacy.ts";
+} from "../../src/platform/environment/privacy.ts";
 
 describe("redactSecrets", () => {
   test("redacts API keys and tokens in free text", () => {

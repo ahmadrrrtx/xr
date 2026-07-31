@@ -27,15 +27,15 @@ import {
   NO_EXTERNAL_EFFECTS,
   redactEvidence,
   type ScenarioDefinition,
-} from "../../src/evaluation/index.ts";
-import * as n from "../../src/workflow/nodes.ts";
+} from "../../src/enterprise/evaluation/index.ts";
+import * as n from "../../src/execution/workflow/nodes.ts";
 import {
   createDraft,
   inspectIntegrity,
   publishDraft,
   verifyIntegrity,
-} from "../../src/workflow/versioning.ts";
-import { hashDefinition, hashDefinitionLegacyV1 } from "../../src/workflow/types.ts";
+} from "../../src/execution/workflow/versioning.ts";
+import { hashDefinition, hashDefinitionLegacyV1 } from "../../src/execution/workflow/types.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Harness isolation from real user data
@@ -67,7 +67,7 @@ describe("harness cannot touch real user data", () => {
       dimension: "runtime",
       set: "development",
       determinism: "deterministic",
-      contracts: ["src/evaluation/fixtures.ts"],
+      contracts: ["src/enterprise/evaluation/fixtures.ts"],
       profiles: [],
       offlineCapable: true,
       allowedEffects: NO_EXTERNAL_EFFECTS,
@@ -200,7 +200,7 @@ describe("system under test cannot disable its safety gates", () => {
       dimension: "runtime",
       set: "development",
       determinism: "deterministic",
-      contracts: ["src/evaluation/gates.ts"],
+      contracts: ["src/enterprise/evaluation/gates.ts"],
       profiles: [],
       offlineCapable: true,
       allowedEffects: NO_EXTERNAL_EFFECTS,
@@ -236,7 +236,7 @@ describe("system under test cannot disable its safety gates", () => {
       dimension: "runtime",
       set: "development",
       determinism: "deterministic",
-      contracts: ["src/evaluation/gates.ts"],
+      contracts: ["src/enterprise/evaluation/gates.ts"],
       profiles: [],
       offlineCapable: true,
       allowedEffects: NO_EXTERNAL_EFFECTS,
@@ -270,7 +270,7 @@ describe("system under test cannot disable its safety gates", () => {
       dimension: "runtime",
       set: "development",
       determinism: "deterministic",
-      contracts: ["src/evaluation/gates.ts"],
+      contracts: ["src/enterprise/evaluation/gates.ts"],
       profiles: [],
       offlineCapable: true,
       allowedEffects: NO_EXTERNAL_EFFECTS,
@@ -307,7 +307,7 @@ describe("system under test cannot disable its safety gates", () => {
       dimension: "runtime",
       set: "development",
       determinism: "deterministic",
-      contracts: ["src/evaluation/runner.ts"],
+      contracts: ["src/enterprise/evaluation/runner.ts"],
       profiles: [],
       offlineCapable: true,
       allowedEffects: NO_EXTERNAL_EFFECTS,
@@ -337,7 +337,7 @@ describe("system under test cannot disable its safety gates", () => {
       dimension: "runtime",
       set: "development",
       determinism: "deterministic",
-      contracts: ["src/evaluation/runner.ts"],
+      contracts: ["src/enterprise/evaluation/runner.ts"],
       profiles: [],
       offlineCapable: true,
       allowedEffects: NO_EXTERNAL_EFFECTS,
@@ -498,7 +498,7 @@ describe("reproducibility", () => {
       dimension: "runtime",
       set: "development",
       determinism: "deterministic",
-      contracts: ["src/evaluation/runner.ts"],
+      contracts: ["src/enterprise/evaluation/runner.ts"],
       profiles: [],
       offlineCapable: true,
       allowedEffects: NO_EXTERNAL_EFFECTS,
@@ -533,7 +533,7 @@ describe("reproducibility", () => {
       dimension: "runtime",
       set: "development",
       determinism: "deterministic",
-      contracts: ["src/evaluation/runner.ts"],
+      contracts: ["src/enterprise/evaluation/runner.ts"],
       profiles: [],
       offlineCapable: true,
       allowedEffects: NO_EXTERNAL_EFFECTS,

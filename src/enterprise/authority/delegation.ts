@@ -17,7 +17,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { RISK_TIER_ORDER, type RiskTier } from "../../trust/types.ts";
+import { RISK_TIER_ORDER, type RiskTier } from "../../runtime/trust/types.ts";
 import {
   ENTERPRISE_BOUNDS,
   ENTERPRISE_SCHEMA_VERSION,

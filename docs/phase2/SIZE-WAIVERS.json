@@ -1,0 +1,163 @@
+{
+  "$comment": [
+    "XR Phase 2 · T7 — the module size waiver register.",
+    "",
+    "Constitution Art. V.3: 'No module exceeds a defined size/complexity threshold",
+    "WITHOUT AN OWNED PLAN TO SPLIT.' The Article permits an over-threshold module",
+    "when there is an owner and a plan; it does not require every module to be under",
+    "the line on day one. This file IS that owned plan, and scripts/size-gate.ts",
+    "enforces it:",
+    "",
+    "  · an over-threshold module missing from this file          -> CI FAILS",
+    "  · a waived module that GROWS beyond its recorded size      -> CI FAILS",
+    "  · a waiver missing owner / reason / plan / ISO review date -> CI FAILS",
+    "  · a waiver for a module now under threshold (stale entry)  -> CI FAILS",
+    "",
+    "So a waiver is permission to be big today, never permission to get bigger, and",
+    "the register cannot silently rot into a list of obsolete excuses.",
+    "",
+    "Threshold: 800 LOC (scripts/size-gate.ts).",
+    "Phase 2 split two modules outright: daemon/dashboard.ts (3619 -> 48 + 3 modules)",
+    "and plugins/loader.ts (1586 -> 89 + 3 modules), and deleted memory/store.ts and",
+    "workflow/engine.ts from the top-level tree via the T5/T6 retirements."
+  ],
+  "threshold": 800,
+  "waivers": [
+    {
+      "path": "src/daemon/dashboard/client-script.ts",
+      "lines": 1739,
+      "owner": "daemon",
+      "reason": "A single exported string constant containing the Control Center's browser application. It is DATA to the daemon, never executed server-side, and has zero branching or imports, so LOC does not represent server-side complexity.",
+      "plan": "Phase 3 replaces the inline string with real client modules served as static assets; the split is blocked on the asset-pipeline decision, not on this file.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/state/workspace-store.ts",
+      "lines": 1609,
+      "owner": "state",
+      "reason": "The single-writer WorkspaceStore is the Phase-1 durability invariant (ADR-0001). It owns the baseline schema for every table plus the audit hash chain; splitting the connection owner risks re-introducing the multi-writer defect Phase 1 closed.",
+      "plan": "Extract the per-domain table DDL into schema modules that the store composes, leaving connection + WriteGate ownership intact. Deferred to Phase 3 so it lands with the durability-quality work rather than mid-consolidation.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/daemon/dashboard/markup.ts",
+      "lines": 1301,
+      "owner": "daemon",
+      "reason": "The HTML shell of the Control Center: one template literal with placeholder tokens. Same reasoning as client-script.ts — declarative markup, not logic.",
+      "plan": "Split per view (health / chat / audit / settings) alongside the Phase-3 asset pipeline.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/interfaces/shell/app.ts",
+      "lines": 1203,
+      "owner": "interfaces",
+      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope.",
+      "plan": "Extract slash-command handling and the palette into interfaces/shell/commands.ts and palette.ts. Deferred: the Shell is the surface most exposed to Phase-3 UX work and splitting it twice would be churn.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/execution/service.ts",
+      "lines": 1188,
+      "owner": "execution",
+      "reason": "ExecutionService is the durable-execution authority consolidated in T6 (records, leases, checkpoints, recovery).",
+      "plan": "Extract lease management and recovery orchestration into collaborators behind the existing ExecutionService facade. Deferred to Phase 3 where durability quality is the phase theme.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/context/memory/store.ts",
+      "lines": 1184,
+      "owner": "context",
+      "reason": "The memory engine, relocated under context/ by the T5 retirement. It still serves the legacy user_memory table because the migration is lossless and reversible — deleting the source would break the documented downgrade path.",
+      "plan": "Shrinks naturally as ContextService takes over reads; the file is removed when the legacy table is dropped (no earlier than 8.0.0, per ADR-0006).",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/enterprise/types.ts",
+      "lines": 1171,
+      "owner": "enterprise",
+      "reason": "Type declarations only — no runtime code. LOC here is schema surface, not complexity.",
+      "plan": "Split per bounded context (identity / recovery / certification) when the enterprise module next changes materially.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/execution/workflow/engine.ts",
+      "lines": 1163,
+      "owner": "execution",
+      "reason": "The DAG engine relocated under execution/ by the T6 retirement. It keeps delegating agent work through the injected WorkflowAgentRunner (Phase 0 · T3).",
+      "plan": "Extract node executors into execution/workflow/executors/* behind the current engine interface. Deferred to Phase 3.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/security/shield.ts",
+      "lines": 1134,
+      "owner": "security",
+      "reason": "Prompt-injection detection and response. Splitting a security-critical detector mid-consolidation risks a coverage gap; the canonical policy gate (guard.ts) is already separate.",
+      "plan": "Extract the detector rule set into security/shield-rules.ts, leaving orchestration in shield.ts. Scheduled with the Phase-4 isolation work that also touches this module.",
+      "review": "2027-03-31"
+    },
+    {
+      "path": "src/context/repository.ts",
+      "lines": 1069,
+      "owner": "context",
+      "reason": "The canonical context store's persistence layer: five tables plus their queries, and the T5 migration target.",
+      "plan": "Split per aggregate (items / provenance / packages / summaries) once the memory retirement's compatibility window closes.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/config/config.ts",
+      "lines": 1020,
+      "owner": "config",
+      "reason": "A single Zod schema plus load/save. It is one cohesive declaration and the single source of truth for configuration shape; splitting the schema would create multiple partial truths.",
+      "plan": "Split into per-section schema modules composed into one exported ConfigSchema, preserving the single export.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/commands/enterprise.ts",
+      "lines": 990,
+      "owner": "commands",
+      "reason": "CLI command surface: a long flat dispatch over enterprise subcommands, low branching depth per handler.",
+      "plan": "Split per subcommand group when the enterprise CLI next changes.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/context/types.ts",
+      "lines": 989,
+      "owner": "context",
+      "reason": "Type declarations only — the ContextItem model with consent, trust, provenance and freshness. No runtime code.",
+      "plan": "Stable by design; revisit only if the context model gains a new aggregate.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/control/browser.ts",
+      "lines": 885,
+      "owner": "control",
+      "reason": "Playwright driver: one adapter over a broad third-party API surface.",
+      "plan": "Split per operation family (navigation / input / extraction) if it exceeds 1000 lines.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/execution/workflow/types.ts",
+      "lines": 851,
+      "owner": "execution",
+      "reason": "Type declarations plus pure state-transition tables for the workflow model. No I/O.",
+      "plan": "Stable by design; the state machine already lives in its own module.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/cli/catalog.ts",
+      "lines": 851,
+      "owner": "cli",
+      "reason": "The declarative CLI command catalogue — data, not behaviour. It is the contract the L6 compatibility suite verifies.",
+      "plan": "Split per command group if it exceeds 1000 lines.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/business/core/types.ts",
+      "lines": 803,
+      "owner": "business",
+      "reason": "Type declarations only for the Business OS record model.",
+      "plan": "Split per aggregate when Business OS next changes materially.",
+      "review": "2026-12-31"
+    }
+  ]
+}

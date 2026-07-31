@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { classifyRisk } from "../../src/trust/classify.ts";
-import { decidePlacement, type PlacementCapabilities } from "../../src/trust/policy.ts";
-import type { TrustRequest } from "../../src/trust/types.ts";
+import { classifyRisk } from "../../src/runtime/trust/classify.ts";
+import { decidePlacement, type PlacementCapabilities } from "../../src/runtime/trust/policy.ts";
+import type { TrustRequest } from "../../src/runtime/trust/types.ts";
 
 function caps(over: Partial<PlacementCapabilities> = {}): PlacementCapabilities {
   return {

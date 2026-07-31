@@ -22,7 +22,7 @@ import { join, basename } from "node:path";
 import { buildHost, type PluginHost, type HostDeps } from "../../src/plugins/host.ts";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
 import { PLUGIN_API_VERSION, CORE_VERSION } from "../../src/core/version.ts";
-import { projectScopeFromCwd } from "../../src/memory/store.ts";
+import { projectScopeFromCwd } from "../../src/context/memory/store.ts";
 import type { XRConfig } from "../../src/config/config.ts";
 import type { PermissionScope } from "../../src/plugins/types.ts";
 

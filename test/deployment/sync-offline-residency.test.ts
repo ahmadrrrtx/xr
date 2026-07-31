@@ -2,13 +2,13 @@
  * XR 6.0 — Phase 11 Tests: Sync Engine, Offline Service, Residency Policy
  */
 import { describe, expect, test } from "bun:test";
-import { SyncEngine, SyncError } from "../../src/deployment/sync/engine.ts";
-import type { SyncVersionedEntity } from "../../src/deployment/sync/engine.ts";
-import { OfflineService } from "../../src/deployment/offline/service.ts";
-import { buildCapsule } from "../../src/deployment/capsule.ts";
-import type { CapsuleBuildInput } from "../../src/deployment/capsule.ts";
-import { ResidencyPolicyEngine, defaultResidencyPolicy } from "../../src/deployment/residency/policy.ts";
-import type { TaskCapsule } from "../../src/deployment/types.ts";
+import { SyncEngine, SyncError } from "../../src/enterprise/deployment/sync/engine.ts";
+import type { SyncVersionedEntity } from "../../src/enterprise/deployment/sync/engine.ts";
+import { OfflineService } from "../../src/enterprise/deployment/offline/service.ts";
+import { buildCapsule } from "../../src/enterprise/deployment/capsule.ts";
+import type { CapsuleBuildInput } from "../../src/enterprise/deployment/capsule.ts";
+import { ResidencyPolicyEngine, defaultResidencyPolicy } from "../../src/enterprise/deployment/residency/policy.ts";
+import type { TaskCapsule } from "../../src/enterprise/deployment/types.ts";
 
 // ── Sync Engine Tests ──────────────────────────────────────────────────
 

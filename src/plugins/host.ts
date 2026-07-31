@@ -26,7 +26,7 @@ import type { Store } from "../state/workspace-store.ts";
 import type { XRConfig } from "../config/config.ts";
 import { hostAllowed } from "../tools/egress.ts";
 import { getSecret } from "../security/secrets.ts";
-import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { admitContextWrite } from "../context/poison.ts";
 import { BudgetManager } from "../cost/manager.ts";
 import { buildProvider } from "../providers/factory.ts";

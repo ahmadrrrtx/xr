@@ -1,18 +1,25 @@
 /**
- * XR 4.1 — Agent Step Adapter
+ * XR 4.1 — Agent Step Adapter (Phase 2 · T1 revision)
  *
- * Provides a runAgent wrapper that records canonical execution records for
- * every model call and tool invocation that occurs during an agent session.
- * Does NOT rewrite runAgent — it augments it by supplying a fabric-aware
- * ToolContext and wrapping the provider when possible.
+ * Records canonical execution records for every model call and tool invocation
+ * that occurs during an agent session.
  *
- * Because runAgent currently invokes `provider.chat()` and `tool.run()`
- * directly, the cleanest integration point is:
- *   - A fabric-aware Provider wrapper that records a model_call execution per turn.
- *   - A fabric-aware ToolContext that intercepts approve/audit and produces
- *     core_tool executions when the agent invokes tools via getTool/extraTools.
- *   - A wrapping API `runAgentWithFabric()` that returns the same AgentResult
- *     plus session-level execution correlation.
+ * ── What Phase 2 changed ────────────────────────────────────────────────────
+ *
+ * This adapter used to be a FOURTH direct caller of `runAgent`, and its own
+ * comments admitted a gap it could not close:
+ *
+ *     "This leaves a known gap: native core tools invoked directly from
+ *      runAgent are NOT double-wrapped in this first pass."
+ *
+ * The cause was structural: core tools came from a module-level array
+ * (`toolsForMode`) that the adapter could not intercept, while plugin/MCP tools
+ * arrived as `extraTools` that it could. With the single `ToolRegistryService`
+ * (T2) every tool — core, plugin, MCP — arrives through ONE arbitrated
+ * collection, so the adapter now wraps them uniformly and the gap is CLOSED.
+ *
+ * It also no longer calls the loop directly: it assembles an execution envelope
+ * and runs it through `runEnvelope`, the single loop caller (T1).
  */
 import type {
   ApprovalRequest,
@@ -21,7 +28,11 @@ import type {
   Provider,
   Tool,
 } from "../../core/types.ts";
-import { runAgent, type AgentDeps, type AgentResult } from "../../core/agent.ts";
+import type { AgentDeps, AgentResult } from "../../core/agent.ts";
+import { assembleEnvelope, newEvidence } from "../../core/execution/envelope.ts";
+import { runEnvelope } from "../../core/execution/runner.ts";
+import { ToolRegistryService } from "../../tools/registry-service.ts";
+import { coreToolContributions } from "../../tools/registry.ts";
 import type { ExecutionService } from "../service.ts";
 import { executeTool } from "./tool-adapter.ts";
 import type { ExecutionRecord } from "../types.ts";
@@ -128,58 +139,137 @@ export async function runAgentWithFabric(
     },
   };
 
-  // We cannot easily intercept tool.run() calls without either (a) replacing
-  // the tool list with wrappers, or (b) modifying core/agent.ts. We go with
-  // (a): wrap each tool to run through executeTool(). This preserves back-compat
-  // because the wrapper returns the same ToolResult.
-  const makeWrappedTools = (tools: Tool[]): Tool[] =>
-    tools.map((t) => ({
-      ...t,
-      run: async (args, ctx) => {
-        const res = await executeTool(t, args, {
-          service,
-          workspaceId,
-          sessionId: fabric.sessionId,
-          actor: agentActor("primary", deps.provider.id),
-          cwd: ctx.cwd,
-          dryRun: ctx.dryRun,
-          approve: ctx.approve,
-          audit: ctx.audit,
-        });
-        executions.push(res.__execution!);
-        // Return the same ToolResult shape the agent expects.
-        return { ok: res.ok, output: res.output, data: res.data };
-      },
-    }));
+  /**
+   * Wrap every tool so its invocation becomes a canonical execution record.
+   * Because the registry is the single source of the tool set, this now covers
+   * CORE tools too — the gap the pre-Phase-2 adapter documented and could not
+   * close.
+   */
+  const wrapForFabric = (t: Tool): Tool => ({
+    ...t,
+    run: async (args, ctx) => {
+      const res = await executeTool(t, args, {
+        service,
+        workspaceId,
+        sessionId: fabric.sessionId,
+        actor: agentActor("primary", deps.provider.id),
+        cwd: ctx.cwd,
+        dryRun: ctx.dryRun,
+        approve: ctx.approve,
+        audit: ctx.audit,
+      });
+      executions.push(res.__execution!);
+      // Return the same ToolResult shape the agent expects.
+      return { ok: res.ok, output: res.output, data: res.data };
+    },
+  });
 
-  // Override extraTools and rely on the existing toolsForMode() path through
-  // runAgent. We intercept getTool() only indirectly — core tools are
-  // returned by toolsForMode which builds from src/tools/registry.ts. We can't
-  // cleanly intercept those without wrapping them; instead we'll rely on the
-  // fact that the AgentService can be refactored separately to pass wrapped
-  // tools. For now: wrap extraTools (plugins/MCP) and add core-tool wrapping
-  // by pre-building the tool list via a patched toolsForMode.
-  const wrappedAgentDeps: AgentDeps = {
-    ...deps,
-    provider: wrappedProvider,
-    extraTools: makeWrappedTools(deps.extraTools ?? []),
+  /**
+   * Build the run's registry. When the caller already supplied one (the
+   * in-tree path), its entries are re-registered wrapped; otherwise the core
+   * set plus any deprecated `extraTools` are used, preserving back-compat for
+   * out-of-tree callers.
+   */
+  const registry = new ToolRegistryService();
+  if (deps.toolRegistry) {
+    for (const kind of ["core", "plugin", "mcp"] as const) {
+      const entries = deps.toolRegistry.listByKind(kind);
+      if (entries.length === 0) continue;
+      // Group by source so qualified ids are reproduced exactly.
+      const bySource = new Map<string, Tool[]>();
+      for (const e of entries) {
+        const list = bySource.get(e.source) ?? [];
+        list.push(wrapForFabric(e.tool));
+        bySource.set(e.source, list);
+      }
+      for (const [source, tools] of bySource) {
+        registry.registerTools({ kind, source, tools });
+      }
+    }
+    for (const skill of deps.toolRegistry.listSkills()) {
+      registry.registerSkill({
+        kind: "skill",
+        source: skill.source,
+        prompt: skill.prompt,
+        declaredTools: skill.declaredTools,
+      });
+    }
+  } else {
+    const core = coreToolContributions();
+    registry.registerTools({ kind: "core", source: core.source, tools: core.tools.map(wrapForFabric) });
+    if (deps.extraTools?.length) {
+      registry.registerTools({
+        kind: "plugin",
+        source: "extra",
+        tools: deps.extraTools.map(wrapForFabric),
+      });
+    }
+  }
+
+  const evidence = newEvidence();
+  const envelope = assembleEnvelope({
+    intent: { task, mode, surface: "workflow", cwd: deps.cwd },
+    plan: {
+      provider: wrappedProvider,
+      providerId: deps.provider.id,
+      modelId: deps.routingDecision?.selected?.modelId ?? "",
+      maxSteps: deps.maxSteps ?? 12,
+      ...(deps.systemPrompt ? { systemPrompt: deps.systemPrompt } : {}),
+      ...(deps.routingDecision ? { routingDecision: deps.routingDecision } : {}),
+    },
+    policy: {
+      budget: deps.budget ?? {},
+      pricing: deps.pricing ?? { inPerMTok: 0, outPerMTok: 0 },
+      egressAllowlist: deps.egressAllowlist ?? [],
+      dryRun: deps.dryRun ?? false,
+      ...(deps.tools?.allow ? { toolsAllow: deps.tools.allow } : {}),
+      ...(deps.tools?.deny ? { toolsDeny: deps.tools.deny } : {}),
+      approve: deps.approve,
+    },
+    placement: {
+      placement: "in_process",
+      registry,
+      tools: registry.discover({
+        mode,
+        ...(deps.tools?.allow ? { allow: deps.tools.allow } : {}),
+        ...(deps.tools?.deny ? { deny: deps.tools.deny } : {}),
+      }),
+      collisions: registry.listCollisions(),
+    },
+    observation: {
+      say: deps.say,
+      ...(deps.onOverBudget ? { onOverBudget: deps.onOverBudget } : {}),
+    },
+    evidence,
+  });
+
+  const outcome = await runEnvelope(
+    envelope,
+    {
+      ...(deps.store ? { store: deps.store } : {}),
+      ...(deps.sessionStore ? { sessionStore: deps.sessionStore } : {}),
+      ...(deps.auditStore ? { auditStore: deps.auditStore } : {}),
+      ...(deps.costStore ? { costStore: deps.costStore } : {}),
+      ...(deps.userMemoryStore ? { userMemoryStore: deps.userMemoryStore } : {}),
+    },
+    {
+      ...(deps.memory ? { memory: deps.memory } : {}),
+      ...(deps.memoryStore ? { memoryStore: deps.memoryStore } : {}),
+      ...(deps.sessionSummary ? { sessionSummary: deps.sessionSummary } : {}),
+      ...(deps.contextPackage ? { contextPackage: deps.contextPackage } : {}),
+      ...(deps.contextMode ? { contextMode: deps.contextMode } : {}),
+    },
+  );
+
+  const result: AgentResult = {
+    sessionId: outcome.sessionId,
+    finalMessage: outcome.finalMessage,
+    steps: outcome.steps,
+    stopped: outcome.stopped,
+    ...(outcome.meter !== undefined ? { meter: outcome.meter } : {}),
+    ...(outcome.inputTokens !== undefined ? { inputTokens: outcome.inputTokens } : {}),
+    ...(outcome.outputTokens !== undefined ? { outputTokens: outcome.outputTokens } : {}),
+    ...(outcome.routingDecisionId !== undefined ? { routingDecisionId: outcome.routingDecisionId } : {}),
   };
-
-  // Wrap core tools by monkey-patching getTool for the duration of this call
-  // via the dynamic import cache pattern is fragile, so instead we override
-  // by passing tools.allow/deny plus an additional wrapped "tool shim" approach
-  // through fabric session — acceptable for Phase 2 because:
-  //   - The agent loop still sees ToolResult-compatible responses.
-  //   - Canonical execution records are captured for all model calls and for plugin/MCP extraTools.
-  //   - Core-tool interception is completed through ToolContext.audit hooks
-  //     (audit events become evidence on the model-call execution record).
-  // This leaves a known gap: native core tools invoked directly from runAgent
-  // are NOT double-wrapped in this first pass. That is acceptable for Phase 2
-  // because their approval/audit/cost paths remain intact, and they produce
-  // session steps + audit entries that are correlated via sessionId. A
-  // follow-up (or deeper patch to core/agent.ts) can route them through the
-  // fabric fully without changing semantics. We document this explicitly.
-
-  const result = await runAgent(task, mode, wrappedAgentDeps);
   return { ...result, executions };
 }

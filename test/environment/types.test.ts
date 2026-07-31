@@ -12,7 +12,7 @@ import {
   EnvironmentActionRequestSchema,
   defaultEnvironmentPolicy,
   type EnvironmentObservation,
-} from "../../src/environment/types.ts";
+} from "../../src/platform/environment/types.ts";
 
 describe("environment types contract", () => {
   test("six environment types, no more", () => {

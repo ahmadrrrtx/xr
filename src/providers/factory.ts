@@ -9,7 +9,7 @@
 import type { XRConfig } from "../config/config.ts";
 import type { Provider } from "../core/types.ts";
 import { registry } from "./registry.ts";
-import { ProviderRouter } from "./routing.ts";
+import { RoutingService } from "../intelligence/routing-service.ts";
 import { PRESETS } from "./presets.ts";
 import { OpenAICompatProvider } from "./openai-compat.ts";
 import {
@@ -127,12 +127,12 @@ export function buildProvider(
   override?: {
     provider?: string;
     model?: string;
-    strategy?: import("./routing.ts").RoutingStrategy;
+    strategy?: import("../intelligence/routing-service.ts").RoutingStrategy;
     requirements?: Partial<import("../intelligence/types.ts").TaskRequirements>;
     mode?: import("../intelligence/types.ts").RoutingMode;
   },
 ): Provider {
-  const router = new ProviderRouter(config);
+  const router = new RoutingService(config);
   return router.resolve(override);
 }
 
@@ -142,12 +142,12 @@ export function buildProviderWithDecision(
   override?: {
     provider?: string;
     model?: string;
-    strategy?: import("./routing.ts").RoutingStrategy;
+    strategy?: import("../intelligence/routing-service.ts").RoutingStrategy;
     requirements?: Partial<import("../intelligence/types.ts").TaskRequirements>;
     mode?: import("../intelligence/types.ts").RoutingMode;
   },
 ) {
-  const router = new ProviderRouter(config);
+  const router = new RoutingService(config);
   return router.resolveWithDecision(override);
 }
 

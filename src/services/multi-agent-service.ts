@@ -20,14 +20,14 @@ import { AgentService } from "./agent-service.ts";
 import { AuditRepo } from "../state/repos/audit-repo.ts";
 import { WorkflowRepo } from "../state/repos/workflow-repo.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
-import { MemoryStore, projectScopeFromCwd } from "../memory/store.ts";
+import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { loadConfig } from "../config/config.ts";
 import { scanUntrusted } from "../security/guard.ts";
 import {
-  compileWorkflowPlan,
   renderWorkflowPlan,
   workflowSummary,
 } from "../agents/planner.ts";
+import { planningService } from "./planning-service.ts";
 import {
   getAgentByRole,
   getAgentDefinition,
@@ -79,7 +79,9 @@ export class MultiAgentService implements LifecycleHook {
   }
 
   planWorkflow(req: WorkflowPlanRequest): WorkflowRecord {
-    const planned = compileWorkflowPlan(req);
+    // Phase 2 · T4 — the single planning authority (adds the schema gate
+    // this path never had).
+    const planned = planningService.planWorkflow(req).plan;
     this.persist(planned, "workflow.created", {
       workflowId: planned.workflowId,
       kind: planned.kind,

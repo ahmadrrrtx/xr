@@ -44,7 +44,7 @@ import {
   type CertificationTarget,
   type EvaluationRun,
   type ScenarioSet,
-} from "../evaluation/index.ts";
+} from "../enterprise/evaluation/index.ts";
 
 // ── Arg parsing (mirrors src/commands/enterprise.ts) ──────────────────────────
 

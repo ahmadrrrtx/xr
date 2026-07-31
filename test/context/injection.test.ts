@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../../src/state/workspace-store.ts";
-import { MemoryStore } from "../../src/memory/store.ts";
+import { MemoryStore } from "../../src/context/memory/store.ts";
 import { ContextRepository, adaptStoreForContext } from "../../src/context/repository.ts";
 import { ContextRetrieval } from "../../src/context/retrieval.ts";
 import { ContextAssembler } from "../../src/context/assembler.ts";
@@ -22,7 +22,7 @@ import {
   channelFor,
   wrapUntrusted,
 } from "../../src/context/injection.ts";
-import { buildContextMessages, describeInjection, buildMemoryBlock } from "../../src/memory/inject.ts";
+import { buildContextMessages, describeInjection, buildMemoryBlock } from "../../src/context/memory/inject.ts";
 import { buildGrant, makeScope } from "../../src/context/policy.ts";
 import { LEXICAL_ROUTE } from "../../src/context/embedding.ts";
 import { ContextInspection } from "../../src/context/inspection.ts";

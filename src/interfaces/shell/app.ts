@@ -11,12 +11,11 @@ import { loadConfig, saveConfig, isMemoryEnabled } from "../../config/config.ts"
 import { buildProvider, knownProviders } from "../../providers/factory.ts";
 import { priceFor, isLocal } from "../../cost/pricing.ts";
 import { Store } from "../../state/workspace-store.ts";
-import { MemoryStore, projectScopeFromCwd, type CaptureOutcome } from "../../memory/store.ts";
+import { MemoryStore, projectScopeFromCwd, type CaptureOutcome } from "../../context/memory/store.ts";
 import { detectRuntime } from "../../local/runtimes.ts";
 import { runLab } from "../../security/lab.ts";
 import { buildAuditReport } from "../../export/report.ts";
-import { runAgent, type AgentDeps } from "../../core/agent.ts";
-import { resolveExtensibility } from "../../services/extensibility-bridge.ts";
+import { executeOnSurface } from "../../services/surface-execution.ts";
 import { WorkspaceManager } from "../../core/workspace.ts";
 import { SHELL_VIEW_ORDER, type ShellViewId } from "../../ui/icons.ts";
 import { stripAnsi } from "../../ui/ansi.ts";
@@ -551,23 +550,24 @@ async function runTask(state: ShellState, task: string): Promise<void> {
   };
 
   /**
-   * Phase 0 · T8 — reach the extensibility layer.
+   * Phase 2 · T1 — the Shell runs through the canonical execution envelope.
    *
-   * Without this the Shell ran with core tools only: plugins the user installed
-   * and MCP servers they connected were silently unavailable here while working
-   * in `xr run`. Resolved through the shared bridge so both surfaces load the
-   * same managers from the same workspace store.
+   * Phase 0 · T8 had bridged only the TOOLS here (plugins/MCP/skills) while the
+   * Shell still called `runAgent` and hand-built `AgentDeps`. It now assembles
+   * the same envelope every other surface does, so tool discovery, collision
+   * arbitration, policy and evidence are identical to `xr run` by construction
+   * rather than by careful duplication.
    */
-  const extensibility = await resolveExtensibility(state.store, task);
-  for (const note of extensibility.diagnostics) addTimeline(state, "warn", note);
-
-  const result = await runAgent(task, state.mode, {
-    provider,
+  const result = await executeOnSurface({
+    task,
+    mode: state.mode,
+    surface: "shell",
     store: state.store,
+    provider,
+    modelId: state.model,
     cwd: state.cwd,
     say,
-    extraTools: extensibility.extraTools,
-    systemPrompt: extensibility.skillPrompt || undefined,
+    onDiagnostic: (note) => addTimeline(state, "warn", note),
     approve: async (req) => {
       return await promptConfirm(
         state,
@@ -602,7 +602,7 @@ async function runTask(state: ShellState, task: string): Promise<void> {
       enabled: isMemoryEnabled() && config.memory.saveSessionSummaries,
       minTurns: config.memory.sessionSummaryMinTurns,
     },
-  } as AgentDeps);
+  });
 
   finalizeLiveAssistantMessage(state);
   const after = state.store.costSummary();

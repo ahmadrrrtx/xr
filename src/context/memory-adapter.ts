@@ -24,7 +24,7 @@ import {
   type SensitivityLevel,
   type TrustStatus,
 } from "./types.ts";
-import type { MemoryEntry, MemorySource } from "../memory/types.ts";
+import type { MemoryEntry, MemorySource } from "./memory/types.ts";
 
 /** Honest mapping from the legacy `source` enum. Documented in the audit §9.4. */
 const SOURCE_MAP: Record<
