@@ -137,7 +137,7 @@ describe("Phase 1 · atomic update — git checkout integration", () => {
       // No leftover worktree debris in the install dir.
       expect(readdirSync(installDir).filter((f) => f.startsWith("xr-update-"))).toHaveLength(0);
     } finally {
-      rmrf(installDir);
+      await rmrf(installDir);
     }
   });
 
@@ -159,18 +159,18 @@ describe("Phase 1 · atomic update — git checkout integration", () => {
       // There may be unrelated temp dirs; assert none references our install dir.
       expect(leftovers.length).toBeGreaterThanOrEqual(0);
     } finally {
-      rmrf(installDir);
+      await rmrf(installDir);
     }
   });
 
-  test("layout detection + no-op when already up to date", () => {
+  test("layout detection + no-op when already up to date",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-layout-"));
     try {
       expect(detectInstallLayout(dir)).toBe("npm"); // no .git
       writeFileSync(join(dir, "package.json"), "{}");
       expect(detectInstallLayout(dir)).toBe("npm");
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 });
@@ -195,7 +195,7 @@ describe("Phase 1 · uninstall", () => {
     return home;
   }
 
-  test("--keep-data: launcher + install dir + PATH entry removed, data kept", () => {
+  test("--keep-data: launcher + install dir + PATH entry removed, data kept",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-un-keep-"));
     try {
       const home = makeInstall(dir);
@@ -214,11 +214,11 @@ describe("Phase 1 · uninstall", () => {
       const rc = readFileSync(join(home, ".bashrc"), "utf8");
       expect(rc).not.toContain("XR launcher");
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("--purge: data home removed too", () => {
+  test("--purge: data home removed too",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-un-purge-"));
     try {
       const home = makeInstall(dir);
@@ -230,11 +230,11 @@ describe("Phase 1 · uninstall", () => {
       expect(existsSync(join(home, ".xr"))).toBe(false);
       expect(existsSync(join(home, ".xr-agent"))).toBe(false);
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("running checkout is never deleted", () => {
+  test("running checkout is never deleted",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-un-guard-"));
     try {
       const home = makeInstall(dir);
@@ -249,11 +249,11 @@ describe("Phase 1 · uninstall", () => {
       expect(summary.skippedInstallDir).toBe(paths.installDir);
       expect(existsSync(paths.installDir)).toBe(true);
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("uninstall resolves the standard paths from HOME", () => {
+  test("uninstall resolves the standard paths from HOME",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-un-paths-"));
     try {
       const paths = resolveUninstallPaths({ HOME: dir } as NodeJS.ProcessEnv);
@@ -261,7 +261,7 @@ describe("Phase 1 · uninstall", () => {
       expect(paths.installDir).toBe(join(dir, ".xr-agent"));
       expect(paths.dataHome).toBe(join(dir, ".xr"));
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 });

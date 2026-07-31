@@ -49,8 +49,9 @@ check("install-creates-config", existsSync(join(XR_HOME, "config.json")), XR_HOM
 check("install-creates-db", existsSync(join(XR_HOME, "xr.db")));
 
 // Simulate install.sh artifacts (launcher + package dir) so the uninstall
-// step has real filesystem targets.
-const launcher = join(HOME, ".local", "bin", "xr");
+// step has real filesystem targets. The launcher name must match
+// resolveUninstallPaths (xr.cmd on Windows, xr elsewhere).
+const launcher = join(HOME, ".local", "bin", process.platform === "win32" ? "xr.cmd" : "xr");
 const installDir = join(HOME, ".xr-agent");
 mkdirSync(join(HOME, ".local", "bin"), { recursive: true });
 mkdirSync(installDir, { recursive: true });

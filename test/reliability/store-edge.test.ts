@@ -17,7 +17,7 @@ function fresh(dbName = "xr.db"): { store: WorkspaceStore; dbPath: string; dir: 
 }
 
 describe("Phase 1 · store edge cases", () => {
-  test("legacy constructor detects a slash-path without .db as a legacy path", () => {
+  test("legacy constructor detects a slash-path without .db as a legacy path",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-legacy-"));
     try {
       const legacy = new Store(join(dir, "nested", "dir", "data")) as unknown as {
@@ -29,11 +29,11 @@ describe("Phase 1 · store edge cases", () => {
       expect(legacy.dbPath).toBe(join(dir, "nested", "dir", "data"));
       legacy.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("empty embedding array is stored as NULL (index_state none)", () => {
+  test("empty embedding array is stored as NULL (index_state none)",async () => {
     const { store, dir } = fresh();
     try {
       store.insertMemory({ id: "m", category: "fact", content: "c", scope: "global", source: "user", tags: "", importance: 3 });
@@ -44,11 +44,11 @@ describe("Phase 1 · store edge cases", () => {
       expect(store.getMemory("m")?.embedding).toBe("[0.1,0.2]");
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("updateMemory: explicit null clears expiry; non-finite clears it; content edit clears embedding", () => {
+  test("updateMemory: explicit null clears expiry; non-finite clears it; content edit clears embedding",async () => {
     const { store, dir } = fresh();
     try {
       store.insertMemory({ id: "m1", category: "fact", content: "original", scope: "global", source: "user", tags: "a", importance: 3 });
@@ -68,11 +68,11 @@ describe("Phase 1 · store edge cases", () => {
       expect(store.updateMemory("missing", { content: "x" })).toBe(false);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("setMemoryProvenance keeps existing values when fields are undefined", () => {
+  test("setMemoryProvenance keeps existing values when fields are undefined",async () => {
     const { store, dir } = fresh();
     try {
       store.insertMemory({ id: "m2", category: "fact", content: "c", scope: "global", source: "user", tags: "", importance: 3 });
@@ -87,11 +87,11 @@ describe("Phase 1 · store edge cases", () => {
       expect(store.setMemoryProvenance("missing", { provenanceKind: "x" })).toBe(false);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("remember dedups by (project, kind, content) even across concurrent-ish calls", () => {
+  test("remember dedups by (project, kind, content) even across concurrent-ish calls",async () => {
     const { store, dir } = fresh();
     try {
       store.remember("r1", "p", "fact", "same");
@@ -100,7 +100,7 @@ describe("Phase 1 · store edge cases", () => {
       expect(store.memoryCount("p")).toBe(2);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 });

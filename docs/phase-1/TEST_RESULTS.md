@@ -5,13 +5,25 @@ All results captured on 2026-07-31 against the Phase-1 implementation.
 ## Full suite (final, after CI review fix)
 
 ```
-2032 pass / 0 fail  (baseline before Phase 1: 1980 pass / 0 fail)
+2033 pass / 0 fail  (baseline before Phase 1: 1980 pass / 0 fail)
 Ran 2032 tests across 136 files. [~31s]
 ```
 
-52 new reliability tests added (test/reliability/*). Verified clean with
-`CI=true` on 3 consecutive full-suite runs and 5 consecutive
+53 new reliability tests added (test/reliability/*). Verified clean with
+`CI=true` on consecutive full-suite runs and 5 consecutive
 concurrency-stress runs.
+
+## Cross-platform review round 3 (Windows EBUSY)
+
+After the macOS policy fix, only Windows failed: `helpers.ts:24` — the `rmrf`
+retry threw after exhausting attempts. Root cause: the first version used a
+spin-loop backoff that blocked the event loop, so bun never got a chance to
+finalize/close the SQLite handles before the directory delete. Fixed: `rmrf`
+is async with `setTimeout` backoff — exactly the pattern proven on the Windows
+CI job by the existing `test/state/workspace-store.test.ts`. All Phase-1 tests
+now `await rmrf(...)` in async callbacks. Also pre-fixed a latent Windows
+golden-path bug (launcher hardcoded `xr`; `resolveUninstallPaths` uses
+`xr.cmd` on win32).
 
 ## Cross-platform review (PR #32 second CI run)
 
@@ -58,7 +70,7 @@ set after `journal_mode=WAL`. Both fixed; regression covered by
 | `update-uninstall.test.ts` | 11 | applyUpdate state machine; git blue-green swap + rollback; uninstall per mode |
 | `artifact-e2e.test.ts` | 1 | pack → install → drive the artifact (identity + audit + durability) |
 | `migration-race.test.ts` | 1 | 16 processes open one fresh DB concurrently → 0 migration races, 0 lost writes |
-| `helpers.ts` | — | shared retry-based `rmrf` (Windows EBUSY-safe test cleanup) |
+| `helpers.ts` | — | shared retry-based `rmrf` (Windows EBUSY-safe test cleanup; async `setTimeout` backoff so bun can release handles) |
 
 ## Concurrency reproduction (before → after)
 

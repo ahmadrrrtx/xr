@@ -75,7 +75,7 @@ describe("Phase 1 · RPO/RTO drill", () => {
       expect(store.auditCount()).toBeLessThan(mutatedCount);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
@@ -92,11 +92,11 @@ describe("Phase 1 · RPO/RTO drill", () => {
       expect(service.listBackups().length).toBe(before + 1); // pre-restore backup
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("RPO: every committed transaction survives process restart (RPO = 0 on process crash)", () => {
+  test("RPO: every committed transaction survives process restart (RPO = 0 on process crash)",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-rpo-restart-"));
     try {
       const dbPath = join(dir, "xr.db");
@@ -111,11 +111,11 @@ describe("Phase 1 · RPO/RTO drill", () => {
       expect(b.verifyChain().valid).toBe(true);
       b.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("RTO: cold restart (open + migrate + verify) completes within budget", () => {
+  test("RTO: cold restart (open + migrate + verify) completes within budget",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-rto-"));
     try {
       const dbPath = join(dir, "xr.db");
@@ -134,7 +134,7 @@ describe("Phase 1 · RPO/RTO drill", () => {
       // eslint-disable-next-line no-console
       console.log(`[RTO] cold restart ${Math.round(t1 - t0)}ms (open ${Math.round(opened - t0)}ms + verify)`);
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 });

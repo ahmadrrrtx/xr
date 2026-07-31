@@ -72,7 +72,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(store.auditCount()).toBe(count + 1);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
@@ -91,7 +91,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
@@ -107,7 +107,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(wf === null || wf.workflowId === "wf_crash").toBe(true);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
@@ -132,7 +132,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       }
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
@@ -151,7 +151,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
@@ -183,7 +183,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(slot?.state).toBe("requires_reconciliation");
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
@@ -206,7 +206,7 @@ describe("Phase 1 · crash-injection matrix", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 });

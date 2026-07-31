@@ -19,7 +19,7 @@ function fresh(dbName = "xr.db"): { store: WorkspaceStore; dbPath: string; dir: 
 }
 
 describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
-  test("auditChainCorrupted flips true on tamper and false after repair", () => {
+  test("auditChainCorrupted flips true on tamper and false after repair",async () => {
     const { store, dbPath, dir } = fresh();
     try {
       store.audit("a", { v: 1 });
@@ -55,11 +55,11 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(reopened.verifyChain().valid).toBe(true);
       reopened.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("repair on an intact chain is a no-op", () => {
+  test("repair on an intact chain is a no-op",async () => {
     const { store, dir } = fresh();
     try {
       store.audit("a", { v: 1 });
@@ -68,11 +68,11 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("chainStatus reports metadata; headHash equals the last row hash", () => {
+  test("chainStatus reports metadata; headHash equals the last row hash",async () => {
     const { store, dir } = fresh();
     try {
       store.audit("a", { v: 1 });
@@ -83,11 +83,11 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(status.genesis).toBe("xr-genesis");
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("WAL checkpoint maintenance returns a usable result", () => {
+  test("WAL checkpoint maintenance returns a usable result",async () => {
     const { store, dir } = fresh();
     try {
       for (let i = 0; i < 20; i++) store.audit(`c.${i}`, { i });
@@ -99,11 +99,11 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("boundary predicates: getSpendForPeriod and expired-memory prune are inclusive at the boundary", () => {
+  test("boundary predicates: getSpendForPeriod and expired-memory prune are inclusive at the boundary",async () => {
     const { store, dir } = fresh();
     try {
       const now = Date.now();
@@ -119,7 +119,7 @@ describe("Phase 1 · audit chain — fail-closed + repair + checkpoint", () => {
       expect(store.expiredMemoryCount(now)).toBe(0);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 });

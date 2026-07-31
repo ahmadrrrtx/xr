@@ -81,8 +81,11 @@ from the CI annotations:
 - macOS golden-path step was missing HOME/XR_HOME env. Fixed in
   cross-platform.yml.
 
-Linux remains fully green (2033/2033). The macOS/Windows jobs now run the
-typecheck + unit + reliability subset with the platform issues above resolved
+Linux remains fully green (2033/2033). Round 3 closed the last Windows
+failure: the `rmrf` retry helper now uses async `setTimeout` backoff (spin-loop
+blocked bun from releasing SQLite handles on Windows), and a latent Windows
+golden-path launcher-path bug was pre-fixed. The macOS/Windows jobs now run
+the typecheck + unit + reliability subset with all platform issues resolved
 and the remaining gaps explicitly documented.
 
 ## Declaration

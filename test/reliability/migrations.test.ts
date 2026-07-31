@@ -24,7 +24,7 @@ import { IdempotencyStore } from "../../src/state/idempotency.ts";
 import { rmrf } from "./helpers.ts";
 
 describe("Phase 1 · reversible migrations", () => {
-  test("up: baseline → latest creates idempotency_slots and records versions", () => {
+  test("up: baseline → latest creates idempotency_slots and records versions",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-mig-up-"));
     try {
       const store = new WorkspaceStore("m", join(dir, "xr.db"));
@@ -44,11 +44,11 @@ describe("Phase 1 · reversible migrations", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("round-trip: down drops the table, up recreates it; audit chain survives", () => {
+  test("round-trip: down drops the table, up recreates it; audit chain survives",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-mig-rt-"));
     try {
       const store = new WorkspaceStore("m", join(dir, "xr.db"));
@@ -79,11 +79,11 @@ describe("Phase 1 · reversible migrations", () => {
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("downgrade readability: upgraded DB is readable without the new table", () => {
+  test("downgrade readability: upgraded DB is readable without the new table",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-mig-down-"));
     try {
       const store = new WorkspaceStore("m", join(dir, "xr.db"));
@@ -105,11 +105,11 @@ describe("Phase 1 · reversible migrations", () => {
       expect(old.verifyChain().valid).toBe(true);
       old.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("runMigrationsUp is idempotent (safe to call repeatedly)", () => {
+  test("runMigrationsUp is idempotent (safe to call repeatedly)",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-mig-idem-"));
     try {
       const store = new WorkspaceStore("m", join(dir, "xr.db"));
@@ -119,7 +119,7 @@ describe("Phase 1 · reversible migrations", () => {
       expect(currentSchemaVersion(store)).toBe(LATEST_SCHEMA_VERSION);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 });

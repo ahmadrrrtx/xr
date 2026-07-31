@@ -65,7 +65,7 @@ describe("Phase 1 · migration race under parallel construction", () => {
       expect(store.auditCount()).toBe(writers * perWriter);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   }, 180_000);
 });

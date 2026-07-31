@@ -46,7 +46,7 @@ async function runRepro(writers: number, perWriter: number): Promise<Record<stri
       `stderr=${res.stderr.slice(0, 400)} | errors=${JSON.stringify(parsed.errors ?? []).slice(0, 600)} | perWriter=${JSON.stringify(parsed.perWriterWritten ?? [])}`;
     return parsed;
   } finally {
-    rmrf(dir);
+    await rmrf(dir);
   }
 }
 
@@ -105,7 +105,7 @@ describe("Phase 1 · concurrency-safe audit + SQLite", () => {
       expect(store.sessionStatusCounts().reduce((a, r) => a + r.c, 0)).toBe(writers * perWriter);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   }, 180_000);
 });

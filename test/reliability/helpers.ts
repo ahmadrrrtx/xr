@@ -3,17 +3,16 @@
  *
  * `rmrf` is the retry-based directory removal the repo already uses in
  * test/state/workspace-store.test.ts (`rmrfWithRetry`). Plain `rmSync` in a
- * `finally` throws `EBUSY: resource busy or locked` on Windows when a SQLite
- * handle is still being released, which failed the cross-platform CI. Every
- * Phase-1 reliability test cleans up through this helper.
- *
- * Synchronous (tests' `finally` blocks are sync); the retry sleep is a brief
- * spin that only happens on the rare Windows EBUSY/EPERM/ENOTEMPTY path.
+ * `finally` throws `EBUSY: resource busy or locked` on Windows while SQLite
+ * handles are still being released. The retry sleep MUST yield to the event
+ * loop (`setTimeout`), not spin: Windows needs the loop to run so bun can
+ * finalize/close the connection before the directory becomes removable. This
+ * is the exact pattern proven on the Windows CI job by test/state.
  */
 import { rmSync } from "node:fs";
 
 /** Remove a file/dir recursively, retrying on Windows EBUSY/EPERM/ENOTEMPTY. */
-export function rmrf(path: string, maxAttempts = 10): void {
+export async function rmrf(path: string, maxAttempts = 10): Promise<void> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       rmSync(path, { recursive: true, force: true });
@@ -23,10 +22,7 @@ export function rmrf(path: string, maxAttempts = 10): void {
       if (!["EBUSY", "ENOTEMPTY", "EPERM"].includes(code ?? "") || attempt === maxAttempts - 1) {
         throw error;
       }
-      const end = Date.now() + 50 * (attempt + 1);
-      while (Date.now() < end) {
-        /* spin */
-      }
+      await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
     }
   }
 }

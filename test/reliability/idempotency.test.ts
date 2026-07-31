@@ -25,15 +25,15 @@ function freshStore(): { store: WorkspaceStore; dir: string; cleanup: () => void
   return {
     store,
     dir,
-    cleanup: () => {
+    cleanup: async () => {
       store.close();
-      rmrf(dir);
+      await rmrf(dir);
     },
   };
 }
 
 describe("Phase 1 · claim-first idempotency primitive", () => {
-  test("claim-then-complete prevents duplicate effects on duplicate delivery", () => {
+  test("claim-then-complete prevents duplicate effects on duplicate delivery",async () => {
     const { store, cleanup } = freshStore();
     try {
       const idem = new IdempotencyStore(store);
@@ -53,11 +53,11 @@ describe("Phase 1 · claim-first idempotency primitive", () => {
       expect(effectCount).toBe(1);
       expect(idem.get("k1")?.state).toBe("completed");
     } finally {
-      cleanup();
+      await cleanup();
     }
   });
 
-  test("interrupted non-idempotent effect is never re-run (at-most-once + reconciliation)", () => {
+  test("interrupted non-idempotent effect is never re-run (at-most-once + reconciliation)",async () => {
     const { store, cleanup } = freshStore();
     try {
       const idem = new IdempotencyStore(store);
@@ -82,11 +82,11 @@ describe("Phase 1 · claim-first idempotency primitive", () => {
       expect(effectCount).toBe(1);
       expect(idem.get("nid-1")?.state).toBe("requires_reconciliation");
     } finally {
-      cleanup();
+      await cleanup();
     }
   });
 
-  test("failed slot is retryable", () => {
+  test("failed slot is retryable",async () => {
     const { store, cleanup } = freshStore();
     try {
       const idem = new IdempotencyStore(store);
@@ -95,11 +95,11 @@ describe("Phase 1 · claim-first idempotency primitive", () => {
       const retry = idem.claim("f1", "external_effect");
       expect(retry.proceed).toBe(true);
     } finally {
-      cleanup();
+      await cleanup();
     }
   });
 
-  test("idempotent-with-key crashed-pending slot may be re-run safely", () => {
+  test("idempotent-with-key crashed-pending slot may be re-run safely",async () => {
     const { store, cleanup } = freshStore();
     try {
       const idem = new IdempotencyStore(store);
@@ -111,7 +111,7 @@ describe("Phase 1 · claim-first idempotency primitive", () => {
       idem.complete("ik-1", "ok");
       expect(idem.get("ik-1")?.state).toBe("completed");
     } finally {
-      cleanup();
+      await cleanup();
     }
   });
 });
@@ -159,7 +159,7 @@ describe("Phase 1 · execution-fabric claim-first integration", () => {
       expect(b.observation?.summary ?? "").toContain("duplicate");
       void cleanup;
     } finally {
-      cleanup();
+      await cleanup();
     }
   });
 
@@ -192,7 +192,7 @@ describe("Phase 1 · execution-fabric claim-first integration", () => {
       expect(r.outcome?.error?.code).toBe("RECONCILIATION_REQUIRED");
       expect(idem.get(key)?.state).toBe("requires_reconciliation");
     } finally {
-      cleanup();
+      await cleanup();
     }
   });
 });

@@ -36,7 +36,7 @@ function runGolden(): Promise<{ code: number | null; stdout: string; stderr: str
     child.stdout.on("data", (d) => (stdout += String(d)));
     child.stderr.on("data", (d) => (stderr += String(d)));
     child.on("close", async (code) => {
-      rmrf(dir);
+      await rmrf(dir);
       resolve({ code, stdout, stderr });
     });
   });

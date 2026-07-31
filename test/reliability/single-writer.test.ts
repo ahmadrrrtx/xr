@@ -31,7 +31,7 @@ function walk(dir: string, acc: string[] = []): string[] {
 }
 
 describe("Phase 1 · single-writer invariant", () => {
-  test("trust-critical workload executes with zero unsafe (un-gated) mutations", () => {
+  test("trust-critical workload executes with zero unsafe (un-gated) mutations",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-single-"));
     try {
       const dbPath = join(dir, "xr.db");
@@ -96,11 +96,11 @@ describe("Phase 1 · single-writer invariant", () => {
       expect(WorkspaceStore.unsafeWriteCount()).toBe(0);
       void r;
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("two stores on the same path share one read-write connection (max-1 RW per file)", () => {
+  test("two stores on the same path share one read-write connection (max-1 RW per file)",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-max1-"));
     try {
       const dbPath = join(dir, "xr.db");
@@ -117,11 +117,11 @@ describe("Phase 1 · single-writer invariant", () => {
       b.close();
       expect(WorkspaceStore.connectionCount()).toBe(baseline);
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 
-  test("no second raw Database connection exists anywhere in src/ (no second write authority)", () => {
+  test("no second raw Database connection exists anywhere in src/ (no second write authority)",async () => {
     const files = walk("src").filter((p) => !p.includes("/reliability/"));
     const offenders: string[] = [];
     for (const f of files) {
@@ -135,7 +135,7 @@ describe("Phase 1 · single-writer invariant", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("legacy db.transaction passthrough routes through the gate and is atomic", () => {
+  test("legacy db.transaction passthrough routes through the gate and is atomic",async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-tx-"));
     try {
       const store = new WorkspaceStore("tx", join(dir, "xr.db"));
@@ -150,7 +150,7 @@ describe("Phase 1 · single-writer invariant", () => {
       expect(WorkspaceStore.unsafeWriteCount()).toBe(0);
       store.close();
     } finally {
-      rmrf(dir);
+      await rmrf(dir);
     }
   });
 });
