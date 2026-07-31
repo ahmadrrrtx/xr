@@ -342,30 +342,29 @@ export async function updateXR(args: string[] = []): Promise<void> {
   banner();
   console.log(C.bold("XR Update"));
   backupConfig("pre-update");
-  let oldHead = "";
-  if (existsSync(join(rootDir, ".git")) && commandExists("git")) {
-    oldHead = runCommand("git", ["rev-parse", "HEAD"], { cwd: rootDir }).stdout.trim();
-    const pull = runCommand("git", ["pull", "--ff-only", "origin", "main"], { cwd: rootDir, inherit: true, timeoutMs: 300_000 });
-    if (!pull.ok) {
-      warn("Git update failed. Existing installation was left unchanged.");
-      return;
-    }
-  } else {
-    warn("This installation is not a Git checkout. Re-run the bootstrap installer or update through your package manager.");
+
+  // Phase 1 · T11 — atomic update with health canary + automatic rollback.
+  // One contract across git-checkout and npm layouts (see src/update/atomic-updater.ts).
+  const { runAtomicUpdate } = await import("../update/atomic-updater.ts");
+  const result = await runAtomicUpdate({ packageRoot: rootDir });
+
+  if (result.ok) {
+    ok(`Updated to ${result.activated}. Health canary passed; atomic swap complete.`);
+    ensureConfig();
+    ok("Update complete. A config backup was written before the update.");
+    return;
   }
 
-  const pm = packageManager();
-  if (pm) {
-    const deps = runCommand(pm, ["install"], { cwd: rootDir, inherit: true, timeoutMs: 600_000 });
-    if (!deps.ok && oldHead && await approved("Dependency install failed. Roll back Git checkout to previous revision?", true, opts)) {
-      runCommand("git", ["reset", "--hard", oldHead], { cwd: rootDir, inherit: true, timeoutMs: 120_000 });
-      warn("Rolled back code checkout. Config backup is in ~/.xr/backups.");
-      return;
-    }
-    if (deps.ok) ok("Dependencies updated.");
+  if (result.keptCurrent) {
+    warn(`Update did not happen — stayed on ${result.keptCurrent}.`);
   }
-  ensureConfig();
-  ok("Update complete.");
+  warn(`Update not applied: ${result.reason}`);
+  info("The previous version was left untouched (auto-rollback). Config backup is in ~/.xr/backups.");
+  if (result.reason.includes("already up to date")) {
+    ok("You are already on the latest version.");
+  } else {
+    process.exitCode = 1;
+  }
 }
 
 export async function resetXR(args: string[] = []): Promise<void> {

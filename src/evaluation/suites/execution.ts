@@ -10,9 +10,9 @@
  * work whose side effects are unknown after a crash.
  */
 
-import { Database } from "bun:sqlite";
 import { ExecutionRepo, adaptWorkspaceStore } from "../../execution/repository.ts";
 import { ExecutionService } from "../../execution/service.ts";
+import { openDatabase } from "../../state/write-gate.ts";
 import { isSideEffectSafe } from "../../execution/checkpoint.ts";
 import { isTerminal, sideEffectPossible, TERMINAL_STATES } from "../../execution/state-machine.ts";
 import { NO_EXTERNAL_EFFECTS, type ScenarioDefinition, type SuiteDefinition } from "../types.ts";
@@ -30,8 +30,7 @@ interface Harness {
 }
 
 function makeExecutionService(dbPath: string): Harness {
-  const db = new Database(dbPath, { create: true });
-  db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
+  const db = openDatabase(dbPath);
   const wrapped = adaptWorkspaceStore({
     exec: (s: string) => db.exec(s),
     prepare: (s: string) => db.prepare(s) as unknown as {

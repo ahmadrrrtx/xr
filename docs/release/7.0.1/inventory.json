@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-31T09:44:11.614Z",
+  "generatedAt": "2026-07-31T12:28:41.960Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.0.1",
@@ -49,8 +49,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 465,
-    "testFiles": 124,
+    "sourceFiles": 471,
+    "testFiles": 135,
     "cliCommands": 41,
     "daemonRoutes": 95,
     "providers": 26,
@@ -69,7 +69,7 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 491
+      "bytes": 526
     },
     {
       "path": "CHANGELOG.md",
@@ -236,12 +236,16 @@
       "bytes": 6339
     },
     {
+      "path": "mutation-report.json",
+      "bytes": 826
+    },
+    {
       "path": "next-env.d.ts",
       "bytes": 247
     },
     {
       "path": "package.json",
-      "bytes": 1971
+      "bytes": 2143
     },
     {
       "path": "release.manifest.json",
@@ -339,6 +343,7 @@
     "src/commands/shield.ts",
     "src/commands/skills.ts",
     "src/commands/trust.ts",
+    "src/commands/uninstall.ts",
     "src/commands/workspace.ts",
     "src/computer/system-control.ts",
     "src/config/cache.ts",
@@ -505,6 +510,7 @@
     "src/i18n/strings.ts",
     "src/index.ts",
     "src/install/system.ts",
+    "src/install/uninstall.ts",
     "src/integrations/credentials.ts",
     "src/integrations/oauth.ts",
     "src/integrations/registry.ts",
@@ -634,6 +640,8 @@
     "src/skills/validator.ts",
     "src/skills/verifier.ts",
     "src/skills/version-resolver.ts",
+    "src/state/idempotency.ts",
+    "src/state/migrations.ts",
     "src/state/repos/audit-repo.ts",
     "src/state/repos/cost-repo.ts",
     "src/state/repos/index.ts",
@@ -644,6 +652,7 @@
     "src/state/repos/workflow-repo.ts",
     "src/state/store.ts",
     "src/state/workspace-store.ts",
+    "src/state/write-gate.ts",
     "src/telegram/auth.ts",
     "src/telegram/bot.ts",
     "src/telegram/commands.ts",
@@ -694,6 +703,7 @@
     "src/ui/terminal.ts",
     "src/ui/theme.ts",
     "src/ui/tokens.ts",
+    "src/update/atomic-updater.ts",
     "src/update/selfheal.ts",
     "src/util/concurrency.ts",
     "src/util/fs-async.ts",
@@ -810,6 +820,17 @@
     "test/plugins/loader.test.ts",
     "test/polish.test.ts",
     "test/reliability.test.ts",
+    "test/reliability/artifact-e2e.test.ts",
+    "test/reliability/audit-chain-extra.test.ts",
+    "test/reliability/concurrency-stress.test.ts",
+    "test/reliability/crash-injection.test.ts",
+    "test/reliability/golden-path.test.ts",
+    "test/reliability/idempotency.test.ts",
+    "test/reliability/migrations.test.ts",
+    "test/reliability/rpo-rto.test.ts",
+    "test/reliability/single-writer.test.ts",
+    "test/reliability/store-edge.test.ts",
+    "test/reliability/update-uninstall.test.ts",
     "test/research.test.ts",
     "test/security.test.ts",
     "test/security/shield.test.ts",

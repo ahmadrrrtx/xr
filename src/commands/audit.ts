@@ -54,7 +54,7 @@ function parseLimit(args: string[], fallback = 30): number {
 export class AuditCommand implements Command {
   name = "audit";
   description = "tamper-evident audit log: tail, verify, export";
-  usage = "xr audit [tail|verify|export] [--limit n] [--json]";
+  usage = "xr audit [tail|verify|export|repair] [--limit n] [--json]";
 
   async execute(ctx: CommandContext): Promise<void> {
     const store = resolveStore(ctx);
@@ -72,6 +72,8 @@ export class AuditCommand implements Command {
         return this.verify(store);
       case "export":
         return this.export(store, rest);
+      case "repair":
+        return this.repair(store, ctx.args);
       case "help":
       case "--help":
       case "-h":
@@ -84,7 +86,7 @@ export class AuditCommand implements Command {
         }
         throw usageError(
           `Unknown audit subcommand: ${sub}`,
-          "Use: xr audit tail | verify | export",
+          "Use: xr audit tail | verify | export | repair",
           ["xr audit --help", "xr shield status"],
         );
     }
@@ -96,9 +98,49 @@ export class AuditCommand implements Command {
     console.log(`  ${xrCyan("xr audit tail [--limit n]")}   recent entries`);
     console.log(`  ${xrCyan("xr audit verify")}              verify SHA-256 chain`);
     console.log(`  ${xrCyan("xr audit export [path]")}       signed markdown report`);
+    console.log(`  ${xrCyan("xr audit repair [--yes]")}      truncate suspect entries at the first broken link`);
     console.log();
     tip("Legacy: xr verify-log → xr audit verify");
     console.log();
+  }
+
+  /**
+   * Phase 1 (T1): explicit chain repair. Destructive — requires --yes.
+   * Truncates suspect entries from the first broken link and re-seeds the
+   * chain with an audited repair event. Nothing intact is ever rewritten.
+   */
+  private repair(store: Store, args: string[]): void {
+    const status = store.verifyChain();
+    if (status.valid) {
+      emit(
+        { ok: true, repaired: false, reason: "chain already intact" },
+        () => {
+          ok("Audit chain is intact — nothing to repair.");
+          console.log(`  ${xrDim(`${store.auditCount()} entries verified · SHA-256 hash chain`)}`);
+        },
+      );
+      return;
+    }
+    const confirmed = args.includes("--yes") || args.includes("-y");
+    if (!confirmed) {
+      warn(
+        `The chain is broken at entry ${status.brokenAt}. ` +
+          `Repair truncates entries from id ${status.brokenAt} onward (they cannot be trusted) and re-seeds the chain. ` +
+          `This cannot be undone except from a backup. Re-run with --yes to confirm.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const result = store.repairChain();
+    emit(
+      { ok: true, repaired: true, brokenAt: result.brokenAt, removed: result.removed, hash: result.hash },
+      () => {
+        banner();
+        ok(`Audit chain repaired: truncated ${result.removed} suspect entries from id ${result.brokenAt}.`);
+        console.log(`  ${xrDim("A re-seeding audit.repair event was chained to the intact prefix.")}`);
+        tip("Verify with: xr audit verify");
+      },
+    );
   }
 
   private tail(store: Store, args: string[]): void {

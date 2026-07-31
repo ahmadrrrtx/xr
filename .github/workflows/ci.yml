@@ -177,14 +177,53 @@ jobs:
       - name: Run test suite
         run: bun test
 
-  # ── 5. Aggregation: the single status check required by branch protection ──
+  # ── 5. Phase 1 reliability suite (concurrency, crash-injection, idempotency,
+  #       migrations, RPO/RTO, golden path) ─────────────────────────────────
+  reliability:
+    name: Reliability (concurrency / crash / idempotency / RPO/RTO)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+      - name: Cache Bun global install cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+      - name: Reliability suite
+        run: bun run reliability:test
+
+  # ── 6. Mutation gate on trust/execution/persistence/credential modules ───
+  mutation-gate:
+    name: Mutation gate (T8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+      - name: Mutation gate
+        run: bun run mutation:run
+
+  # ── 6. Aggregation: the single status check required by branch protection ──
   # Runs even when a dependency fails (if: always()), then asserts every
   # upstream job succeeded. Mark "Quality Gate" as a required status check in
   # Settings → Branches so failing typecheck/tests/version-sync blocks merges.
   quality-gate:
     name: Quality Gate
     if: always()
-    needs: [typecheck, truth-gate, baseline, website, test]
+    needs: [typecheck, truth-gate, baseline, website, test, reliability, mutation-gate]
+
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

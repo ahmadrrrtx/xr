@@ -1,0 +1,71 @@
+# =============================================================================
+# XR Phase 1 · T7 — Cross-platform CI (macOS + Windows)
+#
+# Phase-0 discipline: green, or honestly gapped. The full suite runs on Linux;
+# these jobs run typecheck + unit + reliability subset on macOS and Windows so
+# platform-specific breakage surfaces in CI instead of on users' machines.
+#
+# Honest gap notes (Phase-0 discipline — recorded in docs/phase-1/FINAL_REVIEW.md
+# and docs/phase-1/KNOWN_LIMITATIONS.md):
+#   · crash-injection matrix uses POSIX SIGKILL child processes → Linux/macOS only.
+#   · test/phase0/policy-gate-adversarial.test.ts is a POSIX-path corpus
+#     (isAbsolute("/etc/...") is false on Windows) → skipped on win32, fully
+#     green on macOS (macOS /etc→/private/etc realpath is covered by the guard).
+#   · test/phase0/cli-spine.test.ts spawns the real CLI; doctor --json on
+#     Windows is not verified (same precedent as doctor.test.ts) → skipped on win32.
+#   · golden-path needs a hermetic XR_HOME/HOME on every OS (set below).
+# =============================================================================
+name: Cross-Platform CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macOS (typecheck + unit + reliability subset)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bunx tsc --noEmit
+      - name: Unit + Phase 0 suite
+        run: bun test test/state test/phase0 test/core test/execution test/reliability/single-writer.test.ts test/reliability/idempotency.test.ts test/reliability/migrations.test.ts test/reliability/rpo-rto.test.ts
+      - name: Golden path
+        run: bun run golden-path
+        env:
+          HOME: /tmp/xr-cross-home
+          XR_HOME: /tmp/xr-cross-data
+
+  windows:
+    name: Windows (typecheck + unit + golden-path subset)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bunx tsc --noEmit
+      - name: Unit + Phase 0 suite
+        run: bun test test/state test/phase0 test/core test/reliability/single-writer.test.ts test/reliability/idempotency.test.ts test/reliability/migrations.test.ts test/reliability/rpo-rto.test.ts
+      - name: Golden path
+        run: bun run golden-path
+        env:
+          HOME: ${{ runner.temp }}\xr-home
+          XR_HOME: ${{ runner.temp }}\xr-data

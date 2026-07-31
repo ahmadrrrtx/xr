@@ -277,7 +277,7 @@ export interface ExecutionErrorSummary {
   /** Whether the side-effect status is unknown (e.g. timeout mid-call). */
   sideEffectUnknown: boolean;
   /** Cause category for triage. */
-  category?: "policy" | "validation" | "transport" | "provider" | "timeout" | "cancellation" | "unknown";
+  category?: "policy" | "validation" | "transport" | "provider" | "timeout" | "cancellation" | "reconciliation" | "unknown";
   detail?: Record<string, unknown>;
 }
 
