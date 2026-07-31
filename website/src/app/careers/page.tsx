@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
+import { site } from "@/lib/site";
 import { ArrowRight, MapPin } from "lucide-react";
 
 export const metadata: Metadata = { title: "Careers" };
@@ -30,13 +31,19 @@ const benefits = [
 export default function CareersPage() {
   return (
     <>
-      <PageHeader eyebrow="Careers" title="Build the future of software with us." subtitle="We're a small, senior team building tools that millions of developers will use every day. If you care about craft, come help." />
+      <PageHeader eyebrow="Careers" title="Build the future of software with us." subtitle="XR is an open-source project, not a funded company. There is no payroll — but the work is real and the issue tracker is open." />
       <section className="pb-24">
         <div className="mx-auto max-w-5xl px-6">
           <h2 className="text-xl font-semibold text-white mb-5">Open roles</h2>
           <div className="card divide-y divide-white/5 overflow-hidden">
             {roles.map((r) => (
-              <a key={r.title} href="#" className="flex items-center gap-4 px-6 py-4 hover:bg-white/[0.03] transition-colors">
+              <a
+                key={r.title}
+                href={`${site.github}/issues`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-4 px-6 py-4 hover:bg-white/[0.03] transition-colors"
+              >
                 <div className="flex-1">
                   <div className="text-white font-medium">{r.title}</div>
                   <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-3">

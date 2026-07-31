@@ -6,12 +6,7 @@ import type { Mode, Tool } from "../core/types.ts";
 import { readFileTool, writeFileTool } from "./files.ts";
 import { listDirTool, deleteFileTool, shellTool } from "./system.ts";
 import { fetchUrlTool, webSearchTool, checkPackageTool } from "./web.ts";
-import { 
-  SYSTEM_TOOLS,
-  get_open_appsTool, open_appTool, clipboard_readTool, clipboard_writeTool,
-  system_volumeTool, system_screenshotTool, system_notifyTool,
-  system_batteryTool, system_mediaTool, system_trashTool, system_wifiTool
-} from "../computer/system-control.ts";
+import { SYSTEM_TOOLS } from "../computer/system-control.ts";
 import { computerControlTool } from "./control.ts";
 
 const ALL: Tool[] = [
@@ -33,7 +28,7 @@ const ALL: Tool[] = [
 ];
 
 // Read-only tools — safe in plan/ask modes (no state change, no exec, no system access)
-const READ_ONLY = ["read_file", "list_dir", "fetch_url", "web_search", "check_package", "system_apps", "system_clipboard_read", "system_volume", "system_screenshot", "system_battery", "system_wifi"];
+const READ_ONLY = ["read_file", "list_dir", "fetch_url", "web_search", "check_package", "system_apps", "system_clipboard_read"];
 
 // Agent gets everything
 const MODE_ALLOW: Record<Mode, string[]> = {

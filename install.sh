@@ -3,7 +3,7 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
 set -Eeuo pipefail
 
-VERSION="1.0.0"
+VERSION="7.0.1"
 REPO="ahmadrrrtx/xr"
 BRANCH="main"
 TARGET_DIR="${XR_HOME:-$HOME/.xr-agent}"

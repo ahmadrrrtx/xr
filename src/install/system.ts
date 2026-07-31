@@ -19,7 +19,7 @@ import { detectAllRuntimes, detectRuntime } from "../local/runtimes.ts";
 import { validateOllamaModelId } from "../local/registry.ts";
 import { knownProviders, PRESETS } from "../providers/factory.ts";
 import { preferredSecretBackend, setSecret } from "../security/secrets.ts";
-import { summarizeHealthChecks } from "../baseline/status.ts";
+import { summarizeHealthChecks, REQUIRED_HEALTH_CHECK_IDS } from "../baseline/status.ts";
 
 export type XROs = "windows" | "macos" | "linux" | "termux" | "unknown";
 export type XRArch = "x64" | "arm64" | "arm" | "unknown";
@@ -296,7 +296,8 @@ export async function printStatus(args: string[] = []): Promise<void> {
   const json = args.includes("--json");
   const checks = await probeHealth(opts);
   if (json) {
-    const summary = summarizeHealthChecks(checks);
+    // Installation health, not task readiness — see SummarizeOptions.requireRunnable.
+    const summary = summarizeHealthChecks(checks, REQUIRED_HEALTH_CHECK_IDS, { requireRunnable: false });
     if (summary.exitCode !== 0) process.exitCode = summary.exitCode;
     console.log(JSON.stringify({ platform: detectPlatform(), summary, checks }, null, 2));
     return;
@@ -306,7 +307,7 @@ export async function printStatus(args: string[] = []): Promise<void> {
   for (const c of checks) {
     console.log(`  ${c.label.padEnd(20)} ${stateIcon(c.state)} ${c.detail}`);
   }
-  const summary = summarizeHealthChecks(checks);
+  const summary = summarizeHealthChecks(checks, REQUIRED_HEALTH_CHECK_IDS, { requireRunnable: false });
   if (summary.exitCode !== 0) process.exitCode = summary.exitCode;
   const failures = checks.filter((c) => c.state === "fail");
   const warnings = checks.filter((c) => c.state === "warn");

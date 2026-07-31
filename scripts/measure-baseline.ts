@@ -1,15 +1,23 @@
 #!/usr/bin/env bun
-/** XR 3.1.6 Phase 0 baseline measurements.
+/** XR Phase 0 baseline measurements.
  * Runs deterministic, local-only scenarios and writes JSON + Markdown reports.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { versionInfo } from "../src/core/version.ts";
 import { runtimeEnvironment } from "../src/baseline/status.ts";
 
 const ROOT = join(import.meta.dir, "..");
-const OUT_DIR = join(ROOT, "docs", "release", "3.1.6");
+/**
+ * Phase 0 · T13 — release artifacts follow the manifest, never a literal.
+ * Hardcoding "3.1.6" is what left docs/release/ stamped to a version the code
+ * no longer had.
+ */
+const RELEASE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, "release.manifest.json"), "utf8"),
+).identity.version as string;
+const OUT_DIR = join(ROOT, "docs", "release", RELEASE_VERSION);
 const samples = Number(process.env.XR_BASELINE_SAMPLES ?? 3);
 
 type ScenarioResult = {
@@ -24,6 +32,7 @@ type ScenarioResult = {
   maxMs: number;
   peakRssBytes: number;
   exitCodes: number[];
+  expectedExitCodes: number[];
   limitation?: string;
 };
 
@@ -46,7 +55,21 @@ async function run(command: string[], extraEnv: Record<string, string> = {}): Pr
   return { code, ms, rss: process.memoryUsage.rss() };
 }
 
-async function scenario(id: string, command: string[], extraEnv: Record<string, string> = {}, limitation?: string): Promise<ScenarioResult> {
+/**
+ * Measure a scenario.
+ *
+ * `expectedExitCodes` exists because "exit 0" is not the same as "correct".
+ * After Phase 0 · T4, `doctor` on a machine with no reachable provider exits 1
+ * *by design* — that is the honest answer. Treating it as a harness failure
+ * would push the baseline back toward rewarding a dishonest exit code.
+ */
+async function scenario(
+  id: string,
+  command: string[],
+  extraEnv: Record<string, string> = {},
+  limitation?: string,
+  expectedExitCodes: number[] = [0],
+): Promise<ScenarioResult> {
   const times: number[] = [];
   const exitCodes: number[] = [];
   let peakRssBytes = 0;
@@ -61,8 +84,9 @@ async function scenario(id: string, command: string[], extraEnv: Record<string, 
     id,
     command,
     samples,
-    successes: exitCodes.filter((c) => c === 0).length,
-    failures: exitCodes.filter((c) => c !== 0).length,
+    successes: exitCodes.filter((c) => expectedExitCodes.includes(c)).length,
+    failures: exitCodes.filter((c) => !expectedExitCodes.includes(c)).length,
+    expectedExitCodes,
     medianMs: percentile(sorted, 50),
     p95Ms: percentile(sorted, 95),
     minMs: sorted[0] ?? 0,
@@ -77,7 +101,13 @@ const isolatedHome = join(tmpdir(), `xr-baseline-${Date.now()}`);
 const scenarios = [
   await scenario("cli-version", ["bun", "run", "src/index.ts", "--version"], { XR_HOME: isolatedHome }),
   await scenario("cli-help", ["bun", "run", "src/index.ts", "help"], { XR_HOME: isolatedHome }),
-  await scenario("doctor-json", ["bun", "run", "src/index.ts", "doctor", "--json"], { XR_HOME: isolatedHome }, "Optional local runtimes/providers may warn when not installed; required failures are what gate release."),
+  await scenario(
+    "doctor-json",
+    ["bun", "run", "src/index.ts", "doctor", "--json"],
+    { XR_HOME: isolatedHome },
+    "Exit 1 is the CORRECT result on a host with no reachable provider (Phase 0 · T4): doctor reports task-readiness, not installation status. Exit 0 here would mean XR is lying about being able to work.",
+    [0, 1],
+  ),
   await scenario("workspace-list", ["bun", "run", "src/index.ts", "workspace", "list", "--json"], { XR_HOME: isolatedHome }),
   await scenario("doctor-perf", ["bun", "run", "src/index.ts", "doctor", "--perf", "--json"], { XR_HOME: isolatedHome }, "In-process CLI microbenchmarks; not full cold-start precision."),
 ];
@@ -99,6 +129,6 @@ const report = {
 
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, "baseline-measurements.json"), JSON.stringify(report, null, 2));
-writeFileSync(join(OUT_DIR, "BASELINE_MEASUREMENTS.md"), `# XR 3.1.6 Baseline Measurements\n\nGenerated: ${report.generatedAt}\n\nEnvironment: Bun ${report.environment.bun}, ${report.environment.os}/${report.environment.arch}, ${Math.round(report.environment.memory.totalBytes / 1024 / 1024)} MiB RAM.\n\nMethodology: ${report.methodology.samples} samples per deterministic local-only scenario using an isolated XR_HOME (\`${isolatedHome}\`). Values are wall-clock measurements for this host and are not claims of cross-hardware benchmark precision.\n\n| Scenario | Command | Success | Median ms | p95 ms | Peak RSS MiB | Notes |\n|---|---|---:|---:|---:|---:|---|\n${scenarios.map((s) => `| ${s.id} | \`${s.command.join(" ")}\` | ${s.successes}/${s.samples} | ${s.medianMs.toFixed(1)} | ${s.p95Ms.toFixed(1)} | ${(s.peakRssBytes / 1024 / 1024).toFixed(1)} | ${s.limitation ?? ""} |`).join("\n")}\n\nMachine-readable report: \`baseline-measurements.json\`.\n`);
+writeFileSync(join(OUT_DIR, "BASELINE_MEASUREMENTS.md"), `# XR ${RELEASE_VERSION} Baseline Measurements\n\nGenerated: ${report.generatedAt}\n\nEnvironment: Bun ${report.environment.bun}, ${report.environment.os}/${report.environment.arch}, ${Math.round(report.environment.memory.totalBytes / 1024 / 1024)} MiB RAM.\n\nMethodology: ${report.methodology.samples} samples per deterministic local-only scenario using an isolated XR_HOME (\`${isolatedHome}\`). Values are wall-clock measurements for this host and are not claims of cross-hardware benchmark precision.\n\n| Scenario | Command | Success | Median ms | p95 ms | Peak RSS MiB | Notes |\n|---|---|---:|---:|---:|---:|---|\n${scenarios.map((s) => `| ${s.id} | \`${s.command.join(" ")}\` | ${s.successes}/${s.samples} | ${s.medianMs.toFixed(1)} | ${s.p95Ms.toFixed(1)} | ${(s.peakRssBytes / 1024 / 1024).toFixed(1)} | ${s.limitation ?? ""} |`).join("\n")}\n\nMachine-readable report: \`baseline-measurements.json\`.\n`);
 console.log(`wrote ${relative(ROOT, OUT_DIR)}/baseline-measurements.json and BASELINE_MEASUREMENTS.md`);
 if (scenarios.some((s) => s.failures > 0)) process.exit(1);

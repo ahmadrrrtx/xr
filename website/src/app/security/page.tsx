@@ -1,20 +1,29 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
+import { site } from "@/lib/site";
 import { ShieldCheck, Lock, Key, FileCheck, Eye, Server, ArrowRight } from "lucide-react";
 
 export const metadata: Metadata = { title: "Security" };
 
 const items = [
-  { icon: ShieldCheck, title: "Capability-based security", desc: "Each skill receives only the capabilities it explicitly requests — file paths, network domains, and environment variables." },
-  { icon: Lock, title: "Sandboxed execution", desc: "Skills run in hardened micro-sandboxes with syscall filtering, filesystem namespaces, and restricted network egress." },
-  { icon: Key, title: "Secrets & key management", desc: "Encrypted vault with per-skill scoping, rotating credentials, and just-in-time approval for sensitive access." },
+  { icon: ShieldCheck, title: "Authority is not intelligence", desc: "A model proposes; policy, approval and budget grant. The gate runs even when the model is wrong or manipulated." },
+  { icon: Lock, title: "Deterministic policy gate", desc: "Egress allow-listing, secret-path denial, and dangerous-command blocking are evaluated in-process before any tool runs — independent of what the model decided." },
+  { icon: Key, title: "Secrets stay yours", desc: "BYOK: provider keys are read from your environment. The credential vault encrypts stored integration secrets with AES-256-GCM envelope encryption." },
   { icon: Eye, title: "Human-in-the-loop", desc: "Confirm dangerous actions before they execute. Configure policies by skill, repository, and risk level." },
-  { icon: FileCheck, title: "Signed packages", desc: "Every skill is signed by its author. The runtime verifies signatures before execution." },
-  { icon: Server, title: "Audit & replay", desc: "Every run produces an immutable audit log. Replay sessions end-to-end for debugging and compliance." },
+  { icon: FileCheck, title: "Governed extensibility", desc: "Plugins declare permissions and are disabled by default. Nothing is loaded until you enable it." },
+  { icon: Server, title: "Tamper-evident audit", desc: "Every consequential action is appended to a hash-chained local log. `xr audit verify` detects any modification." },
 ];
 
-const certifications = ["SOC 2 Type II", "ISO 27001", "HIPAA-ready", "GDPR", "CCPA"];
+// XR holds no third-party certifications. Stating that plainly is the point:
+// Constitution Article XIX forbids advertising certifications that do not exist.
+const honestPosture = [
+  "MIT licensed",
+  "No telemetry",
+  "Local-first",
+  "BYOK",
+  "Open source — audit it yourself",
+];
 
 export default function SecurityPage() {
   return (
@@ -22,7 +31,7 @@ export default function SecurityPage() {
       <PageHeader
         eyebrow="Security"
         title="Security is the product."
-        subtitle="XR was designed with a security core, not security bolted on. Capabilities, sandboxing, and audit are fundamental primitives."
+        subtitle="XR separates authority from intelligence: a deterministic policy gate, human approval, spend ceilings, and a tamper-evident audit log."
       />
       <section className="pb-8">
         <div className="mx-auto max-w-7xl px-6">
@@ -45,21 +54,27 @@ export default function SecurityPage() {
             <div aria-hidden className="absolute inset-0" style={{ background: "radial-gradient(600px 300px at 50% 0%, rgba(16,185,129,0.18), transparent 70%)" }} />
             <div className="relative">
               <div className="flex flex-wrap justify-center gap-3">
-                {certifications.map((c) => (
+                {honestPosture.map((c) => (
                   <span key={c} className="px-3 py-1.5 rounded-full border border-white/10 text-sm text-zinc-300 bg-white/[0.03]">
                     {c}
                   </span>
                 ))}
               </div>
               <h2 className="mt-8 text-3xl md:text-4xl font-semibold tracking-tight text-gradient">
-                Request our security dossier.
+                Read the security model.
               </h2>
               <p className="mt-4 text-zinc-400 max-w-xl mx-auto">
-                Including our SOC 2 report, penetration test summaries, and architecture whitepaper.
+                XR is not certified by any third party and does not claim to be. What it does have is
+                a documented threat model, an in-process policy gate, and a hash-chained audit log —
+                all of which you can read in the repository.
               </p>
-              <Link href="/contact" className="btn btn-primary mt-8">
-                Request dossier <ArrowRight className="h-4 w-4" />
-              </Link>
+              <p className="mt-3 text-sm text-zinc-500 max-w-xl mx-auto">
+                XR enforces in-process policy, not kernel or VM isolation. Treat it as a strong guard
+                rail, not a sandbox boundary.
+              </p>
+              <a href={`${site.github}/blob/main/SECURITY.md`} target="_blank" rel="noreferrer" className="btn btn-primary mt-8">
+                Read SECURITY.md <ArrowRight className="h-4 w-4" />
+              </a>
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
-  "version": "7.0.0",
-  "description": "XR 7.0 (XR OS Supremacy) — outcome-based evaluation harness, hard security/correctness gates, evidence-backed certification, compatibility contracts, longitudinal regression detection, and a claim/evidence matrix. XR now proves what it can do, states what it cannot, and detects when a change makes it worse.",
+  "version": "7.0.1",
+  "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr.cjs"
@@ -23,16 +23,17 @@
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "ci": "bun run typecheck && bun test && bun run set-version:check && bun run baseline:inventory",
+    "ci": "bun run typecheck && bun test && bun run release:check && bun run claim-lint && bun run baseline:inventory",
     "xr": "bun run src/index.ts",
     "cli:help": "bun run src/index.ts help",
     "cli:doctor": "bun run src/index.ts doctor",
-    "set-version": "bun run scripts/set-version.ts",
-    "set-version:check": "bun run scripts/set-version.ts --check",
-    "prepublishOnly": "bun run scripts/set-version.ts --check",
+    "prepublishOnly": "bun run release:check && bun run claim-lint",
     "baseline:inventory": "bun run scripts/baseline-inventory.ts",
     "baseline:measure": "bun run scripts/measure-baseline.ts",
-    "baseline:validate": "bun run scripts/validate-baseline.ts"
+    "baseline:validate": "bun run scripts/validate-baseline.ts",
+    "release:stamp": "bun run scripts/release-manifest.ts --write",
+    "release:check": "bun run scripts/release-manifest.ts --check",
+    "claim-lint": "bun run scripts/claim-lint.ts"
   },
   "repository": {
     "type": "git",

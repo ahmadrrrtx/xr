@@ -20,6 +20,7 @@ import {
   colors as C,
 } from "../cli/output.ts";
 import { usageError } from "../cli/errors.ts";
+import { EXIT } from "../cli/flags.ts";
 
 export class RunAgentCommand implements Command {
   name = "run";
@@ -48,6 +49,22 @@ export class RunAgentCommand implements Command {
         tip('Example: xr "summarize this repository" --budget 0.25');
         tip("Modes: --mode agent | plan | ask");
         return;
+      } else if (a?.startsWith("-")) {
+        /**
+         * Phase 0 · T11 — global flags are not task text.
+         *
+         * The router re-injects consumed global flags (`--json`, `--no-color`,
+         * `--quiet`, …) onto the command's argv. Because every unrecognised
+         * token was pushed into `taskArgs`, `xr run` with no task became the
+         * task "--no-color": XR then executed a nonsense task instead of
+         * reporting the usage error, so a genuine mistake exited 1 (task
+         * failure) rather than 2 (usage), and `xr run --json` would have run
+         * "--json" as a prompt.
+         *
+         * Global flags are handled by the output layer, so they are skipped
+         * here; their values are consumed with them.
+         */
+        if (a === "--workspace" || a === "-w" || a === "--format" || a === "--output" || a === "-o") i++;
       } else if (a) {
         taskArgs.push(a);
       }
@@ -80,8 +97,25 @@ export class RunAgentCommand implements Command {
     try {
       const result = await agentService.runTask(task, mode, overrides);
       console.log();
-      if (result.stopped === "done") ok(`done in ${result.steps} step(s)`);
-      else warn(`ended: ${result.finalMessage}`);
+      if (result.stopped === "done") {
+        ok(`done in ${result.steps} step(s)`);
+      } else {
+        warn(`ended: ${result.finalMessage}`);
+        /**
+         * Phase 0 · T11 — a task that did not finish must not exit 0.
+         *
+         * Previously only a *thrown* error set an exit code; a returned
+         * AgentResult with stopped==="error" printed a warning and exited 0, so
+         * every CI pipeline wrapping XR was silently green on failure.
+         *
+         * Exit codes follow the documented contract:
+         *   error    → 1 (EXIT.ERROR)      something went wrong
+         *   budget   → 1                   work incomplete, ceiling reached
+         *   approval → 1                   work incomplete, awaiting a human
+         *   max_steps→ 1                   work incomplete, loop limit hit
+         */
+        process.exitCode = EXIT.ERROR;
+      }
       if (result.finalMessage) console.log(C.cyan("\n" + result.finalMessage));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

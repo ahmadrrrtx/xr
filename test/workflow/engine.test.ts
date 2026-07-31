@@ -203,8 +203,24 @@ describe("Workflow Engine", () => {
         { kind: "user", userId: "admin", name: "Admin" },
       );
 
-      // Should continue to completion (or partially complete)
-      expect(["completed", "partially_completed"].includes(executed.state)).toBe(true);
+      /**
+       * Phase 0 · T6 — this assertion was updated deliberately.
+       *
+       * It previously expected the run to reach "completed" after approval.
+       * That only passed because the `Deploy` tool_action node fabricated
+       * success: no shell command was ever executed. Constitution Article XX
+       * names this exact anti-pattern ("a test asserting a node reached
+       * 'completed' without checking the effect").
+       *
+       * With no tool executor wired into this test engine, the honest outcome
+       * is that the approval is recorded and the deploy node FAILS as
+       * unsupported rather than lying. That is what we assert now.
+       */
+      expect(executed.state).not.toBe("completed");
+      const deployState = executed.nodeStates.get(deploy.id);
+      expect(deployState?.state).toBe("failed");
+      expect(deployState?.error).toMatch(/no tool executor is configured/i);
+      expect(executed.errorChain.some((e) => e.nodeId === deploy.id)).toBe(true);
     });
 
     test("denial stops workflow", async () => {

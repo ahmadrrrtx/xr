@@ -297,6 +297,18 @@ function reinjectGlobalFlags(args: string[], flags: GlobalFlags): string[] {
   return out;
 }
 
+/**
+ * Read the exit code a command signalled through `process.exitCode`.
+ *
+ * Commands report failure by assigning `process.exitCode`; the router must
+ * surface that rather than overwrite it with success (Phase 0 · T11).
+ */
+function currentExitCode(): number {
+  const code = process.exitCode;
+  if (typeof code === "number" && code !== 0) return code;
+  return EXIT.OK;
+}
+
 // ── Unknown command UX ────────────────────────────────────────────────────────
 
 function unknownCommand(name: string): never {
@@ -407,23 +419,38 @@ export async function runCli(argv: string[]): Promise<number> {
           await kernel.executeCommand("run", injectRunOverrides(flags.args, flags), process.cwd());
         }
       });
-      return EXIT.OK;
+      // Phase 0 · T11 — propagate the command's exit code. Returning EXIT.OK
+      // unconditionally discarded every failure a command reported through
+      // process.exitCode, so failed work exited 0.
+      return currentExitCode();
     }
 
-    // ── Default: free-form task → run ─────────────────────────────────────
-    if (head && !head.startsWith("-")) {
-      const maybeCmd = resolveCommandName(head);
-      if (!maybeCmd && rest.length === 0 && head.length < 24 && !head.includes(" ")) {
-        const { didYouMean } = await import("./output.ts");
+    /**
+     * ── Default: free-form task → run ───────────────────────────────────────
+     *
+     * Phase 0 · T11 — one-word tasks must route to task mode.
+     *
+     * This block previously rejected any single token within edit distance 2 of
+     * a command name: `xr hello` printed "Unknown command: hello" (because
+     * "hello" is 2 edits from "help") instead of running the task, breaking the
+     * documented `xr "your task"` grammar for one-word inputs.
+     *
+     * The rule is now unambiguous: a RESERVED command name is a command;
+     * everything else is a task. Near-miss typos still get a suggestion, but as
+     * a non-fatal hint printed alongside the task run — never as a refusal.
+     */
+    if (head && !head.startsWith("-") && !resolveCommandName(head)) {
+      const looksLikeSingleWord = rest.length === 0 && head.length < 24 && !head.includes(" ");
+      if (looksLikeSingleWord) {
+        const { didYouMean, editDistance } = await import("./output.ts");
         const suggestions = didYouMean(
           head,
           allAliasesAndNames().filter((n) => !n.startsWith("-")),
         );
-        if (suggestions.length && suggestions[0] !== head) {
-          const { editDistance } = await import("./output.ts");
-          if (editDistance(head.toLowerCase(), suggestions[0]!.toLowerCase()) <= 2) {
-            unknownCommand(head);
-          }
+        const nearest = suggestions[0];
+        if (nearest && nearest !== head && editDistance(head.toLowerCase(), nearest.toLowerCase()) <= 2) {
+          const { tip } = await import("./output.ts");
+          tip(`Running "${head}" as a task. Did you mean the command \`xr ${nearest}\`?`);
         }
       }
     }
@@ -440,7 +467,7 @@ export async function runCli(argv: string[]): Promise<number> {
       }
       await kernel.executeCommand("run", taskArgs, process.cwd());
     });
-    return EXIT.OK;
+    return currentExitCode();
   } catch (e) {
     if (e instanceof CliError && e.id === "unknown_command") {
       return EXIT.USAGE;

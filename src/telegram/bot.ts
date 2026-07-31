@@ -20,6 +20,7 @@ import {
   type OutgoingMessage,
 } from "./render.ts";
 import { runAgent } from "../core/agent.ts";
+import { resolveExtensibility } from "../services/extensibility-bridge.ts";
 import { loadConfig } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
@@ -173,11 +174,15 @@ export class TelegramBot {
         const providerId = config.defaults.provider;
         const model = config.defaults.model;
         const provider = buildProvider(config, {});
+        // Phase 0 · T8 — plugins/MCP/skills reach the Telegram surface too.
+        const extensibility = await resolveExtensibility(this.deps.store, cmd.text);
         const result = await runAgent(cmd.text, "agent", {
           provider,
           store: this.deps.store,
           cwd: process.cwd(),
           say: () => {}, // streamed lines suppressed on mobile
+          extraTools: extensibility.extraTools,
+          systemPrompt: extensibility.skillPrompt || undefined,
           approve: this.approver(chatId),
           budget: {
             maxUsd: isLocal(providerId) ? undefined : (cmd.budgetUsd ?? config.budget.perTaskUsd),

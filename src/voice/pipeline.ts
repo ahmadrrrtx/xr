@@ -10,6 +10,7 @@ import { SpeechToText } from "./stt.ts";
 import { TextToSpeech } from "./tts.ts";
 import { detectWake, parseConfirmation, parseSpokenMetaCommand } from "./wake.ts";
 import { runAgent } from "../core/agent.ts";
+import { resolveExtensibility } from "../services/extensibility-bridge.ts";
 import { loadConfig, isMemoryEnabled } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
@@ -149,11 +150,15 @@ export class VoicePipeline {
     const memoryEngine = new MemoryStore(this.deps.store);
     const memEnabled = isMemoryEnabled();
 
+    // Phase 0 · T8 — plugins/MCP/skills reach the Voice surface too.
+    const extensibility = await resolveExtensibility(this.deps.store, command);
     const result = await runAgent(command, "agent", {
       store: this.deps.store,
       provider,
       cwd: process.cwd(),
       say: () => {},
+      extraTools: extensibility.extraTools,
+      systemPrompt: extensibility.skillPrompt || undefined,
       approve: this.voiceApprover(),
       budget: {
         maxUsd: isLocal(providerId) ? undefined : config.budget.perTaskUsd,

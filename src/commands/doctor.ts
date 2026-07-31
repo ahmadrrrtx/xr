@@ -2,7 +2,7 @@
 import { CORE_VERSION, versionInfo } from "../core/version.ts";
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
-import { printStatus, probeHealth, detectPlatform } from "../install/system.ts";
+import { printStatus, probeHealth, detectPlatform, type HealthCheck } from "../install/system.ts";
 import { configPath, loadConfig } from "../config/config.ts";
 import { PRESETS } from "../providers/presets.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
@@ -11,6 +11,7 @@ import { isMemoryEnabled } from "../config/config.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";
 import { pluginDoctorLine } from "../plugins/cli.ts";
 import {
+  evaluateRunnable,
   runtimeEnvironment,
   safeConfigStatus,
   summarizeHealthChecks,
@@ -27,12 +28,21 @@ async function loadFlags() {
 
 export class DoctorCommand implements Command {
   name = "doctor";
-  description = "system health, dependency, audit, and provider check";
-  usage = "xr doctor [--network] [--json] [--perf]";
+  description = "task-readiness check: reports whether XR can complete a task now";
+  usage = "xr doctor [--deep] [--network] [--json] [--perf]";
 
   async execute(ctx: CommandContext): Promise<void> {
     const { isJsonMode } = await import("../cli/output.ts");
     const json = ctx.args.includes("--json") || isJsonMode();
+    /**
+     * Phase 0 · T4 — active path by default, full probes behind `--deep`.
+     *
+     * Readiness means "can XR complete a task now", which depends on the
+     * providers and the workspace. Voice, control, environment and capability
+     * probes are diagnostic breadth, not readiness, so they only run with
+     * `--deep` (or `--network`, kept for backwards compatibility).
+     */
+    const deep = ctx.args.includes("--deep") || ctx.args.includes("--network");
     if (ctx.args.includes("--perf")) {
       await runPerfBenchmarks(json);
       return;
@@ -55,16 +65,16 @@ export class DoctorCommand implements Command {
         for (const r of reports) checks.push({ id: `provider-${r.id}`, label: `Provider: ${r.id}`, state: r.ok ? "ok" : r.authOk ? "warn" : "fail", detail: r.detail });
       } catch(e){ checks.push({ id:"providers", label:"Provider health", state:"warn", detail:(e as Error).message });}
       checks.push({ id:"research", label:"Research engine", state:"ok", detail:`${researchCount} sessions` });
-      try { const { checkVoiceStack } = await import("../voice/index.ts"); for(const c of (await checkVoiceStack()).checks) checks.push({ id:c.id, label:c.label, state:c.state, detail:c.detail }); } catch(e){ checks.push({ id:"voice", label:"Voice stack", state:"warn", detail:(e as Error).message });}
+      if (deep) { try { const { checkVoiceStack } = await import("../voice/index.ts"); for(const c of (await checkVoiceStack()).checks) checks.push({ id:c.id, label:c.label, state:c.state, detail:c.detail }); } catch(e){ checks.push({ id:"voice", label:"Voice stack", state:"warn", detail:(e as Error).message });} }
       checks.push({ id:"memory", label:"Memory engine", state: memEnabled ? "ok" : "warn", detail: `${memHealth.total} entries` });
       try { const { PluginManager } = await import("../plugins/manager.ts"); const pm = new PluginManager(store, ctx.cwd); await pm.loadEnabled(); const ps = pm.summary(); checks.push({ id:"plugins", label:"Plugin platform", state: ps.errored ? "warn" : "ok", detail: `${ps.installed} installed, ${ps.enabled} enabled, ${ps.errored} need attention` }); } catch(e){ checks.push({ id:"plugins", label:"Plugin platform", state:"warn", detail:(e as Error).message }); }
       try { const { McpManager } = await import("../mcp/manager.ts"); const mm = new McpManager(store, ctx.cwd); await mm.loadEnabled(); const ms = mm.summary(); checks.push({ id:"mcp", label:"MCP platform", state: ms.errored ? "warn" : "ok", detail: `${ms.installed} servers, ${ms.enabled} enabled, ${ms.healthy} healthy` }); } catch(e){ checks.push({ id:"mcp", label:"MCP platform", state:"warn", detail:(e as Error).message }); }
-      try { const caps = ctx.registry.resolve(Tokens.Capabilities).health(); checks.push({ id:"capabilities", label:"Capability Ecosystem", state: caps.quarantined ? "warn" : "ok", detail: `${caps.total} capabilities, ${caps.certified} certified, ${caps.quarantined} quarantined` }); } catch(e){ checks.push({ id:"capabilities", label:"Capability Ecosystem", state:"warn", detail:(e as Error).message }); }
+      if (deep) { try { const caps = ctx.registry.resolve(Tokens.Capabilities).health(); checks.push({ id:"capabilities", label:"Capability Ecosystem", state: caps.quarantined ? "warn" : "ok", detail: `${caps.total} capabilities, ${caps.certified} certified, ${caps.quarantined} quarantined` }); } catch(e){ checks.push({ id:"capabilities", label:"Capability Ecosystem", state:"warn", detail:(e as Error).message }); } }
       try { const wf = ctx.registry.resolve(Tokens.WorkflowStore); const { listAgents } = await import("../agents/registry.ts"); const health = wf.health(); checks.push({ id:"multi-agent", label:"Multi-agent runtime", state: health.workflows.failed ? "warn" : "ok", detail: `${listAgents({ includeDisabled: true }).length} agents, ${health.workflows.total} workflows, ${health.workflows.running} running` }); } catch(e){ checks.push({ id:"multi-agent", label:"Multi-agent runtime", state:"warn", detail:(e as Error).message }); }
       // control
-      try { const { detectCapabilities } = await import("../control/adapter.ts"); const caps = detectCapabilities(); checks.push({ id:"control", label:"Computer Control", state: caps.tools.keyboard ? "ok":"warn", detail: `${caps.os} · keyboard:${caps.tools.keyboard} mouse:${caps.tools.mouse}` }); } catch {}
+      if (deep) { try { const { detectCapabilities } = await import("../control/adapter.ts"); const caps = detectCapabilities(); checks.push({ id:"control", label:"Computer Control", state: caps.tools.keyboard ? "ok":"warn", detail: `${caps.os} · keyboard:${caps.tools.keyboard} mouse:${caps.tools.mouse}` }); } catch(e){ checks.push({ id:"control", label:"Computer Control", state:"warn", detail:(e as Error).message }); } }
       // XR 5.1 — environment interaction OS capability summary
-      try {
+      if (deep) try {
         const { detectEnvironmentCapabilities, environmentDisabled } = await import("../environment/service.ts");
         const kill = environmentDisabled();
         if (kill.disabled) {
@@ -106,9 +116,25 @@ export class DoctorCommand implements Command {
 
     await printStatus(ctx.args);
 
+    /**
+     * Phase 0 · T4 — the readiness verdict.
+     *
+     * `printStatus` above answers "is XR installed correctly". The block below
+     * answers the question the user actually asked — "can XR complete a task
+     * now" — and is the value that drives the exit code.
+     */
+    const readinessChecks: HealthCheck[] = [];
     try {
       const providerService = ctx.registry.resolve(Tokens.Providers);
       const reports = await providerService.checkAllProviders();
+      for (const r of reports) {
+        readinessChecks.push({
+          id: `provider-${r.id}`,
+          label: `Provider: ${r.id}`,
+          state: r.ok ? "ok" : r.authOk ? "warn" : "fail",
+          detail: r.detail,
+        });
+      }
       if (reports.length) { console.log(""); console.log(C.bold("Provider Health")); for (const r of reports) { const status = r.ok ? C.green("✓") : r.authOk ? C.amber("!") : C.red("✗"); console.log(`  ${r.id.padEnd(12)} ${status}  ${r.detail}`); } }
     } catch(e){ warn(`Provider health check failed: ${(e as Error).message}`); }
 
@@ -157,6 +183,19 @@ export class DoctorCommand implements Command {
     const memState = !memEnabled ? C.red("✗ disabled") : memHealth.expired > 0 ? C.amber(`! ${memHealth.total} entries (${memHealth.expired} expired)`) : C.green(`✓ ${memHealth.total} entries`);
     console.log(`  enabled ........ ${memState}`);
     if (memEnabled && memHealth.ok) { if (memHealth.byCategory.length) { const cats = memHealth.byCategory.map((s) => `${s.category}: ${s.c}`).join(" · "); console.log(`  by category .... ${C.dim(cats)}`); } }
+
+    // ── Readiness verdict (drives the exit code) ─────────────────────────────
+    const verdict = evaluateRunnable(readinessChecks, []);
+    console.log("");
+    console.log(C.bold("Readiness"));
+    if (verdict.runnable) {
+      console.log(`  ${C.green("✓ XR can complete a task now")} ${C.dim(`· ${verdict.runnableReason}`)}`);
+    } else {
+      console.log(`  ${C.red("✗ XR cannot complete a task")} ${C.dim(`· ${verdict.runnableReason}`)}`);
+      console.log(`  ${C.dim("→")} Next: run ${C.bold("xr config")} to set a provider key, or start a local model runtime.`);
+      process.exitCode = 1;
+    }
+    if (!deep) console.log(C.dim("  (run `xr doctor --deep` for voice, control, capability and environment probes)"));
   }
 }
 

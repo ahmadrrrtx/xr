@@ -16,6 +16,7 @@ import { detectRuntime } from "../../local/runtimes.ts";
 import { runLab } from "../../security/lab.ts";
 import { buildAuditReport } from "../../export/report.ts";
 import { runAgent, type AgentDeps } from "../../core/agent.ts";
+import { resolveExtensibility } from "../../services/extensibility-bridge.ts";
 import { WorkspaceManager } from "../../core/workspace.ts";
 import { SHELL_VIEW_ORDER, type ShellViewId } from "../../ui/icons.ts";
 import { stripAnsi } from "../../ui/ansi.ts";
@@ -549,11 +550,24 @@ async function runTask(state: ShellState, task: string): Promise<void> {
     state.dirty = true;
   };
 
+  /**
+   * Phase 0 · T8 — reach the extensibility layer.
+   *
+   * Without this the Shell ran with core tools only: plugins the user installed
+   * and MCP servers they connected were silently unavailable here while working
+   * in `xr run`. Resolved through the shared bridge so both surfaces load the
+   * same managers from the same workspace store.
+   */
+  const extensibility = await resolveExtensibility(state.store, task);
+  for (const note of extensibility.diagnostics) addTimeline(state, "warn", note);
+
   const result = await runAgent(task, state.mode, {
     provider,
     store: state.store,
     cwd: state.cwd,
     say,
+    extraTools: extensibility.extraTools,
+    systemPrompt: extensibility.skillPrompt || undefined,
     approve: async (req) => {
       return await promptConfirm(
         state,

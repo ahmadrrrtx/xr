@@ -1,0 +1,98 @@
+name: Bug report
+description: Something XR does is wrong, or something it claims is not true.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Before filing, please check the
+        [known-limitations register](../../blob/main/docs/release/7.0.1/known-limitations.md) —
+        it lists what is deliberately not implemented yet.
+
+        **Security vulnerabilities do not belong here.** Follow
+        [SECURITY.md](../../blob/main/SECURITY.md) instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What XR actually did.
+      placeholder: "`xr doctor` exited 0 while no provider was reachable."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What XR should have done, and why.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands, in order. A reproduction we can run is worth more than a description.
+      placeholder: |
+        1. rm -rf ~/.xr
+        2. xr doctor --json
+        3. echo $?
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface
+      multiple: true
+      options:
+        - CLI (one-shot task)
+        - Shell (TUI)
+        - Daemon / dashboard
+        - Telegram
+        - Voice
+        - Plugin or MCP
+        - Installer
+        - Docker
+        - Website or docs
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `xr doctor --json`
+      description: |
+        Paste the output. Secrets are redacted automatically, but review it before posting.
+      render: json
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: XR version
+      description: "Output of `xr --version`."
+      placeholder: "7.0.1 (Truth)"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS and runtime
+      placeholder: "Ubuntu 24.04, Bun 1.3.14, installed via install.sh"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: honesty
+    attributes:
+      label: Claim check
+      options:
+        - label: This report is about XR behaving differently from what it documents or claims.
+          required: false
+        - label: I have confirmed this is not already listed in the known-limitations register.
+          required: true

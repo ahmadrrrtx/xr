@@ -48,10 +48,6 @@ const APPROVAL_REQUIRED: Record<string, boolean> = {
   check_package: false,
   system_apps: false,
   system_clipboard_read: false,
-  system_volume: false,
-  system_screenshot: false,
-  system_battery: false,
-  system_wifi: false,
   write_file: true,
   delete_file: true,
   shell: true,
@@ -60,9 +56,6 @@ const APPROVAL_REQUIRED: Record<string, boolean> = {
   system_clipboard_write: true,
   system_notify: true,
   system_open_app: true,
-  system_volume_set: true,
-  system_media: true,
-  system_trash: true,
 };
 
 /**

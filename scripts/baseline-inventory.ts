@@ -8,7 +8,15 @@ import { PRESETS } from "../src/providers/presets.ts";
 import { LOCAL_RUNTIMES } from "../src/local/registry.ts";
 
 const ROOT = join(import.meta.dir, "..");
-const OUT_DIR = join(ROOT, "docs", "release", "3.1.6");
+/**
+ * Phase 0 · T13 — release artifacts follow the manifest, never a literal.
+ * Hardcoding "3.1.6" is what left docs/release/ stamped to a version the code
+ * no longer had.
+ */
+const RELEASE_VERSION = JSON.parse(
+  readFileSync(join(ROOT, "release.manifest.json"), "utf8"),
+).identity.version as string;
+const OUT_DIR = join(ROOT, "docs", "release", RELEASE_VERSION);
 
 function walk(dir: string, predicate: (path: string) => boolean = () => true): string[] {
   if (!existsSync(dir)) return [];
@@ -137,5 +145,5 @@ const inventory = {
 
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(join(OUT_DIR, "inventory.json"), JSON.stringify(inventory, null, 2));
-writeFileSync(join(OUT_DIR, "INVENTORY.md"), `# XR 3.1.6 Repository Inventory\n\nGenerated: ${inventory.generatedAt}\n\n## Summary\n\n| Area | Count |\n|---|---:|\n| Source files | ${inventory.counts.sourceFiles} |\n| Test files | ${inventory.counts.testFiles} |\n| CLI commands | ${inventory.counts.cliCommands} |\n| Daemon routes | ${inventory.counts.daemonRoutes} |\n| Providers | ${inventory.counts.providers} |\n| Local runtimes | ${inventory.counts.localRuntimes} |\n| Plugins | ${inventory.counts.plugins} |\n| Skills | ${inventory.counts.skills} |\n\n## Entrypoints\n\n- Package bin: \`${rootPackage.bin?.xr}\`\n- Runtime CLI: \`src/index.ts\`\n- Daemon: \`src/daemon/server.ts\`\n- Docker entrypoint: \`bun run src/index.ts serve --port 7842\`\n\n## CLI commands\n\n${inventory.cliCommands.map((c) => `- \`${c.name}\` (${c.group}, ${c.classification}) — ${c.usage}`).join("\n")}\n\n## Daemon routes\n\n${inventory.daemonRoutes.map((r) => `- ${r.method ?? "ANY"} \`${r.path ?? `${r.prefix}*`}\` — ${r.auth} (${r.file})`).join("\n")}\n\n## Providers and runtimes\n\n${inventory.providers.map((p) => `- \`${p.id}\` — ${p.kind}, ${p.status}`).join("\n")}\n\n## Plugins\n\n${inventory.plugins.map((p) => `- \`${p.id}\` — ${p.status}`).join("\n")}\n\n## Skills\n\n${inventory.skills.map((s) => `- \`${s.id}\` — ${s.status}`).join("\n")}\n\nMachine-readable inventory: \`inventory.json\`.\n`);
+writeFileSync(join(OUT_DIR, "INVENTORY.md"), `# XR ${RELEASE_VERSION} Repository Inventory\n\nGenerated: ${inventory.generatedAt}\n\n## Summary\n\n| Area | Count |\n|---|---:|\n| Source files | ${inventory.counts.sourceFiles} |\n| Test files | ${inventory.counts.testFiles} |\n| CLI commands | ${inventory.counts.cliCommands} |\n| Daemon routes | ${inventory.counts.daemonRoutes} |\n| Providers | ${inventory.counts.providers} |\n| Local runtimes | ${inventory.counts.localRuntimes} |\n| Plugins | ${inventory.counts.plugins} |\n| Skills | ${inventory.counts.skills} |\n\n## Entrypoints\n\n- Package bin: \`${rootPackage.bin?.xr}\`\n- Runtime CLI: \`src/index.ts\`\n- Daemon: \`src/daemon/server.ts\`\n- Docker entrypoint: \`bun run src/index.ts serve --port 7842\`\n\n## CLI commands\n\n${inventory.cliCommands.map((c) => `- \`${c.name}\` (${c.group}, ${c.classification}) — ${c.usage}`).join("\n")}\n\n## Daemon routes\n\n${inventory.daemonRoutes.map((r) => `- ${r.method ?? "ANY"} \`${r.path ?? `${r.prefix}*`}\` — ${r.auth} (${r.file})`).join("\n")}\n\n## Providers and runtimes\n\n${inventory.providers.map((p) => `- \`${p.id}\` — ${p.kind}, ${p.status}`).join("\n")}\n\n## Plugins\n\n${inventory.plugins.map((p) => `- \`${p.id}\` — ${p.status}`).join("\n")}\n\n## Skills\n\n${inventory.skills.map((s) => `- \`${s.id}\` — ${s.status}`).join("\n")}\n\nMachine-readable inventory: \`inventory.json\`.\n`);
 console.log(`wrote ${relative(ROOT, OUT_DIR)}/inventory.json and INVENTORY.md`);

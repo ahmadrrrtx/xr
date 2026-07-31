@@ -166,20 +166,41 @@ export class ProviderRouter {
       decision.fallbackChain.length > 0 &&
       (decision.requirements.allowFallback ?? decision.constraints.allowFallback)
     ) {
-      const step = decision.fallbackChain[0]!;
-      try {
-        const fallback = registry.createProvider(
-          step.providerId,
-          this.config,
-          step.modelId,
-        );
-        return {
-          provider: new FallbackProvider(primary, fallback),
-          decision,
-        };
-      } catch {
-        return { provider: primary, decision };
+      /**
+       * Phase 0 · T11 — fallback targets must differ from the primary.
+       *
+       * This path had no diversity check (only the legacy path below did), so
+       * XR printed "Ollama (Local) → fallback Ollama (Local)" and, on failure,
+       * "Primary provider (ollama) failed … Falling back to ollama". Retrying a
+       * dead endpoint against itself was presented to the user as resilience.
+       *
+       * A fallback step is only useful if it changes the destination: a
+       * different provider, or at minimum a different model on that provider.
+       */
+      const selected = decision.selected;
+      const step = decision.fallbackChain.find(
+        (candidate) =>
+          candidate.providerId !== selected.providerId ||
+          candidate.modelId !== selected.modelId,
+      );
+      if (step) {
+        try {
+          const fallback = registry.createProvider(
+            step.providerId,
+            this.config,
+            step.modelId,
+          );
+          return {
+            provider: new FallbackProvider(primary, fallback),
+            decision,
+          };
+        } catch {
+          return { provider: primary, decision };
+        }
       }
+      // Every candidate resolved to the same target — run without a fallback
+      // rather than advertising one that cannot help.
+      return { provider: primary, decision };
     }
 
     return { provider: primary, decision };
@@ -200,12 +221,24 @@ export class ProviderRouter {
       fallbackModel = local?.model ?? this.config.defaults.fallbackModel ?? "qwen2.5:7b";
     }
 
-    if (fallbackId && fallbackId !== primaryId) {
+    /**
+     * Phase 0 · T11 — target diversity, including the same-provider case.
+     *
+     * The original guard (`fallbackId !== primaryId`) still permitted a
+     * same-provider/same-model fallback whenever the model was also equal, and
+     * the shipped defaults made exactly that the common case
+     * (defaults.provider = "ollama" and defaults.fallbackProvider = "ollama").
+     */
+    const resolvedFallbackModel = fallbackModel ?? primaryModel;
+    const isDifferentTarget =
+      Boolean(fallbackId) && (fallbackId !== primaryId || resolvedFallbackModel !== primaryModel);
+
+    if (isDifferentTarget) {
       try {
         const fallback = registry.createProvider(
-          fallbackId,
+          fallbackId!,
           this.config,
-          fallbackModel ?? primaryModel,
+          resolvedFallbackModel,
         );
         return new FallbackProvider(primary, fallback);
       } catch {
@@ -285,8 +318,28 @@ export class FallbackProvider implements Provider {
   get id() {
     return this.primary.id;
   }
+  /**
+   * Human-visible routing reason (Phase 0 · T11).
+   *
+   * The label used to print only provider labels, so a genuinely diverse
+   * fallback (qwen2.5:7b → codellama:7b on the same runtime) rendered as
+   * "Ollama (Local) → fallback Ollama (Local)" — indistinguishable from the
+   * self-fallback bug and impossible for a user to reason about. The model is
+   * now included whenever the provider labels match, so the routing decision is
+   * always legible.
+   */
   get label() {
-    return `${this.primary.label} → fallback ${this.fallback.label}`;
+    const primaryLabel = this.primary.label;
+    const fallbackLabel = this.fallback.label;
+    if (primaryLabel !== fallbackLabel) {
+      return `${primaryLabel} → fallback ${fallbackLabel}`;
+    }
+    const primaryModel = (this.primary as { model?: string }).model;
+    const fallbackModel = (this.fallback as { model?: string }).model;
+    if (primaryModel && fallbackModel && primaryModel !== fallbackModel) {
+      return `${primaryLabel} (${primaryModel}) → fallback ${fallbackLabel} (${fallbackModel})`;
+    }
+    return primaryLabel;
   }
 
   /** Expose both sides for decision/audit consumers. */
@@ -294,12 +347,21 @@ export class FallbackProvider implements Provider {
     return this.fallback.id;
   }
 
+  /** `provider/model` when the model is known, else just the provider id. */
+  private describe(p: Provider): string {
+    const model = (p as { model?: string }).model;
+    return model ? `${p.id}/${model}` : p.id;
+  }
+
   async chat(messages: any[], tools: any[]): Promise<any> {
     try {
       return await this.primary.chat(messages, tools);
     } catch (e) {
+      // Phase 0 · T11 — name the actual fallback target, including the model,
+      // so "falling back to ollama" can never describe a retry of the same
+      // model on the same endpoint.
       console.warn(
-        `\x1b[33m! Primary provider (${this.primary.id}) failed: ${(e as Error).message}. Falling back to ${this.fallback.id}...\x1b[0m`,
+        `\x1b[33m! Primary provider (${this.describe(this.primary)}) failed: ${(e as Error).message}. Falling back to ${this.describe(this.fallback)}...\x1b[0m`,
       );
       return await this.fallback.chat(messages, tools);
     }

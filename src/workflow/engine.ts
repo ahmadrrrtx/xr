@@ -73,6 +73,48 @@ export interface WorkflowExecutionRecorder {
   }): Promise<string>;
 }
 
+/**
+ * Interface for the canonical tool-execution service (Phase 0 · T6).
+ *
+ * The engine does NOT implement tool execution — a second executor would be a
+ * duplicate authority for an L1 concern (Commandment 6 / ADR-2). It delegates,
+ * and when no executor is wired it refuses to run the node rather than
+ * fabricating success.
+ */
+export interface WorkflowToolExecutor {
+  /**
+   * Execute a tool action for real.
+   *
+   * Implementations must return `ok: false` when the action did not happen.
+   * Returning `ok: true` for an action that was not performed is the defect
+   * class Phase 0 exists to eliminate (Commandment 2).
+   */
+  executeTool(params: {
+    capability: { family: string; name: string };
+    inputs: Record<string, unknown>;
+    workflowId: string;
+    nodeId: string;
+    signal?: AbortSignal;
+  }): Promise<{ ok: boolean; output?: unknown; error?: string }>;
+
+  /** Whether this executor can perform the named capability at all. */
+  supports(capability: { family: string; name: string }): boolean;
+}
+
+/**
+ * Interface for real time-based waiting (Phase 0 · T6).
+ *
+ * Timer nodes previously "waited" by immediately marking themselves complete.
+ * A scheduler that actually elapses time is injected instead; without one,
+ * timer nodes park in a waiting state rather than lying about having waited.
+ */
+export interface WorkflowTimerScheduler {
+  /** Resolve after `ms` have genuinely elapsed. */
+  wait(ms: number, signal?: AbortSignal): Promise<void>;
+  /** Resolve when the named event fires; reject/timeout otherwise. */
+  waitForEvent?(eventName: string, signal?: AbortSignal): Promise<void>;
+}
+
 /** Interface for the ContextService. */
 export interface WorkflowContextProvider {
   buildContextPackage(params: {
@@ -106,6 +148,18 @@ export interface WorkflowEngineConfig {
   executionRecorder: WorkflowExecutionRecorder;
   contextProvider: WorkflowContextProvider;
   runStore: WorkflowRunStore;
+  /**
+   * Canonical tool executor (Phase 0 · T6). Optional by type so existing
+   * call-sites compile unchanged, but its ABSENCE now means tool-action nodes
+   * fail as unsupported — never that they succeed silently.
+   */
+  toolExecutor?: WorkflowToolExecutor;
+  /**
+   * Real timer scheduler (Phase 0 · T6). Without it, timer nodes remain in a
+   * waiting state to be advanced by an external scheduler instead of
+   * pretending the delay elapsed.
+   */
+  timerScheduler?: WorkflowTimerScheduler;
 }
 
 // ── The Engine ─────────────────────────────────────────────────────────────
@@ -693,28 +747,97 @@ export class WorkflowEngine {
     run.state = applyRunEvent(run.state, isApproval ? "enter_approval" : "enter_review");
   }
 
+  /**
+   * Execute a tool-action node against the canonical execution service.
+   *
+   * Phase 0 · T6. Previously this method transitioned the node straight to
+   * "complete", echoed its own inputs back as `outputs`, and recorded
+   * `outcome: "succeeded"` — without invoking anything. A workflow could report
+   * that it had sent the email, written the file or called the API when no such
+   * thing had occurred.
+   *
+   * The node now succeeds only when a real executor reports a real effect:
+   *   · no executor wired      → fail (unsupported), never succeed
+   *   · capability unsupported → fail, never succeed
+   *   · executor returns !ok   → fail, with the executor's reason
+   *   · executor throws        → fail, with the thrown message
+   */
   private async executeToolActionNode(
     run: WorkflowRun,
     node: WorkflowNode & { kind: "tool_action" },
     ns: WorkflowNodeStateDetail,
   ): Promise<void> {
     const startTime = Date.now();
+
+    const fail = async (reason: string): Promise<void> => {
+      ns.state = applyNodeEvent(ns.state, "fail", node.id);
+      ns.error = reason;
+      const entry: WorkflowErrorEntry = {
+        nodeId: node.id,
+        error: reason,
+        timestamp: Date.now(),
+        retryable: false,
+      };
+      run.errorChain.push(entry);
+      try {
+        await this.config.executionRecorder.recordExecution({
+          workflowId: run.runId,
+          taskId: ns.nodeId,
+          nodeId: node.id,
+          capability: { kind: node.capability.family, name: node.capability.name },
+          inputSummary: node.inputSummary,
+          outcome: "failed",
+          message: reason,
+          durationMs: Date.now() - startTime,
+        });
+      } catch {
+        // Recording the failure must never convert it into a success.
+      }
+    };
+
+    const executor = this.config.toolExecutor;
+    if (!executor) {
+      await fail(
+        `tool_action node "${node.id}" cannot run: no tool executor is configured for this engine. ` +
+          `XR refuses to report success for an action it did not perform.`,
+      );
+      return;
+    }
+
+    const capability = { family: node.capability.family, name: node.capability.name };
+    if (!executor.supports(capability)) {
+      await fail(`tool_action node "${node.id}" requires unsupported capability ${capability.family}:${capability.name}`);
+      return;
+    }
+
     try {
+      const result = await executor.executeTool({
+        capability,
+        inputs: (node.inputs ?? {}) as Record<string, unknown>,
+        workflowId: run.runId,
+        nodeId: node.id,
+        signal: this.running.get(run.runId)?.signal,
+      });
+
+      if (!result.ok) {
+        await fail(result.error ?? `tool ${capability.family}:${capability.name} reported failure`);
+        return;
+      }
+
       ns.state = applyNodeEvent(ns.state, "complete", node.id);
-      ns.outputs = { result: node.inputs };
+      ns.outputs = { result: result.output };
       await this.config.executionRecorder.recordExecution({
         workflowId: run.runId,
         taskId: ns.nodeId,
         nodeId: node.id,
-        capability: { kind: node.capability.family, name: node.capability.name },
+        capability: { kind: capability.family, name: capability.name },
         inputSummary: node.inputSummary,
         outcome: "succeeded",
         message: "Tool action completed",
         durationMs: Date.now() - startTime,
       });
     } catch (err) {
-      ns.state = applyNodeEvent(ns.state, "fail", node.id);
-      ns.error = err instanceof Error ? err.message : String(err);
+      await fail(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -723,29 +846,61 @@ export class WorkflowEngine {
     node: WorkflowNode & { kind: "wait_timer" },
     ns: WorkflowNodeStateDetail,
   ): Promise<void> {
-    if (node.timer.type === "delay") {
+    const scheduler = this.config.timerScheduler;
+    const signal = this.running.get(run.runId)?.signal;
+
+    if (node.timer.type === "delay" || node.timer.type === "deadline") {
+      const durationMs =
+        node.timer.type === "delay"
+          ? node.timer.durationMs
+          : Math.max(0, node.timer.timestamp - Date.now());
+
       ns.state = applyNodeEvent(ns.state, "wait_timer", node.id);
       run.state = applyRunEvent(run.state, "enter_waiting");
-      // In a real implementation, a background timer would advance this.
-      // For now, mark as completed after the delay (simulated synchronously
-      // for small delays, or via an external scheduler for longer ones).
-      ns.state = applyNodeEvent(ns.state, "start", node.id);
+
+      if (!scheduler) {
+        // No scheduler: the node legitimately stays in the waiting state for an
+        // external scheduler to advance. It must NOT claim to have waited.
+        ns.error = `waiting ${durationMs}ms — no timer scheduler configured; an external scheduler must advance this node`;
+        return;
+      }
+
+      const startedAt = Date.now();
+      try {
+        ns.state = applyNodeEvent(ns.state, "start", node.id);
+        await scheduler.wait(durationMs, signal);
+      } catch (err) {
+        ns.state = applyNodeEvent(ns.state, "fail", node.id);
+        ns.error = err instanceof Error ? err.message : String(err);
+        return;
+      }
+
+      const elapsed = Date.now() - startedAt;
       ns.state = applyNodeEvent(ns.state, "complete", node.id);
-      ns.outputs = { waited: node.timer.durationMs };
-    } else if (node.timer.type === "deadline") {
-      const remaining = Math.max(0, node.timer.timestamp - Date.now());
-      ns.state = applyNodeEvent(ns.state, "wait_timer", node.id);
-      run.state = applyRunEvent(run.state, "enter_waiting");
-      ns.state = applyNodeEvent(ns.state, "start", node.id);
+      // `waited` is the measured elapsed time, not the requested duration, so
+      // the record reflects what actually happened (Article XX.1).
+      ns.outputs = { waited: elapsed, requested: durationMs };
+      return;
+    }
+
+    // Event-based wait.
+    ns.state = applyNodeEvent(ns.state, "wait_event", node.id);
+    run.state = applyRunEvent(run.state, "enter_waiting");
+
+    if (!scheduler?.waitForEvent) {
+      // Park in the waiting state. Previously this completed instantly, so a
+      // workflow "waited for" an event that had never fired.
+      ns.error = `waiting for event "${node.timer.eventName}" — no event scheduler configured; an external subscriber must advance this node`;
+      return;
+    }
+
+    try {
+      await scheduler.waitForEvent(node.timer.eventName, signal);
       ns.state = applyNodeEvent(ns.state, "complete", node.id);
-      ns.outputs = { waited: remaining };
-    } else {
-      // Event-based wait
-      ns.state = applyNodeEvent(ns.state, "wait_event", node.id);
-      run.state = applyRunEvent(run.state, "enter_waiting");
-      // In production, an event subscriber would trigger completion
-      ns.state = applyNodeEvent(ns.state, "complete", node.id);
-      ns.outputs = { event: node.timer.eventName };
+      ns.outputs = { event: node.timer.eventName, observed: true };
+    } catch (err) {
+      ns.state = applyNodeEvent(ns.state, "fail", node.id);
+      ns.error = err instanceof Error ? err.message : String(err);
     }
   }
 

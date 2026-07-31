@@ -19,6 +19,7 @@ import {
   BookOpen,
   Rocket,
 } from "lucide-react";
+import { site } from "./site";
 
 export const features = [
   {
@@ -39,7 +40,7 @@ export const features = [
   {
     icon: Boxes,
     title: "Skill Graph",
-    desc: "Compose 12,000+ verified skills into pipelines. Each skill is typed, versioned, and permission-scoped.",
+    desc: "Compose the bundled skills into pipelines. Each skill is manifest-declared and permission-scoped.",
   },
   {
     icon: Cloud,
@@ -64,30 +65,27 @@ export const features = [
   {
     icon: Zap,
     title: "Blazing Fast",
-    desc: "Rust core. Streaming by default. Sub-second tool calls on local models. Designed for daily driving.",
+    desc: "TypeScript on Bun. Streaming by default. Local models keep tool calls on your machine.",
   },
 ];
 
 export const stats = [
-  { value: "12.4M", label: "Monthly runs" },
-  { value: "12,000+", label: "Verified skills" },
-  { value: "840K+", label: "Developers" },
-  { value: "99.99%", label: "Uptime (Cloud)" },
+  { value: `${site.skillCount}`, label: "Bundled skills" },
+  { value: "MIT", label: "License" },
+  { value: "100%", label: "Local-first (no mandatory cloud)" },
+  { value: "0", label: "Telemetry endpoints" },
 ];
 
+// Provider/runtime integrations XR actually ships presets for (src/providers/presets.ts).
 export const logos = [
-  "Vercel",
-  "Linear",
-  "Raycast",
+  "Ollama",
+  "LM Studio",
+  "llama.cpp",
+  "vLLM",
+  "OpenAI",
   "Anthropic",
-  "Cursor",
-  "Warp",
-  "Supabase",
-  "Replicate",
-  "Perplexity",
-  "Resend",
-  "Notion",
-  "Stripe",
+  "Google Gemini",
+  "OpenRouter",
 ];
 
 export const marketplaceCategories = [
@@ -544,8 +542,7 @@ export const pricingPlans = [
       "VPC deployment",
       "Dedicated models",
       "Custom skills & SLA",
-      "SOC 2 / HIPAA / ISO 27001",
-      "Dedicated solutions engineer",
+            "Dedicated solutions engineer",
     ],
   },
 ];
@@ -583,12 +580,12 @@ export const changelog = [
     date: "July 8, 2026",
     title: "XR 3.1 G — The Agentic Runtime",
     highlights: [
-      "Rewritten Rust core: 3x faster cold starts",
+      "Runtime performance work across the agent loop",
       "New skill graph with typed compositions",
       "MCP-native server architecture",
       "Redesigned Dashboard",
       "First-class models marketplace",
-      "120+ new official skills",
+      "New official skills",
     ],
   },
   {
@@ -608,9 +605,8 @@ export const changelog = [
     title: "XR 3.0 — General availability",
     highlights: [
       "Stable runtime API",
-      "Marketplace with 8,000 skills",
+      "Skill marketplace scaffolding",
       "Enterprise SSO",
-      "SOC 2 Type II certified",
     ],
   },
 ];
@@ -620,7 +616,7 @@ export const posts = [
     slug: "xr-3-1-ga",
     title: "XR 3.1 is generally available",
     excerpt:
-      "Today we're releasing XR 3.1 G — a complete rewrite of the agentic runtime that is 3x faster, more secure, and ships with a new skill graph.",
+      "Notes on the agentic runtime: the skill layer, the model router, and the security gate.",
     author: "The XR Team",
     date: "July 8, 2026",
     tag: "Release",
@@ -630,7 +626,7 @@ export const posts = [
     slug: "skill-graph",
     title: "Designing the XR skill graph",
     excerpt:
-      "Skills are the primitive of agentic software. Here's how we designed a typed, composable graph that scales to 12,000+ skills.",
+      "Skills are the primitive of agentic software. Here is how the manifest-governed skill layer is designed.",
     author: "Engineering",
     date: "June 22, 2026",
     tag: "Engineering",
