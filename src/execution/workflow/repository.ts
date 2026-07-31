@@ -5,7 +5,7 @@
  * Definitions and runs are stored as JSON in SQLite with indexed lookup columns.
  */
 
-import type { WorkspaceStore } from "../state/workspace-store.ts";
+import type { WorkspaceStore } from "../../state/workspace-store.ts";
 import type {
   WorkflowDefinition,
   WorkflowRun,

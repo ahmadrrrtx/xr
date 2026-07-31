@@ -13,9 +13,9 @@
  *   - Every node links to execution records, context packages, artifacts, and policy.
  */
 
-import type { AgentPermissionProfile, AgentRole, ProviderScope, ToolScope } from "../agents/types.ts";
-import type { ContextTier } from "../context/types.ts";
-import type { IdempotencyClass } from "../execution/types.ts";
+import type { AgentPermissionProfile, AgentRole, ProviderScope, ToolScope } from "../../agents/types.ts";
+import type { ContextTier } from "../../context/types.ts";
+import type { IdempotencyClass } from "../types.ts";
 
 // ── 1. Workflow Definition Version ─────────────────────────────────────────
 

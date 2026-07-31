@@ -13,7 +13,7 @@
 
 import { CORE_VERSION, PLUGIN_API_VERSION } from "../core/version.ts";
 import { CAPABILITY_DESCRIPTOR_SCHEMA_VERSION } from "../capabilities/types.ts";
-import { WORKFLOW_DEFINITION_SCHEMA_VERSION } from "../workflow/types.ts";
+import { WORKFLOW_DEFINITION_SCHEMA_VERSION } from "../execution/workflow/types.ts";
 import { listDeploymentProfiles } from "../deployment/profiles.ts";
 import {
   AUDIT_EXPORT_FORMAT_VERSION,
@@ -102,7 +102,7 @@ export async function checkPublicApi(baseline: ContractBaseline = XR_7_0_CONTRAC
     execution: () => import("../execution/index.ts"),
     trust: () => import("../trust/index.ts"),
     context: () => import("../context/index.ts"),
-    workflow: () => import("../workflow/index.ts"),
+    workflow: () => import("../execution/workflow/index.ts"),
     capabilities: () => import("../capabilities/index.ts"),
     intelligence: () => import("../intelligence/index.ts"),
     environment: () => import("../environment/index.ts"),
@@ -266,9 +266,9 @@ export function checkDeploymentProfiles(baseline: ContractBaseline = XR_7_0_CONT
  */
 export async function checkWorkflowLegacyDefinitions(): Promise<CompatibilityCheck[]> {
   try {
-    const nodes = await import("../workflow/nodes.ts");
-    const versioning = await import("../workflow/versioning.ts");
-    const types = await import("../workflow/types.ts");
+    const nodes = await import("../execution/workflow/nodes.ts");
+    const versioning = await import("../execution/workflow/versioning.ts");
+    const types = await import("../execution/workflow/types.ts");
 
     const t = nodes.trigger("Start", { type: "manual" });
     const c = nodes.completion("Done", "ok", { dependencies: [t.id] });

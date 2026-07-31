@@ -8,7 +8,7 @@ import type { SkillInstallation, SkillManifest } from "../skills/schema.ts";
 import type { McpRegistryEntry } from "../mcp/registry.ts";
 import type { ProviderPreset } from "../providers/presets.ts";
 import { capabilityLabels } from "../providers/capabilities.ts";
-import type { WorkflowDefinition } from "../workflow/types.ts";
+import type { WorkflowDefinition } from "../execution/workflow/types.ts";
 import type { ConnectorDefinition } from "../integrations/registry.ts";
 import type {
   CapabilityAuthorityVector,

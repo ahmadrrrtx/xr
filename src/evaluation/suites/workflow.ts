@@ -10,9 +10,9 @@
 import { Database } from "bun:sqlite";
 import type { WorkspaceStore } from "../../state/workspace-store.ts";
 import { openDatabase } from "../../state/write-gate.ts";
-import { WorkflowRepository } from "../../workflow/repository.ts";
-import { WorkflowEngine } from "../../workflow/engine.ts";
-import * as n from "../../workflow/nodes.ts";
+import { WorkflowRepository } from "../../execution/workflow/repository.ts";
+import { WorkflowEngine } from "../../execution/workflow/engine.ts";
+import * as n from "../../execution/workflow/nodes.ts";
 import {
   canMigrateActiveRun,
   createDraft,
@@ -20,8 +20,8 @@ import {
   publishDraft,
   publishNewVersion,
   verifyIntegrity,
-} from "../../workflow/versioning.ts";
-import { validateGraph } from "../../workflow/nodes.ts";
+} from "../../execution/workflow/versioning.ts";
+import { validateGraph } from "../../execution/workflow/nodes.ts";
 import { runCapabilityContractTests } from "../../capabilities/certification.ts";
 import { descriptorFromTool } from "../../capabilities/adapters.ts";
 import type { CapabilityDescriptor } from "../../capabilities/types.ts";

@@ -9,7 +9,7 @@
  * runtime gate makes. The Phase 7 engine owns execution/scheduling; the
  * environment gate owns authority.
  */
-import type { ToolActionNode } from "../workflow/types.ts";
+import type { ToolActionNode } from "../execution/workflow/types.ts";
 import type { IdempotencyClass } from "../execution/types.ts";
 import { assessEnvironmentAction } from "./classify.ts";
 import { redactEnvironmentAction } from "./privacy.ts";

@@ -6,7 +6,7 @@
  * Each template maps to journey definitions.
  */
 
-import type { WorkflowDefinition } from '../../workflow/types.ts';
+import type { WorkflowDefinition } from '../../execution/workflow/types.ts';
 import { JOURNEY_DEFINITIONS } from './journeys.ts';
 
 export function createWorkflowTemplateForJourney(journeyId: string): WorkflowDefinition | null {

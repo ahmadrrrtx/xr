@@ -8,7 +8,7 @@ import {
   isActive,
   isAwaitingHuman,
   hashDefinition,
-} from "../../src/workflow/types.ts";
+} from "../../src/execution/workflow/types.ts";
 import {
   applyRunEvent,
   applyNodeEvent,
@@ -17,7 +17,7 @@ import {
   canPause,
   canCancel,
   WorkflowStateError,
-} from "../../src/workflow/state-machine.ts";
+} from "../../src/execution/workflow/state-machine.ts";
 import {
   createDraft,
   publishDraft,
@@ -25,9 +25,9 @@ import {
   publishNewVersion,
   verifyIntegrity,
   canMigrateActiveRun,
-} from "../../src/workflow/versioning.ts";
-import * as n from "../../src/workflow/nodes.ts";
-import type { WorkflowDefinition, WorkflowNode, WorkflowRunState, WorkflowNodeState } from "../../src/workflow/types.ts";
+} from "../../src/execution/workflow/versioning.ts";
+import * as n from "../../src/execution/workflow/nodes.ts";
+import type { WorkflowDefinition, WorkflowNode, WorkflowRunState, WorkflowNodeState } from "../../src/execution/workflow/types.ts";
 
 // ── State Transitions ──────────────────────────────────────────────────────
 

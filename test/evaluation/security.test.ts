@@ -28,14 +28,14 @@ import {
   redactEvidence,
   type ScenarioDefinition,
 } from "../../src/evaluation/index.ts";
-import * as n from "../../src/workflow/nodes.ts";
+import * as n from "../../src/execution/workflow/nodes.ts";
 import {
   createDraft,
   inspectIntegrity,
   publishDraft,
   verifyIntegrity,
-} from "../../src/workflow/versioning.ts";
-import { hashDefinition, hashDefinitionLegacyV1 } from "../../src/workflow/types.ts";
+} from "../../src/execution/workflow/versioning.ts";
+import { hashDefinition, hashDefinitionLegacyV1 } from "../../src/execution/workflow/types.ts";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Harness isolation from real user data

@@ -6,9 +6,9 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { AgentPermissionProfile, AgentRole, MemoryScope, ProviderScope, ToolScope } from "../agents/types.ts";
-import type { ContextTier } from "../context/types.ts";
-import type { IdempotencyClass } from "../execution/types.ts";
+import type { AgentPermissionProfile, AgentRole, MemoryScope, ProviderScope, ToolScope } from "../../agents/types.ts";
+import type { ContextTier } from "../../context/types.ts";
+import type { IdempotencyClass } from "../types.ts";
 import type {
   AgenticNode,
   ApproverSpec,

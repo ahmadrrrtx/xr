@@ -9,7 +9,7 @@ import { SkillMarketplace } from "../skills/marketplace.ts";
 import { SkillMarketplaceStore } from "../skills/marketplace-store.ts";
 import { UnifiedSkillRuntime } from "../skills/runtime.ts";
 import { McpRegistry } from "../mcp/registry.ts";
-import { WorkflowRepository } from "../workflow/repository.ts";
+import { WorkflowRepository } from "../execution/workflow/repository.ts";
 import { CONNECTORS } from "../integrations/registry.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
 import type { ServiceRegistry } from "../core/service-registry.ts";
