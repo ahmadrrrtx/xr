@@ -50,6 +50,15 @@ export interface RawRunOptions {
   timeoutMs: number;
   maxOutputBytes: number;
   stdin?: string;
+  /**
+   * Phase 4 · T1 — extra inherited file descriptors (e.g. a seccomp policy
+   * file for bubblewrap). Each parent fd is passed to the child as fd
+   * 3, 4, … in order (node's stdio fd mapping); the caller references the
+   * CHILD-side number in argv (e.g. `--seccomp 3`). The caller must open the
+   * fds before calling runChild and may close them afterwards — the child's
+   * copies are independent.
+   */
+  extraFds?: number[];
 }
 
 export interface RawRunOutcome {
@@ -85,7 +94,9 @@ export function runChild(opts: RawRunOptions): Promise<RawRunOutcome> {
         cwd: opts.cwd,
         env: opts.env,
         detached: true,
-        stdio: ["pipe", "pipe", "pipe"],
+        // Phase 4 · T1 — extra parent fds are inherited by the child as
+        // fd 3, 4, … (e.g. the seccomp policy file for bubblewrap).
+        stdio: ["pipe", "pipe", "pipe", ...(opts.extraFds ?? [])],
       });
     } catch (err) {
       resolvePromise({

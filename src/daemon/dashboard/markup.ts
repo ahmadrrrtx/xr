@@ -15,8 +15,6 @@
  * re-embedded in a template literal unchanged.
  */
 
-import { DASHBOARD_CSS } from "./styles.ts";
-import { DASHBOARD_SCRIPT } from "./client-script.ts";
 
 /** The document template, placeholders unsubstituted. */
 export const DASHBOARD_PAGE = `<!DOCTYPE html>
@@ -25,7 +23,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>XR — Mission Control</title>
-<style>${DASHBOARD_CSS}</style>
+<link rel="stylesheet" href="/assets/dashboard.css">
 </head>
 <body>
 
@@ -189,13 +187,13 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
 
     <!-- Provider chip lockup — always shows active model; click to change -->
     <div class="sidebar-footer">
-      <div class="provider-pill" id="sidebar-provider" onclick="navigateTo('models')" title="Active model — click to Change model">
+      <div class="provider-pill" id="sidebar-provider" data-xr-action="navigateTo('models')" title="Active model — click to Change model">
         <div class="provider-dot" id="provider-dot"></div>
         <span id="sidebar-provider-text" class="truncate">loading…</span>
       </div>
-      <div class="sidebar-hint" style="display:flex; flex-direction:column; gap:2px;">
-        <button class="btn btn-ghost" style="padding:2px 6px; font-size:10px; width:100%;" onclick="navigateTo('models'); setTimeout(focusChangeModel, 50);">Change model</button>
-        <span>Press <span class="mono" style="color:var(--cyan); font-weight:bold;">?</span> for command search</span>
+      <div class="sidebar-hint xr-s-1">
+        <button class="btn btn-ghost xr-s-2" data-xr-action="navigateTo('models'); setTimeout(focusChangeModel, 50);">Change model</button>
+        <span>Press <span class="mono xr-s-3">?</span> for command search</span>
       </div>
     </div>
   </nav>
@@ -206,16 +204,16 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
     <!-- Top Breadcrumbs Status Strip -->
     <header class="topbar">
       <div class="breadcrumbs" id="topbar-breadcrumbs">
-        <a href="#home" onclick="navigateTo('dashboard')">XR Control</a>
+        <a href="#home" data-xr-action="navigateTo('dashboard')">XR Control</a>
         <span>›</span>
-        <span id="breadcrumb-active" style="color:var(--text); font-weight:700;">Home</span>
+        <span id="breadcrumb-active" class="xr-s-4">Home</span>
       </div>
       <div class="topbar-spacer"></div>
       <div class="topbar-status">
-        <div class="status-chip" id="chip-provider" onclick="navigateTo('models')" title="Active model — click to change"><div class="dot"></div><span id="chip-provider-label">—</span></div>
-        <div class="status-chip" id="chip-audit" onclick="navigateTo('audit')"><div class="dot"></div><span id="chip-audit-label">Audit</span></div>
-        <div class="status-chip" id="chip-budget" onclick="navigateTo('budget')"><div class="dot"></div><span id="chip-budget-label">Budget</span></div>
-        <button class="btn" style="padding:4px 10px; font-family:var(--font-mono); font-size:11px" onclick="openPalette()">⌘K</button>
+        <div class="status-chip" id="chip-provider" data-xr-action="navigateTo('models')" title="Active model — click to change"><div class="dot"></div><span id="chip-provider-label">—</span></div>
+        <div class="status-chip" id="chip-audit" data-xr-action="navigateTo('audit')"><div class="dot"></div><span id="chip-audit-label">Audit</span></div>
+        <div class="status-chip" id="chip-budget" data-xr-action="navigateTo('budget')"><div class="dot"></div><span id="chip-budget-label">Budget</span></div>
+        <button class="btn xr-s-5" data-xr-action="openPalette()">⌘K</button>
       </div>
     </header>
 
@@ -229,10 +227,10 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
             <h1>Overview</h1>
             <div class="section-sub">XR Operating Console — <span id="dash-project" class="mono">loading…</span></div>
           </div>
-          <button class="btn" onclick="refreshAll()">↻ Refresh state</button>
+          <button class="btn" data-xr-action="refreshAll()">↻ Refresh state</button>
         </div>
 
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card card-glow-cyan">
             <div class="card-header"><span class="card-title">Spent Today</span><span class="card-icon"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div>
             <div class="card-value" id="d-spent">$0.0000</div>
@@ -255,7 +253,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <h2 style="margin-bottom: 12px;">System Health Bento Matrix</h2>
+        <h2 class="xr-s-7">System Health Bento Matrix</h2>
         <div class="bento-matrix" id="dashboard-health-matrix">
           <div class="matrix-cell">
             <div class="matrix-cell-head"><span class="matrix-cell-title">1. Provider status</span><div class="matrix-cell-status green" id="h-cell-provider"></div></div>
@@ -319,27 +317,27 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <div class="grid grid-2" style="margin-top: 20px;">
+        <div class="grid grid-2 xr-s-8">
           <div class="card">
             <div class="card-header"><span class="card-title">Recent Activity Logs</span></div>
             <div id="d-audit-list"><div class="spinner"></div></div>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Operating Context</span></div>
-            <div id="dash-hardware-summary" class="muted" style="font-size: 12px; line-height: 1.75;">loading hardware specs...</div>
+            <div id="dash-hardware-summary" class="muted xr-s-9">loading hardware specs...</div>
           </div>
         </div>
       </div>
 
       <!-- Panel 2: Chat Sessions (Universal Workspace) -->
-      <div class="panel" id="panel-chat" style="padding: 0;">
+      <div class="panel xr-s-10" id="panel-chat">
         <div class="chat-wrap">
           <!-- Chat sidebar -->
           <aside class="chat-sidebar">
             <div class="chat-side-header">
               <div class="chat-side-title-row">
                 <span class="chat-side-title">Sessions Feed</span>
-                <button class="btn btn-ghost" onclick="chatNewChat()" style="padding:2px 6px;">＋ New</button>
+                <button class="btn btn-ghost xr-s-11" data-xr-action="chatNewChat()">＋ New</button>
               </div>
               <input id="chat-search" class="chat-search-input" placeholder="Search sessions..."/>
             </div>
@@ -349,17 +347,17 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           <!-- Chat main window -->
           <main class="chat-main">
             <header class="chat-top">
-              <div style="font-size:18px; color:var(--cyan);">◈</div>
+              <div class="xr-s-12">◈</div>
               <div class="chat-title-block">
                 <div class="chat-header-title" id="chat-title">Universal Composer</div>
                 <div class="chat-header-model" id="chat-model-label">local-first · BYOK</div>
               </div>
               <div class="chat-status-row" id="chat-status-row"></div>
               <div class="topbar-spacer"></div>
-              <button class="btn btn-ghost" onclick="chatTogglePin()" id="chat-pin-btn">Pin</button>
-              <button class="btn btn-ghost" onclick="chatBranchFromLast()">Branch</button>
-              <button class="btn btn-ghost" onclick="chatExportActive()">Export</button>
-              <button class="btn btn-danger" onclick="chatArchiveActive()">Archive</button>
+              <button class="btn btn-ghost" data-xr-action="chatTogglePin()" id="chat-pin-btn">Pin</button>
+              <button class="btn btn-ghost" data-xr-action="chatBranchFromLast()">Branch</button>
+              <button class="btn btn-ghost" data-xr-action="chatExportActive()">Export</button>
+              <button class="btn btn-danger" data-xr-action="chatArchiveActive()">Archive</button>
             </header>
 
             <div class="chat-messages" id="chat-messages" role="log"></div>
@@ -370,18 +368,18 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                 <div class="attachment-row" id="attachment-row"></div>
                 <div class="composer-input-row">
                   <textarea id="chat-input" placeholder="Ask XR anything... /for commands, @for context" rows="1"></textarea>
-                  <button class="composer-send" id="chat-send-btn" onclick="sendChatMessage()">
+                  <button class="composer-send" id="chat-send-btn" data-xr-action="sendChatMessage()">
                     <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                   </button>
                 </div>
                 <div class="composer-tools-row">
-                  <button class="composer-tool-btn" onclick="openAttachmentPicker()"><svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> ＋ Attach file</button>
-                  <input id="chat-file-input" type="file" multiple style="display:none">
-                  <button class="composer-flag-chip memory" onclick="toggleComposerFlag('memory')">🧠 Memory</button>
-                  <button class="composer-flag-chip research" onclick="toggleComposerFlag('research')">🔬 Research</button>
-                  <button class="composer-flag-chip shield" onclick="toggleComposerFlag('shield')">🛡 Shield</button>
-                  <button class="composer-flag-chip computer" onclick="toggleComposerFlag('computer')">⌁ Control</button>
-                  <button class="composer-flag-chip mode" onclick="cycleChatMode()" id="mode-chip">Mode: Ask</button>
+                  <button class="composer-tool-btn" data-xr-action="openAttachmentPicker()"><svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> ＋ Attach file</button>
+                  <input id="chat-file-input" type="file" multiple class="xr-s-13">
+                  <button class="composer-flag-chip memory" data-xr-action="toggleComposerFlag('memory')">🧠 Memory</button>
+                  <button class="composer-flag-chip research" data-xr-action="toggleComposerFlag('research')">🔬 Research</button>
+                  <button class="composer-flag-chip shield" data-xr-action="toggleComposerFlag('shield')">🛡 Shield</button>
+                  <button class="composer-flag-chip computer" data-xr-action="toggleComposerFlag('computer')">⌁ Control</button>
+                  <button class="composer-flag-chip mode" data-xr-action="cycleChatMode()" id="mode-chip">Mode: Ask</button>
                   <span class="composer-tip"><span class="kbd">Esc</span> interrupt · <span class="kbd">/</span> commands</span>
                 </div>
               </div>
@@ -414,9 +412,9 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-sessions">
         <div class="section-header">
           <div><h1>Recent Sessions</h1><div class="section-sub">Chronological task logs and history database</div></div>
-          <button class="btn" onclick="loadSessionsPanel()">↻ Refresh</button>
+          <button class="btn" data-xr-action="loadSessionsPanel()">↻ Refresh</button>
         </div>
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card"><div class="card-title">Total sessions</div><div class="card-value" id="sess-count-total">0</div></div>
           <div class="card"><div class="card-title">Running jobs</div><div class="card-value" id="sess-count-running">0</div></div>
           <div class="card"><div class="card-title">Completed done</div><div class="card-value" id="sess-count-done">0</div></div>
@@ -425,7 +423,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="grid grid-2">
           <div class="card">
             <div class="card-header"><span class="card-title">Select session</span></div>
-            <div id="sess-list" style="max-height: 400px; overflow-y:auto;"><div class="spinner"></div></div>
+            <div id="sess-list" class="xr-s-14"><div class="spinner"></div></div>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Session Step Inspector</span></div>
@@ -438,9 +436,9 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-workspaces">
         <div class="section-header">
           <div><h1>Workspaces Switcher</h1><div class="section-sub">Isolate databases, memory vectors, and project trees</div></div>
-          <button class="btn" onclick="loadWorkspaces()">↻ Refresh</button>
+          <button class="btn" data-xr-action="loadWorkspaces()">↻ Refresh</button>
         </div>
-        <div class="grid grid-2" style="margin-bottom: 20px;">
+        <div class="grid grid-2 xr-s-6">
           <div class="card">
             <div class="card-header"><span class="card-title">Active workspace</span></div>
             <div class="card-value" id="ws-active">default</div>
@@ -448,10 +446,10 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Create new workspace</span></div>
-            <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="xr-s-15">
               <input id="ws-create-id" class="input" placeholder="Workspace ID (alphanumeric)" />
               <input id="ws-create-name" class="input" placeholder="Optional display name" />
-              <button class="btn btn-primary" onclick="createWorkspace()" style="align-self: flex-start;">Create workspace</button>
+              <button class="btn btn-primary xr-s-16" data-xr-action="createWorkspace()">Create workspace</button>
             </div>
           </div>
         </div>
@@ -465,18 +463,18 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-providers">
         <div class="section-header">
           <div><h1>Cloud Providers (BYOK)</h1><div class="section-sub">Set primary/fallback routes — never stuck on the default model</div></div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-primary" onclick="document.getElementById('prov-set-provider')?.focus()">Change model</button>
-            <button class="btn btn-ghost" onclick="navigateTo('models')">Local Models</button>
+          <div class="xr-s-17">
+            <button class="btn btn-primary" data-xr-action="document.getElementById('prov-set-provider')?.focus()">Change model</button>
+            <button class="btn btn-ghost" data-xr-action="navigateTo('models')">Local Models</button>
           </div>
         </div>
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card xr-s-6">
           <div class="card-header"><span class="card-title">Routing policy</span></div>
           <div id="prov-routing"><div class="spinner"></div></div>
         </div>
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card xr-s-6">
           <div class="card-header"><span class="card-title">Set active routes</span></div>
-          <div class="grid grid-2" style="margin-bottom: 12px;">
+          <div class="grid grid-2 xr-s-7">
             <div>
               <label>Default provider
                 <select id="prov-set-provider"></select>
@@ -494,7 +492,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
               </label>
             </div>
           </div>
-          <button class="btn btn-primary" onclick="saveProviderRouting()">Save Routing Policy</button>
+          <button class="btn btn-primary" data-xr-action="saveProviderRouting()">Save Routing Policy</button>
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">Available preset providers</span></div>
@@ -509,46 +507,46 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
             <h1>Models (Local AI)</h1>
             <div class="section-sub">Change model anytime — never stuck on the onboarding default</div>
           </div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button class="btn btn-primary" onclick="focusChangeModel()" title="Jump to Change model form">Change model</button>
-            <button class="btn" onclick="loadModels()">↻ Refresh</button>
+          <div class="xr-s-18">
+            <button class="btn btn-primary" data-xr-action="focusChangeModel()" title="Jump to Change model form">Change model</button>
+            <button class="btn" data-xr-action="loadModels()">↻ Refresh</button>
           </div>
         </div>
 
         <!-- Always-visible active model strip -->
-        <div class="card" id="models-active-strip" style="margin-bottom: 16px; border-color: var(--cyan); box-shadow: var(--glow-c);">
-          <div class="card-header" style="margin-bottom: 8px;">
+        <div class="card xr-s-19" id="models-active-strip">
+          <div class="card-header xr-s-20">
             <span class="card-title">Active model</span>
             <span class="badge badge-green" id="models-active-badge">primary</span>
           </div>
-          <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between;">
+          <div class="xr-s-21">
             <div>
-              <div class="card-value mono" id="models-active-display" style="font-size:18px; color:var(--cyan);">— / —</div>
-              <div class="muted" id="models-active-sub" style="margin-top:4px;">Primary route used by Shell, CLI, and Chat Workspace</div>
+              <div class="card-value mono xr-s-12" id="models-active-display">— / —</div>
+              <div class="muted xr-s-22" id="models-active-sub">Primary route used by Shell, CLI, and Chat Workspace</div>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button class="btn btn-primary" onclick="focusChangeModel()">Change model</button>
-              <button class="btn btn-ghost" onclick="navigateTo('providers')">Open Providers</button>
-              <button class="btn btn-ghost" onclick="testModelSelection()">Smoke test</button>
+            <div class="xr-s-23">
+              <button class="btn btn-primary" data-xr-action="focusChangeModel()">Change model</button>
+              <button class="btn btn-ghost" data-xr-action="navigateTo('providers')">Open Providers</button>
+              <button class="btn btn-ghost" data-xr-action="testModelSelection()">Smoke test</button>
             </div>
           </div>
-          <div class="muted" style="margin-top:12px; font-size:11px; line-height:1.5;">
-            CLI: <span class="mono" style="color:var(--cyan);">xr providers set &lt;id&gt; [model]</span>
-            · <span class="mono" style="color:var(--cyan);">xr models set &lt;runtime&gt; &lt;model&gt;</span>
-            · Shell: <span class="mono" style="color:var(--cyan);">Alt+P</span> or <span class="mono" style="color:var(--cyan);">/model</span>
+          <div class="muted xr-s-24">
+            CLI: <span class="mono xr-s-25">xr providers set &lt;id&gt; [model]</span>
+            · <span class="mono xr-s-25">xr models set &lt;runtime&gt; &lt;model&gt;</span>
+            · Shell: <span class="mono xr-s-25">Alt+P</span> or <span class="mono xr-s-25">/model</span>
           </div>
         </div>
 
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card"><div class="card-title">Selected runtime</div><div class="card-value" id="models-selected-runtime">Ollama</div></div>
           <div class="card"><div class="card-title">Active local model</div><div class="card-value" id="models-selected-model">—</div></div>
           <div class="card"><div class="card-title">Hardware recommendation</div><div class="card-value" id="models-recommended">—</div></div>
           <div class="card"><div class="card-title">Healthy runtimes</div><div class="card-value" id="models-healthy-count">0</div></div>
         </div>
-        <div class="grid grid-2" style="margin-bottom: 20px;">
+        <div class="grid grid-2 xr-s-6">
           <div class="card" id="models-change-card">
             <div class="card-header"><span class="card-title">Change model</span></div>
-            <div style="display:flex; flex-direction:column; gap:10px;">
+            <div class="xr-s-26">
               <label>Runtime engine
                 <select id="models-select-runtime"></select>
               </label>
@@ -562,13 +560,13 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                   <option value="cloud-first">cloud-first (cloud default, local backup)</option>
                 </select>
               </label>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button class="btn btn-primary" onclick="saveModelSelection()">Save &amp; apply model</button>
-                <button class="btn btn-ghost" onclick="testModelSelection()">Smoke test model latency</button>
+              <div class="xr-s-23">
+                <button class="btn btn-primary" data-xr-action="saveModelSelection()">Save &amp; apply model</button>
+                <button class="btn btn-ghost" data-xr-action="testModelSelection()">Smoke test model latency</button>
               </div>
-              <div class="muted" style="font-size:11px;">
+              <div class="muted xr-s-27">
                 Saving updates local selection and routing. For cloud primary routes, also use
-                <a href="#providers" onclick="navigateTo('providers'); return false;" style="color:var(--cyan);">Providers → Save Routing Policy</a>.
+                <a href="#providers" data-xr-action="navigateTo('providers'); return false;" class="xr-s-25">Providers → Save Routing Policy</a>.
               </div>
             </div>
           </div>
@@ -583,8 +581,8 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
             <div id="models-local"><div class="spinner"></div></div>
           </div>
           <div class="card">
-            <div class="card-header"><span class="card-title">Downloaded model list</span><span class="muted" style="font-size:11px;">Click a model to select it</span></div>
-            <div id="models-list" style="max-height: 240px; overflow-y:auto;"><div class="spinner"></div></div>
+            <div class="card-header"><span class="card-title">Downloaded model list</span><span class="muted xr-s-27">Click a model to select it</span></div>
+            <div id="models-list" class="xr-s-28"><div class="spinner"></div></div>
           </div>
         </div>
       </div>
@@ -593,34 +591,34 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-memory">
         <div class="section-header">
           <div><h1>Durable Memory</h1><div class="section-sub">Local vector search memory browser (records only what you ask it to remember)</div></div>
-          <button class="btn btn-danger" onclick="clearMemory()">Purge Memory</button>
+          <button class="btn btn-danger" data-xr-action="clearMemory()">Purge Memory</button>
         </div>
-        <div class="grid grid-3" style="margin-bottom: 20px;">
+        <div class="grid grid-3 xr-s-6">
           <div class="card"><div class="card-title">Total memory entries</div><div class="card-value" id="mem-h-total">0</div></div>
           <div class="card"><div class="card-title">Expired entries</div><div class="card-value" id="mem-h-expired">0</div></div>
           <div class="card"><div class="card-title">Unused never recalled</div><div class="card-value" id="mem-h-never">0</div></div>
         </div>
         <!-- XR 4.5 — consent disclosure. Progressive: counts here, full
              provenance via the 'xr context inspect' command. -->
-        <div class="grid grid-3" style="margin-bottom: 20px;">
+        <div class="grid grid-3 xr-s-6">
           <div class="card"><div class="card-title">Approved by you</div><div class="card-value" id="mem-c-approved">0</div></div>
           <div class="card"><div class="card-title">Awaiting your decision</div><div class="card-value" id="mem-c-proposed">0</div></div>
           <div class="card"><div class="card-title">Legacy consent unknown</div><div class="card-value" id="mem-c-legacy">0</div></div>
         </div>
-        <div class="card" id="mem-pending-card" style="margin-bottom:20px; display:none;">
+        <div class="card xr-s-29" id="mem-pending-card">
           <div class="card-header"><span class="card-title">Awaiting your decision</span></div>
-          <div class="muted" style="font-size:12px; margin-bottom:8px;">
+          <div class="muted xr-s-30">
             XR will not use these until you approve them. Nothing self-approves.
           </div>
           <div id="mem-pending-list"></div>
         </div>
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card xr-s-6">
           <div class="card-header"><span class="card-title">Search memory ledger</span></div>
-          <div style="display:flex; gap:8px;">
+          <div class="xr-s-17">
             <input id="mem-search" class="input" placeholder="Query semantic nodes (e.g. prefer typescript)" />
-            <button class="btn btn-primary" onclick="doMemSearch()">Search</button>
+            <button class="btn btn-primary" data-xr-action="doMemSearch()">Search</button>
           </div>
-          <div id="mem-search-results" style="margin-top: 10px;"></div>
+          <div id="mem-search-results" class="xr-s-31"></div>
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">Durable entries</span></div>
@@ -632,9 +630,9 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-research">
         <div class="section-header">
           <div><h1>Research Runs</h1><div class="section-sub">Citation-aware deep search and report synthesis console</div></div>
-          <button class="btn" onclick="loadResearchPanel()">↻ Refresh</button>
+          <button class="btn" data-xr-action="loadResearchPanel()">↻ Refresh</button>
         </div>
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card"><div class="card-title">Total research jobs</div><div class="card-value" id="research-count">0</div></div>
           <div class="card"><div class="card-title">Latest job status</div><div class="card-value" id="research-latest-status">—</div></div>
           <div class="card"><div class="card-title">Latest run sources</div><div class="card-value" id="research-latest-sources">0</div></div>
@@ -647,7 +645,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Previous research topics</span></div>
-            <div id="research-list" style="max-height: 400px; overflow-y:auto;"><div class="spinner"></div></div>
+            <div id="research-list" class="xr-s-14"><div class="spinner"></div></div>
           </div>
         </div>
       </div>
@@ -657,16 +655,16 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="section-header">
           <div><h1>Voice Pipeline</h1><div class="section-sub">Wakeword detectors, TTS vocal synthesis, and hardware controls</div></div>
         </div>
-        <div class="card" style="margin-bottom: 20px;">
-          <div style="text-align:center; padding: 24px;">
-            <span style="font-size: 40px; display:block; margin-bottom: 12px;">🎤</span>
+        <div class="card xr-s-6">
+          <div class="xr-s-32">
+            <span class="xr-s-33">🎤</span>
             <h2>Voice Control Gating</h2>
-            <p class="muted" style="max-width: 500px; margin: 8px auto 16px;">
+            <p class="muted xr-s-34">
               Voice capability operates completely locally by default. Wake words run local heuristic detection to prevent persistent network listening.
             </p>
-            <div style="display:flex; gap:8px; justify-content:center;">
-              <button class="btn btn-primary" onclick="toast('Voice activated. Microphone on hold-to-talk mode.', 'ok')">Enable Voice</button>
-              <button class="btn btn-ghost" onclick="toast('Running Voice Loop smoke test... output OK', 'ok')">Test loop latency</button>
+            <div class="xr-s-35">
+              <button class="btn btn-primary" data-xr-action="toast('Voice activated. Microphone on hold-to-talk mode.', 'ok')">Enable Voice</button>
+              <button class="btn btn-ghost" data-xr-action="toast('Running Voice Loop smoke test... output OK', 'ok')">Test loop latency</button>
             </div>
           </div>
         </div>
@@ -688,14 +686,14 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
               <p class="mp-sub">Expand your AI capabilities with signed package skill structures. Review permissions and dependency chains before enabling.</p>
               <div class="mp-search-row">
                 <input id="market-search" class="mp-search" placeholder="Search React developer, security analyst, patent research..." />
-                <button class="btn btn-primary" onclick="loadMarketplace()">Search Catalog</button>
-                <button class="btn btn-ghost" onclick="syncMarketplace()">Sync Registries</button>
+                <button class="btn btn-primary" data-xr-action="loadMarketplace()">Search Catalog</button>
+                <button class="btn btn-ghost" data-xr-action="syncMarketplace()">Sync Registries</button>
               </div>
               <div class="mp-filter-row" id="market-filter-row">
-                <button class="mp-chip active" data-market-filter="all" onclick="setMarketFilter('all')">All Skills</button>
-                <button class="mp-chip" data-market-filter="installed" onclick="setMarketFilter('installed')">Installed</button>
-                <button class="mp-chip" data-market-filter="verified" onclick="setMarketFilter('verified')">Official/Verified</button>
-                <button class="mp-chip" data-market-filter="updates" onclick="setMarketFilter('updates')">Updates ready</button>
+                <button class="mp-chip active" data-market-filter="all" data-xr-action="setMarketFilter('all')">All Skills</button>
+                <button class="mp-chip" data-market-filter="installed" data-xr-action="setMarketFilter('installed')">Installed</button>
+                <button class="mp-chip" data-market-filter="verified" data-xr-action="setMarketFilter('verified')">Official/Verified</button>
+                <button class="mp-chip" data-market-filter="updates" data-xr-action="setMarketFilter('updates')">Updates ready</button>
               </div>
             </div>
             <div class="mp-brand-orb">
@@ -706,7 +704,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card"><div class="card-title">Installed local packs</div><div class="card-value" id="market-installed">0</div></div>
           <div class="card"><div class="card-title">Verified publishers</div><div class="card-value" id="market-verified">0</div></div>
           <div class="card"><div class="card-title">Updates available</div><div class="card-value" id="market-updates">0</div></div>
@@ -717,16 +715,16 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           <aside class="mp-card mp-side">
             <div class="mp-section-title">Filter by domains</div>
             <div id="market-categories"></div>
-            <div class="mp-section-title" style="margin-top:16px;">Quick categories</div>
-            <div class="mp-cat" onclick="setMarketQuery('security soci alert')"><b>🛡 Security Ops</b></div>
-            <div class="mp-cat" onclick="setMarketQuery('developer python react')"><b>⌘ Software suite</b></div>
-            <div class="mp-cat" onclick="setMarketQuery('research academic citation')"><b>🔬 Deep Research</b></div>
+            <div class="mp-section-title xr-s-36">Quick categories</div>
+            <div class="mp-cat" data-xr-action="setMarketQuery('security soci alert')"><b>🛡 Security Ops</b></div>
+            <div class="mp-cat" data-xr-action="setMarketQuery('developer python react')"><b>⌘ Software suite</b></div>
+            <div class="mp-cat" data-xr-action="setMarketQuery('research academic citation')"><b>🔬 Deep Research</b></div>
           </aside>
           <main class="mp-main">
             <div class="mp-tabs">
-              <button class="mp-tab active" data-market-sort="relevance" onclick="setMarketSort('relevance')">Recommended</button>
-              <button class="mp-tab" data-market-sort="trending" onclick="setMarketSort('trending')">Popularity</button>
-              <button class="mp-tab" data-market-sort="updated" onclick="setMarketSort('updated')">Latest</button>
+              <button class="mp-tab active" data-market-sort="relevance" data-xr-action="setMarketSort('relevance')">Recommended</button>
+              <button class="mp-tab" data-market-sort="trending" data-xr-action="setMarketSort('trending')">Popularity</button>
+              <button class="mp-tab" data-market-sort="updated" data-xr-action="setMarketSort('updated')">Latest</button>
             </div>
             <div id="market-grid" class="mp-grid"><div class="spinner"></div></div>
           </main>
@@ -741,22 +739,22 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-plugins">
         <div class="section-header">
           <div><h1>Sandboxed Plugins</h1><div class="section-sub">Code integrations with custom permissions limits</div></div>
-          <button class="btn" onclick="loadPlugins()">↻ Refresh</button>
+          <button class="btn" data-xr-action="loadPlugins()">↻ Refresh</button>
         </div>
-        <div class="grid grid-3" style="margin-bottom: 20px;">
+        <div class="grid grid-3 xr-s-6">
           <div class="card"><div class="card-title">Installed plugins</div><div class="card-value" id="plug-installed">0</div></div>
           <div class="card"><div class="card-title">Active Enabled</div><div class="card-value" id="plug-enabled">0</div></div>
           <div class="card"><div class="card-title">Security status</div><div class="card-value text-green" id="plug-health">Verified</div></div>
         </div>
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card xr-s-6">
           <div class="card-header"><span class="card-title">Active Plugins List</span></div>
           <div id="plugins-list"><div class="spinner"></div></div>
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">Install Plugins</span></div>
-          <div style="display:flex; gap:8px; margin-bottom: 12px;">
+          <div class="xr-s-37">
             <input id="plugin-search" class="input" placeholder="Query integrations catalogue..." />
-            <button class="btn btn-primary" onclick="searchPlugins()">Query Catalogue</button>
+            <button class="btn btn-primary" data-xr-action="searchPlugins()">Query Catalogue</button>
           </div>
           <div id="plugins-catalog"><div class="muted">Query plugins list above or install using terminal command: <code class="mono text-cyan">xr plugins install ./plugin_folder</code></div></div>
         </div>
@@ -766,19 +764,19 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-capabilities">
         <div class="section-header">
           <div><h1>Capability Ecosystem</h1><div class="section-sub">Common descriptors, provenance, permissions, certification, quarantine and rollback</div></div>
-          <button class="btn" onclick="loadCapabilities()">↻ Refresh</button>
+          <button class="btn" data-xr-action="loadCapabilities()">↻ Refresh</button>
         </div>
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card"><div class="card-title">Total</div><div class="card-value" id="cap-total">0</div></div>
           <div class="card"><div class="card-title">Enabled</div><div class="card-value" id="cap-enabled">0</div></div>
           <div class="card"><div class="card-title">Certified</div><div class="card-value text-green" id="cap-certified">0</div></div>
           <div class="card"><div class="card-title">Quarantined</div><div class="card-value text-amber" id="cap-quarantined">0</div></div>
         </div>
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card xr-s-6">
           <div class="card-header"><span class="card-title">Discovery by task / trust constraints</span></div>
-          <div style="display:flex; gap:8px; margin-bottom: 12px;">
+          <div class="xr-s-37">
             <input id="cap-search" class="input" placeholder="e.g. summarize repository, send email, local OCR" />
-            <button class="btn btn-primary" onclick="loadCapabilities(true)">Discover</button>
+            <button class="btn btn-primary" data-xr-action="loadCapabilities(true)">Discover</button>
           </div>
           <div class="muted">Evidence-weighted ranking only — no popularity-only trust score.</div>
         </div>
@@ -792,16 +790,16 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-mcp">
         <div class="section-header">
           <div><h1>Model Context Protocol (MCP)</h1><div class="section-sub">Add external server toolkits (Github, Postgres, etc)</div></div>
-          <button class="btn" onclick="loadMcp()">↻ Refresh</button>
+          <button class="btn" data-xr-action="loadMcp()">↻ Refresh</button>
         </div>
         <div class="grid grid-2">
           <div class="card">
             <div class="card-header"><span class="card-title">Register MCP Server</span></div>
-            <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="xr-s-15">
               <input id="mcp-create-id" class="input" placeholder="Server ID (e.g. github)" />
               <input id="mcp-create-cmd" class="input" placeholder="Execution command (e.g. npx)" />
               <input id="mcp-create-args" class="input" placeholder="Arguments (e.g. -y @modelcontextprotocol/server-github)" />
-              <button class="btn btn-primary" onclick="registerMcp()" style="align-self: flex-start;">Add MCP Server</button>
+              <button class="btn btn-primary xr-s-16" data-xr-action="registerMcp()">Add MCP Server</button>
             </div>
           </div>
           <div class="card">
@@ -816,7 +814,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="section-header">
           <div><h1>Business OS CRM</h1><div class="section-sub">Enterprise metrics automation, CRM assistant logs, and financial flows</div></div>
         </div>
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card"><div class="card-title">Customer Pipelines</div><div class="card-value">12</div><div class="card-sub">Active CRM accounts</div></div>
           <div class="card"><div class="card-title">Invoices audited</div><div class="card-value">$4,850</div><div class="card-sub">Automated monthly audit</div></div>
           <div class="card"><div class="card-title">Workflows triggered</div><div class="card-value">84</div><div class="card-sub">Cron scheduler jobs</div></div>
@@ -824,10 +822,10 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">Business modules integration</span></div>
-          <p class="muted" style="margin-bottom: 12px;">
+          <p class="muted xr-s-7">
             Business OS CRM features run inside XR using dedicated Enterprise Skill Packs. Activate the matching skill sets inside the Skills Marketplace to enable.
           </p>
-          <button class="btn btn-primary" onclick="setMarketQuery('business crm'); navigateTo('skills');">Browse CRM Skill Packs</button>
+          <button class="btn btn-primary" data-xr-action="setMarketQuery('business crm'); navigateTo('skills');">Browse CRM Skill Packs</button>
         </div>
       </div>
 
@@ -835,9 +833,9 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-control">
         <div class="section-header">
           <div><h1>Computer Control</h1><div class="section-sub">Vision and system command automation permissions</div></div>
-          <button class="btn btn-danger" onclick="emergencyStopControl()" style="box-shadow: 0 0 15px rgba(255,77,77,0.3)">🚨 Emergency Stop</button>
+          <button class="btn btn-danger xr-s-38" data-xr-action="emergencyStopControl()">🚨 Emergency Stop</button>
         </div>
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card"><div class="card-title">Control status</div><div class="card-value" id="control-active-badge">Enabled</div></div>
           <div class="card"><div class="card-title">Vision capabilities</div><div class="card-value text-green" id="control-vision-badge">Yes</div></div>
           <div class="card"><div class="card-title">Pending approvals</div><div class="card-value text-amber" id="control-pending-count">0</div></div>
@@ -850,7 +848,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Automated action ledger</span></div>
-            <div id="control-history-list" style="max-height: 320px; overflow-y:auto;"><div class="spinner"></div></div>
+            <div id="control-history-list" class="xr-s-39"><div class="spinner"></div></div>
           </div>
         </div>
       </div>
@@ -859,13 +857,13 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-shield">
         <div class="section-header">
           <div><h1>🛡️ XR Shield — Security & Privacy</h1><div class="section-sub">EDR endpoint checking, processes manager, and Dojo testing lab</div></div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-primary" onclick="runShieldScan('quick')">Quick Scan</button>
-            <button class="btn btn-ghost" onclick="runShieldScan('full')">Full Scan</button>
+          <div class="xr-s-17">
+            <button class="btn btn-primary" data-xr-action="runShieldScan('quick')">Quick Scan</button>
+            <button class="btn btn-ghost" data-xr-action="runShieldScan('full')">Full Scan</button>
           </div>
         </div>
 
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card card-glow-green" id="shield-card-score">
             <div class="card-header"><span class="card-title">Privacy Score</span></div>
             <div class="card-value" id="shield-score-val">100/100</div>
@@ -873,7 +871,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
           <div class="card" id="shield-card-threats">
             <div class="card-header"><span class="card-title">Active threats</span></div>
-            <div class="card-value" id="shield-threats-val" style="color:var(--green)">0</div>
+            <div class="card-value xr-s-40" id="shield-threats-val">0</div>
             <div class="card-sub">Malware or miner triggers</div>
           </div>
           <div class="card">
@@ -883,19 +881,19 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Ad Block filtering</span></div>
-            <div class="card-value text-cyan" id="shield-adblock-val" onclick="toggleShieldAdBlock()" style="cursor:pointer">Enabled</div>
+            <div class="card-value text-cyan xr-s-41" id="shield-adblock-val" data-xr-action="toggleShieldAdBlock()">Enabled</div>
             <div class="card-sub">Sinkhole tracking servers</div>
           </div>
         </div>
 
         <!-- Sub-tabs row -->
-        <div style="display:flex; gap:8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 16px;">
-          <button class="btn btn-ghost active" id="shield-tab-overview" onclick="switchShieldTab('overview')">Anomalies Scan</button>
-          <button class="btn btn-ghost" id="shield-tab-processes" onclick="switchShieldTab('processes')">Process Tree</button>
-          <button class="btn btn-ghost" id="shield-tab-startup" onclick="switchShieldTab('startup')">Startup tasks</button>
-          <button class="btn btn-ghost" id="shield-tab-downloads" onclick="switchShieldTab('downloads')">Downloads scanner</button>
-          <button class="btn btn-ghost" id="shield-tab-browser" onclick="switchShieldTab('browser')">Browser Privacy</button>
-          <button class="btn btn-ghost" id="shield-tab-lab" onclick="switchShieldTab('lab')">Dojo test lab</button>
+        <div class="xr-s-42">
+          <button class="btn btn-ghost active" id="shield-tab-overview" data-xr-action="switchShieldTab('overview')">Anomalies Scan</button>
+          <button class="btn btn-ghost" id="shield-tab-processes" data-xr-action="switchShieldTab('processes')">Process Tree</button>
+          <button class="btn btn-ghost" id="shield-tab-startup" data-xr-action="switchShieldTab('startup')">Startup tasks</button>
+          <button class="btn btn-ghost" id="shield-tab-downloads" data-xr-action="switchShieldTab('downloads')">Downloads scanner</button>
+          <button class="btn btn-ghost" id="shield-tab-browser" data-xr-action="switchShieldTab('browser')">Browser Privacy</button>
+          <button class="btn btn-ghost" id="shield-tab-lab" data-xr-action="switchShieldTab('lab')">Dojo test lab</button>
         </div>
 
         <!-- Tab contents -->
@@ -912,10 +910,10 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <div id="shield-subpanel-processes" style="display:none;">
+        <div id="shield-subpanel-processes" class="xr-s-43">
           <div class="card">
             <div class="card-header"><span class="card-title">Running Processes EDR inspection</span></div>
-            <div style="overflow-x:auto;">
+            <div class="xr-s-44">
               <table class="proc-table">
                 <thead><tr><th>PID</th><th>PPID</th><th>Name</th><th>CPU%</th><th>Memory</th><th>Signature</th><th>Remediate</th></tr></thead>
                 <tbody id="shield-processes-table-body"></tbody>
@@ -924,10 +922,10 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <div id="shield-subpanel-startup" style="display:none;">
+        <div id="shield-subpanel-startup" class="xr-s-43">
           <div class="card">
             <div class="card-header"><span class="card-title">Persistent registry startup logs</span></div>
-            <div style="overflow-x:auto;">
+            <div class="xr-s-44">
               <table class="proc-table">
                 <thead><tr><th>Name</th><th>Registry location</th><th>Task commands</th><th>Integrity status</th></tr></thead>
                 <tbody id="shield-startup-table-body"></tbody>
@@ -936,10 +934,10 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <div id="shield-subpanel-downloads" style="display:none;">
+        <div id="shield-subpanel-downloads" class="xr-s-43">
           <div class="card">
             <div class="card-header"><span class="card-title">Downloads Directory inspector</span></div>
-            <div style="overflow-x:auto;">
+            <div class="xr-s-44">
               <table class="proc-table">
                 <thead><tr><th>Filename</th><th>File size</th><th>Risk assessment</th><th>Actions</th></tr></thead>
                 <tbody id="shield-downloads-table-body"></tbody>
@@ -948,7 +946,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <div id="shield-subpanel-browser" style="display:none;">
+        <div id="shield-subpanel-browser" class="xr-s-43">
           <div class="grid grid-2">
             <div class="card">
               <div class="card-header"><span class="card-title">Browser secure cookies policies</span></div>
@@ -961,14 +959,14 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           </div>
         </div>
 
-        <div id="shield-subpanel-lab" style="display:none;">
+        <div id="shield-subpanel-lab" class="xr-s-43">
           <div class="grid grid-2">
             <div class="card">
               <div class="card-header"><span class="card-title">Dojo Prompt Injection Attack Benchmarks</span></div>
-              <div style="display:flex; flex-direction:column; gap:12px;">
+              <div class="xr-s-45">
                 <p class="muted">Run standard AgentDojo prompt injection attack payloads against local filters to assess safety resistance index.</p>
                 <div id="sec-lab-result"><div class="muted">Click test button to initialize attack simulation...</div></div>
-                <button class="btn btn-primary" onclick="runSecLab()" style="align-self: flex-start;">Run Dojo Lab</button>
+                <button class="btn btn-primary xr-s-16" data-xr-action="runSecLab()">Run Dojo Lab</button>
               </div>
             </div>
             <div class="card">
@@ -983,17 +981,17 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-audit">
         <div class="section-header">
           <div><h1>Audit Log</h1><div class="section-sub">Tamper-evident append-only ledger with cryptographic hash checks</div></div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn btn-primary" onclick="verifyAuditLedger()">Verify Hash integrity</button>
-            <button class="btn btn-ghost" onclick="loadAuditLog()">↻ Refresh</button>
+          <div class="xr-s-17">
+            <button class="btn btn-primary" data-xr-action="verifyAuditLedger()">Verify Hash integrity</button>
+            <button class="btn btn-ghost" data-xr-action="loadAuditLog()">↻ Refresh</button>
           </div>
         </div>
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card xr-s-6">
           <div class="card-header"><span class="card-title">Ledger verification</span><span id="audit-chain-badge" class="badge badge-gray">checking...</span></div>
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">Cryptographic entries</span></div>
-          <div id="audit-log-list" style="max-height: 400px; overflow-y:auto;"><div class="spinner"></div></div>
+          <div id="audit-log-list" class="xr-s-14"><div class="spinner"></div></div>
         </div>
       </div>
 
@@ -1001,18 +999,18 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-budget">
         <div class="section-header">
           <div><h1>Cost & Budget Governor</h1><div class="section-sub">Resource spending trackers and pricing limit controls</div></div>
-          <button class="btn" onclick="loadBudgetPanel()">↻ Refresh</button>
+          <button class="btn" data-xr-action="loadBudgetPanel()">↻ Refresh</button>
         </div>
-        <div class="grid grid-4" style="margin-bottom: 20px;">
+        <div class="grid grid-4 xr-s-6">
           <div class="card"><div class="card-title">Per-task USD limit</div><div class="card-value" id="bud-cap-task">$0.00</div></div>
           <div class="card"><div class="card-title">Daily spend</div><div class="card-value" id="bud-day-spend">$0.00</div></div>
           <div class="card"><div class="card-title">Monthly total</div><div class="card-value" id="bud-month-spend">$0.00</div></div>
           <div class="card"><div class="card-title">Highest model spend</div><div class="card-value text-cyan" id="bud-top-model">—</div></div>
         </div>
-        <div class="grid grid-2" style="margin-bottom: 20px;">
+        <div class="grid grid-2 xr-s-6">
           <div class="card">
             <div class="card-header"><span class="card-title">Configure caps limits</span></div>
-            <div style="display:flex; flex-direction:column; gap:10px;">
+            <div class="xr-s-26">
               <label>Per-task hard USD ceiling
                 <input id="bud-input-task" type="number" step="0.01" class="input" />
               </label>
@@ -1022,16 +1020,16 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
               <label>Daily warning threshold cap
                 <input id="bud-input-day" type="number" step="0.01" class="input" />
               </label>
-              <div style="display:flex; gap:12px; margin: 4px 0;">
-                <label style="flex-direction:row; align-items:center;"><input id="bud-toggle-warn" type="checkbox"/> Warning notifications</label>
-                <label style="flex-direction:row; align-items:center;"><input id="bud-toggle-fallback" type="checkbox"/> Auto routing fallback</label>
+              <div class="xr-s-46">
+                <label class="xr-s-47"><input id="bud-toggle-warn" type="checkbox"/> Warning notifications</label>
+                <label class="xr-s-47"><input id="bud-toggle-fallback" type="checkbox"/> Auto routing fallback</label>
               </div>
-              <button class="btn btn-primary" onclick="saveBudgetConfig()" style="align-self: flex-start;">Save limit ceilings</button>
+              <button class="btn btn-primary xr-s-16" data-xr-action="saveBudgetConfig()">Save limit ceilings</button>
             </div>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Spend metrics ledger list</span></div>
-            <div id="bud-recent" style="max-height: 240px; overflow-y:auto;"><div class="spinner"></div></div>
+            <div id="bud-recent" class="xr-s-28"><div class="spinner"></div></div>
           </div>
         </div>
         <div class="grid grid-2">
@@ -1062,10 +1060,10 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="section-header">
           <div><h1>Downloads Folder Security Scanner</h1><div class="section-sub">Scans local Downloads for malware and alerts on unsafe files</div></div>
         </div>
-        <div class="card" style="margin-bottom: 20px;">
+        <div class="card xr-s-6">
           <div class="card-header"><span class="card-title">Downloads telemetry scan</span></div>
-          <p class="muted" style="margin-bottom: 12px;">This panel monitors file additions inside the standard Downloads folder and alerts if downloaded scripts contain crypto-miner payloads or suspicious command triggers.</p>
-          <button class="btn btn-primary" onclick="switchShieldTab('downloads'); navigateTo('shield');">Open Shield Downloads scanner</button>
+          <p class="muted xr-s-7">This panel monitors file additions inside the standard Downloads folder and alerts if downloaded scripts contain crypto-miner payloads or suspicious command triggers.</p>
+          <button class="btn btn-primary" data-xr-action="switchShieldTab('downloads'); navigateTo('shield');">Open Shield Downloads scanner</button>
         </div>
       </div>
 
@@ -1077,17 +1075,17 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="grid grid-3">
           <div class="card">
             <div class="card-header"><span class="card-title">VS Code Extension</span></div>
-            <p style="font-size:12px; margin-bottom:12px;">Deploy XR inside editor panes. Share context, models, and local-key configuration with active files.</p>
-            <button class="btn" onclick="toast('VS Code API port listening on 127.0.0.1:3141', 'ok')">Integrate Port</button>
+            <p class="xr-s-48">Deploy XR inside editor panes. Share context, models, and local-key configuration with active files.</p>
+            <button class="btn" data-xr-action="toast('VS Code API port listening on 127.0.0.1:3141', 'ok')">Integrate Port</button>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">Termux Android Sync</span></div>
-            <p style="font-size:12px; margin-bottom:12px;">Integrate Termux prompt on Android devices to access models, CRM, and files remotely via Telegram.</p>
-            <button class="btn" onclick="toast('Mobile webhook sync ready', 'ok')">Show instructions</button>
+            <p class="xr-s-48">Integrate Termux prompt on Android devices to access models, CRM, and files remotely via Telegram.</p>
+            <button class="btn" data-xr-action="toast('Mobile webhook sync ready', 'ok')">Show instructions</button>
           </div>
           <div class="card">
             <div class="card-header"><span class="card-title">CLI Daemon State</span></div>
-            <p style="font-size:12px; margin-bottom:12px;">Local background runner checks on cron scheduled tasks, webhooks, and wake phrases.</p>
+            <p class="xr-s-48">Local background runner checks on cron scheduled tasks, webhooks, and wake phrases.</p>
             <span class="badge badge-green">Healthy</span>
           </div>
         </div>
@@ -1101,8 +1099,8 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="card">
           <div class="card-header"><span class="card-title">Cron Automation Tasks</span></div>
           <div class="stat-row"><div class="stat-key">No scheduled cron automation jobs.</div></div>
-          <div style="border-top:1px solid var(--border); padding-top:12px; margin-top:12px;">
-            <p class="muted" style="font-size:11px;">Register scheduling scripts via terminal commands: <code class="mono text-cyan">xr cron add "0 9 * * *" "xr 'Run daily research summary'"</code></p>
+          <div class="xr-s-49">
+            <p class="muted xr-s-27">Register scheduling scripts via terminal commands: <code class="mono text-cyan">xr cron add "0 9 * * *" "xr 'Run daily research summary'"</code></p>
           </div>
         </div>
       </div>
@@ -1123,7 +1121,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-notifications">
         <div class="section-header">
           <div><h1>Alerts Hub</h1><div class="section-sub">System notices, telemetry flags, and safety block indicators</div></div>
-          <button class="btn btn-ghost" onclick="clearNotifications()">Clear list</button>
+          <button class="btn btn-ghost" data-xr-action="clearNotifications()">Clear list</button>
         </div>
         <div class="card">
           <div id="alerts-list"><div class="muted">No unread alerts. Active console is safe.</div></div>
@@ -1134,23 +1132,23 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       <div class="panel" id="panel-settings">
         <div class="section-header">
           <div><h1>Core Settings</h1><div class="section-sub">Configure XR kernel preferences, budget caps, and egress rules</div></div>
-          <div style="display:flex; gap:8px;">
-            <input id="settings-search" class="input" placeholder="Search settings..." onkeyup="filterSettings()" style="width:200px;" />
-            <button class="btn btn-primary" onclick="saveAllSettings()">Save Configuration</button>
+          <div class="xr-s-17">
+            <input id="settings-search" class="input xr-s-50" placeholder="Search settings..." data-xr-keyup="filterSettings()" />
+            <button class="btn btn-primary" data-xr-action="saveAllSettings()">Save Configuration</button>
           </div>
         </div>
 
         <div class="settings-wrap">
           <aside class="settings-nav">
-            <button class="settings-nav-item active" data-set-pane="general" onclick="switchSettingsPane('general')">General</button>
-            <button class="settings-nav-item" data-set-pane="providers" onclick="switchSettingsPane('providers')">Cloud Keys</button>
-            <button class="settings-nav-item" data-set-pane="local" onclick="switchSettingsPane('local')">Local Models</button>
-            <button class="settings-nav-item" data-set-pane="budget" onclick="switchSettingsPane('budget')">Budget caps</button>
-            <button class="settings-nav-item" data-set-pane="trust" onclick="switchSettingsPane('trust')">Trust & Safety</button>
-            <button class="settings-nav-item" data-set-pane="voice" onclick="switchSettingsPane('voice')">Voice & Audio</button>
+            <button class="settings-nav-item active" data-set-pane="general" data-xr-action="switchSettingsPane('general')">General</button>
+            <button class="settings-nav-item" data-set-pane="providers" data-xr-action="switchSettingsPane('providers')">Cloud Keys</button>
+            <button class="settings-nav-item" data-set-pane="local" data-xr-action="switchSettingsPane('local')">Local Models</button>
+            <button class="settings-nav-item" data-set-pane="budget" data-xr-action="switchSettingsPane('budget')">Budget caps</button>
+            <button class="settings-nav-item" data-set-pane="trust" data-xr-action="switchSettingsPane('trust')">Trust & Safety</button>
+            <button class="settings-nav-item" data-set-pane="voice" data-xr-action="switchSettingsPane('voice')">Voice & Audio</button>
           </aside>
 
-          <main class="settings-content" style="flex:1;">
+          <main class="settings-content xr-s-51">
             <!-- Settings Pane 1: General -->
             <div class="settings-pane active" id="set-pane-general">
               <div class="settings-group">
@@ -1180,7 +1178,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
             <div class="settings-pane" id="set-pane-providers">
               <div class="settings-group">
                 <div class="settings-title">BYOK Cloud API Keys</div>
-                <p class="muted" style="margin-bottom: 12px;">Cloud keys are stored inside the encrypted OS keychain or local encrypted configs. Raw secret tags are never returned over HTTP API requests.</p>
+                <p class="muted xr-s-7">Cloud keys are stored inside the encrypted OS keychain or local encrypted configs. Raw secret tags are never returned over HTTP API requests.</p>
                 <div class="settings-row">
                   <div class="settings-meta">
                     <div class="settings-key">Anthropic Claude Key</div>
@@ -1272,9 +1270,9 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="section-header">
           <div><h1>About XR Control Center</h1><div class="section-sub">System build identity metadata</div></div>
         </div>
-        <div class="card" style="margin-bottom: 20px;">
-          <div style="display:flex; gap:16px; align-items:center; margin-bottom: 20px;">
-            <div class="logo-mark" style="font-size: 48px;">▀▄▀</div>
+        <div class="card xr-s-6">
+          <div class="xr-s-52">
+            <div class="logo-mark xr-s-53">▀▄▀</div>
             <div>
               <h2>XR Unified AI OS Control Center</h2>
               <p class="muted">__XR_VERSION__ — Control Center</p>
@@ -1286,7 +1284,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           <div class="stat-row"><div class="stat-key">Repository</div><div class="stat-val">github.com/ahmadrrrtx/xr</div></div>
           <div class="stat-row"><div class="stat-key">Telemetry policy</div><div class="stat-val text-green">Telemetry disabled completely. Private & local.</div></div>
         </div>
-        <button class="btn btn-primary" onclick="exportFullData()">Export full workspace backup package (JSON)</button>
+        <button class="btn btn-primary" data-xr-action="exportFullData()">Export full workspace backup package (JSON)</button>
       </div>
 
     </div><!-- /content -->
@@ -1294,8 +1292,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
 </div><!-- /app -->
 
 <!-- ── Script Logic (backward-compatible, optimized) ──────────────────── -->
-<script>${DASHBOARD_SCRIPT}
-</script>
+<script src="/assets/dashboard.js" defer></script>
 </body>
 </html>`;
 

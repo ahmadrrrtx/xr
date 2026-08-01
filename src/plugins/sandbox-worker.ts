@@ -2,19 +2,22 @@
  * XR — Worker Plugin Sandbox Entry Point
  *
  * This file runs inside a Worker thread. It:
- *  1) Creates a hardened VM sandbox (two-realm + membrane)
+ *  1) Creates an in-process VM realm (two-realm + membrane) — DEFENSE-IN-DEPTH
  *  2) Loads plugin code from disk (using the worker's own fs module)
  *  3) Builds a capability-gated host object
  *  4) Calls activate() and handles tool/command invocations
  *  5) Proxies capabilities that need the main thread (memory, provider, audit)
  *
- * SECURITY PROPERTIES:
- *  - This file imports ONLY: worker_threads, node:fs, node:path, node:crypto, node:vm
- *  - NO imports of child_process, net, http, https
- *  - Plugin code inside the VM sandbox CANNOT access any of these modules
- *  - The VM sandbox blocks: process, Bun, Function, eval, WebAssembly, global
- *  - Two-realm isolation: donor intrinsics have frozen prototypes + blocked code gen
- *  - Host membrane: blocks .constructor/.__proto__/.prototype on all host values
+ * SECURITY POSTURE (Phase 4 · T8): `node:vm` is NOT a security boundary. It
+ * shares the host process and address space; the REAL boundary for untrusted
+ * plugin code is the OS-level isolation selected by the trust lattice
+ * (namespace sandbox / container — src/runtime/trust/environment). This
+ * worker adds defense-in-depth layers only:
+ *  - restricted import surface (no child_process/net/http/https imports);
+ *  - an in-process VM realm whose intrinsics are frozen, code generation is
+ *    blocked, and host values pass through a membrane that stops
+ *    constructor-chain escapes;
+ *  - capability-gated host object (fs/secrets/net proxied to the main thread).
  *
  * COMMUNICATION:
  *  - Receives messages from main thread via parentPort
@@ -44,7 +47,7 @@ let pluginDir = "";
 let pluginRoot = "";
 let manifest: PluginManifest | null = null;
 let granted: PermissionScope[] = [];
-let secrets: Record<string, string | undefined> = {};
+let secretNames: string[] = [];
 let egressAllowlist: string[] = [];
 let mcpServers: Array<{ id: string; transport: string; url?: string; tools: string[]; description?: string }> = [];
 let coreVersion = "";
@@ -93,7 +96,7 @@ function redactLine(line: string): string {
     .slice(0, 4000);
 }
 
-function requestCapability(capability: "memory" | "provider" | "audit", method: string, args: unknown[]): Promise<unknown> {
+function requestCapability(capability: "memory" | "provider" | "audit" | "secrets" | "net", method: string, args: unknown[]): Promise<unknown> {
   return new Promise((resolvePromise, rejectPromise) => {
     const requestId = `cap-${++capabilityRequestId}-${Date.now()}`;
     const timeout = setTimeout(() => {
@@ -552,7 +555,9 @@ function buildHost(): any {
         return egressAllowlist.some((d) => u.hostname === d || u.hostname.endsWith("." + d));
       } catch { return false; }
     };
-    const fetchFn = async (url: string, init?: RequestInit): Promise<Response> => {
+    const fetchFn = async (url: string, init?: RequestInit): Promise<{
+      status: number; ok: boolean; body: string; text(): Promise<string>; json(): Promise<unknown>;
+    }> => {
       let parsed: URL;
       try { parsed = new URL(url); }
       catch { throw new Error(`invalid URL: ${String(url).slice(0, 200)}`); }
@@ -562,23 +567,41 @@ function buildHost(): any {
         throw new Error(`egress blocked: host not allow-listed (${parsed.hostname})`);
       }
       base.audit("net.fetch", { url: String(url).slice(0, 200), method: init?.method ?? "GET" });
-      const controller = new AbortController();
-      const to = setTimeout(() => controller.abort(), 30_000);
-      try { return await fetch(url, { ...init, signal: controller.signal as any }); }
-      finally { clearTimeout(to); }
+      // Phase 4 · T4 — the actual request is made on the MAIN thread through
+      // the centralized egress proxy (connection-time enforcement). The
+      // worker never opens host sockets itself.
+      const res = (await requestCapability("net", "fetch", [String(url), init ?? {}])) as {
+        status?: number; ok?: boolean; body?: string;
+      };
+      void secretNames;
+      const body = res.body ?? "";
+      return Object.freeze({
+        status: res.status ?? 0,
+        ok: Boolean(res.ok),
+        body,
+        text: async () => body,
+        json: async () => {
+          try {
+            return JSON.parse(body);
+          } catch {
+            throw new Error("response body is not valid JSON");
+          }
+        },
+      });
     };
     base.net = Object.freeze({ isAllowed, fetch: fetchFn });
   }
 
-  // secrets capability (pre-loaded from workerData)
+  // secrets capability (Phase 4 · T4 — broker-mediated: proxied to the main
+  // thread; raw values never live in this worker's bootstrap/state)
   if (grantedSet.has("secrets")) {
     base.secrets = Object.freeze({
-      get: ((name: string) => {
+      get: (async (name: string) => {
         if (typeof name !== "string" || !name) throw new Error("invalid secret name");
         const clean = name.replace(/[^A-Za-z0-9_:-]/g, "").slice(0, 120);
         if (!clean) throw new Error("invalid secret name");
         base.audit("secrets.get", { name: clean });
-        return secrets[clean] ?? undefined;
+        return await requestCapability("secrets", "get", [clean]);
       }),
     });
   }
@@ -629,7 +652,7 @@ async function handleInit(msg: any): Promise<void> {
   pluginRoot = realpathSync(msg.pluginDir);
   manifest = msg.manifest;
   granted = msg.granted;
-  secrets = msg.secrets ?? {};
+  secretNames = Array.isArray(msg.secretNames) ? msg.secretNames : [];
   egressAllowlist = msg.egressAllowlist ?? [];
   mcpServers = msg.mcpServers ?? [];
   coreVersion = msg.coreVersion;

@@ -10,7 +10,7 @@ XR is designed as a secure AI Operating System. This document describes the secu
 
 **Problem**: Plugins could bypass regex-based security scanning and execute arbitrary code on the host.
 
-**Solution**: Multi-layer isolation with VM sandboxing as primary security boundary.
+**Solution**: Risk-tiered OS-level isolation (trust lattice) with the in-process `node:vm` realm as defense-in-depth (Phase 4 · T8 — the VM realm is NOT a security boundary).
 
 #### Architecture
 
@@ -46,7 +46,7 @@ XR is designed as a secure AI Operating System. This document describes the secu
 **File: `src/plugins/loader.ts`**
 
 1. **VM-based Isolation** (Primary Security Boundary)
-   - Plugin code runs in `node:vm` context
+   - Plugin code runs in an in-process `node:vm` realm (defense-in-depth; OS isolation is the boundary)
    - Context has NO access to Node.js built-ins
    - Only explicitly provided globals are available
    - Context is frozen to prevent escape
@@ -54,7 +54,7 @@ XR is designed as a secure AI Operating System. This document describes the secu
 2. **Static Scanning** (Defense-in-Depth)
    - Regex patterns improved with word boundaries
    - Scans for disallowed imports and patterns
-   - NOT the primary security boundary (VM is)
+   - defense-in-depth only; the OS boundary is primary (Phase 4 · T8)
 
 3. **Hash Verification**
    - SHA-256 hash of entrypoint file
@@ -207,9 +207,9 @@ XR is designed as a secure AI Operating System. This document describes the secu
 
 | Threat | Mitigation | Layer |
 |--------|------------|-------|
-| Plugin RCE via `require("child_process")` | VM isolation + no access to require | Primary |
-| Plugin RCE via `process.env` access | VM isolation + static scan | Primary + Defense-in-depth |
-| Plugin escape via `eval()` / `new Function()` | VM isolation + static scan | Primary + Defense-in-depth |
+| Plugin RCE via `require("child_process")` | OS isolation (namespace/container) + no access to require | Primary |
+| Plugin RCE via `process.env` access | OS isolation + broker-mediated secrets | Primary + Defense-in-depth |
+| Plugin escape via `eval()` / `new Function()` | OS isolation + VM realm (defense-in-depth) + static scan | Primary + Defense-in-depth |
 | Browser escape via `--no-sandbox` | Sandbox always enabled (unless opted-in) | Primary |
 | Browser escape via malicious page | Sandbox + isolated context | Primary |
 | MCP secret leakage via `process.env` | Allow-list environment | Primary |

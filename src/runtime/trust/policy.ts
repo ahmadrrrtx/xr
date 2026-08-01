@@ -15,6 +15,7 @@ import {
   type RiskClassification,
   type RiskTier,
 } from "./types.ts";
+import { placementSatisfiesTier } from "./lattice.ts";
 
 /** Capability snapshot of which placements the host can currently enforce. */
 export interface PlacementCapabilities {
@@ -23,6 +24,10 @@ export interface PlacementCapabilities {
   readonly namespaceSandbox: boolean;   // bubblewrap or user-namespace sandbox
   readonly container: boolean;          // docker/podman present + usable
   readonly browserIsolated: boolean;    // isolated browser profile available
+  /** Phase 4 · T1 — gVisor runsc container runtime (detection hook). */
+  readonly gvisor: boolean;
+  /** Phase 4 · T1 — Firecracker microVM runtime (detection hook). */
+  readonly firecracker: boolean;
   /** True when running as root (which weakens many sandboxes). */
   readonly isRoot: boolean;
 }
@@ -37,13 +42,40 @@ export interface PlacementPolicyConfig {
   readonly allowTier1InProcessFallback?: boolean;
   /** Prefer container over namespace sandbox when both are available. */
   readonly preferContainer?: boolean;
+  /**
+   * Phase 4 · T1 — hardened mode. When true (the default), the policy NEVER
+   * weakens a required tier: the tier1 in-process fallback is refused even if
+   * explicitly configured, and any placement weaker than the tier minimum is
+   * rejected. Fail-closed everywhere (Art. IV.4 / IX.6).
+   */
+  readonly hardened?: boolean;
 }
 
+/**
+ * Candidate order per tier — cheapest ADEQUATE backend first (Art. XII:
+ * low/medium-risk work stays fast; the microVM rungs are for hosts that have
+ * them and for high-risk/infrequent actions, not a default slowdown).
+ *
+ * The escalate-only property of the lattice (lattice.ts) is enforced at MERGE
+ * time — per-run escalation, capability-declared minimum tiers, and refusal
+ * of any placement weaker than the tier minimum — not by always picking the
+ * strongest available backend. `preferContainer` moves the container above
+ * the namespace sandbox (an operator preference between two tier-adequate
+ * placements, never a downgrade).
+ */
 const MIN_PLACEMENT_FOR_TIER: Record<RiskTier, PlacementKind[]> = {
   tier0_in_process: ["in_process"],
-  tier1_restricted: ["restricted_process", "namespace_sandbox", "container"],
-  tier2_isolated: ["namespace_sandbox", "container", "browser_isolated"],
+  tier1_restricted: ["restricted_process", "namespace_sandbox", "container", "gvisor", "firecracker"],
+  tier2_isolated: ["namespace_sandbox", "container", "browser_isolated", "gvisor", "firecracker"],
 };
+
+function orderedCandidates(tier: RiskTier, config: PlacementPolicyConfig): PlacementKind[] {
+  const min = [...MIN_PLACEMENT_FOR_TIER[tier]];
+  if (config.preferContainer) {
+    return min.sort((a, b) => (a === "container" && b === "namespace_sandbox" ? -1 : 0));
+  }
+  return min;
+}
 
 function isAvailable(kind: PlacementKind, caps: PlacementCapabilities): boolean {
   switch (kind) {
@@ -57,36 +89,29 @@ function isAvailable(kind: PlacementKind, caps: PlacementCapabilities): boolean 
       return caps.container;
     case "browser_isolated":
       return caps.browserIsolated && !caps.isRoot;
+    case "gvisor":
+      return caps.gvisor && !caps.isRoot;
+    case "firecracker":
+      return caps.firecracker && !caps.isRoot;
   }
 }
 
 /**
- * Decide placement. Returns an "admitted"/"in_process_ok" decision when an
- * enforceable backend exists, or a "blocked" decision (fail closed) when the
- * required isolation is unavailable.
+ * Decide placement for an explicitly requested tier (used by the trust
+ * service after the lattice merge: the effective tier may be higher than the
+ * classifier's, and the placement decision must follow the EFFECTIVE tier).
  */
-export function decidePlacement(
-  classification: RiskClassification,
+export function decidePlacementForTier(
+  tier: RiskTier,
   caps: PlacementCapabilities,
   config: PlacementPolicyConfig = {},
 ): PlacementDecision {
   const now = Date.now();
-  const tier = classification.tier;
   const base = {
     requestedTier: tier,
     decidedAt: now,
     policyVersion: TRUST_POLICY_VERSION,
   } as const;
-
-  if (classification.blocked) {
-    return {
-      ...base,
-      kind: "blocked",
-      placement: "in_process",
-      reason: classification.blockReason ?? "classifier marked request blocked",
-      remediation: "Reduce action scope or provide required isolation/credentials.",
-    };
-  }
 
   // Running as root defeats unprivileged sandbox guarantees.
   if (tier !== "tier0_in_process" && caps.isRoot) {
@@ -106,6 +131,17 @@ export function decidePlacement(
   const candidates = orderedCandidates(tier, config);
   for (const kind of candidates) {
     if (isAvailable(kind, caps)) {
+      // Lattice sanity: never admit a placement weaker than the tier minimum
+      // (escalate-only; hardened or not, this is an invariant).
+      if (!placementSatisfiesTier(kind, tier)) {
+        return {
+          ...base,
+          kind: "blocked",
+          placement: "in_process",
+          reason: `internal: candidate ${kind} does not satisfy ${tier} (lattice violated)`,
+          remediation: "Report as a defect; the lattice must never admit a weaker placement.",
+        };
+      }
       return {
         ...base,
         kind: "admitted",
@@ -116,22 +152,28 @@ export function decidePlacement(
   }
 
   // No enforceable backend for the required tier.
-  if (tier === "tier1_restricted" && config.allowTier1InProcessFallback && caps.inProcess) {
+  if (
+    tier === "tier1_restricted" &&
+    config.allowTier1InProcessFallback &&
+    caps.inProcess &&
+    !config.hardened
+  ) {
     return {
       ...base,
       kind: "admitted",
       placement: "in_process",
-      reason: "TIER1 DEGRADED: process sandbox unavailable; running in-process with policy-only boundary (explicit fallback)",
-      remediation: "Install a process/namespace sandbox to restore the Tier 1 boundary.",
+      reason: "TIER1 DEGRADED: process sandbox unavailable; running in-process with policy-only boundary (explicit fallback; hardened mode OFF)",
+      remediation: "Install a process/namespace sandbox to restore the Tier 1 boundary, or enable hardened mode.",
     };
   }
 
-  // Fail closed (this is the path Tier 2 takes when no sandbox exists).
+  // Fail closed (this is the path Tier 2 takes when no sandbox exists, and the
+  // path Tier 1 takes when hardened).
   return {
     ...base,
     kind: "blocked",
     placement: "in_process",
-    reason: `required isolation for ${tier} is unavailable on this host`,
+    reason: `required isolation for ${tier} is unavailable on this host${config.hardened ? " (hardened mode)" : ""}`,
     remediation:
       tier === "tier2_isolated"
         ? "Install bubblewrap (or a container runtime) so high-risk actions can run isolated; high-risk work will not run in-process."
@@ -139,12 +181,25 @@ export function decidePlacement(
   };
 }
 
-function orderedCandidates(tier: RiskTier, config: PlacementPolicyConfig): PlacementKind[] {
-  const min = MIN_PLACEMENT_FOR_TIER[tier];
-  if (tier === "tier2_isolated" && config.preferContainer) {
-    return ["container", "namespace_sandbox", "browser_isolated"];
+/**
+ * Decide placement. Returns an "admitted"/"in_process_ok" decision when an
+ * enforceable backend exists, or a "blocked" decision (fail closed) when the
+ * required isolation is unavailable.
+ */
+export function decidePlacement(
+  classification: RiskClassification,
+  caps: PlacementCapabilities,
+  config: PlacementPolicyConfig = {},
+): PlacementDecision {
+  if (classification.blocked) {
+    return {
+      ...decidePlacementForTier(classification.tier, caps, config),
+      kind: "blocked",
+      reason: classification.blockReason ?? "classifier marked request blocked",
+      remediation: "Reduce action scope or provide required isolation/credentials.",
+    };
   }
-  return min;
+  return decidePlacementForTier(classification.tier, caps, config);
 }
 
 /** Minimum placement kind required for a tier (for verification + docs). */

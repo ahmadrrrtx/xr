@@ -166,7 +166,7 @@ async function loadDashboard() {
       ? entries.map(e => \`
           <div class="stat-row">
             <span class="stat-key">\${new Date(e.ts).toLocaleTimeString()}</span>
-            <span class="stat-val mono truncate" style="max-width: 200px;">\${e.event}</span>
+            <span class="stat-val mono truncate xr-s-54">\${e.event}</span>
             <span class="stat-val mono">\${(e.hash ?? "").slice(0, 8)}</span>
           </div>\`).join("")
       : "<div class='muted'>No logs recorded yet.</div>";
@@ -310,15 +310,15 @@ function renderChatList() {
   let html = "";
   Object.keys(groups).forEach(g => {
     if (!groups[g].length) return;
-    html += '<div style="font-size: 9px; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); padding:6px 12px;">' + g + '</div>';
+    html += '<div class="xr-s-55">' + g + '</div>';
     groups[g].sort((a,b)=>b.updatedAt - a.updatedAt).forEach(c => {
-      html += \`<div class="chat-session-item \${c.id === chatState.activeId ? "active" : ""}" onclick="chatSelectChat('\${c.id}')">
+      html += \`<div class="chat-session-item \${c.id === chatState.activeId ? "active" : ""}" data-xr-action="\${act('chatSelectChat', c.id)}">
         <div class="chat-session-item-title">\${escapeHtml(c.title)}</div>
         <div class="chat-session-item-meta">\${c.messages.length} messages · \${timeAgo(c.updatedAt)}</div>
       </div>\`;
     });
   });
-  list.innerHTML = html || '<div class="muted" style="padding:14px;">No session logs.</div>';
+  list.innerHTML = html || '<div class="muted xr-s-56">No session logs.</div>';
 }
 
 function renderMessages() {
@@ -329,12 +329,12 @@ function renderMessages() {
   document.getElementById("chat-pin-btn").textContent = chat.pinned ? "Pinned" : "Pin";
 
   if (!chat.messages.length) {
-    feed.innerHTML = \`<div class="chat-empty" style="padding: 40px 20px; text-align:center;">
+    feed.innerHTML = \`<div class="chat-empty xr-s-57">
       <h2>Operating Command Composer</h2>
-      <p class="muted" style="max-width:480px; margin: 8px auto 20px;">XR Control Center handles automation, semantic lookup, security hardening scans, and code synthesis. Execute prompts locally with strict caps.</p>
-      <div class="grid grid-2" style="max-width: 600px; margin: 0 auto; text-align: left;">
-        <button class="btn btn-ghost" onclick="insertHint('/status')"><strong>/status</strong><br><span class="muted">Check environment audit health</span></button>
-        <button class="btn btn-ghost" onclick="insertHint('/plan Refactor code base')"><strong>/plan &lt;task&gt;</strong><br><span class="muted">Dry-run tasks checklists</span></button>
+      <p class="muted xr-s-58">XR Control Center handles automation, semantic lookup, security hardening scans, and code synthesis. Execute prompts locally with strict caps.</p>
+      <div class="grid grid-2 xr-s-59">
+        <button class="btn btn-ghost" data-xr-action="insertHint('/status')"><strong>/status</strong><br><span class="muted">Check environment audit health</span></button>
+        <button class="btn btn-ghost" data-xr-action="insertHint('/plan Refactor code base')"><strong>/plan &lt;task&gt;</strong><br><span class="muted">Dry-run tasks checklists</span></button>
       </div>
     </div>\`;
     return;
@@ -355,8 +355,8 @@ function renderMessage(m, i) {
       <div class="msg-meta">
         <span>\${avatarName} · \${new Date(m.ts || Date.now()).toLocaleTimeString()}</span>
         <span class="msg-actions">
-          <button class="msg-act-btn" onclick="copyText(\`\${m.content}\`)">Copy</button>
-          \${role === "user" ? \`<button class="msg-act-btn" onclick="editMessage(\${i})">Edit</button>\` : ""}
+          <button class="msg-act-btn" data-xr-action="\${act('copyText', m.content)}">Copy</button>
+          \${role === "user" ? \`<button class="msg-act-btn" data-xr-action="\${act('editMessage', i)}">Edit</button>\` : ""}
         </span>
       </div>
     </div>
@@ -371,7 +371,7 @@ function renderArtifacts(m) {
       <div class="artifact-head">
         <span class="artifact-tag">\${escapeHtml(a.type)}</span>
         <span class="artifact-title">\${escapeHtml(a.title)}</span>
-        <button class="btn" style="padding:2px 8px;" onclick="downloadArtifact('\${a.title}', \\\`\${a.content}\\\`, '\${a.ext || 'txt'}')">Download</button>
+        <button class="btn xr-s-60" data-xr-action="\${act('downloadArtifact', a.title, a.content, a.ext || 'txt')}">Download</button>
       </div>
       <div class="artifact-body">\${escapeHtml(a.content)}</div>
     </div>
@@ -415,7 +415,7 @@ function updateComposerContext() {
 
 function renderAttachments() {
   const chat = activeChat(); const row = document.getElementById("attachment-row"); if (!row || !chat) return;
-  row.innerHTML = chat.attachments.map((a,i) => '<span class="badge badge-gray" style="margin-right:6px;">📎 '+escapeHtml(a.name)+' <span onclick="removeAttachment('+i+')" style="cursor:pointer; color:var(--red);">×</span></span>').join("");
+  row.innerHTML = chat.attachments.map((a,i) => '<span class="badge badge-gray xr-s-61">📎 '+escapeHtml(a.name)+' <span data-xr-action="removeAttachment('+i+')" class="xr-s-62">×</span></span>').join("");
 }
 
 function handleComposerKeydown(e) {
@@ -494,13 +494,13 @@ function formatPlan(plan){ if(Array.isArray(plan)) return plan.map((s,i)=> (type
 function formatStatus(all){ const val=i=>all[i].status==='fulfilled'?all[i].value:null; const ov=val(0), cost=val(1), ctrl=val(2), providers=val(3), models=val(4), trust=val(5); return '### XR System Status\\n\\n- **Workspace active directory**: '+(ov?.project||'default')+'\\n- **Durable Ledger checks**: '+(ov?.audit?.chain?.valid?'✓ cryptographic chain OK':'⚠ Chain modified')+'\\n- **Spend Governor**: $'+Number(cost?.totalUsd||0).toFixed(6)+' spend\\n- **Provider / Model**: '+(providers?.primary || 'ollama')+' · '+(models?.selected?.model || 'qwen2.5:7b')+'\\n- **Computer Use state**: '+(ctrl?.enabled?'opt-in authorized':'disabled')+'\\n- **Trust & Isolation**: '+(((trust&&trust.backends)||[]).filter(function(b){return b.available;}).map(function(b){return b.placement;}).join(', ')||'none')+' available (Tier-2 fail-closed)'; }
 function formatMemory(j,q){ const entries=j.results || j.entries || []; if(!entries.length) return 'No vector memories found.'; return '### Vector Memories stored:\\n\\n'+entries.slice(0,10).map(e=>'- **'+(e.category||'node')+'**: '+(e.content||'')).join('\\n'); }
 
-function addToolEvent(tool, purpose, status, result){ const id='tool_'+(++chatToolSeq); const box=document.getElementById('tool-timeline'); if(box){ const el=document.createElement('div'); el.className='tool-card '+status; el.id=id; el.innerHTML='<div class="tool-head" onclick="this.parentElement.classList.toggle(\'open\')"><span class="tool-summary"><svg viewBox="0 0 24 24" style="width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:2;"><polygon points="12 2 2 7 12 12 22 7 12 2z"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> <b>'+escapeHtml(tool)+'</b></span><span class="tool-indicator">'+escapeHtml(status)+'</span></div><div class="tool-body">'+escapeHtml(result||'')+'</div>'; if(box.querySelector('.muted')) box.innerHTML=''; box.prepend(el); } return id; }
+function addToolEvent(tool, purpose, status, result){ const id='tool_'+(++chatToolSeq); const box=document.getElementById('tool-timeline'); if(box){ const el=document.createElement('div'); el.className='tool-card '+status; el.id=id; el.innerHTML='<div class="tool-head" data-xr-action="this.parentElement.classList.toggle(\\'open\\')"><span class="tool-summary"><svg viewBox="0 0 24 24" class="xr-s-63"><polygon points="12 2 2 7 12 12 22 7 12 2z"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> <b>'+escapeHtml(tool)+'</b></span><span class="tool-indicator">'+escapeHtml(status)+'</span></div><div class="tool-body">'+escapeHtml(result||'')+'</div>'; if(box.querySelector('.muted')) box.innerHTML=''; box.prepend(el); } return id; }
 function updateToolEvent(id,status,result){ const el=document.getElementById(id); if(!el) return; el.className='tool-card '+status; const st=el.querySelector('.tool-indicator'); if(st) st.textContent=status; const out=el.querySelector('.tool-body'); if(out) out.textContent=result||''; }
 
 async function refreshInspectorData(){ loadMemoryPeek(); loadApprovals(); }
-async function loadApprovals(){ const box=document.getElementById('approval-list'); if(!box) return; try{ const j=await api('/api/control/pending'); const p=j.pending||[]; box.innerHTML=p.length?p.map(a=>'<div class="approval-card" style="border:1px solid var(--border); padding:8px; border-radius:var(--radius); margin-bottom:6px;"><strong>'+escapeHtml(a.tool || a.id)+'</strong><div style="font-size:10px; color:var(--muted); margin-bottom:6px;">'+escapeHtml(a.reason || 'Approval required')+'</div><div style="display:flex; gap:6px;"><button class="btn btn-primary" onclick="answerApproval(\''+a.id+'\',true)" style="padding:2px 6px; font-size:10px;">Allow</button><button class="btn btn-danger" onclick="answerApproval(\''+a.id+'\',false)" style="padding:2px 6px; font-size:10px;">Deny</button></div></div>').join(''):'<div class="muted">No pending authorizations.</div>'; }catch{} }
+async function loadApprovals(){ const box=document.getElementById('approval-list'); if(!box) return; try{ const j=await api('/api/control/pending'); const p=j.pending||[]; box.innerHTML=p.length?p.map(a=>'<div class="approval-card xr-s-64"><strong>'+escapeHtml(a.tool || a.id)+'</strong><div class="xr-s-65">'+escapeHtml(a.reason || 'Approval required')+'</div><div class="xr-s-66"><button class="btn btn-primary xr-s-67" data-xr-action="answerApproval(\\''+a.id+'\\',true)">Allow</button><button class="btn btn-danger xr-s-67" data-xr-action="answerApproval(\\''+a.id+'\\',false)">Deny</button></div></div>').join(''):'<div class="muted">No pending authorizations.</div>'; }catch{} }
 async function answerApproval(id,approved){ await apiPost('/api/control/approve',{id,approved}); toast(approved?'Action authorized':'Action blocked', approved?'ok':'warn'); loadApprovals(); }
-async function loadMemoryPeek(){ const box=document.getElementById('memory-peek'); if(!box) return; try{ const j=await api('/api/memory'); const entries=(j.entries||[]).slice(0,3); box.innerHTML=entries.length?entries.map(e=>'<div class="inspector-detail" style="border-left:2px solid var(--cyan); padding-left:6px; margin-bottom:6px;"><strong>'+escapeHtml(e.category)+'</strong><br>'+escapeHtml(e.content)+'</div>').join(''):'<div class="muted">Memory cache is empty.</div>'; }catch{ box.innerHTML='<div class="muted">Memory offline.</div>'; } }
+async function loadMemoryPeek(){ const box=document.getElementById('memory-peek'); if(!box) return; try{ const j=await api('/api/memory'); const entries=(j.entries||[]).slice(0,3); box.innerHTML=entries.length?entries.map(e=>'<div class="inspector-detail xr-s-68"><strong>'+escapeHtml(e.category)+'</strong><br>'+escapeHtml(e.content)+'</div>').join(''):'<div class="muted">Memory cache is empty.</div>'; }catch{ box.innerHTML='<div class="muted">Memory offline.</div>'; } }
 async function apiPost(path, body){ const res=await fetch(BASE+path,{ method:'POST', headers:{ Authorization:'Bearer '+TOKEN, 'Content-Type':'application/json' }, body:JSON.stringify(body||{}) }); const j=await res.json().catch(()=>({})); if(!res.ok) throw new Error(j.error || 'Request failed'); return j; }
 
 function chatExportActive(){ const c=activeChat(); if(!c) return; const md='# '+c.title+'\\n\\n'+c.messages.map(m=>'## '+(m.role==='user'?'User':'Assistant')+' · '+new Date(m.ts).toLocaleString()+'\\n\\n'+m.content).join('\\n\\n'); downloadArtifact(c.title, md, 'md'); }
@@ -543,8 +543,8 @@ async function loadSessionsPanel() {
 
     document.getElementById("sess-list").innerHTML = sessions.length ? sessions.map(s => {
       const bClass = s.status === "done" ? "badge-green" : s.status === "running" ? "badge-cyan" : "badge-amber";
-      return \`<div class="stat-row" style="padding: 10px 0; cursor:pointer;" onclick="loadSessionDetail('\${s.id}')">
-        <div><div style="font-weight:700;">\${escapeHtml(s.title)}</div><div class="muted" style="font-size:10px;">\${s.id}</div></div>
+      return \`<div class="stat-row xr-s-69" data-xr-action="\${act('loadSessionDetail', s.id)}">
+        <div><div class="xr-s-70">\${escapeHtml(s.title)}</div><div class="muted xr-s-71">\${s.id}</div></div>
         <span class="badge \${bClass}">\${s.status}</span>
       </div>\`;
     }).join("") : "<div class='muted'>No sessions stored.</div>";
@@ -559,11 +559,11 @@ async function loadSessionDetail(id) {
     const s = data.session;
     const steps = data.steps ?? [];
     document.getElementById("sess-detail").innerHTML = \`
-      <div style="margin-bottom:12px;"><strong>\${escapeHtml(s.title)}</strong><br><span class="muted">\${s.id} · \${s.status}</span></div>
-      <div style="max-height: 300px; overflow-y:auto; display:flex; flex-direction:column; gap:6px;">
-        \${steps.map(st => \`<div style="padding:6px; border-bottom:1px solid rgba(255,255,255,0.02)">
-          <div class="mono" style="font-weight:700;">\${st.phase} \${st.tool ? '· ' + st.tool : ''}</div>
-          <div class="muted" style="font-size:10px; margin-top:2px;">\${escapeHtml(st.detail).slice(0, 160)}</div>
+      <div class="xr-s-72"><strong>\${escapeHtml(s.title)}</strong><br><span class="muted">\${s.id} · \${s.status}</span></div>
+      <div class="xr-s-73">
+        \${steps.map(st => \`<div class="xr-s-74">
+          <div class="mono xr-s-70">\${st.phase} \${st.tool ? '· ' + st.tool : ''}</div>
+          <div class="muted xr-s-75">\${escapeHtml(st.detail).slice(0, 160)}</div>
         </div>\`).join("")}
       </div>
     \`;
@@ -580,9 +580,9 @@ async function loadWorkspaces() {
     document.getElementById("ws-active-path").textContent = activeWs?.rootDir ?? "/home/user";
 
     document.getElementById("ws-list").innerHTML = list.length ? list.map(w => \`
-      <div class="stat-row" style="padding: 8px 0;">
+      <div class="stat-row xr-s-76">
         <div><strong>\${escapeHtml(w.id)}</strong><br><span class="muted mono">\${escapeHtml(w.rootDir)}</span></div>
-        \${w.id === data.active ? '<span class="badge badge-green">active</span>' : \`<button class="btn btn-ghost" style="padding:2px 8px;" onclick="switchWorkspaceUI('\${w.id}')">Switch</button>\`}
+        \${w.id === data.active ? '<span class="badge badge-green">active</span>' : \`<button class="btn btn-ghost xr-s-60" data-xr-action="\${act('switchWorkspaceUI', w.id)}">Switch</button>\`}
       </div>
     \`).join("") : "<div class='muted'>No workspaces configured.</div>";
   } catch {}
@@ -622,10 +622,10 @@ async function loadProviders() {
     const grid = document.getElementById("prov-grid");
     const list = data.providers ?? [];
     grid.innerHTML = list.map(p => \`
-      <div class="card \${p.id === data.primary ? "card-glow-cyan" : ""}" style="padding:10px; text-align:center;">
-        <div style="font-weight:800; font-size:12px;">\${p.label}</div>
-        <div style="font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:2px;">\${p.id}</div>
-        <div style="margin-top:8px;"><span class="badge \${p.healthy ? "badge-green" : (p.hasKey ? "badge-amber" : "badge-gray")}">\s
+      <div class="card \${p.id === data.primary ? "card-glow-cyan" : ""} xr-s-77">
+        <div class="xr-s-78">\${p.label}</div>
+        <div class="xr-s-79">\${p.id}</div>
+        <div class="xr-s-80"><span class="badge \${p.healthy ? "badge-green" : (p.hasKey ? "badge-amber" : "badge-gray")}">\s
           \${p.healthy ? "online" : (p.hasKey ? "inactive" : "no key")}
         </span></div>
       </div>
@@ -717,7 +717,7 @@ async function loadModels() {
       <div class="stat-row"><div class="stat-key">CPU core units</div><div class="stat-val">\${specs.cores ?? "—"}</div></div>
       <div class="stat-row"><div class="stat-key">Total RAM memory</div><div class="stat-val">\${specs.ramGb ? specs.ramGb.toFixed(1) + " GB" : "—"}</div></div>
       <div class="stat-row"><div class="stat-key">VRAM GPU indicators</div><div class="stat-val">\${specs.vramGb ? specs.vramGb.toFixed(1) + " GB" : "0.0 GB"}</div></div>
-      <div class="stat-row" style="border-top:1px solid var(--border); margin-top:8px; padding-top:8px;"><div class="stat-key">Confidence rec</div><div class="stat-val text-cyan">\${rec.confidence ?? "unsupported"}</div></div>
+      <div class="stat-row xr-s-81"><div class="stat-key">Confidence rec</div><div class="stat-val text-cyan">\${rec.confidence ?? "unsupported"}</div></div>
     \`;
 
     // Local runtimes
@@ -732,7 +732,7 @@ async function loadModels() {
     const installed = data.installed ?? [];
     document.getElementById("models-list").innerHTML = installed.length
       ? installed.map(m => \`
-      <div class="stat-row" style="cursor:pointer;" onclick="pickInstalledModel('\${String(m.runtime || "").replace(/'/g, "")}', '\${String(m.model || "").replace(/'/g, "")}')" title="Use this model">
+      <div class="stat-row xr-s-82" data-xr-action="\${act('pickInstalledModel', String(m.runtime || ''), String(m.model || ''))}" title="Use this model">
         <span class="stat-key mono">\${m.model}</span>
         <span class="badge badge-gray">\${m.runtime}</span>
       </div>
@@ -844,15 +844,15 @@ async function loadMemory() {
       if (items.length) {
         card.style.display = "";
         document.getElementById("mem-pending-list").innerHTML = items.map(e => \`
-          <div class="stat-row" style="padding:8px 0;">
+          <div class="stat-row xr-s-83">
             <div>
               \${consentBadge(e.consentState)} \${trustBadge(e.trustStatus)}
-              <p style="font-size:12px;">\${escapeHtml(e.content)}</p>
-              <div class="muted" style="font-size:11px;">from \${escapeHtml(e.provenanceKind || "unknown")}\${e.actorName ? " · " + escapeHtml(e.actorName) : ""}</div>
+              <p class="xr-s-84">\${escapeHtml(e.content)}</p>
+              <div class="muted xr-s-27">from \${escapeHtml(e.provenanceKind || "unknown")}\${e.actorName ? " · " + escapeHtml(e.actorName) : ""}</div>
             </div>
-            <div style="display:flex; gap:6px;">
-              <button class="btn btn-primary" onclick="approveMemory('\${e.id}')" style="padding:2px 8px;">Approve</button>
-              <button class="btn btn-danger" onclick="revokeMemory('\${e.id}')" style="padding:2px 8px;">Reject</button>
+            <div class="xr-s-66">
+              <button class="btn btn-primary xr-s-60" data-xr-action="\${act('approveMemory', e.id)}">Approve</button>
+              <button class="btn btn-danger xr-s-60" data-xr-action="\${act('revokeMemory', e.id)}">Reject</button>
             </div>
           </div>
         \`).join("");
@@ -863,14 +863,14 @@ async function loadMemory() {
 
     const list = mem.entries ?? [];
     document.getElementById("mem-list").innerHTML = list.length ? list.map(e => \`
-      <div class="stat-row" style="padding: 10px 0;">
+      <div class="stat-row xr-s-85">
         <div>
-          <span class="badge badge-cyan" style="margin-bottom:4px;">\${escapeHtml(e.category)}</span>
-          <p style="font-size:12px;">\${escapeHtml(e.content)}</p>
+          <span class="badge badge-cyan xr-s-86">\${escapeHtml(e.category)}</span>
+          <p class="xr-s-84">\${escapeHtml(e.content)}</p>
         </div>
-        <div style="display:flex; gap:6px;">
-          <button class="btn" onclick="revokeMemory('\${e.id}')" style="padding:2px 8px;" title="Stop XR using this, but keep the record">Revoke</button>
-          <button class="btn btn-danger" onclick="deleteMemory('\${e.id}')" style="padding:2px 6px;" title="Delete permanently">✕</button>
+        <div class="xr-s-66">
+          <button class="btn xr-s-60" data-xr-action="\${act('revokeMemory', e.id)}" title="Stop XR using this, but keep the record">Revoke</button>
+          <button class="btn btn-danger xr-s-11" data-xr-action="\${act('deleteMemory', e.id)}" title="Delete permanently">✕</button>
         </div>
       </div>
     \`).join("") : "<div class='muted'>Durable vector memory is empty.</div>";
@@ -904,9 +904,9 @@ async function doMemSearch() {
     const data = await api("/api/memory/search?q=" + encodeURIComponent(q));
     const list = data.results ?? [];
     document.getElementById("mem-search-results").innerHTML = list.length ? list.map(e => \`
-      <div class="stat-row" style="background:rgba(255,255,255,0.01); padding:6px;">
-        <span class="badge badge-cyan" style="height:fit-content;">\${e.category}</span>
-        <span style="font-size:12px;">\${escapeHtml(e.content)}</span>
+      <div class="stat-row xr-s-87">
+        <span class="badge badge-cyan xr-s-88">\${e.category}</span>
+        <span class="xr-s-84">\${escapeHtml(e.content)}</span>
       </div>
     \`).join("") : "<div class='muted'>No entries found.</div>";
   } catch {}
@@ -944,11 +944,11 @@ async function loadResearchPanel() {
 
     document.getElementById("research-latest").innerHTML = latest.topic ? \`
       <strong>\${escapeHtml(latest.topic)}</strong>
-      <p class="muted" style="font-size:11px; margin-top:4px;">\${escapeHtml(latest.synthesis?.shortAnswer || latest.summary || "Draft synthesized OK")}</p>
+      <p class="muted xr-s-89">\${escapeHtml(latest.synthesis?.shortAnswer || latest.summary || "Draft synthesized OK")}</p>
     \` : "<div class='muted'>No active research runs.</div>";
 
     document.getElementById("research-list").innerHTML = recent.length ? recent.map(r => \`
-      <div class="stat-row" style="padding:8px 0; cursor:pointer;" onclick="loadResearchDetail('\${r.id}')">
+      <div class="stat-row xr-s-90" data-xr-action="\${act('loadResearchDetail', r.id)}">
         <div><strong>\${escapeHtml(r.topic)}</strong><br><span class="muted">\${r.id}</span></div>
         <span class="badge \${r.status === "done" ? "badge-green" : "badge-gray"}">\${r.status}</span>
       </div>
@@ -961,8 +961,8 @@ async function loadResearchDetail(id) {
     const data = await api("/api/research/" + encodeURIComponent(id));
     const s = data.session;
     document.getElementById("research-latest").innerHTML = \`
-      <div style="margin-bottom:10px;"><strong>\${escapeHtml(s.topic)}</strong><br><span class="muted">\${s.id} · \${s.status}</span></div>
-      <p style="font-size:12px; line-height:1.6; margin-bottom:10px;">\${escapeHtml(s.synthesis?.shortAnswer || s.summary || "Report verified intact.")}</p>
+      <div class="xr-s-91"><strong>\${escapeHtml(s.topic)}</strong><br><span class="muted">\${s.id} · \${s.status}</span></div>
+      <p class="xr-s-92">\${escapeHtml(s.synthesis?.shortAnswer || s.summary || "Report verified intact.")}</p>
       <div class="stat-row"><div class="stat-key">Citations found</div><div class="stat-val">\${s.sources?.length ?? 0}</div></div>
       <div class="stat-row"><div class="stat-key">Cross-verifications</div><div class="stat-val">\${s.claims?.length ?? 0}</div></div>
     \`;
@@ -1012,7 +1012,7 @@ function renderMarketCategories(rows) {
   for (const s of rows) for (const c of s.categories ?? []) counts[c] = (counts[c] ?? 0) + 1;
   const cats = ["developer","security","research","business","creative","productivity"];
   document.getElementById("market-categories").innerHTML = cats.map(c => \`
-    <div class="mp-cat" onclick="setMarketQuery('\${c}')">
+    <div class="mp-cat" data-xr-action="\${act('setMarketQuery', c)}">
       <b>\${categoryIcon(c)} \${c}</b>
       <span>\${counts[c] ?? 0}</span>
     </div>
@@ -1034,13 +1034,13 @@ function renderMarketplace() {
   grid.innerHTML = rows.length ? rows.map(s => {
     const sel = MARKET_SELECTED === s.id ? " selected" : "";
     const action = s.installed
-      ? (s.enabled ? \`<button class="btn btn-ghost" onclick="event.stopPropagation(); skillAction('\${s.id}', 'disable')">Disable</button>\` : \`<button class="btn" onclick="event.stopPropagation(); skillAction('\${s.id}', 'enable')">Enable</button>\`)
-      : \`<button class="btn btn-primary" onclick="event.stopPropagation(); installMarketplaceSkill('\${s.id}')">Install</button>\`;
+      ? (s.enabled ? \`<button class="btn btn-ghost" data-xr-action="event.stopPropagation(); \${act('skillAction', s.id, 'disable')}">Disable</button>\` : \`<button class="btn" data-xr-action="event.stopPropagation(); \${act('skillAction', s.id, 'enable')}">Enable</button>\`)
+      : \`<button class="btn btn-primary" data-xr-action="event.stopPropagation(); \${act('installMarketplaceSkill', s.id)}">Install</button>\`;
     return \`
-      <div class="mp-skill-card\${sel}" onclick="inspectMarketplaceSkill('\${s.id}')">
+      <div class="mp-skill-card\${sel}" data-xr-action="\${act('inspectMarketplaceSkill', s.id)}">
         <div class="mp-skill-top">
           <div class="mp-skill-icon">\${skillInitials(s.name)}</div>
-          <div style="min-width:0; flex:1;">
+          <div class="xr-s-93">
             <div class="mp-skill-name">\${escapeHtml(s.name)}</div>
             <div class="mp-skill-id">\s\${s.id}</div>
           </div>
@@ -1067,14 +1067,14 @@ async function inspectMarketplaceSkill(id) {
     \`).join("") || "<div class='muted'>No specialized local permissions needed.</div>";
 
     document.getElementById("market-inspector").innerHTML = \`
-      <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
-        <div class="mp-skill-icon" style="width:40px; height:40px;">\${skillInitials(s.name)}</div>
+      <div class="xr-s-94">
+        <div class="mp-skill-icon xr-s-95">\${skillInitials(s.name)}</div>
         <div>
-          <h4 style="font-size:14px; font-weight:800;">\${escapeHtml(s.name)}</h4>
+          <h4 class="xr-s-96">\${escapeHtml(s.name)}</h4>
           <div class="mp-inspector-sub">\${s.id} · v\${s.version}</div>
         </div>
       </div>
-      <p class="muted" style="font-size:11px; line-height:1.5; margin-bottom:12px;">\${escapeHtml(s.description)}</p>
+      <p class="muted xr-s-97">\${escapeHtml(s.description)}</p>
       <div class="mp-section-title">Security Sandboxing</div>
       \${permRows}
     \`;
@@ -1116,16 +1116,16 @@ async function loadCapabilities(searchMode=false) {
     document.getElementById("cap-certified").textContent = health.certified ?? list.filter(c => c.certification && ["verified","xr-tested","self-tested"].includes(c.certification.status)).length;
     document.getElementById("cap-quarantined").textContent = health.quarantined ?? list.filter(c => c.lifecycle && c.lifecycle.state === "quarantined").length;
     document.getElementById("capabilities-list").innerHTML = list.length ? list.slice(0,100).map(c => \`
-      <div class="stat-row" style="padding:10px 0; align-items:flex-start;">
+      <div class="stat-row xr-s-98">
         <div>
           <strong>\${escapeHtml(c.name)}</strong> <span class="mono text-cyan">\${escapeHtml(c.id)}</span>
-          <div class="muted" style="font-size:11px; margin-top:2px;">\${escapeHtml(c.type)} · \${escapeHtml(c.version)} · risk \${escapeHtml(c.placement?.riskTier || "unknown")} · cert \${escapeHtml(c.certification?.status || "unknown")}</div>
-          <div class="muted" style="font-size:11px; margin-top:2px;">effective: \${escapeHtml((c.permissions?.effective?.effective || []).join(", ") || "none")}</div>
+          <div class="muted xr-s-99">\${escapeHtml(c.type)} · \${escapeHtml(c.version)} · risk \${escapeHtml(c.placement?.riskTier || "unknown")} · cert \${escapeHtml(c.certification?.status || "unknown")}</div>
+          <div class="muted xr-s-99">effective: \${escapeHtml((c.permissions?.effective?.effective || []).join(", ") || "none")}</div>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+        <div class="xr-s-100">
           <span class="badge badge-gray">\${escapeHtml(c.lifecycle?.state || "unknown")}</span>
-          <button class="btn btn-ghost" onclick="capabilityInspect('\${escapeHtml(c.id)}')">Inspect</button>
-          \${c.lifecycle?.state === "quarantined" ? "" : \`<button class="btn btn-danger" onclick="capabilityQuarantine('\${escapeHtml(c.id)}')">Quarantine</button>\`}
+          <button class="btn btn-ghost" data-xr-action="\${act('capabilityInspect', c.id)}">Inspect</button>
+          \${c.lifecycle?.state === "quarantined" ? "" : \`<button class="btn btn-danger" data-xr-action="\${act('capabilityQuarantine', c.id)}">Quarantine</button>\`}
         </div>
       </div>
     \`).join("") : "<div class='muted'>No capabilities match the current constraints.</div>";
@@ -1136,7 +1136,7 @@ async function loadCapabilities(searchMode=false) {
 async function capabilityInspect(id) {
   try {
     const c = await api("/api/capabilities/inspect?id=" + encodeURIComponent(id));
-    alert(c.id + "\npublisher: " + (c.publisher?.name || "unknown") + "\neffective: " + ((c.permissions?.effective?.effective || []).join(", ") || "none") + "\nsignature: " + (c.package?.signatureStatus || "unknown") + "\ncertification: " + (c.certification?.status || "unknown"));
+    alert(c.id + "\\npublisher: " + (c.publisher?.name || "unknown") + "\\neffective: " + ((c.permissions?.effective?.effective || []).join(", ") || "none") + "\\nsignature: " + (c.package?.signatureStatus || "unknown") + "\\ncertification: " + (c.certification?.status || "unknown"));
   } catch {}
 }
 async function capabilityQuarantine(id) {
@@ -1158,14 +1158,14 @@ async function loadPlugins() {
     document.getElementById("plug-enabled").textContent = list.filter(p => p.enabled).length;
 
     document.getElementById("plugins-list").innerHTML = list.length ? list.map(p => \`
-      <div class="stat-row" style="padding:10px 0;">
+      <div class="stat-row xr-s-101">
         <div>
           <strong>\${escapeHtml(p.name)}</strong> <span class="mono text-cyan">\${p.id}</span>
-          <div class="muted" style="font-size:11px; margin-top:2px;">v\${p.version} · \${p.type}</div>
+          <div class="muted xr-s-99">v\${p.version} · \${p.type}</div>
         </div>
-        <div style="display:flex; gap:8px;">
-          \s\${p.enabled ? \`<button class="btn btn-ghost" onclick="pluginAction('\${p.id}', 'disable')">Disable</button>\` : \`<button class="btn" onclick="pluginAction('\${p.id}', 'enable')">Enable</button>\`}
-          <button class="btn btn-danger" onclick="pluginRemove('\${p.id}')">Remove</button>
+        <div class="xr-s-17">
+          \s\${p.enabled ? \`<button class="btn btn-ghost" data-xr-action="\${act('pluginAction', p.id, 'disable')}">Disable</button>\` : \`<button class="btn" data-xr-action="\${act('pluginAction', p.id, 'enable')}">Enable</button>\`}
+          <button class="btn btn-danger" data-xr-action="\${act('pluginRemove', p.id)}">Remove</button>
         </div>
       </div>
     \`).join("") : "<div class='muted'>No deep integration plugins active.</div>";
@@ -1178,7 +1178,7 @@ async function searchPlugins() {
     const data = await api("/api/plugins/catalog?q=" + encodeURIComponent(q));
     const list = data.plugins ?? [];
     document.getElementById("plugins-catalog").innerHTML = list.length ? list.map(p => \`
-      <div class="stat-row" style="background:rgba(255,255,255,0.01); padding:8px;">
+      <div class="stat-row xr-s-102">
         <div><strong>\${escapeHtml(p.name)}</strong><br><span class="muted">\${escapeHtml(p.description)}</span></div>
         <span class="badge badge-gray">Install via CLI</span>
       </div>
@@ -1210,7 +1210,7 @@ async function loadMcp() {
     document.getElementById("mcp-servers-list").innerHTML = list.length ? list.map(s => \`
       <div class="stat-row">
         <div><strong>\${escapeHtml(s.id)}</strong><br><span class="muted mono">\${escapeHtml(s.cmd)} \${escapeHtml(s.args.join(" "))}</span></div>
-        <button class="btn btn-danger" onclick="removeMcp('\${s.id}')" style="padding:2px 8px;">✕</button>
+        <button class="btn btn-danger xr-s-60" data-xr-action="\${act('removeMcp', s.id)}">✕</button>
       </div>
     \`).join("") : "<div class='muted'>No Model Context Protocol connections registered.</div>";
   } catch {}
@@ -1317,21 +1317,21 @@ function renderOverviewScan(threats, checks) {
   const rList = document.getElementById("shield-recommendations-list");
 
   tList.innerHTML = threats.length ? threats.map(t => \`
-    <div style="border-bottom:1px solid var(--border); padding:8px 0;">
-      <div style="font-weight:700; display:flex; justify-content:space-between;">
+    <div class="xr-s-103">
+      <div class="xr-s-104">
         <span>\${escapeHtml(t.title)}</span>
         <span class="badge badge-red">\${t.severity}</span>
       </div>
-      <div class="muted" style="font-size:11px; margin-top:2px;">\${escapeHtml(t.details)}</div>
+      <div class="muted xr-s-99">\${escapeHtml(t.details)}</div>
     </div>
   \`).join("") : "<div class='muted'>No vulnerabilities or threat heuristic signs.</div>";
 
   const fails = checks.filter(c => !c.passed);
   rList.innerHTML = fails.length ? fails.map(c => \`
-    <div style="border-bottom:1px solid var(--border); padding:8px 0;">
-      <div style="font-weight:700; color:var(--amber);">⚠ Hardening check failed</div>
-      <div style="font-size:11px; margin-top:2px;">\${escapeHtml(c.name)}</div>
-      <div class="muted" style="font-size:11px;">\${escapeHtml(c.details)}</div>
+    <div class="xr-s-103">
+      <div class="xr-s-105">⚠ Hardening check failed</div>
+      <div class="xr-s-99">\${escapeHtml(c.name)}</div>
+      <div class="muted xr-s-27">\${escapeHtml(c.details)}</div>
     </div>
   \`).join("") : "<div class='muted'>All policy scans passing. Environment is secure.</div>";
 }
@@ -1356,11 +1356,11 @@ async function loadShieldProcesses() {
       <tr class="proc-row">
         <td class="mono">\${p.pid}</td>
         <td class="mono">\s\${p.ppid}</td>
-        <td style="font-weight:700;">\${escapeHtml(p.name)}</td>
+        <td class="xr-s-70">\${escapeHtml(p.name)}</td>
         <td class="mono">\${p.cpu}%</td>
         <td class="mono">\${p.memory} MB</td>
         <td><span class="badge \${p.unsigned ? "badge-amber" : "badge-green"}">\${p.unsigned ? "unsigned":"verified"}</span></td>
-        <td><button class="btn btn-danger" style="padding:2px 6px; font-size:10px;" onclick="killProcess(\${p.pid}, '\${p.name}')">Kill</button></td>
+        <td><button class="btn btn-danger xr-s-67" data-xr-action="\${act('killProcess', p.pid, p.name)}">Kill</button></td>
       </tr>
     \`).join("") : "<tr><td colspan='7' class='muted' style='text-align:center;'>No processes.</td></tr>";
   } catch {}
@@ -1384,7 +1384,7 @@ async function loadShieldStartup() {
     const list = data.startup ?? [];
     body.innerHTML = list.length ? list.map(i => \`
       <tr>
-        <td style="font-weight:700;">\${escapeHtml(i.name)}</td>
+        <td class="xr-s-70">\${escapeHtml(i.name)}</td>
         <td><span class="badge badge-gray">\${i.type}</span></td>
         <td class="muted mono">\${escapeHtml(i.location)}</td>
         <td><span class="badge \${i.suspicious ? "badge-red":"badge-green"}">\s\${i.suspicious ? "suspicious":"clean"}</span></td>
@@ -1401,10 +1401,10 @@ async function loadShieldDownloads() {
     const list = data.downloads ?? [];
     body.innerHTML = list.length ? list.map(d => \`
       <tr>
-        <td style="font-weight:700;">\${escapeHtml(d.name)}</td>
+        <td class="xr-s-70">\${escapeHtml(d.name)}</td>
         <td class="mono">\${Math.round(d.sizeBytes / 1024)} KB</td>
         <td><span class="badge \${d.suspicious ? "badge-red":"badge-green"}">\s\${d.suspicious ? "heuristic block":"clean"}</span></td>
-        <td>\${d.suspicious ? \`<button class="btn btn-danger" style="padding:2px 6px;" onclick="quarantineFile('\${d.path}')">Quarantine</button>\` : "—"}</td>
+        <td>\${d.suspicious ? \`<button class="btn btn-danger xr-s-11" data-xr-action="\${act('quarantineFile', d.path)}">Quarantine</button>\` : "—"}</td>
       </tr>
     \`).join("") : "<tr><td colspan='4' class='muted' style='text-align:center;'>Downloads empty.</td></tr>";
   } catch {}
@@ -1484,12 +1484,12 @@ async function loadAuditLog() {
 
     const list = data.entries ?? [];
     document.getElementById("audit-log-list").innerHTML = list.length ? list.map(e => \`
-      <div class="stat-row" style="padding: 10px 0;">
-        <div style="max-width: 80%;">
+      <div class="stat-row xr-s-85">
+        <div class="xr-s-106">
           <strong>\${escapeHtml(e.event)}</strong>
-          <div class="muted" style="font-size:10px; margin-top:2px;">ts: \${new Date(e.ts).toLocaleString()}</div>
+          <div class="muted xr-s-75">ts: \${new Date(e.ts).toLocaleString()}</div>
         </div>
-        <span class="mono muted" style="font-size:10px;">#\${(e.hash ?? "").slice(0, 8)}</span>
+        <span class="mono muted xr-s-71">#\${(e.hash ?? "").slice(0, 8)}</span>
       </div>
     \`).join("") : "<div class='muted'>No logs written yet.</div>";
   } catch {}
@@ -1531,8 +1531,8 @@ async function loadBudgetPanel() {
     document.getElementById("bud-models").innerHTML = (data.byModel ?? []).map(row => \`
       <div class="stat-row">
         <span class="stat-key mono">\${row.model}</span>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <div class="health-bar" style="width:60px;"><div class="health-bar-fill cyan" style="width:\${Math.min(100, (row.usd / (config.perTaskUsd || 1)) * 100)}%;"></div></div>
+        <div class="xr-s-107">
+          <div class="health-bar xr-s-108"><div class="health-bar-fill cyan xr-s-109"></div></div>
           <span class="stat-val text-cyan">$\${Number(row.usd ?? 0).toFixed(4)}</span>
         </div>
       </div>
@@ -1669,7 +1669,7 @@ function renderPaletteResults(q) {
   const matches = PALETTE_ITEMS.filter(item => !q || item.label.toLowerCase().includes(q.toLowerCase()));
   const el = document.getElementById("palette-results");
   el.innerHTML = matches.map((item, i) => \`
-    <div class="palette-item \${i === paletteFocusIdx ? "focused" : ""}" onclick="PALETTE_ITEMS[\${PALETTE_ITEMS.indexOf(item)}].action(); closePalette();">
+    <div class="palette-item \${i === paletteFocusIdx ? "focused" : ""}" data-xr-action="PALETTE_ITEMS[\${PALETTE_ITEMS.indexOf(item)}].action(); closePalette();">
       <div class="palette-item-icon">
         <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
@@ -1736,4 +1736,122 @@ setInterval(() => {
   if (active === "providers") loadProviders();
   if (active === "models") loadModels();
   if (active === "budget") loadBudgetPanel();
-}, 20_000);`;
+}, 20_000);
+
+
+// Phase 4 · T5 — build a safely-quoted data-xr-action value for runtime
+// generated elements: single-quoted args with quotes/backslashes escaped, so
+// the attribute can never break out of its value (CSP-safe + injection-safe).
+// Backslash is built via fromCharCode(92) to keep this block free of
+// backslash-escape ambiguity inside the outer template.
+function act(fn) {
+  var BS = String.fromCharCode(92);
+  var args = Array.prototype.slice.call(arguments, 1);
+  var out = fn + '(';
+  for (var i = 0; i < args.length; i++) {
+    if (i > 0) out += ', ';
+    var a = args[i];
+    if (typeof a === 'number' || typeof a === 'boolean') { out += String(a); continue; }
+    out += "'" + String(a).split(BS).join(BS + BS).split("'").join(BS + "'") + "'";
+  }
+  return out + ')';
+}
+// ── Phase 4 · T5 — CSP-safe action dispatcher ──────────────────────────────
+// Inline event handlers are forbidden by the strict CSP (script-src 'self',
+// no unsafe-inline). UI actions are declared as data-xr-action="fn('arg')"
+// attributes and dispatched here through a STRICT PARSER + ALLOWLIST — never
+// eval, never a dynamic call outside the allowlist. Unknown functions or
+// malformed expressions are ignored (fail closed).
+var XR_ACTIONS = new Set(["answerApproval","approveMemory","capabilityInspect","capabilityQuarantine","chatArchiveActive","chatBranchFromLast","chatExportActive","chatNewChat","chatSelectChat","chatTogglePin","clearMemory","clearNotifications","closePalette","copyText","createWorkspace","cycleChatMode","deleteMemory","doMemSearch","downloadArtifact","editMessage","emergencyStopControl","exportFullData","focusChangeModel","insertHint","inspectMarketplaceSkill","installMarketplaceSkill","killProcess","loadAuditLog","loadBudgetPanel","loadCapabilities","loadMarketplace","loadMcp","loadModels","loadPlugins","loadResearchDetail","loadResearchPanel","loadSessionDetail","loadSessionsPanel","loadWorkspaces","navigateTo","openAttachmentPicker","openPalette","pickInstalledModel","pluginAction","pluginRemove","quarantineFile","refreshAll","registerMcp","removeAttachment","removeMcp","revokeMemory","runSecLab","runShieldScan","saveAllSettings","saveBudgetConfig","saveModelSelection","saveProviderRouting","searchPlugins","sendChatMessage","setMarketFilter","setMarketQuery","setMarketSort","setTimeout","skillAction","switchSettingsPane","switchShieldTab","switchWorkspaceUI","syncMarketplace","testModelSelection","toast","toggleComposerFlag","toggleShieldAdBlock","verifyAuditLedger"]);
+document.addEventListener('click', function (ev) {
+  var el = ev.target && ev.target.closest ? ev.target.closest('[data-xr-action]') : null;
+  if (!el) return;
+  var expr = el.getAttribute('data-xr-action');
+  if (!expr) return;
+  runXrAction(expr, ev);
+});
+// keyup actions (e.g. the settings search box): dispatched through the same
+// allowlist parser.
+document.addEventListener('keyup', function (ev) {
+  var el = ev.target;
+  if (!el || !el.getAttribute || !el.getAttribute('data-xr-keyup')) return;
+  var expr = el.getAttribute('data-xr-keyup');
+  if (!expr) return;
+  runXrAction(expr, ev);
+});
+function runXrAction(expr, ev) {
+  var stmts = expr.split(';');
+  var stop = false;
+  for (var i = 0; i < stmts.length; i++) {
+    var s = stmts[i].trim();
+    if (!s) continue;
+    if (s === 'return false' || s === 'event.stopPropagation()') { stop = stop || s === 'event.stopPropagation()'; continue; }
+    var m = s.match(/^([A-Za-z_$][\\w$]*)\\(([^)]*)\\)$/);
+    if (!m) { if (!execSpecial(s)) return; continue; }
+    var fnName = m[1];
+    if (!XR_ACTIONS.has(fnName)) return;
+    var fn = window[fnName];
+    if (typeof fn !== 'function') return;
+    var argv = parseArgs(m[2]);
+    if (argv === null) return;
+    try { fn.apply(null, argv); } catch (e) { console.error('action failed:', fnName, e); }
+  }
+  if (stop && ev && ev.stopPropagation) ev.stopPropagation();
+}
+function parseArgs(raw) {
+  var a = raw.trim();
+  if (!a) return [];
+  var out = [];
+  var i = 0;
+  while (i < a.length) {
+    while (i < a.length && (a[i] === ' ' || a[i] === ',')) i++;
+    if (i >= a.length) break;
+    var c = a[i];
+    if (c === "'" || c === '"') {
+      var end = a.indexOf(c, i + 1);
+      if (end < 0) return null;
+      out.push(a.slice(i + 1, end));
+      i = end + 1;
+    } else if (c === String.fromCharCode(96)) {
+      var end2 = a.indexOf(String.fromCharCode(96), i + 1);
+      if (end2 < 0) return null;
+      out.push(a.slice(i + 1, end2));
+      i = end2 + 1;
+    } else {
+      var m = a.slice(i).match(/^(true|false|-?\\d+)/);
+      if (!m) return null;
+      out.push(m[1] === 'true' ? true : m[1] === 'false' ? false : Number(m[1]));
+      i += m[1].length;
+    }
+  }
+  return out;
+}
+function execSpecial(s) {
+  // PALETTE_ITEMS[N].action() — fixed app data, index-checked.
+  var pm = s.match(/^PALETTE_ITEMS\\[(\\d+)\\]\\.action\\(\\)$/);
+  if (pm && window.PALETTE_ITEMS) {
+    var idx = Number(pm[1]);
+    var item = window.PALETTE_ITEMS[idx];
+    if (item && typeof item.action === 'function') { item.action(); return true; }
+    return false;
+  }
+  // this.parentElement.classList.toggle('open') — tool-card header; the
+  // delegated click handler already targets the card, so no-op here.
+  var cm = s.match(/^this\\.parentElement\\.classList\\.toggle\\('open'\\)$/);
+  if (cm) { return true; }
+  // document.getElementById('id')?.focus()
+  var dm = s.match(/^document\\.getElementById\\('([A-Za-z0-9_-]+)'\\)\\?\\.focus\\(\\)$/);
+  if (dm) { var e = document.getElementById(dm[1]); if (e && e.focus) e.focus(); return true; }
+  // setTimeout(ident, num) — allowlisted identifier reference.
+  var tm = s.match(/^setTimeout\\(([A-Za-z_$][\\w$]*), (\\d+)\\)$/);
+  if (tm && XR_ACTIONS.has(tm[1])) {
+    var f = window[tm[1]];
+    if (typeof f === 'function') { setTimeout(f, Number(tm[2])); return true; }
+    return false;
+  }
+  return false;
+}
+/* __XR_DISPATCHER_END__ */
+
+
+`;

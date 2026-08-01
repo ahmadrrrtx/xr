@@ -7,8 +7,8 @@ import { isLocal } from "../../cost/pricing.ts";
 import { runLab } from "../../security/lab.ts";
 import { fingerprint } from "../../context/memory/rag.ts";
 import { MemoryStore } from "../../context/memory/store.ts";
-import { dashboardHtml } from "../dashboard.ts";
-import { route, type DaemonRoute } from "./router.ts";
+import { dashboardHtml, dashboardCssAsset, dashboardScriptAsset } from "../dashboard.ts";
+import { assetResponse, route, type DaemonRoute } from "./router.ts";
 
 async function gitSummary(cwd: string): Promise<{ branch: string; dirty: boolean }> {
   try {
@@ -52,6 +52,20 @@ export function systemRoutes(): DaemonRoute[] {
       path: "/dashboard",
       method: "GET",
       handle: ({ html, token }) => html(dashboardHtml(token)),
+    }),
+    // Phase 4 · T5 — external dashboard assets under strict CSP
+    // (script-src 'self'; the client app is never inline).
+    route({
+      id: "dashboard.css.get",
+      path: "/assets/dashboard.css",
+      method: "GET",
+      handle: () => assetResponse(dashboardCssAsset(), "text/css; charset=utf-8"),
+    }),
+    route({
+      id: "dashboard.js.get",
+      path: "/assets/dashboard.js",
+      method: "GET",
+      handle: () => assetResponse(dashboardScriptAsset(), "application/javascript; charset=utf-8"),
     }),
     route({
       id: "chat.page.get",

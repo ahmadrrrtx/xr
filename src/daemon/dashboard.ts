@@ -42,7 +42,22 @@ export function dashboardHtml(token: string): string {
 }
 
 import { DASHBOARD_PAGE as PAGE } from "./dashboard/markup.ts";
+import { DASHBOARD_CSS } from "./dashboard/styles.ts";
+import { DASHBOARD_SCRIPT } from "./dashboard/client-script.ts";
 
+export { DASHBOARD_PAGE } from "./dashboard/markup.ts";
 export { DASHBOARD_CSS } from "./dashboard/styles.ts";
 export { DASHBOARD_SCRIPT } from "./dashboard/client-script.ts";
-export { DASHBOARD_PAGE } from "./dashboard/markup.ts";
+
+/**
+ * Phase 4 · T5 — external asset accessors. The dashboard is served under a
+ * strict CSP (`script-src 'self'`): the client application and stylesheet are
+ * EXTERNAL assets (never inline), so no `unsafe-inline` is needed anywhere.
+ */
+export function dashboardCssAsset(): string {
+  return DASHBOARD_CSS;
+}
+
+export function dashboardScriptAsset(): string {
+  return DASHBOARD_SCRIPT;
+}

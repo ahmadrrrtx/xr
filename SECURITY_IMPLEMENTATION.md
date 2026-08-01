@@ -30,7 +30,7 @@ Both vulnerabilities have been **FULLY REMEDIATED** through a multi-layer securi
 **Impact**: Remote Code Execution (RCE) - attacker can execute arbitrary commands on host machine.
 
 **Solution**: 
-1. ✅ **Primary Fix**: VM-based isolation using `node:vm`
+1. ✅ **Primary Fix**: risk-tiered OS isolation (trust lattice); the in-process `node:vm` realm is defense-in-depth only (Phase 4 · T8)
    - Plugin code runs in separate V8 context
    - No access to Node.js built-ins (`require`, `process`, `fs`, `net`)
    - Only explicitly provided globals available
@@ -100,7 +100,7 @@ export async function loadPlugin(dir: string, deps: LoadDeps) {
 
 #### After (Secure):
 ```typescript
-// VM-based isolation - plugin has NO access to Node.js
+// In-process VM realm (defense-in-depth, Phase 4 · T8) - plugin has NO access to Node.js
 export async function loadPlugin(dir: string, deps: LoadDeps) {
   const entry = resolve(dir, manifest.entrypoint);
   const code = readFileSync(entry, "utf8");
@@ -281,7 +281,7 @@ private async connectStdio() {
 ## Files Changed
 
 ### 1. `src/plugins/loader.ts` (MODIFIED - Complete rewrite)
-- ✅ Added VM-based isolation (`loadInIsolatedContext()`)
+- ✅ Added in-process VM realm (defense-in-depth) (`loadInIsolatedContext()`)
 - ✅ Improved static scanning regex patterns
 - ✅ Added hash verification (entrypoint + file tree)
 - ✅ Added timeout for VM execution (5 seconds)
@@ -347,11 +347,13 @@ private async connectStdio() {
                       │ (if bypassed)
                       ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Layer 2: VM-Based Isolation (PRIMARY BOUNDARY)            │
+│ Layer 2: In-Process VM Realm (DEFENSE-IN-DEPTH, NOT a      │
+│          security boundary — Phase 4 · T8)                 │
 │ - Separate V8 context                                      │
 │ - No access to Node.js built-ins                            │
 │ - Only safe primitives provided                             │
 │ - Cannot be bypassed from within plugin code               │
+│ - The OS boundary is Layer 1 (trust lattice)               │
 └─────────────────────┬───────────────────────────────────────┘
                       │ (if VM escape)
                       ▼
@@ -392,7 +394,7 @@ private async connectStdio() {
 bun test test/security.test.ts
 
 # Expected output:
-# ✅ Plugin sandbox bypass is CLOSED (VM isolation)
+# ✅ Plugin OS-isolation is enforced (fail-closed); VM realm is defense-in-depth (Phase 4 · T8)
 # ✅ Browser --no-sandbox is REMOVED (sandbox enabled by default)
 # ✅ MCP environment leakage is CLOSED (allow-list only)
 ```
@@ -499,7 +501,7 @@ xr audit --security
 
 The two critical RCE vulnerabilities in XR have been **FULLY REMEDIATED** through a comprehensive security architecture:
 
-1. ✅ **Plugin Sandbox Bypass**: VM-based isolation + static scanning
+1. ✅ **Plugin Sandbox Bypass**: OS isolation (trust lattice) + VM realm (defense-in-depth) + static scanning
 2. ✅ **Browser `--no-sandbox`**: Sandbox enabled by default + explicit opt-in
 3. ✅ **MCP Environment Leakage**: Allow-list based environment filtering
 

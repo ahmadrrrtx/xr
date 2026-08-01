@@ -3,13 +3,13 @@
  *
  * Phase 2 · T7: `src/plugins/loader.ts` was 1 586 lines spanning three
  * unrelated responsibilities — manifest validation/hashing, the in-process VM
- * sandbox, and worker-based process isolation. Split by responsibility so a
+ * sandbox (defense-in-depth), and worker-based process isolation. Split by responsibility so a
  * change to one cannot silently affect the others; the security architecture
  * itself is unchanged (no behaviour edits were made during the split).
  *
  * Owns the `worker_threads` path: the plugin runs in a separate thread with the
  * capability host reached over the message protocol in `worker-protocol.ts`,
- * and falls back to the in-process VM sandbox when a worker cannot be used.
+ * and falls back to the in-process VM realm (defense-in-depth) when a worker cannot be used.
  */
 
 import { existsSync, readFileSync, statSync, readdirSync, lstatSync, realpathSync } from "node:fs";
@@ -88,24 +88,23 @@ export async function loadPluginInWorker(dir: string, deps: LoadDeps): Promise<L
 
   const granted = effectiveGrant(manifest.permissions, deps.granted);
 
-  // Step 2: Pre-load secrets for the worker
-  const secretsForWorker: Record<string, string | undefined> = {};
+  // Step 2 (Phase 4 · T4): secret NAMES only — raw values never cross into
+  // the worker. `secrets.get(name)` is proxied to the main thread, which
+  // resolves the value through the credential broker transiently (never
+  // persisted, never logged, never in workerData).
+  const secretNames: string[] = [];
   if (granted.includes("secrets")) {
-    // Pre-load declared secrets from the environment/file so the worker
-    // can provide them synchronously to plugin code (e.g., github plugin).
-    // Only the secrets the plugin is allowed to see are included.
     try {
       const envSecrets = ["GITHUB_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
       for (const name of envSecrets) {
-        const val = getSecret(name);
-        if (val !== undefined) secretsForWorker[name] = val;
+        if (getSecret(name) !== undefined) secretNames.push(name);
       }
     } catch { /* best-effort */ }
   }
 
   // Step 3: Try Worker-based loading, fallback to direct VM
   try {
-    return await loadViaWorker(dir, entryAbs, manifest, granted, deps, secretsForWorker);
+    return await loadViaWorker(dir, entryAbs, manifest, granted, deps, secretNames);
   } catch (workerError) {
     deps.store.audit("plugin.worker_fallback", {
       plugin: manifest.id,
@@ -122,7 +121,7 @@ async function loadViaWorker(
   manifest: PluginManifest,
   granted: PermissionScope[],
   deps: LoadDeps,
-  secrets: Record<string, string | undefined>,
+  secretNames: string[],
 ): Promise<LoadResult> {
   const workerPath = new URL("../sandbox-worker.ts", import.meta.url).href;
   const egressAllowlist: string[] = (deps.config as any).security?.egressAllowlist ?? [];
@@ -169,7 +168,7 @@ async function loadViaWorker(
             entryFile: entryAbs,
             manifest,
             granted,
-            secrets,
+            secretNames,
             egressAllowlist,
             mcpServers: manifest.mcpServers,
             coreVersion: CORE_VERSION,
@@ -340,6 +339,55 @@ async function handleWorkerCapabilityRequest(
           result = { ok: false, message: "", reason: "provider not available in worker sandbox" };
         }
         break;
+
+      case "net": {
+        // Phase 4 · T4 — centralized egress proxy on the main thread:
+        // allowlist (config + plugin-declared) enforced at connection time.
+        if (method === "fetch") {
+          const url = String(args[0] ?? "");
+          const init = (args[1] ?? {}) as { method?: string; headers?: Record<string, string>; body?: string };
+          const { guardedFetch } = await import("../../security/egress-proxy.ts");
+          const { loadConfig } = await import("../../config/config.ts");
+          const cfg = loadConfig().config.security;
+          const r = await guardedFetch(
+            url,
+            { method: init.method, headers: init.headers, body: init.body },
+            {
+              allowlist: cfg.egressAllowlist ?? [],
+              allowedHosts: cfg.allowedHosts ?? [],
+              audit: (event, detail) => deps.store.audit(event, detail),
+            },
+          );
+          if (r.blocked || !r.ok) {
+            result = { ok: false, status: r.status ?? 0, body: r.reason ?? "" };
+            break;
+          }
+          result = { ok: true, status: r.status, body: r.body };
+        }
+        break;
+      }
+
+      case "secrets": {
+        // Phase 4 · T4 — broker-mediated: the raw value is resolved on the
+        // main thread, returned once, and never stored/logged. The name must
+        // be one the plugin declared and was granted.
+        if (method === "get") {
+          const name = String(args[0] ?? "");
+          const grantedNames = ["GITHUB_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
+          if (!grantedNames.includes(name)) {
+            error = `secret "${name}" is not granted to this plugin`;
+            break;
+          }
+          const { getSecret } = await import("../../security/secrets.ts");
+          const value = getSecret(name);
+          if (value === undefined) {
+            error = `secret "${name}" is not configured`;
+            break;
+          }
+          result = value;
+        }
+        break;
+      }
 
       default:
         error = `unknown capability: ${capability}`;

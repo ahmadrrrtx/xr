@@ -63,8 +63,22 @@ describe("XR 4.2 shell tool isolation wiring", () => {
     rmSync(ctx.cwd, { recursive: true, force: true });
   });
 
-  test("falls back to the legacy in-process path when no runner is wired", async () => {
-    const ctx = ctxWith(); // no runIsolated
+  // Phase 4 · T1 — hardened mode (the default) BLOCKS the host-authority
+  // fallback: no runner wired + hardened ⇒ refused, never host bash.
+  test("hardened mode: no runner wired → BLOCKED (never host-authority bash)", async () => {
+    const ctx = ctxWith({ hardened: true }); // no runIsolated, hardened on
+    const res = await shellTool.run({ cmd: "echo must-not-run" }, ctx);
+    expect(res.ok).toBe(false);
+    expect(res.output).toContain("blocked:");
+    expect(res.output).toContain("hardened");
+    expect(ctx.events.some((e) => e.event === "shell.hardened_blocked")).toBe(true);
+    rmSync(ctx.cwd, { recursive: true, force: true });
+  });
+
+  // Phase 4 · T1 — the legacy host-authority path survives ONLY as an explicit
+  // opt-out (hardened: false), audited as a degraded execution.
+  test("hardened OFF: falls back to the legacy in-process path when no runner is wired", async () => {
+    const ctx = ctxWith({ hardened: false }); // no runIsolated, hardened off
     const res = await shellTool.run({ cmd: "echo legacy-fallback-ok" }, ctx);
     expect(res.ok).toBe(true);
     expect(res.output).toContain("legacy-fallback-ok");

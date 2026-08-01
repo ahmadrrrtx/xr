@@ -1,6 +1,14 @@
 # XR — single-container image (fixes the #1 r/LocalLLaMA complaint:
 # "hostile to docker"). Runs the whole agent + dashboard in one container.
 FROM oven/bun:1-alpine AS base
+
+# Phase 4 · T6 — patch the base image at BUILD time. The floating
+# oven/bun:1-alpine tag can lag alpine security releases (e.g. OpenSSL
+# CVE-2026-45447: libcrypto3/libssl3 3.5.6-r0 -> 3.5.7-r0), which the trivy
+# container-scan gate flags as HIGH/fixed. `apk upgrade` pulls the patched
+# packages so the SHIPPED image is clean on the day it is built.
+RUN apk upgrade --no-cache
+
 WORKDIR /app
 
 # Install deps first (layer cache)

@@ -29,11 +29,16 @@ async function main(): Promise<void> {
   const port = freePort();
   const handle = await serve({ port });
   const url = `http://127.0.0.1:${port}/?token=${handle.token}`;
+  // Phase 4 · T5 — one-time bootstrap: exchange the query token for the
+  // session cookie ONCE, then measure the cookie-authenticated HTML render.
+  const boot = await fetch(url, { redirect: "manual" });
+  const cookie = (boot.headers.get("set-cookie") ?? "").split(";")[0];
+  const cleanUrl = boot.headers.get("location") ?? url;
 
   const times: number[] = [];
   for (let i = 0; i < SAMPLES; i++) {
     const start = performance.now();
-    const res = await fetch(url);
+    const res = await fetch(cleanUrl, { headers: { cookie } });
     const body = await res.text();
     times.push(performance.now() - start);
     if (!res.ok || body.length < 500) {

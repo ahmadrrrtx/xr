@@ -95,9 +95,13 @@ export const shellTool: Tool = {
       ctx.audit("shell.dryrun", { cmd });
       return { ok: true, output: `[dry-run] would run: ${cmd}` };
     }
-    // XR 4.2 — when the runtime provides an isolated runner, execute the shell
-    // command inside a verified environment (Tier 2). This FAILS CLOSED if the
-    // required isolation is unavailable; it never silently runs in-process.
+    // XR 4.2 / Phase 4 · T1 — when the runtime provides an isolated runner,
+    // execute the shell command inside a verified environment (Tier 2). This
+    // FAILS CLOSED if the required isolation is unavailable; it never silently
+    // runs in-process. When no isolated runner is wired (deprecated out-of-tree
+    // callers), hardened mode (the default) BLOCKS the command outright — the
+    // host-authority fallback exists only with hardened mode explicitly OFF
+    // (compat path), and is audited as a degraded execution.
     if (ctx.runIsolated) {
       const { request, executable } = shellTrustSpec(cmd, ctx.cwd, {
         timeoutMs: 120_000,
@@ -115,6 +119,13 @@ export const shellTool: Tool = {
         ok: r.ok,
         output: out.slice(0, 4000) || `(exit ${r.exitCode})`,
         data: { isolated: true, placement: r.placement, verified: r.verified, exit: r.exitCode },
+      };
+    }
+    if (ctx.hardened !== false) {
+      ctx.audit("shell.hardened_blocked", { cmd, reason: "no isolated runner wired and hardened mode is on" });
+      return {
+        ok: false,
+        output: "blocked: shell requires an isolated execution environment, but none is wired (hardened mode). Set XR_TRUST_HARDENED=0 only on hosts where this is explicitly accepted.",
       };
     }
     try {

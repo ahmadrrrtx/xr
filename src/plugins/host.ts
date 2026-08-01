@@ -42,8 +42,16 @@ export interface FsCapability {
   list?(rel?: string): string[];
 }
 
+export interface PluginFetchResult {
+  readonly status: number;
+  readonly ok: boolean;
+  readonly body: string;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+}
+
 export interface NetCapability {
-  fetch(url: string, init?: RequestInit): Promise<Response>;
+  fetch(url: string, init?: RequestInit): Promise<PluginFetchResult>;
   isAllowed(url: string): boolean;
 }
 
@@ -241,7 +249,7 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
       }
     };
 
-    const fetchFn = async (url: string, init?: RequestInit): Promise<Response> => {
+    const fetchFn = async (url: string, init?: RequestInit): Promise<PluginFetchResult> => {
       let parsed: URL;
       try {
         parsed = new URL(url);
@@ -257,13 +265,32 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
         throw new Error(`request body too large (max ${MAX_NET_BODY})`);
       }
       audit("net.fetch", { url: String(url).slice(0, 200), method: init?.method ?? "GET" });
-      const controller = new AbortController();
-      const to = setTimeout(() => controller.abort(), 30_000);
-      try {
-        return await fetch(url, { ...init, signal: controller.signal as any });
-      } finally {
-        clearTimeout(to);
-      }
+      // Phase 4 · T4 — centralized egress proxy: connection-time enforcement
+      // (DNS resolve, private-range/metadata block, redirect revalidation,
+      // pinning, byte caps). The plugin never opens raw host sockets.
+      const { guardedFetch } = await import("../security/egress-proxy.ts");
+      const r = await guardedFetch(
+        String(url),
+        { method: init?.method, headers: (init?.headers ?? {}) as Record<string, string>, body: init?.body as string | undefined },
+        {
+          allowlist: egress,
+          audit: (event, detail) => audit(event, detail),
+        },
+      );
+      const body = r.body ?? r.reason ?? "";
+      return {
+        status: r.status ?? 0,
+        ok: r.ok,
+        body,
+        text: async () => body,
+        json: async () => {
+          try {
+            return JSON.parse(body);
+          } catch {
+            throw new Error("response body is not valid JSON");
+          }
+        },
+      };
     };
 
     base.net = secureCapability({

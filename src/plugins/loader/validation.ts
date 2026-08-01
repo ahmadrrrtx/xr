@@ -3,7 +3,7 @@
  *
  * Phase 2 · T7: `src/plugins/loader.ts` was 1 586 lines spanning three
  * unrelated responsibilities — manifest validation/hashing, the in-process VM
- * sandbox, and worker-based process isolation. Split by responsibility so a
+ * sandbox (defense-in-depth), and worker-based process isolation. Split by responsibility so a
  * change to one cannot silently affect the others; the security architecture
  * itself is unchanged (no behaviour edits were made during the split).
  *

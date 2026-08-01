@@ -21,7 +21,7 @@ This repository contains critical security fixes for the XR AI Operating System.
   - Proxy objects: `new Proxy({}, { get: () => require("child_process") })`
 
 **Solution**:
-- ✅ **VM-based isolation** using `node:vm`
+- ✅ **Defense-in-depth**: in-process `node:vm` realm inside the plugin worker (NOT a security boundary — see Phase 4 · T8). The OS-level boundary comes from the trust lattice: bubblewrap/user namespaces or a container, selected per risk tier.
 - ✅ **Static code scanning** (defense-in-depth)
 - ✅ **Hash verification** (tamper detection)
 
@@ -75,7 +75,7 @@ This repository contains critical security fixes for the XR AI Operating System.
 
 | File | Changes | Lines |
 |------|---------|-------|
-| `src/plugins/loader.ts` | VM isolation + static scanning | ~300 |
+| `src/plugins/loader.ts` | In-process VM realm (defense-in-depth) + static scanning; OS isolation via trust lattice backends | ~300 |
 | `src/control/browser.ts` | Remove --no-sandbox + security | ~130 |
 | `src/mcp/client.ts` | Environment allow-list + validation | ~390 |
 | `src/plugins/host.ts` | Capability enforcement + validation | ~235 |
@@ -169,7 +169,7 @@ This repository contains critical security fixes for the XR AI Operating System.
 bun test test/security.test.ts
 
 # Expected output:
-# ✅ PASS: VM isolation function exists
+# ✅ PASS: defense-in-depth VM realm exists (OS isolation is the boundary — see GUARANTEE_MATRIX.md)
 # ✅ PASS: Sandbox enabled by default
 # ✅ PASS: Environment allow-list exists
 # ...
@@ -285,9 +285,9 @@ Read `SECURITY_IMPLEMENTATION.md` for:
 
 **A**: Plugins that only use the `PluginHost` API will work unchanged. Plugins that directly access `fs`, `process`, etc. will need to be updated.
 
-### Q: Is the VM isolation 100% secure?
+### Q: Is the `node:vm` realm a security boundary?
 
-**A**: VM isolation is a strong security boundary, but not perfect. For defense-in-depth, we also use static scanning, hash verification, and permission enforcement. Future releases will add process-based isolation (Docker/MicroVM).
+**A**: NO (Phase 4 · T8). `node:vm` shares the host process and address space — it is defense-in-depth only. Untrusted plugin code is confined by the OS-level isolation selected from the restrictiveness lattice (namespace sandbox / container), which fails closed when unavailable. Static scanning, hash verification, permission enforcement and the VM realm are additional layers, never the boundary.
 
 ### Q: Can I still use `--no-sandbox` for browser?
 
@@ -299,7 +299,7 @@ Read `SECURITY_IMPLEMENTATION.md` for:
 
 ### Q: What about performance?
 
-**A**: VM isolation adds ~5ms overhead per plugin load. Browser launch is ~50ms slower with sandbox enabled. MCP startup is ~10ms slower due to env filtering. These are acceptable trade-offs for security.
+**A**: The in-process VM realm adds ~5ms overhead per plugin load. Browser launch is ~50ms slower with sandbox enabled. MCP startup is ~10ms slower due to env filtering. These are acceptable trade-offs for security.
 
 ---
 

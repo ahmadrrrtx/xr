@@ -19,7 +19,7 @@ import type { CostRepo } from "../../state/repos/cost-repo.ts";
 import type { SessionRepo } from "../../state/repos/session-repo.ts";
 import type { UserMemoryRepo } from "../../state/repos/user-memory-repo.ts";
 import type { WorkspaceStore } from "../../state/workspace-store.ts";
-import { toOutcome, type EnvelopeOutcome, type ExecutionEnvelope } from "./envelope.ts";
+import { toOutcome, type EnvelopeOutcome, type ExecutionEnvelope, type Placement } from "./envelope.ts";
 
 /**
  * Stores the envelope writes its EVIDENCE through. Supplied by the caller so
@@ -40,6 +40,17 @@ export interface EnvelopeContext {
   readonly sessionSummary?: { enabled: boolean; minTurns?: number };
   readonly contextPackage?: ContextPackage;
   readonly contextMode?: "legacy" | "context" | "both";
+  /**
+   * Phase 4 · T1 — the Trust service. When supplied, the loop wires
+   * `runIsolated` into every tool context and the OUTCOME's recorded
+   * placement reflects the strongest placement the trust gate actually
+   * enforced during the run (never a label the run did not earn).
+   */
+  readonly trust?: import("../../runtime/trust/service.ts").TrustService;
+  /** Phase 4 · T1 — hardened mode flag (fail-closed for high-risk tools). */
+  readonly hardened?: boolean;
+  /** Phase 4 · T4 — explicit raw-IP/loopback destinations (local runtimes). */
+  readonly allowedHosts?: readonly string[];
 }
 
 /**
@@ -88,8 +99,38 @@ export async function runEnvelope(
     toolRegistry: placement.registry,
     envelopeId: envelope.evidence.envelopeId,
     surface: intent.surface,
+    // Phase 4 · T1 — enforce placement on the canonical path: the loop wires
+    // the Trust service into every tool context and carries hardened mode.
+    ...(context.trust ? { trust: context.trust } : {}),
+    ...(context.hardened !== undefined ? { hardened: context.hardened } : {}),
+    ...(context.allowedHosts ? { allowedHosts: context.allowedHosts } : {}),
+    runId: envelope.evidence.envelopeId,
   };
 
   const result = await runAgentLoop(intent.task, intent.mode, deps);
-  return toOutcome(envelope, result);
+  const outcome = toOutcome(envelope, result);
+  // Phase 4 · T1 — the recorded placement is the strongest placement the trust
+  // gate actually enforced this run (escalate-only lattice), not a label.
+  if (context.trust) {
+    const enforced = context.trust.runPlacement(envelope.evidence.envelopeId);
+    context.trust.releaseRun(envelope.evidence.envelopeId);
+    return { ...outcome, placement: toEnvelopePlacement(enforced) };
+  }
+  return outcome;
+}
+
+/**
+ * Map the trust lattice's placement onto the envelope's coarse Placement
+ * union (Phase 2 shape; the fine-grained kind lives in the trust record).
+ * Any OS-enforced boundary is "container"-class for the envelope's purposes.
+ */
+function toEnvelopePlacement(kind: import("../../runtime/trust/types.ts").PlacementKind): Placement {
+  switch (kind) {
+    case "in_process":
+      return "in_process";
+    case "restricted_process":
+      return "worker";
+    default:
+      return "container";
+  }
 }

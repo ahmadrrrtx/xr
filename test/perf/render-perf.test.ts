@@ -22,11 +22,19 @@ describe("Phase 3 · T5 — dashboard first render", () => {
     const handle = await serve({ port });
     const url = `http://127.0.0.1:${port}/?token=${handle.token}`;
     try {
+      // Phase 4 · T5 — the query token is a one-time bootstrap: it 302s to a
+      // token-free URL and sets the session cookie. The render budget is
+      // measured on the full HTML fetch through the bootstrap flow.
       const start = performance.now();
-      const res = await fetch(url);
-      const body = await res.text();
+      const res = await fetch(url, { redirect: "manual" });
+      expect(res.status).toBe(302);
+      const cookie = (res.headers.get("set-cookie") ?? "").split(";")[0];
+      const res2 = await fetch(res.headers.get("location") ?? url, {
+        headers: { cookie },
+      });
+      const body = await res2.text();
       const ms = performance.now() - start;
-      expect(res.ok).toBe(true);
+      expect(res2.ok).toBe(true);
       expect(body.length).toBeGreaterThan(500);
       expect(ms).toBeLessThan(1000 * 1.5);
     } finally {

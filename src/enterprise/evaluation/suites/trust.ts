@@ -50,6 +50,8 @@ const NO_ISOLATION: PlacementCapabilities = Object.freeze({
   namespaceSandbox: false,
   container: false,
   browserIsolated: false,
+  gvisor: false,
+  firecracker: false,
   isRoot: false,
 });
 
@@ -60,6 +62,8 @@ const FULL_ISOLATION: PlacementCapabilities = Object.freeze({
   namespaceSandbox: true,
   container: true,
   browserIsolated: true,
+  gvisor: true,
+  firecracker: true,
   isRoot: false,
 });
 

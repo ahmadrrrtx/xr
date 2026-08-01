@@ -24,6 +24,8 @@ export interface IsolatedRunResult {
   /** True when the action was BLOCKED (fail closed) rather than executed. */
   blocked: boolean;
   reason?: string;
+  /** Phase 4 · T1 — actionable remediation surfaced to the user when blocked. */
+  remediation?: string;
   /** Placement actually used (e.g. "namespace_sandbox"). */
   placement?: string;
   /** Whether isolation verification passed before execution. */
@@ -59,6 +61,11 @@ export interface ToolContext {
   audit(event: string, detail: Record<string, unknown>): void;
   /** Domains the agent may contact (egress allow-list). Empty = none. */
   egressAllowlist?: string[];
+  /**
+   * Phase 4 · T4 — explicitly permitted raw-IP / loopback destinations
+   * (exact host or host:port), consumed by the centralized egress proxy.
+   */
+  allowedHosts?: readonly string[];
   /** Dry-run: simulate side effects, never actually write/execute. */
   dryRun?: boolean;
   /**
@@ -69,6 +76,13 @@ export interface ToolContext {
    * rather than executing in the unrestricted host process.
    */
   runIsolated?: (req: TrustRequest, exec: EnvironmentExecutable) => Promise<IsolatedRunResult>;
+  /**
+   * Phase 4 · T1 — hardened mode (fail-closed). When true, a high-risk tool
+   * MUST NOT fall back to host-authority execution when `runIsolated` is
+   * absent or blocked — it fails instead. When false/absent, the legacy
+   * fallback is permitted but audited as a degraded path.
+   */
+  hardened?: boolean;
 }
 
 export interface ApprovalRequest {

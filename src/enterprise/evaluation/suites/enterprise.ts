@@ -590,7 +590,7 @@ const refusalsAreUnderstandable: ScenarioDefinition = {
 
     const decision = decidePlacement(
       classification,
-      { inProcess: true, restrictedProcess: false, namespaceSandbox: false, container: false, browserIsolated: false, isRoot: false },
+      { inProcess: true, restrictedProcess: false, namespaceSandbox: false, container: false, browserIsolated: false, gvisor: false, firecracker: false, isRoot: false },
       {},
     );
 

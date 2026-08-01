@@ -54,7 +54,13 @@ export type PlacementKind =
   | "restricted_process"  // Tier 1: confined child process (NOT a hard boundary).
   | "namespace_sandbox"   // Tier 2: OS namespace sandbox (bubblewrap / unshare).
   | "container"           // Tier 2: container runtime (docker/podman) when present.
-  | "browser_isolated";   // Tier 2: isolated browser profile/process.
+  | "browser_isolated"    // Tier 2: isolated browser profile/process.
+  // Phase 4 · T1 — extended placements. Wired as detection hooks only: when the
+  // runtime is present they are selectable; when absent the policy layer fails
+  // closed. They exist so the restrictiveness lattice (lattice.ts) can order
+  // them and so a host with gVisor/Firecracker can escalate, never the reverse.
+  | "gvisor"              // Tier 2: gVisor runsc user-space kernel (detect-only).
+  | "firecracker";        // Tier 2: Firecracker microVM (detect-only).
 
 /** What a backend honestly claims to enforce. Used for verification + docs. */
 export interface PlacementGuarantees {
@@ -237,6 +243,17 @@ export interface TrustRequest {
   readonly workspaceRoot: string;
   /** Explicit deployment profile (affects available backends). */
   readonly deploymentProfile?: string;
+  /**
+   * Phase 4 · T1 — CAPABILITY-DECLARED minimum tier (escalate-only).
+   *
+   * A capability (plugin, MCP server, skill) may declare that its operations
+   * must never run below a given tier — e.g. a plugin that spawns processes
+   * declares tier2. The effective tier is `max(classified, declared, run)`.
+   * A capability can therefore only RAISE the isolation bar, never lower it:
+   * this field is ignored when it would downgrade the classifier's tier
+   * (effectiveTier in lattice.ts enforces the max).
+   */
+  readonly minimumTier?: RiskTier;
 }
 
 export interface RiskClassification {
