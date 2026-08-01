@@ -64,6 +64,9 @@ jobs:
     name: Vulnerability scan (osv-scanner + bun audit)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write # CodeQL upload-sarif posts findings to the security tab
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -118,6 +121,9 @@ jobs:
     name: Container image scan (trivy)
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    permissions:
+      contents: read
+      security-events: write # CodeQL upload-sarif posts findings to the security tab
     steps:
       - uses: actions/checkout@v4
       - name: Build the shipped image

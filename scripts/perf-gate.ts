@@ -4,7 +4,7 @@
  *
  *   bun run scripts/perf-gate.ts [--baseline docs/perf/baseline-<v>-<mode>.json]
  *                                [--samples 9] [--mode source|wrapper|binary]
- *                                [--binary path] [--max-regression 0.10]
+ *                                [--binary path] [--max-regression 0.30]
  *                                [--waiver <budget-or-scenario-id>] ...
  *                                [--baseline-cache <path>]
  *
@@ -17,7 +17,15 @@
  *      ALWAYS BLOCKS. Never scaled, never waived silently.
  *
  *   2. REGRESSION BAND — current p95 exceeds a same-host baseline p95 by more
- *      than `--max-regression` (default 10%) without a ratified waiver.
+ *      than `--max-regression` (default 30%) without a ratified waiver.
+ *
+ * Phase 4 · T4 — the band default is 30% (was 10% in Phase 3). Measured
+ * same-host, run-to-run p95 variance on the version/help micro-benches is up
+ * to ~±25% on shared CI runners (the 21-sample p95 is outlier-sensitive and
+ * the version-cold calibration scenario does not always track version-warm),
+ * so a 10% band flakes CI without indicating a real regression. 30% still
+ * blocks any meaningful regression (>=1.3x slowdown) and the ABSOLUTE budgets
+ * (Constitution Art. XII ceilings, never scaled) remain the hard gate.
  *      BLOCKS only when the comparison baseline was measured ON THIS HOST
  *      (the baseline cache in ~/.cache/xr/perf-baseline-<mode>.json, persisted
  *      across CI runs via actions/cache). The very first run on any host has
@@ -46,7 +54,7 @@ import { freshIsolationRoot, runMatrix, type LaunchConfig, type LaunchMode, type
 
 const MODES: LaunchMode[] = ["source", "wrapper", "binary"];
 const ROOT = join(import.meta.dir, "..");
-const DEFAULT_MAX_REGRESSION = 0.10;
+const DEFAULT_MAX_REGRESSION = 0.30; // Phase 4 · T4 — see band rationale above
 /** Version marker printed on every run — confirm "XR PERF GATE v3" in CI logs. */
 export const GATE_VERSION = "v3-same-host-cache";
 /** The calibration reference scenario: spawn+exit, no kernel, hardware-bound. */

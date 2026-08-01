@@ -18,16 +18,16 @@ import { serve } from "../../src/daemon/server.ts";
 
 const SAMPLES = Number(process.env.XR_BENCH_DASH_SAMPLES ?? 9);
 
-function freePort(): number {
-  return 40000 + Math.floor(Math.random() * 10000);
-}
-
 async function main(): Promise<void> {
   const home = process.env.XR_HOME ?? join(tmpdir(), `xr-dash-bench-${process.pid}-${Date.now()}`);
   mkdirSync(home, { recursive: true });
 
-  const port = freePort();
-  const handle = await serve({ port });
+  // Phase 4 · T4 fix — `port: 0` lets the OS assign an ephemeral port. The
+  // harness spawns this bench once PER SAMPLE (21+ times); a random/fixed
+  // port collides with the previous process's lingering TIME_WAIT socket
+  // (EADDRINUSE) and flakes the perf gate on CI.
+  const handle = await serve({ port: 0 });
+  const port = handle.port;
   const url = `http://127.0.0.1:${port}/?token=${handle.token}`;
   // Phase 4 · T5 — one-time bootstrap: exchange the query token for the
   // session cookie ONCE, then measure the cookie-authenticated HTML render.

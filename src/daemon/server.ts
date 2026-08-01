@@ -323,26 +323,33 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const handler = makeHandler(store, token);
   const bindHost = resolveBindHost();
   const server = Bun.serve({ hostname: bindHost, port, fetch: handler });
+  // Phase 4 · T4 fix — report the ACTUAL bound port: `port: 0` asks the OS to
+  // assign an ephemeral port (used by the perf dashboard-bench, which spawns
+  // many bench processes; a fixed/random port can collide with the previous
+  // process's TIME_WAIT socket → EADDRINUSE → flaky CI).
+  // @types/bun types `server.port` as `number | undefined`, so fall back to
+  // the requested port when the server does not report one.
+  const boundPort = server.port ?? port;
   // Always show a reachable URL: 0.0.0.0 is a bind address, not a destination.
   const displayHost = bindHost === CONTAINER_BIND ? DEFAULT_LOOPBACK : bindHost;
-  const url = `http://${displayHost}:${port}/?token=${token}`;
+  const url = `http://${displayHost}:${boundPort}/?token=${token}`;
 
   const { xrCyan, xrGreen, xrDim, xrBold } = await import("../ui/theme.ts");
   console.log(`
   ${xrBold(xrCyan("XR"))} ${xrDim("—")} Local Server
-  ${xrGreen("✓")} Listening on  ${xrCyan(`http://${displayHost}:${port}`)}
+  ${xrGreen("✓")} Listening on  ${xrCyan(`http://${displayHost}:${boundPort}`)}
   ${xrGreen("✓")} Dashboard     ${xrCyan(url)}
-  ${xrGreen("✓")} Chat          ${xrCyan(`http://${displayHost}:${port}/chat?token=${token}`)}
+  ${xrGreen("✓")} Chat          ${xrCyan(`http://${displayHost}:${boundPort}/chat?token=${token}`)}
   ${xrDim("Token:")} ${xrDim(token)}
   ${xrDim(
     bindHost === CONTAINER_BIND
-      ? `Binding: ${bindHost} inside the container — publish it loopback-only on the host (127.0.0.1:${port}:${port})`
+      ? `Binding: ${bindHost} inside the container — publish it loopback-only on the host (127.0.0.1:${boundPort}:${boundPort})`
       : `Binding: ${bindHost} only — not exposed to the network`,
   )}
 `);
 
   return {
-    port,
+    port: boundPort,
     token,
     stop: () => server.stop(),
     handle: handler,
