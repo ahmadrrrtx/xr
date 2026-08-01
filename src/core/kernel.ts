@@ -81,9 +81,18 @@ export class XRKernel {
     return this.app.backgroundServices;
   }
 
-  /** Bootstrap the full XR runtime (registers services, runs onInit). */
-  async bootstrap(): Promise<void> {
-    await this.app.bootstrap();
+  /**
+   * Bootstrap the XR runtime (registers services, runs onInit).
+   * Phase 3 · T1: `opts.profile` restricts boot to the provider ids a
+   * command needs (command-scoped boot profiles — see boot-profile.ts).
+   */
+  async bootstrap(opts?: { profile?: string[] | null }): Promise<void> {
+    await this.app.bootstrap(opts);
+  }
+
+  /** Phase 3 · T1 — provider ids booted under the current profile. */
+  bootedProviderIds(): string[] {
+    return this.app.bootedProviderIds();
   }
 
   /** Start long-running background services and run onStart hooks. */

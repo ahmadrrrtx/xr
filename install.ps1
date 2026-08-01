@@ -35,6 +35,36 @@ function Refresh-Path {
   if ($userPath) { $env:Path = "$userPath;$env:Path" }
 }
 
+function Get-XrBinaryName {
+  $os = if ($IsWindows -or $env:OS -eq 'Windows_NT') { 'windows' } else { 'unknown' }
+  $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
+  return "xr-$os-$arch.exe"
+}
+
+# Phase 3 · T2 — download the standalone binary (default distribution path).
+function Fetch-XrBinary {
+  $name = Get-XrBinaryName
+  if (-not $name) { return $false }
+  $url = "https://github.com/$Repo/releases/download/v$Version/$name"
+  $distDir = Join-Path $TargetDir 'dist'
+  New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+  Step "Downloading compiled binary v$Version ($name)"
+  try {
+    Invoke-WebRequest -Uri $url -OutFile (Join-Path $distDir $name) -UseBasicParsing -ErrorAction Stop
+    $probe = & (Join-Path $distDir $name) --version 2>$null
+    if ($LASTEXITCODE -eq 0) {
+      Ok "Compiled binary installed ($name)"
+      return $true
+    }
+    Warn 'Binary failed to run; falling back to source checkout.'
+    Remove-Item (Join-Path $distDir $name) -Force -ErrorAction SilentlyContinue
+    return $false
+  } catch {
+    Warn 'Binary download unavailable; falling back to source checkout.'
+    return $false
+  }
+}
+
 function Ensure-Bun {
   Refresh-Path
   if (Get-Command bun -ErrorAction SilentlyContinue) {
@@ -97,8 +127,11 @@ function Install-Launcher {
   $ps1 = Join-Path $binDir 'xr.ps1'
   $cmd = Join-Path $binDir 'xr.cmd'
   $entry = Join-Path $TargetDir 'src\index.ts'
-  Set-Content -Path $ps1 -Encoding UTF8 -Value "& bun run `"$entry`" @args`nexit `$LASTEXITCODE`n"
-  Set-Content -Path $cmd -Encoding ASCII -Value "@echo off`r`nbun run `"$entry`" %*`r`n"
+  $name = Get-XrBinaryName
+  $binary = Join-Path $TargetDir "dist\$name"
+  # Phase 3 · T2 — compiled binary first (default distribution path), Bun source fallback.
+  Set-Content -Path $ps1 -Encoding UTF8 -Value "if (Test-Path `"$binary`") { & `"$binary`" @args; exit `$LASTEXITCODE }; & bun run `"$entry`" @args`nexit `$LASTEXITCODE`n"
+  Set-Content -Path $cmd -Encoding ASCII -Value "@echo off`r`nif exist `"$binary`" (`r`n  `"$binary`" %*`r`n) else (`r`n  bun run `"$entry`" %*`r`n)`r`n"
   $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
   if (-not ($userPath -split ';' | Where-Object { $_ -eq $binDir })) {
     [Environment]::SetEnvironmentVariable('Path', ($(if ($userPath) { "$userPath;$binDir" } else { $binDir })), 'User')
@@ -116,8 +149,12 @@ Step 'Optional Ollama, voice, browser and desktop-control packs are handled late
 if (-not (AskYes 'Continue?' $true)) { Die 'Cancelled.' }
 
 Ensure-Bun
-Fetch-Repo
-Install-Deps
+if (Fetch-XrBinary) {
+  Step 'Using the compiled binary distribution (source checkout skipped).'
+} else {
+  Fetch-Repo
+  Install-Deps
+}
 Install-Launcher
 
 $xrCmd = Join-Path $TargetDir 'bin-local\xr.cmd'

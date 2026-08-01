@@ -251,6 +251,47 @@ jobs:
       - name: Mutation gate
         run: bun run mutation:run
 
+  # ── 5c. Phase 3 performance gates ──────────────────────────────────────────
+  # Art. XII · Rule 2: "No perf claim without a budget and a regression gate."
+  # The perf gate:
+  #   · measures the Phase 3 scenario matrix (fast path + doctor + route +
+  #     dashboard + retrieval@100k) in an isolated XR_HOME;
+  #   · fails when p95 exceeds the PUBLISHED budget (scripts/perf/budgets.json)
+  #     or the VERSIONED BASELINE (docs/perf/baseline-*.json) by >10% without
+  #     a ratified waiver (docs/perf/WAIVERS.md).
+  # The hot-path lint enforces zero sync FS/process I/O on the CLI fast path.
+  # The perf tests (test/perf/*) run inside `bun test` as well, including the
+  # seeded-regression proof that the gate is not vacuous.
+  perf-gate:
+    name: Performance (budgets + regression gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+      - name: Cache Bun global install cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+      - name: Cache perf baseline (same-host regression band)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/xr
+          key: perf-baseline-${{ runner.os }}-7.0.1
+          restore-keys: |
+            perf-baseline-${{ runner.os }}-
+      - name: Hot-path sync-I/O lint
+        run: bun run hot-path-lint
+      - name: Performance regression gate (budgets + baseline)
+        run: bun run perf:gate --samples 21 --mode source --baseline docs/perf/baseline-7.0.1-source.json
+
   # ── 6. Aggregation: the single status check required by branch protection ──
   # Runs even when a dependency fails (if: always()), then asserts every
   # upstream job succeeded. Mark "Quality Gate" as a required status check in
@@ -258,7 +299,7 @@ jobs:
   quality-gate:
     name: Quality Gate
     if: always()
-    needs: [typecheck, truth-gate, baseline, website, test, reliability, boundaries, mutation-gate]
+    needs: [typecheck, truth-gate, baseline, website, test, reliability, boundaries, mutation-gate, perf-gate]
 
     runs-on: ubuntu-latest
     timeout-minutes: 5

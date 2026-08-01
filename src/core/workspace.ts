@@ -42,13 +42,94 @@ export class WorkspaceManager {
   private activeWorkspaceId = "default";
   private workspaces = new Map<string, WorkspaceContext>();
   private globalConfig: XRConfig;
+  /** Phase 3 · T3 — true once async load() has run (kernel boot path). */
+  private loaded = false;
 
   constructor() {
+    // Single cached config read — the config substrate's canonical load
+    // (documented owned exception in docs/perf/PERF-BUDGETS.md). No other
+    // sync I/O happens here: state read/provisioning moved to async load().
     this.globalConfig = loadConfig().config;
-    this.ensureWorkspace("default", "Default Workspace");
-    this.activeWorkspaceId = this.readState().activeWorkspaceId || "default";
-    this.ensureWorkspace(this.activeWorkspaceId, this.activeWorkspaceId === "default" ? "Default Workspace" : this.activeWorkspaceId);
-    this.writeState();
+  }
+
+  /**
+   * Phase 3 · T3 — async state load + provisioning. Called by XRApp.bootstrap
+   * BEFORE any provider runs, so the kernel boot path performs no synchronous
+   * filesystem I/O. Standalone consumers that never call load() fall back to
+   * the previous synchronous behavior via ensureLoadedSync().
+   */
+  async load(): Promise<void> {
+    if (this.loaded) return;
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(XR_HOME, { recursive: true });
+    await mkdir(WORKSPACES_ROOT, { recursive: true });
+
+    let state: WorkspaceStateFile = { activeWorkspaceId: "default" };
+    try {
+      const file = Bun.file(WORKSPACE_STATE_PATH);
+      if (await file.exists()) {
+        const parsed = (await file.json()) as Partial<WorkspaceStateFile>;
+        state = { activeWorkspaceId: parsed.activeWorkspaceId || "default" };
+      }
+    } catch {
+      state = { activeWorkspaceId: "default" }; // corrupt state → default (same as sync path)
+    }
+    this.activeWorkspaceId = state.activeWorkspaceId || "default";
+    await this.provision("default", "Default Workspace");
+    if (this.activeWorkspaceId !== "default") {
+      await this.provision(this.activeWorkspaceId, this.activeWorkspaceId);
+    }
+    // Persist only when the file is missing or the active id changed — the
+    // boot path never rewrites an unchanged state file.
+    if (state.activeWorkspaceId !== this.activeWorkspaceId) {
+      try {
+        await Bun.write(
+          WORKSPACE_STATE_PATH,
+          JSON.stringify({ activeWorkspaceId: this.activeWorkspaceId }, null, 2),
+        );
+      } catch {
+        /* best-effort persist */
+      }
+    }
+    this.loaded = true;
+  }
+
+  /** Async provisioning of a workspace's root dirs + config overlay. */
+  private async provision(id: string, name: string): Promise<void> {
+    const rootDir = id === "default" ? XR_HOME : join(WORKSPACES_ROOT, id);
+    const dbPath = join(rootDir, id === "default" ? "xr.db" : `xr-${id}.db`);
+    const configPath = join(rootDir, "config.json");
+    const pluginsDir = join(rootDir, "plugins");
+    const skillsDir = join(rootDir, "skills");
+    const memoriesDir = join(rootDir, "memories");
+
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    for (const dir of [rootDir, pluginsDir, skillsDir, memoriesDir]) {
+      await mkdir(dir, { recursive: true });
+    }
+    try {
+      const file = Bun.file(configPath);
+      if (!(await file.exists())) {
+        await writeFile(
+          configPath,
+          JSON.stringify({ ...this.globalConfig, workspaceId: id, workspaceName: name }, null, 2),
+          "utf8",
+        );
+      }
+    } catch {
+      /* best-effort provisioning */
+    }
+
+    this.workspaces.set(id, {
+      id,
+      name,
+      rootDir,
+      configPath,
+      dbPath,
+      pluginsDir,
+      skillsDir,
+      memoriesDir,
+    });
   }
 
   private ensureRoots(): void {
@@ -73,9 +154,23 @@ export class WorkspaceManager {
   }
 
   /**
+   * Standalone consumers that never call load(): restore the pre-Phase-3
+   * synchronous state behavior on first access.
+   */
+  private ensureLoadedSync(): void {
+    if (this.loaded) return;
+    this.ensureRoots();
+    this.activeWorkspaceId = this.readState().activeWorkspaceId || "default";
+    this.ensureWorkspace("default", "Default Workspace");
+    this.ensureWorkspace(this.activeWorkspaceId, this.activeWorkspaceId === "default" ? "Default Workspace" : this.activeWorkspaceId);
+    this.loaded = true;
+  }
+
+  /**
    * Get the active workspace ID.
    */
   getActiveId(): string {
+    this.ensureLoadedSync();
     return this.activeWorkspaceId;
   }
 
@@ -83,6 +178,7 @@ export class WorkspaceManager {
    * Set the active workspace ID and persist it.
    */
   setActiveId(id: string): void {
+    this.ensureLoadedSync();
     if (!this.workspaces.has(id)) {
       this.ensureWorkspace(id, id === "default" ? "Default Workspace" : id);
     }
@@ -135,6 +231,7 @@ export class WorkspaceManager {
    * Get context of active workspace.
    */
   getActiveContext(): WorkspaceContext {
+    this.ensureLoadedSync();
     return this.ensureWorkspace(this.activeWorkspaceId, this.activeWorkspaceId === "default" ? "Default Workspace" : this.activeWorkspaceId);
   }
 
@@ -142,6 +239,7 @@ export class WorkspaceManager {
    * Get context for a specific workspace.
    */
   getContext(id: string): WorkspaceContext | undefined {
+    this.ensureLoadedSync();
     return this.workspaces.get(id);
   }
 
@@ -149,6 +247,7 @@ export class WorkspaceManager {
    * List all provisioned workspaces.
    */
   listWorkspaces(): WorkspaceContext[] {
+    this.ensureLoadedSync();
     const list: WorkspaceContext[] = [this.ensureWorkspace("default", "Default Workspace")];
 
     if (existsSync(WORKSPACES_ROOT)) {
@@ -177,6 +276,7 @@ export class WorkspaceManager {
    * CLI usage outside the kernel lifecycle.
    */
   getStore(id: string): Store {
+    this.ensureLoadedSync();
     const ctx = this.ensureWorkspace(id, id === "default" ? "Default Workspace" : id);
     return new Store(ctx.dbPath);
   }
@@ -185,6 +285,7 @@ export class WorkspaceManager {
    * Delete/clean up a workspace.
    */
   deleteWorkspace(id: string): boolean {
+    this.ensureLoadedSync();
     if (id === "default") return false;
     const ctx = this.ensureWorkspace(id, id);
 

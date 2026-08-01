@@ -344,9 +344,16 @@ export async function updateXR(args: string[] = []): Promise<void> {
   backupConfig("pre-update");
 
   // Phase 1 · T11 — atomic update with health canary + automatic rollback.
-  // One contract across git-checkout and npm layouts (see src/update/atomic-updater.ts).
+  // One contract across git-checkout, npm and compiled-binary layouts
+  // (see src/update/atomic-updater.ts). Phase 3 · T2: the binary layout
+  // downloads the platform binary from the release feed.
   const { runAtomicUpdate } = await import("../update/atomic-updater.ts");
-  const result = await runAtomicUpdate({ packageRoot: rootDir });
+  const release = JSON.parse(readFileSync(join(rootDir, "release.manifest.json"), "utf8")) as {
+    identity?: { version?: string };
+    version?: string;
+  };
+  const version = release.identity?.version ?? release.version;
+  const result = await runAtomicUpdate({ packageRoot: rootDir, version });
 
   if (result.ok) {
     ok(`Updated to ${result.activated}. Health canary passed; atomic swap complete.`);

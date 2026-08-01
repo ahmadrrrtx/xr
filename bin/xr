@@ -1,0 +1,54 @@
+#!/usr/bin/env bun
+/**
+ * XR — default launcher (Phase 3 · T2).
+ *
+ * The compiled binary is the DEFAULT distribution path: when dist/<platform>
+ * contains the standalone binary (installed by install.sh/install.ps1 or the
+ * release pipeline), this launcher execs it — one process, no node, no
+ * node→bun spawn tax.
+ *
+ * The contributor path (a git/npm checkout without a binary) runs the CLI
+ * in-process from source — still Bun-only, still no node→bun spawn.
+ *
+ * bin/xr.cjs remains as the legacy fallback for environments that invoke the
+ * package through `node` directly; it is NOT the default path anymore.
+ */
+
+import { existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(HERE, "..");
+
+function binaryFileName(): string {
+  const map: Record<string, string> = {
+    "linux-x64": "xr-linux-x64",
+    "linux-arm64": "xr-linux-arm64",
+    "darwin-arm64": "xr-darwin-arm64",
+    "darwin-x64": "xr-darwin-x64",
+    "win32-x64": "xr-windows-x64.exe",
+  };
+  return map[`${process.platform}-${process.arch}`] ?? `xr-${process.platform}-${process.arch}`;
+}
+
+async function main(): Promise<void> {
+  // 1. Compiled binary (default distribution path).
+  const binary = process.env.XR_BINARY ?? join(ROOT, "dist", binaryFileName());
+  if (existsSync(binary)) {
+    const res = spawnSync(binary, process.argv.slice(2), { stdio: "inherit", env: process.env });
+    process.exit(res.status === null ? 1 : res.status);
+    return;
+  }
+
+  // 2. Contributor source path: run the CLI in-process (Bun only).
+  const { runCli } = await import("../src/cli/router.ts");
+  const code = await runCli(process.argv.slice(2));
+  if (code !== 0) process.exit(code);
+}
+
+main().catch((e) => {
+  console.error("fatal:", e instanceof Error ? e.message : String(e));
+  process.exit(1);
+});

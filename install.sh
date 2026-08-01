@@ -63,6 +63,37 @@ arch_name(){
   esac
 }
 
+# Phase 3 · T2 — compiled-binary distribution name for this platform.
+binary_name(){
+  local os; os="$(os_name)"; local arch; arch="$(arch_name)"
+  case "$os/$arch" in
+    linux/x64) echo "xr-linux-x64" ;;
+    linux/arm64) echo "xr-linux-arm64" ;;
+    macos/x64) echo "xr-darwin-x64" ;;
+    macos/arm64) echo "xr-darwin-arm64" ;;
+    windows/x64) echo "xr-windows-x64.exe" ;;
+    *) echo "" ;;
+  esac
+}
+
+# Phase 3 · T2 — download the standalone binary (default distribution path).
+# Returns 0 when the binary was installed; non-zero falls back to source.
+fetch_binary(){
+  local bin; bin="$(binary_name)"
+  [ -z "$bin" ] && return 1
+  local url="https://github.com/$REPO/releases/download/v$VERSION/$bin"
+  mkdir -p "$TARGET_DIR/dist"
+  log "Downloading compiled binary v$VERSION ($bin)"
+  if curl -fsSL "$url" -o "$TARGET_DIR/dist/$bin" 2>/dev/null; then
+    chmod +x "$TARGET_DIR/dist/$bin"
+    "$TARGET_DIR/dist/$bin" --version >/dev/null 2>&1 || { warn "Binary failed to run; falling back to source."; rm -f "$TARGET_DIR/dist/$bin"; return 1; }
+    ok "Compiled binary installed ($bin)"
+    return 0
+  fi
+  warn "Binary download unavailable; falling back to source checkout."
+  return 1
+}
+
 ensure_bun(){
   if command -v bun >/dev/null 2>&1; then ok "Bun $(bun --version)"; return; fi
   warn "Bun is required to run XR."
@@ -129,8 +160,13 @@ install_launcher(){
   mkdir -p "$bin_dir"
   local bun_bin
   bun_bin="$(command -v bun)"
+  local bin; bin="$(binary_name)"
   cat > "$bin_dir/xr" <<EOF
 #!/usr/bin/env bash
+# XR launcher (Phase 3 · T2): compiled binary first, Bun source fallback.
+if [ -n "$bin" ] && [ -x "$TARGET_DIR/dist/$bin" ]; then
+  exec "$TARGET_DIR/dist/$bin" "\$@"
+fi
 exec "$bun_bin" run "$TARGET_DIR/src/index.ts" "\$@"
 EOF
   chmod +x "$bin_dir/xr"
@@ -159,8 +195,12 @@ main(){
   log "Optional Ollama, voice, browser and desktop-control packs are handled later by xr install prompts."
   if ! prompt_yes "Continue?" y; then die "Cancelled."; fi
   ensure_bun
-  fetch_repo
-  install_deps
+  if fetch_binary; then
+    log "Using the compiled binary distribution (source checkout skipped)."
+  else
+    fetch_repo
+    install_deps
+  fi
   install_launcher
   cmd=("$HOME/.local/bin/xr" install --from-bootstrap)
   [ -n "$MODE" ] && cmd+=(--mode "$MODE")
