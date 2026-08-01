@@ -4,6 +4,7 @@ M  .github/workflows/nightly.yml
 N  .github/workflows/release.yml
 N  .github/workflows/supply-chain.yml
 M  DELIVERABLE.md
+M  Dockerfile
 M  MIGRATION.md
 M  README_SECURITY.md
 M  SECURITY.md
@@ -89,3 +90,5 @@ M  test/trust/mcp-isolation.test.ts
 M  test/trust/migration-rollback.test.ts
 M  test/trust/policy.test.ts
 M  test/trust/shell-tool.test.ts
+M  website/package-lock.json
+M  website/package.json
