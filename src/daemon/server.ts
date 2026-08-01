@@ -327,7 +327,9 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   // assign an ephemeral port (used by the perf dashboard-bench, which spawns
   // many bench processes; a fixed/random port can collide with the previous
   // process's TIME_WAIT socket → EADDRINUSE → flaky CI).
-  const boundPort = server.port;
+  // @types/bun types `server.port` as `number | undefined`, so fall back to
+  // the requested port when the server does not report one.
+  const boundPort = server.port ?? port;
   // Always show a reachable URL: 0.0.0.0 is a bind address, not a destination.
   const displayHost = bindHost === CONTAINER_BIND ? DEFAULT_LOOPBACK : bindHost;
   const url = `http://${displayHost}:${boundPort}/?token=${token}`;
