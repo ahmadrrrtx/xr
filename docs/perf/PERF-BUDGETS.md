@@ -185,6 +185,6 @@ paths) is unit-tested. `xr models set` keeps its interactive flow.
 
 Sample isolation (fresh XR_HOME for cold samples), a discarded warm-up sample
 for warm scenarios, ≥9 samples for gate runs, ≥21 for baseline artifacts,
-p95 as the metric, and a 10% noise budget in the regression gate. If a budget
+p95 as the metric, and a 30% noise budget in the regression gate (Phase 4 · T4; see scripts/perf/budgets.json note for the measured rationale). If a budget
 is missed the real number is reported with the blocker — a budget is never
 claimed without being measured (Phase-0/1/2 honesty discipline).
