@@ -258,6 +258,23 @@ async function installModel(target?: string, args: string[] = []): Promise<void>
   if (!before.models.includes(model)) {
     const known = findLocalModel(model);
     if (known) console.log(`  download size .... about ${known.estimatedDiskGb}GB (${known.quantization ?? "runtime default"})`);
+
+    // Phase 3 · T8 — local-load admission: preflight the model against the
+    // detected host BEFORE pulling, so an oversized model cannot OOM/thrash
+    // the machine. --force overrides.
+    const { admitLocalModelLoad } = await import("../local/admission.ts");
+    const admission = admitLocalModelLoad(
+      known ?? { id: model, paramsB: 7, minRamGb: 8, recommendedRamGb: 16, quantization: "q4" },
+      specs,
+      { force: args.includes("--force") },
+    );
+    if (!admission.admitted) {
+      warn(`Load denied by hardware admission: ${admission.reason}`);
+      console.log(`  ${C.dim("Override with:")} xr models install ${model} --force`);
+      return;
+    }
+    if (admission.tier === "warn") warn(admission.reason);
+
     if (!(yes || await confirm(`Download ${model} with 'ollama pull'?`, true))) return;
     const success = await pullOllamaModel(model);
     if (!success) {

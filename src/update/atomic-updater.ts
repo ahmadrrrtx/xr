@@ -26,10 +26,120 @@ import { applyUpdate, type UpdatePlan, type UpdateResult } from "./selfheal.ts";
 
 // ── Install layout detection ──────────────────────────────────────────────
 
-export type InstallLayout = "git" | "npm";
+export type InstallLayout = "git" | "npm" | "binary";
+
+/**
+ * Phase 3 · T2 — standard compiled-binary name per platform, relative to the
+ * package root's dist/ directory (or $XR_BINARY override).
+ */
+export function binaryFileName(platform: string = process.platform, arch: string = process.arch): string {
+  const map: Record<string, string> = {
+    "linux-x64": "xr-linux-x64",
+    "linux-arm64": "xr-linux-arm64",
+    "darwin-arm64": "xr-darwin-arm64",
+    "darwin-x64": "xr-darwin-x64",
+    "win32-x64": "xr-windows-x64.exe",
+  };
+  return map[`${platform}-${arch}`] ?? `xr-${platform}-${arch}`;
+}
+
+export function binaryPathForPackage(packageRoot: string): string | null {
+  if (process.env.XR_BINARY) return process.env.XR_BINARY;
+  const p = join(packageRoot, "dist", binaryFileName());
+  return existsSync(p) ? p : null;
+}
 
 export function detectInstallLayout(packageRoot: string): InstallLayout {
+  // The compiled binary is the default distribution path (Phase 3 · T2);
+  // git/npm checkouts remain the contributor path.
+  if (binaryPathForPackage(packageRoot)) return "binary";
   return existsSync(join(packageRoot, ".git")) ? "git" : "npm";
+}
+
+// ── Binary layout (Phase 3 · T2) ──────────────────────────────────────────
+
+export interface BinaryUpdateOptions {
+  /** Path of the installed package root (dist/ lives here). */
+  packageRoot: string;
+  /** Target version to install (from the release manifest). */
+  version: string;
+  /** Download base URL template; {version}/{file} placeholders. */
+  baseUrl?: string;
+  /** Timeout for the download + canary, ms. */
+  timeoutMs?: number;
+  /** Override the canary (tests inject a fake). */
+  canary?: (binaryPath: string) => { healthy: boolean; reason?: string };
+}
+
+export function binaryCanary(binaryPath: string, timeoutMs = 120_000): { healthy: boolean; reason?: string } {
+  const xrHome = join(tmpdir(), `xr-canary-${randomUUID().slice(0, 8)}`);
+  mkdirSync(xrHome, { recursive: true });
+  const env = { ...process.env, XR_HOME: xrHome, XR_NONINTERACTIVE: "1" };
+  const version = spawnSync(binaryPath, ["--version"], { env, encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "pipe"] });
+  if (version.status !== 0) {
+    return { healthy: false, reason: `binary --version failed (exit ${version.status})` };
+  }
+  const doctor = spawnSync(binaryPath, ["doctor", "--json"], { env, encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "pipe"] });
+  if (doctor.status !== 0 && doctor.status !== 1) {
+    // doctor exits 1 BY DESIGN without a reachable provider (Phase 0 · T4);
+    // anything else is an unhealthy candidate.
+    return { healthy: false, reason: `binary doctor probe failed (exit ${doctor.status}): ${(doctor.stderr ?? "").trim().slice(0, 300)}` };
+  }
+  return { healthy: true };
+}
+
+export function createBinaryUpdatePlan(opts: BinaryUpdateOptions): UpdatePlan<string> | null {
+  const current = binaryPathForPackage(opts.packageRoot);
+  if (!current) return null;
+  const file = binaryFileName();
+  const baseUrl =
+    opts.baseUrl ?? `https://github.com/ahmadrrrtx/xr/releases/download/v${opts.version}`;
+  const url = `${baseUrl}/${file}`;
+  const stagingDir = join(opts.packageRoot, "dist", ".staging");
+  const candidate = join(stagingDir, `xr-${opts.version}`);
+
+  return {
+    current,
+    candidate,
+    install: async () => {
+      mkdirSync(stagingDir, { recursive: true });
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`download failed (HTTP ${res.status}): ${url}`);
+      const buf = new Uint8Array(await res.arrayBuffer());
+      await Bun.write(candidate, buf);
+      if (process.platform !== "win32") {
+        spawnSync("chmod", ["+x", candidate], { encoding: "utf8" });
+      }
+    },
+    selfTest: (bin) => (opts.canary ?? binaryCanary)(bin).healthy,
+    activate: async () => {
+      // Atomic blue-green swap: rename current aside, move candidate in,
+      // roll back on any failure (Phase 1 · T11 contract).
+      const backup = `${current}.prev`;
+      try {
+        if (existsSync(backup)) rmSync(backup, { force: true });
+        renameSync(current, backup);
+        renameSync(candidate, current);
+        try {
+          spawnSync("chmod", ["+x", current], { encoding: "utf8" });
+        } catch {
+          /* non-fatal on win32 */
+        }
+        rmSync(backup, { force: true });
+      } catch (e) {
+        // Roll back: restore the previous binary if the swap failed midway.
+        if (!existsSync(current) && existsSync(backup)) renameSync(backup, current);
+        throw e;
+      }
+    },
+    discard: async (bin) => {
+      try {
+        rmSync(bin, { force: true });
+      } catch {
+        /* best-effort */
+      }
+    },
+  };
 }
 
 // ── Health canary ─────────────────────────────────────────────────────────
@@ -259,21 +369,36 @@ export function createNpmUpdatePlan(opts: NpmUpdateOptions = {}): UpdatePlan<str
 
 export async function runAtomicUpdate(opts: {
   packageRoot: string;
+  version?: string;
   git?: GitUpdateOptions;
   npm?: NpmUpdateOptions;
+  binary?: BinaryUpdateOptions;
 }): Promise<UpdateResult<string>> {
   const layout = detectInstallLayout(opts.packageRoot);
-  const plan =
-    layout === "git"
-      ? createGitUpdatePlan({ packageRoot: opts.packageRoot, ...opts.git })
-      : createNpmUpdatePlan(opts.npm);
+  let plan: UpdatePlan<string> | null = null;
+  let noPlanReason = "already up to date or update source unreachable";
+
+  if (layout === "binary") {
+    const version = opts.version ?? opts.binary?.version;
+    if (!version) {
+      return { ok: false, keptCurrent: "", reason: "binary layout update requires a target version (release manifest missing)" };
+    }
+    plan = createBinaryUpdatePlan({
+      packageRoot: opts.packageRoot,
+      version,
+      ...(opts.binary ?? {}),
+    });
+    noPlanReason = "binary update skipped (no current binary found)";
+  } else if (layout === "git") {
+    plan = createGitUpdatePlan({ packageRoot: opts.packageRoot, ...opts.git });
+    noPlanReason = "already up to date or fetch failed";
+  } else {
+    plan = createNpmUpdatePlan(opts.npm);
+    noPlanReason = "already up to date or registry unreachable";
+  }
 
   if (!plan) {
-    return {
-      ok: false,
-      keptCurrent: "",
-      reason: layout === "git" ? "already up to date or fetch failed" : "already up to date or registry unreachable",
-    };
+    return { ok: false, keptCurrent: "", reason: noPlanReason };
   }
   return applyUpdate(plan);
 }

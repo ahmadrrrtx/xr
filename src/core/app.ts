@@ -54,26 +54,12 @@ import {
   ProviderRegistrationFailedError,
   ProviderInitFailedError,
 } from "./errors.ts";
-// Static import is cycle-free: providers.ts only imports *types* from this
-// module (erased at compile time), so there is no runtime back-edge.
-import {
-  StateServiceProvider,
-  ConfigServiceProvider,
-  LlmServiceProvider,
-  IntelligenceServiceProvider,
-  BudgetServiceProvider,
-  PluginServiceProvider,
-  McpServiceProvider,
-  SkillServiceProvider,
-  CapabilityServiceProvider,
-  TrustServiceProvider,
-  ExecutionServiceProvider,
-  ContextServiceProvider,
-  AgentServiceProvider,
-  MultiAgentServiceProvider,
-  ShieldServiceProvider,
-  BusinessServiceProvider,
-} from "./providers.ts";
+// Phase 3 · T1 — providers are loaded per boot profile via provider-modules
+// (literal-path dynamic imports), so a command never evaluates the provider
+// modules it does not boot (Commandment 11). No static import here.
+import { loadDefaultProviders } from "./provider-modules.ts";
+import { DEFAULT_PROVIDER_ORDER } from "./boot-profile.ts";
+import { StallDetector } from "./stall-detector.ts";
 
 /**
  * Context handed to a ServiceProvider. Providers register services into the
@@ -113,7 +99,10 @@ export class XRApp {
   public readonly workspaces = new WorkspaceManager();
   public readonly backgroundServices: BackgroundServiceManager;
 
-  private readonly providers: ServiceProvider[] = [];
+  /** Phase 3 · T1 — narrowed to the boot profile (if any) during bootstrap. */
+  private providers: ServiceProvider[] = [];
+  /** Phase 3 · T3 — event-loop stall monitor (attached at start()). */
+  public readonly stallDetector = new StallDetector({ events: this.events });
   private booted = false;
   private started = false;
   /** Tracks the last workspace switch error for health reporting. */
@@ -136,17 +125,39 @@ export class XRApp {
   }
 
   /**
-   * Bootstraps the full runtime: registers the standard providers, runs them,
-   * wires lifecycle participants in dependency order, and runs onInit.
+   * Bootstraps the runtime: registers the standard providers (or, with a
+   * command-scoped boot profile, only the providers the command needs), runs
+   * them, wires lifecycle participants in dependency order, and runs onInit.
    *
    * Storage contract: exactly one WorkspaceStore connection is opened (by the
    * state provider) and shared by every repo and service.
+   *
+   * Phase 3 · T1 — command-scoped boot: `opts.profile` is a provider-id list
+   * (see src/core/boot-profile.ts). A command boots only the subsystems it
+   * needs (Article VI · Rule 4; Commandment 11). `null`/absent = full boot.
    */
-  async bootstrap(): Promise<this> {
+  async bootstrap(opts?: { profile?: string[] | null }): Promise<this> {
     if (this.booted) return this; // Idempotent
 
+    // Phase 3 · T3 — async workspace state load + provisioning BEFORE any
+    // provider runs, so the kernel boot path performs no synchronous
+    // filesystem I/O (Article XII · Rule 4).
+    await this.workspaces.load();
+
     if (this.providers.length === 0) {
-      this.registerDefaultProviders();
+      // Phase 3 · T1 — per-module loading: only the modules the boot will
+      // actually run are evaluated (profile = subset, absent = full set).
+      const want = opts?.profile;
+      const order = want ? want : [...DEFAULT_PROVIDER_ORDER];
+      this.providers = await loadDefaultProviders(order);
+    }
+
+    // Phase 3 · T1 — profile filter. Providers are a fixed, ordered set; a
+    // profile picks the subset. Unlisted providers are NOT registered, so
+    // their services cannot be resolved (fail fast, never silently missing).
+    if (opts?.profile) {
+      const wanted = new Set(opts.profile);
+      this.providers = this.providers.filter((p) => wanted.has(p.id));
     }
 
     const ctx = this.providerContext();
@@ -210,6 +221,9 @@ export class XRApp {
 
     this.registerCoreBackgroundJobs();
     await this.lifecycle.start();
+
+    // Phase 3 · T3 — watch the event loop for stalls while the runtime is up.
+    this.stallDetector.attach();
 
     this.started = true;
     this.events.emit(CoreEvents.KernelStarted, { timestamp: Date.now() });
@@ -280,6 +294,10 @@ export class XRApp {
         /* best-effort */
       }
     }
+
+    // Phase 3 · T3 — stop the stall monitor first so shutdown work is not
+    // measured as a stall.
+    this.stallDetector.detach();
 
     // Best-effort: stop even if not fully booted.
     this.backgroundServices.stopAll();
@@ -442,6 +460,15 @@ export class XRApp {
   }
 
   /**
+   * Phase 3 · T1 — the provider ids this runtime booted under. Empty before
+   * bootstrap; the full default set when no profile was used. Used by the
+   * boot-profile tests and the boot trace.
+   */
+  bootedProviderIds(): string[] {
+    return this.providers.map((p) => p.id);
+  }
+
+  /**
    * Whether the runtime has been started.
    */
   isStarted(): boolean {
@@ -546,30 +573,9 @@ export class XRApp {
   }
 
   // ── Default provider set ────────────────────────────────────────────────
-
-  /**
-   * Registers the standard XR provider set in construction order. Order
-   * matters because some services resolve collaborators in their constructor.
-   * Override (clear + use(...)) to customize the runtime composition.
-   */
-  protected registerDefaultProviders(): void {
-    this.use(new StateServiceProvider());
-    this.use(new ConfigServiceProvider());
-    this.use(new LlmServiceProvider());
-    this.use(new IntelligenceServiceProvider());
-    this.use(new BudgetServiceProvider());
-    this.use(new PluginServiceProvider());
-    this.use(new McpServiceProvider());
-    this.use(new SkillServiceProvider());
-    this.use(new CapabilityServiceProvider());
-    this.use(new TrustServiceProvider());
-    this.use(new ExecutionServiceProvider());
-    this.use(new ContextServiceProvider());
-    this.use(new AgentServiceProvider());
-    this.use(new MultiAgentServiceProvider());
-    this.use(new ShieldServiceProvider());
-    this.use(new BusinessServiceProvider());
-  }
+  // Phase 3 · T1: the default set is loaded per boot profile from
+  // src/core/provider-modules.ts (see bootstrap()). `use()` remains the
+  // programmatic composition API for tests and embedders.
 
   /** Registers the infra services XRApp itself owns. */
   private registerInfrastructure(): void {

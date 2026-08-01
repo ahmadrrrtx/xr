@@ -86,6 +86,27 @@ bun run ci                 # typecheck + tests + release:check + claim-lint + in
 bun run baseline:measure   # reproducible performance baseline
 ```
 
+### Performance (Phase 3 — budgets, not boasts)
+
+Every performance claim is a **published budget with a measured baseline and a
+CI regression gate** (Constitution Art. XII):
+
+- `--version` / `--help` **p95 < 150 ms warm / < 300 ms cold** (Constitution
+  Article XII; measured 47.4 / 43.9 ms warm, 55.7 / 42.6 ms cold on the
+  7.0.1 baseline — well under even the tighter Phase-3 targets);
+- `doctor` **< 1 s measured** (474 ms; gate ceiling 1500 ms for shared runners) · route decision **< 20 ms** (0.003 ms) ·
+  dashboard first render **< 1 s** (16 ms) · retrieval **25–42 ms @100k items** (gate ceiling 250 ms on shared runners);
+- fast path performs **zero synchronous FS/process I/O** (lint-enforced);
+- a command boots only the subsystems it needs (boot profiles);
+- the standalone compiled binary is the default distribution path
+  (build matrix per target: linux-x64/arm64, darwin-x64/arm64, windows-x64).
+
+Full budgets, the boot-profile model, the regression gate, profiling tooling
+and known limitations: [`docs/perf/`](docs/perf/PERF-BUDGETS.md) and
+[`docs/phase3-perf/`](docs/phase3-perf/01-AUDIT-REPORT.md). Baseline artifact:
+`docs/perf/baseline-7.0.1-source.json` (regenerate per release with
+`bun run perf:baseline`).
+
 ### Readiness and exit codes
 
 `xr doctor` answers one question: **can XR actually run a task right now?**

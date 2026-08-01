@@ -59,6 +59,8 @@ export interface MemoryRow {
   updated_at: number;
   /** v0.9: cached embedding (JSON number[]) or NULL when not yet embedded. */
   embedding: string | null;
+  /** Phase 3 · T9 — content hash (sha256 of content+tags); NULL = never indexed. */
+  content_hash: string | null;
   /** Stage 6: access tracking + retention. */
   last_accessed_at: number | null;
   access_count: number;
@@ -357,6 +359,10 @@ export class WorkspaceStore {
       if (!have.has("embedding")) {
         this.db.exec(`ALTER TABLE user_memory ADD COLUMN embedding TEXT`);
       }
+      // Phase 3 · T9 — incremental content-addressed indexing.
+      if (!have.has("content_hash")) {
+        this.db.exec(`ALTER TABLE user_memory ADD COLUMN content_hash TEXT`);
+      }
       // Stage 6: access tracking + retention columns (idempotent, fail-soft).
       if (!have.has("last_accessed_at")) {
         this.db.exec(`ALTER TABLE user_memory ADD COLUMN last_accessed_at INTEGER`);
@@ -533,6 +539,11 @@ export class WorkspaceStore {
     this.db
       .query(`UPDATE user_memory SET embedding=? WHERE id=?`)
       .run(embedding && embedding.length ? JSON.stringify(embedding) : null, id);
+  }
+
+  /** Phase 3 · T9 — record the content hash a cached embedding was built from. */
+  setMemoryContentHash(id: string, hash: string | null): void {
+    this.db.query(`UPDATE user_memory SET content_hash=? WHERE id=?`).run(hash, id);
   }
 
   /** Find an existing entry with identical (scope, category, content). */

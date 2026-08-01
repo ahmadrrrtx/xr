@@ -160,7 +160,7 @@ const LAYER_RULES: Array<{
   {
     name: "kernel-stays-kernel",
     from: /^src\/(core|state|security|config|util|cost)\//,
-    fromNot: /^src\/core\/(app\.ts|providers\.ts|agent\.ts|execution\/)/,
+    fromNot: /^src\/core\/(app\.ts|providers\.ts|providers\/|agent\.ts|execution\/)/,
     to: /^src\/(execution|context|intelligence|providers|agents|control|runtime|services|reliability|tools|plugins|skills|mcp|platform|integrations|computer|automation|local|research|business|enterprise|interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)\//,
     toNot: /^src\/(providers\/presets\.ts|context\/repository\.ts|interfaces\/cli\.ts)$/,
   },

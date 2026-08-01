@@ -41,7 +41,7 @@
  *   • Fail soft — bad input is validated and rejected with a clear reason,
  *     never a crash.
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { basename } from "node:path";
 import type { MemoryRow } from "../../state/workspace-store.ts";
 import type { WorkspaceStore as Store } from "../../state/workspace-store.ts";
@@ -786,12 +786,22 @@ export class MemoryStore {
    * dedupe/scope are consistent). Returns counts. Fail-soft: an entry whose
    * embedding call fails is left for lazy embedding on next recall.
    */
-  async reindexEmbeddings(): Promise<{ total: number; embedded: number; fallback: number }> {
+  async reindexEmbeddings(): Promise<{ total: number; embedded: number; fallback: number; skipped: number }> {
     const rows = this.store.listMemory({ includeExclusions: true, includeExpired: true });
     let embedded = 0;
     let fallback = 0;
+    let skipped = 0;
     for (const row of rows) {
       const text = `${row.content} ${(row.tags || "").split(",").join(" ")}`.trim();
+      // Phase 3 · T9 — incremental content-addressed indexing: a row whose
+      // content hash is unchanged AND whose embedding is cached is skipped,
+      // so a warm re-index is near-O(changed rows) instead of re-embedding
+      // the whole store.
+      const hash = contentHash(text);
+      if (row.content_hash === hash && row.embedding != null) {
+        skipped++;
+        continue;
+      }
       try {
         const vec = await embed(text);
         // A lexical-fallback vector has the fixed fallback dimensionality; we
@@ -799,12 +809,13 @@ export class MemoryStore {
         // know whether a real embedding model was used.
         if (vec.length === 256) fallback++;
         this.store.setMemoryEmbedding(row.id, vec);
+        this.store.setMemoryContentHash(row.id, hash);
         embedded++;
       } catch {
         /* leave for lazy embedding */
       }
     }
-    return { total: rows.length, embedded, fallback };
+    return { total: rows.length, embedded, fallback, skipped };
   }
 
   // ── live capture ("remember this?" flow) ──────────────────────────────
@@ -1181,4 +1192,9 @@ export function summarizeConversation(messages: Message[], maxBullets = 24): str
     bullets.push(`• ${tag}: ${oneLine}`);
   }
   return bullets.slice(0, maxBullets).join("\n");
+}
+
+/** Phase 3 · T9 — content hash for incremental indexing (sha256 of text). */
+export function contentHash(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
 }

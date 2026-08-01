@@ -100,13 +100,13 @@ module.exports = {
       comment:
         "L0 Kernel contains only what XR needs to BE XR (Art. VI.2). It must " +
         "not reach into runtime, platform, business, enterprise or any surface. " +
-        "The composition root (core/app.ts, core/providers.ts), the agent loop " +
+        "The composition root (core/app.ts, core/providers/*), the agent loop " +
         "(core/agent.ts) and the execution envelope (core/execution/**) are L1 " +
         "by the boundary table and are scoped out.",
       from: {
         path: "^src/(core|state|security|config|util|cost)/",
         pathNot:
-          "^src/core/(app\\.ts|providers\\.ts|agent\\.ts|execution/)",
+          "^src/core/(app\\.ts|providers\\.ts|providers/|agent\\.ts|execution/)",
       },
       to: {
         path:

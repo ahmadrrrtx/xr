@@ -56,6 +56,9 @@ export class ProvidersCommand implements Command {
       case "status":
         await providerStatus(providerService, configService);
         break;
+      case "metrics":
+        await showMetrics(providerService, args.includes("--json"));
+        break;
       case "refresh":
         await refreshProviders(providerService);
         break;
@@ -250,23 +253,78 @@ async function setProvider(
   ps: ProviderService,
   args: string[],
 ): Promise<void> {
-  const id = args[0];
-  const model = args[1];
+  const force = args.includes("--force");
+  const id = args.find((a) => !a.startsWith("--"));
+  const model = args[1] && !args[1].startsWith("--") ? args[1] : undefined;
   if (!id) {
-    warn("Usage: xr providers set <id> [model]");
+    warn("Usage: xr providers set <id> [model] [--force]");
     console.log(`  ${C.dim("Examples:")}`);
     console.log(`    xr providers set ollama qwen2.5:7b`);
     console.log(`    xr providers set openai gpt-4o-mini`);
+    console.log(`  ${C.dim("--force:")}  switch even when the canary probe cannot reach/auth the provider`);
     console.log(`  ${C.dim("List:")} xr providers list`);
     return;
   }
-  await ps.setActiveProvider(id, model);
-  ok(
-    `Active model set to ${id}${model ? ` / ${model}` : ""} (persisted).`,
-  );
-  console.log(`  ${C.dim("Verify:")} xr providers list · xr models`);
-  console.log(`  ${C.dim("Shell:")}   Alt+P or /model ${id}${model ? ` ${model}` : ""}`);
-  console.log(`  ${C.dim("Web:")}     xr serve → Providers → Change model`);
+
+  // Phase 3 · T6 — model-switch state machine: preflight → warm → canary →
+  // swap → verify, with rollback on failure. No unexplained waits: every
+  // phase is timeout-bounded and reported.
+  const { ModelSwitchStateMachine } = await import("../providers/model-switch.ts");
+  const { Tokens } = await import("../core/tokens.ts");
+  const configService = ps.getRegistry().resolve(Tokens.Config);
+  const readActive = () => ({
+    providerId: ps.getActiveProviderId(),
+    model: configService.get().defaults?.model,
+  });
+  const machine = new ModelSwitchStateMachine({
+    preflight: (t) => {
+      const known = ps.getPreset(t.providerId) !== undefined;
+      return known ? { ok: true, detail: `${t.providerId} is a known provider` } : { ok: false, detail: `unknown provider: ${t.providerId}` };
+    },
+    warm: async (t, timeoutMs) => {
+      const report = await Promise.race([
+        ps.checkHealth(t.providerId, t.model),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`health probe timed out after ${timeoutMs} ms`)), timeoutMs)),
+      ]);
+      return report.ok || report.authOk
+        ? { ok: true, detail: `${report.detail}${report.latencyMs ? ` (${report.latencyMs}ms)` : ""}` }
+        : { ok: false, detail: report.detail };
+    },
+    canary: async (t, timeoutMs) => {
+      const report = await Promise.race([
+        ps.checkHealth(t.providerId, t.model),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`canary timed out after ${timeoutMs} ms`)), timeoutMs)),
+      ]);
+      // authOk = reachable + key present — a sound switch (model availability
+      // is a runtime concern); full completion probes are for local runtimes.
+      return report.ok || report.authOk
+        ? { ok: true, detail: `${report.detail}${report.latencyMs ? ` (${report.latencyMs}ms)` : ""}` }
+        : { ok: false, detail: report.detail };
+    },
+    apply: async (t) => {
+      await ps.setActiveProvider(t.providerId, t.model);
+    },
+    readActive,
+  });
+
+  const result = await machine.run({ providerId: id, model }, { force });
+  for (const p of result.phases) {
+    if (p.phase === "done" || p.phase === "rolled-back") continue;
+    const icon = p.ok ? C.green("✓") : C.red("✗");
+    console.log(`  ${icon} ${p.phase.padEnd(9)} ${p.detail} ${C.dim(`(${Math.round(p.ms)}ms)`)}`);
+  }
+  if (result.ok) {
+    ok(`Active model set to ${id}${model ? ` / ${model}` : ""} (persisted${result.forced ? " · forced" : ""}).`);
+    console.log(`  ${C.dim("Verify:")} xr providers list · xr models`);
+    console.log(`  ${C.dim("Shell:")}   Alt+P or /model ${id}${model ? ` ${model}` : ""}`);
+    console.log(`  ${C.dim("Web:")}     xr serve → Providers → Change model`);
+  } else {
+    const failed = result.phases.find((p) => !p.ok && p.phase !== "rolled-back");
+    warn(`Switch to ${id}${model ? ` / ${model}` : ""} NOT applied — kept ${result.previous.providerId}.`);
+    if (failed) console.log(`  ${C.dim(`Reason: ${failed.detail}`)}`);
+    console.log(`  ${C.dim("To switch anyway (no canary): xr providers set <id> [model] --force")}`);
+    process.exitCode = 1;
+  }
 }
 
 async function testProvider(
@@ -464,4 +522,50 @@ async function refreshProviders(ps: ProviderService): Promise<void> {
   // Re-sync custom providers from config by touching the provider service.
   ps.getProvider();
   ok("Provider registry refreshed.");
+}
+
+/** Phase 3 · T7 — streaming-metrics report (`xr providers metrics`). */
+async function showMetrics(ps: ProviderService, json: boolean): Promise<void> {
+  const summary = ps.metrics.summary();
+  const turns = ps.metrics.persistedTurns(20);
+  if (json) {
+    console.log(
+      JSON.stringify(
+        {
+          summary: {
+            turns: summary.turns,
+            ttftMs: { p50: summary.p50TtftMs, p95: summary.p95TtftMs },
+            tokensPerSec: { p50: summary.p50TokensPerSec, p95: summary.p95TokensPerSec },
+            avgOutTokens: summary.avgTokens,
+            maxHighWaterKb: summary.maxHighWaterKb ?? null,
+          },
+          recent: turns,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  banner();
+  console.log(C.bold("Provider streaming metrics (Phase 3 · T7)"));
+  if (summary.turns === 0) {
+    info("No model turns recorded yet. Run a task, then re-run: xr providers metrics");
+    return;
+  }
+  console.log(`  turns recorded       ${summary.turns}`);
+  console.log(`  TTFT p50/p95         ${summary.p50TtftMs} / ${summary.p95TtftMs} ms`);
+  console.log(`  tokens/s p50/p95     ${summary.p50TokensPerSec} / ${summary.p95TokensPerSec}`);
+  console.log(`  avg output tokens    ${summary.avgTokens}`);
+  if (summary.maxHighWaterKb != null) console.log(`  memory high-water    ${Math.round(summary.maxHighWaterKb / 1024)} MiB`);
+  console.log();
+  console.log(C.dim("Recent turns (newest first):"));
+  for (const t of turns.slice(0, 8)) {
+    console.log(
+      `  ${t.at.slice(11, 19)}  ${String(t.providerId).padEnd(12)} ttft ${String(t.ttftMs).padStart(5)}ms  ` +
+        `${String(t.tokensPerSec).padStart(5)} tok/s  ${t.outTokens} tok${t.cancelLatencyMs > 0 ? `  cancel ${t.cancelLatencyMs}ms` : ""}`,
+    );
+  }
+  console.log();
+  console.log(C.dim("Reset: XR_HOME/cache/metrics/streaming.jsonl · metrics are never sent anywhere"));
 }

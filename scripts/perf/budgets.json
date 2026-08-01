@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 3,
+  "publishedAt": "2026-08-01T08:45:00.000Z",
+  "owner": "xr.kernel",
+  "constitution": "Article XII \u00b7 Mandatory Rule 1: --version/--help p95 <150ms warm / <300ms cold. Rule 2: no perf claim without a budget and a regression gate.",
+  "waiverPolicy": "Any budget exceeded by a change requires a ratified waiver (docs/perf/WAIVERS.md) before merge; the regression gate fails CI otherwise.",
+  "measurement": {
+    "harness": "scripts/perf/harness.ts",
+    "samples": ">=9 for gate runs, >=21 for baseline artifacts (cold samples use a fresh isolated XR_HOME; warm scenarios discard a warm-up sample; the single largest sample is trimmed when samples >= 15)",
+    "metric": "p95 wall-clock process duration on the CI host",
+    "note": "Budgets are absolute ceilings for the p95 metric (Constitution Article XII \u2014 the binding contract). doctor gate ceiling 1500ms (measured 315-474ms; spec target <1000ms met by measurement on the reference host) \u2014 the ceiling accommodates degraded shared runners. The regression band (10%) is evaluated against a SAME-HOST baseline cache (~/.cache/xr, persisted in CI via actions/cache): it blocks only when a same-host baseline exists (run 2+ on any host); otherwise it warns (run 1 seeds the cache). retrieval-100k budget 250ms (measured 25-42ms)."
+  },
+  "budgets": [
+    {
+      "id": "version-warm",
+      "scenario": "version-warm",
+      "warm": true,
+      "metric": "p95",
+      "ms": 150
+    },
+    {
+      "id": "version-cold",
+      "scenario": "version",
+      "warm": false,
+      "metric": "p95",
+      "ms": 300
+    },
+    {
+      "id": "help-warm",
+      "scenario": "help-warm",
+      "warm": true,
+      "metric": "p95",
+      "ms": 150
+    },
+    {
+      "id": "help-cold",
+      "scenario": "help",
+      "warm": false,
+      "metric": "p95",
+      "ms": 300
+    },
+    {
+      "id": "doctor",
+      "scenario": "doctor",
+      "warm": true,
+      "metric": "p95",
+      "ms": 1500
+    },
+    {
+      "id": "route-decision",
+      "scenario": "route-decision",
+      "warm": true,
+      "metric": "p95",
+      "ms": 20
+    },
+    {
+      "id": "dashboard-render",
+      "scenario": "dashboard-render",
+      "warm": true,
+      "metric": "p95",
+      "ms": 1000
+    },
+    {
+      "id": "retrieval-100k",
+      "scenario": "retrieval-100k",
+      "warm": true,
+      "metric": "p95",
+      "ms": 250
+    },
+    {
+      "id": "workspace-list",
+      "scenario": "workspace-list",
+      "warm": true,
+      "metric": "p95",
+      "ms": 1000
+    }
+  ]
+}

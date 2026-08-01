@@ -8,6 +8,7 @@
  */
 
 import { registry } from "../providers/registry.ts";
+import { streamingMetrics, withTurnMetrics, type StreamingMetricsCollector } from "../providers/stream-metrics.ts";
 import {
   RoutingService,
   type RoutingStrategy,
@@ -37,6 +38,11 @@ import type {
 
 export class ProviderService implements LifecycleHook {
   private registry: ServiceRegistry;
+
+  /** Phase 3 · T6 — typed registry access for model-switch wiring. */
+  getRegistry(): ServiceRegistry {
+    return this.registry;
+  }
   private lastDecision: RoutingDecision | null = null;
 
   constructor(registry: ServiceRegistry) {
@@ -83,7 +89,8 @@ export class ProviderService implements LifecycleHook {
           requirements: overrides?.requirements,
         });
         this.lastDecision = result.decision;
-        return result.provider;
+        // Phase 3 · T7 — every model turn is measured at this choke point.
+        return withTurnMetrics(result.provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
       } catch {
         // Fall through to classic router
       }
@@ -92,7 +99,13 @@ export class ProviderService implements LifecycleHook {
     const router = new RoutingService(config);
     const { provider, decision } = router.resolveWithDecision(overrides as ResolveOptions);
     this.lastDecision = decision;
-    return provider;
+    // Phase 3 · T7 — every model turn is measured at this choke point.
+    return withTurnMetrics(provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
+  }
+
+  /** Phase 3 · T7 — the process-wide streaming-metrics collector. */
+  get metrics(): StreamingMetricsCollector {
+    return streamingMetrics;
   }
 
   private tryIntel(): import("../intelligence/service.ts").IntelligenceService | null {

@@ -5,6 +5,7 @@ import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { SkillMarketplaceStore, installedSkillsDir, packageCacheDir } from "./marketplace-store.ts";
+import { cachedScan } from "../util/scan-cache.ts";
 import { hashSkillTree, readSkillInstructions, readSkillManifest, safeResolve, skillDirName } from "./manifest.ts";
 import { SkillManifestSchema, type SkillInstallation, type SkillManifest, type SkillPermissionScope } from "./schema.ts";
 
@@ -157,10 +158,24 @@ export class SkillMarketplace {
     return out;
   }
 
+  /**
+   * Phase 3 · T4 — content-addressed incremental catalog scan. The parsed
+   * catalog is cached keyed on the skill-tree fingerprints + the marketplace
+   * registry file; warm calls with an unchanged tree skip per-file parsing.
+   */
   catalog(): SkillCatalogEntry[] {
+    const scan = cachedScan({
+      cacheId: "skills-catalog",
+      roots: [bundledSkillsDir(), installedSkillsDir()],
+      files: [this.store.registryPath],
+      load: () => ({
+        bundled: this.scanRoot(bundledSkillsDir(), "bundled"),
+        installed: this.scanRoot(installedSkillsDir(), "installed"),
+      }),
+    });
     const byId = new Map<string, SkillCatalogEntry>();
-    for (const entry of this.scanRoot(bundledSkillsDir(), "bundled")) byId.set(entry.manifest.id, entry);
-    for (const entry of this.scanRoot(installedSkillsDir(), "installed")) byId.set(entry.manifest.id, entry);
+    for (const entry of scan.value.bundled) byId.set(entry.manifest.id, entry);
+    for (const entry of scan.value.installed) byId.set(entry.manifest.id, entry);
     return [...byId.values()].sort((a, b) => a.manifest.name.localeCompare(b.manifest.name));
   }
 

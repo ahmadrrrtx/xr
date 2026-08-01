@@ -47,6 +47,11 @@ export class SkillMarketplaceStore {
     this.data = this.read();
   }
 
+  /** Registry file path (used as a scan-cache fingerprint input). */
+  get registryPath(): string {
+    return this.path;
+  }
+
   private read(): MarketplaceRegistry {
     if (!existsSync(this.path)) return MarketplaceRegistrySchema.parse({});
     try {
