@@ -1,0 +1,134 @@
+# =============================================================================
+# XR Phase 4 · T6 — Supply-chain scanning (every PR + nightly)
+#
+# Gates the release pipeline with independent evidence:
+#   1. secret scanning   — gitleaks over the whole tree (no committed secrets)
+#   2. vuln scanning     — osv-scanner over the LOCKED dependency set
+#                          (bun.lock) + npm audit over the registry advisories
+#   3. license check     — scripts/license-check.ts (forbidden/unknown licenses)
+#   4. SBOM              — CycloneDX generation + drift guard (reproducible)
+#   5. container scan    — trivy over the shipped image (Dockerfile)
+#   6. install hygiene   — bun install --frozen-lockfile --ignore-scripts
+#                          (no dependency install scripts ever run in CI)
+#
+# SLSA provenance + cosign keyless signing happen in release.yml on tagged
+# releases; the verification path is exercised by test/supply-chain/.
+# =============================================================================
+name: Supply Chain
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * *" # nightly
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install-hygiene:
+    name: Install hygiene (--ignore-scripts)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install with --ignore-scripts (no dependency scripts ever run)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Lockfile is authoritative (no drift)
+        run: bun install --frozen-lockfile --ignore-scripts --dry-run
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks (full history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_LICENSE: ""
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  vuln-scan:
+    name: Vulnerability scan (osv-scanner + npm audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install (ignore-scripts, frozen)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: OSV scanner over the locked dependency set
+        uses: google/osv-scanner-action@v2
+        with:
+          scan-args: |-
+            -r
+            --format
+            sarif
+            -O
+            osv-results.sarif
+      - name: Upload OSV SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: osv-results.sarif
+      - name: npm registry advisories (production deps)
+        run: npm audit --omit=dev --audit-level=high || (echo "npm audit found high/critical advisories in production deps"; exit 1)
+
+  license-scan:
+    name: License scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install (ignore-scripts, frozen)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: License check (forbidden/unknown fail the gate)
+        run: bun run scripts/license-check.ts
+
+  sbom:
+    name: SBOM (CycloneDX) + drift guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Generate SBOM from the locked dependency set
+        run: bun run scripts/sbom.ts --out sbom.cyclonedx.json
+      - name: SBOM is valid CycloneDX with pinned hashes
+        run: bun test test/supply-chain/supply-chain.test.ts
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cyclonedx.json
+
+  container-scan:
+    name: Container image scan (trivy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the shipped image
+        run: docker build -t xr:scan .
+      - name: Trivy image scan (high/critical gate)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: xr:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+      - name: Upload trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif

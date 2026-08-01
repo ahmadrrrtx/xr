@@ -34,6 +34,10 @@ export interface ToolAdapterOptions {
   cwd: string;
   dryRun?: boolean;
   approve?: (req: ApprovalRequest) => Promise<boolean>;
+  /** Phase 4 · T1 — hardened mode: high-risk tools refuse host-authority fallbacks. */
+  hardened?: boolean;
+  /** Phase 4 · T4 — explicit raw-IP/loopback destinations (local runtimes). */
+  allowedHosts?: string[];
   audit?: (event: string, detail: Record<string, unknown>) => void;
   checkBudget?: () => { allow: boolean; reason?: string; suggestLocal?: boolean; warning?: string; meter?: string } | Promise<{ allow: boolean; reason?: string; suggestLocal?: boolean; warning?: string; meter?: string }>;
   timeoutMs?: number;
@@ -101,14 +105,19 @@ export async function executeTool(
       opts.audit?.(event, detail);
     },
     dryRun: !!opts.dryRun,
-    // XR 4.2 — when a Trust service is wired, expose an isolated runner so
-    // high-risk tools (e.g. shell) execute inside a verified environment and
-    // FAIL CLOSED when required isolation is unavailable. Absent otherwise,
-    // which keeps the legacy in-process path for callers without a Trust service.
+    hardened: opts.hardened ?? true,
+    allowedHosts: opts.allowedHosts ?? [],
+    // XR 4.2 / Phase 4 · T1 — when a Trust service is wired, expose an
+    // isolated runner so high-risk tools (e.g. shell) execute inside a
+    // verified environment and FAIL CLOSED when required isolation is
+    // unavailable. When no Trust service is wired, `hardened` (default true)
+    // still prevents the legacy host-authority fallback.
     runIsolated: service.trust
       ? async (req, exec) => {
           const trustSvc = service.trust!;
-          const runId = `ex_${randomUUID().slice(0, 10)}`;
+          // Phase 4 · T1 — the run identity spans the session/workspace so the
+          // escalate-only lattice persists across tool calls within a run.
+          const runId = opts.sessionId ?? opts.workspaceId;
           const ev = await trustSvc.evaluate({
             request: req,
             runId,

@@ -81,6 +81,8 @@ export class EnvironmentManager {
       namespaceSandbox: avail("namespace-sandbox"),
       container: avail("container-docker"),
       browserIsolated: false, // browser isolation is integrated via control/browser, not a generic backend here
+      gvisor: avail("gvisor-runsc"),
+      firecracker: avail("firecracker"),
       isRoot: process.getuid?.() === 0,
     };
   }

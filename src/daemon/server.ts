@@ -20,6 +20,8 @@ import { InProcessBackend } from "../runtime/trust/environment/in-process.ts";
 import { RestrictedProcessBackend } from "../runtime/trust/environment/restricted-process.ts";
 import { NamespaceSandboxBackend } from "../runtime/trust/environment/namespace.ts";
 import { ContainerBackend } from "../runtime/trust/environment/container.ts";
+import { GVisorBackend } from "../runtime/trust/environment/gvisor.ts";
+import { FirecrackerBackend } from "../runtime/trust/environment/firecracker.ts";
 import {
   createRouteHandler,
   htmlResponse,
@@ -92,28 +94,129 @@ const responseHelpers: DaemonResponseHelpers = {
   sse: sseResponse,
 };
 
-function isAuthorized(req: Request, token: string): boolean {
-  const authorization = req.headers.get("authorization") ?? "";
-  if (authorization === `Bearer ${token}`) return true;
+/**
+ * Phase 4 · T5 — daemon session cookie name (HttpOnly, SameSite=Strict).
+ * The bearer token remains valid for API clients (curl/scripts); browsers
+ * authenticate via the session cookie established by the one-time bootstrap.
+ */
+export const SESSION_COOKIE = "xr_session";
+const SESSION_COOKIE_SET = `${SESSION_COOKIE}=`;
 
-  // Localhost-only server: query token keeps the first dashboard load smooth.
+/**
+ * One-time bootstrap → secure cookie.
+ *
+ *   · Authorization: Bearer <token>  — API clients (always allowed).
+ *   · Cookie: xr_session=<token>      — browser sessions (always allowed).
+ *   · ?token=<token>                  — accepted ONLY to bootstrap a browser
+ *     session on a page GET; the handler then redirects to the same path
+ *     WITHOUT the token in the URL and sets the HttpOnly/SameSite cookie.
+ *     After that the query token is dead (the redirect strips it), so the
+ *     secret never lingers in browser history or referrers.
+ *
+ * The query token NEVER authorizes a mutating request — CSRF-safe.
+ */
+export function authorizeRequest(
+  req: Request,
+  token: string,
+): { kind: "bearer" } | { kind: "session" } | { kind: "bootstrap"; url: string } | { kind: "denied" } {
+  const authorization = req.headers.get("authorization") ?? "";
+  if (authorization === `Bearer ${token}`) return { kind: "bearer" };
+
+  const cookie = req.headers.get("cookie") ?? "";
+  if (cookie.split(";").some((c) => c.trim() === SESSION_COOKIE_SET + token)) return { kind: "session" };
+
   const url = new URL(req.url);
-  return url.searchParams.get("token") === token;
+  const queryToken = url.searchParams.get("token");
+  if (queryToken === token) {
+    // Bootstrap is page-navigation only (GET). Once the cookie is set the
+    // query token is stripped by the redirect — one-time use.
+    if (req.method.toUpperCase() === "GET") {
+      url.searchParams.delete("token");
+      return { kind: "bootstrap", url: url.toString() };
+    }
+    return { kind: "denied" };
+  }
+  return { kind: "denied" };
 }
+
+/**
+ * Phase 4 · T5 — CSRF/Origin enforcement for mutating requests.
+ * A browser-authenticated (cookie) request must carry an Origin matching the
+ * daemon's own origin; missing/mismatched Origin is refused. Bearer-token
+ * API clients (no browser) are exempt — they authenticate out-of-band.
+ */
+export function originAllowed(
+  req: Request,
+  auth: { kind: "bearer" } | { kind: "session" } | { kind: "bootstrap" } | { kind: "denied" },
+  host: string,
+  port: number,
+): boolean {
+  if (auth.kind !== "session") return true;
+  const method = req.method.toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS") return true;
+  const origin = req.headers.get("origin");
+  if (!origin) return false; // non-browser without bearer → refuse (fail closed)
+  try {
+    const o = new URL(origin);
+    return o.hostname === host && (o.port === String(port) || (o.port === "" && port === 80));
+  } catch {
+    return false;
+  }
+}
+
+/** Phase 4 · T5 — fixed-window per-IP rate limiter (memory-only). */
+export class RateLimiter {
+  private hits = new Map<string, { windowStart: number; count: number }>();
+  constructor(
+    private readonly limit: number,
+    private readonly windowMs: number,
+  ) {}
+
+  /** Returns true when the request is allowed. */
+  allow(key: string, now = Date.now()): boolean {
+    const entry = this.hits.get(key);
+    if (!entry || now - entry.windowStart >= this.windowMs) {
+      this.hits.set(key, { windowStart: now, count: 1 });
+      return true;
+    }
+    entry.count++;
+    if (entry.count > this.limit) {
+      // keep counting for Retry-After accuracy
+      return false;
+    }
+    return true;
+  }
+
+  retryAfterSeconds(key: string, now = Date.now()): number {
+    const entry = this.hits.get(key);
+    if (!entry) return 0;
+    return Math.max(1, Math.ceil((entry.windowStart + this.windowMs - now) / 1000));
+  }
+}
+
+/** Phase 4 · T5 — request body size cap (route caps; fail closed). */
+export const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024; // 2 MiB
 
 /** Build a daemon-scoped Trust service (backends are detected lazily on first use). */
 function makeDaemonTrust(): TrustService {
   const broker = new CredentialBroker();
   const registry = new AuthorityRegistry();
   const manager = new EnvironmentManager(
-    [new InProcessBackend(), new RestrictedProcessBackend(), new NamespaceSandboxBackend(), new ContainerBackend()],
+    [
+      new InProcessBackend(),
+      new RestrictedProcessBackend(),
+      new NamespaceSandboxBackend(),
+      new ContainerBackend(),
+      new GVisorBackend(),
+      new FirecrackerBackend(),
+    ],
     broker,
   );
   return new TrustService({ manager, registry, broker });
 }
 
 /** Build the request handler (pure; used by both serve() and tests). */
-export function makeHandler(initialStore: Store, token: string) {
+export function makeHandler(initialStore: Store, token: string, opts: { rateLimit?: number } = {}) {
   const workspaceManager = new WorkspaceManager();
   const state: DaemonState = {
     store: initialStore,
@@ -122,6 +225,8 @@ export function makeHandler(initialStore: Store, token: string) {
     trust: makeDaemonTrust(),
   };
   const routes = createRouteHandler();
+  // Phase 4 · T5 — rate limiting: generous default, but bounded (429).
+  const limiter = new RateLimiter(opts.rateLimit ?? 600, 60_000);
 
   return async function handle(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -129,8 +234,64 @@ export function makeHandler(initialStore: Store, token: string) {
     const method = req.method.toUpperCase();
 
     // Health is intentionally open; every other route requires the local token.
-    if (path !== "/api/health" && !isAuthorized(req, token)) {
-      return safeJson({ error: "unauthorized — local bearer token required" }, 401);
+    if (path !== "/api/health") {
+      const auth = authorizeRequest(req, token);
+
+      // Phase 4 · T5 — one-time bootstrap: set the session cookie and
+      // redirect to the token-free URL (the token never lingers).
+      if (auth.kind === "bootstrap") {
+        const cookie = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`;
+        return new Response(null, {
+          status: 302,
+          headers: { location: auth.url, "set-cookie": cookie },
+        });
+      }
+
+      if (auth.kind === "denied") {
+        return safeJson({ error: "unauthorized — local bearer token or session cookie required" }, 401);
+      }
+
+      // Phase 4 · T5 — CSRF/Origin: cookie-authenticated mutating requests
+      // must come from the daemon's own origin.
+      const host = resolveBindHost();
+      const port = Number(url.port || (url.protocol === "https:" ? 443 : 80));
+      if (!originAllowed(req, auth, host, port)) {
+        return safeJson({ error: "forbidden — cross-origin request refused (CSRF guard)" }, 403);
+      }
+    }
+
+    // Phase 4 · T5 — per-IP rate limit (fail closed with 429).
+    const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim() || "local";
+    if (!limiter.allow(`${ip}:${path}`)) {
+      return new Response(JSON.stringify({ error: "rate limit exceeded" }), {
+        status: 429,
+        headers: {
+          "content-type": "application/json",
+          "retry-after": String(limiter.retryAfterSeconds(`${ip}:${path}`)),
+        },
+      });
+    }
+
+    // Phase 4 · T5 — route caps: reject oversized bodies up front (413).
+    // Bun does not always populate content-length, so the cap is enforced on
+    // the actual bytes (read from a clone; the original request is untouched
+    // for the route handlers).
+    if (method === "POST" || method === "PUT" || method === "PATCH") {
+      const len = req.headers.get("content-length");
+      if (len && Number(len) > MAX_REQUEST_BODY_BYTES) {
+        return safeJson({ error: "payload too large" }, 413);
+      }
+      if (!len) {
+        const clone = req.clone();
+        try {
+          const body = await clone.text();
+          if (body.length > MAX_REQUEST_BODY_BYTES) {
+            return safeJson({ error: "payload too large" }, 413);
+          }
+        } catch {
+          return safeJson({ error: "unreadable request body" }, 400);
+        }
+      }
     }
 
     const { config } = loadConfig();

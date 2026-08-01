@@ -72,7 +72,7 @@ describe("XR 4.2 migration & rollback safety", () => {
   test("rollback safety: the Tier-1 fallback flag can NEVER enable an unsafe high-risk fallback", () => {
     const classification = classifyRisk(highRiskReq());
     // No Tier-2 backend available, but the explicit Tier-1 fallback is enabled.
-    const caps = { inProcess: true, restrictedProcess: false, namespaceSandbox: false, container: false, browserIsolated: false, isRoot: false };
+    const caps = { inProcess: true, restrictedProcess: false, namespaceSandbox: false, container: false, browserIsolated: false, gvisor: false, firecracker: false, isRoot: false };
     const d = decidePlacement(classification, caps, { allowTier1InProcessFallback: true });
     // Tier-2 high-risk must STILL be blocked — the fallback is Tier-1 only.
     expect(d.kind).toBe("blocked");

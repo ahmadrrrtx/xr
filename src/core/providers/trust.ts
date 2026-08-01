@@ -9,6 +9,8 @@ import { InProcessBackend } from "../../runtime/trust/environment/in-process.ts"
 import { RestrictedProcessBackend } from "../../runtime/trust/environment/restricted-process.ts";
 import { NamespaceSandboxBackend } from "../../runtime/trust/environment/namespace.ts";
 import { ContainerBackend } from "../../runtime/trust/environment/container.ts";
+import { GVisorBackend } from "../../runtime/trust/environment/gvisor.ts";
+import { FirecrackerBackend } from "../../runtime/trust/environment/firecracker.ts";
 
 export class TrustServiceProvider implements ServiceProvider {
   readonly id = "trust";
@@ -25,6 +27,8 @@ export class TrustServiceProvider implements ServiceProvider {
             new RestrictedProcessBackend(),
             new NamespaceSandboxBackend(),
             new ContainerBackend(),
+            new GVisorBackend(),
+            new FirecrackerBackend(),
           ],
           broker,
         );

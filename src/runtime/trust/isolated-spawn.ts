@@ -171,15 +171,20 @@ export type McpStdioPlacement = "isolated" | "confined" | "blocked";
  * isolated when a sandbox exists; without one they are BLOCKED unless the
  * operator explicitly acknowledges running unisolated. Low-risk servers use
  * the existing confined spawn (or isolation when forced).
+ *
+ * Phase 4 · T1 — hardened mode: when `hardened` is true the unisolated
+ * escape hatch is refused entirely (policy is not confinement; a third-party
+ * process with host authority is never acceptable in hardened mode).
  */
 export function decideMcpStdioPlacement(
   risk: McpServerRisk,
   sandboxAvailable: boolean,
   flags: McpStdioFlags,
+  hardened = true,
 ): McpStdioPlacement {
   if (risk === "high") {
     if (sandboxAvailable) return "isolated";
-    if (flags.allowUnisolated) return "confined"; // explicit, warned ack
+    if (flags.allowUnisolated && !hardened) return "confined"; // explicit, warned ack (hardened OFF)
     return "blocked"; // fail closed
   }
   // low risk

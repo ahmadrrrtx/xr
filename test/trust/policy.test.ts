@@ -10,6 +10,8 @@ function caps(over: Partial<PlacementCapabilities> = {}): PlacementCapabilities 
     namespaceSandbox: true,
     container: false,
     browserIsolated: false,
+    gvisor: false,
+    firecracker: false,
     isRoot: false,
     ...over,
   };

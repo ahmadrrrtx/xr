@@ -45,7 +45,7 @@
  *
  *   loader/validation.ts     manifest + permission + compatibility validation,
  *                            hash pinning, tree hashing, static scan
- *   loader/sandbox.ts        the hardened in-process VM realm + host membrane
+ *   loader/sandbox.ts        the in-process VM realm + host membrane (defense-in-depth)
  *   loader/worker-loader.ts  worker_threads process isolation
  *
  * The public API below is unchanged, so every existing import keeps working.

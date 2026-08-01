@@ -1184,5 +1184,10 @@ function trustPlacementToExecution(kind: PlacementKind, description?: string): P
       return { kind: "container", description };
     case "browser_isolated":
       return { kind: "browser_isolated", description };
+    case "gvisor":
+    case "firecracker":
+      // Container-class confinement for the execution record (microVM/guest
+      // kernel placements map to the container kind in this union).
+      return { kind: "container", description };
   }
 }

@@ -1,15 +1,15 @@
 # XR 7.0.1 Repository Inventory
 
-Generated: 2026-07-31T18:39:48.611Z
+Generated: 2026-08-01T11:49:21.882Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 483 |
-| Test files | 145 |
+| Source files | 514 |
+| Test files | 165 |
 | CLI commands | 41 |
-| Daemon routes | 95 |
+| Daemon routes | 97 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -17,7 +17,7 @@ Generated: 2026-07-31T18:39:48.611Z
 
 ## Entrypoints
 
-- Package bin: `./bin/xr.cjs`
+- Package bin: `./bin/xr`
 - Runtime CLI: `src/index.ts`
 - Daemon: `src/daemon/server.ts`
 - Docker entrypoint: `bun run src/index.ts serve --port 7842`
@@ -161,6 +161,8 @@ Generated: 2026-07-31T18:39:48.611Z
 - GET `/api/workspaces` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/workspaces/create` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/workspaces/switch` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/assets/dashboard.css` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/assets/dashboard.js` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/chat` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/dashboard` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 

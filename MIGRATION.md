@@ -550,7 +550,7 @@ A: Plugins that only use the `PluginHost` API will work unchanged. Plugins that 
 
 ### Q: Is the VM isolation 100% secure?
 
-A: VM isolation is a strong security boundary, but not perfect. For defense-in-depth, we also use static scanning, hash verification, and permission enforcement. Future releases will add process-based isolation (Docker/MicroVM).
+A: The in-process `node:vm` realm is defense-in-depth only (Phase 4 · T8) — it is NOT a security boundary. OS-level isolation from the trust lattice (namespace sandbox / container) is the boundary, and it fails closed when unavailable.
 
 ### Q: Can I still use `--no-sandbox` for browser?
 

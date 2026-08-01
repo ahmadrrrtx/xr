@@ -238,6 +238,16 @@ export class AgentService implements LifecycleHook {
         enabled: config.memory.enabled && config.memory.saveSessionSummaries,
         minTurns: config.memory.sessionSummaryMinTurns,
       },
+      /**
+       * Phase 4 · T1 — placement ENFORCEMENT on the canonical path: the run's
+       * tool contexts get the Trust service (so high-risk tools isolate or
+       * fail closed) and the envelope outcome records the strongest placement
+       * actually enforced. The Trust token is always registered by the
+       * composition root; tryResolve keeps out-of-tree callers working.
+       */
+      trust: this.registry.tryResolve(Tokens.Trust),
+      hardened: config.security.hardened,
+      allowedHosts: config.security.allowedHosts,
     };
 
     // ── XR 4.5 — assemble a scope-filtered context package ──────────────

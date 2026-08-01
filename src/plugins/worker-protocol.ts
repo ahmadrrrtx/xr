@@ -22,8 +22,13 @@ export interface WorkerInitMessage {
   entryFile: string;
   manifest: PluginManifest;
   granted: PermissionScope[];
-  /** Pre-loaded secret values (only names the plugin declared + was granted). */
-  secrets: Record<string, string | undefined>;
+  /**
+   * Phase 4 · T4 — secret NAMES ONLY (declared + granted). Raw values never
+   * cross into the worker bootstrap; `secrets.get` is proxied to the main
+   * thread (capability-request "secrets"), which resolves the value through
+   * the credential broker transiently and never persists/logs it.
+   */
+  secretNames: string[];
   /** Egress allowlist for network filtering. */
   egressAllowlist: string[];
   /** MCP server declarations (metadata only). */
@@ -131,7 +136,12 @@ export interface WorkerDisposedMessage {
 export interface WorkerCapabilityRequest {
   type: "capability-request";
   requestId: string;
-  capability: "memory" | "provider" | "audit";
+  /** Phase 4 · T4 — "secrets" is proxied to the main thread (broker-mediated;
+   *  raw values never live in the worker bootstrap); "net" routes through the
+   *  centralized egress proxy on the main thread (connection-time
+   *  enforcement: DNS resolve, private-range/metadata block, redirect
+   *  revalidation, pinning, caps). */
+  capability: "memory" | "provider" | "audit" | "secrets" | "net";
   method: string;
   args: unknown[];
 }

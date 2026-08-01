@@ -1,9 +1,13 @@
 /**
- * XR — web/live-data tools. Every one is egress-gated (allow-list) so the agent
- * can never reach an unapproved domain — exfiltration is structurally blocked.
+ * XR — web/live-data tools. Every one is egress-gated through the CENTRALIZED
+ * egress proxy (Phase 4 · T4): the allow-list is enforced at connection time
+ * (DNS resolution, private-range/metadata blocking, redirect revalidation,
+ * connection pinning, byte caps) — not merely on the argument string.
+ * The legacy `hostAllowed` suffix check remains as a cheap first gate.
  */
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { hostAllowed, htmlToText } from "./egress.ts";
+import { guardedFetch, type EgressPolicy } from "../security/egress-proxy.ts";
 import { networkTrustRequest } from "../runtime/trust/tool-support.ts";
 
 const DEFAULT_SEARXNG = process.env.XR_SEARXNG ?? "https://searx.be";
@@ -21,6 +25,15 @@ function egressOk(url: string, ctx: ToolContext): string | null {
   return null;
 }
 
+/** Build the centralized-proxy policy from the tool context. */
+function policyFor(ctx: ToolContext): EgressPolicy {
+  return {
+    allowlist: ctx.egressAllowlist ?? [],
+    allowedHosts: ctx.allowedHosts ?? [],
+    audit: (event, detail) => ctx.audit(event, detail),
+  };
+}
+
 export const fetchUrlTool: Tool = {
   name: "fetch_url",
   description: "Fetch a web page (allow-listed domains only) and return clean text.",
@@ -34,15 +47,14 @@ export const fetchUrlTool: Tool = {
       ctx.audit("fetch_url.blocked", { url, reason: blocked });
       return { ok: false, output: blocked };
     }
-    try {
-      const res = await fetch(url, { headers: { "User-Agent": "XR-Agent/0.1" } });
-      const html = await res.text();
-      const text = htmlToText(html);
-      ctx.audit("fetch_url", { url, bytes: text.length });
-      return { ok: true, output: text.slice(0, 4000) + (text.length > 4000 ? "\n…(truncated)" : "") };
-    } catch (e) {
-      return { ok: false, output: `fetch failed: ${(e as Error).message}` };
+    const res = await guardedFetch(url, { headers: { "User-Agent": "XR-Agent/4.0" } }, policyFor(ctx));
+    if (res.blocked || !res.ok) {
+      ctx.audit("fetch_url.blocked", { url, reason: res.reason ?? `status ${res.status}` });
+      return { ok: false, output: res.reason ?? `fetch failed (status ${res.status})` };
     }
+    const text = htmlToText(res.body ?? "");
+    ctx.audit("fetch_url", { url, bytes: text.length, pinned: res.pinnedAddress });
+    return { ok: true, output: text.slice(0, 4000) + (text.length > 4000 ? "\n…(truncated)" : "") };
   },
 };
 
@@ -62,9 +74,17 @@ export const webSearchTool: Tool = {
       ctx.audit("web_search.blocked", { query, reason: blocked });
       return { ok: false, output: `${blocked} (add your SearXNG host to egress allow-list)` };
     }
+    const res = await guardedFetch(
+      endpoint,
+      { headers: { "User-Agent": "XR-Agent/4.0" } },
+      policyFor(ctx),
+    );
+    if (res.blocked || !res.ok) {
+      ctx.audit("web_search.blocked", { query, reason: res.reason ?? `status ${res.status}` });
+      return { ok: false, output: res.reason ?? `search failed (status ${res.status})` };
+    }
     try {
-      const res = await fetch(endpoint, { headers: { "User-Agent": "XR-Agent/0.1" } });
-      const json: any = await res.json();
+      const json: any = JSON.parse(res.body ?? "{}");
       const results = (json.results ?? []).slice(0, max).map((r: any, i: number) =>
         `${i + 1}. ${r.title}\n   ${r.url}\n   ${(r.content ?? "").slice(0, 200)}`,
       );
@@ -92,10 +112,11 @@ export const checkPackageTool: Tool = {
         : `https://registry.npmjs.org/${encodeURIComponent(name)}`;
     const blocked = egressOk(url, ctx);
     if (blocked) return { ok: false, output: blocked };
+    const res = await guardedFetch(url, {}, policyFor(ctx));
+    if (res.blocked) return { ok: false, output: res.reason ?? "egress blocked" };
+    if (res.status !== undefined && res.status >= 400) return { ok: false, output: `not found: ${name}` };
     try {
-      const res = await fetch(url);
-      if (!res.ok) return { ok: false, output: `not found: ${name}` };
-      const json: any = await res.json();
+      const json: any = JSON.parse(res.body ?? "{}");
       const version = registry === "pypi" ? json.info?.version : json["dist-tags"]?.latest;
       const desc = registry === "pypi" ? json.info?.summary : json.description;
       ctx.audit("check_package", { name, registry, version });

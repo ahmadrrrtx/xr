@@ -44,7 +44,7 @@ Close two critical Remote Code Execution (RCE) vectors in XR:
 3. ❌ No runtime isolation — plugin code runs in host context
 
 #### Fix Applied:
-1. ✅ **VM-based isolation** using `node:vm` (PRIMARY SECURITY BOUNDARY)
+1. ✅ **Defense-in-depth** in-process `node:vm` realm (Phase 4 · T8: NOT a security boundary; OS isolation from the trust lattice is the boundary)
    - Separate V8 context for plugin code
    - No access to `require`, `process`, `fs`, `net`
    - Only safe primitives provided
@@ -660,7 +660,7 @@ export XR_BROWSER_UNSAFE=1
 
 The two critical RCE vulnerabilities in XR have been **FULLY REMEDIATED** through a comprehensive security architecture:
 
-1. ✅ **Plugin Sandbox Bypass**: VM-based isolation + static scanning
+1. ✅ **Plugin Sandbox Bypass**: OS isolation (trust lattice) + in-process VM realm (defense-in-depth) + static scanning
 2. ✅ **Browser `--no-sandbox`**: Sandbox enabled by default + explicit opt-in
 3. ✅ **MCP Environment Leakage**: Allow-list based environment filtering
 

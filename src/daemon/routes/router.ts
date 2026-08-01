@@ -95,7 +95,29 @@ export function htmlResponse(body: string): Response {
       "x-content-type-options": "nosniff",
       "x-frame-options": "DENY",
       "referrer-policy": "no-referrer",
-      "content-security-policy": "default-src 'self'; img-src 'self' data:; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+      "cross-origin-resource-policy": "same-origin",
+      "cross-origin-opener-policy": "same-origin",
+      /**
+       * Phase 4 · T5 — strict CSP. NO unsafe-inline anywhere: the dashboard
+       * client application and stylesheet are EXTERNAL assets (script-src
+       * 'self', style-src 'self') and every interactive element uses the
+       * allowlisted data-xr-action dispatcher (never inline handlers).
+       */
+      "content-security-policy":
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
+        "connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; " +
+        "form-action 'self'; object-src 'none'; upgrade-insecure-requests",
+    },
+  });
+}
+
+/** Phase 4 · T5 — external dashboard assets (strict-CSP friendly). */
+export function assetResponse(body: string, contentType: string): Response {
+  return new Response(body, {
+    headers: {
+      "content-type": contentType,
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
     },
   });
 }

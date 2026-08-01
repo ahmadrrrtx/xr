@@ -19,6 +19,7 @@ import type {
   Mode,
   Provider,
   Tool,
+  ToolContext,
 } from "./types.ts";
 import { getTool, toolsForMode } from "../tools/registry.ts";
 import type { SessionRepo } from "../state/repos/session-repo.ts";
@@ -109,6 +110,28 @@ export interface AgentDeps {
   envelopeId?: string;
   /** Phase 2 · T1 — originating surface, recorded on audit entries. */
   surface?: string;
+  /**
+   * Phase 4 · T1 — the Trust service, wired UNCONDITIONALLY on every in-tree
+   * path so high-risk tools (shell/code) execute inside an enforced
+   * environment or fail closed. Absent only for deprecated out-of-tree
+   * callers, whose tools then see `hardened` and act accordingly.
+   */
+  trust?: import("../runtime/trust/service.ts").TrustService;
+  /**
+   * Phase 4 · T1 — hardened mode flag (from config). When true, high-risk
+   * tools refuse host-authority fallbacks. Defaults to true when unset.
+   */
+  hardened?: boolean;
+  /**
+   * Phase 4 · T4 — explicit raw-IP/loopback destinations (local runtimes).
+   */
+  allowedHosts?: readonly string[];
+  /**
+   * Phase 4 · T1 — run identity for escalate-only lattice bookkeeping.
+   * Defaults to `envelopeId`. Shared by every tool call in this run so the
+   * run's isolation can only escalate, never downgrade.
+   */
+  runId?: string;
   /**
    * XR 4.4 — routing decision from the Universal Intelligence Plane.
    * Secret-free; safe to audit and attach to execution records.
@@ -214,13 +237,74 @@ export async function runAgentLoop(
     const extraToolMap = new Map(extraTools.map((t) => [t.name, t]));
     resolveTool = (name: string) => getTool(name) ?? extraToolMap.get(name);
   }
-  const toolCtx = {
+  /**
+   * Phase 4 · T1 — every tool on the canonical path sees the Trust service, so
+   * a high-risk tool can demand an enforced environment. The run's identity
+   * (`runId`) feeds the escalate-only lattice: isolation can only go up
+   * within a run, never down. When no Trust service is wired (deprecated
+   * out-of-tree callers), `hardened` still governs whether tools may fall
+   * back to host authority at all.
+   */
+  const runId = deps.runId ?? deps.envelopeId ?? sessionId;
+  const hardened = deps.hardened ?? true;
+  const toolCtx: ToolContext = {
     cwd,
     approve: deps.approve,
     audit: (event: string, detail: Record<string, unknown>) =>
       auditStore.audit(event, detail, sessionId),
     egressAllowlist: deps.egressAllowlist ?? [],
+    allowedHosts: deps.allowedHosts ?? [],
     dryRun: deps.dryRun ?? false,
+    hardened,
+    ...(deps.trust
+      ? {
+          runIsolated: async (req, exec) => {
+            const ev = await deps.trust!.evaluate({
+              request: req,
+              runId,
+              correlationId: runId,
+              workspaceId: cwd,
+              actor: "agent-loop",
+              capability: `${req.capability.kind}:${req.capability.name}`,
+              executable: exec,
+            });
+            if (ev.outcome.kind === "blocked") {
+              return {
+                ok: false,
+                exitCode: null,
+                stdout: "",
+                stderr: ev.outcome.reason ?? "blocked",
+                timedOut: false,
+                blocked: true,
+                reason: ev.outcome.reason,
+                remediation: ev.outcome.remediation,
+              };
+            }
+            if (ev.outcome.kind === "in_process_ok") {
+              return {
+                ok: false,
+                exitCode: null,
+                stdout: "",
+                stderr: "high-risk action refused: trust gate returned in-process (placement not enforced)",
+                timedOut: false,
+                blocked: true,
+                reason: "high-risk action refused: trust gate returned in-process (placement not enforced)",
+              };
+            }
+            const o = ev.outcome.observation;
+            return {
+              ok: o.transportOk,
+              exitCode: typeof o.statusCode === "number" ? o.statusCode : null,
+              stdout: String(o.meta?.stdout ?? ""),
+              stderr: (o.logs ?? []).join("\n"),
+              timedOut: Boolean(o.meta?.timedOut),
+              blocked: false,
+              placement: typeof o.meta?.placement === "string" ? o.meta.placement : undefined,
+              verified: ev.trust.verification?.verified ?? false,
+            };
+          },
+        }
+      : {}),
   };
 
   const messages: Message[] = [];

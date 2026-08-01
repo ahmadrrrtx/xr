@@ -307,20 +307,34 @@ export class McpClient {
     // run inside a namespace sandbox; without one they FAIL CLOSED unless the
     // operator explicitly acknowledges an unisolated spawn. Low-risk servers
     // keep the existing confined spawn (or isolation when forced).
+    //
+    // Phase 4 · T1 — hardened mode (default ON) refuses the unisolated escape
+    // hatch entirely: a third-party process with host authority is never
+    // acceptable when hardened.
     const risk = mcpServerRisk(this.cfg);
     const flags: McpStdioFlags = {
       isolateStdio: process.env.XR_MCP_ISOLATE_STDIO === "1",
       allowNet: process.env.XR_MCP_ISOLATED_NET === "1",
       allowUnisolated: process.env.XR_MCP_ALLOW_UNISOLATED === "1",
     };
+    let hardened = true;
+    try {
+      const { loadConfig } = await import("../config/config.ts");
+      hardened = loadConfig().config.security.hardened;
+    } catch {
+      hardened = true; // fail closed on config error
+    }
     const sandboxAvailable = await detectBwrap();
-    const placement = decideMcpStdioPlacement(risk, sandboxAvailable, flags);
+    const placement = decideMcpStdioPlacement(risk, sandboxAvailable, flags, hardened);
 
     if (placement === "blocked") {
+      const hint = hardened
+        ? "hardened mode is ON: unisolated high-risk servers are refused. Install bubblewrap (or disable hardened mode explicitly with XR_TRUST_HARDENED=0 on hosts where that is accepted)."
+        : `no namespace sandbox (bubblewrap) is available. Install bubblewrap, or set XR_MCP_ALLOW_UNISOLATED=1 ` +
+          `to explicitly accept the confined (non-kernel-isolated) spawn.`;
       throw new Error(
         `MCP stdio server "${this.cfg.id}" is high-risk (carries credentials) and requires isolation, ` +
-          `but no namespace sandbox (bubblewrap) is available. Install bubblewrap, or set XR_MCP_ALLOW_UNISOLATED=1 ` +
-          `to explicitly accept the confined (non-kernel-isolated) spawn.`,
+          `but no namespace sandbox is available. ${hint}`,
       );
     }
 
@@ -338,13 +352,16 @@ export class McpClient {
         });
         this.isolated = true;
         spawned = true;
-      } else if (risk === "high" && !flags.allowUnisolated) {
-        throw new Error(`MCP stdio server "${this.cfg.id}" requires isolation but the sandbox could not be prepared.`);
+      } else if (risk === "high" && (hardened || !flags.allowUnisolated)) {
+        // Phase 4 · T1 — hardened: never fall through to a host-authority spawn.
+        throw new Error(
+          `MCP stdio server "${this.cfg.id}" requires isolation but the sandbox could not be prepared${hardened ? " (hardened mode: unisolated fallback refused)" : ""}.`,
+        );
       }
     }
 
     if (!spawned) {
-      if (risk === "high" && flags.allowUnisolated) {
+      if (risk === "high" && flags.allowUnisolated && !hardened) {
         this.sandboxWarning =
           `high-risk MCP stdio server "${this.cfg.id}" running WITHOUT kernel isolation (XR_MCP_ALLOW_UNISOLATED=1). ` +
           `Env is allow-listed but the process is not sandboxed.`;

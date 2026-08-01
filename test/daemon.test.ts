@@ -64,11 +64,103 @@ test("wrong token is rejected", async () => {
   expect((await h(bad)).status).toBe(401);
 });
 
-test("token via query string works for the dashboard page", async () => {
+test("Phase 4 T5 — query token bootstraps a session cookie, then redirects to a token-free URL (one-time bootstrap)", async () => {
   const h = makeHandler(store, TOKEN);
   const res = await h(new Request(`http://127.0.0.1:7842/?token=${TOKEN}`));
-  expect(res.status).toBe(200);
-  expect(res.headers.get("content-type")).toContain("text/html");
+  expect(res.status).toBe(302);
+  const cookie = res.headers.get("set-cookie") ?? "";
+  expect(cookie).toContain("xr_session=");
+  expect(cookie).toContain("HttpOnly");
+  expect(cookie).toContain("SameSite=Strict");
+  const location = res.headers.get("location") ?? "";
+  expect(location).not.toContain("token="); // token never lingers
+  // The cookie now authenticates the dashboard.
+  const authed = await h(new Request("http://127.0.0.1:7842/", {
+    headers: { cookie: `xr_session=${TOKEN}` },
+  }));
+  expect(authed.status).toBe(200);
+  expect(authed.headers.get("content-type")).toContain("text/html");
+  // The query token is DEAD for mutating requests (CSRF guard).
+  const mut = await h(new Request(`http://127.0.0.1:7842/api/control/approve?token=${TOKEN}`, {
+    method: "POST",
+    body: "{}",
+  }));
+  expect(mut.status).toBe(401);
+});
+
+test("Phase 4 T5 — strict CSP: no unsafe-inline, external dashboard assets", async () => {
+  const h = makeHandler(store, TOKEN);
+  const res = await h(new Request("http://127.0.0.1:7842/", {
+    headers: { cookie: `xr_session=${TOKEN}` },
+  }));
+  const csp = res.headers.get("content-security-policy") ?? "";
+  expect(csp).toContain("script-src 'self'");
+  expect(csp).not.toContain("unsafe-inline");
+  expect(csp).not.toContain("unsafe-eval");
+  const html = await res.text();
+  expect(html).not.toContain("onclick=");
+  expect(html).not.toContain("<script>");
+  expect(html).not.toContain("style=\"");
+  // external assets are served
+  const js = await h(new Request("http://127.0.0.1:7842/assets/dashboard.js", {
+    headers: { cookie: `xr_session=${TOKEN}` },
+  }));
+  expect(js.status).toBe(200);
+  expect(js.headers.get("content-type")).toContain("javascript");
+  const css = await h(new Request("http://127.0.0.1:7842/assets/dashboard.css", {
+    headers: { cookie: `xr_session=${TOKEN}` },
+  }));
+  expect(css.status).toBe(200);
+});
+
+test("Phase 4 T5 — cross-origin mutating request is refused (CSRF/Origin guard)", async () => {
+  const h = makeHandler(store, TOKEN);
+  const res = await h(new Request("http://127.0.0.1:7842/api/control/approve", {
+    method: "POST",
+    headers: {
+      cookie: `xr_session=${TOKEN}`,
+      origin: "https://evil.example.com",
+      "content-type": "application/json",
+    },
+    body: "{}",
+  }));
+  expect(res.status).toBe(403);
+  // Same-origin mutating request is allowed.
+  const ok = await h(new Request("http://127.0.0.1:7842/api/control/approve", {
+    method: "POST",
+    headers: {
+      cookie: `xr_session=${TOKEN}`,
+      origin: "http://127.0.0.1:7842",
+      "content-type": "application/json",
+    },
+    body: "{}",
+  }));
+  expect(ok.status).not.toBe(403);
+});
+
+test("Phase 4 T5 — rate limiting returns 429", async () => {
+  const h = makeHandler(store, TOKEN, { rateLimit: 3 });
+  for (let i = 0; i < 3; i++) {
+    await h(new Request("http://127.0.0.1:7842/api/overview", {
+      headers: { authorization: `Bearer ${TOKEN}` },
+    }));
+  }
+  const res = await h(new Request("http://127.0.0.1:7842/api/overview", {
+    headers: { authorization: `Bearer ${TOKEN}` },
+  }));
+  expect(res.status).toBe(429);
+  expect(res.headers.get("retry-after")).toBeTruthy();
+});
+
+test("Phase 4 T5 — oversized request body is refused (route caps)", async () => {
+  const h = makeHandler(store, TOKEN);
+  const big = "x".repeat(3 * 1024 * 1024);
+  const res = await h(new Request("http://127.0.0.1:7842/api/chat", {
+    method: "POST",
+    headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+    body: JSON.stringify({ message: big }),
+  }));
+  expect(res.status).toBe(413);
 });
 
 test("security endpoint returns a block-rate report", async () => {
@@ -94,16 +186,23 @@ test("unknown route 404s (authed)", async () => {
   expect((await h(req("/api/nope"))).status).toBe(404);
 });
 
-test("dashboard html embeds the token and has no external assets", () => {
+test("dashboard html does NOT embed the token and loads same-origin assets only", () => {
   const html = dashboardHtml(TOKEN);
-  expect(html).toContain(TOKEN);
+  // Phase 4 · T5 — the token is NOT embedded in the HTML (one-time bootstrap
+  // via the server); embedding would leak it into history/referrers.
+  expect(html).not.toContain(TOKEN);
   // Stable dashboard copy (rendered statically, not via JS).
   expect(html).toContain("Control Center");
   expect(html).toContain("Security EDR");
   expect(html).toContain("Audit Log");
-  // No external script/style/link tags (sandbox-safe, offline).
-  expect(html).not.toMatch(/<script[^>]+src=/i);
-  expect(html).not.toMatch(/<link[^>]+href=/i);
+  // Phase 4 · T5 — same-origin external assets under strict CSP. NO
+  // third-party origins, no inline scripts.
+  const srcs = [...html.matchAll(/<script[^>]+src=\"([^\"]+)\"/gi)].map((m) => m[1]);
+  const links = [...html.matchAll(/<link[^>]+href=\"([^\"]+)\"/gi)].map((m) => m[1]);
+  for (const a of [...srcs, ...links]) {
+    expect(a.startsWith("/") || a.startsWith("data:")).toBe(true);
+  }
+  expect(html).not.toMatch(/<script(?!\s+src)/i);
 });
 
 test("agents endpoint returns the built-in workforce and workflow counters", async () => {
@@ -200,10 +299,12 @@ test("memory DELETE of a missing id 404s", async () => {
   expect(res.status).toBe(404);
 });
 
-test("dashboard html includes the durable memory viewer", () => {
+test("dashboard html includes the durable memory viewer (markup; script is external)", () => {
   const html = dashboardHtml(TOKEN);
   // The memory panel shows the durable ledger + search + the viewer.
   expect(html).toContain("Durable Memory");
   expect(html).toContain("Search memory ledger");
-  expect(html).toContain("/api/memory");
+  // Phase 4 · T5 — the client application is an external asset under strict
+  // CSP; the API wiring lives in /assets/dashboard.js, not inline HTML.
+  expect(html).toContain('/assets/dashboard.js');
 });

@@ -1,9 +1,17 @@
 /**
- * XR — the hardened in-process VM sandbox (two-realm isolation).
+ * XR — the in-process VM realm (two-realm isolation).
+ *
+ * DEFENSE-IN-DEPTH, NOT A SECURITY BOUNDARY (Phase 4 · T8): `node:vm` shares
+ * the host process and address space; a V8 escape would land inside the XR
+ * runtime. The REAL boundary for untrusted plugin code is the OS-level
+ * isolation selected by the trust lattice (see src/runtime/trust/environment)
+ * and the worker's restricted import surface. The VM realm only hardens the
+ * in-process layer: frozen intrinsics, blocked code generation, and a host
+ * membrane that stops constructor-chain escapes.
  *
  * Phase 2 · T7: `src/plugins/loader.ts` was 1 586 lines spanning three
  * unrelated responsibilities — manifest validation/hashing, the in-process VM
- * sandbox, and worker-based process isolation. Split by responsibility so a
+ * sandbox (defense-in-depth), and worker-based process isolation. Split by responsibility so a
  * change to one cannot silently affect the others; the security architecture
  * itself is unchanged (no behaviour edits were made during the split).
  *

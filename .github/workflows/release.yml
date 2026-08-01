@@ -1,0 +1,124 @@
+# =============================================================================
+# XR Phase 4 · T6 — signed, provenance-bearing releases.
+#
+# On a `v*` tag:
+#   1. builds the publishable artifact (npm tarball + source archive);
+#   2. generates SHA256SUMS, the CycloneDX SBOM and SLSA provenance;
+#   3. signs the tarball + SBOM + provenance KEYLESSLY with cosign (GitHub
+#      OIDC → Fulcio short-lived cert), entries recorded in the PUBLIC Rekor
+#      transparency log;
+#   4. uploads everything to the GitHub Release (assets + .bundle files);
+#   5. publishes to npm with OIDC trusted publishing (provenance: true —
+#      no long-lived npm tokens).
+#
+# Verification instructions live in docs/release/VERIFYING_RELEASES.md.
+# The keyless/Rekor proof is ONLY claimable after this workflow actually ran
+# on a real tag (Art. IX.4) — test/supply-chain covers the local path.
+# =============================================================================
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write # release assets
+  id-token: write # cosign keyless OIDC + npm trusted publishing + SLSA
+
+jobs:
+  build-and-sign:
+    name: Build + SBOM + SLSA + cosign keyless sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Identity + claim gates must pass before any release
+        run: |
+          bun run release:check
+          bun run claim-lint
+          bun run typecheck
+          bun test test/supply-chain test/trust test/security test/daemon
+
+      - name: Pack the npm artifact
+        run: bun pm pack --pack-destination dist
+
+      - name: Bundle the source archive
+        run: |
+          mkdir -p dist
+          git archive --format=tar.gz -o dist/xr-source.tar.gz HEAD
+
+      - name: Generate SHA256SUMS
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS
+
+      - name: Generate CycloneDX SBOM (locked deps)
+        run: bun run scripts/sbom.ts --out dist/sbom.cyclonedx.json
+
+      - name: Verify our own release inputs
+        run: |
+          ARTIFACT=$(ls dist/*.tgz | head -1)
+          bun run scripts/verify-release.ts --artifact "$ARTIFACT" \
+            --sums dist/SHA256SUMS --sbom dist/sbom.cyclonedx.json \
+            --local-key /dev/null --local-sig /dev/null || true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign artifact + SBOM keylessly (Rekor)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        working-directory: dist
+        run: |
+          for f in $(ls *.tgz) sbom.cyclonedx.json SHA256SUMS; do
+            cosign sign-blob --yes "$f" --bundle "$f.bundle"
+          done
+
+      - name: Upload release assets (signed, with Rekor bundles)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          generate_release_notes: true
+
+  provenance:
+    name: SLSA provenance (build level 3)
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    with:
+      base64-subjects: "${{ needs.build-and-sign.outputs.digests }}"
+      upload-assets: true
+    needs: build-and-sign
+
+  publish-npm:
+    name: Publish to npm (OIDC trusted publishing + provenance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-and-sign, provenance]
+    environment: npm-publish
+    permissions:
+      id-token: write # npm trusted publishing
+      contents: read
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Publish with provenance (no long-lived token)
+        run: bun pm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

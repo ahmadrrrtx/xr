@@ -47,9 +47,25 @@ const ConfigSchema = z.object({
       // Sensible defaults so web tools work out-of-the-box without leaving a hole.
       // Users can tighten this to their own allow-list in config.json.
       egressAllowlist: z.array(z.string()).default(["searx.be", "api.github.com", "registry.npmjs.org", "pypi.org", "crates.io"]),
+      /**
+       * Phase 4 · T4 — explicitly permitted raw-IP / loopback destinations
+       * (e.g. a local model runtime at 127.0.0.1:11434). Exact host or
+       * host:port entries; the ONLY way through the private-range block.
+       * Absent = raw IP literals are refused at the egress proxy.
+       */
+      allowedHosts: z.array(z.string()).default([]),
       requireApproval: z
         .array(z.string())
         .default(["write_file", "delete", "shell", "send"]),
+      /**
+       * Phase 4 · T1 — hardened mode (fail-closed). Default TRUE: high-risk
+       * actions (shell/code/MCP/plugins) must run inside an enforceable OS
+       * boundary or FAIL; they never silently fall back to host authority.
+       * Set to false only on hosts where no isolation backend exists and the
+       * operator explicitly accepts the degraded posture (logged + audited).
+       * Env override: XR_TRUST_HARDENED=0|false.
+       */
+      hardened: z.boolean().default(true),
     })
     .default({}),
   providers: z
@@ -816,7 +832,25 @@ export function migrateRawConfig(raw: unknown): unknown {
  * invalidates immediately on saveConfig() or fs.watch of config.json. Secrets
  * are loaded into process.env once and not re-probed on every request.
  */
+/**
+ * Phase 4 · T1 — apply operator env overrides on top of parsed config.
+ * `XR_TRUST_HARDENED=0|false` disables hardened mode (fail-open degraded
+ * posture for hosts without isolation backends — logged by callers).
+ */
+export function withEnvOverrides(config: XRConfig): XRConfig {
+  const env = process.env.XR_TRUST_HARDENED;
+  if (env === undefined || env === "") return config;
+  const hardened = !/^(0|false|off|no)$/i.test(env);
+  if (hardened === config.security.hardened) return config;
+  return { ...config, security: { ...config.security, hardened } };
+}
+
 export function loadConfig(): { config: XRConfig; warnings: string[] } {
+  const out = loadConfigInner();
+  return { config: withEnvOverrides(out.config), warnings: out.warnings };
+}
+
+function loadConfigInner(): { config: XRConfig; warnings: string[] } {
   const cached = getCachedConfig<XRConfig>();
   if (cached) {
     // Secrets may still need a rare refresh; never block on OS keychain here.

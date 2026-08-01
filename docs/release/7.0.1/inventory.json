@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-31T18:39:48.611Z",
+  "generatedAt": "2026-08-01T11:49:21.882Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.0.1",
@@ -23,7 +23,7 @@
       "bun": ">=1.3.0"
     },
     "bin": {
-      "xr": "./bin/xr.cjs"
+      "xr": "./bin/xr"
     },
     "dependencies": {
       "zod": "^3.23.8"
@@ -50,10 +50,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 483,
-    "testFiles": 145,
+    "sourceFiles": 514,
+    "testFiles": 165,
     "cliCommands": 41,
-    "daemonRoutes": 95,
+    "daemonRoutes": 97,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -66,7 +66,7 @@
     },
     {
       "path": ".dependency-cruiser.cjs",
-      "bytes": 13413
+      "bytes": 13423
     },
     {
       "path": ".gitattributes",
@@ -74,7 +74,7 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 526
+      "bytes": 543
     },
     {
       "path": "CHANGELOG.md",
@@ -94,7 +94,7 @@
     },
     {
       "path": "DELIVERABLE.md",
-      "bytes": 19438
+      "bytes": 19564
     },
     {
       "path": "Dockerfile",
@@ -114,7 +114,7 @@
     },
     {
       "path": "MIGRATION.md",
-      "bytes": 17700
+      "bytes": 17710
     },
     {
       "path": "PHASE10_ARCHITECTURE_DESIGN.md",
@@ -178,19 +178,19 @@
     },
     {
       "path": "README.md",
-      "bytes": 67521
+      "bytes": 68764
     },
     {
       "path": "README_SECURITY.md",
-      "bytes": 9121
+      "bytes": 9646
     },
     {
       "path": "SECURITY.md",
-      "bytes": 15366
+      "bytes": 15608
     },
     {
       "path": "SECURITY_IMPLEMENTATION.md",
-      "bytes": 18834
+      "bytes": 19191
     },
     {
       "path": "XR-2.1-MARKETPLACE-COMPLETE-IMPLEMENTATION.md",
@@ -234,15 +234,11 @@
     },
     {
       "path": "install.ps1",
-      "bytes": 6050
+      "bytes": 7720
     },
     {
       "path": "install.sh",
-      "bytes": 6339
-    },
-    {
-      "path": "mutation-report.json",
-      "bytes": 1289
+      "bytes": 7861
     },
     {
       "path": "next-env.d.ts",
@@ -250,7 +246,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 2563
+      "bytes": 3139
     },
     {
       "path": "release.manifest.json",
@@ -308,11 +304,14 @@
     "src/business/modules/scheduling/index.ts",
     "src/business/modules/support/index.ts",
     "src/cli/catalog.ts",
+    "src/cli/command-loaders.ts",
     "src/cli/errors.ts",
     "src/cli/flags.ts",
     "src/cli/help.ts",
     "src/cli/index.ts",
+    "src/cli/kernel-boot.ts",
     "src/cli/output.ts",
+    "src/cli/route-decision.ts",
     "src/cli/router.ts",
     "src/commands/agents.ts",
     "src/commands/ask-plan.ts",
@@ -387,6 +386,8 @@
     "src/control/vision.ts",
     "src/core/agent.ts",
     "src/core/app.ts",
+    "src/core/boot-profile.ts",
+    "src/core/boot-trace.ts",
     "src/core/command-registry.ts",
     "src/core/errors.ts",
     "src/core/event-bus.ts",
@@ -395,9 +396,26 @@
     "src/core/health.ts",
     "src/core/kernel.ts",
     "src/core/lifecycle.ts",
-    "src/core/providers.ts",
+    "src/core/provider-modules.ts",
+    "src/core/providers/agent.ts",
+    "src/core/providers/budget.ts",
+    "src/core/providers/business.ts",
+    "src/core/providers/capabilities.ts",
+    "src/core/providers/config.ts",
+    "src/core/providers/context.ts",
+    "src/core/providers/execution.ts",
+    "src/core/providers/intelligence.ts",
+    "src/core/providers/llm.ts",
+    "src/core/providers/mcp.ts",
+    "src/core/providers/multi-agents.ts",
+    "src/core/providers/plugins.ts",
+    "src/core/providers/shield.ts",
+    "src/core/providers/skills.ts",
+    "src/core/providers/state.ts",
+    "src/core/providers/trust.ts",
     "src/core/service-registry.ts",
     "src/core/services.ts",
+    "src/core/stall-detector.ts",
     "src/core/tokens.ts",
     "src/core/types.ts",
     "src/core/version.ts",
@@ -538,6 +556,7 @@
     "src/interfaces/shell/render.ts",
     "src/interfaces/shell/types.ts",
     "src/interfaces/tui.ts",
+    "src/local/admission.ts",
     "src/local/hardware.ts",
     "src/local/ollama.ts",
     "src/local/recommend.ts",
@@ -590,6 +609,7 @@
     "src/providers/custom.ts",
     "src/providers/factory.ts",
     "src/providers/health.ts",
+    "src/providers/model-switch.ts",
     "src/providers/native/anthropic.ts",
     "src/providers/native/bedrock.ts",
     "src/providers/native/cerebras.ts",
@@ -600,6 +620,7 @@
     "src/providers/openai-compat.ts",
     "src/providers/presets.ts",
     "src/providers/registry.ts",
+    "src/providers/stream-metrics.ts",
     "src/reliability/grammar.ts",
     "src/reliability/profiles.ts",
     "src/reliability/repair.ts",
@@ -619,12 +640,15 @@
     "src/runtime/trust/credentials.ts",
     "src/runtime/trust/environment/backend.ts",
     "src/runtime/trust/environment/container.ts",
+    "src/runtime/trust/environment/firecracker.ts",
+    "src/runtime/trust/environment/gvisor.ts",
     "src/runtime/trust/environment/in-process.ts",
     "src/runtime/trust/environment/manager.ts",
     "src/runtime/trust/environment/namespace.ts",
     "src/runtime/trust/environment/restricted-process.ts",
     "src/runtime/trust/index.ts",
     "src/runtime/trust/isolated-spawn.ts",
+    "src/runtime/trust/lattice.ts",
     "src/runtime/trust/policy.ts",
     "src/runtime/trust/resources.ts",
     "src/runtime/trust/service.ts",
@@ -633,9 +657,11 @@
     "src/runtime/trust/verify.ts",
     "src/schemas/business-os.skill.json",
     "src/security/attacks.ts",
+    "src/security/egress-proxy.ts",
     "src/security/guard.ts",
     "src/security/lab.ts",
     "src/security/policies.ts",
+    "src/security/private-ip.ts",
     "src/security/secrets.ts",
     "src/security/shield.ts",
     "src/services/agent-service.ts",
@@ -733,6 +759,7 @@
     "src/util/concurrency.ts",
     "src/util/fs-async.ts",
     "src/util/process.ts",
+    "src/util/scan-cache.ts",
     "src/voice/audio.ts",
     "src/voice/cli.ts",
     "src/voice/hardware.ts",
@@ -780,6 +807,7 @@
     "test/cost.test.ts",
     "test/daemon.test.ts",
     "test/daemon/dashboard-split.test.ts",
+    "test/daemon/dispatcher.test.ts",
     "test/deployment/capsule.test.ts",
     "test/deployment/placement-engine.test.ts",
     "test/deployment/profiles.test.ts",
@@ -830,6 +858,19 @@
     "test/memory-v09.test.ts",
     "test/memory.test.ts",
     "test/multi-agent.test.ts",
+    "test/perf/binary-smoke.test.ts",
+    "test/perf/binary-update.test.ts",
+    "test/perf/boot-profile.test.ts",
+    "test/perf/hot-path-lint.test.ts",
+    "test/perf/incremental-index.test.ts",
+    "test/perf/load-admission.test.ts",
+    "test/perf/metrics-capture.test.ts",
+    "test/perf/model-switch.test.ts",
+    "test/perf/perf-gate.test.ts",
+    "test/perf/render-perf.test.ts",
+    "test/perf/scan-cache.test.ts",
+    "test/perf/stall-detection.test.ts",
+    "test/perf/startup-latency.test.ts",
     "test/phase0/cli-spine.test.ts",
     "test/phase0/credential-vault.test.ts",
     "test/phase0/install-container.test.ts",
@@ -857,6 +898,8 @@
     "test/reliability/update-uninstall.test.ts",
     "test/research.test.ts",
     "test/security.test.ts",
+    "test/security/egress-proxy.test.ts",
+    "test/security/nodevm-wording.test.ts",
     "test/security/shield.test.ts",
     "test/services/agent-service.test.ts",
     "test/services/planning-service.test.ts",
@@ -869,15 +912,19 @@
     "test/skills.test.ts",
     "test/state/memory-to-context-migration.test.ts",
     "test/state/workspace-store.test.ts",
+    "test/supply-chain/supply-chain.test.ts",
     "test/telegram.test.ts",
     "test/tools.test.ts",
     "test/tools/semantics-contract.test.ts",
     "test/trust.test.ts",
     "test/trust/adapters-risk.test.ts",
     "test/trust/authority.test.ts",
+    "test/trust/canonical-shell-isolation.test.ts",
     "test/trust/classify.test.ts",
     "test/trust/credentials.test.ts",
     "test/trust/execution-integration.test.ts",
+    "test/trust/guarantee-matrix.test.ts",
+    "test/trust/lattice.test.ts",
     "test/trust/mcp-isolation.test.ts",
     "test/trust/migration-rollback.test.ts",
     "test/trust/namespace.test.ts",
@@ -1986,6 +2033,20 @@
       "id": "workspaces.switch",
       "method": "POST",
       "path": "/api/workspaces/switch",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "dashboard.css.get",
+      "method": "GET",
+      "path": "/assets/dashboard.css",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "dashboard.js.get",
+      "method": "GET",
+      "path": "/assets/dashboard.js",
       "auth": "local bearer token or dashboard query token"
     },
     {
