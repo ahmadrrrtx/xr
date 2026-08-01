@@ -1,8 +1,12 @@
 # XR — Per-OS / Per-Action Isolation Guarantee Matrix
 
 > **Generated from live host probes** — `bun run scripts/guarantee-matrix.ts`. 
-> This document is a machine output, not prose; it regenerates on every run and CI fails if it drifts.
-> Language follows the Constitution: "data scope" ≠ "security isolation"; only OS-level boundaries are called boundaries.
+> This document is a machine output, not prose; it regenerates on every run.
+> It is a SNAPSHOT OF THE HOST THAT LAST RAN `--write`: rows are per-host by design
+> (a host with Docker selects `container`; one without selects `namespace_sandbox` or
+> fails closed). CI validates the generator and this document's structure, not cross-host
+> row equality. Language follows the Constitution: "data scope" ≠ "security isolation";
+> only OS-level boundaries are called boundaries.
 
 **Host:** `linux/x64` · **root:** `false` · **hardened mode:** on (fail-closed)
 

@@ -65,7 +65,7 @@ jobs:
       - name: Install (ignore-scripts, frozen)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: OSV scanner over the locked dependency set
-        uses: google/osv-scanner-action@v2
+        uses: google/osv-scanner-action@v2.3.8
         with:
           scan-args: |-
             -r
@@ -119,7 +119,7 @@ jobs:
       - name: Build the shipped image
         run: docker build -t xr:scan .
       - name: Trivy image scan (high/critical gate)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: xr:scan
           format: sarif

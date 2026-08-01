@@ -101,8 +101,12 @@ function renderMarkdown(m: Awaited<ReturnType<typeof buildMatrix>>): string {
   lines.push(`# XR — Per-OS / Per-Action Isolation Guarantee Matrix`);
   lines.push(``);
   lines.push(`> **Generated from live host probes** — \`bun run scripts/guarantee-matrix.ts\`. `);
-  lines.push(`> This document is a machine output, not prose; it regenerates on every run and CI fails if it drifts.`);
-  lines.push(`> Language follows the Constitution: "data scope" ≠ "security isolation"; only OS-level boundaries are called boundaries.`);
+  lines.push(`> This document is a machine output, not prose; it regenerates on every run.`);
+  lines.push(`> It is a SNAPSHOT OF THE HOST THAT LAST RAN \`--write\`: rows are per-host by design`);
+  lines.push(`> (a host with Docker selects \`container\`; one without selects \`namespace_sandbox\` or`);
+  lines.push(`> fails closed). CI validates the generator and this document's structure, not cross-host`);
+  lines.push(`> row equality. Language follows the Constitution: "data scope" ≠ "security isolation";`);
+  lines.push(`> only OS-level boundaries are called boundaries.`);
   lines.push(``);
   lines.push(`**Host:** \`${m.os}/${m.arch}\` · **root:** \`${m.isRoot}\` · **hardened mode:** on (fail-closed)`);
   lines.push(``);
