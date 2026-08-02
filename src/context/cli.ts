@@ -48,6 +48,10 @@ interface Flags {
   detailed?: boolean;
   limit?: number;
   reason?: string;
+  /** Phase 6: --keep a|b|stale|both for `resolve`; --write for `benchmark`. */
+  keep?: string;
+  write?: boolean;
+  olderThanDays?: number;
   _: string[];
 }
 
@@ -58,10 +62,13 @@ function parseFlags(argv: string[]): Flags {
     if (a === "--json") f.json = true;
     else if (a === "--all") f.all = true;
     else if (a === "-y" || a === "--yes") f.yes = true;
+    else if (a === "--write") f.write = true;
     else if (a === "--detailed" || a === "-v") f.detailed = true;
     else if (a === "--scope") f.scope = argv[++i];
     else if (a === "--type") f.type = argv[++i];
     else if (a === "--reason") f.reason = argv[++i];
+    else if (a === "--keep") f.keep = argv[++i];
+    else if (a === "--older-than") f.olderThanDays = Number(argv[++i]);
     else if (a === "--limit") f.limit = Number(argv[++i]);
     else f._.push(a);
   }
@@ -494,6 +501,13 @@ ${C.bold("Control")}
   xr context approve <id>          grant consent (the only way to reach "approved")
   xr context revoke <id> [--reason t]   withdraw consent; keeps the record
   xr context correct <id> "<text>"      replace, preserving correction lineage
+  xr context forget <id> -y        hide from retrieval (undoable, never silent)
+  xr context conflicts             list contradictions/staleness + status
+  xr context resolve <a> <b> --keep a|b|stale|both -y   decide a conflict
+  xr context undo [opId]           undo the latest (or given) context op
+  xr context history               the ops ledger (what changed, when, by whom)
+  xr context promote               fold stale task context into summaries
+  xr context benchmark [--write] [--json]   measured recall (offline)
   xr context export [path]         export everything XR holds
   xr context prune                 delete expired items and old packages
 
@@ -525,6 +539,11 @@ export async function handleContextCommand(argv: string[], store: Store): Promis
   if (sub === "explain" || sub === "why") return cmdExplain(store, flags);
   if (sub === "export") return cmdExport(store, flags);
   if (sub === "prune") return cmdPrune(store, flags);
+
+  // Phase 6 · T1/T4/T5/T6 — delegated to the Phase 6 module (keeps this file
+  // under the module size budget).
+  const { handlePhase6ContextCommand } = await import("./cli-phase6.ts");
+  if (await handlePhase6ContextCommand(sub!, flags, store)) return;
 
   out(C.red(`unknown context subcommand: ${sub}`));
   printHelp();

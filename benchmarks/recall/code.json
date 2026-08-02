@@ -1,0 +1,29 @@
+{
+  "domain": "code",
+  "description": "Software-engineering memory: services, migrations, limits, corrections.",
+  "items": [
+    { "id": "c_auth_1", "content": "The auth service signs access tokens with RS256 (RSA) JWT and rotates its JWKS every 24 hours; legacy HS256 tokens are rejected at the gateway.", "type": "knowledge", "tags": ["auth", "jwt", "security"], "provenance": "file" },
+    { "id": "c_mig_0", "content": "Migration 0042 moved session storage from Redis to Postgres because Redis memory pressure was evicting sessions early; rollback plan is documented in ops/migrations/0042.md.", "type": "knowledge", "tags": ["migration", "sessions", "postgres"], "provenance": "file" },
+    { "id": "c_cache_1", "content": "The product metadata cache uses a 60-second TTL with stale-while-revalidate; catalog updates invalidate the tag 'product-metadata'.", "type": "knowledge", "tags": ["cache", "ttl"], "provenance": "file" },
+    { "id": "c_rate_old", "content": "The public API enforces a rate limit of 500 requests per minute per token, documented in api/limits.md.", "type": "knowledge", "tags": ["api", "rate-limit"], "provenance": "file", "taskId": "task-ratelimit", "staleDaysAgo": 60 },
+    { "id": "c_rate_new", "content": "Correction (2026-06): after the edge cache rollout, the public API rate limit was raised to 1000 requests per minute per token. api/limits.md updated accordingly.", "type": "knowledge", "tags": ["api", "rate-limit", "correction"], "provenance": "file", "taskId": "task-ratelimit", "supersedes": "c_rate_old" },
+    { "id": "c_bill_env", "content": "The billing worker reads its queue region from the environment variable BILLING_REGION; deployments fail closed if it is unset.", "type": "knowledge", "tags": ["billing", "env", "config"], "provenance": "file", "staleDaysAgo": 45 },
+    { "id": "c_bill_env2", "content": "Correction (2026-07): the billing worker's queue region variable was renamed to BILLING_QUEUE_REGION; BILLING_REGION is now ignored and a deprecation warning is logged.", "type": "knowledge", "tags": ["billing", "env", "config", "correction"], "provenance": "file", "supersedes": "c_bill_env" },
+    { "id": "c_step_1", "content": "Tenant migration step 1: run the backfill job that copies user.account_id into user.tenant_id for all rows (idempotent, resumable).", "type": "task_context", "tags": ["tenant", "migration"], "taskId": "task-tenant" },
+    { "id": "c_step_2", "content": "Tenant migration step 2: create a composite index on (tenant_id, email) only after the backfill reports zero false rows.", "type": "task_context", "tags": ["tenant", "migration", "index"], "taskId": "task-tenant" },
+    { "id": "c_step_3", "content": "Tenant migration step 3: enable dual-write for account creation and monitor the mismatch metric for 72 hours before cutting reads over.", "type": "task_context", "tags": ["tenant", "migration", "dual-write"], "taskId": "task-tenant" },
+    { "id": "c_noise_1", "content": "The frontend lint rules were updated to eslint 9 with flat config; prettier remains the formatter.", "type": "knowledge", "tags": ["frontend", "lint"], "provenance": "file" },
+    { "id": "c_noise_2", "content": "CI runners moved to ubuntu-24.04 images; the build caching layer stayed the same.", "type": "knowledge", "tags": ["ci"], "provenance": "file" },
+    { "id": "c_noise_3", "content": "The observability agent emits Prometheus metrics on port 9102 with a 15s scrape interval.", "type": "knowledge", "tags": ["observability"], "provenance": "file" }
+  ],
+  "queries": [
+    { "id": "cq1", "competency": "accurate_retrieval", "query": "which JWT signing algorithm does the auth service use for access tokens?", "expectTop1": "c_auth_1" },
+    { "id": "cq2", "competency": "accurate_retrieval", "query": "why did session storage move to Postgres in migration 0042?", "expectTop1": "c_mig_0" },
+    { "id": "cq3", "competency": "accurate_retrieval", "query": "what TTL does the product metadata cache use?", "expectTop1": "c_cache_1" },
+    { "id": "cq4", "competency": "conflict_resolution", "query": "what is the current public API rate limit per minute per token?", "expectTop1": "c_rate_new" },
+    { "id": "cq5", "competency": "conflict_resolution", "query": "api requests per minute limit after edge cache rollout 2026-06?", "expectTop1": "c_rate_new" },
+    { "id": "cq6", "competency": "test_time_learning", "query": "which environment variable names the billing worker queue region now?", "expectTop1": "c_bill_env2" },
+    { "id": "cq7", "competency": "long_range_consistency", "query": "tenant migration backfill index dual-write steps", "expectInTop5": ["c_step_1", "c_step_2", "c_step_3"] },
+    { "id": "cq8", "competency": "accurate_retrieval", "query": "what port does the observability agent expose prometheus metrics on?", "expectTop1": "c_noise_3" }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "domain": "personal",
+  "description": "Personal preference memory: consented user facts, corrections, plans.",
+  "items": [
+    {
+      "id": "p_dark",
+      "content": "The user prefers dark mode and full keyboard navigation (no mouse) in dashboards.",
+      "type": "memory",
+      "tags": [
+        "preference",
+        "ui"
+      ]
+    },
+    {
+      "id": "p_meeting",
+      "content": "The user's standing design review meeting is every Tuesday at 10:00 local time.",
+      "type": "memory",
+      "tags": [
+        "meeting",
+        "design"
+      ]
+    },
+    {
+      "id": "p_coffee_old",
+      "content": "The user's morning drink of choice was black coffee, no sugar.",
+      "type": "memory",
+      "tags": [
+        "preference",
+        "drink"
+      ],
+      "taskId": "task-drinks"
+    },
+    {
+      "id": "p_tea_new",
+      "content": "Correction (2026-03): the user switched from black coffee to green tea in the mornings; do not recommend coffee blends any more.",
+      "type": "memory",
+      "tags": [
+        "preference",
+        "drink",
+        "correction"
+      ],
+      "taskId": "task-drinks",
+      "supersedes": "p_coffee_old"
+    },
+    {
+      "id": "p_email_old",
+      "content": "The user's primary contact email is alice@example.com.",
+      "type": "memory",
+      "tags": [
+        "contact",
+        "email"
+      ]
+    },
+    {
+      "id": "p_email_new",
+      "content": "Correction (2026-05): the user's primary email is now alice@work.example.com; the old alice@example.com forwards for 90 days.",
+      "type": "memory",
+      "tags": [
+        "contact",
+        "email",
+        "correction"
+      ],
+      "supersedes": "p_email_old"
+    },
+    {
+      "id": "p_trip_1",
+      "content": "Trip plan step 1: book the refundable hotel in Kyoto for the third week of October.",
+      "type": "task_context",
+      "tags": [
+        "trip",
+        "kyoto"
+      ],
+      "taskId": "task-trip"
+    },
+    {
+      "id": "p_trip_2",
+      "content": "Trip plan step 2: only after the hotel is confirmed, buy the Osaka→Kyoto rail passes (date-locked).",
+      "type": "task_context",
+      "tags": [
+        "trip",
+        "kyoto",
+        "rail"
+      ],
+      "taskId": "task-trip"
+    },
+    {
+      "id": "p_trip_3",
+      "content": "Trip plan step 3: once rail passes are booked, reserve the Kaiseki dinner for two on the Friday evening.",
+      "type": "task_context",
+      "tags": [
+        "trip",
+        "kyoto",
+        "dinner"
+      ],
+      "taskId": "task-trip"
+    },
+    {
+      "id": "p_noise_1",
+      "content": "The user reads on an e-ink tablet and prefers sending long documents to it.",
+      "type": "memory",
+      "tags": [
+        "preference",
+        "reading"
+      ]
+    },
+    {
+      "id": "p_noise_2",
+      "content": "The user's podcast queue is refreshed every Sunday evening.",
+      "type": "memory",
+      "tags": [
+        "habit"
+      ]
+    },
+    {
+      "id": "p_noise_3",
+      "content": "The user tracks groceries with a shared list app, shared with their partner.",
+      "type": "memory",
+      "tags": [
+        "habit",
+        "groceries"
+      ]
+    }
+  ],
+  "queries": [
+    {
+      "id": "pq1",
+      "competency": "accurate_retrieval",
+      "query": "what are the user's dashboard display and navigation preferences?",
+      "expectTop1": "p_dark"
+    },
+    {
+      "id": "pq2",
+      "competency": "accurate_retrieval",
+      "query": "when is the user's standing design review meeting?",
+      "expectTop1": "p_meeting"
+    },
+    {
+      "id": "pq3",
+      "competency": "conflict_resolution",
+      "query": "what does the user drink in the morning now?",
+      "expectTop1": "p_tea_new"
+    },
+    {
+      "id": "pq4",
+      "competency": "test_time_learning",
+      "query": "what is the user's current primary email address?",
+      "expectTop1": "p_email_new"
+    },
+    {
+      "id": "pq5",
+      "competency": "long_range_consistency",
+      "query": "kyoto trip hotel rail dinner order",
+      "expectInTop5": [
+        "p_trip_1",
+        "p_trip_2",
+        "p_trip_3"
+      ]
+    },
+    {
+      "id": "pq6",
+      "competency": "accurate_retrieval",
+      "query": "how does the user track groceries with the shared list app?",
+      "expectTop1": "p_noise_3"
+    }
+  ]
+}

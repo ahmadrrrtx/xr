@@ -97,6 +97,55 @@ export {
   type RequestContextOptions,
 } from "./service.ts";
 
+// ── Phase 6 surfaces ────────────────────────────────────────────────────────
+
+export {
+  fuseRRF,
+  lexicalScore,
+  structuredScore,
+  describeChannels,
+  RRF_K,
+  type HybridCandidate,
+  type FusedCandidate,
+  type HybridChannel,
+  type ChannelScores,
+} from "./hybrid.ts";
+
+export {
+  gateItem,
+  gateItems,
+  gateToolResult,
+  summarizeGate,
+  type IntegrityFinding,
+  type IntegrityResult,
+} from "./integrity.ts";
+
+export {
+  ProgressiveLifecycle,
+  type PromotionResult,
+  type LifecycleOptions,
+} from "./lifecycle.ts";
+
+export {
+  ConflictResolver,
+  type OpenConflict,
+  type ResolutionKind,
+  type ResolutionOutcome,
+} from "./conflicts.ts";
+
+export { UndoLedger, type UndoOutcome, type LedgerOp } from "./undo.ts";
+
+export { buildMemoryTools, type MemoryToolsDeps } from "./tools.ts";
+
+export {
+  runRecallBenchmark,
+  RECALL_TARGETS,
+  evaluateTargets,
+  type BenchmarkReport,
+  type Competency,
+  type BenchmarkDomain,
+} from "./eval/harness.ts";
+
 export {
   memoryEntryToContextItem,
   contextTypeToMemoryCategory,

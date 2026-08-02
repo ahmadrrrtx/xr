@@ -21,6 +21,7 @@ import {
   emptyUncertainty,
   isConsentState,
   isContextType,
+  isLifecycleStage,
   isProvenanceKind,
   isTrustStatus,
   type ConsentState,
@@ -79,6 +80,8 @@ const PROV = "context_provenance";
 const REVOCATIONS = "context_revocations";
 const PACKAGES = "context_packages";
 const SUMMARIES = "context_summaries";
+const RESOLUTIONS = "context_conflict_resolutions"; // Phase 6 · T4
+const OPS = "context_ops"; // Phase 6 · T6 — undo/evidence ledger
 
 // ── Row shapes ─────────────────────────────────────────────────────────────
 
@@ -124,6 +127,36 @@ interface ItemRow {
   updated_at: number;
   last_accessed_at: number | null;
   access_count: number;
+  lifecycle_stage: string | null; // Phase 6 · T1 (absent on pre-Phase-6 dbs)
+  lifecycle_summarized_by: string | null;
+}
+
+export interface ResolutionRow {
+  id: string;
+  workspace_id: string;
+  item_a: string;
+  item_b: string;
+  kind: string;
+  resolution: string;
+  decided_by: string;
+  reason: string;
+  created_at: number;
+  undone_at: number | null;
+}
+
+export interface OpsRow {
+  id: string;
+  workspace_id: string;
+  op: string;
+  target_table: string;
+  target_id: string;
+  before_json: string;
+  after_json: string;
+  actor: string;
+  reason: string;
+  created_at: number;
+  undone_at: number | null;
+  undo_op_id: string | null;
 }
 
 interface ProvRow {
@@ -308,10 +341,79 @@ export class ContextRepository {
         );
         CREATE INDEX IF NOT EXISTS idx_ctx_sum_task ON ${SUMMARIES}(workspace_id, task_id);
         CREATE INDEX IF NOT EXISTS idx_ctx_sum_created ON ${SUMMARIES}(workspace_id, created_at DESC);
+
+        -- Phase 6 · T4: conflict resolutions (user-visible, undoable).
+        CREATE TABLE IF NOT EXISTS ${RESOLUTIONS} (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          item_a TEXT NOT NULL,
+          item_b TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          resolution TEXT NOT NULL,
+          decided_by TEXT NOT NULL,
+          reason TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          undone_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_ctx_res_ws ON ${RESOLUTIONS}(workspace_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_ctx_res_items ON ${RESOLUTIONS}(item_a, item_b);
+
+        -- Phase 6 · T6: the undo/evidence ledger for every mutating context op.
+        CREATE TABLE IF NOT EXISTS ${OPS} (
+          id TEXT PRIMARY KEY,
+          workspace_id TEXT NOT NULL,
+          op TEXT NOT NULL,
+          target_table TEXT NOT NULL,
+          target_id TEXT NOT NULL,
+          before_json TEXT NOT NULL,
+          after_json TEXT NOT NULL,
+          actor TEXT NOT NULL,
+          reason TEXT NOT NULL DEFAULT '',
+          created_at INTEGER NOT NULL,
+          undone_at INTEGER,
+          undo_op_id TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_ctx_ops_ws ON ${OPS}(workspace_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_ctx_ops_target ON ${OPS}(target_table, target_id);
       `);
+
+      // Phase 6 · T1 — additive column: evidence lifecycle stage.
+      // Guarded ALTER (idempotent): existing rows are 'verbatim' via DEFAULT.
+      const cols = this.q(`PRAGMA table_info(${ITEMS})`).all() as Array<{ name: string }>;
+      if (!cols.some((c) => c.name === "lifecycle_stage")) {
+        this.db.exec(`ALTER TABLE ${ITEMS} ADD COLUMN lifecycle_stage TEXT NOT NULL DEFAULT 'verbatim'`);
+      }
+      if (!cols.some((c) => c.name === "lifecycle_summarized_by")) {
+        this.db.exec(`ALTER TABLE ${ITEMS} ADD COLUMN lifecycle_summarized_by TEXT`);
+      }
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_ctx_lifecycle ON ${ITEMS}(workspace_id, lifecycle_stage)`);
     } catch {
       /* never block startup on a migration probe */
     }
+  }
+
+  // ── Prepared-statement cache ─────────────────────────────────────────────
+  //
+  // The WriteGate (Phase 1) strongly retains every distinct prepared Statement
+  // until connection close, so per-call prepare is an UNBOUNDED leak plus a
+  // latency tax — measured during Phase 6 scale work: ~16KB RSS per distinct
+  // statement and a >100s stall once ~53k distinct statements accumulated
+  // (the @100k-item benchmark could not even be seeded). Retrieval itself
+  // compounds this: the semantic channel resolves embeddings per candidate, so
+  // a single query previously compiled hundreds of statements.
+  //
+  // Identical SQL is therefore compiled once per repository instance and
+  // reused. Statements are pure SQL+bindings — reuse is semantics-preserving
+  // (the single-writer connection serializes all mutation either way), and
+  // the gate still tracks exactly one statement per distinct SQL string.
+  private readonly statements = new Map<string, ReturnType<ContextDb["prepare"]>>();
+
+  private q(sql: string): ReturnType<ContextDb["prepare"]> {
+    const cached = this.statements.get(sql);
+    if (cached) return cached;
+    const stmt = this.db.prepare(sql);
+    this.statements.set(sql, stmt);
+    return stmt;
   }
 
   // ── Items ────────────────────────────────────────────────────────────────
@@ -338,6 +440,7 @@ export class ContextRepository {
     retention?: RetentionPolicy;
     links?: ContextLinks;
     tags?: string[];
+    lifecycleStage?: string;
     now?: number;
   }): string {
     const now = input.now ?? Date.now();
@@ -345,8 +448,7 @@ export class ContextRepository {
     const content = boundText(input.content, CONTEXT_BOUNDS.maxItemChars);
     const tags = (input.tags ?? []).slice(0, CONTEXT_BOUNDS.maxTagsPerItem).map((t) => t.trim()).filter(Boolean);
 
-    this.db
-      .prepare(
+    this.q(
         `INSERT INTO ${ITEMS} (
           id, version, type, title, content,
           workspace_id, project_scope, user_id, task_id, agent_id,
@@ -357,8 +459,9 @@ export class ContextRepository {
           sensitivity, retention, links_json,
           index_state, embedding_model, embedding_dim, embedding,
           revoked_at, revoked_reason, deleted_at,
-          tags, created_at, updated_at, last_accessed_at, access_count
-        ) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?,?)`,
+          tags, created_at, updated_at, last_accessed_at, access_count,
+          lifecycle_stage, lifecycle_summarized_by
+        ) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?)`,
       )
       .run(
         id,
@@ -402,13 +505,15 @@ export class ContextRepository {
         now,
         null,
         0,
+        input.lifecycleStage ?? "verbatim",
+        null,
       );
 
     return id;
   }
 
   getItem(id: string): ContextItem | null {
-    const row = this.db.prepare(`SELECT * FROM ${ITEMS} WHERE id = ?`).get<ItemRow>(id);
+    const row = this.q(`SELECT * FROM ${ITEMS} WHERE id = ?`).get<ItemRow>(id);
     return row ? rowToItem(row) : null;
   }
 
@@ -466,8 +571,7 @@ export class ContextRepository {
     const limit = Math.min(opts.limit ?? CONTEXT_BOUNDS.maxCandidates, CONTEXT_BOUNDS.maxCandidates);
     params.push(limit);
 
-    const rows = this.db
-      .prepare(
+    const rows = this.q(
         `SELECT * FROM ${ITEMS} WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC LIMIT ?`,
       )
       .all<ItemRow>(...params);
@@ -497,8 +601,7 @@ export class ContextRepository {
     if (!opts.includeDeleted) clauses.push("deleted_at IS NULL");
     const limit = Math.min(opts.limit ?? 200, 1000);
     params.push(limit);
-    return this.db
-      .prepare(`SELECT * FROM ${ITEMS} WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC LIMIT ?`)
+    return this.q(`SELECT * FROM ${ITEMS} WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC LIMIT ?`)
       .all<ItemRow>(...params)
       .map(rowToItem);
   }
@@ -508,8 +611,7 @@ export class ContextRepository {
     if (!cur) return false;
     const now = opts.now ?? Date.now();
     const bounded = boundText(content, CONTEXT_BOUNDS.maxItemChars);
-    this.db
-      .prepare(
+    this.q(
         `UPDATE ${ITEMS} SET content = ?, title = ?, version = version + 1, updated_at = ?,
          index_state = 'invalidated', embedding = NULL WHERE id = ?`,
       )
@@ -523,8 +625,7 @@ export class ContextRepository {
     opts: { actor?: string; now?: number } = {},
   ): boolean {
     const now = opts.now ?? Date.now();
-    this.db
-      .prepare(
+    this.q(
         `UPDATE ${ITEMS} SET consent_state = ?, consent_actor = ?, consent_at = ?, updated_at = ?, version = version + 1 WHERE id = ?`,
       )
       .run(state, opts.actor ?? null, now, now, id);
@@ -543,8 +644,7 @@ export class ContextRepository {
     const cur = this.getItem(id);
     if (!cur) return { ok: false, indexInvalidated: false };
     const now = opts.now ?? Date.now();
-    this.db
-      .prepare(
+    this.q(
         `UPDATE ${ITEMS} SET revoked_at = ?, revoked_reason = ?, consent_state = 'revoked',
          index_state = 'invalidated', embedding = NULL, embedding_model = NULL, embedding_dim = NULL,
          updated_at = ?, version = version + 1 WHERE id = ?`,
@@ -576,29 +676,27 @@ export class ContextRepository {
       indexInvalidated: true,
       now,
     });
-    this.db.prepare(`DELETE FROM ${PROV} WHERE item_id = ?`).run(id);
-    this.db.prepare(`DELETE FROM ${ITEMS} WHERE id = ?`).run(id);
+    this.q(`DELETE FROM ${PROV} WHERE item_id = ?`).run(id);
+    this.q(`DELETE FROM ${ITEMS} WHERE id = ?`).run(id);
     return true;
   }
 
   /** Record a correction: old item points at the new one. */
   supersede(oldId: string, newId: string, opts: { now?: number } = {}): boolean {
     const now = opts.now ?? Date.now();
-    this.db
-      .prepare(`UPDATE ${ITEMS} SET superseded_by = ?, updated_at = ?, version = version + 1 WHERE id = ?`)
+    this.q(`UPDATE ${ITEMS} SET superseded_by = ?, updated_at = ?, version = version + 1 WHERE id = ?`)
       .run(newId, now, oldId);
     return true;
   }
 
   markStale(id: string, at: number): boolean {
-    this.db.prepare(`UPDATE ${ITEMS} SET stale_after = ?, updated_at = ? WHERE id = ?`).run(at, Date.now(), id);
+    this.q(`UPDATE ${ITEMS} SET stale_after = ?, updated_at = ? WHERE id = ?`).run(at, Date.now(), id);
     return true;
   }
 
   setEmbedding(id: string, vec: number[] | null, model: string, dim: number): void {
     try {
-      this.db
-        .prepare(
+      this.q(
           `UPDATE ${ITEMS} SET embedding = ?, embedding_model = ?, embedding_dim = ?, index_state = ? WHERE id = ?`,
         )
         .run(
@@ -614,8 +712,7 @@ export class ContextRepository {
   }
 
   getEmbedding(id: string): { vec: number[]; model: string; dim: number } | null {
-    const row = this.db
-      .prepare(`SELECT embedding, embedding_model, embedding_dim, index_state FROM ${ITEMS} WHERE id = ?`)
+    const row = this.q(`SELECT embedding, embedding_model, embedding_dim, index_state FROM ${ITEMS} WHERE id = ?`)
       .get<{ embedding: string | null; embedding_model: string | null; embedding_dim: number | null; index_state: string }>(id);
     if (!row || !row.embedding || row.index_state === "invalidated") return null;
     try {
@@ -629,8 +726,7 @@ export class ContextRepository {
 
   /** Invalidate every cached vector in a workspace (e.g. embedding model change). */
   invalidateIndex(workspaceId: string): number {
-    const r = this.db
-      .prepare(
+    const r = this.q(
         `UPDATE ${ITEMS} SET index_state = 'invalidated', embedding = NULL WHERE workspace_id = ? AND index_state = 'indexed'`,
       )
       .run(workspaceId);
@@ -639,7 +735,7 @@ export class ContextRepository {
 
   touchAccess(ids: readonly string[], now: number = Date.now()): void {
     if (!ids.length) return;
-    const stmt = this.db.prepare(
+    const stmt = this.q(
       `UPDATE ${ITEMS} SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?`,
     );
     for (const id of ids) {
@@ -653,15 +749,13 @@ export class ContextRepository {
 
   countItems(workspaceId: string): number {
     return (
-      this.db
-        .prepare(`SELECT COUNT(*) c FROM ${ITEMS} WHERE workspace_id = ? AND deleted_at IS NULL`)
+      this.q(`SELECT COUNT(*) c FROM ${ITEMS} WHERE workspace_id = ? AND deleted_at IS NULL`)
         .get<{ c: number }>(workspaceId)?.c ?? 0
     );
   }
 
   statsByType(workspaceId: string): Array<{ type: string; c: number }> {
-    return this.db
-      .prepare(
+    return this.q(
         `SELECT type, COUNT(*) c FROM ${ITEMS} WHERE workspace_id = ? AND deleted_at IS NULL GROUP BY type ORDER BY c DESC`,
       )
       .all<{ type: string; c: number }>(workspaceId);
@@ -669,8 +763,7 @@ export class ContextRepository {
 
   /** Prune expired items whose retention policy allows it. */
   pruneExpired(workspaceId: string, now: number = Date.now()): number {
-    const r = this.db
-      .prepare(
+    const r = this.q(
         `DELETE FROM ${ITEMS} WHERE workspace_id = ? AND expires_at IS NOT NULL AND expires_at <= ? AND retention IN ('ttl','session','task')`,
       )
       .run(workspaceId, now);
@@ -680,13 +773,11 @@ export class ContextRepository {
   // ── Provenance ───────────────────────────────────────────────────────────
 
   addProvenance(itemId: string, ref: ProvenanceRef, now: number = Date.now()): string | null {
-    const existing = this.db
-      .prepare(`SELECT COUNT(*) c FROM ${PROV} WHERE item_id = ?`)
+    const existing = this.q(`SELECT COUNT(*) c FROM ${PROV} WHERE item_id = ?`)
       .get<{ c: number }>(itemId);
     if ((existing?.c ?? 0) >= CONTEXT_BOUNDS.maxProvenancePerItem) return null;
     const id = `prv_${randomUUID().slice(0, 10)}`;
-    this.db
-      .prepare(
+    this.q(
         `INSERT INTO ${PROV} (id, item_id, kind, ref, label, observed_at, content_hash, created_at) VALUES (?,?,?,?,?,?,?,?)`,
       )
       .run(
@@ -703,8 +794,7 @@ export class ContextRepository {
   }
 
   getProvenance(itemId: string): ProvenanceRef[] {
-    return this.db
-      .prepare(`SELECT * FROM ${PROV} WHERE item_id = ? ORDER BY created_at ASC LIMIT ?`)
+    return this.q(`SELECT * FROM ${PROV} WHERE item_id = ? ORDER BY created_at ASC LIMIT ?`)
       .all<ProvRow>(itemId, CONTEXT_BOUNDS.maxProvenancePerItem)
       .map((r) => ({
         kind: (isProvenanceKind(r.kind) ? r.kind : "unknown") as ProvenanceKind,
@@ -717,8 +807,7 @@ export class ContextRepository {
 
   /** Find every item that cites a given reference (e.g. all uses of a URL). */
   findByProvenanceRef(kind: ProvenanceKind, ref: string, limit = 50): string[] {
-    return this.db
-      .prepare(`SELECT item_id FROM ${PROV} WHERE kind = ? AND ref = ? LIMIT ?`)
+    return this.q(`SELECT item_id FROM ${PROV} WHERE kind = ? AND ref = ? LIMIT ?`)
       .all<{ item_id: string }>(kind, ref, Math.min(limit, 200))
       .map((r) => r.item_id);
   }
@@ -739,8 +828,7 @@ export class ContextRepository {
     now?: number;
   }): string {
     const id = `rev_${randomUUID().slice(0, 10)}`;
-    this.db
-      .prepare(
+    this.q(
         `INSERT INTO ${REVOCATIONS} (id, item_id, item_kind, workspace_id, reason, actor, index_invalidated, created_at) VALUES (?,?,?,?,?,?,?,?)`,
       )
       .run(
@@ -758,8 +846,7 @@ export class ContextRepository {
 
   /** Is this id revoked according to the ledger? Used at resume-revalidation. */
   isRevoked(itemId: string): boolean {
-    const r = this.db
-      .prepare(`SELECT COUNT(*) c FROM ${REVOCATIONS} WHERE item_id = ?`)
+    const r = this.q(`SELECT COUNT(*) c FROM ${REVOCATIONS} WHERE item_id = ?`)
       .get<{ c: number }>(itemId);
     return (r?.c ?? 0) > 0;
   }
@@ -768,15 +855,13 @@ export class ContextRepository {
   revokedAmong(itemIds: readonly string[]): Set<string> {
     if (!itemIds.length) return new Set();
     const placeholders = itemIds.map(() => "?").join(",");
-    const rows = this.db
-      .prepare(`SELECT DISTINCT item_id FROM ${REVOCATIONS} WHERE item_id IN (${placeholders})`)
+    const rows = this.q(`SELECT DISTINCT item_id FROM ${REVOCATIONS} WHERE item_id IN (${placeholders})`)
       .all<{ item_id: string }>(...itemIds);
     return new Set(rows.map((r) => r.item_id));
   }
 
   listRevocations(workspaceId: string, limit = 100): RevocationRow[] {
-    return this.db
-      .prepare(`SELECT * FROM ${REVOCATIONS} WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ?`)
+    return this.q(`SELECT * FROM ${REVOCATIONS} WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ?`)
       .all<RevocationRow>(workspaceId, Math.min(limit, 500));
   }
 
@@ -814,8 +899,7 @@ export class ContextRepository {
         contentHash: pkg.contentHash,
         revalidation: pkg.revalidation ?? null,
       };
-      this.db
-        .prepare(
+      this.q(
           `INSERT OR REPLACE INTO ${PACKAGES} (package_id, version, schema_version, workspace_id, run_id, task_id, agent_id, query_intent, content_hash, total_items, total_chars, degraded, package_json, created_at)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         )
@@ -843,11 +927,9 @@ export class ContextRepository {
   getPackage(packageId: string, version?: number): { row: PackageRow; slim: Record<string, unknown> } | null {
     const row =
       version === undefined
-        ? this.db
-            .prepare(`SELECT * FROM ${PACKAGES} WHERE package_id = ? ORDER BY version DESC LIMIT 1`)
+        ? this.q(`SELECT * FROM ${PACKAGES} WHERE package_id = ? ORDER BY version DESC LIMIT 1`)
             .get<PackageRow>(packageId)
-        : this.db
-            .prepare(`SELECT * FROM ${PACKAGES} WHERE package_id = ? AND version = ?`)
+        : this.q(`SELECT * FROM ${PACKAGES} WHERE package_id = ? AND version = ?`)
             .get<PackageRow>(packageId, version);
     if (!row) return null;
     try {
@@ -858,14 +940,13 @@ export class ContextRepository {
   }
 
   getPackagesForRun(runId: string, limit = 20): PackageRow[] {
-    return this.db
-      .prepare(`SELECT * FROM ${PACKAGES} WHERE run_id = ? ORDER BY created_at DESC LIMIT ?`)
+    return this.q(`SELECT * FROM ${PACKAGES} WHERE run_id = ? ORDER BY created_at DESC LIMIT ?`)
       .all<PackageRow>(runId, Math.min(limit, 100));
   }
 
   prunePackages(now: number = Date.now()): number {
     const cutoff = now - CONTEXT_BOUNDS.packageRetentionMs;
-    const r = this.db.prepare(`DELETE FROM ${PACKAGES} WHERE created_at < ?`).run(cutoff);
+    const r = this.q(`DELETE FROM ${PACKAGES} WHERE created_at < ?`).run(cutoff);
     return (r as { changes?: number })?.changes ?? 0;
   }
 
@@ -886,8 +967,7 @@ export class ContextRepository {
     now?: number;
   }): string {
     const id = `sum_${randomUUID().slice(0, 10)}`;
-    this.db
-      .prepare(
+    this.q(
         `INSERT INTO ${SUMMARIES} (id, workspace_id, project_scope, task_id, summary, preserved, lost, source_item_ids, generation, lineage_parent, original_chars, compressed_chars, created_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       )
@@ -910,18 +990,16 @@ export class ContextRepository {
   }
 
   getSummary(id: string): SummaryRow | null {
-    return this.db.prepare(`SELECT * FROM ${SUMMARIES} WHERE id = ?`).get<SummaryRow>(id) ?? null;
+    return this.q(`SELECT * FROM ${SUMMARIES} WHERE id = ?`).get<SummaryRow>(id) ?? null;
   }
 
   listSummaries(workspaceId: string, opts: { taskId?: string; limit?: number } = {}): SummaryRow[] {
     const limit = Math.min(opts.limit ?? 50, 200);
     if (opts.taskId) {
-      return this.db
-        .prepare(`SELECT * FROM ${SUMMARIES} WHERE workspace_id = ? AND task_id = ? ORDER BY created_at DESC LIMIT ?`)
+      return this.q(`SELECT * FROM ${SUMMARIES} WHERE workspace_id = ? AND task_id = ? ORDER BY created_at DESC LIMIT ?`)
         .all<SummaryRow>(workspaceId, opts.taskId, limit);
     }
-    return this.db
-      .prepare(`SELECT * FROM ${SUMMARIES} WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ?`)
+    return this.q(`SELECT * FROM ${SUMMARIES} WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ?`)
       .all<SummaryRow>(workspaceId, limit);
   }
 
@@ -964,6 +1042,235 @@ export class ContextRepository {
       revocations: this.listRevocations(workspaceId, 500),
       summaries: this.listSummaries(workspaceId, { limit: 200 }),
     };
+  }
+
+  // ── Phase 6 · T1: evidence lifecycle helpers ──────────────────────────────
+
+  /** Live rows with a given lifecycle stage. */
+  listByLifecycle(
+    workspaceId: string,
+    stage: string,
+    opts: { type?: ContextType; limit?: number } = {},
+  ): ContextItem[] {
+    const rows = this.q(
+        `SELECT * FROM ${ITEMS}
+         WHERE workspace_id = ? AND lifecycle_stage = ? AND deleted_at IS NULL AND revoked_at IS NULL
+           ${opts.type ? "AND type = ?" : ""}
+         ORDER BY updated_at ASC
+         LIMIT ?`,
+      )
+      .all<ItemRow>(
+        ...(opts.type
+          ? [workspaceId, stage, opts.type, opts.limit ?? 200]
+          : [workspaceId, stage, opts.limit ?? 200]),
+      );
+    return rows.map(rowToItem);
+  }
+
+  /** Update lifecycle stage (+ the summary that stands for an externalized original). */
+  setLifecycleStage(
+    id: string,
+    stage: string,
+    summarizedBy?: string | null,
+    now: number = Date.now(),
+  ): boolean {
+    const r = this.q(
+        `UPDATE ${ITEMS} SET lifecycle_stage = ?, lifecycle_summarized_by = COALESCE(?, lifecycle_summarized_by), updated_at = ?, version = version + 1 WHERE id = ?`,
+      )
+      .run(stage, summarizedBy ?? null, now, id);
+    return (r as { changes?: number }).changes === 1;
+  }
+
+  /** All live (non-deleted, non-revoked) rows of a workspace, bounded. */
+  scopeCandidates(
+    workspaceId: string,
+    opts: { projectScope?: string; limit?: number; types?: ContextType[] } = {},
+  ): ContextItem[] {
+    const typeFilter = opts.types?.length
+      ? `AND type IN (${opts.types.map(() => "?").join(",")})`
+      : "";
+    const scopeFilter = opts.projectScope ? `AND (project_scope = ? OR project_scope = 'global')` : "";
+    const rows = this.q(
+        `SELECT * FROM ${ITEMS}
+         WHERE workspace_id = ? AND deleted_at IS NULL AND revoked_at IS NULL
+           ${scopeFilter} ${typeFilter}
+         ORDER BY updated_at DESC LIMIT ?`,
+      )
+      .all<ItemRow>(
+        workspaceId,
+        ...(opts.projectScope ? [opts.projectScope] : []),
+        ...(opts.types ?? []),
+        opts.limit ?? 500,
+      );
+    return rows.map(rowToItem);
+  }
+
+  /** Record a contradiction pointer on an item (content-free metadata change). */
+  setContradictedBy(id: string, otherIds: readonly string[], now: number = Date.now()): boolean {
+    const r = this.q(`UPDATE ${ITEMS} SET contradicted_by = ?, updated_at = ?, version = version + 1 WHERE id = ?`)
+      .run(otherIds.join(","), now, id);
+    return (r as { changes?: number }).changes === 1;
+  }
+
+  /** Hard-expire one item (selective forgetting; reversible via ops ledger). */
+  expireItem(id: string, expiresAt: number, now: number = Date.now()): boolean {
+    const r = this.q(`UPDATE ${ITEMS} SET expires_at = ?, updated_at = ?, version = version + 1 WHERE id = ?`)
+      .run(expiresAt, now, id);
+    return (r as { changes?: number }).changes === 1;
+  }
+
+  /** Reachable children for navigation: items folded into summary `summaryId`. */
+  externalizedBy(summaryId: string): ContextItem[] {
+    const rows = this.q(`SELECT * FROM ${ITEMS} WHERE lifecycle_summarized_by = ? AND deleted_at IS NULL`)
+      .all<ItemRow>(summaryId);
+    return rows.map(rowToItem);
+  }
+
+  // ── Phase 6 · T4: conflict resolutions ────────────────────────────────────
+
+  saveResolution(input: {
+    workspaceId: string;
+    itemA: string;
+    itemB: string;
+    kind: string;
+    resolution: string;
+    decidedBy: string;
+    reason?: string;
+    now?: number;
+  }): string {
+    const id = `res_${randomUUID().slice(0, 10)}`;
+    this.q(
+        `INSERT INTO ${RESOLUTIONS} (id, workspace_id, item_a, item_b, kind, resolution, decided_by, reason, created_at, undone_at)
+         VALUES (?,?,?,?,?,?,?,?,?,NULL)`,
+      )
+      .run(
+        id,
+        input.workspaceId,
+        input.itemA,
+        input.itemB,
+        input.kind,
+        input.resolution,
+        input.decidedBy,
+        input.reason ?? "",
+        input.now ?? Date.now(),
+      );
+    return id;
+  }
+
+  listResolutions(workspaceId: string, opts: { includeUndone?: boolean; limit?: number } = {}): ResolutionRow[] {
+    return this.q(
+        `SELECT * FROM ${RESOLUTIONS} WHERE workspace_id = ? ${opts.includeUndone ? "" : "AND undone_at IS NULL"}
+         ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all<ResolutionRow>(workspaceId, opts.limit ?? 100);
+  }
+
+  /** Active resolution (if any) for an unordered item pair. */
+  resolutionFor(itemA: string, itemB: string): ResolutionRow | null {
+    const row = this.q(
+        `SELECT * FROM ${RESOLUTIONS} WHERE undone_at IS NULL AND
+           ((item_a = ? AND item_b = ?) OR (item_a = ? AND item_b = ?))
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get<ResolutionRow>(itemA, itemB, itemB, itemA);
+    return row ?? null;
+  }
+
+  markResolutionUndone(id: string, undoOpId?: string, now: number = Date.now()): boolean {
+    const r = this.q(`UPDATE ${RESOLUTIONS} SET undone_at = ? WHERE id = ? AND undone_at IS NULL`)
+      .run(now, id);
+    void undoOpId;
+    return (r as { changes?: number }).changes === 1;
+  }
+
+  // ── Phase 6 · T6: undo/evidence ledger ────────────────────────────────────
+
+  /** Raw row snapshot for undo before/after images. */
+  rawRow(table: string, id: string): Record<string, unknown> | null {
+    const allowed = new Set([ITEMS, RESOLUTIONS, OPS, "user_memory"]);
+    if (!allowed.has(table)) return null;
+    const row = this.q(`SELECT * FROM ${table} WHERE id = ?`).get<Record<string, unknown>>(id);
+    return row ?? null;
+  }
+
+  recordOp(input: {
+    workspaceId: string;
+    op: string;
+    targetTable: string;
+    targetId: string;
+    before: Record<string, unknown> | null;
+    after: Record<string, unknown> | null;
+    actor: string;
+    reason?: string;
+    now?: number;
+  }): string {
+    const id = `op_${randomUUID().slice(0, 10)}`;
+    this.q(
+        `INSERT INTO ${OPS} (id, workspace_id, op, target_table, target_id, before_json, after_json, actor, reason, created_at, undone_at, undo_op_id)
+         VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL)`,
+      )
+      .run(
+        id,
+        input.workspaceId,
+        input.op,
+        input.targetTable,
+        input.targetId,
+        JSON.stringify(input.before ?? null),
+        JSON.stringify(input.after ?? null),
+        input.actor,
+        input.reason ?? "",
+        input.now ?? Date.now(),
+      );
+    return id;
+  }
+
+  listOps(workspaceId: string, opts: { includeUndone?: boolean; limit?: number } = {}): OpsRow[] {
+    return this.q(
+        `SELECT * FROM ${OPS} WHERE workspace_id = ? ${opts.includeUndone ? "" : "AND undone_at IS NULL"}
+         ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all<OpsRow>(workspaceId, opts.limit ?? 100);
+  }
+
+  getOp(id: string): OpsRow | null {
+    const row = this.q(`SELECT * FROM ${OPS} WHERE id = ?`).get<OpsRow>(id);
+    return row ?? null;
+  }
+
+  markOpUndone(id: string, undoOpId: string, now: number = Date.now()): boolean {
+    const r = this.q(`UPDATE ${OPS} SET undone_at = ?, undo_op_id = ? WHERE id = ? AND undone_at IS NULL`)
+      .run(now, undoOpId, id);
+    return (r as { changes?: number }).changes === 1;
+  }
+
+  /** Attach the after-image to an in-flight ledger op. */
+  recordOpFinalize(opId: string, after: Record<string, unknown> | null): boolean {
+    const r = this.q(`UPDATE ${OPS} SET after_json = ? WHERE id = ? AND after_json = 'null'`)
+      .run(JSON.stringify(after ?? null), opId);
+    return (r as { changes?: number }).changes === 1;
+  }
+
+  /** Hard-delete a row (undo of an insert). Internal to the undo ledger. */
+  purgeRow(table: string, id: string): boolean {
+    const allowed = new Set([ITEMS, RESOLUTIONS, "user_memory"]);
+    if (!allowed.has(table)) return false;
+    const r = this.q(`DELETE FROM ${table} WHERE id = ?`).run(id);
+    return (r as { changes?: number }).changes === 1;
+  }
+
+  /**
+   * Restore a raw row snapshot (insert-or-replace) — used ONLY by undo, which
+   * is why this accepts raw rows rather than domain values. Callers must
+   * pass a snapshot previously produced by `rawRow`.
+   */
+  restoreRow(table: string, id: string, snapshot: Record<string, unknown>): boolean {
+    const allowed = new Set([ITEMS, RESOLUTIONS, "user_memory"]);
+    if (!allowed.has(table)) return false;
+    const cols = Object.keys(snapshot);
+    if (!cols.includes("id")) return false;
+    const sql = `INSERT OR REPLACE INTO ${table} (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`;
+    this.q(sql).run(...cols.map((c) => snapshot[c]));
+    return true;
   }
 }
 
@@ -1023,6 +1330,10 @@ function rowToItem(r: ItemRow): ContextItem {
     sensitivity: (r.sensitivity as SensitivityLevel) ?? "unknown",
     retention: (r.retention as RetentionPolicy) ?? "durable",
     links,
+    lifecycleStage: (
+      r.lifecycle_stage && isLifecycleStage(r.lifecycle_stage) ? r.lifecycle_stage : "verbatim"
+    ) as ContextItem["lifecycleStage"],
+    lifecycleSummarizedBy: r.lifecycle_summarized_by ?? null,
     indexState: (r.index_state as IndexState) ?? "none",
     embeddingSpace:
       r.embedding_model && r.embedding_dim ? { model: r.embedding_model, dim: r.embedding_dim } : null,

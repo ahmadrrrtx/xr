@@ -42,6 +42,8 @@ interface Flags {
   maxImportance?: number;
   /** summarize: preview only, change nothing. */
   dryRun: boolean;
+  /** Phase 6 — history listing cap. */
+  limit?: number;
   rest: string[];
 }
 
@@ -64,6 +66,7 @@ function parseFlags(argv: string[]): Flags {
       const t = argv[++i];
       if (t) f.tags.push(t);
     } else if (a === "--importance" || a === "-i") f.importance = Number(argv[++i]);
+    else if (a === "--limit") f.limit = Number(argv[++i]);
     else if (a === "--json") f.json = true;
     else if (a === "--yes" || a === "-y") f.yes = true;
     else f.rest.push(a);
@@ -248,7 +251,7 @@ function cmdAdd(mem: MemoryStore, f: Flags): void {
   ok(`remembered ${C.dim(res.entry!.id)} · ${colorCat(res.entry!.category)}${ttlNote}`);
 }
 
-function cmdEdit(mem: MemoryStore, f: Flags): void {
+async function cmdEdit(mem: MemoryStore, f: Flags, store: Store): Promise<void> {
   const id = f.rest[0];
   const content = f.rest.slice(1).join(" ").trim();
   if (!id) {
@@ -265,7 +268,9 @@ function cmdEdit(mem: MemoryStore, f: Flags): void {
     warn("nothing to change — pass new text and/or flags.");
     return;
   }
-  const res = mem.update(id, patch);
+  // Phase 6 · T6 — before-image captured so the edit is undoable.
+  const { runMemoryOpWithLedger } = await import("../cli-phase6.ts");
+  const res = runMemoryOpWithLedger(store, "memory_correct", id, "user", () => mem.update(id, patch)) as ReturnType<MemoryStore["update"]>;
   if (!res.ok) {
     warn(`edit failed: ${res.reason}`);
     return;
@@ -273,15 +278,55 @@ function cmdEdit(mem: MemoryStore, f: Flags): void {
   ok(`updated ${C.dim(res.entry!.id)}`);
 }
 
-function cmdRemove(mem: MemoryStore, f: Flags): void {
+async function cmdRemove(mem: MemoryStore, f: Flags, store: Store): Promise<void> {
   const id = f.rest[0];
   if (!id) {
     warn("usage: xr memory remove <id>");
     return;
   }
-  const res = mem.remove(id);
-  if (res.ok) ok(`forgotten ${C.dim(id)}`);
+  // Phase 6 · T6 — before-image captured first, then exactly one removal.
+  const { runMemoryOpWithLedger } = await import("../cli-phase6.ts");
+  const res = runMemoryOpWithLedger(store, "memory_remove", id, "user", () => mem.remove(id)) as ReturnType<MemoryStore["remove"]>;
+  if (res.ok) ok(`forgotten ${C.dim(id)} (undo: xr memory undo)`);
   else warn(`remove failed: ${res.reason}`);
+}
+
+/** Phase 6 · T6 — undo the latest (or given) memory op, or list history. */
+async function cmdHistoryUndo(store: Store, f: Flags, undoOnly: boolean): Promise<void> {
+  const { ContextRepository, adaptStoreForContext } = await import("../repository.ts");
+  const { UndoLedger } = await import("../undo.ts");
+  const wsId = store.workspaceId ?? "default";
+  const repo = new ContextRepository(adaptStoreForContext(store), wsId);
+  repo.migrate();
+  const ledger = new UndoLedger(repo, wsId);
+  if (undoOnly) {
+    const target = f.rest[0] ?? ledger.latestUndoable()?.id;
+    if (!target) {
+      ok("nothing to undo");
+      return;
+    }
+    const result = ledger.undo(target, { actor: "user" });
+    if (result.ok) ok(`undone: ${result.undoneOpId} (restored ${result.restoredTarget?.table}/${result.restoredTarget?.id})`);
+    else warn(`undo failed: ${result.reason}`);
+    return;
+  }
+  const ops = ledger
+    .history({ includeUndone: true, limit: f.limit ?? 25 })
+    .filter((o) => o.op.startsWith("memory_") || o.op.startsWith("undo memory_"));
+  if (f.json) {
+    console.log(JSON.stringify(ops, null, 2));
+    return;
+  }
+  banner();
+  console.log(C.bold("🧾 Memory ops history"));
+  if (ops.length === 0) {
+    console.log(C.dim("  no recorded memory operations yet"));
+    return;
+  }
+  for (const op of ops) {
+    const state = op.undone_at ? C.dim(" (undone)") : "";
+    console.log(`  ${op.id}  ${op.op.padEnd(16)} ${op.target_id.slice(0, 28)}  ${new Date(op.created_at).toISOString()}${state}`);
+  }
 }
 
 function cmdSearch(mem: MemoryStore, f: Flags): void {
@@ -498,7 +543,9 @@ ${C.bold("Write")}
                          [--scope <s>] [--tag <t>] [--importance 1-5]
                          [--ttl <sec>|--ttl-days <n>]   (entry auto-expires after TTL)
   xr memory edit <id> ["<new text>"] [--category c] [--scope s] [--importance n] [--tag t]
-  xr memory remove <id>              forget one entry (permanent)
+  xr memory remove <id>              forget one entry (undoable via the ops ledger)
+  xr memory undo [opId]              undo the latest (or given) memory op
+  xr memory history [--limit n]      what changed, when, by whom (ops ledger)
   xr memory clear [--scope s] [-y]   forget everything / one scope (permanent)
 
 ${C.bold("Maintain")}
@@ -539,8 +586,10 @@ export async function handleMemoryCommand(argv: string[], store: Store): Promise
   if (sub === "help" || sub === "--help" || sub === "-h") return printHelp();
   if (sub === "list" || sub === "ls") return cmdList(mem, flags);
   if (sub === "add") return cmdAdd(mem, flags);
-  if (sub === "edit") return cmdEdit(mem, flags);
-  if (sub === "remove" || sub === "rm" || sub === "forget") return cmdRemove(mem, flags);
+  if (sub === "edit") return cmdEdit(mem, flags, store);
+  if (sub === "remove" || sub === "rm" || sub === "forget") return cmdRemove(mem, flags, store);
+  if (sub === "undo") return cmdHistoryUndo(store, flags, true);
+  if (sub === "history") return cmdHistoryUndo(store, flags, false);
   if (sub === "search") return cmdSearch(mem, flags);
   if (sub === "recall") return cmdRecall(mem, flags);
   if (sub === "reindex") return cmdReindex(mem);

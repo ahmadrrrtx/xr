@@ -1,0 +1,189 @@
+{
+  "runAt": "2026-08-02T12:40:25.490Z",
+  "route": "lexical",
+  "domains": {
+    "code": {
+      "accurate_retrieval": {
+        "queries": 4,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      },
+      "test_time_learning": {
+        "queries": 1,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      },
+      "long_range_consistency": {
+        "queries": 1,
+        "precisionAt1": 0,
+        "recallAt1": 0,
+        "recallAt5": 1,
+        "mrr": 0.3333333333333333,
+        "failures": []
+      },
+      "conflict_resolution": {
+        "queries": 2,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      }
+    },
+    "research": {
+      "accurate_retrieval": {
+        "queries": 3,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      },
+      "test_time_learning": {
+        "queries": 1,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      },
+      "long_range_consistency": {
+        "queries": 1,
+        "precisionAt1": 0,
+        "recallAt1": 0,
+        "recallAt5": 1,
+        "mrr": 0.5,
+        "failures": []
+      },
+      "conflict_resolution": {
+        "queries": 1,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      }
+    },
+    "personal": {
+      "accurate_retrieval": {
+        "queries": 3,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      },
+      "test_time_learning": {
+        "queries": 1,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      },
+      "long_range_consistency": {
+        "queries": 1,
+        "precisionAt1": 0,
+        "recallAt1": 0,
+        "recallAt5": 1,
+        "mrr": 0.5,
+        "failures": []
+      },
+      "conflict_resolution": {
+        "queries": 1,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      }
+    },
+    "business": {
+      "accurate_retrieval": {
+        "queries": 3,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      },
+      "test_time_learning": {
+        "queries": 1,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      },
+      "long_range_consistency": {
+        "queries": 1,
+        "precisionAt1": 0,
+        "recallAt1": 0,
+        "recallAt5": 1,
+        "mrr": 0.3333333333333333,
+        "failures": []
+      },
+      "conflict_resolution": {
+        "queries": 1,
+        "precisionAt1": 1,
+        "recallAt1": 1,
+        "recallAt5": 1,
+        "mrr": 1,
+        "failures": []
+      }
+    }
+  },
+  "overall": {
+    "accurate_retrieval": {
+      "queries": 13,
+      "precisionAt1": 1,
+      "recallAt1": 1,
+      "recallAt5": 1,
+      "mrr": 1,
+      "failures": []
+    },
+    "test_time_learning": {
+      "queries": 4,
+      "precisionAt1": 1,
+      "recallAt1": 1,
+      "recallAt5": 1,
+      "mrr": 1,
+      "failures": []
+    },
+    "long_range_consistency": {
+      "queries": 4,
+      "precisionAt1": 0,
+      "recallAt1": 0,
+      "recallAt5": 1,
+      "mrr": 0.41666666666666663,
+      "failures": []
+    },
+    "conflict_resolution": {
+      "queries": 5,
+      "precisionAt1": 1,
+      "recallAt1": 1,
+      "recallAt5": 1,
+      "mrr": 1,
+      "failures": []
+    }
+  },
+  "summary": {
+    "precisionAt1": 0.8461538461538461,
+    "recallAt1": 0.8461538461538461,
+    "recallAt5": 1,
+    "mrr": 0.9102564102564101,
+    "queries": 26,
+    "failures": 0
+  },
+  "largeScale": {
+    "items": 100000,
+    "p95Ms": 22.536223000000064,
+    "avgMs": 18.828918599999987
+  }
+}

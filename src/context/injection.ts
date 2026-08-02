@@ -27,8 +27,10 @@ import {
   type InjectionPackage,
   type RetrievalExplanation,
   type RetrievedItem,
+  type RejectedItem,
 } from "./types.ts";
 import { maskExternalPaths, maskSecrets } from "./poison.ts";
+import { gateItems, type IntegrityFinding } from "./integrity.ts";
 
 /** Opening/closing fence for quarantined content. Deliberately unmistakable. */
 const QUARANTINE_OPEN = "<<<XR_UNTRUSTED_CONTENT_BEGIN>>>";
@@ -73,6 +75,8 @@ export interface InjectionOptions {
   /** Redaction toggles (defaults come from the package grant). */
   maskSecrets?: boolean;
   maskExternalPaths?: boolean;
+  /** Time override for the render-time integrity gate (tests). */
+  now?: number;
 }
 
 /**
@@ -93,19 +97,41 @@ export function buildInjectionPackage(pkg: ContextPackage, opts: InjectionOption
   const instructionItems: RetrievedItem[] = [];
   const dataByTier = new Map<ContextTier, RetrievedItem[]>();
   const quarantineItems: RetrievedItem[] = [];
+  let integrityFindings: IntegrityFinding[] = [];
+  let integrityRejected: RejectedItem[] = [];
+
+  // ── Phase 6 · T3: render-time integrity gate ──────────────────────────────
+  // Re-validate every item at render time (poison rescan + consent/expiry
+  // drift). Write-time admission alone cannot stop poisoning planted before a
+  // policy/signature change (MINJA-class attacks are temporally decoupled).
+  const allItems: RetrievedItem[] = [];
+  for (const tierContent of pkg.tiers) allItems.push(...tierContent.items);
+  const gated = gateItems(allItems, opts.now);
+  const gateRuleByItem = new Map<string, IntegrityFinding>(
+    gated.findings
+      .filter((f) => f.action === "quarantine")
+      .map((f) => [f.itemId, f]),
+  );
+
+  // Gate decisions surface in the machine-readable explanation (memory of WHY).
+  integrityFindings = gated.findings;
+  integrityRejected = gated.rejected;
 
   // ── Channel assignment: deterministic, per item ──────────────────────────
-  for (const tierContent of pkg.tiers) {
-    for (const ri of tierContent.items) {
-      explanations[ri.item.id] = ri.explanation;
-      const channel = channelFor(ri.item, ri.tier);
-      if (channel === "instruction") instructionItems.push(ri);
-      else if (channel === "quarantine") quarantineItems.push(ri);
-      else {
-        const arr = dataByTier.get(ri.tier) ?? [];
-        arr.push(ri);
-        dataByTier.set(ri.tier, arr);
-      }
+  // `gated.admitted` == keep items; `gated.quarantined` == force-quarantine.
+  for (const ri of [...gated.admitted, ...gated.quarantined]) {
+    explanations[ri.item.id] = ri.explanation;
+    const finding = gateRuleByItem.get(ri.item.id);
+    const channel = finding ? "quarantine" : channelFor(ri.item, ri.tier);
+    if (finding) {
+      ri.explanation.policyReason = `${ri.explanation.policyReason} · ${finding.rule}`;
+    }
+    if (channel === "instruction") instructionItems.push(ri);
+    else if (channel === "quarantine") quarantineItems.push(ri);
+    else {
+      const arr = dataByTier.get(ri.tier) ?? [];
+      arr.push(ri);
+      dataByTier.set(ri.tier, arr);
     }
   }
 
@@ -211,6 +237,8 @@ export function buildInjectionPackage(pkg: ContextPackage, opts: InjectionOption
     totalChars: blocks.reduce((n, b) => n + b.chars, 0),
     allItemIds,
     explanations,
+    integrityFindings,
+    integrityRejected,
   };
 }
 

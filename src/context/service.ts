@@ -47,6 +47,9 @@ import { ContextInspection } from "./inspection.ts";
 import { ProvenanceService } from "./provenance.ts";
 import { routeModelClass, type EmbeddingRoute } from "./embedding.ts";
 import { memoryEntryToContextItem } from "./memory-adapter.ts";
+import { ProgressiveLifecycle, type PromotionResult, type LifecycleOptions } from "./lifecycle.ts";
+import { ConflictResolver, type OpenConflict, type ResolutionKind, type ResolutionOutcome } from "./conflicts.ts";
+import { UndoLedger, type UndoOutcome } from "./undo.ts";
 
 export interface ContextServiceOptions {
   /** Override the workspace id (defaults to the store's). */
@@ -77,6 +80,8 @@ export interface RequestContextOptions {
   /** Durable run id for checkpoint linkage. */
   runId?: string;
   lexicalOnly?: boolean;
+  /** Phase 6 · T1 — "deep" also ranks externalized originals. */
+  depth?: "progressive" | "deep";
 }
 
 export interface RecordContextOptions {
@@ -117,6 +122,9 @@ export class ContextService implements LifecycleHook {
   private readonly repo: ContextRepository;
   private readonly provenanceSvc: ProvenanceService;
   private readonly inspector: ContextInspection;
+  private readonly lifecycle: ProgressiveLifecycle;
+  private readonly conflicts: ConflictResolver;
+  private readonly undo: UndoLedger;
   private route: EmbeddingRoute;
   private readonly wsId: string;
   private readonly lexicalOnly: boolean;
@@ -132,6 +140,9 @@ export class ContextService implements LifecycleHook {
     this.repo.migrate();
     this.provenanceSvc = new ProvenanceService(this.repo);
     this.inspector = new ContextInspection(this.repo, this.wsId);
+    this.lifecycle = new ProgressiveLifecycle(this.repo, this.wsId);
+    this.conflicts = new ConflictResolver(this.repo, this.wsId);
+    this.undo = new UndoLedger(this.repo, this.wsId);
     this.route = { model: "lexical", locality: "local", fallback: true, reason: "not yet routed" };
   }
 
@@ -278,6 +289,7 @@ export class ContextService implements LifecycleHook {
         query: req.query ?? req.intent,
         tiers: req.tiers,
         lexicalOnly: req.lexicalOnly || this.lexicalOnly,
+        depth: req.depth,
         runId: req.runId,
       },
       extra,
@@ -412,6 +424,148 @@ export class ContextService implements LifecycleHook {
       expiresAt: opts.expiresInMs ? Date.now() + opts.expiresInMs : undefined,
       references: source.ref ? [{ kind: source.kind, ref: source.ref, label: source.label }] : [],
     });
+  }
+
+  // ── Phase 6 · T1/T4/T6: lifecycle, conflicts, undo, navigation adapters ────
+
+  /** The evidence-lifecycle promotions surface (offline/async by design). */
+  get progressiveLifecycle(): ProgressiveLifecycle {
+    return this.lifecycle;
+  }
+
+  /** Promote stale verbatim task_context items to evidence-preserving summaries. */
+  promoteStaleMemory(
+    scope: { projectScope: string; taskId?: string },
+    opts: LifecycleOptions = {},
+  ): PromotionResult[] {
+    return this.lifecycle.promoteStale(scope, opts);
+  }
+
+  /** Adapt one legacy `user_memory` row into a context item (read-through). */
+  adaptedMemoryItem(id: string, memoryStore?: MemoryStore): ContextItem | null {
+    try {
+      const mem = memoryStore ?? new MemoryStore(this.store);
+      const entry = mem.get(id);
+      return entry ? memoryEntryToContextItem(entry, this.wsId) : null;
+    } catch {
+      return null; // legacy adapter is best-effort; absence is honest, not an error
+    }
+  }
+
+  /** Live conflicts with their resolution status (user-visible). */
+  openConflicts(projectScope?: string): OpenConflict[] {
+    const candidates = this.repo.scopeCandidates(this.wsId, { projectScope, limit: 500 });
+    return this.conflicts.openConflicts(candidates);
+  }
+
+  /**
+   * Resolve a contradiction between two items (user decision, undoable).
+   * The loser's precedence falls; its content is preserved.
+   */
+  resolveConflict(
+    idA: string,
+    idB: string,
+    kind: ResolutionKind,
+    opts: { reason: string; actor?: string; now?: number },
+  ): ResolutionOutcome {
+    const a = this.repo.getItem(idA);
+    const b = this.repo.getItem(idB);
+    if (!a || !b) return { ok: false, reason: !a ? `${idA} not found` : `${idB} not found` };
+    const out = this.conflicts.resolve(a, b, kind, {
+      decidedBy: opts.actor ?? "user",
+      reason: opts.reason,
+      now: opts.now,
+      recordUndo: (loser) => {
+        const opId = this.undo.begin("resolve", "context_items", loser.id, {
+          actor: opts.actor ?? "user",
+          reason: opts.reason,
+          now: opts.now,
+        });
+        // finalize happens after supersede — scheduled via callback:
+        this.deferredFinalizes.push(() => this.undo.finalize(opId, "context_items", loser.id));
+        return opId;
+      },
+    });
+    this.flushFinalizes();
+    return out;
+  }
+
+  /** Selective forgetting: hard-expire an item (undoable). */
+  forgetItem(
+    id: string,
+    opts: { reason: string; actor?: string; now?: number },
+  ): { ok: boolean; opId?: string; reason?: string } {
+    const item = this.repo.getItem(id);
+    if (!item) return { ok: false, reason: "not found" };
+    const out = this.conflicts.forget(item, {
+      actor: opts.actor,
+      reason: opts.reason,
+      now: opts.now,
+      recordUndo: (i, afterExpiry) => {
+        const opId = this.undo.begin("forget", "context_items", i.id, {
+          actor: opts.actor ?? "user",
+          reason: opts.reason,
+          now: opts.now,
+        });
+        this.deferredFinalizes.push(() => this.undo.finalize(opId, "context_items", i.id));
+        return opId;
+      },
+    });
+    this.flushFinalizes();
+    return { ok: out.ok, ...(out.opId ? { opId: out.opId } : {}), ...(out.reason ? { reason: out.reason } : {}) };
+  }
+
+  /** Correct an item with undo capture (content-correction lineage preserved). */
+  correctItem(id: string, newContent: string, actor = "user"): { ok: boolean; newId?: string; reason: string } {
+    const opId = this.undo.begin("correct", "context_items", id, { actor, reason: `correct ${id}` });
+    const res = this.inspector.correct(id, newContent, { actor });
+    this.undo.finalize(opId, "context_items", id);
+    return res;
+  }
+
+  /** Approve consent with undo capture. */
+  approveItem(id: string, actor = "user"): { ok: boolean; reason: string } {
+    const opId = this.undo.begin("approve", "context_items", id, { actor, reason: `approve ${id}` });
+    const res = this.inspector.approve(id, actor);
+    this.undo.finalize(opId, "context_items", id);
+    return res;
+  }
+
+  /** Revoke consent with undo capture. */
+  revokeItem(id: string, reason = "user_revoked", actor = "user"): { ok: boolean; reason: string } {
+    const opId = this.undo.begin("revoke", "context_items", id, { actor, reason });
+    const res = this.inspector.revoke(id, reason, actor);
+    this.undo.finalize(opId, "context_items", id);
+    return { ok: res.ok, reason: res.reason };
+  }
+
+  /** Delete an item with undo capture (before-image keeps it recoverable). */
+  deleteItem(id: string, actor = "user"): { ok: boolean; reason: string } {
+    const opId = this.undo.begin("delete", "context_items", id, { actor, reason: `delete ${id}` });
+    const res = this.inspector.delete(id, actor);
+    this.undo.finalize(opId, "context_items", id);
+    return { ok: res.ok, reason: res.reason };
+  }
+
+  /** Undo a recorded op (or the latest one). */
+  undoOp(opId?: string, actor = "user"): UndoOutcome {
+    const id = opId ?? this.undo.latestUndoable()?.id;
+    if (!id) return { ok: false, reason: "nothing to undo" };
+    const out = this.undo.undo(id, { actor });
+    this.flushFinalizes();
+    return out;
+  }
+
+  /** Ops history (user-visible, content-free headers). */
+  opsHistory(limit = 25): ReturnType<UndoLedger["history"]> {
+    return this.undo.history({ includeUndone: true, limit });
+  }
+
+  /** Schedule finalize callbacks run just after resolve/forget transactions. */
+  private deferredFinalizes: Array<() => void> = [];
+  private flushFinalizes(): void {
+    const q = this.deferredFinalizes.splice(0, this.deferredFinalizes.length);
+    for (const f of q) f();
   }
 
   // ── Maintenance ──────────────────────────────────────────────────────────
