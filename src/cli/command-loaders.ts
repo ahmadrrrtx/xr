@@ -62,6 +62,7 @@ export const COMMAND_LOADERS: Readonly<Record<string, CommandLoaderEntry>> = {
   session: { path: "../commands/session.ts", symbol: "SessionCommand" },
   logs: { path: "../commands/logs.ts", symbol: "LogsCommand" },
   audit: { path: "../commands/audit.ts", symbol: "AuditCommand" },
+  telemetry: { path: "../commands/telemetry.ts", symbol: "TelemetryCommand" },
   workspace: { path: "../commands/workspace.ts", symbol: "WorkspaceCommand" },
   // Ecosystem.
   skill: { path: "../commands/skills.ts", symbol: "SkillsCommand" },
@@ -117,6 +118,8 @@ async function importCommandModule(path: string): Promise<Record<string, new () 
       return (await import("../commands/session.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/logs.ts":
       return (await import("../commands/logs.ts")) as unknown as Record<string, new () => Command>;
+    case "../commands/telemetry.ts":
+      return (await import("../commands/telemetry.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/audit.ts":
       return (await import("../commands/audit.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/workspace.ts":

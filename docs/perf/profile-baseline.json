@@ -1,0 +1,23 @@
+{
+  "version": "1",
+  "capturedAt": "2026-08-02T19:58:31.895Z",
+  "host": "linux-x64",
+  "scenarios": {
+    "version": {
+      "cpuMs": 23.6,
+      "samples": 13
+    },
+    "help": {
+      "cpuMs": 26.4,
+      "samples": 15
+    },
+    "workspace-list": {
+      "cpuMs": 83.8,
+      "samples": 57
+    },
+    "doctor": {
+      "cpuMs": 400.7,
+      "samples": 301
+    }
+  }
+}

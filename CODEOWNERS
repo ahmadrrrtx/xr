@@ -40,6 +40,37 @@
 /src/interfaces/                @ahmadrrrtx
 /src/daemon/                    @ahmadrrrtx
 
+# ── Phase 8: observability plane (Art. XXI privacy boundary) ────────────────
+# Opt-in, structural-by-default, PII-redacted telemetry. Changes here can
+# silently alter what user data leaves the process — require privacy review.
+/src/observability/             @ahmadrrrtx
+/src/commands/telemetry.ts      @ahmadrrrtx
+/test/observability/            @ahmadrrrtx
+/docs/observability/            @ahmadrrrtx
+
+# ── Phase 8: public API contract (breaking-change discipline) ───────────────
+# The OpenAPI schema, generated client, and compat gate must move together.
+/src/daemon/api/                @ahmadrrrtx
+/src/daemon/routes/contract.ts  @ahmadrrrtx
+/src/daemon/routes/registry.ts  @ahmadrrrtx
+/src/clients/                   @ahmadrrrtx
+/scripts/generate-openapi.ts    @ahmadrrrtx
+/scripts/generate-client.ts     @ahmadrrrtx
+/scripts/api-compat.ts          @ahmadrrrtx
+/docs/api/                      @ahmadrrrtx
+
+# ── Phase 8: accessibility gate & DX instruments ────────────────────────────
+/src/daemon/auth-page.ts        @ahmadrrrtx
+/test/a11y/                     @ahmadrrrtx
+/test/ux/                       @ahmadrrrtx
+/docs/a11y/                     @ahmadrrrtx
+/docs/ux/                       @ahmadrrrtx
+/scripts/ownership-map.ts       @ahmadrrrtx
+/scripts/unit-tier.ts           @ahmadrrrtx
+/scripts/first-task-survey.ts   @ahmadrrrtx
+/scripts/sus.ts                 @ahmadrrrtx
+/scripts/profile-gate.ts        @ahmadrrrtx
+
 # ── Public claims: docs, website, installers ────────────────────────────────
 # Claim-governed under Article XIX. Every change is claim-linted.
 /README.md                      @ahmadrrrtx

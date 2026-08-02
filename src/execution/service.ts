@@ -44,6 +44,10 @@ import {
 import { CheckpointManager } from "./checkpoint.ts";
 import { LeaseManager } from "./lease.ts";
 import { RecoveryManager } from "./recovery.ts";
+import { envelopeSpan } from "../observability/instrument.ts";
+import { withSpan } from "../observability/tracer.ts";
+import { xrMetrics } from "../observability/metrics.ts";
+import { XR_ATTR } from "../observability/semconv.ts";
 
 export interface ExecutionServiceDeps {
   repo: ExecutionRepo;
@@ -294,7 +298,37 @@ export class ExecutionService {
    * The canonical execute() entry point. Runs a single action through the
    * full fabric lifecycle. Returns the completed ExecutionRecord.
    */
+  /**
+   * Phase 8 · T2 — canonical-envelope observability. Every execution is an
+   * OTel-GenAI span (`chat <model>` / `execute_tool <tool>` /
+   * `invoke_agent <agent>` per capability kind), so nested placements,
+   * routing decisions and child work line up under one trace. Structural
+   * only: kind/name/ids/outcome — never payloads (Art. XXI).
+   */
   async execute(opts: ExecuteOptions): Promise<ExecutionRecord> {
+    const span = envelopeSpan({
+      capabilityKind: opts.capability.kind,
+      capabilityName: opts.capability.name,
+      runId: opts.runId,
+      correlationId: opts.correlationId,
+      workspaceId: opts.workspaceId,
+    });
+    try {
+      const record = await withSpan(span, () => this.executeInner(opts));
+      const succeeded = record.state === "succeeded" || record.state === "partially_completed";
+      span.set(XR_ATTR.OUTCOME, record.outcome?.kind ?? record.state);
+      span.setStatus(succeeded ? "ok" : "error", succeeded ? undefined : record.outcome?.kind ?? record.state);
+      xrMetrics.capabilityExec.inc({ kind: opts.capability.kind, outcome: record.outcome?.kind ?? record.state });
+      span.end();
+      return record;
+    } catch (err) {
+      span.setStatus("error", (err as Error)?.name ?? "Error");
+      span.end();
+      throw err;
+    }
+  }
+
+  async executeInner(opts: ExecuteOptions): Promise<ExecutionRecord> {
     const now = Date.now();
     let claimedKey: string | null = null; // Phase 1 (T5): idempotency slot claimed before the effect
     const runId = opts.runId ?? `ex_${randomUUID().slice(0, 10)}`;

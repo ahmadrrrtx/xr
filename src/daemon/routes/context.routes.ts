@@ -8,6 +8,7 @@ import { CONTEXT_POLICY_VERSION, CONTEXT_TIERS, TIER_POLICIES } from "../../cont
 import { tierCeilingFor } from "../../context/policy.ts";
 import { MemoryStore } from "../../context/memory/store.ts";
 import { route, type DaemonRoute } from "./router.ts";
+import { UndoLedger } from "../../context/undo.ts";
 
 function repoFor(store: Parameters<typeof adaptStoreForContext>[0] & { workspaceId: string }) {
   return new ContextRepository(adaptStoreForContext(store), store.workspaceId);
@@ -131,8 +132,36 @@ export function contextRoutes(): DaemonRoute[] {
       handle: ({ json, path, state }) => {
         const id = decodeURIComponent(path.slice("/api/context/approve/".length));
         const mem = new MemoryStore(state.store);
+        const ledger = new UndoLedger(repoFor(state.store), state.store.workspaceId);
+        const opId = ledger.begin("memory_approve", "user_memory", id, { actor: "dashboard" });
         const res = mem.approveConsent(id, "dashboard");
+        if (res.ok) ledger.finalize(opId, "user_memory", id);
         state.store.audit("context.consent.approve", { id, ok: res.ok });
+        return json(res, res.ok ? 200 : 404);
+      },
+    }),
+
+    // Phase 8 · T4 — user control over memory includes UNDO (Art. VIII/XXI).
+    // The daemon surfaces the existing UndoLedger: undo the latest mutation,
+    // or an explicit ledger op id from the request body.
+    route({
+      id: "context.undo",
+      path: "/api/context/undo",
+      method: "POST",
+      handle: async ({ json, req, state }) => {
+        let id: string | undefined;
+        try {
+          const body = (await req.clone().json()) as { id?: unknown };
+          if (typeof body?.id === "string" && body.id.trim() !== "") id = body.id;
+        } catch {
+          // Empty/absent body → undo the latest undoable mutation.
+        }
+        const repo = repoFor(state.store);
+        const ledger = new UndoLedger(repo, state.store.workspaceId);
+        const targetId = id ?? ledger.latestUndoable()?.id;
+        if (!targetId) return json({ ok: false, reason: "nothing to undo" }, 404);
+        const res = ledger.undo(targetId, { actor: "dashboard" });
+        state.store.audit("context.undo", { id: targetId, ok: res.ok });
         return json(res, res.ok ? 200 : 404);
       },
     }),
@@ -144,7 +173,10 @@ export function contextRoutes(): DaemonRoute[] {
       handle: ({ json, path, state }) => {
         const id = decodeURIComponent(path.slice("/api/context/revoke/".length));
         const mem = new MemoryStore(state.store);
+        const ledger = new UndoLedger(repoFor(state.store), state.store.workspaceId);
+        const opId = ledger.begin("memory_revoke", "user_memory", id, { actor: "dashboard" });
         const res = mem.revoke(id, "dashboard_revoked", "dashboard");
+        if (res.ok) ledger.finalize(opId, "user_memory", id);
         state.store.audit("context.revoke", { id, ok: res.ok });
         return json(
           { ...res, residual: res.ok ? residualDisclosure() : [] },

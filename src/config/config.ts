@@ -520,6 +520,36 @@ const ConfigSchema = z.object({
       enabled: z.boolean().default(false),
     })
     .default({}),
+  /**
+   * Phase 8 · T2 — privacy-respecting telemetry (Constitution Art. XXI).
+   * OPT-IN: `enabled` defaults to false (nothing is emitted or exported);
+   * structural-by-default (durations, model/tool names, token counts,
+   * placements, SLOs); prompt/tool CONTENT requires explicit per-flag
+   * opt-in below and still passes the redactor. Endpoint defaults to the
+   * LOCAL viewer (standalone OTLP dashboard); no cloud default, and there
+   * is never silent egress.
+   */
+  telemetry: z
+    .object({
+      enabled: z.boolean().default(false),
+      endpoint: z.string().url().default("http://127.0.0.1:4318"),
+      serviceName: z.string().min(1).max(80).default("xr"),
+      sampleRatio: z.number().min(0).max(1).default(1),
+      content: z
+        .object({
+          prompt: z.boolean().default(false),
+          toolArgs: z.boolean().default(false),
+        })
+        .default({}),
+      exportMetrics: z.boolean().default(true),
+      exportLogs: z.boolean().default(true),
+      batchIntervalMs: z.number().int().min(500).max(600_000).default(5000),
+      batchMax: z.number().int().min(1).max(1000).default(100),
+      ringBufferSize: z.number().int().min(16).max(16384).default(512),
+      /** Per-metric label cardinality budgets (overflow folds to xr_other). */
+      cardinality: z.record(z.number().int().min(1).max(10_000)).default({}),
+    })
+    .default({}),
   // Onboarding-persisted user profile (written by src/interfaces/onboard.ts).
   workspace: z
     .object({

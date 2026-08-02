@@ -25,9 +25,9 @@
   "waivers": [
     {
       "path": "src/daemon/dashboard/client-script.ts",
-      "lines": 1857,
+      "lines": 2111,
       "owner": "daemon",
-      "reason": "A single exported string constant containing the Control Center's browser application. It is DATA to the daemon, never executed server-side, and has zero branching or imports, so LOC does not represent server-side complexity. Phase 4 \u00b7 T5 appended the CSP-safe action dispatcher (allowlist parser) and act() helper; the file remains a single exported string constant (data, not server-side logic).",
+      "reason": "A single exported string constant containing the Control Center's browser application. It is DATA to the daemon, never executed server-side, and has zero branching or imports, so LOC does not represent server-side complexity. Phase 4 \u00b7 T5 appended the CSP-safe action dispatcher (allowlist parser) and act() helper; the file remains a single exported string constant (data, not server-side logic). Phase 8 \u00b7 T3/T1 appended the keyboard/a11y behavior (aria-current state machine, dialog focus trap/return, Enter/Space activation bridge, tool-card accordion fix) and the versioned-API v1() rewrite (+61 lines, still declarative browser data). Phase 8 \u00b7 T4 appended the progressive-disclosure nav (Start-here area, collapsible persisted areas), honest readiness banner, undo button, and standardized capability badges (+193 lines, still declarative browser data).",
       "plan": "Phase 3 replaces the inline string with real client modules served as static assets; the split is blocked on the asset-pipeline decision, not on this file.",
       "review": "2026-12-31"
     },
@@ -41,9 +41,9 @@
     },
     {
       "path": "src/daemon/dashboard/markup.ts",
-      "lines": 1298,
+      "lines": 1276,
       "owner": "daemon",
-      "reason": "The HTML shell of the Control Center: one template literal with placeholder tokens. Same reasoning as client-script.ts \u2014 declarative markup, not logic. Phase 4 \u00b7 T5 converted inline handlers/styles to data-xr-action + utility classes (size-neutral; +split plan unchanged).",
+      "reason": "The HTML shell of the Control Center: one template literal with placeholder tokens. Same reasoning as client-script.ts \u2014 declarative markup, not logic. Phase 4 \u00b7 T5 converted inline handlers/styles to data-xr-action + utility classes (size-neutral; +split plan unchanged). Phase 8 \u00b7 T3 made the shell WCAG-2.2-AA conformant (buttons not href-less anchors, landmarks, labels, dialog semantics) \u2014 net -22 lines.",
       "plan": "Split per view (health / chat / audit / settings) alongside the Phase-3 asset pipeline.",
       "review": "2026-12-31"
     },
@@ -57,9 +57,9 @@
     },
     {
       "path": "src/execution/service.ts",
-      "lines": 1193,
+      "lines": 1227,
       "owner": "execution",
-      "reason": "ExecutionService is the durable-execution authority consolidated in T6 (records, leases, checkpoints, recovery). Phase 4 \u00b7 T1 extended trustPlacementToExecution for the lattice placements (gvisor/firecracker map to container-class).",
+      "reason": "ExecutionService is the durable-execution authority consolidated in T6 (records, leases, checkpoints, recovery). Phase 4 \u00b7 T1 extended trustPlacementToExecution for the lattice placements (gvisor/firecracker map to container-class). Phase 8 \u00b7 T2 wrapped execute() in an OpenTelemetry envelope span (executeInner split; +34 lines, observability wiring only, no new orchestration logic).",
       "plan": "Extract lease management and recovery orchestration into collaborators behind the existing ExecutionService facade. Deferred to Phase 3 where durability quality is the phase theme.",
       "review": "2026-12-31"
     },
@@ -105,9 +105,9 @@
     },
     {
       "path": "src/config/config.ts",
-      "lines": 1101,
+      "lines": 1131,
       "owner": "config",
-      "reason": "A single Zod schema plus load/save. It is one cohesive declaration and the single source of truth for configuration shape; splitting the schema would create multiple partial truths. Phase 4 \u00b7 T1/T4 added security.hardened + security.allowedHosts schema fields and the env-override helper. Phase 5 added the additive difficultyRouting/breaker/retry intelligencePlane fields and migration 17\u219218 (+47 lines, schema-only).",
+      "reason": "A single Zod schema plus load/save. It is one cohesive declaration and the single source of truth for configuration shape; splitting the schema would create multiple partial truths. Phase 4 \u00b7 T1/T4 added security.hardened + security.allowedHosts schema fields and the env-override helper. Phase 5 added the additive difficultyRouting/breaker/retry intelligencePlane fields and migration 17\u219218 (+47 lines, schema-only). Phase 8 \u00b7 T2 added the additive telemetry subtree (opt-in, structural-by-default, redacted, local-first; +30 lines, schema-only, no migration needed \u2014 defaults fill).",
       "plan": "Split into per-section schema modules composed into one exported ConfigSchema, preserving the single export.",
       "review": "2026-12-31"
     },

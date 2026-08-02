@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-02T16:54:26.324Z",
+  "generatedAt": "2026-08-02T22:22:21.432Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.0.1",
@@ -33,7 +33,9 @@
     },
     "devDependencies": {
       "@types/bun": "latest",
+      "axe-core": "^4.12.1",
       "dependency-cruiser": "^17.0.0",
+      "jsdom": "^30.0.1",
       "typescript": "^5.5.0"
     },
     "files": [
@@ -50,10 +52,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 496,
-    "testFiles": 192,
+    "sourceFiles": 514,
+    "testFiles": 211,
     "cliCommands": 41,
-    "daemonRoutes": 98,
+    "daemonRoutes": 104,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -66,7 +68,7 @@
     },
     {
       "path": ".dependency-cruiser.cjs",
-      "bytes": 14026
+      "bytes": 14303
     },
     {
       "path": ".gitattributes",
@@ -74,7 +76,7 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 543
+      "bytes": 667
     },
     {
       "path": "CHANGED-FILES.txt",
@@ -86,11 +88,11 @@
     },
     {
       "path": "CODEOWNERS",
-      "bytes": 2994
+      "bytes": 4561
     },
     {
       "path": "CONTRIBUTING.md",
-      "bytes": 7146
+      "bytes": 8387
     },
     {
       "path": "CRITICAL_FIXES.md",
@@ -234,7 +236,7 @@
     },
     {
       "path": "bun.lock",
-      "bytes": 10686
+      "bytes": 19273
     },
     {
       "path": "docker-compose.yml",
@@ -254,7 +256,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 3237
+      "bytes": 3953
     },
     {
       "path": "release.manifest.json",
@@ -281,6 +283,7 @@
     "src/cli/output.ts",
     "src/cli/route-decision.ts",
     "src/cli/router.ts",
+    "src/clients/daemon-client.generated.ts",
     "src/commands/agents.ts",
     "src/commands/ask-plan.ts",
     "src/commands/attacks.ts",
@@ -306,6 +309,7 @@
     "src/commands/session.ts",
     "src/commands/shield.ts",
     "src/commands/skills.ts",
+    "src/commands/telemetry.ts",
     "src/commands/trust.ts",
     "src/commands/uninstall.ts",
     "src/commands/workspace.ts",
@@ -401,6 +405,8 @@
     "src/cost/governor.ts",
     "src/cost/manager.ts",
     "src/cost/pricing.ts",
+    "src/daemon/api/openapi.ts",
+    "src/daemon/auth-page.ts",
     "src/daemon/control-api.ts",
     "src/daemon/dashboard.ts",
     "src/daemon/dashboard/client-script.ts",
@@ -413,13 +419,17 @@
     "src/daemon/routes/capabilities.routes.ts",
     "src/daemon/routes/chat.routes.ts",
     "src/daemon/routes/context.routes.ts",
+    "src/daemon/routes/contract.ts",
     "src/daemon/routes/control.routes.ts",
     "src/daemon/routes/environment.routes.ts",
     "src/daemon/routes/extensions.routes.ts",
     "src/daemon/routes/index.ts",
     "src/daemon/routes/memory.routes.ts",
+    "src/daemon/routes/meta.routes.ts",
     "src/daemon/routes/providers.routes.ts",
+    "src/daemon/routes/registry.ts",
     "src/daemon/routes/router.ts",
+    "src/daemon/routes/schemas.ts",
     "src/daemon/routes/shield.routes.ts",
     "src/daemon/routes/system.routes.ts",
     "src/daemon/routes/trust.routes.ts",
@@ -551,6 +561,16 @@
     "src/mcp/manager.ts",
     "src/mcp/registry.ts",
     "src/mcp/types.ts",
+    "src/observability/config.ts",
+    "src/observability/ids.ts",
+    "src/observability/index.ts",
+    "src/observability/instrument.ts",
+    "src/observability/logs.ts",
+    "src/observability/metrics.ts",
+    "src/observability/otlp.ts",
+    "src/observability/redaction.ts",
+    "src/observability/semconv.ts",
+    "src/observability/tracer.ts",
     "src/platform/capabilities/adapters.ts",
     "src/platform/capabilities/authority-diff.ts",
     "src/platform/capabilities/authority.ts",
@@ -764,10 +784,20 @@
     "src/voice/wake.ts"
   ],
   "tests": [
+    "test/a11y/auth-server.test.ts",
+    "test/a11y/browser-axe.test.ts",
+    "test/a11y/contrast.test.ts",
+    "test/a11y/static.test.ts",
     "test/agent.test.ts",
+    "test/api/client.test.ts",
+    "test/api/compat.test.ts",
+    "test/api/openapi.test.ts",
+    "test/api/v1-versioning.test.ts",
     "test/architecture/boundaries.test.ts",
     "test/architecture/one-store.test.ts",
+    "test/architecture/ownership.test.ts",
     "test/architecture/size-gate.test.ts",
+    "test/architecture/unit-tier.test.ts",
     "test/baseline/doctor.test.ts",
     "test/baseline/status.test.ts",
     "test/business/business.test.ts",
@@ -873,6 +903,10 @@
     "test/memory-v09.test.ts",
     "test/memory.test.ts",
     "test/multi-agent.test.ts",
+    "test/observability/envelope-trace.test.ts",
+    "test/observability/instrumentation-e2e.test.ts",
+    "test/observability/privacy.test.ts",
+    "test/observability/tracing.test.ts",
     "test/perf/binary-smoke.test.ts",
     "test/perf/binary-update.test.ts",
     "test/perf/boot-profile.test.ts",
@@ -882,6 +916,7 @@
     "test/perf/metrics-capture.test.ts",
     "test/perf/model-switch.test.ts",
     "test/perf/perf-gate.test.ts",
+    "test/perf/profile-gate.test.ts",
     "test/perf/render-perf.test.ts",
     "test/perf/scan-cache.test.ts",
     "test/perf/stall-detection.test.ts",
@@ -953,6 +988,10 @@
     "test/trust/ux.test.ts",
     "test/trust/verify.test.ts",
     "test/util/process.test.ts",
+    "test/ux/disclosure.test.ts",
+    "test/ux/mode-color.test.ts",
+    "test/ux/sus.test.ts",
+    "test/ux/undo.test.ts",
     "test/voice.test.ts",
     "test/workflow/engine.test.ts",
     "test/workflow/types.test.ts"
@@ -1411,6 +1450,13 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/meta.routes.ts",
+      "id": "meta.apiRoot.get",
+      "method": "GET",
+      "path": "/api",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/agents.routes.ts",
       "id": "agents.list",
       "method": "GET",
@@ -1677,6 +1723,13 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.undo",
+      "method": "POST",
+      "path": "/api/context/undo",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/control.routes.ts",
       "id": "control.approve",
       "method": "POST",
@@ -1831,6 +1884,13 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/meta.routes.ts",
+      "id": "meta.metrics.get",
+      "method": "GET",
+      "path": "/api/metrics",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/providers.routes.ts",
       "id": "models.list",
       "method": "GET",
@@ -1849,6 +1909,13 @@
       "id": "models.test",
       "method": "POST",
       "path": "/api/models/test",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/meta.routes.ts",
+      "id": "meta.openapi.get",
+      "method": "GET",
+      "path": "/api/openapi.json",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -2025,6 +2092,13 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/meta.routes.ts",
+      "id": "meta.traces.get",
+      "method": "GET",
+      "path": "/api/traces/recent",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/trust.routes.ts",
       "id": "trust.get",
       "method": "GET",
@@ -2057,6 +2131,13 @@
       "id": "workspaces.switch",
       "method": "POST",
       "path": "/api/workspaces/switch",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "auth.js.get",
+      "method": "GET",
+      "path": "/assets/auth.js",
       "auth": "local bearer token or dashboard query token"
     },
     {

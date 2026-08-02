@@ -257,6 +257,10 @@ module.exports = {
           "^src/(core/types|agents/types|interfaces/shell/types|skills/marketplace-backend-types)\\.ts$",
           // Reached only through dynamic/CLI dispatch.
           "^src/(automation/cron|cost/estimate|i18n/strings)\\.ts$",
+          // Generated typed API client — published for external integrators
+          // (Art. XVIII); regenerated and checked by `bun run client:check`.
+          // XR itself speaks to the daemon over plain fetch.
+          "^src/clients/daemon-client\\.generated\\.ts$",
         ],
       },
       to: {},

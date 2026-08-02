@@ -219,8 +219,25 @@ export function card(title: string, body: string[], width: number, focus = false
 
 // ── Composer prompt ───────────────────────────────────────────────────────────
 
+/**
+ * Phase 8 · T4 — one canonical mode→colour map for the whole shell.
+ * Before Phase 8 the header breadcrumb painted `plan` violet while the
+ * composer chip painted every mode cyan — the same state looked different on
+ * different surfaces. All mode chips must go through this helper so the
+ * mapping can never drift again. Colour is ALWAYS redundant with the mode
+ * word (never the only signal):
+ *   agent → cyan   (write authority: the agent can change things)
+ *   plan  → violet (deliberation: proposes, never executes)
+ *   ask   → dim    (read-only question answering)
+ */
+export function modePaint(mode: string): string {
+  if (mode === "agent") return xrCyan(mode);
+  if (mode === "plan") return xrViolet(mode);
+  return xrDim(mode); // ask — and any future read-only mode
+}
+
 export function composerPrompt(mode: string, busy: boolean): string {
-  const modeChip = busy ? xrAmber("busy") : xrCyan(mode);
+  const modeChip = busy ? xrAmber("busy") : modePaint(mode);
   return `${xrBold(xrCyan("xr"))} ${xrDim("[")}${modeChip}${xrDim("]")} ${xrCyan("›")}`;
 }
 

@@ -24,8 +24,15 @@ import {
  * Recorded from the post-Phase-4-T5 implementation with
  * `dashboardHtml("TESTTOKEN")`. Bump deliberately when the dashboard is
  * intentionally changed — the pin is a deliberate-change guard.
+ *
+ * Phase 8 · T3 bump (2026-08-02, WCAG 2.2 AA conformance work — DELIBERATE):
+ *   · nav anchors → natively operable <button>s; aria-current state machine;
+ *   · skip link, single <main> landmark, palette as modal combobox dialog;
+ *   · every form control labelled; decorative SVGs hidden from AT;
+ *   · tokens raised for AA contrast; :focus-visible indicator, 24px targets;
+ *   · reduced-motion support; live-region toasts; panel focus management.
  */
-const POST_PHASE4_SHA256 = "39878b3999887e079b50fb02972d0dc9764076a6113c8052673d650fb6ad1922";
+const POST_PHASE4_SHA256 = "c5b86136815360aafb5d2e585683e0f7a8f19e5eb55b35b8d631b900e3308957";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {

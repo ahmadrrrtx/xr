@@ -29,6 +29,39 @@ bun run src/index.ts "summarise this repository"
 
 ---
 
+## Your first day: the fast loop
+
+The full suite is the gate for merging, not for editing. While you work, run the
+**unit tier** — 19 curated files covering the invariants a first PR can actually
+break (architecture boundaries, API contract, trust gates, core semantics,
+dashboard/a11y/UX statics):
+
+```bash
+bun run unit-tier      # ~1.4s on a dev laptop; CI fails if it ever exceeds 5s
+```
+
+Then before pushing:
+
+```bash
+bun test               # full suite
+bun run ci             # every gate CI will run against your PR
+```
+
+A first PR within a day is realistically scoped as:
+
+1. **Orient (≤1 h):** §Architecture boundaries below; [`docs/OWNERSHIP.md`](docs/OWNERSHIP.md)
+   to see who owns the area you are touching; the newest ADRs in
+   [`docs/adr/`](docs/adr/) for the decisions you must not fight.
+2. **Change:** one logical change; add or adjust the tests that prove the effect.
+3. **Verify:** `bun run unit-tier` while editing, `bun test && bun run ci` at the end.
+4. **PR:** fill the template's honesty checklist; `CODEOWNERS` routes review
+   automatically.
+
+If any step on this path takes a new contributor materially longer than described,
+that gap is a bug — file it as a DX issue, not a documentation complaint.
+
+---
+
 ## The four rules that get PRs rejected fastest
 
 ### 1. No success without a verified effect

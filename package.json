@@ -23,7 +23,9 @@
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "ci": "bun run typecheck && bun test && bun run release:check && bun run claim-lint && bun run baseline:inventory && bun run ci-capability-gate && bun run boundaries && bun run size-gate && bun run hot-path-lint",
+    "ci": "bun run typecheck && bun test && bun run release:check && bun run claim-lint && bun run baseline:inventory && bun run ci-capability-gate && bun run api:schema:check && bun run client:check && bun run api:compat && bun run boundaries && bun run size-gate && bun run hot-path-lint && bun run ownership:check",
+    "ownership:generate": "bun run scripts/ownership-map.ts",
+    "ownership:check": "bun run scripts/ownership-map.ts --check",
     "xr": "bun run src/index.ts",
     "cli:help": "bun run src/index.ts help",
     "cli:doctor": "bun run src/index.ts doctor",
@@ -48,7 +50,14 @@
     "sbom": "bun run scripts/sbom.ts",
     "supply:check": "bun run scripts/license-check.ts && bun run scripts/sbom.ts --out /tmp/xr-sbom.json",
     "verify-release": "bun run scripts/verify-release.ts",
-    "ci-capability-gate": "bun run scripts/ci-capability-gate.ts"
+    "ci-capability-gate": "bun run scripts/ci-capability-gate.ts",
+    "api:schema:generate": "bun run scripts/generate-openapi.ts --write",
+    "api:schema:check": "bun run scripts/generate-openapi.ts --check",
+    "api:compat": "bun run scripts/api-compat.ts",
+    "client:generate": "bun run scripts/generate-client.ts --write",
+    "client:check": "bun run scripts/generate-client.ts --check",
+    "profile:gate": "bun run scripts/profile-gate.ts",
+    "unit-tier": "bun run scripts/unit-tier.ts"
   },
   "repository": {
     "type": "git",
@@ -79,7 +88,9 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "axe-core": "^4.12.1",
     "dependency-cruiser": "^17.0.0",
+    "jsdom": "^30.0.1",
     "typescript": "^5.5.0"
   },
   "engines": {
