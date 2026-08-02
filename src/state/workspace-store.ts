@@ -1598,12 +1598,21 @@ export class WorkspaceStore {
 
   /**
    * Narrow prepared-statement passthrough required by BusinessDatabase
-   * (src/business/core/database.ts), which is intentionally adapter-based so
+   * (extensions/business-os/src/core/database.ts), which is intentionally adapter-based so
    * Business OS runs on the SAME unified connection as everything else.
    * New XR code should use the typed repos — not raw SQL.
    */
   prepare(sql: string): ReturnType<Database["prepare"]> {
     return this.db.prepare(sql);
+  }
+
+  /**
+   * Phase 7 · T8 — narrow statement passthrough for the Business OS L0
+   * contract (xr_l0_* tables) on the SAME unified connection (single
+   * writer). Same discipline as `prepare`: typed repos preferred elsewhere.
+   */
+  query(sql: string): ReturnType<Database["query"]> {
+    return this.db.query(sql);
   }
 
   /** Transaction passthrough for BusinessDatabase migrations (single writer). */

@@ -13,6 +13,8 @@ import { hashEntrypoint, hashPluginTree, loadPlugin, validatePlugin, type LoadRe
 import { loadPluginSkills } from "./skills.ts";
 import type { LoadedSkill } from "../skills/loader.ts";
 import { SENSITIVE_PERMISSIONS, type PermissionScope, type PluginCommand, type PluginContributions, type PluginManifest, type PluginStatus, type PluginTool } from "./types.ts";
+import { CapabilityProvenanceStore } from "../platform/capabilities/provenance.ts";
+import { capabilityId } from "../platform/capabilities/types.ts";
 
 export interface LoadedPlugin {
   id: string;
@@ -26,6 +28,20 @@ export interface LoadedPlugin {
 
 function safeRollbackVersion(version: string | undefined): string {
   return (version ?? "unknown").replace(/[^a-z0-9._-]/gi, "_").slice(0, 80);
+}
+
+/**
+ * Phase 7 · T1 — record provenance events from the plugin plane.
+ * Best-effort derived evidence: a provenance write failure must never break an
+ * install/rollback (the registry remains authoritative); we surface the
+ * problem on stderr instead of swallowing it silently.
+ */
+function recordProvenance(record: (store: CapabilityProvenanceStore) => void): void {
+  try {
+    record(new CapabilityProvenanceStore());
+  } catch (e) {
+    console.warn(`[provenance] plugin event not recorded: ${(e as Error).message}`);
+  }
 }
 
 function rollbackSnapshotDir(dest: string, version: string | undefined): string {
@@ -128,6 +144,12 @@ export class PluginManager {
       entry.history = [...(previousEntry?.history ?? []), ...(entry.history ?? [])].slice(-100);
       this.registry.upsert(entry);
       this.store.audit("plugin.install", { plugin: manifest.id, version: manifest.version, granted, enabled: entry.enabled, treeHash });
+      const cid = capabilityId("plugin", manifest.id);
+      recordProvenance((p) => p.recordEvent(cid, hadPrevious ? "update" : "install", {
+        actor: "user",
+        detail: `${hadPrevious ? "updated to" : "installed"} v${manifest.version}${entry.enabled ? " (enabled)" : ""}`,
+        outcome: { status: "success", detail: "plugin staged, validated and registry-committed" },
+      }));
       return { ok: true, manifest, requestedPermissions: granted, warnings: prep.warnings };
     } catch (e) {
       try { if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true }); } catch {}
@@ -144,6 +166,7 @@ export class PluginManager {
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
     this.registry.remove(id);
     this.store.audit("plugin.remove", { plugin: id });
+    recordProvenance((p) => p.recordEvent(capabilityId("plugin", id), "remove", { actor: "user", detail: "plugin uninstalled", outcome: { status: "success" } }));
     return { ok: true };
   }
 
@@ -163,6 +186,7 @@ export class PluginManager {
     this.registry.setEnabled(id, true);
     this.registry.record(id, "enable");
     this.store.audit("plugin.enable", { plugin: id });
+    recordProvenance((p) => p.recordEvent(capabilityId("plugin", id), "enable", { actor: "user", detail: "enabled" }));
     return { ok: true };
   }
 
@@ -176,6 +200,7 @@ export class PluginManager {
     this.registry.setHealth(id, { state: "disabled", checkedAt: Date.now() });
     this.registry.record(id, "disable");
     this.store.audit("plugin.disable", { plugin: id });
+    recordProvenance((p) => p.recordEvent(capabilityId("plugin", id), "disable", { actor: "user", detail: "disabled" }));
     return { ok: true };
   }
 
@@ -186,6 +211,7 @@ export class PluginManager {
     this.registry.quarantine(id, reason);
     this.registry.record(id, "quarantine", reason);
     this.store.audit("plugin.quarantine", { plugin: id, reason });
+    recordProvenance((p) => p.recordEvent(capabilityId("plugin", id), "quarantine", { actor: "user", detail: reason, outcome: { status: "failure", detail: reason } }));
     return { ok: true };
   }
 
@@ -232,6 +258,11 @@ export class PluginManager {
       next.history = [...(entry.history ?? []), { at: Date.now(), action: "rollback" as const, detail: snapshot.version }].slice(-100);
       this.registry.upsert(next);
       this.store.audit("plugin.rollback", { plugin: id, version: snapshot.version, restoredAuthority: false });
+      recordProvenance((p) => p.recordEvent(capabilityId("plugin", id), "rollback", {
+        actor: "user",
+        detail: snapshot.version,
+        outcome: { status: "success", detail: "snapshot restored and re-validated; permissions revoked pending review" },
+      }));
       return { ok: true };
     } catch (e) {
       return { ok: false, reason: (e as Error).message };

@@ -7,6 +7,7 @@ import { SkillLifecycleManager } from "./lifecycle.ts";
 import { SkillDependencyResolver } from "./dependencies.ts";
 import { SkillPermissionManager } from "./permissions.ts";
 import { readSkillInstructions } from "./manifest.ts";
+import { effectiveToolAllowlist } from "./tool-allowlist.ts";
 import type { UnifiedSkillRecord } from "./adapters.ts";
 import type { SkillInstallation } from "./schema.ts";
 
@@ -60,11 +61,13 @@ export class UnifiedSkillRuntime {
       const body = record.dir.includes(":") ? record.manifest.description : readSkillInstructions(record.dir, record.manifest);
       const deps = new SkillDependencyResolver(this.registry.list()).resolve(record.manifest.id);
       const perms = this.permissions.report(record.manifest);
+      const allowlist = effectiveToolAllowlist(record.manifest);
       return [
         `## Active Skill: ${record.manifest.name} (${record.manifest.id})`,
         `Adapter: ${record.kind}`,
+        `Type: ${record.skillType}${record.skillType === "prompt-pack" ? " (prompt pack — guidance only, not executable)" : ""}`,
         body,
-        `Declared tools: ${record.manifest.tools.join(", ") || "none"}`,
+        `Allowed tools (allow-list): ${allowlist.join(", ") || "none — default-deny"}`,
         `Dependencies: ${deps.statuses.map((s) => `${s.dependency.kind}:${s.dependency.id}=${s.satisfied ? "ok" : "missing"}`).join(", ") || "none"}`,
         `Permissions: ${[...perms.safe, ...perms.dangerous].map((p) => `${p.scope}${p.dangerous ? "!" : ""}`).join(", ") || "none"}`,
       ].join("\n");

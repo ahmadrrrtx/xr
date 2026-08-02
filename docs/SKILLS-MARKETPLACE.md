@@ -51,3 +51,39 @@ Every Skill declares permissions with a reason. Dangerous permissions include fi
 ## Publishing model
 
 `xr skill publish` creates a package and marketplace metadata in the local outbox. This keeps publishing transparent and reviewable before sync to any hosted registry. `xr skill package` produces a `.xrs` package with a tree checksum; import verifies the checksum before installation.
+
+---
+
+# Phase 7 — Skill quality gates
+
+## Typed labels (Art. XV.2)
+
+Every skill carries a constitutional type: `executable` / `connector` /
+`prompt-pack` / `knowledge-pack` / `experimental` (declared via
+`skillType` in `xr-skill.json`, or derived). Counts never inflate
+capability — a prompt-pack is guidance, never an executable.
+
+```bash
+xr skills types                    # honest per-type counts
+xr skills list --type executable   # filter by type
+```
+
+## Enforced tool allow-lists (non-permissive)
+
+`manifest.tools` is now ENFORCED: wildcards are refused at install, unknown
+tool names are flagged, and the runtime context shows `Allowed tools
+(allow-list): … | none — default-deny`. A skill that declares no tools gets
+an empty allow-list.
+
+## Permissions are explicit (auto-approve removed)
+
+Third-party skills install with an **empty permission grant** unless the
+operator explicitly grants (`--grant`). Bundled first-party skills keep
+non-dangerous auto-grants (they ship with XR and are scanned in CI).
+Permission escalation on update always requires review.
+
+## Description injection guard
+
+Descriptions containing `Permissions:`, `tools:`, `system:` or similar
+routing/authority-injection markers are REJECTED by the manifest-security
+scanner — a description can never grant authority or declare tools.

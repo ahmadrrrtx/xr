@@ -39,17 +39,33 @@ export interface BusinessExecutionParams {
   idempotencyKey?: string;
 }
 
+export interface EffectVerifier {
+  /** Deterministic check that the operation's side effect actually landed. */
+  verify(params: BusinessExecutionParams): { ok: boolean; detail?: string };
+}
+
 export class ExecutionBridge {
   constructor(private deps: ExecutionBridgeDeps) {}
 
   /**
    * Execute a business operation through canonical execution fabric.
    * Returns executionId and records execution.
+   *
+   * Phase 7 · T8 — NO SIMULATED SUCCESS (Constitution Art. XVI.4): an
+   * outcome of 'succeeded' is recorded ONLY when a deterministic effect
+   * verifier confirms the side effect landed (record row / artifact /
+   * audit append). Without a verifier the outcome is 'failed' (fail-closed),
+   * never an assumed success.
    */
-  async executeBusinessAction(params: BusinessExecutionParams): Promise<{
+  async executeBusinessAction(
+    params: BusinessExecutionParams,
+    effectVerifier?: EffectVerifier,
+  ): Promise<{
     executionId: string;
     outcome: 'succeeded' | 'failed' | 'denied' | 'requires_approval';
     durationMs: number;
+    verified?: boolean;
+    verificationDetail?: string;
   }> {
     const executionId = `exec_${randomUUID().slice(0, 12)}`;
     const start = Date.now();
@@ -58,7 +74,8 @@ export class ExecutionBridge {
     if (params.idempotencyKey) {
       const existing = this.checkIdempotency(params.workspaceId, params.idempotencyKey);
       if (existing) {
-        return { executionId: existing.executionId, outcome: 'succeeded', durationMs: 0 };
+        // Idempotent replay: the effect was verified on the first run.
+        return { executionId: existing.executionId, outcome: existing.outcome === 'succeeded' ? 'succeeded' : 'failed', durationMs: 0, verified: existing.outcome === 'succeeded' };
       }
     }
 
@@ -83,6 +100,58 @@ export class ExecutionBridge {
         }
       }
 
+      // Phase 7 · T8 — EFFECT-VERIFIED OUTCOME (no simulated success):
+      // a deterministic verifier must confirm the side effect landed.
+      let verified = false;
+      let verificationDetail: string | undefined;
+      if (effectVerifier) {
+        try {
+          const v = effectVerifier.verify(params);
+          verified = v.ok;
+          verificationDetail = v.detail;
+        } catch (e) {
+          verified = false;
+          verificationDetail = `effect verifier threw: ${(e as Error).message}`;
+        }
+      } else {
+        verificationDetail = 'no effect verifier provided — outcome recorded as failed (fail-closed)';
+      }
+      if (!verified) {
+        // Fail-closed: record the failure; NEVER record an unverified success.
+        this.persistExecution({
+          executionId,
+          orgId: params.orgId,
+          workspaceId: params.workspaceId,
+          module: params.module,
+          entity: params.entity,
+          entityId: params.entityId,
+          operation: params.operation,
+          actorKind: params.actor.kind,
+          actorId: params.actor.id,
+          workflowDefinitionId: params.workflowRef?.definitionId,
+          workflowRunId: params.workflowRef?.runId,
+          workflowNodeId: params.workflowRef?.nodeId,
+          capabilityKind: params.capability.kind,
+          capabilityName: params.capability.name,
+          outcome: 'failed',
+          durationMs: Date.now() - start,
+          idempotencyKey: params.idempotencyKey,
+          trustTier: trustClassification?.tier,
+          createdAt: new Date().toISOString(),
+        });
+        this.deps.audit.log({
+          orgId: params.orgId,
+          workspaceId: params.workspaceId,
+          actorId: params.actor.id,
+          actorType: params.actor.kind === 'worker' ? 'worker' : 'member',
+          action: `${params.module}.${params.entity}.execution_unverified`,
+          resource: params.entity,
+          resourceId: params.entityId,
+          metadata: { executionId, verificationDetail },
+        });
+        return { executionId, outcome: 'failed', durationMs: Date.now() - start, verified: false, verificationDetail };
+      }
+
       // Record execution via canonical service if available, else local persistence
       let recordedId = executionId;
       if (this.deps.executionService?.recordExecution) {
@@ -94,7 +163,7 @@ export class ExecutionBridge {
             capability: params.capability,
             inputSummary: params.inputSummary,
             outcome: 'succeeded',
-            message: `Business action ${params.module}.${params.entity}.${params.operation} via canonical fabric`,
+            message: `Business action ${params.module}.${params.entity}.${params.operation} via canonical fabric (effect-verified)`,
             durationMs: Date.now() - start,
           });
         } catch (e) {
@@ -138,10 +207,10 @@ export class ExecutionBridge {
         action: `${params.module}.${params.entity}.executed`,
         resource: params.entity,
         resourceId: params.entityId,
-        metadata: { executionId: recordedId, capability: params.capability, workflowRef: params.workflowRef, trust: trustClassification },
+        metadata: { executionId: recordedId, capability: params.capability, workflowRef: params.workflowRef, trust: trustClassification, verified: true, verificationDetail },
       });
 
-      return { executionId: recordedId, outcome: 'succeeded', durationMs: Date.now() - start };
+      return { executionId: recordedId, outcome: 'succeeded', durationMs: Date.now() - start, verified: true, verificationDetail };
     } finally {
       this.releaseLease(params.workspaceId, leaseKey);
     }

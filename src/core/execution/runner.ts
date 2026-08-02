@@ -51,6 +51,13 @@ export interface EnvelopeContext {
   readonly hardened?: boolean;
   /** Phase 4 · T4 — explicit raw-IP/loopback destinations (local runtimes). */
   readonly allowedHosts?: readonly string[];
+  /**
+   * Phase 7 · T1 — optional tool-use recorder forwarded to every tool call of
+   * the run (feeds the capability provenance graph). Plain callback type:
+   * the kernel stays free of platform imports; the wire-up lives in the
+   * caller (AgentService) which resolves it from the service registry.
+   */
+  readonly onToolUse?: (info: { tool: string; ok: boolean; error?: string }) => void;
 }
 
 /**
@@ -104,6 +111,7 @@ export async function runEnvelope(
     ...(context.trust ? { trust: context.trust } : {}),
     ...(context.hardened !== undefined ? { hardened: context.hardened } : {}),
     ...(context.allowedHosts ? { allowedHosts: context.allowedHosts } : {}),
+    ...(context.onToolUse ? { onToolUse: context.onToolUse } : {}),
     runId: envelope.evidence.envelopeId,
   };
 

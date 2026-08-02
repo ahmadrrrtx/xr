@@ -5,9 +5,9 @@
  * All business operations must pass through these policies.
  */
 
-import type { BusinessDatabase } from '../business/core/database.ts';
-import type { RBACManager } from '../business/core/rbac.ts';
-import type { AuditTrail } from '../business/core/audit.ts';
+import type { BusinessDatabase } from '../../extensions/business-os/src/core/database.ts';
+import type { RBACManager } from '../../extensions/business-os/src/core/rbac.ts';
+import type { AuditTrail } from '../../extensions/business-os/src/core/audit.ts';
 
 export interface SecurityPolicy {
   id: string;

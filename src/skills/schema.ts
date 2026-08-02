@@ -32,6 +32,14 @@ const SemverRange = z.string().min(1).max(80).regex(/^[\d.\sxX*<>=~^|-]+$/, "inv
 
 export const SKILL_SCHEMA_VERSION = 1;
 
+/**
+ * Phase 7 · T5 — constitutional skill TYPES (Art. XV.2, §10.5).
+ * Typed labels keep counts honest: a prompt-pack is never counted as an
+ * executable capability.
+ */
+export const SKILL_TYPES = ["executable", "connector", "prompt-pack", "knowledge-pack", "experimental"] as const;
+export type SkillType = (typeof SKILL_TYPES)[number];
+
 export const SKILL_CATEGORIES = [
   "developer",
   "business",
@@ -221,7 +229,24 @@ export const SkillManifestSchema = z.object({
     reviewedBy: z.string().max(160).optional(),
     reviewedAt: z.string().max(80).optional(),
   }).default({}),
+  // ── Phase 7 · T4 — additive manifest-security fields (all optional) ──────
+  sbom: z.object({ ref: z.string().max(800), format: z.string().max(40).optional() }).optional(),
+  dependencyLocks: z.array(z.object({ id: z.string().min(1).max(160), version: z.string().min(1).max(120), hash: z.string().regex(/^[a-f0-9]{64}$/i).optional() })).optional(),
+  // ── Phase 7 · T5 — constitutional skill type label (Art. XV.2) ───────────
+  skillType: z.enum(SKILL_TYPES).optional(),
 });
+
+/** Derive the constitutional skill type when the manifest does not declare it. */
+export function deriveSkillType(manifest: Pick<SkillManifest, "skillType" | "contributions" | "content" | "mcp" | "plugins" | "tools">): SkillType {
+  if (manifest.skillType) return manifest.skillType;
+  const hasExecutable = manifest.contributions.commands.length > 0 || manifest.contributions.computerActions.length > 0 || manifest.contributions.workflows.length > 0 || manifest.tools.length > 0;
+  const hasConnector = manifest.mcp.length > 0 || manifest.plugins.length > 0;
+  const hasKnowledge = manifest.content.knowledge.length > 0 || manifest.content.promptTemplates.length > 0;
+  if (hasConnector) return "connector";
+  if (hasExecutable) return "executable";
+  if (hasKnowledge) return "knowledge-pack";
+  return "prompt-pack";
+}
 export type SkillManifest = z.infer<typeof SkillManifestSchema>;
 
 export const PublisherSchema = z.object({

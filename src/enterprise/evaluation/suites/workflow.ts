@@ -4,7 +4,7 @@
  * Calls real contracts:
  *   - src/execution/workflow/*      (definitions, versioning, integrity, human gates)
  *   - src/platform/capabilities/*  (contract certification, descriptor validation)
- *   - src/business/core/* (journeys, authority boundaries)
+ *   - extensions/business-os/src/core/* (journeys, authority boundaries)
  */
 
 import { Database } from "bun:sqlite";
@@ -26,7 +26,14 @@ import { runCapabilityContractTests } from "../../../platform/capabilities/certi
 import { descriptorFromTool } from "../../../platform/capabilities/adapters.ts";
 import type { CapabilityDescriptor } from "../../../platform/capabilities/types.ts";
 import type { Tool } from "../../../core/types.ts";
-import { listAllJourneys } from "../../../business/core/journeys.ts";
+let _journeys: ((scope: string) => unknown[]) | null = null;
+async function listAllJourneysCached(scope: string): Promise<unknown[]> {
+  if (!_journeys) {
+    const mod = (await import(/* @vite-ignore */ new URL("../../../../extensions/business-os/src/core/journeys.ts", import.meta.url).pathname)) as { listAllJourneys?: (s: string) => unknown[] };
+    _journeys = mod.listAllJourneys ?? (() => []);
+  }
+  return _journeys(scope) as unknown[];
+}
 import { NO_EXTERNAL_EFFECTS, type ScenarioDefinition, type SuiteDefinition } from "../types.ts";
 import { verifyPredicate, verifyRecords, verifyState } from "../verifiers.ts";
 
@@ -519,7 +526,7 @@ const journeysAreDefined: ScenarioDefinition = {
   dimension: "business",
   set: "validation",
   determinism: "deterministic",
-  contracts: ["src/business/core/journeys.ts#listAllJourneys"],
+  contracts: ["extensions/business-os/src/core/journeys.ts#listAllJourneys"],
   profiles: [],
   offlineCapable: true,
   allowedEffects: NO_EXTERNAL_EFFECTS,
@@ -528,8 +535,8 @@ const journeysAreDefined: ScenarioDefinition = {
     "Verifies journey definitions exist and are well-formed. It does not execute a full business outcome, " +
       "which would require provider access outside the offline subset.",
   ],
-  run: (ctx) => {
-    const journeys = listAllJourneys();
+  run: async (ctx) => {
+    const journeys = await listAllJourneysCached("default");
     ctx.recordEffect({ kind: "state_transition", target: `business:journeys:${journeys.length}`, allowed: true });
 
     const wellFormed = journeys.every(

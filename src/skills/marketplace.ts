@@ -8,6 +8,10 @@ import { SkillMarketplaceStore, installedSkillsDir, packageCacheDir } from "./ma
 import { cachedScan } from "../util/scan-cache.ts";
 import { hashSkillTree, readSkillInstructions, readSkillManifest, safeResolve, skillDirName } from "./manifest.ts";
 import { SkillManifestSchema, type SkillInstallation, type SkillManifest, type SkillPermissionScope } from "./schema.ts";
+import { CapabilityProvenanceStore } from "../platform/capabilities/provenance.ts";
+import { capabilityId } from "../platform/capabilities/types.ts";
+import { validateToolAllowlist } from "./tool-allowlist.ts";
+import { allTools } from "../tools/registry.ts";
 
 export interface SkillCatalogEntry {
   manifest: SkillManifest;
@@ -83,9 +87,21 @@ function rollbackDir(skillId: string, version: string, now = Date.now()): string
   return join(packageCacheDir(), "rollback", skillDirName(skillId), `${now}-${version.replace(/[^a-z0-9._-]/gi, "_")}`);
 }
 
-function grantedFor(manifest: SkillManifest, options: SkillInstallOptions, existing?: SkillInstallation): SkillPermissionScope[] {
+/**
+ * Phase 7 · T5 — permission grants are explicit (default-deny). Bundled
+ * first-party skills may auto-grant non-dangerous scopes (they ship with XR
+ * and are scanned in CI); installed/third-party skills get an EMPTY grant
+ * unless the operator explicitly grants permissions. Auto-approve is removed.
+ */
+function grantedFor(
+  manifest: SkillManifest,
+  options: SkillInstallOptions,
+  existing?: SkillInstallation,
+  opts: { bundled?: boolean } = {},
+): SkillPermissionScope[] {
   const declared = new Set(manifest.permissions.map((p) => p.scope));
-  const requested = options.grantPermissions ?? existing?.grantedPermissions ?? manifest.permissions.filter((p) => !p.dangerous).map((p) => p.scope);
+  const auto = opts.bundled ? manifest.permissions.filter((p) => !p.dangerous).map((p) => p.scope) : [];
+  const requested = options.grantPermissions ?? existing?.grantedPermissions ?? auto;
   return [...new Set(requested.filter((p) => declared.has(p)))];
 }
 
@@ -93,6 +109,18 @@ function updatePermissionEscalation(manifest: SkillManifest, existing?: SkillIns
   if (!existing || options.grantPermissions) return [];
   const prev = new Set(existing.grantedPermissions ?? []);
   return [...new Set(manifest.permissions.map((p) => p.scope).filter((p) => !prev.has(p)))];
+}
+
+/**
+ * Phase 7 · T1 — record provenance events from the skill plane.
+ * Best-effort derived evidence; never breaks the marketplace operation.
+ */
+function recordSkillProvenance(record: (store: CapabilityProvenanceStore) => void): void {
+  try {
+    record(new CapabilityProvenanceStore());
+  } catch (e) {
+    console.warn(`[provenance] skill event not recorded: ${(e as Error).message}`);
+  }
 }
 
 function tokenize(text: string): string[] {
@@ -268,6 +296,14 @@ export class SkillMarketplace {
     const escalation = updatePermissionEscalation(manifest, existing, options);
     if (escalation.length) throw new Error(`update requests new permissions — review with --grant before update: ${escalation.join(", ")}`);
 
+    // Phase 7 · T5 — tool allow-list enforcement at install: wildcards and
+    // unknown tools are refused (never silently accepted).
+    const allowlist = validateToolAllowlist(manifest, allTools().map((t) => t.name));
+    if (!allowlist.ok) throw new Error(`skill tool allow-list invalid: ${allowlist.errors.join("; ")}`);
+    if (allowlist.warnings.length) {
+      for (const w of allowlist.warnings) console.warn(`[skill:${manifest.id}] ${w}`);
+    }
+
     const dest = sourceKind === "bundled" ? loaded.dir : join(installedSkillsDir(), skillDirName(manifest.id));
     const rollback = existing ? [...existing.rollback] : [];
     if (sourceKind !== "bundled") {
@@ -278,7 +314,7 @@ export class SkillMarketplace {
       }
       copyDir(loaded.dir, dest);
     }
-    const granted = grantedFor(manifest, options, existing);
+    const granted = grantedFor(manifest, options, existing, { bundled: sourceKind === "bundled" });
     const entry: SkillInstallation = {
       id: manifest.id,
       version: manifest.version,
@@ -294,6 +330,11 @@ export class SkillMarketplace {
       rollback: rollback.slice(0, 10),
     };
     this.store.upsertInstallation(entry);
+    recordSkillProvenance((p) => p.recordEvent(capabilityId("skill", manifest.id), existing ? "update" : "install", {
+      actor: "user",
+      detail: `${existing ? "updated to" : "installed"} v${manifest.version} (source: ${sourceKind})`,
+      outcome: { status: "success", detail: "skill tree staged, hashed and registry-committed" },
+    }));
     return entry;
   }
 
@@ -311,7 +352,11 @@ export class SkillMarketplace {
   remove(id: string): boolean {
     const install = this.store.getInstallation(id);
     if (install && install.source !== "bundled" && existsSync(install.dir)) rmSync(install.dir, { recursive: true, force: true });
-    return this.store.removeInstallation(id);
+    const removed = this.store.removeInstallation(id);
+    if (removed) {
+      recordSkillProvenance((p) => p.recordEvent(capabilityId("skill", id), "remove", { actor: "user", detail: "skill uninstalled", outcome: { status: "success" } }));
+    }
+    return removed;
   }
 
   enable(id: string): boolean { return this.store.setEnabled(id, true); }
@@ -327,11 +372,12 @@ export class SkillMarketplace {
     if (!existsSync(target.dir)) throw new Error("rollback snapshot files are missing");
     const loaded = readSkillManifest(target.dir);
     if (!loaded.ok || !loaded.manifest) throw new Error(`rollback snapshot invalid: ${loaded.errors.join("; ")}`);
+    const rolledBackVersion = loaded.manifest.version;
     const dest = install.source === "bundled" ? target.dir : join(installedSkillsDir(), skillDirName(id));
     if (install.source !== "bundled") copyDir(target.dir, dest);
     const entry: SkillInstallation = {
       ...install,
-      version: loaded.manifest.version,
+      version: rolledBackVersion,
       dir: dest,
       enabled: false,
       grantedPermissions: [],
@@ -339,6 +385,11 @@ export class SkillMarketplace {
       rollback: install.rollback.filter((r) => r !== target),
     };
     this.store.upsertInstallation(entry);
+    recordSkillProvenance((p) => p.recordEvent(capabilityId("skill", id), "rollback", {
+      actor: "user",
+      detail: rolledBackVersion,
+      outcome: { status: "success", detail: "snapshot restored; permissions revoked pending review" },
+    }));
     return entry;
   }
 
@@ -371,6 +422,10 @@ export class SkillMarketplace {
     if (existing?.pinned && !options.force) throw new Error(`${manifest.id} is pinned; use --force to replace`);
     const escalation = updatePermissionEscalation(manifest, existing, options);
     if (escalation.length) throw new Error(`update requests new permissions — review with --grant before update: ${escalation.join(", ")}`);
+
+    // Phase 7 · T5 — tool allow-list enforcement for packages too.
+    const allowlist = validateToolAllowlist(manifest, allTools().map((t) => t.name));
+    if (!allowlist.ok) throw new Error(`skill tool allow-list invalid: ${allowlist.errors.join("; ")}`);
 
     const dest = join(installedSkillsDir(), skillDirName(manifest.id));
     const tmp = `${dest}.stage-${Date.now()}`;
@@ -419,6 +474,11 @@ export class SkillMarketplace {
         rollback: rollback.slice(0, 10),
       };
       this.store.upsertInstallation(entry);
+      recordSkillProvenance((p) => p.recordEvent(capabilityId("skill", manifest.id), existing ? "update" : "install", {
+        actor: "user",
+        detail: `${existing ? "updated to" : "installed"} v${manifest.version} (package)`,
+        outcome: { status: "success", detail: "package extracted, checksum verified, atomically activated" },
+      }));
       return entry;
     } catch (e) {
       try { if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true }); } catch {}

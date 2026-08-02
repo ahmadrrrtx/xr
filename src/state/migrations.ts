@@ -229,7 +229,55 @@ function inferSensitivity(text: string): string {
   return "unknown";
 }
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2];
+/**
+ * Migration 3 — Phase 7 · T8 — Business OS thin L0 contract tables.
+ * The kernel holds ONLY this record/artifact contract; business domain
+ * schema lives in the extensions/business-os package. Additive; down drops
+ * the two L0 tables (business data in biz_* tables is untouched).
+ */
+const MIGRATION_3: Migration = {
+  version: 3,
+  name: "business_l0_contract",
+  up(store: WorkspaceStore) {
+    store.exec(`
+      CREATE TABLE IF NOT EXISTS xr_l0_records (
+        module TEXT NOT NULL,
+        entity TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        version INTEGER NOT NULL,
+        data TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        created_by TEXT NOT NULL,
+        updated_by TEXT NOT NULL,
+        reason TEXT,
+        evidence_refs TEXT NOT NULL DEFAULT '[]',
+        PRIMARY KEY (module, entity, entity_id, workspace_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_l0_records_ws ON xr_l0_records(workspace_id, updated_at);
+      CREATE TABLE IF NOT EXISTS xr_l0_artifacts (
+        artifact_id TEXT PRIMARY KEY,
+        module TEXT NOT NULL,
+        entity TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
+        workspace_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        content TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        metadata TEXT NOT NULL DEFAULT '{}',
+        content_hash TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_l0_artifacts_ref ON xr_l0_artifacts(module, entity, entity_id);
+    `);
+  },
+  down(store: WorkspaceStore) {
+    store.exec(`DROP TABLE IF EXISTS xr_l0_records; DROP TABLE IF EXISTS xr_l0_artifacts;`);
+  },
+};
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3];
 
 /** Latest known schema version. */
 export const LATEST_SCHEMA_VERSION: number = MIGRATIONS.reduce(

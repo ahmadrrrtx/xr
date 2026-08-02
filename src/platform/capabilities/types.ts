@@ -244,6 +244,35 @@ export interface CapabilityCostEstimate {
   notes?: string;
 }
 
+/**
+ * Phase 7 · T4 — additive manifest-security fields.
+ * All optional: pre-existing manifests keep validating unchanged.
+ */
+export interface CapabilitySbom {
+  /** Reference (path/URL) to the bill-of-materials for the capability. */
+  ref: string;
+  /** SBOM format, e.g. "spdx-json", "cyclonedx". */
+  format?: string;
+  /** Verified by XR (hash of the SBOM file matches manifest). */
+  verified?: boolean;
+}
+
+export interface CapabilityDependencyLock {
+  id: string;
+  version: string;
+  hash?: string;
+  type?: CapabilityType | "binary" | "npm" | "python" | "model" | "unknown";
+}
+
+export interface CapabilityManifestSecurity {
+  /** Bill of materials reference (Phase 7 · T4). */
+  sbom?: CapabilitySbom;
+  /** Dependency locks: id → version → hash (Phase 7 · T4). */
+  dependencyLocks?: CapabilityDependencyLock[];
+  /** Capability statement: what the capability does and what it needs. */
+  capabilityStatement?: string;
+}
+
 export interface CapabilityDescriptor {
   schemaVersion: typeof CAPABILITY_DESCRIPTOR_SCHEMA_VERSION;
   id: string;
@@ -277,6 +306,8 @@ export interface CapabilityDescriptor {
     maintenance: CapabilityTrustSignals["maintenanceStatus"];
   };
   cost: CapabilityCostEstimate;
+  /** Phase 7 · T4 — additive manifest-security evidence. */
+  security?: CapabilityManifestSecurity;
   tags: string[];
   keywords: string[];
 }
@@ -404,6 +435,11 @@ export const CapabilityDescriptorSchema = z.object({
   }),
   support: z.object({ homepage: z.string().optional(), repository: z.string().optional(), license: z.string().optional(), maintenance: z.enum(["active", "unknown", "deprecated", "abandoned"]) }),
   cost: z.object({ moneyUsd: z.number().optional(), tokens: z.number().optional(), networkBytes: z.number().optional(), diskBytes: z.number().optional(), cpu: z.enum(["low", "medium", "high", "unknown"]).optional(), notes: z.string().optional() }),
+  security: z.object({
+    sbom: z.object({ ref: z.string(), format: z.string().optional(), verified: z.boolean().optional() }).optional(),
+    dependencyLocks: z.array(z.object({ id: z.string(), version: z.string(), hash: z.string().optional(), type: z.string().optional() })).optional(),
+    capabilityStatement: z.string().optional(),
+  }).default({}),
   tags: strArr,
   keywords: strArr,
 });

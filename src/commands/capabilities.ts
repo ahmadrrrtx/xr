@@ -7,6 +7,23 @@ import type { CapabilityDescriptor, CapabilityType } from "../platform/capabilit
 
 type Parsed = { positional: string[]; flags: Record<string, string | boolean> };
 
+/** Compact human-readable authority diff for the CLI (Phase 7 · T4). */
+function renderDiffCli(diff: import("../platform/capabilities/authority-diff.ts").AuthorityDiff): string {
+  const c = diff.changes;
+  const lines: string[] = [];
+  lines.push(`  declared:  ${diff.next.declared.join(", ") || "none"}`);
+  lines.push(`  effective: ${diff.next.effective.join(", ") || "none"}`);
+  lines.push(`  denied:    ${diff.next.denied.join(", ") || "none"}`);
+  lines.push(`  risk tier: ${diff.next.riskTier}${c.riskTierChanged ? ` ${C.yellow(`(was ${c.riskTierFrom})`)}` : ""}`);
+  lines.push(`  data:      ${diff.next.dataScopes.join(", ") || "none"}`);
+  for (const p of c.newPermissions) lines.push(`  ${C.green(`+ ${p}`)}`);
+  for (const p of c.removedPermissions) lines.push(`  ${C.red(`- ${p}`)}`);
+  for (const p of c.newDenied) lines.push(`  ${C.yellow(`deny ${p}`)}`);
+  if (c.undetermined) lines.push(`  ${C.red("⚠ effective authority undetermined — fail closed")}`);
+  if (!diff.previous) lines.push("  (first enable — no previous authority recorded)");
+  return lines.join("\n");
+}
+
 function parse(args: string[]): Parsed {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
@@ -221,6 +238,144 @@ export class CapabilitiesCommand implements Command {
           console.log(`  certified:   ${h.certified}`);
           console.log(`  quarantined: ${h.quarantined}`);
           for (const [type, count] of Object.entries(h.byType)) console.log(`  ${type.padEnd(12)} ${count}`);
+          return;
+        }
+        case "rank": {
+          // Phase 7 · T3 — evidence-based ranking with "why" explanations.
+          const task = rest.join(" ").trim();
+          const q: CapabilityDiscoverQuery = {
+            task,
+            type: typeof flags.type === "string" ? flags.type as CapabilityType : undefined,
+            maxRiskTier: typeof flags["max-risk"] === "string" ? flags["max-risk"] as any : undefined,
+            locality: bool(flags, "local") ? "local" : undefined,
+            certified: bool(flags, "certified"),
+            limit: typeof flags.limit === "string" ? Number(flags.limit) : 15,
+          };
+          const ranked = service.rankEvidence(q);
+          if (json) {
+            return console.log(JSON.stringify(ranked.map((r) => ({ id: r.descriptor.id, score: r.trust.score, evidenceScore: r.trust.evidenceScore, components: r.trust.components, reasons: r.trust.reasons })), null, 2));
+          }
+          heading(`Capabilities by evidence${task ? `: ${task}` : ""} (popularity never decides rank)`);
+          for (const { descriptor: d, trust } of ranked) {
+            const pct = Math.round(trust.score * 100);
+            const sig = d.package.signatureStatus === "valid" ? "✓signed" : "unsigned";
+            const cert = d.certification.status;
+            console.log(`  ${String(pct).padStart(3)}%  ${d.id.padEnd(42)} ${sig} · ${cert} · ${d.permissions.effective.effective.length} perms`);
+          }
+          if (bool(flags, "why")) {
+            heading("Why each ranks (evidence reasons)");
+            for (const { descriptor: d, trust } of ranked) {
+              console.log(`\n  ${d.id} — ${Math.round(trust.score * 100)}%`);
+              for (const r of trust.reasons.slice(0, 6)) console.log(`    · ${r}`);
+            }
+          }
+          return;
+        }
+        case "trust": {
+          // Phase 7 · T3 — explain ONE capability's trust score.
+          const id = rest[0];
+          if (!id) { warn("usage: xr capabilities trust <type:id|id>"); return; }
+          const explained = service.explainTrust(id, { downloads: typeof flags.downloads === "string" ? Number(flags.downloads) : undefined });
+          if (!explained) { error(`capability not found or ambiguous: ${id}`); return; }
+          if (json) return console.log(JSON.stringify(explained, null, 2));
+          heading(`Trust evidence — ${id}`);
+          console.log(`  score: ${Math.round(explained.score * 100)}%  (evidence ${Math.round(explained.evidenceScore * 100)}%, popularity factor ${(explained.popularityFactor * 100).toFixed(0)}%)`);
+          for (const [k, v] of Object.entries(explained.components)) console.log(`  ${k.padEnd(12)} ${(v * 100).toFixed(0)}%`);
+          console.log("  reasons:");
+          for (const r of explained.reasons) console.log(`    · ${r}`);
+          return;
+        }
+        case "security": {
+          // Phase 7 · T4 — manifest security posture.
+          const id = rest[0];
+          if (!id) { warn("usage: xr capabilities security <type:id|id> [--strict]"); return; }
+          const report = service.securityReport(id, { strict: bool(flags, "strict") });
+          if (!report) { error(`capability not found or ambiguous: ${id}`); return; }
+          if (json) return console.log(JSON.stringify(report, null, 2));
+          const verdict = report.verdict === "reject" ? C.red("REJECT") : report.verdict === "flag" ? C.yellow("FLAG") : C.green("OK");
+          heading(`Manifest security — ${id}: ${verdict}`);
+          for (const c of report.checks) {
+            const mark = c.verdict === "reject" ? "✗" : c.verdict === "flag" ? "!" : "✓";
+            console.log(`  ${mark} ${c.name}: ${c.detail}`);
+          }
+          return;
+        }
+        case "diff": {
+          // Phase 7 · T4 — human-readable authority diff (pre-enable/update).
+          const id = rest[0];
+          if (!id) { warn("usage: xr capabilities diff <type:id|id>"); return; }
+          const md = service.authorityDiffMarkdown(id);
+          if (!md) { error(`capability not found or ambiguous: ${id}`); return; }
+          if (json) {
+            const diff = service.authorityDiff(id);
+            return console.log(JSON.stringify(diff, null, 2));
+          }
+          console.log(md);
+          return;
+        }
+        case "update": {
+          // Phase 7 · T2+T4 — TUF-gated update with authority diff shown pre-apply.
+          const id = rest[0];
+          const source = rest[1];
+          if (!id || !source) { warn("usage: xr capabilities update <type:id|id> <source-dir|.xrs|plugin-dir> [--tuf-metadata <path>] [--allow-unsigned] [--force]"); return; }
+          let metadata: import("../platform/capabilities/updates.ts").TufMetadataSet | undefined;
+          const tufPath = typeof flags["tuf-metadata"] === "string" ? flags["tuf-metadata"] : undefined;
+          if (tufPath) {
+            const { readFileSync } = await import("node:fs");
+            metadata = JSON.parse(readFileSync(tufPath, "utf8")) as import("../platform/capabilities/updates.ts").TufMetadataSet;
+          }
+          const r = await service.update(id, source, {
+            metadata,
+            allowUnsigned: bool(flags, "allow-unsigned"),
+            force: bool(flags, "force"),
+          });
+          if (json) return console.log(JSON.stringify(r, null, 2));
+          if (r.diff) {
+            heading(`Authority diff — ${id}`);
+            console.log(renderDiffCli(r.diff));
+          }
+          if (r.security && r.security.verdict !== "ok") {
+            heading("Manifest security (candidate)");
+            for (const c of r.security.checks) if (c.verdict !== "ok") console.log(`  ${c.verdict === "reject" ? "✗" : "!"} ${c.name}: ${c.detail}`);
+          }
+          if (r.tuf && !r.tuf.ok) {
+            heading("TUF update gate");
+            for (const reason of r.tuf.reasons) console.log(`  ✗ ${reason}`);
+          }
+          if (r.ok) ok(`update applied: ${id}; review/enable explicitly before use`);
+          else error(r.reason ?? "update failed");
+          return;
+        }
+        case "provenance": {
+          // Phase 7 · T1 — provenance graph query surface.
+          const id = rest[0];
+          if (!id) { warn("usage: xr capabilities provenance <type:id|id>"); return; }
+          const prov = service.provenanceOf(id);
+          if (!prov) { error(`no provenance recorded for: ${id}`); return; }
+          if (json) return console.log(JSON.stringify(prov, null, 2));
+          heading(`Provenance — ${id}`);
+          console.log(`  type:        ${prov.node.type}`);
+          console.log(`  version:     ${prov.node.version}   publisher: ${prov.node.publisherId}`);
+          console.log(`  first seen:  ${new Date(prov.summary.firstSeenAt).toISOString()}`);
+          console.log(`  last seen:   ${new Date(prov.summary.lastSeenAt).toISOString()}`);
+          console.log(`  installs: ${prov.summary.installs}  updates: ${prov.summary.updates}  rollbacks: ${prov.summary.rollbacks}  uses: ${prov.summary.uses} (${prov.summary.successes} ok / ${prov.summary.failures} fail)  quarantines: ${prov.summary.quarantines}`);
+          if (prov.outgoing.length) {
+            console.log("  edges:");
+            for (const e of prov.outgoing.slice(0, 10)) console.log(`    ${e.kind} → ${e.to}${e.version ? ` @${e.version}` : ""}`);
+          }
+          console.log("  recent events:");
+          for (const e of prov.events.slice(-8)) console.log(`    ${new Date(e.at).toISOString().slice(11, 19)} ${e.kind.padEnd(10)} ${e.detail ?? ""}${e.outcome ? ` [${e.outcome.status}]` : ""}`);
+          return;
+        }
+        case "used": {
+          // Phase 7 · T1 — "what did the agent use?"
+          const since = typeof flags.since === "string" ? Number(flags.since) : undefined;
+          const runId = typeof flags.run === "string" ? flags.run : undefined;
+          const used = service.whatWasUsed({ runId, since, limit: typeof flags.limit === "string" ? Number(flags.limit) : 25 });
+          if (json) return console.log(JSON.stringify(used, null, 2));
+          if (!used.length) { warn("no capability uses recorded yet"); return; }
+          heading("What the agent used (provenance)");
+          for (const u of used) console.log(`  ${u.capabilityId.padEnd(42)} ${String(u.uses).padStart(4)} uses  ${u.outcomes.success} ok / ${u.outcomes.failure} fail  last ${new Date(u.lastUsedAt).toISOString().slice(11, 19)}`);
           return;
         }
         default:

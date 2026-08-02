@@ -30,7 +30,7 @@ function boolFlag(flags: Record<string, string | boolean>, key: string): boolean
 function printUnifiedSkill(row: UnifiedSkillRecord, verbose = false): void {
   const m = row.manifest;
   const status = row.health === "healthy" ? C.green("healthy") : row.health === "disabled" ? C.dim("disabled") : C.amber(row.health);
-  console.log(`  ${C.bold(m.id)} ${C.dim(`v${m.version}`)} ${row.enabled ? C.green("enabled") : C.dim("disabled")} ${status} ${C.dim(row.kind)}`);
+  console.log(`  ${C.bold(m.id)} ${C.dim(`v${m.version}`)} ${row.enabled ? C.green("enabled") : C.dim("disabled")} ${status} ${C.dim(row.kind)} ${C.dim(`[${row.skillType}]`)}`);
   console.log(`    ${m.description}`);
   console.log(`    ${C.dim(m.categories.join(" / "))}  ${m.tags.slice(0, 8).map((t) => `#${t}`).join(" ")}`);
   if (verbose) {
@@ -89,9 +89,43 @@ export class SkillsCommand implements Command {
           const rows = service.listUnified();
           const category = typeof flags.category === "string" ? flags.category : undefined;
           const kind = typeof flags.kind === "string" ? flags.kind : undefined;
-          const visible = rows.filter((row) => (!category || row.manifest.categories.includes(category as any)) && (!kind || row.kind === kind));
+          const type = typeof flags.type === "string" ? flags.type : undefined;
+          const visible = rows.filter(
+            (row) =>
+              (!category || row.manifest.categories.includes(category as any)) &&
+              (!kind || row.kind === kind) &&
+              (!type || row.skillType === type),
+          );
           heading(`Unified Skills (${visible.length})`);
           for (const row of visible) printUnifiedSkill(row, boolFlag(flags, "verbose"));
+          return;
+        }
+
+        case "types": {
+          // Phase 7 · T5 — honest typed counts (Art. XV.2: counts never
+          // inflate capability; prompt-packs are never presented as
+          // executable).
+          const rows = service.listUnified();
+          const byType = new Map<string, number>();
+          const enabled = new Map<string, number>();
+          for (const row of rows) {
+            byType.set(row.skillType, (byType.get(row.skillType) ?? 0) + 1);
+            if (row.enabled) enabled.set(row.skillType, (enabled.get(row.skillType) ?? 0) + 1);
+          }
+          if (boolFlag(flags, "json")) {
+            console.log(JSON.stringify(
+              [...byType.entries()].map(([skillType, count]) => ({ skillType, count, enabled: enabled.get(skillType) ?? 0 })),
+              null, 2,
+            ));
+            return;
+          }
+          heading(`Skills by type (${rows.length} total)`);
+          for (const skillType of ["executable", "connector", "prompt-pack", "knowledge-pack", "experimental"]) {
+            const count = byType.get(skillType) ?? 0;
+            const en = enabled.get(skillType) ?? 0;
+            if (count === 0) continue;
+            console.log(`  ${skillType.padEnd(14)} ${String(count).padStart(4)} total  ${String(en).padStart(3)} enabled`);
+          }
           return;
         }
 

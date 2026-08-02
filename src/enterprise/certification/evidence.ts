@@ -125,7 +125,7 @@ export const PHASE12_CONTROLS: readonly ControlEvidence[] = Object.freeze([
     description: "Audit records are SHA-256 hash-chained; the chain is verifiable independently of export.",
     assurance: "technical",
     status: "implemented",
-    implementedIn: ["src/state/workspace-store.ts", "src/business/core/audit.ts"],
+    implementedIn: ["src/state/workspace-store.ts", "extensions/business-os/src/core/audit.ts"],
     testedBy: ["test/enterprise/audit-export.test.ts"],
     limitations: [
       "Hash chaining detects tampering; it does not prevent an operator with filesystem access from deleting the store. " +
