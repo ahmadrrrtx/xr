@@ -32,6 +32,7 @@ import { makeHandler } from "../../src/daemon/server.ts";
 // Playwright, so we declare the globals they touch locally.
 declare const document: any;
 declare const HTMLElement: any;
+declare const getComputedStyle: any;
 declare const axe: any;
 
 const REQUIRE_BROWSER = process.env.XR_A11Y_REQUIRE_BROWSER === "1";
@@ -87,6 +88,27 @@ afterAll(async () => {
 async function newPage(): Promise<Page> {
   browser ??= await chromium.launch();
   return browser.newPage();
+}
+
+/**
+ * Panels/dialogs activate with a fade from opacity 0 (styles.ts: viewFade /
+ * paletteScale, ≤150ms). axe-core's color-contrast blends through opacity, so
+ * a sweep that lands MID-ANIMATION reports a transient, nonexistent violation
+ * (the flake that raced CI: `#panel-voice .card-title` — a static panel that
+ * can only "fail" while its fade runs). A fixed wait long enough for a fast
+ * machine is not long enough for a contended runner, so we POLL for computed
+ * opacity 1: deterministic on any host, and it verifies the REAL CSS.
+ */
+async function settleSurface(page: Page, selector: string): Promise<void> {
+  await page.waitForTimeout(50); // let the activation animation start its first frames
+  await page.waitForFunction(
+    (sel) => {
+      const el = document.querySelector(sel);
+      return !!el && getComputedStyle(el).opacity === "1";
+    },
+    selector,
+    { timeout: 5_000, polling: 100 },
+  );
 }
 
 interface Violation { id: string; nodes: string[]; }
@@ -165,6 +187,7 @@ describe.skipIf(!HAS_CHROMIUM)("T3 live — dashboard axe sweep (every panel)", 
   test("zero axe violations on the initial dashboard", async () => {
     const page = await newPage();
     await signedInDashboard(page);
+    await settleSurface(page, ".panel.active");
     expect(await axeViolations(page)).toEqual([]);
     await page.close();
   }, 60_000);
@@ -182,7 +205,7 @@ describe.skipIf(!HAS_CHROMIUM)("T3 live — dashboard axe sweep (every panel)", 
     const failures: Record<string, Violation[]> = {};
     for (const panel of new Set(panels)) {
       await gotoPanel(page, panel);
-      await page.waitForTimeout(150);
+      await settleSurface(page, ".panel.active");
       const v = await page.evaluate(async (tags) => {
         // @ts-ignore
         const out = await axe.run(document, { runOnly: { type: "tag", values: tags } });
@@ -202,6 +225,7 @@ describe.skipIf(!HAS_CHROMIUM)("T3 live — dashboard axe sweep (every panel)", 
     await signedInDashboard(page);
     await page.keyboard.press("Control+k");
     await page.waitForSelector("#palette.open");
+    await settleSurface(page, "#palette.open");
     expect(await axeViolations(page)).toEqual([]);
     await page.close();
   }, 60_000);

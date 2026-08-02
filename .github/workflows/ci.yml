@@ -340,13 +340,15 @@ jobs:
             ${{ runner.os }}-bun-
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Cache perf baseline (same-host regression band)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/xr
-          key: perf-baseline-${{ runner.os }}-7.0.1
-          restore-keys: |
-            perf-baseline-${{ runner.os }}-
+      # NOTE (Phase-8 supply/perf fix): the "same-host regression band" cache
+      # was removed. The gate's warn-only/block flip is triggered by the mere
+      # PRESENCE of a previous host baseline — on ephemeral GitHub runners a
+      # restored cache comes from a DIFFERENT VM, which broke the same-host
+      # assumption and made the job pass on a PR's first run then fail its
+      # second (same tree). Without the cache every CI run is a first run:
+      # the band stays warn-only (visible in logs) while the CONSTITUTIONAL
+      # gate — absolute budgets in scripts/perf/budgets.json — still blocks.
+      # The band keeps working unchanged on persistent/self-hosted runners.
       - name: Hot-path sync-I/O lint
         run: bun run hot-path-lint
       - name: Performance regression gate (budgets + baseline)
