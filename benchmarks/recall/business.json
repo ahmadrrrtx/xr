@@ -1,0 +1,25 @@
+{
+  "domain": "business",
+  "description": "Business record memory: contracts, targets, vendor facts, onboarding.",
+  "items": [
+    { "id": "b_acme", "content": "The Acme Corporation contract renews on 2026-09-30 and includes a 5% annual uplift clause in section 4.2.", "type": "knowledge", "tags": ["contract", "acme"], "provenance": "business_record" },
+    { "id": "b_q1_old", "content": "The platform team's Q1 revenue target was set to 1.2M USD in the original annual plan.", "type": "knowledge", "tags": ["revenue", "q1", "plan"], "provenance": "business_record", "taskId": "task-q1" },
+    { "id": "b_q1_new", "content": "Correction (2026-02): after the enterprise pipeline review, the platform team's Q1 revenue target was revised to 1.35M USD.", "type": "knowledge", "tags": ["revenue", "q1", "plan", "correction"], "provenance": "business_record", "taskId": "task-q1", "supersedes": "b_q1_old" },
+    { "id": "b_vendor", "content": "The payment gateway vendor is Novapay; settlement is T+2 with a 1.9% blended fee.", "type": "knowledge", "tags": ["vendor", "payments"], "provenance": "business_record" },
+    { "id": "b_vendor_new", "content": "Correction (2026-04): the payment gateway was migrated from Novapay to AuricPay; settlement is now T+1 with a 1.7% blended fee.", "type": "knowledge", "tags": ["vendor", "payments", "correction"], "provenance": "business_record", "supersedes": "b_vendor" },
+    { "id": "b_onboard_1", "content": "Client onboarding step 1: countersign the MSA and log the signed copy in the vault before any work starts.", "type": "task_context", "tags": ["onboarding"], "taskId": "task-onboard" },
+    { "id": "b_onboard_2", "content": "Client onboarding step 2: after the MSA is logged, provision the client tenant with the starter template.", "type": "task_context", "tags": ["onboarding"], "taskId": "task-onboard" },
+    { "id": "b_onboard_3", "content": "Client onboarding step 3: once the tenant is live, schedule the kickoff workshop within five business days.", "type": "task_context", "tags": ["onboarding"], "taskId": "task-onboard" },
+    { "id": "b_noise_1", "content": "The support SLA for enterprise accounts is a 4-business-hour first response.", "type": "knowledge", "tags": ["sla", "support"], "provenance": "business_record" },
+    { "id": "b_noise_2", "content": "The invoicing run executes on the last business day of each month at 18:00 UTC.", "type": "knowledge", "tags": ["invoicing"], "provenance": "business_record" },
+    { "id": "b_noise_3", "content": "Office lease negotiations started in June; nothing is signed yet.", "type": "knowledge", "tags": ["office"], "provenance": "business_record" }
+  ],
+  "queries": [
+    { "id": "bq1", "competency": "accurate_retrieval", "query": "when does the Acme contract renew and what uplift applies?", "expectTop1": "b_acme" },
+    { "id": "bq2", "competency": "conflict_resolution", "query": "what is the platform team's current Q1 revenue target?", "expectTop1": "b_q1_new" },
+    { "id": "bq3", "competency": "test_time_learning", "query": "which payment gateway vendor processes payments now and on what fee?", "expectTop1": "b_vendor_new" },
+    { "id": "bq4", "competency": "long_range_consistency", "query": "client onboarding MSA tenant kickoff order", "expectInTop5": ["b_onboard_1", "b_onboard_2", "b_onboard_3"] },
+    { "id": "bq5", "competency": "accurate_retrieval", "query": "what first response SLA applies to enterprise support?", "expectTop1": "b_noise_1" },
+    { "id": "bq6", "competency": "accurate_retrieval", "query": "when does the monthly invoicing run execute?", "expectTop1": "b_noise_2" }
+  ]
+}

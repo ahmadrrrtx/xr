@@ -41,6 +41,12 @@ export interface BuildRegistryOptions {
     pluginTools?: () => readonly import("../core/types.ts").Tool[];
     mcpTools?: () => readonly import("../core/types.ts").Tool[];
     skillContext?: () => { prompt: string } | undefined;
+    /**
+     * Phase 6 · T2 — navigable memory tools, supplied by the surface that owns
+     * the ContextService (AgentService). Kept as a host hook so this module
+     * never opens a store itself (one-store law).
+     */
+    memoryTools?: () => readonly import("../core/types.ts").Tool[];
   };
   /** How many skills to select. Matches the pre-Phase-2 default of 4. */
   readonly skillLimit?: number;
@@ -123,6 +129,18 @@ export async function buildToolRegistry(
     }
   } catch (err) {
     diagnostics.push(`skills unavailable: ${describe(err)}`);
+  }
+
+  // ── 5. Phase 6 · T2 — navigable memory tools (opt-in by the surface) ──────
+  // Registered as core-kind: they are read-only observers of the one context
+  // store, subject to the same grant/integrity gates as prompt injection.
+  try {
+    if (options.hosts?.memoryTools) {
+      const tools = options.hosts.memoryTools();
+      if (tools.length > 0) registry.registerTools({ kind: "core", source: "context-memory", tools });
+    }
+  } catch (err) {
+    diagnostics.push(`memory tools unavailable: ${describe(err)}`);
   }
 
   return { registry, diagnostics };

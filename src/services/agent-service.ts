@@ -26,6 +26,7 @@ import {
 } from "../core/execution/envelope.ts";
 import { runEnvelope, type EnvelopeContext, type EnvelopeStores } from "../core/execution/runner.ts";
 import { buildToolRegistry } from "../tools/registry-builder.ts";
+import { buildMemoryTools } from "../context/tools.ts";
 import { ProviderService } from "./provider-service.ts";
 import { BudgetService } from "./budget-service.ts";
 import { ConfigService } from "./config-service.ts";
@@ -208,6 +209,25 @@ export class AgentService implements LifecycleHook {
             // Skills are best-effort; the degradation is reported as a
             // diagnostic by the builder rather than failing the run.
             return undefined;
+          }
+        },
+        // Phase 6 · T2 — navigable memory-as-tools. Same enable-condition as
+        // context injection: knowledge layer on AND memory enabled. The agent
+        // can now re-query memory mid-run instead of relying on the single
+        // snapshot assembled below; injection stays as the seed context.
+        memoryTools: () => {
+          try {
+            if (!config.knowledge?.enabled || !config.memory.enabled) return [];
+            const contextSvc = this.registry.tryResolve(Tokens.Context);
+            if (!contextSvc) return [];
+            return buildMemoryTools({
+              context: contextSvc,
+              requester: { kind: "agent", id: "primary", role: overrides.agentRole ?? "agent" },
+              lexicalOnly: config.knowledge.lexicalOnly,
+            });
+          } catch (err) {
+            // Reported as a diagnostic by the builder — never fails the run.
+            throw err;
           }
         },
       },

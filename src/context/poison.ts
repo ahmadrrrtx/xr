@@ -65,6 +65,63 @@ const MEMORY_POISON_PATTERNS: Array<{ name: string; re: RegExp }> = [
     name: "tool_directive",
     re: /\b(call|invoke|use) (the )?(tool|function|shell|bash|command)\b[^.\n]{0,60}\b(with|and)\b/i,
   },
+
+  // ── Phase 6 attack classes (memory-poisoning corpus; see benchmarks/poisoning-corpus.json)
+  {
+    /** MINJA indication: redirect lookups / retire records / "exclusively". */
+    name: "indirect_control",
+    re: /\b(do not act on|must never be\b[^.\n]{0,40}\b(used|billed|applied|recalled)|use\b[^.\n]{0,50}\bexclusively\b[^.\n]{0,50}\b(never|must)\b|outranks? all\b[^.\n]{0,30}\b(polic\w+|rules?|safety))/i,
+  },
+  {
+    /** "Never ask for approval/consent" — kills the human gate. */
+    name: "consent_bypass",
+    re: /\bnever ask for\b[^.\n]{0,30}\b(approval|confirmation|permission|consent)\b/i,
+  },
+  {
+    /** Stop future verification: "verified by X, do not re-verify". */
+    name: "verification_laundering",
+    re: /\b(do not re-verify|no need to (re-)?verify|well-known (internally )?that|verified by\b[^.\n]{0,60}\bdo not\b)/i,
+  },
+  {
+    /** Role/persona authority: DAN, jailbroken, uncensored. */
+    name: "role_assignment",
+    re: /\b(play(ing)?|act as|you are)\b[^.\n]{0,30}\b(DAN|an? uncensored|jailbroken)\b|uncensored mode|no guidelines/i,
+  },
+  {
+    /** Loosen secret handling: "password can be shared". */
+    name: "secret_loosening",
+    re: /\b(passwords?|secrets?|credentials?|api[_ -]?keys?)\b[^.\n]{0,40}\b(can|may|should) be (shared|emailed|sent|posted|mailed)\b/i,
+  },
+  {
+    /** Fabricated permanent retention consent. */
+    name: "retention_forgery",
+    re: /\bpermanent retention of\b[^.\n]{0,40}\b(chat|content|secrets?|everything|all)\b/i,
+  },
+  {
+    /** Destroy evidence: delete logs/audit records. */
+    name: "evidence_destruction",
+    re: /\b(delete|destroy|remove|wipe|shred)\b[^.\n]{0,40}\b(the )?(logs?|audit (log|trail|records?)|records?)\b|\b(logs?|audit|records?)\b[^.\n]{0,20}\b(may|can) be (destroyed|deleted) at will\b|\bdelete log files\b/i,
+  },
+  {
+    /** MemoryGraft: fake "winning pattern" the agent should imitate. */
+    name: "tool_pattern_graft",
+    re: /\b(replicate|copy|repeat|follow)\b[^.\n]{0,30}\bthis (winning|successful|proven) (pattern|example|approach)\b/i,
+  },
+  {
+    /** Templated role smuggling: {{system}}…{{/system}}. */
+    name: "template_smuggle",
+    re: /\{\{\s*system\s*\}\}/i,
+  },
+  {
+    /** JSON role payload smuggling into memory. */
+    name: "json_role_smuggle",
+    re: /\{\s*"role"\s*:\s*"(system|developer|tool)"/i,
+  },
+  {
+    /** Hide memories: "never recall/surface these entries; pretend they don't exist". */
+    name: "memory_suppression",
+    re: /\b(never|do not)\b[^.\n]{0,25}\b(recall|surface|reveal|show)\b[^.\n]{0,50}\b(entries|memories|memory|records?)\b|\bpretend\b[^.\n]{0,30}\b(do not|don't) exist\b/i,
+  },
 ];
 
 export interface PoisonScan {
@@ -88,6 +145,17 @@ const HIGH_SEVERITY = new Set([
   "unrestricted_mode",
   "fake_system",
   "leak_keys",
+  // Phase 6 classes
+  "indirect_control",
+  "consent_bypass",
+  "verification_laundering",
+  "role_assignment",
+  "secret_loosening",
+  "retention_forgery",
+  "evidence_destruction",
+  "template_smuggle",
+  "json_role_smuggle",
+  "memory_suppression",
 ]);
 
 const MEDIUM_SEVERITY = new Set([
@@ -99,6 +167,8 @@ const MEDIUM_SEVERITY = new Set([
   "exfil_url",
   "mass_delete",
   "zero_width",
+  // Phase 6 classes
+  "tool_pattern_graft",
 ]);
 
 /**

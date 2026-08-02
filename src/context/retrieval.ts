@@ -38,6 +38,7 @@ import {
   sameSpace,
   type EmbeddingRoute,
 } from "./embedding.ts";
+import { describeChannels, fuseRRF, structuredScore, type HybridChannel } from "./hybrid.ts";
 import type { ContextRepository } from "./repository.ts";
 
 export interface RetrievalRequest {
@@ -54,6 +55,15 @@ export interface RetrievalRequest {
   floor?: number;
   /** Force lexical scoring (no embedding call). */
   lexicalOnly?: boolean;
+  /**
+   * Phase 6 · T1 — retrieval depth.
+   *   "progressive" (default): `externalized` originals are excluded from
+   *     ranking — their summary stands for them. This is what keeps recall
+   *     sharp at scale without ever deleting evidence.
+   *   "deep": externalized originals rank alongside everything else
+   *     (navigation/debug/investigation path; used by memory tools).
+   */
+  depth?: "progressive" | "deep";
   now?: number;
 }
 
@@ -185,6 +195,18 @@ export class ContextRetrieval {
     const admitted: Admitted[] = [];
 
     const consider = (item: ContextItem, preferredTier?: ContextTier): void => {
+      // Phase 6 · T1 — progressive depth: folded originals stand down.
+      const stage = item.lifecycleStage ?? "verbatim";
+      if (stage === "externalized" && req.depth !== "deep") {
+        if (rejected.length < CONTEXT_BOUNDS.maxRejectedRecorded) {
+          rejected.push({
+            itemId: item.id,
+            reason: "lifecycle_externalized",
+            detail: "folded into a summary — retrievable via deep retrieval or navigation",
+          });
+        }
+        return;
+      }
       const decision = authorize(item, req.grant, { tier: preferredTier, now });
       if (!decision.allowed) {
         if (rejected.length < CONTEXT_BOUNDS.maxRejectedRecorded) {
@@ -246,38 +268,62 @@ export class ContextRetrieval {
       mode: RetrievalExplanation["matchMode"];
       prior: number;
       score: number;
+      fusedScore?: number;
+      channels?: { lexical: number; semantic: number; structured: number };
+      voted?: HybridChannel[];
     }
 
-    const scored: Scored[] = [];
-    for (const a of admitted) {
-      const text = `${a.item.title} ${a.item.content} ${a.item.tags.join(" ")}`.trim();
+    // ── Phase 6 · T2: hybrid channel scoring + RRF fusion ──────────────────
+    // Channels: lexical (always, offline) · semantic (routed vector when the
+    // item has a cached vector in the active space) · structured (metadata).
+    // A channel abstains rather than emit a garbage cross-space number.
+    interface HybridEntry extends Admitted {
+      prior: number;
+      scores: { lexical: number; semantic: number | null; structured: number };
+    }
 
-      let similarity = 0;
-      let mode: RetrievalExplanation["matchMode"] = "lexical";
-      if (!query) {
-        // No query → recency/trust ordering only. Everything clears the floor.
-        similarity = 1;
-        mode = "lexical";
-      } else if (queryVec) {
+    const hybridInput: HybridEntry[] = admitted.map((a) => {
+      const text = `${a.item.title} ${a.item.content} ${a.item.tags.join(" ")}`.trim();
+      const lexS = !query ? 1 : qLex ? Math.max(0, cosine(qLex, lexicalVector(text))) : 0;
+
+      let semS: number | null = null;
+      if (query && queryVec) {
         const cached = this.repo.getEmbedding(a.item.id);
         if (cached && cached.model === this.route.model && sameSpace(cached.vec, queryVec)) {
-          similarity = cosine(queryVec, cached.vec);
-          mode = "semantic";
-        } else {
-          // Space mismatch or no cached vector → lexical on BOTH sides so the
-          // number stays meaningful (never a garbage cross-space cosine).
-          similarity = qLex ? cosine(qLex, lexicalVector(text)) : 0;
-          mode = "lexical";
+          semS = Math.max(0, cosine(queryVec, cached.vec));
         }
-      } else {
-        similarity = qLex ? cosine(qLex, lexicalVector(text)) : 0;
-        mode = "lexical";
+        // Else: semantic ABSTAINS for this item (never a cross-space cosine).
       }
 
-      // Deterministic prior from trust + freshness. Never from similarity.
+      const structS = structuredScore(query, a.item);
       const prior = computePrior(a.item);
-      scored.push({ ...a, similarity, mode, prior, score: similarity });
-    }
+      return { ...a, prior, scores: { lexical: lexS, semantic: semS, structured: structS } };
+    });
+
+    const fusedById = new Map(fuseRRF(hybridInput).map((f) => [f.item.id, f]));
+    const scored: Scored[] = hybridInput.map((h) => {
+      const f = fusedById.get(h.item.id);
+      // contentSim = the strongest *content* evidence (lexical or semantic).
+      // The relevance floor gates on this — identical semantics to the
+      // pre-hybrid floor — so an item that merely ranks via RRF ordering can
+      // never slip in with no content match at all.
+      const semVal = h.scores.semantic ?? -1;
+      const contentSim = !query ? 1 : Math.max(h.scores.lexical, semVal);
+      // The FUSED score drives ranking (order) — recorded for lineage.
+      return {
+        ...h,
+        similarity: contentSim,
+        mode: !query ? "lexical" : f?.mode ?? "lexical",
+        score: !query ? 1 : f?.fused ?? contentSim,
+        fusedScore: f?.fused ?? 0,
+        channels: {
+          lexical: h.scores.lexical,
+          semantic: h.scores.semantic ?? 0,
+          structured: h.scores.structured,
+        },
+        voted: f?.voted ?? [],
+      };
+    });
 
     // Floor check happens before reranking so noise never occupies rerank slots.
     const aboveFloor = scored.filter((s) => {
@@ -300,7 +346,8 @@ export class ContextRetrieval {
         aboveFloor.map((s) => ({
           id: s.item.id,
           text: `${s.item.title} ${s.item.content}`,
-          similarity: s.similarity,
+          // The reranker receives the FUSED score so all channels influence order.
+          similarity: s.fusedScore ?? s.similarity,
           prior: s.prior,
         })),
       );
@@ -349,6 +396,7 @@ export class ContextRetrieval {
         scopeMatch: `${s.item.scope.projectScope} @ ${s.item.scope.workspaceId}`,
         similarity: round3(s.similarity),
         matchMode: s.mode,
+        ...(s.channels ? { channels: s.channels } : {}),
         ...(rr && rr.before !== rr.after
           ? { rerank: { before: rr.before, after: rr.after, reason: rr.reason } }
           : {}),
@@ -357,7 +405,13 @@ export class ContextRetrieval {
         consentState: s.item.consentState,
         provenance: describeProvenance(s.item),
         policyReason: boundText(
-          notes.length ? `${s.policyReason} · ${notes.join("; ")}` : s.policyReason,
+          [
+            s.voted && s.voted.length > 0 ? `hybrid:${describeChannels(s.voted)}` : null,
+            s.policyReason,
+            ...(notes.length ? notes : []),
+          ]
+            .filter(Boolean)
+            .join(" · "),
           CONTEXT_BOUNDS.maxExplanationChars,
         ),
         score: round3(s.score),

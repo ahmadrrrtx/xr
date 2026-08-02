@@ -37,6 +37,8 @@ export interface AssembleRequest {
   query: string;
   tiers?: readonly ContextTier[];
   lexicalOnly?: boolean;
+  /** Phase 6 · T1 — "deep" also ranks externalized originals. */
+  depth?: "progressive" | "deep";
   /** Link the package to a durable run for checkpointing. */
   runId?: string;
   now?: number;
@@ -68,6 +70,7 @@ export class ContextAssembler {
           grant: req.grant,
           tiers: req.tiers,
           lexicalOnly: req.lexicalOnly,
+          depth: req.depth,
           now,
         },
         extra,

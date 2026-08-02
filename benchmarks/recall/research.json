@@ -1,0 +1,26 @@
+{
+  "domain": "research",
+  "description": "Research evidence memory: studies, surveys, experiment steps, corrections.",
+  "items": [
+    { "id": "r_study_a", "content": "Study A (2024) found retrieval-augmented generation reduced hallucination by 40% in a 120-participant pilot; the report flags low confidence due to sample size.", "type": "evidence", "tags": ["rag", "hallucination", "study"], "provenance": "research" },
+    { "id": "r_study_b", "content": "Study B (2025) compared BM25-only against hybrid retrieval over 50k documents; hybrid lifted Recall@5 from 86% to 96% with no latency regression.", "type": "evidence", "tags": ["retrieval", "hybrid", "benchmark"], "provenance": "research" },
+    { "id": "r_survey_old", "content": "The 2025 annual developer survey recorded a response rate of 61% across 840 invited teams.", "type": "knowledge", "tags": ["survey", "2025"], "provenance": "research", "taskId": "task-survey" },
+    { "id": "r_survey_new", "content": "Correction (2026-01): after removing duplicate ballots, the 2025 annual developer survey response rate is 58% (818 valid teams).", "type": "knowledge", "tags": ["survey", "2025", "correction"], "provenance": "research", "taskId": "task-survey", "supersedes": "r_survey_old" },
+    { "id": "r_cedar", "content": "The staged rollout of the evaluation harness was internally codenamed Project Cedar.", "type": "knowledge", "tags": ["rollout", "codename"], "provenance": "research" },
+    { "id": "r_redwood", "content": "Correction (2026-03): Project Cedar was renamed to Project Redwood after the codename collision was found; all dashboards now show Redwood.", "type": "knowledge", "tags": ["rollout", "codename", "correction"], "provenance": "research", "supersedes": "r_cedar" },
+    { "id": "r_exp_1", "content": "Experiment alpha step 1: freeze the corpus snapshot so every run sees identical documents.", "type": "task_context", "tags": ["experiment", "alpha"], "taskId": "task-alpha" },
+    { "id": "r_exp_2", "content": "Experiment alpha step 2: calibrate the scorer on the frozen corpus before any treatment run (never after).", "type": "task_context", "tags": ["experiment", "alpha"], "taskId": "task-alpha" },
+    { "id": "r_exp_3", "content": "Experiment alpha step 3: only then execute the treatment arm and record effect sizes with bootstrap confidence intervals.", "type": "task_context", "tags": ["experiment", "alpha"], "taskId": "task-alpha" },
+    { "id": "r_noise_1", "content": "The literature review folder contains 212 papers, 40 of which were marked irrelevant in the first pass.", "type": "knowledge", "tags": ["literature"], "provenance": "research" },
+    { "id": "r_noise_2", "content": "The citation export format was switched from BibTeX to CSL-JSON for the shared library.", "type": "knowledge", "tags": ["citations"], "provenance": "research" },
+    { "id": "r_noise_3", "content": "A pre-print on embedding drift was bookmarked for later review; it has not been read or validated.", "type": "knowledge", "tags": ["bookmark", "unread"], "provenance": "research" }
+  ],
+  "queries": [
+    { "id": "rq1", "competency": "accurate_retrieval", "query": "what hallucination reduction did Study A report in the RAG pilot?", "expectTop1": "r_study_a" },
+    { "id": "rq2", "competency": "accurate_retrieval", "query": "how much did hybrid retrieval lift Recall@5 in Study B?", "expectTop1": "r_study_b" },
+    { "id": "rq3", "competency": "conflict_resolution", "query": "what is the cleaned response rate of the 2025 annual developer survey?", "expectTop1": "r_survey_new" },
+    { "id": "rq4", "competency": "test_time_learning", "query": "what is the current codename of the evaluation harness rollout project?", "expectTop1": "r_redwood" },
+    { "id": "rq5", "competency": "long_range_consistency", "query": "experiment alpha freeze calibrate treatment order steps", "expectInTop5": ["r_exp_1", "r_exp_2", "r_exp_3"] },
+    { "id": "rq6", "competency": "accurate_retrieval", "query": "how many papers did the literature review mark irrelevant?", "expectTop1": "r_noise_1" }
+  ]
+}

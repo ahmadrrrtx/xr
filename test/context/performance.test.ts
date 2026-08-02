@@ -247,6 +247,39 @@ describe("XR 4.5 performance (§11.9)", () => {
     expect(avg).toBeLessThan(100);
   });
 
+  test("Phase 6 · G6: retrieval p95 < 100ms is MEASURED at 100,000 stored items", async () => {
+    // The constitutional budget (Art. XII) previously rested on seeds ≤5,000;
+    // Phase 6 proves it at the declared 100k scale. Seeding is ~4s since the
+    // repository compiles each SQL statement once (see the prepared-statement
+    // cache in repository.ts — before it, the WriteGate retained every
+    // per-call statement and bulk seeding stalled at ~53k items).
+    const { repo } = seed(100_000);
+    const retrieval = new ContextRetrieval(repo, LEXICAL_ROUTE);
+    const g = grant();
+    const topics = ["authentication", "deployment", "database", "caching", "logging", "billing"];
+
+    // Warm, then measure a representative query mix.
+    await retrieval.retrieve({ queryIntent: "warm", query: "authentication", grant: g });
+    const lat: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      const t0 = performance.now();
+      const out = await retrieval.retrieve({
+        queryIntent: `scale-${i}`,
+        query: `${topics[i % topics.length]} configuration subsystem`,
+        grant: g,
+      });
+      lat.push(performance.now() - t0);
+      expect(out.items.length).toBeGreaterThan(0);
+    }
+    lat.sort((a, b) => a - b);
+    const p95 = lat[Math.floor(lat.length * 0.95)]!;
+    const avg = lat.reduce((a, b) => a + b, 0) / lat.length;
+    record("retrieval avg (100,000 items, lexical)", `${avg.toFixed(2)} ms`);
+    record("retrieval p95 (100,000 items, lexical)", `${p95.toFixed(2)} ms`);
+    // THE budget, measured (local runs land ≈25ms — 4× headroom for CI).
+    expect(p95).toBeLessThan(100);
+  }, 120_000);
+
   test("summary: print the collected benchmark table", () => {
     console.log("\n    ── XR 4.5 benchmark summary ──");
     for (const r of results) console.log(`    ${r.metric.padEnd(44)} ${r.value}`);

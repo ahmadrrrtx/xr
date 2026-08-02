@@ -21,6 +21,7 @@ import {
   consentAllowsRetrieval,
   consentIsTerminal,
   defaultRedaction,
+  defaultTierForItem,
   defaultTierForType,
   freshnessBlocksRetrieval,
   trustRank,
@@ -295,8 +296,10 @@ export function authorize(
     };
   }
 
-  // 8. Tier resolution + grant check.
-  const tier = opts.tier ?? defaultTierForType(item.type);
+  // 8. Tier resolution + grant check. Lifecycle-aware (Phase 6 · T1): fresh
+  // task evidence resolves to `immediate`, folded summaries to `task_summary`;
+  // every ceiling still applies (see defaultTierForItem in types.ts).
+  const tier = opts.tier ?? defaultTierForItem(item);
   if (!grant.allowedTiers.includes(tier)) {
     return {
       allowed: false,

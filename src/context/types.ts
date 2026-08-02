@@ -416,6 +416,31 @@ export const RETENTION_POLICIES = [
 
 export type RetentionPolicy = (typeof RETENTION_POLICIES)[number];
 
+// ── 9b. Progressive evidence lifecycle (Phase 6 · T1) ──────────────────────
+
+/**
+ * Where an item sits in the evidence-preserving compression lifecycle:
+ *
+ *   verbatim     — the original, unmodified item (recent tier behavior)
+ *   summary      — a first-generation evidence-preserving compression of
+ *                  originals (trust is ALWAYS generated_synthesis, never higher)
+ *   condensed    — a re-compression of summaries (generation ≥ 2)
+ *   externalized — an original whose content has been folded into a summary.
+ *                  It is NEVER deleted; it is excluded from default progressive
+ *                  ranking (the summary represents it) but stays reachable by
+ *                  id and through navigation tools (deep retrieval).
+ *
+ * The stage is orthogonal to the eight semantic CONTEXT_TIERS: the tiers
+ * govern policy, the lifecycle governs compression progression. Existing rows
+ * predate the stage, so it is optional on the type and defaults to verbatim.
+ */
+export const LIFECYCLE_STAGES = ["verbatim", "summary", "condensed", "externalized"] as const;
+export type LifecycleStage = (typeof LIFECYCLE_STAGES)[number];
+
+export function isLifecycleStage(v: string): v is LifecycleStage {
+  return (LIFECYCLE_STAGES as readonly string[]).includes(v);
+}
+
 // ── 10. Index state ────────────────────────────────────────────────────────
 
 export const INDEX_STATES = [
@@ -473,6 +498,11 @@ export interface ContextItem {
 
   /** Relationships to other durable objects (§7.2). */
   links: ContextLinks;
+
+  /** Evidence-lifecycle stage (Phase 6). Absent on legacy rows = "verbatim". */
+  lifecycleStage?: LifecycleStage;
+  /** For externalized originals: the summary item that stands for them. */
+  lifecycleSummarizedBy?: string | null;
 
   indexState: IndexState;
   embeddingSpace?: EmbeddingSpace | null;
@@ -673,6 +703,29 @@ export function defaultTierForType(t: ContextType): ContextTier {
   }
 }
 
+/**
+ * Lifecycle-aware tier resolution (Phase 6 · T1). The type-level default for
+ * task_context is `task_summary` — but that tier's trust ceiling
+ * (generated_synthesis) is designed for SYNTHESIZED summaries. A verbatim
+ * task-context item carrying source evidence can never fit it, which made
+ * fresh task evidence unreachable (measured: LRC recall 0.0 in the recall
+ * benchmark). Verbatim (and externalized, when deep-retrieved) task context
+ * belongs in `immediate`, the tier whose ceiling admits source evidence;
+ * folded summaries/condensations keep the synthesis-capped `task_summary`.
+ *
+ * The tier TABLE is untouched; this only resolves which band an item
+ * presents in when no tier is explicitly requested. Trust ceilings, tier
+ * grants and type compatibility are still enforced by `authorize`.
+ */
+export function defaultTierForItem(item: Pick<ContextItem, "type"> & { lifecycleStage?: LifecycleStage }): ContextTier {
+  if (item.type === "task_context") {
+    const stage = item.lifecycleStage ?? "verbatim";
+    if (stage === "summary" || stage === "condensed") return "task_summary";
+    return "immediate";
+  }
+  return defaultTierForType(item.type);
+}
+
 // ── 13. Retrieval + explanation (§9.7) ─────────────────────────────────────
 
 /** Why an item was retrieved. Every field is populated for every hit. */
@@ -685,6 +738,11 @@ export interface RetrievalExplanation {
   similarity: number;
   /** Which matching mode produced `similarity`. */
   matchMode: "semantic" | "lexical" | "hybrid";
+  /**
+   * Per-channel pre-fusion scores (Phase 6 hybrid). Present whenever the
+   * hybrid pipeline ran; the fused value equals `similarity`.
+   */
+  channels?: { lexical: number; semantic: number; structured: number };
   /** Rerank position change, when a reranker ran. */
   rerank?: { before: number; after: number; reason: string };
   /** Freshness label + reason at retrieval time. */
@@ -733,6 +791,8 @@ export const REJECTION_REASONS = [
   "poisoning_signature",
   "budget_exhausted",
   "memory_disabled",
+  /** Phase 6: folded into a summary; excluded from progressive ranking. */
+  "lifecycle_externalized",
 ] as const;
 
 export type RejectionReason = (typeof REJECTION_REASONS)[number];
@@ -870,6 +930,13 @@ export interface InjectionPackage {
   allItemIds: string[];
   /** Machine-readable why-included map for `xr context explain`. */
   explanations: Record<string, RetrievalExplanation>;
+  /**
+   * Phase 6 · T3 — render-time integrity gate outcomes per item
+   * ({ itemId, action, rule, signatures }); content-free, inspectable.
+   */
+  integrityFindings?: Array<{ itemId: string; action: string; rule: string; signatures: string[] }>;
+  /** Items dropped by the render-time integrity gate (content-free). */
+  integrityRejected?: RejectedItem[];
 }
 
 // ── 16. Compression (§7.8 / §9.6) ──────────────────────────────────────────

@@ -1,0 +1,24 @@
+# Phase 6 — Step 2 Gap Analysis
+
+Ordered by dependency. Each gap lists the task that closes it and the **benchmark/test that proves it** (Part 2 mandate: nothing asserted, everything measured).
+
+| # | Gap | Constitutional/spec anchor | Closes in | Proven by |
+|---|---|---|---|---|
+| G1/G2 | No navigable memory-as-tools; retrieval not hybrid | Art. VIII.3, VIII.5; Part 5 bullets 2; R2/R3 | **T2** | `test/context/hybrid.test.ts` (fusion precision/recall); `test/context/navigation.test.ts` (**navigable beats single-shot top-k** on a planted cross-document question) |
+| G3 | No progressive evidence-preserving lifecycle | Art. VIII.4; Part 5 bullet 1 | **T1** | `test/context/lifecycle.test.ts` (verbatim→summary→condensed→externalized; critical evidence survives; fail-closed keeps originals; externally-accessible lineage) |
+| G4 | No injection-time integrity gate; no poisoning corpus | Art. VIII.3, IX.3; Part 5 bullet 3; Part 20 | **T3** | `test/context/integrity.test.ts` + `fixtures/poisoning-corpus.json` (**30 malicious entries, 100% blocked from instruction escalation**; benign corpus: no false-positive lockout) |
+| G5 | Conflicts not resolvable; no selective forgetting | Art. VIII.5; Part 5 bullet 4; MemoryAgentBench CR competency | **T4** | `test/context/conflicts.test.ts` (contradiction-injection resolves deterministically; user decision recorded; stales correctly; **no silent corruption** — loser stays inspectable) |
+| G6/G7 | Recall unmeasured; test-suite scale proof ≤5k items; no explicit network-off knowledge test | Art. VIII.5, XII, XXI | **T5/T7** | `test/context/recall-benchmark.test.ts` + `scripts/recall-benchmark.ts` (MemoryAgentBench-style: 4 domains × 4 competencies; **measured P@1/R@1/R@5/MRR** vs declared targets; results persisted to `docs/phase6/measured-recall.json`); `test/context/local-only.test.ts` (network disabled, knowledge path green); @100k p95 now measured in THREE lanes: `test/context/performance.test.ts`, the benchmark's scale lane, and the pre-existing `perf:gate` retrieval bench |
+
+> **Audit correction (2026-08-02, discovered during T5):** the original G6 note said "@100k unproven". Precisely: `scripts/perf/retrieval-bench.ts` (perf:gate) already seeded N=100,000 via one prepared statement/one transaction and gates p95 < 250ms — so a gate-level proof existed; what was missing was (a) a *test-suite* measurement (perf suite seeded ≤5,000), (b) any recall-QUALITY measurement, and (c) seeding/read paths through the repository itself, which stalled at ~53k items due to per-call prepared statements (fixed: prepare-once cache in `repository.ts`). The gap is corrected here rather than rewritten away.
+| G8 | No undo ledger; conflict UI absent | Art. VIIII.1, X.3 recommended; Part 22 | **T6** | `test/context/undo.test.ts` (op → undo restores exact prior state; history inspectable; covers context rows **and** legacy `user_memory` rows) |
+| G9 | Residual duplicate store / asserted-recall drift | Art. III.2, VIII.2 | **T8** | one-store guard test (`src/memory` absent; no context store constructed outside the composition root); claim-lint green; benchmark numbers cited — never implied — in docs |
+
+## Design commitments implied by the gaps
+
+1. **Hybrid = fusion, not selection.** Three channels (lexical vector cosine, semantic vector cosine, structured type/tag/scope/provenance match) are fused with **Reciprocal Rank Fusion**; a deterministic reranker then runs; every channel’s contribution is recorded in the explanation (lineage-first).
+2. **Memory-as-tools rides the existing envelope.** Tools are *read-only data-plane* operations over the one store, granted by the same `ContextGrant` machinery, results re-validated by the integrity gate and rendered as **data**, never instructions. No authority can flow through a tool result.
+3. **Progressive lifecycle is additive.** `context_items.lifecycle_stage` (default `'verbatim'`), summary lineage via existing `context_summaries` + `links.derivedFrom`; promotion is fail-closed (a failed compression keeps originals verbatim). Reversible: demotion restores ranking behavior exactly.
+4. **Integrity gate is render-time.** All injection assembly (prompt blocks AND tool results) passes one `verifyInjectionIntegrity()` that re-runs the poison scan + consent/expiry/trust checks at render time, dropping or quarantining offenders with a `rejected` entry — a stored row written before a policy change cannot bypass it.
+5. **Conflict resolution is recorded, user-owned.** Resolutions live in an additive table; deterministic policy resolves supersession automatically; contradictions resolvable by user decision (`keep_a|keep_b|stale`), always undoable, never a silent delete (selective forgetting = hard-expiry flag + audit, reversible).
+6. **Benchmarks are offline/async.** The recall harness runs against scratch stores, is never on the hot path, persists results as the only evidence for any recall claim.
