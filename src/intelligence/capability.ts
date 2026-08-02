@@ -191,7 +191,10 @@ export function capabilityRequired(
   field: keyof ModelCapabilities,
   opts: { allowUnknown?: boolean } = {},
 ): { ok: boolean; support: CapabilitySupport } {
-  const support = caps[field] ?? "unknown";
+  const raw = caps[field];
+  // `extensions` holds a record, not a tri-state — unknown by definition here.
+  const support: CapabilitySupport =
+    raw === "supported" || raw === "unsupported" || raw === "unknown" ? raw : "unknown";
   if (support === "supported") return { ok: true, support };
   if (support === "unknown" && opts.allowUnknown) return { ok: true, support };
   return { ok: false, support };

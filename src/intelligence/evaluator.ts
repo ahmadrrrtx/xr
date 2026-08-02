@@ -4,6 +4,8 @@
  */
 
 import { capabilityRequired } from "./capability.ts";
+import type { BehavioralView } from "./behavioral.ts";
+import type { RoutingHealthView } from "./health.ts";
 import type {
   CandidateEvaluation,
   ModelCapabilities,
@@ -36,6 +38,10 @@ export interface EvaluateOptions {
   strictUnknown?: boolean;
   /** Skip health hard-fail (still recorded). */
   ignoreHealth?: boolean;
+  /** Phase 5 · T2 — measured behavioral contracts (offline-evaluated). */
+  behavioral?: BehavioralView;
+  /** Phase 5 · T3 — rolling health / circuit-breaker view. */
+  routingHealth?: RoutingHealthView;
 }
 
 /**
@@ -72,6 +78,16 @@ export function evaluateCandidate(
       rejections.push({
         code: "user_pin",
         message: `Pinned to model ${requirements.pin.modelId}`,
+      });
+    }
+  }
+
+  // Phase 5 · T1 — manual override: restrict selection to a provider set
+  if (requirements.restrictProviders?.length) {
+    if (!requirements.restrictProviders.includes(model.providerId)) {
+      rejections.push({
+        code: "user_restriction",
+        message: `Provider restricted by user (allowed: ${requirements.restrictProviders.join(", ")})`,
       });
     }
   }
@@ -161,6 +177,20 @@ export function evaluateCandidate(
   need(req.reasoning, "reasoning", "reasoning");
   need(req.functionCalling, "functionCalling", "function-calling");
 
+  // Phase 5 · T7 — future model classes via contract extension (unknown fails closed)
+  if (req.extensions?.length) {
+    for (const ext of req.extensions) {
+      const support = model.capabilities.extensions?.[ext] ?? "unknown";
+      if (support !== "supported" && !(support === "unknown" && !strictUnknown)) {
+        rejections.push({
+          code: support === "unknown" ? "capability_unknown" : "capability_unsupported",
+          message: `Required extension capability missing: ${ext}`,
+          detail: `extensions.${ext}=${support}`,
+        });
+      }
+    }
+  }
+
   // Modalities
   if (requirements.modalities?.length) {
     for (const mod of requirements.modalities) {
@@ -246,6 +276,47 @@ export function evaluateCandidate(
         code: "credential_missing",
         message: "API key not configured",
       });
+    }
+  }
+
+  // Phase 5 · T3 — circuit breaker: an OPEN breaker removes the target from
+  // selection with a reason; half-open stays eligible (probe path) but is
+  // down-scored by the scorer. Manual pins bypass evaluation of this gate —
+  // user authority wins (Charter §9.5), and the executor still gates calls.
+  if (opts.routingHealth && !requirements.pin?.providerId) {
+    const gate = opts.routingHealth.gate(model.providerId, model.modelId);
+    if (gate.state === "open") {
+      rejections.push({
+        code: "health_unavailable",
+        message: `circuit open: ${gate.reason ?? "repeated failures"}`,
+        detail: gate.nextProbeAt ? `probe after ${new Date(gate.nextProbeAt).toISOString()}` : undefined,
+      });
+    }
+  }
+
+  // Phase 5 · T2 — measured-fidelity capability gate (RouteLLM principle:
+  // the cheapest model whose MEASURED capability meets the requirement).
+  // Only MEASURED contracts can reject; absence of a contract passes
+  // (cold start) and is scored on static priors by the scorer.
+  const floor = requirements.minFidelity;
+  if (floor && opts.behavioral) {
+    const contract = opts.behavioral.contract(model.providerId, model.modelId);
+    if (contract && contract.source === "measured") {
+      const checks: Array<{ name: string; actual: number; required?: number }> = [
+        { name: "overall", actual: contract.overallFidelity, required: floor.overall },
+        { name: "tool-use", actual: contract.toolUseFidelity, required: floor.toolUse },
+        { name: "structured-output", actual: contract.structuredOutputFidelity, required: floor.structuredOutput },
+        { name: "context-retention", actual: contract.contextRetention, required: floor.contextRetention },
+      ];
+      for (const c of checks) {
+        if (c.required !== undefined && c.actual < c.required) {
+          rejections.push({
+            code: "fidelity_below_floor",
+            message: `Measured ${c.name} fidelity ${c.actual.toFixed(2)} below required floor ${c.required.toFixed(2)}`,
+            detail: `contract n=${contract.samples}, measured ${new Date(contract.measuredAt).toISOString()}`,
+          });
+        }
+      }
     }
   }
 

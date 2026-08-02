@@ -100,7 +100,9 @@ Adding a genuinely new surface means adding one value to `SurfaceId`.
 ## 3. How do I change routing?
 
 One authority: `RoutingService` (`src/intelligence/routing-service.ts`).
-`src/providers/routing.ts` is deleted (ADR-0004).
+`src/providers/routing.ts` is deleted (ADR-0004). The routing model after
+Phase 5 is documented in `docs/phase5-routing/ROUTING-MODEL.md` and
+ADR-0012.
 
 - Model selection scoring → `intelligence/router.ts`, `scorer.ts`, `evaluator.ts`.
 - Turning a decision into a `Provider` → `RoutingService` only.
@@ -109,9 +111,37 @@ One authority: `RoutingService` (`src/intelligence/routing-service.ts`).
   policy. If no compliant provider exists, the call raises
   `LocalityPolicyViolation` rather than silently downgrading the user's privacy
   guarantee.
+- **Behavioral quality is measured, not claimed** — contracts come from
+  offline probes (`xr providers measure`), never from presets; measured
+  fidelity gates and outranks static priors. Do not add vendor-claim
+  capability assumptions to the decision path (Charter §9.8).
+- **Health and fallback are part of the authority** — rolling health +
+  circuit breakers (`intelligence/health.ts`) feed evaluation; runtime
+  failover executes only through the decision's chain
+  (`intelligence/degradation.ts`). Never add a parallel fallback path.
 
 If you add a code path that constructs a `Provider`, it must go through
 `RoutingService` or it is a second authority.
+
+### Adding a provider is a bounded adapter — nothing else
+
+To add provider `acme`:
+
+1. **Adapter** — a `Provider` implementation (`chat(messages, tools)`,
+   `health()`) registered in `src/providers/` (preset or
+   `providerEngine.customProviders` in config). Capability declarations
+   (`toolUse`, `structuredOutput`, …) describe the *models* honestly.
+2. **Locality** — derives from the preset `kind` (`local` | `hosted` |
+   `custom`→`private`); the authority enforces it. You write no locality code.
+3. **That's it.** No edits to `src/intelligence/`, `src/core`, the agent
+   loop, or execution. If your provider needs a capability the contract
+   doesn't model, declare an *extension capability* on the descriptor and
+   have tasks require it via `TaskRequirements.require.extensions` —
+   unknown fails closed (Art. VII.4; proof:
+   `test/intelligence/model-class-contract.test.ts`).
+
+Optional free improvements, no code: run `xr providers measure --provider
+acme` so measured fidelity replaces static priors in scoring.
 
 ## 4. How do I produce a plan?
 

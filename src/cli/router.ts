@@ -116,6 +116,16 @@ function reinjectGlobalFlags(args: string[], flags: GlobalFlags): string[] {
   if (flags.workspace && !has("--workspace") && !has("-w")) {
     out.push("--workspace", flags.workspace);
   }
+  // Provider/model globals are ALSO command-local flags for subcommands like
+  // `xr providers route --provider ollama` / `xr providers measure --model X`
+  // — re-attach them so the shared parser doesn't silently swallow the
+  // operator's explicit selection (Phase 5: honest CLI, no dropped flags).
+  if (flags.provider && !has("--provider") && !has("-p")) {
+    out.push("--provider", flags.provider);
+  }
+  if (flags.model && !has("--model") && !has("-m")) {
+    out.push("--model", flags.model);
+  }
   if (flags.format && flags.format !== "text" && !has("--format") && !has("--output") && !has("-o")) {
     out.push("--format", flags.format);
   }

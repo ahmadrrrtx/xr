@@ -1,15 +1,15 @@
 # XR 7.0.1 Repository Inventory
 
-Generated: 2026-08-01T11:49:21.882Z
+Generated: 2026-08-01T22:34:50.639Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 514 |
-| Test files | 165 |
+| Source files | 520 |
+| Test files | 175 |
 | CLI commands | 41 |
-| Daemon routes | 97 |
+| Daemon routes | 98 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -138,6 +138,7 @@ Generated: 2026-08-01T11:49:21.882Z
 - GET `/api/providers/catalog` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - GET `/api/providers/route` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/providers/set` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/providers/slo` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - GET `/api/recovery` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/research` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/research/*` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)

@@ -11,7 +11,17 @@ import {
   type IntelligenceMetrics,
 } from "./metrics.ts";
 import { rankCandidates } from "./scorer.ts";
+import {
+  estimateDifficulty,
+  difficultyLabel,
+  fidelityFloorFor,
+  type DifficultyEstimate,
+  type DifficultyOptions,
+} from "./difficulty.ts";
+import type { BehavioralView } from "./behavioral.ts";
+import type { RoutingHealthView } from "./health.ts";
 import type {
+  ModelCapabilities,
   PolicyConstraints,
   RouteRequest,
   RouteResult,
@@ -30,6 +40,12 @@ export interface RouterOptions {
   maxRejected?: number;
   /** Max considered (non-selected) scored entries. */
   maxConsidered?: number;
+  /** Phase 5 · T2 — measured behavioral contracts (offline-evaluated). */
+  behavioral?: BehavioralView;
+  /** Phase 5 · T3 — rolling health / circuit-breaker view. */
+  health?: RoutingHealthView;
+  /** Phase 5 · T1 — difficulty estimator options. */
+  difficulty?: DifficultyOptions;
 }
 
 function decisionId(): string {
@@ -38,27 +54,30 @@ function decisionId(): string {
 
 /** Map legacy providerEngine.routingStrategy → mode + locality hints. */
 export function policyFromConfig(config: XRConfig): PolicyConstraints {
-  const engine = (config as any).providerEngine ?? {};
-  const intel = (config as any).intelligencePlane ?? {};
-  const localModels = (config as any).localModels ?? {};
-  const strategy: string = intel.routingMode
-    ? String(intel.routingMode)
-    : (engine.routingStrategy ?? "hybrid");
+  // Typed end-to-end (Art. IV — no `any`), but partial-config tolerant:
+  // legitimate callers outside the boot path (e.g. the evaluation harness)
+  // pass RAW fixture objects, not schema-parsed configs — every section read
+  // keeps a safe fallback. (`intel.routingMode` was also a dead read here:
+  // the schema field is `mode`, applied as the override below.)
+  const engine = config.providerEngine;
+  const intel = config.intelligencePlane;
+  const localModels = config.localModels;
+  const strategy: string = engine?.routingStrategy ?? "hybrid";
 
   let routingMode: RoutingMode = "automatic";
   let localityPolicy: PolicyConstraints["localityPolicy"] = "any";
   let allowCloudFallback = true;
 
   // Explicit intelligencePlane.localityPolicy wins
-  if (intel.localityPolicy === "local_only" || localModels.routing === "local-only") {
+  if (intel?.localityPolicy === "local_only" || localModels?.routing === "local-only") {
     localityPolicy = "local_only";
     allowCloudFallback = false;
     routingMode = "local_only";
-  } else if (intel.localityPolicy === "private_only") {
+  } else if (intel?.localityPolicy === "private_only") {
     localityPolicy = "private_only";
-    allowCloudFallback = intel.allowCloudFallback === true;
+    allowCloudFallback = intel?.allowCloudFallback === true;
     routingMode = "private_only";
-  } else if (intel.localityPolicy === "no_cloud") {
+  } else if (intel?.localityPolicy === "no_cloud") {
     localityPolicy = "no_cloud";
     allowCloudFallback = false;
   }
@@ -73,7 +92,7 @@ export function policyFromConfig(config: XRConfig): PolicyConstraints {
         routingMode = "automatic";
         if (localityPolicy === "any") {
           // prefer local but allow cloud unless local-only
-          allowCloudFallback = intel.allowCloudFallback !== false;
+          allowCloudFallback = intel?.allowCloudFallback !== false;
         }
         break;
       case "cloudFirst":
@@ -114,7 +133,7 @@ export function policyFromConfig(config: XRConfig): PolicyConstraints {
   }
 
   // intelligencePlane explicit mode override
-  if (intel.mode && typeof intel.mode === "string") {
+  if (intel?.mode && typeof intel.mode === "string") {
     routingMode = intel.mode as RoutingMode;
     if (intel.mode === "local_only") {
       localityPolicy = "local_only";
@@ -122,8 +141,19 @@ export function policyFromConfig(config: XRConfig): PolicyConstraints {
     }
   }
 
+  /**
+   * Phase 5 · T1 — honor `enableAutomatic` (Charter §9.5: automatic routing
+   * is opt-in-then-default, manual override always available). When disabled,
+   * unpinned requests resolve the configured defaults via
+   * preferred_with_fallback — XR never roams the catalog on its own. This was
+   * previously dead config (G1 in docs/phase5-routing/01-AUDIT-REPORT.md).
+   */
+  if (intel?.enableAutomatic === false && routingMode === "automatic") {
+    routingMode = "preferred_with_fallback";
+  }
+
   const allowFallback =
-    intel.allowFallback !== undefined
+    intel?.allowFallback !== undefined
       ? !!intel.allowFallback
       : routingMode !== "manual";
 
@@ -132,19 +162,19 @@ export function policyFromConfig(config: XRConfig): PolicyConstraints {
     localityPolicy,
     allowFallback,
     allowCloudFallback:
-      intel.allowCloudFallback !== undefined
+      intel?.allowCloudFallback !== undefined
         ? !!intel.allowCloudFallback
         : allowCloudFallback,
-    preferFree: intel.preferFree ?? config.preferFreeProviders ?? true,
-    maxCostUsd: intel.maxCostUsd,
-    latencyPreference: intel.latencyPreference ?? "any",
-    qualityPreference: intel.qualityPreference ?? "any",
-    disableHistorical: intel.disableHistorical === true,
+    preferFree: intel?.preferFree ?? config.preferFreeProviders ?? true,
+    maxCostUsd: intel?.maxCostUsd,
+    latencyPreference: intel?.latencyPreference ?? "any",
+    qualityPreference: intel?.qualityPreference ?? "any",
+    disableHistorical: intel?.disableHistorical === true,
     defaultProviderId: config.defaults?.provider,
     defaultModelId: config.defaults?.model,
     fallbackProviderId: config.defaults?.fallbackProvider,
     fallbackModelId: config.defaults?.fallbackModel,
-    legacyStrategy: engine.routingStrategy,
+    legacyStrategy: engine?.routingStrategy,
   };
 }
 
@@ -187,6 +217,11 @@ export function mergeRequirements(
     allowCloudFallback: partial?.allowCloudFallback ?? policy.allowCloudFallback,
     disableHistorical: partial?.disableHistorical ?? policy.disableHistorical,
     summary: partial?.summary,
+    ...(partial?.difficulty !== undefined ? { difficulty: partial.difficulty } : {}),
+    ...(partial?.minFidelity !== undefined ? { minFidelity: partial.minFidelity } : {}),
+    ...(partial?.restrictProviders !== undefined
+      ? { restrictProviders: partial.restrictProviders }
+      : {}),
   };
 
   // Manual mode without pin → use defaults as preferred pin (non-strict if fallback on)
@@ -219,11 +254,40 @@ export class IntelligenceRouter {
       ...basePolicy,
       routingMode: request.mode ?? basePolicy.routingMode,
     };
-    const requirements = mergeRequirements(request.requirements, policy, request);
+    let requirements = mergeRequirements(request.requirements, policy, request);
+
+    // Phase 5 · T1 — difficulty estimation (deterministic, explainable).
+    const difficulty: DifficultyEstimate =
+      requirements.difficulty !== undefined
+        ? {
+            score: requirements.difficulty,
+            signals: ["explicit difficulty override"],
+            requiredFidelity: fidelityFloorFor(requirements.difficulty, this.opts.difficulty),
+            requirementsOnly: false,
+          }
+        : estimateDifficulty(requirements, this.opts.difficulty);
+
+    // Capability gate: derive the fidelity floor from difficulty unless the
+    // caller set one explicitly or the workspace disabled difficulty routing.
+    // The gate rejects only MEASURED-below-floor contracts (cold start passes
+    // and is scored on static priors) — RouteLLM principle, deterministic.
+    const intelPlane = config.intelligencePlane;
+    const difficultyRouting = intelPlane?.difficultyRouting !== false;
+    if (typeof intelPlane?.minOverallFidelity === "number") {
+      requirements = {
+        ...requirements,
+        minFidelity: { overall: intelPlane.minOverallFidelity },
+      };
+    } else if (difficultyRouting && !requirements.minFidelity) {
+      requirements = {
+        ...requirements,
+        minFidelity: { overall: difficulty.requiredFidelity },
+      };
+    }
 
     // Manual / pin path — highest precedence
     if (requirements.pin?.providerId) {
-      return this.routePinned(catalog, requirements, policy, request);
+      return this.routePinned(catalog, requirements, policy, request, difficulty);
     }
 
     if (policy.routingMode === "disabled") {
@@ -232,6 +296,8 @@ export class IntelligenceRouter {
         policy,
         "Intelligence routing is disabled",
         true,
+        [],
+        difficulty,
       );
     }
 
@@ -243,10 +309,12 @@ export class IntelligenceRouter {
         policy,
         "Manual mode requires an explicit provider/model",
         true,
+        [],
+        difficulty,
       );
     }
 
-    return this.routeAutomatic(catalog, requirements, policy);
+    return this.routeAutomatic(catalog, requirements, policy, difficulty);
   }
 
   private routePinned(
@@ -254,6 +322,7 @@ export class IntelligenceRouter {
     requirements: TaskRequirements,
     policy: PolicyConstraints,
     _request: RouteRequest,
+    difficulty: DifficultyEstimate,
   ): RouteResult {
     const providerId = requirements.pin!.providerId!;
     const modelId = requirements.pin!.modelId;
@@ -266,7 +335,7 @@ export class IntelligenceRouter {
           ...requirements,
           pin: undefined,
           preferred: { providerId, modelId },
-        }, policy);
+        }, policy, difficulty);
         if (auto.decision.selected) {
           auto.decision.factors = [
             `pin ${providerId}/${modelId ?? "?"} unavailable — fell back`,
@@ -283,19 +352,48 @@ export class IntelligenceRouter {
         policy,
         `Pinned provider/model not found: ${providerId}/${modelId ?? "(default)"}`,
         true,
+        [],
+        difficulty,
       );
     }
 
-    // Still enforce hard policy (local-only etc.) even on manual pin —
-    // security policy cannot be bypassed by pin.
-    const evals = evaluateAll([model], requirements, {
+    // Still enforce hard policy (locality, credentials, disabled) on a manual
+    // pin — security policy cannot be bypassed (Art. IV.4). Capability
+    // DECLARATIONS and the measured-fidelity floor do NOT hard-reject a pin
+    // (Charter §9.5: manual override is always available — the user is the
+    // authority over possibly-stale metadata, e.g. a seeded bad override);
+    // every overridden declaration is surfaced as a factor warning.
+    const pinEvalRequirements = { ...requirements, minFidelity: undefined, require: undefined };
+    const evals = evaluateAll([model], pinEvalRequirements, {
       ...policy,
       // For pin eval, don't apply pin-strict rejection to itself
-    });
+    }, this.evalOpts());
     // Clear user_pin self-rejections
     const ev = evals[0]!;
     ev.rejections = ev.rejections.filter((r) => r.code !== "user_pin");
     ev.compatible = ev.rejections.length === 0;
+
+    // Record which capability declarations the pin overrides (explainability,
+    // not enforcement).
+    const overriddenDeclarations: string[] = [];
+    const declaredReq = requirements.require ?? {};
+    type CapField = Exclude<keyof ModelCapabilities, "extensions">;
+    const declaredTable: ReadonlyArray<readonly [string, boolean | undefined, CapField]> = [
+      ["tool-use", declaredReq.toolUse, "toolUse"],
+      ["structured-output", declaredReq.structuredOutput, "structuredOutput"],
+      ["json-mode", declaredReq.jsonMode, "jsonMode"],
+      ["streaming", declaredReq.streaming, "streaming"],
+      ["vision", declaredReq.vision, "vision"],
+      ["embeddings", declaredReq.embeddings, "embeddings"],
+      ["reasoning", declaredReq.reasoning, "reasoning"],
+      ["function-calling", declaredReq.functionCalling, "functionCalling"],
+    ];
+    for (const [label, flag, field] of declaredTable) {
+      if (!flag) continue;
+      if (model.capabilities[field] !== "supported") {
+        overriddenDeclarations.push(`${label} declared ${model.capabilities[field]}`);
+      }
+    }
 
     if (!ev.compatible) {
       if (requirements.allowFallback) {
@@ -303,6 +401,7 @@ export class IntelligenceRouter {
           catalog,
           { ...requirements, pin: undefined },
           policy,
+          difficulty,
         );
         if (auto.decision.selected) {
           auto.decision.factors.unshift(
@@ -323,19 +422,38 @@ export class IntelligenceRouter {
             reasons: ev.rejections,
           },
         ],
+        difficulty,
       );
     }
 
     // Build fallback chain from other candidates when allowed
-    const allEvals = evaluateAll(catalog.models, { ...requirements, pin: undefined }, policy);
+    const allEvals = evaluateAll(catalog.models, { ...requirements, pin: undefined }, policy, this.evalOpts());
     const ranked = rankCandidates(allEvals, {
       requirements: { ...requirements, pin: undefined },
       policy,
+      behavioral: this.opts.behavioral,
+      routingHealth: this.opts.health,
     }, (m) =>
       this.metrics.statsFor(m.providerId, m.modelId, requirements.modelClass),
     );
     const compatible = ranked.filter((e) => e.compatible);
-    const fb = buildFallbackChain(compatible, model, requirements, policy);
+    const fb = buildFallbackChain(compatible, model, requirements, policy, 3, this.opts.health);
+
+    // Measured-fidelity warning for the pin (informational, not a rejection —
+    // manual override is complete).
+    const pinFactors = ["explicit provider/model pin", `locality=${model.locality.locality}`];
+    if (overriddenDeclarations.length) {
+      pinFactors.push(`pin overrides capability declaration(s): ${overriddenDeclarations.join(", ")}`);
+    }
+    const pinDifficultyFloor = requirements.minFidelity?.overall;
+    if (pinDifficultyFloor !== undefined && this.opts.behavioral) {
+      const contract = this.opts.behavioral.contract(model.providerId, model.modelId);
+      if (contract && contract.source === "measured" && contract.overallFidelity < pinDifficultyFloor) {
+        pinFactors.push(
+          `warning: measured fidelity ${contract.overallFidelity.toFixed(2)} below difficulty floor ${pinDifficultyFloor.toFixed(2)} (pin honored)`,
+        );
+      }
+    }
 
     const decision: RoutingDecision = {
       version: 1,
@@ -355,17 +473,24 @@ export class IntelligenceRouter {
       manual: true,
       unavailable: false,
       explanation: `Manual pin: ${model.providerId}/${model.modelId}`,
-      factors: ["explicit provider/model pin", `locality=${model.locality.locality}`],
+      factors: pinFactors,
       confidence: 1,
       humanHandoff: fb.humanHandoff,
+      difficulty,
     };
     return finalize(decision);
+  }
+
+  /** Evaluator options threaded through this router's views (Phase 5). */
+  private evalOpts() {
+    return { behavioral: this.opts.behavioral, routingHealth: this.opts.health };
   }
 
   private routeAutomatic(
     catalog: IntelligenceCatalog,
     requirements: TaskRequirements,
     policy: PolicyConstraints,
+    difficulty: DifficultyEstimate,
   ): RouteResult {
     // Credential hard-filter: attach auth health onto models from provider list
     const models = catalog.models.map((m) => {
@@ -397,10 +522,15 @@ export class IntelligenceRouter {
       return m.health?.authOk !== false;
     });
 
-    const evaluations = evaluateAll(withCreds, requirements, policy);
+    const evaluations = evaluateAll(withCreds, requirements, policy, this.evalOpts());
     const ranked = rankCandidates(
       evaluations,
-      { requirements, policy },
+      {
+        requirements,
+        policy,
+        behavioral: this.opts.behavioral,
+        routingHealth: this.opts.health,
+      },
       (m) => this.metrics.statsFor(m.providerId, m.modelId, requirements.modelClass),
     );
 
@@ -422,13 +552,14 @@ export class IntelligenceRouter {
       return this.unavailable(
         requirements,
         policy,
-        "No compatible model for task requirements and policy",
+        `No compatible model for task requirements and policy (difficulty ${difficultyLabel(difficulty.score)}, fidelity floor ${difficulty.requiredFidelity.toFixed(2)})`,
         false,
         rejected,
+        difficulty,
       );
     }
 
-    const fb = buildFallbackChain(compatible, best.model, requirements, policy);
+    const fb = buildFallbackChain(compatible, best.model, requirements, policy, 3, this.opts.health);
 
     // Seed configured fallback provider into chain if compatible and not selected
     if (policy.fallbackProviderId && policy.fallbackProviderId !== best.model.providerId) {
@@ -463,6 +594,7 @@ export class IntelligenceRouter {
     }));
 
     const factors = [
+      `difficulty=${difficulty.score} (${difficultyLabel(difficulty.score)}) floor=${difficulty.requiredFidelity.toFixed(2)}`,
       ...(best.score?.notes ?? []),
       `score=${best.score?.total.toFixed(3) ?? "?"}`,
       `mode=${policy.routingMode}`,
@@ -487,10 +619,11 @@ export class IntelligenceRouter {
       considered,
       manual: false,
       unavailable: false,
-      explanation: explain(best.model.providerId, best.model.modelId, factors, policy),
+      explanation: explain(best.model.providerId, best.model.modelId, factors, policy, difficulty),
       factors,
       confidence: estimateConfidence(best, compatible.length),
       humanHandoff: fb.humanHandoff,
+      difficulty,
     };
     return finalize(decision);
   }
@@ -501,6 +634,7 @@ export class IntelligenceRouter {
     reason: string,
     manual: boolean,
     rejected: RoutingDecision["rejected"] = [],
+    difficulty?: DifficultyEstimate,
   ): RouteResult {
     const decision: RoutingDecision = {
       version: 1,
@@ -519,6 +653,7 @@ export class IntelligenceRouter {
       factors: [reason],
       confidence: 1,
       humanHandoff: { required: true, reason },
+      ...(difficulty ? { difficulty } : {}),
     };
     return finalize(decision);
   }
@@ -529,10 +664,14 @@ function explain(
   modelId: string,
   factors: string[],
   policy: PolicyConstraints,
+  difficulty?: DifficultyEstimate,
 ): string {
   const bits = [
     `Selected ${providerId}/${modelId}`,
     `mode=${policy.routingMode}`,
+    difficulty
+      ? `difficulty=${difficulty.score} (${difficultyLabel(difficulty.score)})${difficulty.signals.length ? `: ${difficulty.signals.slice(0, 3).join(", ")}` : ""}`
+      : undefined,
     factors.slice(0, 4).join("; "),
   ];
   return bits.filter(Boolean).join(" — ");
@@ -566,6 +705,7 @@ function toRecord(decision: RoutingDecision): RoutingDecisionRecord {
     confidence: decision.confidence,
     rejectedCount: decision.rejected.length,
     humanHandoff: decision.humanHandoff?.required,
+    ...(decision.difficulty ? { difficultyScore: decision.difficulty.score } : {}),
   };
 }
 

@@ -185,8 +185,13 @@ export function legacyFallbackAllowed(params: {
   return isDifferentTarget && localityAllowed(policy, localityOf(fallbackId));
 }
 
-/** Locality of a provider id, from the preset catalogue. */
-function localityOf(providerId: string): Locality | "unknown" {
+/**
+ * Locality of a provider id, from the preset catalogue.
+ * Exported (Phase 5 · T3/T5): the ONLY locality derivation for provider ids —
+ * the resilient executor's per-hop guard uses this same function (Art. III:
+ * one derivation, no second opinion).
+ */
+export function localityOf(providerId: string): Locality | "unknown" {
   const preset = registry.getPreset(providerId) ?? PRESETS[providerId];
   if (!preset) return "unknown";
   switch (preset.kind) {

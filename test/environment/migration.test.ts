@@ -1,5 +1,5 @@
 /**
- * XR 5.1/5.2 — Config migration 15 → 17 tests (additive, behavior-preserving).
+ * XR 5.1/5.2+ — Config migration 15 → 18 tests (additive, behavior-preserving).
  *
  * The migration chain is tested directly on raw objects (no disk, no shared
  * config-cache state), so results are identical regardless of which test files
@@ -21,14 +21,14 @@ const LEGACY_V15 = {
   budget: { perTaskUsd: 0.25, perTaskTokens: 200000 },
 };
 
-describe("config migration 15 → 17 (raw chain)", () => {
+describe("config migration 15 → 18 (raw chain)", () => {
   test("CONFIG_VERSION is 17", () => {
-    expect(CONFIG_VERSION).toBe(17);
+    expect(CONFIG_VERSION).toBe(18);
   });
 
   test("a v15 config gains the environment block with safe defaults", () => {
     const raw = migrateRawConfig(structuredClone(LEGACY_V15)) as Record<string, any>;
-    expect(raw.version).toBe(17);
+    expect(raw.version).toBe(18);
     const env = raw.environment;
     expect(env.enabled).toBe(true);
     expect(env.modalities).toEqual({
@@ -70,7 +70,7 @@ describe("config migration 15 → 17 (raw chain)", () => {
       environment: { enabled: false, modalities: { browser: false } },
     };
     const raw = migrateRawConfig(legacyWithEnv) as Record<string, any>;
-    expect(raw.version).toBe(17);
+    expect(raw.version).toBe(18);
     expect(raw.environment.enabled).toBe(false);
     expect(raw.environment.modalities.browser).toBe(false);
     expect(raw.capabilities.enabled).toBe(true);
@@ -83,7 +83,7 @@ describe("config migration 15 → 17 (raw chain)", () => {
       environment: { enabled: true },
       capabilities: { enabled: false, requireSignedPackages: true },
     }) as Record<string, any>;
-    expect(raw.version).toBe(17);
+    expect(raw.version).toBe(18);
     expect(raw.capabilities.enabled).toBe(false);
     expect(raw.capabilities.requireSignedPackages).toBe(true);
   });
@@ -92,7 +92,7 @@ describe("config migration 15 → 17 (raw chain)", () => {
     const parsed = ConfigSchema.safeParse(migrateRawConfig(structuredClone(LEGACY_V15)));
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.version).toBe(17);
+      expect(parsed.data.version).toBe(18);
       expect(parsed.data.environment.vision.allowCloud).toBe(false);
       expect(parsed.data.capabilities.updateRequiresReview).toBe(true);
       expect(parsed.data.control.enabled).toBe(true);
@@ -102,7 +102,7 @@ describe("config migration 15 → 17 (raw chain)", () => {
   test("a v17 config does not re-migrate (idempotent)", () => {
     const once = migrateRawConfig(structuredClone(LEGACY_V15)) as Record<string, any>;
     const twice = migrateRawConfig(once) as Record<string, any>;
-    expect(twice.version).toBe(17);
+    expect(twice.version).toBe(18);
     expect(JSON.stringify(twice.environment)).toBe(JSON.stringify(once.environment));
     expect(JSON.stringify(twice.capabilities)).toBe(JSON.stringify(once.capabilities));
   });
