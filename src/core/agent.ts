@@ -133,6 +133,12 @@ export interface AgentDeps {
    */
   runId?: string;
   /**
+   * Phase 7 · T1 — optional tool-use recorder forwarded into every
+   * ToolContext. Wired by the execution envelope from the caller-provided
+   * EnvelopeContext; provenance recording is best-effort by design.
+   */
+  onToolUse?: (info: { tool: string; ok: boolean; error?: string }) => void;
+  /**
    * XR 4.4 — routing decision from the Universal Intelligence Plane.
    * Secret-free; safe to audit and attach to execution records.
    */
@@ -256,6 +262,7 @@ export async function runAgentLoop(
     allowedHosts: deps.allowedHosts ?? [],
     dryRun: deps.dryRun ?? false,
     hardened,
+    ...(deps.onToolUse ? { onToolUse: deps.onToolUse } : {}),
     ...(deps.trust
       ? {
           runIsolated: async (req, exec) => {
@@ -505,11 +512,13 @@ export async function runAgentLoop(
             ok: result.ok,
           });
           messages.push({ role: "tool", name: call.tool, content: result.output });
+          toolCtx.onToolUse?.({ tool: call.tool, ok: result.ok });
         } catch (e) {
           const msg = `tool error: ${(e as Error).message}`;
           say(`  \x1b[31m✗ ${msg}\x1b[0m`);
           messages.push({ role: "tool", name: call.tool, content: msg });
           auditStore.audit("tool.error", { tool: call.tool, error: (e as Error).message }, sessionId);
+          toolCtx.onToolUse?.({ tool: call.tool, ok: false, error: (e as Error).message });
         }
       }
     }

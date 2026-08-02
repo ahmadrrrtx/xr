@@ -37,7 +37,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
-import type { BusinessDatabase } from '../business/core/database.ts';
+import type { BusinessDatabase } from '../../extensions/business-os/src/core/database.ts';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit nonce — the GCM-recommended size.

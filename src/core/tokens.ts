@@ -46,7 +46,7 @@ import type { CapabilityService } from "../platform/capabilities/service.ts";
 
 // Cross-cutting subsystems.
 import type { XRShieldService } from "../security/shield.ts";
-import type { BusinessOS } from "../business/index.ts";
+import type { BusinessOsExtension, BusinessL0 } from "./business-l0.ts";
 import type { ExecutionService } from "../execution/service.ts";
 import type { TrustService } from "../runtime/trust/service.ts";
 import type { ContextService } from "../context/service.ts";
@@ -96,7 +96,13 @@ export const Tokens = {
 
   // ── Cross-cutting subsystems ────────────────────────────────────────────
   Shield: token<XRShieldService>("xr.shield", "security shield service"),
-  Business: token<BusinessOS>("xr.business", "Business OS"),
+  /** Phase 7 · T8 — Business OS extension (L5), loaded through the thin L0
+   *  contract; null unless config-enabled AND effect-verified. */
+  Business: token<BusinessOsExtension | null>("xr.business", "Business OS extension (governed, default-excluded)"),
+  /** Phase 7 · T8 — the thin L0 record/artifact/identity/audit contract. */
+  BusinessL0: token<BusinessL0>("xr.business.l0", "Business OS thin L0 contract"),
+  /** Phase 7 · T8 — lazy loader for the governed extension (config + effect-verification gate). */
+  BusinessLoader: token<{ load(): Promise<BusinessOsExtension | null>; status(): { loaded: boolean; reason: string | null } }>("xr.business.loader", "Business OS extension loader"),
   Execution: token<ExecutionService>("xr.execution", "Unified Execution Fabric service"),
   // XR 4.2 — Trust & Isolation (risk-tiered placement + enforceable boundaries).
   Trust: token<TrustService>("xr.trust", "Trust & Isolation service"),

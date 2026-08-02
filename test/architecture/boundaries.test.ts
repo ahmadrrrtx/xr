@@ -46,7 +46,12 @@ interface Edge {
   readonly dynamic: boolean;
 }
 
-const FILES = walk(SRC).map((f) => relative(ROOT, f).replace(/\\/g, "/"));
+const EXT = join(ROOT, "extensions/business-os/src");
+const FILES = [
+  ...walk(SRC).map((f) => relative(ROOT, f).replace(/\\/g, "/")),
+  // Phase 7 · T8 — the business extension participates in boundary rules.
+  ...walk(EXT).map((f) => relative(ROOT, f).replace(/\\/g, "/")),
+];
 const SOURCES = new Map(FILES.map((f) => [f, readFileSync(join(ROOT, f), "utf8")]));
 
 function resolveSpec(fromRel: string, spec: string): string | null {
@@ -179,9 +184,14 @@ const LAYER_RULES: Array<{
   },
   {
     name: "business-not-enterprise",
-    from: /^src\/business\//,
-    to: /^src\/(enterprise|interfaces|cli|commands|daemon|telegram|voice)\//,
+    from: /^extensions\/business-os\//,
+    to: /^src\/(enterprise|interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)\//,
     toNot: /^src\/interfaces\/cli\.ts$/,
+  },
+  {
+    name: "kernel-no-business-extension",
+    from: /^src\//,
+    to: /^extensions\/business-os\//,
   },
   {
     name: "no-one-imports-surfaces",

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "business-os",
+  "name": "Business OS",
+  "version": "7.0.1",
+  "type": "extension",
+  "l0ContractVersion": 1,
+  "entry": "src/index.ts",
+  "description": "Business OS — governed L5 extension over the thin L0 record/artifact/identity/audit contract. Default-excluded until each module passes its effect-verification gate.",
+  "publisher": { "id": "xr", "name": "XR", "verified": true },
+  "license": "MIT",
+  "modules": [
+    "crm", "sales", "marketing", "support", "projects", "knowledge", "finance",
+    "hr", "analytics", "automation", "scheduling", "communication", "documents",
+    "meetings", "ai-workers"
+  ],
+  "effectVerification": {
+    "harness": "effect-verification.ts",
+    "policy": "A module is included only when its deterministic effect tests pass against a scratch database. Unproven modules are excluded from default loads."
+  },
+  "capabilityStatement": "Records, artifacts, outcomes, approvals and AI-worker automation over local-first business records, through the canonical execution envelope and single-writer store. No second orchestration engine; no simulated success.",
+  "permissions": ["fs:read", "fs:write", "db", "workflow:run", "skill:execute", "mcp", "net"],
+  "knownLimitations": "Not a competing ERP: real systems of record integrate via MCP. Hosted control plane is Phase 11+."
+}

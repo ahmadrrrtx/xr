@@ -22,6 +22,18 @@ import {
   MCP_SENSITIVE_PERMISSIONS,
 } from "./types.ts";
 import { wrapMcpTool, wrapMcpResource, wrapMcpPrompt } from "./client.ts";
+import { CapabilityProvenanceStore } from "../platform/capabilities/provenance.ts";
+import { capabilityId } from "../platform/capabilities/types.ts";
+import { McpAllowlist } from "./allowlist.ts";
+
+/** Phase 7 · T1 — best-effort provenance recording from the MCP plane. */
+function recordMcpProvenance(record: (store: CapabilityProvenanceStore) => void): void {
+  try {
+    record(new CapabilityProvenanceStore());
+  } catch (e) {
+    console.warn(`[provenance] mcp event not recorded: ${(e as Error).message}`);
+  }
+}
 
 export interface McpLoadResult {
   serverId: string;
@@ -99,6 +111,11 @@ export class McpManager {
     const entry = McpRegistry.newEntry(input);
     this.registry.upsert(entry);
     this.store.audit("mcp.add", { id: entry.id, transport: entry.transport, source: entry.source });
+    recordMcpProvenance((p) => p.recordEvent(capabilityId("mcp", entry.id), "install", {
+      actor: "user",
+      detail: `v${entry.version} (${entry.transport}, ${entry.localOrRemote})`,
+      outcome: { status: "success", detail: "registered; default-deny until enabled + allowlisted" },
+    }));
     return { ok: true, entry };
   }
 
@@ -152,6 +169,7 @@ export class McpManager {
     this.unloadOne(id); // sync best-effort
     this.registry.remove(id);
     this.store.audit("mcp.remove", { id });
+    recordMcpProvenance((p) => p.recordEvent(capabilityId("mcp", id), "remove", { actor: "user", detail: "server uninstalled", outcome: { status: "success" } }));
     return { ok: true };
   }
 
@@ -266,6 +284,17 @@ export class McpManager {
 
   private async loadOne(entry: McpRegistryEntry): Promise<void> {
     if (!entry.enabled) return;
+    // Phase 7 · T6 — SIGNED ALLOWLIST gate (default-deny): enabled is
+    // necessary but not sufficient. A server not on the validly-signed
+    // allowlist is refused at load (fail-closed).
+    const allow = this.allowlistGate(entry.id);
+    if (!allow.ok) {
+      this.loaded.delete(entry.id);
+      this.registry.setHealth(entry.id, "untrusted", allow.reason);
+      this.registry.record(entry.id, "allowlist_denied", allow.reason);
+      this.store.audit("mcp.allowlist_denied", { id: entry.id, reason: allow.reason });
+      return;
+    }
     const problem = this.authorityProblem(entry);
     if (problem) {
       this.loaded.delete(entry.id);
@@ -295,15 +324,37 @@ export class McpManager {
       };
       this.loaded.set(entry.id, result);
 
-      // update registry inventory
+      // update registry inventory + honest health (a successful load clears
+      // any earlier untrusted/error state — Phase 7 · T6)
       this.registry.patch(entry.id, {
         tools: toolDefs,
         resources: resDefs,
         prompts: promptDefs,
+        health: "healthy",
+        healthDetail: `loaded via signed allowlist${client.isIsolated ? " (isolated)" : ""}`,
+        lastHealthCheckAt: Date.now(),
       });
     } catch (e: any) {
       this.loaded.delete(entry.id);
       this.registry.setHealth(entry.id, "error", e.message);
+    }
+  }
+
+  /**
+   * Phase 7 · T6 — allowlist gate with local override support (the config
+   * `mcp.allowlist.enabled: false` can disable the gate ONLY explicitly;
+   * default is enforced). Uses the shared allowlist store.
+   */
+  private allowlistGate(id: string): { ok: boolean; reason: string } {
+    const cfg = this.config as { mcp?: { allowlist?: { enabled?: boolean } } };
+    if (cfg.mcp?.allowlist?.enabled === false) {
+      return { ok: true, reason: "allowlist gate explicitly disabled by operator config (mcp.allowlist.enabled=false)" };
+    }
+    try {
+      const r = new McpAllowlist().isAllowed(id);
+      return { ok: r.ok, reason: r.reason ?? "allowlist gate" };
+    } catch (e) {
+      return { ok: false, reason: `allowlist gate error (fail-closed): ${(e as Error).message}` };
     }
   }
 

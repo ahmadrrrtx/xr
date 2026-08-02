@@ -8,7 +8,8 @@
  */
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { SkillManifest } from "./schema.ts";
+import type { SkillManifest, SkillType } from "./schema.ts";
+import { deriveSkillType } from "./schema.ts";
 import { readSkillManifest } from "./manifest.ts";
 import type { LoadedSkill } from "./loader.ts";
 import type { McpRegistryEntry } from "../mcp/registry.ts";
@@ -34,6 +35,8 @@ export interface UnifiedSkillRecord {
   health: "healthy" | "disabled" | "invalid" | "missing-dependency";
   errors: string[];
   warnings: string[];
+  /** Phase 7 · T5 — constitutional skill type (Art. XV.2). */
+  skillType: SkillType;
 }
 
 function perm(scope: SkillManifest["permissions"][number]["scope"], reason: string, dangerous: boolean): SkillManifest["permissions"][number] {
@@ -113,6 +116,7 @@ export function recordFromSkillDirectory(dir: string, source: UnifiedSkillRecord
           health: "invalid",
           errors: loaded.errors,
           warnings: [],
+          skillType: "experimental",
         }
       : null;
   }
@@ -125,6 +129,7 @@ export function recordFromSkillDirectory(dir: string, source: UnifiedSkillRecord
     enabled,
     installed: source !== "local",
     health: enabled ? "healthy" : "disabled",
+    skillType: deriveSkillType(loaded.manifest),
     errors: loaded.ok ? [] : loaded.errors,
     warnings: hasManifest ? [] : ["legacy SKILL.md compatibility adapter active; run xr skills migrate to create xr-skill.json"],
   };
@@ -148,6 +153,7 @@ export function recordsFromPluginSkills(pluginId: string, skills: LoadedSkill[],
     enabled,
     installed: true,
     health: enabled ? "healthy" : "disabled",
+    skillType: "connector",
     errors: [],
     warnings: [],
   }));
@@ -174,6 +180,7 @@ export function recordsFromMcpBundles(entries: McpRegistryEntry[]): UnifiedSkill
     enabled: entry.enabled,
     installed: true,
     health: entry.enabled ? (entry.health === "healthy" || entry.health === "unknown" ? "healthy" : "missing-dependency") : "disabled",
+    skillType: "connector",
     errors: entry.health === "error" || entry.health === "unreachable" ? [entry.healthDetail ?? entry.health] : [],
     warnings: entry.health === "unknown" ? ["MCP health has not been checked yet"] : [],
   }));
@@ -188,8 +195,8 @@ export interface LearnedSkillRow {
 }
 
 export function recordsFromLearnedSkills(rows: LearnedSkillRow[]): UnifiedSkillRecord[] {
-  return rows.map((row) => ({
-    manifest: virtualManifest({
+  return rows.map((row) => {
+    const manifest = virtualManifest({
       id: `learned:${row.id}`,
       name: titleCase(row.id),
       description: row.why || `Learned XR skill ${row.id}, preserved by the non-regressive skill engine.`,
@@ -197,16 +204,20 @@ export function recordsFromLearnedSkills(rows: LearnedSkillRow[]): UnifiedSkillR
       tags: ["learned", row.source],
       publisher: "xr-autolearn",
       permissions: [perm("skill:execute", `Replay learned behavior ${row.id}.`, false)],
-    }),
-    dir: `learned:${row.id}`,
-    kind: "learned-skill",
-    source: "learned",
-    enabled: row.active === 1,
-    installed: true,
-    health: row.active === 1 ? "healthy" : "disabled",
-    errors: [],
-    warnings: [],
-  }));
+    });
+    return {
+      manifest,
+      dir: `learned:${row.id}`,
+      kind: "learned-skill",
+      source: "learned",
+      enabled: row.active === 1,
+      installed: true,
+      health: row.active === 1 ? "healthy" : "disabled",
+      skillType: deriveSkillType(manifest),
+      errors: [],
+      warnings: [],
+    };
+  });
 }
 
 export function recordsFromResearchPacks(): UnifiedSkillRecord[] {
@@ -215,8 +226,8 @@ export function recordsFromResearchPacks(): UnifiedSkillRecord[] {
     ["research:academic", "Academic Research Pack", "Academic source discovery, paper analysis, citation-aware synthesis, and uncertainty tracking."],
     ["research:market", "Market Research Pack", "Market, competitor, segment, and positioning research using XR's Research Engine."],
   ] as const;
-  return packs.map(([id, name, description]) => ({
-    manifest: virtualManifest({
+  return packs.map(([id, name, description]) => {
+    const manifest = virtualManifest({
       id,
       name,
       description,
@@ -225,46 +236,52 @@ export function recordsFromResearchPacks(): UnifiedSkillRecord[] {
       publisher: "xr-core",
       tools: ["research"],
       permissions: [perm("net", `${name} may use approved research/search egress.`, true)],
-    }),
-    dir: id,
-    kind: "research-pack",
-    source: "virtual",
-    enabled: true,
-    installed: true,
-    health: "healthy",
-    errors: [],
-    warnings: [],
-  }));
+    });
+    return {
+      manifest,
+      dir: id,
+      kind: "research-pack",
+      source: "virtual",
+      enabled: true,
+      installed: true,
+      health: "healthy",
+      skillType: deriveSkillType(manifest),
+      errors: [],
+      warnings: [],
+    };
+  });
 }
 
 function recordFromAgent(agent: AgentDefinition): UnifiedSkillRecord {
-  return {
-    manifest: virtualManifest({
-      id: `role:${agent.id}`,
-      name: agent.label,
+  const manifest = virtualManifest({
+    id: `role:${agent.id}`,
+    name: agent.label,
+    description: agent.description,
+    category: "agent",
+    tags: ["role", agent.role, ...agent.capabilities],
+    publisher: "xr-core",
+    tools: agent.toolScope.mode === "allowlist" ? agent.toolScope.tools : [],
+    permissions: [perm("skill:execute", `Use role behavior ${agent.label} through the multi-agent runtime.`, false)],
+    workflows: [{
+      id: `role:${agent.id}:workflow`,
+      title: `${agent.label} role workflow`,
       description: agent.description,
-      category: "agent",
-      tags: ["role", agent.role, ...agent.capabilities],
-      publisher: "xr-core",
-      tools: agent.toolScope.mode === "allowlist" ? agent.toolScope.tools : [],
-      permissions: [perm("skill:execute", `Use role behavior ${agent.label} through the multi-agent runtime.`, false)],
-      workflows: [{
-        id: `role:${agent.id}:workflow`,
-        title: `${agent.label} role workflow`,
-        description: agent.description,
-        steps: [
-          { id: "scope", title: "Scope", instruction: `Operate only within the ${agent.role} role and declared tool scope.`, expectedOutput: "Scoped plan" },
-          { id: "execute", title: "Execute", instruction: `Execute as ${agent.label}. Capabilities: ${agent.capabilities.join(", ")}. Tool scope: ${agent.toolScope.mode} ${agent.toolScope.tools.join(", ") || "none"}.`, expectedOutput: "Role-specific output" },
-          { id: "handoff", title: "Handoff", instruction: "Summarize decisions, risks, and downstream handoff requirements.", expectedOutput: "Handoff summary" },
-        ],
-      }],
-    }),
+      steps: [
+        { id: "scope", title: "Scope", instruction: `Operate only within the ${agent.role} role and declared tool scope.`, expectedOutput: "Scoped plan" },
+        { id: "execute", title: "Execute", instruction: `Execute as ${agent.label}. Capabilities: ${agent.capabilities.join(", ")}. Tool scope: ${agent.toolScope.mode} ${agent.toolScope.tools.join(", ") || "none"}.`, expectedOutput: "Role-specific output" },
+        { id: "handoff", title: "Handoff", instruction: "Summarize decisions, risks, and downstream handoff requirements.", expectedOutput: "Handoff summary" },
+      ],
+    }],
+  });
+  return {
+    manifest,
     dir: `role:${agent.id}`,
     kind: "role-pack",
     source: "virtual",
     enabled: true,
     installed: true,
     health: "healthy",
+    skillType: deriveSkillType(manifest),
     errors: [],
     warnings: [],
   };

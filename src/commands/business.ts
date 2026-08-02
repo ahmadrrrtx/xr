@@ -17,7 +17,13 @@
 
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
-import { BusinessOS } from "../business/index.ts";
+/**
+ * Phase 7 · T8 — Business OS is a governed extension (L5) over the thin L0
+ * contract. The command resolves the extension through Tokens.Business
+ * (null unless config-enabled AND effect-verified — default-excluded).
+ */
+import type { BusinessOS } from "../../extensions/business-os/src/index.ts";
+import type { BusinessOsExtension } from "../core/business-l0.ts";
 import { banner, ok, info, warn, xrBold, xrDim, xrGreen, xrRed } from "../cli/output.ts";
 import { xrAmber } from "../ui/theme.ts";
 const xrYellow = xrAmber;
@@ -46,7 +52,16 @@ export class BusinessCommand implements Command {
   usage = "xr business [status|init|journeys|outcomes|approvals|workers|artifacts|mutations|privacy|work-queue|audit]";
 
   async execute(ctx: CommandContext): Promise<void> {
-    const businessOS = ctx.registry.resolve(Tokens.Business) as BusinessOS;
+    let businessOS = ctx.registry.resolve(Tokens.Business) as BusinessOS | null;
+    if (!businessOS) {
+      // Lazy-load the governed extension (config + effect-verification gate).
+      try {
+        const loader = ctx.registry.tryResolve(Tokens.BusinessLoader);
+        businessOS = (await loader?.load()) as BusinessOS | null;
+      } catch {
+        businessOS = null;
+      }
+    }
     const rawArgs = ctx.args ?? [];
     const sub = rawArgs[0] ?? "status";
     const json = isJsonFlag(rawArgs);

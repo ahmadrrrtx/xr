@@ -26,7 +26,7 @@
  *                 src/platform/**, src/integrations, src/computer,
  *                 src/automation, src/local, src/research
  *   L3/L4         plugins + skills are packaged out-of-tree; their HOSTS are L2
- *   L5 Business   src/business
+ *   L5 Business   extensions/business-os (governed extension over L0)
  *   L6 Enterprise src/enterprise/** (incl. deployment, evaluation, baseline)
  *   Surfaces      src/interfaces, src/cli, src/commands, src/daemon,
  *                 src/telegram, src/voice, src/ui, src/i18n, src/export,
@@ -166,9 +166,21 @@ module.exports = {
       severity: "error",
       comment:
         "Business OS is an extension package over thin kernel contracts " +
-        "(Art. §2.2 L5); it must not depend on enterprise deployment concerns.",
-      from: { path: "^src/business/" },
-      to: { path: "^src/(enterprise|interfaces|cli|commands|daemon|telegram|voice)/" },
+        "(Art. §2.2 L5); it must not depend on enterprise deployment concerns " +
+        "or surfaces. The kernel must not import the extension statically.",
+      from: { path: "^extensions/business-os/" },
+      to: { path: "^src/(enterprise|interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)/" },
+    },
+    {
+      name: "kernel-no-business-extension",
+      severity: "error",
+      comment:
+        "Phase 7 · T8 — the kernel holds ONLY the thin L0 contract; the " +
+        "business extension (extensions/business-os) is loaded dynamically. " +
+        "A static import from src/ into the extension is a constitutional " +
+        "violation (Art. XVI).",
+      from: { path: "^src/" },
+      to: { path: "^extensions/business-os/" },
     },
 
     // ── Nothing may import a surface ─────────────────────────────────────────

@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
   "version": "7.0.1",
-  "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
+  "description": "XR \u2014 a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr"
@@ -23,7 +23,7 @@
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "ci": "bun run typecheck && bun test && bun run release:check && bun run claim-lint && bun run baseline:inventory && bun run boundaries && bun run size-gate && bun run hot-path-lint",
+    "ci": "bun run typecheck && bun test && bun run release:check && bun run claim-lint && bun run baseline:inventory && bun run ci-capability-gate && bun run boundaries && bun run size-gate && bun run hot-path-lint",
     "xr": "bun run src/index.ts",
     "cli:help": "bun run src/index.ts help",
     "cli:doctor": "bun run src/index.ts doctor",
@@ -47,7 +47,8 @@
     "hot-path-lint": "bun run scripts/hot-path-lint.ts",
     "sbom": "bun run scripts/sbom.ts",
     "supply:check": "bun run scripts/license-check.ts && bun run scripts/sbom.ts --out /tmp/xr-sbom.json",
-    "verify-release": "bun run scripts/verify-release.ts"
+    "verify-release": "bun run scripts/verify-release.ts",
+    "ci-capability-gate": "bun run scripts/ci-capability-gate.ts"
   },
   "repository": {
     "type": "git",

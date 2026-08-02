@@ -185,6 +185,13 @@ export const ManifestSchema = z.object({
   homepage: z.string().max(800).optional(),
   license: z.string().max(80).optional(),
   keywords: z.array(z.string().max(40)).default([]),
+  // ── Phase 7 · T4 — additive manifest-security fields (all optional) ──────
+  /** Bill-of-materials reference (SPDX/CycloneDX JSON path). */
+  sbom: z.object({ ref: z.string().max(800), format: z.string().max(40).optional() }).optional(),
+  /** Dependency locks: id → version → hash. */
+  dependencyLocks: z.array(z.object({ id: z.string().max(96), version: z.string().max(40), hash: z.string().regex(/^[a-f0-9]{64}$/i).optional() })).optional(),
+  /** Capability statement: what this plugin does and what it needs. */
+  capabilityStatement: z.string().max(4000).optional(),
 });
 
 export type PluginManifest = z.infer<typeof ManifestSchema>;

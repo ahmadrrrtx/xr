@@ -42,12 +42,12 @@ import { DocumentsModule } from './modules/documents/index.ts';
 import { MeetingsModule } from './modules/meetings/index.ts';
 import { AIWorkersModule, WORKER_DEFINITIONS } from './modules/ai-workers/index.ts';
 
-import { ConnectorRegistry } from '../integrations/registry.ts';
-import { OAuthManager } from '../integrations/oauth.ts';
-import { CredentialVault } from '../integrations/credentials.ts';
-import { BusinessSecurityPolicies } from '../security/policies.ts';
-import { CORE_VERSION, CODENAME, PKG } from '../core/version.ts';
-import type { LifecycleHook } from '../core/lifecycle.ts';
+import { ConnectorRegistry } from '../../../src/integrations/registry.ts';
+import { OAuthManager } from '../../../src/integrations/oauth.ts';
+import { CredentialVault } from '../../../src/integrations/credentials.ts';
+import { BusinessSecurityPolicies } from '../../../src/security/policies.ts';
+import { CORE_VERSION, CODENAME, PKG } from '../../../src/core/version.ts';
+import type { LifecycleHook } from '../../../src/core/lifecycle.ts';
 
 // XR 5.3 — Operating Layer
 import { BusinessRecordMutationService } from './core/record-mutation.ts';
@@ -62,6 +62,8 @@ import { BusinessOperatingLayer } from './core/operating-layer.ts';
 import { applyOperatingLayerMigration } from './core/migration.ts';
 import { JOURNEY_DEFINITIONS } from './core/journeys.ts';
 
+type BusinessOsExtensionContract = import("../../../src/core/business-l0.ts").BusinessOsExtension;
+
 export interface BusinessOSConfig {
   /** XR's existing SQLite database instance */
   db: any;
@@ -69,9 +71,17 @@ export interface BusinessOSConfig {
   masterKey?: string;
   /** Enabled modules (default: all) */
   modules?: string[];
+  /**
+   * Phase 7 · T8 — the kernel's thin L0 contract. The extension exposes it
+   * so the kernel can govern records/artifacts/audit without domain schema.
+   */
+  l0?: import("../../../src/core/business-l0.ts").BusinessL0;
 }
 
-export class BusinessOS implements LifecycleHook {
+export class BusinessOS implements LifecycleHook, BusinessOsExtensionContract {
+  /** Phase 7 · T8 — the thin L0 contract handed in by the kernel. */
+  readonly l0: import("../../../src/core/business-l0.ts").BusinessL0;
+
   // Core
   readonly db: BusinessDatabase;
   readonly orgs: OrganizationManager;
@@ -120,6 +130,9 @@ export class BusinessOS implements LifecycleHook {
   private initialized = false;
 
   constructor(config: BusinessOSConfig) {
+    // Phase 7 · T8 — L0 contract (kernel-provided or local default).
+    const { BusinessL0 } = require("../../../src/core/business-l0.ts") as typeof import("../../../src/core/business-l0.ts");
+    this.l0 = config.l0 ?? new BusinessL0(config.db);
     // Initialize core
     this.db = new BusinessDatabase(config.db);
     this.orgs = new OrganizationManager(this.db);
@@ -235,6 +248,21 @@ export class BusinessOS implements LifecycleHook {
     return this.initialized || this.db.isInitialized();
   }
 
+  /** Phase 7 · T8 — extension health view (kernel-facing). */
+  health(): { loaded: boolean; modules: string[]; verified: boolean; reason?: string } {
+    return {
+      loaded: this.isInitialized(),
+      modules: Object.keys(this.db.getStats()).length ? ["core", "crm", "sales", "marketing", "support", "projects", "knowledge", "finance", "hr", "analytics", "automation", "scheduling", "communication", "documents", "meetings", "ai-workers"] : [],
+      verified: this.isInitialized(),
+      reason: this.isInitialized() ? undefined : "extension not initialized",
+    };
+  }
+
+  /** Phase 7 · T8 — dispose (kernel-facing). */
+  async dispose(): Promise<void> {
+    this.initialized = false;
+  }
+
   /**
    * Get system health status.
    */
@@ -315,10 +343,10 @@ export { CommunicationModule } from './modules/communication/index.ts';
 export { DocumentsModule } from './modules/documents/index.ts';
 export { MeetingsModule } from './modules/meetings/index.ts';
 export { AIWorkersModule, WORKER_DEFINITIONS } from './modules/ai-workers/index.ts';
-export { ConnectorRegistry, CONNECTORS } from '../integrations/registry.ts';
-export { OAuthManager } from '../integrations/oauth.ts';
-export { CredentialVault } from '../integrations/credentials.ts';
-export { BusinessSecurityPolicies } from '../security/policies.ts';
+export { ConnectorRegistry, CONNECTORS } from '../../../src/integrations/registry.ts';
+export { OAuthManager } from '../../../src/integrations/oauth.ts';
+export { CredentialVault } from '../../../src/integrations/credentials.ts';
+export { BusinessSecurityPolicies } from '../../../src/security/policies.ts';
 export { BUSINESS_CLI_COMMANDS, BUSINESS_MODULE_IDS } from './cli.ts';
 
 // XR 5.3 Operating Layer Exports

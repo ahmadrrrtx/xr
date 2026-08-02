@@ -268,6 +268,30 @@ export class AgentService implements LifecycleHook {
       trust: this.registry.tryResolve(Tokens.Trust),
       hardened: config.security.hardened,
       allowedHosts: config.security.allowedHosts,
+      /**
+       * Phase 7 · T1 — provenance: every tool call of this run is recorded in
+       * the capability provenance graph (best-effort; the capability service
+       * is optional). Answers "what did the agent use?" with outcomes.
+       */
+      ...(() => {
+        const caps = this.registry.tryResolve(Tokens.Capabilities) as
+          | { recordUse?: (tool: string, opts: { runId?: string; outcome?: "success" | "failure" | "unknown"; detail?: string }) => void }
+          | undefined;
+        const recordUse = caps?.recordUse;
+        if (!recordUse) return {};
+        return {
+          onToolUse: (info: { tool: string; ok: boolean; error?: string }) => {
+            try {
+              // The envelope identity is allocated below (evidence); the
+              // run-level correlation id is the envelope id, recorded per
+              // call by the loop's ToolContext wiring.
+              recordUse(info.tool, { runId: evidence.envelopeId, outcome: info.ok ? "success" : "failure", detail: info.error });
+            } catch {
+              // Provenance recording must never break the run.
+            }
+          },
+        };
+      })(),
     };
 
     // ── XR 4.5 — assemble a scope-filtered context package ──────────────

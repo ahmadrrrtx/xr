@@ -16,10 +16,12 @@ import type {
   CapabilityCredentialRequirement,
   CapabilityDataScope,
   CapabilityDependency,
+  CapabilityDependencyLock,
   CapabilityDescriptor,
   CapabilityInterface,
   CapabilityLifecycle,
   CapabilityLifecycleState,
+  CapabilityManifestSecurity,
   CapabilityNetworkRequirement,
   CapabilityPackageIntegrity,
   CapabilityPermissionDeclaration,
@@ -27,6 +29,7 @@ import type {
   CapabilityPlacementRequirement,
   CapabilityProvenance,
   CapabilityPublisherIdentity,
+  CapabilitySbom,
   CapabilitySignatureStatus,
   CapabilityTrustSignals,
   CapabilityType,
@@ -195,6 +198,9 @@ function descriptorBase(args: {
   trustLevel?: string;
   support?: CapabilityDescriptor["support"];
   cost?: CapabilityDescriptor["cost"];
+  sbom?: CapabilitySbom;
+  dependencyLocks?: CapabilityDependencyLock[];
+  capabilityStatement?: string;
   tags?: string[];
   keywords?: string[];
   overlay?: CapabilityOverlay;
@@ -236,10 +242,19 @@ function descriptorBase(args: {
     trust: trustSignals({ trustLevel: args.trustLevel ?? args.publisher.trustLevel, publisherVerified: args.publisher.verified, package: pack, certification: cert }),
     support: args.support ?? { maintenance: "unknown" },
     cost: args.cost ?? { cpu: "unknown" },
+    security: {
+      sbom: args.sbom,
+      dependencyLocks: args.dependencyLocks,
+      capabilityStatement: args.capabilityStatement,
+    },
     tags: uniq(args.tags),
     keywords: uniq(args.keywords),
   };
   return applyOverlay(desc, args.overlay);
+}
+
+function securityFromManifest(m: { sbom?: CapabilitySbom; dependencyLocks?: CapabilityDependencyLock[]; capabilityStatement?: string }): CapabilityManifestSecurity {
+  return { sbom: m.sbom, dependencyLocks: m.dependencyLocks, capabilityStatement: m.capabilityStatement };
 }
 
 export function descriptorFromPlugin(manifest: PluginManifest, entry?: PluginRegistryEntry, overlay?: CapabilityOverlay, denied: string[] = []): CapabilityDescriptor {
@@ -282,6 +297,9 @@ export function descriptorFromPlugin(manifest: PluginManifest, entry?: PluginReg
     certification: certificationFromTrust(manifest.trustLevel, false),
     trustLevel: manifest.trustLevel,
     support: { homepage: manifest.homepage, license: manifest.license, maintenance: "unknown" },
+    sbom: manifest.sbom,
+    dependencyLocks: manifest.dependencyLocks,
+    capabilityStatement: manifest.capabilityStatement,
     tags: [manifest.type, ...manifest.keywords],
     keywords: [manifest.id, manifest.name, manifest.description, ...manifest.keywords],
     overlay,
@@ -329,8 +347,10 @@ export function descriptorFromSkill(record: UnifiedSkillRecord, installation?: S
     providerRequirements: { providerIds: m.compatibility.providers, modelCapabilities: [], locality: "any" },
     certification: certificationFromTrust(trustLevel, m.content.tests.length > 0),
     trustLevel,
+    sbom: (m as { sbom?: CapabilitySbom }).sbom,
+    dependencyLocks: (m as { dependencyLocks?: CapabilityDependencyLock[] }).dependencyLocks,
     support: { homepage: m.homepage, repository: m.repository, license: m.license, maintenance: "unknown" },
-    tags: [...m.categories, ...m.tags, record.kind],
+    tags: ["skill", record.skillType, ...m.categories, ...m.tags, record.kind],
     keywords: [m.id, m.name, m.description, ...m.keywords, ...m.activation.phrases],
     overlay,
   });

@@ -54,11 +54,59 @@ export async function handleMcpCommand(argv: string[], store: Store): Promise<vo
     case "search": return cmdSearch(mgr, flags);
     case "update": return cmdUpdate(mgr, flags);
     case "doctor": return cmdDoctor(mgr);
+    case "allow": case "allowlist": return cmdAllow(mgr, flags);
+    case "revoke": return cmdRevoke(mgr, flags);
+    case "allowlist-status": return cmdAllowlistStatus(mgr, flags);
     case "help": case "--help": case "-h": return printHelp();
     default:
       warn(`unknown mcp subcommand: ${sub}`);
       printHelp();
   }
+}
+
+/** Phase 7 · T6 — signed allowlist commands (default-deny MCP). */
+async function cmdAllow(mgr: McpManager, flags: Flags) {
+  const id: string = flags.rest[0] ?? "";
+  if (!id) return warn("usage: xr mcp allow <id> [--key <keyId>]");
+  await cmdAllowInner(id);
+}
+
+async function cmdAllowInner(id: string) {
+  const { McpAllowlist, defaultAllowlistKeysPath, generateAllowlistKeyPair, writeAllowlistKeys } = await import("./allowlist.ts");
+  // Ensure operator keys exist (first run).
+  const { existsSync } = await import("node:fs");
+  if (!existsSync(defaultAllowlistKeysPath())) {
+    const pair = generateAllowlistKeyPair();
+    writeAllowlistKeys([pair]);
+    ok(`created operator allowlist key ${pair.keyId} at ${defaultAllowlistKeysPath()}`);
+  }
+  const result = new McpAllowlist().allow(id, { by: "operator" });
+  if (result.ok) ok(result.reason ?? "allowed"); else warn(result.reason ?? "allow failed");
+}
+
+async function cmdRevoke(mgr: McpManager, flags: Flags) {
+  const id: string = flags.rest[0] ?? "";
+  if (!id) return warn("usage: xr mcp revoke <id>");
+  const { McpAllowlist } = await import("./allowlist.ts");
+  const result = new McpAllowlist().revoke(id);
+  if (result.ok) {
+    ok(result.reason ?? "revoked");
+    // Revocation kills live clients.
+    await mgr.unloadOne(id);
+    info(`unloaded live client for ${id}`);
+  } else warn(result.reason ?? "revoke failed");
+}
+
+async function cmdAllowlistStatus(mgr: McpManager, flags: Flags) {
+  const { McpAllowlist } = await import("./allowlist.ts");
+  const allowlist = new McpAllowlist();
+  const file = allowlist.verifyFile();
+  const rows = allowlist.list();
+  if (flags.json) return console.log(JSON.stringify({ verified: file.ok, reason: file.reason, servers: rows }, null, 2));
+  if (!file.ok) warn(`allowlist ${file.ok ? "verified" : "NOT VERIFIED"}: ${file.reason}`);
+  else ok(`allowlist verified: ${file.reason}`);
+  if (!rows.length) return warn("no servers allowlisted (default-deny: nothing can load)");
+  for (const r of rows) console.log(`  ${r.serverId}  granted ${new Date(r.grantedAt).toISOString()} by ${r.by}`);
 }
 
 function printHelp(): void {
@@ -77,6 +125,9 @@ function printHelp(): void {
   xr mcp health [id]              run health check
   xr mcp search <query>           search registry
   xr mcp doctor                   MCP platform health
+  xr mcp allow <id>               sign server onto the allowlist (default-deny gate)
+  xr mcp revoke <id>              revoke from allowlist (kills live client)
+  xr mcp allowlist-status         verify allowlist signature + list entries
 
   Example:
     xr mcp add github stdio npx @modelcontextprotocol/server-github

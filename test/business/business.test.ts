@@ -17,7 +17,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BusinessOS } from "../../src/business/index.ts";
+import { BusinessOS } from "../../extensions/business-os/src/index.ts";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
 import { CORE_VERSION, CODENAME, PKG } from "../../src/core/version.ts";
 

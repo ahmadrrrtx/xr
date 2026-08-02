@@ -20,22 +20,22 @@ import { join } from 'node:path';
 import { mkdtempSync } from 'node:fs';
 import Database from 'bun:sqlite';
 
-import { BusinessDatabase } from '../../src/business/core/database.ts';
-import { OrganizationManager } from '../../src/business/core/organization.ts';
-import { RBACManager } from '../../src/business/core/rbac.ts';
-import { BusinessEventBus } from '../../src/business/core/bus.ts';
-import { AuditTrail } from '../../src/business/core/audit.ts';
-import { BusinessRecordMutationService } from '../../src/business/core/record-mutation.ts';
-import { OutcomeTracker } from '../../src/business/core/outcome.ts';
-import { WorkerGovernanceService } from '../../src/business/core/worker-contract.ts';
-import { AuthorityBoundaryService } from '../../src/business/core/authority-boundaries.ts';
-import { ArtifactEvidenceService } from '../../src/business/core/artifact-evidence.ts';
-import { ApprovalEscalationService } from '../../src/business/core/approval-escalation.ts';
-import { LocalPrivacyService } from '../../src/business/core/local-privacy.ts';
-import { ExecutionBridge } from '../../src/business/core/execution-bridge.ts';
-import { BusinessOperatingLayer } from '../../src/business/core/operating-layer.ts';
-import { JOURNEY_DEFINITIONS, getJourneyById } from '../../src/business/core/journeys.ts';
-import { getAllBusinessWorkflowTemplates } from '../../src/business/core/workflow-templates.ts';
+import { BusinessDatabase } from '../../extensions/business-os/src/core/database.ts';
+import { OrganizationManager } from '../../extensions/business-os/src/core/organization.ts';
+import { RBACManager } from '../../extensions/business-os/src/core/rbac.ts';
+import { BusinessEventBus } from '../../extensions/business-os/src/core/bus.ts';
+import { AuditTrail } from '../../extensions/business-os/src/core/audit.ts';
+import { BusinessRecordMutationService } from '../../extensions/business-os/src/core/record-mutation.ts';
+import { OutcomeTracker } from '../../extensions/business-os/src/core/outcome.ts';
+import { WorkerGovernanceService } from '../../extensions/business-os/src/core/worker-contract.ts';
+import { AuthorityBoundaryService } from '../../extensions/business-os/src/core/authority-boundaries.ts';
+import { ArtifactEvidenceService } from '../../extensions/business-os/src/core/artifact-evidence.ts';
+import { ApprovalEscalationService } from '../../extensions/business-os/src/core/approval-escalation.ts';
+import { LocalPrivacyService } from '../../extensions/business-os/src/core/local-privacy.ts';
+import { ExecutionBridge } from '../../extensions/business-os/src/core/execution-bridge.ts';
+import { BusinessOperatingLayer } from '../../extensions/business-os/src/core/operating-layer.ts';
+import { JOURNEY_DEFINITIONS, getJourneyById } from '../../extensions/business-os/src/core/journeys.ts';
+import { getAllBusinessWorkflowTemplates } from '../../extensions/business-os/src/core/workflow-templates.ts';
 
 function createTestBiz() {
   const dir = mkdtempSync(join(tmpdir(), 'xr-biz-test-'));
@@ -467,6 +467,7 @@ describe('XR 5.3 Operating Layer — Execution Bridge', () => {
     const audit = new AuditTrail(db);
     const bridge = new ExecutionBridge({ db, audit });
 
+    const verifier = { verify: () => ({ ok: true, detail: 'biz_deals row updated (effect verified)' }) };
     const result = await bridge.executeBusinessAction({
       orgId: 'org-1',
       workspaceId: 'ws-1',
@@ -478,10 +479,11 @@ describe('XR 5.3 Operating Layer — Execution Bridge', () => {
       inputSummary: 'Move deal to qualified',
       capability: { kind: 'business', name: 'deals.move' },
       idempotencyKey: 'move:deal-1:qualified',
-    });
+    }, verifier);
 
     expect(result.executionId).toBeDefined();
     expect(result.outcome).toBe('succeeded');
+    expect(result.verified).toBe(true);
 
     // Second call with same idempotency key should return same executionId without re-running
     const result2 = await bridge.executeBusinessAction({
@@ -495,7 +497,7 @@ describe('XR 5.3 Operating Layer — Execution Bridge', () => {
       inputSummary: 'Move deal to qualified',
       capability: { kind: 'business', name: 'deals.move' },
       idempotencyKey: 'move:deal-1:qualified',
-    });
+    }, verifier);
 
     expect(result2.executionId).toBe(result.executionId);
   });
@@ -555,7 +557,7 @@ describe('XR 5.3 Operating Layer — Complete Journeys End-to-End', () => {
     const workspaceId = wsId?.id ?? 'default';
 
     // Need projects module for journey logic — create manually
-    const { ProjectsModule } = await import('../../src/business/modules/projects/index.ts');
+    const { ProjectsModule } = await import('../../extensions/business-os/src/modules/projects/index.ts');
     const projects = new ProjectsModule({ db, bus, audit });
     operatingLayer.setBusinessModules({ projects });
 
@@ -589,7 +591,7 @@ describe('XR 5.3 Operating Layer — Complete Journeys End-to-End', () => {
     const wsId = db.prepare(`SELECT id FROM biz_workspaces WHERE org_id = ? LIMIT 1`).get(org.id) as any;
     const workspaceId = wsId?.id ?? 'default';
 
-    const { KnowledgeModule } = await import('../../src/business/modules/knowledge/index.ts');
+    const { KnowledgeModule } = await import('../../extensions/business-os/src/modules/knowledge/index.ts');
     const knowledge = new KnowledgeModule({ db, bus });
     operatingLayer.setBusinessModules({ knowledge });
 
@@ -624,7 +626,7 @@ describe('XR 5.3 Operating Layer — Complete Journeys End-to-End', () => {
     const wsId = db.prepare(`SELECT id FROM biz_workspaces WHERE org_id = ? LIMIT 1`).get(org.id) as any;
     const workspaceId = wsId?.id ?? 'default';
 
-    const { FinanceModule } = await import('../../src/business/modules/finance/index.ts');
+    const { FinanceModule } = await import('../../extensions/business-os/src/modules/finance/index.ts');
     const finance = new FinanceModule({ db, bus, audit });
     operatingLayer.setBusinessModules({ finance });
 
@@ -720,6 +722,7 @@ describe('XR 5.3 Operating Layer — Reliability & Recovery', () => {
     const audit = new AuditTrail(db);
     const bridge = new ExecutionBridge({ db, audit });
 
+    const verifier = { verify: () => ({ ok: true, detail: 'project row persisted (effect verified)' }) };
     const exec1 = await bridge.executeBusinessAction({
       orgId: 'org-1',
       workspaceId: 'ws-1',
@@ -731,7 +734,7 @@ describe('XR 5.3 Operating Layer — Reliability & Recovery', () => {
       inputSummary: 'Create project',
       capability: { kind: 'business', name: 'projects.create' },
       idempotencyKey: 'create:proj-1',
-    });
+    }, verifier);
 
     expect(exec1.outcome).toBe('succeeded');
 
@@ -747,7 +750,7 @@ describe('XR 5.3 Operating Layer — Reliability & Recovery', () => {
       inputSummary: 'Create project',
       capability: { kind: 'business', name: 'projects.create' },
       idempotencyKey: 'create:proj-1',
-    });
+    }, verifier);
 
     expect(exec2.executionId).toBe(exec1.executionId);
   });

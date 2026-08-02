@@ -83,6 +83,14 @@ export interface ToolContext {
    * fallback is permitted but audited as a degraded path.
    */
   hardened?: boolean;
+  /**
+   * Phase 7 · T1 — optional tool-use recorder. When present, invoked after
+   * every tool execution with the outcome so the capability provenance graph
+   * can answer "what did the agent use?". Absence disables recording, never
+   * execution (kernel stays free of platform imports: this is a plain
+   * callback type).
+   */
+  onToolUse?: (info: { tool: string; ok: boolean; error?: string }) => void;
 }
 
 export interface ApprovalRequest {
