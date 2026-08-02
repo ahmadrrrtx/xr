@@ -1,0 +1,27 @@
+# XR — gitleaks allow-list for INTENTIONAL fake secrets inside test fixtures.
+#
+# Every entry below is a deliberately-unreal specimen used by tests to prove
+# XR's own redaction/vault/security code works on realistic-looking shapes.
+# None of these strings authenticates to anything; they were invented for the
+# fixtures that contain them. Format: <path>:<rule>:<line> (path-scoped so the
+# entry survives commit-hash changes).
+#
+# Phase 8 observability redaction fixtures (test/observability/privacy.test.ts):
+# the scanner-shaped secrets our PII redactor is PROVEN to strip; removing the
+# realistic shape would weaken the privacy gate.
+test/observability/privacy.test.ts:generic-api-key:62
+test/observability/privacy.test.ts:jwt:124
+# Pre-existing fixtures in evaluation/enterprise/environment/context/trust/state
+# suites (same intent: fake specimens for security-proof tests).
+test/evaluation/harness.test.ts:generic-api-key:337
+test/evaluation/harness.test.ts:generic-api-key:632
+test/enterprise/audit-export.test.ts:generic-api-key:77
+test/enterprise/recovery.test.ts:generic-api-key:103
+test/enterprise/security-adversarial.test.ts:generic-api-key:384
+test/enterprise/security-adversarial.test.ts:generic-api-key:397
+test/enterprise/security-adversarial.test.ts:generic-api-key:403
+test/environment/privacy.test.ts:generic-api-key:19
+test/environment/privacy.test.ts:jwt:25
+test/context/security.test.ts:generic-api-key:569
+test/trust/credentials.test.ts:generic-api-key:15
+test/state/workspace-store.test.ts:generic-api-key:178
