@@ -22,7 +22,7 @@ import {
 export class ProvidersCommand implements Command {
   name = "providers";
   description = "manage and inspect LLM providers";
-  usage = "xr providers [list|add|remove|set|test|status|refresh|route|explain|catalog]";
+  usage = "xr providers [list|add|remove|set|test|status|refresh|route|explain|catalog|measure|slo]";
 
   async execute(ctx: CommandContext): Promise<void> {
     const { registry, args } = ctx;
@@ -52,6 +52,12 @@ export class ProvidersCommand implements Command {
         break;
       case "catalog":
         await showCatalog(registry, args.slice(1));
+        break;
+      case "measure":
+        await measureProviders(registry, args.slice(1));
+        break;
+      case "slo":
+        await showRoutingSlo(registry, args.slice(1));
         break;
       case "status":
         await providerStatus(providerService, configService);
@@ -85,6 +91,8 @@ function printUsage(): void {
   xr providers catalog [--json]  intelligence-plane provider/model catalog
   xr providers route [--json]    explain automatic selection
   xr providers explain [--json]  detailed routing decision
+  xr providers measure [--provider <id>] [--json]  offline behavioral measurement
+  xr providers slo [--json]      routing SLO report (selection p95, fallback, CPR)
 
   ${C.bold("Change model / provider (never stuck on default)")}
   xr providers set <id> [model]  set active provider and optional model
@@ -458,6 +466,13 @@ async function explainRoute(
     console.log(`  locality .... ${loc}`);
     console.log(`  mode ........ ${decision.mode}${decision.manual ? " (manual pin)" : ""}`);
     console.log(`  confidence .. ${decision.confidence}`);
+    if (decision.difficulty) {
+      const d = decision.difficulty;
+      console.log(`  difficulty .. ${d.score} (fidelity floor ${d.requiredFidelity.toFixed(2)})`);
+      if (detailed && d.signals.length) {
+        console.log(`  signals ..... ${d.signals.join("; ")}`);
+      }
+    }
     console.log(`  why ......... ${decision.explanation}`);
     if (decision.fallbackChain.length) {
       console.log(`  fallback .... ${decision.fallbackChain.map((s) => `${s.providerId}/${s.modelId}`).join(" → ")}`);
@@ -522,6 +537,116 @@ async function refreshProviders(ps: ProviderService): Promise<void> {
   // Re-sync custom providers from config by touching the provider service.
   ps.getProvider();
   ok("Provider registry refreshed.");
+}
+
+/**
+ * Phase 5 · T2 — offline behavioral measurement (`xr providers measure`).
+ * Runs the bounded probe suite against the selected providers and records
+ * MEASURED behavioral contracts (never vendor claims). Runs only here, as an
+ * explicit operator action — never on the routing hot path.
+ */
+async function measureProviders(
+  registry: import("../core/service-registry.ts").ServiceRegistry,
+  args: string[],
+): Promise<void> {
+  let intel: import("../intelligence/service.ts").IntelligenceService | null = null;
+  try {
+    intel = registry.resolve(Tokens.Intelligence);
+  } catch {
+    warn("Intelligence service not registered.");
+    return;
+  }
+  const jsonMode = args.includes("--json");
+  const idx = args.findIndex((a) => a === "--provider" || a === "-p");
+  const midx = args.findIndex((a) => a === "--model" || a === "-m");
+  const providerId = idx >= 0 ? args[idx + 1] : undefined;
+  const modelId = midx >= 0 ? args[midx + 1] : undefined;
+
+  if (!jsonMode) {
+    banner();
+    console.log(C.bold("Behavioral measurement (offline probes)"));
+    info(
+      "Running bounded probes (structured-output, tool-use, refusal, context-retention). " +
+        "Cloud targets are probed only when the workspace locality policy permits; bounded paid traffic may result.",
+    );
+  }
+  const { measured, skipped } = await intel.measureModels({
+    ...(providerId !== undefined ? { providerId } : {}),
+    ...(modelId !== undefined ? { modelId } : {}),
+  });
+
+  if (jsonMode) {
+    console.log(JSON.stringify({ measured, skipped }, null, 2));
+    return;
+  }
+  if (!measured.length && !skipped.length) {
+    info("No models matched the filter.");
+    return;
+  }
+  for (const c of measured) {
+    ok(
+      `${c.providerId}/${c.modelId} — overall ${c.overallFidelity.toFixed(2)} ` +
+        `(tools ${c.toolUseFidelity}, structured ${c.structuredOutputFidelity}, retention ${c.contextRetention}, false-refusal ${c.refusalRate}; n=${c.samples})`,
+    );
+  }
+  for (const s of skipped.slice(0, 12)) {
+    console.log(`  ${C.dim("skip")} ${s.key} — ${s.reason}`);
+  }
+  console.log(C.dim("\nMeasured contracts: XR_HOME/cache/intelligence/behavioral.json"));
+}
+
+/** Phase 5 · T6 — routing SLO report (`xr providers slo`). */
+async function showRoutingSlo(
+  registry: import("../core/service-registry.ts").ServiceRegistry,
+  args: string[],
+): Promise<void> {
+  let intel: import("../intelligence/service.ts").IntelligenceService | null = null;
+  try {
+    intel = registry.resolve(Tokens.Intelligence);
+  } catch {
+    warn("Intelligence service not registered.");
+    return;
+  }
+  const jsonMode = args.includes("--json");
+  const report = intel.slo.report();
+  const gates = intel.health.report();
+  const open = gates.filter((g) => g.state === "open");
+
+  if (jsonMode) {
+    console.log(JSON.stringify({ ...report, breakers: gates }, null, 2));
+    return;
+  }
+  banner();
+  console.log(C.bold("Routing SLOs (24h window)"));
+  const s = report.selection;
+  const within = s.withinBudget ? C.green("within budget") : C.red("OVER BUDGET");
+  console.log(`  selections           ${s.count}  (manual ${(s.manualRate * 100).toFixed(0)}%, unavailable ${(s.unavailableRate * 100).toFixed(0)}%)`);
+  console.log(`  selection p50 / p95  ${s.p50Ms} / ${s.p95Ms} ms   budget ${s.budgetMs} ms → ${within}`);
+  console.log(`  fallbacks            ${report.fallback.total}  (rate ${(report.fallback.ratePerSelection * 100).toFixed(1)}% of selections)`);
+  console.log(`  degradations         ${report.degradation.total}  (rate ${(report.degradation.ratePerSelection * 100).toFixed(1)}%)`);
+  const cpq = report.costPerQuality;
+  console.log(
+    `  cost-per-quality     avg $${cpq.avgCostUsd.toFixed(5)} @ fidelity ${cpq.avgFidelity} → $${cpq.usdPerFidelityPoint}/0.1pt (n=${cpq.samples})`,
+  );
+  const cpr = report.cpr;
+  const cprState = cpr.samples === 0 ? "no failover samples" : cpr.met ? C.green("target met") : C.red("BELOW TARGET");
+  console.log(`  CPR                  ${cpr.mean} (target ${cpr.target}, n=${cpr.samples}) → ${cprState}`);
+  console.log();
+  console.log(C.bold("Circuit breakers"));
+  if (!gates.length) {
+    console.log("  no health samples yet (breakers close on fresh processes)");
+  }
+  for (const g of gates.slice(0, 12)) {
+    const state =
+      g.state === "open" ? C.red("OPEN") : g.state === "half_open" ? C.yellow("half-open") : C.green("closed");
+    console.log(
+      `  ${g.key.padEnd(28)} ${state}  score ${g.score}  err ${(g.errorRate * 100).toFixed(0)}%  qual-fail ${(g.qualityFailRate * 100).toFixed(0)}% (n=${g.samples})${g.reason ? `  — ${g.reason}` : ""}`,
+    );
+  }
+  if (open.length) {
+    warn(`${open.length} breaker(s) OPEN — traffic routes around them until a half-open probe succeeds.`);
+  }
+  console.log(C.dim("\nEvents: XR_HOME/cache/intelligence/routing-slo.jsonl · never sent anywhere"));
 }
 
 /** Phase 3 · T7 — streaming-metrics report (`xr providers metrics`). */

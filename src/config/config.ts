@@ -23,7 +23,7 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 17; // XR 5.2 Capability Ecosystem
+export const CONFIG_VERSION = 18; // Phase 5 — measured, explainable routing quality
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -167,6 +167,40 @@ const ConfigSchema = z.object({
       disableHistorical: z.boolean().default(false),
       /** When false, automatic routing is off — only explicit/default pins. */
       enableAutomatic: z.boolean().default(true),
+      /**
+       * Phase 5 · T1 — difficulty-aware capability gating (RouteLLM
+       * principle, deterministic): estimate task difficulty and require
+       * MEASURED fidelity ≥ the implied floor. The gate rejects only measured
+       * contracts below the floor; unmeasured models pass on static priors.
+       */
+      difficultyRouting: z.boolean().default(true),
+      /** Phase 5 · T1 — explicit global fidelity floor override (0..1). */
+      minOverallFidelity: z.number().min(0).max(1).optional(),
+      /**
+       * Phase 5 · T3 — circuit breaker tuning (rolling window trips on error
+       * rate AND quality degradation; cooldown → half-open probe).
+       */
+      breaker: z
+        .object({
+          windowSize: z.number().int().min(4).max(512).default(32),
+          minSamples: z.number().int().min(1).max(128).default(4),
+          errorRateThreshold: z.number().min(0.05).max(1).default(0.5),
+          qualityRateThreshold: z.number().min(0.05).max(1).default(0.6),
+          cooldownMs: z.number().int().min(1000).default(30_000),
+          cooldownMaxMs: z.number().int().min(1000).default(300_000),
+          jitterRatio: z.number().min(0).max(1).default(0.2),
+        })
+        .default({}),
+      /** Phase 5 · T3 — jittered retry budget for transient failures. */
+      retry: z
+        .object({
+          maxInPlaceRetries: z.number().int().min(0).max(5).default(1),
+          baseDelayMs: z.number().int().min(0).default(250),
+          maxDelayMs: z.number().int().min(0).default(4_000),
+          totalBudgetMs: z.number().int().min(0).default(8_000),
+          jitterRatio: z.number().min(0).max(1).default(0.3),
+        })
+        .default({}),
     })
     .default({}),
   localModels: z
@@ -805,8 +839,21 @@ export const MIGRATIONS: Record<number, (raw: any) => any> = {
       evidenceWeightedDiscovery: true,
     },
   }),
-
-
+  // 17 -> 18: Phase 5 — measured, explainable routing quality.
+  //
+  // Additive and behavior-preserving:
+  //   • difficultyRouting defaults ON but rejects only MEASURED-below-floor
+  //     contracts, so a workspace with no measured contracts routes exactly as
+  //     before; every existing intelligencePlane value is preserved.
+  //   • breaker/retry get safe defaults; locality policy untouched.
+  17: (raw) => ({
+    ...raw,
+    version: 18,
+    intelligencePlane: {
+      difficultyRouting: true,
+      ...raw.intelligencePlane,
+    },
+  }),
 };
 
 function migrate(raw: any): any {

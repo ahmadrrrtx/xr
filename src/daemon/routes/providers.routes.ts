@@ -9,6 +9,9 @@ import { isLocalRuntimeId, providerIdForRuntime, validateLocalModelId } from "..
 import { XRShieldService } from "../../security/shield.ts";
 import { IntelligenceRouter } from "../../intelligence/router.ts";
 import { buildCatalog } from "../../intelligence/catalog.ts";
+import { BehavioralStore, behavioralView } from "../../intelligence/behavioral.ts";
+import { RoutingHealth, healthView } from "../../intelligence/health.ts";
+import { RoutingSlo } from "../../intelligence/slo.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
 export function providersRoutes(): DaemonRoute[] {
@@ -85,7 +88,13 @@ export function providersRoutes(): DaemonRoute[] {
         const modelClass = (params.get("class") ?? "chat") as any;
         const localOnly = params.get("localOnly") === "1" || params.get("localOnly") === "true";
         const detailed = params.get("detailed") === "1" || params.get("detailed") === "true";
-        const router = new IntelligenceRouter({ catalog: buildCatalog(config) });
+        // Phase 5 — the daemon explains against the SAME measured metadata and
+        // live breaker state as the agent path (one authority, one data set).
+        const router = new IntelligenceRouter({
+          catalog: buildCatalog(config),
+          behavioral: behavioralView(new BehavioralStore()),
+          health: healthView(new RoutingHealth()),
+        });
         const { decision, record } = router.route(config, {
           provider,
           model,
@@ -96,6 +105,30 @@ export function providersRoutes(): DaemonRoute[] {
           },
         });
         return json(detailed ? { decision, record } : { record, summary: decision.explanation });
+      },
+    }),
+    // Phase 5 · T6 — routing SLOs + breaker state (persisted, secret-free)
+    route({
+      id: "providers.slo",
+      path: "/api/providers/slo",
+      method: "GET",
+      handle: async ({ json, url }) => {
+        const windowMs = Number(url.searchParams.get("windowMs") ?? "") || undefined;
+        const report = new RoutingSlo().report(windowMs);
+        const breakers = new RoutingHealth().report();
+        const contracts = new BehavioralStore().all().map((c) => ({
+          key: c.key,
+          overallFidelity: c.overallFidelity,
+          toolUseFidelity: c.toolUseFidelity,
+          structuredOutputFidelity: c.structuredOutputFidelity,
+          contextRetention: c.contextRetention,
+          refusalRate: c.refusalRate,
+          samples: c.samples,
+          measuredAt: c.measuredAt,
+          source: c.source,
+          confidence: c.confidence,
+        }));
+        return json({ report, breakers, measuredContracts: contracts });
       },
     }),
     route({

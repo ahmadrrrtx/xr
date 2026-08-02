@@ -8,6 +8,7 @@
  *   - support human handoff when nothing safe remains
  */
 
+import type { RoutingHealthView } from "./health.ts";
 import type {
   CandidateEvaluation,
   FallbackStep,
@@ -49,6 +50,16 @@ const LOCALITY_RANK: Record<Locality, number> = {
 /**
  * Build an ordered fallback chain from ranked compatible candidates,
  * excluding the already-selected model.
+ *
+ * Phase 5 · T3 — TARGET DIVERSITY, FIRST-CLASS (Charter §9.5; R3): a
+ * cross-provider step outranks a same-provider step with a similar score,
+ * because a provider-level outage or a shared rate-limit pool makes the
+ * same-provider step fail for the SAME reason the primary just failed.
+ * Ordering is stable within each class (score order preserved).
+ *
+ * Phase 5 · T3 — candidates behind an OPEN circuit breaker are excluded
+ * (their reason stays visible in the decision's rejected list, produced by
+ * the evaluator).
  */
 export function buildFallbackChain(
   rankedCompatible: CandidateEvaluation[],
@@ -56,6 +67,7 @@ export function buildFallbackChain(
   requirements: TaskRequirements,
   policy: PolicyConstraints,
   maxSteps = 3,
+  routingHealth?: RoutingHealthView,
 ): FallbackPlan {
   const allow =
     (requirements.allowFallback ?? policy.allowFallback) &&
@@ -94,10 +106,24 @@ export function buildFallbackChain(
   const steps: FallbackStep[] = [];
   let blockedCloudEscalation = false;
 
-  for (const ev of rankedCompatible) {
+  // Target diversity first: cross-provider candidates before same-provider
+  // (different model) ones — stable within each class.
+  const ordered = [...rankedCompatible].sort((a, b) => {
+    if (!selected) return 0;
+    const aCross = a.model.providerId !== selected.providerId ? 0 : 1;
+    const bCross = b.model.providerId !== selected.providerId ? 0 : 1;
+    return aCross - bCross;
+  });
+
+  for (const ev of ordered) {
     if (steps.length >= maxSteps) break;
     const m = ev.model;
     if (selected && m.key === selected.key) continue;
+
+    // Circuit breaker: skip OPEN targets (reason already on rejected list)
+    if (routingHealth && routingHealth.gate(m.providerId, m.modelId).state === "open") {
+      continue;
+    }
 
     // Never escalate locality silently
     if (selectedLocality) {
@@ -125,12 +151,13 @@ export function buildFallbackChain(
       }
     }
 
+    const diverse = !selected || m.providerId !== selected.providerId;
     steps.push({
       providerId: m.providerId,
       modelId: m.modelId,
-      reason: ev.score
-        ? `next-best score=${ev.score.total.toFixed(3)}`
-        : "compatible alternative",
+      reason:
+        (ev.score ? `next-best score=${ev.score.total.toFixed(3)}` : "compatible alternative") +
+        (diverse ? " · cross-provider" : " · same-provider distinct model"),
     });
   }
 

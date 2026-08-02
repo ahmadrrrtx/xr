@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-01T11:49:21.882Z",
+  "generatedAt": "2026-08-01T22:34:50.639Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.0.1",
@@ -50,10 +50,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 514,
-    "testFiles": 165,
+    "sourceFiles": 520,
+    "testFiles": 175,
     "cliCommands": 41,
-    "daemonRoutes": 97,
+    "daemonRoutes": 98,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -77,6 +77,10 @@
       "bytes": 543
     },
     {
+      "path": "CHANGED-FILES.txt",
+      "bytes": 202
+    },
+    {
       "path": "CHANGELOG.md",
       "bytes": 65009
     },
@@ -98,7 +102,7 @@
     },
     {
       "path": "Dockerfile",
-      "bytes": 1110
+      "bytes": 1495
     },
     {
       "path": "LAUNCH-POSTS.md",
@@ -175,6 +179,10 @@
     {
       "path": "PHASE6_VALIDATION_REPORT.md",
       "bytes": 2979
+    },
+    {
+      "path": "README-APPLY.txt",
+      "bytes": 1505
     },
     {
       "path": "README.md",
@@ -536,16 +544,22 @@
     "src/integrations/credentials.ts",
     "src/integrations/oauth.ts",
     "src/integrations/registry.ts",
+    "src/intelligence/behavioral.ts",
     "src/intelligence/capability.ts",
     "src/intelligence/catalog.ts",
+    "src/intelligence/degradation.ts",
+    "src/intelligence/difficulty.ts",
     "src/intelligence/evaluator.ts",
+    "src/intelligence/failover.ts",
     "src/intelligence/fallback.ts",
+    "src/intelligence/health.ts",
     "src/intelligence/index.ts",
     "src/intelligence/metrics.ts",
     "src/intelligence/router.ts",
     "src/intelligence/routing-service.ts",
     "src/intelligence/scorer.ts",
     "src/intelligence/service.ts",
+    "src/intelligence/slo.ts",
     "src/intelligence/types.ts",
     "src/interfaces/cli.ts",
     "src/interfaces/models.ts",
@@ -847,11 +861,21 @@
     "test/execution/repository.test.ts",
     "test/execution/service.test.ts",
     "test/execution/state-machine.test.ts",
+    "test/intelligence/behavioral.test.ts",
+    "test/intelligence/breaker.test.ts",
     "test/intelligence/capability.test.ts",
+    "test/intelligence/difficulty.test.ts",
+    "test/intelligence/failover-cpr.test.ts",
+    "test/intelligence/fallback-v5.test.ts",
     "test/intelligence/integration.test.ts",
     "test/intelligence/locality-invariant.test.ts",
+    "test/intelligence/locality-v5.test.ts",
+    "test/intelligence/model-class-contract.test.ts",
     "test/intelligence/performance.test.ts",
     "test/intelligence/router.test.ts",
+    "test/intelligence/routing-slo.test.ts",
+    "test/intelligence/routing-v5.test.ts",
+    "test/intelligence/service-v5.test.ts",
     "test/memory-semantic.test.ts",
     "test/memory-stage6.test.ts",
     "test/memory-summarize.test.ts",
@@ -1873,6 +1897,13 @@
       "id": "providers.set",
       "method": "POST",
       "path": "/api/providers/set",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "providers.slo",
+      "method": "GET",
+      "path": "/api/providers/slo",
       "auth": "local bearer token or dashboard query token"
     },
     {

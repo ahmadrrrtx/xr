@@ -3,6 +3,8 @@
  * Weights are inspectable; no opaque ML. Historical influence is confidence-gated.
  */
 
+import type { BehavioralView } from "./behavioral.ts";
+import type { RoutingHealthView } from "./health.ts";
 import type {
   CandidateEvaluation,
   ModelDescriptor,
@@ -42,6 +44,10 @@ export interface ScoreContext {
   historical?: ModelOutcomeStats | null;
   /** Provider ids the user has configured keys for (soft boost). */
   configuredProviders?: Set<string>;
+  /** Phase 5 · T2 — measured behavioral contracts (quality = measured fidelity). */
+  behavioral?: BehavioralView;
+  /** Phase 5 · T3 — rolling health view (availability = rolling score). */
+  routingHealth?: RoutingHealthView;
 }
 
 function clamp01(n: number): number {
@@ -86,11 +92,30 @@ export function scoreCandidate(
     taskFit = clamp01(taskFit + 0.1);
   }
 
-  // Quality
+  // Quality — Phase 5 · T2/T8: MEASURED behavioral fidelity wins over static
+  // (declared) priors. The static quality class survives only as a cold-start
+  // prior and is labeled as such in the notes (no vendor-claim presented as
+  // measurement — Art. IV.5).
   const qMap: Record<string, number> = { basic: 0.4, standard: 0.65, high: 0.85, frontier: 1, unknown: 0.5 };
   let quality: number = qMap[model.quality.class] ?? 0.5;
   if (model.quality.staticScore !== undefined) {
     quality = clamp01(0.5 * quality + 0.5 * model.quality.staticScore);
+  }
+  const contract = ctx.behavioral?.contract(model.providerId, model.modelId);
+  if (contract && contract.source === "measured") {
+    // Blend dimensions by what THIS task requires (capability-per-quality).
+    if (req.require?.toolUse) {
+      quality = clamp01(0.6 * contract.toolUseFidelity + 0.4 * contract.overallFidelity);
+    } else if (req.require?.structuredOutput || req.require?.jsonMode) {
+      quality = clamp01(0.6 * contract.structuredOutputFidelity + 0.4 * contract.overallFidelity);
+    } else if ((req.minContextTokens ?? 0) > 16_000) {
+      quality = clamp01(0.6 * contract.contextRetention + 0.4 * contract.overallFidelity);
+    } else {
+      quality = clamp01(contract.overallFidelity);
+    }
+    notes.push(`measured fidelity ${contract.overallFidelity.toFixed(2)} (n=${contract.samples})`);
+  } else if (ctx.behavioral) {
+    notes.push("quality from static prior (unmeasured)");
   }
   if (policy.routingMode === "quality_constrained" || req.qualityPreference === "high" || req.qualityPreference === "frontier") {
     notes.push("quality-weighted mode");
@@ -175,7 +200,8 @@ export function scoreCandidate(
     notes.push("history sparse — ignored");
   }
 
-  // Availability
+  // Availability — Phase 5 · T3: rolling health score (measured outcomes)
+  // overrides the point-in-time snapshot when samples exist.
   let availability = 0.7;
   if (model.health) {
     if (model.health.ok && model.health.available !== false) {
@@ -193,6 +219,15 @@ export function scoreCandidate(
   // Cloud without credentials should have been filtered; if not, tank score
   if (model.locality.requiresCredential && model.health?.authOk === false) {
     availability = 0.05;
+  }
+  const gate = ctx.routingHealth?.gate(model.providerId, model.modelId);
+  if (gate && gate.samples > 0) {
+    availability = clamp01(0.2 + 0.8 * gate.score);
+    notes.push(`rolling health ${gate.score.toFixed(2)} (n=${gate.samples})`);
+    if (gate.state === "half_open") {
+      availability = clamp01(availability * 0.5);
+      notes.push("half-open probe pending");
+    }
   }
 
   // Mode-specific weight emphasis

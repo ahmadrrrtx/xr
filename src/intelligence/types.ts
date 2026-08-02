@@ -63,6 +63,14 @@ export interface ModelCapabilities {
   embeddings: CapabilitySupport;
   reranking: CapabilitySupport;
   multimodal: CapabilitySupport;
+  /**
+   * Phase 5 · T7 — future model classes via the contract. A provider/model
+   * may declare arbitrary named capability extensions (e.g.
+   * { "video_temporal_reasoning": "supported" }) which tasks can require via
+   * `TaskRequirements.require.extensions` — no kernel/loop edits (Art. VII.4).
+   * Unknown fails closed, like every other capability.
+   */
+  extensions?: Record<string, CapabilitySupport>;
 }
 
 export interface ContextLimits {
@@ -204,7 +212,28 @@ export interface TaskRequirements {
     embeddings?: boolean;
     reasoning?: boolean;
     functionCalling?: boolean;
+    /** Phase 5 · T7 — required future-class capabilities (contract extension). */
+    extensions?: string[];
   };
+  /**
+   * Phase 5 · T1 — measured-fidelity floor (capability gate, RouteLLM
+   * principle). When a provider/model has a MEASURED behavioral contract
+   * below the floor, it is rejected (`fidelity_below_floor`). Models without
+   * measured contracts pass (cold start) but are scored on static priors.
+   */
+  minFidelity?: {
+    overall?: number;
+    toolUse?: number;
+    structuredOutput?: number;
+    contextRetention?: number;
+  };
+  /** Phase 5 · T1 — explicit difficulty override (0..1). Estimated when absent. */
+  difficulty?: number;
+  /**
+   * Phase 5 · T1 — manual override: restrict selection to this provider set
+   * (others rejected with `user_restriction`).
+   */
+  restrictProviders?: string[];
   /** Minimum context window (tokens). */
   minContextTokens?: number;
   /** Soft latency preference. */
@@ -271,6 +300,7 @@ export type RejectionCode =
   | "budget"
   | "credential_missing"
   | "health_unavailable"
+  | "fidelity_below_floor"
   | "user_pin"
   | "user_restriction"
   | "hardware"
@@ -347,6 +377,16 @@ export interface RoutingDecision {
   manual: boolean;
   /** True when no compatible candidate exists. */
   unavailable: boolean;
+  /**
+   * Phase 5 · T1 — the difficulty estimate driving capability-gated
+   * selection (safe strings; absent for pure pin paths).
+   */
+  difficulty?: {
+    score: number;
+    signals: string[];
+    requiredFidelity: number;
+    requirementsOnly: boolean;
+  };
   /** Safe explanation for UX. */
   explanation: string;
   /** Factors that drove the choice. */
@@ -378,6 +418,8 @@ export interface RoutingDecisionRecord {
   /** Rejected count only (full list may be large). */
   rejectedCount: number;
   humanHandoff?: boolean;
+  /** Phase 5 · T1 — estimated task difficulty (0..1) when computed. */
+  difficultyScore?: number;
 }
 
 // ── Historical metrics ────────────────────────────────────────────────────
