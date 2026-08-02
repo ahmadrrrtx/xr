@@ -1,7 +1,7 @@
 {
   "name": "@rrrtx/xr",
   "version": "7.0.1",
-  "description": "XR \u2014 a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
+  "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
   "type": "module",
   "bin": {
     "xr": "./bin/xr"
