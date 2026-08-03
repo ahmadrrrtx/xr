@@ -94,8 +94,11 @@ describe("Phase 1 · concurrency-safe audit + SQLite", () => {
       const results = await Promise.all(procs);
       const totalWritten = results.reduce((a, r) => a + r.written, 0);
       const errors = results.flatMap((r) => r.errors);
-      expect(totalWritten).toBe(writers * perWriter * 5);
-      expect(errors).toHaveLength(0);
+      // Report worker errors FIRST and inline, so a CI annotation shows the
+      // exact SQLite error text instead of a bare count mismatch.
+      const diag = errors.slice(0, 5).map((e) => e.slice(0, 160)).join(" | ");
+      expect(errors, `worker errors — ${diag}`).toHaveLength(0);
+      expect(totalWritten, `lost writes (errors: ${diag})`).toBe(writers * perWriter * 5);
 
       // Reopen and verify the full chain + consistency.
       const { WorkspaceStore } = await import("../../src/state/workspace-store.ts");

@@ -24,12 +24,13 @@ export const DASHBOARD_CSS = `
   --surface2:   #151E33; /* Inputs / active rows */
   --border:     #1E293B; /* Slate-800 divider default border */
   --border2:    #334155; /* Slate-700 hover border */
+  --border-strong: #5C7194; /* Phase 8 · T3 — ≥3:1 vs every surface: interactive-control boundaries (WCAG 1.4.11) */
   --cyan:       #00D4FF; /* Primary active indicator / glow */
   --violet:     #A855F7; /* Secondary end brand color */
   --green:      #00FF88; /* Success, local-first, safe */
   --amber:      #F59E0B; /* Warning, cloud routing, attention */
   --red:        #FF4D4D; /* Critical error, security block */
-  --muted:      #475569; /* Tertiary labels, disabled state */
+  --muted:      #7A8FB0; /* Phase 8 · T3 — raised from #475569: was 2.2–2.6:1 (fail); now ≥5:1 on every surface (WCAG 1.4.3) */
   --text:       #F8FAFC; /* Primary high-contrast text */
   --textDim:    #94A3B8; /* Secondary dim copy */
   --radius-sm:  4px;
@@ -116,6 +117,9 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; }
   color: var(--muted);
   padding: 8px 16px 4px;
 }
+.area-caret { float: right; } /* Phase 8 · T4 — area toggles are real buttons (aria-expanded). */
+.area-toggle { background: none; border: none; width: 100%; text-align: left; cursor: pointer; font-family: var(--font-sans); }
+.area-toggle:hover { color: var(--textDim); }
 .nav-item {
   display: flex;
   align-items: center;
@@ -125,8 +129,15 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; }
   font-size: 12px;
   color: var(--textDim);
   transition: background 0.1s, color 0.1s;
+  border: none;
   border-left: 2px solid transparent;
   text-decoration: none;
+  /* Phase 8 · T3 — rendered as <button> for keyboard/AT operability */
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-sans);
+  line-height: 1.6;
 }
 .nav-item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
 .nav-item.active {
@@ -188,10 +199,11 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; }
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   color: var(--textDim);
   cursor: pointer;
   transition: border-color 0.1s, color 0.1s;
+  min-height: 26px; /* Phase 8 · T3 — WCAG 2.5.8 target size */
 }
 .status-chip:hover { border-color: var(--cyan); color: var(--text); }
 .status-chip .dot { width: 6px; height: 6px; border-radius: 50%; }
@@ -330,7 +342,7 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; }
 .input, select, textarea {
   width: 100%;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   padding: 8px 12px;
   color: var(--text);
@@ -347,12 +359,12 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; }
 label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--textDim); display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
 
 /* ── Toggle Switch ───────────────────────────────────────────────────── */
-.toggle { position: relative; width: 36px; height: 20px; cursor: pointer; display: inline-block; }
+.toggle { position: relative; width: 44px; height: 24px; cursor: pointer; display: inline-block; }
 .toggle input { opacity: 0; width: 0; height: 0; }
-.toggle-slider { position: absolute; inset: 0; background: var(--border2); border-radius: 99px; transition: 0.15s; }
-.toggle-slider::before { content: ""; position: absolute; width: 14px; height: 14px; left: 3px; bottom: 3px; background: var(--textDim); border-radius: 50%; transition: 0.15s; }
+.toggle-slider { position: absolute; inset: 0; background: var(--border-strong); border-radius: 99px; transition: 0.15s; }
+.toggle-slider::before { content: ""; position: absolute; width: 18px; height: 18px; left: 3px; bottom: 3px; background: var(--text); border-radius: 50%; transition: 0.15s; }
 .toggle input:checked + .toggle-slider { background: var(--cyan); }
-.toggle input:checked + .toggle-slider::before { transform: translateX(16px); background: #000; }
+.toggle input:checked + .toggle-slider::before { transform: translateX(20px); background: #000; }
 
 /* ── Floating Toast Container ────────────────────────────────────────── */
 .toast-wrap { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 999; }
@@ -445,7 +457,7 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
 .chat-side-header { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .chat-side-title-row { display: flex; align-items: center; justify-content: space-between; }
 .chat-side-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
-.chat-search-input { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; font-size: 11px; outline: none; color: var(--text); }
+.chat-search-input { background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 6px 10px; font-size: 11px; outline: none; color: var(--text); }
 .chat-search-input:focus { border-color: var(--cyan); }
 .chat-sessions-list { flex: 1; overflow-y: auto; padding: 8px; }
 
@@ -479,7 +491,7 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
 .msg-meta { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--muted); font-family: var(--font-mono); padding: 0 4px; }
 .msg-actions { margin-left: auto; display: flex; gap: 6px; opacity: 0.1; transition: opacity 0.1s; }
 .msg:hover .msg-actions { opacity: 1; }
-.msg-act-btn { background: none; border: none; color: var(--textDim); cursor: pointer; font-size: 10px; padding: 2px 4px; border-radius: var(--radius-sm); border: 1px solid transparent; }
+.msg-act-btn { background: none; border: none; color: var(--textDim); cursor: pointer; font-size: 10px; padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid transparent; min-height: 24px; /* Phase 8 · T3 — WCAG 2.5.8 */ }
 .msg-act-btn:hover { color: var(--cyan); border-color: rgba(0,212,255,0.2); }
 
 /* Markdown Styles inside Bubbles */
@@ -538,7 +550,9 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
 .composer-tool-btn:hover { background: rgba(255,255,255,0.03); color: var(--cyan); border-color: rgba(0,212,255,0.15); }
 .composer-tool-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; }
 .composer-flag-chip {
-  font-size: 10px; font-weight: 700; text-transform: uppercase; font-family: var(--font-mono); padding: 2px 6px; border-radius: var(--radius-sm); border: 1px solid var(--border); color: var(--muted); cursor: pointer; transition: 0.1s;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; font-family: var(--font-mono); padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); color: var(--muted); cursor: pointer; transition: 0.1s;
+  /* Phase 8 · T3 — explicit background (UA button grey broke contrast) + 24px target (2.5.8) */
+  background: var(--surface2); min-height: 24px;
 }
 .composer-flag-chip:hover { border-color: var(--cyan); color: var(--textDim); }
 .composer-flag-chip.active { color: #001018; border-color: transparent; }
@@ -559,7 +573,9 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
 .settings-nav { display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--border); padding-right: 16px; }
 @media(max-width: 768px) { .settings-nav { flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 12px; overflow-x: auto; } }
 .settings-nav-item {
-  padding: 6px 12px; border-radius: var(--radius); cursor: pointer; font-size: 12px; color: var(--textDim); transition: 0.1s; border-left: 2px solid transparent; text-align: left;
+  padding: 6px 12px; border-radius: var(--radius); cursor: pointer; font-size: 12px; color: var(--textDim); transition: 0.1s; border: none; border-left: 2px solid transparent; text-align: left;
+  /* Phase 8 · T3 — button reset (UA grey background broke contrast) */
+  background: none; width: 100%; font-family: var(--font-sans);
 }
 .settings-nav-item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
 .settings-nav-item.active { background: rgba(0, 212, 255, 0.08); color: var(--cyan); border-left-color: var(--cyan); font-weight: 600; }
@@ -705,4 +721,78 @@ label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spa
 .xr-s-107 { display:flex; align-items:center; gap:8px; }
 .xr-s-108 { width:60px; }
 .xr-s-109 { width:\${Math.min(100, (row.usd / (config.perTaskUsd || 1)) * 100)}%; }
+
+
+/* ── Phase 8 · T3 — marketplace chips were unstyled buttons (UA grey bg). ── */
+.mp-chip, .mp-tab {
+  font-size: 11px; font-weight: 600; font-family: var(--font-sans);
+  color: var(--textDim); cursor: pointer;
+  background: var(--surface2); border: 1px solid var(--border-strong);
+  border-radius: 999px; padding: 4px 12px; min-height: 24px; /* WCAG 2.5.8 */
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.mp-chip:hover, .mp-tab:hover { border-color: var(--cyan); color: var(--text); }
+.mp-chip.active, .mp-tab.active { background: rgba(0, 212, 255, 0.12); color: var(--cyan); border-color: var(--cyan); font-weight: 700; }
+
+/* ── Phase 8 · T3 — Accessibility layer (WCAG 2.2 AA) ────────────────── */
+/* One visible ≥3:1 indicator for every interactive element; placed AFTER
+   every \`outline: none\` reset so it always wins for keyboard users. */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* Programmatic-focus targets are exempt (panels/main are focused only to
+   hand AT the new context; their contents are the very next tab stops). */
+.panel:focus, .panel:focus-visible, #main-content:focus, #main-content:focus-visible,
+.chat-main:focus, .chat-main:focus-visible { outline: none; }
+/* Unchecked focus ring for the visually-hidden checkbox inside a toggle. */
+.toggle input:focus-visible + .toggle-slider { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* Skip link — first tab stop, revealed on keyboard focus. */
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -96px;
+  z-index: 1000;
+  background: var(--cyan);
+  color: #001018;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  transition: top 0.12s ease;
+}
+.skip-link:focus-visible { top: 12px; outline-color: var(--text); }
+
+[role="button"] { cursor: pointer; } /* JS pseudo-buttons keep the pointer affordance */
+
+.content :focus { scroll-margin-block: 16px; } /* focus never obscured (WCAG 2.4.11) */
+
+/* 24×24 min target (2.5.8) */
+.badge-x {
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  border-radius: var(--radius-sm);
+  padding: 0 4px;
+}
+.badge-x:hover { background: rgba(255, 77, 77, 0.12); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 `;

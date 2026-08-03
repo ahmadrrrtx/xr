@@ -8,9 +8,11 @@
  *   • `IMMEDIATE` acquires the write lock up front, so a read-then-write
  *     sequence can never deadlock or hit the classic "cannot upgrade" busy
  *     failure; cross-process writers serialize at the database level.
- *   • `busy_timeout` (set at open, ≥ 3000 ms) makes a contended writer wait
- *     instead of failing with SQLITE_BUSY; a residual busy failure is retried
- *     with bounded backoff + jitter.
+ *   • `busy_timeout` (set at open, 5000 ms) makes a contended writer wait
+ *     instead of failing with SQLITE_BUSY; a residual busy failure — raised
+ *     at BEGIN, at a statement, or at COMMIT — rolls the transaction back and
+ *     retries it whole with bounded, jittered exponential backoff (8 retries,
+ *     50 ms base ×2ⁿ capped at 2 s, ±50 % jitter).
  *   • A broken audit chain makes appends fail CLOSED (the caller gets a
  *     clear error and a repair path) rather than silently extending a
  *     corrupted chain.
@@ -137,8 +139,8 @@ export class WriteGate {
     private readonly raw: Database,
     opts: WriteGateOptions = {},
   ) {
-    this.maxBusyRetries = opts.maxBusyRetries ?? 3;
-    this.backoffBaseMs = opts.backoffBaseMs ?? 40;
+    this.maxBusyRetries = opts.maxBusyRetries ?? 8;
+    this.backoffBaseMs = opts.backoffBaseMs ?? 50;
   }
 
   get rawDb(): Database {
@@ -176,18 +178,11 @@ export class WriteGate {
     const crash = parseCrashDirective(process.env.XR_CRASH_AT_WRITE);
     let attempts = 0;
     for (;;) {
+      let began = false;
       try {
         this.raw.exec("BEGIN IMMEDIATE");
-      } catch (e) {
-        if (isBusy(e) && attempts < this.maxBusyRetries) {
-          attempts += 1;
-          syncSleep(this.backoffBaseMs * attempts + (Math.random() * this.backoffBaseMs) | 0);
-          continue;
-        }
-        throw new WriteGateBusyError(e, attempts + 1);
-      }
-      this.inWrite = true;
-      try {
+        began = true;
+        this.inWrite = true;
         if (crash.kind === "after-begin") killSelf("after-begin");
         const result = fn();
         if (crash.kind === "before-commit") killSelf("before-commit");
@@ -196,18 +191,40 @@ export class WriteGate {
         this.writeCount += 1;
         return result;
       } catch (e) {
-        if (crash.kind !== "after-begin" && crash.kind !== "before-commit" && crash.kind !== "count") {
+        // Undo any partial transaction before deciding what happens next —
+        // except after a crash-injection kill, where the connection is gone.
+        if (began && crash.kind === "none") {
           try {
             this.raw.exec("ROLLBACK");
           } catch {
             /* connection may be gone after a kill */
           }
         }
+        // A busy failure can surface at BEGIN, at a statement, or at COMMIT
+        // (in WAL the commit itself takes the write lock, and a CPU-starved
+        // lock holder can outlast busy_timeout). The whole transaction is
+        // deterministic, so ROLLBACK + retry replays it against fresh state
+        // with no partial effects. ONLY busy is retried — constraint or logic
+        // errors must throw immediately, never be replayed.
+        if (isBusy(e)) {
+          if (attempts < this.maxBusyRetries) {
+            attempts += 1;
+            syncSleep(this.backoffDelay(attempts));
+            continue;
+          }
+          throw new WriteGateBusyError(e, attempts + 1);
+        }
         throw e;
       } finally {
         this.inWrite = false;
       }
     }
+  }
+
+  /** Jittered exponential backoff: base×2ⁿ capped at 2 s, ±50 % jitter. */
+  private backoffDelay(attempt: number): number {
+    const exponential = Math.min(this.backoffBaseMs * 2 ** (attempt - 1), 2000);
+    return (exponential * (0.5 + Math.random())) | 0;
   }
 
   /** Total committed write transactions on this connection (crash-injection targeting). */

@@ -28,9 +28,20 @@ beforeEach(() => {
   process.env.XR_HOME = join(tmp, "home");
 });
 
-// Fixtures are per-test SQLite databases; without this the suite fills /tmp
-// over repeated runs and unrelated tests fail with "no such table".
+// Every seed() opens a real SQLite connection (bun:sqlite holds fds, buffer
+// cache and finalizable statements until close()). The suite runs ALL files
+// in one shared process, so leaking these stores compounds into heap/handle
+// pressure that lands on the heaviest test in the file (the 100k seed).
+// Track and close them deterministically — measurements are unaffected.
+const openStores: Store[] = [];
 afterEach(() => {
+  for (const s of openStores.splice(0)) {
+    try {
+      s.close();
+    } catch {
+      /* close() is idempotent and best-effort internally */
+    }
+  }
   try {
     rmSync(tmp, { recursive: true, force: true });
   } catch {
@@ -47,6 +58,7 @@ function record(metric: string, value: string): void {
 function seed(n: number): { store: Store; repo: ContextRepository; path: string } {
   const path = join(tmp, `perf-${Math.random().toString(36).slice(2)}.db`);
   const store = new Store("default", path);
+  openStores.push(store);
   const repo = new ContextRepository(adaptStoreForContext(store), "default");
   repo.migrate();
   const topics = ["authentication", "deployment", "database", "caching", "logging", "billing"];

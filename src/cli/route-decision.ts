@@ -78,6 +78,7 @@ const REGISTRY_NAME: Record<string, string> = {
   "verify-log": "audit",
   log: "logs",
   logs: "logs",
+  telemetry: "telemetry",
   attacks: "attacks",
   lab: "attacks",
   "security-lab": "attacks",

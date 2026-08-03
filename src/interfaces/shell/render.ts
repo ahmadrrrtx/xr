@@ -3,12 +3,12 @@
  * Assembles header · sidebar · main · inspector · composer · status
  */
 
-import { xrBold, xrCyan, xrDim, xrGreen, xrAmber, xrRed, xrViolet } from "../../ui/theme.ts";
+import { xrBold, xrCyan, xrDim, xrGreen, xrAmber, xrRed } from "../../ui/theme.ts";
 import { padAnsi, clipAnsi, hline, visibleLength, wrapAnsi } from "../../ui/ansi.ts";
 import {
   badge, statusDot, spinnerFrame, emptyState, listRow, sectionHeader,
   navItem, composerPrompt, statusBar, overlayFrame, helpBindings,
-  messagePrefix, card, keyHintRow, toastLine, progressBar,
+  messagePrefix, card, keyHintRow, toastLine, progressBar, modePaint,
 } from "../../ui/primitives.ts";
 import { SHELL_VIEW_ORDER, NAV_ITEMS, SECTION_LABELS, icon, type GlyphId } from "../../ui/icons.ts";
 import { renderOfficialBannerFrame, renderCompactBrand } from "../../ui/brand.ts";
@@ -38,7 +38,8 @@ export function renderHeader(state: ShellState, cols: number): string[] {
 
   const ws = xrCyan(state.workspaceId);
   const sess = xrDim(state.sessionTitle || "new session");
-  const mode = state.mode === "agent" ? xrCyan("agent") : state.mode === "plan" ? xrViolet("plan") : xrDim("ask");
+  // Phase 8 · T4: mode colour comes from the single canonical map.
+  const mode = modePaint(state.mode);
   const line2 = clipAnsi(
     `${xrDim("workspace")} ${ws}  ${xrDim("›")}  ${sess}  ${xrDim("·")}  ${mode}`,
     cols,
@@ -100,7 +101,7 @@ function renderHome(state: ShellState, width: number, height: number): string[] 
   lines.push("");
 
   const sessions = state.sessions.slice(0, 5).map((s) =>
-    `${xrDim(humanDate(s.created_at))} ${s.title.slice(0, 28)} ${xrDim(`(${s.mode})`)}`,
+    `${xrDim(humanDate(s.created_at))} ${s.title.slice(0, 28)} ${xrDim("(")}${modePaint(s.mode)}${xrDim(")")}`,
   );
   lines.push(...card("Recent sessions", sessions.length ? sessions : [xrDim("No sessions yet — ask XR anything")], Math.min(width, 56)));
   lines.push("");

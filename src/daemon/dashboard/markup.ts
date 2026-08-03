@@ -27,17 +27,21 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
 </head>
 <body>
 
-<!-- ── Toast Stack ──────────────────────────────────────────────────────── -->
-<div class="toast-wrap" id="toasts"></div>
+<!-- Phase 8 · T3 — skip link: first tab stop lands directly on main content (WCAG 2.4.1) -->
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
+<!-- ── Toast Stack (live region: polite status; errors carry role=alert) ── -->
+<div class="toast-wrap" id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <!-- ── Global Command Palette ───────────────────────────────────────────── -->
-<div class="palette-bg" id="palette">
-  <div class="palette">
+<div class="palette-bg" id="palette" aria-hidden="true">
+  <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
     <div class="palette-input">
-      <svg><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-      <input id="palette-search" placeholder="Search sections, settings, skills..." autocomplete="off" aria-label="Command search"/>
+      <svg aria-hidden="true" focusable="false"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input id="palette-search" placeholder="Search sections, settings, skills..." autocomplete="off" aria-label="Command search"
+        role="combobox" aria-expanded="true" aria-controls="palette-results" aria-activedescendant=""/>
     </div>
-    <div class="palette-results" id="palette-results"></div>
+    <div class="palette-results" id="palette-results" role="listbox" aria-label="Commands"></div>
   </div>
 </div>
 
@@ -47,7 +51,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
   <!-- ── Sidebar Nav (24 elements structured) ───────────────────────────── -->
   <nav class="sidebar" aria-label="Mission navigation">
     <div class="sidebar-logo">
-      <div class="logo-mark">▀▄▀</div>
+      <div class="logo-mark" aria-hidden="true">▀▄▀</div>
       <div class="logo-text-block">
         <span class="logo-text">XR Control</span>
         <span class="logo-sub">v3.1F OS</span>
@@ -57,130 +61,104 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
     <!-- Group 1: Mission Hub -->
     <div class="sidebar-section">
       <div class="sidebar-label">Mission Hub</div>
-      <a class="nav-item active" data-panel="dashboard">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span>
-        Home
-      </a>
-      <a class="nav-item" data-panel="chat">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-        Chat Sessions
-      </a>
-      <a class="nav-item" data-panel="sessions">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-        Recent Sessions
-      </a>
-      <a class="nav-item" data-panel="workspaces">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
-        Workspaces
-      </a>
+      <button type="button" class="nav-item active" data-panel="dashboard" aria-current="page">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span>
+        Home</button>
+      <button type="button" class="nav-item" data-panel="chat">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+        Chat Sessions</button>
+      <button type="button" class="nav-item" data-panel="sessions">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+        Recent Sessions</button>
+      <button type="button" class="nav-item" data-panel="workspaces">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+        Workspaces</button>
     </div>
 
     <!-- Group 2: AI Resources -->
     <div class="sidebar-section">
       <div class="sidebar-label">AI Resources</div>
-      <a class="nav-item" data-panel="providers">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span>
-        Providers (BYOK)
-      </a>
-      <a class="nav-item" data-panel="models">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></span>
-        Models (Local AI)
-      </a>
-      <a class="nav-item" data-panel="memory">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
-        Durable Memory
-      </a>
-      <a class="nav-item" data-panel="research">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zm20 0h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
-        Research Runs
-      </a>
-      <a class="nav-item" data-panel="voice">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span>
-        Voice Pipeline
-      </a>
+      <button type="button" class="nav-item" data-panel="providers">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></span>
+        Providers (BYOK)</button>
+      <button type="button" class="nav-item" data-panel="models">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></span>
+        Models (Local AI)</button>
+      <button type="button" class="nav-item" data-panel="memory">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        Durable Memory</button>
+      <button type="button" class="nav-item" data-panel="research">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zm20 0h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
+        Research Runs</button>
+      <button type="button" class="nav-item" data-panel="voice">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span>
+        Voice Pipeline</button>
     </div>
 
     <!-- Group 3: Platforms & Tools -->
     <div class="sidebar-section">
       <div class="sidebar-label">Platforms & Tools</div>
-      <a class="nav-item" data-panel="skills">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg></span>
-        Skills Marketplace
-      </a>
-      <a class="nav-item" data-panel="plugins">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
-        Sandboxed Plugins
-      </a>
-      <a class="nav-item" data-panel="capabilities">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg></span>
-        Capability Ecosystem
-      </a>
-      <a class="nav-item" data-panel="mcp">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span>
-        MCP Servers
-      </a>
-      <a class="nav-item" data-panel="business">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
-        Business OS CRM
-      </a>
+      <button type="button" class="nav-item" data-panel="skills">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg></span>
+        Skills Marketplace</button>
+      <button type="button" class="nav-item" data-panel="plugins">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+        Sandboxed Plugins</button>
+      <button type="button" class="nav-item" data-panel="capabilities">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg></span>
+        Capability Ecosystem</button>
+      <button type="button" class="nav-item" data-panel="mcp">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></span>
+        MCP Servers</button>
+      <button type="button" class="nav-item" data-panel="business">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+        Business OS CRM</button>
     </div>
 
     <!-- Group 4: Governance & Trust -->
     <div class="sidebar-section">
       <div class="sidebar-label">Governance & Trust</div>
-      <a class="nav-item" data-panel="control">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
-        Computer Control
-      </a>
-      <a class="nav-item" data-panel="shield">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-        Shield (Security)
-      </a>
-      <a class="nav-item" data-panel="audit">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
-        Audit Log
-      </a>
-      <a class="nav-item" data-panel="budget">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
-        Cost & Budget
-      </a>
-      <a class="nav-item" data-panel="files">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></span>
-        Files & Artifacts
-      </a>
-      <a class="nav-item" data-panel="downloads">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-        Downloads Security
-      </a>
-      <a class="nav-item" data-panel="devices">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
-        Devices Link
-      </a>
+      <button type="button" class="nav-item" data-panel="control">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+        Computer Control</button>
+      <button type="button" class="nav-item" data-panel="shield">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        Shield (Security)</button>
+      <button type="button" class="nav-item" data-panel="audit">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+        Audit Log</button>
+      <button type="button" class="nav-item" data-panel="budget">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+        Cost & Budget</button>
+      <button type="button" class="nav-item" data-panel="files">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></span>
+        Files & Artifacts</button>
+      <button type="button" class="nav-item" data-panel="downloads">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        Downloads Security</button>
+      <button type="button" class="nav-item" data-panel="devices">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span>
+        Devices Link</button>
     </div>
 
     <!-- Group 5: Core Services -->
     <div class="sidebar-section">
       <div class="sidebar-label">Core Services</div>
-      <a class="nav-item" data-panel="automation">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
-        Scheduled Tasks
-      </a>
-      <a class="nav-item" data-panel="integrations">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
-        Webhooks API
-      </a>
-      <a class="nav-item" data-panel="notifications">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
-        Alerts Hub
-      </a>
-      <a class="nav-item" data-panel="settings">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
-        Core Settings
-      </a>
-      <a class="nav-item" data-panel="about">
-        <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
-        About Build
-      </a>
+      <button type="button" class="nav-item" data-panel="automation">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+        Scheduled Tasks</button>
+      <button type="button" class="nav-item" data-panel="integrations">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+        Webhooks API</button>
+      <button type="button" class="nav-item" data-panel="notifications">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+        Alerts Hub</button>
+      <button type="button" class="nav-item" data-panel="settings">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+        Core Settings</button>
+      <button type="button" class="nav-item" data-panel="about">
+        <span class="nav-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+        About Build</button>
     </div>
 
     <div class="sidebar-spacer"></div>
@@ -199,21 +177,21 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
   </nav>
 
   <!-- ── Main Control Window Frame ──────────────────────────────────────── -->
-  <div class="main">
+  <main class="main" id="main-content" tabindex="-1">
 
     <!-- Top Breadcrumbs Status Strip -->
     <header class="topbar">
-      <div class="breadcrumbs" id="topbar-breadcrumbs">
+      <nav class="breadcrumbs" id="topbar-breadcrumbs" aria-label="Breadcrumb">
         <a href="#home" data-xr-action="navigateTo('dashboard')">XR Control</a>
-        <span>›</span>
-        <span id="breadcrumb-active" class="xr-s-4">Home</span>
-      </div>
+        <span aria-hidden="true">›</span>
+        <span id="breadcrumb-active" class="xr-s-4" aria-current="page">Home</span>
+      </nav>
       <div class="topbar-spacer"></div>
       <div class="topbar-status">
-        <div class="status-chip" id="chip-provider" data-xr-action="navigateTo('models')" title="Active model — click to change"><div class="dot"></div><span id="chip-provider-label">—</span></div>
-        <div class="status-chip" id="chip-audit" data-xr-action="navigateTo('audit')"><div class="dot"></div><span id="chip-audit-label">Audit</span></div>
-        <div class="status-chip" id="chip-budget" data-xr-action="navigateTo('budget')"><div class="dot"></div><span id="chip-budget-label">Budget</span></div>
-        <button class="btn xr-s-5" data-xr-action="openPalette()">⌘K</button>
+        <button type="button" class="status-chip" id="chip-provider" data-xr-action="navigateTo('models')" title="Active model — activate to change"><div class="dot" aria-hidden="true"></div><span id="chip-provider-label">—</span></button>
+        <button type="button" class="status-chip" id="chip-audit" data-xr-action="navigateTo('audit')" title="Audit chain status — activate to open audit log"><div class="dot" aria-hidden="true"></div><span id="chip-audit-label">Audit</span></button>
+        <button type="button" class="status-chip" id="chip-budget" data-xr-action="navigateTo('budget')" title="Budget status — activate to open budget"><div class="dot" aria-hidden="true"></div><span id="chip-budget-label">Budget</span></button>
+        <button type="button" class="btn xr-s-5" data-xr-action="openPalette()" aria-label="Open command palette (Ctrl+K)">⌘K</button>
       </div>
     </header>
 
@@ -221,7 +199,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
     <div class="content">
 
       <!-- Panel 1: Overview (Home) -->
-      <div class="panel active" id="panel-dashboard">
+      <div class="panel active" tabindex="-1" id="panel-dashboard">
         <div class="section-header">
           <div>
             <h1>Overview</h1>
@@ -232,22 +210,22 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
 
         <div class="grid grid-4 xr-s-6">
           <div class="card card-glow-cyan">
-            <div class="card-header"><span class="card-title">Spent Today</span><span class="card-icon"><svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div>
+            <div class="card-header"><span class="card-title">Spent Today</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div>
             <div class="card-value" id="d-spent">$0.0000</div>
             <div class="card-sub" id="d-tokens">0 tokens processed</div>
           </div>
           <div class="card card-glow-green">
-            <div class="card-header"><span class="card-title">Security EDR</span><span class="card-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span></div>
+            <div class="card-header"><span class="card-title">Security EDR</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span></div>
             <div class="card-value" id="d-sec-score">0%</div>
             <div class="card-sub">Dojo injection block-rate</div>
           </div>
           <div class="card card-glow-green">
-            <div class="card-header"><span class="card-title">Protection Log</span><span class="card-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span></div>
+            <div class="card-header"><span class="card-title">Protection Log</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span></div>
             <div class="card-value" id="d-shield-health">Safe</div>
             <div class="card-sub" id="d-shield-scans">EDR Scan passed</div>
           </div>
           <div class="card">
-            <div class="card-header"><span class="card-title">Immutable Ledger</span><span class="card-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div>
+            <div class="card-header"><span class="card-title">Immutable Ledger</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div>
             <div class="card-value" id="d-audit-val">—</div>
             <div class="card-sub" id="d-audit-entries">checking ledger…</div>
           </div>
@@ -330,7 +308,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 2: Chat Sessions (Universal Workspace) -->
-      <div class="panel xr-s-10" id="panel-chat">
+      <div class="panel xr-s-10" tabindex="-1" id="panel-chat">
         <div class="chat-wrap">
           <!-- Chat sidebar -->
           <aside class="chat-sidebar">
@@ -339,13 +317,13 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                 <span class="chat-side-title">Sessions Feed</span>
                 <button class="btn btn-ghost xr-s-11" data-xr-action="chatNewChat()">＋ New</button>
               </div>
-              <input id="chat-search" class="chat-search-input" placeholder="Search sessions..."/>
+              <input id="chat-search" class="chat-search-input" placeholder="Search sessions..." aria-label="Search chat sessions"/>
             </div>
-            <div class="chat-sessions-list" id="chat-list" role="list"></div>
+            <div class="chat-sessions-list" id="chat-list"></div>
           </aside>
 
           <!-- Chat main window -->
-          <main class="chat-main">
+          <div class="chat-main">
             <header class="chat-top">
               <div class="xr-s-12">◈</div>
               <div class="chat-title-block">
@@ -367,14 +345,14 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                 <div class="composer-context" id="composer-context"></div>
                 <div class="attachment-row" id="attachment-row"></div>
                 <div class="composer-input-row">
-                  <textarea id="chat-input" placeholder="Ask XR anything... /for commands, @for context" rows="1"></textarea>
-                  <button class="composer-send" id="chat-send-btn" data-xr-action="sendChatMessage()">
-                    <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                  <textarea id="chat-input" placeholder="Ask XR anything... /for commands, @for context" rows="1" aria-label="Message XR — press Enter to send, Shift+Enter for a new line"></textarea>
+                  <button class="composer-send" id="chat-send-btn" data-xr-action="sendChatMessage()" aria-label="Send message" title="Send message">
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                   </button>
                 </div>
                 <div class="composer-tools-row">
-                  <button class="composer-tool-btn" data-xr-action="openAttachmentPicker()"><svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> ＋ Attach file</button>
-                  <input id="chat-file-input" type="file" multiple class="xr-s-13">
+                  <button class="composer-tool-btn" data-xr-action="openAttachmentPicker()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg> ＋ Attach file</button>
+                  <input id="chat-file-input" type="file" multiple class="xr-s-13" aria-label="Attach files to this message">
                   <button class="composer-flag-chip memory" data-xr-action="toggleComposerFlag('memory')">🧠 Memory</button>
                   <button class="composer-flag-chip research" data-xr-action="toggleComposerFlag('research')">🔬 Research</button>
                   <button class="composer-flag-chip shield" data-xr-action="toggleComposerFlag('shield')">🛡 Shield</button>
@@ -384,7 +362,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                 </div>
               </div>
             </footer>
-          </main>
+          </div>
 
           <!-- Chat right-rail inspector -->
           <aside class="chat-inspector">
@@ -409,7 +387,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 3: Recent Sessions -->
-      <div class="panel" id="panel-sessions">
+      <div class="panel" tabindex="-1" id="panel-sessions">
         <div class="section-header">
           <div><h1>Recent Sessions</h1><div class="section-sub">Chronological task logs and history database</div></div>
           <button class="btn" data-xr-action="loadSessionsPanel()">↻ Refresh</button>
@@ -433,7 +411,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 4: Workspaces switcher -->
-      <div class="panel" id="panel-workspaces">
+      <div class="panel" tabindex="-1" id="panel-workspaces">
         <div class="section-header">
           <div><h1>Workspaces Switcher</h1><div class="section-sub">Isolate databases, memory vectors, and project trees</div></div>
           <button class="btn" data-xr-action="loadWorkspaces()">↻ Refresh</button>
@@ -447,8 +425,8 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           <div class="card">
             <div class="card-header"><span class="card-title">Create new workspace</span></div>
             <div class="xr-s-15">
-              <input id="ws-create-id" class="input" placeholder="Workspace ID (alphanumeric)" />
-              <input id="ws-create-name" class="input" placeholder="Optional display name" />
+              <input id="ws-create-id" class="input" placeholder="Workspace ID (alphanumeric)" aria-label="Workspace ID (alphanumeric)" />
+              <input id="ws-create-name" class="input" placeholder="Optional display name" aria-label="Workspace display name (optional)" />
               <button class="btn btn-primary xr-s-16" data-xr-action="createWorkspace()">Create workspace</button>
             </div>
           </div>
@@ -460,7 +438,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 5: Providers (BYOK) -->
-      <div class="panel" id="panel-providers">
+      <div class="panel" tabindex="-1" id="panel-providers">
         <div class="section-header">
           <div><h1>Cloud Providers (BYOK)</h1><div class="section-sub">Set primary/fallback routes — never stuck on the default model</div></div>
           <div class="xr-s-17">
@@ -477,18 +455,18 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           <div class="grid grid-2 xr-s-7">
             <div>
               <label>Default provider
-                <select id="prov-set-provider"></select>
+                <select id="prov-set-provider" aria-label="Primary provider"></select>
               </label>
               <label>Default model name
-                <input id="prov-set-model" class="input" placeholder="e.g. gpt-4" />
+                <input id="prov-set-model" class="input" placeholder="e.g. gpt-4" aria-label="Primary model" />
               </label>
             </div>
             <div>
               <label>Fallback provider
-                <select id="prov-set-fallback"></select>
+                <select id="prov-set-fallback" aria-label="Fallback provider (optional)"></select>
               </label>
               <label>Fallback model name
-                <input id="prov-set-fallback-model" class="input" placeholder="e.g. llama3" />
+                <input id="prov-set-fallback-model" class="input" placeholder="e.g. llama3" aria-label="Fallback model (optional)" />
               </label>
             </div>
           </div>
@@ -501,7 +479,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 6: Models (Local AI) -->
-      <div class="panel" id="panel-models">
+      <div class="panel" tabindex="-1" id="panel-models">
         <div class="section-header">
           <div>
             <h1>Models (Local AI)</h1>
@@ -548,13 +526,13 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
             <div class="card-header"><span class="card-title">Change model</span></div>
             <div class="xr-s-26">
               <label>Runtime engine
-                <select id="models-select-runtime"></select>
+                <select id="models-select-runtime" aria-label="Local runtime"></select>
               </label>
               <label>Model tag ID
-                <input id="models-select-model" class="input" placeholder="e.g. qwen2.5:7b" />
+                <input id="models-select-model" class="input" placeholder="e.g. qwen2.5:7b" aria-label="Model tag" />
               </label>
               <label>Routing mode
-                <select id="models-select-routing">
+                <select id="models-select-routing" aria-label="Routing strategy">
                   <option value="local-only">local-only (strict private)</option>
                   <option value="hybrid">hybrid (Ollama fallback to Cloud)</option>
                   <option value="cloud-first">cloud-first (cloud default, local backup)</option>
@@ -588,7 +566,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 7: Durable Memory -->
-      <div class="panel" id="panel-memory">
+      <div class="panel" tabindex="-1" id="panel-memory">
         <div class="section-header">
           <div><h1>Durable Memory</h1><div class="section-sub">Local vector search memory browser (records only what you ask it to remember)</div></div>
           <button class="btn btn-danger" data-xr-action="clearMemory()">Purge Memory</button>
@@ -615,7 +593,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="card xr-s-6">
           <div class="card-header"><span class="card-title">Search memory ledger</span></div>
           <div class="xr-s-17">
-            <input id="mem-search" class="input" placeholder="Query semantic nodes (e.g. prefer typescript)" />
+            <input id="mem-search" class="input" placeholder="Query semantic nodes (e.g. prefer typescript)" aria-label="Query semantic memory nodes" />
             <button class="btn btn-primary" data-xr-action="doMemSearch()">Search</button>
           </div>
           <div id="mem-search-results" class="xr-s-31"></div>
@@ -627,7 +605,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 8: Research Runs -->
-      <div class="panel" id="panel-research">
+      <div class="panel" tabindex="-1" id="panel-research">
         <div class="section-header">
           <div><h1>Research Runs</h1><div class="section-sub">Citation-aware deep search and report synthesis console</div></div>
           <button class="btn" data-xr-action="loadResearchPanel()">↻ Refresh</button>
@@ -651,7 +629,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 9: Voice Pipeline -->
-      <div class="panel" id="panel-voice">
+      <div class="panel" tabindex="-1" id="panel-voice">
         <div class="section-header">
           <div><h1>Voice Pipeline</h1><div class="section-sub">Wakeword detectors, TTS vocal synthesis, and hardware controls</div></div>
         </div>
@@ -677,7 +655,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 10: Skills Marketplace -->
-      <div class="panel" id="panel-skills">
+      <div class="panel" tabindex="-1" id="panel-skills">
         <div class="mp-hero">
           <div class="mp-hero-grid">
             <div>
@@ -685,7 +663,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
               <div class="mp-title">Inject expertise like <span>hiring specialists</span></div>
               <p class="mp-sub">Expand your AI capabilities with signed package skill structures. Review permissions and dependency chains before enabling.</p>
               <div class="mp-search-row">
-                <input id="market-search" class="mp-search" placeholder="Search React developer, security analyst, patent research..." />
+                <input id="market-search" class="mp-search" placeholder="Search React developer, security analyst, patent research..." aria-label="Search the skills marketplace" />
                 <button class="btn btn-primary" data-xr-action="loadMarketplace()">Search Catalog</button>
                 <button class="btn btn-ghost" data-xr-action="syncMarketplace()">Sync Registries</button>
               </div>
@@ -720,14 +698,14 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
             <div class="mp-cat" data-xr-action="setMarketQuery('developer python react')"><b>⌘ Software suite</b></div>
             <div class="mp-cat" data-xr-action="setMarketQuery('research academic citation')"><b>🔬 Deep Research</b></div>
           </aside>
-          <main class="mp-main">
+          <div class="mp-main">
             <div class="mp-tabs">
               <button class="mp-tab active" data-market-sort="relevance" data-xr-action="setMarketSort('relevance')">Recommended</button>
               <button class="mp-tab" data-market-sort="trending" data-xr-action="setMarketSort('trending')">Popularity</button>
               <button class="mp-tab" data-market-sort="updated" data-xr-action="setMarketSort('updated')">Latest</button>
             </div>
             <div id="market-grid" class="mp-grid"><div class="spinner"></div></div>
-          </main>
+          </div>
           <aside class="mp-card mp-inspector">
             <div class="mp-section-title">Selected Skill Inspector</div>
             <div id="market-inspector"><div class="mp-panel-empty">Click any card to inspect dependency trees, commands, and security permissions reasons.</div></div>
@@ -736,7 +714,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 11: Sandboxed Plugins -->
-      <div class="panel" id="panel-plugins">
+      <div class="panel" tabindex="-1" id="panel-plugins">
         <div class="section-header">
           <div><h1>Sandboxed Plugins</h1><div class="section-sub">Code integrations with custom permissions limits</div></div>
           <button class="btn" data-xr-action="loadPlugins()">↻ Refresh</button>
@@ -753,7 +731,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="card">
           <div class="card-header"><span class="card-title">Install Plugins</span></div>
           <div class="xr-s-37">
-            <input id="plugin-search" class="input" placeholder="Query integrations catalogue..." />
+            <input id="plugin-search" class="input" placeholder="Query integrations catalogue..." aria-label="Query the integrations catalogue" />
             <button class="btn btn-primary" data-xr-action="searchPlugins()">Query Catalogue</button>
           </div>
           <div id="plugins-catalog"><div class="muted">Query plugins list above or install using terminal command: <code class="mono text-cyan">xr plugins install ./plugin_folder</code></div></div>
@@ -761,7 +739,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 12: Capability Ecosystem -->
-      <div class="panel" id="panel-capabilities">
+      <div class="panel" tabindex="-1" id="panel-capabilities">
         <div class="section-header">
           <div><h1>Capability Ecosystem</h1><div class="section-sub">Common descriptors, provenance, permissions, certification, quarantine and rollback</div></div>
           <button class="btn" data-xr-action="loadCapabilities()">↻ Refresh</button>
@@ -775,7 +753,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
         <div class="card xr-s-6">
           <div class="card-header"><span class="card-title">Discovery by task / trust constraints</span></div>
           <div class="xr-s-37">
-            <input id="cap-search" class="input" placeholder="e.g. summarize repository, send email, local OCR" />
+            <input id="cap-search" class="input" placeholder="e.g. summarize repository, send email, local OCR" aria-label="Search capabilities" />
             <button class="btn btn-primary" data-xr-action="loadCapabilities(true)">Discover</button>
           </div>
           <div class="muted">Evidence-weighted ranking only — no popularity-only trust score.</div>
@@ -787,7 +765,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 13: MCP Servers -->
-      <div class="panel" id="panel-mcp">
+      <div class="panel" tabindex="-1" id="panel-mcp">
         <div class="section-header">
           <div><h1>Model Context Protocol (MCP)</h1><div class="section-sub">Add external server toolkits (Github, Postgres, etc)</div></div>
           <button class="btn" data-xr-action="loadMcp()">↻ Refresh</button>
@@ -796,9 +774,9 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
           <div class="card">
             <div class="card-header"><span class="card-title">Register MCP Server</span></div>
             <div class="xr-s-15">
-              <input id="mcp-create-id" class="input" placeholder="Server ID (e.g. github)" />
-              <input id="mcp-create-cmd" class="input" placeholder="Execution command (e.g. npx)" />
-              <input id="mcp-create-args" class="input" placeholder="Arguments (e.g. -y @modelcontextprotocol/server-github)" />
+              <input id="mcp-create-id" class="input" placeholder="Server ID (e.g. github)" aria-label="MCP server ID" />
+              <input id="mcp-create-cmd" class="input" placeholder="Execution command (e.g. npx)" aria-label="MCP server execution command" />
+              <input id="mcp-create-args" class="input" placeholder="Arguments (e.g. -y @modelcontextprotocol/server-github)" aria-label="MCP server arguments" />
               <button class="btn btn-primary xr-s-16" data-xr-action="registerMcp()">Add MCP Server</button>
             </div>
           </div>
@@ -810,7 +788,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 13: Business OS CRM -->
-      <div class="panel" id="panel-business">
+      <div class="panel" tabindex="-1" id="panel-business">
         <div class="section-header">
           <div><h1>Business OS CRM</h1><div class="section-sub">Enterprise metrics automation, CRM assistant logs, and financial flows</div></div>
         </div>
@@ -830,7 +808,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 14: Computer Control -->
-      <div class="panel" id="panel-control">
+      <div class="panel" tabindex="-1" id="panel-control">
         <div class="section-header">
           <div><h1>Computer Control</h1><div class="section-sub">Vision and system command automation permissions</div></div>
           <button class="btn btn-danger xr-s-38" data-xr-action="emergencyStopControl()">🚨 Emergency Stop</button>
@@ -854,7 +832,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 15: Shield (Security) -->
-      <div class="panel" id="panel-shield">
+      <div class="panel" tabindex="-1" id="panel-shield">
         <div class="section-header">
           <div><h1>🛡️ XR Shield — Security & Privacy</h1><div class="section-sub">EDR endpoint checking, processes manager, and Dojo testing lab</div></div>
           <div class="xr-s-17">
@@ -978,7 +956,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 16: Audit Log -->
-      <div class="panel" id="panel-audit">
+      <div class="panel" tabindex="-1" id="panel-audit">
         <div class="section-header">
           <div><h1>Audit Log</h1><div class="section-sub">Tamper-evident append-only ledger with cryptographic hash checks</div></div>
           <div class="xr-s-17">
@@ -996,7 +974,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 17: Cost & Budget -->
-      <div class="panel" id="panel-budget">
+      <div class="panel" tabindex="-1" id="panel-budget">
         <div class="section-header">
           <div><h1>Cost & Budget Governor</h1><div class="section-sub">Resource spending trackers and pricing limit controls</div></div>
           <button class="btn" data-xr-action="loadBudgetPanel()">↻ Refresh</button>
@@ -1012,13 +990,13 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
             <div class="card-header"><span class="card-title">Configure caps limits</span></div>
             <div class="xr-s-26">
               <label>Per-task hard USD ceiling
-                <input id="bud-input-task" type="number" step="0.01" class="input" />
+                <input id="bud-input-task" type="number" step="0.01" class="input" aria-label="Budget limit per task (USD)" />
               </label>
               <label>Monthly hard USD cap
-                <input id="bud-input-month" type="number" step="0.01" class="input" />
+                <input id="bud-input-month" type="number" step="0.01" class="input" aria-label="Budget limit per month (USD)" />
               </label>
               <label>Daily warning threshold cap
-                <input id="bud-input-day" type="number" step="0.01" class="input" />
+                <input id="bud-input-day" type="number" step="0.01" class="input" aria-label="Budget limit per day (USD)" />
               </label>
               <div class="xr-s-46">
                 <label class="xr-s-47"><input id="bud-toggle-warn" type="checkbox"/> Warning notifications</label>
@@ -1045,7 +1023,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 18: Files & Artifacts -->
-      <div class="panel" id="panel-files">
+      <div class="panel" tabindex="-1" id="panel-files">
         <div class="section-header">
           <div><h1>Files & Produced Artifacts</h1><div class="section-sub">Browser of documents, plans, and files generated in chats</div></div>
         </div>
@@ -1056,7 +1034,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 19: Downloads Security -->
-      <div class="panel" id="panel-downloads">
+      <div class="panel" tabindex="-1" id="panel-downloads">
         <div class="section-header">
           <div><h1>Downloads Folder Security Scanner</h1><div class="section-sub">Scans local Downloads for malware and alerts on unsafe files</div></div>
         </div>
@@ -1068,7 +1046,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 20: Devices Link -->
-      <div class="panel" id="panel-devices">
+      <div class="panel" tabindex="-1" id="panel-devices">
         <div class="section-header">
           <div><h1>Devices Sync</h1><div class="section-sub">Synchronize terminal clients, VS Code workspaces, and mobile Termux interfaces</div></div>
         </div>
@@ -1092,7 +1070,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 21: Scheduled Tasks -->
-      <div class="panel" id="panel-automation">
+      <div class="panel" tabindex="-1" id="panel-automation">
         <div class="section-header">
           <div><h1>Scheduled Automation</h1><div class="section-sub">Execute recurring prompts or scripts via local cron scheduling</div></div>
         </div>
@@ -1106,7 +1084,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 22: Webhooks API -->
-      <div class="panel" id="panel-integrations">
+      <div class="panel" tabindex="-1" id="panel-integrations">
         <div class="section-header">
           <div><h1>Webhooks API</h1><div class="section-sub">Expose local endpoints to receive events from Github, Slack, etc</div></div>
         </div>
@@ -1118,7 +1096,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 23: Alerts Hub -->
-      <div class="panel" id="panel-notifications">
+      <div class="panel" tabindex="-1" id="panel-notifications">
         <div class="section-header">
           <div><h1>Alerts Hub</h1><div class="section-sub">System notices, telemetry flags, and safety block indicators</div></div>
           <button class="btn btn-ghost" data-xr-action="clearNotifications()">Clear list</button>
@@ -1129,11 +1107,11 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
       <!-- Panel 24: Core Settings -->
-      <div class="panel" id="panel-settings">
+      <div class="panel" tabindex="-1" id="panel-settings">
         <div class="section-header">
           <div><h1>Core Settings</h1><div class="section-sub">Configure XR kernel preferences, budget caps, and egress rules</div></div>
           <div class="xr-s-17">
-            <input id="settings-search" class="input xr-s-50" placeholder="Search settings..." data-xr-keyup="filterSettings()" />
+            <input id="settings-search" class="input xr-s-50" placeholder="Search settings..." data-xr-keyup="filterSettings()" aria-label="Search settings" />
             <button class="btn btn-primary" data-xr-action="saveAllSettings()">Save Configuration</button>
           </div>
         </div>
@@ -1148,7 +1126,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
             <button class="settings-nav-item" data-set-pane="voice" data-xr-action="switchSettingsPane('voice')">Voice & Audio</button>
           </aside>
 
-          <main class="settings-content xr-s-51">
+          <div class="settings-content xr-s-51">
             <!-- Settings Pane 1: General -->
             <div class="settings-pane active" id="set-pane-general">
               <div class="settings-group">
@@ -1158,7 +1136,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                     <div class="settings-key">Interface Density</div>
                     <div class="settings-desc">Adjust size of tables, lists, and spacing layout.</div>
                   </div>
-                  <select id="set-general-density" class="settings-field">
+                  <select id="set-general-density" class="settings-field" aria-label="Layout density">
                     <option value="compact">Compact (High density)</option>
                     <option value="default" selected>Default (Standard)</option>
                     <option value="cozy">Cozy (Larger rows)</option>
@@ -1169,7 +1147,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                     <div class="settings-key">Automatic Startup</div>
                     <div class="settings-desc">Launch XR background server daemon on computer boot.</div>
                   </div>
-                  <label class="toggle"><input type="checkbox" id="set-general-startup"/><div class="toggle-slider"></div></label>
+                  <label class="toggle"><input type="checkbox" id="set-general-startup" aria-label="Launch XR Control Center on login"/><div class="toggle-slider"></div></label>
                 </div>
               </div>
             </div>
@@ -1184,14 +1162,14 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                     <div class="settings-key">Anthropic Claude Key</div>
                     <div class="settings-desc">Enables claude-3-5-sonnet model features.</div>
                   </div>
-                  <input type="password" id="set-prov-key-anthropic" class="input settings-field" placeholder="••••••••••••" />
+                  <input type="password" id="set-prov-key-anthropic" class="input settings-field" placeholder="••••••••••••" aria-label="Anthropic API key" autocomplete="off" />
                 </div>
                 <div class="settings-row">
                   <div class="settings-meta">
                     <div class="settings-key">OpenAI API Key</div>
                     <div class="settings-desc">Enables gpt-4o endpoints.</div>
                   </div>
-                  <input type="password" id="set-prov-key-openai" class="input settings-field" placeholder="••••••••••••" />
+                  <input type="password" id="set-prov-key-openai" class="input settings-field" placeholder="••••••••••••" aria-label="OpenAI API key" autocomplete="off" />
                 </div>
               </div>
             </div>
@@ -1205,7 +1183,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                     <div class="settings-key">Preferred local engine</div>
                     <div class="settings-desc">Set local server instance connection target.</div>
                   </div>
-                  <select id="set-local-runtime" class="settings-field">
+                  <select id="set-local-runtime" class="settings-field" aria-label="Default local runtime">
                     <option value="ollama">Ollama (Standard)</option>
                     <option value="llama.cpp">Llama.cpp</option>
                   </select>
@@ -1222,7 +1200,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                     <div class="settings-key">Per-task spend cap</div>
                     <div class="settings-desc">Hard USD cost stop before calling LLM layers.</div>
                   </div>
-                  <input type="number" id="set-budget-task" step="0.01" class="input settings-field" />
+                  <input type="number" id="set-budget-task" step="0.01" class="input settings-field" aria-label="Default budget per task (USD)" />
                 </div>
               </div>
             </div>
@@ -1236,14 +1214,14 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                     <div class="settings-key">Require approvals for shell</div>
                     <div class="settings-desc">Gates execution of write_file or shell cmd jobs.</div>
                   </div>
-                  <label class="toggle"><input type="checkbox" id="set-trust-approval" checked/><div class="toggle-slider"></div></label>
+                  <label class="toggle"><input type="checkbox" id="set-trust-approval" checked aria-label="Require approval for elevated actions"/><div class="toggle-slider"></div></label>
                 </div>
                 <div class="settings-row">
                   <div class="settings-meta">
                     <div class="settings-key">Egress filtering restrictor</div>
                     <div class="settings-desc">Limit network requests to allowlisted domains alone.</div>
                   </div>
-                  <label class="toggle"><input type="checkbox" id="set-trust-egress"/><div class="toggle-slider"></div></label>
+                  <label class="toggle"><input type="checkbox" id="set-trust-egress" aria-label="Restrict network egress for sandboxed tools"/><div class="toggle-slider"></div></label>
                 </div>
               </div>
             </div>
@@ -1257,22 +1235,22 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
                     <div class="settings-key">Push-to-talk defaults</div>
                     <div class="settings-desc">PTT click triggers capture rather than continuous wake listener.</div>
                   </div>
-                  <label class="toggle"><input type="checkbox" id="set-voice-ptt" checked/><div class="toggle-slider"></div></label>
+                  <label class="toggle"><input type="checkbox" id="set-voice-ptt" checked aria-label="Push-to-talk voice capture default"/><div class="toggle-slider"></div></label>
                 </div>
               </div>
             </div>
-          </main>
+          </div>
         </div>
       </div>
 
       <!-- Panel 25: About Build -->
-      <div class="panel" id="panel-about">
+      <div class="panel" tabindex="-1" id="panel-about">
         <div class="section-header">
           <div><h1>About XR Control Center</h1><div class="section-sub">System build identity metadata</div></div>
         </div>
         <div class="card xr-s-6">
           <div class="xr-s-52">
-            <div class="logo-mark xr-s-53">▀▄▀</div>
+            <div class="logo-mark xr-s-53" aria-hidden="true">▀▄▀</div>
             <div>
               <h2>XR Unified AI OS Control Center</h2>
               <p class="muted">__XR_VERSION__ — Control Center</p>
@@ -1288,7 +1266,7 @@ export const DASHBOARD_PAGE = `<!DOCTYPE html>
       </div>
 
     </div><!-- /content -->
-  </div><!-- /main -->
+  </main><!-- /main -->
 </div><!-- /app -->
 
 <!-- ── Script Logic (backward-compatible, optimized) ──────────────────── -->

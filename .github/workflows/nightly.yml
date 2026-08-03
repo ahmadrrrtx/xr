@@ -60,3 +60,34 @@ jobs:
             -v "$PWD":/app \
             -w /app \
             xr:nightly bun run scripts/golden-path.ts
+
+  # ── Phase 8 · T4 ────────────────────────────────────────────────────────────
+  # First-task success-rate survey: 20 fresh-machine attempts (install → boot
+  # → first answer) must succeed at ≥ 95%. Automated proxy — the human study
+  # stays pending per docs/ux/FIRST-TASK.md (honesty exception E-1); this job
+  # guards the machine-verifiable half of the requirement.
+  first-task-survey:
+    name: First-task survey (N=20, rate ≥ 0.95)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run first-task survey
+        run: |
+          bun run scripts/first-task-survey.ts --runs=20 --target=0.95 --json | tee first-task-survey.json
+
+      - name: Upload survey evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: first-task-survey
+          path: first-task-survey.json
+          retention-days: 90

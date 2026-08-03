@@ -19,9 +19,14 @@ export const DASHBOARD_SCRIPT = `
 const TOKEN = "__TOKEN__";
 const BASE = window.location.origin;
 
-// ── API request helper
+// ── API request helper (Phase 8 · T1 — the dashboard consumes the VERSIONED API)
+function v1(path) {
+  return typeof path === "string" && path.startsWith("/api/") && !path.startsWith("/api/v1")
+    ? "/api/v1" + path.slice("/api".length)
+    : path;
+}
 async function api(path, opts = {}) {
-  const res = await fetch(BASE + path, {
+  const res = await fetch(BASE + v1(path), {
     ...opts,
     headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json", ...(opts.headers ?? {}) },
     body: opts.body ? (typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body)) : undefined,
@@ -30,35 +35,55 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
-// ── Toast notifier
+// ── Toast notifier — live-region aware (Phase 8 · T3):
+// routine confirmations are polite status updates; failures are alerts.
 function toast(msg, type = "info") {
   const wrap = document.getElementById("toasts");
   const el = document.createElement("div");
   el.className = "toast " + type;
+  el.setAttribute("role", type === "err" ? "alert" : "status");
   el.textContent = msg;
   wrap.appendChild(el);
   setTimeout(() => el.remove(), 4000);
 }
 
 // ── Views routing navigator
+// Labels keyed by REAL panel ids (nav data-panel attributes) — breadcrumbs,
+// disclosure, and the palette all derive from this one map (T4: fixed the
+// stale status/security keys; control/shield were unmapped before).
 const NAV_LABELS = {
-  dashboard: "Home", chat: "Chat Sessions", sessions: "Recent Sessions", status: "System Status", budget: "Cost & Budget", workspaces: "Workspaces",
+  dashboard: "Home", chat: "Chat Sessions", sessions: "Recent Sessions", budget: "Cost & Budget", workspaces: "Workspaces",
   providers: "Providers (BYOK)", models: "Models (Local AI)", memory: "Durable Memory",
   research: "Research Runs", plugins: "Sandboxed Plugins", capabilities: "Capability Ecosystem", skills: "Skills Marketplace", voice: "Voice Pipeline",
-  security: "Shield (Security)", audit: "Audit Log", settings: "Core Settings", about: "About Build",
-  mcp: "MCP Servers", business: "Business OS CRM", files: "Files & Artifacts", downloads: "Downloads Security",
+  shield: "Shield (Security)", audit: "Audit Log", settings: "Core Settings", about: "About Build",
+  mcp: "MCP Servers", business: "Business OS CRM", control: "Computer Control", files: "Files & Artifacts", downloads: "Downloads Security",
   devices: "Devices Link", automation: "Scheduled Tasks", integrations: "Webhooks API", notifications: "Alerts Hub"
 };
 
 function navigateTo(id) {
-  // Toggle nav buttons
+  // Toggle nav buttons — visual state AND the accessibility current-page state
+  // (aria-current is what a screen reader announces; the class is only paint).
   document.querySelectorAll(".nav-item").forEach(el => {
-    el.classList.toggle("active", el.dataset.panel === id);
+    const active = el.dataset.panel === id;
+    el.classList.toggle("active", active);
+    if (active) el.setAttribute("aria-current", "page");
+    else el.removeAttribute("aria-current");
   });
   // Toggle panels
   document.querySelectorAll(".panel").forEach(el => {
     el.classList.toggle("active", el.id === "panel-" + id);
   });
+  // Focus management (Phase 8 · T3): when navigation came from the keyboard
+  // (a nav button, the body on a shortcut key, or anywhere inside a panel
+  // being hidden), move focus into the newly-shown panel so keyboard and
+  // screen-reader users land on the new context instead of being stranded
+  // on a now-hidden element. Topbar chips/breadcrumb clicks keep their own
+  // focus — they stay visible across navigation.
+  const ae = document.activeElement;
+  if (ae && (ae === document.body || (ae.closest && ae.closest(".nav-item, .panel")))) {
+    const panel = document.getElementById("panel-" + id);
+    if (panel) panel.focus({ preventScroll: true });
+  }
   // Update breadcrumb
   document.getElementById("breadcrumb-active").textContent = NAV_LABELS[id] ?? id;
 
@@ -312,7 +337,7 @@ function renderChatList() {
     if (!groups[g].length) return;
     html += '<div class="xr-s-55">' + g + '</div>';
     groups[g].sort((a,b)=>b.updatedAt - a.updatedAt).forEach(c => {
-      html += \`<div class="chat-session-item \${c.id === chatState.activeId ? "active" : ""}" data-xr-action="\${act('chatSelectChat', c.id)}">
+      html += \`<div class="chat-session-item \${c.id === chatState.activeId ? "active" : ""}" role="button" tabindex="0" data-xr-action="\${act('chatSelectChat', c.id)}">
         <div class="chat-session-item-title">\${escapeHtml(c.title)}</div>
         <div class="chat-session-item-meta">\${c.messages.length} messages · \${timeAgo(c.updatedAt)}</div>
       </div>\`;
@@ -415,7 +440,7 @@ function updateComposerContext() {
 
 function renderAttachments() {
   const chat = activeChat(); const row = document.getElementById("attachment-row"); if (!row || !chat) return;
-  row.innerHTML = chat.attachments.map((a,i) => '<span class="badge badge-gray xr-s-61">📎 '+escapeHtml(a.name)+' <span data-xr-action="removeAttachment('+i+')" class="xr-s-62">×</span></span>').join("");
+  row.innerHTML = chat.attachments.map((a,i) => '<span class="badge badge-gray xr-s-61"><span aria-hidden="true">📎</span> '+escapeHtml(a.name)+' <button type="button" data-xr-action="removeAttachment('+i+')" class="badge-x" aria-label="Remove attachment '+escapeHtml(a.name)+'">×</button></span>').join("");
 }
 
 function handleComposerKeydown(e) {
@@ -471,7 +496,7 @@ function stopChatGeneration(){ if(chatAbortController) chatAbortController.abort
 async function streamChat(text, assistantMsg) {
   const toolId = addToolEvent('AI chat prompt','Call provider hot-path routing','running','Streaming...');
   const history = activeChat().messages.filter(m=>!m.streaming).slice(-10).map(m=>({ role:m.role, content:m.content }));
-  const res = await fetch(BASE + "/api/chat", { method:"POST", headers:{ Authorization:"Bearer "+TOKEN, "Content-Type":"application/json" }, body:JSON.stringify({ message:text, history }), signal: chatAbortController.signal });
+  const res = await fetch(BASE + "/api/v1/chat", { method:"POST", headers:{ Authorization:"Bearer "+TOKEN, "Content-Type":"application/json" }, body:JSON.stringify({ message:text, history }), signal: chatAbortController.signal });
   if(!res.ok) { throw new Error('API routing failed or token expired.'); }
   const reader = res.body?.getReader(); const decoder = new TextDecoder(); let reply="";
   if(reader){
@@ -494,14 +519,14 @@ function formatPlan(plan){ if(Array.isArray(plan)) return plan.map((s,i)=> (type
 function formatStatus(all){ const val=i=>all[i].status==='fulfilled'?all[i].value:null; const ov=val(0), cost=val(1), ctrl=val(2), providers=val(3), models=val(4), trust=val(5); return '### XR System Status\\n\\n- **Workspace active directory**: '+(ov?.project||'default')+'\\n- **Durable Ledger checks**: '+(ov?.audit?.chain?.valid?'✓ cryptographic chain OK':'⚠ Chain modified')+'\\n- **Spend Governor**: $'+Number(cost?.totalUsd||0).toFixed(6)+' spend\\n- **Provider / Model**: '+(providers?.primary || 'ollama')+' · '+(models?.selected?.model || 'qwen2.5:7b')+'\\n- **Computer Use state**: '+(ctrl?.enabled?'opt-in authorized':'disabled')+'\\n- **Trust & Isolation**: '+(((trust&&trust.backends)||[]).filter(function(b){return b.available;}).map(function(b){return b.placement;}).join(', ')||'none')+' available (Tier-2 fail-closed)'; }
 function formatMemory(j,q){ const entries=j.results || j.entries || []; if(!entries.length) return 'No vector memories found.'; return '### Vector Memories stored:\\n\\n'+entries.slice(0,10).map(e=>'- **'+(e.category||'node')+'**: '+(e.content||'')).join('\\n'); }
 
-function addToolEvent(tool, purpose, status, result){ const id='tool_'+(++chatToolSeq); const box=document.getElementById('tool-timeline'); if(box){ const el=document.createElement('div'); el.className='tool-card '+status; el.id=id; el.innerHTML='<div class="tool-head" data-xr-action="this.parentElement.classList.toggle(\\'open\\')"><span class="tool-summary"><svg viewBox="0 0 24 24" class="xr-s-63"><polygon points="12 2 2 7 12 12 22 7 12 2z"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> <b>'+escapeHtml(tool)+'</b></span><span class="tool-indicator">'+escapeHtml(status)+'</span></div><div class="tool-body">'+escapeHtml(result||'')+'</div>'; if(box.querySelector('.muted')) box.innerHTML=''; box.prepend(el); } return id; }
+function addToolEvent(tool, purpose, status, result){ const id='tool_'+(++chatToolSeq); const box=document.getElementById('tool-timeline'); if(box){ const el=document.createElement('div'); el.className='tool-card '+status; el.id=id; el.innerHTML='<div class="tool-head" role="button" tabindex="0" aria-expanded="false"><span class="tool-summary"><svg viewBox="0 0 24 24" class="xr-s-63" aria-hidden="true" focusable="false"><polygon points="12 2 2 7 12 12 22 7 12 2z"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> <b>'+escapeHtml(tool)+'</b></span><span class="tool-indicator">'+escapeHtml(status)+'</span></div><div class="tool-body">'+escapeHtml(result||'')+'</div>'; if(box.querySelector('.muted')) box.innerHTML=''; box.prepend(el); } return id; }
 function updateToolEvent(id,status,result){ const el=document.getElementById(id); if(!el) return; el.className='tool-card '+status; const st=el.querySelector('.tool-indicator'); if(st) st.textContent=status; const out=el.querySelector('.tool-body'); if(out) out.textContent=result||''; }
 
 async function refreshInspectorData(){ loadMemoryPeek(); loadApprovals(); }
 async function loadApprovals(){ const box=document.getElementById('approval-list'); if(!box) return; try{ const j=await api('/api/control/pending'); const p=j.pending||[]; box.innerHTML=p.length?p.map(a=>'<div class="approval-card xr-s-64"><strong>'+escapeHtml(a.tool || a.id)+'</strong><div class="xr-s-65">'+escapeHtml(a.reason || 'Approval required')+'</div><div class="xr-s-66"><button class="btn btn-primary xr-s-67" data-xr-action="answerApproval(\\''+a.id+'\\',true)">Allow</button><button class="btn btn-danger xr-s-67" data-xr-action="answerApproval(\\''+a.id+'\\',false)">Deny</button></div></div>').join(''):'<div class="muted">No pending authorizations.</div>'; }catch{} }
 async function answerApproval(id,approved){ await apiPost('/api/control/approve',{id,approved}); toast(approved?'Action authorized':'Action blocked', approved?'ok':'warn'); loadApprovals(); }
 async function loadMemoryPeek(){ const box=document.getElementById('memory-peek'); if(!box) return; try{ const j=await api('/api/memory'); const entries=(j.entries||[]).slice(0,3); box.innerHTML=entries.length?entries.map(e=>'<div class="inspector-detail xr-s-68"><strong>'+escapeHtml(e.category)+'</strong><br>'+escapeHtml(e.content)+'</div>').join(''):'<div class="muted">Memory cache is empty.</div>'; }catch{ box.innerHTML='<div class="muted">Memory offline.</div>'; } }
-async function apiPost(path, body){ const res=await fetch(BASE+path,{ method:'POST', headers:{ Authorization:'Bearer '+TOKEN, 'Content-Type':'application/json' }, body:JSON.stringify(body||{}) }); const j=await res.json().catch(()=>({})); if(!res.ok) throw new Error(j.error || 'Request failed'); return j; }
+async function apiPost(path, body){ const res=await fetch(BASE+v1(path),{ method:'POST', headers:{ Authorization:'Bearer '+TOKEN, 'Content-Type':'application/json' }, body:JSON.stringify(body||{}) }); const j=await res.json().catch(()=>({})); if(!res.ok) throw new Error(j.error || 'Request failed'); return j; }
 
 function chatExportActive(){ const c=activeChat(); if(!c) return; const md='# '+c.title+'\\n\\n'+c.messages.map(m=>'## '+(m.role==='user'?'User':'Assistant')+' · '+new Date(m.ts).toLocaleString()+'\\n\\n'+m.content).join('\\n\\n'); downloadArtifact(c.title, md, 'md'); }
 function downloadArtifact(name, content, ext){ const safe=String(name||'artifact').replace(/[^a-z0-9_.-]+/gi,'-').slice(0,64) || 'artifact'; const blob=new Blob([content||''],{type:'text/plain;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=safe+'.'+(ext||'txt'); document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},0); }
@@ -543,7 +568,7 @@ async function loadSessionsPanel() {
 
     document.getElementById("sess-list").innerHTML = sessions.length ? sessions.map(s => {
       const bClass = s.status === "done" ? "badge-green" : s.status === "running" ? "badge-cyan" : "badge-amber";
-      return \`<div class="stat-row xr-s-69" data-xr-action="\${act('loadSessionDetail', s.id)}">
+      return \`<div class="stat-row xr-s-69" role="button" tabindex="0" data-xr-action="\${act('loadSessionDetail', s.id)}">
         <div><div class="xr-s-70">\${escapeHtml(s.title)}</div><div class="muted xr-s-71">\${s.id}</div></div>
         <span class="badge \${bClass}">\${s.status}</span>
       </div>\`;
@@ -732,7 +757,7 @@ async function loadModels() {
     const installed = data.installed ?? [];
     document.getElementById("models-list").innerHTML = installed.length
       ? installed.map(m => \`
-      <div class="stat-row xr-s-82" data-xr-action="\${act('pickInstalledModel', String(m.runtime || ''), String(m.model || ''))}" title="Use this model">
+      <div class="stat-row xr-s-82" role="button" tabindex="0" data-xr-action="\${act('pickInstalledModel', String(m.runtime || ''), String(m.model || ''))}" title="Use this model">
         <span class="stat-key mono">\${m.model}</span>
         <span class="badge badge-gray">\${m.runtime}</span>
       </div>
@@ -948,7 +973,7 @@ async function loadResearchPanel() {
     \` : "<div class='muted'>No active research runs.</div>";
 
     document.getElementById("research-list").innerHTML = recent.length ? recent.map(r => \`
-      <div class="stat-row xr-s-90" data-xr-action="\${act('loadResearchDetail', r.id)}">
+      <div class="stat-row xr-s-90" role="button" tabindex="0" data-xr-action="\${act('loadResearchDetail', r.id)}">
         <div><strong>\${escapeHtml(r.topic)}</strong><br><span class="muted">\${r.id}</span></div>
         <span class="badge \${r.status === "done" ? "badge-green" : "badge-gray"}">\${r.status}</span>
       </div>
@@ -1012,7 +1037,7 @@ function renderMarketCategories(rows) {
   for (const s of rows) for (const c of s.categories ?? []) counts[c] = (counts[c] ?? 0) + 1;
   const cats = ["developer","security","research","business","creative","productivity"];
   document.getElementById("market-categories").innerHTML = cats.map(c => \`
-    <div class="mp-cat" data-xr-action="\${act('setMarketQuery', c)}">
+    <div class="mp-cat" role="button" tabindex="0" data-xr-action="\${act('setMarketQuery', c)}">
       <b>\${categoryIcon(c)} \${c}</b>
       <span>\${counts[c] ?? 0}</span>
     </div>
@@ -1037,7 +1062,7 @@ function renderMarketplace() {
       ? (s.enabled ? \`<button class="btn btn-ghost" data-xr-action="event.stopPropagation(); \${act('skillAction', s.id, 'disable')}">Disable</button>\` : \`<button class="btn" data-xr-action="event.stopPropagation(); \${act('skillAction', s.id, 'enable')}">Enable</button>\`)
       : \`<button class="btn btn-primary" data-xr-action="event.stopPropagation(); \${act('installMarketplaceSkill', s.id)}">Install</button>\`;
     return \`
-      <div class="mp-skill-card\${sel}" data-xr-action="\${act('inspectMarketplaceSkill', s.id)}">
+      <div class="mp-skill-card\${sel}" role="button" tabindex="0" data-xr-action="\${act('inspectMarketplaceSkill', s.id)}">
         <div class="mp-skill-top">
           <div class="mp-skill-icon">\${skillInitials(s.name)}</div>
           <div class="xr-s-93">
@@ -1123,6 +1148,7 @@ async function loadCapabilities(searchMode=false) {
           <div class="muted xr-s-99">effective: \${escapeHtml((c.permissions?.effective?.effective || []).join(", ") || "none")}</div>
         </div>
         <div class="xr-s-100">
+          \${(() => { const b = window.__xrT4.capabilityBadge(c); return '<span class="badge ' + b[1] + '" title="' + escapeHtml(b[2]) + '">' + b[0] + "</span>"; })()}
           <span class="badge badge-gray">\${escapeHtml(c.lifecycle?.state || "unknown")}</span>
           <button class="btn btn-ghost" data-xr-action="\${act('capabilityInspect', c.id)}">Inspect</button>
           \${c.lifecycle?.state === "quarantined" ? "" : \`<button class="btn btn-danger" data-xr-action="\${act('capabilityQuarantine', c.id)}">Quarantine</button>\`}
@@ -1634,49 +1660,52 @@ function exportFullData() {
 }
 
 // ── Global Command Palette opening and results rendering
-const PALETTE_ITEMS = [
-  { label: "Go to Dashboard Home", action: () => navigateTo("dashboard"), key: "g d" },
-  { label: "Go to Chat Sessions workspace", action: () => navigateTo("chat"), key: "g c" },
-  { label: "Go to Recent Sessions history", action: () => navigateTo("sessions"), key: "g t" },
-  { label: "Go to Workspaces config", action: () => navigateTo("workspaces"), key: "g w" },
-  { label: "Go to Cloud Providers BYOK", action: () => navigateTo("providers"), key: "g p" },
-  { label: "Go to Local Models Ollama", action: () => navigateTo("models") },
-  { label: "Go to Durable Memory", action: () => navigateTo("memory"), key: "g m" },
-  { label: "Go to Research Runs", action: () => navigateTo("research"), key: "g r" },
-  { label: "Go to Shield (Security)", action: () => navigateTo("security"), key: "g s" },
-  { label: "Go to Audit Log ledger", action: () => navigateTo("audit"), key: "g a" },
-  { label: "Go to Core Settings", action: () => navigateTo("settings"), key: "g ." },
-  { label: "Go to Skills Marketplace", action: () => navigateTo("skills") },
-  { label: "Go to Sandboxed Plugins", action: () => navigateTo("plugins") },
-  { label: "Go to MCP Servers", action: () => navigateTo("mcp") },
-  { label: "Go to Computer Control", action: () => navigateTo("control") },
-  { label: "Go to Alerts Hub", action: () => navigateTo("notifications") },
-  { label: "Go to About Build", action: () => navigateTo("about") }
-];
+// Palette commands are DERIVED from the single nav-label map — they always
+// cover all 26 areas with the real panel ids (previously a hand-kept list of
+// 17 with a broken Shield mapping: it pointed at a nonexistent panel id).
+const PALETTE_KEYS = { dashboard: "g d", chat: "g c", sessions: "g t", workspaces: "g w", providers: "g p", memory: "g m", research: "g r", shield: "g s", audit: "g a", settings: "g ." };
+const PALETTE_ITEMS = Object.keys(NAV_LABELS).map((id) => ({
+  label: "Go to " + NAV_LABELS[id],
+  action: () => navigateTo(id),
+  key: PALETTE_KEYS[id] || undefined,
+}));
 
 let paletteFocusIdx = 0;
+// Phase 8 · T3 — dialog focus bookkeeping: where focus returns on close.
+let paletteReturnFocus = null;
 function openPalette() {
-  document.getElementById("palette").classList.add("open");
+  paletteReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const bg = document.getElementById("palette");
+  bg.classList.add("open");
+  bg.removeAttribute("aria-hidden");
   document.getElementById("palette-search").value = "";
   renderPaletteResults("");
   document.getElementById("palette-search").focus();
   paletteFocusIdx = 0;
 }
 function closePalette() {
-  document.getElementById("palette").classList.remove("open");
+  const bg = document.getElementById("palette");
+  bg.classList.remove("open");
+  bg.setAttribute("aria-hidden", "true");
+  if (paletteReturnFocus && document.contains(paletteReturnFocus)) {
+    paletteReturnFocus.focus({ preventScroll: true });
+  }
+  paletteReturnFocus = null;
 }
 function renderPaletteResults(q) {
   const matches = PALETTE_ITEMS.filter(item => !q || item.label.toLowerCase().includes(q.toLowerCase()));
   const el = document.getElementById("palette-results");
   el.innerHTML = matches.map((item, i) => \`
-    <div class="palette-item \${i === paletteFocusIdx ? "focused" : ""}" data-xr-action="PALETTE_ITEMS[\${PALETTE_ITEMS.indexOf(item)}].action(); closePalette();">
+    <div class="palette-item \${i === paletteFocusIdx ? "focused" : ""}" role="option" id="pal-opt-\${i}" aria-selected="\${i === paletteFocusIdx}" data-xr-action="PALETTE_ITEMS[\${PALETTE_ITEMS.indexOf(item)}].action(); closePalette();">
       <div class="palette-item-icon">
-        <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
       <span>\${item.label}</span>
       \${item.key ? \`<span class="palette-key">\${item.key}</span>\` : ""}
     </div>
   \`).join("");
+  // Combobox active descendant drives what Enter activates (4.1.2).
+  document.getElementById("palette-search")?.setAttribute("aria-activedescendant", matches.length ? \`pal-opt-\${paletteFocusIdx}\` : "");
 }
 
 document.getElementById("palette-search")?.addEventListener("input", e => {
@@ -1685,6 +1714,9 @@ document.getElementById("palette-search")?.addEventListener("input", e => {
 });
 document.getElementById("palette-search")?.addEventListener("keydown", e => {
   const matches = PALETTE_ITEMS.filter(item => !item.label.toLowerCase().includes(e.target.value.toLowerCase()));
+  // Modal focus trap (WCAG 2.1.2): the input is the dialog's sole tabbable
+  // control, so Tab/Shift+Tab stay pinned to it until the dialog closes.
+  if (e.key === "Tab") { e.preventDefault(); return; }
   if (e.key === "Escape") closePalette();
   if (e.key === "ArrowDown") { paletteFocusIdx = Math.min(paletteFocusIdx + 1, matches.length - 1); renderPaletteResults(e.target.value); }
   if (e.key === "ArrowUp") { paletteFocusIdx = Math.max(paletteFocusIdx - 1, 0); renderPaletteResults(e.target.value); }
@@ -1700,6 +1732,7 @@ document.getElementById("palette")?.addEventListener("click", e => {
 // ── Keyboard Shortkeys listener
 let gKeyReady = false;
 document.addEventListener("keydown", e => {
+  if (document.getElementById("palette")?.classList.contains("open") && e.key === "Escape") { e.preventDefault(); closePalette(); return; }
   if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
   if (e.key === "?" || (e.key === "k" && (e.metaKey || e.ctrlKey))) { e.preventDefault(); openPalette(); return; }
   if (e.key === "/") { e.preventDefault(); navigateTo("chat"); setTimeout(() => document.getElementById("chat-input")?.focus(), 0); return; }
@@ -1772,6 +1805,28 @@ document.addEventListener('click', function (ev) {
 });
 // keyup actions (e.g. the settings search box): dispatched through the same
 // allowlist parser.
+// Phase 8 · T3 — keyboard activation bridge: elements upgraded with
+// role="button" (rows, cards, list items) activate on Enter/Space exactly
+// like native buttons. Native controls are ignored (they activate themselves).
+document.addEventListener('keydown', function (ev) {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  var el = ev.target && ev.target.closest ? ev.target.closest('[role="button"]') : null;
+  if (!el) return;
+  var tag = el.tagName;
+  if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  ev.preventDefault();
+  if (el.hasAttribute('data-xr-action')) runXrAction(el.getAttribute('data-xr-action'), ev);
+  else el.click();
+});
+// Tool timeline accordion: toggles the card open/closed and mirrors state
+// into aria-expanded (fixes the Phase 4 no-op stub — the CSP dispatcher must
+// stay allowlist-only, so expansion lives in this dedicated handler).
+document.addEventListener('click', function (ev) {
+  var head = ev.target && ev.target.closest ? ev.target.closest('.tool-head') : null;
+  if (!head || !head.parentElement) return;
+  var open = head.parentElement.classList.toggle('open');
+  head.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
 document.addEventListener('keyup', function (ev) {
   var el = ev.target;
   if (!el || !el.getAttribute || !el.getAttribute('data-xr-keyup')) return;
@@ -1853,5 +1908,200 @@ function execSpecial(s) {
 }
 /* __XR_DISPATCHER_END__ */
 
+
+
+
+// ── Phase 8 · T4 — Progressive disclosure, honest readiness, undo, toned badges
+// All client-side (the composed HTML stays source-of-truth for the shell):
+//   A. A compact "Start here" area + every other area collapsed until opened —
+//      state persists in localStorage; opening any panel auto-reveals its area.
+//   B. An honest readiness banner on Overview, computed from live endpoints
+//      (never a static claim): Ready / Setup required / Degraded + ONE action.
+//   C. Undo as a first-class action on Durable Memory (UndoLedger via daemon).
+//   D. Standardized capability badges (works-now/setup-required/experimental/
+//      unsupported-here) rendered from real lifecycle data, with WHY tooltips.
+(function () {
+  var AREA_KEY = "xr.nav.areas.v1";
+  function loadAreas() { try { return JSON.parse(localStorage.getItem(AREA_KEY) || "{}"); } catch (e) { return {}; } }
+  function areaIdFor(label) { return label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-"); }
+
+  function applyAreaState(sec, open) {
+    var t = sec.querySelector(":scope > .area-toggle");
+    if (!t) return;
+    t.setAttribute("aria-expanded", open ? "true" : "false");
+    var caret = t.querySelector(".area-caret");
+    if (caret) caret.textContent = open ? "▾" : "▸";
+    Array.prototype.slice.call(sec.querySelectorAll(":scope > .nav-item")).forEach(function (el) {
+      el.style.display = open ? "" : "none";
+    });
+  }
+  function saveArea(id, open) { var m = loadAreas(); m[id] = open; localStorage.setItem(AREA_KEY, JSON.stringify(m)); }
+  function revealAreaFor(panelId) {
+    var item = document.querySelector('.sidebar .nav-item[data-panel="' + panelId + '"]');
+    var sec = item && item.closest ? item.closest(".sidebar-section") : null;
+    if (sec) {
+      var t = sec.querySelector(":scope > .area-toggle");
+      if (t && t.getAttribute("aria-expanded") !== "true") {
+        applyAreaState(sec, true);
+        if (sec.dataset.area) saveArea(sec.dataset.area, true);
+      }
+    }
+  }
+
+  function initDisclosure() {
+    var sidebar = document.querySelector(".sidebar");
+    if (!sidebar || sidebar.dataset.disclosure === "1") return;
+    sidebar.dataset.disclosure = "1";
+    // A. "Start here": the four first-run essentials (real nav clones).
+    var start = document.createElement("div");
+    start.className = "sidebar-section";
+    start.dataset.area = "start-here";
+    var startLabel = document.createElement("button");
+    startLabel.type = "button";
+    startLabel.className = "sidebar-label area-toggle";
+    startLabel.setAttribute("aria-expanded", "true");
+    startLabel.innerHTML = 'Start here <span class="area-caret" aria-hidden="true">▾</span>';
+    start.appendChild(startLabel);
+    ["dashboard", "chat", "models", "settings"].forEach(function (pid) {
+      var src = sidebar.querySelector('.nav-item[data-panel="' + pid + '"]');
+      if (!src) return;
+      var clone = src.cloneNode(true);
+      clone.addEventListener("click", function () { navigateTo(pid); });
+      start.appendChild(clone);
+    });
+    var first = sidebar.querySelector(":scope > .sidebar-section");
+    sidebar.insertBefore(start, first);
+
+    var saved = loadAreas();
+    Array.prototype.slice.call(sidebar.querySelectorAll(":scope > .sidebar-section")).forEach(function (sec) {
+      var label = sec.querySelector(":scope > .sidebar-label");
+      if (!label) return;
+      if (!sec.dataset.area) sec.dataset.area = areaIdFor(label.textContent);
+      var id = sec.dataset.area;
+      if (label.tagName !== "BUTTON") {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "sidebar-label area-toggle";
+        btn.innerHTML = label.textContent.trim() + ' <span class="area-caret" aria-hidden="true"></span>';
+        sec.replaceChild(btn, label);
+        label = btn;
+      }
+      // Default: only "Start here" is expanded (progressive disclosure);
+      // everything the user opens stays open (localStorage).
+      var open = id in saved ? !!saved[id] : id === "start-here";
+      label.addEventListener("click", function () {
+        var nowOpen = label.getAttribute("aria-expanded") !== "true";
+        applyAreaState(sec, nowOpen);
+        saveArea(id, nowOpen);
+      });
+      applyAreaState(sec, open);
+    });
+  }
+
+  // Panels reached via palette/shortcut/chips reveal their area automatically.
+  var _navigateTo = navigateTo;
+  navigateTo = function (id) {
+    revealAreaFor(id);
+    return _navigateTo(id);
+  };
+
+  // B. Honest readiness — computed from the same live endpoints, never static.
+  function readinessEl() {
+    var el = document.getElementById("readiness-banner");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "readiness-banner";
+      el.setAttribute("role", "status");
+      el.className = "card xr-s-6";
+      var anchor = document.querySelector("#panel-dashboard .section-header");
+      if (anchor) anchor.insertAdjacentElement("afterend", el);
+    }
+    return el;
+  }
+  async function updateReadiness() {
+    var el = readinessEl();
+    try {
+      var ov = await api("/api/overview");
+      var models = await api("/api/models");
+      var ctx = null;
+      try { ctx = await api("/api/context"); } catch (e) { /* context may be disabled — readiness stays honest without it */ }
+      var auditOk = ov.audit && ov.audit.chain && ov.audit.chain.valid;
+      var provider = (ov.provider && ov.provider.active) || "?";
+      var model = (ov.provider && ov.provider.model) || "?";
+      var local = !!(ov.provider && ov.provider.local);
+      var running = !!(models.current && models.current.healthy);
+      var pending = ctx && ctx.memory && ctx.memory.consent ? (ctx.memory.consent.proposed || 0) : 0;
+      var verdict;
+      if (!auditOk) {
+        verdict = { tone: "err", word: "Degraded", text: "The audit chain failed verification — investigate before trusting history.", action: ["Open audit log", "audit"] };
+      } else if (local && !running) {
+        verdict = { tone: "warn", word: "Setup required", text: "The active route is a local model but no local model is running yet.", action: ["Set up a model", "models"] };
+      } else if (pending > 0) {
+        verdict = { tone: "warn", word: "Your call needed", text: pending + " memor" + (pending === 1 ? "y awaits" : "ies await") + " your consent decision — XR will not use them first.", action: ["Review memory", "memory"] };
+      } else {
+        verdict = { tone: "ok", word: "Ready", text: "Everything on this page is live from the local daemon — nothing staged.", action: null };
+      }
+      var facts = "provider " + provider + " · model " + model + " · " + (local ? "local-first" : "cloud route") + (running ? " · model running" : "");
+      var badgeCls = verdict.tone === "ok" ? "badge-green" : verdict.tone === "warn" ? "badge-amber" : "badge-red";
+      el.innerHTML =
+        '<div class="card-header"><span class="card-title">Readiness</span>' +
+        '<span class="badge ' + badgeCls + '">' + escapeHtml(verdict.word) + "</span></div>" +
+        '<div class="muted xr-s-9">' + escapeHtml(verdict.text) + " " + escapeHtml(facts) + ".</div>" +
+        (verdict.action ? '<div class="xr-s-31"><button type="button" class="btn btn-primary"></button></div>' : "");
+      if (verdict.action) {
+        var btn = el.querySelector("button");
+        btn.textContent = verdict.action[0] + " →";
+        (function (target) { btn.addEventListener("click", function () { navigateTo(target); }); })(verdict.action[1]);
+      }
+    } catch (e) {
+      el.innerHTML = '<div class="card-header"><span class="card-title">Readiness</span><span class="badge badge-red">Unreachable</span></div><div class="muted xr-s-9">Could not compute readiness: ' + escapeHtml(String(e && e.message ? e.message : e)) + "</div>";
+    }
+  }
+  var _loadDashboard = loadDashboard;
+  loadDashboard = async function () {
+    var r = _loadDashboard.apply(this, arguments);
+    try { await r; } catch (e) { /* original handles its own errors */ }
+    await updateReadiness();
+  };
+
+  // C. Undo on Durable Memory (restore data, never authority).
+  function initUndoButton() {
+    var header = document.querySelector("#panel-memory .section-header");
+    if (!header || document.getElementById("mem-undo-btn")) return;
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "mem-undo-btn";
+    btn.className = "btn btn-ghost";
+    btn.title = "Undo the most recent memory/context mutation (restores the exact prior state)";
+    btn.textContent = "↶ Undo last change";
+    btn.addEventListener("click", async function () {
+      try {
+        var res = await apiPost("/api/context/undo", {});
+        toast(res.ok ? "Undone — restored " + res.restoredTarget.table + " " + res.restoredTarget.id : "Nothing to undo", res.ok ? "ok" : "info");
+        loadMemory();
+      } catch (e) {
+        toast("Nothing to undo", "info");
+      }
+    });
+    header.appendChild(btn);
+  }
+
+  // D. Standardized capability badges from real lifecycle data.
+  function capabilityBadge(c) {
+    var state = (c.lifecycle && c.lifecycle.state) || "unknown";
+    var enabled = !!(c.lifecycle && c.lifecycle.enabled);
+    var cert = (c.certification && c.certification.status) || "unknown";
+    if (state === "quarantined") return ["unsupported-here", "badge-red", "Quarantined — blocked from running in this workspace"];
+    if (state === "experimental" || cert === "self-tested") return ["experimental", "badge-violet", "Experimental — unverified; evaluate before relying on it"];
+    if (!enabled) return ["setup-required", "badge-amber", "Installed but not enabled — finish setup before it can run"];
+    return ["works-now", "badge-green", "Enabled and verified to work in this workspace (" + cert + ")"];
+  }
+  window.__xrT4 = { capabilityBadge: capabilityBadge, updateReadiness: updateReadiness, revealAreaFor: revealAreaFor };
+  initDisclosure();
+  initUndoButton();
+  // The wrapper above only sees LATER dashboard loads — compute readiness for
+  // the initial paint as well (updateReadiness has its own failure path).
+  updateReadiness();
+})();
 
 `;

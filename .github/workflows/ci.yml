@@ -237,6 +237,65 @@ jobs:
       - name: Module size gate (owned split plans)
         run: bun run size-gate
 
+  # ── 5d. Phase 8 API contract gates ────────────────────────────────────────
+  # Art. XI/XVIII/XXVII: the generated OpenAPI/JSON-Schema artifact, the typed
+  # client, and the breaking-change detector must never drift from the route
+  # contract. All three regenerate from source and byte-compare.
+  api-contract:
+    name: API contract (schema + client + compat)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Generated OpenAPI artifact is in sync
+        run: bun run api:schema:check
+      - name: Generated typed client is in sync
+        run: bun run client:check
+      - name: No breaking API change without the deprecation path
+        run: bun run api:compat
+
+  # ── 5e. Phase 8 accessibility gate ────────────────────────────────────────
+  # Art. X: WCAG 2.2 AA is claimed only with the automated half green in CI
+  # (axe-core over every panel + contrast gate + structural tests + real
+  # keyboard flows) — the manual half is recorded in docs/a11y/CONFORMANCE.md.
+  a11y:
+    name: Accessibility (axe + keyboard, WCAG 2.2 AA)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install Playwright chromium (headless)
+        run: bunx playwright install chromium --with-deps
+      - name: Live a11y verification (browser required here)
+        run: XR_A11Y_REQUIRE_BROWSER=1 bun test test/a11y/
+
+  # ── 5f. Phase 8 observability-overhead profile gate ────────────────────────
+  # Art. XII: no startup regression — CPU-profiles CLI cold starts with
+  # telemetry wiring present and gates wall time + CPU against the baseline.
+  profiling:
+    name: Profile gate (startup overhead)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Profile gate
+        run: bun run profile:gate
+
   # ── 6. Mutation gate on trust/execution/persistence/credential modules ───
   mutation-gate:
     name: Mutation gate (T8)
@@ -281,17 +340,38 @@ jobs:
             ${{ runner.os }}-bun-
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Cache perf baseline (same-host regression band)
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/xr
-          key: perf-baseline-${{ runner.os }}-7.0.1
-          restore-keys: |
-            perf-baseline-${{ runner.os }}-
+      # NOTE (Phase-8 supply/perf fix): the "same-host regression band" cache
+      # was removed. The gate's warn-only/block flip is triggered by the mere
+      # PRESENCE of a previous host baseline — on ephemeral GitHub runners a
+      # restored cache comes from a DIFFERENT VM, which broke the same-host
+      # assumption and made the job pass on a PR's first run then fail its
+      # second (same tree). Without the cache every CI run is a first run:
+      # the band stays warn-only (visible in logs) while the CONSTITUTIONAL
+      # gate — absolute budgets in scripts/perf/budgets.json — still blocks.
+      # The band keeps working unchanged on persistent/self-hosted runners.
       - name: Hot-path sync-I/O lint
         run: bun run hot-path-lint
       - name: Performance regression gate (budgets + baseline)
         run: bun run perf:gate --samples 21 --mode source --baseline docs/perf/baseline-7.0.1-source.json
+
+  # ── 5g. Phase 8 DX gates: unit tier budget + ownership map sync ───────────
+  # The contributor inner loop must stay under 5 s (measured); the public
+  # ownership map must never drift from CODEOWNERS.
+  unit-tier:
+    name: DX (unit tier <5s + ownership map)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Ownership map is in sync with CODEOWNERS
+        run: bun run scripts/ownership-map.ts --check
+      - name: Unit tier completes inside its 5s budget
+        run: bun run scripts/unit-tier.ts --budget=5000
 
   # ── 6. Aggregation: the single status check required by branch protection ──
   # Runs even when a dependency fails (if: always()), then asserts every
@@ -300,7 +380,7 @@ jobs:
   quality-gate:
     name: Quality Gate
     if: always()
-    needs: [typecheck, truth-gate, baseline, website, test, reliability, boundaries, mutation-gate, perf-gate]
+    needs: [typecheck, truth-gate, baseline, website, test, reliability, boundaries, mutation-gate, perf-gate, api-contract, a11y, profiling, unit-tier]
 
     runs-on: ubuntu-latest
     timeout-minutes: 5

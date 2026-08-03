@@ -117,6 +117,7 @@ export const COMMAND_PROFILES: Readonly<Record<string, readonly string[] | null>
   audit: ["state"],
   session: ["state"],
   logs: ["state"],
+  telemetry: ["config"],
   memory: ["state"],
   context: ["state"],
   mcp: ["state"],

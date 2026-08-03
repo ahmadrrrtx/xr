@@ -8,6 +8,7 @@ import { runLab } from "../../security/lab.ts";
 import { fingerprint } from "../../context/memory/rag.ts";
 import { MemoryStore } from "../../context/memory/store.ts";
 import { dashboardHtml, dashboardCssAsset, dashboardScriptAsset } from "../dashboard.ts";
+import { AUTH_PAGE_SCRIPT } from "../auth-page.ts";
 import { assetResponse, route, type DaemonRoute } from "./router.ts";
 
 async function gitSummary(cwd: string): Promise<{ branch: string; dirty: boolean }> {
@@ -66,6 +67,15 @@ export function systemRoutes(): DaemonRoute[] {
       path: "/assets/dashboard.js",
       method: "GET",
       handle: () => assetResponse(dashboardScriptAsset(), "application/javascript; charset=utf-8"),
+    }),
+    // Phase 8 · T3 — the sign-in page's behaviour script. Reachable WITHOUT
+    // authentication (server.ts exempts this exact path): the page needs it
+    // before any session exists. Static bytes, no data, no secrets.
+    route({
+      id: "auth.js.get",
+      path: "/assets/auth.js",
+      method: "GET",
+      handle: () => assetResponse(AUTH_PAGE_SCRIPT, "application/javascript; charset=utf-8"),
     }),
     route({
       id: "chat.page.get",

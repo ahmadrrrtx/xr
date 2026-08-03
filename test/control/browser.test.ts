@@ -196,16 +196,28 @@ describe("Browser Control — Security & Sandbox", () => {
 
   describe("Non-blocking behavior", () => {
     test("executeBrowserAction does not hang indefinitely when browser unavailable", async () => {
-      const start = Date.now();
-      const result = await executeBrowserAction({
-        type: "browser",
-        op: "goto",
-        value: "https://example.com",
-      } as any);
-      const elapsed = Date.now() - start;
-      // The action should fail quickly (no hang) when browser is unavailable.
-      expect(elapsed).toBeLessThan(10_000);
-      expect(result.ok).toBe(false);
+      // Deterministic "browser unavailable": point Playwright's browser
+      // registry at an empty directory for the duration of this test. The
+      // outcome must not depend on whether the ambient dev machine happens
+      // to have a browser binary downloaded.
+      const savedBrowsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
+      process.env.PLAYWRIGHT_BROWSERS_PATH = "/nonexistent/xr-test-no-browsers";
+      try {
+        await shutdownBrowser(); // ensure no cached live browser instance
+        const start = Date.now();
+        const result = await executeBrowserAction({
+          type: "browser",
+          op: "goto",
+          value: "https://example.com",
+        } as any);
+        const elapsed = Date.now() - start;
+        // The action should fail quickly (no hang) when browser is unavailable.
+        expect(elapsed).toBeLessThan(10_000);
+        expect(result.ok).toBe(false);
+      } finally {
+        if (savedBrowsersPath === undefined) delete process.env.PLAYWRIGHT_BROWSERS_PATH;
+        else process.env.PLAYWRIGHT_BROWSERS_PATH = savedBrowsersPath;
+      }
     });
   });
 });

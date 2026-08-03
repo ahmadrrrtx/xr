@@ -1,6 +1,6 @@
 # XR 7.0.1 (Truth) — Known Limitations
 
-**Status:** current · **Generated for:** release 7.0.1 · **Last reviewed:** 2026-07-31
+**Status:** current · **Generated for:** release 7.0.1 · **Last reviewed:** 2026-08-03
 
 This register exists because XR's constitution forbids claiming what has not been verified. It is
 the honest, prominent list of what is **not yet real**. Everything here is a deliberate, recorded
@@ -177,6 +177,40 @@ Rows migrated from `user_memory` carry `consent_state: legacy_unknown`. XR
 cannot reconstruct how consent was originally given, so it does **not** claim
 those items were approved. They remain retrievable and flagged for
 re-affirmation.
+
+---
+
+## 7b. Phase-8 scope boundaries (deliberate deferrals)
+
+### Observability has no hosted backend or SIEM integration
+The Phase-8 telemetry plane is **local-first**: OTLP export when you run your
+own collector, `/metrics` on the local daemon, and a local trace viewer
+(`docs/observability/LOCAL-VIEWER.md`). There is **no** hosted XR telemetry
+service, no managed dashboards, and no packaged Datadog/Splunk/Humio-style
+SIEM connector. *To close:* Phase 10 (operated/hosted surfaces).
+
+### No enterprise identity (SSO / SCIM / IdP) integration
+Dashboard auth is a local bearer token. SAML/OIDC SSO, SCIM provisioning, and
+identity-federation audit mappings **do not exist**. *To close:* Phase 10.
+
+### Remote telemetry transport is manual
+Exporting telemetry off the box is the operator's job (their own OTLP
+collector endpoint). XR ships no vendor upload path, and content capture
+remains unavailable even remotely unless the debugging flag is explicitly
+set. *To close:* Phase 10/11 decisions; the privacy defaults
+(opt-in, structural-by-default, redacted, cardinality-bounded) are NOT
+negotiable when it lands (Art. XXI).
+
+### Human-verified UX studies are pending, not claimed
+WCAG 2.2 AA status is **automated-verified** (axe over all 26 panels +
+contrast math + keyboard flows, zero violations); the screen-reader
+(VoiceOver/NVDA) and 200% zoom manual passes have **not been performed by a
+human** — procedure recorded in `docs/a11y/MANUAL-TESTING.md`, honest record
+in `docs/a11y/CONFORMANCE.md`. The first-task ≥95% figure is an
+**automated proxy** (20/20 fresh-machine attempts); the moderated human study
+and the SUS ≥80 study use the recorded protocols but have no participants
+yet. Claiming otherwise anywhere is a false-claim defect (see
+`docs/phase8/04-ARCHITECTURE-VALIDATION.md`, exception E-1).
 
 ---
 

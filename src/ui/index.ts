@@ -108,6 +108,7 @@ export {
   messagePrefix,
   card,
   composerPrompt,
+  modePaint,
   statusBar,
   overlayFrame,
   helpBindings,

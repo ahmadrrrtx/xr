@@ -37,6 +37,10 @@ export interface DaemonRoute {
   id: string;
   match(ctx: DaemonRouteContext): boolean;
   handle: DaemonRouteHandler;
+  /** Phase 8 · T1 — contract introspection (drives OpenAPI + validation). */
+  methodLabel(): string;
+  pathLabel(): string;
+  matchesPath(path: string, method: string): boolean;
 }
 
 export interface RouteOptions {
@@ -54,6 +58,9 @@ export function route(options: RouteOptions): DaemonRoute {
       ? new Set([options.method.toUpperCase()])
       : null;
 
+  const methodLabel = methods ? [...methods].join(",") : "ANY";
+  const pathLabel = options.path ?? options.prefix ?? "/";
+
   return {
     id: options.id,
     match(ctx) {
@@ -63,6 +70,14 @@ export function route(options: RouteOptions): DaemonRoute {
       return true;
     },
     handle: options.handle,
+    methodLabel: () => methodLabel,
+    pathLabel: () => pathLabel,
+    matchesPath(path: string, method: string): boolean {
+      if (methods && !methods.has(method.toUpperCase())) return false;
+      if (options.path && path !== options.path) return false;
+      if (options.prefix && !path.startsWith(options.prefix)) return false;
+      return true;
+    },
   };
 }
 
@@ -85,6 +100,29 @@ export function safeJson(data: unknown, status = 200): Response {
       "cache-control": "no-store",
     },
   });
+}
+
+/**
+ * Phase 8 · T1 — structured problem response (RFC 9457-flavored).
+ * The legacy `error` field is ALWAYS present (client compatibility);
+ * title/status/detail/errors add the machine-readable envelope.
+ */
+export function problem(
+  status: number,
+  title: string,
+  detail?: string,
+  errors?: Array<{ path: string; message: string }>,
+): Response {
+  return safeJson(
+    {
+      error: detail ?? title.toLowerCase(),
+      title,
+      status,
+      ...(detail ? { detail } : {}),
+      ...(errors && errors.length > 0 ? { errors } : {}),
+    },
+    status,
+  );
 }
 
 export function htmlResponse(body: string): Response {

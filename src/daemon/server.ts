@@ -25,11 +25,23 @@ import { FirecrackerBackend } from "../runtime/trust/environment/firecracker.ts"
 import {
   createRouteHandler,
   htmlResponse,
+  resolveMount,
+  matchRouteId,
   safeJson,
   sseResponse,
   type DaemonResponseHelpers,
   type DaemonState,
 } from "./routes/index.ts";
+import {
+  initObservability,
+  shutdownObservability,
+  httpServerSpan,
+  endHttpServerSpan,
+  structuredLog,
+  xrMetrics,
+} from "../observability/index.ts";
+import { CORE_VERSION } from "../core/version.ts";
+import { AUTH_PAGE_CSP, authPageHtml } from "./auth-page.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -228,13 +240,16 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
   // Phase 4 · T5 — rate limiting: generous default, but bounded (429).
   const limiter = new RateLimiter(opts.rateLimit ?? 600, 60_000);
 
-  return async function handle(req: Request): Promise<Response> {
+  async function dispatch(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
     const method = req.method.toUpperCase();
 
-    // Health is intentionally open; every other route requires the local token.
-    if (path !== "/api/health") {
+    // Health is intentionally open (both mounts); everything else requires the token.
+    // Phase 8 · T3: the sign-in page's behaviour script is the one other open
+    // path — a static script with no data/endpoints that the pre-auth page
+    // needs (see src/daemon/auth-page.ts).
+    if (path !== "/api/health" && path !== "/api/v1/health" && path !== "/assets/auth.js") {
       const auth = authorizeRequest(req, token);
 
       // Phase 4 · T5 — one-time bootstrap: set the session cookie and
@@ -248,6 +263,21 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
       }
 
       if (auth.kind === "denied") {
+        // Phase 8 · T3 (WCAG 2.2 · 3.3.8): browser page navigations get an
+        // ACCESSIBLE sign-in page instead of raw JSON — labelled field,
+        // paste-friendly token entry, announced error. API clients (no
+        // text/html Accept) keep the Phase-4 JSON contract unchanged.
+        const accept = req.headers.get("accept") ?? "";
+        if (method === "GET" && accept.includes("text/html")) {
+          return new Response(authPageHtml(path), {
+            status: 401,
+            headers: {
+              "content-type": "text/html; charset=utf-8",
+              "content-security-policy": AUTH_PAGE_CSP,
+              "cache-control": "no-store",
+            },
+          });
+        }
         return safeJson({ error: "unauthorized — local bearer token or session cookie required" }, 401);
       }
 
@@ -307,6 +337,44 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
       config,
     });
     return response ?? safeJson({ error: "not found" }, 404);
+  }
+
+  /**
+   * Phase 8 · T2 — every request is a root server span with route/mount
+   * labels; status and duration are recorded as structural metrics; one
+   * trace-correlated log line per request. No prompts, bodies, or content
+   * are ever captured here (structural-only, Art. XXI).
+   */
+  return async function handle(req: Request): Promise<Response> {
+    const url = new URL(req.url);
+    const method = req.method.toUpperCase();
+    const mount = resolveMount(url.pathname);
+    const canonical = mount.kind === "v1" ? mount.canonical : url.pathname;
+    const routeId = matchRouteId(canonical, method);
+    const span = httpServerSpan({ routeId, method, path: canonical, mount: mount.kind });
+    const started = Date.now();
+    let status = 500;
+    try {
+      const response = await dispatch(req);
+      status = response.status;
+      return response;
+    } catch (err) {
+      span.setStatus("error", (err as Error)?.name ?? "Error");
+      throw err;
+    } finally {
+      endHttpServerSpan(span, status);
+      const durationMs = Date.now() - started;
+      const statusClass = `${Math.floor(status / 100)}xx`;
+      xrMetrics.httpRequests.inc({ route: routeId, method, status: statusClass });
+      xrMetrics.httpDuration.observe({ route: routeId }, durationMs);
+      structuredLog("info", "http.request", {
+        route: routeId,
+        method,
+        mount: mount.kind,
+        status,
+        duration_ms: durationMs,
+      });
+    }
   };
 }
 
@@ -321,6 +389,24 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   void hydrateSecretsAsync().catch(() => {});
 
   const handler = makeHandler(store, token);
+
+  // Phase 8 · T2 — observability lifecycle: resolves the telemetry config
+  // (file + env; OPT-IN, disabled by default) and starts the OTLP exporter
+  // ONLY when enabled. When disabled there is zero telemetry network work.
+  const { config: bootConfig } = loadConfig();
+  const obsHandle = initObservability({
+    fileConfig: bootConfig.telemetry,
+    version: CORE_VERSION,
+  });
+  if (obsHandle.config.enabled) {
+    structuredLog("info", "telemetry.enabled", {
+      endpoint: obsHandle.config.endpoint,
+      content_prompt: obsHandle.config.content.prompt,
+      content_tool_args: obsHandle.config.content.toolArgs,
+      note: "telemetry is opt-in, structural-by-default, redacted, cardinality-bounded",
+    });
+  }
+
   const bindHost = resolveBindHost();
   const server = Bun.serve({ hostname: bindHost, port, fetch: handler });
   // Phase 4 · T4 fix — report the ACTUAL bound port: `port: 0` asks the OS to
@@ -351,7 +437,10 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   return {
     port: boundPort,
     token,
-    stop: () => server.stop(),
+    stop: () => {
+      server.stop();
+      void shutdownObservability();
+    },
     handle: handler,
   };
 }

@@ -24,6 +24,8 @@ import {
 import { verifyEnvironment } from "../verify.ts";
 import type { EnvironmentBackend } from "./backend.ts";
 import type { PlacementCapabilities } from "../policy.ts";
+import { placementSpan, endPlacementSpan } from "../../../observability/instrument.ts";
+import { xrMetrics } from "../../../observability/metrics.ts";
 
 export interface BackendAvailability {
   id: string;
@@ -109,7 +111,35 @@ export class EnvironmentManager {
    * TrustBlockedError-equivalent via the returned `blocked` field rather than
    * running in-process; the caller records the block on the execution record.
    */
+  /**
+   * Phase 8 · T2 — placement is observable: one span + bounded metric per
+   * decision/outcome (tier, backend, blocked) — never the action payload.
+   */
   async executeInEnvironment(input: ExecuteInEnvironmentInput): Promise<
+    | { blocked: true; reason: string; remediation?: string; verification?: VerificationResult }
+    | { blocked: false; output: ExecuteInEnvironmentOutput }
+  > {
+    const span = placementSpan({ tier: input.decision.placement });
+    const backendId = this.backendFor(input.decision.placement)?.id ?? "none";
+    try {
+      const out = await this.executeInEnvironmentInner(input);
+      if ("blocked" in out && out.blocked) {
+        endPlacementSpan(span, { placement: input.decision.placement, backend: backendId, blocked: true, reason: out.reason });
+        xrMetrics.placements.inc({ tier: input.decision.placement, backend: backendId, outcome: "blocked" });
+      } else {
+        endPlacementSpan(span, { placement: input.decision.placement, backend: backendId, blocked: false });
+        xrMetrics.placements.inc({ tier: input.decision.placement, backend: backendId, outcome: "ran" });
+      }
+      return out;
+    } catch (err) {
+      span.setStatus("error", (err as Error)?.name ?? "Error");
+      span.end();
+      xrMetrics.placements.inc({ tier: input.decision.placement, backend: backendId, outcome: "error" });
+      throw err;
+    }
+  }
+
+  private async executeInEnvironmentInner(input: ExecuteInEnvironmentInput): Promise<
     | { blocked: true; reason: string; remediation?: string; verification?: VerificationResult }
     | { blocked: false; output: ExecuteInEnvironmentOutput }
   > {

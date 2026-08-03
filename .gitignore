@@ -47,3 +47,5 @@ Thumbs.db
 mutation-report.json
 xr-audit-*.md
 test/perf/.seed/
+# Phase 8 · T4: raw SUS responses are local-only (study aggregate lives in docs/ux/SUS.md)
+docs/ux/sus-results.local.jsonl

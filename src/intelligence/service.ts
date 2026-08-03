@@ -36,6 +36,8 @@ import {
 import { IntelligenceRouter, policyFromConfig } from "./router.ts";
 import { mayFallbackOnTrigger, type FallbackTrigger } from "./fallback.ts";
 import { priceFor } from "../cost/pricing.ts";
+import { routingSpan, endRoutingSpan } from "../observability/instrument.ts";
+import { xrMetrics } from "../observability/metrics.ts";
 import type {
   FallbackStep,
   ModelClass,
@@ -165,8 +167,28 @@ export class IntelligenceService implements LifecycleHook {
       health: healthView(this.health),
     });
     const t0 = performance.now();
+    // Phase 8 · T2 — routing is observable: one span per selection with the
+    // structural decision (target, reason, availability) — never the task.
+    const span = routingSpan();
     const result = router.route(config, request);
     const ms = performance.now() - t0;
+    endRoutingSpan(span, {
+      provider: result.decision.selected?.providerId,
+      model: result.decision.selected?.modelId,
+      reason: result.decision.mode,
+      unavailable: result.decision.unavailable,
+      selectionMs: Math.round(ms * 100) / 100,
+    });
+    try {
+      xrMetrics.routingLatency.observe({}, Math.round(ms * 100) / 100);
+      xrMetrics.routingDecisions.inc({
+        provider: result.decision.selected?.providerId ?? "none",
+        mode: result.decision.manual ? "manual" : result.decision.mode,
+        outcome: result.decision.unavailable ? "unavailable" : "selected",
+      });
+    } catch {
+      // Metrics never break routing.
+    }
     // Phase 5 · T6 — the selection-latency SLO is measured here, at the
     // single choke point every decision passes through (Art. III).
     try {
