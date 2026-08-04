@@ -31,8 +31,15 @@ import {
  *   · every form control labelled; decorative SVGs hidden from AT;
  *   · tokens raised for AA contrast; :focus-visible indicator, 24px targets;
  *   · reduced-motion support; live-region toasts; panel focus management.
+ *
+ * Phase 9 · bump (2026-08-04, release-manifest version stamp 7.0.1 → 7.1.0 —
+ * DELIBERATE, zero markup change). Proven by substitution: replacing the
+ * single "7.1.0" occurrence in the live render with "7.0.1" reproduces the
+ * Phase-8 pin c5b86136… exactly. This is Art. XXII working as designed: one
+ * manifest stamps all surfaces, and the pin catches the stamp as a deliberate,
+ * reviewed change.
  */
-const POST_PHASE4_SHA256 = "c5b86136815360aafb5d2e585683e0f7a8f19e5eb55b35b8d631b900e3308957";
+const POST_PHASE4_SHA256 = "809c745eb99cb40bc9de85f494153770bdbc6b9a602279fd68520b0092657a58";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {

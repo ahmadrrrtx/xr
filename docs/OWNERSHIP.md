@@ -90,6 +90,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/plugins.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/plugins/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/polish.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/release/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/reliability.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/reliability/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/research.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -117,10 +118,14 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/workflow/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/api-compat.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/baseline-inventory.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/beta-metric.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/build-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/changelog.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/channel-render.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/ci-capability-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/claim-lint.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/dashboard-csp-convert.py` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/distribution-model.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/e2e-artifact.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/first-task-survey.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/gen-dashboard-dispatcher.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -136,12 +141,14 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/measure-trust-perf.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/mutate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/ownership-map.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/package-linux.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/perf-baseline.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/perf-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/perf/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/phase2-move-module.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/recall-benchmark.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/release-build.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-manifest.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/size-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

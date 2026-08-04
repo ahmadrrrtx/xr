@@ -1,6 +1,6 @@
 {
   "name": "@rrrtx/xr",
-  "version": "7.0.1",
+  "version": "7.1.0",
   "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
   "type": "module",
   "bin": {
@@ -50,6 +50,10 @@
     "sbom": "bun run scripts/sbom.ts",
     "supply:check": "bun run scripts/license-check.ts && bun run scripts/sbom.ts --out /tmp/xr-sbom.json",
     "verify-release": "bun run scripts/verify-release.ts",
+    "release:build": "bun run scripts/release-build.ts",
+    "channel:render": "bun run scripts/channel-render.ts",
+    "changelog": "bun run scripts/changelog.ts",
+    "beta:metric": "bun run scripts/beta-metric.ts",
     "ci-capability-gate": "bun run scripts/ci-capability-gate.ts",
     "api:schema:generate": "bun run scripts/generate-openapi.ts --write",
     "api:schema:check": "bun run scripts/generate-openapi.ts --check",

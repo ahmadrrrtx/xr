@@ -1,19 +1,28 @@
 # =============================================================================
-# XR Phase 4 · T6 — signed, provenance-bearing releases.
+# XR Phase 9 · T1/T2 — signed, reproducible, multi-channel releases from tag.
 #
-# On a `v*` tag:
-#   1. builds the publishable artifact (npm tarball + source archive);
-#   2. generates SHA256SUMS, the CycloneDX SBOM and SLSA provenance;
-#   3. signs the tarball + SBOM + provenance KEYLESSLY with cosign (GitHub
-#      OIDC → Fulcio short-lived cert), entries recorded in the PUBLIC Rekor
-#      transparency log;
-#   4. uploads everything to the GitHub Release (assets + .bundle files);
-#   5. publishes to npm with OIDC trusted publishing (provenance: true —
-#      no long-lived npm tokens).
+# ONE pipeline (scripts/release-build.ts is the authority; this file is the
+# thin caller):
 #
-# Verification instructions live in docs/release/VERIFYING_RELEASES.md.
-# The keyless/Rekor proof is ONLY claimable after this workflow actually ran
-# on a real tag (Art. IX.4) — test/supply-chain covers the local path.
+#   gate        release:check + claim-lint + typecheck + targeted suites +
+#               golden path + TAG == manifest version + beta-channel suffix rule
+#   build       the 5-target binary matrix + npm tarball + .deb/.rpm +
+#               SHA256SUMS + CycloneDX SBOM + SLSA subjects + hashes.json
+#   sign        cosign KEYLESS sign-blob per asset (sigstore bundle; Rekor)
+#   provenance  SLSA v1.0 attestation (generic generator, subjects wired — the
+#               Phase-4 scaffold's `outputs.digests` miswiring is fixed here)
+#   release     changelog (conventional commits) + GitHub Release (prerelease
+#               for v*-* tags — the beta channel)
+#   publish     npm (OIDC trusted publishing — no long-lived token), GHCR
+#               container (digest-signed), Homebrew tap, Scoop bucket, WinGet
+#
+# Honesty rules (Art. IX.4 / XXII):
+#   · No unsigned distribution — every asset is cosign-signed and in SHA256SUMS.
+#   · A channel that cannot publish FAILS the release (never silently skipped).
+#   · Keyless/Rekor proof is claimable only for tags this workflow actually ran
+#     on; the local path is proven by test/release/.
+#
+# Verification: docs/release/VERIFYING_RELEASES.md · Runbook: docs/release/RELEASING.md
 # =============================================================================
 name: Release
 
@@ -22,19 +31,33 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag to release (must already exist)"
+        required: true
 
 permissions:
   contents: write # release assets
-  id-token: write # cosign keyless OIDC + npm trusted publishing + SLSA
+  id-token: write # cosign keyless OIDC + npm trusted publishing + SLSA + GHCR
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-sign:
-    name: Build + SBOM + SLSA + cosign keyless sign
+  gate:
+    name: Release gate (identity, claims, tests, golden path)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tagname: ${{ steps.meta.outputs.tagname }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
     steps:
-      - name: Checkout tag
+      - name: Checkout (full history for the changelog range)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -42,83 +65,411 @@ jobs:
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Identity + claim gates must pass before any release
+      - name: Tag identity + beta-channel suffix rule
+        id: meta
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "tagname=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          case "$VERSION" in
+            *-alpha*|*-beta*|*-rc*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *-*) echo "::error::prerelease tag $TAG must carry an alpha|beta|rc suffix (channel semantics)" && exit 1 ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+          # The tag must name the stamped manifest version (one identity — Art. XXII.1).
+          MVERSION="$(node -p 'JSON.parse(require("fs").readFileSync("release.manifest.json","utf8")).identity.version')"
+          if [ "$VERSION" != "$MVERSION" ]; then
+            echo "::error::tag $TAG != release.manifest.json version $MVERSION — stamp or retag (Art. XXII.1)"
+            exit 1
+          fi
+
+      - name: Truth gates
         run: |
           bun run release:check
           bun run claim-lint
-          bun run typecheck
-          bun test test/supply-chain test/trust test/security test/daemon
 
-      - name: Pack the npm artifact
-        run: bun pm pack --pack-destination dist
+      - name: Typecheck
+        run: bun run typecheck
 
-      - name: Bundle the source archive
+      - name: Targeted suites (release machinery + trust floor)
+        run: bun test test/release test/supply-chain test/trust test/security test/daemon test/reliability/update-uninstall.test.ts
+
+      - name: Golden path
+        run: bun run golden-path
+        env:
+          HOME: /tmp/xr-release-home
+          XR_HOME: /tmp/xr-release-data
+
+  build:
+    name: Build 5 targets + packages + checksums + SBOM + SLSA subjects
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: gate
+    outputs:
+      digests: ${{ steps.subjects.outputs.digests }}
+      tagname: ${{ needs.gate.outputs.tagname }}
+      version: ${{ needs.gate.outputs.version }}
+      prerelease: ${{ needs.gate.outputs.prerelease }}
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install (frozen, no scripts) + rpm tooling
         run: |
-          mkdir -p dist
-          git archive --format=tar.gz -o dist/xr-source.tar.gz HEAD
+          bun install --frozen-lockfile --ignore-scripts
+          sudo apt-get update -y && sudo apt-get install -y rpm
 
-      - name: Generate SHA256SUMS
-        working-directory: dist
-        run: sha256sum * > SHA256SUMS
+      - name: Assemble the release bundle (one pipeline authority)
+        run: bun run scripts/release-build.ts --out dist/release --with-npm --verify
+        env:
+          XR_REQUIRE_RPM: "1"
 
-      - name: Generate CycloneDX SBOM (locked deps)
-        run: bun run scripts/sbom.ts --out dist/sbom.cyclonedx.json
-
-      - name: Verify our own release inputs
+      - name: Export SLSA subjects (fixes the Phase-4 miswired outputs.digests)
+        id: subjects
+        working-directory: dist/release
         run: |
-          ARTIFACT=$(ls dist/*.tgz | head -1)
-          bun run scripts/verify-release.ts --artifact "$ARTIFACT" \
-            --sums dist/SHA256SUMS --sbom dist/sbom.cyclonedx.json \
-            --local-key /dev/null --local-sig /dev/null || true
+          set -euo pipefail
+          # subjects.b64 = base64 of "sha256 name" lines over EVERY asset
+          echo "digests=$(cat subjects.b64 | tr -d '\n')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the unsigned bundle (for the sign job)
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr-release-bundle
+          path: dist/release
+          if-no-files-found: error
+
+  sign:
+    name: Cosign keyless sign every asset (sigstore bundle + Rekor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+    outputs:
+      tagname: ${{ needs.build.outputs.tagname }}
+      version: ${{ needs.build.outputs.version }}
+      prerelease: ${{ needs.build.outputs.prerelease }}
+    steps:
+      - name: Download the release bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: xr-release-bundle
+          path: dist/release
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
-      - name: Sign artifact + SBOM keylessly (Rekor)
-        env:
-          COSIGN_EXPERIMENTAL: "1"
-        working-directory: dist
+      - name: Sign every asset keylessly (public Rekor transparency log)
+        working-directory: dist/release
         run: |
-          for f in $(ls *.tgz) sbom.cyclonedx.json SHA256SUMS; do
+          set -euo pipefail
+          for f in $(find . -maxdepth 1 -type f \
+              ! -name "*.bundle" ! -name "subjects.b64" ! -name "subjects.txt" ! -name "hashes.json" \
+              -printf "%f\n"); do
             cosign sign-blob --yes "$f" --bundle "$f.bundle"
+            echo "signed: $f"
           done
 
-      - name: Upload release assets (signed, with Rekor bundles)
-        uses: softprops/action-gh-release@v2
+      - name: Upload the signed bundle
+        uses: actions/upload-artifact@v4
         with:
-          files: |
-            dist/*
-          generate_release_notes: true
+          name: xr-release-signed
+          path: dist/release
+          if-no-files-found: error
 
   provenance:
     name: SLSA provenance (build level 3)
+    needs: build
     permissions:
       actions: read
       id-token: write
       contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
-      base64-subjects: "${{ needs.build-and-sign.outputs.digests }}"
+      base64-subjects: "${{ needs.build.outputs.digests }}"
       upload-assets: true
-    needs: build-and-sign
+      upload-tag-name: "${{ needs.build.outputs.tagname }}"
+      provenance-name: "provenance.intoto.jsonl"
+
+  github-release:
+    name: GitHub Release (changelog + assets; prerelease for beta tags)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [sign, provenance]
+    outputs:
+      tagname: ${{ needs.sign.outputs.tagname }}
+      version: ${{ needs.sign.outputs.version }}
+      prerelease: ${{ needs.sign.outputs.prerelease }}
+    steps:
+      - name: Checkout tag (full history for the changelog)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Download the signed bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: xr-release-signed
+          path: dist/release
+
+      - name: Generate release notes (conventional commits)
+        run: |
+          bun run scripts/changelog.ts --from "$(git tag --sort=-v:refname --list 'v*' | grep -vF "${{ needs.sign.outputs.tagname }}" | head -1)" \
+            --to "${{ needs.sign.outputs.tagname }}" --version "${{ needs.sign.outputs.version }}" > dist/release/RELEASE_NOTES.md
+          { echo ""; echo "---"; echo "Verify this release: docs/release/VERIFYING_RELEASES.md — cosign verify-blob (identity pinned to this workflow), sha256sum -c SHA256SUMS, slsa-verifier with provenance.intoto.jsonl."; } >> dist/release/RELEASE_NOTES.md
+
+      - name: Create the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.sign.outputs.tagname }}
+          prerelease: ${{ needs.sign.outputs.prerelease == 'true' }}
+          body_path: dist/release/RELEASE_NOTES.md
+          files: |
+            dist/release/*
+            !dist/release/subjects.b64
+            !dist/release/subjects.txt
+            !dist/release/hashes.json
+            !dist/release/RELEASE_NOTES.md
 
   publish-npm:
-    name: Publish to npm (OIDC trusted publishing + provenance)
+    name: Publish npm (OIDC trusted publishing — no long-lived token)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [build-and-sign, provenance]
+    needs: github-release
     environment: npm-publish
     permissions:
-      id-token: write # npm trusted publishing
+      id-token: write
       contents: read
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node (npm trusted publishing needs npm ≥ 11.5.1)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Publish with provenance (no long-lived token)
-        run: bun pm publish --provenance
+
+      - name: Pack + publish with OIDC provenance (NO NODE_AUTH_TOKEN — R4)
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Trusted publishing exchanges the workflow's OIDC token; a token in
+          # the environment breaks the exchange (research R4). Intentionally unset.
+          NODE_AUTH_TOKEN: ""
+        run: |
+          set -euo pipefail
+          bun pm pack --pack-destination dist
+          TAG="latest"
+          if [ "${{ needs.github-release.outputs.prerelease }}" = "true" ]; then
+            TAG="beta"   # a prerelease must never take the `latest` dist-tag
+          fi
+          npm publish --provenance --tag "$TAG" dist/rrrtx-xr-${{ needs.github-release.outputs.version }}.tgz
+
+  publish-container:
+    name: Publish container to GHCR (digest-signed + attestations)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: github-release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+
+      - name: Setup buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags (stable only moves :latest)
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO="ghcr.io/${{ github.repository }}"
+          TAGS="${REPO}:v${{ needs.github-release.outputs.version }}"
+          if [ "${{ needs.github-release.outputs.prerelease }}" = "false" ]; then
+            TAGS="${TAGS}
+          ${REPO}:latest"
+          fi
+          echo "tags<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TAGS" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT" | tail -4
+
+      - name: Build + push (SBOM + provenance attestations)
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          provenance: true
+          sbom: true
+          tags: ${{ steps.tags.outputs.tags }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the image digest keylessly
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign --yes "ghcr.io/${{ github.repository }}@${{ steps.push.outputs.digest }}" \
+            -a "git-sha=${{ github.sha }}" -a "git-ref=${{ github.ref }}" \
+            -a "build-url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+  publish-channels:
+    name: Publish Homebrew tap + Scoop bucket (+ pin channel hashes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [sign, github-release]
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Download the signed bundle (hashes authority)
+        uses: actions/download-artifact@v4
+        with:
+          name: xr-release-signed
+          path: dist/release
+
+      - name: Pin channel manifests from the canonical hashes
+        run: |
+          bun run scripts/channel-render.ts --fill-hashes dist/release/hashes.json \
+            --dest dist/channels --fill-release-date "$(date -u +%Y-%m-%d)"
+
+      - name: Channel tokens must exist — a publishable channel never silently skips
+        run: |
+          set -euo pipefail
+          for s in TAP_TOKEN SCOOP_TOKEN; do
+            if [ -z "${!s:-}" ]; then
+              echo "::error::secret $s is not configured. The manifest lists this channel; per Art. XXII a channel that cannot publish MUST fail the release. Fix: add $s (see docs/release/RELEASING.md#secrets) then re-run this release."
+              exit 1
+            fi
+          done
+
+      - name: Publish Homebrew formula → ahmadrrrtx/homebrew-tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/ahmadrrrtx/homebrew-tap.git" /tmp/tap
+          mkdir -p /tmp/tap/Formula
+          cp dist/channels/packaging/homebrew/xr.rb /tmp/tap/Formula/xr.rb
+          cd /tmp/tap
+          git config user.name "xr-release[bot]"
+          git config user.email "release+xr@users.noreply.github.com"
+          git add Formula/xr.rb
+          if git diff --cached --quiet; then echo "formula already at v${{ needs.sign.outputs.version }}"; exit 0; fi
+          git commit -m "xr ${{ needs.sign.outputs.version }} (sha256 pinned from SHA256SUMS)"
+          git push
+
+      - name: Publish Scoop manifest → ahmadrrrtx/scoop-bucket
+        env:
+          SCOOP_TOKEN: ${{ secrets.SCOOP_TOKEN }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${SCOOP_TOKEN}@github.com/ahmadrrrtx/scoop-bucket.git" /tmp/bucket
+          mkdir -p /tmp/bucket/bucket
+          cp dist/channels/packaging/scoop/xr.json /tmp/bucket/bucket/xr.json
+          cd /tmp/bucket
+          git config user.name "xr-release[bot]"
+          git config user.email "release+xr@users.noreply.github.com"
+          git add bucket/xr.json
+          if git diff --cached --quiet; then echo "manifest already at v${{ needs.sign.outputs.version }}"; exit 0; fi
+          git commit -m "xr: update to ${{ needs.sign.outputs.version }} (sha256 from SHA256SUMS)"
+          git push
+
+  publish-winget:
+    name: Submit WinGet manifest (community review lag documented)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    needs: [sign, github-release]
+    steps:
+      - name: Winget token check (fail loudly, never silently skip)
+        shell: bash
+        run: |
+          if [ -z "${WINGET_TOKEN:-}" ]; then
+            echo "::error::secret WINGET_TOKEN not configured (docs/release/RELEASING.md#secrets). WinGet is a manifest-listed channel."
+            exit 1
+          fi
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+
+      - name: Submit manifests via wingetcreate
+        shell: bash
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -euo pipefail
+          LATEST="$(curl -fsSL https://aka.ms/wingetcreate/latest -o wingetcreate.exe && echo ok)"
+          echo "wingetcreate downloaded: $LATEST"
+          URL="https://github.com/${{ github.repository }}/releases/download/${{ needs.sign.outputs.tagname }}/xr-windows-x64.exe"
+          ./wingetcreate.exe update ahmadrrrtx.XR -s -v "${{ needs.sign.outputs.version }}" -u "$URL|x64|portable" -t "$WINGET_TOKEN"
+
+  evidence:
+    name: Release evidence summary (post-publish truth record)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [gate, build, sign, provenance, github-release, publish-npm, publish-container, publish-channels, publish-winget]
+    if: always()
+    steps:
+      - name: Summarize
+        run: |
+          echo "### XR release — ${{ needs.gate.outputs.tagname }} (Phase 9)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| job | result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| gate (identity/claims/tests/golden path) | ${{ needs.gate.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| build (5 targets + npm + deb/rpm + SBOM) | ${{ needs.build.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| cosign keyless sign (Rekor) | ${{ needs.sign.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SLSA provenance | ${{ needs.provenance.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| GitHub Release (prerelease=${{ needs.build.outputs.prerelease }}) | ${{ needs.github-release.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| npm (OIDC) | ${{ needs.publish-npm.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| GHCR container (digest-signed) | ${{ needs.publish-container.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Homebrew tap + Scoop bucket | ${{ needs.publish-channels.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| WinGet submission | ${{ needs.publish-winget.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ needs.github-release.result }}" = "success" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Verify: \`cosign verify-blob --certificate-identity 'https://github.com/${{ github.repository }}/.github/workflows/release.yml@refs/tags/v*' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' --bundle <asset>.bundle <asset>\` then \`sha256sum -c SHA256SUMS\`." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Release must be complete — any failed stage fails the workflow
+        run: |
+          set -euo pipefail
+          results="${{ toJSON(needs) }}"
+          for job in gate build sign provenance github-release publish-npm publish-container publish-channels publish-winget; do
+            r=$(echo "$results" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8'))['$job'].result")
+            echo "$job: $r"
+            if [ "$r" != "success" ]; then
+              echo "::error::release stage $job did not succeed ($r) — a manifest-listed channel or stage failed; the release is incomplete and MUST NOT be presented as shipped (Art. XXII)."
+              exit 1
+            fi
+          done

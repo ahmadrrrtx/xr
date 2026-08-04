@@ -12,7 +12,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $Repo = 'ahmadrrrtx/xr'
 $Branch = 'main'
-$Version = '7.0.1'
+$Version = '7.1.0'
 
 function Step($m) { Write-Host "  ▸ $m" -ForegroundColor Cyan }
 function Ok($m) { Write-Host "  ✓ $m" -ForegroundColor Green }
@@ -41,6 +41,41 @@ function Get-XrBinaryName {
   return "xr-$os-$arch.exe"
 }
 
+# Phase 9 · T5 — verify the downloaded binary against the release SHA256SUMS.
+# FAIL CLOSED: for releases >= 7.1.0 checksums are part of the release contract.
+function Verify-XrBinary([string]$Name, [string]$Path) {
+  $sumsUrl = "https://github.com/$Repo/releases/download/v$Version/SHA256SUMS"
+  $sumsFile = Join-Path $env:TEMP ("xr-sums-" + [Guid]::NewGuid().ToString('n') + ".txt")
+  try {
+    Invoke-WebRequest -Uri $sumsUrl -OutFile $sumsFile -UseBasicParsing -ErrorAction Stop
+  } catch {
+    Remove-Item $sumsFile -Force -ErrorAction SilentlyContinue
+    Die "Release SHA256SUMS unavailable for v$Version — refusing to install an integrity-unverified binary (docs/release/VERIFYING_RELEASES.md)."
+  }
+  $line = Get-Content $sumsFile | Where-Object { $_ -match "\s$([regex]::Escape($Name))$" } | Select-Object -First 1
+  Remove-Item $sumsFile -Force -ErrorAction SilentlyContinue
+  if (-not $line) { Die "SHA256SUMS has no entry for $Name — refusing (tamper-evidence)." }
+  $expected = ($line -split '\s+')[0].ToLower()
+  $actual = (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLower()
+  if ($actual -ne $expected) {
+    Remove-Item $Path -Force -ErrorAction SilentlyContinue
+    Die "Checksum mismatch for $Name — refusing to install (tamper-evidence). Report: https://github.com/$Repo/security"
+  }
+  Ok 'Checksum verified against release SHA256SUMS'
+}
+
+# Phase 9 · T5 — record the install channel so `xr update` picks the right
+# update/rollback contract (docs/release/CHANNELS.md).
+function Write-InstallRecord([string]$Channel, [string]$Layout) {
+  $dataHome = if ($env:XR_DATA_HOME) { $env:XR_DATA_HOME } else { Join-Path $HOME '.xr' }
+  New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
+  New-Item -ItemType Directory -Force -Path $dataHome | Out-Null
+  $record = @{ channel = $Channel; layout = $Layout; version = $Version; installedAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'); installer = 'install.ps1' } | ConvertTo-Json -Compress
+  Set-Content -Path (Join-Path $TargetDir 'install.json') -Value $record -Encoding UTF8
+  Set-Content -Path (Join-Path $dataHome 'install.json') -Value $record -Encoding UTF8
+  Ok "install channel recorded: $Channel"
+}
+
 # Phase 3 · T2 — download the standalone binary (default distribution path).
 function Fetch-XrBinary {
   $name = Get-XrBinaryName
@@ -51,6 +86,7 @@ function Fetch-XrBinary {
   Step "Downloading compiled binary v$Version ($name)"
   try {
     Invoke-WebRequest -Uri $url -OutFile (Join-Path $distDir $name) -UseBasicParsing -ErrorAction Stop
+    Verify-XrBinary -Name $name -Path (Join-Path $distDir $name)
     $probe = & (Join-Path $distDir $name) --version 2>$null
     if ($LASTEXITCODE -eq 0) {
       Ok "Compiled binary installed ($name)"
@@ -141,7 +177,8 @@ function Install-Launcher {
 }
 
 Write-Host ""
-Write-Host "  ▀▄▀ █▀█   XR Stage 2 Installer v$Version" -ForegroundColor Cyan
+Write-Host "  ▀▄▀ █▀█   XR Installer v$Version" -ForegroundColor Cyan
+Write-Host "  Public Beta — validated, signed and reversible; not finished." -ForegroundColor Yellow
 Write-Host "  Windows · Target: $TargetDir" -ForegroundColor DarkGray
 Write-Host ""
 Step 'This will download XR from GitHub, install Bun dependencies, and create an xr launcher.'
@@ -151,9 +188,11 @@ if (-not (AskYes 'Continue?' $true)) { Die 'Cancelled.' }
 Ensure-Bun
 if (Fetch-XrBinary) {
   Step 'Using the compiled binary distribution (source checkout skipped).'
+  Write-InstallRecord -Channel 'github-releases' -Layout 'binary'
 } else {
   Fetch-Repo
   Install-Deps
+  Write-InstallRecord -Channel 'git-checkout' -Layout 'git'
 }
 Install-Launcher
 

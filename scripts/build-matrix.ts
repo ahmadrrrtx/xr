@@ -18,7 +18,9 @@
  *     resolved at runtime; the binary never embeds them.
  *   - No secrets are embedded: the binary embeds only source; credentials
  *     live in the OS keychain / $XR_HOME (never compiled in).
- *   - Signing is NOT performed here (Phase 9); the binary ships unsigned.
+ *   - Signing happens AROUND this build, never inside it: scripts/release-build.ts
+ *     + the release workflow cosign-sign every target (Phase 9 · T1). No
+ *     release path ships an unsigned binary.
  *
  * Cross-target builds succeed on any host (bun cross-compiles); smoke tests
  * run only for the current platform's binary (a darwin binary cannot run on
@@ -106,7 +108,7 @@ export async function buildTarget(target: string, out: string, minify: boolean):
   return outfile;
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   const { targets, out, minify, skipSmoke } = parseArgs();
   console.log(`building ${targets.length} targets → ${out}${minify ? " (minified)" : ""}`);
   const built: Array<{ target: string; file: string; bytes: number; smoke: string }> = [];
@@ -130,4 +132,8 @@ async function main(): Promise<void> {
   console.log(`✅ matrix complete: ${built.length} binaries built.`);
 }
 
-await main();
+// Phase 9: importable by the release pipeline (scripts/release-build.ts) and
+// the release test suite — main() runs only when invoked directly.
+if (import.meta.main) {
+  await main();
+}

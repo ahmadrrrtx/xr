@@ -1,12 +1,12 @@
 {
-  "$schema": "./docs/phase-0/release-manifest.schema.json",
+  "$schema": "./docs/phase-9/release-manifest.schema.json",
   "manifestVersion": 1,
-  "comment": "XR RELEASE MANIFEST \u2014 the single source of truth for release identity and every public claim. Constitution Article XXII.1 ('One release manifest stamps version across version.ts, package.json, README, installers, website ... CI fails on drift') and Article XIX.1 ('no public claim without an evidence link'). Edit THIS file, then run `bun run release:stamp`. Never hand-edit a stamped surface.",
+  "comment": "XR RELEASE MANIFEST — the single source of truth for release identity and every public claim. Constitution Article XXII.1 and Article XIX.1. Edit THIS file, then run `bun run release:stamp`. Never hand-edit a stamped surface. Phase 9 extended the manifest's authority to DISTRIBUTION: targets, channels, support tiers and the stability label live here and nowhere else.",
   "identity": {
     "name": "@rrrtx/xr",
-    "version": "7.0.1",
+    "version": "7.1.0",
     "codename": "Truth",
-    "description": "XR \u2014 a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
+    "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
     "author": "Muhammad Ahmad (@ahmadrrrtx)",
     "license": "MIT",
     "repo": "https://github.com/ahmadrrrtx/xr",
@@ -43,18 +43,285 @@
       "id": "install.ps1",
       "path": "install.ps1",
       "kind": "powershell-var"
+    },
+    {
+      "id": "homebrew-formula",
+      "path": "packaging/homebrew/xr.rb",
+      "kind": "generated-channel",
+      "generator": "channels"
+    },
+    {
+      "id": "scoop-manifest",
+      "path": "packaging/scoop/xr.json",
+      "kind": "generated-channel",
+      "generator": "channels"
+    },
+    {
+      "id": "winget-version",
+      "path": "packaging/winget/ahmadrrrtx.XR.yaml",
+      "kind": "generated-channel",
+      "generator": "channels"
+    },
+    {
+      "id": "winget-locale",
+      "path": "packaging/winget/ahmadrrrtx.XR.locale.en-US.yaml",
+      "kind": "generated-channel",
+      "generator": "channels"
+    },
+    {
+      "id": "winget-installer",
+      "path": "packaging/winget/ahmadrrrtx.XR.installer.yaml",
+      "kind": "generated-channel",
+      "generator": "channels"
+    },
+    {
+      "id": "rpm-spec",
+      "path": "packaging/rpm/xr.spec",
+      "kind": "generated-channel",
+      "generator": "channels"
+    },
+    {
+      "id": "support-matrix",
+      "path": "docs/release/SUPPORT_MATRIX.md",
+      "kind": "generated-channel",
+      "generator": "support-matrix"
+    },
+    {
+      "id": "website-distribution",
+      "path": "website/src/lib/distribution.ts",
+      "kind": "generated-channel",
+      "generator": "distribution-module"
     }
   ],
+  "distribution": {
+    "stability": "beta",
+    "stabilityLabel": "Public Beta",
+    "tagline": "honestly labeled: validated, signed and reversible — and not finished. Known limitations are public.",
+    "targets": [
+      {
+        "id": "linux-x64",
+        "os": "linux",
+        "arch": "x64",
+        "bunTarget": "bun-linux-x64",
+        "file": "xr-linux-x64",
+        "tier": 1
+      },
+      {
+        "id": "linux-arm64",
+        "os": "linux",
+        "arch": "arm64",
+        "bunTarget": "bun-linux-arm64",
+        "file": "xr-linux-arm64",
+        "tier": 1
+      },
+      {
+        "id": "darwin-arm64",
+        "os": "macos",
+        "arch": "arm64",
+        "bunTarget": "bun-darwin-arm64",
+        "file": "xr-darwin-arm64",
+        "tier": 1
+      },
+      {
+        "id": "darwin-x64",
+        "os": "macos",
+        "arch": "x64",
+        "bunTarget": "bun-darwin-x64",
+        "file": "xr-darwin-x64",
+        "tier": 1
+      },
+      {
+        "id": "windows-x64",
+        "os": "windows",
+        "arch": "x64",
+        "bunTarget": "bun-windows-x64",
+        "file": "xr-windows-x64.exe",
+        "tier": 1
+      }
+    ],
+    "channels": [
+      {
+        "id": "github-releases",
+        "kind": "binary",
+        "updateOwner": "xr",
+        "os": [
+          "linux",
+          "macos",
+          "windows"
+        ],
+        "tier": 1,
+        "summary": "Signed compiled binary straight from the release (default distribution).",
+        "install": "curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash",
+        "update": "xr update",
+        "rollback": "xr update is atomic; a failed canary auto-rolls back"
+      },
+      {
+        "id": "homebrew",
+        "kind": "package-manager",
+        "updateOwner": "channel",
+        "os": [
+          "macos",
+          "linux"
+        ],
+        "tier": 1,
+        "summary": "Homebrew formula from the ahmadrrrtx/homebrew-tap tap.",
+        "install": "brew install ahmadrrrtx/tap/xr",
+        "update": "brew upgrade ahmadrrrtx/tap/xr",
+        "rollback": "brew switch xr <previous-version> (brew keeps prior Cellar versions)"
+      },
+      {
+        "id": "scoop",
+        "kind": "package-manager",
+        "updateOwner": "channel",
+        "os": [
+          "windows"
+        ],
+        "tier": 1,
+        "summary": "Scoop manifest from the ahmadrrrtx/scoop-bucket bucket.",
+        "install": "scoop bucket add ahmadrrrtx https://github.com/ahmadrrrtx/scoop-bucket; scoop install xr",
+        "update": "scoop update xr",
+        "rollback": "scoop reset xr@<previous-version>"
+      },
+      {
+        "id": "winget",
+        "kind": "package-manager",
+        "updateOwner": "channel",
+        "os": [
+          "windows"
+        ],
+        "tier": 2,
+        "summary": "WinGet community manifest (ahmadrrrtx.XR) — lags one registry review after each release.",
+        "install": "winget install ahmadrrrtx.XR",
+        "update": "winget upgrade ahmadrrrtx.XR",
+        "rollback": "winget install ahmadrrrtx.XR --version <previous-version> --force"
+      },
+      {
+        "id": "deb",
+        "kind": "package-manager",
+        "updateOwner": "channel",
+        "os": [
+          "linux"
+        ],
+        "tier": 1,
+        "summary": "Native .deb for Debian/Ubuntu from the canonical release assets.",
+        "install": "sudo dpkg -i xr_<version>_amd64.deb   # from the GitHub release",
+        "update": "sudo dpkg -i xr_<new-version>_amd64.deb",
+        "rollback": "sudo dpkg -i xr_<previous-version>_amd64.deb"
+      },
+      {
+        "id": "rpm",
+        "kind": "package-manager",
+        "updateOwner": "channel",
+        "os": [
+          "linux"
+        ],
+        "tier": 2,
+        "summary": "Native .rpm for Fedora/RHEL/openSUSE from the canonical release assets.",
+        "install": "sudo rpm -Uvh xr-<version>-1.<arch>.rpm   # from the GitHub release",
+        "update": "sudo rpm -Uvh xr-<new-version>-1.<arch>.rpm",
+        "rollback": "sudo rpm -Uvh --oldpackage xr-<previous-version>-1.<arch>.rpm"
+      },
+      {
+        "id": "npm",
+        "kind": "registry",
+        "updateOwner": "xr",
+        "os": [
+          "linux",
+          "macos",
+          "windows"
+        ],
+        "tier": 1,
+        "summary": "npm package @rrrtx/xr (Bun required; OIDC trusted publishing).",
+        "install": "npm i -g @rrrtx/xr",
+        "update": "xr update",
+        "rollback": "npm i -g @rrrtx/xr@<previous-version>"
+      },
+      {
+        "id": "docker",
+        "kind": "container",
+        "updateOwner": "channel",
+        "os": [
+          "linux",
+          "macos",
+          "windows"
+        ],
+        "tier": 1,
+        "summary": "Container image ghcr.io/ahmadrrrtx/xr with a signed digest.",
+        "install": "docker run --rm -it -v xr-data:/data ghcr.io/ahmadrrrtx/xr:latest",
+        "update": "docker pull ghcr.io/ahmadrrrtx/xr:latest",
+        "rollback": "docker pull ghcr.io/ahmadrrrtx/xr:<previous-version> (immutable tag)"
+      },
+      {
+        "id": "git-checkout",
+        "kind": "binary",
+        "updateOwner": "xr",
+        "os": [
+          "linux",
+          "macos",
+          "windows"
+        ],
+        "tier": 1,
+        "summary": "Contributor path: git clone + bun install.",
+        "install": "git clone https://github.com/ahmadrrrtx/xr && cd xr && bun install",
+        "update": "xr update",
+        "rollback": "git checkout <previous-tag>"
+      }
+    ],
+    "supportTiers": [
+      {
+        "os": "linux",
+        "arch": "x64",
+        "tier": 1,
+        "evidence": ".github/workflows/ci.yml + cross-platform.yml (Linux x64 full tier + golden path)",
+        "notes": "Primary CI."
+      },
+      {
+        "os": "linux",
+        "arch": "arm64",
+        "tier": 1,
+        "evidence": ".github/workflows/cross-platform.yml (ubuntu-24.04-arm: full unit tier + golden path)",
+        "notes": "Native arm64 runner."
+      },
+      {
+        "os": "macos",
+        "arch": "arm64",
+        "tier": 1,
+        "evidence": ".github/workflows/cross-platform.yml (macos-latest: full unit tier + golden path)",
+        "notes": ""
+      },
+      {
+        "os": "macos",
+        "arch": "x64",
+        "tier": 1,
+        "evidence": ".github/workflows/cross-platform.yml (macos-13/intel: full unit tier + golden path)",
+        "notes": ""
+      },
+      {
+        "os": "windows",
+        "arch": "x64",
+        "tier": 1,
+        "evidence": ".github/workflows/cross-platform.yml (windows-latest: full unit tier + golden path)",
+        "notes": ""
+      },
+      {
+        "os": "windows",
+        "arch": "arm64",
+        "tier": "unsupported",
+        "evidence": "no bun-windows-arm64 build target; installs fail honestly",
+        "notes": "Tracked as a possible future target."
+      }
+    ]
+  },
   "claims": [
     {
       "id": "local-first",
       "text": "Runs locally with local models; no mandatory cloud control plane.",
-      "evidence": "src/providers/presets.ts \u2014 local runtimes (ollama, lmstudio, llamacpp, jan, localai, vllm) are first-class provider presets; src/config/config.ts localModels.",
+      "evidence": "src/providers/presets.ts — local runtimes (ollama, lmstudio, llamacpp, jan, localai, vllm) are first-class provider presets; src/config/config.ts localModels.",
       "expires": "2027-07-31"
     },
     {
       "id": "byok",
-      "text": "Bring your own API key \u2014 provider credentials stay in your environment.",
+      "text": "Bring your own API key — provider credentials stay in your environment.",
       "evidence": "src/config/config.ts provider apiKeyEnv resolution; secrets redacted by src/baseline/status.ts:redactValue.",
       "expires": "2027-07-31"
     },
@@ -73,7 +340,7 @@
     {
       "id": "skills-count",
       "text": "65 bundled skills.",
-      "evidence": "Directory count of skills/ at release commit \u2014 verified mechanically by scripts/claim-lint.ts (countSkills).",
+      "evidence": "Directory count of skills/ at release commit — verified mechanically by scripts/claim-lint.ts (countSkills).",
       "expires": "2027-07-31",
       "mechanical": {
         "kind": "skill-count",
@@ -83,7 +350,7 @@
     {
       "id": "provider-neutral",
       "text": "Multiple model providers behind one interface; no vendor lock-in.",
-      "evidence": "src/providers/presets.ts and src/providers/registry.ts \u2014 provider-agnostic Provider interface.",
+      "evidence": "src/providers/presets.ts and src/providers/registry.ts — provider-agnostic Provider interface.",
       "expires": "2027-07-31"
     },
     {
@@ -96,6 +363,24 @@
       "id": "typescript-runtime",
       "text": "Written in TypeScript, running on Bun.",
       "evidence": "package.json engines.bun; tsconfig.json; zero Rust sources in the repository.",
+      "expires": "2027-07-31"
+    },
+    {
+      "id": "compiled-binary-default",
+      "text": "The compiled binary is the default distribution; npm and git checkout remain alternative channels.",
+      "evidence": ".github/workflows/release.yml (build-matrix job publishes 5 targets); bin/xr binary-first launcher; install.sh/install.ps1 fetch the release binary; test/release/release-build.test.ts.",
+      "expires": "2027-07-31"
+    },
+    {
+      "id": "signed-releases",
+      "text": "Release artifacts are signed cosign-keylessly by the release workflow and ship with checksums, a CycloneDX SBOM and SLSA provenance.",
+      "evidence": ".github/workflows/release.yml (cosign sign-blob per asset; SLSA generic generator); scripts/verify-release.ts; test/release/release-build.test.ts; docs/release/VERIFYING_RELEASES.md. Live Rekor proof materializes on the first real tag — see known-limitations.",
+      "expires": "2027-07-31"
+    },
+    {
+      "id": "cross-platform-parity",
+      "text": "Linux, macOS and Windows run the full unit tier plus the golden path in CI.",
+      "evidence": ".github/workflows/cross-platform.yml (full bun test on 3 OS families + arm tiers) and the nightly golden-path workflow; docs/release/SUPPORT_MATRIX.md.",
       "expires": "2027-07-31"
     }
   ],

@@ -13,7 +13,7 @@ const quarters = [
       { t: "Skills 2.0 with typed compositions", s: "done" },
       { t: "MCP-native runtime (stable)", s: "done" },
       { t: "Self-hosted model gateway GA", s: "active" },
-      { t: "JetBrains 2.0 extension", s: "active" },
+      { t: "Editor integration research (not a shipped extension)", s: "planned" },
     ],
   },
   {

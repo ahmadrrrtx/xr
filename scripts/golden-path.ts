@@ -28,6 +28,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { CORE_VERSION } from "../src/core/version.ts";
 
 const results: Record<string, unknown> = [];
 function ok(name: string): void {
@@ -153,7 +154,7 @@ async function main(): Promise<void> {
   // Capture final state BEFORE shutdown (the store closes with the kernel).
   const report = {
     ok: true,
-    version: "7.0.1",
+    version: CORE_VERSION,
     steps: results,
     auditEntries: store2.auditCount(),
     chainValid: store2.verifyChain().valid,

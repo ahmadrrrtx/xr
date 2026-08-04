@@ -1,0 +1,26 @@
+{
+    "##": "GENERATED from release.manifest.json — regenerate: bun run channel:render",
+    "version": "7.1.0",
+    "description": "XR — a local-first, provider-neutral AI agent runtime (public beta). BYOK, spend-capped, local-first.",
+    "homepage": "https://xr-gules.vercel.app",
+    "license": "MIT",
+    "github": "https://github.com/ahmadrrrtx/xr",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/ahmadrrrtx/xr/releases/download/v7.1.0/xr-windows-x64.exe#/xr.exe",
+            "hash": "__SHA256_XR_WINDOWS_X64_EXE__"
+        }
+    },
+    "bin": "xr.exe",
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/ahmadrrrtx/xr/releases/download/v$version/xr-windows-x64.exe#/xr.exe",
+                "hash": {
+                    "url": "$baseurl/SHA256SUMS"
+                }
+            }
+        }
+    }
+}

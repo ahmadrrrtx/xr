@@ -22,8 +22,21 @@
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
+import {
+  renderChannelFiles,
+  renderDistributionModule,
+  renderSupportMatrix,
+  validateDistribution,
+  type MinimalManifest,
+} from "./distribution-model.ts";
 
-export const ROOT = resolve(import.meta.dir, "..");
+/**
+ * Phase 9: XR_ROOT overrides the repository root so the release gate can be
+ * tested against a throwaway fixture tree (test/release/release-gate.test.ts)
+ * without touching the real surfaces. Unset in normal operation — the root is
+ * the script's own repository.
+ */
+export const ROOT = resolve(process.env.XR_ROOT ?? join(import.meta.dir, ".."));
 export const MANIFEST_PATH = join(ROOT, "release.manifest.json");
 
 export interface ReleaseIdentity {
@@ -54,13 +67,23 @@ export interface ProhibitedClaim {
 export interface StampTarget {
   id: string;
   path: string;
-  kind: "json-version" | "generated-module" | "site-identity" | "marker-block" | "shell-var" | "powershell-var";
+  kind:
+    | "json-version"
+    | "generated-module"
+    | "site-identity"
+    | "marker-block"
+    | "shell-var"
+    | "powershell-var"
+    | "generated-channel";
+  /** For kind "generated-channel": which Phase-9 renderer produces the file. */
+  generator?: "channels" | "support-matrix" | "distribution-module";
 }
 
 export interface ReleaseManifest {
   manifestVersion: number;
   identity: ReleaseIdentity;
   stampTargets: StampTarget[];
+  distribution?: import("./distribution-model.ts").Distribution;
   claims: ReleaseClaim[];
   prohibitedClaims: ProhibitedClaim[];
   supervisedTerms: string[];
@@ -94,6 +117,14 @@ export function loadManifest(path: string = MANIFEST_PATH): ReleaseManifest {
     if (!claim.expires || Number.isNaN(Date.parse(claim.expires))) {
       throw new Error(`claim "${claim.id}" has no valid expiry date (Article XXII.4)`);
     }
+  }
+  // Phase 9 · T3: the manifest is also the distribution authority. Structural,
+  // tier and claim discipline for channels/targets lives in
+  // scripts/distribution-model.ts (fail closed on malformed distribution).
+  if (parsed.distribution) {
+    validateDistribution(parsed as unknown as MinimalManifest);
+  } else if (parsed.stampTargets.some((t) => t.kind === "generated-channel")) {
+    throw new Error("manifest declares channel stamp targets but has no distribution section");
   }
   return parsed;
 }
@@ -251,19 +282,27 @@ export function stampSiteTs(current: string, id: ReleaseIdentity, skillCount: nu
 export const README_BEGIN = "<!-- XR:RELEASE-IDENTITY:BEGIN -->";
 export const README_END = "<!-- XR:RELEASE-IDENTITY:END -->";
 
-export function buildReadmeBlock(id: ReleaseIdentity, skillCount: number): string {
+export function buildReadmeBlock(id: ReleaseIdentity, skillCount: number, manifest?: ReleaseManifest): string {
+  const d = manifest?.distribution;
+  const betaBlock = d
+    ? `
+> **${d.stabilityLabel}.** ${d.tagline} Platform + channel truth: [support matrix](docs/release/SUPPORT_MATRIX.md) ·
+> [known limitations](docs/release/${id.version}/known-limitations.md) ·
+> [how to verify a release](docs/release/VERIFYING_RELEASES.md).
+`
+    : "";
   return `${README_BEGIN}
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
 
 **Version:** \`${DISPLAY(id)}\` · **Package:** [\`${id.name}\`](${id.npm}) · **License:** ${id.license}
 
 > **Version source of truth:** [\`release.manifest.json\`](release.manifest.json). Every surface —
-> \`src/core/version.ts\`, \`package.json\`, this README, \`install.sh\`, \`install.ps1\` and the website —
-> is stamped from that one file, and CI fails the build if any of them drift
-> (Constitution Article XXII.1).
+> \`src/core/version.ts\`, \`package.json\`, this README, \`install.sh\`, \`install.ps1\`, the website
+> and every package-channel manifest — is stamped from that one file, and CI fails the build if
+> any of them drift (Constitution Article XXII.1).
 
 ${id.description}
-
+${betaBlock}
 **Bundled skills:** ${skillCount} (counted from \`skills/\` at release time.)
 ${README_END}`;
 }
@@ -338,7 +377,7 @@ export function evaluateSurfaces(manifest: ReleaseManifest, root: string = ROOT)
     const current = readFileSync(abs, "utf8");
     let desired: string;
     try {
-      desired = renderTarget(target, current, id, skillCount);
+      desired = renderTarget(target, current, manifest, skillCount);
     } catch (err) {
       results.push({
         id: target.id,
@@ -362,9 +401,10 @@ export function evaluateSurfaces(manifest: ReleaseManifest, root: string = ROOT)
 export function renderTarget(
   target: StampTarget,
   current: string,
-  id: ReleaseIdentity,
+  manifest: ReleaseManifest,
   skillCount: number,
 ): string {
+  const id = manifest.identity;
   switch (target.kind) {
     case "json-version":
       return stampPackageJson(current, id);
@@ -373,11 +413,33 @@ export function renderTarget(
     case "site-identity":
       return stampSiteTs(current, id, skillCount);
     case "marker-block":
-      return stampMarkerBlock(current, buildReadmeBlock(id, skillCount));
+      return stampMarkerBlock(current, buildReadmeBlock(id, skillCount, manifest));
     case "shell-var":
       return stampShellVersion(current, id.version);
     case "powershell-var":
       return stampPowershellVersion(current, id.version);
+    case "generated-channel": {
+      if (!manifest.distribution) {
+        throw new Error(`stamp target "${target.id}" requires manifest.distribution`);
+      }
+      const minimal = manifest as unknown as MinimalManifest;
+      switch (target.generator) {
+        case "channels": {
+          const files = renderChannelFiles(minimal);
+          const content = files[target.path];
+          if (content === undefined) {
+            throw new Error(`channel generator produced no file for "${target.path}"`);
+          }
+          return content;
+        }
+        case "support-matrix":
+          return renderSupportMatrix(minimal);
+        case "distribution-module":
+          return renderDistributionModule(minimal);
+        default:
+          throw new Error(`stamp target "${target.id}" has unknown generator "${String(target.generator)}"`);
+      }
+    }
     default: {
       const exhaustive: never = target.kind;
       throw new Error(`unknown stamp target kind: ${String(exhaustive)}`);
@@ -396,7 +458,7 @@ export function writeSurfaces(manifest: ReleaseManifest, root: string = ROOT): S
       throw new Error(`declared stamp target does not exist: ${target.path}`);
     }
     const current = readFileSync(abs, "utf8");
-    const desired = renderTarget(target, current, id, skillCount);
+    const desired = renderTarget(target, current, manifest, skillCount);
     if (normalizeEol(current) !== normalizeEol(desired)) {
       writeFileSync(abs, desired, "utf8");
       results.push({ id: target.id, path: target.path, inSync: true, detail: `stamped → ${id.version}` });

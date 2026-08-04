@@ -23,14 +23,18 @@
 <!-- XR:RELEASE-IDENTITY:BEGIN -->
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
 
-**Version:** `7.0.1 (Truth)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
+**Version:** `7.1.0 (Truth)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
 
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
-> `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
-> is stamped from that one file, and CI fails the build if any of them drift
-> (Constitution Article XXII.1).
+> `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1`, the website
+> and every package-channel manifest — is stamped from that one file, and CI fails the build if
+> any of them drift (Constitution Article XXII.1).
 
 XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.
+
+> **Public Beta.** honestly labeled: validated, signed and reversible — and not finished. Known limitations are public. Platform + channel truth: [support matrix](docs/release/SUPPORT_MATRIX.md) ·
+> [known limitations](docs/release/7.1.0/known-limitations.md) ·
+> [how to verify a release](docs/release/VERIFYING_RELEASES.md).
 
 **Bundled skills:** 65 (counted from `skills/` at release time.)
 <!-- XR:RELEASE-IDENTITY:END -->
@@ -67,12 +71,12 @@ by `bun run claim-lint`.
 - **not a hosted product.** There is no XR cloud;
 - **not a substitute** for a human reviewing consequential actions;
 - **not finished** — see the
-  [known-limitations register](docs/release/7.0.1/known-limitations.md), which is maintained as a
+  [known-limitations register](docs/release/7.1.0/known-limitations.md), which is maintained as a
   first-class release artifact.
 
 ### Release evidence
 
-Evidence for this release lives in [`docs/release/7.0.1/`](docs/release/7.0.1/):
+Evidence for this release lives in [`docs/release/7.1.0/`](docs/release/7.1.0/):
 
 - repository inventory (`INVENTORY.md`, `inventory.json`);
 - baseline measurements (`BASELINE_MEASUREMENTS.md`, `baseline-measurements.json`);
@@ -92,10 +96,10 @@ Every performance claim is a **published budget with a measured baseline and a
 CI regression gate** (Constitution Art. XII):
 
 - `--version` / `--help` **p95 < 150 ms warm / < 300 ms cold** (Constitution
-  Article XII; measured 47.4 / 43.9 ms warm, 55.7 / 42.6 ms cold on the
-  7.0.1 baseline — well under even the tighter Phase-3 targets);
-- `doctor` **< 1 s measured** (474 ms; gate ceiling 1500 ms for shared runners) · route decision **< 20 ms** (0.003 ms) ·
-  dashboard first render **< 1 s** (16 ms) · retrieval **25–42 ms @100k items** (gate ceiling 250 ms on shared runners);
+  Article XII; measured 40.8 / 48.2 ms warm, 42.0 / 55.4 ms cold on the
+  7.1.0 baseline — well under even the tighter Phase-3 targets);
+- `doctor` **< 1 s measured** (477 ms; gate ceiling 1500 ms for shared runners) · route decision **< 20 ms** (0.0025 ms) ·
+  dashboard first render **< 1 s** (6.2 ms) · retrieval **22.9–31.3 ms @100k items** (gate ceiling 250 ms on shared runners);
 - fast path performs **zero synchronous FS/process I/O** (lint-enforced);
 - a command boots only the subsystems it needs (boot profiles);
 - the standalone compiled binary is the default distribution path
@@ -104,7 +108,7 @@ CI regression gate** (Constitution Art. XII):
 Full budgets, the boot-profile model, the regression gate, profiling tooling
 and known limitations: [`docs/perf/`](docs/perf/PERF-BUDGETS.md) and
 [`docs/phase3-perf/`](docs/phase3-perf/01-AUDIT-REPORT.md). Baseline artifact:
-`docs/perf/baseline-7.0.1-source.json` (regenerate per release with
+`docs/perf/baseline-7.1.0-source.json` (regenerate per release with
 `bun run perf:baseline`).
 
 ### Readiness and exit codes

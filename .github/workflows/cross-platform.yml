@@ -1,19 +1,20 @@
 # =============================================================================
-# XR Phase 1 · T7 — Cross-platform CI (macOS + Windows)
+# XR Phase 9 · T4 — Cross-platform CI at FULL PARITY.
 #
-# Phase-0 discipline: green, or honestly gapped. The full suite runs on Linux;
-# these jobs run typecheck + unit + reliability subset on macOS and Windows so
-# platform-specific breakage surfaces in CI instead of on users' machines.
+# "Supported" means validated (Constitution Art. XX.4 + the Phase-9 contract):
+# every tier-1 OS family runs the SAME tier as Linux — typecheck + the FULL
+# unit suite + the golden path — on real runners, never a subset. Phase 1
+# shipped a documented subset; Phase 9 graduates it to parity. The support
+# matrix (docs/release/SUPPORT_MATRIX.md, stamped from the release manifest)
+# names this workflow as its evidence.
 #
-# Honest gap notes (Phase-0 discipline — recorded in docs/phase-1/FINAL_REVIEW.md
-# and docs/phase-1/KNOWN_LIMITATIONS.md):
-#   · crash-injection matrix uses POSIX SIGKILL child processes → Linux/macOS only.
-#   · test/phase0/policy-gate-adversarial.test.ts is a POSIX-path corpus
-#     (isAbsolute("/etc/...") is false on Windows) → skipped on win32, fully
-#     green on macOS (macOS /etc→/private/etc realpath is covered by the guard).
-#   · test/phase0/cli-spine.test.ts spawns the real CLI; doctor --json on
-#     Windows is not verified (same precedent as doctor.test.ts) → skipped on win32.
-#   · golden-path needs a hermetic XR_HOME/HOME on every OS (set below).
+# Platform exceptions are made INSIDE tests by runtime detection (Art. XX.5),
+# never by directory exclusions here — config-level exclusion hides portability
+# drift. Current detection-skips (whitelisted in test/release/portability.test.ts):
+#   · test/reliability/crash-injection.test.ts — POSIX child-SIGKILL semantics.
+#   · test/phase0/policy-gate-adversarial.test.ts — POSIX absolute-path corpus.
+#   · test/phase0/cli-spine.test.ts — spawns the built CLI; doctor --json not
+#     asserted on win32 (same precedent as doctor.test.ts).
 # =============================================================================
 name: Cross-Platform CI
 
@@ -28,44 +29,102 @@ permissions:
   contents: read
 
 jobs:
-  macos:
-    name: macOS (typecheck + unit + reliability subset)
-    runs-on: macos-latest
-    timeout-minutes: 30
+  linux-arm64:
+    name: Linux arm64 (full tier + golden path)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
-      - name: Install dependencies
+      - name: Install dependencies (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Typecheck
         run: bunx tsc --noEmit
-      - name: Unit + Phase 0 suite
-        run: bun test test/state test/phase0 test/core test/execution test/reliability/single-writer.test.ts test/reliability/idempotency.test.ts test/reliability/migrations.test.ts test/reliability/rpo-rto.test.ts
+      - name: Full unit suite (parity with Linux x64 — no subset)
+        run: bun test
+      - name: Golden path
+        run: bun run golden-path
+        env:
+          HOME: /tmp/xr-cross-arm-home
+          XR_HOME: /tmp/xr-cross-arm-data
+
+  macos:
+    name: macOS arm64 (full tier + golden path)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Typecheck
+        run: bunx tsc --noEmit
+      - name: Full unit suite (parity with Linux — no subset)
+        run: bun test
       - name: Golden path
         run: bun run golden-path
         env:
           HOME: /tmp/xr-cross-home
           XR_HOME: /tmp/xr-cross-data
 
-  windows:
-    name: Windows (typecheck + unit + golden-path subset)
-    runs-on: windows-latest
-    timeout-minutes: 40
+  macos-intel:
+    name: macOS x64 (full tier + golden path)
+    runs-on: macos-13
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
-      - name: Install dependencies
+      - name: Install dependencies (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Typecheck
         run: bunx tsc --noEmit
-      - name: Unit + Phase 0 suite
-        run: bun test test/state test/phase0 test/core test/reliability/single-writer.test.ts test/reliability/idempotency.test.ts test/reliability/migrations.test.ts test/reliability/rpo-rto.test.ts
+      - name: Full unit suite (parity with Linux — no subset)
+        run: bun test
+      - name: Golden path
+        run: bun run golden-path
+        env:
+          HOME: /tmp/xr-cross-home13
+          XR_HOME: /tmp/xr-cross-data13
+
+  windows:
+    name: Windows x64 (full tier + golden path)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Typecheck
+        run: bunx tsc --noEmit
+      - name: Full unit suite (parity with Linux — no subset)
+        run: bun test
       - name: Golden path
         run: bun run golden-path
         env:
           HOME: ${{ runner.temp }}\xr-home
           XR_HOME: ${{ runner.temp }}\xr-data
+
+  beta-label:
+    name: Support-matrix freshness (matrix must match CI reality)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: release:check (support matrix + channels stamped from the manifest)
+        run: bun run release:check
+      - name: Support-matrix test (tiers ⟷ this workflow's jobs)
+        run: bun test test/release/support-matrix.test.ts test/release/portability.test.ts

@@ -35,7 +35,7 @@ export const features = [
   {
     icon: Code2,
     title: "Editor Agnostic",
-    desc: "First-class integrations with VS Code, Neovim, JetBrains, Zed, and Cursor. Your agent, every surface.",
+    desc: "Works alongside any editor: XR is a CLI with an MCP server/client and an interactive shell. Packaged editor extensions are planned, not shipped — when they exist, they will be installable from a channel listed on /downloads.",
   },
   {
     icon: Boxes,
@@ -550,11 +550,11 @@ export const pricingPlans = [
 export const faqs = [
   {
     q: "Is XR open-source?",
-    a: "Yes. The XR runtime, CLI, and most official skills are MIT-licensed. Some cloud-only features ship under a commercial license.",
+    a: "Yes. The XR runtime, CLI, and bundled skills are MIT-licensed, end to end. There are no commercial-only features.",
   },
   {
     q: "Which editors are supported?",
-    a: "VS Code, Neovim, JetBrains IDEs, Zed, Cursor, and Windsurf all have first-party extensions. The CLI works anywhere.",
+    a: "Any editor that can run a terminal command: XR is a CLI with an interactive shell and MCP integration. Dedicated editor extensions are planned but not shipped yet — /downloads lists every distribution channel that actually exists.",
   },
   {
     q: "Can I run XR locally?",
@@ -595,7 +595,7 @@ export const changelog = [
     highlights: [
       "Capability tokens for skills",
       "Improved streaming latency (-18%)",
-      "JetBrains extension v2",
+      "MCP client hardening",
       "Support for GPT-5 and Claude Opus 4.5",
     ],
   },

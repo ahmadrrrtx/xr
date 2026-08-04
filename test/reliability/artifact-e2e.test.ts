@@ -6,6 +6,7 @@
  * durability driver). Green only when every effect on the artifact holds.
  */
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
@@ -33,6 +34,9 @@ describe("Phase 1 · hermetic artifact E2E", () => {
     expect(report).toBeDefined();
     const parsed = JSON.parse(report!) as { ok: boolean; doctorVersion: string };
     expect(parsed.ok).toBe(true);
-    expect(parsed.doctorVersion).toBe("7.0.1");
+    // Art. XXII: the artifact's identity must be the manifest's version —
+    // never a second literal that drifts.
+    const manifest = JSON.parse(readFileSync(join(__dirname, "..", "..", "release.manifest.json"), "utf8")) as { identity: { version: string } };
+    expect(parsed.doctorVersion).toBe(manifest.identity.version);
   }, 300_000);
 });

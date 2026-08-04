@@ -1,0 +1,2927 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-04T17:52:05.716Z",
+  "version": {
+    "name": "@rrrtx/xr",
+    "version": "7.1.0",
+    "codename": "Truth",
+    "display": "7.1.0 (Truth)",
+    "displayVersion": "7.1.0 (Truth)",
+    "repo": "https://github.com/ahmadrrrtx/xr",
+    "homepage": "https://xr-gules.vercel.app",
+    "npm": "https://www.npmjs.com/package/@rrrtx/xr",
+    "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
+    "author": "Muhammad Ahmad (@ahmadrrrtx)",
+    "license": "MIT",
+    "pluginApi": 2
+  },
+  "package": {
+    "name": "@rrrtx/xr",
+    "version": "7.1.0",
+    "packageManager": "bun@1.3.14",
+    "engines": {
+      "bun": ">=1.3.0"
+    },
+    "bin": {
+      "xr": "./bin/xr"
+    },
+    "dependencies": {
+      "zod": "^3.23.8"
+    },
+    "optionalDependencies": {
+      "playwright": "^1.47.0"
+    },
+    "devDependencies": {
+      "@types/bun": "latest",
+      "axe-core": "^4.12.1",
+      "dependency-cruiser": "^17.0.0",
+      "typescript": "^5.5.0"
+    },
+    "files": [
+      "bin",
+      "src",
+      "plugins",
+      "skills",
+      "assets",
+      "docs",
+      "README.md",
+      "LICENSE",
+      "install.sh",
+      "install.ps1"
+    ]
+  },
+  "counts": {
+    "sourceFiles": 515,
+    "testFiles": 222,
+    "cliCommands": 41,
+    "daemonRoutes": 104,
+    "providers": 26,
+    "localRuntimes": 11,
+    "plugins": 2,
+    "skills": 65
+  },
+  "rootFiles": [
+    {
+      "path": ".bun-version",
+      "bytes": 7
+    },
+    {
+      "path": ".dependency-cruiser.cjs",
+      "bytes": 14303
+    },
+    {
+      "path": ".gitattributes",
+      "bytes": 1483
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 667
+    },
+    {
+      "path": ".gitleaksignore",
+      "bytes": 1540
+    },
+    {
+      "path": "CHANGED-FILES.txt",
+      "bytes": 202
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 65009
+    },
+    {
+      "path": "CODEOWNERS",
+      "bytes": 4561
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "bytes": 8387
+    },
+    {
+      "path": "CRITICAL_FIXES.md",
+      "bytes": 13098
+    },
+    {
+      "path": "DELIVERABLE.md",
+      "bytes": 19564
+    },
+    {
+      "path": "Dockerfile",
+      "bytes": 1495
+    },
+    {
+      "path": "LAUNCH-POSTS.md",
+      "bytes": 7445
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1071
+    },
+    {
+      "path": "MCP-STAGE11-IMPLEMENTED.md",
+      "bytes": 2769
+    },
+    {
+      "path": "MIGRATION.md",
+      "bytes": 17710
+    },
+    {
+      "path": "PHASE10_ARCHITECTURE_DESIGN.md",
+      "bytes": 26342
+    },
+    {
+      "path": "PHASE10_AUDIT_DELIVERABLE.md",
+      "bytes": 41089
+    },
+    {
+      "path": "PHASE10_COMPLETE.md",
+      "bytes": 10768
+    },
+    {
+      "path": "PHASE10_VALIDATION_REPORT.md",
+      "bytes": 15894
+    },
+    {
+      "path": "PHASE11_COMPLETE.md",
+      "bytes": 9621
+    },
+    {
+      "path": "PHASE12_AUDIT_DELIVERABLE.md",
+      "bytes": 16636
+    },
+    {
+      "path": "PHASE12_VALIDATION_REPORT.md",
+      "bytes": 14369
+    },
+    {
+      "path": "PHASE13_AUDIT_DELIVERABLE.md",
+      "bytes": 21419
+    },
+    {
+      "path": "PHASE13_VALIDATION_REPORT.md",
+      "bytes": 15025
+    },
+    {
+      "path": "PHASE4_ARCHITECTURE_DESIGN.md",
+      "bytes": 6295
+    },
+    {
+      "path": "PHASE4_AUDIT_DELIVERABLE.md",
+      "bytes": 16639
+    },
+    {
+      "path": "PHASE5_AUDIT_DELIVERABLE.md",
+      "bytes": 13004
+    },
+    {
+      "path": "PHASE5_VALIDATION_REPORT.md",
+      "bytes": 1510
+    },
+    {
+      "path": "PHASE6_AUDIT_DELIVERABLE.md",
+      "bytes": 28657
+    },
+    {
+      "path": "PHASE6_VALIDATION_REPORT.md",
+      "bytes": 2979
+    },
+    {
+      "path": "README-APPLY.txt",
+      "bytes": 1505
+    },
+    {
+      "path": "README.md",
+      "bytes": 69134
+    },
+    {
+      "path": "README_SECURITY.md",
+      "bytes": 9646
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 15608
+    },
+    {
+      "path": "SECURITY_IMPLEMENTATION.md",
+      "bytes": 19191
+    },
+    {
+      "path": "XR-2.1-MARKETPLACE-COMPLETE-IMPLEMENTATION.md",
+      "bytes": 2530
+    },
+    {
+      "path": "XR-2.1A-IMPLEMENTATION.md",
+      "bytes": 7259
+    },
+    {
+      "path": "XR-2.1B-IMPLEMENTATION.md",
+      "bytes": 4897
+    },
+    {
+      "path": "XR-2.1C-IMPLEMENTATION.md",
+      "bytes": 5198
+    },
+    {
+      "path": "XR-2.1D-MARKETPLACE-UI-IMPLEMENTATION.md",
+      "bytes": 3124
+    },
+    {
+      "path": "XR-2.1E-OFFICIAL-SKILL-PACKS-IMPLEMENTATION.md",
+      "bytes": 3626
+    },
+    {
+      "path": "XR-ASYNC-PERFORMANCE-REPORT.md",
+      "bytes": 10639
+    },
+    {
+      "path": "XR-MODEL-SWITCH-FIX-REPORT.md",
+      "bytes": 12723
+    },
+    {
+      "path": "bun.lock",
+      "bytes": 10862
+    },
+    {
+      "path": "docker-compose.yml",
+      "bytes": 900
+    },
+    {
+      "path": "install.ps1",
+      "bytes": 10189
+    },
+    {
+      "path": "install.sh",
+      "bytes": 11199
+    },
+    {
+      "path": "next-env.d.ts",
+      "bytes": 247
+    },
+    {
+      "path": "package.json",
+      "bytes": 4147
+    },
+    {
+      "path": "release.manifest.json",
+      "bytes": 14831
+    },
+    {
+      "path": "tsconfig.json",
+      "bytes": 594
+    }
+  ],
+  "sourceFiles": [
+    "src/agents/planner.ts",
+    "src/agents/registry.ts",
+    "src/agents/types.ts",
+    "src/automation/cron.ts",
+    "src/automation/webhook.ts",
+    "src/cli/catalog.ts",
+    "src/cli/command-loaders.ts",
+    "src/cli/errors.ts",
+    "src/cli/flags.ts",
+    "src/cli/help.ts",
+    "src/cli/index.ts",
+    "src/cli/kernel-boot.ts",
+    "src/cli/output.ts",
+    "src/cli/route-decision.ts",
+    "src/cli/router.ts",
+    "src/clients/daemon-client.generated.ts",
+    "src/commands/agents.ts",
+    "src/commands/ask-plan.ts",
+    "src/commands/attacks.ts",
+    "src/commands/audit.ts",
+    "src/commands/budget.ts",
+    "src/commands/business.ts",
+    "src/commands/capabilities.ts",
+    "src/commands/config.ts",
+    "src/commands/context.ts",
+    "src/commands/doctor.ts",
+    "src/commands/enterprise.ts",
+    "src/commands/environment.ts",
+    "src/commands/evaluate.ts",
+    "src/commands/execution.ts",
+    "src/commands/help.ts",
+    "src/commands/install.ts",
+    "src/commands/logs.ts",
+    "src/commands/mcp.ts",
+    "src/commands/memory.ts",
+    "src/commands/plugins.ts",
+    "src/commands/providers.ts",
+    "src/commands/run-agent.ts",
+    "src/commands/session.ts",
+    "src/commands/shield.ts",
+    "src/commands/skills.ts",
+    "src/commands/telemetry.ts",
+    "src/commands/trust.ts",
+    "src/commands/uninstall.ts",
+    "src/commands/workspace.ts",
+    "src/computer/system-control.ts",
+    "src/config/cache.ts",
+    "src/config/config.ts",
+    "src/context/assembler.ts",
+    "src/context/cli-phase6.ts",
+    "src/context/cli.ts",
+    "src/context/compression.ts",
+    "src/context/conflicts.ts",
+    "src/context/embedding.ts",
+    "src/context/eval/harness.ts",
+    "src/context/hybrid.ts",
+    "src/context/index.ts",
+    "src/context/injection.ts",
+    "src/context/inspection.ts",
+    "src/context/integrity.ts",
+    "src/context/lifecycle.ts",
+    "src/context/memory-adapter.ts",
+    "src/context/memory/cli.ts",
+    "src/context/memory/compact.ts",
+    "src/context/memory/embed.ts",
+    "src/context/memory/inject.ts",
+    "src/context/memory/intent.ts",
+    "src/context/memory/rag.ts",
+    "src/context/memory/store.ts",
+    "src/context/memory/summarize.ts",
+    "src/context/memory/types.ts",
+    "src/context/poison.ts",
+    "src/context/policy.ts",
+    "src/context/provenance.ts",
+    "src/context/repository.ts",
+    "src/context/retrieval.ts",
+    "src/context/service.ts",
+    "src/context/tools.ts",
+    "src/context/types.ts",
+    "src/context/undo.ts",
+    "src/control/adapter.ts",
+    "src/control/approvals.ts",
+    "src/control/audit.ts",
+    "src/control/browser.ts",
+    "src/control/classify.ts",
+    "src/control/cli.ts",
+    "src/control/computer-use.ts",
+    "src/control/executor.ts",
+    "src/control/files.ts",
+    "src/control/index.ts",
+    "src/control/memory.ts",
+    "src/control/permissions.ts",
+    "src/control/planner.ts",
+    "src/control/service.ts",
+    "src/control/types.ts",
+    "src/control/vision.ts",
+    "src/core/agent.ts",
+    "src/core/app.ts",
+    "src/core/boot-profile.ts",
+    "src/core/boot-trace.ts",
+    "src/core/business-l0.ts",
+    "src/core/command-registry.ts",
+    "src/core/errors.ts",
+    "src/core/event-bus.ts",
+    "src/core/execution/envelope.ts",
+    "src/core/execution/runner.ts",
+    "src/core/health.ts",
+    "src/core/kernel.ts",
+    "src/core/lifecycle.ts",
+    "src/core/provider-modules.ts",
+    "src/core/providers/agent.ts",
+    "src/core/providers/budget.ts",
+    "src/core/providers/business.ts",
+    "src/core/providers/capabilities.ts",
+    "src/core/providers/config.ts",
+    "src/core/providers/context.ts",
+    "src/core/providers/execution.ts",
+    "src/core/providers/intelligence.ts",
+    "src/core/providers/llm.ts",
+    "src/core/providers/mcp.ts",
+    "src/core/providers/multi-agents.ts",
+    "src/core/providers/plugins.ts",
+    "src/core/providers/shield.ts",
+    "src/core/providers/skills.ts",
+    "src/core/providers/state.ts",
+    "src/core/providers/trust.ts",
+    "src/core/service-registry.ts",
+    "src/core/services.ts",
+    "src/core/stall-detector.ts",
+    "src/core/tokens.ts",
+    "src/core/types.ts",
+    "src/core/version.ts",
+    "src/core/workspace.ts",
+    "src/cost/estimate.ts",
+    "src/cost/governor.ts",
+    "src/cost/manager.ts",
+    "src/cost/pricing.ts",
+    "src/daemon/api/openapi.ts",
+    "src/daemon/auth-page.ts",
+    "src/daemon/control-api.ts",
+    "src/daemon/dashboard.ts",
+    "src/daemon/dashboard/client-script.ts",
+    "src/daemon/dashboard/markup.ts",
+    "src/daemon/dashboard/styles.ts",
+    "src/daemon/plugin-api.ts",
+    "src/daemon/routes/agents.routes.ts",
+    "src/daemon/routes/budget.routes.ts",
+    "src/daemon/routes/business.routes.ts",
+    "src/daemon/routes/capabilities.routes.ts",
+    "src/daemon/routes/chat.routes.ts",
+    "src/daemon/routes/context.routes.ts",
+    "src/daemon/routes/contract.ts",
+    "src/daemon/routes/control.routes.ts",
+    "src/daemon/routes/environment.routes.ts",
+    "src/daemon/routes/extensions.routes.ts",
+    "src/daemon/routes/index.ts",
+    "src/daemon/routes/memory.routes.ts",
+    "src/daemon/routes/meta.routes.ts",
+    "src/daemon/routes/providers.routes.ts",
+    "src/daemon/routes/registry.ts",
+    "src/daemon/routes/router.ts",
+    "src/daemon/routes/schemas.ts",
+    "src/daemon/routes/shield.routes.ts",
+    "src/daemon/routes/system.routes.ts",
+    "src/daemon/routes/trust.routes.ts",
+    "src/daemon/server.ts",
+    "src/daemon/skills-api.ts",
+    "src/enterprise/audit/export.ts",
+    "src/enterprise/audit/redaction.ts",
+    "src/enterprise/audit/retention.ts",
+    "src/enterprise/authority/delegation.ts",
+    "src/enterprise/baseline/status.ts",
+    "src/enterprise/certification/evidence.ts",
+    "src/enterprise/deployment/backup/service.ts",
+    "src/enterprise/deployment/capsule.ts",
+    "src/enterprise/deployment/control-plane/service.ts",
+    "src/enterprise/deployment/identity/service.ts",
+    "src/enterprise/deployment/index.ts",
+    "src/enterprise/deployment/offline/service.ts",
+    "src/enterprise/deployment/placement/engine.ts",
+    "src/enterprise/deployment/profiles.ts",
+    "src/enterprise/deployment/residency/policy.ts",
+    "src/enterprise/deployment/sync/engine.ts",
+    "src/enterprise/deployment/types.ts",
+    "src/enterprise/deployment/workers/registry.ts",
+    "src/enterprise/evaluation/certification.ts",
+    "src/enterprise/evaluation/claims.ts",
+    "src/enterprise/evaluation/comparison.ts",
+    "src/enterprise/evaluation/compatibility.ts",
+    "src/enterprise/evaluation/effects.ts",
+    "src/enterprise/evaluation/fixtures.ts",
+    "src/enterprise/evaluation/gates.ts",
+    "src/enterprise/evaluation/governance.ts",
+    "src/enterprise/evaluation/index.ts",
+    "src/enterprise/evaluation/metrics.ts",
+    "src/enterprise/evaluation/provenance.ts",
+    "src/enterprise/evaluation/report.ts",
+    "src/enterprise/evaluation/repository.ts",
+    "src/enterprise/evaluation/runner.ts",
+    "src/enterprise/evaluation/scoring.ts",
+    "src/enterprise/evaluation/suites/context.ts",
+    "src/enterprise/evaluation/suites/enterprise.ts",
+    "src/enterprise/evaluation/suites/execution.ts",
+    "src/enterprise/evaluation/suites/index.ts",
+    "src/enterprise/evaluation/suites/platform.ts",
+    "src/enterprise/evaluation/suites/trust.ts",
+    "src/enterprise/evaluation/suites/workflow.ts",
+    "src/enterprise/evaluation/types.ts",
+    "src/enterprise/evaluation/verifiers.ts",
+    "src/enterprise/incidents/workflow.ts",
+    "src/enterprise/index.ts",
+    "src/enterprise/operations/slo.ts",
+    "src/enterprise/operations/status.ts",
+    "src/enterprise/policy/bundles.ts",
+    "src/enterprise/policy/engine.ts",
+    "src/enterprise/policy/layers.ts",
+    "src/enterprise/recovery/operations.ts",
+    "src/enterprise/release/channels.ts",
+    "src/enterprise/supplychain/response.ts",
+    "src/enterprise/types.ts",
+    "src/execution/adapters/agent-adapter.ts",
+    "src/execution/adapters/common.ts",
+    "src/execution/adapters/control-adapter.ts",
+    "src/execution/adapters/domain-adapter.ts",
+    "src/execution/adapters/index.ts",
+    "src/execution/adapters/mcp-adapter.ts",
+    "src/execution/adapters/plugin-adapter.ts",
+    "src/execution/adapters/tool-adapter.ts",
+    "src/execution/adapters/workflow-adapter.ts",
+    "src/execution/checkpoint.ts",
+    "src/execution/errors.ts",
+    "src/execution/index.ts",
+    "src/execution/inspection.ts",
+    "src/execution/lease.ts",
+    "src/execution/recovery.ts",
+    "src/execution/repository.ts",
+    "src/execution/service.ts",
+    "src/execution/state-machine.ts",
+    "src/execution/types.ts",
+    "src/execution/workflow/engine.ts",
+    "src/execution/workflow/index.ts",
+    "src/execution/workflow/inspection.ts",
+    "src/execution/workflow/nodes.ts",
+    "src/execution/workflow/repository.ts",
+    "src/execution/workflow/state-machine.ts",
+    "src/execution/workflow/types.ts",
+    "src/execution/workflow/versioning.ts",
+    "src/export/report.ts",
+    "src/i18n/strings.ts",
+    "src/index.ts",
+    "src/install/system.ts",
+    "src/install/uninstall.ts",
+    "src/integrations/credentials.ts",
+    "src/integrations/oauth.ts",
+    "src/integrations/registry.ts",
+    "src/intelligence/behavioral.ts",
+    "src/intelligence/capability.ts",
+    "src/intelligence/catalog.ts",
+    "src/intelligence/degradation.ts",
+    "src/intelligence/difficulty.ts",
+    "src/intelligence/evaluator.ts",
+    "src/intelligence/failover.ts",
+    "src/intelligence/fallback.ts",
+    "src/intelligence/health.ts",
+    "src/intelligence/index.ts",
+    "src/intelligence/metrics.ts",
+    "src/intelligence/router.ts",
+    "src/intelligence/routing-service.ts",
+    "src/intelligence/scorer.ts",
+    "src/intelligence/service.ts",
+    "src/intelligence/slo.ts",
+    "src/intelligence/types.ts",
+    "src/interfaces/cli.ts",
+    "src/interfaces/models.ts",
+    "src/interfaces/onboard.ts",
+    "src/interfaces/providers.ts",
+    "src/interfaces/shell/app.ts",
+    "src/interfaces/shell/layout.ts",
+    "src/interfaces/shell/render.ts",
+    "src/interfaces/shell/types.ts",
+    "src/interfaces/tui.ts",
+    "src/local/admission.ts",
+    "src/local/hardware.ts",
+    "src/local/ollama.ts",
+    "src/local/recommend.ts",
+    "src/local/registry.ts",
+    "src/local/runtimes.ts",
+    "src/mcp/allowlist.ts",
+    "src/mcp/cli.ts",
+    "src/mcp/client.ts",
+    "src/mcp/manager.ts",
+    "src/mcp/registry.ts",
+    "src/mcp/types.ts",
+    "src/observability/config.ts",
+    "src/observability/ids.ts",
+    "src/observability/index.ts",
+    "src/observability/instrument.ts",
+    "src/observability/logs.ts",
+    "src/observability/metrics.ts",
+    "src/observability/otlp.ts",
+    "src/observability/redaction.ts",
+    "src/observability/semconv.ts",
+    "src/observability/tracer.ts",
+    "src/platform/capabilities/adapters.ts",
+    "src/platform/capabilities/authority-diff.ts",
+    "src/platform/capabilities/authority.ts",
+    "src/platform/capabilities/certification.ts",
+    "src/platform/capabilities/index.ts",
+    "src/platform/capabilities/manifest-security.ts",
+    "src/platform/capabilities/provenance.ts",
+    "src/platform/capabilities/service.ts",
+    "src/platform/capabilities/store.ts",
+    "src/platform/capabilities/trust.ts",
+    "src/platform/capabilities/types.ts",
+    "src/platform/capabilities/updates.ts",
+    "src/platform/environment/audit.ts",
+    "src/platform/environment/capabilities.ts",
+    "src/platform/environment/classify.ts",
+    "src/platform/environment/index.ts",
+    "src/platform/environment/lifecycle.ts",
+    "src/platform/environment/observations.ts",
+    "src/platform/environment/privacy.ts",
+    "src/platform/environment/providers/browser.ts",
+    "src/platform/environment/providers/desktop.ts",
+    "src/platform/environment/providers/filesystem.ts",
+    "src/platform/environment/providers/vision.ts",
+    "src/platform/environment/providers/voice.ts",
+    "src/platform/environment/recovery.ts",
+    "src/platform/environment/service.ts",
+    "src/platform/environment/types.ts",
+    "src/platform/environment/workflow-binding.ts",
+    "src/plugins/catalog.ts",
+    "src/plugins/cli.ts",
+    "src/plugins/compat.ts",
+    "src/plugins/host.ts",
+    "src/plugins/loader.ts",
+    "src/plugins/loader/sandbox.ts",
+    "src/plugins/loader/validation.ts",
+    "src/plugins/loader/worker-loader.ts",
+    "src/plugins/manager.ts",
+    "src/plugins/manifest.ts",
+    "src/plugins/registry.ts",
+    "src/plugins/sandbox-worker.ts",
+    "src/plugins/skills.ts",
+    "src/plugins/types.ts",
+    "src/plugins/worker-protocol.ts",
+    "src/providers/capabilities.ts",
+    "src/providers/custom.ts",
+    "src/providers/factory.ts",
+    "src/providers/health.ts",
+    "src/providers/model-switch.ts",
+    "src/providers/native/anthropic.ts",
+    "src/providers/native/bedrock.ts",
+    "src/providers/native/cerebras.ts",
+    "src/providers/native/cohere.ts",
+    "src/providers/native/google.ts",
+    "src/providers/native/index.ts",
+    "src/providers/native/mistral.ts",
+    "src/providers/openai-compat.ts",
+    "src/providers/presets.ts",
+    "src/providers/registry.ts",
+    "src/providers/stream-metrics.ts",
+    "src/reliability/grammar.ts",
+    "src/reliability/profiles.ts",
+    "src/reliability/repair.ts",
+    "src/research/budget.ts",
+    "src/research/cli.ts",
+    "src/research/engine.ts",
+    "src/research/extract.ts",
+    "src/research/llm.ts",
+    "src/research/plan.ts",
+    "src/research/ranking.ts",
+    "src/research/report.ts",
+    "src/research/search.ts",
+    "src/research/synthesize.ts",
+    "src/research/types.ts",
+    "src/runtime/trust/authority.ts",
+    "src/runtime/trust/classify.ts",
+    "src/runtime/trust/credentials.ts",
+    "src/runtime/trust/environment/backend.ts",
+    "src/runtime/trust/environment/container.ts",
+    "src/runtime/trust/environment/firecracker.ts",
+    "src/runtime/trust/environment/gvisor.ts",
+    "src/runtime/trust/environment/in-process.ts",
+    "src/runtime/trust/environment/manager.ts",
+    "src/runtime/trust/environment/namespace.ts",
+    "src/runtime/trust/environment/restricted-process.ts",
+    "src/runtime/trust/index.ts",
+    "src/runtime/trust/isolated-spawn.ts",
+    "src/runtime/trust/lattice.ts",
+    "src/runtime/trust/policy.ts",
+    "src/runtime/trust/resources.ts",
+    "src/runtime/trust/service.ts",
+    "src/runtime/trust/tool-support.ts",
+    "src/runtime/trust/types.ts",
+    "src/runtime/trust/verify.ts",
+    "src/schemas/business-os.skill.json",
+    "src/security/attacks.ts",
+    "src/security/egress-proxy.ts",
+    "src/security/guard.ts",
+    "src/security/lab.ts",
+    "src/security/policies.ts",
+    "src/security/private-ip.ts",
+    "src/security/secrets.ts",
+    "src/security/shield.ts",
+    "src/services/agent-service.ts",
+    "src/services/budget-service.ts",
+    "src/services/config-service.ts",
+    "src/services/mcp-service.ts",
+    "src/services/multi-agent-service.ts",
+    "src/services/planning-service.ts",
+    "src/services/plugin-service.ts",
+    "src/services/provider-service.ts",
+    "src/services/review-decision.ts",
+    "src/services/skill-service.ts",
+    "src/services/surface-execution.ts",
+    "src/skills/adapters.ts",
+    "src/skills/autolearn.ts",
+    "src/skills/compatibility.ts",
+    "src/skills/dependencies.ts",
+    "src/skills/download-engine.ts",
+    "src/skills/engine.ts",
+    "src/skills/installer.ts",
+    "src/skills/lifecycle.ts",
+    "src/skills/loader-runtime.ts",
+    "src/skills/loader.ts",
+    "src/skills/manifest.ts",
+    "src/skills/marketplace-backend-store.ts",
+    "src/skills/marketplace-backend-types.ts",
+    "src/skills/marketplace-backend.ts",
+    "src/skills/marketplace-dependency-solver.ts",
+    "src/skills/marketplace-store.ts",
+    "src/skills/marketplace.ts",
+    "src/skills/online-registry.ts",
+    "src/skills/permissions.ts",
+    "src/skills/registry.ts",
+    "src/skills/resolver.ts",
+    "src/skills/runtime.ts",
+    "src/skills/schema.ts",
+    "src/skills/sdk.ts",
+    "src/skills/search-index.ts",
+    "src/skills/semver.ts",
+    "src/skills/signing.ts",
+    "src/skills/tool-allowlist.ts",
+    "src/skills/validator.ts",
+    "src/skills/verifier.ts",
+    "src/skills/version-resolver.ts",
+    "src/state/idempotency.ts",
+    "src/state/migrations.ts",
+    "src/state/repos/audit-repo.ts",
+    "src/state/repos/cost-repo.ts",
+    "src/state/repos/index.ts",
+    "src/state/repos/project-memory-repo.ts",
+    "src/state/repos/session-repo.ts",
+    "src/state/repos/skill-repo.ts",
+    "src/state/repos/user-memory-repo.ts",
+    "src/state/repos/workflow-repo.ts",
+    "src/state/store.ts",
+    "src/state/workspace-store.ts",
+    "src/state/write-gate.ts",
+    "src/telegram/auth.ts",
+    "src/telegram/bot.ts",
+    "src/telegram/commands.ts",
+    "src/telegram/render.ts",
+    "src/templates/workflows/competitor-monitoring.json",
+    "src/templates/workflows/content-calendar.json",
+    "src/templates/workflows/customer-onboarding.json",
+    "src/templates/workflows/email-campaign.json",
+    "src/templates/workflows/invoice-generation.json",
+    "src/templates/workflows/lead-qualification.json",
+    "src/templates/workflows/market-research.json",
+    "src/templates/workflows/meeting-prep.json",
+    "src/templates/workflows/sales-followup.json",
+    "src/templates/workflows/support-routing.json",
+    "src/templates/workflows/weekly-reports.json",
+    "src/tools/control.ts",
+    "src/tools/egress.ts",
+    "src/tools/files.ts",
+    "src/tools/git.ts",
+    "src/tools/registry-builder.ts",
+    "src/tools/registry-service.ts",
+    "src/tools/registry-types.ts",
+    "src/tools/registry.ts",
+    "src/tools/system.ts",
+    "src/tools/web.ts",
+    "src/ui/ansi.ts",
+    "src/ui/brand.ts",
+    "src/ui/css-vars.css",
+    "src/ui/icons.ts",
+    "src/ui/index.ts",
+    "src/ui/layout.ts",
+    "src/ui/primitives.ts",
+    "src/ui/spinner.ts",
+    "src/ui/terminal.ts",
+    "src/ui/theme.ts",
+    "src/ui/tokens.ts",
+    "src/update/atomic-updater.ts",
+    "src/update/channels.ts",
+    "src/update/selfheal.ts",
+    "src/util/concurrency.ts",
+    "src/util/fs-async.ts",
+    "src/util/process.ts",
+    "src/util/scan-cache.ts",
+    "src/voice/audio.ts",
+    "src/voice/cli.ts",
+    "src/voice/hardware.ts",
+    "src/voice/index.ts",
+    "src/voice/intents.ts",
+    "src/voice/pipeline.ts",
+    "src/voice/settings.ts",
+    "src/voice/stt.ts",
+    "src/voice/tts.ts",
+    "src/voice/types.ts",
+    "src/voice/vad.ts",
+    "src/voice/wake.ts"
+  ],
+  "tests": [
+    "test/a11y/auth-server.test.ts",
+    "test/a11y/browser-axe.test.ts",
+    "test/a11y/contrast.test.ts",
+    "test/a11y/static.test.ts",
+    "test/agent.test.ts",
+    "test/api/client.test.ts",
+    "test/api/compat.test.ts",
+    "test/api/openapi.test.ts",
+    "test/api/v1-versioning.test.ts",
+    "test/architecture/boundaries.test.ts",
+    "test/architecture/one-store.test.ts",
+    "test/architecture/ownership.test.ts",
+    "test/architecture/size-gate.test.ts",
+    "test/architecture/unit-tier.test.ts",
+    "test/baseline/doctor.test.ts",
+    "test/baseline/status.test.ts",
+    "test/business/business.test.ts",
+    "test/business/decoupling.test.ts",
+    "test/business/operating-layer.test.ts",
+    "test/capabilities/ecosystem.test.ts",
+    "test/capabilities/evidence-trust.test.ts",
+    "test/capabilities/lifecycle.test.ts",
+    "test/capabilities/manifest-security.test.ts",
+    "test/capabilities/provenance-graph.test.ts",
+    "test/capabilities/tuf-updates.test.ts",
+    "test/config/cache.test.ts",
+    "test/context/compression.test.ts",
+    "test/context/conflicts.test.ts",
+    "test/context/durable.test.ts",
+    "test/context/hybrid.test.ts",
+    "test/context/injection.test.ts",
+    "test/context/integrity.test.ts",
+    "test/context/lifecycle.test.ts",
+    "test/context/local-only.test.ts",
+    "test/context/migration.test.ts",
+    "test/context/navigation.test.ts",
+    "test/context/performance.test.ts",
+    "test/context/recall-benchmark.test.ts",
+    "test/context/retrieval.test.ts",
+    "test/context/security.test.ts",
+    "test/context/taxonomy.test.ts",
+    "test/context/undo.test.ts",
+    "test/control-memory.test.ts",
+    "test/control-plan.test.ts",
+    "test/control.test.ts",
+    "test/control/browser.test.ts",
+    "test/core/background-services.test.ts",
+    "test/core/envelope.test.ts",
+    "test/core/errors.test.ts",
+    "test/core/health.test.ts",
+    "test/core/kernel.test.ts",
+    "test/core/lifecycle.test.ts",
+    "test/core/no-bypass.test.ts",
+    "test/core/registry-v2.test.ts",
+    "test/core/service-registry.test.ts",
+    "test/cost.test.ts",
+    "test/daemon.test.ts",
+    "test/daemon/dashboard-split.test.ts",
+    "test/daemon/dispatcher.test.ts",
+    "test/deployment/capsule.test.ts",
+    "test/deployment/placement-engine.test.ts",
+    "test/deployment/profiles.test.ts",
+    "test/deployment/security-identity-backup.test.ts",
+    "test/deployment/sync-offline-residency.test.ts",
+    "test/deployment/worker-registry.test.ts",
+    "test/ecosystem.test.ts",
+    "test/enterprise/audit-export.test.ts",
+    "test/enterprise/authority.test.ts",
+    "test/enterprise/certification.test.ts",
+    "test/enterprise/governance-matrix.test.ts",
+    "test/enterprise/incidents.test.ts",
+    "test/enterprise/operations.test.ts",
+    "test/enterprise/policy.test.ts",
+    "test/enterprise/recovery.test.ts",
+    "test/enterprise/release.test.ts",
+    "test/enterprise/security-adversarial.test.ts",
+    "test/enterprise/supplychain.test.ts",
+    "test/environment/adversarial.test.ts",
+    "test/environment/browser-policy.test.ts",
+    "test/environment/capabilities.test.ts",
+    "test/environment/classify.test.ts",
+    "test/environment/lifecycle.test.ts",
+    "test/environment/migration.test.ts",
+    "test/environment/privacy.test.ts",
+    "test/environment/recovery.test.ts",
+    "test/environment/service.test.ts",
+    "test/environment/types.test.ts",
+    "test/environment/workflow-binding.test.ts",
+    "test/evaluation/harness.test.ts",
+    "test/evaluation/integration.test.ts",
+    "test/evaluation/security.test.ts",
+    "test/execution/adapters.test.ts",
+    "test/execution/checkpoint.test.ts",
+    "test/execution/lease.test.ts",
+    "test/execution/recovery.test.ts",
+    "test/execution/repository.test.ts",
+    "test/execution/service.test.ts",
+    "test/execution/state-machine.test.ts",
+    "test/intelligence/behavioral.test.ts",
+    "test/intelligence/breaker.test.ts",
+    "test/intelligence/capability.test.ts",
+    "test/intelligence/difficulty.test.ts",
+    "test/intelligence/failover-cpr.test.ts",
+    "test/intelligence/fallback-v5.test.ts",
+    "test/intelligence/integration.test.ts",
+    "test/intelligence/locality-invariant.test.ts",
+    "test/intelligence/locality-v5.test.ts",
+    "test/intelligence/model-class-contract.test.ts",
+    "test/intelligence/performance.test.ts",
+    "test/intelligence/router.test.ts",
+    "test/intelligence/routing-slo.test.ts",
+    "test/intelligence/routing-v5.test.ts",
+    "test/intelligence/service-v5.test.ts",
+    "test/memory-semantic.test.ts",
+    "test/memory-stage6.test.ts",
+    "test/memory-summarize.test.ts",
+    "test/memory-v09.test.ts",
+    "test/memory.test.ts",
+    "test/multi-agent.test.ts",
+    "test/observability/envelope-trace.test.ts",
+    "test/observability/instrumentation-e2e.test.ts",
+    "test/observability/privacy.test.ts",
+    "test/observability/tracing.test.ts",
+    "test/perf/binary-smoke.test.ts",
+    "test/perf/binary-update.test.ts",
+    "test/perf/boot-profile.test.ts",
+    "test/perf/hot-path-lint.test.ts",
+    "test/perf/incremental-index.test.ts",
+    "test/perf/load-admission.test.ts",
+    "test/perf/metrics-capture.test.ts",
+    "test/perf/model-switch.test.ts",
+    "test/perf/perf-gate.test.ts",
+    "test/perf/profile-gate.test.ts",
+    "test/perf/render-perf.test.ts",
+    "test/perf/scan-cache.test.ts",
+    "test/perf/stall-detection.test.ts",
+    "test/perf/startup-latency.test.ts",
+    "test/phase0/cli-spine.test.ts",
+    "test/phase0/credential-vault.test.ts",
+    "test/phase0/install-container.test.ts",
+    "test/phase0/policy-gate-adversarial.test.ts",
+    "test/phase0/reviewer-fail-closed.test.ts",
+    "test/phase0/stub-tools.test.ts",
+    "test/phase0/surface-parity.test.ts",
+    "test/phase0/workflow-effects.test.ts",
+    "test/plugins.test.ts",
+    "test/plugins/host.test.ts",
+    "test/plugins/loader.test.ts",
+    "test/polish.test.ts",
+    "test/release/beta.test.ts",
+    "test/release/changelog.test.ts",
+    "test/release/channel-update.test.ts",
+    "test/release/channels.test.ts",
+    "test/release/downloads-page.test.ts",
+    "test/release/install-scripts.test.ts",
+    "test/release/portability.test.ts",
+    "test/release/release-build.test.ts",
+    "test/release/release-gate.test.ts",
+    "test/release/release-workflow.test.ts",
+    "test/release/support-matrix.test.ts",
+    "test/reliability.test.ts",
+    "test/reliability/artifact-e2e.test.ts",
+    "test/reliability/audit-chain-extra.test.ts",
+    "test/reliability/concurrency-stress.test.ts",
+    "test/reliability/crash-injection.test.ts",
+    "test/reliability/golden-path.test.ts",
+    "test/reliability/idempotency.test.ts",
+    "test/reliability/migration-race.test.ts",
+    "test/reliability/migrations.test.ts",
+    "test/reliability/rpo-rto.test.ts",
+    "test/reliability/single-writer.test.ts",
+    "test/reliability/store-edge.test.ts",
+    "test/reliability/update-uninstall.test.ts",
+    "test/research.test.ts",
+    "test/security.test.ts",
+    "test/security/egress-proxy.test.ts",
+    "test/security/mcp-allowlist.test.ts",
+    "test/security/nodevm-wording.test.ts",
+    "test/security/shield.test.ts",
+    "test/services/agent-service.test.ts",
+    "test/services/planning-service.test.ts",
+    "test/skills-loader.test.ts",
+    "test/skills-marketplace-backend.test.ts",
+    "test/skills-marketplace.test.ts",
+    "test/skills-official-packs.test.ts",
+    "test/skills-sdk-2.1b.test.ts",
+    "test/skills-unified-runtime.test.ts",
+    "test/skills.test.ts",
+    "test/skills/quality.test.ts",
+    "test/state/memory-to-context-migration.test.ts",
+    "test/state/workspace-store.test.ts",
+    "test/supply-chain/supply-chain.test.ts",
+    "test/telegram.test.ts",
+    "test/tools.test.ts",
+    "test/tools/semantics-contract.test.ts",
+    "test/trust.test.ts",
+    "test/trust/adapters-risk.test.ts",
+    "test/trust/authority.test.ts",
+    "test/trust/canonical-shell-isolation.test.ts",
+    "test/trust/classify.test.ts",
+    "test/trust/credentials.test.ts",
+    "test/trust/execution-integration.test.ts",
+    "test/trust/guarantee-matrix.test.ts",
+    "test/trust/lattice.test.ts",
+    "test/trust/mcp-isolation.test.ts",
+    "test/trust/migration-rollback.test.ts",
+    "test/trust/namespace.test.ts",
+    "test/trust/persistence.test.ts",
+    "test/trust/plugin-risk.test.ts",
+    "test/trust/policy.test.ts",
+    "test/trust/shell-tool.test.ts",
+    "test/trust/tool-risk.test.ts",
+    "test/trust/ux.test.ts",
+    "test/trust/verify.test.ts",
+    "test/util/process.test.ts",
+    "test/ux/disclosure.test.ts",
+    "test/ux/mode-color.test.ts",
+    "test/ux/sus.test.ts",
+    "test/ux/undo.test.ts",
+    "test/voice.test.ts",
+    "test/workflow/engine.test.ts",
+    "test/workflow/types.test.ts"
+  ],
+  "cliCommands": [
+    {
+      "name": "shell",
+      "aliases": [
+        "tui",
+        "--tui"
+      ],
+      "group": "start",
+      "usage": "xr [shell|--tui|tui]",
+      "needsKernel": false,
+      "fastPath": true,
+      "classification": "stable"
+    },
+    {
+      "name": "serve",
+      "aliases": [],
+      "group": "start",
+      "usage": "xr serve [--port <n>]",
+      "needsKernel": false,
+      "fastPath": true,
+      "classification": "stable"
+    },
+    {
+      "name": "onboarding",
+      "aliases": [
+        "setup",
+        "init"
+      ],
+      "group": "start",
+      "usage": "xr onboarding",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "help",
+      "aliases": [
+        "--help",
+        "-h"
+      ],
+      "group": "start",
+      "usage": "xr help [topic|command]",
+      "needsKernel": false,
+      "fastPath": true,
+      "classification": "stable"
+    },
+    {
+      "name": "version",
+      "aliases": [
+        "--version",
+        "-v"
+      ],
+      "group": "start",
+      "usage": "xr version | xr --version | xr -v",
+      "needsKernel": false,
+      "fastPath": true,
+      "classification": "stable"
+    },
+    {
+      "name": "run",
+      "aliases": [
+        "task",
+        "do",
+        "exec"
+      ],
+      "group": "work",
+      "usage": "xr run \"<task>\" [--mode agent|plan|ask] [--model p/m] [--budget usd]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "ask",
+      "aliases": [],
+      "group": "work",
+      "usage": "xr ask \"<question>\" [--model p/m]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "plan",
+      "aliases": [],
+      "group": "work",
+      "usage": "xr plan \"<task>\" [--model p/m]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "research",
+      "aliases": [],
+      "group": "work",
+      "usage": "xr research \"<topic>\" [quick|deep|plan|status|setup]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "agents",
+      "aliases": [
+        "agent"
+      ],
+      "group": "work",
+      "usage": "xr agents [list|plan|run|status|stop|resume|inspect]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "control",
+      "aliases": [
+        "computer"
+      ],
+      "group": "work",
+      "usage": "xr control [status|start|stop|plan|setup|browser|…]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "env",
+      "aliases": [
+        "environment"
+      ],
+      "group": "work",
+      "usage": "xr env [status|capabilities|sessions|close|close-all|history|observations|policy] [--json]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "voice",
+      "aliases": [],
+      "group": "work",
+      "usage": "xr voice [setup|status|start|stop|test|devices|config]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "speak",
+      "aliases": [],
+      "group": "work",
+      "usage": "xr speak <text>",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "listen",
+      "aliases": [],
+      "group": "work",
+      "usage": "xr listen",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "workspace",
+      "aliases": [
+        "workspaces",
+        "ws"
+      ],
+      "group": "context",
+      "usage": "xr workspace [list|create|use|switch|delete] …",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "session",
+      "aliases": [
+        "sessions"
+      ],
+      "group": "context",
+      "usage": "xr session [list|show|export] [id]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "memory",
+      "aliases": [
+        "mem"
+      ],
+      "group": "context",
+      "usage": "xr memory [list|add|search|recall|remove|health|export|…]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "context",
+      "aliases": [
+        "ctx",
+        "knowledge"
+      ],
+      "group": "context",
+      "usage": "xr context [list|inspect|explain|pending|approve|revoke|correct|export]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "config",
+      "aliases": [
+        "cfg",
+        "settings"
+      ],
+      "group": "context",
+      "usage": "xr config [get|set|path|reset] [key] [value]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "providers",
+      "aliases": [
+        "provider"
+      ],
+      "group": "intelligence",
+      "usage": "xr providers [list|set|add|remove|test|status|refresh]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "models",
+      "aliases": [
+        "model"
+      ],
+      "group": "intelligence",
+      "usage": "xr models [status|list|recommend|install|remove|set|test|runtimes]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "budget",
+      "aliases": [
+        "cost",
+        "spend"
+      ],
+      "group": "intelligence",
+      "usage": "xr budget [status|set|reset] [amount]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "capabilities",
+      "aliases": [
+        "capability",
+        "caps"
+      ],
+      "group": "extensions",
+      "usage": "xr capabilities [list|discover|inspect|permissions|certify|enable|disable|quarantine|rollback]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "skills",
+      "aliases": [
+        "skill",
+        "marketplace"
+      ],
+      "group": "extensions",
+      "usage": "xr skills [list|search|install|enable|disable|inspect|doctor|…]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "plugins",
+      "aliases": [
+        "plugin"
+      ],
+      "group": "extensions",
+      "usage": "xr plugins [list|search|install|enable|disable|remove|status]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "mcp",
+      "aliases": [],
+      "group": "extensions",
+      "usage": "xr mcp [list|add|remove|enable|disable|tools|health|doctor]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "shield",
+      "aliases": [
+        "security"
+      ],
+      "group": "trust",
+      "usage": "xr shield [status|scan|processes|startup|privacy|doctor|…]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "trust",
+      "aliases": [
+        "isolation"
+      ],
+      "group": "trust",
+      "usage": "xr trust [status|classify <command...>] [--json]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "audit",
+      "aliases": [
+        "verify-log",
+        "log"
+      ],
+      "group": "trust",
+      "usage": "xr audit [tail|verify|export] [--limit n]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "attacks",
+      "aliases": [
+        "lab",
+        "security-lab"
+      ],
+      "group": "trust",
+      "usage": "xr attacks [--json]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "business",
+      "aliases": [
+        "biz"
+      ],
+      "group": "work",
+      "usage": "xr business [status|init|journeys|outcomes|approvals|workers|artifacts|mutations|privacy|work-queue|audit]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "evaluate",
+      "aliases": [
+        "eval",
+        "benchmark"
+      ],
+      "group": "trust",
+      "usage": "xr evaluate [run|suites|list|inspect|compare|regressions|export|verify|certify|compatibility|claims|limitations|gaps|reproduce]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "enterprise",
+      "aliases": [
+        "ent"
+      ],
+      "group": "trust",
+      "usage": "xr enterprise [status|policy|authority|audit|slo|incident|supplychain|recovery|release|evidence]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "doctor",
+      "aliases": [
+        "health",
+        "check"
+      ],
+      "group": "system",
+      "usage": "xr doctor [--network] [--json] [--perf]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "status",
+      "aliases": [],
+      "group": "system",
+      "usage": "xr status [--json] [--network]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "update",
+      "aliases": [
+        "upgrade"
+      ],
+      "group": "system",
+      "usage": "xr update [--yes]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "repair",
+      "aliases": [],
+      "group": "system",
+      "usage": "xr repair [--yes] [--network]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "reset",
+      "aliases": [],
+      "group": "system",
+      "usage": "xr reset [--hard] [--yes]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "install",
+      "aliases": [],
+      "group": "system",
+      "usage": "xr install [--mode minimal|local|byok|hybrid|full] [--yes]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "logs",
+      "aliases": [
+        "log"
+      ],
+      "group": "system",
+      "usage": "xr logs [--limit n] [--json]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    }
+  ],
+  "daemonRoutes": [
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "dashboard.get",
+      "method": "GET",
+      "path": "/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/meta.routes.ts",
+      "id": "meta.apiRoot.get",
+      "method": "GET",
+      "path": "/api",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/agents.routes.ts",
+      "id": "agents.list",
+      "method": "GET",
+      "path": "/api/agents",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/agents.routes.ts",
+      "id": "agents.workflow.get",
+      "method": "GET",
+      "prefix": "/api/agents/workflows/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "audit.get",
+      "method": "GET",
+      "path": "/api/audit",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/budget.routes.ts",
+      "id": "budget.get",
+      "method": "GET",
+      "path": "/api/budget",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/budget.routes.ts",
+      "id": "budget.set",
+      "method": "POST",
+      "path": "/api/budget/set",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.approvals.list",
+      "method": "GET",
+      "path": "/api/business/approvals",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.approvals.decide",
+      "method": "POST",
+      "prefix": "/api/business/approvals/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.artifacts.list",
+      "method": "GET",
+      "path": "/api/business/artifacts",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.journeys.list",
+      "method": "GET",
+      "path": "/api/business/journeys",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.journeys.start",
+      "method": "POST",
+      "prefix": "/api/business/journeys/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.mutations.list",
+      "method": "GET",
+      "path": "/api/business/mutations",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.outcomes.list",
+      "method": "GET",
+      "path": "/api/business/outcomes",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.outcomes.get",
+      "method": "GET",
+      "prefix": "/api/business/outcomes/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.privacy.get",
+      "method": "GET",
+      "prefix": "/api/business/privacy/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.status.get",
+      "method": "GET",
+      "path": "/api/business/status",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.workers.list",
+      "method": "GET",
+      "path": "/api/business/workers",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.workers.get",
+      "method": "GET",
+      "prefix": "/api/business/workers/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.workers.disable",
+      "method": "POST",
+      "prefix": "/api/business/workers/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/business.routes.ts",
+      "id": "business.workers.enable",
+      "method": "POST",
+      "prefix": "/api/business/workers/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/capabilities.routes.ts",
+      "id": "capabilities.list",
+      "method": "GET",
+      "path": "/api/capabilities",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/capabilities.routes.ts",
+      "id": "capabilities.certify",
+      "method": "POST",
+      "path": "/api/capabilities/certify",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/capabilities.routes.ts",
+      "id": "capabilities.disable",
+      "method": "POST",
+      "path": "/api/capabilities/disable",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/capabilities.routes.ts",
+      "id": "capabilities.enable",
+      "method": "POST",
+      "path": "/api/capabilities/enable",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/capabilities.routes.ts",
+      "id": "capabilities.health",
+      "method": "GET",
+      "path": "/api/capabilities/health",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/capabilities.routes.ts",
+      "id": "capabilities.inspect",
+      "method": "GET",
+      "path": "/api/capabilities/inspect",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/capabilities.routes.ts",
+      "id": "capabilities.permissions",
+      "method": "GET",
+      "path": "/api/capabilities/permissions",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/capabilities.routes.ts",
+      "id": "capabilities.quarantine",
+      "method": "POST",
+      "path": "/api/capabilities/quarantine",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/capabilities.routes.ts",
+      "id": "capabilities.rollback",
+      "method": "POST",
+      "path": "/api/capabilities/rollback",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/chat.routes.ts",
+      "id": "chat.stream.post",
+      "method": "POST",
+      "path": "/api/chat",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "config.safe.get",
+      "method": "GET",
+      "path": "/api/config",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.status",
+      "method": "GET",
+      "path": "/api/context",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.approve",
+      "method": "POST",
+      "prefix": "/api/context/approve/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.export",
+      "method": "GET",
+      "path": "/api/context/export",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.inspect",
+      "method": "GET",
+      "prefix": "/api/context/item/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.items",
+      "method": "GET",
+      "path": "/api/context/items",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.pending",
+      "method": "GET",
+      "path": "/api/context/pending",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.policy",
+      "method": "GET",
+      "path": "/api/context/policy",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.revoke",
+      "method": "POST",
+      "prefix": "/api/context/revoke/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/context.routes.ts",
+      "id": "context.undo",
+      "method": "POST",
+      "path": "/api/context/undo",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.approve",
+      "method": "POST",
+      "path": "/api/control/approve",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.events",
+      "method": "GET",
+      "path": "/api/control/events",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.history.legacy",
+      "method": "GET",
+      "path": "/api/control/history",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.memory.list",
+      "method": "GET",
+      "path": "/api/control/memory",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.memory.delete",
+      "method": "DELETE",
+      "prefix": "/api/control/memory/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.pending",
+      "method": "GET",
+      "path": "/api/control/pending",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.permissions.legacy",
+      "method": "GET",
+      "path": "/api/control/permissions",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.plan",
+      "method": "POST",
+      "path": "/api/control/plan",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.status",
+      "method": "GET",
+      "path": "/api/control/status",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "cost.get",
+      "method": "GET",
+      "path": "/api/cost",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.capabilities",
+      "method": "GET",
+      "path": "/api/environment/capabilities",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.close",
+      "method": "POST",
+      "path": "/api/environment/close",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.history",
+      "method": "GET",
+      "path": "/api/environment/history",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.observations",
+      "method": "GET",
+      "path": "/api/environment/observations",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.policy",
+      "method": "GET",
+      "path": "/api/environment/policy",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.sessions",
+      "method": "GET",
+      "path": "/api/environment/sessions",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/environment.routes.ts",
+      "id": "environment.status",
+      "method": "GET",
+      "path": "/api/environment/status",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "health.get",
+      "method": "GET",
+      "path": "/api/health",
+      "auth": "open"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.list",
+      "method": "GET",
+      "path": "/api/memory",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.delete",
+      "method": "DELETE",
+      "prefix": "/api/memory/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.health",
+      "method": "GET",
+      "path": "/api/memory/health",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.search",
+      "method": "GET",
+      "path": "/api/memory/search",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/meta.routes.ts",
+      "id": "meta.metrics.get",
+      "method": "GET",
+      "path": "/api/metrics",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "models.list",
+      "method": "GET",
+      "path": "/api/models",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "models.select",
+      "method": "POST",
+      "path": "/api/models/select",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "models.test",
+      "method": "POST",
+      "path": "/api/models/test",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/meta.routes.ts",
+      "id": "meta.openapi.get",
+      "method": "GET",
+      "path": "/api/openapi.json",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "overview.get",
+      "method": "GET",
+      "path": "/api/overview",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/extensions.routes.ts",
+      "id": "plugins.api",
+      "prefix": "/api/plugins",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "providers.list",
+      "method": "GET",
+      "path": "/api/providers",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "providers.catalog",
+      "method": "GET",
+      "path": "/api/providers/catalog",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "providers.route",
+      "method": "GET",
+      "path": "/api/providers/route",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "providers.set",
+      "method": "POST",
+      "path": "/api/providers/set",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "providers.slo",
+      "method": "GET",
+      "path": "/api/providers/slo",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "recovery.status.get",
+      "method": "GET",
+      "path": "/api/recovery",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "research.list",
+      "method": "GET",
+      "path": "/api/research",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "research.get",
+      "method": "GET",
+      "prefix": "/api/research/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "security.get",
+      "method": "GET",
+      "path": "/api/security",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "sessions.list",
+      "method": "GET",
+      "path": "/api/sessions",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "sessions.get",
+      "method": "GET",
+      "prefix": "/api/sessions/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.adblock",
+      "method": "POST",
+      "path": "/api/shield/adblock",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.browser",
+      "method": "GET",
+      "path": "/api/shield/browser",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.downloads",
+      "method": "GET",
+      "path": "/api/shield/downloads",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.explain",
+      "method": "POST",
+      "path": "/api/shield/explain",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.privacy",
+      "method": "GET",
+      "path": "/api/shield/privacy",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.processes",
+      "method": "GET",
+      "path": "/api/shield/processes",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.quarantine",
+      "method": "POST",
+      "path": "/api/shield/quarantine",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.scan",
+      "method": "GET",
+      "path": "/api/shield/scan",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.startup",
+      "method": "GET",
+      "path": "/api/shield/startup",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.status",
+      "method": "GET",
+      "path": "/api/shield/status",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/shield.routes.ts",
+      "id": "shield.whitelist",
+      "method": "POST",
+      "path": "/api/shield/whitelist",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/extensions.routes.ts",
+      "id": "skills.api",
+      "prefix": "/api/skills",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/meta.routes.ts",
+      "id": "meta.traces.get",
+      "method": "GET",
+      "path": "/api/traces/recent",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/trust.routes.ts",
+      "id": "trust.get",
+      "method": "GET",
+      "path": "/api/trust",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/trust.routes.ts",
+      "id": "trust.classify.post",
+      "method": "POST",
+      "path": "/api/trust/classify",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "workspaces.list",
+      "method": "GET",
+      "path": "/api/workspaces",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "workspaces.create",
+      "method": "POST",
+      "path": "/api/workspaces/create",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/providers.routes.ts",
+      "id": "workspaces.switch",
+      "method": "POST",
+      "path": "/api/workspaces/switch",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "auth.js.get",
+      "method": "GET",
+      "path": "/assets/auth.js",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "dashboard.css.get",
+      "method": "GET",
+      "path": "/assets/dashboard.css",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "dashboard.js.get",
+      "method": "GET",
+      "path": "/assets/dashboard.js",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "chat.page.get",
+      "method": "GET",
+      "path": "/chat",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "dashboard.alias.get",
+      "method": "GET",
+      "path": "/dashboard",
+      "auth": "local bearer token or dashboard query token"
+    }
+  ],
+  "providers": [
+    {
+      "id": "ollama",
+      "label": "Ollama (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "qwen2.5:7b",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "lmstudio",
+      "label": "LM Studio (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "jan",
+      "label": "Jan (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "jan",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "localai",
+      "label": "LocalAI (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "gpt-4",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "vllm",
+      "label": "vLLM (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "meta-llama/Llama-3.1-8B-Instruct",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "llamacpp",
+      "label": "llama.cpp server (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "local-model",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "gpt4all",
+      "label": "GPT4All (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "local-model",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "koboldcpp",
+      "label": "KoboldCPP (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "local-model",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "textgenwebui",
+      "label": "Text Generation WebUI (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "local-model",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "sglang",
+      "label": "SGLang (Local)",
+      "kind": "local",
+      "tier": "free",
+      "defaultModel": "local-model",
+      "apiKeyEnv": null,
+      "status": "supported with local runtime"
+    },
+    {
+      "id": "groq",
+      "label": "Groq (Fast)",
+      "kind": "hosted",
+      "tier": "free",
+      "defaultModel": "llama-3.3-70b-versatile",
+      "apiKeyEnv": "GROQ_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "google",
+      "label": "Google Gemini",
+      "kind": "hosted",
+      "tier": "free",
+      "defaultModel": "gemini-1.5-flash",
+      "apiKeyEnv": "GOOGLE_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "deepseek",
+      "label": "DeepSeek",
+      "kind": "hosted",
+      "tier": "free",
+      "defaultModel": "deepseek-chat",
+      "apiKeyEnv": "DEEPSEEK_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "cerebras",
+      "label": "Cerebras",
+      "kind": "hosted",
+      "tier": "free",
+      "defaultModel": "cerebras/csm-8b",
+      "apiKeyEnv": "CEREBRAS_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "openrouter",
+      "label": "OpenRouter",
+      "kind": "hosted",
+      "tier": "cheap",
+      "defaultModel": "anthropic/claude-3.5-sonnet",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "together",
+      "label": "Together AI",
+      "kind": "hosted",
+      "tier": "cheap",
+      "defaultModel": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+      "apiKeyEnv": "TOGETHER_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "mistral",
+      "label": "Mistral AI",
+      "kind": "hosted",
+      "tier": "cheap",
+      "defaultModel": "mistral-small-latest",
+      "apiKeyEnv": "MISTRAL_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "fireworks",
+      "label": "Fireworks AI",
+      "kind": "hosted",
+      "tier": "cheap",
+      "defaultModel": "accounts/fireworks/models/llama-v3p1-70b-instruct",
+      "apiKeyEnv": "FIREWORKS_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "sambanova",
+      "label": "SambaNova",
+      "kind": "hosted",
+      "tier": "cheap",
+      "defaultModel": "Meta-Llama-3.1-70B-Instruct",
+      "apiKeyEnv": "SAMBANOVA_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "huggingface",
+      "label": "Hugging Face",
+      "kind": "hosted",
+      "tier": "cheap",
+      "defaultModel": "meta-llama/Llama-3.1-8B-Instruct",
+      "apiKeyEnv": "HF_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "openai",
+      "label": "OpenAI",
+      "kind": "hosted",
+      "tier": "premium",
+      "defaultModel": "gpt-4o-mini",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "anthropic",
+      "label": "Anthropic Claude",
+      "kind": "hosted",
+      "tier": "premium",
+      "defaultModel": "claude-3-5-sonnet-20241022",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "cohere",
+      "label": "Cohere",
+      "kind": "hosted",
+      "tier": "premium",
+      "defaultModel": "command-r-plus-08-2024",
+      "apiKeyEnv": "COHERE_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "xai",
+      "label": "xAI (Grok)",
+      "kind": "hosted",
+      "tier": "premium",
+      "defaultModel": "grok-2-latest",
+      "apiKeyEnv": "XAI_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "perplexity",
+      "label": "Perplexity",
+      "kind": "hosted",
+      "tier": "premium",
+      "defaultModel": "llama-3.1-sonar-large-128k-online",
+      "apiKeyEnv": "PERPLEXITY_API_KEY",
+      "status": "supported with user-provided credentials"
+    },
+    {
+      "id": "bedrock",
+      "label": "AWS Bedrock",
+      "kind": "hosted",
+      "tier": "enterprise",
+      "defaultModel": "claude-3-sonnet",
+      "apiKeyEnv": null,
+      "status": "supported with user-provided credentials"
+    }
+  ],
+  "localRuntimes": [
+    {
+      "id": "ollama",
+      "providerId": "ollama",
+      "label": "Ollama",
+      "installSupport": "automatic",
+      "modelManagement": "automatic",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "lmstudio",
+      "providerId": "lmstudio",
+      "label": "LM Studio",
+      "installSupport": "guided",
+      "modelManagement": "runtime-ui",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "llamacpp",
+      "providerId": "llamacpp",
+      "label": "llama.cpp server",
+      "installSupport": "manual",
+      "modelManagement": "external",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "jan",
+      "providerId": "jan",
+      "label": "Jan",
+      "installSupport": "guided",
+      "modelManagement": "runtime-ui",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "localai",
+      "providerId": "localai",
+      "label": "LocalAI",
+      "installSupport": "manual",
+      "modelManagement": "external",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "vllm",
+      "providerId": "vllm",
+      "label": "vLLM OpenAI server",
+      "installSupport": "manual",
+      "modelManagement": "external",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "gpt4all",
+      "providerId": "gpt4all",
+      "label": "GPT4All local server",
+      "installSupport": "guided",
+      "modelManagement": "runtime-ui",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "koboldcpp",
+      "providerId": "koboldcpp",
+      "label": "KoboldCPP",
+      "installSupport": "manual",
+      "modelManagement": "external",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "textgenwebui",
+      "providerId": "textgenwebui",
+      "label": "Text Generation WebUI",
+      "installSupport": "manual",
+      "modelManagement": "runtime-ui",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "sglang",
+      "providerId": "sglang",
+      "label": "SGLang server",
+      "installSupport": "manual",
+      "modelManagement": "external",
+      "status": "detected/optional unless configured"
+    },
+    {
+      "id": "custom-openai",
+      "providerId": "custom-local",
+      "label": "Custom OpenAI-compatible local endpoint",
+      "installSupport": "manual",
+      "modelManagement": "custom",
+      "status": "detected/optional unless configured"
+    }
+  ],
+  "plugins": [
+    {
+      "id": "github",
+      "path": "plugins/github",
+      "manifest": "xr-plugin.json",
+      "status": "experimental plugin package"
+    },
+    {
+      "id": "hello",
+      "path": "plugins/hello",
+      "manifest": "xr-plugin.json",
+      "status": "experimental plugin package"
+    }
+  ],
+  "skills": [
+    {
+      "id": "academic_research",
+      "path": "skills/academic_research",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "api_design",
+      "path": "skills/api_design",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "architecture_reviewer",
+      "path": "skills/architecture_reviewer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "brand_designer",
+      "path": "skills/brand_designer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "code_auditor",
+      "path": "skills/code_auditor",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "competitive_intelligence",
+      "path": "skills/competitive_intelligence",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "content_creator",
+      "path": "skills/content_creator",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "copywriter",
+      "path": "skills/copywriter",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "crm_assistant",
+      "path": "skills/crm_assistant",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "customer_support",
+      "path": "skills/customer_support",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "daily-brief",
+      "path": "skills/daily-brief",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "db_migrate",
+      "path": "skills/db_migrate",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "debug_error",
+      "path": "skills/debug_error",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "debugging_expert",
+      "path": "skills/debugging_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "deep_research",
+      "path": "skills/deep_research",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "devops_engineer",
+      "path": "skills/devops_engineer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "docker_expert",
+      "path": "skills/docker_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "email_writer",
+      "path": "skills/email_writer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "explain_codebase",
+      "path": "skills/explain_codebase",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "financial_analyst",
+      "path": "skills/financial_analyst",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "full_stack_engineer",
+      "path": "skills/full_stack_engineer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "generate_readme",
+      "path": "skills/generate_readme",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "git_commit_message",
+      "path": "skills/git_commit_message",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "git_expert",
+      "path": "skills/git_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "go_expert",
+      "path": "skills/go_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "incident_response",
+      "path": "skills/incident_response",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "java_expert",
+      "path": "skills/java_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "kubernetes_expert",
+      "path": "skills/kubernetes_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "logo_designer",
+      "path": "skills/logo_designer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "malware_analyst",
+      "path": "skills/malware_analyst",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "market_research",
+      "path": "skills/market_research",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "marketing_strategist",
+      "path": "skills/marketing_strategist",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "negotiation_expert",
+      "path": "skills/negotiation_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "nextjs_expert",
+      "path": "skills/nextjs_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "node_expert",
+      "path": "skills/node_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "osint_researcher",
+      "path": "skills/osint_researcher",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "paper_analyzer",
+      "path": "skills/paper_analyzer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "patent_research",
+      "path": "skills/patent_research",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "pentest_assistant",
+      "path": "skills/pentest_assistant",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "performance_optimizer",
+      "path": "skills/performance_optimizer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "pr_description",
+      "path": "skills/pr_description",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "presentation_builder",
+      "path": "skills/presentation_builder",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "privacy_advisor",
+      "path": "skills/privacy_advisor",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "product_manager",
+      "path": "skills/product_manager",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "project_manager",
+      "path": "skills/project_manager",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "proposal_writer",
+      "path": "skills/proposal_writer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "python_expert",
+      "path": "skills/python_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "react_expert",
+      "path": "skills/react_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "refactor_clean",
+      "path": "skills/refactor_clean",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "refactoring_expert",
+      "path": "skills/refactoring_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "rust_expert",
+      "path": "skills/rust_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "sales_agent",
+      "path": "skills/sales_agent",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "scientific_research",
+      "path": "skills/scientific_research",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "security_audit",
+      "path": "skills/security_audit",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    },
+    {
+      "id": "seo_expert",
+      "path": "skills/seo_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "soc_analyst",
+      "path": "skills/soc_analyst",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "social_media_creator",
+      "path": "skills/social_media_creator",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "startup_advisor",
+      "path": "skills/startup_advisor",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "story_writer",
+      "path": "skills/story_writer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "testing_expert",
+      "path": "skills/testing_expert",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "threat_hunter",
+      "path": "skills/threat_hunter",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "ui_designer",
+      "path": "skills/ui_designer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "ux_designer",
+      "path": "skills/ux_designer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "video_script_writer",
+      "path": "skills/video_script_writer",
+      "manifest": "xr-skill.json",
+      "status": "supported content"
+    },
+    {
+      "id": "write_tests",
+      "path": "skills/write_tests",
+      "manifest": "SKILL.md",
+      "status": "supported content"
+    }
+  ],
+  "deployment": {
+    "dockerfile": true,
+    "compose": true,
+    "installSh": true,
+    "installPs1": true,
+    "ciWorkflow": true,
+    "websiteDirectory": true
+  }
+}

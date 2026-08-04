@@ -1,0 +1,7 @@
+# GENERATED from release.manifest.json — regenerate: bun run channel:render
+# Reference manifest; the release job submits via wingetcreate (ADR-0023).
+PackageIdentifier: ahmadrrrtx.XR
+PackageVersion: 7.1.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

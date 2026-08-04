@@ -341,13 +341,40 @@ export async function updateXR(args: string[] = []): Promise<void> {
   const opts = parseOptions(args);
   banner();
   console.log(C.bold("XR Update"));
-  backupConfig("pre-update");
 
   // Phase 1 · T11 — atomic update with health canary + automatic rollback.
-  // One contract across git-checkout, npm and compiled-binary layouts
-  // (see src/update/atomic-updater.ts). Phase 3 · T2: the binary layout
-  // downloads the platform binary from the release feed.
-  const { runAtomicUpdate } = await import("../update/atomic-updater.ts");
+  // Phase 9 · T5 — channel-aware: XR-owned channels (github-releases binary,
+  // npm, git-checkout) use the atomic updater with release-checksum
+  // verification; package-manager-owned channels (homebrew/scoop/winget/
+  // deb/rpm/docker) print the exact update + rollback commands and NEVER
+  // half-edit a PM-owned install (Constitution Art. XXIII).
+  const { runAtomicUpdate, detectInstallLayout } = await import("../update/atomic-updater.ts");
+  const { detectChannel, CHANNELS, rollbackHintFor } = await import("../update/channels.ts");
+
+  const layout = detectInstallLayout(rootDir);
+  const { channel, via } = detectChannel({
+    xrHome: XR_HOME,
+    packageRoot: rootDir,
+    exePath: process.env.XR_BINARY ?? process.execPath,
+    legacyLayout: layout,
+  });
+  info(`Install channel: ${channel} (detected via ${via})`);
+
+  const def = CHANNELS[channel];
+  if (def.owner === "channel") {
+    // PM-owned: the package manager performs update/rollback atomically itself.
+    info(`This installation is managed by ${channel}. Update and rollback go through the package manager (atomic and reversible there — XR never half-edits a package-manager install).`);
+    console.log();
+    console.log(C.bold("  To update:"));
+    console.log(`    ${def.update}`);
+    console.log(C.bold("  To roll back:"));
+    console.log(`    ${def.rollback}`);
+    console.log();
+    info("Fetch the target manually if you want a specific version: see docs/release/INSTALLATION.md (per-channel instructions).");
+    return;
+  }
+
+  backupConfig("pre-update");
   const release = JSON.parse(readFileSync(join(rootDir, "release.manifest.json"), "utf8")) as {
     identity?: { version?: string };
     version?: string;
@@ -359,6 +386,7 @@ export async function updateXR(args: string[] = []): Promise<void> {
     ok(`Updated to ${result.activated}. Health canary passed; atomic swap complete.`);
     ensureConfig();
     ok("Update complete. A config backup was written before the update.");
+    info(`Rollback: ${rollbackHintFor(channel)}`);
     return;
   }
 

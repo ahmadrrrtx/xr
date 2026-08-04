@@ -1,0 +1,77 @@
+name: Public Beta feedback
+description: Something in the Public Beta behavior, packaging, channels, or docs — with enough evidence to act on. Feedback is triaged into acceptance criteria (docs/beta/FEEDBACK.md).
+labels: ["beta", "feedback", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        XR is in **Public Beta**: validated, signed and reversible — and not finished.
+        This template is the front door of the feedback → acceptance loop
+        (see `docs/beta/FEEDBACK.md`): every item is triaged into either an
+        acceptance criterion for a patch release, a known-limitations entry, or
+        a recorded rejection with rationale.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: What part of the beta does this concern?
+      options:
+        - Install / one-command install UX
+        - Package channel (homebrew, scoop, winget, deb, rpm, npm, docker)
+        - Update / rollback / uninstall
+        - Release verification (cosign / SHA256SUMS / SBOM / SLSA)
+        - Cross-platform parity (linux / macOS / Windows)
+        - Golden path / first success
+        - Honesty (a claim that seems untrue)  # also accepted via false_claim.yml
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Your platform
+      options:
+        - linux-x64
+        - linux-arm64
+        - macos-arm64
+        - macos-x64
+        - windows-x64
+        - windows-arm64 / not offered
+        - other / unsure
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened / what should happen
+      description: Facts, with the evidence a reviewer can reproduce (commands, output, exit codes, screenshots).
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: XR version
+      description: Output of `xr --version`.
+      placeholder: "7.1.0 (Truth)"
+    validations:
+      required: false
+
+  - type: input
+    id: channel
+    attributes:
+      label: How you installed XR (channel)
+      description: e.g. install.sh, brew, scoop, winget, .deb, npm, docker, git checkout.
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        **Triage promise (recorded in docs/beta/FEEDBACK.md):** beta items are
+        reviewed every patch cycle; a reproducible issue becomes a failing test
+        or a register entry before the next tag. You can watch the loop close in
+        the linked acceptance criteria.

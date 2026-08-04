@@ -91,3 +91,80 @@ jobs:
           name: first-task-survey
           path: first-task-survey.json
           retention-days: 90
+
+  # ── Phase 9 · T6 — Public-Beta install-success metric ────────────────────
+  # Installs XR via the real installer on every tier-1 OS family, records the
+  # attempt, and aggregates the rolling window honestly: the >99% claim opens
+  # only once ≥ 30 recorded attempts exist (scripts/beta-metric.ts gate). The
+  # history is carried by a best-effort CI cache (artifacts are the durable
+  # audit trail; a cache miss simply means a provisional window).
+  beta-install:
+    name: Beta install success (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout (beta-metric script lives here)
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Resolve OS label
+        id: os
+        shell: bash
+        run: |
+          case "${{ matrix.os }}" in
+            ubuntu-*) echo "label=linux" >> "$GITHUB_OUTPUT" ;;
+            macos-*) echo "label=macos" >> "$GITHUB_OUTPUT" ;;
+            windows-*) echo "label=windows" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Restore metric history (best-effort; artifacts are the audit trail)
+        uses: actions/cache@v4
+        with:
+          path: .beta-metrics
+          key: beta-metrics-${{ steps.os.outputs.label }}
+          restore-keys: |
+            beta-metrics-${{ steps.os.outputs.label }}-
+      - name: Run the Public-Beta installer (hermetic home)
+        shell: bash
+        env:
+          XR_HOME: ${{ runner.temp }}/xr-beta-install
+          HOME: ${{ runner.temp }}/xr-beta-home
+          XR_DATA_HOME: ${{ runner.temp }}/xr-beta-data
+        run: |
+          set -uo pipefail
+          mkdir -p .beta-metrics
+          OK=0
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -Command \
+              "iex \"& { \$(irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1) } -Yes\"" && OK=1 || OK=0
+          else
+            curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash -s -- --yes && OK=1 || OK=0
+          fi
+          echo "OK=$OK" >> "$GITHUB_ENV"
+      - name: Record the attempt
+        shell: bash
+        if: always()
+        run: |
+          set -euo pipefail
+          bun run scripts/beta-metric.ts record \
+            --file .beta-metrics/metrics.jsonl --os "${{ steps.os.outputs.label }}" \
+            --channel installer --version "$(node -p 'JSON.parse(require("fs").readFileSync("release.manifest.json","utf8")).identity.version')" \
+            --ok "${OK:-0}" --job-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      - name: Rolling gate + report (provisional until the window is full)
+        shell: bash
+        if: always()
+        run: |
+          bun run scripts/beta-metric.ts report --file .beta-metrics/metrics.jsonl --window 30 >> "$GITHUB_STEP_SUMMARY"
+          # Gate: fails the job once the window is full and < 99%; provisional
+          # runs report and pass (recorded, never claimed).
+          bun run scripts/beta-metric.ts gate --file .beta-metrics/metrics.jsonl --threshold 0.99 --window 30 >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload metric evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta-install-${{ steps.os.outputs.label }}
+          path: .beta-metrics/metrics.jsonl
+          retention-days: 400

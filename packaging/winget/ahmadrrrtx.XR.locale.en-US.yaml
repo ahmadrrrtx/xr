@@ -1,0 +1,20 @@
+# GENERATED from release.manifest.json — regenerate: bun run channel:render
+PackageIdentifier: ahmadrrrtx.XR
+PackageVersion: 7.1.0
+PackageLocale: en-US
+Publisher: Muhammad Ahmad
+PackageName: XR
+PackageUrl: https://github.com/ahmadrrrtx/xr
+License: MIT
+LicenseUrl: https://github.com/ahmadrrrtx/xr/blob/main/LICENSE
+ShortDescription: Local-first, provider-neutral AI agent runtime (Public Beta)
+Description: XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.
+Moniker: xr
+Tags:
+- ai-agent
+- ai-os
+- byok
+- cli
+- local-llm
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

@@ -55,6 +55,9 @@ describe("Phase 3 · T2 — binary distribution update contract", () => {
         version: "7.0.1",
         baseUrl: "file:///nonexistent", // install step will fail → no swap
         canary: () => ({ healthy: true }),
+        // This test exercises the swap state machine, not integrity —
+        // checksum behavior has its own adversarial suite (test/release/channel-update.test.ts).
+        requireChecksums: false,
       });
       expect(plan).not.toBeNull();
       expect(plan!.current).toBe(current);

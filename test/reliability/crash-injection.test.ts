@@ -21,6 +21,15 @@ import { spawn } from "node:child_process";
 import { WorkspaceStore } from "../../src/state/workspace-store.ts";
 import { rmrf } from "./helpers.ts";
 
+// Phase 9 · T4 — detection-based platform guard (Constitution Art. XX.5):
+// the matrix depends on POSIX process semantics (SIGKILL'd children whose
+// exit state the parent asserts as `code === null`). The suite runs on every
+// OS; on Windows this file skips ITS tests by runtime detection — the same
+// precedent as test/phase0 (cli-spine / policy-gate) — never by CI-config
+// exclusion, which would hide portability drift. Whitelisted in
+// test/release/portability.test.ts.
+import { POSIX_ONLY } from "./platform-guards.ts";
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCENARIOS = join(__dirname, "crash-injection");
 
@@ -53,7 +62,7 @@ async function crashInsideTransaction(dbPath: string, crashPoint: "after-begin" 
   expect(r.stdout).toContain("[crash-point]");
 }
 
-describe("Phase 1 · crash-injection matrix", () => {
+describe.skipIf(POSIX_ONLY)("Phase 1 · crash-injection matrix", () => {
   test("audit append: crash mid-transaction → chain intact, all-or-nothing", async () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-crash-audit-"));
     try {

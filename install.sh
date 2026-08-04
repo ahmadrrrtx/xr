@@ -3,7 +3,7 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
 set -Eeuo pipefail
 
-VERSION="7.0.1"
+VERSION="7.1.0"
 REPO="ahmadrrrtx/xr"
 BRANCH="main"
 TARGET_DIR="${XR_HOME:-$HOME/.xr-agent}"
@@ -76,8 +76,51 @@ binary_name(){
   esac
 }
 
+# Phase 9 · T5 — verify a downloaded artifact against the release SHA256SUMS.
+# FAIL CLOSED: for releases ≥ 7.1.0 the checksums file is part of the release
+# contract; a fetchable-tag without verifiable checksums is tamper-evidence,
+# not a fallback reason.
+verify_binary(){
+  local bin="$1" path="$2"
+  local sums_url="https://github.com/$REPO/releases/download/v$VERSION/SHA256SUMS"
+  local sums_file; sums_file="$(mktemp)"
+  if ! curl -fsSL "$sums_url" -o "$sums_file" 2>/dev/null; then
+    rm -f "$sums_file"
+    die "Release SHA256SUMS unavailable for v$VERSION — refusing to install an integrity-unverified binary (docs/release/VERIFYING_RELEASES.md)."
+  fi
+  local expected; expected="$(grep "  $bin\$" "$sums_file" | head -n1 | cut -d' ' -f1)"
+  rm -f "$sums_file"
+  [ -z "$expected" ] && die "SHA256SUMS has no entry for $bin — refusing (tamper-evidence)."
+  local actual
+  if command -v sha256sum >/dev/null 2>&1; then actual="$(sha256sum "$path" | cut -d' ' -f1)"
+  elif command -v shasum >/dev/null 2>&1; then actual="$(shasum -a 256 "$path" | cut -d' ' -f1)"
+  else die "sha256sum/shasum required to verify the release."; fi
+  if [ "$actual" != "$expected" ]; then
+    die "Checksum mismatch for $bin — refusing to install (tamper-evidence). Report: https://github.com/$REPO/security"
+  fi
+  ok "Checksum verified against release SHA256SUMS"
+  # Stronger, when cosign is present (optional): verify the keyless bundle.
+  if command -v cosign >/dev/null 2>&1; then
+    local burl="https://github.com/$REPO/releases/download/v$VERSION/$bin.bundle"
+    if curl -fsSL "$burl" -o "$path.bundle" 2>/dev/null; then
+      if cosign verify-blob \
+        --certificate-identity "https://github.com/$REPO/.github/workflows/release.yml@refs/tags/v*" \
+        --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+        --bundle "$path.bundle" "$path" >/dev/null 2>&1; then
+        ok "cosign keyless signature verified (Rekor)"
+        rm -f "$path.bundle"
+      else
+        rm -f "$path" "$path.bundle"
+        die "cosign bundle present but verification failed — refusing (docs/release/VERIFYING_RELEASES.md)."
+      fi
+    fi
+  fi
+}
+
 # Phase 3 · T2 — download the standalone binary (default distribution path).
-# Returns 0 when the binary was installed; non-zero falls back to source.
+# Phase 9 · T5 — verified against SHA256SUMS before it is trusted.
+# Returns 0 when the binary was installed; non-zero falls back to source ONLY
+# when no binary exists for this platform (Termux, unknown arch).
 fetch_binary(){
   local bin; bin="$(binary_name)"
   [ -z "$bin" ] && return 1
@@ -86,12 +129,30 @@ fetch_binary(){
   log "Downloading compiled binary v$VERSION ($bin)"
   if curl -fsSL "$url" -o "$TARGET_DIR/dist/$bin" 2>/dev/null; then
     chmod +x "$TARGET_DIR/dist/$bin"
+    verify_binary "$bin" "$TARGET_DIR/dist/$bin"
     "$TARGET_DIR/dist/$bin" --version >/dev/null 2>&1 || { warn "Binary failed to run; falling back to source."; rm -f "$TARGET_DIR/dist/$bin"; return 1; }
     ok "Compiled binary installed ($bin)"
+    CHANNEL="github-releases"
     return 0
   fi
   warn "Binary download unavailable; falling back to source checkout."
   return 1
+}
+
+# Phase 9 · T5 — record the install channel so `xr update` picks the right
+# update/rollback contract (docs/release/CHANNELS.md). Written to the runtime
+# data home (default ~/.xr) and to the install root: the two directories
+# legitimately differ, and the updater reads both.
+write_install_record(){
+  local channel="$1" layout="$2"
+  mkdir -p "$TARGET_DIR"
+  cat > "$TARGET_DIR/install.json" <<EOF
+{"channel":"$channel","layout":"$layout","version":"$VERSION","installedAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","installer":"install.sh"}
+EOF
+  local data_home="${XR_DATA_HOME:-$HOME/.xr}"
+  mkdir -p "$data_home"
+  cp "$TARGET_DIR/install.json" "$data_home/install.json"
+  ok "install channel recorded: $channel"
 }
 
 ensure_bun(){
@@ -189,7 +250,8 @@ EOF
 }
 
 main(){
-  printf "\n%b\n" "${BLD}${CYN}  ▀▄▀ █▀█   XR Stage 2 Installer v$VERSION${RST}"
+  printf "\n%b\n" "${BLD}${CYN}  ▀▄▀ █▀█   XR Installer v$VERSION${RST}"
+  printf "%b\n" "${YEL}  Public Beta${RST}${DIM} — validated, signed and reversible; not finished. Known limitations are public.${RST}"
   printf "%b\n\n" "${DIM}  OS: $(os_name)/$(arch_name) · Target: $TARGET_DIR${RST}"
   log "This will download XR from GitHub, install Bun dependencies, and create an xr launcher."
   log "Optional Ollama, voice, browser and desktop-control packs are handled later by xr install prompts."
@@ -197,9 +259,11 @@ main(){
   ensure_bun
   if fetch_binary; then
     log "Using the compiled binary distribution (source checkout skipped)."
+    write_install_record "github-releases" "binary"
   else
     fetch_repo
     install_deps
+    write_install_record "git-checkout" "git"
   fi
   install_launcher
   cmd=("$HOME/.local/bin/xr" install --from-bootstrap)

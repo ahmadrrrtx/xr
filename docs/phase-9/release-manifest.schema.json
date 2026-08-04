@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ahmadrrrtx/xr/blob/main/docs/phase-9/release-manifest.schema.json",
+  "title": "XR Release Manifest",
+  "description": "Single source of truth for release identity, public claims AND distribution (Constitution Article XXII.1). Validated structurally by scripts/release-manifest.ts + scripts/distribution-model.ts; this schema is the documentation-accurate shape.",
+  "type": "object",
+  "required": ["manifestVersion", "identity", "stampTargets", "distribution", "claims", "prohibitedClaims", "supervisedTerms", "scannedSurfaces"],
+  "additionalProperties": true,
+  "properties": {
+    "manifestVersion": { "type": "integer", "const": 1 },
+    "identity": {
+      "type": "object",
+      "required": ["name", "version", "codename", "description", "author", "license", "repo", "homepage", "npm"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$" },
+        "codename": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "license": { "type": "string" },
+        "repo": { "type": "string", "format": "uri" },
+        "homepage": { "type": "string", "format": "uri" },
+        "npm": { "type": "string", "format": "uri" }
+      }
+    },
+    "stampTargets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "kind"],
+        "properties": {
+          "id": { "type": "string" },
+          "path": { "type": "string" },
+          "kind": {
+            "enum": ["json-version", "generated-module", "site-identity", "marker-block", "shell-var", "powershell-var", "generated-channel"]
+          },
+          "generator": { "enum": ["channels", "support-matrix", "distribution-module"] }
+        }
+      }
+    },
+    "distribution": {
+      "type": "object",
+      "required": ["stability", "stabilityLabel", "tagline", "targets", "channels", "supportTiers"],
+      "properties": {
+        "stability": { "enum": ["alpha", "beta", "rc", "stable"] },
+        "stabilityLabel": { "type": "string" },
+        "tagline": { "type": "string" },
+        "targets": {
+          "type": "array",
+          "minItems": 5,
+          "items": {
+            "type": "object",
+            "required": ["id", "os", "arch", "bunTarget", "file", "tier"],
+            "properties": {
+              "id": { "type": "string" },
+              "os": { "enum": ["linux", "macos", "windows"] },
+              "arch": { "type": "string" },
+              "bunTarget": { "type": "string", "pattern": "^bun-" },
+              "file": { "type": "string" },
+              "tier": { "enum": [1, 2] }
+            }
+          }
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "kind", "updateOwner", "os", "tier", "summary", "install", "update", "rollback"],
+            "properties": {
+              "id": { "type": "string" },
+              "kind": { "enum": ["binary", "package-manager", "registry", "container"] },
+              "updateOwner": { "enum": ["xr", "channel"] },
+              "os": { "type": "array", "items": { "enum": ["linux", "macos", "windows"] } },
+              "tier": { "enum": [1, 2] },
+              "summary": { "type": "string" },
+              "install": { "type": "string" },
+              "update": { "type": "string" },
+              "rollback": { "type": "string" }
+            }
+          }
+        },
+        "supportTiers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["os", "arch", "tier", "evidence"],
+            "properties": {
+              "os": { "enum": ["linux", "macos", "windows"] },
+              "arch": { "type": "string" },
+              "tier": { "enum": [1, 2, "unsupported"] },
+              "evidence": { "type": "string" },
+              "notes": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "evidence", "expires"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" },
+          "evidence": { "type": "string" },
+          "expires": { "type": "string", "format": "date" }
+        }
+      }
+    },
+    "prohibitedClaims": { "type": "array" },
+    "supervisedTerms": { "type": "array", "items": { "type": "string" } },
+    "scannedSurfaces": { "type": "array", "items": { "type": "string" } }
+  }
+}

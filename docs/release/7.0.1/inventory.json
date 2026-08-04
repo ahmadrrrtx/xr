@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-02T22:22:21.432Z",
+  "generatedAt": "2026-08-04T15:42:49.951Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.0.1",
@@ -35,7 +35,6 @@
       "@types/bun": "latest",
       "axe-core": "^4.12.1",
       "dependency-cruiser": "^17.0.0",
-      "jsdom": "^30.0.1",
       "typescript": "^5.5.0"
     },
     "files": [
@@ -77,6 +76,10 @@
     {
       "path": ".gitignore",
       "bytes": 667
+    },
+    {
+      "path": ".gitleaksignore",
+      "bytes": 1540
     },
     {
       "path": "CHANGED-FILES.txt",
@@ -236,7 +239,7 @@
     },
     {
       "path": "bun.lock",
-      "bytes": 19273
+      "bytes": 10862
     },
     {
       "path": "docker-compose.yml",
@@ -256,7 +259,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 3953
+      "bytes": 3929
     },
     {
       "path": "release.manifest.json",

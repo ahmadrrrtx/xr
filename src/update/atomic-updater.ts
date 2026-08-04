@@ -20,7 +20,7 @@
 import { existsSync, mkdirSync, rmSync, renameSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { applyUpdate, type UpdatePlan, type UpdateResult } from "./selfheal.ts";
 
@@ -69,6 +69,15 @@ export interface BinaryUpdateOptions {
   timeoutMs?: number;
   /** Override the canary (tests inject a fake). */
   canary?: (binaryPath: string) => { healthy: boolean; reason?: string };
+  /**
+   * Phase 9 · T5/Part-20 — integrity is MANDATORY for binary updates.
+   * Default true: the updater fetches SHA256SUMS from the release and refuses
+   * a candidate whose hash is absent or mismatched (no unsigned distribution).
+   * Do not disable outside tests that explicitly assert the refusal behavior.
+   */
+  requireChecksums?: boolean;
+  /** Override the checksum fetch (tests inject a local server/fixture). */
+  fetchSums?: (url: string) => Promise<{ ok: boolean; text: string }>;
 }
 
 export function binaryCanary(binaryPath: string, timeoutMs = 120_000): { healthy: boolean; reason?: string } {
@@ -88,6 +97,21 @@ export function binaryCanary(binaryPath: string, timeoutMs = 120_000): { healthy
   return { healthy: true };
 }
 
+/** Parse a SHA256SUMS body: "<hex>  <name>" lines → name → digest. */
+export function parseSha256Sums(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const line of text.split("\n")) {
+    const m = line.trim().match(/^([0-9a-f]{64})\s+\*?(.+)$/i);
+    if (m) out.set(m[2]!.replace(/^\.\//, ""), m[1]!.toLowerCase());
+  }
+  return out;
+}
+
+async function fetchText(url: string): Promise<{ ok: boolean; text: string }> {
+  const res = await fetch(url);
+  return res.ok ? { ok: true, text: await res.text() } : { ok: false, text: "" };
+}
+
 export function createBinaryUpdatePlan(opts: BinaryUpdateOptions): UpdatePlan<string> | null {
   const current = binaryPathForPackage(opts.packageRoot);
   if (!current) return null;
@@ -95,6 +119,8 @@ export function createBinaryUpdatePlan(opts: BinaryUpdateOptions): UpdatePlan<st
   const baseUrl =
     opts.baseUrl ?? `https://github.com/ahmadrrrtx/xr/releases/download/v${opts.version}`;
   const url = `${baseUrl}/${file}`;
+  const sumsUrl = `${baseUrl}/SHA256SUMS`;
+  const requireChecksums = opts.requireChecksums ?? true;
   const stagingDir = join(opts.packageRoot, "dist", ".staging");
   const candidate = join(stagingDir, `xr-${opts.version}`);
 
@@ -103,9 +129,35 @@ export function createBinaryUpdatePlan(opts: BinaryUpdateOptions): UpdatePlan<st
     candidate,
     install: async () => {
       mkdirSync(stagingDir, { recursive: true });
+
+      // Phase 9 · T5 — fetch the release checksums FIRST (integrity authority
+      // for every asset in the release; Part 20: no unsigned distribution).
+      const fetcher = opts.fetchSums ?? fetchText;
+      const sumsRes = await fetcher(sumsUrl);
+      if (requireChecksums && !sumsRes.ok) {
+        throw new Error(
+          `release checksums unavailable (HTTP failure): ${sumsUrl}. ` +
+            `Refusing an integrity-unverified update. Retry, or install manually per docs/release/INSTALLATION.md.`,
+        );
+      }
+      const expected = sumsRes.ok ? parseSha256Sums(sumsRes.text).get(file) : undefined;
+      if (requireChecksums && !expected) {
+        throw new Error(`no SHA256SUMS entry for ${file} in ${sumsUrl} — refusing (tamper-evidence)`);
+      }
+
       const res = await fetch(url);
       if (!res.ok) throw new Error(`download failed (HTTP ${res.status}): ${url}`);
       const buf = new Uint8Array(await res.arrayBuffer());
+
+      if (expected) {
+        const actual = createHash("sha256").update(buf).digest("hex");
+        if (actual !== expected) {
+          throw new Error(
+            `checksum mismatch for ${file}: SHA256SUMS=${expected.slice(0, 12)}… actual=${actual.slice(0, 12)}… — refusing (tamper-evidence)`,
+          );
+        }
+      }
+
       await Bun.write(candidate, buf);
       if (process.platform !== "win32") {
         spawnSync("chmod", ["+x", candidate], { encoding: "utf8" });
