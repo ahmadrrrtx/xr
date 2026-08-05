@@ -1,5 +1,53 @@
 # Changelog
 
+## 7.1.0 — 2026-08-05
+
+### Features
+
+- **phase9:** packaging & release engineering core (T1-T5 machinery) (4896793)
+- **phase8:** UX, accessibility, observability & DX excellence (T1-T5) (4f31005)
+- **phase7:** capability ecosystem quality + Business OS graduation (T1-T8) (15a805c)
+- **intelligence:** Phase 5 — measured, explainable routing quality (c8db271)
+- **phase4:** security & trust hardening - enforceable isolation lattice, egress proxy, credential brokering, dashboard hardening, su… (8c43ae5)
+- **phase3:** runtime & performance engineering — lazy boot, compiled binary, budgets + regression gate (e401bef)
+- **phase2/T7,T8:** giant-file splits + enforced acyclic L0-L6 boundaries (0c53cfb)
+- **phase2/T6:** one execution engine — src/workflow/ retired (402967a)
+- **phase2/T5:** one context store — src/memory/ retired (e9c14a9)
+- **phase2/T3,T4:** one routing authority + one PlanningService (7a1c570)
+- **phase2/T1,T2:** execution envelope + single ToolRegistryService (350fb48)
+- **reliability:** Phase 1 reliability & persistence core (ab39ff7)
+
+### Fixes
+
+- **state:** retry busy transactions whole in the WriteGate (CI stability) (adeb2bd)
+- **test:** close performance-test store handles (suite-shared-process flake) (711cb61)
+- **ci:** truth gate, a11y flake, and perf-gate pendulum on phase-8 PR (54996cf)
+- **supply-chain:** green secret/license scans on phase-8 PR (c25e11a)
+- **phase4:** typecheck - server.port may be undefined; fall back to requested port (549d41e)
+- **phase4:** CI round 3 - SARIF upload permissions; dashboard-bench port 0 (EADDRINUSE); regression band 30% (runner noise) (98f2fb9)
+- **phase4:** CI round 2 - trivy base-image patch (apk upgrade); osv-scanner binary + bun audit; website dep bumps + overrides (d375cf5)
+- **phase4:** CI - valid action versions (trivy v0.36.0, osv v2.3.8); host-agnostic guarantee-matrix tests (2a146b6)
+- **golden-path:** spawn wizard via process.execPath (Windows PATH fix) (41de9e9)
+- **tests:** async rmrf with event-loop backoff for Windows EBUSY (4d087ce)
+- **security:** macOS /private/etc policy bypass + cross-platform CI hardening (3b5c28b)
+- **reliability:** race-safe migrations + busy_timeout before WAL (92562cf)
+
+### Refactoring
+
+- **phase2/T9:** no phase-named modules — folded into L0-L6 homes (0dd6be9)
+
+### Documentation
+
+- **phase7:** completion report + audit/gap/research/validation work log (5f237c7)
+- **phase7:** ecosystem + Business OS documentation and ADRs (0d6159a)
+- **phase2:** final engineering review — gates proven live, honest LOC finding (642fd23)
+- **phase2:** ADRs 0002-0008, boundary table, developer + migration guides (93138ff)
+
+### Other
+
+- Phase 6: memory, knowledge & context quality (T1-T8) — progressive lifecycle, hybrid retrieval, memory-as-tools, integr… (56defd6)
+- Phase 0 (Truth & Foundation Reset): make every claim and success signal true (bfec891)
+
 ## XR 7.0.0 — "Supremacy" (Phase 13: XR OS Supremacy)
 
 **XR becomes a measurable platform.** This release adds no product features. It
@@ -83,7 +131,6 @@ detects when a change makes it worse.
   `--save` is used.
 - The entire benchmark suite runs fully offline with no network.
 - Tests: 1636 → **1771 pass / 0 fail**.
-
 
 All notable changes to this project will be documented in this file.
 

@@ -107,9 +107,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { osName: "Linux", runsOn: ubuntu-latest, bunOs: linux, target: "linux-x64"
-          - { osName: "macOS", runsOn: macos-latest, bunOs: darwin, target: "darwin-arm64"
-          - { osName: "Windows", runsOn: windows-latest, bunOs: win32, target: "windows-x64"
+          - { osName: "Linux", runsOn: ubuntu-latest, bunOs: linux, target: "linux-x64" }
+          - { osName: "macOS", runsOn: macos-latest, bunOs: darwin, target: "darwin-arm64" }
+          - { osName: "Windows", runsOn: windows-latest, bunOs: win32, target: "windows-x64" }
     steps:
       - name: Checkout
         uses: actions/checkout@v4

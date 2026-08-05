@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "XR Daemon API",
-    "version": "7.0.1",
+    "version": "7.1.0",
     "summary": "The local-first daemon API of the XR AI operating system.",
     "description": "Versioned surface mounted at /api/v1. Legacy /api/* mounts serve during the deprecation window with Deprecation/Sunset headers and are removed no earlier than XR 8.0.0. Compatibility policy: docs/api/COMPATIBILITY.md. Authentication: local bearer token (x-session bootstrap cookie for browsers).",
     "license": {

@@ -4,27 +4,27 @@
 class Xr < Formula
   desc "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility."
   homepage "https://github.com/ahmadrrrtx/xr"
-  version "7.0.1"
+  version "7.1.0"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/ahmadrrrtx/xr/releases/download/v7.0.1/xr-darwin-arm64"
+      url "https://github.com/ahmadrrrtx/xr/releases/download/v7.1.0/xr-darwin-arm64"
       sha256 "SHA256_XR_DARWIN_ARM64"
     end
     on_intel do
-      url "https://github.com/ahmadrrrtx/xr/releases/download/v7.0.1/xr-darwin-x64"
+      url "https://github.com/ahmadrrrtx/xr/releases/download/v7.1.0/xr-darwin-x64"
       sha256 "SHA256_XR_DARWIN_X64"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/ahmadrrrtx/xr/releases/download/v7.0.1/xr-linux-arm64"
+      url "https://github.com/ahmadrrrtx/xr/releases/download/v7.1.0/xr-linux-arm64"
       sha256 "SHA256_XR_LINUX_ARM64"
     end
     on_intel do
-      url "https://github.com/ahmadrrrtx/xr/releases/download/v7.0.1/xr-linux-x64"
+      url "https://github.com/ahmadrrrtx/xr/releases/download/v7.1.0/xr-linux-x64"
       sha256 "SHA256_XR_LINUX_X64"
     end
   end

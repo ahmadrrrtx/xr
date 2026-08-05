@@ -58,7 +58,7 @@ jobs:
           dpkg-deb -e "$DEB" /tmp/xr-ctrl
           (cd / && md5sum -c <(sed 's|usr/bin/xr|usr/bin/xr|' /tmp/xr-ctrl/md5sums))
           rm -rf /tmp/xr-deb-home /tmp/xr-ctrl
-      - name: Reversible: remove and assert effects
+      - name: "Reversible: remove and assert effects"
         run: |
           sudo dpkg -r xr
           test ! -e /usr/bin/xr

@@ -1,0 +1,66 @@
+name: Public Beta feedback
+description: Installation, channel, golden-path or support-matrix feedback for the XR Public Beta (7.x)
+labels: ["beta-feedback", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        XR 7.x is a Public Beta — see docs/release/BETA.md for the loop this feeds.
+        Anything the docs claim that is not true in your environment is a defect of the
+        same severity as a crash; you can also use the dedicated false-claim template.
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Channel you installed from
+      options:
+        - "Binary (install.sh / install.ps1)"
+        - "Homebrew tap"
+        - "WinGet"
+        - "Scoop"
+        - ".deb package"
+        - "npm"
+        - "Docker (GHCR)"
+        - "git checkout / source"
+        - "Prerelease (beta tag)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Platform
+      options:
+        - "Linux x64"
+        - "Linux arm64"
+        - "macOS arm64"
+        - "macOS x64"
+        - "Windows x64"
+        - "Termux (Android)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempted
+    attributes:
+      label: What you tried
+      description: The exact command(s), and whether you verified the release (cosign/sha256) first.
+      placeholder: "curl -fsSL ...install.sh | bash → xr doctor"
+    validations:
+      required: true
+
+  - type: textarea
+    id: effect
+    attributes:
+      label: Effect vs expectation
+      description: What happened vs what the docs/support matrix led you to expect. `xr doctor --json` output helps.
+      placeholder: "install succeeded; doctor exits 1 — expected 0 per README readings"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: consent-metrics
+    attributes:
+      label: Diagnostics (optional)
+      options:
+        - label: "I attached `xr doctor --json` output (contains no secrets — keys are redacted by XR)"
