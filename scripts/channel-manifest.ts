@@ -19,10 +19,12 @@
  *   --write     regenerate packaging/* templates (contributor flow)
  *   --check     drift gate: packaging/* must equal generated templates
  *               (fails closed — used by `bun run ci` and the release gate)
- *   --stamp --sums dist/SHA256SUMS --out dist/channels
+ *   --stamp --sums dist/SHA256SUMS --out dist/channels [--channels winget,scoop]
  *               produce the PUBLISHABLE channel set: every sha256 filled from
  *               the release's signed checksums. Fails closed if any required
- *               artifact is missing from the sums (channel-bundle completeness).
+ *               artifact for a stamped channel is missing from the sums (per-
+ *               channel completeness). --channels limits WHICH channels are
+ *               stamped (per-lane CI); the tube stays fail-closed.
  *
  * Repo templates contain NO checksums (checksums exist only after the build).
  * The release pipeline stamps them from SHA256SUMS so every channel points at
@@ -241,12 +243,20 @@ export function renderedTemplates(manifest: ReleaseManifest): RenderedChannelFil
   ];
 }
 
-export function renderedStamped(manifest: ReleaseManifest, sums: Map<string, string>): RenderedChannelFile[] {
-  return [
-    { relpath: "homebrew/xr.rb", content: guard(renderHomebrewFormula(manifest, sums)) },
-    ...renderWinget(manifest, sums).map((f) => ({ ...f, content: guard(f.content) })),
-    { relpath: "scoop/xr.json", content: guard(renderScoop(manifest, sums)) },
-  ];
+export function renderedStamped(
+  manifest: ReleaseManifest,
+  sums: Map<string, string>,
+  channels?: ReadonlySet<string>,
+): RenderedChannelFile[] {
+  const want = (relpath: string): boolean => !channels || [...channels].some((c) => relpath.startsWith(c + "/"));
+  // Render lazily: an unselected channel is never rendered, so its artifacts
+  // are never required from the sums (per-lane stamping stays fail-closed
+  // only for the channels that ARE stamped).
+  const files: RenderedChannelFile[] = [];
+  if (want("homebrew/xr.rb")) files.push({ relpath: "homebrew/xr.rb", content: guard(renderHomebrewFormula(manifest, sums)) });
+  if (want("winget/manifests")) files.push(...renderWinget(manifest, sums).map((f) => ({ ...f, content: guard(f.content) })));
+  if (want("scoop/xr.json")) files.push({ relpath: "scoop/xr.json", content: guardJson(renderScoop(manifest, sums)) });
+  return files;
 }
 
 function requireSha(sha: string | undefined, key: string): string {
@@ -257,10 +267,20 @@ function requireSha(sha: string | undefined, key: string): string {
 }
 
 function guard(content: string): string {
+  failClosedOnPlaceholder(content);
+  return `# ${STAMP_GUARD}\n${content}`;
+}
+
+/** JSON artifacts cannot carry a '#' line prefix — the inner "#" key documents them. */
+function guardJson(content: string): string {
+  failClosedOnPlaceholder(content);
+  return content;
+}
+
+function failClosedOnPlaceholder(content: string): void {
   if (/SHA256_[A-Z0-9_]+/.test(content)) {
     throw new Error("channel stamping failed closed: unstamped placeholder survived — every channel must carry signed checksums");
   }
-  return `# ${STAMP_GUARD}\n${content}`;
 }
 
 // ── CLI ────────────────────────────────────────────────────────────────────
@@ -315,7 +335,13 @@ async function main(): Promise<void> {
       process.exit(1);
     }
     const sums = parse(readFileSync(sumsPath, "utf8"));
-    const files = renderedStamped(manifest, sums);
+    const only = arg("--channels");
+    const channels = only ? new Set(only.split(",").map((c) => c.trim()).filter(Boolean)) : undefined;
+    const files = renderedStamped(manifest, sums, channels);
+    if (files.length === 0) {
+      console.error(`[channel:stamp] FAIL — no channels selected${only ? ` (--channels ${only})` : ""}`);
+      process.exit(1);
+    }
     for (const f of files) {
       const path = join(outDir, f.relpath);
       mkdirSync(dirname(path), { recursive: true });

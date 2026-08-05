@@ -19,7 +19,7 @@ import type { ProviderContext, ServiceProvider } from "../app.ts";
 import { Tokens } from "../tokens.ts";
 import { BusinessL0, type BusinessOsExtension } from "../business-l0.ts";
 
-const EXTENSION_ENTRY = new URL("../../../extensions/business-os/src/index.ts", import.meta.url).pathname;
+const EXTENSION_ENTRY = new URL("../../../extensions/business-os/src/index.ts", import.meta.url).href;
 
 export class BusinessServiceProvider implements ServiceProvider {
   readonly id = "business";
@@ -93,7 +93,7 @@ export class BusinessServiceProvider implements ServiceProvider {
       // effect tests against a scratch database. Unproven modules are
       // excluded; if a REQUESTED module is unverified, the whole extension
       // stays excluded (fail-closed) with the reason recorded.
-      const evPath = new URL("../../../extensions/business-os/effect-verification.ts", import.meta.url).pathname;
+      const evPath = new URL("../../../extensions/business-os/effect-verification.ts", import.meta.url).href;
       const { verifyBusinessOsModules } = (await import(evPath)) as { verifyBusinessOsModules: () => Promise<Array<{ module: string; status: string }>> };
       const results = await verifyBusinessOsModules();
       const requested = new Set(config.business.modules ?? results.map((r) => r.module));

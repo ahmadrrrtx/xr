@@ -72,8 +72,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: macOS-homebrew, os: macos-latest }
-          - { name: Windows-winget-scoop, os: windows-latest }
+          - { name: macOS-homebrew, os: macos-latest, targets: "linux-x64,linux-arm64,darwin-arm64,darwin-x64,windows-x64", channels: "" }
+          - { name: Windows-winget-scoop, os: windows-latest, targets: "windows-x64", channels: "winget,scoop" }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,16 +81,28 @@ jobs:
         uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Build the full canonical matrix + channel zip
+      - name: Build the canonical binary set this lane validates
         shell: bash
         run: |
-          bun run scripts/build-matrix.ts --targets linux-x64,linux-arm64,darwin-arm64,darwin-x64,windows-x64 --out dist --skip-smoke
+          bun run scripts/build-matrix.ts --targets "${{ matrix.targets }}" --out dist --skip-smoke
+      - name: Channel zip (macOS lane)
+        if: matrix.name == 'macOS-homebrew'
+        shell: bash
+        run: |
           mkdir -p dist/zip && cp dist/xr-windows-x64.exe dist/zip/xr.exe
-          # `zip` is not installed on windows-latest runners (Git Bash ships
-          # unzip only); 7-Zip is in the image. Both emit a standard .zip.
-          (cd dist/zip && { command -v zip >/dev/null && zip -q ../xr-windows-x64.zip xr.exe; } || 7z a -tzip ../xr-windows-x64.zip xr.exe >/dev/null)
+          (cd dist/zip && zip -q ../xr-windows-x64.zip xr.exe)
           test -f dist/xr-windows-x64.zip
           rm -rf dist/zip
+      - name: Channel zip (Windows lane)
+        if: matrix.name == 'Windows-winget-scoop'
+        shell: pwsh
+        run: |
+          # Compress-Archive is a PowerShell builtin — no zip/7z availability gamble.
+          New-Item -ItemType Directory -Force dist/zip | Out-Null
+          Copy-Item dist/xr-windows-x64.exe dist/zip/xr.exe
+          Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-x64.zip -Force
+          if (-not (Test-Path dist/xr-windows-x64.zip)) { throw "zip not produced" }
+          Remove-Item -Recurse -Force dist/zip
       - name: Stamp channels from this build's checksums
         shell: bash
         run: |
@@ -98,7 +110,11 @@ jobs:
           sha256sum $(ls | grep -v '^SHA256SUMS$' | grep -v '^zip$') > SHA256SUMS
           cat SHA256SUMS
           cd ..
-          bun run scripts/channel-manifest.ts --stamp --sums dist/SHA256SUMS --out dist/channels
+          if [ -n "${{ matrix.channels }}" ]; then
+            bun run scripts/channel-manifest.ts --stamp --sums dist/SHA256SUMS --out dist/channels --channels "${{ matrix.channels }}"
+          else
+            bun run scripts/channel-manifest.ts --stamp --sums dist/SHA256SUMS --out dist/channels
+          fi
       - name: Homebrew formula syntax + fields validate (no network fetch)
         if: matrix.name == 'macOS-homebrew'
         run: |

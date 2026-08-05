@@ -54,7 +54,7 @@ export function businessRoutes(): DaemonRoute[] {
           // In current router, DaemonRouteContext doesn't have registry, but we can try state
           // For robustness, we try to find BusinessOS via global app registry if injected
           // If still null, we return degraded status with journeys list static
-          const { JOURNEY_DEFINITIONS } = await import(/* @vite-ignore */ new URL('../../../extensions/business-os/src/core/journeys.ts', import.meta.url).pathname);
+          const { JOURNEY_DEFINITIONS } = await import(/* @vite-ignore */ new URL('../../../extensions/business-os/src/core/journeys.ts', import.meta.url).href);
           return ctx.json({ status: { version: '5.3.0', journeys: JOURNEY_DEFINITIONS.length, activeWorkflows: 0, pendingApprovals: 0 }, journeys: JOURNEY_DEFINITIONS });
         }
 
@@ -73,7 +73,7 @@ export function businessRoutes(): DaemonRoute[] {
       path: '/api/business/journeys',
       method: 'GET',
       handle: async (ctx) => {
-        const { JOURNEY_DEFINITIONS } = await import(/* @vite-ignore */ new URL('../../../extensions/business-os/src/core/journeys.ts', import.meta.url).pathname);
+        const { JOURNEY_DEFINITIONS } = await import(/* @vite-ignore */ new URL('../../../extensions/business-os/src/core/journeys.ts', import.meta.url).href);
         return ctx.json({ journeys: JOURNEY_DEFINITIONS, count: JOURNEY_DEFINITIONS.length });
       },
     }),
