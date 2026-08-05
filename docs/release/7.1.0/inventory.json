@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-05T17:14:05.050Z",
+  "generatedAt": "2026-08-05T18:38:45.183Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -191,7 +191,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 71742
+      "bytes": 72425
     },
     {
       "path": "README_SECURITY.md",
@@ -247,7 +247,7 @@
     },
     {
       "path": "install.ps1",
-      "bytes": 9128
+      "bytes": 9180
     },
     {
       "path": "install.sh",

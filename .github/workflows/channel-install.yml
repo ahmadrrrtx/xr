@@ -86,7 +86,10 @@ jobs:
         run: |
           bun run scripts/build-matrix.ts --targets linux-x64,linux-arm64,darwin-arm64,darwin-x64,windows-x64 --out dist --skip-smoke
           mkdir -p dist/zip && cp dist/xr-windows-x64.exe dist/zip/xr.exe
-          (cd dist/zip && zip ../xr-windows-x64.zip xr.exe)
+          # `zip` is not installed on windows-latest runners (Git Bash ships
+          # unzip only); 7-Zip is in the image. Both emit a standard .zip.
+          (cd dist/zip && { command -v zip >/dev/null && zip -q ../xr-windows-x64.zip xr.exe; } || 7z a -tzip ../xr-windows-x64.zip xr.exe >/dev/null)
+          test -f dist/xr-windows-x64.zip
           rm -rf dist/zip
       - name: Stamp channels from this build's checksums
         shell: bash
