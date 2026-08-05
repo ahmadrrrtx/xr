@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { spawn } from "node:child_process";
+import { PKG } from "../../src/core/version.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCRIPT = join(__dirname, "..", "..", "scripts", "e2e-artifact.ts");
@@ -33,6 +34,6 @@ describe("Phase 1 · hermetic artifact E2E", () => {
     expect(report).toBeDefined();
     const parsed = JSON.parse(report!) as { ok: boolean; doctorVersion: string };
     expect(parsed.ok).toBe(true);
-    expect(parsed.doctorVersion).toBe("7.0.1");
+    expect(parsed.doctorVersion).toBe(PKG.version);
   }, 300_000);
 });

@@ -31,8 +31,13 @@ import {
  *   · every form control labelled; decorative SVGs hidden from AT;
  *   · tokens raised for AA contrast; :focus-visible indicator, 24px targets;
  *   · reduced-motion support; live-region toasts; panel focus management.
+ *
+ * Phase 9 bump (2026-08-05, 7.0.1 → 7.1.0 release stamp — DELIBERATE):
+ *   the rendered document embeds the stamped version (one occurrence); the
+ *   7.0.1→7.0.1 back-substitution reproduces the Phase-8 pin exactly, proving
+ *   the only delta is the deliberate version stamp.
  */
-const POST_PHASE4_SHA256 = "c5b86136815360aafb5d2e585683e0f7a8f19e5eb55b35b8d631b900e3308957";
+const POST_PHASE4_SHA256 = "809c745eb99cb40bc9de85f494153770bdbc6b9a602279fd68520b0092657a58";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {

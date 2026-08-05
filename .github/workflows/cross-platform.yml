@@ -1,19 +1,19 @@
 # =============================================================================
-# XR Phase 1 · T7 — Cross-platform CI (macOS + Windows)
+# XR Phase 9 · T4 — Cross-platform CI at FULL parity (macOS + Windows + Linux).
 #
-# Phase-0 discipline: green, or honestly gapped. The full suite runs on Linux;
-# these jobs run typecheck + unit + reliability subset on macOS and Windows so
-# platform-specific breakage surfaces in CI instead of on users' machines.
+# "Supported" means validated — never "imports compile". Every OS family runs
+# the SAME three gates from ONE computation source:
 #
-# Honest gap notes (Phase-0 discipline — recorded in docs/phase-1/FINAL_REVIEW.md
-# and docs/phase-1/KNOWN_LIMITATIONS.md):
-#   · crash-injection matrix uses POSIX SIGKILL child processes → Linux/macOS only.
-#   · test/phase0/policy-gate-adversarial.test.ts is a POSIX-path corpus
-#     (isAbsolute("/etc/...") is false on Windows) → skipped on win32, fully
-#     green on macOS (macOS /etc→/private/etc realpath is covered by the guard).
-#   · test/phase0/cli-spine.test.ts spawns the real CLI; doctor --json on
-#     Windows is not verified (same precedent as doctor.test.ts) → skipped on win32.
-#   · golden-path needs a hermetic XR_HOME/HOME on every OS (set below).
+#   1. typecheck          (bunx tsc --noEmit)
+#   2. full unit suite    minus ONLY the documented exclusions in
+#                         test/platform/exclusions.json — each with a reason,
+#                         each guarded by `platform-parity.ts --validate` so a
+#                         test can never vanish silently (Art. XX.4/XX.5)
+#   3. golden path        (hermetic install → answer → restart → resume →
+#                          answer → uninstall, asserting real effects)
+#
+# The support matrix (docs/release/SUPPORT_MATRIX.md) claims exactly what these
+# jobs prove — `partial` is never rounded up to `supported`.
 # =============================================================================
 name: Cross-Platform CI
 
@@ -27,32 +27,22 @@ on:
 permissions:
   contents: read
 
-jobs:
-  macos:
-    name: macOS (typecheck + unit + reliability subset)
-    runs-on: macos-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-      - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
-      - name: Typecheck
-        run: bunx tsc --noEmit
-      - name: Unit + Phase 0 suite
-        run: bun test test/state test/phase0 test/core test/execution test/reliability/single-writer.test.ts test/reliability/idempotency.test.ts test/reliability/migrations.test.ts test/reliability/rpo-rto.test.ts
-      - name: Golden path
-        run: bun run golden-path
-        env:
-          HOME: /tmp/xr-cross-home
-          XR_HOME: /tmp/xr-cross-data
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
-  windows:
-    name: Windows (typecheck + unit + golden-path subset)
-    runs-on: windows-latest
-    timeout-minutes: 40
+jobs:
+  parity:
+    name: ${{ matrix.osName }} — full parity (typecheck + suite + golden path)
+    runs-on: ${{ matrix.runsOn }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { osName: "Linux (reference)", runsOn: ubuntu-latest, bunOs: linux }
+          - { osName: "macOS", runsOn: macos-latest, bunOs: darwin }
+          - { osName: "Windows", runsOn: windows-latest, bunOs: win32 }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,12 +50,54 @@ jobs:
         uses: oven-sh/setup-bun@v2
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
+      - name: Exclusion manifest validates (no silent skips)
+        run: bun run scripts/platform-parity.ts --validate
       - name: Typecheck
         run: bunx tsc --noEmit
-      - name: Unit + Phase 0 suite
-        run: bun test test/state test/phase0 test/core test/reliability/single-writer.test.ts test/reliability/idempotency.test.ts test/reliability/migrations.test.ts test/reliability/rpo-rto.test.ts
-      - name: Golden path
+      - name: Full unit suite for this OS (one computation authority)
+        shell: bash
+        run: |
+          # ONE computation authority for WHAT runs: scripts/platform-parity.ts.
+          # HOW it runs: per-directory segments. A single 214-file monolithic
+          # `bun test` process intermittently dies mid-run on hosted runners
+          # (win32 exit 3 at ~85s; linux exit 1 at ~68s — no test-failure
+          # output, matching bun-on-Windows crash classes in transpiler/GC/
+          # teardown under accumulated load). Fresh process per segment caps
+          # heap/lifetime pressure, keeps every gate identical, echoes the
+          # segment name before running it (a future crash names its own
+          # culprit), and the count guard makes a silent skip impossible
+          # (Art. XX.4/XX.5): executed files MUST equal the authority's list.
+          FILES=$(bun run scripts/platform-parity.ts --os ${{ matrix.bunOs }} --args)
+          EXPECTED=$(echo $FILES | wc -w)
+          echo "running $EXPECTED test files (per-directory segments, one computation authority)"
+          RAN=0
+          STATUS=0
+          XR_SEGDIRS=$(echo $FILES | tr ' ' '\n' | grep -E '^test/[^/]+/' | cut -d/ -f1,2 | sort -u)
+          for G in $XR_SEGDIRS; do
+            SEG=$(echo $FILES | tr ' ' '\n' | grep -E "^$G/")
+            N=$(echo "$SEG" | wc -l)
+            RAN=$((RAN + N))
+            echo "::group::suite segment $G/ — $N files"
+            bun test $(echo "$SEG" | tr '\n' ' ') || STATUS=1
+            echo "::endgroup::"
+          done
+          ROOTSEG=$(echo $FILES | tr ' ' '\n' | grep -E '^test/[^/]+$' || true)
+          if [ -n "$ROOTSEG" ]; then
+            N=$(echo "$ROOTSEG" | wc -l)
+            RAN=$((RAN + N))
+            echo "::group::suite segment test/ (root) — $N files"
+            bun test $(echo "$ROOTSEG" | tr '\n' ' ') || STATUS=1
+            echo "::endgroup::"
+          fi
+          echo "executed $RAN of $EXPECTED files"
+          if [ "$RAN" -ne "$EXPECTED" ]; then
+            echo "SEGMENT GUARD FAILED: $RAN != $EXPECTED — a file silently vanished (Art. XX.4)"
+            exit 1
+          fi
+          exit $STATUS
+      - name: Golden path (hermetic)
+        shell: bash
         run: bun run golden-path
         env:
-          HOME: ${{ runner.temp }}\xr-home
-          XR_HOME: ${{ runner.temp }}\xr-data
+          HOME: /tmp/xr-cross-${{ matrix.bunOs }}-home
+          XR_HOME: /tmp/xr-cross-${{ matrix.bunOs }}-data

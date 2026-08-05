@@ -348,12 +348,18 @@ export async function updateXR(args: string[] = []): Promise<void> {
   // (see src/update/atomic-updater.ts). Phase 3 · T2: the binary layout
   // downloads the platform binary from the release feed.
   const { runAtomicUpdate } = await import("../update/atomic-updater.ts");
+  const { detectChannel } = await import("../update/channels.ts");
   const release = JSON.parse(readFileSync(join(rootDir, "release.manifest.json"), "utf8")) as {
     identity?: { version?: string };
     version?: string;
   };
   const version = release.identity?.version ?? release.version;
-  const result = await runAtomicUpdate({ packageRoot: rootDir, version });
+  // Phase 9 · T5 — say plainly which channel owns this install before updating.
+  const channel = detectChannel({ platform: process.platform, exePath: process.execPath });
+  if (channel.managed) {
+    info(`Channel-managed install detected: ${channel.detail} — updating through ${channel.channel} (atomic + rollback per channel contract).`);
+  }
+  const result = await runAtomicUpdate({ packageRoot: rootDir, version, channel: channel.managed ? channel : undefined });
 
   if (result.ok) {
     ok(`Updated to ${result.activated}. Health canary passed; atomic swap complete.`);

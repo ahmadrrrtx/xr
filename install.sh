@@ -3,7 +3,7 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
 set -Eeuo pipefail
 
-VERSION="7.0.1"
+VERSION="7.1.0"
 REPO="ahmadrrrtx/xr"
 BRANCH="main"
 TARGET_DIR="${XR_HOME:-$HOME/.xr-agent}"
@@ -77,21 +77,53 @@ binary_name(){
 }
 
 # Phase 3 · T2 — download the standalone binary (default distribution path).
-# Returns 0 when the binary was installed; non-zero falls back to source.
+# Phase 9 · Part 20 — verified-only: the binary is installed ONLY when its
+# sha256 matches the release's SHA256SUMS (fail closed); otherwise fall back
+# to the source checkout. Returns 0 when the binary was installed.
 fetch_binary(){
   local bin; bin="$(binary_name)"
   [ -z "$bin" ] && return 1
-  local url="https://github.com/$REPO/releases/download/v$VERSION/$bin"
+  local base="https://github.com/$REPO/releases/download/v$VERSION"
+  local url="$base/$bin"
   mkdir -p "$TARGET_DIR/dist"
   log "Downloading compiled binary v$VERSION ($bin)"
-  if curl -fsSL "$url" -o "$TARGET_DIR/dist/$bin" 2>/dev/null; then
-    chmod +x "$TARGET_DIR/dist/$bin"
-    "$TARGET_DIR/dist/$bin" --version >/dev/null 2>&1 || { warn "Binary failed to run; falling back to source."; rm -f "$TARGET_DIR/dist/$bin"; return 1; }
-    ok "Compiled binary installed ($bin)"
-    return 0
+  local sums_file="$TARGET_DIR/dist/.sha256sums.tmp"
+  if ! curl -fsSL "$base/SHA256SUMS" -o "$sums_file" 2>/dev/null; then
+    warn "Release checksums unavailable — refusing an unverified binary; falling back to source."
+    rm -f "$sums_file"
+    return 1
   fi
-  warn "Binary download unavailable; falling back to source checkout."
-  return 1
+  if ! curl -fsSL "$url" -o "$TARGET_DIR/dist/$bin" 2>/dev/null; then
+    warn "Binary download unavailable; falling back to source checkout."
+    rm -f "$sums_file"
+    return 1
+  fi
+  local expect actual
+  expect="$(awk -v f="$bin" '$2 == f || $2 == "*"f {print $1}' "$sums_file" | head -n1)"
+  rm -f "$sums_file"
+  if [ -z "$expect" ]; then
+    warn "No checksum entry for $bin in SHA256SUMS — refusing the unverified binary."
+    rm -f "$TARGET_DIR/dist/$bin"
+    return 1
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$TARGET_DIR/dist/$bin" | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "$TARGET_DIR/dist/$bin" | awk '{print $1}')"
+  else
+    warn "No sha256 tool available — refusing the unverified binary."
+    rm -f "$TARGET_DIR/dist/$bin"
+    return 1
+  fi
+  if [ "$actual" != "$expect" ]; then
+    warn "Integrity check FAILED for $bin (sha256 ${actual} ≠ published ${expect}). Refusing the binary (possible tampering)."
+    rm -f "$TARGET_DIR/dist/$bin"
+    return 1
+  fi
+  chmod +x "$TARGET_DIR/dist/$bin"
+  "$TARGET_DIR/dist/$bin" --version >/dev/null 2>&1 || { warn "Binary failed to run; falling back to source."; rm -f "$TARGET_DIR/dist/$bin"; return 1; }
+  ok "Compiled binary installed and verified ($bin)"
+  return 0
 }
 
 ensure_bun(){

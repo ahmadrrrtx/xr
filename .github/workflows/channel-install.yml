@@ -1,0 +1,198 @@
+# =============================================================================
+# XR Phase 9 · T3 — channel install tests ("supported" means install-validated).
+#
+# Tier 1 (every PR/push): what can be proven WITHOUT a published release —
+#   · channel configs are generated + in sync (channel:check)
+#   · .deb REAL install + remove on Linux (dpkg is the channel; the payload is
+#     the same canonical binary bytes the release ships)
+#   · Homebrew formula syntax/field validation on macOS (Ruby eval, no fetch)
+#   · WinGet manifest schema validation on Windows + Scoop manifest parse
+#   · stamped manifests' sha256 equals the canonical build's SHA256SUMS
+#
+# Tier 2 (on published releases — schedule + workflow_dispatch only):
+#   · REAL installs from the published release assets via each manager:
+#     dpkg -i, brew install (formula), scoop install, winget install
+#     (skipped when the release assets for the current version don't exist —
+#     reported, never fabricated green).
+# =============================================================================
+name: Channel Install Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "41 4 * * 1" # weekly real-install validation of the published release
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ── Tier 1a: .deb real install (Linux) ───────────────────────────────────
+  deb-install:
+    name: .deb — build, real dpkg install, smoke, remove
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build canonical linux binary + .deb
+        run: |
+          bun run scripts/build-matrix.ts --targets linux-x64 --out dist
+          V=$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("release.manifest.json","utf8")).identity.version)')
+          bun run scripts/build-deb.ts --bin dist/xr-linux-x64 --out "dist/xr_${V}_amd64.deb"
+      - name: Real install via dpkg (the apt channel payload)
+        run: |
+          DEB=$(ls dist/xr_*_amd64.deb)
+          sudo dpkg -i "$DEB"
+          test -x /usr/bin/xr
+          XR_HOME=/tmp/xr-deb-home /usr/bin/xr --version
+          XR_HOME=/tmp/xr-deb-home /usr/bin/xr doctor --json || test $? -eq 1
+          dpkg -L xr | grep -q /usr/bin/xr
+          dpkg-deb -e "$DEB" /tmp/xr-ctrl
+          (cd / && md5sum -c <(sed 's|usr/bin/xr|usr/bin/xr|' /tmp/xr-ctrl/md5sums))
+          rm -rf /tmp/xr-deb-home /tmp/xr-ctrl
+      - name: "Reversible: remove and assert effects"
+        run: |
+          sudo dpkg -r xr
+          test ! -e /usr/bin/xr
+
+  # ── Tier 1b: Homebrew + WinGet + Scoop structural validation ─────────────
+  channel-structural:
+    name: ${{ matrix.name }} — stamped channels match canonical build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macOS-homebrew, os: macos-latest, targets: "linux-x64,linux-arm64,darwin-arm64,darwin-x64,windows-x64", channels: "" }
+          - { name: Windows-winget-scoop, os: windows-latest, targets: "windows-x64", channels: "winget,scoop" }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build the canonical binary set this lane validates
+        shell: bash
+        run: |
+          bun run scripts/build-matrix.ts --targets "${{ matrix.targets }}" --out dist --skip-smoke
+      - name: Channel zip (macOS lane)
+        if: matrix.name == 'macOS-homebrew'
+        shell: bash
+        run: |
+          mkdir -p dist/zip && cp dist/xr-windows-x64.exe dist/zip/xr.exe
+          (cd dist/zip && zip -q ../xr-windows-x64.zip xr.exe)
+          test -f dist/xr-windows-x64.zip
+          rm -rf dist/zip
+      - name: Channel zip (Windows lane)
+        if: matrix.name == 'Windows-winget-scoop'
+        shell: pwsh
+        run: |
+          # Compress-Archive is a PowerShell builtin — no zip/7z availability gamble.
+          New-Item -ItemType Directory -Force dist/zip | Out-Null
+          Copy-Item dist/xr-windows-x64.exe dist/zip/xr.exe
+          Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-x64.zip -Force
+          if (-not (Test-Path dist/xr-windows-x64.zip)) { throw "zip not produced" }
+          Remove-Item -Recurse -Force dist/zip
+      - name: Stamp channels from this build's checksums
+        shell: bash
+        run: |
+          cd dist
+          sha256sum $(ls | grep -v '^SHA256SUMS$' | grep -v '^zip$') > SHA256SUMS
+          cat SHA256SUMS
+          cd ..
+          if [ -n "${{ matrix.channels }}" ]; then
+            bun run scripts/channel-manifest.ts --stamp --sums dist/SHA256SUMS --out dist/channels --channels "${{ matrix.channels }}"
+          else
+            bun run scripts/channel-manifest.ts --stamp --sums dist/SHA256SUMS --out dist/channels
+          fi
+      - name: Homebrew formula syntax + fields validate (no network fetch)
+        if: matrix.name == 'macOS-homebrew'
+        run: |
+          brew ruby -e '
+            require_relative "dist/channels/homebrew/xr.rb"
+            raise "formula must bind the canonical sha256" if Xr.stable.url.include?("PLACEHOLDER")
+            puts "formula OK: #{Xr.version}"
+          '
+      - name: WinGet manifests validate against the schema + hash matches build
+        if: matrix.name == 'Windows-winget-scoop'
+        shell: pwsh
+        run: |
+          $sha = (Get-FileHash dist/xr-windows-x64.zip -Algorithm SHA256).Hash.ToLower()
+          $installer = Get-Content dist/channels/winget/manifests/r/ahmadrrrtx/XR/*/ahmadrrrtx.XR.installer.yaml -Raw
+          if ($installer -notmatch [regex]::Escape("InstallerSha256: $sha")) { throw "winget installer sha256 does not match canonical build" }
+          $scoop = Get-Content dist/channels/scoop/xr.json -Raw | ConvertFrom-Json
+          if ($scoop.architecture.'64bit'.hash -ne $sha) { throw "scoop manifest hash does not match canonical build" }
+          Write-Host "winget + scoop manifests bind the canonical build ($sha)"
+
+  # ── Tier 2: REAL installs from the published release (weekly/on-demand) ──
+  published-release-installs:
+    name: Real channel installs from the published release (report-only)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, channel: apt }
+          - { os: macos-latest, channel: brew }
+          - { os: windows-latest, channel: scoop }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Resolve latest published release assets
+        shell: bash
+        id: rel
+        run: |
+          V=$(curl -fsSL https://api.github.com/repos/${{ github.repository }}/releases/latest | bun -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>console.log(JSON.parse(s).tag_name.replace(/^v/,"")))')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          code=$(curl -s -o /dev/null -w "%{http_code}" "https://github.com/${{ github.repository }}/releases/download/v${V}/SHA256SUMS")
+          echo "assets=$code" >> "$GITHUB_OUTPUT"
+      - name: Report when no published asset set exists yet (honest, not green)
+        if: steps.rel.outputs.assets != '200'
+        shell: bash
+        run: |
+          echo "::warning::No published release assets for the current channel feed yet — real channel install validated at the next tagged release (Phase 9 T3 records first-run status in docs/release/SUPPORT_MATRIX.md)."
+          exit 0
+      - name: apt channel — real install from published .deb
+        if: steps.rel.outputs.assets == '200' && matrix.channel == 'apt'
+        run: |
+          V="${{ steps.rel.outputs.version }}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/v${V}"
+          curl -fsSL "$BASE/SHA256SUMS" -o /tmp/SHA256SUMS
+          curl -fsSL "$BASE/xr_${V}_amd64.deb" -o /tmp/xr.deb
+          expected=$(awk '/_.*.deb$/ {print $1}' /tmp/SHA256SUMS)
+          echo "$expected  /tmp/xr.deb" | sha256sum -c -
+          sudo dpkg -i /tmp/xr.deb
+          test "$(/usr/bin/xr --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" = "$V"
+          sudo dpkg -r xr
+      - name: brew channel — real install via the published formula
+        if: steps.rel.outputs.assets == '200' && matrix.channel == 'brew'
+        env:
+          TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO || 'ahmadrrrtx/homebrew-tap' }}
+        run: |
+          V="${{ steps.rel.outputs.version }}"
+          curl -fsSL "https://github.com/${{ github.repository }}/releases/download/v${V}/homebrew/xr.rb" -o xr.rb || \
+            curl -fsSL "https://raw.githubusercontent.com/${TAP_REPO}/main/Formula/xr.rb" -o xr.rb
+          brew install --formula ./xr.rb
+          xr --version | grep "$V"
+          brew uninstall xr
+      - name: scoop channel — real install via the published manifest
+        if: steps.rel.outputs.assets == '200' && matrix.channel == 'scoop'
+        shell: pwsh
+        run: |
+          $V = '${{ steps.rel.outputs.version }}'
+          Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v$V/scoop/xr.json" -OutFile xr.json
+          scoop install ./xr.json
+          xr --version | Select-String $V
+          scoop uninstall xr

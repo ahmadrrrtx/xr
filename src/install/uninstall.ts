@@ -132,6 +132,10 @@ export interface UninstallSummary {
   skippedInstallDir: string | null;
   skippedDataHome: string | null;
   confirmed: boolean;
+  /** Phase 9 · T5 — non-null when the install was package-manager-owned. */
+  channel: string | null;
+  channelRemoved: boolean;
+  channelCommand: string[] | null;
 }
 
 /**
@@ -139,7 +143,15 @@ export interface UninstallSummary {
  * command layer (and for the per-mode filesystem assertions in tests).
  */
 export function performUninstall(
-  args: { mode: UninstallMode; yes: boolean; packageRoot: string },
+  args: {
+    mode: UninstallMode;
+    yes: boolean;
+    packageRoot: string;
+    /** Phase 9 · T5 — channel detection override (tests inject). */
+    channel?: { channel: string; managed: boolean; uninstall: string[] | null };
+    /** Phase 9 · T5 — runner override (tests inject). */
+    run?: (cmd: string[]) => { ok: boolean };
+  },
   paths: UninstallPaths = resolveUninstallPaths(),
 ): UninstallSummary {
   const mode = args.mode;
@@ -150,6 +162,25 @@ export function performUninstall(
   const installDirIsDataHome = paths.installDir === paths.dataHome;
   const removeInstallDir = mode === "purge" || !installDirIsDataHome;
   const removeData = mode === "purge";
+
+  // Phase 9 · T5 — one reversibility contract across channels (Art. XXIII):
+  // package-manager-owned installs are removed by their manager (keeping its
+  // bookkeeping intact); XR still removes its launcher/PATH/data effects.
+  let channelId: string | null = null;
+  let channelRemoved = false;
+  let channelCommand: string[] | null = null;
+  const channelInfo = args.channel;
+  if (channelInfo && channelInfo.managed && channelInfo.uninstall) {
+    channelId = channelInfo.channel;
+    channelCommand = channelInfo.uninstall;
+    const run =
+      args.run ??
+      ((cmd: string[]): { ok: boolean } => {
+        const r = spawnSync(cmd[0]!, cmd.slice(1), { encoding: "utf8", timeout: 300_000, stdio: ["ignore", "pipe", "pipe"] });
+        return { ok: r.status === 0 };
+      });
+    channelRemoved = run(channelInfo.uninstall).ok;
+  }
 
   const rcFilesTouched = removePathEntries(paths);
   const install = removeInstallation(paths, {
@@ -181,6 +212,9 @@ export function performUninstall(
     skippedInstallDir: install.skippedInstallDir,
     skippedDataHome: data.skipped,
     confirmed: args.yes,
+    channel: channelId,
+    channelRemoved,
+    channelCommand,
   };
 }
 

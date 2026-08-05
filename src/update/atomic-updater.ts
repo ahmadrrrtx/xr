@@ -65,10 +65,16 @@ export interface BinaryUpdateOptions {
   version: string;
   /** Download base URL template; {version}/{file} placeholders. */
   baseUrl?: string;
+  /** URL of the release SHA256SUMS (default: `${baseUrl}/SHA256SUMS`). */
+  sumsUrl?: string;
   /** Timeout for the download + canary, ms. */
   timeoutMs?: number;
   /** Override the canary (tests inject a fake). */
   canary?: (binaryPath: string) => { healthy: boolean; reason?: string };
+  /** Test-only: skip SHA256SUMS verification (never set by production paths). */
+  verify?: boolean;
+  /** Fetch implementation (tests inject). */
+  fetchImpl?: typeof fetch;
 }
 
 export function binaryCanary(binaryPath: string, timeoutMs = 120_000): { healthy: boolean; reason?: string } {
@@ -103,10 +109,30 @@ export function createBinaryUpdatePlan(opts: BinaryUpdateOptions): UpdatePlan<st
     candidate,
     install: async () => {
       mkdirSync(stagingDir, { recursive: true });
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`download failed (HTTP ${res.status}): ${url}`);
-      const buf = new Uint8Array(await res.arrayBuffer());
-      await Bun.write(candidate, buf);
+      // Phase 9 · Part 20 — verified-only distribution: the candidate is
+      // checked against the release's SHA256SUMS before it is ever written
+      // to disk (fails closed when the sums are missing/mismatched).
+      if (opts.verify === false) {
+        // Explicit, test-only escape hatch — the production path (updateXR)
+        // never sets this. DSC/CI installers use it to inject fixtures.
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`download failed (HTTP ${res.status}): ${url}`);
+        const buf = new Uint8Array(await res.arrayBuffer());
+        await Bun.write(candidate, buf);
+      } else {
+        const { downloadVerified } = await import("./channels.ts");
+        await downloadVerified(
+          {
+            url,
+            sumsUrl: opts.sumsUrl ?? `${baseUrl}/SHA256SUMS`,
+            expectedFile: file,
+            ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
+          },
+          async (bytes) => {
+            await Bun.write(candidate, bytes);
+          },
+        );
+      }
       if (process.platform !== "win32") {
         spawnSync("chmod", ["+x", candidate], { encoding: "utf8" });
       }
@@ -373,7 +399,44 @@ export async function runAtomicUpdate(opts: {
   git?: GitUpdateOptions;
   npm?: NpmUpdateOptions;
   binary?: BinaryUpdateOptions;
+  /** Phase 9 · T5 — channel detection override (tests inject). */
+  channel?: import("./channels.ts").ChannelInfo;
+  /** Phase 9 · T5 — runner override for channel-managed updates (tests inject). */
+  channelRun?: (cmd: string[]) => { ok: boolean; error?: string };
+  /** Phase 9 · T5 — canary override for channel-managed updates (tests inject). */
+  channelCanary?: () => { healthy: boolean; reason?: string };
 }): Promise<UpdateResult<string>> {
+  // Phase 9 · T5 — channel-managed installs (Homebrew/Scoop/WinGet/apt/npm?)
+  // update through their own package manager under the same atomic contract.
+  const { detectChannel, createChannelUpdatePlan } = await import("./channels.ts");
+  const channel =
+    opts.channel ??
+    detectChannel({
+      platform: process.platform,
+      exePath: process.execPath,
+      isDebInstalled: () =>
+        process.platform === "linux" && existsSync("/usr/bin/xr") && !existsSync(join(opts.packageRoot, "dist")),
+      isBrewInstalled: () => {
+        const prefix = process.platform === "darwin" ? "/opt/homebrew" : "/home/linuxbrew/.linuxbrew";
+        return existsSync(join(prefix, "Cellar", "xr"));
+      },
+    });
+  if (channel.managed && channel.channel !== "npm") {
+    const { channelHealthCanary } = await import("./channels.ts");
+    const current =
+      spawnSync("xr", ["--version"], { encoding: "utf8", timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] })
+        .stdout?.trim()
+        .match(/(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/)?.[1] ?? "current";
+    const plan = createChannelUpdatePlan({
+      info: channel,
+      currentVersion: current,
+      ...(opts.version ? { targetVersion: opts.version } : {}),
+      ...(opts.channelRun ? { run: opts.channelRun } : {}),
+      canary: opts.channelCanary ?? channelHealthCanary,
+    });
+    return applyUpdate(plan);
+  }
+
   const layout = detectInstallLayout(opts.packageRoot);
   let plan: UpdatePlan<string> | null = null;
   let noPlanReason = "already up to date or update source unreachable";

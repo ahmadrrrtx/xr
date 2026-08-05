@@ -28,6 +28,9 @@ import { join, relative } from "node:path";
 
 const ROOT = join(import.meta.dir, "../..");
 
+/** Path comparisons must be separator-agnostic (win32 yields backslashes). */
+const rel = (p: string): string => relative(ROOT, p).replaceAll("\\", "/");
+
 function* walk(dir: string, exts: readonly string[]): Generator<string> {
   for (const entry of readdirSync(dir)) {
     if (["node_modules", ".git", "dist", "out"].includes(entry)) continue;
@@ -49,8 +52,8 @@ describe("T8 — one context store, forever", () => {
       const text = readFileSync(file, "utf8");
       // The canonical items table is const ITEMS = "context_items" and the
       // CREATE TABLE for it; both must be unique to the repository.
-      if (/const\s+ITEMS\s*=\s*"context_items"/.test(text)) creators.push(relative(ROOT, file));
-      if (/CREATE TABLE[\s\S]{0,80}context_items/.test(text)) creators.push(relative(ROOT, file));
+      if (/const\s+ITEMS\s*=\s*"context_items"/.test(text)) creators.push(rel(file));
+      if (/CREATE TABLE[\s\S]{0,80}context_items/.test(text)) creators.push(rel(file));
     }
     expect([...new Set(creators)].sort()).toEqual(["src/context/repository.ts"]);
   });
@@ -60,8 +63,8 @@ describe("T8 — one context store, forever", () => {
       const text = readFileSync(file, "utf8");
       if (!text.includes("new ContextRepository(")) continue;
       // A second, privately-connected store would need its own Database.
-      expect({ file: relative(ROOT, file), hasRawDb: /new Database\(/.test(text) }).toEqual({
-        file: relative(ROOT, file),
+      expect({ file: rel(file), hasRawDb: /new Database\(/.test(text) }).toEqual({
+        file: rel(file),
         hasRawDb: false,
       });
     }
@@ -92,7 +95,7 @@ describe("T8 — recall numbers are measured or cited, never bare-asserted", () 
       const text = readFileSync(file, "utf8");
       if (!CLAIM.test(text)) continue;
       const anchored = ANCHORS.some((a) => a.test(text));
-      if (!anchored) offenders.push(relative(ROOT, file));
+      if (!anchored) offenders.push(rel(file));
     }
     expect(offenders).toEqual([]);
   });

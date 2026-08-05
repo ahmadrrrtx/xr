@@ -32,11 +32,13 @@ export const UNIT_TIER: readonly string[] = [
   "test/architecture/boundaries.test.ts",
   "test/architecture/one-store.test.ts",
   "test/architecture/size-gate.test.ts",
-  // Public API contract — schema/client drift, versioning, compat surface
-  "test/api/client.test.ts",
+  // Public API contract — schema/compat surface. Runtime is the primary
+  // filter: the client round-trip and versioned-mount files each spin the
+  // real in-process daemon handler (+340/+270 ms measured — the tier's heavy
+  // tail), so they live in the full suite (still CI-enforced there and by the
+  // dedicated API-contract job); the tier keeps the cheap schema/compat gates.
   "test/api/compat.test.ts",
   "test/api/openapi.test.ts",
-  "test/api/v1-versioning.test.ts",
   // Trust gates — fail-closed regressions a reviewer MUST see immediately
   "test/phase0/policy-gate-adversarial.test.ts",
   "test/phase0/workflow-effects.test.ts",

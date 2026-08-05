@@ -29,7 +29,7 @@ import type { Tool } from "../../../core/types.ts";
 let _journeys: ((scope: string) => unknown[]) | null = null;
 async function listAllJourneysCached(scope: string): Promise<unknown[]> {
   if (!_journeys) {
-    const mod = (await import(/* @vite-ignore */ new URL("../../../../extensions/business-os/src/core/journeys.ts", import.meta.url).pathname)) as { listAllJourneys?: (s: string) => unknown[] };
+    const mod = (await import(/* @vite-ignore */ new URL("../../../../extensions/business-os/src/core/journeys.ts", import.meta.url).href)) as { listAllJourneys?: (s: string) => unknown[] };
     _journeys = mod.listAllJourneys ?? (() => []);
   }
   return _journeys(scope) as unknown[];

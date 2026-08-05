@@ -1,17 +1,18 @@
 {
-  "$schema": "./docs/phase-0/release-manifest.schema.json",
-  "manifestVersion": 1,
+  "$schema": "./docs/release/release-manifest.schema.json",
+  "manifestVersion": 2,
   "comment": "XR RELEASE MANIFEST \u2014 the single source of truth for release identity and every public claim. Constitution Article XXII.1 ('One release manifest stamps version across version.ts, package.json, README, installers, website ... CI fails on drift') and Article XIX.1 ('no public claim without an evidence link'). Edit THIS file, then run `bun run release:stamp`. Never hand-edit a stamped surface.",
   "identity": {
     "name": "@rrrtx/xr",
-    "version": "7.0.1",
+    "version": "7.1.0",
     "codename": "Truth",
     "description": "XR \u2014 a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
     "author": "Muhammad Ahmad (@ahmadrrrtx)",
     "license": "MIT",
     "repo": "https://github.com/ahmadrrrtx/xr",
     "homepage": "https://xr-gules.vercel.app",
-    "npm": "https://www.npmjs.com/package/@rrrtx/xr"
+    "npm": "https://www.npmjs.com/package/@rrrtx/xr",
+    "stability": "public-beta"
   },
   "stampTargets": [
     {
@@ -96,6 +97,18 @@
       "id": "typescript-runtime",
       "text": "Written in TypeScript, running on Bun.",
       "evidence": "package.json engines.bun; tsconfig.json; zero Rust sources in the repository.",
+      "expires": "2027-07-31"
+    },
+    {
+      "id": "signed-releases",
+      "text": "Tagged releases ship cosign keyless signatures over SHA256SUMS, a CycloneDX SBOM and SLSA3 provenance for every per-target artifact.",
+      "evidence": ".github/workflows/release.yml (gates → 5-target matrix → SHA256SUMS → cosign sign-blob → SLSA generator_generic_slsa3 with wired outputs.digests); docs/release/VERIFYING_RELEASES.md. Verifiable from the public Rekor log after the first tagged release ≥ 7.1.0.",
+      "expires": "2027-07-31"
+    },
+    {
+      "id": "validated-channels",
+      "text": "The same canonical build installs through GitHub Releases, Homebrew, WinGet, Scoop, .deb, npm and Docker, with channel configs generated from one manifest.",
+      "evidence": "scripts/channel-manifest.ts (one generator) + packaging/ (generated, drift-gated by `bun run channel:check` in CI) + .github/workflows/channel-install.yml (install tests). Real published-release installs run in the weekly job; .deb is dpkg-installed on every PR.",
       "expires": "2027-07-31"
     }
   ],
