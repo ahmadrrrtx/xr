@@ -444,7 +444,7 @@ export class ContextRepository {
     now?: number;
   }): string {
     const now = input.now ?? Date.now();
-    const id = input.id ?? `ctx_${randomUUID().slice(0, 10)}`;
+    const id = input.id ?? `ctx_${randomUUID()}`;
     const content = boundText(input.content, CONTEXT_BOUNDS.maxItemChars);
     const tags = (input.tags ?? []).slice(0, CONTEXT_BOUNDS.maxTagsPerItem).map((t) => t.trim()).filter(Boolean);
 
@@ -776,7 +776,7 @@ export class ContextRepository {
     const existing = this.q(`SELECT COUNT(*) c FROM ${PROV} WHERE item_id = ?`)
       .get<{ c: number }>(itemId);
     if ((existing?.c ?? 0) >= CONTEXT_BOUNDS.maxProvenancePerItem) return null;
-    const id = `prv_${randomUUID().slice(0, 10)}`;
+    const id = `prv_${randomUUID()}`;
     this.q(
         `INSERT INTO ${PROV} (id, item_id, kind, ref, label, observed_at, content_hash, created_at) VALUES (?,?,?,?,?,?,?,?)`,
       )
@@ -827,7 +827,7 @@ export class ContextRepository {
     indexInvalidated: boolean;
     now?: number;
   }): string {
-    const id = `rev_${randomUUID().slice(0, 10)}`;
+    const id = `rev_${randomUUID()}`;
     this.q(
         `INSERT INTO ${REVOCATIONS} (id, item_id, item_kind, workspace_id, reason, actor, index_invalidated, created_at) VALUES (?,?,?,?,?,?,?,?)`,
       )
@@ -966,7 +966,7 @@ export class ContextRepository {
     compressedChars: number;
     now?: number;
   }): string {
-    const id = `sum_${randomUUID().slice(0, 10)}`;
+    const id = `sum_${randomUUID()}`;
     this.q(
         `INSERT INTO ${SUMMARIES} (id, workspace_id, project_scope, task_id, summary, preserved, lost, source_item_ids, generation, lineage_parent, original_chars, compressed_chars, created_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -1138,7 +1138,7 @@ export class ContextRepository {
     reason?: string;
     now?: number;
   }): string {
-    const id = `res_${randomUUID().slice(0, 10)}`;
+    const id = `res_${randomUUID()}`;
     this.q(
         `INSERT INTO ${RESOLUTIONS} (id, workspace_id, item_a, item_b, kind, resolution, decided_by, reason, created_at, undone_at)
          VALUES (?,?,?,?,?,?,?,?,?,NULL)`,
@@ -1204,7 +1204,7 @@ export class ContextRepository {
     reason?: string;
     now?: number;
   }): string {
-    const id = `op_${randomUUID().slice(0, 10)}`;
+    const id = `op_${randomUUID()}`;
     this.q(
         `INSERT INTO ${OPS} (id, workspace_id, op, target_table, target_id, before_json, after_json, actor, reason, created_at, undone_at, undo_op_id)
          VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL)`,

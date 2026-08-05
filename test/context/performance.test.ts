@@ -62,17 +62,24 @@ function seed(n: number): { store: Store; repo: ContextRepository; path: string 
   const repo = new ContextRepository(adaptStoreForContext(store), "default");
   repo.migrate();
   const topics = ["authentication", "deployment", "database", "caching", "logging", "billing"];
-  for (let i = 0; i < n; i++) {
-    repo.insertItem({
-      type: "knowledge",
-      content: `${topics[i % topics.length]} note ${i}: configuration detail about the ${topics[i % topics.length]} subsystem with supporting explanation text.`,
-      scope: { workspaceId: "default", projectScope: "proj" },
-      trustStatus: "source_evidence",
-      consentState: "approved",
-      provenanceKind: "file",
-      actorKind: "user",
-    });
-  }
+  // One write transaction for the bulk seed: the WriteGate is re-entrant
+  // (nested insertItem joins the open transaction), so n items commit ONCE
+  // instead of fsyncing per item — per-item transactions take minutes on
+  // Windows CI disks (observed 7m+ stall → step kill). Seeding is SETUP,
+  // not measurement; nothing the benchmark asserts changes.
+  store.write(() => {
+    for (let i = 0; i < n; i++) {
+      repo.insertItem({
+        type: "knowledge",
+        content: `${topics[i % topics.length]} note ${i}: configuration detail about the ${topics[i % topics.length]} subsystem with supporting explanation text.`,
+        scope: { workspaceId: "default", projectScope: "proj" },
+        trustStatus: "source_evidence",
+        consentState: "approved",
+        provenanceKind: "file",
+        actorKind: "user",
+      });
+    }
+  });
   return { store, repo, path };
 }
 
