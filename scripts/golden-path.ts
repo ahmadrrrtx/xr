@@ -151,9 +151,10 @@ async function main(): Promise<void> {
   check("uninstall-data-home-present", existsSync(join(XR_HOME, "config.json")));
 
   // Capture final state BEFORE shutdown (the store closes with the kernel).
+  const { PKG } = await import("../src/core/version.ts");
   const report = {
     ok: true,
-    version: "7.0.1",
+    version: PKG.version,
     steps: results,
     auditEntries: store2.auditCount(),
     chainValid: store2.verifyChain().valid,

@@ -129,11 +129,25 @@ describe("Phase 5 · future model classes via the contract (T7)", () => {
     // the routing authority (src/intelligence), config schema, CLI/daemon
     // surfaces, and tests — but MUST NOT change the kernel or the agent loop
     // to route a new provider/model class.
-    const diff = execSync("git diff --name-only HEAD -- src/core src/services/agent-service.ts src/core/agent.ts src/core/execution", {
+    //
+    // Encoding note: the gate inspects the working tree (porcelain covers
+    // untracked kernel files too, not just tracked edits). Exactly ONE file
+    // under src/core is excluded: src/core/version.ts — the Art. XXII release
+    // stamp surface. Every release rewrites that one constant (7.0.1 → 7.1.0
+    // → …) without touching kernel/loop logic; counting it would make the
+    // documented release flow (stamp → ci → tag) trip this Phase-5 gate on
+    // every release. Everything else under src/core, src/core/execution, and
+    // the agent service still fails the gate on ANY modification.
+    const porcelain = execSync("git status --porcelain -- src/core src/services/agent-service.ts", {
       cwd: join(import.meta.dir, "../.."),
       encoding: "utf8",
     }).trim();
-    expect(diff).toBe("");
+    const kernelEdits = porcelain
+      .split("\n")
+      .map((l) => l.trimEnd())
+      .filter((l) => l !== "" && !l.endsWith("src/core/version.ts"))
+      .join("\n");
+    expect(kernelEdits).toBe("");
   });
 
   test("custom provider construction works through the registry adapter path (no core edits)", () => {
