@@ -91,3 +91,46 @@ jobs:
           name: first-task-survey
           path: first-task-survey.json
           retention-days: 90
+
+  # ── Phase 9 · T6 ────────────────────────────────────────────────────────────
+  # Public Beta install-success metric: the DEFAULT DISTRIBUTION (canonical
+  # compiled binary) must install 🔒verified + smoke-clean on every supported
+  # OS family, ≥ 99% of fresh attempts. Each job builds its own canonical
+  # asset in-job (one build), generates SHA256SUMS, then runs N clean-room
+  # install attempts measured per step. The aggregate mirrors the Beta
+  # acceptance gate; the per-OS JSON artifacts ARE the installation evidence.
+  beta-install-survey:
+    name: Beta install survey — ${{ matrix.osName }} (≥ 99%)
+    runs-on: ${{ matrix.runsOn }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { osName: "Linux", runsOn: ubuntu-latest, bunOs: linux, target: "linux-x64"
+          - { osName: "macOS", runsOn: macos-latest, bunOs: darwin, target: "darwin-arm64"
+          - { osName: "Windows", runsOn: windows-latest, bunOs: win32, target: "windows-x64"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build the canonical asset for this OS
+        run: bun run scripts/build-matrix.ts --targets ${{ matrix.target }} --out survey-assets
+      - name: Generate checksum manifest (the signable unit)
+        shell: bash
+        working-directory: survey-assets
+        run: sha256sum * > SHA256SUMS
+      - name: Run the install survey (10 fresh attempts, gate ≥ 0.99)
+        shell: bash
+        run: |
+          bun run scripts/beta-install-survey.ts --release-dir survey-assets --runs=10 --target=0.99 | tee beta-install-${{ matrix.bunOs }}.json
+      - name: Upload per-OS install evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: beta-install-${{ matrix.bunOs }}
+          path: beta-install-${{ matrix.bunOs }}.json
+          retention-days: 90

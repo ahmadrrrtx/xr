@@ -42,27 +42,56 @@ function Get-XrBinaryName {
 }
 
 # Phase 3 · T2 — download the standalone binary (default distribution path).
+# Phase 9 · Part 20 — verified-only: install ONLY when sha256 matches the
+# release's SHA256SUMS (fail closed); otherwise fall back to source.
 function Fetch-XrBinary {
   $name = Get-XrBinaryName
   if (-not $name) { return $false }
-  $url = "https://github.com/$Repo/releases/download/v$Version/$name"
+  $base = "https://github.com/$Repo/releases/download/v$Version"
+  $url = "$base/$name"
   $distDir = Join-Path $TargetDir 'dist'
   New-Item -ItemType Directory -Force -Path $distDir | Out-Null
   Step "Downloading compiled binary v$Version ($name)"
+  $sumsPath = Join-Path $distDir '.sha256sums.tmp'
   try {
-    Invoke-WebRequest -Uri $url -OutFile (Join-Path $distDir $name) -UseBasicParsing -ErrorAction Stop
-    $probe = & (Join-Path $distDir $name) --version 2>$null
-    if ($LASTEXITCODE -eq 0) {
-      Ok "Compiled binary installed ($name)"
-      return $true
-    }
-    Warn 'Binary failed to run; falling back to source checkout.'
-    Remove-Item (Join-Path $distDir $name) -Force -ErrorAction SilentlyContinue
-    return $false
+    Invoke-WebRequest -Uri "$base/SHA256SUMS" -OutFile $sumsPath -UseBasicParsing -ErrorAction Stop | Out-Null
   } catch {
-    Warn 'Binary download unavailable; falling back to source checkout.'
+    Warn 'Release checksums unavailable - refusing an unverified binary; falling back to source.'
+    Remove-Item $sumsPath -Force -ErrorAction SilentlyContinue
     return $false
   }
+  try {
+    Invoke-WebRequest -Uri $url -OutFile (Join-Path $distDir $name) -UseBasicParsing -ErrorAction Stop | Out-Null
+  } catch {
+    Warn 'Binary download unavailable; falling back to source checkout.'
+    Remove-Item $sumsPath -Force -ErrorAction SilentlyContinue
+    return $false
+  }
+  $expect = $null
+  foreach ($line in Get-Content $sumsPath) {
+    $parts = $line.Trim() -split '\s+'
+    if ($parts.Count -ge 2 -and $parts[1].TrimStart('*') -eq $name) { $expect = $parts[0]; break }
+  }
+  Remove-Item $sumsPath -Force -ErrorAction SilentlyContinue
+  if (-not $expect) {
+    Warn "No checksum entry for $name in SHA256SUMS - refusing the unverified binary."
+    Remove-Item (Join-Path $distDir $name) -Force -ErrorAction SilentlyContinue
+    return $false
+  }
+  $actual = (Get-FileHash (Join-Path $distDir $name) -Algorithm SHA256).Hash.ToLower()
+  if ($actual -ne $expect.ToLower()) {
+    Warn "Integrity check FAILED for $name (sha256 $actual ≠ published $expect). Refusing the binary (possible tampering)."
+    Remove-Item (Join-Path $distDir $name) -Force -ErrorAction SilentlyContinue
+    return $false
+  }
+  $probe = & (Join-Path $distDir $name) --version 2>$null
+  if ($LASTEXITCODE -eq 0) {
+    Ok "Compiled binary installed and verified ($name)"
+    return $true
+  }
+  Warn 'Binary failed to run; falling back to source checkout.'
+  Remove-Item (Join-Path $distDir $name) -Force -ErrorAction SilentlyContinue
+  return $false
 }
 
 function Ensure-Bun {

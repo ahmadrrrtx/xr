@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ahmadrrrtx/xr/docs/release/release-manifest.schema.json",
+  "title": "XR Release Manifest",
+  "description": "The single source of truth for XR release identity and every public claim (Constitution Art. XXII.1 / XIX.1). Structural validation is enforced by scripts/release-manifest.ts (fail-closed); this schema documents the contract for editors and external tooling.",
+  "type": "object",
+  "required": ["manifestVersion", "identity", "stampTargets", "claims", "prohibitedClaims", "supervisedTerms", "scannedSurfaces"],
+  "properties": {
+    "manifestVersion": { "type": "integer", "minimum": 1 },
+    "identity": {
+      "type": "object",
+      "required": ["name", "version", "codename", "description", "author", "license", "repo", "homepage", "npm"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$" },
+        "codename": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "license": { "type": "string" },
+        "repo": { "type": "string" },
+        "homepage": { "type": "string" },
+        "npm": { "type": "string" },
+        "stability": {
+          "type": "string",
+          "enum": ["public-beta", "developer-preview", "stable"],
+          "description": "Phase 9 · T6 — honest maturity label. Prerelease versions may not be 'stable'."
+        }
+      }
+    },
+    "stampTargets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "kind"],
+        "properties": {
+          "id": { "type": "string" },
+          "path": { "type": "string" },
+          "kind": { "type": "string", "enum": ["json-version", "generated-module", "site-identity", "marker-block", "shell-var", "powershell-var"] }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "text", "evidence", "expires"],
+        "properties": {
+          "id": { "type": "string" },
+          "text": { "type": "string" },
+          "evidence": { "type": "string" },
+          "expires": { "type": "string", "format": "date" },
+          "mechanical": {
+            "type": "object",
+            "properties": { "kind": { "type": "string" }, "value": { "type": "number" } }
+          }
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern", "reason"],
+        "properties": { "pattern": { "type": "string" }, "reason": { "type": "string" } }
+      }
+    },
+    "supervisedTerms": { "type": "array", "items": { "type": "string" } },
+    "scannedSurfaces": { "type": "array", "items": { "type": "string" } }
+  }
+}

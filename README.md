@@ -25,6 +25,14 @@
 
 **Version:** `7.0.1 (Truth)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
 
+> **Status: Public Beta.** @rrrtx/xr is honestly labeled beta software: install and use it,
+> expect the documented golden path to work on the validated platforms, and check the
+> [support matrix](docs/release/SUPPORT_MATRIX.md) and
+> [known-limitations register](docs/release/7.0.1/known-limitations.md) before adopting it
+> for anything critical. `v*-beta.*` tags land on the prerelease channel (npm `beta` dist-tag,
+> GitHub prerelease) for early adopters; feedback goes through the
+> [beta loop](docs/release/BETA.md).
+
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
 > `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
 > is stamped from that one file, and CI fails the build if any of them drift

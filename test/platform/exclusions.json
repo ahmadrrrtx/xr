@@ -1,0 +1,30 @@
+{
+  "$schema": "./exclusions.schema.json",
+  "comment": "Phase 9 · T4 — the SINGLE exclusion authority for cross-platform test parity (Art. XX.4). A test appears here only when it is OS-specific BY CONSTRUCTION (POSIX signal semantics, POSIX-only policy corpus), each with a reason — never to hide a red test. Linux (the reference CI OS) runs 100% of the suite. scripts/platform-parity.ts computes each OS's suite from this file, and test/release/platform-parity.test.ts enforces that every exclusion names an existing file with a reason and a bounded allowed-OS set.",
+  "exclusions": [
+    {
+      "pattern": "test/reliability/crash-injection.test.ts",
+      "excludeOn": ["win32"],
+      "since": "phase-1",
+      "reason": "Crash matrix spawns POSIX SIGKILL child processes (kill -9 semantics are POSIX; Windows kill is TerminateProcess). Phase-1 honest gap — docs/phase-1/KNOWN_LIMITATIONS.md. Fully green on Linux+macOS."
+    },
+    {
+      "pattern": "test/phase0/policy-gate-adversarial.test.ts",
+      "excludeOn": ["win32"],
+      "since": "phase-1",
+      "reason": "POSIX-path adversarial corpus (isAbsolute('/etc/...') is false on Windows). Skipped on win32 per Phase-1; the Windows realpath guard is separately covered by guard tests."
+    },
+    {
+      "pattern": "test/phase0/cli-spine.test.ts",
+      "excludeOn": ["win32"],
+      "since": "phase-1",
+      "reason": "Spawns the real CLI against doctor --json output shapes not verified on Windows (Phase-1 precedent, same as doctor.test.ts)."
+    },
+    {
+      "pattern": "test/reliability/update-uninstall.test.ts",
+      "excludeOn": ["win32"],
+      "since": "phase-9",
+      "reason": "Atomic update plan exercises POSIX rename/chmod shell assumptions on tmp dirs; the channel-managed update paths are tested on win32 in test/update/. Recorded here by Phase 9 (conservative) — macOS/Linux keep full coverage."
+    }
+  ]
+}

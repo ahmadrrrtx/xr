@@ -36,6 +36,13 @@ export interface ReleaseIdentity {
   repo: string;
   homepage: string;
   npm: string;
+  /**
+   * Phase 9 · T6 — honest maturity label stamped across surfaces. Stable
+   * releases carry "public-beta" until Phase 10 enterprise readiness; the
+   * label is never upgraded without the exit-gate evidence that allows it
+   * (Art. XIX). Pre-release versions are detected from semver suffixes.
+   */
+  stability?: "public-beta" | "developer-preview" | "stable";
 }
 
 export interface ReleaseClaim {
@@ -83,6 +90,13 @@ export function loadManifest(path: string = MANIFEST_PATH): ReleaseManifest {
   }
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(id.version)) {
     throw new Error(`manifest.identity.version must be semver, got "${id.version}" (Article XXII.2)`);
+  }
+  if (id.stability !== undefined && !["public-beta", "developer-preview", "stable"].includes(id.stability)) {
+    throw new Error(`manifest.identity.stability must be public-beta | developer-preview | stable, got "${id.stability}"`);
+  }
+  // Art. XXII.4/IX.4 — a prerelease version can never wear a "stable" label.
+  if (id.stability === "stable" && id.version.includes("-")) {
+    throw new Error(`prerelease version "${id.version}" cannot be labeled "stable" (Article XXII.4)`);
   }
   if (!Array.isArray(parsed.stampTargets) || parsed.stampTargets.length === 0) {
     throw new Error("manifest.stampTargets must be a non-empty array");
@@ -252,10 +266,16 @@ export const README_BEGIN = "<!-- XR:RELEASE-IDENTITY:BEGIN -->";
 export const README_END = "<!-- XR:RELEASE-IDENTITY:END -->";
 
 export function buildReadmeBlock(id: ReleaseIdentity, skillCount: number): string {
+  const stabilityLine =
+    id.stability === "public-beta"
+      ? `\n\n> **Status: Public Beta.** ${id.name} is honestly labeled beta software: install and use it,\n> expect the documented golden path to work on the validated platforms, and check the\n> [support matrix](docs/release/SUPPORT_MATRIX.md) and\n> [known-limitations register](docs/release/${id.version}/known-limitations.md) before adopting it\n> for anything critical. \`v*-beta.*\` tags land on the prerelease channel (npm \`beta\` dist-tag,\n> GitHub prerelease) for early adopters; feedback goes through the\n> [beta loop](docs/release/BETA.md).`
+      : id.stability === "developer-preview"
+        ? `\n\n> **Status: Developer Preview.** APIs and behavior may change without a deprecation cycle.`
+        : "";
   return `${README_BEGIN}
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
 
-**Version:** \`${DISPLAY(id)}\` · **Package:** [\`${id.name}\`](${id.npm}) · **License:** ${id.license}
+**Version:** \`${DISPLAY(id)}\` · **Package:** [\`${id.name}\`](${id.npm}) · **License:** ${id.license}${stabilityLine}
 
 > **Version source of truth:** [\`release.manifest.json\`](release.manifest.json). Every surface —
 > \`src/core/version.ts\`, \`package.json\`, this README, \`install.sh\`, \`install.ps1\` and the website —

@@ -1,19 +1,26 @@
 # =============================================================================
-# XR Phase 4 · T6 — signed, provenance-bearing releases.
+# XR Phase 9 · T1/T2 — signed, reproducible, per-target releases, automated
+# from a `v*` tag. One canonical build → many channels (Constitution Art. XXII).
 #
-# On a `v*` tag:
-#   1. builds the publishable artifact (npm tarball + source archive);
-#   2. generates SHA256SUMS, the CycloneDX SBOM and SLSA provenance;
-#   3. signs the tarball + SBOM + provenance KEYLESSLY with cosign (GitHub
-#      OIDC → Fulcio short-lived cert), entries recorded in the PUBLIC Rekor
-#      transparency log;
-#   4. uploads everything to the GitHub Release (assets + .bundle files);
-#   5. publishes to npm with OIDC trusted publishing (provenance: true —
-#      no long-lived npm tokens).
+# Pipeline (unattended, tag → complete signed release):
+#   gates (release:check + claim-lint + channel:check + typecheck + test subsets)
+#     → build.matrix    per-OS canonical binaries + native smoke + windows zip
+#     → assemble        npm tarball + source archive + .deb + SHA256SUMS over
+#                       EVERYTHING + CycloneDX SBOM + conventional-commit changelog
+#     → sign            cosign KEYLESS sign-blob of SHA256SUMS (+ tarball + SBOM),
+#                       entries in the public Rekor log (GitHub OIDC → Fulcio)
+#     → release         GitHub Release with every asset (prerelease=true when
+#                       the tag carries a semver suffix, e.g. v7.2.0-beta.1)
+#     → provenance      SLSA3 via slsa-github-generator over assemble's real
+#                       output digests (outputs.digests — wired, not assumed)
+#     → npm             OIDC trusted publishing, dist-tag latest|beta
+#     → docker          GHCR multi-arch image + buildx SLSA/SBOM attestations
+#                       + cosign image signature
+#     → channels        channel manifests stamped FROM THE SIGNED SHA256SUMS
+#                       (channel:check drift gate blocks any out-of-sync config)
 #
-# Verification instructions live in docs/release/VERIFYING_RELEASES.md.
-# The keyless/Rekor proof is ONLY claimable after this workflow actually ran
-# on a real tag (Art. IX.4) — test/supply-chain covers the local path.
+# Verification: docs/release/VERIFYING_RELEASES.md. Trust-root: cosign bundle
+# + public Rekor; identity …/workflows/release.yml@refs/tags/v*.
 # =============================================================================
 name: Release
 
@@ -24,92 +31,239 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # release assets
-  id-token: write # cosign keyless OIDC + npm trusted publishing + SLSA
+  contents: read # jobs escalate locally
 
 jobs:
-  build-and-sign:
-    name: Build + SBOM + SLSA + cosign keyless sign
+  # ── 0. Truth gate: a release is evidence-bound or it does not ship ─────────
+  gates:
+    name: Release gates (identity + claims + channels + unit floor)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0 # changelog generator needs history + tags
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
-
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-
-      - name: Identity + claim gates must pass before any release
+      - name: Identity + claim + channel gates
         run: |
           bun run release:check
           bun run claim-lint
+          bun run channel:check
           bun run typecheck
-          bun test test/supply-chain test/trust test/security test/daemon
+      - name: Parity manifest validates
+        run: bun run scripts/platform-parity.ts --validate
+      - name: Test floor (supply chain + trust + security + release)
+        run: bun test test/supply-chain test/trust test/security test/daemon test/release test/update
 
-      - name: Pack the npm artifact
-        run: bun pm pack --pack-destination dist
-
-      - name: Bundle the source archive
+  # ── 1. Canonical per-target builds with native smoke ───────────────────────
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64, os: ubuntu-latest, targets: "linux-x64,linux-arm64", smoke: "linux-x64" }
+          - { name: darwin, os: macos-latest, targets: "darwin-arm64,darwin-x64", smoke: "darwin-arm64" }
+          - { name: windows, os: windows-latest, targets: "windows-x64", smoke: "windows-x64" }
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build targets + native smoke
+        run: bun run scripts/build-matrix.ts --targets ${{ matrix.targets }} --out dist
+      - name: Package windows as portable zip (winget/scoop canonical asset)
+        if: matrix.name == 'windows'
+        shell: pwsh
         run: |
-          mkdir -p dist
+          New-Item -ItemType Directory -Force -Path dist/zip | Out-Null
+          Copy-Item dist/xr-windows-x64.exe dist/zip/xr.exe
+          Compress-Archive -Path dist/zip/xr.exe -DestinationPath dist/xr-windows-x64.zip -Force
+      - name: Upload canonical binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.name }}
+          path: |
+            dist/xr-*
+          retention-days: 3
+
+  # ── 2. Assemble the release: sums + SBOM + deb + changelog ────────────────
+  assemble:
+    name: Assemble (sums + SBOM + .deb + changelog)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [gates, build]
+    permissions:
+      contents: read
+    outputs:
+      digests: ${{ steps.subjects.outputs.base64 }}
+      version: ${{ steps.version.outputs.value }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Resolve release version + channel
+        id: version
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          if [ -z "$V" ]; then V="$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("release.manifest.json","utf8")).identity.version)')"; fi
+          echo "value=$V" >> "$GITHUB_OUTPUT"
+      - name: Prerelease channel detection (semver suffix → prerelease)
+        id: meta
+        run: |
+          if [[ "${{ steps.version.outputs.value }}" == *"-"* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Download canonical binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: binaries-*
+          merge-multiple: true
+      - name: Assert the full target set is present (one canonical build)
+        run: |
+          for f in xr-linux-x64 xr-linux-arm64 xr-darwin-arm64 xr-darwin-x64 xr-windows-x64.exe xr-windows-x64.zip; do
+            test -f "dist/$f" || { echo "MISSING dist/$f"; exit 1; }
+          done
+      - name: Pack the npm artifact + source archive
+        run: |
+          bun pm pack --pack-destination dist
           git archive --format=tar.gz -o dist/xr-source.tar.gz HEAD
-
-      - name: Generate SHA256SUMS
+      - name: Build the .deb channel artifact from the canonical linux-x64 binary
+        run: bun run scripts/build-deb.ts --bin dist/xr-linux-x64 --out dist/xr_${{ steps.version.outputs.value }}_amd64.deb
+      - name: Generate the changelog from conventional commits (evidence-bound)
+        run: |
+          V="${{ steps.version.outputs.value }}"
+          bun run scripts/changelog.ts --version "$V" --write
+          git diff -- CHANGELOG.md
+      - name: Generate SHA256SUMS over every publishable artifact
         working-directory: dist
-        run: sha256sum * > SHA256SUMS
-
+        run: |
+          sha256sum xr-* rrrtx-xr-*.tgz > SHA256SUMS
+          cat SHA256SUMS
       - name: Generate CycloneDX SBOM (locked deps)
         run: bun run scripts/sbom.ts --out dist/sbom.cyclonedx.json
-
-      - name: Verify our own release inputs
+      - name: Emit SLSA subjects from the real artifact digests
+        id: subjects
+        working-directory: dist
         run: |
-          ARTIFACT=$(ls dist/*.tgz | head -1)
-          bun run scripts/verify-release.ts --artifact "$ARTIFACT" \
-            --sums dist/SHA256SUMS --sbom dist/sbom.cyclonedx.json \
-            --local-key /dev/null --local-sig /dev/null || true
+          SUBJECTS="$(sha256sum xr-* *.tgz sbom.cyclonedx.json SHA256SUMS)"
+          echo "$SUBJECTS"
+          echo "base64=$(echo "$SUBJECTS" | base64 -w0)" >> "$GITHUB_OUTPUT"
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle
+          path: |
+            dist/
+            CHANGELOG.md
+          retention-days: 3
 
+  # ── 3. Keyless signing (public Rekor) ─────────────────────────────────────
+  sign:
+    name: cosign keyless sign (Rekor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [assemble]
+    permissions:
+      contents: read
+      id-token: write # GitHub OIDC → Fulcio
+    steps:
+      - name: Download release bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: release-bundle
+          path: dist
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
-
-      - name: Sign artifact + SBOM keylessly (Rekor)
+      - name: Sign checksums + npm tarball + SBOM keylessly
         env:
           COSIGN_EXPERIMENTAL: "1"
         working-directory: dist
         run: |
-          for f in $(ls *.tgz) sbom.cyclonedx.json SHA256SUMS; do
+          cosign sign-blob --yes SHA256SUMS --bundle SHA256SUMS.bundle
+          for f in rrrtx-xr-*.tgz sbom.cyclonedx.json; do
             cosign sign-blob --yes "$f" --bundle "$f.bundle"
           done
+      - name: Upload signed bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-bundle
+          path: |
+            dist/
+            CHANGELOG.md
+          retention-days: 3
 
-      - name: Upload release assets (signed, with Rekor bundles)
+  # ── 4. GitHub Release (assets + changelog notes) ──────────────────────────
+  release:
+    name: GitHub Release (signed assets)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [sign]
+    permissions:
+      contents: write
+    steps:
+      - name: Download signed bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-bundle
+          path: dist
+      - name: Extract release notes for this version
+        run: |
+          V="${{ needs.assemble.outputs.version }}"
+          awk -v v="## $V —" '
+            index($0, v) == 1 { p=1; next }
+            p && /^## [0-9]+\.[0-9]+\.[0-9]+/ { exit }
+            p { print }
+          ' dist/CHANGELOG.md > RELEASE-NOTES.md || true
+          test -s RELEASE-NOTES.md || echo "Release $V — see CHANGELOG.md" > RELEASE-NOTES.md
+      - name: Publish release (prerelease channel honored)
         uses: softprops/action-gh-release@v2
         with:
+          name: XR v${{ needs.assemble.outputs.version }}
+          body_path: RELEASE-NOTES.md
+          prerelease: ${{ needs.assemble.outputs.prerelease == 'true' }}
           files: |
             dist/*
-          generate_release_notes: true
 
+  # ── 5. SLSA3 provenance over the REAL digests (the Phase-4 fix) ───────────
   provenance:
     name: SLSA provenance (build level 3)
+    needs: [assemble, release]
     permissions:
       actions: read
       id-token: write
       contents: write
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
     with:
-      base64-subjects: "${{ needs.build-and-sign.outputs.digests }}"
+      base64-subjects: ${{ needs.assemble.outputs.digests }}
       upload-assets: true
-    needs: build-and-sign
 
+  # ── 6. npm channel (OIDC trusted publishing; dist-tag latest|beta) ────────
   publish-npm:
-    name: Publish to npm (OIDC trusted publishing + provenance)
+    name: Publish npm (trusted publishing, provenance)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [build-and-sign, provenance]
+    needs: [assemble, sign]
     environment: npm-publish
     permissions:
-      id-token: write # npm trusted publishing
+      id-token: write # npm OIDC trusted publishing — no long-lived token
       contents: read
     steps:
       - name: Checkout tag
@@ -118,7 +272,112 @@ jobs:
         uses: oven-sh/setup-bun@v2
       - name: Install (frozen, no scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Publish with provenance (no long-lived token)
-        run: bun pm publish --provenance
+      - name: Publish with provenance (prerelease → beta dist-tag)
+        run: |
+          if [ "${{ needs.assemble.outputs.prerelease }}" = "true" ]; then
+            bun pm publish --provenance --tag beta
+          else
+            bun pm publish --provenance --tag latest
+          fi
+
+  # ── 7. Docker channel (GHCR, attestations, cosign) ────────────────────────
+  publish-docker:
+    name: Publish Docker (GHCR + cosign sign)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [assemble, sign]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image metadata (version channels; prereleases never move latest)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ needs.assemble.outputs.prerelease == 'false' }}
+            type=raw,value=beta,enable=${{ needs.assemble.outputs.prerelease == 'true' }}
+      - name: Build + push multi-arch image (SBOM + SLSA buildx attestations)
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign the pushed image digest keylessly (Rekor)
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          COSIGN_EXPERIMENTAL: "1"
+        run: cosign sign --yes "ghcr.io/${{ github.repository }}@${{ steps.push.outputs.digest }}"
+
+  # ── 8. Channel stamping from the SIGNED checksums (no channel drift) ──────
+  publish-channels:
+    name: Stamp + publish channel manifests (homebrew/winget/scoop)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [assemble, release]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Download signed bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-bundle
+          path: dist
+      - name: Stamp all channel manifests from the signed SHA256SUMS
+        run: bun run scripts/channel-manifest.ts --stamp --sums dist/SHA256SUMS --out dist/channels
+      - name: Publish stamped channels as release assets (homebrew/winget/scoop)
+        run: |
+          cp -R dist/channels dist/channels-upload
+      - name: Attach channel bundle to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/channels/**
+      - name: Push the Homebrew formula to the project tap (operator-enabled)
+        # Operator opt-in: set repo variable HOMEBREW_TAP_PUBLISH=true, variable
+        # HOMEBREW_TAP_REPO=owner/homebrew-tap and secret TAP_GITHUB_TOKEN scoped
+        # to that repo only (least privilege). Without it, the stamped formula
+        # still ships as a release asset — nothing unsigned, nothing missing.
+        if: ${{ vars.HOMEBREW_TAP_PUBLISH == 'true' }}
+        env:
+          TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+        run: |
+          git config user.name "xr-release-bot"
+          git config user.email "release-bot@users.noreply.github.com"
+          git clone "https://x-access-token:${{ secrets.TAP_GITHUB_TOKEN }}@github.com/${TAP_REPO}.git" tap
+          mkdir -p tap/Formula
+          cp dist/channels/homebrew/xr.rb tap/Formula/xr.rb
+          cd tap
+          if ! git diff --quiet; then
+            git add Formula/xr.rb
+            git commit -m "xr: ${{ needs.assemble.outputs.version }} (stamped from signed SHA256SUMS)"
+            git push
+          else
+            echo "tap already in sync"
+          fi
