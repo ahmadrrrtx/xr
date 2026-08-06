@@ -54,7 +54,7 @@ export default function EnterprisePage() {
       <section className="py-20">
         <div className="mx-auto max-w-7xl px-6">
           <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 text-center mb-8">
-            Trusted by regulated industries
+          Supported deployment targets
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {deploymentTargets.map((l) => (

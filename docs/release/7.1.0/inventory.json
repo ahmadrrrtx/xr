@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-05T18:38:45.183Z",
+  "generatedAt": "2026-08-06T08:49:26.853Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -259,11 +259,11 @@
     },
     {
       "path": "package.json",
-      "bytes": 4356
+      "bytes": 4572
     },
     {
       "path": "release.manifest.json",
-      "bytes": 6610
+      "bytes": 9380
     },
     {
       "path": "tsconfig.json",

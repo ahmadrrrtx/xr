@@ -24,7 +24,7 @@ const sections = [
   { icon: Workflow, title: "MCP & tools", desc: "Use any MCP server. Build custom tools and adapters.", href: "/docs/mcp" },
   { icon: Cpu, title: "Models", desc: "Configure local, remote, and custom models. Routing rules.", href: "/docs/models" },
   { icon: ShieldCheck, title: "Security", desc: "Capabilities, policies, secrets, and audit.", href: "/docs/security" },
-  { icon: Rocket, title: "Deployment", desc: "Self-host, VPC deploy, and operate XR at scale.", href: "/docs/deployment" },
+  { icon: Rocket, title: "Deployment", desc: "Self-host and operate XR on your own infrastructure.", href: "/docs/deployment" },
   { icon: BookText, title: "API reference", desc: "TypeScript and REST APIs, typed clients, Webhooks.", href: "/docs/api" },
 ];
 

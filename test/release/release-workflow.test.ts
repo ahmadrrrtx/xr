@@ -108,8 +108,15 @@ describe("Phase 9 · T4 — cross-platform.yml runs full parity on 3 OS families
     expect(crossPlatform).toContain("windows-latest");
   });
   test("one parity authority computes the suite per OS (no hand-picked subsets)", () => {
-    expect(crossPlatform).toContain("platform-parity.ts --os ${{ matrix.bunOs }} --args");
+    // The suite step delegates to the segmented runner script, which itself
+    // asks scripts/platform-parity.ts (the single authority) for the file
+    // list. The --validate step stays inline. A hand-picked subset in the
+    // workflow (or a runner that stopped consulting the authority) fails.
+    expect(crossPlatform).toContain("scripts/parity-suite-runner.sh");
     expect(crossPlatform).toContain("platform-parity.ts --validate");
+    const runner = readFileSync(join(ROOT, "scripts", "parity-suite-runner.sh"), "utf8");
+    expect(runner).toContain("platform-parity.ts --os \"$OS\" --args");
+    expect(runner).toContain("executed $RAN of $EXPECTED files");
   });
   test("typecheck + golden path run on every OS", () => {
     expect(crossPlatform).toContain("bunx tsc --noEmit");

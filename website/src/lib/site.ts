@@ -8,7 +8,7 @@
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 7.0.0 (Supremacy) — from src/core/version.ts
+ *   Version: 7.1.0 (Truth) — from release.manifest.json
  */
 
 export const site = {

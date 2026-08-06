@@ -287,6 +287,11 @@ export function checkAction(action: ActionCheck, ctx: PolicyContext): PolicyDeci
     if (!matches) continue;
 
     for (const candidate of matches) {
+      // Windows absolute paths (C:\... or C:/...) are filesystem paths, not
+      // URL schemes. Without this, a shell command such as
+      // `echo x > "C:\Users\me\out.txt"` would be misread as egress to a "c:"
+      // scheme and denied on Windows (the shell-isolation tests exercise this).
+      if (/^[a-zA-Z]:[\\/]/.test(candidate)) continue;
       let url: URL;
       try {
         url = new URL(candidate);

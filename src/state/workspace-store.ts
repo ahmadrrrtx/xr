@@ -117,7 +117,7 @@ export class WorkspaceStore {
   public readonly workspaceId: string;
 
   constructor(workspaceIdOrPath: string = "default", path?: string) {
-    const legacyPath = path === undefined && (workspaceIdOrPath.includes("/") || workspaceIdOrPath.endsWith(".db"));
+    const legacyPath = path === undefined && (workspaceIdOrPath.includes("/") || workspaceIdOrPath.includes("\\") || workspaceIdOrPath.endsWith(".db"));
     this.workspaceId = legacyPath ? "default" : workspaceIdOrPath;
     path = legacyPath ? workspaceIdOrPath : (path ?? join(XR_HOME, "xr.db"));
     // Ensure the home dir exists before opening the DB ("never breaks" rule).

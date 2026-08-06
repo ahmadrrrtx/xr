@@ -19,7 +19,7 @@ export default function ResearchPage() {
           {research.map((r) => (
             <a
               key={r.title}
-              href={`${site.github}/tree/main/docs`}
+              href={`${site.github}/tree/main/${r.doc}`}
               target="_blank"
               rel="noreferrer"
               className="card p-6 flex items-start gap-4 group"

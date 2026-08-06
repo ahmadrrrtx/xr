@@ -58,43 +58,18 @@ jobs:
         shell: bash
         run: |
           # ONE computation authority for WHAT runs: scripts/platform-parity.ts.
-          # HOW it runs: per-directory segments. A single 214-file monolithic
-          # `bun test` process intermittently dies mid-run on hosted runners
-          # (win32 exit 3 at ~85s; linux exit 1 at ~68s — no test-failure
-          # output, matching bun-on-Windows crash classes in transpiler/GC/
-          # teardown under accumulated load). Fresh process per segment caps
-          # heap/lifetime pressure, keeps every gate identical, echoes the
-          # segment name before running it (a future crash names its own
-          # culprit), and the count guard makes a silent skip impossible
-          # (Art. XX.4/XX.5): executed files MUST equal the authority's list.
-          FILES=$(bun run scripts/platform-parity.ts --os ${{ matrix.bunOs }} --args)
-          EXPECTED=$(echo $FILES | wc -w)
-          echo "running $EXPECTED test files (per-directory segments, one computation authority)"
-          RAN=0
-          STATUS=0
-          XR_SEGDIRS=$(echo $FILES | tr ' ' '\n' | grep -E '^test/[^/]+/' | cut -d/ -f1,2 | sort -u)
-          for G in $XR_SEGDIRS; do
-            SEG=$(echo $FILES | tr ' ' '\n' | grep -E "^$G/")
-            N=$(echo "$SEG" | wc -l)
-            RAN=$((RAN + N))
-            echo "::group::suite segment $G/ — $N files"
-            bun test $(echo "$SEG" | tr '\n' ' ') || STATUS=1
-            echo "::endgroup::"
-          done
-          ROOTSEG=$(echo $FILES | tr ' ' '\n' | grep -E '^test/[^/]+$' || true)
-          if [ -n "$ROOTSEG" ]; then
-            N=$(echo "$ROOTSEG" | wc -l)
-            RAN=$((RAN + N))
-            echo "::group::suite segment test/ (root) — $N files"
-            bun test $(echo "$ROOTSEG" | tr '\n' ' ') || STATUS=1
-            echo "::endgroup::"
-          fi
-          echo "executed $RAN of $EXPECTED files"
-          if [ "$RAN" -ne "$EXPECTED" ]; then
-            echo "SEGMENT GUARD FAILED: $RAN != $EXPECTED — a file silently vanished (Art. XX.4)"
-            exit 1
-          fi
-          exit $STATUS
+          # HOW it runs: per-directory segments via scripts/parity-suite-runner.sh.
+          # A single 214-file monolithic `bun test` process intermittently dies
+          # mid-run on hosted runners (win32 exit 3 at ~85s; linux exit 1 at
+          # ~68s — no test-failure output, matching bun-on-Windows crash classes
+          # in transpiler/GC/teardown under accumulated load). Fresh process per
+          # segment caps heap/lifetime pressure, keeps every gate identical, echoes
+          # the segment name before running it, and retries a segment ONCE when it
+          # exits non-zero with ZERO test failures (crash class) — a segment with
+          # any real test failure fails immediately and prints its full output.
+          # The count guard makes a silent skip impossible (Art. XX.4/XX.5):
+          # executed files MUST equal the authority's list.
+          bash scripts/parity-suite-runner.sh ${{ matrix.bunOs }}
       - name: Golden path (hermetic)
         shell: bash
         run: bun run golden-path
