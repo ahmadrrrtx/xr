@@ -18,11 +18,17 @@
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = join(import.meta.dir, "..", ".."); // repo root
+// Node-compatible module location (works under BOTH Bun and Node; the website
+// CI and Vercel typecheck this file with Node's ImportMeta, which has no
+// `import.meta.dir`). `new URL(".", import.meta.url)` resolves to the
+// directory of this script.
+const HERE = fileURLToPath(new URL(".", import.meta.url)); // .../website/scripts/
+const ROOT = join(HERE, "..", ".."); // repo root
 const SKILLS_DIR = join(ROOT, "skills");
 const PLUGINS_DIR = join(ROOT, "plugins");
-const OUT_FILE = join(import.meta.dir, "..", "src", "lib", "marketplace.generated.ts");
+const OUT_FILE = join(HERE, "..", "src", "lib", "marketplace.generated.ts");
 
 interface SkillManifest {
   id?: string;

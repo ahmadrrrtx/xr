@@ -82,10 +82,15 @@ export function detectChannel(env: DetectEnvironment): ChannelInfo {
 
   // ── Homebrew: binary lives in the Cellar (<prefix>/Cellar/xr/<v>/bin/xr)
   //    or is linked from <prefix>/bin/ and the formula is installed.
+  //    Path comparisons are separator-normalized so the check is host-OS
+  //    independent: on Windows, node:path joins with backslashes, which would
+  //    never match a darwin/linux exe path (the Scoop/WinGet branches below
+  //    already normalize; the Homebrew branch must too).
+  const norm = (p: string) => p.replace(/\\/g, "/");
   const brewPrefix = env.brewPrefix ?? (env.platform === "darwin" ? "/opt/homebrew" : "/home/linuxbrew/.linuxbrew");
-  const inCellar = exe.includes(join(brewPrefix, "Cellar", "xr"));
+  const inCellar = norm(exe).includes(norm(join(brewPrefix, "Cellar", "xr")));
   const brewInstalled = env.isBrewInstalled?.() ?? false;
-  if (inCellar || (brewInstalled && exe.startsWith(join(brewPrefix, "bin")))) {
+  if (inCellar || (brewInstalled && norm(exe).startsWith(norm(join(brewPrefix, "bin"))))) {
     return {
       channel: "homebrew",
       detail: `Homebrew formula (prefix ${brewPrefix})`,

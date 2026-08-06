@@ -81,10 +81,26 @@ function makeTrust(backends: ConstructorParameters<typeof EnvironmentManager>[0]
   });
 }
 
+/** Convert a host path to the form the canonical shell (bash) understands on
+ *  this OS. The isolated runner and the legacy path both execute `bash -lc` on
+ *  every platform (Git Bash on Windows). bash does not treat backslashes as
+ *  separators, so a Windows absolute path must become its MSYS mount form
+ *  (`C:\Users\me\x.txt` → `/c/Users/me/x.txt`) or the marker lands in the
+ *  wrong place and node:fs cannot find it.
+ */
+function shellPath(p: string): string {
+  if (process.platform === "win32") {
+    const m = /^([a-zA-Z]):\\(.*)$/.exec(p);
+    if (m) return `/${m[1]!.toLowerCase()}/${m[2]!.replace(/\\/g, "/")}`;
+  }
+  return p;
+}
+
 /** A command that creates a marker file when executed — the test asserts its
  *  absence to prove a blocked command truly never ran. */
 function markerCommand(marker: string): string {
-  return `echo isolated > ${JSON.stringify(marker)}; cat ${JSON.stringify(marker)}`;
+  const p = shellPath(marker);
+  return `echo isolated > ${JSON.stringify(p)}; cat ${JSON.stringify(p)}`;
 }
 
 describe("Phase 4 · T1/T3 — canonical-path shell isolation", () => {
