@@ -30,12 +30,12 @@ export const features = [
   {
     icon: Terminal,
     title: "Native Shell",
-    desc: "XR lives inside your terminal. Native commands, pipes, and a sub-10ms cold start. No browser required.",
+    desc: "XR lives inside your terminal. Native commands, pipes, and a ~36 ms cold start (measured p95). No browser required.",
   },
   {
     icon: Code2,
     title: "Editor Agnostic",
-    desc: "First-class integrations with VS Code, Neovim, JetBrains, Zed, and Cursor. Your agent, every surface.",
+    desc: "A bundled VS Code extension, and a CLI that runs in any terminal. Your agent, every surface.",
   },
   {
     icon: Boxes,
@@ -50,7 +50,7 @@ export const features = [
   {
     icon: ShieldCheck,
     title: "Security by Default",
-    desc: "Capability-based security, human-in-the-loop confirmations, signed skills, and end-to-end audit logging.",
+    desc: "Capability-based security, human-in-the-loop confirmations, signed skills, and a hash-chained audit log.",
   },
   {
     icon: GitBranch,
@@ -60,7 +60,7 @@ export const features = [
   {
     icon: Workflow,
     title: "MCP Native",
-    desc: "Use any Model Context Protocol server out of the box. Build your own MCP tools with a single file.",
+    desc: "An MCP client with a signed, default-deny allowlist. Grant exact commands and network access per server.",
   },
   {
     icon: Zap,
@@ -88,322 +88,15 @@ export const logos = [
   "OpenRouter",
 ];
 
-export const marketplaceCategories = [
-  { id: "all", label: "All" },
-  { id: "coding", label: "Coding" },
-  { id: "devops", label: "DevOps" },
-  { id: "data", label: "Data" },
-  { id: "design", label: "Design" },
-  { id: "productivity", label: "Productivity" },
-  { id: "research", label: "Research" },
-  { id: "writing", label: "Writing" },
-  { id: "security", label: "Security" },
-  { id: "web", label: "Web" },
-];
-
-type ItemType = "skill" | "extension";
-
-export interface MarketplaceItem {
-  id: string;
-  name: string;
-  tagline: string;
-  description: string;
-  type: ItemType;
-  category: string;
-  author: string;
-  authorHandle: string;
-  verified: boolean;
-  downloads: number;
-  rating: number;
-  reviews: number;
-  version: string;
-  compatibility: string;
-  icon: React.ComponentType<{ className?: string }>;
-  iconBg: string;
-  installs: string;
-  updated: string;
-  installCmd: string;
-  tags: string[];
-}
-
-export const marketplaceItems: MarketplaceItem[] = [
-  {
-    id: "pr-reviewer",
-    name: "PR Reviewer",
-    tagline: "Review pull requests with context-aware analysis",
-    description:
-      "Scans diffs, links to tickets, flags risky changes, and drafts review comments with code suggestions. Supports GitHub, GitLab, and Bitbucket.",
-    type: "skill",
-    category: "coding",
-    author: "XR Official",
-    authorHandle: "@xr",
-    verified: true,
-    downloads: 1_240_000,
-    rating: 4.9,
-    reviews: 3421,
-    version: "2.4.1",
-    compatibility: "XR 3.0+",
-    icon: GitBranch,
-    iconBg: "linear-gradient(135deg,#7c5cff,#3b82f6)",
-    installs: "1.2M",
-    updated: "2 days ago",
-    installCmd: "xr skills add pr-reviewer",
-    tags: ["git", "code-review", "github"],
-  },
-  {
-    id: "code-search",
-    name: "Codebase Search",
-    tagline: "Semantic search across your entire repo",
-    description:
-      "Indexes your codebase locally and answers questions across files, functions, and commits. Reranks by symbol relevance.",
-    type: "skill",
-    category: "coding",
-    author: "XR Official",
-    authorHandle: "@xr",
-    verified: true,
-    downloads: 980_000,
-    rating: 4.8,
-    reviews: 2104,
-    version: "1.9.0",
-    compatibility: "XR 3.0+",
-    icon: Search,
-    iconBg: "linear-gradient(135deg,#22d3ee,#6366f1)",
-    installs: "980K",
-    updated: "5 days ago",
-    installCmd: "xr skills add code-search",
-    tags: ["search", "embeddings", "indexing"],
-  },
-  {
-    id: "refactor",
-    name: "Smart Refactor",
-    tagline: "Automated refactors with type-safe transforms",
-    description:
-      "Performs AST-guided renames, module splits, and dependency cleanup. Generates PRs with before/after diffs.",
-    type: "skill",
-    category: "coding",
-    author: "Hermes Labs",
-    authorHandle: "@hermes",
-    verified: true,
-    downloads: 540_000,
-    rating: 4.7,
-    reviews: 1203,
-    version: "3.1.2",
-    compatibility: "XR 3.1+",
-    icon: FileCode2,
-    iconBg: "linear-gradient(135deg,#f472b6,#f59e0b)",
-    installs: "540K",
-    updated: "1 week ago",
-    installCmd: "xr skills add smart-refactor",
-    tags: ["refactor", "typescript", "ast"],
-  },
-  {
-    id: "deploy",
-    name: "One-Click Deploy",
-    tagline: "Deploy to Vercel, Cloudflare, AWS, Fly.io",
-    description:
-      "Detects your stack, provisions infra, configures CI, and ships preview environments. Rollback with a command.",
-    type: "extension",
-    category: "devops",
-    author: "XR Official",
-    authorHandle: "@xr",
-    verified: true,
-    downloads: 720_000,
-    rating: 4.8,
-    reviews: 1876,
-    version: "2.0.0",
-    compatibility: "XR 3.0+",
-    icon: Rocket,
-    iconBg: "linear-gradient(135deg,#10b981,#06b6d4)",
-    installs: "720K",
-    updated: "3 days ago",
-    installCmd: "xr extensions add deploy",
-    tags: ["deploy", "vercel", "cloud"],
-  },
-  {
-    id: "db-browser",
-    name: "Database Studio",
-    tagline: "Browsing, migrations, and query explain",
-    description:
-      "Connect to Postgres, MySQL, SQLite, MongoDB, Supabase, Turso, and Neon. Generate type-safe migrations.",
-    type: "extension",
-    category: "data",
-    author: "DataStream",
-    authorHandle: "@datastream",
-    verified: true,
-    downloads: 310_000,
-    rating: 4.6,
-    reviews: 684,
-    version: "1.4.3",
-    compatibility: "XR 3.0+",
-    icon: Database,
-    iconBg: "linear-gradient(135deg,#8b5cf6,#ec4899)",
-    installs: "310K",
-    updated: "2 weeks ago",
-    installCmd: "xr extensions add db-studio",
-    tags: ["database", "sql", "migrations"],
-  },
-  {
-    id: "security-audit",
-    name: "Security Audit",
-    tagline: "SAST, dependency, and secret scanning",
-    description:
-      "Scans repos for vulnerabilities, leaked secrets, and supply-chain risks. Produces SARIF reports.",
-    type: "skill",
-    category: "security",
-    author: "LockShield",
-    authorHandle: "@lockshield",
-    verified: true,
-    downloads: 220_000,
-    rating: 4.9,
-    reviews: 412,
-    version: "1.2.8",
-    compatibility: "XR 3.1+",
-    icon: Lock,
-    iconBg: "linear-gradient(135deg,#ef4444,#f97316)",
-    installs: "220K",
-    updated: "4 days ago",
-    installCmd: "xr skills add security-audit",
-    tags: ["security", "sast", "secrets"],
-  },
-  {
-    id: "design-tokens",
-    name: "Design Tokens",
-    tagline: "Sync design tokens from Figma to code",
-    description:
-      "Pulls styles, typography scales, and color systems from Figma and emits Tailwind / CSS / Swift / Compose.",
-    type: "extension",
-    category: "design",
-    author: "Palette",
-    authorHandle: "@palette",
-    verified: false,
-    downloads: 84_000,
-    rating: 4.5,
-    reviews: 198,
-    version: "0.9.4",
-    compatibility: "XR 3.0+",
-    icon: Palette,
-    iconBg: "linear-gradient(135deg,#ec4899,#a855f7)",
-    installs: "84K",
-    updated: "6 days ago",
-    installCmd: "xr extensions add design-tokens",
-    tags: ["figma", "design", "tokens"],
-  },
-  {
-    id: "research-deep",
-    name: "Deep Research",
-    tagline: "Multi-source research with citations",
-    description:
-      "Performs iterative web research, synthesizes findings, and outputs cited reports. Supports arXiv and academic APIs.",
-    type: "skill",
-    category: "research",
-    author: "XR Official",
-    authorHandle: "@xr",
-    verified: true,
-    downloads: 610_000,
-    rating: 4.9,
-    reviews: 2341,
-    version: "2.1.0",
-    compatibility: "XR 3.0+",
-    icon: BookOpen,
-    iconBg: "linear-gradient(135deg,#14b8a6,#6366f1)",
-    installs: "610K",
-    updated: "1 day ago",
-    installCmd: "xr skills add deep-research",
-    tags: ["research", "web", "citations"],
-  },
-  {
-    id: "docs-writer",
-    name: "Docs Writer",
-    tagline: "Auto-generate docs from code",
-    description:
-      "Generates READMEs, TSDoc, JSDoc, OpenAPI specs, and MDX guides. Keeps docs in sync on every commit.",
-    type: "skill",
-    category: "writing",
-    author: "DocForge",
-    authorHandle: "@docforge",
-    verified: true,
-    downloads: 290_000,
-    rating: 4.7,
-    reviews: 541,
-    version: "1.7.2",
-    compatibility: "XR 3.0+",
-    icon: BookOpen,
-    iconBg: "linear-gradient(135deg,#0ea5e9,#22c55e)",
-    installs: "290K",
-    updated: "2 weeks ago",
-    installCmd: "xr skills add docs-writer",
-    tags: ["docs", "tsdoc", "openapi"],
-  },
-  {
-    id: "web-preview",
-    name: "Live Preview",
-    tagline: "Instant browser preview with hot reload",
-    description:
-      "Spins up a sandboxed browser for your web app. Captures screenshots, runs Lighthouse, and flags regressions.",
-    type: "extension",
-    category: "web",
-    author: "XR Official",
-    authorHandle: "@xr",
-    verified: true,
-    downloads: 420_000,
-    rating: 4.6,
-    reviews: 912,
-    version: "1.5.0",
-    compatibility: "XR 3.1+",
-    icon: Globe,
-    iconBg: "linear-gradient(135deg,#f59e0b,#ef4444)",
-    installs: "420K",
-    updated: "1 week ago",
-    installCmd: "xr extensions add live-preview",
-    tags: ["browser", "preview", "lighthouse"],
-  },
-  {
-    id: "metrics",
-    name: "Metrics Dashboard",
-    tagline: "Real-time telemetry for your agents",
-    description:
-      "Tracks token usage, tool calls, success rates, and cost. Emits OpenTelemetry to your favorite backend.",
-    type: "extension",
-    category: "devops",
-    author: "TraceLine",
-    authorHandle: "@traceline",
-    verified: true,
-    downloads: 140_000,
-    rating: 4.5,
-    reviews: 302,
-    version: "1.1.0",
-    compatibility: "XR 3.1+",
-    icon: LineChart,
-    iconBg: "linear-gradient(135deg,#06b6d4,#8b5cf6)",
-    installs: "140K",
-    updated: "3 weeks ago",
-    installCmd: "xr extensions add metrics",
-    tags: ["otel", "telemetry", "cost"],
-  },
-  {
-    id: "toolkit",
-    name: "Productivity Toolkit",
-    tagline: "Calendar, email, Slack, Notion, Linear",
-    description:
-      "Connects your daily tools. Reads mail, drafts replies, triages Linear issues, and summarizes Slack threads.",
-    type: "skill",
-    category: "productivity",
-    author: "XR Official",
-    authorHandle: "@xr",
-    verified: true,
-    downloads: 890_000,
-    rating: 4.8,
-    reviews: 2810,
-    version: "3.0.1",
-    compatibility: "XR 3.0+",
-    icon: Wrench,
-    iconBg: "linear-gradient(135deg,#64748b,#0ea5e9)",
-    installs: "890K",
-    updated: "5 days ago",
-    installCmd: "xr skills add toolkit",
-    tags: ["slack", "notion", "linear"],
-  },
-];
+// Marketplace content is GENERATED from the real bundled inventory
+// (skills/* and plugins/*) — see website/scripts/generate-marketplace.ts.
+// It carries no fabricated popularity metrics (Constitution Art. XV.4).
+export {
+  marketplaceCategories,
+  marketplaceItems,
+  type MarketplaceItem,
+  type ItemType,
+} from "./marketplace.generated";
 
 export const models = [
   {
@@ -474,75 +167,44 @@ export const models = [
   },
 ];
 
+// XR has no hosted SaaS and no paid tier. These plans describe the single
+// MIT-licensed, self-hosted product honestly: what individuals get, and what
+// the optional, opt-in enterprise deployment profile adds (all operated
+// locally — there is no XR cloud and no control plane to depend on).
 export const pricingPlans = [
   {
-    name: "Free",
+    name: "XR",
     price: "$0",
-    cadence: "forever",
-    description: "For individual developers exploring XR.",
-    cta: "Get started",
+    cadence: "forever · MIT-licensed",
+    description: "Free and open source. XR is self-hosted software you run yourself.",
+    cta: "Get XR",
     href: "/downloads",
-    featured: false,
+    featured: true,
     features: [
-      "XR CLI + dashboard",
-      "Unlimited local runs",
-      "Access to free models",
-      "Community skills",
-      "Public marketplace",
+      "CLI + dashboard",
+      "Local-first — no mandatory cloud",
+      "BYOK, or local models (Ollama, llama.cpp, vLLM)",
+      "Per-task spend caps",
+      "Tamper-evident audit log",
+      "Plugins, MCP, skills",
       "Community support",
     ],
   },
   {
-    name: "Pro",
-    price: "$20",
-    cadence: "per user / month",
-    description: "For developers who ship with XR daily.",
-    cta: "Start Pro trial",
-    href: "/downloads",
-    featured: true,
-    features: [
-      "Everything in Free",
-      "Pro models (GPT-5, Claude Opus, XR Core)",
-      "Priority skill access",
-      "Private skills & teams",
-      "Advanced MCP servers",
-      "Session replay & trace search",
-      "Priority support",
-    ],
-  },
-  {
-    name: "Team",
-    price: "$40",
-    cadence: "per user / month",
-    description: "For teams collaborating on agents and workflows.",
-    cta: "Start Team trial",
+    name: "For teams & organizations",
+    price: "Self-hosted",
+    cadence: "you run it",
+    description: "Deploy XR on your own infrastructure. Enterprise controls are operated locally and opt-in per deployment.",
+    cta: "Deployment docs",
     href: "/enterprise",
     featured: false,
     features: [
-      "Everything in Pro",
-      "SSO / SAML",
-      "Shared workspaces",
-      "Role-based access",
-      "Audit logs (90 days)",
-      "Custom model gateways",
-      "SLAs & dedicated support",
-    ],
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    cadence: "annual",
-    description: "For organizations that need security, scale, and control.",
-    cta: "Contact sales",
-    href: "/contact",
-    featured: false,
-    features: [
-      "Everything in Team",
-      "Self-hosted runtime",
-      "VPC deployment",
-      "Dedicated models",
-      "Custom skills & SLA",
-            "Dedicated solutions engineer",
+      "Layered org/workspace policy (most-restrictive-wins)",
+      "Hash-chained audit export with retention schedules & legal hold",
+      "Incident workflow with evidence-bound states",
+      "SLO definitions with honest measurability",
+      "Backup verification and restore drills",
+      "No hosted control plane required",
     ],
   },
 ];
@@ -550,7 +212,7 @@ export const pricingPlans = [
 export const faqs = [
   {
     q: "Is XR open-source?",
-    a: "Yes. The XR runtime, CLI, and most official skills are MIT-licensed. Some cloud-only features ship under a commercial license.",
+    a: "Yes. XR is fully MIT-licensed. There is no commercial tier and no cloud-only product — the same software runs for individuals and organizations.",
   },
   {
     q: "Which editors are supported?",
@@ -578,7 +240,7 @@ export const changelog = [
   {
     version: "3.1.0",
     date: "July 8, 2026",
-    title: "XR 3.1 G — The Agentic Runtime",
+    title: "XR 3.1 — The Agentic Runtime",
     highlights: [
       "Runtime performance work across the agent loop",
       "New skill graph with typed compositions",
@@ -602,11 +264,10 @@ export const changelog = [
   {
     version: "3.0.0",
     date: "April 14, 2026",
-    title: "XR 3.0 — General availability",
+    title: "XR 3.0 — Release",
     highlights: [
       "Stable runtime API",
       "Skill marketplace scaffolding",
-      "Enterprise SSO",
     ],
   },
 ];
@@ -614,13 +275,21 @@ export const changelog = [
 export const posts = [
   {
     slug: "xr-3-1-ga",
-    title: "XR 3.1 is generally available",
+    title: "XR 3.1 — the agentic runtime",
     excerpt:
       "Notes on the agentic runtime: the skill layer, the model router, and the security gate.",
     author: "The XR Team",
     date: "July 8, 2026",
     tag: "Release",
     readTime: "6 min read",
+    body: [
+      "XR 3.1 is the agentic runtime release: a typed skill layer, an explainable model router, and a fail-closed security gate.",
+      "The skill layer is manifest-governed: every skill declares its id, version, publisher, permissions, and categories, so what you install is what you audit.",
+      "The model router explains why a model was chosen — capability, cost, latency, and locality are all inputs, and sensitive work never silently routes to the cloud.",
+      "The security gate canonicalizes policy decisions first, then evaluates them, and denies what it cannot canonicalize. Unparseable reviewer output is treated as a request for changes, never as approval.",
+      "Measured baseline: CLI fast path cold start ~36 ms p95, doctor readiness ~456 ms p95, retrieval over 100k items ~33 ms p95. Budgets and regression gates are enforced in CI.",
+      "Next: faster local models, richer multi-agent orchestration, and deeper editor integrations.",
+    ],
   },
   {
     slug: "skill-graph",
@@ -631,6 +300,13 @@ export const posts = [
     date: "June 22, 2026",
     tag: "Engineering",
     readTime: "12 min read",
+    body: [
+      "Skills are the primitive of agentic software: packaged capabilities that travel with their own provenance, permissions, and tests.",
+      "Every skill in the repository ships a manifest (xr-skill.json) declaring id, version, publisher, license, categories, tags, and a description. Skills are typed: executable, connector, prompt-pack, knowledge-pack, or experimental.",
+      "Bundled skills ship with XR and are discovered automatically; you can inspect any skill with `xr skills inspect <id>`.",
+      "Skills execute through the same execution envelope as everything else: policy is evaluated before any tool call, and every consequential action is recorded in the hash-chained audit log.",
+      "The capability ecosystem adds a provenance graph, an evidence-based trust scorer (popularity contributes at most a 5% nudge), and a signed MCP allowlist that is default-deny.",
+    ],
   },
   {
     slug: "security-model",
@@ -641,6 +317,13 @@ export const posts = [
     date: "May 30, 2026",
     tag: "Security",
     readTime: "9 min read",
+    body: [
+      "XR's security model separates authority from intelligence: a model proposes, but policy, identity, isolation, and approval grant.",
+      "Every consequential action flows through one execution envelope: intent, plan, policy decision, placement, action, observation, evidence, outcome.",
+      "Isolation follows risk. Low-risk work runs in-process; high-risk actions — shell, code, secrets, external writes — are placed in restricted or container isolation. In-process policy is a data boundary, not a security boundary.",
+      "The reviewer is fail-closed: it requires strict JSON, and anything unparseable is changes_requested, never silently approved.",
+      "The audit log is hash-chained and serialized, and can be verified with one command. XR is not certified by any third party and makes no SOC 2, ISO 27001, or HIPAA claim.",
+    ],
   },
   {
     slug: "local-first",
@@ -651,32 +334,53 @@ export const posts = [
     date: "May 12, 2026",
     tag: "Tutorial",
     readTime: "7 min read",
+    body: [
+      "XR is designed to run entirely on your machine: CLI, dashboard, and model access all work offline.",
+      "Local inference engines — Ollama, llama.cpp, LM Studio, vLLM — are first-class provider presets. Bring your own API keys if you prefer cloud models; keys stay in your environment and are never logged.",
+      "There is no XR cloud and no mandatory control plane. Telemetry is off by default; the only outbound call the runtime makes is to a model provider you configured.",
+      "The audit log, memory, sessions, and workflow records all live in your local state directory.",
+      "You can verify this yourself: run XR with no network and finish a local task end to end.",
+    ],
   },
 ];
 
+// Research = engineering write-ups that actually ship inside the repository.
+// Each entry points at a real docs/ artifact; nothing here is a peer-reviewed
+// paper and no fabricated study is presented as one.
 export const research = [
   {
-    title: "Skill Memory: Episodic Retrieval for Long-Horizon Agents",
-    authors: "XR Research",
+    title: "The XR Execution Fabric",
+    authors: "XR Engineering",
     year: 2026,
-    tag: "Agents",
+    tag: "Architecture",
+    doc: "docs/EXECUTION_FABRIC.md",
   },
   {
-    title: "Typed Tool Use: Why Agents Need Schemas That Don't Lie",
-    authors: "XR Research",
+    title: "Privacy-first Observability (OTLP)",
+    authors: "XR Engineering",
     year: 2026,
-    tag: "Systems",
+    tag: "Observability",
+    doc: "docs/observability/MODEL.md",
   },
   {
-    title: "Streaming Interleaved Thought & Action at 100k tok/s",
-    authors: "XR Research",
-    year: 2025,
-    tag: "Inference",
-  },
-  {
-    title: "Capability-Based Security for LLM Executables",
-    authors: "XR Research",
-    year: 2025,
+    title: "XR Security Model",
+    authors: "XR Engineering",
+    year: 2026,
     tag: "Security",
+    doc: "docs/security/SECURITY_MODEL.md",
+  },
+  {
+    title: "Capability Ecosystem: provenance, trust scoring, MCP allowlist",
+    authors: "XR Engineering",
+    year: 2026,
+    tag: "Ecosystem",
+    doc: "docs/phase7-ecosystem/",
+  },
+  {
+    title: "Outcome Benchmark Methodology",
+    authors: "XR Engineering",
+    year: 2026,
+    tag: "Evaluation",
+    doc: "docs/phase13/BENCHMARK_METHODOLOGY.md",
   },
 ];

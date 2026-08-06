@@ -13,7 +13,7 @@ export function MarketplaceBrowser() {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [tab, setTab] = useState<Tab>("all");
-  const [sort, setSort] = useState<"popular" | "rating" | "recent">("popular");
+  const [sort, setSort] = useState<"name">("name");
   const [selected, setSelected] = useState<MarketplaceItem | null>(null);
 
   const filtered = useMemo(() => {
@@ -23,8 +23,7 @@ export function MarketplaceBrowser() {
       if (q && !`${i.name} ${i.tagline} ${i.description} ${i.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase())) return false;
       return true;
     });
-    if (sort === "rating") items = [...items].sort((a, b) => b.rating - a.rating);
-    if (sort === "popular") items = [...items].sort((a, b) => b.downloads - a.downloads);
+    if (sort === "name") items = [...items].sort((a, b) => a.name.localeCompare(b.name));
     return items;
   }, [q, cat, tab, sort]);
 
@@ -55,13 +54,11 @@ export function MarketplaceBrowser() {
             />
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value as "popular" | "rating" | "recent")}
+              onChange={(e) => setSort(e.target.value as "name")}
               className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-violet-400/50"
               aria-label="Sort"
             >
-              <option value="popular">Most popular</option>
-              <option value="rating">Top rated</option>
-              <option value="recent">Recently updated</option>
+              <option value="name">Name (A–Z)</option>
             </select>
           </div>
         </div>
@@ -163,13 +160,21 @@ function ItemCard({ item, onOpen }: { item: MarketplaceItem; onOpen: () => void 
         ))}
       </div>
       <div className="mt-5 pt-4 border-t border-white/5 flex items-center gap-4 text-xs text-zinc-400">
-        <span className="flex items-center gap-1">
-          <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
-          {item.rating} <span className="text-zinc-600">({formatNumber(item.reviews)})</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <Download className="h-3.5 w-3.5" /> {item.installs}
-        </span>
+        {item.downloads > 0 ? (
+          <>
+            <span className="flex items-center gap-1">
+              <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
+              {item.rating} <span className="text-zinc-600">({formatNumber(item.reviews)})</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <Download className="h-3.5 w-3.5" /> {item.installs}
+            </span>
+          </>
+        ) : (
+          <span className="flex items-center gap-1">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Bundled with XR
+          </span>
+        )}
         <span className="ml-auto text-zinc-500">v{item.version}</span>
       </div>
     </button>
@@ -205,12 +210,20 @@ function ItemModal({ item, onClose }: { item: MarketplaceItem; onClose: () => vo
               by {item.author} · {item.type === "skill" ? "Skill" : "Extension"}
             </div>
             <div className="mt-2 flex items-center gap-4 text-xs text-zinc-400">
-              <span className="flex items-center gap-1">
-                <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" /> {item.rating} ({formatNumber(item.reviews)} reviews)
-              </span>
-              <span className="flex items-center gap-1">
-                <Download className="h-3.5 w-3.5" /> {item.installs} installs
-              </span>
+              {item.downloads > 0 ? (
+                <>
+                  <span className="flex items-center gap-1">
+                    <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" /> {item.rating} ({formatNumber(item.reviews)} reviews)
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Download className="h-3.5 w-3.5" /> {item.installs} installs
+                  </span>
+                </>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Bundled with XR
+                </span>
+              )}
               <span className="text-zinc-500">v{item.version}</span>
             </div>
           </div>

@@ -109,7 +109,7 @@ function Logos() {
     <section className="py-14 border-y border-white/5 bg-white/[0.01]">
       <div className="mx-auto max-w-7xl px-6">
         <p className="text-center text-xs uppercase tracking-[0.2em] text-zinc-500 mb-8">
-          Trusted by teams building the future
+          Works with the providers and runtimes you already use
         </p>
         <div className="relative overflow-hidden">
           <div className="marquee-track flex gap-14 whitespace-nowrap will-change-transform">
