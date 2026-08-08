@@ -33,7 +33,7 @@ One navigation map. Three classes of material:
 | Accessibility | [`a11y/`](a11y/) |
 | UX research | [`ux/`](ux/) |
 | Security | [`security/`](security/) — security model, threat model, known limitations, pentest register, guarantee matrix |
-| Release | [`release/`](release/) — RELEASING, channels, support matrix, verifying releases, per-version notes, [release-candidate notes](release/RELEASE_CANDIDATE_NOTES.md), [launch handoff](release/LAUNCH_HANDOFF.md) |
+| Release | [`release/`](release/) — RELEASING, channels, support matrix, verifying releases, per-version notes, [release-candidate notes](release/RELEASE_CANDIDATE_NOTES.md), [launch handoff](release/LAUNCH_HANDOFF.md), [remote-hygiene runbook](release/REMOTE_HYGIENE.md) |
 | Implementation tracker | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) |
 
 ## 2. Audits

@@ -63,8 +63,10 @@ gates, `tsc --noEmit` clean, zero suite temp-dirs left on /tmp.
 | R-6 | **Provider canary machinery (register #11)** — `bun run canary:providers` + nightly `provider-canaries` workflow: live-probes each key-configured provider via its own `health()` (canary ≡ doctor truth), fails the job on live-probe errors, honest SKIP for unconfigured presets (never a fake pass); coverage scales with the 15 hosted key secrets provisioned in CI | #11 | 5 pins + LIVE: 401 → exit 1; stub-override → PASS |
 
 Remaining open items are P3/maintainer: provider-canary **secrets** in CI
-(R-6 machinery shipped; coverage activates with them), branch retirement
-(R-7), the cross-process workflow-stop precision
+(R-6 machinery shipped; coverage activates with them), remote-branch
+retirement **execution** (R-7 — runbook + evidence in
+[`REMOTE_HYGIENE.md`](REMOTE_HYGIENE.md); 30 branches are provably
+zero-content-loss, 1 reviewed), the cross-process workflow-stop precision
 (ledger A-19 — in-process surfaces including the daemon cancel fully; a
 second process's `stopWorkflow` reaches only the durable record), and the
 external docs-page diff (U-2 — pending the maintainer's current page
@@ -88,7 +90,8 @@ markdown).
 The Phase-5 plan (§2b) is complete except P3/maintainer items: the secrets
 for provider-canary coverage (R-6 machinery shipped 2026-08-08 — nightly
 workflow live, coverage scales with provisioned secrets),
-branch retirement + remote hygiene (R-7 — maintainer on remotes),
+remote-branch retirement execution (R-7 — runbook + evidence complete in
+[`REMOTE_HYGIENE.md`](REMOTE_HYGIENE.md); maintainer on remotes),
 and the cross-process workflow-stop precision recorded in ledger A-19
 (in-process cancel is done and pinned; reaching a *running* workflow from
 another process belongs to the remote control-plane roadmap).
