@@ -56,11 +56,14 @@ gates, `tsc --noEmit` clean, zero suite temp-dirs left on /tmp.
 | F-2 | **`xr onboarding --yes`** + prompt **EOF-fail-closed** semantics (consent gates deny on vanished stdin); wizard EOF completion: 90 s hang → 263 ms | S-1 F2 | 4→5 tests pin |
 | F-1 | **Doctor/onboarding defaults follow the keyed provider** on any validation outcome; key validation probes the preset's real `baseUrl` | S-1 F1 | unit-pinned |
 | U-1 | **`docs/guides/cli-compat.md`** — exit codes, global flags, per-command `--yes`, scripting envs, prompt-piping rules, envOverrides | — | vs src line-by-line |
+| R-9 | **Abort signal threaded AgentService→runner→loop (A-19)** — cooperative checkpoints (step top / post-chat pre-tools / between tool calls), honest `stopped: "cancelled"` + `session.cancelled` audit; Shell Ctrl+C/Esc abort for real (pending approval denied fail-closed); `xr run` SIGINT → exit 130 with cooperative wrap-up; `stopWorkflow` aborts the in-flight worker (live `{record, controller}` map) and a cancelled worker fails honestly, never completes; no-bypass contract untouched | A-19 | 7 pins (`test/agent-cancel.test.ts`) + LIVE: SIGINT @ step 6 → cancelled → 130 → audited → chain ✓ |
 
 Remaining open items are P3/maintainer: provider canaries (R-6, register
-#11), branch retirement (R-7), the abort-through-agent-service P2 follow-up
-(recorded in ledger A-19), and the external docs-page diff (U-2 — pending
-the maintainer's current page markdown).
+#11), branch retirement (R-7), the cross-process workflow-stop precision
+(ledger A-19 — in-process surfaces including the daemon cancel fully; a
+second process's `stopWorkflow` reaches only the durable record), and the
+external docs-page diff (U-2 — pending the maintainer's current page
+markdown).
 
 ## 3. Known limitations (read before operating)
 
@@ -79,8 +82,10 @@ the maintainer's current page markdown).
 
 The Phase-5 plan (§2b) is complete except P3/maintainer items: provider
 canaries (R-6 — known-limitations register #11; nightly CI when infra
-exists), branch retirement + remote hygiene (R-7 — maintainer on remotes), 
-and the documented P2 abort-through-agent-service threading (ledger A-19).
+exists), branch retirement + remote hygiene (R-7 — maintainer on remotes),
+and the cross-process workflow-stop precision recorded in ledger A-19
+(in-process cancel is done and pinned; reaching a *running* workflow from
+another process belongs to the remote control-plane roadmap).
 The external docs-page paste-handoff (U-2) ships when the maintainer
 supplies the current page markdown (paste-ready content was prepared
 separately against the verified claims in this note).

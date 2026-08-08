@@ -49,9 +49,9 @@
     },
     {
       "path": "src/interfaces/shell/app.ts",
-      "lines": 1203,
+      "lines": 1226,
       "owner": "interfaces",
-      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope.",
+      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope. A-19 (launch RC) appended the abort-controller wiring (run-scoped controller, fail-closed approval denial, Ctrl+C/Esc reaching the loop's checkpoints; +23 lines, still a single state machine).",
       "plan": "Extract slash-command handling and the palette into interfaces/shell/commands.ts and palette.ts. Deferred: the Shell is the surface most exposed to Phase-3 UX work and splitting it twice would be churn.",
       "review": "2026-12-31"
     },

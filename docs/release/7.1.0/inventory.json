@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-08T22:27:43.398Z",
+  "generatedAt": "2026-08-08T23:14:16.875Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -52,7 +52,7 @@
   },
   "counts": {
     "sourceFiles": 515,
-    "testFiles": 224,
+    "testFiles": 225,
     "cliCommands": 41,
     "daemonRoutes": 104,
     "providers": 26,
@@ -664,6 +664,7 @@
     "test/a11y/browser-axe.test.ts",
     "test/a11y/contrast.test.ts",
     "test/a11y/static.test.ts",
+    "test/agent-cancel.test.ts",
     "test/agent.test.ts",
     "test/api/client.test.ts",
     "test/api/compat.test.ts",

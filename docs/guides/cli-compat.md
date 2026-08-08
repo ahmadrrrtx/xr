@@ -23,7 +23,7 @@ reported `process.exitCode` (so a failed command never exits 0 silently).
 | 3 | NETWORK | Network-only failure paths (update/fetch surfaces). |
 | 4 | DENIED | Policy/consent denial paths. |
 | 5 | NOT_FOUND | Missing-resource paths. |
-| 130 | INTERRUPT | Documented POSIX convention for SIGINT (128+2); the runtime never *sets* this code itself. |
+| 130 | INTERRUPT | POSIX SIGINT convention (128+2). Since the A-19 cancellation work, `xr run` / free-form task invocations **set** this when the user interrupts: the first SIGINT aborts the run cooperatively — the agent loop stops at its next checkpoint, the session is audited `session.cancelled`, the result is an honest `stopped: "cancelled"` (never a fake completion) — and a second SIGINT force-exits immediately. In pipelines, 130 means *stopped by the user*, distinct from 1 (*failed*). |
 
 **Scripting rule:** test `== 0` vs `!= 0` for control flow; use 2/3/4/5 only
 as diagnostics. Verdict-bearing commands document their own non-zero meanings

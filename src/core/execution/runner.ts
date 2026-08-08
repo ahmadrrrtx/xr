@@ -58,6 +58,12 @@ export interface EnvelopeContext {
    * caller (AgentService) which resolves it from the service registry.
    */
   readonly onToolUse?: (info: { tool: string; ok: boolean; error?: string }) => void;
+  /**
+   * A-19 — cooperative cancellation for this run, forwarded to the loop.
+   * Surfaces abort their own runs (Shell Ctrl+C/Esc, `xr run` SIGINT, workflow
+   * stop); the loop observes the signal at its checkpoints.
+   */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -112,6 +118,7 @@ export async function runEnvelope(
     ...(context.hardened !== undefined ? { hardened: context.hardened } : {}),
     ...(context.allowedHosts ? { allowedHosts: context.allowedHosts } : {}),
     ...(context.onToolUse ? { onToolUse: context.onToolUse } : {}),
+    ...(context.signal ? { signal: context.signal } : {}),
     runId: envelope.evidence.envelopeId,
   };
 

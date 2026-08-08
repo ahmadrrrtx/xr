@@ -106,6 +106,12 @@ export interface ShellState {
   totalTokens: number;
   busy: boolean;
   busyLabel: string;
+  /**
+   * A-19 — the abort handle for the run currently in flight. Ctrl+C / Esc
+   * abort it; the loop stops at its next checkpoint and reports
+   * `stopped: "cancelled"` (no fake completion, no run-on in the background).
+   */
+  runAbort: AbortController | null;
   spinnerIndex: number;
   view: ShellViewId;
   sidebarIndex: number;

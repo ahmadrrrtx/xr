@@ -94,11 +94,35 @@ export class RunAgentCommand implements Command {
       model: overrides.model as string | undefined,
     });
 
+    /**
+     * A-19 — Ctrl+C stops the run cooperatively. The first SIGINT aborts this
+     * run's signal: the loop wraps up honestly at its next checkpoint (session
+     * audited, `stopped: "cancelled"`, exit 130) instead of dying mid-write
+     * with no evidence. A second SIGINT force-exits immediately (POSIX 130).
+     * The listener is scoped to this execute() call and always removed.
+     */
+    const runController = new AbortController();
+    let forceExitArmed = false;
+    const onSigint = (): void => {
+      if (forceExitArmed) process.exit(EXIT.INTERRUPT);
+      forceExitArmed = true;
+      runController.abort();
+      console.log();
+      warn("interrupted — stopping at the next step (Ctrl+C again to force-quit)");
+    };
+    process.on("SIGINT", onSigint);
+
     try {
-      const result = await agentService.runTask(task, mode, overrides);
+      const result = await agentService.runTask(task, mode, {
+        ...overrides,
+        signal: runController.signal,
+      });
       console.log();
       if (result.stopped === "done") {
         ok(`done in ${result.steps} step(s)`);
+      } else if (result.stopped === "cancelled") {
+        warn("interrupted by user");
+        process.exitCode = EXIT.INTERRUPT;
       } else {
         warn(`ended: ${result.finalMessage}`);
         /**
@@ -113,6 +137,8 @@ export class RunAgentCommand implements Command {
          *   budget   → 1                   work incomplete, ceiling reached
          *   approval → 1                   work incomplete, awaiting a human
          *   max_steps→ 1                   work incomplete, loop limit hit
+         *   cancelled→ 130 (EXIT.INTERRUPT) stopped by the user (POSIX SIGINT,
+         *                                   handled in its own branch above)
          */
         process.exitCode = EXIT.ERROR;
       }
@@ -126,6 +152,8 @@ export class RunAgentCommand implements Command {
         tip("For a stack trace: XR_DEBUG=1 xr …");
       }
       process.exitCode = 1;
+    } finally {
+      process.off("SIGINT", onSigint);
     }
   }
 }

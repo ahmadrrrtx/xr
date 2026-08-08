@@ -57,6 +57,22 @@ import type {
 export class MultiAgentService implements LifecycleHook {
   constructor(private registry: ServiceRegistry) {}
 
+  /**
+   * A-19 — the runs currently executing on THIS service instance, by workflow
+   * id. `getWorkflow` materializes a FRESH record per call, so a
+   * `stopWorkflow` issued while a run is in flight would otherwise only flip
+   * a stale persisted copy the running loop never sees; holding the live
+   * record here lets stop reach the in-flight run directly: it mutates the
+   * live `cancellationState` (observed at the next task boundary) AND aborts
+   * the controller (observed at the in-flight worker's loop checkpoints).
+   * Entries exist only for the duration of `executeWorkflow`; a cancel from
+   * another process remains boundary-checked (durable record), as before.
+   */
+  private workflowRuns = new Map<
+    string,
+    { controller: AbortController; record: WorkflowRecord }
+  >();
+
   private get workflowStore(): WorkflowRepo {
     return this.registry.resolve(Tokens.WorkflowStore);
   }
@@ -148,6 +164,20 @@ export class MultiAgentService implements LifecycleHook {
         task.cancellationState = "requested";
         task.updatedAt = record.updatedAt;
       }
+    }
+    // A-19 — reach the in-flight run on THIS instance: flip its LIVE record
+    // (the persisted flip above never reaches it) and abort its workers.
+    const live = this.workflowRuns.get(workflowId);
+    if (live) {
+      live.record.cancellationState = "requested";
+      live.record.updatedAt = Date.now();
+      for (const task of live.record.tasks) {
+        if (task.status === "pending" || task.status === "ready") {
+          task.cancellationState = "requested";
+          task.updatedAt = live.record.updatedAt;
+        }
+      }
+      live.controller.abort();
     }
     this.persist(record, "workflow.cancel_requested", { workflowId });
     return record;
@@ -403,6 +433,19 @@ export class MultiAgentService implements LifecycleHook {
   }
 
   private async executeWorkflow(record: WorkflowRecord, req: Partial<WorkflowRunRequest>): Promise<WorkflowRecord> {
+    // A-19 — publish this execution's live record + abort handle. A fresh
+    // controller per execution means a resume after a cancelled run is NOT
+    // poisoned by the old aborted signal. The entry is removed when the run
+    // ends so the map never leaks across runs of the same workflow id.
+    this.workflowRuns.set(record.workflowId, { controller: new AbortController(), record });
+    try {
+      return await this.executeWorkflowLoop(record, req);
+    } finally {
+      this.workflowRuns.delete(record.workflowId);
+    }
+  }
+
+  private async executeWorkflowLoop(record: WorkflowRecord, req: Partial<WorkflowRunRequest>): Promise<WorkflowRecord> {
     record.status = "running";
     record.startedAt = record.startedAt ?? Date.now();
     this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "start" });
@@ -599,6 +642,11 @@ export class MultiAgentService implements LifecycleHook {
     if (result.stopped === "approval") {
       throw new Error("worker stopped: a required approval was declined");
     }
+    // A-19 — an interrupted worker run is a task failure ("interrupted"), NOT
+    // a completion; resumeWorkflow re-arms it under its retry budget.
+    if (result.stopped === "cancelled") {
+      throw new Error("worker interrupted: the run was cancelled");
+    }
     if (
       result.stopped === "max_steps" &&
       (!result.finalMessage || result.finalMessage.includes("(stopped at step limit)"))
@@ -627,7 +675,11 @@ export class MultiAgentService implements LifecycleHook {
     allow: string[] | undefined,
     deny: string[] | undefined,
   ) {
+    // A-19 — the workflow's abort handle reaches every worker's loop
+    // checkpoints; stopWorkflow aborts it for this instance's in-flight run.
+    const workflowSignal = this.workflowRuns.get(record.workflowId)?.controller.signal;
     return {
+        ...(workflowSignal ? { signal: workflowSignal } : {}),
         provider,
         model,
         budget: req.budget,
