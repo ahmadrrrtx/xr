@@ -14,7 +14,39 @@
  * No Phase 11 cloud control plane.
  */
 
-import { route, type DaemonRoute } from './router.ts';
+import { route, type DaemonRoute, type DaemonRouteContext } from './router.ts';
+import type { BusinessOS } from '../../../extensions/business-os/src/index.ts';
+
+/**
+ * Business-service resolution (A-6 seam — one narrowing point, one comment).
+ *
+ * The daemon serve path (`makeHandler` in server.ts) does NOT braid the kernel
+ * service registry into DaemonState, so in the standalone dashboard these
+ * routes resolve to null and answer with honest 503/empty payloads — the same
+ * behavior as before this tightening. A host process that attaches a registry
+ * (embedded serve, tests) is honored, checked on the context first, then on
+ * state — the carriers the previous scattered `as any` sites consulted.
+ */
+async function resolveBusinessOS(ctx: DaemonRouteContext): Promise<BusinessOS | null> {
+  let token: unknown;
+  try {
+    const { Tokens } = await import('../../core/tokens.ts');
+    token = Tokens.Business;
+  } catch {
+    return null;
+  }
+  const carriers: Array<{ registry?: { resolve?: (t: unknown) => unknown } | null } | null | undefined> = [
+    ctx as unknown as { registry?: { resolve?: (t: unknown) => unknown } | null },
+    ctx.state as { registry?: { resolve?: (t: unknown) => unknown } | null },
+  ];
+  for (const carrier of carriers) {
+    try {
+      const resolved = carrier?.registry?.resolve?.(token);
+      if (resolved) return resolved as BusinessOS;
+    } catch { /* try the next carrier */ }
+  }
+  return null;
+}
 
 export function businessRoutes(): DaemonRoute[] {
   return [
@@ -22,38 +54,11 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.status.get',
       path: '/api/business/status',
       method: 'GET',
-      handle: async (ctx: any) => {
-        const business = (ctx as any).state?.store ? null : (ctx as any).registry?.resolve?.((() => { try { const { Tokens } = require('../../core/tokens.ts'); return Tokens.Business; } catch { return null; } })());
-        // Fallback: try registry from global
-        const reg = (ctx as any).registry || (ctx as any).state?.registry;
-        let biz: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          biz = reg?.resolve?.(Tokens.Business) ?? (ctx as any).registry?.resolve?.(Tokens.Business);
-        } catch {}
-        if (!biz?.operatingLayer) {
-          // Try direct from ctx as earlier pattern uses registry via closure?
-          try {
-            const { Tokens } = await import('../../core/tokens.ts');
-            biz = (ctx as any).registry?.resolve?.(Tokens.Business) ?? biz;
-          } catch {}
-        }
-        // Simpler: use global registry if available via ctx
-        const businessService = (() => {
-          try {
-            // @ts-ignore - dynamic resolve
-            return (ctx as any).registry?.resolve ? (ctx as any).registry.resolve((globalThis as any).__XR_TOKENS__?.Business) : null;
-          } catch { return null; }
-        })();
-
-        // Actually most routes use registry resolve pattern like other routes: get from state?
-        // We'll attempt to get BusinessOS from registry if available
-        let businessOS: any = biz ?? businessService;
+      handle: async (ctx: DaemonRouteContext) => {
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS) {
-          // Try alternative: import Tokens and resolve via ctx.registry which is passed in DaemonRouteContext extended?
-          // In current router, DaemonRouteContext doesn't have registry, but we can try state
-          // For robustness, we try to find BusinessOS via global app registry if injected
-          // If still null, we return degraded status with journeys list static
+          // Extension not served in this process: degraded-but-honest status
+          // (journey definitions are static metadata; counts are zero).
           const { JOURNEY_DEFINITIONS } = await import(/* @vite-ignore */ new URL('../../../extensions/business-os/src/core/journeys.ts', import.meta.url).href);
           return ctx.json({ status: { version: '5.3.0', journeys: JOURNEY_DEFINITIONS.length, activeWorkflows: 0, pendingApprovals: 0 }, journeys: JOURNEY_DEFINITIONS });
         }
@@ -81,14 +86,14 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.journeys.start',
       prefix: '/api/business/journeys/',
       method: 'POST',
-      handle: async (ctx: any) => {
+      handle: async (ctx: DaemonRouteContext) => {
         // Path: /api/business/journeys/:journeyId/start
-        const path = ctx.path as string;
+        const path = ctx.path;
         const match = path.match(/^\/api\/business\/journeys\/([^\/]+)\/start$/);
         if (!match) return null;
         const journeyId = match[1];
         let body: any = {};
-        try { body = ctx.body ? await ctx.req?.json?.() ?? ctx.body : {}; } catch { body = {}; }
+        try { body = await ctx.req.json(); } catch { body = {}; }
         if (!body || Object.keys(body).length === 0) {
           try { const txt = await ctx.req?.text?.(); body = txt ? JSON.parse(txt) : {}; } catch {}
         }
@@ -97,12 +102,7 @@ export function businessRoutes(): DaemonRoute[] {
         const actorId = body.actorId ?? 'daemon-user';
 
         // Try to get business service via registry if present in ctx.state
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+        const businessOS = await resolveBusinessOS(ctx);
 
         if (!businessOS?.operatingLayer) {
           return ctx.json({ error: 'Business OS not initialized or journey execution requires workspace context', journeyId, workspaceId }, 503);
@@ -124,13 +124,8 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.outcomes.list',
       path: '/api/business/outcomes',
       method: 'GET',
-      handle: async (ctx: any) => {
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+      handle: async (ctx: DaemonRouteContext) => {
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.outcomes) {
           return ctx.json({ outcomes: [], stats: { total: 0, verified: 0, failed: 0, pending: 0 } });
         }
@@ -144,17 +139,12 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.outcomes.get',
       prefix: '/api/business/outcomes/',
       method: 'GET',
-      handle: async (ctx: any) => {
-        const path = ctx.path as string;
+      handle: async (ctx: DaemonRouteContext) => {
+        const path = ctx.path;
         const match = path.match(/^\/api\/business\/outcomes\/([^\/]+)$/);
         if (!match) return null;
         const outcomeId = match[1];
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.operatingLayer) return ctx.json({ error: 'Business OS not initialized' }, 503);
         const view = businessOS.operatingLayer.getOutcomeView(outcomeId);
         if (!view) return ctx.json({ error: 'Outcome not found' }, 404);
@@ -165,13 +155,8 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.approvals.list',
       path: '/api/business/approvals',
       method: 'GET',
-      handle: async (ctx: any) => {
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+      handle: async (ctx: DaemonRouteContext) => {
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.approvals) return ctx.json({ pending: [], workQueue: { pendingApprovals: 0, pendingReviews: 0, criticalCount: 0, grouped: {} } });
         const workspaceId = ctx.url.searchParams.get('workspaceId') ?? 'default';
         const pending = businessOS.approvals.listPending(workspaceId, { limit: 100 });
@@ -183,19 +168,14 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.approvals.decide',
       prefix: '/api/business/approvals/',
       method: 'POST',
-      handle: async (ctx: any) => {
-        const path = ctx.path as string;
+      handle: async (ctx: DaemonRouteContext) => {
+        const path = ctx.path;
         const match = path.match(/^\/api\/business\/approvals\/([^\/]+)\/decide$/);
         if (!match) return null;
         const approvalId = match[1];
         let body: any = {};
         try { body = await ctx.req?.json?.(); } catch { body = {}; }
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.approvals) return ctx.json({ error: 'Business OS not initialized' }, 503);
         try {
           const result = businessOS.approvals.decide(approvalId, {
@@ -213,13 +193,8 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.artifacts.list',
       path: '/api/business/artifacts',
       method: 'GET',
-      handle: async (ctx: any) => {
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+      handle: async (ctx: DaemonRouteContext) => {
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.artifacts) return ctx.json({ artifacts: [], count: 0 });
         const workspaceId = ctx.url.searchParams.get('workspaceId') ?? 'default';
         const artifacts = businessOS.artifacts.listByWorkspace(workspaceId, { limit: 50 });
@@ -230,13 +205,8 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.workers.list',
       path: '/api/business/workers',
       method: 'GET',
-      handle: async (ctx: any) => {
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+      handle: async (ctx: DaemonRouteContext) => {
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.workerGovernance) return ctx.json({ workers: [], inspections: [] });
         const workspaceId = ctx.url.searchParams.get('workspaceId') ?? 'default';
         const workers = businessOS.workerGovernance.listByWorkspace(workspaceId);
@@ -248,19 +218,14 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.workers.get',
       prefix: '/api/business/workers/',
       method: 'GET',
-      handle: async (ctx: any) => {
-        const path = ctx.path as string;
+      handle: async (ctx: DaemonRouteContext) => {
+        const path = ctx.path;
         // Avoid matching /disable /enable
         if (path.endsWith('/disable') || path.endsWith('/enable')) return null;
         const match = path.match(/^\/api\/business\/workers\/([^\/]+)$/);
         if (!match) return null;
         const workerId = match[1];
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.workerGovernance) return ctx.json({ error: 'Business OS not initialized' }, 503);
         const inspection = businessOS.workerGovernance.inspect(workerId);
         if (!inspection) return ctx.json({ error: 'Worker not found' }, 404);
@@ -271,19 +236,14 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.workers.disable',
       prefix: '/api/business/workers/',
       method: 'POST',
-      handle: async (ctx: any) => {
-        const path = ctx.path as string;
+      handle: async (ctx: DaemonRouteContext) => {
+        const path = ctx.path;
         const match = path.match(/^\/api\/business\/workers\/([^\/]+)\/disable$/);
         if (!match) return null;
         const workerId = match[1];
         let body: any = {};
         try { body = await ctx.req?.json?.(); } catch {}
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.workerGovernance) return ctx.json({ error: 'Business OS not initialized' }, 503);
         try {
           const result = businessOS.workerGovernance.setEnabled(workerId, false, { actorId: body.actorId ?? 'admin', reason: body.reason ?? 'disabled via API' });
@@ -297,19 +257,14 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.workers.enable',
       prefix: '/api/business/workers/',
       method: 'POST',
-      handle: async (ctx: any) => {
-        const path = ctx.path as string;
+      handle: async (ctx: DaemonRouteContext) => {
+        const path = ctx.path;
         const match = path.match(/^\/api\/business\/workers\/([^\/]+)\/enable$/);
         if (!match) return null;
         const workerId = match[1];
         let body: any = {};
         try { body = await ctx.req?.json?.(); } catch {}
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.workerGovernance) return ctx.json({ error: 'Business OS not initialized' }, 503);
         try {
           const result = businessOS.workerGovernance.setEnabled(workerId, true, { actorId: body.actorId ?? 'admin' });
@@ -323,13 +278,8 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.mutations.list',
       path: '/api/business/mutations',
       method: 'GET',
-      handle: async (ctx: any) => {
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+      handle: async (ctx: DaemonRouteContext) => {
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.recordMutations) return ctx.json({ mutations: [], count: 0 });
         const workspaceId = ctx.url.searchParams.get('workspaceId') ?? 'default';
         const mutations = businessOS.recordMutations.listByWorkspace(workspaceId, { limit: 50 });
@@ -340,17 +290,12 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.privacy.get',
       prefix: '/api/business/privacy/',
       method: 'GET',
-      handle: async (ctx: any) => {
-        const path = ctx.path as string;
+      handle: async (ctx: DaemonRouteContext) => {
+        const path = ctx.path;
         const match = path.match(/^\/api\/business\/privacy\/([^\/]+)$/);
         if (!match) return null;
         const workspaceId = match[1];
-        let businessOS: any = null;
-        try {
-          const { Tokens } = await import('../../core/tokens.ts');
-          const reg = (ctx as any).registry ?? (ctx as any).state?.registry;
-          businessOS = reg?.resolve?.(Tokens.Business);
-        } catch {}
+        const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS?.privacy) return ctx.json({ policy: null });
         const policy = businessOS.privacy.getPolicy(workspaceId);
         return ctx.json({ policy });

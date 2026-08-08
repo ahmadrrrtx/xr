@@ -93,21 +93,22 @@ export class OpenAICompatProvider implements Provider {
       stream: false,
     };
 
+    // body is Record<string, unknown> — build provider-specific extras as
+    // typed locals instead of poking at `any` (A-6 seam).
+    const options: Record<string, unknown> = {};
     if (this.profile.structure === "grammar") {
       body.format = "json";
-      (body as any).options = {
-        grammar: buildEnvelopeGBNF(tools.map((t) => t.name)),
-        temperature: 0,
-      };
+      options.grammar = buildEnvelopeGBNF(tools.map((t) => t.name));
+      options.temperature = 0;
     } else if (this.profile.structure === "json_mode") {
       body.response_format = { type: "json_object" };
     }
     if (this.profile.disableThinking) {
-      (body as any).options = {
-        ...(body as any).options,
-        think: false,
-      };
-      (body as any).reasoning = { effort: "none" };
+      options.think = false;
+      body.reasoning = { effort: "none" };
+    }
+    if (Object.keys(options).length > 0) {
+      body.options = options;
     }
 
     const res = await fetch(`${this.baseUrl}/chat/completions`, {

@@ -1049,7 +1049,7 @@ function loadConfigInner(): { config: XRConfig; warnings: string[] } {
   const parsed = ConfigSchema.safeParse(migrated);
   if (parsed.success) {
     // Only rewrite disk when migration actually advanced the version or filled defaults.
-    const needsWrite = (raw as any)?.version !== parsed.data.version;
+    const needsWrite = (raw as { version?: unknown })?.version !== parsed.data.version;
     if (needsWrite) {
       writeFileSync(CONFIG_PATH, JSON.stringify(parsed.data, null, 2));
     }

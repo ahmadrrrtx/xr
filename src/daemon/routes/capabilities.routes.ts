@@ -1,5 +1,14 @@
 /** XR Daemon — Capability Ecosystem API routes. */
 import { CapabilityService, type CapabilityDiscoverQuery } from "../../platform/capabilities/service.ts";
+import { CAPABILITY_TYPES, type CapabilityType } from "../../platform/capabilities/types.ts";
+
+/** Untrusted query enums: only schema literals pass, everything else = no
+ * filter (previously raw strings were cast blind into the query — A-6 seam). */
+function enumParam<T extends string>(raw: string | null, allowed: ReadonlySet<T>): T | undefined {
+  return raw != null && allowed.has(raw as T) ? (raw as T) : undefined;
+}
+const RISK_TIERS = new Set(["tier0", "tier1", "tier2"] as const);
+const LOCALITIES = new Set(["local", "private", "internet", "any"] as const);
 import { route, type DaemonRoute } from "./router.ts";
 
 async function readJson(req: Request): Promise<any> {
@@ -20,14 +29,14 @@ export function capabilityRoutes(): DaemonRoute[] {
         const svc = service(ctx);
         const url = ctx.url;
         const task = url.searchParams.get("task") ?? undefined;
-        const type = url.searchParams.get("type") as any;
+        const type = enumParam(url.searchParams.get("type"), new Set(CAPABILITY_TYPES as readonly CapabilityType[]));
         const query: CapabilityDiscoverQuery = {
           task,
           type: type || undefined,
           requires: url.searchParams.get("requires")?.split(",").filter(Boolean),
           excludesPermissions: url.searchParams.get("exclude")?.split(",").filter(Boolean),
-          maxRiskTier: url.searchParams.get("maxRisk") as any,
-          locality: url.searchParams.get("locality") as any,
+          maxRiskTier: enumParam(url.searchParams.get("maxRisk"), RISK_TIERS),
+          locality: enumParam(url.searchParams.get("locality"), LOCALITIES),
           certified: url.searchParams.get("certified") === "1" || url.searchParams.get("certified") === "true",
           installedOnly: url.searchParams.get("installed") === "1" || url.searchParams.get("installed") === "true",
           enabledOnly: url.searchParams.get("enabled") === "1" || url.searchParams.get("enabled") === "true",
