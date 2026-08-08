@@ -17,9 +17,9 @@ verified evidence. It complements (does not replace) the product-facing
 ## 1. Launch gates — 10/10 verified (2026-08-08)
 
 Every gate in the tracker's §Launch-gates block is green with dated evidence:
-clean-clone build (`tsc --noEmit` exit 0), full suite **2,807 pass / 13 skip
-(live-browser a11y) / 0 fail** across 225 files (re-verified post-R-9 at
-`9e48754`), 14/14 local CI gates, a live
+clean-clone build (`tsc --noEmit` exit 0), full suite **2,812 pass / 13 skip
+(live-browser a11y) / 0 fail** across 226 files (re-verified post-R-6 at
+`d3017c0`), 14/14 local CI gates, a live
 multi-agent flagship workflow run to `status=completed`, zero prohibited
 claims on scanned surfaces, ciphertext secrets at rest, security suites
 green, first-run and upgrade probes live-verified, distribution prep
@@ -40,10 +40,10 @@ complete. **The only remaining release action is maintainer-held credentials**
 | 4 — Probes | **All four stabilization probes live-verified:** fresh-Linux first-run journey (S-1), agent-experience regression (S-2), daemon/dashboard smoke incl. token auth 401s + SSE chat (S-3), loss-free upgrade from a pre-cleanup `~/.xr` home (config v18 hydrate, plaintext `.env` auto-seal, audit chain intact across trees — S-4) | — | `2637119` |
 | RC | Launch gates recorded 10/10; F-3 reduced to maintainer credentials | A-2 | `297da3d` |
 
-**Totals (program):** test floor rose from 2,750 → **2,807 passing with zero
-failures at every recorded run**; final tree re-verified after the P2 batch
-and R-9 (`9e48754`):
-2,807 pass / 13 skip (live-browser a11y) / 0 fail over 225 files, 14/14 CI
+**Totals (program):** test floor rose from 2,750 → **2,812 passing with zero
+failures at every recorded run**; final tree re-verified after the P2 batch,
+R-9, and R-6 (`d3017c0`):
+2,812 pass / 13 skip (live-browser a11y) / 0 fail over 226 files, 14/14 CI
 gates, `tsc --noEmit` clean, zero suite temp-dirs left on /tmp.
 
 ## 2b. P2 batch landed after RC-1 (all verified, none blocking)
