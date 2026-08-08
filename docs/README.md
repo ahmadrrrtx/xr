@@ -29,6 +29,7 @@ One navigation map. Three classes of material:
 | Observability | [`observability/`](observability/) |
 | Performance | [`perf/`](perf/) — budgets, waivers (`SIZE-WAIVERS.json`), measured recall |
 | Migration guides | [`migration/`](migration/) (per-version upgrade guides + storage-format migrations: credential vault, secrets at rest) |
+| Guides | [`guides/`](guides/) — [CLI compatibility & scripting](guides/cli-compat.md) |
 | Accessibility | [`a11y/`](a11y/) |
 | UX research | [`ux/`](ux/) |
 | Security | [`security/`](security/) — security model, threat model, known limitations, pentest register, guarantee matrix |
