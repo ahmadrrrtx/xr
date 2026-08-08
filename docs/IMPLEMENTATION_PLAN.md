@@ -97,10 +97,11 @@ here, executed by the maintainer.
 ## Launch gates — 10/10 verified 2026-08-08 (all must be true to declare `v7.1.0` candidate)
 
 Evidence gathered at pre-incident `@2637119`, **re-verified after the
-reconstitution (see §Work log, "Environment incident") and again after the
-Phase-5 P2 batch** (R-2/R-3/R-4/R-5/R-8/F-1/F-2): typecheck clean, **2,800
-pass / 13 skip / 0 fail over 224 files, 14/14 gates, 0 suite temp-dirs left
-on /tmp**.
+reconstitution (see §Work log, "Environment incident"), again after the
+Phase-5 P2 batch** (R-2/R-3/R-4/R-5/R-8/F-1/F-2) **and once more after R-9
+(A-19 abort threading, `@9e48754`)**: typecheck clean, **2,807 pass / 13
+skip / 0 fail over 225 files, 14/14 gates, 0 suite temp-dirs left on
+/tmp**.
 Gate 10 is preparation-complete — the publish action itself is
 maintainer-owned (F-3 ⊗ credentials). F-3's "all launch gates" dependency is
 therefore **met**; only the credentials remain.
@@ -108,7 +109,7 @@ therefore **met**; only the credentials remain.
 | # | Gate | Status | Verified evidence (2026-08-08) |
 |---|---|---|---|
 | 1 | **Build** | ☑ | Clean worktree clone at HEAD: `bun install --frozen-lockfile` (52 pkgs) + `tsc --noEmit` exit 0 |
-| 2 | **Tests** | ☑ | Full suite **2,800 pass / 13 skip / 0 fail** across 224 files (~45 s); F-2 e2e `test/multi-agent-e2e.test.ts` (6 tests) green; suite leaves **0** temp dirs (R-8) |
+| 2 | **Tests** | ☑ | Full suite **2,807 pass / 13 skip / 0 fail** across 225 files (~48 s); F-2 e2e `test/multi-agent-e2e.test.ts` (6 tests) green; A-19 cancel pins `test/agent-cancel.test.ts` (7 tests) green; suite leaves **0** temp dirs (R-8) |
 | 3 | **Gates** | ☑ | 14/14 local CI gates PASS (release:check, channel:check, claim-lint, changelog:check, baseline:inventory, ownership:check, boundaries, size-gate, hot-path-lint, ci-capability-gate, api:schema:check, client:check, api:compat, website:marketplace:check) |
 | 4 | **Multi-agent** | ☑ | Live CLI run `wf_6acaa135` vs stub provider: planner → gates → researcher/builder → reviewer (strict-JSON approved) → synthesizer; `status=completed`, workers executed; dashboard agents panel reflected the run |
 | 5 | **Claims** | ☑ | `claim-lint` green; grep of prohibited phrases ("True AI Operating System", "AI OS Kernel", "Provable Security", "AI Business Operating System", deterministic-injection-benchmark framing) over all scanned surfaces = **0 hits**; negative tests prove the guard fails the build |
@@ -129,6 +130,7 @@ therefore **met**; only the credentials remain.
 - 2026-08-08 — S-2 + R-1 complete: agent-experience behaviors verified pinned (approvals, budget stop, memory consent ×5, workflow cancel) + 7 new tests for the two unpinned paths (`test/execution/cancellation.test.ts` ×3 — cooperative cancel, watchdog-stamped honest `cancelled`, durable flag; `test/execution/service.test.ts` ×4 — fail-closed retry semantics). Verification surfaced that automatic same-run retry is intentionally unreachable post-side-effect (fail-closed design) — ledger A-19 records it; abort-through-agent-service logged as P2 follow-up. R-1: adversarial boundary tests for the business extension (`test/business/adversarial-boundaries.test.ts`, 12 tests) after verifying the audit's module list predates the 7.x consolidation.
 - 2026-08-08 — Test-count drift note: phase deltas touch many files; per policy, suite re-run + all gates after every batch (see each commit message).
 - 2026-08-08 — Phase 4 complete (S-1..S-4 all live-verified): first-run journey on fresh Linux XR_HOME end-to-end (F1 doctor-defaults cosmetics P3, F2 onboarding `--yes` absent → documented P2, F3 env base-URL override unsupported → **fixed with `config.envOverrides`/`envOverridesLocked` + 10 tests incl. run-path regression**, F4 doctor-ready ≠ key-valid → documented); upgrade probe from pre-cleanup `9f5840c` home — config v18 hydrates loss-free, plaintext `.env` auto-seals with exact value round-trip, audit chain intact across trees; daemon smoke — token auth (401 no/bad token), real panels, SSE chat stream; multi-agent flagship workflow run live via CLI to `completed`.
+- 2026-08-08 — **R-9 (ledger A-19 follow-up) RESOLVED** (`9e48754`): cooperative abort signal threaded surface → AgentService → envelope → runner → loop (checkpoints at step top / post-chat pre-tools / between tool calls); `stopped: "cancelled"` + `session.cancelled` audit; Shell Ctrl+C/Esc wired (approval denied fail-closed); `xr run` SIGINT → exit 130; `stopWorkflow` aborts the in-flight worker live (worker fails honestly "interrupted"; resume un-poisoned). Pins: `test/agent-cancel.test.ts` ×7. Live SIGINT probe (slow stub provider): interrupt @ step 6 → cancelled → 130 → audited → chain intact. Ownership map 154 → 155 areas; shell/app.ts waiver 1203 → 1226 LOC. Architecture gates fired then re-green post-commit — the invariants are doing their job.
 - 2026-08-08 — RC-1: launch gates recorded — **10/10 verified** with dated evidence at `2637119` (clean-clone build; 2,795-pass suite; 14/14 gates; live multi-agent `wf_6acaa135` completed; claim grep 0 hits; secrets ciphertext at rest; security suites green; S-1 fresh-run; S-4 upgrade probe; distribution-prep runbook). F-3's gate dependency met — only maintainer credentials remain (publish per `docs/release/LAUNCH_HANDOFF.md`).
 - 2026-08-08 — RC-2: `docs/release/RELEASE_CANDIDATE_NOTES.md` — engineering delta since baseline, per-phase with ledger IDs, totals, known-limitations pointers, open P2/P3, maintainer actions; indexed in docs/README.md.
 - 2026-08-08 — R-3 (A-15 RESOLVED): known-limitations dedup — `docs/security/KNOWN_LIMITATIONS.md` = canonical living register (stable #1–#9; #10–#17 merged from the release register), 7.1.0 doc = frozen excerpt; stale `docs/phase-1/` pointer in test/platform/exclusions.json repointed.
