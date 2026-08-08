@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-08T23:16:14.772Z",
+  "generatedAt": "2026-08-08T23:29:58.182Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -52,7 +52,7 @@
   },
   "counts": {
     "sourceFiles": 515,
-    "testFiles": 225,
+    "testFiles": 226,
     "cliCommands": 41,
     "daemonRoutes": 104,
     "providers": 26,
@@ -131,7 +131,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 4572
+      "bytes": 4636
     },
     {
       "path": "release.manifest.json",
@@ -829,6 +829,7 @@
     "test/reliability/idempotency.test.ts",
     "test/reliability/migration-race.test.ts",
     "test/reliability/migrations.test.ts",
+    "test/reliability/provider-canaries.test.ts",
     "test/reliability/rpo-rto.test.ts",
     "test/reliability/single-writer.test.ts",
     "test/reliability/store-edge.test.ts",

@@ -60,8 +60,11 @@ gates, `tsc --noEmit` clean, zero suite temp-dirs left on /tmp.
 | U-1 | **`docs/guides/cli-compat.md`** — exit codes, global flags, per-command `--yes`, scripting envs, prompt-piping rules, envOverrides | — | vs src line-by-line |
 | R-9 | **Abort signal threaded AgentService→runner→loop (A-19)** — cooperative checkpoints (step top / post-chat pre-tools / between tool calls), honest `stopped: "cancelled"` + `session.cancelled` audit; Shell Ctrl+C/Esc abort for real (pending approval denied fail-closed); `xr run` SIGINT → exit 130 with cooperative wrap-up; `stopWorkflow` aborts the in-flight worker (live `{record, controller}` map) and a cancelled worker fails honestly, never completes; no-bypass contract untouched | A-19 | 7 pins (`test/agent-cancel.test.ts`) + LIVE: SIGINT @ step 6 → cancelled → 130 → audited → chain ✓ |
 
-Remaining open items are P3/maintainer: provider canaries (R-6, register
-#11), branch retirement (R-7), the cross-process workflow-stop precision
+| R-6 | **Provider canary machinery (register #11)** — `bun run canary:providers` + nightly `provider-canaries` workflow: live-probes each key-configured provider via its own `health()` (canary ≡ doctor truth), fails the job on live-probe errors, honest SKIP for unconfigured presets (never a fake pass); coverage scales with the 15 hosted key secrets provisioned in CI | #11 | 5 pins + LIVE: 401 → exit 1; stub-override → PASS |
+
+Remaining open items are P3/maintainer: provider-canary **secrets** in CI
+(R-6 machinery shipped; coverage activates with them), branch retirement
+(R-7), the cross-process workflow-stop precision
 (ledger A-19 — in-process surfaces including the daemon cancel fully; a
 second process's `stopWorkflow` reaches only the durable record), and the
 external docs-page diff (U-2 — pending the maintainer's current page
@@ -82,9 +85,10 @@ markdown).
 
 ## 4. Open follow-ups (tracked, non-blocking)
 
-The Phase-5 plan (§2b) is complete except P3/maintainer items: provider
-canaries (R-6 — known-limitations register #11; nightly CI when infra
-exists), branch retirement + remote hygiene (R-7 — maintainer on remotes),
+The Phase-5 plan (§2b) is complete except P3/maintainer items: the secrets
+for provider-canary coverage (R-6 machinery shipped 2026-08-08 — nightly
+workflow live, coverage scales with provisioned secrets),
+branch retirement + remote hygiene (R-7 — maintainer on remotes),
 and the cross-process workflow-stop precision recorded in ledger A-19
 (in-process cancel is done and pinned; reaching a *running* workflow from
 another process belongs to the remote control-plane roadmap).

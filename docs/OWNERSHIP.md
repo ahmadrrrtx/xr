@@ -153,6 +153,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/phase2-move-module.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/platform-parity.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/provider-canaries.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/recall-benchmark.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-manifest.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
