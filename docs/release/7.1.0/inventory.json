@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-08T20:07:17.851Z",
+  "generatedAt": "2026-08-08T21:32:59.193Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -112,6 +112,10 @@
     {
       "path": "bun.lock",
       "bytes": 10862
+    },
+    {
+      "path": "bunfig.toml",
+      "bytes": 285
     },
     {
       "path": "docker-compose.yml",

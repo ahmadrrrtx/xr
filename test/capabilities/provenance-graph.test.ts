@@ -119,6 +119,11 @@ test("recordUse through the capability service records tool-plane uses", () => {
   expect(used[0].outcomes.success).toBe(1);
 });
 
+// R-8: 8,200 recordEvent calls each pay an O(events) per-capability prune
+// rebuild once the 500-event floor is crossed (~4 s of CPU). Correct but at
+// ~80% of bun's 5 s default test timeout it flaked under parallel load
+// (observed 5,021 ms once). The bound semantics are what this test pins — not
+// prune speed — so it gets an explicit 15 s timeout; 3x observed headroom.
 test("graph is bounded (endless-data protection)", () => {
   const p = new CapabilityProvenanceStore();
   for (let i = 0; i < PROVENANCE_BOUNDS.maxEvents + 200; i++) {
@@ -129,7 +134,7 @@ test("graph is bounded (endless-data protection)", () => {
   // Per-capability bound respected.
   const perCap = graph.events.filter((e) => e.capabilityId === "tool:t0");
   expect(perCap.length).toBeLessThanOrEqual(PROVENANCE_BOUNDS.maxEventsPerCapability);
-});
+}, 15_000);
 
 test("persistence round-trip: events survive a new store instance", () => {
   const path = join(root, "provenance-roundtrip.json");

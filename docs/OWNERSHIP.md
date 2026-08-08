@@ -77,6 +77,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/evaluation/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/execution/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/fixtures/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/helpers/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/intelligence/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-semantic.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-stage6.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
