@@ -144,6 +144,32 @@ describe("onboarding --yes", () => {
     expect(saved.workspace?.name).toBe("My First Workspace");
   }, 120_000);
 
+  test("F-1: keyed provider becomes the configured default regardless of key-validation outcome", async () => {
+    const { recordKeyedProvider } = await import("../../src/interfaces/onboard.ts");
+    const { PRESETS } = await import("../../src/providers/presets.ts");
+    const state = {
+      mode: "hybrid" as const,
+      providerId: "ollama",
+      model: "qwen2.5:7b",
+      localModel: "qwen2.5:7b",
+      localEnabled: false,
+      apiKeys: {},
+      workspaceName: "x",
+      theme: "dark" as const,
+      accessibility: { largeText: false, screenReader: false },
+      dependenciesInstalled: [],
+    };
+    // A key was entered and stored — even on the "could not verify" path the
+    // default must follow it (validation is advisory, the key is the choice).
+    recordKeyedProvider(state, "openrouter");
+    expect(state.providerId).toBe("openrouter");
+    expect(state.model).toBe(PRESETS["openrouter"]!.defaultModel);
+    // First keyed provider wins: a second key must not hijack the default.
+    recordKeyedProvider(state, "groq");
+    expect(state.providerId).toBe("openrouter");
+    expect(state.model).toBe(PRESETS["openrouter"]!.defaultModel);
+  }, 10_000);
+
   test("prompt primitives: EOF yields ask default, plain confirm keeps its default, security gates fail closed", async () => {
     // Black-box: real src primitives, real EOF-on-pipe stdin, in a tiny probe
     // process (in-process stdin manipulation would pollute the suite).

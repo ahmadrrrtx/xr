@@ -21,7 +21,7 @@ import { setSecret, preferredSecretBackend } from "../security/secrets.ts";
 import { detectPlatform, probeHealth } from "../install/system.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface OnboardingState {
+export interface OnboardingState {
   mode: "local" | "cloud" | "hybrid";
   providerId: string;
   model: string;
@@ -57,6 +57,20 @@ function passwordO(promptText: string): Promise<string> {
 }
 
 // ── Helpers (non-blocking, graceful) ─────────────────────────────────────────
+
+/**
+ * F-1: the configured default follows the user's demonstrated choice.
+ * Historically `state.providerId` was updated only when the best-effort key
+ * VALIDATION fetch succeeded, so a cloud-keyed user with an unreachable
+ * validation endpoint kept the fresh-install `ollama` default — doctor then
+ * displayed `provider: ollama` next to "1 provider ready: openrouter".
+ * Validation outcome is advisory; the key is the choice.
+ */
+export function recordKeyedProvider(state: OnboardingState, providerId: string): void {
+  if (state.providerId !== "ollama") return; // first keyed provider wins
+  state.providerId = providerId;
+  state.model = defaultCloudModel(providerId);
+}
 async function checkInternet(): Promise<boolean> {
   try {
     const res = await fetch("https://registry.npmjs.org/", { method: "HEAD", signal: AbortSignal.timeout(2000) });
@@ -161,29 +175,32 @@ async function configureProviders(state: OnboardingState, internet: boolean): Pr
     const key = await passwordO(`  API key for ${xrBold(p)}:`);
     if (!key) continue;
 
-    // Instant validation (non-blocking)
+    // Instant validation (non-blocking). Advisory only: whatever the network
+    // outcome, the entered key is the user's choice (recordKeyedProvider).
     const tracker = new StepTracker().addStep("validate", `Validating ${p}`).start();
     try {
-      // Lightweight validation using existing provider contract (no backend change)
-      const testRes = await fetch(`https://api.${p}.com/v1/models`, {
+      // Probe the provider's OWN models endpoint when the preset declares one
+      // — the old `https://api.<id>.com/v1/models` guess 404'd for most real
+      // providers and pushed everyone into the un-updated-default path (F-1).
+      const probeUrl = preset.baseUrl ? `${preset.baseUrl}/models` : `https://api.${p}.com/v1/models`;
+      const testRes = await fetch(probeUrl, {
         headers: { Authorization: `Bearer ${key}` },
         signal: AbortSignal.timeout(4000)
       }).catch(() => ({ ok: false }));
-      if ((testRes as any).ok) {
+      if ((testRes as { ok?: boolean }).ok) {
         tracker.setStatus("validate", "done", "valid");
         state.apiKeys[preset.apiKeyEnv] = key;
-        if (state.providerId === "ollama") {
-          state.providerId = p;
-          state.model = defaultCloudModel(p);
-        }
+        recordKeyedProvider(state, p);
         ok(`${p} key saved and validated.`);
       } else {
         tracker.setStatus("validate", "warn", "could not verify (will retry later)");
         state.apiKeys[preset.apiKeyEnv] = key;
+        recordKeyedProvider(state, p);
       }
     } catch {
       tracker.setStatus("validate", "warn", "offline — key stored securely");
       state.apiKeys[preset.apiKeyEnv] = key;
+      recordKeyedProvider(state, p);
     }
     tracker.finish();
   }
