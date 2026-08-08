@@ -47,14 +47,42 @@ export function heading(title: string): void {
 
 // ── Readline ──────────────────────────────────────────────────────────────────
 
-async function readLine(promptText: string): Promise<string> {
+/**
+ * One line of stdin.
+ *
+ * Resolves `null` when stdin reaches EOF before an answer (closed pipe,
+ * /dev/null, Ctrl+D). Previously an unanswered EOF hung the prompt forever —
+ * any scripted invocation touching an interactive question froze silently
+ * (probed 2026-08-08). Each question opens its own readline interface, and a
+ * fresh interface never re-emits `close` for an already-ended stream, so the
+ * EOF state is tracked once at module level and later questions resolve
+ * immediately. Callers decide EOF semantics: informational asks fall back to
+ * their default; consent gates must fail closed (see confirm opts).
+ */
+let stdinEnded = false;
+
+async function readLine(promptText: string): Promise<string | null> {
+  if (stdinEnded) return null;
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise(resolve => {
-    rl.question(promptText, answer => { rl.close(); resolve(answer.trim()); });
+    let settled = false;
+    const done = (value: string | null): void => {
+      if (settled) return;
+      settled = true;
+      try { rl.close(); } catch { /* interface already closed */ }
+      resolve(value);
+    };
+    rl.question(promptText, answer => done(answer.trim()));
+    // Only a close arriving BEFORE an answer is a real EOF — the close our own
+    // rl.close() emits after a normal answer must not poison later questions.
+    rl.on("close", () => {
+      if (!settled) stdinEnded = true;
+      done(null);
+    });
   });
 }
 
-/** Ask a question and return a string response. */
+/** Ask a question and return a string response. EOF yields the default. */
 export async function ask(promptText: string, options?: { default?: string }): Promise<string> {
   const suffix = options?.default ? ` ${xrDim(`(${options.default})`)}` : "";
   return (await readLine(`  ${xrCyan("?")} ${promptText}${suffix} `)) || options?.default || "";
@@ -77,23 +105,40 @@ export async function password(promptText: string): Promise<string> {
     terminal: true,
   });
 
+  if (stdinEnded) return ""; // stdin already gone — never hang scripting
   process.stdout.write(`  ${xrCyan("🔑")} ${promptText} `);
   (mutableOut as any).muted = true;
 
   return new Promise(resolve => {
-    rl.question("", answer => {
+    let settled = false;
+    const done = (value: string): void => {
+      if (settled) return;
+      settled = true;
       (mutableOut as any).muted = false;
       process.stdout.write("\n");
-      rl.close();
-      resolve(answer.trim());
+      try { rl.close(); } catch { /* already closed on EOF */ }
+      resolve(value);
+    };
+    rl.question("", answer => done(answer.trim()));
+    rl.on("close", () => {
+      if (!settled) stdinEnded = true; // real EOF = empty secret, never a hang
+      done("");
     });
   });
 }
 
-/** Yes/No confirmation — defaults shown clearly. */
-export async function confirm(promptText: string, defaultYes = true): Promise<boolean> {
+/**
+ * Yes/No confirmation — defaults shown clearly.
+ *
+ * EOF semantics: a blank answer returns `defaultYes`; an EOF (scripted run,
+ * closed pipe, Ctrl+D) returns `opts.eofApproves ?? defaultYes`. Security
+ * gates pass `{ eofApproves: false }` — a vanished stdin must never read as
+ * consent.
+ */
+export async function confirm(promptText: string, defaultYes = true, opts?: { eofApproves?: boolean }): Promise<boolean> {
   const suffix = defaultYes ? xrDim(" [Y/n]") : xrDim(" [y/N]");
   const result = await readLine(`  ${xrCyan("?")} ${promptText}${suffix} `);
+  if (result === null) return opts?.eofApproves ?? defaultYes;
   if (!result) return defaultYes;
   return result.toLowerCase().startsWith("y");
 }
@@ -116,7 +161,9 @@ export async function approvePrompt(req: ApprovalRequest): Promise<boolean> {
   }
   console.log(`  ${xrDim("─".repeat(46))}`);
 
-  const approved = await confirm("Approve this action?", true);
+  // Fail closed on EOF: `Enter` may default to approve for a human at a TTY,
+  // but a closed/vanished stdin is not consent.
+  const approved = await confirm("Approve this action?", true, { eofApproves: false });
   console.log(approved ? `  ${SYM.ok} ${xrGreen("Approved")}` : `  ${SYM.error} ${xrRed("Denied")}`);
   console.log();
   return approved;

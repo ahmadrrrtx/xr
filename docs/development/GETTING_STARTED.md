@@ -39,9 +39,17 @@ xr onboarding
 
 The wizard is re-runnable anytime. It walks through provider choice, memory
 consent (XR only remembers what you explicitly ask it to), and optional voice
-setup. It changes nothing you do not approve. It is **interactive** (no
-`--yes` flag yet — tracked); in a non-TTY shell it reads piped input and
-takes defaults on empty lines, so script it only deliberately.
+setup. It changes nothing you do not approve.
+
+**Scripting:** `xr onboarding --yes` accepts every prompt at its default —
+the same semantics as `xr install --yes`. Two honest consequences: no provider
+keys get configured (run `xr provider` afterwards), and if Ollama is installed
+and running, the default-true consent downloads the recommended model (a
+multi-GB pull) — run `--yes` before installing Ollama if you do not want that.
+Do not script the interactive wizard by piping answer sequences: questions
+share one stdin and buffered input can be dropped between prompts; an EOF now
+resolves each prompt at its default instead of hanging (consent gates fail
+closed on EOF — a closed stdin is never read as approval).
 
 Then confirm the install can actually do work:
 

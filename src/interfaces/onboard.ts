@@ -35,6 +35,27 @@ interface OnboardingState {
   dependenciesInstalled: string[];
 }
 
+// ── Non-interactive mode (`xr onboarding --yes`) ─────────────────────────────
+// Accepts every prompt at its documented default — same semantics as
+// `xr install --yes` (src/install/system.ts `approved()`), including the
+// default-true model-download consent when Ollama is installed and running.
+let assumeYes = false;
+
+function askO(promptText: string, options?: { default?: string }): Promise<string> {
+  if (assumeYes) return Promise.resolve(options?.default ?? "");
+  return ask(promptText, options);
+}
+
+function confirmO(promptText: string, defaultYes = true): Promise<boolean> {
+  if (assumeYes) return Promise.resolve(defaultYes);
+  return confirm(promptText, defaultYes);
+}
+
+function passwordO(promptText: string): Promise<string> {
+  if (assumeYes) return Promise.resolve(""); // no providers are preselected in --yes mode
+  return password(promptText);
+}
+
 // ── Helpers (non-blocking, graceful) ─────────────────────────────────────────
 async function checkInternet(): Promise<boolean> {
   try {
@@ -93,7 +114,7 @@ function showWelcome(): void {
 // ── Workspace + Theme + Accessibility ────────────────────────────────────────
 async function configureWorkspaceAndPreferences(state: OnboardingState): Promise<void> {
   section("Create Your Workspace");
-  state.workspaceName = await ask("Workspace name", { default: "My First Workspace" });
+  state.workspaceName = await askO("Workspace name", { default: "My First Workspace" });
 
   section("Theme & Accessibility");
   console.log();
@@ -101,11 +122,11 @@ async function configureWorkspaceAndPreferences(state: OnboardingState): Promise
   console.log(`  2  High contrast`);
   console.log(`  3  Reduced motion`);
   console.log();
-  const themeChoice = await ask("Choose theme", { default: "1" });
+  const themeChoice = await askO("Choose theme", { default: "1" });
   state.theme = themeChoice === "2" ? "high-contrast" : themeChoice === "3" ? "reduced-motion" : "dark";
 
-  state.accessibility.largeText = await confirm("Enable larger text for readability?", false);
-  state.accessibility.screenReader = await confirm("Optimize for screen readers?", false);
+  state.accessibility.largeText = await confirmO("Enable larger text for readability?", false);
+  state.accessibility.screenReader = await confirmO("Optimize for screen readers?", false);
 
   console.log();
   ok("Preferences saved. You can change these anytime in Settings.");
@@ -123,7 +144,7 @@ async function configureProviders(state: OnboardingState, internet: boolean): Pr
   console.log(`  ${xrDim("Available:")} ${cloudProviders.join("  ")}`);
   console.log(`  ${xrDim("Press Enter to skip and stay 100% local.")}`);
 
-  const selected = await ask("Providers to configure (comma-separated)", { default: "" });
+  const selected = await askO("Providers to configure (comma-separated)", { default: "" });
   if (!selected.trim()) {
     console.log(`  ${xrDim("Skipped — using local-only or hybrid mode.")}`);
     return;
@@ -137,7 +158,7 @@ async function configureProviders(state: OnboardingState, internet: boolean): Pr
     const preset = PRESETS[p];
     if (!preset.apiKeyEnv) continue;
 
-    const key = await password(`  API key for ${xrBold(p)}:`);
+    const key = await passwordO(`  API key for ${xrBold(p)}:`);
     if (!key) continue;
 
     // Instant validation (non-blocking)
@@ -201,7 +222,7 @@ async function configureLocalAI(state: OnboardingState): Promise<void> {
   if (!status.installed) {
     warn("Ollama not found.");
     console.log(`  ${xrDim("Install from")} ${xrCyan("https://ollama.com")} ${xrDim("— we can continue without it.")}`);
-    if (await confirm("Install Ollama now? (opens browser)", false)) {
+    if (await confirmO("Install Ollama now? (opens browser)", false)) {
       // Safe non-blocking open
       spawnSync(process.platform === "win32" ? "start" : "open", ["https://ollama.com"], { stdio: "ignore" });
     }
@@ -209,14 +230,14 @@ async function configureLocalAI(state: OnboardingState): Promise<void> {
     warn("Ollama installed but not running. Start it with: ollama serve");
   }
 
-  const useRec = await confirm(`Use ${xrCyan(state.localModel)} as local model?`, true);
+  const useRec = await confirmO(`Use ${xrCyan(state.localModel)} as local model?`, true);
   if (!useRec) {
-    state.localModel = await ask("Enter model id", { default: state.localModel });
+    state.localModel = await askO("Enter model id", { default: state.localModel });
   }
 
   // Auto-download if missing and consented
   if (status.installed && status.running && !status.models.includes(state.localModel)) {
-    if (await confirm(`Download ${state.localModel} now? (~${rec.model.estimatedDiskGb} GB)`, true)) {
+    if (await confirmO(`Download ${state.localModel} now? (~${rec.model.estimatedDiskGb} GB)`, true)) {
       const dlTracker = new StepTracker().addStep("download", `Downloading ${state.localModel}`).start();
       const success = await pullOllamaModel(state.localModel);
       dlTracker.setStatus("download", success ? "done" : "warn", success ? "complete" : "failed — retry later");
@@ -241,7 +262,7 @@ async function installOptionalDependencies(state: OnboardingState): Promise<void
   const toInstall: string[] = [];
 
   for (const dep of needed) {
-    if (await confirm(`Install ${dep} now?`, false)) {
+    if (await confirmO(`Install ${dep} now?`, false)) {
       toInstall.push(dep);
     }
   }
@@ -269,7 +290,7 @@ async function installOptionalDependencies(state: OnboardingState): Promise<void
 // ── Import Experience ────────────────────────────────────────────────────────
 async function handleImport(state: OnboardingState): Promise<void> {
   section("Import Previous Configuration (optional)");
-  const importPath = await ask("Path to previous XR config (or press Enter to skip)", { default: "" });
+  const importPath = await askO("Path to previous XR config (or press Enter to skip)", { default: "" });
   if (!importPath.trim()) return;
 
   if (existsSync(importPath)) {
@@ -342,7 +363,8 @@ function showSuccess(state: OnboardingState): void {
 }
 
 // ── Main Onboarding Flow ─────────────────────────────────────────────────────
-export async function runOnboarding(): Promise<void> {
+export async function runOnboarding(opts?: { yes?: boolean }): Promise<void> {
+  assumeYes = opts?.yes === true;
   const state: OnboardingState = {
     mode: "hybrid",
     providerId: "ollama",
@@ -359,6 +381,11 @@ export async function runOnboarding(): Promise<void> {
   showWelcome();
   showPrivacyLocalExplanation();
 
+  if (assumeYes) {
+    info("Non-interactive onboarding (--yes): every prompt accepted at its default.");
+    info("No provider keys are configured this way — run `xr provider` afterwards to add one.");
+  }
+
   const internet = await checkInternet();
   const freeDisk = detectStorageGb();
 
@@ -369,7 +396,7 @@ export async function runOnboarding(): Promise<void> {
   console.log(`  2  ${xrCyan("Cloud (BYOK)")} ${xrDim("Use your API keys")}`);
   console.log(`  3  ${xrCyan("Hybrid")}       ${xrDim("Recommended — best of both worlds")}`);
   console.log();
-  const modeChoice = await ask("Select mode", { default: internet ? "3" : "1" });
+  const modeChoice = await askO("Select mode", { default: internet ? "3" : "1" });
   state.mode = modeChoice === "1" ? "local" : modeChoice === "2" ? "cloud" : "hybrid";
 
   await configureWorkspaceAndPreferences(state);
@@ -431,7 +458,7 @@ export async function runOnboarding(): Promise<void> {
   showSuccess(state);
 
   // Auto-launch Chat Workspace hint (non-blocking)
-  if (await confirm("\nLaunch Chat Workspace now?", true)) {
+  if (await confirmO("\nLaunch Chat Workspace now?", true)) {
     console.log(`  ${xrCyan("Run:")} xr serve   (or open http://localhost:3456 after starting)`);
   }
 }
