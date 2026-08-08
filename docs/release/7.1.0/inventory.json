@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-08T21:32:59.193Z",
+  "generatedAt": "2026-08-08T22:27:43.398Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -51,8 +51,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 516,
-    "testFiles": 223,
+    "sourceFiles": 515,
+    "testFiles": 224,
     "cliCommands": 41,
     "daemonRoutes": 104,
     "providers": 26,
@@ -282,7 +282,6 @@
     "src/cost/pricing.ts",
     "src/daemon/api/openapi.ts",
     "src/daemon/auth-page.ts",
-    "src/daemon/control-api.ts",
     "src/daemon/dashboard.ts",
     "src/daemon/dashboard/client-script.ts",
     "src/daemon/dashboard/markup.ts",
@@ -879,6 +878,7 @@
     "test/util/process.test.ts",
     "test/ux/disclosure.test.ts",
     "test/ux/mode-color.test.ts",
+    "test/ux/onboarding-yes.test.ts",
     "test/ux/sus.test.ts",
     "test/ux/undo.test.ts",
     "test/voice.test.ts",

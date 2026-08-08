@@ -95,7 +95,11 @@ here, executed by the maintainer.
 
 ## Launch gates — 10/10 verified 2026-08-08 (all must be true to declare `v7.1.0` candidate)
 
-Verified at `chore/xr-launch-cleanup @ 2637119`; dated evidence below.
+Evidence gathered at pre-incident `@2637119`, **re-verified after the
+reconstitution (see §Work log, "Environment incident") and again after the
+Phase-5 P2 batch** (R-2/R-3/R-4/R-5/R-8/F-1/F-2): typecheck clean, **2,800
+pass / 13 skip / 0 fail over 224 files, 14/14 gates, 0 suite temp-dirs left
+on /tmp**.
 Gate 10 is preparation-complete — the publish action itself is
 maintainer-owned (F-3 ⊗ credentials). F-3's "all launch gates" dependency is
 therefore **met**; only the credentials remain.
@@ -103,7 +107,7 @@ therefore **met**; only the credentials remain.
 | # | Gate | Status | Verified evidence (2026-08-08) |
 |---|---|---|---|
 | 1 | **Build** | ☑ | Clean worktree clone at HEAD: `bun install --frozen-lockfile` (52 pkgs) + `tsc --noEmit` exit 0 |
-| 2 | **Tests** | ☑ | Full suite **2,795 pass / 13 skip / 0 fail** across 223 files (~48 s); F-2 e2e `test/multi-agent-e2e.test.ts` (6 tests) green |
+| 2 | **Tests** | ☑ | Full suite **2,800 pass / 13 skip / 0 fail** across 224 files (~45 s); F-2 e2e `test/multi-agent-e2e.test.ts` (6 tests) green; suite leaves **0** temp dirs (R-8) |
 | 3 | **Gates** | ☑ | 14/14 local CI gates PASS (release:check, channel:check, claim-lint, changelog:check, baseline:inventory, ownership:check, boundaries, size-gate, hot-path-lint, ci-capability-gate, api:schema:check, client:check, api:compat, website:marketplace:check) |
 | 4 | **Multi-agent** | ☑ | Live CLI run `wf_6acaa135` vs stub provider: planner → gates → researcher/builder → reviewer (strict-JSON approved) → synthesizer; `status=completed`, workers executed; dashboard agents panel reflected the run |
 | 5 | **Claims** | ☑ | `claim-lint` green; grep of prohibited phrases ("True AI Operating System", "AI OS Kernel", "Provable Security", "AI Business Operating System", deterministic-injection-benchmark framing) over all scanned surfaces = **0 hits**; negative tests prove the guard fails the build |

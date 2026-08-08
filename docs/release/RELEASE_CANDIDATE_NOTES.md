@@ -39,8 +39,28 @@ complete. **The only remaining release action is maintainer-held credentials**
 | 4 — Probes | **All four stabilization probes live-verified:** fresh-Linux first-run journey (S-1), agent-experience regression (S-2), daemon/dashboard smoke incl. token auth 401s + SSE chat (S-3), loss-free upgrade from a pre-cleanup `~/.xr` home (config v18 hydrate, plaintext `.env` auto-seal, audit chain intact across trees — S-4) | — | `2637119` |
 | RC | Launch gates recorded 10/10; F-3 reduced to maintainer credentials | A-2 | `297da3d` |
 
-**Totals:** 254 files changed, ~2,444 insertions, ~545 deletions. Test floor
-rose from 2,750 → 2,795 passing with zero failures at every recorded run.
+**Totals (program):** test floor rose from 2,750 → **2,800 passing with zero
+failures at every recorded run**; final tree re-verified after the P2 batch:
+2,800 pass / 13 skip (live-browser a11y) / 0 fail over 224 files, 14/14 CI
+gates, `tsc --noEmit` clean, zero suite temp-dirs left on /tmp.
+
+## 2b. P2 batch landed after RC-1 (all verified, none blocking)
+
+| Item | Change | Ledger | Evidence |
+|---|---|---|---|
+| R-3 | **Known-limitations registers de-duplicated** — `docs/security/KNOWN_LIMITATIONS.md` is the canonical living register (stable #1–#9 + #10–#17 merged in); the 7.1.0 register is a frozen release excerpt pointing back | A-15 | platform-parity 5/5, ownership sync |
+| R-4 | **control/ vs computer/ division documented** in `docs/environment/README.md` (verified against imports: governed pipeline vs single-shot `SYSTEM_TOOLS`; no duplication → deliberately no merge) | A-10 | imports traced |
+| R-8 | **Test-suite hygiene** — `bunfig [test].preload` routes the whole suite (incl. children) into one owned temp root with stale-sweep + `afterAll` cleanup (bun's runner skips exit hooks — probed); full run now leaves **0** bytes on /tmp; bounded-graph flake fixed with an explicit 15 s timeout | — | full run 0 leftovers |
+| R-5 | **Onboarding capability scan (A-12)** — "What works on this machine" section from the same `probeHealth()` engine doctor uses (no duplicate detection) | A-12 | live output verified |
+| R-2 | **Zero `as any` at the A-6 trust seams** — all 43 sites (providers/intelligence/config/daemon) rewritten with validated narrowing; cast archaeology surfaced two bugs (dead daemon file with broken SQL removed; anthropic literal cast) | A-6 | 415 seam tests green |
+| F-2 | **`xr onboarding --yes`** + prompt **EOF-fail-closed** semantics (consent gates deny on vanished stdin); wizard EOF completion: 90 s hang → 263 ms | S-1 F2 | 4→5 tests pin |
+| F-1 | **Doctor/onboarding defaults follow the keyed provider** on any validation outcome; key validation probes the preset's real `baseUrl` | S-1 F1 | unit-pinned |
+| U-1 | **`docs/guides/cli-compat.md`** — exit codes, global flags, per-command `--yes`, scripting envs, prompt-piping rules, envOverrides | — | vs src line-by-line |
+
+Remaining open items are P3/maintainer: provider canaries (R-6, register
+#11), branch retirement (R-7), the abort-through-agent-service P2 follow-up
+(recorded in ledger A-19), and the external docs-page diff (U-2 — pending
+the maintainer's current page markdown).
 
 ## 3. Known limitations (read before operating)
 
@@ -57,14 +77,13 @@ rose from 2,750 → 2,795 passing with zero failures at every recorded run.
 
 ## 4. Open follow-ups (tracked, non-blocking)
 
-Phase-5 items are queued in the tracker: `as any` tightening at provider /
-routing / config seams (R-2), known-limitations register de-duplication
-(R-3), control/computer division documentation (R-4), onboarding capability
-surfacing (R-5), test-suite hygiene — /tmp routing + bounded-graph timing
-(R-8), onboarding `--yes` (F2), doctor-defaults cosmetics (F1), provider
-canaries (R-6, P3), branch retirement (R-7, P3, maintainer). Any that land
-before the tag will update this note; none changes the verified gate
-evidence above (each requires its own full re-verification per policy).
+The Phase-5 plan (§2b) is complete except P3/maintainer items: provider
+canaries (R-6 — known-limitations register #11; nightly CI when infra
+exists), branch retirement + remote hygiene (R-7 — maintainer on remotes), 
+and the documented P2 abort-through-agent-service threading (ledger A-19).
+The external docs-page paste-handoff (U-2) ships when the maintainer
+supplies the current page markdown (paste-ready content was prepared
+separately against the verified claims in this note).
 
 ## 5. Maintainer actions (credential-gated)
 
