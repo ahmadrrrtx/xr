@@ -8,9 +8,11 @@
  *
  * Scope: src/**, docs/security/** (excluding the phase-4 audit-trail docs,
  * which deliberately QUOTE the old wording as historical evidence of what
- * was wrong), README_SECURITY.md, SECURITY.md, SECURITY_IMPLEMENTATION.md.
- * Historical phase reports (DELIVERABLE.md, MIGRATION.md, stage0/, PHASE-named)
- * are archived records — the current-doc set above is what governs claims.
+ * was wrong) and SECURITY.md (the current security policy).
+ * Historical phase reports — DELIVERABLE.md, README_SECURITY.md,
+ * SECURITY_IMPLEMENTATION.md, MIGRATION.md, stage0/, PHASE-named — now live
+ * under docs/historical/ and docs/migration/. They are archived records: the
+ * current-doc set above is what governs claims.
  */
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -18,12 +20,14 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..", "..");
 
+// README_SECURITY.md and SECURITY_IMPLEMENTATION.md were 2026-05 RCE-fix
+// campaign records. They are archived under docs/historical/phase-deliverables/
+// (launch cleanup) and, per this test's own doctrine, historical reports do
+// not govern current claims — only the surfaces below do.
 const SCOPES = [
   join(ROOT, "src"),
   join(ROOT, "docs", "security"),
-  join(ROOT, "README_SECURITY.md"),
   join(ROOT, "SECURITY.md"),
-  join(ROOT, "SECURITY_IMPLEMENTATION.md"),
 ];
 
 const EXCLUDE_DIRS = new Set(["node_modules", ".git", "dist"]);

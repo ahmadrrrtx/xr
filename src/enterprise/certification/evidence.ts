@@ -237,7 +237,7 @@ export const PHASE12_CONTROLS: readonly ControlEvidence[] = Object.freeze([
     description: "Documented tabletop and technical exercises for each incident kind.",
     assurance: "operational",
     status: "implemented",
-    implementedIn: ["docs/phase12/INCIDENT_RESPONSE.md"],
+    implementedIn: ["docs/enterprise-readiness/INCIDENT_RESPONSE.md"],
     testedBy: ["test/enterprise/incidents.test.ts"],
     limitations: ["Exercise cadence and participation are organizational responsibilities."],
   },

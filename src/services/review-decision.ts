@@ -47,9 +47,9 @@ function failClosed(reason: string, source: ReviewDecision["source"]): ReviewDec
   return { decision: "changes_requested", reason, source };
 }
 
-/** Extract the first balanced JSON object from arbitrary text. */
-function extractJsonObject(text: string): string | null {
-  const start = text.indexOf("{");
+/** Extract the first balanced JSON object starting at or after `from`. */
+function extractJsonObject(text: string, from = 0): { json: string; end: number } | null {
+  const start = text.indexOf("{", from);
   if (start === -1) return null;
 
   let depth = 0;
@@ -65,7 +65,7 @@ function extractJsonObject(text: string): string | null {
     if (ch === "{") depth++;
     else if (ch === "}") {
       depth--;
-      if (depth === 0) return text.slice(start, i + 1);
+      if (depth === 0) return { json: text.slice(start, i + 1), end: i + 1 };
     }
   }
   return null;
@@ -86,26 +86,40 @@ export function parseReviewDecision(raw: unknown): ReviewDecision {
   const candidateSource: ReviewDecision["source"] = fenced ? "fenced_json" : "strict_json";
   const body = fenced?.[1]?.trim() ?? text;
 
-  const jsonText = body.startsWith("{") ? extractJsonObject(body) : extractJsonObject(body);
-  if (!jsonText) {
+  // A reviewer that precedes its decision with findings may emit braces inside
+  // prose (code snippets, examples). Accept the FIRST well-formed JSON object
+  // that actually carries a string `decision` field rather than blindly taking
+  // the first balanced object: that is the decision the reviewer marked. If no
+  // object qualifies we fail closed, unchanged.
+  let parsed: unknown = null;
+  let cursor = 0;
+  let found = false;
+  while (cursor < body.length && !found) {
+    const extracted = extractJsonObject(body, cursor);
+    if (!extracted) break;
+    cursor = extracted.end;
+    let candidate: unknown;
+    try {
+      candidate = JSON.parse(extracted.json);
+    } catch {
+      continue; // not JSON — keep scanning
+    }
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      !Array.isArray(candidate) &&
+      typeof (candidate as Record<string, unknown>).decision === "string"
+    ) {
+      parsed = candidate;
+      found = true;
+    }
+  }
+
+  if (!found) {
     return failClosed(
       "reviewer output contained no JSON decision object; expected {\"decision\":…,\"reason\":…}",
       "parse_failure",
     );
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(jsonText);
-  } catch (err) {
-    return failClosed(
-      `reviewer output was not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
-      "parse_failure",
-    );
-  }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return failClosed("reviewer decision was not a JSON object", "parse_failure");
   }
 
   const record = parsed as Record<string, unknown>;

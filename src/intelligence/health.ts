@@ -1,7 +1,7 @@
 /**
  * XR Phase 5 · T3 — Rolling provider health + circuit breaker.
  *
- * 2026 ops consensus adopted (docs/phase5-routing/03-RESEARCH-NOTES.md · R3):
+ * 2026 ops consensus adopted (docs/historical/phases/phase5-routing/03-RESEARCH-NOTES.md · R3):
  *   · ROLLING health score (windowed aggregation with hysteresis), not binary.
  *   · A circuit breaker that trips on ERROR RATE and on QUALITY DEGRADATION
  *     (a provider returning well-formed-but-invalid answers is failing in
@@ -12,7 +12,7 @@
  *
  * The breaker is in-process (XR is local-first single-process CLI/daemon —
  * shared multi-replica state is recorded as future work in
- * docs/phase5-routing/KNOWN-LIMITATIONS.md). Snapshots persist to
+ * docs/historical/phases/phase5-routing/KNOWN-LIMITATIONS.md). Snapshots persist to
  * $XR_HOME/cache/intelligence/health.json (atomic, bounded, secret-free) so a
  * tripped breaker survives a restart of the same workspace machine.
  *

@@ -146,7 +146,7 @@ export function policyFromConfig(config: XRConfig): PolicyConstraints {
    * is opt-in-then-default, manual override always available). When disabled,
    * unpinned requests resolve the configured defaults via
    * preferred_with_fallback — XR never roams the catalog on its own. This was
-   * previously dead config (G1 in docs/phase5-routing/01-AUDIT-REPORT.md).
+   * previously dead config (G1 in docs/historical/phases/phase5-routing/01-AUDIT-REPORT.md).
    */
   if (intel?.enableAutomatic === false && routingMode === "automatic") {
     routingMode = "preferred_with_fallback";

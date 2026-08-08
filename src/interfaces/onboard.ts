@@ -76,7 +76,7 @@ function showPrivacyLocalExplanation(): void {
 function showWelcome(): void {
   const platform = detectPlatform();
   banner();
-  console.log(`  ${xrBold("Welcome to XR.")} Your calm, local-first AI operating system.`);
+  console.log(`  ${xrBold("Welcome to XR.")} Your calm, local-first AI agent runtime.`);
   console.log();
   console.log(`  ${xrDim("Install → Configure → First message in under 60 seconds.")}`);
   console.log();

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-06T08:49:26.853Z",
+  "generatedAt": "2026-08-08T20:07:17.851Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -51,8 +51,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 515,
-    "testFiles": 218,
+    "sourceFiles": 516,
+    "testFiles": 223,
     "cliCommands": 41,
     "daemonRoutes": 104,
     "providers": 26,
@@ -82,10 +82,6 @@
       "bytes": 1540
     },
     {
-      "path": "CHANGED-FILES.txt",
-      "bytes": 202
-    },
-    {
       "path": "CHANGELOG.md",
       "bytes": 67911
     },
@@ -98,144 +94,20 @@
       "bytes": 8387
     },
     {
-      "path": "CRITICAL_FIXES.md",
-      "bytes": 13098
-    },
-    {
-      "path": "DELIVERABLE.md",
-      "bytes": 19564
-    },
-    {
       "path": "Dockerfile",
       "bytes": 1495
-    },
-    {
-      "path": "LAUNCH-POSTS.md",
-      "bytes": 7445
     },
     {
       "path": "LICENSE",
       "bytes": 1071
     },
     {
-      "path": "MCP-STAGE11-IMPLEMENTED.md",
-      "bytes": 2769
-    },
-    {
-      "path": "MIGRATION.md",
-      "bytes": 17710
-    },
-    {
-      "path": "PHASE10_ARCHITECTURE_DESIGN.md",
-      "bytes": 26342
-    },
-    {
-      "path": "PHASE10_AUDIT_DELIVERABLE.md",
-      "bytes": 41089
-    },
-    {
-      "path": "PHASE10_COMPLETE.md",
-      "bytes": 10768
-    },
-    {
-      "path": "PHASE10_VALIDATION_REPORT.md",
-      "bytes": 15894
-    },
-    {
-      "path": "PHASE11_COMPLETE.md",
-      "bytes": 9621
-    },
-    {
-      "path": "PHASE12_AUDIT_DELIVERABLE.md",
-      "bytes": 16636
-    },
-    {
-      "path": "PHASE12_VALIDATION_REPORT.md",
-      "bytes": 14369
-    },
-    {
-      "path": "PHASE13_AUDIT_DELIVERABLE.md",
-      "bytes": 21419
-    },
-    {
-      "path": "PHASE13_VALIDATION_REPORT.md",
-      "bytes": 15025
-    },
-    {
-      "path": "PHASE4_ARCHITECTURE_DESIGN.md",
-      "bytes": 6295
-    },
-    {
-      "path": "PHASE4_AUDIT_DELIVERABLE.md",
-      "bytes": 16639
-    },
-    {
-      "path": "PHASE5_AUDIT_DELIVERABLE.md",
-      "bytes": 13004
-    },
-    {
-      "path": "PHASE5_VALIDATION_REPORT.md",
-      "bytes": 1510
-    },
-    {
-      "path": "PHASE6_AUDIT_DELIVERABLE.md",
-      "bytes": 28657
-    },
-    {
-      "path": "PHASE6_VALIDATION_REPORT.md",
-      "bytes": 2979
-    },
-    {
-      "path": "README-APPLY.txt",
-      "bytes": 1505
-    },
-    {
       "path": "README.md",
-      "bytes": 72425
-    },
-    {
-      "path": "README_SECURITY.md",
-      "bytes": 9646
+      "bytes": 74105
     },
     {
       "path": "SECURITY.md",
       "bytes": 15608
-    },
-    {
-      "path": "SECURITY_IMPLEMENTATION.md",
-      "bytes": 19191
-    },
-    {
-      "path": "XR-2.1-MARKETPLACE-COMPLETE-IMPLEMENTATION.md",
-      "bytes": 2530
-    },
-    {
-      "path": "XR-2.1A-IMPLEMENTATION.md",
-      "bytes": 7259
-    },
-    {
-      "path": "XR-2.1B-IMPLEMENTATION.md",
-      "bytes": 4897
-    },
-    {
-      "path": "XR-2.1C-IMPLEMENTATION.md",
-      "bytes": 5198
-    },
-    {
-      "path": "XR-2.1D-MARKETPLACE-UI-IMPLEMENTATION.md",
-      "bytes": 3124
-    },
-    {
-      "path": "XR-2.1E-OFFICIAL-SKILL-PACKS-IMPLEMENTATION.md",
-      "bytes": 3626
-    },
-    {
-      "path": "XR-ASYNC-PERFORMANCE-REPORT.md",
-      "bytes": 10639
-    },
-    {
-      "path": "XR-MODEL-SWITCH-FIX-REPORT.md",
-      "bytes": 12723
     },
     {
       "path": "bun.lock",
@@ -254,16 +126,12 @@
       "bytes": 9216
     },
     {
-      "path": "next-env.d.ts",
-      "bytes": 247
-    },
-    {
       "path": "package.json",
       "bytes": 4572
     },
     {
       "path": "release.manifest.json",
-      "bytes": 9380
+      "bytes": 10406
     },
     {
       "path": "tsconfig.json",
@@ -681,6 +549,7 @@
     "src/services/config-service.ts",
     "src/services/mcp-service.ts",
     "src/services/multi-agent-service.ts",
+    "src/services/multi-agent-task-support.ts",
     "src/services/planning-service.ts",
     "src/services/plugin-service.ts",
     "src/services/provider-service.ts",
@@ -804,6 +673,7 @@
     "test/architecture/unit-tier.test.ts",
     "test/baseline/doctor.test.ts",
     "test/baseline/status.test.ts",
+    "test/business/adversarial-boundaries.test.ts",
     "test/business/business.test.ts",
     "test/business/decoupling.test.ts",
     "test/business/operating-layer.test.ts",
@@ -814,6 +684,7 @@
     "test/capabilities/provenance-graph.test.ts",
     "test/capabilities/tuf-updates.test.ts",
     "test/config/cache.test.ts",
+    "test/config/env-overrides.test.ts",
     "test/context/compression.test.ts",
     "test/context/conflicts.test.ts",
     "test/context/durable.test.ts",
@@ -880,6 +751,7 @@
     "test/evaluation/integration.test.ts",
     "test/evaluation/security.test.ts",
     "test/execution/adapters.test.ts",
+    "test/execution/cancellation.test.ts",
     "test/execution/checkpoint.test.ts",
     "test/execution/lease.test.ts",
     "test/execution/recovery.test.ts",
@@ -906,6 +778,7 @@
     "test/memory-summarize.test.ts",
     "test/memory-v09.test.ts",
     "test/memory.test.ts",
+    "test/multi-agent-e2e.test.ts",
     "test/multi-agent.test.ts",
     "test/observability/envelope-trace.test.ts",
     "test/observability/instrumentation-e2e.test.ts",
@@ -961,6 +834,7 @@
     "test/security/egress-proxy.test.ts",
     "test/security/mcp-allowlist.test.ts",
     "test/security/nodevm-wording.test.ts",
+    "test/security/secrets.test.ts",
     "test/security/shield.test.ts",
     "test/services/agent-service.test.ts",
     "test/services/planning-service.test.ts",

@@ -1,7 +1,7 @@
 /**
  * XR Phase 5 · T1 — Deterministic task-difficulty estimation.
  *
- * Principle adopted (docs/phase5-routing/03-RESEARCH-NOTES.md · R1, RouteLLM
+ * Principle adopted (docs/historical/phases/phase5-routing/03-RESEARCH-NOTES.md · R1, RouteLLM
  * ICLR 2025): route to the CHEAPEST model whose measured capability meets the
  * task's difficulty. We adopt the principle deterministically — no learned
  * preference model, no model call, nothing opaque (Art. IV.5; the learned

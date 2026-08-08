@@ -16,7 +16,7 @@
  *      constitutional p95 < 100ms @100k budget, previously only asserted at
  *      ≤5,000 items — Phase-6 gap G6, now measured).
  *   3. REPORT — prints the measured matrix; with --write persists
- *      docs/phase6/measured-recall.json (the single evidence file the Phase-6
+ *      docs/perf/measured-recall.json (the single evidence file the Phase-6
  *      docs cite). Exit code is non-zero when any declared target is missed,
  *      so the benchmark is a gate, not a decoration.
  *

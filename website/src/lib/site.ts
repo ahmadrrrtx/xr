@@ -15,7 +15,7 @@ export const site = {
   name: "XR",
   tagline: "The AI Agent You Can Actually Trust — BYOK, local-first, secure",
   description:
-    "XR is an open-source, local-first AI operating system — BYOK, secure, with a Unified Execution Fabric, persistent memory, research, voice, plugins, MCP, multi-agent runtime, and workflow automation. Built on Bun + TypeScript + SQLite.",
+    "XR is an open-source, local-first AI agent runtime — BYOK, secure, with a Unified Execution Fabric, persistent memory, research, voice, plugins, MCP, multi-agent runtime, and workflow automation. Built on Bun + TypeScript + SQLite.",
   url: "https://xr-gules.vercel.app",
   twitter: "@ahmadrrrtx",
   github: "https://github.com/ahmadrrrtx/xr",

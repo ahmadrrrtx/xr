@@ -1,7 +1,7 @@
 /**
  * XR Phase 5 · T4 — mid-conversation failover context preservation (CPR).
  *
- * ContinuityBench-style harness (docs/phase5-routing/03-RESEARCH-NOTES.md ·
+ * ContinuityBench-style harness (docs/historical/phases/phase5-routing/03-RESEARCH-NOTES.md ·
  * R4; arXiv:2607.15899): a scripted conversation plants canonical factual
  * anchors, a provider failure is injected MID-CONVERSATION, and we measure
  * CPR — the share of anchors that reach the fallback's input.

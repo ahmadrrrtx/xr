@@ -50,6 +50,30 @@ describe("T10 · well-formed decisions are honoured", () => {
     expect(r.decision).toBe("approved");
   });
 
+  test("a decision after brace-laden findings prose is still found", () => {
+    // Findings often quote code/objects. The parser must reach the decision,
+    // not choke on the first balanced braces it meets. (Launch P0 hardening.)
+    const r = parseReviewDecision(
+      'Findings: the diff touches {"a":1} and renames {"b":2}.\n' +
+        'Risks: none.\n{"decision":"changes_requested","reason":"Needs one more test."}',
+    );
+    expect(r.decision).toBe("changes_requested");
+  });
+
+  test("an unparseable brace block before the decision does not poison the parse", () => {
+    const r = parseReviewDecision(
+      'Reviewer wrote: { Decision: NOT_JSON } then remembered the contract.\n{"decision":"approved","reason":"Contract eventually followed."}',
+    );
+    expect(r.decision).toBe("approved");
+  });
+
+  test("a brace block with a non-decision field does not masquerade as the verdict", () => {
+    const r = parseReviewDecision(
+      '{"summary":"all findings look fine"} is not a decision.\n{"decision":"rejected","reason":"Blocking regression found."}',
+    );
+    expect(r.decision).toBe("rejected");
+  });
+
   test("decision matching is case-insensitive", () => {
     expect(parseReviewDecision('{"decision":"APPROVED","reason":"fine"}').decision).toBe("approved");
   });

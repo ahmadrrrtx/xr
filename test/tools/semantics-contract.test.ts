@@ -7,7 +7,7 @@
  *
  * Each `describe` block states the invariants that kind's CONSUMERS rely on
  * (the consumer-driven-contract idea, applied natively rather than through a
- * broker — see docs/phase2/03-RESEARCH-NOTES.md R5), and verifies them against
+ * broker — see docs/historical/phases/phase2/03-RESEARCH-NOTES.md R5), and verifies them against
  * the single provider, `ToolRegistryService`.
  */
 

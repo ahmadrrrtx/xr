@@ -193,7 +193,7 @@ async function addProviderKey(target?: string): Promise<void> {
   process.env[preset.apiKeyEnv] = key;
 
   if (backend === "file") {
-    warn(`OS keychain not available — key saved to ${XR_HOME}/.env (chmod 600).`);
+    warn(`OS keychain not available — key sealed (AES-256-GCM, per-install key) in ${XR_HOME}/.env (chmod 600).`);
   } else {
     ok(`API key for ${xrCyan(id)} saved in ${backend}.`);
   }

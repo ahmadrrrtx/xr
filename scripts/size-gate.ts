@@ -25,7 +25,7 @@ import { join, relative, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
 const SRC = join(ROOT, "src");
-const REGISTER = join(ROOT, "docs/phase2/SIZE-WAIVERS.json");
+const REGISTER = join(ROOT, "docs/perf/SIZE-WAIVERS.json");
 
 /** Lines of code per module. */
 export const THRESHOLD = 800;

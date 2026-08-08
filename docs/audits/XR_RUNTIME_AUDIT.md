@@ -1,0 +1,78 @@
+# XR Agent Runtime — Consolidated Audit Ledger
+
+**Basis:** (a) the deep technical audit of 3.1.5 (2026-07-21, ~596 commits),
+(b) the independent verification audit of 7.1.0 (2026-08-06, 697 commits),
+(c) fresh verification performed during the launch-engineering program on
+`main @ 9f5840c` (2026-08-08, Bun 1.3.14, full gates + live CLI/daemon
+probes + source inspection).
+
+**Method rule:** every audit claim below was checked against the actual
+repository before being acted on. Verdicts:
+
+- `CONFIRMED` — repo matches the claim and work was/is required.
+- `ALREADY RESOLVED` — the claim was true of an earlier revision; current
+  `main` already handles it.
+- `DISCREPANCY` — audit and repository disagree; resolution recorded.
+- `NOT-APPLICABLE-TO-LAUNCH` — true, but belongs to the multi-year XR-OS
+  roadmap, not the runtime launch.
+
+---
+
+## 1. Baseline verified on 2026-08-08 (main @ 9f5840c)
+
+| Check | Result |
+|---|---|
+| Package identity | `@rrrtx/xr` **7.1.0** "Truth", Bun ≥ 1.3.0, TS strict, deps: `zod` only (`playwright` optional) |
+| Install | `bun install --frozen-lockfile` clean (52 pkgs, lockfile honored) |
+| Typecheck | `tsc --noEmit` **PASS** |
+| Tests | **2,750 pass / 13 skip / 0 fail** (skips = live-browser a11y), 12,289 assertions, 218 files |
+| CI gates (local) | release:check · channel:check · claim-lint · changelog:check · baseline:inventory · ownership:check · boundaries · size-gate · hot-path-lint · ci-capability-gate · api:schema:check · client:check · api:compat · website:marketplace:check — **all PASS** |
+| CLI | `xr --version` → `v7.1.0 (Truth)`; `doctor --json` ≈ 0.6 s, honest output |
+| Daemon | `xr serve` binds **127.0.0.1 only**; `/` → 401 without token; `/api/health` → 200; token issuance printed at startup |
+| npm registry | `@rrrtx/xr` latest = **3.1.5** (source is 7.1.0) |
+| Remote tags | `v3.0.0 v4.3.0 v4.5.0 v7.0.0` — **no v7.1.0** |
+| Scale | 502 src TS files / 130,115 LOC; 237 test TS files / 44,557 LOC; 65 skill dirs; `as any` × 245 in src |
+
+## 2. Finding ledger (launch-track)
+
+| ID | Audit claim | Repository evidence (verified 2026-08-08) | Verdict | Disposition |
+|---|---|---|---|---|
+| A-1 | **Multi-agent workflow broken end-to-end** — deterministic `security_checker` emits prose; strict-JSON review gate fails closed; worker agents never run; no e2e test covers this | CONFIRMED and **reproduced live**: `MultiAgentService.runSecurityTask` returns `Decision: APPROVED …` prose (`src/services/multi-agent-service.ts`); `executeTask` feeds `output.summary` to `parseReviewDecision` (`src/services/review-decision.ts`) → fail-closed `changes_requested`; `refreshReadyTasks` marks every dependent `blocked`. Live repro: workflow ends `status=blocked`, zero roles reached the provider stub. Only plan/cancel test exists (`test/multi-agent.test.ts`). | **CONFIRMED → RESOLVED 2026-08-08** | **FIXED (F-1/F-2, commit 7a7c270)** — deterministic checker now emits the strict-JSON `{"decision","reason"}` contract; the executor consumes the structured decision directly; model-reviewer prose still fails closed (pinned by regression tests); transport/budget/approval stops map to honest task failure (no fake completions; resumable via `resumeWorkflow`); `test/multi-agent-e2e.test.ts` runs the full workflow with workers executing. Live-verified: gates approve; provider-down surfaces `worker model call failed`. |
+| A-2 | **npm distribution 4 versions behind** (npm 3.1.5 vs source 7.1.0); no v7.1.0 tag | `npm view @rrrtx/xr version` → `3.1.5`; `git ls-remote --tags` → max `v7.0.0`. Release + channel manifests exist and pass; signed-release wiring exists but never cut for 7.1.0 (KNOWN_LIMITATIONS #6 says exactly this). | **CONFIRMED** | **P0** — cut signed `v7.1.0` (tag + GitHub release + npm publish) per `docs/release/RELEASING.md`; requires maintainer credentials (user action). |
+| A-3 | **"AI Operating System" / "Provable Security" framing is misleading** | `README.md:660` "True AI Operating System"; `:242` "AI OS Kernel"; `:790` "Provable Security"; `:227` "deterministic injection benchmark" growth-table cell; also `website/src/lib/site.ts:18` "AI operating system", onboarding banner + OpenAPI summary repeats. claim-lint passed because these phrases were not in `release.manifest.json` prohibited/supervised lists. Runtime is an application-layer agent runtime (in-process policy; docs/security/* says so honestly). | **CONFIRMED → RESOLVED 2026-08-08** | **FIXED (H-1)** — all six sites reframed to the agent-runtime identity on every scanned surface; manifest gained 4 prohibited patterns + supervised "AI OS"/"operating system"; negative tests prove the regression guard fails the build; adjacent stale claims fixed in the same pass (`xr test --attacks` → canonical `xr attacks`; 12→11 workflow templates; stale `src/business/` tree → real `extensions/business-os` layout; XR-15 marked default-off). Honesty machinery untouched. |
+| A-4 | Secrets: deep audit claimed "AES-256-GCM encrypted credential vault" | `src/security/secrets.ts` — OS backends (macOS keychain / Linux secret-service / Windows DPAPI) + **plaintext NAME=value file fallback (chmod 600)**. No AES-256-GCM at rest for the fallback. The old deep audit over-claimed; the architecture report correctly flagged this. | **DISCREPANCY (audit over-claimed) → RESOLVED 2026-08-08** | **FIXED (H-2)** — fallback is now AES-256-GCM sealed (`XRG1` format, per-install 256-bit key at `~/.xr/secrets/.file-key`, fail-closed on corrupt key, undecryptable entries carried verbatim, transparent legacy plaintext migration). 7 disclosure tests in `test/security/secrets.test.ts`; runbook `docs/migration/secrets-at-rest.md`. OS backends remain the recommended anchor (`doctor` still warns on `file`). |
+| A-5 | Enterprise module is the largest, least-tested surface | `src/enterprise` 21,995 LOC (53 files); `test/enterprise` 11 files / 4,927 LOC (~22% by LOC). | **CONFIRMED → RESOLVED 2026-08-08** | **FIXED (R-1)** — verified current layout first: `test/enterprise/` 11 files (audit-export, authority, certification, governance-matrix, incidents, operations, policy, recovery, release, security-adversarial, supplychain) + `test/evaluation/` 3 files phase-13 harness/integration/security + `test/business/` 4 files for the extension. The adversarial gap closed where the boundary actually lives today: new `test/business/adversarial-boundaries.test.ts` (12 tests — RBAC escalation attempts + custom-permission explicit-deny override + disabled-member denial + no-mutation-on-deny; approval replay/expiry-fail-closed/workspace isolation; org member isolation). PII-admission equivalents already exist at observability redaction + security injection/egress suites. Enforcement reality recorded: RBAC wired for AI workers + operating-layer mutations; plain CRUD trusts the single local owner (documented in the test header). |
+| A-6 | Heavy `as any` in provider/routing/config seams | 245 occurrences across src. Concentrated in provider/routing/config/dashboard seams. | **CONFIRMED** | **P2** — targeted tightening at the trust seams only (no blanket refactor). |
+| A-7 | 26+ providers but only 6 native adapters (`Anthropic, Google, Mistral, Cohere, Bedrock, Cerebras`), rest are OpenAI-compatible presets | `src/providers/presets.ts` (26: 16 hosted + 10 local) + `src/providers/native/*` (6 native implementations). Wiring nuance verified in `factory.ts`: **5 wired natively**; the 6th (Cerebras) ships as a native adapter for standalone use while its built-in preset uses the OpenAI-compatible endpoint like the other 20 presets. README model labels were also stale vs `defaultModel` (e.g. "deepseek-r2", "claude-opus-4"). | **CONFIRMED (working as intended, framing issue) → RESOLVED 2026-08-08** | **FIXED (H-3)** — README providers section rewritten: 26 presets = 16 hosted + 10 local; 5 wired native adapters named; OpenAI-compatible transport + custom base-URL path stated; Cerebras nuance recorded; table = real `defaultModel` values; switch semantics (`providers set <id> <model>`, canary + rollback) documented. |
+| A-8 | Docs scattered: 30+ root markdown deliverables, phase dirs everywhere | 34 root .md/.txt incl. 29 campaign deliverables; `docs/phase*` campaign dirs mixed with living docs; `MIGRATION.md` duplicate of docs/migration; stray `next-env.d.ts`, `README-APPLY.txt`, `CHANGED-FILES.txt`. | **CONFIRMED** | **Done in launch Phase 1** — repository cleanup (this program). |
+| A-9 | 3.1.5-era reports said `website/` did not exist | `website/` exists on main (Next.js 16 marketing site, private) and `website:marketplace:check` passes. | **ALREADY RESOLVED** | Keep. |
+| A-10 | `src/control/` vs `src/computer/` overlapping control abstractions | Both exist on main: `src/control/` (16 files — plan/preview/approve/audit) and `src/computer/system-control.ts` (1 file, 202 LOC tool surface). | **RESOLVED 2026-08-08** | Division documented in `docs/environment/README.md` §"Related but distinct", verified against imports: `control/` = governed multi-step computer-use pipeline (classify→approve→audit; entry points `computer_control` tool / daemon control-api / `xr control` CLI); `computer/system-control.ts` = single-shot `SYSTEM_TOOLS` registry surface (5 live tools; 6 no-op stubs deleted Phase-0 with `assertNoNoOpSuccess()` guard). No duplication exists → no merge (would couple the governance gate to a tool provider). |
+| A-11 | Injection "benchmark" is a deterministic regex/heuristic scanner, not model-level evidence | `src/security/attacks.ts` + `lab.ts` — fixed corpus + policy gate. Code-internal docs are honest; README growth-table framing inflates it (A-3). | **CONFIRMED → RESOLVED 2026-08-08** | **FIXED with H-1** — README now says "deterministic injection screen — curated attack corpus, signed block-rate report"; section heading renamed "Verifiable Security"; stale `xr test --attacks` corrected to canonical `xr attacks --json`. |
+| A-12 | Voice/research/computer-control need heavy host tooling (whisper, piper, xdotool, Playwright) | `src/voice`, `src/research`, `src/platform/environment` + doctor reports degrade honestly. | **CONFIRMED** | **P3** — onboarding should surface capability detection (partially exists via `doctor`); not launch-blocking. |
+| A-13 | Timer/event workflow nodes don't self-advance; workflow tool-action nodes need an injected executor | Documented in the 7.1.0 known-limitations register §4; consistent with `src/execution/workflow/*`. | **CONFIRMED → RESOLVED 2026-08-08** | **FIXED (H-3)** — stated explicitly in the launch getting-started guide (`docs/development/GETTING_STARTED.md` "Know before you rely on it") with a link to the register. Documentation stance, as chosen; no silent gap on the golden path. |
+| A-14 | Secrets hydrated into `process.env` for provider plane | `KNOWN_LIMITATIONS.md` #4 already registers this honestly with an owner + review date. | **CONFIRMED (already registered)** | **P3** — enterprise identity work (XR-OS roadmap), not launch scope. |
+| A-15 | Repository-level hygiene inside `docs/`: duplicate known-limitations registers | `docs/security/KNOWN_LIMITATIONS.md` (Phase-4 register) + `docs/release/7.1.0/known-limitations.md` (release-scoped) both exist. | **RESOLVED 2026-08-08** | Security doc is now the **canonical living register** (stable #1–#9, LAUNCH_HANDOFF §6 → #6 intact; rows #10–#17 merged in from the release excerpt — workflow executor/scheduler, provider canaries, rpm/snap, channel publication, Tier-2 platforms, hosted telemetry, human UX studies, pre-7.0.1 credentials); the 7.1.0 doc is declared a **frozen release excerpt** pointing back at canonical. Binding removal policy restated in both. Stale pointer `docs/phase-1/KNOWN_LIMITATIONS.md` in test/platform/exclusions.json repointed to `docs/historical/phases/phase-1/`. |
+| A-16 | Authorship: ~697 commits, one human founder + AI coding agents; 33 long-lived branches | `git shortlog` matches (585+92 Muhammad Ahmad, ~15 agent commits); 33 remote branches, most merged. | **CONFIRMED** | **P3** — branch retirement + CONTRIBUTING note (maintainer action on remotes). |
+| A-17 | Root `next-env.d.ts` misplaced (Next.js artifact at repo root) | Was present at root; `website/` has its own. Root tsconfig never included it. | **CONFIRMED** | **Deleted in launch Phase 1.** |
+| A-18 | Live route/claim drift tools exist but must keep passing after cleanup | All gates re-run green after every cleanup batch (see work log). | — | Continuous gate in this program. |
+| A-19 | **S-2 stabilization pass — retry & cancellation semantics verified (new information, 2026-08-08)** | Not from the uploaded audits; found during Phase-4 verification. | **VERIFIED + PINNED** | (1) **Execution retry is intentionally fail-closed:** a thrown mid-run failure has `sideEffectUnknown=true` (state is `running` at catch time) → the generic-failure + timeout retry branches are unreachable for action faults — no automatic same-run retry, terminal `failed`, `maxAttempts` cannot override; non-idempotent additionally escalates to `reconciliation_required` ("we cannot prove the charge didn't happen"). Live retry genuinely lives at: provider failover pool + one-shot 429/5xx retry (`callWithRetry`), model-switch canary rollback, recovery/resume. Pinned by 4 tests (`test/execution/service.test.ts`). (2) **Execution cancellation is real:** cooperative `ctx.isCancelled()`, non-cooperative bail-out watchdog stamping honest `cancelled` (durable, `sideEffectPossible` flag), now pinned (`test/execution/cancellation.test.ts`, 3 tests). (3) **Cancellation propagation gap (documented, P2):** the flag never reaches agent-service/runner/envelope — `AgentResult.stopped` has no `cancelled` variant; single-shot CLI tasks end via process exit; shell Ctrl+C is UI-level best-effort (its own comment: "agent may not support abort yet"); multi-agent workflows cancel cooperatively between tasks (`cancelWorkflow`, pinned in test/multi-agent.test.ts). Follow-up: thread an abort signal through AgentService→runner→loop without breaking the no-bypass contract. |
+
+## 3. XR-OS roadmap items explicitly out of launch scope
+
+The uploaded strategy/roadmap documents (3-year execution program, master
+roadmap, competitive strategy, OSINT) converge on: risk-tiered isolation
+substrates, event-sourced execution, agent mailboxes, progressive context,
+flow/agent unification, remote/hybrid control plane, visual workflow studio,
+enterprise certification. These are genuine XR-OS goals. **The runtime launch
+does not attempt them**; the launch gates are defined in
+[`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) §Launch-gates.
+Where a roadmap item touches a launch gate (e.g. secrets at rest), the minimal
+honest slice is taken (A-4), and the rest is recorded as future work.
+
+## 4. Discrepancy register (cumulative)
+
+| # | Audit said | Repo truth | Resolution |
+|---|---|---|---|
+| D-1 | "AES-256-GCM credential vault" | OS keychain + plaintext file fallback (chmod 600) | **RESOLVED 2026-08-08 (H-2):** fallback sealed with AES-256-GCM (`XRG1` format, per-install key); migration + threat-model ceiling documented in `docs/migration/secrets-at-rest.md`; tests pin ciphertext-at-rest and legacy migration (A-4) |
+| D-2 | "336 docs / specific doc counts, 44,559 test LOC" | Counts drift with generation (237 test files / 44,557 LOC on 2026-08-08) | Treated as approximation; baseline-inventory regenerates mechanically |
+| D-3 | (3.1.5 report) "no `website/` dir in checkout" | `website/` exists on main | Closed (A-9) |

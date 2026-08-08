@@ -1,7 +1,0 @@
-M  .github/workflows/supply-chain.yml
-M  src/daemon/server.ts
-M  scripts/perf/dashboard-bench.ts
-M  scripts/perf-gate.ts
-M  scripts/perf/budgets.json
-M  docs/perf/PERF-BUDGETS.md
-M  docs/perf/WAIVERS.md

@@ -272,7 +272,7 @@ async function cmdBenchmark(store: Store, flags: Phase6Flags): Promise<void> {
     const measured = { report, targets: evaluation };
 
     if (flags.write) {
-      const dest = join("docs", "phase6", "measured-recall.json");
+      const dest = join("docs", "perf", "measured-recall.json");
       mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, JSON.stringify(measured, null, 2));
       out(C.dim(`  wrote ${dest}`));

@@ -2,7 +2,7 @@
  * Semantic-convention attribute names (Phase 8 · T2).
  *
  * GenAI names follow the OpenTelemetry GenAI semantic conventions
- * (docs/phase8/03-RESEARCH-NOTES.md · R1): span names are
+ * (docs/historical/phases/phase8/03-RESEARCH-NOTES.md · R1): span names are
  * `{operation} {name}` (`chat <model>`, `execute_tool <tool>`,
  * `invoke_agent <agent>`); attributes are the structural set — content is
  * opt-in only, per the conventions themselves and Art. XXI.

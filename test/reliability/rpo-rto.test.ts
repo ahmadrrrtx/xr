@@ -3,7 +3,7 @@
  *
  * Real backup → mutate → restore round trip with an intact audit chain,
  * real record counts, real integrity hashes, and a measured cold-restart time
- * against the stated RTO budget. See docs/phase-1/RPO_RTO.md for the
+ * against the stated RTO budget. See docs/historical/phases/phase-1/RPO_RTO.md for the
  * stated objectives.
  */
 import { describe, expect, test } from "bun:test";

@@ -12,7 +12,7 @@ import { z } from "zod";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
-import { getSecret, getSecretSyncCached } from "../security/secrets.ts";
+import { getSecret, getSecretSyncCached, listFileSecrets } from "../security/secrets.ts";
 import { PRESETS } from "../providers/presets.ts";
 import {
   getCachedConfig,
@@ -563,6 +563,19 @@ const ConfigSchema = z.object({
       screenReader: z.boolean().default(false),
     })
     .default({}),
+  /**
+   * Explicit env-var → config-path override contract (Phase 4 · S-1 finding
+   * F3). `"envOverrides": { "providers.openrouter.baseUrl": "OPENROUTER_BASE_URL" }`
+   * makes the named env var override that config path at load time. Without an
+   * entry, the env var does nothing (bare `*_BASE_URL` vars are NOT honored).
+   * Rules: env var names must be UPPER_SNAKE; paths must start from a real
+   * config root; only string-valued leaves are writable; values must pass
+   * schema validation; `__proto__`/`prototype`/`constructor` segments are
+   * refused. Everything overridden is reported in the loadConfig warnings.
+   */
+  envOverrides: z.record(z.string()).default({}),
+  /** Kill-switch for automation/CI: ignore every envOverrides mapping. */
+  envOverridesLocked: z.boolean().default(false),
 });
 
 export type XRConfig = z.infer<typeof ConfigSchema>;
@@ -909,22 +922,93 @@ export function migrateRawConfig(raw: unknown): unknown {
  * invalidates immediately on saveConfig() or fs.watch of config.json. Secrets
  * are loaded into process.env once and not re-probed on every request.
  */
+const ENV_NAME_RE = /^[A-Z][A-Z0-9_]*$/;
+const FORBIDDEN_PATH_SEGMENTS = new Set(["__proto__", "prototype", "constructor"]);
+
+/** Write a dotted path to a string leaf only. Never creates structure. */
+function setDottedStringLeaf(target: Record<string, unknown>, path: string, value: string): boolean {
+  const segs = path.split(".");
+  if (segs.length < 2 || segs.some((s) => s === "" || FORBIDDEN_PATH_SEGMENTS.has(s))) return false;
+  let node: Record<string, unknown> = target;
+  for (let i = 0; i < segs.length - 1; i++) {
+    const next: unknown = node[segs[i]!];
+    if (typeof next !== "object" || next === null || Array.isArray(next)) return false;
+    node = next as Record<string, unknown>;
+  }
+  const leaf = segs[segs.length - 1]!;
+  if (typeof node[leaf] !== "string") return false; // string leaves only
+  node[leaf] = value;
+  return true;
+}
+
 /**
- * Phase 4 · T1 — apply operator env overrides on top of parsed config.
+ * Phase 4 · T1 (+ F3) — apply operator env overrides on top of parsed config.
  * `XR_TRUST_HARDENED=0|false` disables hardened mode (fail-open degraded
- * posture for hosts without isolation backends — logged by callers).
+ * posture for hosts without isolation backends — logged by callers); the
+ * configured `config.envOverrides` map applies last and reports everything it
+ * does (or refuses) through the warnings sink. `envOverridesLocked: true`
+ * ignores the whole map.
  */
+export function applyEnvOverrides(config: XRConfig): { config: XRConfig; warnings: string[] } {
+  const warnings: string[] = [];
+  let out = config;
+
+  // 1. Legacy single-purpose override (kept for compatibility, documented inline).
+  const envHardened = process.env.XR_TRUST_HARDENED;
+  if (envHardened !== undefined && envHardened !== "") {
+    const hardened = !/^(0|false|off|no)$/i.test(envHardened);
+    if (hardened !== out.security.hardened) {
+      out = { ...out, security: { ...out.security, hardened } };
+      warnings.push(`env override applied: security.hardened ← XR_TRUST_HARDENED`);
+    }
+  }
+
+  // 2. Configured map (explicit contract — nothing ambient is honored).
+  const map = out.envOverrides ?? {};
+  const entries = Object.entries(map);
+  if (entries.length === 0) return { config: out, warnings };
+  if (out.envOverridesLocked) {
+    warnings.push(`envOverrides: ${entries.length} mapping(s) ignored — envOverridesLocked is true`);
+    return { config: out, warnings };
+  }
+  const roots = new Set(Object.keys(ConfigSchema.shape));
+  for (const [path, envName] of entries) {
+    if (!ENV_NAME_RE.test(envName)) {
+      warnings.push(`envOverrides["${path}"]: "${envName}" is not an UPPER_SNAKE env var name — ignored`);
+      continue;
+    }
+    const root = path.split(".")[0]!;
+    if (!roots.has(root)) {
+      warnings.push(`envOverrides["${path}"]: unknown config root "${root}" — ignored`);
+      continue;
+    }
+    const value = process.env[envName];
+    if (value === undefined || value === "") continue;
+    const next = structuredClone(out);
+    if (!setDottedStringLeaf(next as unknown as Record<string, unknown>, path, value)) {
+      warnings.push(`envOverrides["${path}"]: no writable string leaf at that path — ignored`);
+      continue;
+    }
+    const parsed = ConfigSchema.safeParse(next);
+    if (!parsed.success) {
+      warnings.push(`envOverrides["${path}"] ← ${envName}: value failed schema validation (e.g. must be a valid URL) — ignored`);
+      continue;
+    }
+    out = parsed.data;
+    warnings.push(`env override applied: ${path} ← ${envName}`);
+  }
+  return { config: out, warnings };
+}
+
+/** Backwards-compatible wrapper: config only (warnings discarded). */
 export function withEnvOverrides(config: XRConfig): XRConfig {
-  const env = process.env.XR_TRUST_HARDENED;
-  if (env === undefined || env === "") return config;
-  const hardened = !/^(0|false|off|no)$/i.test(env);
-  if (hardened === config.security.hardened) return config;
-  return { ...config, security: { ...config.security, hardened } };
+  return applyEnvOverrides(config).config;
 }
 
 export function loadConfig(): { config: XRConfig; warnings: string[] } {
   const out = loadConfigInner();
-  return { config: withEnvOverrides(out.config), warnings: out.warnings };
+  const env = applyEnvOverrides(out.config);
+  return { config: env.config, warnings: [...out.warnings, ...env.warnings] };
 }
 
 function loadConfigInner(): { config: XRConfig; warnings: string[] } {
@@ -1076,12 +1160,11 @@ function loadLocalSecrets(opts: { skipOsProbe?: boolean } = {}): void {
   if (existsSync(envPath)) {
     try { chmodSync(envPath, 0o600); } catch {}
     try {
-      const content = readFileSync(envPath, "utf8");
-      for (const line of content.split("\n")) {
-        const [key, ...val] = line.split("=");
-        if (key && val.length > 0 && !process.env[key.trim()]) {
-          process.env[key.trim()] = val.join("=").trim();
-        }
+      // Route through secrets.ts: it owns the format (AES-256-GCM sealed
+      // values + legacy plaintext migration). Raw-parsing here once hydrated
+      // ciphertext into process.env during the launch hardening.
+      for (const [key, value] of Object.entries(listFileSecrets())) {
+        if (value && !process.env[key]) process.env[key] = value;
       }
     } catch { /* ignore corrupt .env */ }
   }

@@ -111,7 +111,7 @@ export function buildOpenApi(ops: ApiOperation[]): Record<string, unknown> {
     info: {
       title: "XR Daemon API",
       version: CORE_VERSION,
-      summary: "The local-first daemon API of the XR AI operating system.",
+      summary: "The local-first daemon API of the XR AI agent runtime.",
       description:
         "Versioned surface mounted at /api/v1. Legacy /api/* mounts serve during the deprecation " +
         "window with Deprecation/Sunset headers and are removed no earlier than XR 8.0.0. " +

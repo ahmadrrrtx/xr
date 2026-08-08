@@ -83,6 +83,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/memory-summarize.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-v09.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/multi-agent-e2e.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/multi-agent.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/observability/` | @ahmadrrrtx | explicit entry |
 | `test/perf/` | @ahmadrrrtx | default (@ahmadrrrtx) |

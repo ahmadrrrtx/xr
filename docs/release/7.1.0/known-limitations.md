@@ -1,6 +1,14 @@
 # XR 7.1.0 (Truth) — Known Limitations
 
-**Status:** current · **Generated for:** release 7.1.0 · **Last reviewed:** 2026-08-05
+**Status:** frozen release excerpt · **Generated for:** release 7.1.0 · **Last reviewed:** 2026-08-08
+
+> **Canonical register:** [`docs/security/KNOWN_LIMITATIONS.md`](../../security/KNOWN_LIMITATIONS.md).
+> This document is the **release-scoped excerpt** of that register, frozen at
+> the 7.1.0 cut (closes audit finding A-15 — the two registers were parallel
+> lists that could drift). Post-release changes land in the canonical register
+> first and flow into the next version's excerpt; this snapshot is corrected
+> in place only for false-claim defects. The §-numbers below are the detail
+> text the canonical register's "Detail" column points at.
 
 This register exists because XR's constitution forbids claiming what has not been verified. It is
 the honest, prominent list of what is **not yet real**. Everything here is a deliberate, recorded

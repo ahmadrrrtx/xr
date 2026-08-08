@@ -298,4 +298,112 @@ describe("XR 4.1 ExecutionService", () => {
     // Outcome persistence failed → upgrade to reconciliation_required.
     expect(rec.state).toBe("reconciliation_required");
   });
+
+  // ── S-2 launch pass: retry-policy pinning ────────────────────────────────
+  // Verifying the retry contract for launch surfaced the REAL semantics, which
+  // these tests now pin (see docs/audits/XR_RUNTIME_AUDIT.md A-14):
+  //   · An action that throws mid-run has sideEffectUnknown=true → the service
+  //     FAILS CLOSED: no automatic same-run retry, terminal `failed` — even
+  //     with maxAttempts > 1. Retrying work whose side effect may already have
+  //     happened would risk silently repeating it (double charge, double write).
+  //   · Non-idempotent work additionally escalates to reconciliation_required.
+  //   · Live retry therefore lives at other layers: provider failover
+  //     (multi-agent), model-switch canary rollback, and recovery/resume.
+  // Cancellation pinning lives in ./cancellation.test.ts.
+
+  test("retry policy: thrown mid-run failure is terminal — no silent re-execution", async () => {
+    let calls = 0;
+    const rec = await h.service.execute({
+      workspaceId: "ws",
+      actor: { kind: "user", source: "cli" },
+      intent: { summary: "flaky action", origin: { kind: "user", source: "cli" } },
+      capability: { kind: "model_call", name: "flaky" },
+      placement: IN_PROCESS_PLACEMENT,
+      idempotency: "naturally_idempotent",
+      inputSummary: "{}",
+      maxAttempts: 3,
+      retryBackoffMs: 1,
+      run: async () => {
+        calls++;
+        throw new Error(`failure ${calls}`);
+      },
+    });
+    expect(rec.state).toBe("failed");
+    expect(rec.outcome!.kind).toBe("failed");
+    // sideEffectUnknown → fail closed. Asking for retries does not override it.
+    expect(calls).toBe(1);
+    expect(rec.retryCount ?? 0).toBe(0);
+    expect(h.auditEvents.some((e) => e.event === "execution.retry")).toBe(false);
+  });
+
+  test("retry policy: non-idempotent thrown failure escalates to reconciliation_required", async () => {
+    let calls = 0;
+    const rec = await h.service.execute({
+      workspaceId: "ws",
+      actor: { kind: "user", source: "cli" },
+      intent: { summary: "charge card", origin: { kind: "user", source: "cli" } },
+      capability: { kind: "core_tool", name: "shell_exec" },
+      placement: IN_PROCESS_PLACEMENT,
+      idempotency: "non_idempotent",
+      inputSummary: "{}",
+      maxAttempts: 3,
+      retryBackoffMs: 1,
+      run: async () => {
+        calls++;
+        throw new Error("gateway timeout");
+      },
+    });
+    // We cannot prove the side effect did NOT happen → honest escalation, never a blind retry.
+    expect(rec.state).toBe("reconciliation_required");
+    expect(rec.outcome!.kind).toBe("reconciliation_required");
+    expect(rec.outcome!.message).toContain("reconciliation");
+    expect(calls).toBe(1);
+    expect(h.auditEvents.some((e) => e.event === "execution.retry")).toBe(false);
+  });
+
+  test("retry policy: isRetryable veto → terminal failure", async () => {
+    let calls = 0;
+    const rec = await h.service.execute({
+      workspaceId: "ws",
+      actor: { kind: "user", source: "cli" },
+      intent: { summary: "vetoed retry", origin: { kind: "user", source: "cli" } },
+      capability: { kind: "core_tool", name: "read_file" },
+      placement: IN_PROCESS_PLACEMENT,
+      idempotency: "naturally_idempotent",
+      inputSummary: "{}",
+      maxAttempts: 3,
+      retryBackoffMs: 1,
+      isRetryable: () => false,
+      run: async () => {
+        calls++;
+        throw new Error("permanent 400");
+      },
+    });
+    expect(rec.state).toBe("failed");
+    expect(calls).toBe(1);
+  });
+
+  test("retry policy: maxAttempts cannot buy retries past the side-effect safety gate", async () => {
+    let calls = 0;
+    const rec = await h.service.execute({
+      workspaceId: "ws",
+      actor: { kind: "user", source: "cli" },
+      intent: { summary: "clamp check", origin: { kind: "user", source: "cli" } },
+      capability: { kind: "core_tool", name: "read_file" },
+      placement: IN_PROCESS_PLACEMENT,
+      idempotency: "naturally_idempotent",
+      inputSummary: "{}",
+      maxAttempts: 99,
+      retryBackoffMs: 1,
+      run: async () => {
+        calls++;
+        throw new Error(`failure ${calls}`);
+      },
+    });
+    expect(rec.state).toBe("failed");
+    // EXECUTION_BOUNDS.MAX_ATTEMPTS=5 is the clamp, but the side-effect gate
+    // fires first: exactly one attempt, terminal failure.
+    expect(calls).toBe(1);
+    expect(rec.id.attempt).toBe(1);
+  });
 });

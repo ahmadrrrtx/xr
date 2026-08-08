@@ -7,7 +7,7 @@
  * inject-once/query-many-times — through the REAL retrieval pipeline and
  * asserts the measured scores meet the declared targets in RECALL_TARGETS.
  *
- * The numbers printed are the contract: docs/phase6/05-TEST-RESULTS.md cites
+ * The numbers printed are the contract: docs/historical/phases/phase6/05-TEST-RESULTS.md cites
  * exactly this output. Nothing is asserted in prose that this suite does not
  * prove.
  */
