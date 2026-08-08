@@ -18,7 +18,7 @@ import { detectHardwareSpecs, formatHardwareSummary } from "../local/hardware.ts
 import { recommendLocalModel } from "../local/recommend.ts";
 import { ollamaStatus, pullOllamaModel, testOllamaModel } from "../local/ollama.ts";
 import { setSecret, preferredSecretBackend } from "../security/secrets.ts";
-import { detectPlatform } from "../install/system.ts";
+import { detectPlatform, probeHealth } from "../install/system.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface OnboardingState {
@@ -288,6 +288,39 @@ async function installOptionalDependencies(state: OnboardingState): Promise<void
 }
 
 // ── Import Experience ────────────────────────────────────────────────────────
+// ── Capability scan (A-12): surface what THIS host can actually do ───────────
+// Reuses the doctor status engine (probeHealth) — one detection authority,
+// no second implementation. Runs after saveConfig so health reads the state
+// the wizard just persisted. Network check stays skipped (offline-safe).
+const CAPABILITY_SCAN_IDS = new Set([
+  "local-runtimes-detected", // what local AI this machine already has
+  "secrets", // where keys actually live (file fallback is stated honestly)
+  "voice", // ffmpeg/whisper/piper heavy tooling
+  "browser", // Playwright/Chromium for research + browser automation
+  "control", // xdotool/wmctrl/osascript desktop-control tooling
+]);
+
+async function showCapabilityScan(): Promise<void> {
+  section("What works on this machine");
+  console.log();
+  const checks = (await probeHealth()).filter((c) => CAPABILITY_SCAN_IDS.has(c.id));
+  for (const c of checks) {
+    // Optional-capability surface: amber for anything not ready (red would
+    // overstate an optional piece at first run), green when usable, dim on skip.
+    const icon =
+      c.state === "ok" ? xrGreen(SYM.ok) :
+      c.state === "skip" ? xrDim("·") :
+      xrAmber(SYM.warn);
+    console.log(`  ${icon} ${xrBold(c.label)}  ${xrDim(c.detail)}`);
+    if (c.state !== "ok" && c.remediation) {
+      console.log(`    ${xrDim("→")} ${xrDim(c.remediation)}`);
+    }
+  }
+  console.log();
+  console.log(`  ${xrDim("Optional pieces stay off until you enable them; nothing above is required for chat.")}`);
+  console.log(`  ${xrDim("Full health scan anytime:")} ${xrCyan("xr doctor")}`);
+}
+
 async function handleImport(state: OnboardingState): Promise<void> {
   section("Import Previous Configuration (optional)");
   const importPath = await askO("Path to previous XR config (or press Enter to skip)", { default: "" });
@@ -453,6 +486,10 @@ export async function runOnboarding(opts?: { yes?: boolean }): Promise<void> {
   }
 
   saveConfig(config);
+
+  // A-12: surface capability detection at first run (voice/browser/desktop
+  // tooling degrade honestly — users should learn it here, not later).
+  await showCapabilityScan();
 
   // Final success + launch guidance
   showSuccess(state);

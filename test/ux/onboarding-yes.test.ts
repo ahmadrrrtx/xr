@@ -87,6 +87,12 @@ describe("onboarding --yes", () => {
     }
 
     expect(lines.join("\n")).toContain("Non-interactive onboarding (--yes)");
+    // A-12 / R-5: the capability scan is rendered at first run, reusing the
+    // doctor detection engine (rows exist on every host; states vary).
+    expect(lines.join("\n")).toContain("What works on this machine");
+    expect(lines.join("\n")).toContain("Voice tools");
+    expect(lines.join("\n")).toContain("Desktop control");
+    expect(lines.join("\n")).toContain("xr doctor");
     expect(existsSync(configPath())).toBe(true);
 
     const { config } = loadConfig();
