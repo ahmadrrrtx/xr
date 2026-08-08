@@ -99,7 +99,8 @@ here, executed by the maintainer.
 Evidence gathered at pre-incident `@2637119`, **re-verified after the
 reconstitution (see §Work log, "Environment incident"), again after the
 Phase-5 P2 batch** (R-2/R-3/R-4/R-5/R-8/F-1/F-2) **and once more after R-9
-(A-19 abort threading, `@9e48754`) and R-6 (canary machinery, `@d3017c0`)**:
+(A-19 abort threading, `@9e48754`), R-6 (canary machinery, `@d3017c0`) and
+the R-7 runbook (`@7946683`)**:
 typecheck clean, **2,812 pass / 13
 skip / 0 fail over 226 files, 14/14 gates, 0 suite temp-dirs left on
 /tmp**.
