@@ -29,6 +29,15 @@ reported `process.exitCode` (so a failed command never exits 0 silently).
 as diagnostics. Verdict-bearing commands document their own non-zero meanings
 (doctor below); treat any undocumented non-zero as failure.
 
+**Contributor caveat (repo checkouts only):** the repo launcher `bin/xr`
+prefers a compiled `dist/<platform>` binary when one exists and spawns it as a
+*child* process — OS signals are not forwarded across that spawn boundary, so
+Ctrl+C semantics reach the stale binary, not your edited source. The installed
+layouts don't have this nuance: the release binary is executed directly and the
+npm layout ships no binary, so `bin/xr` runs from source. When probing signal
+behavior from a source checkout, either remove `dist/` or run with
+`XR_BINARY=` (empty) to force the source path.
+
 ## 2. Global flags (every registered command)
 
 Parsed in order by `parseGlobalFlags`; boolean and `--flag=value` forms both

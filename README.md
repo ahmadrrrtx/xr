@@ -7,16 +7,15 @@
 █░█ █▀▄
 ```
 
-# XR — The AI Agent You Can Actually Trust
+# XR — The AI Agent Runtime You Can Actually Audit
 
-**`BYOK` · `local-first` · `spend-capped` · `tamper-evident` · `memory engine` · `research engine` · `voice stack` · `plugin platform` · `MCP-ready` · `multi-agent runtime` · `supervisor workflows` · `offline-capable` · `safe computer control` · `universal provider engine` · `@rrrtx/xr`**
+**BYOK · local-first · spend-capped · tamper-evident · provider-neutral · plugin + MCP platform**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![SQLite](https://img.shields.io/badge/SQLite-state-003b57?style=flat-square&logo=sqlite&logoColor=white)](https://sqlite.org/)
-[![Tests](https://img.shields.io/badge/tests-bun%20test-34e2a0?style=flat-square)](https://bun.sh)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh)
+[![Platforms](https://img.shields.io/badge/platforms-Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](https://bun.sh/)
 
 </div>
 
@@ -43,136 +42,44 @@ XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tam
 **Bundled skills:** 65 (counted from `skills/` at release time.)
 <!-- XR:RELEASE-IDENTITY:END -->
 
----
-
-> **You bring the key. We ship none.**
-> XR runs on *your* provider API key or *your* local model — it costs **us $0 to maintain** and **you $0 to trust.**
+> **You bring the key. We ship none.** XR runs on *your* provider API key or *your* local
+> model. Nothing leaves your machine unless you configured it to.
 
 ---
 
 ## What XR is — and what it is not
 
-XR is honest about its boundaries before it describes its features. Every capability claim below is
-backed by evidence recorded in [`release.manifest.json`](release.manifest.json) and enforced in CI
-by `bun run claim-lint`.
+XR is a **local-first, provider-neutral AI agent runtime**: a CLI, fullscreen shell, local
+dashboard and automation engine that plans and executes multi-step tasks against your
+filesystem, tools and models — under a deterministic policy gate, human approval on
+consequential actions, per-task spend ceilings, and a hash-chained audit log you can verify
+offline. Every capability claim on this page is backed by evidence recorded in
+[`release.manifest.json`](release.manifest.json) and re-checked in CI by `bun run claim-lint`.
 
 **XR is:**
 
-- a **local-first CLI agent runtime** you self-host — no mandatory cloud, no telemetry;
-- **provider-neutral** — cloud APIs (BYOK) or fully local models via Ollama, LM Studio, llama.cpp,
-  vLLM and others;
-- **governed** — a deterministic policy gate, human approval on consequential actions, per-task
-  spend ceilings, and a hash-chained audit log you can verify;
-- **extensible** — skills, plugins and MCP servers, reachable identically from the CLI, Shell,
-  Telegram and Voice;
+- a **self-hosted agent runtime** — no mandatory cloud, no telemetry;
+- **provider-neutral** — 26 presets, 16 hosted (BYOK) + 10 local runtimes, one switch command;
+- **governed** — policy, approvals, budgets and audit are enforced in the execution path, not promised in docs;
+- **extensible** — skills, plugins and MCP servers reachable identically from every surface;
 - **MIT-licensed** and readable end to end.
 
 **XR is not:**
 
-- **not certified** against SOC 2, ISO 27001, HIPAA, PCI-DSS or FedRAMP. No external audit exists;
-- **not a sandbox.** It enforces in-process policy, not kernel or VM isolation. Strong guard rail,
-  not a confinement boundary;
-- **not a hosted product.** There is no XR cloud;
+- **not certified** against SOC 2, ISO 27001, HIPAA, PCI-DSS or FedRAMP — no external audit exists;
+- **not a sandbox** — in-process policy enforcement, not kernel or VM isolation;
+- **not a hosted product** — there is no XR cloud;
 - **not a substitute** for a human reviewing consequential actions;
-- **not finished** — see the
-  [known-limitations register](docs/release/7.1.0/known-limitations.md), which is maintained as a
-  first-class release artifact.
-
-### Release evidence
-
-Evidence for this release lives in [`docs/release/7.1.0/`](docs/release/7.1.0/):
-
-- repository inventory (`INVENTORY.md`, `inventory.json`);
-- baseline measurements (`BASELINE_MEASUREMENTS.md`, `baseline-measurements.json`);
-- **known limitations** (`known-limitations.md`) — the honest list of what is not yet real.
-
-Reproduce the local gates with:
-
-```bash
-bun install --frozen-lockfile
-bun run ci                 # typecheck + tests + release:check + claim-lint + inventory
-bun run baseline:measure   # reproducible performance baseline
-```
-
-### Performance (Phase 3 — budgets, not boasts)
-
-Every performance claim is a **published budget with a measured baseline and a
-CI regression gate** (Constitution Art. XII):
-
-- `--version` / `--help` **p95 < 150 ms warm / < 300 ms cold** (Constitution
-  Article XII; measured 37.5 / 40.7 ms warm, 35.9 / 40.0 ms cold on the
-  7.1.0 baseline — well under even the tighter Phase-3 targets);
-- `doctor` **< 1 s measured** (456 ms; gate ceiling 1500 ms for shared runners) · route decision **< 20 ms** (sub-ms) ·
-  dashboard first render **< 1 s** (5.7 ms) · retrieval **25–33 ms @100k items** (gate ceiling 250 ms on shared runners);
-- fast path performs **zero synchronous FS/process I/O** (lint-enforced);
-- a command boots only the subsystems it needs (boot profiles);
-- the standalone compiled binary is the default distribution path
-  (build matrix per target: linux-x64/arm64, darwin-x64/arm64, windows-x64).
-
-Full budgets, the boot-profile model, the regression gate, profiling tooling
-and known limitations: [`docs/perf/`](docs/perf/PERF-BUDGETS.md) and
-[`docs/phase3-perf/`](docs/historical/phases/phase3-perf/01-AUDIT-REPORT.md). Baseline artifact:
-`docs/perf/baseline-7.1.0-source.json` (regenerate per release with
-`bun run perf:baseline`).
-
-### Readiness and exit codes
-
-`xr doctor` answers one question: **can XR actually run a task right now?**
-
-- It exits **non-zero** when no provider is reachable, and says why plus one next action.
-- It never prints `ok: true` for a system that cannot do work.
-- `--deep` adds voice, control, capability and environment probes; the default checks only the
-  active path.
-
-Failed tasks exit non-zero (`1`), usage errors exit `2`, so XR is safe to wrap in CI.
-
-`xr doctor --json` is the stable machine-readable diagnostic entrypoint. It reports version,
-runtime, workspace/database status, redacted configuration, provider readiness, plugin/skill/MCP
-status, and a `summary.runnable` verdict. Secret values are never printed — only presence.
+- **not finished** — the [known-limitations register](docs/security/KNOWN_LIMITATIONS.md) is a
+  first-class release artifact, and the release docs state precisely what beta means today
+  ([support matrix](docs/release/SUPPORT_MATRIX.md)).
 
 ---
 
-XR 2.1 turns XR from an assistant into an extensible AI runtime with a manifest-governed Skill layer:
+## Install & first task
 
-| Phase | Status | What shipped |
-|---|---:|---|
-| **XR 2.1A — Unified Skill Runtime** | ✅ Done | `xr-skill.json`, unified loader, registry, resolver, validator, installer, lifecycle manager, permission manager, dependency resolver, local search index, compatibility adapters for legacy skills / plugin skills / MCP bundles / learned skills / research packs / role packs |
-| **XR 2.1B — Skill SDK** | ✅ Done | `xr skill init/create/build/package/validate/publish/doctor/test`, production folder scaffolding, docs, examples, tests, icon, changelog, lockfile, build reports |
-| **XR 2.1C — Marketplace Backend** | ✅ Done | local + installed registry state, online registry interface, download engine, dependency solver, updates, rollback snapshots, verification/signing helpers, publisher IDs, version resolution, compatibility checks |
-| **XR 2.1D — Marketplace UI** | ✅ Done | local dashboard Marketplace, website `/marketplace`, XR logo/avatar brand system, search, filters, categories, Skill inspector, permission viewer, dependency viewer, install command copy |
-| **XR 2.1E — Official Skill Packs** | ✅ Done | 54 official professional Skills hardened with playbooks, diagnostic prompts, operating manuals, permission docs, quality tests, professional examples, quality gates, workflows, commands, and memory templates |
-
-### Marketplace surfaces
-
-```bash
-xr skill browse                    # browse local Skills
-xr skills list                     # unified runtime Skills
-xr skill registry list             # configured registries
-xr skill registry sync             # sync online/local registries
-xr skill install-online <id>       # install from marketplace backend
-xr skill updates                   # check available Skill updates
-xr skill rollback-online <id>      # rollback registry-installed Skill
-xr serve                           # open local dashboard Marketplace
-```
-
-Website:
-
-```text
-/marketplace
-```
-
-The website Marketplace now renders the full repository Skill catalog: **65 available Skills** including **54 official Skills** and **11 legacy compatibility Skills**.
-
-### Good-to-go signal
-
-XR 2.1 is **GOOD TO GO** for the next Stage 13 workstream. The architecture is stable enough to build on top of the completed Skill Runtime, SDK, Marketplace Backend, Marketplace UI, and official Skill pack foundation.
-
----
-
-## 🚀 Install XR
-
-**One canonical build, many channels.** Every channel below installs the same signed
-artifacts (cosign keyless signatures + SHA256SUMS + SBOM + SLSA provenance — verify with
+**One canonical build, many channels.** Every channel installs the same signed artifacts
+(cosign keyless signatures + SHA256SUMS + SBOM + SLSA provenance — verify with
 [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md)). The default
 distribution is the compiled per-target binary; source checkout is the contributor path.
 
@@ -190,665 +97,254 @@ distribution is the compiled per-target binary; source checkout is the contribut
 
 Channel configs are **generated from the release manifest** and drift-gated
 (`bun run channel:check` runs in CI), so a channel can never fall behind the release it
-serves. First-release status for any "publication"-marked row is recorded in
-[`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md) and the
-[known-limitations register](docs/release/7.1.0/known-limitations.md).
-
-Every binary download (install scripts, `xr update`) is verified against the release's
-SHA256SUMS before it runs — unverified artifacts are refused. Update and rollback follow
-the channel you installed from (`brew upgrade xr`, `scoop update xr`, `winget upgrade ahmadrrrtx.XR`,
-`apt-get install --only-upgrade xr`, or `xr update` for the binary/npm/git layouts) and are
-atomic with an automatic rollback path ([the contract](docs/release/SUPPORT_MATRIX.md)).
+serves. Publication status per channel is tracked in
+[`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
 
 ```bash
-# After install — first time setup
-xr onboarding        # guided setup wizard (incl. memory + optional voice)
-xr doctor            # full health check (incl. memory + research + voice + plugins)
-xr plugins search    # discover safe, permissioned plugins
-xr skill browse      # browse the XR Skills Marketplace
-xr skill install react_expert  # install/enable a professional Skill
-xr agents list       # inspect the built-in multi-agent workforce
-xr agents plan "refactor this repo safely"
-xr voice setup       # optional local-first voice setup
-xr                   # open the dedicated fullscreen XR shell
-xr "hello, XR"       # run your first task directly
-xr --tui             # explicit alias for the fullscreen shell
-xr serve             # start local dashboard + chat in browser
+# After install
+xr onboarding        # guided first-run wizard (memory + optional voice)
+xr doctor            # health check — exits non-zero if XR cannot actually work
+xr "hello, XR"       # your first task
+xr                   # the fullscreen shell
+xr serve             # dashboard + chat at http://localhost:3141 (127.0.0.1, token-authed)
 ```
+
+New here? Follow the golden path: [`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md).
 
 ---
 
-## ✨ What Makes XR Different
-
-|  | Most AI agents | **XR** |
-|---|---|---|
-| **Provider** | locked to vendor | BYOK — **any of 26 built-in providers** (16 hosted + 10 local runtimes), or **fully local** via Ollama, LM Studio, llama.cpp, Jan, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, SGLang |
-| **Cost** | "soft" warnings | **hard ceiling enforced in code** (`checkBeforeStep()`) |
-| **Security** | trust us | **deterministic injection screen** — curated attack corpus, signed block-rate report |
-| **Audit** | scrollback only | **SHA-256 hash chain** — tamper-evident, offline, free |
-| **Terminal UI** | raw prompts | **Claude Code–style TUI** — spinner, history, status bar, slash commands |
-| **Browser UI** | cloud dashboard | **self-hosted chat + dashboard** at `localhost:3141` |
-| **Computer Control** | wild west | **safe-by-construction** — classify → preview → approve → audit |
-| **Multi-step planner** | hidden prompts | **typed Action[] schema** validated with Zod, every step previewed |
-| **Plan memory** | none | **cached deterministic plans** — second run skips the LLM |
-| **Durable memory** | silent auto-save, creepy | **explicit-by-default** — XR only remembers what you ask; live "remember this?" with consent |
-| **Memory recall** | injects everything, opaque | **explainable** — shows match-% + why; conservative floor, never floods the prompt |
-| **Memory hygiene** | grows forever | **TTL/expiry + prune + access tracking** — see what's stale, delete permanently |
-| **Research** | answer-first summaries | **source-first Research Engine** — live discovery, trust/freshness ranking, evidence ledger, claims, contradictions, signed reports |
-| **Dashboard** | cloud-only | **127.0.0.1 only**, token-authed, live approvals, Marketplace, no telemetry |
-| **Voice** | silent cloud listener | **Stage 8 Voice Stack** — disabled by default, push-to-talk default, local Whisper/Piper/Kokoro/system adapters, explicit cloud consent |
-| **Extensibility** | arbitrary packages or hardcoded integrations | **XR 2.1 Skills Marketplace** + **Stage 10 Plugin Platform** + **Stage 11 MCP Platform** — install professional AI capabilities with manifests, permissions, dependencies, SDK, backend registry, updates, rollback, signing hooks, and App Store-style UI |
-| **Multi-agent orchestration** | one big agent with tool spam | **Stage 12 Multi-Agent Runtime** — supervisor, planner, researcher, builder, reviewer, executor, synthesizer, memory manager, security checker |
-| **Runtime** | procedural script | **runtime kernel** with DI, lifecycle management, and a persisted multi-agent workflow store |
-
----
-
-## 🖥️ Stage 5 — User Interfaces
-
-Stage 5 gives XR a **consistent UI layer** across the user-facing surfaces listed below.
-
-### Terminal Interface (Claude Code–style TUI)
-
-```bash
-xr
-# or
-xr --tui
-```
-
-```
-▀▄▀ █▀█  XR — The AI Agent You Can Actually Trust
-█░█ █▀▄  by @rrrtx · local-first · BYOK · spend-capped · secure
-
-  Project: my-project  Stack: TypeScript, Bun
-
-  provider: ollama  │  model: qwen2.5:7b  │  mode: agent
-
-  Type a message to talk to XR. Use /help to see all commands.
-  Quick: /ask  /plan  /model  /status  /dashboard
-
-  xr [agent] ›  _
-```
-
-**What the TUI provides:**
-- ✦ Claude Code–style star-burst spinner while XR thinks (`· ✻ ✽ ✶ ✳ ✢`)
-- ✦ Command history navigation (↑/↓ arrows, 200 entries)
-- ✦ Provider / model / mode / budget status bar on every prompt
-- ✦ Structured tool-call display with live status icons
-- ✦ Ctrl+C interrupt → safe recovery (not immediate exit)
-- ✦ `xr.md` / `.xrrc` / `CLAUDE.md` project context auto-load
-- ✦ Graceful non-TTY degradation
-
-**All slash commands — grouped by category:**
-
-```
-Chat & Tasks         /ask  /plan  /mode  /model  /budget
-Navigation           /dashboard  /chat
-System               /status  /doctor  /cost  /index  /help  /clear  /exit
-Tools                /memory  /shell
-Security             /attacks  /verify-log  /export
-Local AI             /skills
-```
-
-### Browser Chat Interface
-
-```bash
-xr serve
-# Opens: http://localhost:3141/chat?token=<TOKEN>
-```
-
-A **full ChatGPT-style chat interface** running locally in your browser:
-- Streaming SSE responses, token-by-token
-- XR branding — not a generic template
-- Slash command hint chips: `/plan` `/status` `/research` `/ask` `/memory` `/budget`
-- Markdown rendering (code blocks, bold, inline code)
-- Typing indicator, clear button, keyboard shortcuts
-- Graceful error states with recovery tips
-
-### Browser Dashboard
-
-```bash
-xr serve
-# Opens: http://localhost:3141/?token=<TOKEN>
-```
-
-A **mission-control dashboard** with 16 navigation panels:
-
-| Panel | What it shows |
-|---|---|
-| **Dashboard** | 4 stat cards (spend, security score, audit chain, skills) + provider health + local AI + memory + recent audit |
-| **Chat** | Full streaming chat UI |
-| **Sessions** | Recent chats/tasks, session detail, step timeline, research runs |
-| **Status** | System health grid |
-| **Budget** | Spend controls, recent cost events, by-model and by-provider usage, soft-cap settings |
-| **Workspaces** | Create and switch isolated XR workspaces |
-| **Providers** | All 26 built-in providers with status, tier, key configuration, plus provider manager controls |
-| **Models** | Local runtime status, installed models |
-| **Memory** | Health cards (total/expired/never-recalled), live search, all entries with inline delete, expiry badges |
-| **Research** | Research mode quick reference |
-| **Plugins** | Installed plugins, permissions, enabled state, trust, health, catalog search, enable/disable/remove actions |
-| **Marketplace** | XR 2.1 Skills Marketplace — search, categories, collections, installed/verified/update filters, Skill cards, inspector, permissions, dependencies, install/enable/disable actions |
-| **Voice** | Voice control quick reference |
-| **Security** | Injection lab (run-on-demand), egress list, security posture |
-| **Audit Log** | Full SHA-256 chain with integrity badge |
-| **Settings** | Privacy, budget, approval gates, CLI reference |
-
-**Dashboard UX features:**
-- Command palette: press `?` or `⌘K`
-- Keyboard shortcuts: `g d` = Dashboard, `g c` = Chat, `g s` = Security, `g a` = Audit
-- Live 30-second auto-refresh
-- Toast notifications for all async actions
-- Zero external dependencies — works fully offline
-
-### Design System (`src/ui/`)
-
-All terminal styling now routes through a single design-token layer:
-
-```
-src/ui/
-  theme.ts      Brand palette, ANSI codes, CSS variables, spinner frames
-  spinner.ts    Spinner, ProgressBar, StepTracker
-  layout.ts     banner(), kv(), table(), box(), helpPanel(), notify()
-  index.ts      Public re-export
-```
-
-**XR brand identity:**
-- Primary: `#00D4FF` cyan
-- Success / local: `#00FF88` green
-- Warning / cloud: `#F59E0B` amber
-- Background: `#0A0A0F`
-- Logo: `▀▄▀ █▀█ / █░█ █▀▄` (block-char ASCII art spelling XR)
-
----
-
-## 🧠 Stage 6 — The Memory Engine
-
-Stage 6 makes XR **stateful, personal, and durable** — without becoming creepy, noisy, or unsafe. XR now remembers your preferences, projects, workflows, and long-lived context in a way that is **transparent and controllable**.
+## Architecture
 
 ### Design principles
 
-- **Explicit by default** — XR only remembers what you ask it to. No silent auto-save.
-- **Local-first** — all memory lives in `~/.xr/xr.db`. Nothing leaves your machine.
-- **Explainable** — recall shows the match percentage and *why* each entry surfaced.
-- **Reversible** — everything is editable, deletable, exportable, and importable.
-- **Non-creepy** — conservative retrieval; session summaries are off by default.
-- **Private** — audit log stores content length only, never raw content; secrets redacted.
-- **Kill-switch** — `XR_MEMORY_DISABLED=1` turns memory off completely.
+1. **One computation authority per question.** Whatever answers a question for you answers it
+   for every surface and for CI — doctor's readiness engine is the onboarding capability scan;
+   the cross-platform test suite is one file list (`scripts/platform-parity.ts`) executed per
+   OS; channel configs are generated, never handwritten.
+2. **No bypass around the runner.** Every agent turn flows through a single execution
+   envelope → runner → loop pipeline. Policy, approvals, budget, cancellation and audit are
+   properties of the pipeline, so they cannot be skipped by an interface.
+3. **Honest outcomes.** A run ends `success`, `failed`, or `cancelled` — never a fake
+   completion. Cooperative cancellation is real (checkpoints inside the loop); when an action
+   cannot be interrupted, XR stamps the honest outcome instead of claiming it stopped cleanly.
+4. **State you can inspect.** One SQLite database per install, hash-chained audit events,
+   exportable sessions, reproducible inventory.
+5. **Fast path stays fast.** Commands boot only the subsystems they need (boot profiles), the
+   hot path performs zero synchronous FS/process I/O (lint-enforced), and budgets are CI-gated.
 
-### Memory commands
-
-```bash
-# Inspect
-xr memory                          # status + counts by category
-xr memory list [--scope s] [--category c] [--json]
-xr memory search "typescript"      # keyword search
-xr memory recall "what runtime"    # EXACTLY what XR would surface + WHY (match %)
-xr memory health                   # expired, never-recalled, by category
-xr memory reindex                  # warm the semantic-recall cache
-
-# Write (explicit, consent-gated)
-xr memory add "I prefer TypeScript" --category preference
-xr memory add "temp note" --ttl 3600          # expires after 1 hour
-xr memory add "tmp" --ttl-days 7              # expires after 7 days
-xr memory edit mem_ab12 "new text"
-xr memory remove mem_ab12                      # permanent
-xr memory clear [--scope s]                    # permanent
-
-# Maintain
-xr memory prune                   # permanently delete expired entries
-xr memory summarize [--days 30]   # fold old, low-importance entries into compact summaries
-
-# Portability
-xr memory export [path]           # JSON bundle
-xr memory import <path>           # merge (dedupes; drops stale entries)
-```
-
-### Live capture — "remember this?"
-
-In the **TUI, chat, and voice**, XR intercepts memory intents naturally:
+### The runtime map
 
 ```
-you: remember I prefer dark mode for everything
-xr: ✓ remembered: I prefer dark mode for everything (preference)
+                        terminals · browsers · CI scripts · chat clients
+                                        │
+   ┌────────────────────────── SURFACES ┴──────────────────────────────────────┐
+   │  xr <task> (CLI)   fullscreen Shell   Telegram bot   `xr serve` daemon     │
+   │  src/commands/*    src/interfaces/    src/telegram   src/daemon — 127.0.0.1│
+   │                    shell + TUI                       dashboard, token auth │
+   └──────────────────────────────────┬────────────────────────────────────────┘
+                                      │  one contract: AgentService.execute(request)
+                        ┌─────────────▼──────────────┐
+                        │   EXECUTION FABRIC          │   src/execution
+                        │   envelope · state machine  │   idempotency keys
+                        │   leases · checkpoints      │   cancellation tokens
+                        │   runner = sole loop caller │   inspection/repository
+                        └─────────────┬──────────────┘
+                                      ▼
+                        ┌────────────────────────────┐
+                        │   AGENT LOOP src/core/agent │  steps with checkpoints
+                        │   chat → tools → observe    │  plan/act hybrid
+                        │   turn-repair (strict JSON) │  src/reliability
+                        │   memory & provenance writes│
+                        └───┬───────────┬───────────┬─┘
+                            │           │           │
+        ┌───────────────────▼──┐  ┌─────▼───────┐  ┌▼─────────────────────┐
+        │ PROVIDERS            │  │ TOOLS        │  │ MEMORY & CONTEXT      │
+        │ src/providers        │  │ src/tools    │  │ src/context           │
+        │ 26 presets, 5 native │  │ files/git/   │  │ retrieval, embeddings │
+        │ adapters + OpenAI-   │  │ shell/browse │  │ compression, conflicts│
+        │ compatible transport │  │ guarded      │  │ session summaries     │
+        │ health() + failover  │  │ registry     │  │ src/research engine   │
+        └──────────────────────┘  └──────────────┘  └───────────────────────┘
+                            │           │           │
+   ┌─────────────── TRUST PLANE (cross-cutting, enforced in the same pipeline) ───────────┐
+   │ policy gate src/security/guard · approvals src/control/approvals · budget governor    │
+   │ src/cost · egress allowlist (egress-proxy) · secrets vault (OS keychain else AES-256- │
+   │ GCM sealed file) · hash-chained audit log src/state/workspace-store → xr audit verify │
+   └──────────────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                 ┌────────────────────▼─────────────────────┐
+                 │ LOCAL STATE (src/state)                   │
+                 │ SQLite workspace store · migrations       │
+                 │ write-gate · repos · idempotency          │
+                 └───────────────────────────────────────────┘
 
-you: what do you remember about my preferences?
-xr: here's what I remember (1):
-       • I prefer dark mode for everything
-
-you: don't remember my email address
-xr: ✓ got it — I won't remember that.           # no prompt needed (reduces stored data)
-
-you: forget the note about vim
-xr: ✓ forgotten 1 entry.
+   EXTENSIBILITY (invoked by the loop, governed by the same trust plane)
+   skills/ 65 bundled · plugins src/plugins (manifest + permissions)
+   MCP servers src/mcp (allowlist, transports) · templates 11 built-in workflows
 ```
 
-- Durable adds **ask for consent** first (`autoSuggest`).
-- "Don't remember" and "forget" **never prompt** — reducing stored data is always honoured.
-- "What do you remember" is **read-only recall**.
+### What happens to one task
 
-### Memory categories & scopes
+Every surface — `xr "…"`, the Shell, Telegram, the daemon chat — funnels into the same call.
+This is the exact pipeline each request travels (checkpoints enforced in code):
 
-| Category | Use for | Surfaced in recall? |
+```
+request
+  │
+  ▼
+AgentService.execute ──▶ execution envelope        state machine + idempotency + audit seed
+  │                          │
+  │                          ▼
+  │                     RUNNER (the only code allowed to drive the loop)
+  │                          │
+  │            ┌─────────────┴── per step ────────────────────────────────┐
+  │            │ ⓪ abort checkpoint → cancelled? stop now, honestly      │
+  │            │ ① chat completion — provider failover, tokens metered   │
+  │            │ ② turn-repair: model output must satisfy the strict     │
+  │            │   turn contract (src/reliability) or the step fails     │
+  │            │ ③ post-chat abort checkpoint                            │
+  │            │ ④ for each tool call:                                   │
+  │            │     • approval needed? denied ⇒ tool error, never run   │
+  │            │     • policy gate (risk classes, egress allow-list)     │
+  │            │     • budget governor — exceeded ⇒ stop, spend-capped   │
+  │            │     • execute tool → observation appended               │
+  │            │     • between-calls abort checkpoint                    │
+  │            │ ⑤ memory delta + provenance events                      │
+  │            └── until done · budget stop · cancelled · guardrail ─────┘
+  │
+  ▼
+outcome: success | failed | cancelled           — never "completed" by default
+  │
+  ▼
+audit chain: every event SHA-256-linked into the install's hash chain;
+verify offline with `xr audit verify` / `xr verify-log`
+```
+
+Interrupt semantics are real: in the Shell, `Ctrl+C` / `Esc` stop the current run (a pending
+approval is denied fail-closed first); `xr run` maps the first `SIGINT` to a cooperative wrap
+and exits `130`, a second `SIGINT` forces exit. `stopWorkflow` cancels the in-flight worker of
+a multi-agent run; the worker fails honestly ("interrupted"), never reports completion.
+
+### The trust plane in detail
+
+| Mechanism | Where | What it enforces |
 |---|---|---|
-| `preference` | coding style, provider, tools | ✅ |
-| `project` | long-running project context | ✅ |
-| `workflow` | repeated procedures | ✅ |
-| `fact` | stable long-term facts | ✅ |
-| `exclusion` | **do-not-remember rules** | ❌ (never surfaced) |
+| Policy gate | `src/security/guard.ts`, `policies.ts` | Risk-classed rules over every tool effect; dangerous classes require approval |
+| Approvals | `src/control/approvals.ts` | Human consent for consequential actions, per workspace, auditable |
+| Budget governor | `src/cost/governor.ts` | USD + token ceilings per task, checked before and during steps |
+| Egress allow-list | `src/security/egress-proxy.ts` | Only configured domains receive data |
+| Secrets | `src/config/config.ts` | OS keychain where available; else AES-256-GCM sealed file (auto-migrates plaintext); values are redacted from status output |
+| Audit chain | `src/state/workspace-store.ts`, `src/commands/audit.ts` | SHA-256-linked events; `xr audit verify` / `xr verify-log` verify offline |
+| Plugin trust | `src/plugins/` | Manifest permissions, tree hashes, static scan, health checks, disable/remove |
 
-Scopes separate **personal** memory (`global`) from **project** memory (per-directory), so your TypeScript preferences don't leak into a Python project.
+> **Honesty box:** XR enforces **in-process policy**, not kernel/VM isolation; it is a guard
+> rail, not a confinement boundary. It is not a substitute for reviewing consequential
+> actions. The gaps are written down, not hidden:
+> [`docs/security/KNOWN_LIMITATIONS.md`](docs/security/KNOWN_LIMITATIONS.md).
 
-### Retention, expiry & hygiene
+### Multi-agent workflows
 
-- **Per-entry TTL** — `--ttl` / `--ttl-days` make an entry auto-expire.
-- **Expired = forgotten** — expired entries are excluded from recall and list (visible only with `--include-expired` / `xr memory list` flag in code).
-- **`xr memory prune`** — permanently deletes expired entries.
-- **Access tracking** — every entry records `lastAccessedAt` + `accessCount`, so `xr memory health` can show you what's never been used.
-- **Import safety** — importing an already-expired entry **drops it** (no silent resurrection of stale memory).
+`src/services/multi-agent-service.ts` (+ `src/agents/`) runs a planner → reviewer →
+synthesizer pipeline with a deterministic security gate between stages:
 
-### Explainable retrieval
-
-Recall is never a black box. Every surfaced entry comes with a **score and a reason**:
-
-```
-🧠 Recall "what typescript runtime" (1)
-  mem_177cce4b 27% preference I prefer TypeScript and Bun for backend work
-      why: lexical match 27% · scope=global
+```bash
+xr agents list
+xr agents plan "refactor this repo safely"
 ```
 
-Retrieval uses **semantic embeddings** (Ollama `nomic-embed-text`) when available, with an automatic **lexical fallback** so it always works — even fully offline.
+- The **review gate consumes a strict-JSON decision** from the deterministic
+  `security_checker`; prose-only reviewers fail closed (an unparsable verdict blocks the run
+  rather than waving it through).
+- **Honest failure mapping:** transport errors, budget stops and approval stops mark the task
+  failed instead of faking completion.
+- **Cancellation is workload-aware:** stopping a workflow aborts the in-flight worker via a
+  live run map; the worker's outcome is recorded as cancelled, and remaining work is marked,
+  never silently dropped.
 
-### Session summaries (opt-in)
+### Extensibility: skills, plugins, MCP
 
-Conversations can fold into compact **session summaries**, kept in a **separate store** so the agent never confuses ephemeral chat recaps with durable facts. Off by default (`memory.saveSessionSummaries`).
+| Layer | Truth surface | Notes |
+|---|---|---|
+| **Skills** | `skills/` (bundled set — count in the stamped block above, mechanically verified in CI) | manifest-governed (`xr-skill.json`), unified loader + registry + resolver + validator; `xr skill browse/install/…`; SDK: `init/create/build/package/validate/publish/doctor/test` |
+| **Plugins** | `src/plugins/` | explicit permissions, hash verification, lifecycle (discover → install → enable → update → rollback → quarantine → uninstall), certification gate |
+| **MCP** | `src/mcp/` | client + manager + registry over stdio/SSE/HTTP transports with an allowlist; `xr mcp …` full command surface |
+| **Workflow templates** | `src/templates/workflows/` | 11 built-in multi-step templates |
 
-### Dashboard memory panel
+### Memory, research, voice, control
 
-The dashboard Memory panel now includes **health cards** (total / expired / never-recalled), a **live search box**, expiry badges, and inline delete. `xr doctor` includes a memory-health row.
+- **Memory engine** (`src/context/`): consent-first capture (only what you ask it to remember),
+  categorized + scoped entries, TTL/expiry with `xr memory prune`, explainable retrieval
+  (`xr memory recall "…"` shows match % and why), optional session summaries. Config and
+  dashboard panel included.
+- **Research engine** (`src/research/`): offline by default; `xr research deep --allow-public-web`
+  opts into live fetching with egress rules and per-run budgets; results carry source
+  provenance into memory if you allow it.
+- **Voice stack** (`src/interfaces/`, commands `xr voice …`): optional, local-first adapters;
+  voice can trigger capabilities through the same governed pipeline (approvals still apply).
+- **Computer control** (`src/control/`, `src/computer/`): guarded desktop actions behind the
+  approval plane; the vision agent is opt-in; platform support and limits are documented per OS.
 
-### Memory config
+### Repository map
 
-```jsonc
-// ~/.xr/config.json
-{
-  "memory": {
-    "enabled": true,              // master switch
-    "autoSuggest": true,          // offer to remember in chat/voice (asks first)
-    "injectInChat": true,         // inject relevant memory into prompts
-    "recallLimit": 5,             // max entries surfaced per prompt
-    "semanticRecall": true,       // embeddings (with lexical fallback)
-    "autoExpireDays": 0,          // 0 = never auto-expire
-    "saveSessionSummaries": false,// off by default (non-creepy)
-    "sessionSummaryMinTurns": 6
-  }
-}
 ```
+xr/
+├─ bin/xr                    compiled-binary-first launcher (falls back to source)
+├─ src/
+│  ├─ cli/                   router, catalog, lazy command loaders, flags, exit codes
+│  ├─ commands/              one file per CLI command (run, doctor, agents, mcp, audit…)
+│  ├─ interfaces/            shell + TUI, providers/models pickers, onboarding
+│  ├─ core/                  kernel: DI container/lifecycle (app.ts), agent loop (agent.ts)
+│  ├─ services/              agent-service, multi-agent-service, budget-, config-, mcp-service
+│  ├─ execution/             envelope, runner-equivalents, state machine, adapters, leases
+│  ├─ agents/                multi-agent planner/registry/types
+│  ├─ providers/             presets, factory, health, native adapters, openai-compat
+│  ├─ tools/                 tool registry + guarded tools (files, git, control, egress)
+│  ├─ reliability/           turn repair, grammar, profiles
+│  ├─ security/              guard, policies, egress-proxy, attack lab, private-ip checks
+│  ├─ state/                 SQLite workspace store, repos, write-gate, migrations
+│  ├─ context/               memory: assembler, retrieval, embeddings, compression
+│  ├─ research/              research engine (offline default, opt-in web)
+│  ├─ mcp/  plugins/  skills/  local/  cost/  control/  computer/  telegram/
+│  ├─ daemon/                `xr serve`: API routes, dashboard, chat (127.0.0.1)
+│  ├─ enterprise/            optional governance/evaluation surfaces
+│  ├─ update/  install/      atomic updater + channels; install/uninstall
+│  ├─ observability/  ui/    metrics/logs/exporters; design system
+│  └─ index.ts               CLI entry
+├─ extensions/business-os/   business extension — optional, default-off, effect-verified
+├─ skills/                   bundled skill manifests
+├─ plugins/                  bundled plugins
+├─ scripts/                  gates, release machinery, parity runner, perf budgets
+├─ test/                     226-file suite (mirrors src/ areas) + helpers + fixtures
+├─ docs/                     product, development, release, security, historical
+└─ website/                  docs/marketing site (Next.js; scanned by claim-lint)
+```
+
+Layering is enforced in CI: the `boundaries` gate + `test/architecture/*` pin the allowed
+dependency directions (surfaces → services → execution/core → state; tools/providers as
+leaves), and the ownership map (`bun run ownership:check`) requires every source area to have
+an owning document.
 
 ---
 
-## 🔬 Stage 7 — The Research Engine
-
-Stage 7 turns XR from a chat wrapper into a **source-first research system**. XR gathers sources before forming conclusions, tracks where every claim came from, marks uncertainty, detects contradictions, and exports signed research artifacts.
-
-### Research principles
-
-- **Source-first, not answer-first** — sources are discovered, ranked, fetched, and checked before synthesis.
-- **No fabricated citations** — reports only cite collected source IDs like `[s1]`; unknown source IDs are stripped.
-- **Evidence ledger** — every evidence block tracks source, quote, claim kind, confidence, strength, verification state, and extraction time.
-- **Claim ledger** — supported, weak, unverified, and contested claims are tracked separately from prose.
-- **Contradiction log** — disagreements are surfaced instead of hidden.
-- **Freshness-aware** — sources track `Last-Modified` or apparent dates, freshness labels, last verification, and refresh history.
-- **Safe live web** — default egress allow-list remains fail-closed; broad public fetch requires explicit `--allow-public-web`.
-- **Auditable exports** — Markdown reports are signed with a SHA-256 footer and paired with a JSON sidecar.
-
-### Research commands
-
-```bash
-# Run research
-xr research "topic"                         # quick research
-xr research quick "topic"                   # fast source-first pass
-xr research deep "topic"                    # deeper source discovery + synthesis
-xr research compare "A vs B"                # comparison workflow + matrix
-xr research factcheck "claim"               # verify a claim against sources
-xr research briefing "topic"                # briefing-style deep report
-
-# Inspect the workflow
-xr research plan "topic"                    # collaborative research plan
-xr research status [id]                     # session status
-xr research sources [id]                    # source list + trust/freshness
-xr research evidence [id]                   # evidence ledger + quotes
-xr research claims [id]                     # claim ledger
-xr research contradictions [id]             # contradiction log
-xr research list                            # recent research sessions
-
-# Maintain and export
-xr research summarize [id]                  # regenerate synthesis from evidence
-xr research refresh [id]                    # re-check sources and refresh changed evidence
-xr research export [id] [path]              # signed Markdown + JSON sidecar
-xr research remember [id]                   # explicitly save finding to durable memory
-```
-
-### Live research safety
-
-By default, XR can search through the configured SearXNG host and fetch only allow-listed domains. To fetch public web pages returned by search, opt in explicitly:
-
-```bash
-xr research deep "Gemini Deep Research MCP support" --allow-public-web
-xr research deep "topic" --allow-public-web --live-sources-only
-```
-
-`--allow-public-web` still blocks localhost, private IP ranges, link-local addresses, unsafe redirects, non-HTTP(S) URLs, and oversized responses.
-
-### Research data model
-
-Every `ResearchSession` stores:
-
-- `id`, `topic`, `query`, `mode`, `status`, `createdAt`, `updatedAt`
-- `plan` with research questions, search queries, strategy, source requirements
-- ranked `sources` with trust, relevance, quality, type, freshness, last verification
-- `evidence` / `notes` with quotes, claim kind, confidence, strength, verified flag
-- `claims`, `contradictions`, `summary`, `finalReport`
-- `reportVersions`, `refreshHistory`, optional `comparison`
-- `tags`, `projectId`, `lastRefreshedAt`, `exportPath`
-
-### Doctor integration
-
-```bash
-xr doctor
-xr doctor --json
-```
-
-Doctor now includes Research Engine health: total sessions, latest session state, and next inspection commands.
-
----
-
-
-## 🎙️ Stage 8 — The Voice Stack
-
-Stage 8 gives XR a **privacy-respecting voice interface**: talk to XR naturally, hear XR respond, interrupt it, and safely trigger XR actions by voice. It is designed as a first-class subsystem, not a toy chatbot mode.
-
-### Voice principles
-
-- **Disabled by default** — XR never silently turns on your microphone.
-- **Push-to-talk by default** — wake-word and always-listen modes are opt-in.
-- **Local-first** — prefers local Whisper / whisper.cpp STT and Piper / Kokoro / system TTS.
-- **Explicit cloud consent** — Groq/OpenAI STT only run when cloud audio is explicitly allowed.
-- **Safe computer control** — voice actions still pass through XR's risk classifier, preview, approval, and audit layers.
-- **Interruption-aware** — `stop`, `cancel`, `repeat`, `say again`, `mute voice`, and barge-in are handled directly.
-- **Private transcripts** — voice history is not persisted unless you choose `local-private` transcript policy.
-- **Text fallback** — missing microphones, speakers, STT, or TTS degrade safely back to text mode.
-
-### Voice commands
-
-```bash
-xr voice status              # privacy, mode, STT/TTS, device health
-xr voice setup               # guided optional setup
-xr voice devices             # list microphones and speakers
-xr voice test                # record → VAD → STT → TTS loopback
-xr voice start               # push-to-talk voice loop
-xr voice start --wake-word   # opt-in wake-word transcript gating
-xr voice start --always-listen # explicit confirmation required
-xr voice stop                # disable voice and always-listen
-xr voice config --stt whisper-cli --tts piper
-xr speak "hello from XR"     # speak text once
-xr listen                    # listen once and print transcript
-```
-
-### Supported local-first adapters
-
-| Layer | Backends |
-|---|---|
-| Microphone | `ffmpeg`, `arecord`, `rec` |
-| Speaker | `ffplay`, `afplay`, `aplay`, `paplay`, `play`, PowerShell |
-| STT | `auto`, local HTTP, `whisper-cli`, `whispercpp`, explicit `groq` / `openai`, `disabled` |
-| TTS | `auto`, local HTTP, `piper`, `kokoro-cli`, `system`, `say`, `espeak`, PowerShell, `disabled` |
-| VAD | local energy VAD now; Silero/openWakeWord-compatible extension points |
-| Wake | transcript-side wake phrase now; external openWakeWord-compatible extension point |
-
-### Voice config
-
-```jsonc
-// ~/.xr/config.json
-{
-  "voice": {
-    "enabled": false,
-    "mode": "push-to-talk",
-    "inputDevice": "default",
-    "outputDevice": "default",
-    "sttBackend": "auto",
-    "sttModel": "base.en",
-    "ttsBackend": "auto",
-    "ttsVoice": "default",
-    "wakeWord": "hey xr",
-    "pushToTalkKey": "enter",
-    "alwaysListen": false,
-    "interruptionPolicy": "barge-in",
-    "confirmationPolicy": "always-risky",
-    "transcriptPolicy": "session",
-    "fallbackTextMode": true,
-    "allowCloudStt": false,
-    "allowCloudTts": false
-  }
-}
-```
-
-### Voice can safely trigger XR capabilities
-
-Voice can route to:
-
-- `open app`, `open website`, `type text`, `click`, `scroll`, `press`, `focus window`
-- research requests: “research local-first voice assistants”
-- memory: “remember I prefer short answers” / “what do you remember about TypeScript?”
-- provider/model switching: “switch provider to ollama”, “switch model to qwen2.5:7b”
-- budget questions: “what is my budget?”
-- normal XR agent tasks
-
-High-risk actions still require confirmation. Unknown or unsafe states fail closed.
-
-### Doctor integration
-
-```bash
-xr doctor
-xr doctor --json
-```
-
-Doctor includes Voice Stack health: capture tools, playback tools, device count, STT/TTS adapter status, mode, and privacy posture.
-
----
-
-## 🏛️ Foundation Runtime — Current Runtime Surfaces
-
-XR runs on a **structured runtime foundation** — not a procedural script. The v1.0 kernel introduces:
-
-- **Service Container (DI)** — lightweight dependency injection managing Agent, Budget, Provider, Plugins with a strictly controlled lifecycle
-- **Lifecycle Management** — formal `Bootstrap → Start → Stop` sequence
-- **Specialized Store Architecture** — Session, Audit, Memory, Cost, Skill stores decomposed from the monolithic DB
-- **Command Registry** — decoupled CLI commands; adding capabilities requires no core router changes
-- **Event-Driven Core** — internal Event Bus for decoupled async service communication
-
----
-
-## 🎯 Core Features
-
-### 🖥 Safe Computer Control (v0.8 → v0.8.2)
-
-```bash
-xr control start                                          # opt-in (off by default)
-xr control plan "open github.com and search for ahmadrrrtx" --yes
-```
-
-Four execution layers, all enforced in code:
-1. **Action schema** — every action is a typed, Zod-validated `Action` variant
-2. **Risk classifier** — pure function returns `safe | sensitive | destructive`
-3. **Approval gate** — safe runs immediately; sensitive prompts; destructive *always* prompts
-4. **Hash-chained audit** — every plan, exec, denial, memory hit is tamper-evident
-
-Approvals work from **both** the CLI prompt **and** the dashboard "Approve / Deny" buttons.
-
-### 🧭 Multi-Step Planner (v0.8.1)
-
-```bash
-xr control plan "fill the contact form on example.com"         # dry-run
-xr control plan "fill the contact form on example.com" --step  # confirm each
-xr control plan "fill the contact form on example.com" --yes   # auto-approve sensitive
-```
-
-### 🌐 Browser Automation (Playwright, v0.8.1)
-
-```bash
-xr control browser status   # check Playwright availability
-xr control browser install  # one-shot: install + chromium (~150 MB)
-```
-
-### 🧠 Plan Memory (v0.8.2)
-
-```bash
-xr control plan "open github notifications" --yes  # first run: LLM plans (~$0.002)
-xr control plan "open github notifications" --yes  # next run: ⚡ recalled, $0.00
-xr control memory list
-```
-
-### 🧠 Durable Memory (v0.9 → Stage 6)
-
-```bash
-xr memory add "I prefer TypeScript and Bun" --category preference
-xr memory add "this project is called XR" --category project --scope xr
-xr memory list             # see everything XR remembers
-xr memory recall "what do I prefer?"    # shows match % + WHY
-xr memory search "bun"
-xr memory health           # expired, never-recalled, by category
-xr memory prune            # delete expired entries permanently
-xr memory edit mem_ab12 "prefer Bun + Zod"
-xr memory remove mem_ab12
-xr memory clear            # forget everything (asks first)
-xr memory export memories.json
-xr memory import memories.json
-```
-
-XR remembers **only what you explicitly tell it to.** Everything is local-first, inspectable, editable, and permanently deletable. See [Stage 6 — The Memory Engine](#-stage-6--the-memory-engine) for the full feature set: live capture, explainable recall, TTL/expiry, session summaries, and memory health.
-
-### 🏠 Stage 4 — Local AI Runtime Manager
-
-```bash
-xr models                     # local AI status
-xr models runtimes            # detect Ollama, LM Studio, Jan, llama.cpp, vLLM...
-xr models recommend [use-case] # hardware-aware recommendation
-xr models install [model]     # safe Ollama setup/pull with approval
-xr models set <runtime> <model>
-xr models test [model]        # local inference smoke test
-```
-
-Supported local runtimes: **Ollama** (auto-install) · LM Studio · llama.cpp · Jan · LocalAI · vLLM · GPT4All · KoboldCPP · Text Generation WebUI · SGLang · any OpenAI-compatible endpoint.
-
-### 🔬 Research Engine (Stage 7)
-
-```bash
-xr research "compare Rust vs Go for embedded development"
-xr research deep "best self-hosted alternatives to Cloudflare Tunnel" --allow-public-web
-xr research compare "OpenAI Deep Research vs Gemini Deep Research"
-xr research factcheck "Gemini Deep Research supports MCP servers"
-xr research evidence      # inspect evidence ledger
-xr research claims        # inspect claim ledger
-xr research contradictions
-xr research refresh       # re-check source freshness
-xr research export        # signed Markdown + JSON sidecar
-```
-
-See [Stage 7 — The Research Engine](#-stage-7--the-research-engine) for the full workflow: live source discovery, trust/freshness ranking, evidence extraction, contradiction detection, comparison matrices, refresh history, and signed reports.
-
-### 🧩 Stage 10 — Plugin Platform
-
-```bash
-xr plugins search                     # catalog metadata search
-xr plugins inspect ./plugins/github   # manifest + permissions, no code execution
-xr plugins install ./plugins/github   # shows permissions, asks to approve
-xr plugins enable github              # explicit activation
-xr plugin github repo ahmadrrtx/xr    # run a plugin command
-xr plugins permissions github         # requested vs granted permissions
-xr plugins doctor                     # health/trust check
-```
-
-Plugins are **opt-in, permissioned, inspectable, and disableable**. XR records entrypoint + whole-tree hashes at install, rejects tampered plugins as `untrusted`, blocks common ambient-authority imports (`node:fs`, `child_process`, raw `fetch`, `process.env`, dynamic eval), and forces approval for tools from plugins with sensitive grants. Plugins can ship tools, commands, skills, MCP-backed tools, UI metadata, provider adapters, workflow packs, research packs, voice packs, security packs, business packs, and developer packs without editing XR core.
-
-Full spec: [docs/PLUGINS.md](docs/PLUGINS.md)
-
-### 🤖 JARVIS-Level Vision Loop
-
-```bash
-xr --computer "open Safari and search for AI agents"
-```
-
-Vision-driven: screenshot → LLM reasons → action loop. For open-ended tasks where the planner doesn't know steps in advance.
-
-### 💰 Cost Governor — Enforced in Code
-
-```bash
-xr --budget 0.10 "write me a full React app"
-```
-
-The agent **literally cannot exceed your budget.** `checkBeforeStep()` runs before every model call and blocks if the next step would breach the ceiling.
-
-### 🛡️ Verifiable Security
-
-```bash
-xr attacks --json    # curated-corpus injection screen — signed, publishable block-rate report
-```
-
-### 🔒 Tamper-Evident Audit Log
-
-```bash
-xr verify-log    # → "✓ Audit chain intact (N entries)"
-```
-
-SHA-256 hash chain on every action — git's trick, $0, offline. Any tampering detected instantly.
-
----
-
-## 🔬 Evaluation — how XR proves what it claims
-
-XR 7.0 ships an outcome-based benchmark harness. It measures whether XR produces
-**verified outcomes**, not whether a model sounded confident.
-
-```bash
-xr evaluate run --offline      # 14 suites, 38 scenarios, no network required
-xr evaluate claims             # every public claim mapped to its evidence
-xr evaluate limitations        # what the benchmarks do NOT measure
-xr evaluate compare <a> <b>    # regression detection between releases
-xr evaluate export <runId>     # hash-verifiable evidence bundle
-```
-
-What makes it trustworthy rather than marketing:
-
-- **Outcomes are verified, not asserted.** A scenario passes only when the
-  harness inspects reality — the artifact on disk, the durable record, the state
-  transition, the audit chain.
-- **Security failures cannot be averaged away.** Nine hard safety gates are
-  evaluated by the harness, not by the code under test. A critical violation
-  nulls the headline score instead of lowering it.
-- **`not applicable` is never scored as zero**, and weights are always published.
-- **Negative results cannot be deleted** — only invalidated, with the reason and
-  original hash preserved.
-- **Claims are machine-checked.** `xr evaluate claims` fails if a
-  benchmark-verified claim's supporting scenario stopped passing.
-- **XR makes no comparative superiority claim.** No competitor is executed, so
-  no such claim is possible — and a test enforces that none is ever shipped.
-
-The harness found real defects in XR itself on its first run, including a
-workflow integrity gap where a published automation's shell command could be
-swapped without breaking its content hash. See
-[`docs/historical/phase-deliverables/PHASE13_VALIDATION_REPORT.md`](docs/historical/phase-deliverables/PHASE13_VALIDATION_REPORT.md) §4 and
-[`docs/historical/phases/phase13/`](docs/historical/phases/phase13/).
-
----
-
-## 📡 Providers
-
-XR supports **26 built-in provider presets** — 16 hosted and 10 local runtimes. Swap anytime — no restart, no re-config.
-
-> Counted from `PRESETS` in `src/providers/presets.ts`. Provider count is not a measure of product quality and is deliberately not scored by `xr evaluate`.
-
-**How they connect:** five hosted providers run dedicated native API adapters (Anthropic, Google, Mistral, Cohere, AWS Bedrock). Every other preset — the remaining hosted providers and all ten local runtimes — speaks the **OpenAI-compatible protocol** through one transport (`src/providers/openai-compat.ts`), and a custom preset can point at any OpenAI-compatible base URL. (A native Cerebras adapter also ships in `src/providers/native/`; the built-in Cerebras preset uses Cerebras's OpenAI-compatible endpoint.)
-
-Default models below are the presets' launch defaults (`defaultModel` in `src/providers/presets.ts`) — not ceilings: `xr providers set <id> <model>` switches to any model the provider offers, through a preflight → canary → swap → verify state machine that rolls back automatically if the new model cannot be reached (`--force` skips the probe).
+## Providers
+
+XR ships **26 built-in provider presets — 16 hosted and 10 local runtimes**. Swap anytime —
+no restart, no re-config.
+
+> Counted from `PRESETS` in `src/providers/presets.ts`. Provider count is not a measure of
+> product quality and is deliberately not scored by `xr evaluate`.
+
+**How they connect:** five hosted providers run dedicated native API adapters (Anthropic,
+Google, Mistral, Cohere, AWS Bedrock). Every other preset — the remaining hosted providers
+and all ten local runtimes — speaks the **OpenAI-compatible protocol** through one transport
+(`src/providers/openai-compat.ts`), and a custom preset can point at any OpenAI-compatible
+base URL. (A native Cerebras adapter also ships in `src/providers/native/`; the built-in
+Cerebras preset uses Cerebras's OpenAI-compatible endpoint.)
+
+Default models below are the presets' launch defaults (`defaultModel`) — not ceilings:
+`xr providers set <id> <model>` switches to any model the provider offers through a
+preflight → canary → swap → verify state machine that rolls back automatically if the new
+model cannot be reached (`--force` skips the probe).
 
 | Provider | Type | Default model |
 |---|---|---|
@@ -873,687 +369,126 @@ Default models below are the presets' launch defaults (`defaultModel` in `src/pr
 | + any OpenAI-compatible endpoint | Local/Hosted | your base URL |
 
 ```bash
-xr providers list      # all providers + status
-xr providers set openai gpt-4o-mini
-xr providers add claude   # enter API key (masked; OS keychain, else AES-256-GCM sealed file)
-xr providers test         # test all configured providers live
-```
-
----
-
-## 🔒 Security — Built In, Not Bolted On
-
-Every security feature is **code-enforced**, not a suggestion:
-
-| Feature | How |
-|---|---|
-| **Hard budget ceiling** | `checkBeforeStep()` blocks — no exceptions |
-| **Tamper-evident audit** | SHA-256 hash chain, offline, `xr verify-log` |
-| **Plugin trust** | Explicit permissions, tree hashes, static scan, health checks, disable/remove |
-| **Injection defense** | 10-attack benchmark, signed block-rate report |
-| **Egress allow-list** | Only configured domains receive data |
-| **Approval gates** | `write_file`, `delete`, `shell`, `send` need consent |
-| **API key redaction** | Keys never appear in audit log |
-| **Local-first** | Nothing leaves your machine by default |
-| **Dashboard security** | 127.0.0.1 only, bearer token, `X-Frame-Options: DENY` |
-
----
-
-## 🖥️ Install Modes
-
-```bash
-xr install --mode minimal   # core only
-xr install --mode local     # local/free, no API key required
-xr install --mode byok      # cloud keys you own
-xr install --mode hybrid    # cloud primary + local fallback
-xr install --mode full      # all optional packs
-```
-
----
-
-## 🗂 Repository Structure
-
-```
-xr/
-├── src/
-│   ├── ui/               # Stage 5: design system
-│   │   ├── theme.ts      # brand palette, ANSI codes, CSS vars
-│   │   ├── spinner.ts    # Spinner, ProgressBar, StepTracker
-│   │   ├── layout.ts     # terminal layout primitives
-│   │   └── index.ts
-│   ├── interfaces/       # all user-facing surfaces
-│   │   ├── tui.ts        # interactive terminal UI (Claude Code–style)
-│   │   ├── cli.ts        # CLI output helpers
-│   │   ├── onboard.ts    # setup wizard
-│   │   ├── providers.ts  # provider management UI
-│   │   └── models.ts     # local AI model UI
-│   ├── commands/         # CLI command handlers
-│   │   ├── memory.ts     # xr memory — the Memory Engine (Stage 6)
-│   │   ├── help.ts       # xr help [topic]
-│   │   ├── budget.ts
-│   │   ├── config.ts
-│   │   ├── doctor.ts     # includes memory + research + voice + plugin health
-│   │   ├── plugins.ts    # xr plugins / xr plugin command adapters
-│   │   └── ...
-│   ├── daemon/           # local server
-│   │   ├── server.ts      # xr serve — dashboard + chat + API
-│   │   ├── plugin-api.ts  # plugin management API
-│   │   └── dashboard.ts   # full SPA: 12 panels, chat, command palette
-│   ├── core/             # agent runtime
-│   ├── providers/        # 20+ provider adapters
-│   ├── memory/           # durable memory + RAG
-│   ├── security/         # injection lab, audit, egress
-│   ├── control/          # computer control, planner
-│   ├── local/            # local AI runtime manager
-│   ├── plugins/          # Stage 10 plugin platform: manifests, registry, host, loader, lifecycle
-│   ├── research/         # Stage 7 Research Engine
-│   ├── voice/            # Stage 8 Voice Stack
-│   ├── cost/             # budget governor
-│   └── config/           # configuration
-├── bin/                  # CLI entry point
-├── plugins/              # built-in plugins
-├── skills/               # learned skills
-├── docs/                 # PLUGINS.md, etc.
-├── website/              # Next.js marketing site
-└── test/                 # test suite
-```
-
----
-
-## ⌨️ Quick Reference
-
-```bash
-# One-shot tasks
-xr "write a README for this project"
-xr "explain this codebase"          --mode ask
-xr "refactor auth module"            --budget 0.25
-xr "build a REST API"                --mode plan   # plan only
-
-# Interactive TUI
-xr                                   # full terminal workspace
-xr --tui                             # explicit alias for the fullscreen shell
-
-# Browser interfaces
-xr serve                             # dashboard + chat at localhost:3141
-
-# Local AI
-xr models                            # status
-xr models recommend                  # hardware-aware recommendation
-xr models install                    # install recommended model
-
-# Providers
 xr providers list
-xr providers set ollama
-xr providers add claude
-
-# Memory
-xr memory add "I prefer TypeScript" --category preference
-xr memory add "temp" --ttl 3600          # expires after 1h
-xr memory list
-xr memory recall "what do I prefer?"     # match % + why
-xr memory health
-xr memory prune                         # delete expired
-xr memory clear
-
-# Research
-xr research "topic"
-xr research deep "topic" --allow-public-web
-xr research compare "A vs B"
-xr research factcheck "claim"
-xr research evidence
-xr research refresh
-xr research export
-
-# Plugins (Stage 10)
-xr plugins search
-xr plugins inspect ./plugins/hello
-xr plugins install ./plugins/hello --yes
-xr plugins enable hello
-xr plugin hello greet Ahmad
-xr plugins doctor
-
-# Voice (Stage 8, opt-in)
-xr voice status
-xr voice setup
-xr voice devices
-xr voice test
-xr voice start                         # push-to-talk
-xr voice start --wake-word             # opt-in wake phrase
-xr speak "hello"
-xr listen
-
-# Computer control (opt-in)
-xr control start
-xr control plan "open browser and go to github.com"
-
-# Security
-xr verify-log
-xr attacks
-
-# Help
-xr help                              # full command reference
-xr help tui                          # TUI guide
-xr help security                     # security guide
-xr help providers                    # providers guide
-xr help memory                       # memory engine guide
+xr providers set openai gpt-4o-mini
+xr providers add claude     # enter API key (masked; OS keychain, else AES-256-GCM sealed file)
+xr providers test           # probe configured providers live
 ```
+
+Provider canaries also exist for CI: `bun run canary:providers` live-probes each
+key-configured preset through its own `health()` and fails on a dead provider (honest SKIP
+for unconfigured ones).
 
 ---
 
-## 📋 Compatibility
+## Readiness, scripting & exit codes
 
-| Platform | Status |
+`xr doctor` answers one question: **can XR actually run a task right now?**
+
+- exits non-zero when no provider is reachable, and says why plus one next action;
+- never prints `ok: true` for a system that cannot do work;
+- `--deep` adds voice, control, capability and environment probes;
+- `xr doctor --json` is the stable machine-readable entrypoint (redacted config, provider
+  readiness, `summary.runnable` verdict; secrets are never printed — only presence).
+
+Exit codes are stable for scripting (`docs/guides/cli-compat.md`):
+
+| Code | Meaning |
 |---|---|
-| Linux x64 (Ubuntu, Debian, Fedora, Arch) | ✅ Tier 1 — full CI + golden path |
-| macOS (Apple Silicon) | ✅ Tier 1 — full-parity CI (typecheck + suite + golden path) |
-| Windows x64 (PowerShell, WSL) | ✅ Tier 1 — full-parity CI (4 documented POSIX-only test exclusions) |
-| Linux arm64 | ◐ Tier 2 — canonical build + container validated; native lane pending an arm runner |
-| macOS (Intel) | ◐ Tier 2 — canonical build; native smoke unavailable on arm64 runners |
-| Android (Termux) | ○ Tier 3 — community installer path |
-
-Per-tier evidence and the exact CI jobs behind every ✅ live in
-[`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md) — "supported" is never
-claimed without the run that validates it.
-
-**Runtime:** [Bun](https://bun.sh) (required) — install with `curl -fsSL https://bun.sh/install | bash`
+| `0` | ok |
+| `1` | runtime/task failure |
+| `2` | usage error |
+| `3` | network |
+| `4` | denied |
+| `5` | not found |
+| `130` | interrupted (Ctrl+C / SIGINT) |
 
 ---
 
-## 🗺 Roadmap
+## Performance — budgets, not boasts
 
-| Stage | Name | Status |
-|---|---|---|
-| Stage 1 | Core Agent | ✅ Done |
-| Stage 2 | Security + Audit | ✅ Done |
-| Stage 3 | Research + Plugins | ✅ Done |
-| Stage 4 | Local AI Runtime | ✅ Done |
-| Stage 5 | User Interfaces | ✅ Done |
-| **Stage 6** | **Memory Engine** | ✅ **Done** |
-| **Stage 7** | **Research Engine** | ✅ **Done** |
-| **Stage 8** | **Voice Stack** | ✅ **Done** |
-| **Stage 9** | **Computer Control Engine** | ✅ **Done** |
-| **Stage 10** | **Plugin Platform** | ✅ **Done** |
-| **Stage 11** | **MCP Platform** | ✅ **Done** |
-| **Stage 12** | **Multi-Agent + Advanced Orchestration** | ✅ **Done** |
-| Stage 13 | Advanced Runtime / Visual Orchestration / Background Workers | ✅ Done |
-| **Stage 14** | **XR Shield — Security & Privacy Layer** | ✅ **Done** |
+Every performance claim is a **published budget with a measured baseline and a CI regression
+gate**:
+
+- `--version` / `--help` **p95 < 150 ms warm / < 300 ms cold** (measured 37.5 / 40.7 ms warm,
+  35.9 / 40.0 ms cold on the 7.1.0 baseline);
+- `doctor` **< 1 s measured** (456 ms; gate ceiling 1500 ms for shared runners) · route
+  decision **< 20 ms** (sub-ms) · dashboard first render **< 1 s** (5.7 ms) · retrieval
+  **25–33 ms @100k items** (gate ceiling 250 ms);
+- fast path performs **zero synchronous FS/process I/O** (lint-enforced);
+- a command boots only the subsystems it needs (boot profiles).
+
+Full budgets, the boot-profile model, the regression gate and profiling tooling:
+[`docs/perf/PERF-BUDGETS.md`](docs/perf/PERF-BUDGETS.md). Baseline artifact:
+`docs/perf/baseline-7.1.0-source.json` (regenerate per release with `bun run perf:baseline`).
 
 ---
 
-## 🤝 Stage 12 — The Multi-Agent System
+## How XR proves itself (quality machinery)
 
-Stage 12 turns XR from a powerful single-agent shell into a **professional multi-agent operating layer**.
+XR's differentiator is that its claims are checked by machines on every PR:
 
-XR now supports a **supervisor / worker runtime** with:
-
-- **Supervisor / Coordinator**
-- **Planner**
-- **Researcher**
-- **Builder / Developer**
-- **Reviewer**
-- **Executor**
-- **Synthesizer**
-- **Memory Manager**
-- **Router / Model Selector**
-- **Security Checker**
-
-### What Stage 12 adds
-
-- **Agent registry** with explicit roles, capabilities, permissions, memory scopes, and tool scopes
-- **Persisted workflow graphs** (`agent_workflows` + `agent_tasks`) for inspectability, resume, and auditability
-- **Task decomposition** with dependency tracking, parallel branches, handoffs, and review checkpoints
-- **Role-scoped execution** so reviewer agents stay read-only while builder/executor agents get narrow side-effect lanes
-- **Memory boundaries** via a dedicated memory-manager brief instead of broad memory injection into every worker
-- **Security and critique gates** that can block downstream execution with `CHANGES_REQUESTED` or `REJECTED`
-- **Live CLI progress** for `xr agents run`, so you can see which agent is active and what it is doing
-
-### Commands
-
-```bash
-xr agents list
-xr agents status
-xr agents status <workflowId>
-xr agents inspect <agentId|workflowId>
-xr agents plan "implement this safely"
-xr agents run "implement this safely" --dry-run
-xr agents delegate <workflowId> <agentId> "investigate X"
-xr agents review <workflowId>
-xr agents synthesize <workflowId>
-xr agents stop <workflowId>
-xr agents resume <workflowId>
-```
-
-### Design principles
-
-- **Not one giant agent**
-- **Supervisor owns the flow**
-- **Workers stay narrow**
-- **Review is separate from generation**
-- **Synthesis is separate from execution**
-- **Memory and tools are scoped per role**
-- **High-risk execution must pass through security/review gates**
-- **Everything important is persisted and inspectable**
-
-### Current architecture
-
-- `src/agents/registry.ts` — built-in agent workforce
-- `src/agents/planner.ts` — deterministic workflow/task graph compiler
-- `src/services/multi-agent-service.ts` — supervisor runtime
-- `src/state/stores/workflow-store.ts` — persisted workflow/task storage
-- `src/commands/agents.ts` — CLI surface
-
----
-
-## 🖥️ Stage 9 — Computer Control Engine
-
-Stage 9 turns XR from a chat assistant into a **safe, vision-capable AI operator**. XR can now operate your computer exactly like a human assistant, with full transparency and permission gates.
-
-### Design principles
-
-- **Safe-by-construction** — all actions are Zod-validated against a strict schema.
-- **Human-in-the-loop** — risk classifier checks every step. Sensitive actions prompt; destructive actions *always* prompt.
-- **Vision-assisted** — XR uses screenshots and Vision LLMs to navigate modern UIs, not just shell commands.
-- **Transparent** — every click, keystroke, and scroll is logged to the tamper-evident audit chain.
-- **Kill-switch** — `xr control stop` disables the engine immediately.
-
-### Control commands
-
-```bash
-# Setup & Status
-xr control status              # check tools (keyboard, mouse, browser)
-xr control start               # enable control engine
-xr control stop                # disable control engine
-xr control browser install     # setup Playwright + Chromium
-
-# Automation
-xr control plan "task"         # plan and execute multi-step workflow
-xr control computer "task"     # vision-driven agentic loop (screenshot -> act)
-xr control test                # run a safety/capability self-test
-
-# Primitive Actions
-xr control app "VS Code"       # launch application
-xr control open "https://..."  # open URL or file
-xr control click 640,480       # click coordinates
-xr control type "hello"        # type text
-xr control key "cmd+tab"       # press keys
-xr control scroll down 5       # scroll
-```
-
-### Vision Agent (Computer-Use)
-
-The `xr control computer` command starts a JARVIS-level loop:
-1. **Observe**: Captures a high-res screenshot.
-2. **Reason**: A Vision LLM (like Claude 3.5 Sonnet) analyzes the UI state.
-3. **Act**: XR sends a mouse/keyboard action.
-4. **Repeat**: Loop continues until the task is marked `DONE`.
-
-### Platform Support
-
-| Platform | Keyboard | Mouse | Apps | Browser |
-|---|---|---|---|---|
-| **macOS** | `osascript` | `cliclick` | `open` | Playwright |
-| **Linux** | `xdotool` | `xdotool` | `xdg-open` | Playwright |
-| **Windows**| PowerShell | .NET Native | `Start-Process` | Playwright |
-
----
-
-## 🔌 Stage 11 — The MCP Platform
-
-**Stage 11 turns XR into a true standardized integration platform** using the Model Context Protocol (MCP 2025-06-18).
-
-MCP servers expose **tools**, **resources**, and **prompts** in a uniform way. XR can now safely consume any compliant MCP server (GitHub, databases, browsers, filesystems, workflows, etc.) without bespoke glue code.
-
-### MCP Principles (enforced in code)
-- **Opt-in only** — servers are never auto-discovered or enabled
-- **Inspect before activate** — `xr mcp inspect` shows capabilities + declared permissions
-- **Explicit permissions** — 15 permission scopes (fs:read, fs:write, net, secrets, control, shell, etc.)
-- **Always approval-gated** — every MCP tool/resource call requires explicit user approval
-- **Audit + budget inheritance** — all calls go through XR's existing safety rails
-- **Clean lifecycle** — enable / disable / remove actually stops access
-- **Fail closed** — broken servers are isolated and never crash XR
-
-### Full MCP Command Surface
-
-```bash
-xr mcp list
-xr mcp add github stdio npx @modelcontextprotocol/server-github
-xr mcp add postgres http http://127.0.0.1:8765/mcp
-xr mcp inspect github
-xr mcp enable github
-xr mcp disable github
-xr mcp tools github
-xr mcp resources github
-xr mcp prompts github
-xr mcp health
-xr mcp permissions github
-xr mcp remove github
-xr mcp doctor
-```
-
-MCP tools/resources/prompts automatically appear in the agent as namespaced tools:
-- `mcp.github.create_issue`
-- `mcp.postgres.query`
-- etc.
-
-All are wrapped with `requiresApproval: true`, full audit, and budget checks.
-
-### Supported Transports
-- `stdio` (local processes)
-- `http` / `sse` / `streamable-http` (remote)
-
-### Security Model
-- Never stores raw API keys (only `apiKeyEnv`)
-- All calls go through XR approval + egress + audit
-- Remote servers are treated as higher trust risk
-- Disable/remove actually stops execution
-
-### Doctor & Health
-```bash
-xr doctor
-# includes: MCP platform (X installed, Y enabled, Z healthy)
-```
-
-### Dashboard
-MCP servers are managed from the CLI today; dashboard surfacing is not yet implemented.
-
-See `xr mcp --help` for the full surface.
-
----
-
-## 🧩 Stage 10 — The Plugin Platform
-
-Stage 10 makes XR extensible without making core a monolith. Plugins are capability bundles that can add tools, skills, integrations, MCP connectors, workflow packs, research packs, voice packs, security packs, business packs, developer packs, and UI metadata through a strict manifest and explicit permission model.
-
-### Plugin platform principles
-
-- **Opt-in install and opt-in enable** — XR never silently installs or activates plugins.
-- **Manifest-first** — `xr plugins inspect` shows identity, version, permissions, capabilities, source, trust, skills, and MCP declarations without executing code.
-- **Explicit permissions** — a plugin receives only permissions it declares and the user grants.
-- **No ambient authority by default** — plugin scanning blocks direct `node:fs`, `child_process`, raw `fetch`, `process.env`, Bun host APIs, eval/dynamic Function, and symlinks.
-- **Tamper detection** — XR records entrypoint and full plugin-tree SHA-256 hashes at install; changed code fails closed as `untrusted`.
-- **Budget/security inheritance** — plugin provider calls, network calls, memory, secrets, MCP tools, and computer-control paths still pass through XR gates.
-- **Recoverable lifecycle** — disable/remove actually stops loaded contributions and deletes installed files.
-
-### Plugin commands
-
-```bash
-xr plugins list                         # installed state + health
-xr plugins search [query]               # catalog metadata search
-xr plugins inspect <id|path>            # manifest + permissions; no code runs
-xr plugins install <path|catalog-id>    # review and approve permissions
-xr plugins enable <id>
-xr plugins disable <id>
-xr plugins update <id> [path]           # blocks new permissions until reinstall approval
-xr plugins remove <id>
-xr plugins permissions <id>             # requested/granted permissions
-xr plugins skills                       # skills contributed by enabled plugins
-xr plugins doctor                       # health/trust check
-xr plugin <id> <command> [args...]      # run plugin CLI command
-```
-
-### Plugin manifest surfaces
-
-`xr-plugin.json` supports:
-
-- `id`, `name`, `version`, `author`, `description`, `type`, `entrypoint`
-- `permissions`, `capabilities`, `dependencies`, `compatibility`, `apiVersion`
-- `source`, `sourceUrl`, `updateSource`, `trustLevel`, `trust.signature`, `trust.sha256`, `trust.treeSha256`
-- `uiHooks`, `commandHooks`, `toolHooks`, `mcpServers`, `skillPaths`
-- plugin types: `tool`, `skill`, `integration`, `provider`, `memory`, `research`, `automation`, `ui`, `mcp`, `voice`, `security`, `business`, `developer`, `workflow`
-
-### Dashboard integration
-
-The local dashboard Plugins panel now shows installed plugins, version, type, enabled state, health, trust level, requested/granted permissions, capabilities, catalog search, and enable/disable/remove actions.
-
-See [docs/PLUGINS.md](docs/PLUGINS.md) for the full authoring and security contract.
-
----
-
----
-
-## 🛡️ Stage 14 — XR Shield (AI Security & Privacy Layer)
-
-Stage 14 integrates **XR Shield** — an AI-powered Endpoint Detection, Response, Privacy Protection, and System Integrity layer directly into XR. 
-
-XR Shield is **NOT** a replacement for commercial antivirus software. It is an agentic, local-first security layer that helps users understand, detect, and respond to potential vulnerabilities, malware indicators, and privacy exposures, keeping with XR's principles of absolute transparency and fail-closed safety.
-
-### 🧩 Key Architecture & Modules
-
-1. **Threat Detection Engine**: Scans active processes, autoruns, crontabs, and scheduled tasks for signatures matching known miners, backdoors, Trojan spoof files, and dangerous LOLBins (dual-use system binaries).
-2. **Malware Assistant Agents**: Integrates specialized AI agents (Process Inspector, Startup Inspector, Crypto Miner Detection Agent, Download Inspector, and Forensics Assistant) to contextualize and explain anomalies in natural language with structured confidence scores.
-3. **Crypto Miner Detection**: Identifies sustained, unauthorized background miner indicators through CPU/GPU utilization audits and known block-mining pool connections (e.g., nanopool, supportxmr).
-4. **Privacy Controls Gating**: Runs diagnostics on browser mic/camera permissions, OS and VS Code telemetry trackers, and active clipboard dumps to warn if secrets or passwords sit in unsafe caches.
-5. **Ad & Tracker Protection**: Uses a permission-gated hosts-file sinkholing tool to map over 50,000 corporate diagnostic tracking endpoints to `0.0.0.0` (fully local DNS filter lists).
-6. **Chronological Audit Ledger**: Writes all scans, isolations, restores, whitelists, and toggles into XR's cryptographically linked, tamper-evident SHA-256 SQLite hash chain.
-
-### 💻 Command Surface
-
-```bash
-# General Status & Self-Diagnostics
-xr shield status               # show protection modules, score, and outstanding threats
-xr shield doctor               # run integrity diagnostics on files, state, and logs
-
-# System Scans
-xr shield quick-scan           # fast heuristics scan of processes and autorun registries
-xr shield full-scan            # deep scan including downloads, extensions, and tasks
-xr shield processes            # list running processes highlighting signature verification
-xr shield startup              # audit persistence (registry run keys, launchd plists, desktop autostarts)
-xr shield downloads            # check Downloads folder for double extensions (.pdf.exe) and Trojan spoof names
-xr shield browser              # check extensions safety profiles, secure cookies, and permissions
-
-# Quarantine & Remediations
-xr shield explain <threat-id>  # get agentic risk analysis, details, and remedy recommendations
-xr shield quarantine-review    # interactively review, permanently delete, or restore isolated items
-xr shield adblock [on|off]     # enable/disable DNS hosts tracker blocking (requires root/elevation)
-xr shield logs                 # view chronological security operations chain from database
-```
-
-### 🖥️ Dashboard Controls
-
-The **Security (XR Shield)** control cockpit is completely integrated into the web dashboard, providing a highly visual interface for:
-- **Privacy Score Card**: Shows a dynamic 0..100 security rating based on system checklist validations.
-- **Threat Timeline & Feeds**: Shows chronological heuristics feeds with deep explanation modals.
-- **System Processes Explorer**: Search and filter running processes with live CPU/Memory stats and signature certifications.
-- **Auto-Hardening Settings**: One-click remediation buttons to safely quarantine scripts, terminate risky processes, and activate tracker blocking.
-
----
-## ✅ XR 15 — Business OS extension
-
-**Status: implemented on `main` as an optional, governed extension — off by default** (`business.enabled=false`; when enabled, each module loads only after its deterministic effect-verification gate passes).
-
-XR 15 adds a **Business OS extension** (`extensions/business-os`) over the thin record/artifact/identity/audit contract held by the kernel (`src/core/business-l0.ts`). It unifies CRM, Sales, Marketing, Support, Projects, Knowledge, Finance, HR, Analytics, Automation, Scheduling, Communication, Documents, Meetings, and AI Workers over local-first business records — no hosted control plane, and real systems of record integrate via MCP.
-
-| Phase | Status | What shipped |
-| --- | --: | --- |
-| **XR 15A — Business Core** | ✅ Done | Organization management, workspace data scoping, RBAC (6 roles), unified contact model, sales pipeline engine, business event bus, SHA-256 audit trail with hash chain verification, encrypted credential vault (AES-256-GCM) |
-| **XR 15B — Business Modules** | ✅ Done | 15 production modules: CRM, Sales, Marketing, Support, Projects, Knowledge, Finance, HR, Analytics, Automation, Scheduling, Communication, Documents, Meetings, AI Workers — each with full CRUD, pagination, filtering, search, and statistics |
-| **XR 15C — AI Business Team** | ✅ Done | 11 specialized AI Workers: CEO Advisor, Sales Director, Marketing Director, Financial Analyst, HR Manager, Project Manager, Support Manager, Operations Manager, Legal Assistant, Research Analyst, Growth Strategist — each with system prompts, capability matrices, permission sets, and live business context |
-| **XR 15D — Integration Layer** | ✅ Done | 30+ optional BYOK integrations: Gmail, Outlook, Slack, Discord, Teams, Telegram, WhatsApp, Google Calendar, Cal.com, GitHub, GitLab, Jira, Linear, Google Drive, OneDrive, Dropbox, Nextcloud, HubSpot, Salesforce, ERPNext, Twenty, Stripe, PayPal, Plausible, PostHog, Shopify, WooCommerce, n8n, Activepieces, Coolify, Docker — OAuth2 flow manager, credential vault |
-| **XR 15E — Automation Engine** | ✅ Done | Workflow engine with event/schedule/webhook/manual triggers, conditional steps, retry logic, error handling (stop/skip/retry). 11 pre-built templates: Lead Qualification, Sales Follow-up, Meeting Preparation, Invoice Generation, Customer Onboarding, Weekly Reports, Competitor Monitoring, Market Research, Content Calendar, Email Campaign, Support Ticket Routing |
-| **XR 15F — Security & CLI** | ✅ Done | 7 security policies (least privilege, workspace data scoping, export approval, integration consent, credential protection, automation budget, worker permission approval). Full CLI: `xr biz` with 40+ subcommands. Migration guide, architecture docs, test suite |
-
-### What's new in Stage 15
-
-```
-extensions/business-os/     # Business OS extension (L5, governed, default-off)
-├── manifest.json           # modules, permissions, effect-verification policy
-├── effect-verification.ts  # per-module deterministic gate harness
-└── src/
-    ├── core/               # 23 files: organization, RBAC, contacts, pipeline, event bus,
-    │                       # hash-chained audit, approvals/escalations, artifacts/evidence,
-    │                       # authority boundaries, outcomes, workflow templates
-    ├── modules/            # 15 modules: crm, sales, marketing, support, projects, knowledge,
-    │                       # finance, hr, analytics, automation, scheduling, communication,
-    │                       # documents, meetings, ai-workers
-    ├── index.ts            # unified BusinessOS API
-    └── cli.ts              # `xr biz` subcommands
-
-src/core/business-l0.ts     # thin kernel contract: records / artifacts / identity / audit
-
-src/integrations/           # Integration layer
-├── registry.ts             # 30+ connector definitions
-├── oauth.ts                # OAuth2 flow manager
-└── credentials.ts          # AES-256-GCM encrypted credential vault (v2 envelope)
-
-src/security/
-└── policies.ts             # 7 security policies for business operations
-
-src/schemas/
-└── business-os.skill.json  # XR Skill definition
-
-src/templates/workflows/    # 11 automation templates
-├── lead-qualification.json
-├── sales-followup.json
-├── meeting-prep.json
-├── invoice-generation.json
-├── customer-onboarding.json
-├── weekly-reports.json
-├── competitor-monitoring.json
-├── market-research.json
-├── content-calendar.json
-├── email-campaign.json
-└── support-routing.json
-
-docs/
-├── business-os-extension.md            # current extension architecture
-└── migration/XR-15-BUSINESS-OS.md      # stage-14 → stage-15 migration guide
-```
-
-### How Business OS integrates with existing XR
-
-| Existing XR System | Business OS Integration |
+| Gate | What it pins |
 |---|---|
-| **Provider Engine** | AI Workers use it for LLM calls. No new providers. |
-| **Memory Engine** | Business entities stored with business schema. |
-| **Research Engine** | AI Workers use for market analysis, competitor monitoring. |
-| **Voice Stack** | Meeting transcription via STT. Voice-enabled workers. |
-| **Computer Control** | Workers generate reports, take screenshots. |
-| **Plugin Platform** | Gmail, Slack, Discord connectors are Plugins. |
-| **MCP Platform** | HubSpot, Salesforce, ERPNext via MCP. |
-| **Skill Runtime** | Each module registers as an XR Skill (15 skills). |
-| **Dashboard** | Business UI served through daemon. |
-| **CLI** | `xr biz` commands via command registry. |
-| **Multi-Agent Runtime** | AI Workers are XR Agents (11 agents). |
-| **XR Shield** | All operations pass through policy engine. |
-
-**Nothing is duplicated. Everything delegates to existing XR engines.**
-
-### Quick start
-
-Business OS is off by default. Enable it in config first (`config.business.enabled = true`), then:
+| `bun test` + parity suite | **2,812 tests** across 226 files; one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and self-diagnosing failure annotations |
+| `release:check` + `claim-lint` | version identity stamped everywhere; every public claim has evidence; prohibited/supervised terms fail the build |
+| `baseline:inventory` | source-derived repository inventory regenerated and compared |
+| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, file-size discipline (waivers are explicit) |
+| `api:schema:check` + `client:check` + `api:compat` | daemon OpenAPI schema, generated client, compatibility |
+| `channel:check` | channel configs match the release manifest |
+| supply chain lanes | osv-scanner + bun audit, gitleaks, license scan, SBOM drift, `-ignore-scripts` hygiene, container scan |
+| Quality Gate | single required aggregation check over all of the above |
+| `xr evaluate` | outcome-based benchmark harness: scenarios pass only when reality is inspected (artifact on disk, durable record, state transition, audit chain) — see below |
 
 ```bash
-# Initialize Business OS
-xr biz init
-
-# Enable modules (comma-separated list)
-xr biz enable crm,sales,support
-
-# Deploy an AI Worker by role
-xr biz workers deploy sales_director
-
-# Connect integrations (optional, BYOK)
-xr biz connect gmail
-xr biz connect slack
-xr biz connect stripe
-
-# Use it
-xr biz contacts add --name "John Doe" --email john@example.com
-xr biz deals add --title "Big Deal" --value 50000
-xr biz tickets add --subject "Help needed" --priority high
-xr biz kpis
+xr evaluate run --offline      # 14 suites, 38 scenarios, no network required
+xr evaluate claims             # every public claim mapped to its evidence
+xr evaluate limitations        # what the benchmarks do NOT measure
+xr evaluate compare <a> <b>    # regression detection between releases
+xr evaluate export <runId>     # hash-verifiable evidence bundle
 ```
 
-### AI Business Team
+---
 
-| Worker | Role | Capabilities |
-|---|---|---|
-| 👔 CEO Advisor | Strategic advisor | KPIs, reports, risk flagging, board prep |
-| 💼 Sales Director | Pipeline manager | Deals, forecasting, follow-ups, coaching |
-| 📣 Marketing Director | Campaign strategist | Campaigns, content, lead scoring, ROI |
-| 📊 Financial Analyst | Finance monitor | P&L, invoices, expenses, cash flow |
-| 👥 HR Manager | People operations | Directory, time-off, engagement |
-| 📋 Project Manager | Delivery manager | Tasks, milestones, sprints, status |
-| 🎧 Support Manager | Customer support | Tickets, SLA, knowledge base, routing |
-| ⚙️ Operations Manager | Process optimizer | Workflows, automation, efficiency |
-| ⚖️ Legal Assistant | Legal support | Contracts, compliance, risk |
-| 🔍 Research Analyst | Intelligence analyst | Market research, competitors, trends |
-| 🚀 Growth Strategist | Growth driver | Funnels, CAC/LTV, experiments |
+## Uninstall & data
 
-### Integration catalog (30+, all optional, all BYOK)
+`xr uninstall` removes the binary, PATH entry and data directory with explicit flags for what
+to keep; the exact matrix is written down in
+[`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md) and
+[`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md). Updates and rollback
+follow the channel you installed from (`brew upgrade xr`, `winget upgrade ahmadrrrtx.XR`,
+`apt-get install --only-upgrade xr`, or `xr update` for the binary/npm/git layouts) and are
+atomic with an automatic rollback path.
 
-| Category | Services |
+---
+
+## Documentation map
+
+| Doc | Purpose |
 |---|---|
-| Communication | Gmail, Outlook, Slack, Discord, Teams, Telegram, WhatsApp |
-| Calendar | Google Calendar, Outlook Calendar, Cal.com |
-| Development | GitHub, GitLab, Jira, Linear |
-| Storage | Google Drive, OneDrive, Dropbox, Nextcloud |
-| CRM/ERP | HubSpot, Salesforce, ERPNext, Twenty |
-| Payments | Stripe, PayPal |
-| Analytics | Plausible, PostHog |
-| Commerce | Shopify, WooCommerce |
-| Automation | n8n, Activepieces |
-| Infrastructure | Coolify, Docker |
+| [`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md) | The golden path: install → onboarding → provider → first task → restart/resume → uninstall |
+| [`docs/guides/cli-compat.md`](docs/guides/cli-compat.md) | Exit codes, global flags, `--yes` semantics, scripting envs, prompt-piping rules |
+| [`docs/security/KNOWN_LIMITATIONS.md`](docs/security/KNOWN_LIMITATIONS.md) | Canonical known-limitations register (living) |
+| [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md) | Platform/channel support truth per release |
+| [`docs/release/BETA.md`](docs/release/BETA.md) | Beta loop and feedback channel |
+| [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md) | cosign/SBOM/SLSA verification walkthrough |
+| [`docs/`](docs/README.md) | Full documentation index |
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-XR is MIT licensed. Contributions welcome.
+Contributions are welcome — read [`CONTRIBUTING.md`](CONTRIBUTING.md) and the
+[security policy](SECURITY.md) first. The quality bar is the same for humans and agents:
+every change ships with tests, passes the local gate battery, and keeps claims honest.
 
 ```bash
-git clone https://github.com/ahmadrrrtx/xr
-cd xr
-bun install
-bun test
+git clone https://github.com/ahmadrrrtx/xr && cd xr
+bun install --frozen-lockfile
+bun run ci        # typecheck + tests + release:check + claim-lint + inventory
 ```
 
----
+## License
 
-## 📄 License
-
-MIT — [LICENSE](LICENSE)
-
----
-
-<div align="center">
-
-```
-▀▄▀ █▀█
-█░█ █▀▄
-```
-
-**XR** — built by [@rrrtx](https://github.com/ahmadrrrtx) · [xr-gules.vercel.app](https://xr-gules.vercel.app) · MIT
-
-*Local-first. Spend-capped. Tamper-evident. Yours.*
-
-</div>
-
-## 🔌 Stage 11 — The MCP Platform (Completed)
-
-XR is now a first-class **MCP-native** platform.
-
-MCP (Model Context Protocol) lets XR connect to any compliant server for tools, resources, and prompts using a single standard — no more bespoke integrations.
-
-**Core capabilities delivered:**
-- Full MCP 2025-06-18 client (tools/list, tools/call, resources, prompts)
-- 4 transports: stdio, http, sse, streamable-http
-- Persistent registry + lifecycle commands (`add` / `enable` / `disable` / `remove` / `inspect`)
-- Explicit permission model (15 scopes) + trust levels
-- Every MCP invocation is **approval-gated**, audited, budget-aware, and egress-controlled
-- MCP tools/resources/prompts surface automatically into the agent as `mcp.<server>.<name>`
-- Health checks + `xr mcp doctor`
-- Clean fail-closed behavior
-
-**Quick start**
-```bash
-xr mcp add github stdio npx @modelcontextprotocol/server-github
-xr mcp enable github
-xr mcp inspect github
-xr mcp tools github
-xr "list my open PRs using the github MCP server"
-```
-
-All safety rails from previous stages still apply. MCP servers are **never trusted by default**.
-
-See `xr mcp --help` for the full surface.
+MIT — see [LICENSE](LICENSE). XR is free software; there is no paid tier, no telemetry, and
+no lock-in.

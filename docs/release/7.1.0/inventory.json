@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-09T00:54:43.180Z",
+  "generatedAt": "2026-08-09T01:23:11.470Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -103,7 +103,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 74105
+      "bytes": 29746
     },
     {
       "path": "SECURITY.md",
