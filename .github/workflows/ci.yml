@@ -179,7 +179,18 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run test suite
-        run: bun test
+        shell: bash
+        # A single monolithic `bun test` process intermittently dies mid-run
+        # on HOSTED runners (linux exit 1 at ~68s — no test-failure output;
+        # same crash class the cross-platform parity lanes were segmented to
+        # survive, see cross-platform.yml). The check annotations for such a
+        # death are empty ("Process completed with exit code 1"), which is how
+        # this lane presented on PR #45 (check-run 93173409229). The repo's
+        # remedy already exists and is the one computation authority for the
+        # suite: per-directory segments via scripts/parity-suite-runner.sh —
+        # same WHAT (scripts/platform-parity.ts), identical gate semantics,
+        # one fresh-process retry for crash-class exits. Use it here too.
+        run: bash scripts/parity-suite-runner.sh linux
 
   # ── 5. Phase 1 reliability suite (concurrency, crash-injection, idempotency,
   #       migrations, RPO/RTO, golden path) ─────────────────────────────────

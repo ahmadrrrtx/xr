@@ -39,7 +39,14 @@ beforeEach(() => {
 
 afterEach(() => {
   try { raw.close(); } catch { /* already closed */ }
-  rmSync(dir, { recursive: true, force: true });
+  // Windows (hosted CI): closing a WAL-mode bun:sqlite handle does not make
+  // the directory removable synchronously — the freshly-written WAL is still
+  // briefly locked (fsync completion + Defender/indexer peeking), and a plain
+  // rmSync fails with EBUSY. Observed on windows-latest: three ×
+  // "error: EBUSY: resource busy or locked" from THIS line (PR #45 check-run
+  // 93173409316 annotations). Node's rmSync retries EBUSY/EPERM internally —
+  // same contract as test/helpers/suite-tmp.ts (R-8).
+  rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
 });
 
 function baseOpts(overrides: Record<string, unknown> = {}): Parameters<ExecutionService["execute"]>[0] {

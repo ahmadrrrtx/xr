@@ -46,6 +46,23 @@ R-9, and R-6 (`d3017c0`):
 2,812 pass / 13 skip (live-browser a11y) / 0 fail over 226 files, 14/14 CI
 gates, `tsc --noEmit` clean, zero suite temp-dirs left on /tmp.
 
+## 2a. Hosted-CI stabilization batch (2026-08-09, from PR #45's first CI run)
+
+The first CI run over the launch-cleanup branch surfaced 4 red lanes; each
+was traced to a root cause and fixed without weakening any gate:
+
+| Lane | Root cause (evidence) | Fix |
+|---|---|---|
+| CI / Test (bun test) — Ubuntu | Monolithic `bun test` died mid-run with no failure output ("Process completed with exit code 1", check-run 93173409229) — the crash class the repo itself documents for hosted runners (linux exit 1 ~68 s) | Lane now runs the repo's one computation authority, `scripts/parity-suite-runner.sh linux` (identical file set + count guard, crash-class single retry) |
+| Cross-Platform / Windows | 3× `error: EBUSY: resource busy or locked` from `test/execution/cancellation.test.ts:42` — WAL-mode SQLite teardown is not synchronously removable on Windows (check-run 93173409316 annotations) | afterEach `rmSync` gained the canonical retry (`maxRetries: 8, retryDelay: 50`, same contract as `test/helpers/suite-tmp.ts`) |
+| Cross-Platform / Windows (capabilities, perf segments) | Segment header annotated the directory but no culprit — undiagnosable without raw logs | `parity-suite-runner.sh` gained `diagnose_segment`: per-segment `::error::` annotations naming failed tests / error lines / locating frames / crash vocabulary (POSIX + bash-3.2 safe), so the next run is self-diagnosing |
+| Supply Chain / Vulnerability scan | New disclosures against unchanged website deps: js-yaml@4.3.0 (GHSA-5p4m-2wfm-xmqj) + nanoid@3.3.16 (GHSA-2v37-7h3g-55p8 / CVE-2026-67213) — reproduced locally with the CI-pinned osv-scanner v2.4.0 binary (exit 1) | `website/package.json` overrides → 4.3.1 / 3.3.17 (12-line lock diff); scanner re-run exits 0; website lane re-verified (clean `npm ci` + `tsc --noEmit` + `next build` all green) |
+| CI / Quality Gate | Aggregator (`needs: […, test, …]`) — fails only because an upstream lane failed | No change needed; heals with its dependencies |
+
+Verification: `tsc --noEmit` clean; full suite 2,812/13/0; segment runner
+226/226 exit 0; 14/14 gates; 0 suite temp leftovers; `bash -n` clean;
+diagnostics probed on synthetic EBUSY + segfault shapes.
+
 ## 2b. P2 batch landed after RC-1 (all verified, none blocking)
 
 | Item | Change | Ledger | Evidence |
