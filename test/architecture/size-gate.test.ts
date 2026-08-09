@@ -13,7 +13,7 @@ import { THRESHOLD, checkSizes } from "../../scripts/size-gate.ts";
 
 const ROOT = resolve(import.meta.dir, "../..");
 const REGISTER = JSON.parse(
-  readFileSync(join(ROOT, "docs/phase2/SIZE-WAIVERS.json"), "utf8"),
+  readFileSync(join(ROOT, "docs/perf/SIZE-WAIVERS.json"), "utf8"),
 ) as {
   threshold: number;
   waivers: Array<{ path: string; lines: number; owner: string; reason: string; plan: string; review: string }>;

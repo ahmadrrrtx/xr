@@ -1,7 +1,7 @@
 /**
  * XR Phase 5 · T4 — Mid-conversation failover context preservation.
  *
- * Principle adopted (docs/phase5-routing/03-RESEARCH-NOTES.md · R4,
+ * Principle adopted (docs/historical/phases/phase5-routing/03-RESEARCH-NOTES.md · R4,
  * ContinuityBench arXiv:2607.15899): high API availability ≠ conversational
  * continuity. Stateful failover must forward the conversation; the metric is
  * CPR — Continuity Preservation Rate — the share of canonical factual anchors

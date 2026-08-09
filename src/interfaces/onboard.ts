@@ -18,10 +18,10 @@ import { detectHardwareSpecs, formatHardwareSummary } from "../local/hardware.ts
 import { recommendLocalModel } from "../local/recommend.ts";
 import { ollamaStatus, pullOllamaModel, testOllamaModel } from "../local/ollama.ts";
 import { setSecret, preferredSecretBackend } from "../security/secrets.ts";
-import { detectPlatform } from "../install/system.ts";
+import { detectPlatform, probeHealth } from "../install/system.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface OnboardingState {
+export interface OnboardingState {
   mode: "local" | "cloud" | "hybrid";
   providerId: string;
   model: string;
@@ -35,7 +35,42 @@ interface OnboardingState {
   dependenciesInstalled: string[];
 }
 
+// ── Non-interactive mode (`xr onboarding --yes`) ─────────────────────────────
+// Accepts every prompt at its documented default — same semantics as
+// `xr install --yes` (src/install/system.ts `approved()`), including the
+// default-true model-download consent when Ollama is installed and running.
+let assumeYes = false;
+
+function askO(promptText: string, options?: { default?: string }): Promise<string> {
+  if (assumeYes) return Promise.resolve(options?.default ?? "");
+  return ask(promptText, options);
+}
+
+function confirmO(promptText: string, defaultYes = true): Promise<boolean> {
+  if (assumeYes) return Promise.resolve(defaultYes);
+  return confirm(promptText, defaultYes);
+}
+
+function passwordO(promptText: string): Promise<string> {
+  if (assumeYes) return Promise.resolve(""); // no providers are preselected in --yes mode
+  return password(promptText);
+}
+
 // ── Helpers (non-blocking, graceful) ─────────────────────────────────────────
+
+/**
+ * F-1: the configured default follows the user's demonstrated choice.
+ * Historically `state.providerId` was updated only when the best-effort key
+ * VALIDATION fetch succeeded, so a cloud-keyed user with an unreachable
+ * validation endpoint kept the fresh-install `ollama` default — doctor then
+ * displayed `provider: ollama` next to "1 provider ready: openrouter".
+ * Validation outcome is advisory; the key is the choice.
+ */
+export function recordKeyedProvider(state: OnboardingState, providerId: string): void {
+  if (state.providerId !== "ollama") return; // first keyed provider wins
+  state.providerId = providerId;
+  state.model = defaultCloudModel(providerId);
+}
 async function checkInternet(): Promise<boolean> {
   try {
     const res = await fetch("https://registry.npmjs.org/", { method: "HEAD", signal: AbortSignal.timeout(2000) });
@@ -76,7 +111,7 @@ function showPrivacyLocalExplanation(): void {
 function showWelcome(): void {
   const platform = detectPlatform();
   banner();
-  console.log(`  ${xrBold("Welcome to XR.")} Your calm, local-first AI operating system.`);
+  console.log(`  ${xrBold("Welcome to XR.")} Your calm, local-first AI agent runtime.`);
   console.log();
   console.log(`  ${xrDim("Install → Configure → First message in under 60 seconds.")}`);
   console.log();
@@ -93,7 +128,7 @@ function showWelcome(): void {
 // ── Workspace + Theme + Accessibility ────────────────────────────────────────
 async function configureWorkspaceAndPreferences(state: OnboardingState): Promise<void> {
   section("Create Your Workspace");
-  state.workspaceName = await ask("Workspace name", { default: "My First Workspace" });
+  state.workspaceName = await askO("Workspace name", { default: "My First Workspace" });
 
   section("Theme & Accessibility");
   console.log();
@@ -101,11 +136,11 @@ async function configureWorkspaceAndPreferences(state: OnboardingState): Promise
   console.log(`  2  High contrast`);
   console.log(`  3  Reduced motion`);
   console.log();
-  const themeChoice = await ask("Choose theme", { default: "1" });
+  const themeChoice = await askO("Choose theme", { default: "1" });
   state.theme = themeChoice === "2" ? "high-contrast" : themeChoice === "3" ? "reduced-motion" : "dark";
 
-  state.accessibility.largeText = await confirm("Enable larger text for readability?", false);
-  state.accessibility.screenReader = await confirm("Optimize for screen readers?", false);
+  state.accessibility.largeText = await confirmO("Enable larger text for readability?", false);
+  state.accessibility.screenReader = await confirmO("Optimize for screen readers?", false);
 
   console.log();
   ok("Preferences saved. You can change these anytime in Settings.");
@@ -123,7 +158,7 @@ async function configureProviders(state: OnboardingState, internet: boolean): Pr
   console.log(`  ${xrDim("Available:")} ${cloudProviders.join("  ")}`);
   console.log(`  ${xrDim("Press Enter to skip and stay 100% local.")}`);
 
-  const selected = await ask("Providers to configure (comma-separated)", { default: "" });
+  const selected = await askO("Providers to configure (comma-separated)", { default: "" });
   if (!selected.trim()) {
     console.log(`  ${xrDim("Skipped — using local-only or hybrid mode.")}`);
     return;
@@ -137,32 +172,35 @@ async function configureProviders(state: OnboardingState, internet: boolean): Pr
     const preset = PRESETS[p];
     if (!preset.apiKeyEnv) continue;
 
-    const key = await password(`  API key for ${xrBold(p)}:`);
+    const key = await passwordO(`  API key for ${xrBold(p)}:`);
     if (!key) continue;
 
-    // Instant validation (non-blocking)
+    // Instant validation (non-blocking). Advisory only: whatever the network
+    // outcome, the entered key is the user's choice (recordKeyedProvider).
     const tracker = new StepTracker().addStep("validate", `Validating ${p}`).start();
     try {
-      // Lightweight validation using existing provider contract (no backend change)
-      const testRes = await fetch(`https://api.${p}.com/v1/models`, {
+      // Probe the provider's OWN models endpoint when the preset declares one
+      // — the old `https://api.<id>.com/v1/models` guess 404'd for most real
+      // providers and pushed everyone into the un-updated-default path (F-1).
+      const probeUrl = preset.baseUrl ? `${preset.baseUrl}/models` : `https://api.${p}.com/v1/models`;
+      const testRes = await fetch(probeUrl, {
         headers: { Authorization: `Bearer ${key}` },
         signal: AbortSignal.timeout(4000)
       }).catch(() => ({ ok: false }));
-      if ((testRes as any).ok) {
+      if ((testRes as { ok?: boolean }).ok) {
         tracker.setStatus("validate", "done", "valid");
         state.apiKeys[preset.apiKeyEnv] = key;
-        if (state.providerId === "ollama") {
-          state.providerId = p;
-          state.model = defaultCloudModel(p);
-        }
+        recordKeyedProvider(state, p);
         ok(`${p} key saved and validated.`);
       } else {
         tracker.setStatus("validate", "warn", "could not verify (will retry later)");
         state.apiKeys[preset.apiKeyEnv] = key;
+        recordKeyedProvider(state, p);
       }
     } catch {
       tracker.setStatus("validate", "warn", "offline — key stored securely");
       state.apiKeys[preset.apiKeyEnv] = key;
+      recordKeyedProvider(state, p);
     }
     tracker.finish();
   }
@@ -201,7 +239,7 @@ async function configureLocalAI(state: OnboardingState): Promise<void> {
   if (!status.installed) {
     warn("Ollama not found.");
     console.log(`  ${xrDim("Install from")} ${xrCyan("https://ollama.com")} ${xrDim("— we can continue without it.")}`);
-    if (await confirm("Install Ollama now? (opens browser)", false)) {
+    if (await confirmO("Install Ollama now? (opens browser)", false)) {
       // Safe non-blocking open
       spawnSync(process.platform === "win32" ? "start" : "open", ["https://ollama.com"], { stdio: "ignore" });
     }
@@ -209,14 +247,14 @@ async function configureLocalAI(state: OnboardingState): Promise<void> {
     warn("Ollama installed but not running. Start it with: ollama serve");
   }
 
-  const useRec = await confirm(`Use ${xrCyan(state.localModel)} as local model?`, true);
+  const useRec = await confirmO(`Use ${xrCyan(state.localModel)} as local model?`, true);
   if (!useRec) {
-    state.localModel = await ask("Enter model id", { default: state.localModel });
+    state.localModel = await askO("Enter model id", { default: state.localModel });
   }
 
   // Auto-download if missing and consented
   if (status.installed && status.running && !status.models.includes(state.localModel)) {
-    if (await confirm(`Download ${state.localModel} now? (~${rec.model.estimatedDiskGb} GB)`, true)) {
+    if (await confirmO(`Download ${state.localModel} now? (~${rec.model.estimatedDiskGb} GB)`, true)) {
       const dlTracker = new StepTracker().addStep("download", `Downloading ${state.localModel}`).start();
       const success = await pullOllamaModel(state.localModel);
       dlTracker.setStatus("download", success ? "done" : "warn", success ? "complete" : "failed — retry later");
@@ -241,7 +279,7 @@ async function installOptionalDependencies(state: OnboardingState): Promise<void
   const toInstall: string[] = [];
 
   for (const dep of needed) {
-    if (await confirm(`Install ${dep} now?`, false)) {
+    if (await confirmO(`Install ${dep} now?`, false)) {
       toInstall.push(dep);
     }
   }
@@ -267,9 +305,42 @@ async function installOptionalDependencies(state: OnboardingState): Promise<void
 }
 
 // ── Import Experience ────────────────────────────────────────────────────────
+// ── Capability scan (A-12): surface what THIS host can actually do ───────────
+// Reuses the doctor status engine (probeHealth) — one detection authority,
+// no second implementation. Runs after saveConfig so health reads the state
+// the wizard just persisted. Network check stays skipped (offline-safe).
+const CAPABILITY_SCAN_IDS = new Set([
+  "local-runtimes-detected", // what local AI this machine already has
+  "secrets", // where keys actually live (file fallback is stated honestly)
+  "voice", // ffmpeg/whisper/piper heavy tooling
+  "browser", // Playwright/Chromium for research + browser automation
+  "control", // xdotool/wmctrl/osascript desktop-control tooling
+]);
+
+async function showCapabilityScan(): Promise<void> {
+  section("What works on this machine");
+  console.log();
+  const checks = (await probeHealth()).filter((c) => CAPABILITY_SCAN_IDS.has(c.id));
+  for (const c of checks) {
+    // Optional-capability surface: amber for anything not ready (red would
+    // overstate an optional piece at first run), green when usable, dim on skip.
+    const icon =
+      c.state === "ok" ? xrGreen(SYM.ok) :
+      c.state === "skip" ? xrDim("·") :
+      xrAmber(SYM.warn);
+    console.log(`  ${icon} ${xrBold(c.label)}  ${xrDim(c.detail)}`);
+    if (c.state !== "ok" && c.remediation) {
+      console.log(`    ${xrDim("→")} ${xrDim(c.remediation)}`);
+    }
+  }
+  console.log();
+  console.log(`  ${xrDim("Optional pieces stay off until you enable them; nothing above is required for chat.")}`);
+  console.log(`  ${xrDim("Full health scan anytime:")} ${xrCyan("xr doctor")}`);
+}
+
 async function handleImport(state: OnboardingState): Promise<void> {
   section("Import Previous Configuration (optional)");
-  const importPath = await ask("Path to previous XR config (or press Enter to skip)", { default: "" });
+  const importPath = await askO("Path to previous XR config (or press Enter to skip)", { default: "" });
   if (!importPath.trim()) return;
 
   if (existsSync(importPath)) {
@@ -342,7 +413,8 @@ function showSuccess(state: OnboardingState): void {
 }
 
 // ── Main Onboarding Flow ─────────────────────────────────────────────────────
-export async function runOnboarding(): Promise<void> {
+export async function runOnboarding(opts?: { yes?: boolean }): Promise<void> {
+  assumeYes = opts?.yes === true;
   const state: OnboardingState = {
     mode: "hybrid",
     providerId: "ollama",
@@ -359,6 +431,11 @@ export async function runOnboarding(): Promise<void> {
   showWelcome();
   showPrivacyLocalExplanation();
 
+  if (assumeYes) {
+    info("Non-interactive onboarding (--yes): every prompt accepted at its default.");
+    info("No provider keys are configured this way — run `xr provider` afterwards to add one.");
+  }
+
   const internet = await checkInternet();
   const freeDisk = detectStorageGb();
 
@@ -369,7 +446,7 @@ export async function runOnboarding(): Promise<void> {
   console.log(`  2  ${xrCyan("Cloud (BYOK)")} ${xrDim("Use your API keys")}`);
   console.log(`  3  ${xrCyan("Hybrid")}       ${xrDim("Recommended — best of both worlds")}`);
   console.log();
-  const modeChoice = await ask("Select mode", { default: internet ? "3" : "1" });
+  const modeChoice = await askO("Select mode", { default: internet ? "3" : "1" });
   state.mode = modeChoice === "1" ? "local" : modeChoice === "2" ? "cloud" : "hybrid";
 
   await configureWorkspaceAndPreferences(state);
@@ -427,11 +504,15 @@ export async function runOnboarding(): Promise<void> {
 
   saveConfig(config);
 
+  // A-12: surface capability detection at first run (voice/browser/desktop
+  // tooling degrade honestly — users should learn it here, not later).
+  await showCapabilityScan();
+
   // Final success + launch guidance
   showSuccess(state);
 
   // Auto-launch Chat Workspace hint (non-blocking)
-  if (await confirm("\nLaunch Chat Workspace now?", true)) {
+  if (await confirmO("\nLaunch Chat Workspace now?", true)) {
     console.log(`  ${xrCyan("Run:")} xr serve   (or open http://localhost:3456 after starting)`);
   }
 }

@@ -6,7 +6,7 @@
       "pattern": "test/reliability/crash-injection.test.ts",
       "excludeOn": ["win32"],
       "since": "phase-1",
-      "reason": "Crash matrix spawns POSIX SIGKILL child processes (kill -9 semantics are POSIX; Windows kill is TerminateProcess). Phase-1 honest gap — docs/phase-1/KNOWN_LIMITATIONS.md. Fully green on Linux+macOS."
+      "reason": "Crash matrix spawns POSIX SIGKILL child processes (kill -9 semantics are POSIX; Windows kill is TerminateProcess). Phase-1 honest gap — docs/historical/phases/phase-1/KNOWN_LIMITATIONS.md. Fully green on Linux+macOS."
     },
     {
       "pattern": "test/phase0/policy-gate-adversarial.test.ts",

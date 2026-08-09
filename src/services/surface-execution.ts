@@ -65,6 +65,8 @@ export interface SurfaceExecuteRequest {
   readonly sessionSummary?: { enabled: boolean; minTurns?: number };
   /** Surface-side hook so the UI can show degradations (missing plugin, etc.). */
   readonly onDiagnostic?: (note: string) => void;
+  /** A-19 — the surface's abort handle for this run (Shell Ctrl+C/Esc). */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -142,6 +144,7 @@ export async function executeOnSurface(
     ...(request.memory ? { memory: request.memory } : {}),
     ...(request.memoryStore ? { memoryStore: request.memoryStore } : {}),
     ...(request.sessionSummary ? { sessionSummary: request.sessionSummary } : {}),
+    ...(request.signal ? { signal: request.signal } : {}),
   };
 
   return await runEnvelope(envelope, { store: request.store }, context);

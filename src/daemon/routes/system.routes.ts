@@ -214,17 +214,27 @@ export function systemRoutes(): DaemonRoute[] {
       method: "GET",
       handle: ({ json, state }) => {
         try {
-          const execService = (state as any).registry?.tryResolve?.((state as any).registry?.Tokens?.Execution);
+          // The standalone daemon does not braid the kernel registry into
+          // DaemonState; an embedding host may attach it. One typed carrier
+          // instead of repeated `any` (A-6 seam); response shape narrowed to
+          // exactly the two fields this summary reads.
+          const carrier = state as typeof state & {
+            registry?: { tryResolve?: (token: unknown) => unknown; Tokens?: { Execution?: unknown } };
+          };
+          const execService = carrier.registry?.tryResolve?.(carrier.registry?.Tokens?.Execution) as
+            | { getRecoveryPending(workspaceId: string): unknown }
+            | undefined;
           if (!execService || typeof execService.getRecoveryPending !== "function") {
             return json({ recovery: [], summary: { pending: 0, blocked: 0, safeToResume: 0 } });
           }
-          const pending = execService.getRecoveryPending((state as any).workspaceManager.getActiveId());
+          const pending = execService.getRecoveryPending(state.workspaceManager.getActiveId()) as
+            Array<{ recoveryState?: unknown; safeToResume?: unknown }>;
           return json({
             recovery: pending,
             summary: {
               pending: pending.length,
-              blocked: pending.filter((r: any) => r.recoveryState === "recovery_blocked").length,
-              safeToResume: pending.filter((r: any) => r.safeToResume).length,
+              blocked: pending.filter((r) => r.recoveryState === "recovery_blocked").length,
+              safeToResume: pending.filter((r) => r.safeToResume).length,
             },
           });
         } catch (e) {

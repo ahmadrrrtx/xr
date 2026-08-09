@@ -54,6 +54,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `src/util/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/voice/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/a11y/` | @ahmadrrrtx | explicit entry |
+| `test/agent-cancel.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/agent.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/api/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/architecture/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -77,12 +78,14 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/evaluation/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/execution/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/fixtures/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/helpers/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/intelligence/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-semantic.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-stage6.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-summarize.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory-v09.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/memory.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/multi-agent-e2e.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/multi-agent.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/observability/` | @ahmadrrrtx | explicit entry |
 | `test/perf/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -150,6 +153,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/phase2-move-module.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/platform-parity.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/provider-canaries.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/recall-benchmark.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-manifest.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

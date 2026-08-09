@@ -27,6 +27,18 @@ export type CostTier = "free" | "cheap" | "premium" | "enterprise";
 export type { ProviderPreset } from "./presets.ts";
 export { PRESETS } from "./presets.ts";
 
+/**
+ * One narrowing point for provider-map overrides (A-6 seam).
+ * `config.providers` is a zod-passthrough object: arbitrary ids are typed
+ * `unknown`, so callers previously silenced access with `as any` and then
+ * trusted the result blindly. Here the entry is narrowed to the only shape
+ * this factory consumes — with an actual runtime type check.
+ */
+function providerOverrideBaseUrl(config: XRConfig, id: string): string | undefined {
+  const entry = config.providers[id] as { baseUrl?: unknown } | undefined;
+  return typeof entry?.baseUrl === "string" ? entry.baseUrl : undefined;
+}
+
 // ── Register built-in presets ────────────────────────────────────────────────
 
 function registerBuiltins(): void {
@@ -36,12 +48,13 @@ function registerBuiltins(): void {
     const preset = PRESETS[id];
     if (!preset) continue;
     registry.register(preset, (config, model, _preset) => {
-      const cfgProvider = (config.providers as any)?.[id];
-      const cfgRuntime = (config.localModels as any)?.runtimes?.[id];
+      // localModels.runtimes is fully typed in the schema; providers-map
+      // entries go through the validated narrowing helper.
+      const cfgRuntime = config.localModels.runtimes?.[id];
       return new OpenAICompatProvider({
         id: preset.id,
         label: preset.label,
-        baseUrl: cfgRuntime?.baseUrl ?? cfgProvider?.baseUrl ?? preset.baseUrl!,
+        baseUrl: cfgRuntime?.baseUrl ?? providerOverrideBaseUrl(config, id) ?? preset.baseUrl!,
         model,
         apiKeyEnv: preset.apiKeyEnv,
       });
@@ -65,8 +78,7 @@ function registerBuiltins(): void {
     const preset = PRESETS[id];
     if (!preset) continue;
     registry.register(preset, (config, model, _preset) => {
-      const cfgProvider = (config.providers as any)?.[id];
-      const baseUrl = cfgProvider?.baseUrl ?? preset.baseUrl!;
+      const baseUrl = providerOverrideBaseUrl(config, id) ?? preset.baseUrl!;
       return new OpenAICompatProvider({
         id: preset.id,
         label: preset.label,
@@ -105,8 +117,7 @@ function registerBuiltins(): void {
   registry.register(
     PRESETS["openai"],
     (config, model, preset) => {
-      const cfgProvider = (config.providers as any)?.["openai"];
-      const baseUrl = cfgProvider?.baseUrl ?? preset.baseUrl!;
+      const baseUrl = providerOverrideBaseUrl(config, "openai") ?? preset.baseUrl!;
       return new OpenAICompatProvider({
         id: preset.id,
         label: preset.label,

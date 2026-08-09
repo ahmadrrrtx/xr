@@ -111,7 +111,7 @@ CI regression gate** (Constitution Art. XII):
 
 Full budgets, the boot-profile model, the regression gate, profiling tooling
 and known limitations: [`docs/perf/`](docs/perf/PERF-BUDGETS.md) and
-[`docs/phase3-perf/`](docs/phase3-perf/01-AUDIT-REPORT.md). Baseline artifact:
+[`docs/phase3-perf/`](docs/historical/phases/phase3-perf/01-AUDIT-REPORT.md). Baseline artifact:
 `docs/perf/baseline-7.1.0-source.json` (regenerate per release with
 `bun run perf:baseline`).
 
@@ -224,7 +224,7 @@ xr serve             # start local dashboard + chat in browser
 |---|---|---|
 | **Provider** | locked to vendor | BYOK — **any of 26 built-in providers** (16 hosted + 10 local runtimes), or **fully local** via Ollama, LM Studio, llama.cpp, Jan, LocalAI, vLLM, GPT4All, KoboldCPP, Text Generation WebUI, SGLang |
 | **Cost** | "soft" warnings | **hard ceiling enforced in code** (`checkBeforeStep()`) |
-| **Security** | trust us | **deterministic injection benchmark**, signed block-rate report |
+| **Security** | trust us | **deterministic injection screen** — curated attack corpus, signed block-rate report |
 | **Audit** | scrollback only | **SHA-256 hash chain** — tamper-evident, offline, free |
 | **Terminal UI** | raw prompts | **Claude Code–style TUI** — spinner, history, status bar, slash commands |
 | **Browser UI** | cloud dashboard | **self-hosted chat + dashboard** at `localhost:3141` |
@@ -239,7 +239,7 @@ xr serve             # start local dashboard + chat in browser
 | **Voice** | silent cloud listener | **Stage 8 Voice Stack** — disabled by default, push-to-talk default, local Whisper/Piper/Kokoro/system adapters, explicit cloud consent |
 | **Extensibility** | arbitrary packages or hardcoded integrations | **XR 2.1 Skills Marketplace** + **Stage 10 Plugin Platform** + **Stage 11 MCP Platform** — install professional AI capabilities with manifests, permissions, dependencies, SDK, backend registry, updates, rollback, signing hooks, and App Store-style UI |
 | **Multi-agent orchestration** | one big agent with tool spam | **Stage 12 Multi-Agent Runtime** — supervisor, planner, researcher, builder, reviewer, executor, synthesizer, memory manager, security checker |
-| **Runtime** | procedural script | **AI OS Kernel** with DI, Lifecycle management, and a persisted multi-agent workflow store |
+| **Runtime** | procedural script | **runtime kernel** with DI, lifecycle management, and a persisted multi-agent workflow store |
 
 ---
 
@@ -657,7 +657,7 @@ Doctor includes Voice Stack health: capture tools, playback tools, device count,
 
 ## 🏛️ Foundation Runtime — Current Runtime Surfaces
 
-XR has evolved into a **True AI Operating System**. The v1.0 kernel introduces:
+XR runs on a **structured runtime foundation** — not a procedural script. The v1.0 kernel introduces:
 
 - **Service Container (DI)** — lightweight dependency injection managing Agent, Budget, Provider, Plugins with a strictly controlled lifecycle
 - **Lifecycle Management** — formal `Bootstrap → Start → Stop` sequence
@@ -787,10 +787,10 @@ xr --budget 0.10 "write me a full React app"
 
 The agent **literally cannot exceed your budget.** `checkBeforeStep()` runs before every model call and blocks if the next step would breach the ceiling.
 
-### 🛡️ Provable Security
+### 🛡️ Verifiable Security
 
 ```bash
-xr test --attacks --json    # signed, publishable block-rate report
+xr attacks --json    # curated-corpus injection screen — signed, publishable block-rate report
 ```
 
 ### 🔒 Tamper-Evident Audit Log
@@ -835,37 +835,47 @@ What makes it trustworthy rather than marketing:
 The harness found real defects in XR itself on its first run, including a
 workflow integrity gap where a published automation's shell command could be
 swapped without breaking its content hash. See
-[`PHASE13_VALIDATION_REPORT.md`](PHASE13_VALIDATION_REPORT.md) §4 and
-[`docs/phase13/`](docs/phase13/).
+[`docs/historical/phase-deliverables/PHASE13_VALIDATION_REPORT.md`](docs/historical/phase-deliverables/PHASE13_VALIDATION_REPORT.md) §4 and
+[`docs/historical/phases/phase13/`](docs/historical/phases/phase13/).
 
 ---
 
 ## 📡 Providers
 
-XR supports **26 built-in providers** — 16 hosted and 10 local runtimes. Swap anytime — no restart, no re-config.
+XR supports **26 built-in provider presets** — 16 hosted and 10 local runtimes. Swap anytime — no restart, no re-config.
 
 > Counted from `PRESETS` in `src/providers/presets.ts`. Provider count is not a measure of product quality and is deliberately not scored by `xr evaluate`.
 
-| Provider | Type | Notes |
+**How they connect:** five hosted providers run dedicated native API adapters (Anthropic, Google, Mistral, Cohere, AWS Bedrock). Every other preset — the remaining hosted providers and all ten local runtimes — speaks the **OpenAI-compatible protocol** through one transport (`src/providers/openai-compat.ts`), and a custom preset can point at any OpenAI-compatible base URL. (A native Cerebras adapter also ships in `src/providers/native/`; the built-in Cerebras preset uses Cerebras's OpenAI-compatible endpoint.)
+
+Default models below are the presets' launch defaults (`defaultModel` in `src/providers/presets.ts`) — not ceilings: `xr providers set <id> <model>` switches to any model the provider offers, through a preflight → canary → swap → verify state machine that rolls back automatically if the new model cannot be reached (`--force` skips the probe).
+
+| Provider | Type | Default model |
 |---|---|---|
-| **Ollama** | Local | Auto-detect, model pull, free |
-| **Claude** (Anthropic) | Cloud | claude-opus-4, claude-sonnet-4 |
-| **OpenAI** | Cloud | gpt-4o, o3 |
-| **Gemini** (Google) | Cloud | gemini-2.5-pro |
-| **Groq** | Cloud | llama-3.3-70b, ultra-fast |
-| **DeepSeek** | Cloud | deepseek-r2, reasoning |
-| **Together AI** | Cloud | Open models, batch |
-| **Mistral** | Cloud | mistral-large-2 |
-| **Cohere** | Cloud | command-r-plus |
-| **Cerebras** | Cloud | llama-3.3-70b, fast |
-| **OpenRouter** | Cloud | 100+ models, unified |
-| **AWS Bedrock** | Cloud | Enterprise |
-| + any OpenAI-compatible endpoint | Local/Cloud | Custom base URL |
+| **Ollama** | Local | `qwen2.5:7b` — auto-detect, model pull, free |
+| **LM Studio, llama.cpp, Jan, LocalAI, vLLM, GPT4All, KoboldCPP, Text-Generation-WebUI, SGLang** | Local | picked per install |
+| **Claude** (Anthropic) | Hosted · native adapter | `claude-3-5-sonnet-20241022` |
+| **Gemini** (Google) | Hosted · native adapter | `gemini-1.5-flash` |
+| **Mistral** | Hosted · native adapter | `mistral-small-latest` |
+| **Cohere** | Hosted · native adapter | `command-r-plus-08-2024` |
+| **AWS Bedrock** | Hosted · native adapter | `claude-3-sonnet` |
+| **OpenAI** | Hosted | `gpt-4o-mini` |
+| **Groq** | Hosted | `llama-3.3-70b-versatile` |
+| **DeepSeek** | Hosted | `deepseek-chat` |
+| **Cerebras** | Hosted | `cerebras/csm-8b` |
+| **Together AI** | Hosted | `Llama-3.3-70B-Instruct-Turbo` |
+| **Fireworks** | Hosted | `llama-v3p1-70b-instruct` |
+| **SambaNova** | Hosted | `Llama-3.1-70B-Instruct` |
+| **Hugging Face** | Hosted | `Llama-3.1-8B-Instruct` |
+| **OpenRouter** | Hosted | `anthropic/claude-3.5-sonnet` |
+| **xAI** | Hosted | `grok-2-latest` |
+| **Perplexity** | Hosted | `llama-3.1-sonar-large-128k-online` |
+| + any OpenAI-compatible endpoint | Local/Hosted | your base URL |
 
 ```bash
 xr providers list      # all providers + status
-xr providers set openai
-xr providers add claude   # enter API key (masked, stored in OS keychain)
+xr providers set openai gpt-4o-mini
+xr providers add claude   # enter API key (masked; OS keychain, else AES-256-GCM sealed file)
 xr providers test         # test all configured providers live
 ```
 
@@ -1347,11 +1357,11 @@ The **Security (XR Shield)** control cockpit is completely integrated into the w
 - **Auto-Hardening Settings**: One-click remediation buttons to safely quarantine scripts, terminate risky processes, and activate tracker blocking.
 
 ---
-## ✅ XR 15 — Business OS
+## ✅ XR 15 — Business OS extension
 
-**Status: XR 15 is implemented on `main` and ready for use.**
+**Status: implemented on `main` as an optional, governed extension — off by default** (`business.enabled=false`; when enabled, each module loads only after its deterministic effect-verification gate passes).
 
-XR 15 transforms XR from an AI agent into an **AI Business Operating System**. It unifies CRM, Sales, Marketing, Support, Projects, Knowledge, Finance, HR, Analytics, Automation, Scheduling, Communication, Documents, Meetings, and AI Workers — all behind one intelligent AI platform.
+XR 15 adds a **Business OS extension** (`extensions/business-os`) over the thin record/artifact/identity/audit contract held by the kernel (`src/core/business-l0.ts`). It unifies CRM, Sales, Marketing, Support, Projects, Knowledge, Finance, HR, Analytics, Automation, Scheduling, Communication, Documents, Meetings, and AI Workers over local-first business records — no hosted control plane, and real systems of record integrate via MCP.
 
 | Phase | Status | What shipped |
 | --- | --: | --- |
@@ -1359,37 +1369,31 @@ XR 15 transforms XR from an AI agent into an **AI Business Operating System**. I
 | **XR 15B — Business Modules** | ✅ Done | 15 production modules: CRM, Sales, Marketing, Support, Projects, Knowledge, Finance, HR, Analytics, Automation, Scheduling, Communication, Documents, Meetings, AI Workers — each with full CRUD, pagination, filtering, search, and statistics |
 | **XR 15C — AI Business Team** | ✅ Done | 11 specialized AI Workers: CEO Advisor, Sales Director, Marketing Director, Financial Analyst, HR Manager, Project Manager, Support Manager, Operations Manager, Legal Assistant, Research Analyst, Growth Strategist — each with system prompts, capability matrices, permission sets, and live business context |
 | **XR 15D — Integration Layer** | ✅ Done | 30+ optional BYOK integrations: Gmail, Outlook, Slack, Discord, Teams, Telegram, WhatsApp, Google Calendar, Cal.com, GitHub, GitLab, Jira, Linear, Google Drive, OneDrive, Dropbox, Nextcloud, HubSpot, Salesforce, ERPNext, Twenty, Stripe, PayPal, Plausible, PostHog, Shopify, WooCommerce, n8n, Activepieces, Coolify, Docker — OAuth2 flow manager, credential vault |
-| **XR 15E — Automation Engine** | ✅ Done | Workflow engine with event/schedule/webhook/manual triggers, conditional steps, retry logic, error handling (stop/skip/retry). 12 pre-built templates: Lead Qualification, Sales Follow-up, Meeting Preparation, Proposal Generation, Invoice Generation, Customer Onboarding, Weekly Reports, Competitor Monitoring, Market Research, Content Calendar, Email Campaign, Support Ticket Routing |
+| **XR 15E — Automation Engine** | ✅ Done | Workflow engine with event/schedule/webhook/manual triggers, conditional steps, retry logic, error handling (stop/skip/retry). 11 pre-built templates: Lead Qualification, Sales Follow-up, Meeting Preparation, Invoice Generation, Customer Onboarding, Weekly Reports, Competitor Monitoring, Market Research, Content Calendar, Email Campaign, Support Ticket Routing |
 | **XR 15F — Security & CLI** | ✅ Done | 7 security policies (least privilege, workspace data scoping, export approval, integration consent, credential protection, automation budget, worker permission approval). Full CLI: `xr biz` with 40+ subcommands. Migration guide, architecture docs, test suite |
 
 ### What's new in Stage 15
 
 ```
-src/business/              # Business OS core
-├── core/                   # 10 files: types, schema, database, org, rbac, contacts, pipeline, bus, audit, index
-├── modules/                # 15 modules, each with full implementation
-│   ├── crm/                # Contact management, companies, notes, activity feed
-│   ├── sales/              # Pipeline, deals, stages, forecasting
-│   ├── marketing/          # Campaigns, content calendar, lead scoring
-│   ├── support/            # Tickets, SLA, messages, routing
-│   ├── projects/           # Projects, tasks, milestones, time tracking
-│   ├── knowledge/          # Wiki, SOPs, articles, search
-│   ├── finance/            # Invoices, expenses, P&L, tax
-│   ├── hr/                 # Employees, time-off, directory
-│   ├── analytics/          # Dashboards, widgets, reports, KPIs
-│   ├── automation/         # Workflow engine with triggers and conditions
-│   ├── scheduling/         # Calendar, events, availability
-│   ├── communication/      # Email, chat, notifications, templates
-│   ├── documents/          # Create, edit, version, templates
-│   ├── meetings/           # Schedule, attendees, notes, transcript
-│   └── ai-workers/         # 11 AI business roles with full XR integration
-├── index.ts                # Unified BusinessOS API
-└── cli.ts                  # 40+ CLI commands
+extensions/business-os/     # Business OS extension (L5, governed, default-off)
+├── manifest.json           # modules, permissions, effect-verification policy
+├── effect-verification.ts  # per-module deterministic gate harness
+└── src/
+    ├── core/               # 23 files: organization, RBAC, contacts, pipeline, event bus,
+    │                       # hash-chained audit, approvals/escalations, artifacts/evidence,
+    │                       # authority boundaries, outcomes, workflow templates
+    ├── modules/            # 15 modules: crm, sales, marketing, support, projects, knowledge,
+    │                       # finance, hr, analytics, automation, scheduling, communication,
+    │                       # documents, meetings, ai-workers
+    ├── index.ts            # unified BusinessOS API
+    └── cli.ts              # `xr biz` subcommands
+
+src/core/business-l0.ts     # thin kernel contract: records / artifacts / identity / audit
 
 src/integrations/           # Integration layer
 ├── registry.ts             # 30+ connector definitions
 ├── oauth.ts                # OAuth2 flow manager
-└── credentials.ts          # AES-256-GCM encrypted credential vault
+└── credentials.ts          # AES-256-GCM encrypted credential vault (v2 envelope)
 
 src/security/
 └── policies.ts             # 7 security policies for business operations
@@ -1397,7 +1401,7 @@ src/security/
 src/schemas/
 └── business-os.skill.json  # XR Skill definition
 
-src/templates/workflows/    # 12 automation templates
+src/templates/workflows/    # 11 automation templates
 ├── lead-qualification.json
 ├── sales-followup.json
 ├── meeting-prep.json
@@ -1410,12 +1414,9 @@ src/templates/workflows/    # 12 automation templates
 ├── email-campaign.json
 └── support-routing.json
 
-src/tests/
-└── business.test.ts        # Full test suite
-
 docs/
-├── XR-15-BUSINESS-OS-ARCHITECTURE.md
-└── MIGRATION-GUIDE.md
+├── business-os-extension.md            # current extension architecture
+└── migration/XR-15-BUSINESS-OS.md      # stage-14 → stage-15 migration guide
 ```
 
 ### How Business OS integrates with existing XR
@@ -1439,15 +1440,17 @@ docs/
 
 ### Quick start
 
+Business OS is off by default. Enable it in config first (`config.business.enabled = true`), then:
+
 ```bash
 # Initialize Business OS
 xr biz init
 
-# Enable modules
-xr biz enable all
+# Enable modules (comma-separated list)
+xr biz enable crm,sales,support
 
-# Deploy AI Workers
-xr biz workers deploy --all
+# Deploy an AI Worker by role
+xr biz workers deploy sales_director
 
 # Connect integrations (optional, BYOK)
 xr biz connect gmail

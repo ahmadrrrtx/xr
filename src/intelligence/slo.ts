@@ -1,7 +1,7 @@
 /**
  * XR Phase 5 · T6 — Routing SLO collector.
  *
- * Principle adopted (docs/phase5-routing/03-RESEARCH-NOTES.md · R5): routing
+ * Principle adopted (docs/historical/phases/phase5-routing/03-RESEARCH-NOTES.md · R5): routing
  * visibility is a first-class SLO domain — which target, why, whether
  * fallback/degradation occurred, at what cost-per-quality — measured, never
  * asserted. Routing-scoped only; the full observability platform is Phase 8.

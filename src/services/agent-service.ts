@@ -88,6 +88,12 @@ export interface AgentRunOverrides {
    * the audit log alone. Defaults to "cli".
    */
   surface?: SurfaceId;
+  /**
+   * A-19 — cooperative cancellation. The surface's own abort handle for THIS
+   * run; forwarded through the envelope to the loop's checkpoints. A run
+   * cancelled this way ends honestly as `stopped: "cancelled"`.
+   */
+  signal?: AbortSignal;
 }
 
 /** Phase 2 · T1 — the canonical execution request. */
@@ -258,6 +264,8 @@ export class AgentService implements LifecycleHook {
         enabled: config.memory.enabled && config.memory.saveSessionSummaries,
         minTurns: config.memory.sessionSummaryMinTurns,
       },
+      // A-19 — cooperative cancellation threaded to the loop's checkpoints.
+      ...(overrides.signal ? { signal: overrides.signal } : {}),
       /**
        * Phase 4 · T1 — placement ENFORCEMENT on the canonical path: the run's
        * tool contexts get the Trust service (so high-risk tools isolate or

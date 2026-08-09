@@ -19,7 +19,10 @@
 #     crash and retried. If the retry also fails, the segment FAILS and its
 #     full captured output is printed.
 #   - Every failure is emitted as a ::error:: annotation that NAMES the
-#     segment, so a red job is always self-diagnosing.
+#     segment, so a red job is always self-diagnosing. A failed segment ALSO
+#     emits per-culprit annotations (failed tests / error lines / locating
+#     frames / crash vocabulary — see diagnose_segment) so the root cause is
+#     visible in the check annotations without opening raw logs.
 #   - The executed-files guard is unchanged: RAN must equal EXPECTED or the
 #     step fails (a file can never silently vanish).
 #   - If the parity authority produces no files, the step FAILS (fail closed)
@@ -86,8 +89,36 @@ run_segment() {
   fi
 
   echo "::error::$label FAILED (exit ${code}) — full output:"
+  diagnose_segment "$out"
   cat "$out"
   return "$code"
+}
+
+# Surface the specific culprits as annotations in addition to the segment
+# header above — the header says WHICH directory failed but not WHICH test.
+# bun already annotates per-test failures; this covers the shapes it does NOT
+# annotate: "(fail)" lines when output got reshaped (CRLF/spawned output),
+# file/module-level "error:" lines (beforeAll/afterAll/module-top throws),
+# and crash-class process deaths. A red lane must name its root cause in the
+# check annotations WITHOUT opening raw logs (PR #45 could not be diagnosed
+# from the segment header alone). POSIX only: grep -E, tr, sed, head, cut —
+# identical on bash 3.2/macOS and bash 5/Linux.
+diagnose_segment() {
+  local out="$1"
+  # 1. Explicit failed tests (any source): "(fail) <describe > name> [ms]"
+  grep -E '^[[:space:]]*\(fail\)[[:space:]]' "$out" | head -8 | tr -d '\r' \
+    | sed -e 's/[[:space:]]*\[[0-9.]*ms\][[:space:]]*$//' -e 's/^[[:space:]]*/::error::FAILED TEST: /' \
+    | cut -c1-256
+  # 2. File/module-level errors: "error: <summary>" (hook throws etc.)
+  grep -E '^error: ' "$out" | head -4 | tr -d '\r' \
+    | sed 's/^/::error::ERROR: /' | cut -c1-256
+  # 3. Stack frames that locate an error: "at <fn> (path:line:col)"
+  grep -E '^[[:space:]]*at .*[\\/][^()]+:[0-9]+:[0-9]+' "$out" | head -4 | tr -d '\r' \
+    | sed 's/^[[:space:]]*/::error::FRAME: /' | cut -c1-256
+  # 4. Process-crash vocabulary (panics/OOM/signals) for crash-class exits.
+  grep -Ei 'panic|segmentation fault|illegal instruction|aborted|bus error|out of memory|heap' "$out" | head -4 \
+    | tr -d '\r' | sed 's/^/::error::CRASH TRACE: /' | cut -c1-256
+  return 0
 }
 
 XR_SEGDIRS=$(echo "$FILES" | tr ' ' '\n' | grep -E '^test/[^/]+/' | cut -d/ -f1,2 | sort -u)

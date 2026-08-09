@@ -1,6 +1,6 @@
 /**
  * XR Phase 5 · T1 — deterministic difficulty estimation (RouteLLM principle,
- * deterministic variant; docs/phase5-routing/03-RESEARCH-NOTES.md · R1).
+ * deterministic variant; docs/historical/phases/phase5-routing/03-RESEARCH-NOTES.md · R1).
  * Asserts EFFECTS: difficulty scores drive fidelity floors, signals explain
  * every estimate, and nothing here is a model call or opaque.
  */

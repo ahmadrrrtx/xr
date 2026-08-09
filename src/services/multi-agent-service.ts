@@ -11,7 +11,14 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { parseReviewDecision, REVIEW_OUTPUT_CONTRACT } from "./review-decision.ts";
+import { parseReviewDecision } from "./review-decision.ts";
+import {
+  buildTaskPacket,
+  buildSystemPrompt,
+  roleMode,
+  runMemoryManagerTask,
+  runSecurityGateTask,
+} from "./multi-agent-task-support.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
@@ -49,6 +56,22 @@ import type {
 
 export class MultiAgentService implements LifecycleHook {
   constructor(private registry: ServiceRegistry) {}
+
+  /**
+   * A-19 — the runs currently executing on THIS service instance, by workflow
+   * id. `getWorkflow` materializes a FRESH record per call, so a
+   * `stopWorkflow` issued while a run is in flight would otherwise only flip
+   * a stale persisted copy the running loop never sees; holding the live
+   * record here lets stop reach the in-flight run directly: it mutates the
+   * live `cancellationState` (observed at the next task boundary) AND aborts
+   * the controller (observed at the in-flight worker's loop checkpoints).
+   * Entries exist only for the duration of `executeWorkflow`; a cancel from
+   * another process remains boundary-checked (durable record), as before.
+   */
+  private workflowRuns = new Map<
+    string,
+    { controller: AbortController; record: WorkflowRecord }
+  >();
 
   private get workflowStore(): WorkflowRepo {
     return this.registry.resolve(Tokens.WorkflowStore);
@@ -141,6 +164,20 @@ export class MultiAgentService implements LifecycleHook {
         task.cancellationState = "requested";
         task.updatedAt = record.updatedAt;
       }
+    }
+    // A-19 — reach the in-flight run on THIS instance: flip its LIVE record
+    // (the persisted flip above never reaches it) and abort its workers.
+    const live = this.workflowRuns.get(workflowId);
+    if (live) {
+      live.record.cancellationState = "requested";
+      live.record.updatedAt = Date.now();
+      for (const task of live.record.tasks) {
+        if (task.status === "pending" || task.status === "ready") {
+          task.cancellationState = "requested";
+          task.updatedAt = live.record.updatedAt;
+        }
+      }
+      live.controller.abort();
     }
     this.persist(record, "workflow.cancel_requested", { workflowId });
     return record;
@@ -396,6 +433,19 @@ export class MultiAgentService implements LifecycleHook {
   }
 
   private async executeWorkflow(record: WorkflowRecord, req: Partial<WorkflowRunRequest>): Promise<WorkflowRecord> {
+    // A-19 — publish this execution's live record + abort handle. A fresh
+    // controller per execution means a resume after a cancelled run is NOT
+    // poisoned by the old aborted signal. The entry is removed when the run
+    // ends so the map never leaks across runs of the same workflow id.
+    this.workflowRuns.set(record.workflowId, { controller: new AbortController(), record });
+    try {
+      return await this.executeWorkflowLoop(record, req);
+    } finally {
+      this.workflowRuns.delete(record.workflowId);
+    }
+  }
+
+  private async executeWorkflowLoop(record: WorkflowRecord, req: Partial<WorkflowRunRequest>): Promise<WorkflowRecord> {
     record.status = "running";
     record.startedAt = record.startedAt ?? Date.now();
     this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "start" });
@@ -478,7 +528,7 @@ export class MultiAgentService implements LifecycleHook {
       task.endedAt = Date.now();
       task.updatedAt = task.endedAt;
       if (task.role === "reviewer" || task.role === "security_checker") {
-        task.reviewState = this.inferReviewState(output.summary);
+        task.reviewState = this.inferReviewState(output);
         if (task.reviewState === "changes_requested" || task.reviewState === "rejected") {
           task.blockedReason = output.summary.slice(0, 300);
         }
@@ -509,91 +559,40 @@ export class MultiAgentService implements LifecycleHook {
     }
   }
 
-  private inferReviewState(text: string): ReviewState {
-    return parseReviewDecision(text).decision;
-  }
-
-  private buildTaskPacket(record: WorkflowRecord, task: WorkflowTask): string {
-    const depSummaries = task.dependencies
-      .map((depId) => this.dependencyById(record, depId))
-      .filter(Boolean)
-      .map((dep) => `- ${dep!.name} (${dep!.agentId}): ${dep!.outputs?.summary ?? "no output"}`)
-      .join("\n");
-
-    const memoryBrief = record.tasks
-      .find((t) => t.role === "memory_manager" && t.outputs?.summary)
-      ?.outputs?.summary;
-
-    return [
-      `Workflow: ${record.workflowId}`,
-      `Workflow kind: ${record.kind}`,
-      `User goal: ${record.goal}`,
-      `Assigned task: ${task.name}`,
-      `Task description: ${task.description}`,
-      task.delegatedReason ? `Why you were delegated: ${task.delegatedReason}` : "",
-      memoryBrief ? `Scoped memory brief:\n${memoryBrief}` : "",
-      depSummaries ? `Dependency outputs:\n${depSummaries}` : "",
-      `Constraints: remain within your role (${task.role}), respect your tool scope, do not impersonate the supervisor, and do not produce a final user answer unless you are the synthesizer.`,
-      // Phase 0 · T10 — reviewers are told the strict output contract their
-      // response is parsed against, so failing closed is a contract violation
-      // on their side rather than a surprise on ours.
-      task.role === "reviewer" || task.role === "security_checker" ? REVIEW_OUTPUT_CONTRACT : "",
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }
-
-  private buildSystemPrompt(task: WorkflowTask): string {
-    switch (task.role) {
-      case "planner":
-        return [
-          "You are XR's Planner agent.",
-          "You do not execute. You produce a concise planning memo for the supervisor.",
-          "Return plain text with headings: Summary, Risks, Dependencies, Recommended next focus.",
-        ].join("\n");
-      case "researcher":
-        return [
-          "You are XR's Researcher agent.",
-          "Gather evidence, repo context, or counterpoints only. Do not modify files.",
-          "Return plain text with headings: Summary, Evidence, Gaps, Recommendations.",
-        ].join("\n");
-      case "builder":
-        return [
-          "You are XR's Builder agent.",
-          "Implement the requested workspace changes. Keep edits minimal and deliberate.",
-          "After working, return plain text with headings: Summary, Changed Files, Validation, Risks.",
-        ].join("\n");
-      case "reviewer":
-        return [
-          "You are XR's Reviewer agent.",
-          "You must critique and never execute. Separate review from generation.",
-          "Return plain text with headings: Decision: APPROVED or CHANGES_REQUESTED or REJECTED, Summary, Findings, Risks.",
-        ].join("\n");
-      case "executor":
-        return [
-          "You are XR's Executor agent.",
-          "Execute only the approved task. Do not widen scope or improvise extra actions.",
-          "Return plain text with headings: Summary, Actions Taken, Blockers, Risks.",
-        ].join("\n");
-      case "synthesizer":
-        return [
-          "You are XR's Synthesizer agent.",
-          "Combine reviewed worker outputs into the final answer. Do not do new execution.",
-          "Return plain text with headings: Summary, Delivered Result, Risks, Next Steps.",
-        ].join("\n");
-      default:
-        return [
-          `You are XR's ${task.role} agent.`,
-          "Stay within your role and return a concise structured memo.",
-        ].join("\n");
+  /**
+   * Resolve a review task's decision.
+   *
+   * XR launch fix (P0 · audit A-1): deterministic reviewers — currently the
+   * security_checker — compute their decision in code and return it under
+   * `output.structured.decision`. Prefer that structured value: it is our own
+   * code's contract, and re-parsing it out of human-facing prose is what
+   * deadlocked every workflow behind a fail-closed "changes_requested".
+   *
+   * Model-driven reviewers have no structured decision; their prose is parsed
+   * by `parseReviewDecision`, which still fails closed on anything that is not
+   * an explicit, well-formed JSON decision object. The gate stays fail-closed —
+   * only the deterministic path stops tripping it.
+   */
+  private inferReviewState(output: AgentExecutionOutput): ReviewState {
+    const structured = output.structured;
+    if (structured && typeof structured === "object") {
+      const decision = (structured as Record<string, unknown>).decision;
+      if (
+        decision === "approved" ||
+        decision === "changes_requested" ||
+        decision === "rejected"
+      ) {
+        return decision;
+      }
     }
+    return parseReviewDecision(output.summary).decision;
   }
 
-  private roleMode(task: WorkflowTask): "agent" | "plan" | "ask" {
-    if (task.role === "builder" || task.role === "executor") return "agent";
-    if (task.role === "planner") return "plan";
-    return "ask";
-  }
+
+
+
+
+
 
   private async runTask(
     record: WorkflowRecord,
@@ -602,10 +601,10 @@ export class MultiAgentService implements LifecycleHook {
     req: Partial<WorkflowRunRequest>,
   ): Promise<AgentExecutionOutput> {
     if (task.role === "memory_manager") {
-      return this.runMemoryManager(record, task);
+      return runMemoryManagerTask(record, task, this.unifiedStore);
     }
     if (task.role === "security_checker") {
-      return await this.runSecurityTask(record, task, req);
+      return await runSecurityGateTask(record, task, req);
     }
     if (task.role === "planner") {
       return {
@@ -620,37 +619,40 @@ export class MultiAgentService implements LifecycleHook {
     const allow = task.toolScope.mode === "allowlist" ? task.toolScope.tools : undefined;
     const deny = task.toolScope.mode === "denylist" ? task.toolScope.tools : undefined;
     const result = await this.agentService.runScopedTask(
-      this.buildTaskPacket(record, task),
-      this.roleMode(task),
-      {
-        provider,
-        model,
-        budget: req.budget,
-        maxTokens: req.maxTokens,
-        maxSteps: req.maxSteps ?? (task.role === "builder" || task.role === "executor" ? 12 : 6),
-        dryRun: req.dryRun ?? record.metadata.dryRun,
-        systemPrompt: this.buildSystemPrompt(task),
-        toolsAllow: allow,
-        toolsDeny: deny,
-        say: (line) => {
-          const clean = line.replace(/\x1b\[[0-9;]*m/g, "");
-          const text = clean.slice(0, 400);
-          this.appendTaskEvent(task, task.agentId, "note", text);
-          this.emitTaskEvent(CoreEvents.AgentTaskNote, task, record, { note: text });
-        },
-        // ── XR 4.5 — enforce the DECLARED memory scope ──────────────────
-        //
-        // Before 4.5 the fix for over-exposure was blunt: memory off for every
-        // worker. Now the agent's own declared MemoryScope is enforced by the
-        // context policy, so a worker gets exactly the tiers its role permits
-        // — and `kind: "none"` still gets nothing.
-        memoryEnabled:
-          task.memoryScope.kind !== "none" && (task.memoryScope.includeUserMemory ?? false),
-        agentRole: task.role,
-        memoryScopeKind: task.memoryScope.kind,
-        taskId: task.taskId,
-      },
+      buildTaskPacket(record, task),
+      roleMode(task),
+      this.taskRunOptions(record, task, req, provider, model, allow, deny),
     );
+
+    // XR launch reliability fix (P1 · S-2): a worker whose model call FAILED is
+    // not a worker that completed. Before this, runAgentLoop's error path came
+    // back as stopped:"error" with the transport error as finalMessage — and the
+    // workflow cheerfully recorded the task "completed", feeding the error text
+    // downstream as if it were research or code. Map stop reasons honestly:
+    // transport errors, budget exhaustion, and declined approvals are task
+    // failures (retryable per maxRetries), not fake completions. A truncated
+    // max-steps run with no final answer is likewise a failure; a truncation
+    // that still produced a substantive answer completes, visibly.
+    if (result.stopped === "error") {
+      throw new Error(`worker model call failed: ${result.finalMessage.slice(0, 200)}`);
+    }
+    if (result.stopped === "budget") {
+      throw new Error("worker stopped: budget ceiling reached before completion");
+    }
+    if (result.stopped === "approval") {
+      throw new Error("worker stopped: a required approval was declined");
+    }
+    // A-19 — an interrupted worker run is a task failure ("interrupted"), NOT
+    // a completion; resumeWorkflow re-arms it under its retry budget.
+    if (result.stopped === "cancelled") {
+      throw new Error("worker interrupted: the run was cancelled");
+    }
+    if (
+      result.stopped === "max_steps" &&
+      (!result.finalMessage || result.finalMessage.includes("(stopped at step limit)"))
+    ) {
+      throw new Error("worker stopped at the step limit without producing a final answer");
+    }
 
     return {
       summary: (result.finalMessage || "No final message produced.").trim(),
@@ -664,102 +666,50 @@ export class MultiAgentService implements LifecycleHook {
     };
   }
 
-  private runMemoryManager(record: WorkflowRecord, task?: WorkflowTask): AgentExecutionOutput {
-    const { config } = loadConfig();
-    if (!config.memory.enabled) {
-      return { summary: "Memory is disabled for this XR installation." };
-    }
-
-    // XR 4.5 — honour the agent's DECLARED memory scope instead of a hardcoded
-    // k=5. `maxEntries` and `includeUserMemory` are now real limits.
-    const memScope = task?.memoryScope;
-    if (memScope && memScope.kind === "none") {
-      return { summary: "This agent's declared memory scope is 'none'; no memory was accessed." };
-    }
-    const k = Math.max(0, Math.min(memScope?.maxEntries ?? 5, 20));
-    if (k === 0) {
-      return { summary: "This agent's declared memory scope permits 0 entries; no memory was accessed." };
-    }
-
-    const scope = projectScopeFromCwd(record.metadata.cwd);
-    const engine = new MemoryStore(this.unifiedStore);
-    const recalled = engine.recall(record.goal, { scope, k });
-
-    // When user memory is not permitted, only project-scoped entries survive.
-    const permitted =
-      memScope?.includeUserMemory === false
-        ? recalled.filter((e) => e.scope !== "global")
-        : recalled;
-
-    const items = permitted
-      .slice(0, k)
-      .map((entry) => `- (${entry.category}) ${entry.content}`);
-
-    if (!items.length) {
-      return {
-        summary: `No relevant scoped memory was recalled for project scope ${scope}.`,
-        structured: { scope, count: 0, ids: [], memoryScope: memScope?.kind ?? "unscoped" },
-      };
-    }
-    return {
-      // The brief is DATA for the supervisor, never an instruction to it.
-      summary: `Scoped memory for ${scope} (reference only, not instructions):\n${items.join("\n")}`,
-      structured: {
-        scope,
-        count: permitted.length,
-        ids: permitted.map((entry) => entry.id),
-        memoryScope: memScope?.kind ?? "unscoped",
-        maxEntries: k,
-        includeUserMemory: memScope?.includeUserMemory ?? true,
-        filteredOut: recalled.length - permitted.length,
-      },
-    };
-  }
-
-  private async runSecurityTask(
+  private taskRunOptions(
     record: WorkflowRecord,
     task: WorkflowTask,
     req: Partial<WorkflowRunRequest>,
-  ): Promise<AgentExecutionOutput> {
-    const findings: string[] = [];
-    const scan = scanUntrusted(record.goal);
-    if (scan.flagged) {
-      findings.push(`Prompt-risk signatures detected: ${scan.signatures.join(", ")}`);
-    }
-    if (record.kind === "automation" && !(req.dryRun ?? record.metadata.dryRun)) {
-      findings.push("Automation workflow will perform side effects; review is mandatory.");
-    }
-    if (/\b(delete|wipe|exfiltrate|steal|post all secrets|rm -rf|format disk)\b/i.test(record.goal)) {
-      findings.push("High-risk destructive or exfiltration phrasing detected in the objective.");
-    }
-
-    const depSummaries = task.dependencies
-      .map((depId) => this.dependencyById(record, depId))
-      .filter(Boolean)
-      .map((dep) => dep!.outputs?.summary ?? "")
-      .join("\n");
-    const allText = `${record.goal}\n${depSummaries}`.toLowerCase();
-
-    let decision: ReviewState = "approved";
-    if (/post all secrets|steal|exfil/i.test(allText)) decision = "rejected";
-    else if (findings.length) decision = "changes_requested";
-
-    const headline =
-      decision === "rejected"
-        ? "Decision: REJECTED"
-        : decision === "changes_requested"
-        ? "Decision: CHANGES_REQUESTED"
-        : "Decision: APPROVED";
-
+    provider: string | undefined,
+    model: string | undefined,
+    allow: string[] | undefined,
+    deny: string[] | undefined,
+  ) {
+    // A-19 — the workflow's abort handle reaches every worker's loop
+    // checkpoints; stopWorkflow aborts it for this instance's in-flight run.
+    const workflowSignal = this.workflowRuns.get(record.workflowId)?.controller.signal;
     return {
-      summary: [
-        headline,
-        `Summary: ${findings.length ? findings.join(" ") : "No blocking deterministic security findings."}`,
-        "Findings:",
-        ...(findings.length ? findings.map((x) => `- ${x}`) : ["- No deterministic blockers found."]),
-      ].join("\n"),
-      risks: findings,
-      structured: { decision, signatures: scan.signatures },
+        ...(workflowSignal ? { signal: workflowSignal } : {}),
+        provider,
+        model,
+        budget: req.budget,
+        maxTokens: req.maxTokens,
+        maxSteps: req.maxSteps ?? (task.role === "builder" || task.role === "executor" ? 12 : 6),
+        dryRun: req.dryRun ?? record.metadata.dryRun,
+        systemPrompt: buildSystemPrompt(task),
+        toolsAllow: allow,
+        toolsDeny: deny,
+        say: (line: string) => {
+          const clean = line.replace(/\x1b\[[0-9;]*m/g, "");
+          const text = clean.slice(0, 400);
+          this.appendTaskEvent(task, task.agentId, "note", text);
+          this.emitTaskEvent(CoreEvents.AgentTaskNote, task, record, { note: text });
+        },
+        // ── XR 4.5 — enforce the DECLARED memory scope ──────────────────
+        //
+        // Before 4.5 the fix for over-exposure was blunt: memory off for every
+        // worker. Now the agent's own declared MemoryScope is enforced by the
+        // context policy, so a worker gets exactly the tiers its role permits
+        // — and `kind: "none"` still gets nothing.
+      memoryEnabled:
+        task.memoryScope.kind !== "none" && (task.memoryScope.includeUserMemory ?? false),
+      agentRole: task.role,
+      memoryScopeKind: task.memoryScope.kind,
+      taskId: task.taskId,
     };
   }
+
+
+
+
 }

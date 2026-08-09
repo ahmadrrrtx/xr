@@ -79,6 +79,36 @@ For any action you can always answer:
 - `src/environment/providers/{browser,desktop,filesystem,voice,vision}.ts`
 - `src/environment/{privacy,recovery,capabilities,observations,audit,workflow-binding}.ts`
 
+## Related but distinct: `src/control/` vs `src/computer/`
+
+Two source directories with deceptively similar names hold **different
+layers** — this is the division of responsibility (audit A-10; verified
+against the imports, no code duplication exists, so no merge is planned):
+
+- **`src/control/` — the governed computer-use plane.** The multi-step
+  automation pipeline: planner → risk classification (`classify.ts`) →
+  permissions → approvals → executor → audit, plus the 5.1
+  observe→propose→act loop (`computer-use.ts`) and the vision/browser/adapter
+  surfaces. Entry points: the `computer_control` agent tool
+  (`src/tools/control.ts`), the daemon control API
+  (`src/daemon/control-api.ts`), and the `xr control` CLI (`src/control/cli.ts`,
+  routed via `ControlCommand`). Environment actions route through this same
+  gate — see the integration map above.
+- **`src/computer/system-control.ts` — the raw system-tool surface.**
+  Single-shot cross-platform OS tools registered directly in the tool
+  registry (`SYSTEM_TOOLS`, imported by `src/tools/registry.ts`): `get_open_apps`,
+  `open_app`, `clipboard_read`, `clipboard_write`, `system_notify`. The file
+  also carries the Phase-0 `assertNoNoOpSuccess()` structural guard and the
+  `REMOVED_STUB_TOOLS` record — six tools that always "succeeded" without
+  acting (`system_volume`, `system_battery`, `system_wifi`, `system_media`,
+  `system_trash`, `system_screenshot`) were deleted, never kept as polite
+  no-ops: an absent tool is honest, a lying tool is not.
+
+Rule of thumb: **`control/` decides *whether and how* actions may run;
+`computer/` is one *kind of action* a tool call performs.** Merging them
+would couple the governance pipeline to a tool provider — deliberately
+avoided.
+
 Guides: [BROWSER](./BROWSER.md) · [DESKTOP](./DESKTOP.md) · [VOICE](./VOICE.md) ·
 [VISION](./VISION.md) · [REVERSIBILITY](./REVERSIBILITY.md) ·
 [RECOVERY](./RECOVERY.md) · [PLATFORM_SUPPORT](./PLATFORM_SUPPORT.md) ·

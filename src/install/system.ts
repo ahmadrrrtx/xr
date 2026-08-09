@@ -243,7 +243,7 @@ export async function probeHealth(opts: InstallOptions = {}): Promise<HealthChec
   checks.push({ id: "local-model", label: "Local model", state: runtimeStatus.models.includes(selectedModel) ? "ok" : (localCfg.enabled ? "warn" : "skip"), detail: `${selectedRuntime}/${selectedModel}`, remediation: `Run xr models install ${selectedModel} or xr models set ${selectedRuntime} <model>.` });
 
   const secretBackend = preferredSecretBackend();
-  checks.push({ id: "secrets", label: "Secret store", state: secretBackend === "file" ? "warn" : "ok", detail: secretBackend, remediation: secretBackend === "file" ? `Keys fall back to ${join(XR_HOME, ".env")} with chmod 600. Install OS secret tooling for stronger storage.` : undefined });
+  checks.push({ id: "secrets", label: "Secret store", state: secretBackend === "file" ? "warn" : "ok", detail: secretBackend, remediation: secretBackend === "file" ? `Keys fall back to ${join(XR_HOME, ".env")} — AES-256-GCM sealed with a per-install key, chmod 600. Install OS secret tooling for the strongest storage.` : undefined });
 
   const ffmpeg = commandExists("ffmpeg");
   const whisper = commandExists("whisper-cli") || commandExists("main") || existsSync(join(XR_HOME, "components", "whisper.cpp"));

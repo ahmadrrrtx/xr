@@ -322,7 +322,7 @@ describe("Evidence rendering", () => {
 
 describe("Repository-level honesty checks", () => {
   test("no Phase 12 doc claims an unobtained certification", () => {
-    const docs = ["docs/phase12/CERTIFICATION_EVIDENCE.md", "docs/phase12/ENTERPRISE_TRUST_ARCHITECTURE.md"];
+    const docs = ["docs/enterprise-readiness/CERTIFICATION_EVIDENCE.md", "docs/enterprise-readiness/ENTERPRISE_TRUST_ARCHITECTURE.md"];
     const forbidden = /\b(we are|xr is)\s+(soc\s*2|iso\s*27001|hipaa|pci[- ]dss|fedramp)\s+(certified|compliant)\b/i;
     for (const d of docs) {
       const p = join(ROOT, d);

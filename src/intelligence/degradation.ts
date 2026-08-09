@@ -2,7 +2,7 @@
  * XR Phase 5 · T3/T4 — Failure classification, retry budget, degradation
  * levels, human escalation, and the context-preserving chain executor.
  *
- * Ops consensus adopted (docs/phase5-routing/03-RESEARCH-NOTES.md · R3/R4):
+ * Ops consensus adopted (docs/historical/phases/phase5-routing/03-RESEARCH-NOTES.md · R3/R4):
  *   · THREE-TIER error classification — transient / permanent / semantic —
  *     because each class wants a different reaction (retry, advance, advance
  *     + record quality-degradation for the breaker).

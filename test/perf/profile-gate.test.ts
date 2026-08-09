@@ -1,7 +1,7 @@
 /**
  * XR Phase 8 · T2 — profile-gate parser + budget logic (hermetic; the live
  * gate itself runs in CI on every PR — see tests integration note in
- * docs/phase8/05-TEST-RESULTS.md).
+ * docs/historical/phases/phase8/05-TEST-RESULTS.md).
  */
 
 import { test, expect } from "bun:test";

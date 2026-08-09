@@ -155,9 +155,10 @@ export class AnthropicProvider implements Provider {
       name: t.name,
       description: t.description,
       input_schema: {
-        type: "object",
+        // `as const` keeps the literal "object" instead of an object-wide cast.
+        type: "object" as const,
         properties: t.parameters,
-      } as any,
+      },
     }));
 
     // Get system prompt

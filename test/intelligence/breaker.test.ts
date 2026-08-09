@@ -1,7 +1,7 @@
 /**
  * XR Phase 5 · T3 — rolling health + circuit breaker.
  *
- * Asserts EFFECTS (docs/phase5-routing/04-ARCHITECTURE-VALIDATION.md):
+ * Asserts EFFECTS (docs/historical/phases/phase5-routing/04-ARCHITECTURE-VALIDATION.md):
  *   · an injected OUTAGE trips the breaker open;
  *   · an injected QUALITY-DEGRADATION (semantic) streak trips it too —
  *     uptime checks cannot see this class, the breaker must;

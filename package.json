@@ -58,6 +58,7 @@
     "supply:check": "bun run scripts/license-check.ts && bun run scripts/sbom.ts --out /tmp/xr-sbom.json",
     "verify-release": "bun run scripts/verify-release.ts",
     "ci-capability-gate": "bun run scripts/ci-capability-gate.ts",
+    "canary:providers": "bun run scripts/provider-canaries.ts",
     "api:schema:generate": "bun run scripts/generate-openapi.ts --write",
     "api:schema:check": "bun run scripts/generate-openapi.ts --check",
     "api:compat": "bun run scripts/api-compat.ts",

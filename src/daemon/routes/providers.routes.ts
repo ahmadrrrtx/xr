@@ -13,6 +13,13 @@ import { BehavioralStore, behavioralView } from "../../intelligence/behavioral.t
 import { RoutingHealth, healthView } from "../../intelligence/health.ts";
 import { RoutingSlo } from "../../intelligence/slo.ts";
 import { route, type DaemonRoute } from "./router.ts";
+import type { ModelClass } from "../../intelligence/types.ts";
+
+const MODEL_CLASSES: ReadonlySet<string> = new Set<ModelClass>([
+  "chat", "completion", "reasoning", "code", "tool_use", "structured_output",
+  "vision", "speech_to_text", "text_to_speech", "image_generation",
+  "image_understanding", "embeddings", "reranking", "multimodal", "unknown",
+]);
 
 export function providersRoutes(): DaemonRoute[] {
   return [
@@ -85,7 +92,9 @@ export function providersRoutes(): DaemonRoute[] {
         const params = url.searchParams;
         const provider = params.get("provider") ?? undefined;
         const model = params.get("model") ?? undefined;
-        const modelClass = (params.get("class") ?? "chat") as any;
+        // Untrusted query value: only real ModelClass literals pass (A-6 seam).
+        const rawClass = params.get("class") ?? "chat";
+        const modelClass = (MODEL_CLASSES.has(rawClass) ? rawClass : "chat") as ModelClass;
         const localOnly = params.get("localOnly") === "1" || params.get("localOnly") === "true";
         const detailed = params.get("detailed") === "1" || params.get("detailed") === "true";
         // Phase 5 — the daemon explains against the SAME measured metadata and
@@ -210,7 +219,7 @@ export function providersRoutes(): DaemonRoute[] {
         try {
           const specs = detectHardwareSpecs();
           const runtimes = await detectAllRuntimes();
-          const local = config.localModels as any;
+          const local = config.localModels; // fully typed in the schema
           const selectedRuntime = local.runtime ?? "ollama";
           const selectedModel = local.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
           const selectedStatus = isLocalRuntimeId(selectedRuntime) ? await detectRuntime(selectedRuntime) : undefined;
@@ -247,7 +256,7 @@ export function providersRoutes(): DaemonRoute[] {
           if (!model || !validateLocalModelId(model)) return json({ error: "valid local model id is required" }, 400);
           const status = await detectRuntime(runtime);
           const next = loadConfig().config;
-          const local = next.localModels as any;
+          const local = next.localModels;
           local.enabled = true;
           local.runtime = runtime;
           local.provider = providerIdForRuntime(runtime);
@@ -291,8 +300,12 @@ export function providersRoutes(): DaemonRoute[] {
             next.defaults.fallbackProvider = providerIdForRuntime(runtime);
             next.defaults.fallbackModel = model;
           }
-          (next.providers as any)[providerIdForRuntime(runtime)] = {
-            ...((next.providers as any)[providerIdForRuntime(runtime)] ?? {}),
+          // providers is a zod-passthrough map: narrow once to the override
+          // shape this route writes, instead of an `any` write (A-6 seam).
+          const providersMap = next.providers as Record<string, Record<string, unknown> | undefined>;
+          const overrideId = providerIdForRuntime(runtime);
+          providersMap[overrideId] = {
+            ...(providersMap[overrideId] ?? {}),
             baseUrl: status.baseUrl,
           };
           saveConfig(next);
@@ -310,8 +323,8 @@ export function providersRoutes(): DaemonRoute[] {
       handle: async ({ req, json, state, config }) => {
         try {
           const body = await req.json() as { runtime?: string; model?: string };
-          const runtime = body.runtime ?? (config.localModels as any).runtime ?? "ollama";
-          const model = (body.model ?? (config.localModels as any).selected ?? config.defaults.model ?? "").trim();
+          const runtime = body.runtime ?? config.localModels.runtime ?? "ollama";
+          const model = (body.model ?? config.localModels.selected ?? config.defaults.model ?? "").trim();
           if (!isLocalRuntimeId(runtime)) return json({ error: "valid local runtime is required" }, 400);
           if (!model || !validateLocalModelId(model)) return json({ error: "valid local model id is required" }, 400);
           const status = await detectRuntime(runtime);

@@ -220,6 +220,22 @@
     {
       "pattern": "Audit\\s+logs\\s*\\(",
       "reason": "Audit retention is configurable per event class (src/enterprise/audit/retention.ts), not a fixed hosted-tier feature."
+    },
+    {
+      "pattern": "AI\\s+Operating\\s+System",
+      "reason": "XR is an application-layer AI agent runtime with in-process policy enforcement, not an operating system. OS-scale isolation is XR-OS roadmap work, not the runtime's identity (launch finding A-3)."
+    },
+    {
+      "pattern": "AI\\s+OS\\s+Kernel",
+      "reason": "XR ships a runtime kernel (DI container, lifecycle, stores) — not an OS kernel. Framing it as one is misleading (launch finding A-3)."
+    },
+    {
+      "pattern": "Provable\\s+Security",
+      "reason": "Absolute security claims are never evidenceable. XR ships verifiable evidence — hash-chained audit (xr verify-log) and signed attack-screen reports (xr attacks) — not proofs of security."
+    },
+    {
+      "pattern": "Business\\s+Operating\\s+System",
+      "reason": "Business OS is an optional, default-off, effect-verified extension over local-first records (extensions/business-os), not an operating system (launch finding A-3)."
     }
   ],
   "supervisedTerms": [
@@ -228,7 +244,9 @@
     "fully supported",
     "production-ready",
     "complete",
-    "guaranteed"
+    "guaranteed",
+    "AI OS",
+    "operating system"
   ],
   "scannedSurfaces": [
     "README.md",

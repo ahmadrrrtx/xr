@@ -112,11 +112,13 @@ function applyCapabilityOverride(pd: ProviderDescriptor, override: any): void {
     "embeddings",
     "functionCalling",
   ] as const;
+  // Every capKeys entry is a real ModelCapabilities key — direct indexed
+  // writes typecheck; no `any` (A-6 seam).
   for (const k of capKeys) {
-    if (override[k] === true) (pd.capabilities as any)[k] = "supported";
-    else if (override[k] === false) (pd.capabilities as any)[k] = "unsupported";
+    if (override[k] === true) pd.capabilities[k] = "supported";
+    else if (override[k] === false) pd.capabilities[k] = "unsupported";
     else if (override[k] === "supported" || override[k] === "unsupported" || override[k] === "unknown") {
-      (pd.capabilities as any)[k] = override[k];
+      pd.capabilities[k] = override[k];
     }
   }
 }

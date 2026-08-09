@@ -156,6 +156,7 @@ function createState(): ShellState {
     totalTokens: 0,
     busy: false,
     busyLabel: "idle",
+    runAbort: null,
     spinnerIndex: 0,
     view: "chat",
     sidebarIndex: SHELL_VIEW_ORDER.indexOf("chat"),
@@ -558,7 +559,11 @@ async function runTask(state: ShellState, task: string): Promise<void> {
    * arbitration, policy and evidence are identical to `xr run` by construction
    * rather than by careful duplication.
    */
-  const result = await executeOnSurface({
+  const controller = new AbortController();
+  state.runAbort = controller;
+  let result: Awaited<ReturnType<typeof executeOnSurface>>;
+  try {
+    result = await executeOnSurface({
     task,
     mode: state.mode,
     surface: "shell",
@@ -566,6 +571,7 @@ async function runTask(state: ShellState, task: string): Promise<void> {
     provider,
     modelId: state.model,
     cwd: state.cwd,
+    signal: controller.signal,
     say,
     onDiagnostic: (note) => addTimeline(state, "warn", note),
     approve: async (req) => {
@@ -603,6 +609,9 @@ async function runTask(state: ShellState, task: string): Promise<void> {
       minTurns: config.memory.sessionSummaryMinTurns,
     },
   });
+  } finally {
+    state.runAbort = null;
+  }
 
   finalizeLiveAssistantMessage(state);
   const after = state.store.costSummary();
@@ -615,6 +624,7 @@ async function runTask(state: ShellState, task: string): Promise<void> {
   if (result.stopped === "done") notify(state, "ok", "Task complete", `${result.steps} step(s) · $${deltaUsd.toFixed(4)}`);
   else if (result.stopped === "budget") notify(state, "warn", "Task paused by budget", result.finalMessage);
   else if (result.stopped === "approval") notify(state, "warn", "Task paused for approval", result.finalMessage);
+  else if (result.stopped === "cancelled") notify(state, "warn", "Task interrupted", result.finalMessage || "Stopped at your request.");
   else notify(state, result.stopped === "error" ? "error" : "info", `Task ended: ${result.stopped}`, result.finalMessage);
 
   if (result.finalMessage && (!state.chat.length || state.chat[state.chat.length - 1]!.content !== result.finalMessage)) {
@@ -745,8 +755,19 @@ async function handleKey(state: ShellState, key: KeyEvent): Promise<void> {
   // Global: Ctrl+C
   if (key.name === "ctrl+c") {
     if (state.busy) {
-      // interrupt is best-effort; agent may not support abort yet
-      notify(state, "warn", "Interrupt requested", "Stopping current run when possible.");
+      /**
+       * A-19 — real interruption, not best-effort cosmetics: abort the run's
+       * controller; the loop stops at its next checkpoint and reports
+       * stopped:"cancelled". A pending approval is denied first (fail-closed)
+       * so a run waiting on the confirm overlay stops immediately.
+       */
+      if (state.overlay === "confirm" && state.confirm) {
+        state.confirm.resolve(false);
+        state.confirm = undefined;
+        state.overlay = "none";
+      }
+      state.runAbort?.abort();
+      notify(state, "warn", "Interrupt requested", "Stopping current run at the next checkpoint.");
       state.busy = false;
       state.busyLabel = "idle";
       finalizeLiveAssistantMessage(state);
@@ -808,10 +829,12 @@ async function handleKey(state: ShellState, key: KeyEvent): Promise<void> {
       return;
     }
     if (state.busy) {
+      // A-19 — Esc aborts like Ctrl+C.
+      state.runAbort?.abort();
       state.busy = false;
       state.busyLabel = "idle";
       finalizeLiveAssistantMessage(state);
-      notify(state, "warn", "Interrupted");
+      notify(state, "warn", "Interrupted", "Stopping current run at the next checkpoint.");
       return;
     }
     if (state.focus !== "composer") {

@@ -1,0 +1,7 @@
+# XR — Bun configuration.
+#
+# [test].preload runs once before any test module loads, so module-top
+# `mkdtempSync(join(tmpdir(), ...))` calls in test files already see the
+# suite-owned temp root (see test/helpers/suite-tmp.ts, R-8).
+[test]
+preload = ["./test/helpers/suite-tmp.ts"]

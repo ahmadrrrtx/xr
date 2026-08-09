@@ -161,13 +161,26 @@ export interface AgentDeps {
   contextMode?: "legacy" | "context" | "both";
   /** XR 4.5 — receives the rendered injection for inspection/audit surfaces. */
   onContextInjected?(injection: InjectionPackage): void;
+  /**
+   * XR 7.1.0-RC (audit A-19) — cooperative cancellation.
+   *
+   * Wired by the execution envelope from the caller-provided signal. The loop
+   * checks it at well-defined checkpoints: the top of every step, after a
+   * model turn resolves (before its tool calls execute — a cancelled run must
+   * not perform new side effects), and between tool calls. A signal raised
+   * mid-`provider.chat` takes effect at the next checkpoint; JS cannot
+   * universally force-interrupt an in-flight turn, and XR does not fake it —
+   * the session ends honestly as `stopped: "cancelled"` once the turn
+   * resolves or the next step begins.
+   */
+  signal?: AbortSignal;
 }
 
 export interface AgentResult {
   sessionId: string;
   finalMessage: string;
   steps: number;
-  stopped: "done" | "max_steps" | "error" | "budget" | "approval";
+  stopped: "done" | "max_steps" | "error" | "budget" | "approval" | "cancelled";
   /** Optional token counters for richer UIs when a caller/provider supplies them. */
   inputTokens?: number;
   outputTokens?: number;
@@ -422,8 +435,32 @@ export async function runAgentLoop(
     }
   };
 
+  /**
+   * A-19 — cooperative cancellation. Checkpoints sit where the loop can stop
+   * cleanly WITHOUT faking outcomes: before a step starts, after a model turn
+   * resolves (before its tool calls run), and between tool calls. The
+   * session/audit record says exactly what happened — interrupted by the
+   * caller, at this step.
+   */
+  const isCancelled = (): boolean => deps.signal?.aborted === true;
+  const cancelledResult = (steps: number): AgentResult => {
+    say(`\x1b[33m⏸ cancelled — interrupted at your request\x1b[0m`);
+    sessionStore.endSession(sessionId, "stopped");
+    auditStore.audit("session.cancelled", { steps, snapshot: governor.snapshot() }, sessionId);
+    return {
+      sessionId,
+      finalMessage: finalMessage || "Interrupted at your request.",
+      steps,
+      stopped: "cancelled",
+      meter: governor.meter(),
+      routingDecisionId: deps.routingDecision?.decisionId,
+    };
+  };
+
   try {
     for (; stepIdx < maxSteps; stepIdx++) {
+      if (isCancelled()) return cancelledResult(stepIdx);
+
       const decision = governor.checkBeforeStep();
       
       if (decision.allow && decision.warning) {
@@ -478,6 +515,10 @@ export async function runAgentLoop(
       if (turn.message) say(`\x1b[36m◆ ${turn.message}\x1b[0m`);
       messages.push({ role: "assistant", content: JSON.stringify({ message: turn.message, tool_calls: turn.toolCalls, done: turn.done }) });
 
+      // A-19 — an abort that landed while the model turn was in flight takes
+      // effect HERE, before any of its tool calls run.
+      if (isCancelled()) return cancelledResult(stepIdx + 1);
+
       if (turn.done && turn.toolCalls.length === 0) {
         finalMessage = turn.message;
         // Stage 6 — optionally fold the conversation into a session summary.
@@ -495,6 +536,9 @@ export async function runAgentLoop(
       }
 
       for (const call of turn.toolCalls) {
+        // A-19 — between tool calls: a mid-batch abort skips the rest.
+        if (isCancelled()) return cancelledResult(stepIdx + 1);
+
         const tool = resolveTool(call.tool);
         if (!tool || !tools.some((t) => t.name === call.tool)) {
           const msg = `tool "${call.tool}" is not available in ${mode} mode`;

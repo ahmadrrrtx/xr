@@ -3,7 +3,7 @@
  * no write may be lost under N parallel writers against one XR_HOME.
  *
  * Before the Phase-1 fix the same harness (8 × 50) produced 6 "database is
- * locked" errors and a chain broken at entry 138 — see docs/phase-1/AUDIT_REPORT.md.
+ * locked" errors and a chain broken at entry 138 — see docs/historical/phases/phase-1/AUDIT_REPORT.md.
  * After the fix (WAL + busy_timeout + IMMEDIATE serialized append) it must be
  * 0 locked, 0 lost, chain valid.
  */

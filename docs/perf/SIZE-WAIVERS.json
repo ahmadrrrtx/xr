@@ -49,9 +49,9 @@
     },
     {
       "path": "src/interfaces/shell/app.ts",
-      "lines": 1203,
+      "lines": 1226,
       "owner": "interfaces",
-      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope.",
+      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope. A-19 (launch RC) appended the abort-controller wiring (run-scoped controller, fail-closed approval denial, Ctrl+C/Esc reaching the loop's checkpoints; +23 lines, still a single state machine).",
       "plan": "Extract slash-command handling and the palette into interfaces/shell/commands.ts and palette.ts. Deferred: the Shell is the surface most exposed to Phase-3 UX work and splitting it twice would be churn.",
       "review": "2026-12-31"
     },
@@ -105,9 +105,9 @@
     },
     {
       "path": "src/config/config.ts",
-      "lines": 1131,
+      "lines": 1214,
       "owner": "config",
-      "reason": "A single Zod schema plus load/save. It is one cohesive declaration and the single source of truth for configuration shape; splitting the schema would create multiple partial truths. Phase 4 \u00b7 T1/T4 added security.hardened + security.allowedHosts schema fields and the env-override helper. Phase 5 added the additive difficultyRouting/breaker/retry intelligencePlane fields and migration 17\u219218 (+47 lines, schema-only). Phase 8 \u00b7 T2 added the additive telemetry subtree (opt-in, structural-by-default, redacted, local-first; +30 lines, schema-only, no migration needed \u2014 defaults fill).",
+      "reason": "A single Zod schema plus load/save. It is one cohesive declaration and the single source of truth for configuration shape; splitting the schema would create multiple partial truths. Phase 4 \u00b7 T1/T4 added security.hardened + security.allowedHosts schema fields and the env-override helper. Phase 5 added the additive difficultyRouting/breaker/retry intelligencePlane fields and migration 17\u219218 (+47 lines, schema-only). Phase 8 \u00b7 T2 added the additive telemetry subtree (opt-in, structural-by-default, redacted, local-first; +30 lines, schema-only, no migration needed \u2014 defaults fill). Launch S-1 \u00b7 F3 added the additive envOverrides/envOverridesLocked fields and applyEnvOverrides (explicit env-var -> config-path contract with proto-pollution guards and schema re-validation; +83 lines, no migration needed - defaults fill), pinned by test/config/env-overrides.test.ts.",
       "plan": "Split into per-section schema modules composed into one exported ConfigSchema, preserving the single export.",
       "review": "2026-12-31"
     },

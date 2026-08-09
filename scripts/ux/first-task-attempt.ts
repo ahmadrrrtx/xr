@@ -86,7 +86,7 @@ async function attempt(): Promise<void> {
         intent: { summary: "first task answer", origin: { kind: "user", source: "cli" } },
         idempotency: "naturally_idempotent",
         inputSummary: "what is XR?",
-        run: async () => ({ summary: "XR is a local-first AI operating system.", transportOk: true }),
+        run: async () => ({ summary: "XR is a local-first AI agent runtime.", transportOk: true }),
       });
       answered = res.outcome?.kind === "succeeded";
       record("first-answer-succeeds", answered, Date.now() - t, answered ? undefined : JSON.stringify(res.outcome));
