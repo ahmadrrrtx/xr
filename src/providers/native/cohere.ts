@@ -9,7 +9,8 @@
  * Cost: Has free tier (1000 API calls/month on trial).
  *       Command R+ is excellent for RAG and long documents.
  */
-import type { Message, ModelTurn, Provider, Tool } from "../../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool, ChatOptions } from "../../core/types.ts";
+import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 
 interface CohereOptions {
@@ -30,7 +31,7 @@ export class CohereProvider implements Provider {
     this.model = opts.model ?? "command-r-plus-08-2024";
   }
 
-  async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
+  async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
     const apiKey = this.apiKey;
     if (!apiKey) {
       throw new Error(
@@ -111,15 +112,19 @@ export class CohereProvider implements Provider {
     }
 
     try {
-      const res = await fetch(`${this.baseUrl}/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "X-Client-Name": "xr-agent",
-        },
-        body: JSON.stringify(body),
-      });
+      // GAP-001 — bounded + cancellable (was: no signal, no timeout).
+      const res = await guardedRequest(this.id, options, (signal) =>
+        fetch(`${this.baseUrl}/chat`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+            "X-Client-Name": "xr-agent",
+          },
+          body: JSON.stringify(body),
+          signal,
+        }),
+      );
 
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
@@ -175,6 +180,10 @@ export class CohereProvider implements Provider {
         usage,
       };
     } catch (e) {
+      // GAP-001 — this fallback was unconditional, so a user cancellation or a
+      // timeout silently issued a SECOND request to the v1 endpoint. Aborts
+      // are terminal.
+      if (e instanceof ProviderAbortError) throw e;
       // Fall back to /chat endpoint (v1)
       return this.chatV1(messages, tools, apiKey);
     }

@@ -9,7 +9,8 @@
  * Cost: Free tier (15 req/min, 1500 req/day on Gemini 1.5 Flash!)
  *       Great for zero-cost setup.
  */
-import type { Message, ModelTurn, Provider, Tool } from "../../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool, ChatOptions } from "../../core/types.ts";
+import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 
 interface GoogleOptions {
@@ -51,7 +52,7 @@ export class GoogleProvider implements Provider {
     this.model = opts.model ?? "gemini-1.5-flash";
   }
 
-  async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
+  async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
     const apiKey = this.apiKey;
     if (!apiKey) {
       throw new Error(
@@ -154,11 +155,15 @@ export class GoogleProvider implements Provider {
     const url = `${this.baseUrl}/models/${this.model}:generateContent?key=${apiKey}`;
     
     try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      // GAP-001 — bounded + cancellable (was: no signal, no timeout).
+      const res = await guardedRequest(this.id, options, (signal) =>
+        fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal,
+        }),
+      );
 
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
@@ -206,6 +211,8 @@ export class GoogleProvider implements Provider {
         usage,
       };
     } catch (e) {
+      // GAP-001 — never retry a cancelled/timed-out turn on another endpoint.
+      if (e instanceof ProviderAbortError) throw e;
       // Fall back to Vertex AI if configured
       const vertexProject = process.env.GCP_PROJECT_ID;
       const vertexLocation = process.env.GCP_LOCATION ?? "us-central1";

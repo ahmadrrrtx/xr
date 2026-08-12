@@ -8,7 +8,8 @@
  * 
  * Cost: NOT free, but great quality. Use Groq/Ollama for zero-cost.
  */
-import type { Message, ModelTurn, Provider, Tool } from "../../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool, ChatOptions } from "../../core/types.ts";
+import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 
 interface AnthropicOptions {
@@ -69,7 +70,7 @@ export class AnthropicProvider implements Provider {
     this.model = opts.model ?? "claude-3-5-sonnet-20241022";
   }
 
-  async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
+  async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
     const apiKey = this.apiKey;
     if (!apiKey) {
       throw new Error(
@@ -176,16 +177,20 @@ export class AnthropicProvider implements Provider {
     }
 
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify(body),
-      });
+      // GAP-001 — bounded + cancellable (was: no signal, no timeout).
+      const res = await guardedRequest(this.id, options, (signal) =>
+        fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+          },
+          body: JSON.stringify(body),
+          signal,
+        }),
+      );
 
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
@@ -233,6 +238,10 @@ export class AnthropicProvider implements Provider {
         usage,
       };
     } catch (e) {
+      // GAP-001 — a cancelled or timed-out request must NEVER be retried on a
+      // fallback endpoint: that would double the work the user just stopped
+      // and hide the real reason the turn ended.
+      if (e instanceof ProviderAbortError) throw e;
       // Fall back to OpenAI-compatible endpoint if available
       if ((e as Error).message.includes("API key not found")) throw e;
       

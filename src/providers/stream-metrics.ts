@@ -26,7 +26,7 @@
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import type { ModelTurn, Message, Tool, Provider } from "../core/types.ts";
+import type { ModelTurn, Message, Tool, Provider, ChatOptions } from "../core/types.ts";
 
 /** Resolved at call time so tests/embedders can isolate via env. */
 const XR_HOME_DIR = () => process.env.XR_HOME ?? join(homedir(), ".xr");
@@ -162,13 +162,18 @@ export function withTurnMetrics(provider: Provider, collector: StreamingMetricsC
   return {
     id: provider.id,
     label: provider.label,
-    async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
+    // GAP-001 — this decorator MUST forward chat options. It sits between the
+    // agent loop and the real adapter on the default run path, so dropping the
+    // third argument silently stripped the cancellation signal and the request
+    // timeout from EVERY run (verified live: Ctrl+C could not interrupt a
+    // stalled provider even after the adapters themselves were fixed).
+    async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
       const started = performance.now();
       // TTFT on this substrate = time to first byte; approximated by the
       // provider's response resolving (documented in PERF-BUDGETS.md).
       let settleMs = 0;
       try {
-        const turn = await provider.chat(messages, tools);
+        const turn = await provider.chat(messages, tools, options);
         const ttftMs = performance.now() - started;
         const totalMs = ttftMs;
         const outTokens = turn.usage?.outTokens ?? estimateTokens(turn.message);

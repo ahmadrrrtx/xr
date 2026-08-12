@@ -21,6 +21,7 @@ import {
   CerebrasProvider,
 } from "./native/index.ts";
 import { getSecret } from "../security/secrets.ts";
+import { setConfiguredRequestTimeout } from "./request-guard.ts";
 
 export type CostTier = "free" | "cheap" | "premium" | "enterprise";
 
@@ -143,6 +144,10 @@ export function buildProvider(
     mode?: import("../intelligence/types.ts").RoutingMode;
   },
 ): Provider {
+  // GAP-001 — publish the configured request ceiling before any adapter is
+  // built, so the guard's default reflects the user's config rather than only
+  // the compiled-in fallback.
+  setConfiguredRequestTimeout(config.providerEngine?.requestTimeoutMs);
   const router = new RoutingService(config);
   return router.resolve(override);
 }

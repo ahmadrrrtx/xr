@@ -9,7 +9,8 @@
  * Cost: NOT free, but very affordable. $2-4/M tokens.
  *       Great for coding tasks (Codestral is excellent).
  */
-import type { Message, ModelTurn, Provider, Tool } from "../../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool, ChatOptions } from "../../core/types.ts";
+import { guardedRequest } from "../request-guard.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 
 interface MistralOptions {
@@ -46,7 +47,7 @@ export class MistralProvider implements Provider {
     this.model = opts.model ?? "mistral-small-latest";
   }
 
-  async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
+  async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
     const apiKey = this.apiKey;
     if (!apiKey) {
       throw new Error(
@@ -119,14 +120,18 @@ export class MistralProvider implements Provider {
     }
 
     try {
-      const res = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
+      // GAP-001 — bounded + cancellable (was: no signal, no timeout).
+      const res = await guardedRequest(this.id, options, (signal) =>
+        fetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal,
+        }),
+      );
 
       if (!res.ok) {
         const txt = await res.text().catch(() => "");

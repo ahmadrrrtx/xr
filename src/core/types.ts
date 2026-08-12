@@ -137,11 +137,24 @@ export interface Message {
 }
 
 /** Abstraction over any LLM provider (BYOK or local). */
+/**
+ * Per-request controls for a model call (audit GAP-001 · P0).
+ *
+ * Optional so every existing call site keeps compiling and behaving; adapters
+ * apply a bounded default when it is omitted, so a call is never unbounded.
+ */
+export interface ChatOptions {
+  /** Caller cancellation — reaches the socket, not just the loop checkpoints. */
+  signal?: AbortSignal;
+  /** Per-request ceiling in ms. Defaults to the configured provider timeout. */
+  timeoutMs?: number;
+}
+
 export interface Provider {
   id: string;
   label: string;
   /** Run one turn of the loop. Implementations parse tool calls. */
-  chat(messages: Message[], tools: Tool[]): Promise<ModelTurn>;
+  chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn>;
   /** Quick liveness/health check. */
   health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }>;
 }
