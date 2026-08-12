@@ -24,7 +24,25 @@ let store: Store;
 
 beforeEach(() => {
   const home = process.env.XR_HOME!;
-  if (existsSync(home)) rmSync(home, { recursive: true, force: true });
+  // Windows (hosted CI): the previous test's Store holds an open WAL-mode
+  // SQLite handle under this tree, and Defender/the search indexer may still
+  // be reading it. A bare rmSync then throws EBUSY/EPERM — and a throwing
+  // beforeEach fails the test before a single line of it runs, which is how
+  // `full local lifecycle with effects asserted at each step` came back red on
+  // the Windows lane with no assertion diff (identical on main@3308aff job
+  // 93181649605 and PR #48 job 94138640579).
+  //
+  // Retry like the rest of the suite (R-8 contract), and treat a residual
+  // lock as hygiene rather than a verdict: the per-test isolation this
+  // provides comes from the FRESH Store below (a uniquely-named db file), not
+  // from the directory removal succeeding.
+  if (existsSync(home)) {
+    try {
+      rmSync(home, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
+    } catch (e) {
+      console.warn(`[cleanup] could not remove ${home}: ${(e as Error).message}`);
+    }
+  }
   mkdirSync(home, { recursive: true });
   store = new Store(join(root, `db-${Math.random().toString(36).slice(2)}.db`));
 });
