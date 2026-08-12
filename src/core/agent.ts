@@ -23,6 +23,7 @@ import type {
 } from "./types.ts";
 import { getTool, toolsForMode } from "../tools/registry.ts";
 import { isCancellation } from "../providers/request-guard.ts";
+import { frameToolOutput } from "../security/tool-output.ts";
 import type { SessionRepo } from "../state/repos/session-repo.ts";
 import type { AuditRepo } from "../state/repos/audit-repo.ts";
 import type { CostRepo } from "../state/repos/cost-repo.ts";
@@ -561,7 +562,22 @@ export async function runAgentLoop(
           sessionStore.addStep(`st_${randomUUID().slice(0, 8)}`, sessionId, stepIdx, "act", call.tool, {
             ok: result.ok,
           });
-          messages.push({ role: "tool", name: call.tool, content: result.output });
+          // GAP-003 — tool output is UNTRUSTED DATA. Before this it was pushed
+          // raw, so any file/page/MCP response could inject instructions into
+          // the model's stream. Now it is scanned, delimited and audited.
+          // Non-blocking by design: the content is still delivered in full.
+          const framed = frameToolOutput(call.tool, result.output);
+          if (framed.flagged) {
+            say(
+              `  \x1b[33m! untrusted content flagged in ${call.tool} output: ${framed.signatures.join(", ")}\x1b[0m`,
+            );
+            auditStore.audit(
+              "security.untrusted_content",
+              { tool: call.tool, signatures: framed.signatures },
+              sessionId,
+            );
+          }
+          messages.push({ role: "tool", name: call.tool, content: framed.content });
           toolCtx.onToolUse?.({ tool: call.tool, ok: result.ok });
         } catch (e) {
           const msg = `tool error: ${(e as Error).message}`;
