@@ -1,5 +1,9 @@
 /**
  * XR Business OS — OAuth Flow Manager
+ *
+ * Relocated from `src/integrations/oauth.ts` by audit GAP-006/GAP-007: used
+ * only by extensions/business-os, so in core it was an orphan module that
+ * implied a runtime capability the runtime does not have.
  * 
  * Handles OAuth2 authorization code flows for integrations.
  * All credentials stored encrypted. Users own their credentials.

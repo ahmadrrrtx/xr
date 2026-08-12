@@ -1,13 +1,20 @@
 /**
  * XR Business OS — Security Policies
+ *
+ * Relocated from `src/security/policies.ts` by audit GAP-006/GAP-007: this is
+ * Business-OS-only code (it is typed against BusinessDatabase/RBACManager/
+ * AuditTrail and is imported solely by extensions/business-os). Living in core
+ * made it an orphan module inside the runtime AND put a core→extension edge in
+ * the dependency graph. It is NOT dead code — deleting it would have broken
+ * the extension — so it moves to the layer that actually owns it.
  * 
  * Integrates with XR Shield for policy enforcement.
  * All business operations must pass through these policies.
  */
 
-import type { BusinessDatabase } from '../../extensions/business-os/src/core/database.ts';
-import type { RBACManager } from '../../extensions/business-os/src/core/rbac.ts';
-import type { AuditTrail } from '../../extensions/business-os/src/core/audit.ts';
+import type { BusinessDatabase } from './database.ts';
+import type { RBACManager } from './rbac.ts';
+import type { AuditTrail } from './audit.ts';
 
 export interface SecurityPolicy {
   id: string;

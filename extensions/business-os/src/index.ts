@@ -43,9 +43,9 @@ import { MeetingsModule } from './modules/meetings/index.ts';
 import { AIWorkersModule, WORKER_DEFINITIONS } from './modules/ai-workers/index.ts';
 
 import { ConnectorRegistry } from '../../../src/integrations/registry.ts';
-import { OAuthManager } from '../../../src/integrations/oauth.ts';
+import { OAuthManager } from './core/oauth.ts';
 import { CredentialVault } from '../../../src/integrations/credentials.ts';
-import { BusinessSecurityPolicies } from '../../../src/security/policies.ts';
+import { BusinessSecurityPolicies } from './core/policies.ts';
 import { CORE_VERSION, CODENAME, PKG } from '../../../src/core/version.ts';
 import type { LifecycleHook } from '../../../src/core/lifecycle.ts';
 
@@ -344,9 +344,9 @@ export { DocumentsModule } from './modules/documents/index.ts';
 export { MeetingsModule } from './modules/meetings/index.ts';
 export { AIWorkersModule, WORKER_DEFINITIONS } from './modules/ai-workers/index.ts';
 export { ConnectorRegistry, CONNECTORS } from '../../../src/integrations/registry.ts';
-export { OAuthManager } from '../../../src/integrations/oauth.ts';
+export { OAuthManager } from './core/oauth.ts';
 export { CredentialVault } from '../../../src/integrations/credentials.ts';
-export { BusinessSecurityPolicies } from '../../../src/security/policies.ts';
+export { BusinessSecurityPolicies } from './core/policies.ts';
 export { BUSINESS_CLI_COMMANDS, BUSINESS_MODULE_IDS } from './cli.ts';
 
 // XR 5.3 Operating Layer Exports
