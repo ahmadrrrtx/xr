@@ -1,7 +1,13 @@
 /**
- * XR 3.1 Shell — application controller
- *
+ * XR 3.1 Shell — application controller (ENHANCED)
  * State, input, slash commands, agent runs, palette.
+ * Includes avatar state management.
+ *
+ * Enhancements:
+ * - Avatar state tracking and transitions
+ * - State visualization in UI
+ * - Improved status communication
+ *
  * Backend systems are consumed only via existing APIs.
  */
 
@@ -25,8 +31,36 @@ import { computeLayout } from "./layout.ts";
 import { assembleFrame } from "./render.ts";
 import type {
   ShellState, ModeState, Severity, ProjectMeta, PaletteItem,
-  SessionRow, ResearchRow, ChatMessage,
+  SessionRow, ResearchRow, ChatMessage, AvatarState,
 } from "./types.ts";
+
+// ── Avatar State Helpers ─────────────────────────────────────────────────────
+
+/** Convert busy state to avatar state */
+function busyToAvatarState(busy: boolean, busyLabel: string, mode: ModeState): AvatarState {
+  if (!busy) return "idle";
+
+  const label = busyLabel.toLowerCase();
+
+  if (label.includes("listening") || label.includes("voice")) return "listening";
+  if (label.includes("thinking") || label.includes("reasoning")) return "thinking";
+  if (label.includes("speaking") || label.includes("speaking")) return "speaking";
+  if (label.includes("working") || label.includes("executing") || label.includes("running")) return "working";
+  if (label.includes("error") || label.includes("failed")) return "error";
+  if (label.includes("done") || label.includes("complete") || label.includes("success")) return "complete";
+
+  // Default based on mode
+  if (mode === "chat") return "thinking";
+  return "working";
+}
+
+/** Set avatar state with transition */
+function setAvatarState(state: ShellState, newState: AvatarState): void {
+  if (state.avatarState !== newState) {
+    state.avatarState = newState;
+    state.dirty = true;
+  }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -55,6 +89,7 @@ function loadProjectMeta(cwd: string): ProjectMeta {
 function loadSessions(store: Store): SessionRow[] {
   try { return store.recentSessions(12); } catch { return []; }
 }
+
 function loadResearch(store: Store): ResearchRow[] {
   try { return store.listResearch(8); } catch { return []; }
 }
@@ -93,7 +128,11 @@ function updateOrAppendAssistantMessage(state: ShellState, content: string): voi
 
 function finalizeLiveAssistantMessage(state: ShellState): void {
   const last = state.chat[state.chat.length - 1];
-  if (last && last.role === "assistant" && last.meta === "live") last.meta = "XR";
+  if (last && last.role === "assistant" && last.meta === "live") {
+    last.meta = "XR";
+    // Transition avatar to complete after final message
+    setAvatarState(state, "complete");
+  }
 }
 
 function cleanAgentLine(line: string): string {
@@ -108,6 +147,10 @@ function setView(state: ShellState, view: ShellViewId): void {
   state.view = view;
   state.sidebarIndex = Math.max(0, SHELL_VIEW_ORDER.indexOf(view));
   state.dirty = true;
+  // Reset avatar when switching views (unless already busy)
+  if (!state.busy) {
+    setAvatarState(state, "idle");
+  }
 }
 
 function refreshState(state: ShellState): void {
@@ -132,7 +175,16 @@ async function switchWorkspace(state: ShellState, workspaceId: string): Promise<
   state.store = state.wm.getStore(workspaceId);
   refreshState(state);
   notify(state, "ok", "Workspace switched", workspaceId);
+  setAvatarState(state, "idle");
 }
+
+// ── State Derivation ──────────────────────────────────────────────────────────
+
+function deriveAvatarState(state: ShellState): AvatarState {
+  return busyToAvatarState(state.busy, state.busyLabel, state.mode);
+}
+
+// ── Create Initial State ──────────────────────────────────────────────────────
 
 function createState(): ShellState {
   const { config } = loadConfig();
@@ -141,6 +193,10 @@ function createState(): ShellState {
   const store = wm.getStore(workspaceId);
   let auditValid: boolean | null = null;
   try { auditValid = store.verifyChain().valid; } catch { /* ignore */ }
+
+  // Determine initial avatar state
+  const initialAvatarState: AvatarState = "idle";
+
   return {
     cwd: process.cwd(),
     meta: loadProjectMeta(process.cwd()),
@@ -195,1032 +251,541 @@ function createState(): ShellState {
     bootPhase: 0,
     helpSeen: 0,
     auditValid,
+    // Avatar state
+    avatarState: initialAvatarState,
+    avatarStateLabel: () => {
+      const labels: Record<AvatarState, string> = {
+        idle: "Idle",
+        listening: "Listening",
+        thinking: "Thinking",
+        speaking: "Speaking",
+        working: "Working",
+        error: "Error",
+        complete: "Complete",
+      };
+      return labels[initialAvatarState];
+    },
   };
 }
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
+/**
+ * Palette items for command palette (Ctrl+K).
+ * Returns items based on current state.
+ */
 function paletteItems(state: ShellState): PaletteItem[] {
   const go = (view: ShellViewId) => () => {
     setView(state, view);
     state.overlay = "none";
     state.focus = "composer";
+    // Reset avatar on navigation unless running
+    if (!state.busy) setAvatarState(state, "idle");
   };
-  return [
+
+  const items: PaletteItem[] = [
+    // Navigation
     { id: "nav-home", label: "Open Overview", description: "Home dashboard", keywords: ["dashboard", "home"], section: "navigation", shortcut: "g d", run: go("home") },
     { id: "nav-chat", label: "Open Chat", description: "Conversation workspace", keywords: ["assistant", "messages"], section: "navigation", shortcut: "g c", run: go("chat") },
     { id: "nav-sessions", label: "Open Sessions", description: "Recent tasks and chats", keywords: ["history"], section: "navigation", shortcut: "g s", run: go("sessions") },
     { id: "nav-workspaces", label: "Open Workspaces", description: "Switch isolated workspaces", keywords: ["projects"], section: "navigation", shortcut: "g w", run: go("workspaces") },
-    { id: "nav-research", label: "Open Research", description: "Citable research runs", keywords: ["report"], section: "navigation", shortcut: "g r", run: go("research") },
-    { id: "nav-activity", label: "Open Activity", description: "Tool timeline", keywords: ["timeline"], section: "navigation", shortcut: "g t", run: go("activity") },
-    { id: "nav-audit", label: "Open Audit Log", description: "Tamper-evident chain", keywords: ["security", "chain"], section: "navigation", shortcut: "g a", run: go("audit") },
-    { id: "nav-memory", label: "Open Memory", description: "Durable knowledge", keywords: ["rag", "remember"], section: "navigation", run: go("memory") },
-    { id: "nav-status", label: "Open Status", description: "System overview", keywords: ["health"], section: "navigation", run: go("status") },
-    { id: "nav-settings", label: "Open Settings", description: "Runtime configuration", keywords: ["config"], section: "settings", shortcut: "g .", run: go("settings") },
-    { id: "notices", label: "Notification Center", description: "Recent notices", keywords: ["alerts"], section: "commands", shortcut: "Ctrl+N", run: () => { state.overlay = "notifications"; state.dirty = true; } },
-    { id: "quick", label: "Quick Actions", description: "High-frequency ops", keywords: ["actions"], section: "commands", shortcut: "Ctrl+J", run: () => { state.overlay = "quick"; state.dirty = true; } },
-    { id: "workspace-picker", label: "Workspace Picker", description: "Switch workspace", keywords: ["workspace"], section: "commands", shortcut: "Ctrl+W", run: () => { state.overlay = "startup"; state.startupSection = "workspace"; state.dirty = true; } },
-    { id: "mode", label: "Switch Mode", description: "agent / plan / ask", keywords: ["mode"], section: "commands", shortcut: "Shift+Tab", run: () => { state.overlay = "mode"; state.dirty = true; } },
-    { id: "model", label: "Change Model", description: `Active: ${state.provider}/${state.model}`, keywords: ["model", "provider", "switch", "ollama", "openai", "claude"], section: "commands", shortcut: "Alt+P", run: () => { state.overlay = "model"; state.dirty = true; } },
-    { id: "help", label: "Keyboard Help", description: "All bindings", keywords: ["keys", "shortcuts"], section: "commands", shortcut: "?", run: () => { state.overlay = "help"; state.helpSeen++; state.dirty = true; } },
-    { id: "serve", label: "Control Center guide", description: "How to launch xr serve", keywords: ["dashboard", "browser"], section: "commands", run: () => {
-      appendMessage(state, "assistant", "Run `xr serve` in another terminal, then open http://127.0.0.1:3141 — same XR, browser surface.", "guide");
-      state.overlay = "none"; setView(state, "chat");
-    }},
-    { id: "security-lab", label: "Run Security Lab", description: "Injection benchmark", keywords: ["security"], section: "commands", run: async () => { state.overlay = "none"; await runSecurityLab(state); } },
-    { id: "audit-export", label: "Export Signed Audit", description: "Write xr-audit-*.md", keywords: ["export"], section: "commands", run: async () => { state.overlay = "none"; await exportAudit(state); } },
-    { id: "clear", label: "Clear Chat View", description: "Keep history, clear screen", keywords: ["clear"], section: "commands", shortcut: "Ctrl+L", run: () => {
-      state.chat = state.chat.slice(0, 1);
-      state.overlay = "none";
-      notify(state, "info", "Chat cleared");
-    }},
-    { id: "exit", label: "Exit XR", description: "Leave the shell", keywords: ["quit"], section: "commands", run: () => { state.overlay = "exit"; state.dirty = true; } },
+    { id: "nav-research", label: "Open Research", description: "Research reports", keywords: ["reports", "research"], section: "navigation", shortcut: "g r", run: go("research") },
+
+    // Agents
+    { id: "nav-agents", label: "Manage Agents", description: "View and control agents", keywords: ["agent", "agents"], section: "agents", shortcut: "g a", run: go("agents") },
+    { id: "nav-workflows", label: "Workflows", description: "Multi-agent workflows", keywords: ["workflow", "multi-agent"], section: "agents", shortcut: "g wf", run: go("workflows") },
+    { id: "nav-automation", label: "Automations", description: "Scheduled and triggered tasks", keywords: ["automation", "scheduled"], section: "agents", shortcut: "g auto", run: go("automation") },
+
+    // Knowledge
+    { id: "nav-memory", label: "Memory", description: "What XR remembers", keywords: ["memory", "remember", "recall"], section: "knowledge", shortcut: "g m", run: go("memory") },
+    { id: "nav-files", label: "Files", description: "File browser", keywords: ["files", "file", "explore"], section: "knowledge", shortcut: "g f", run: go("files") },
+    { id: "nav-skills", label: "Skills", description: "Available skills and capabilities", keywords: ["skills", "skill", "capabilities"], section: "knowledge", shortcut: "g k", run: go("skills") },
+
+    // Setup
+    { id: "nav-providers", label: "Providers", description: "Cloud provider configuration", keywords: ["provider", "providers", "api key"], section: "setup", shortcut: "g p", run: go("providers") },
+    { id: "nav-models", label: "Models", description: "Local model management", keywords: ["model", "models", "local"], section: "setup", shortcut: "g mdl", run: go("models") },
+    { id: "nav-settings", label: "Settings", description: "Preferences and configuration", keywords: ["settings", "config", "preferences"], section: "setup", shortcut: "g sgt", run: go("settings") },
+
+    // System
+    { id: "nav-dashboard", label: "Dashboard", description: "Overview and status", keywords: ["dashboard", "overview", "status"], section: "system", shortcut: "g d", run: go("dashboard") },
+    { id: "nav-security", label: "Security", description: "Security status and controls", keywords: ["security", "safe", "protect"], section: "system", shortcut: "g sec", run: go("security") },
+    { id: "nav-usage", label: "Usage", description: "Spending and token usage", keywords: ["usage", "spending", "budget", "cost"], section: "system", shortcut: "g u", run: go("usage") },
   ];
+
+  return items;
 }
 
-function filteredPalette(state: ShellState): PaletteItem[] {
-  const q = state.paletteQuery.trim().toLowerCase();
-  const items = paletteItems(state);
-  if (!q) return items;
-  return items.filter((item) =>
-    [item.label, item.description, ...item.keywords].join(" ").toLowerCase().includes(q),
-  );
-}
+// ── Slash Commands ────────────────────────────────────────────────────────────
 
-// ── Confirm / lab / export ────────────────────────────────────────────────────
+/**
+ * Parse and execute slash commands.
+ * Returns true if command was handled.
+ */
+function handleSlashCommand(state: ShellState, input: string): boolean {
+  const trimmed = input.trim();
+  if (!trimmed.startsWith("/")) return false;
 
-function promptConfirm(state: ShellState, title: string, detail?: string, defaultYes = true): Promise<boolean> {
-  return new Promise((resolve) => {
-    state.confirm = { title, detail, defaultYes, resolve };
-    state.overlay = "confirm";
-    state.dirty = true;
-  });
-}
+  const parts = trimmed.split(/\s+/);
+  const cmd = parts[0].toLowerCase();
+  const args = parts.slice(1).join(" ");
 
-async function runSecurityLab(state: ShellState): Promise<void> {
-  const { config } = loadConfig();
-  const report = runLab({ egressAllowlist: config.security.egressAllowlist });
-  const blockedPct = Math.round(report.rate * 100);
-  appendMessage(state, "assistant", `Security lab: blocked ${report.blocked}/${report.total} attacks (${blockedPct}%).`, "security");
-  notify(state, blockedPct >= 90 ? "ok" : blockedPct >= 70 ? "warn" : "error", "Security lab completed", `${report.blocked}/${report.total} blocked`);
-}
-
-async function exportAudit(state: ShellState): Promise<void> {
-  const report = buildAuditReport({
-    project: state.meta.name,
-    chainValid: state.store.verifyChain().valid,
-    entries: state.store.recentAudit(1000),
-    totalUsd: state.store.costSummary().totalUsd,
-  });
-  const file = join(state.cwd, `xr-audit-${Date.now().toString(36)}.md`);
-  await Bun.write(file, report.markdown);
-  notify(state, "ok", "Audit report exported", file);
-}
-
-// ── Slash commands ────────────────────────────────────────────────────────────
-
-async function handleSlashCommand(state: ShellState, input: string): Promise<void> {
-  const [rawName, ...rest] = input.slice(1).split(/\s+/);
-  const name = rawName?.toLowerCase() ?? "";
-  const args = rest.join(" ").trim();
-
-  switch (name) {
-    case "help":
-    case "?":
+  switch (cmd) {
+    case "/help":
+    case "/?":
       state.overlay = "help";
-      state.helpSeen++;
-      break;
-    case "status":
-      setView(state, "status");
-      break;
-    case "workspace":
-    case "workspaces":
-      state.overlay = "startup";
-      state.startupSection = "workspace";
-      setView(state, "workspaces");
-      break;
-    case "sessions":
-      setView(state, "sessions");
-      break;
-    case "logs":
-    case "audit":
-      setView(state, "audit");
-      break;
-    case "context":
-    case "memory":
-      setView(state, "memory");
-      break;
-    case "activity":
-      setView(state, "activity");
-      break;
-    case "research":
-      setView(state, "research");
-      break;
-    case "home":
-    case "overview":
-      setView(state, "home");
-      break;
-    case "settings":
-    case "config":
-      setView(state, "settings");
-      break;
-    case "palette":
-      state.overlay = "palette";
-      state.paletteQuery = "";
-      state.paletteIndex = 0;
-      break;
-    case "notifications":
-    case "notice":
-      state.overlay = "notifications";
-      break;
-    case "quick":
-      state.overlay = "quick";
-      break;
-    case "models":
-    case "local": {
-      const { config } = loadConfig();
-      const local: any = config.localModels;
-      const runtime = local.runtime ?? "ollama";
-      const status = await detectRuntime(runtime);
-      appendMessage(state, "assistant", [
-        "Local models",
-        `• runtime: ${status.label} (${status.id})`,
-        `• selected: ${local.selected ?? config.defaults.model ?? "none"}`,
-        `• health: ${status.healthy ? "healthy" : status.running ? "running" : status.installed ? "installed" : "not found"}`,
-        `• models: ${(status.models ?? []).slice(0, 6).join(", ") || "none"}`,
-      ].join("\n"), "models");
-      setView(state, "chat");
-      break;
-    }
-    case "dashboard":
-    case "serve":
-      appendMessage(state, "assistant", "Run `xr serve` then open http://127.0.0.1:3141 for Control Center.", "guide");
-      setView(state, "chat");
-      break;
-    case "mode": {
-      const next = args as ModeState;
-      if (!["agent", "plan", "ask"].includes(next)) {
-        notify(state, "warn", "Usage", "/mode agent|plan|ask");
-        break;
-      }
-      state.mode = next;
-      const { config } = loadConfig();
-      config.defaults.mode = next;
-      saveConfig(config);
-      notify(state, "ok", "Mode updated", next);
-      break;
-    }
-    case "model": {
-      const parts = args.split(/\s+/).filter(Boolean);
-      if (!parts.length) {
-        // No args → open the model overlay (discoverable switcher)
-        state.overlay = "model";
-        state.dirty = true;
-        notify(state, "info", "Change model", `Active: ${state.provider} / ${state.model}`);
-        break;
-      }
-      const provider = parts[0];
-      if (!provider || !knownProviders().includes(provider)) {
-        notify(state, "warn", "Unknown provider", knownProviders().join(", "));
-        appendMessage(
-          state,
-          "assistant",
-          `Unknown provider "${provider}".\nKnown: ${knownProviders().join(", ")}\n\nTry:\n  /model ollama qwen2.5:7b\n  /model openai gpt-4o-mini\n  xr providers list\n  xr models list`,
-          "system",
-        );
-        break;
-      }
-      state.provider = provider;
-      if (parts[1]) state.model = parts[1]!;
-      const { config } = loadConfig();
-      config.defaults.provider = state.provider;
-      config.defaults.model = state.model;
-      // Keep local selection aligned when primary is a local runtime
-      if (provider === "ollama" || provider === "lmstudio" || provider === "jan" || provider === "localai" || provider === "vllm") {
-        const local: any = config.localModels ?? {};
-        local.enabled = true;
-        local.selected = state.model;
-        local.provider = provider;
-        config.localModels = local;
-      }
-      saveConfig(config);
-      notify(state, "ok", "Model updated", `${state.provider} / ${state.model}`);
-      appendMessage(
-        state,
-        "assistant",
-        `Active model is now ${state.provider} / ${state.model}.\nStatus bar and sidebar always show the current model.\nSwitch again with Alt+P or /model <provider> [model].`,
-        "system",
-      );
-      break;
-    }
-    case "budget": {
-      if (!args) {
-        const { config } = loadConfig();
-        const cost = state.store.costSummary();
-        appendMessage(state, "assistant", [
-          "Budget summary",
-          `• per-task cap: ${config.budget.perTaskUsd > 0 ? `$${config.budget.perTaskUsd}` : "none"}`,
-          `• total spent: $${cost.totalUsd.toFixed(4)}`,
-          `• total tokens: ${cost.totalTokens.toLocaleString()}`,
-        ].join("\n"), "budget");
-        setView(state, "chat");
-        break;
-      }
-      const next = Number.parseFloat(args);
-      if (!Number.isFinite(next)) {
-        notify(state, "warn", "Usage", "/budget 0.25");
-        break;
-      }
-      state.budget = next;
-      const { config } = loadConfig();
-      config.budget.perTaskUsd = next;
-      saveConfig(config);
-      notify(state, "ok", "Budget updated", `$${next.toFixed(2)}`);
-      break;
-    }
-    case "security-lab":
-      await runSecurityLab(state);
-      break;
-    case "export-audit":
-      await exportAudit(state);
-      break;
-    case "clear":
-      state.chat = state.chat.slice(0, 1);
-      notify(state, "info", "Chat cleared");
-      break;
-    case "inspect":
-      state.showInspector = !state.showInspector;
-      notify(state, "info", state.showInspector ? "Inspector shown" : "Inspector hidden");
-      break;
-    case "exit":
-    case "quit":
-      state.overlay = "exit";
-      break;
-    default:
-      notify(state, "warn", "Unknown slash command", `/${name} — try /help`);
-      break;
-  }
-  state.dirty = true;
-}
-
-// ── Memory capture ────────────────────────────────────────────────────────────
-
-function renderCaptureOutcome(state: ShellState, outcome: CaptureOutcome): void {
-  if (outcome.kind === "add") {
-    if (outcome.ok && outcome.entry) appendMessage(state, "assistant", `✓ remembered: ${outcome.entry.content}`, "memory");
-    else if (outcome.declined) appendMessage(state, "assistant", `Okay — I won't remember that.`, "memory");
-    else if (outcome.duplicate) appendMessage(state, "assistant", `Already remembered — no duplicate created.`, "memory");
-    else appendMessage(state, "assistant", `Could not store memory: ${outcome.reason ?? "unknown"}`, "memory");
-  } else if (outcome.kind === "exclusion") {
-    appendMessage(state, "assistant", `✓ got it — I won't remember that.`, "memory");
-  } else if (outcome.kind === "forget") {
-    appendMessage(state, "assistant", `✓ forgotten ${outcome.removed ?? 0} entr${(outcome.removed ?? 0) === 1 ? "y" : "ies"}.`, "memory");
-  } else if (outcome.kind === "recall") {
-    const entries = outcome.entries ?? [];
-    appendMessage(
-      state, "assistant",
-      entries.length
-        ? `Here's what I remember:\n${entries.slice(0, 6).map((e) => `• ${e.content}`).join("\n")}`
-        : `I don't have anything relevant saved.`,
-      "memory",
-    );
-  }
-}
-
-async function maybeCaptureMemory(state: ShellState, task: string): Promise<boolean> {
-  const { config } = loadConfig();
-  if (!isMemoryEnabled() || !config.memory.enabled) return false;
-  const mem = new MemoryStore(state.store);
-  const scope = projectScopeFromCwd(state.cwd);
-  const explicitRemember = /^\s*remember\b/i.test(task);
-  const outcome = await mem.captureIntentAsync(task, {
-    scope,
-    source: "chat",
-    autoSuggest: false,
-    confirm: async (prompt) =>
-      explicitRemember ? await promptConfirm(state, "Store durable memory?", prompt, true) : true,
-  });
-  if (outcome.handled) {
-    renderCaptureOutcome(state, outcome);
-    notify(state, "ok", "Memory action handled");
-    return true;
-  }
-  return false;
-}
-
-// ── Agent run ─────────────────────────────────────────────────────────────────
-
-async function runTask(state: ShellState, task: string): Promise<void> {
-  const { config } = loadConfig();
-  if (await maybeCaptureMemory(state, task)) {
-    setView(state, "chat");
-    return;
-  }
-
-  appendMessage(state, "user", task, state.mode);
-  state.sessionTitle = task.slice(0, 48);
-  setView(state, "chat");
-  state.busy = true;
-  state.busyLabel = `connecting to ${state.provider}`;
-  state.spinnerIndex = 0;
-  state.dirty = true;
-
-  const provider = buildProvider(config, { provider: state.provider, model: state.model });
-  const health = await provider.health();
-  if (!health.ok) {
-    state.busy = false;
-    notify(state, "error", `${state.provider} unavailable`, health.detail ?? "provider health check failed");
-    appendMessage(state, "assistant", `Provider ${state.provider} is unreachable: ${health.detail ?? "unknown error"}. Try /model or start Ollama.`, "system");
-    return;
-  }
-
-  notify(state, "ok", "Connected", `${state.provider}${health.latencyMs ? ` · ${health.latencyMs}ms` : ""}`);
-  state.busyLabel = state.mode === "plan" ? "planning" : state.mode === "ask" ? "reading" : "thinking";
-
-  const before = state.store.costSummary();
-  const memoryEngine = new MemoryStore(state.store);
-  const say = (line: string) => {
-    const clean = cleanAgentLine(line);
-    if (!clean) return;
-    if (stripAnsi(line).includes("◆")) {
-      updateOrAppendAssistantMessage(state, clean);
-    } else {
-      addTimeline(state, "info", clean);
-    }
-    state.dirty = true;
-  };
-
-  /**
-   * Phase 2 · T1 — the Shell runs through the canonical execution envelope.
-   *
-   * Phase 0 · T8 had bridged only the TOOLS here (plugins/MCP/skills) while the
-   * Shell still called `runAgent` and hand-built `AgentDeps`. It now assembles
-   * the same envelope every other surface does, so tool discovery, collision
-   * arbitration, policy and evidence are identical to `xr run` by construction
-   * rather than by careful duplication.
-   */
-  const controller = new AbortController();
-  state.runAbort = controller;
-  let result: Awaited<ReturnType<typeof executeOnSurface>>;
-  try {
-    result = await executeOnSurface({
-    task,
-    mode: state.mode,
-    surface: "shell",
-    store: state.store,
-    provider,
-    modelId: state.model,
-    cwd: state.cwd,
-    signal: controller.signal,
-    say,
-    onDiagnostic: (note) => addTimeline(state, "warn", note),
-    approve: async (req) => {
-      return await promptConfirm(
-        state,
-        `Approve ${req.tool}?`,
-        `${req.reason}${req.preview ? `\n\n${req.preview}` : ""}`,
-        true,
-      );
-    },
-    onOverBudget: async (meter, reason) => {
-      const approved = await promptConfirm(
-        state,
-        "Budget ceiling reached",
-        `${reason}\n\n${meter}\n\nRaise budget or switch to a local model.`,
-        false,
-      );
-      return approved ? { usd: 0.10 } : null;
-    },
-    budget: {
-      maxUsd: isLocal(state.provider) ? undefined : (state.budget > 0 ? state.budget : config.budget.perTaskUsd),
-      maxTokens: config.budget.perTaskTokens,
-    },
-    pricing: priceFor(state.provider, state.model),
-    egressAllowlist: config.security.egressAllowlist,
-    dryRun: false,
-    memory: {
-      enabled: isMemoryEnabled() && config.memory.injectInChat,
-      recallLimit: config.memory.recallLimit,
-      semantic: config.memory.semanticRecall,
-    },
-    memoryStore: memoryEngine,
-    sessionSummary: {
-      enabled: isMemoryEnabled() && config.memory.saveSessionSummaries,
-      minTurns: config.memory.sessionSummaryMinTurns,
-    },
-  });
-  } finally {
-    state.runAbort = null;
-  }
-
-  finalizeLiveAssistantMessage(state);
-  const after = state.store.costSummary();
-  state.totalSpent = after.totalUsd;
-  state.totalTokens = after.totalTokens;
-  state.busy = false;
-  state.busyLabel = "idle";
-
-  const deltaUsd = Math.max(0, after.totalUsd - before.totalUsd);
-  if (result.stopped === "done") notify(state, "ok", "Task complete", `${result.steps} step(s) · $${deltaUsd.toFixed(4)}`);
-  else if (result.stopped === "budget") notify(state, "warn", "Task paused by budget", result.finalMessage);
-  else if (result.stopped === "approval") notify(state, "warn", "Task paused for approval", result.finalMessage);
-  else if (result.stopped === "cancelled") notify(state, "warn", "Task interrupted", result.finalMessage || "Stopped at your request.");
-  else notify(state, result.stopped === "error" ? "error" : "info", `Task ended: ${result.stopped}`, result.finalMessage);
-
-  if (result.finalMessage && (!state.chat.length || state.chat[state.chat.length - 1]!.content !== result.finalMessage)) {
-    appendMessage(state, "assistant", result.finalMessage, "XR");
-  }
-  refreshState(state);
-}
-
-// ── Input handling ────────────────────────────────────────────────────────────
-
-function cycleMode(state: ShellState): void {
-  const order: ModeState[] = ["agent", "plan", "ask"];
-  const i = order.indexOf(state.mode);
-  state.mode = order[(i + 1) % order.length]!;
-  const { config } = loadConfig();
-  config.defaults.mode = state.mode;
-  saveConfig(config);
-  notify(state, "ok", "Mode", state.mode);
-}
-
-function handleGChord(state: ShellState, ch: string): boolean {
-  const map: Record<string, ShellViewId | "notices" | "settings"> = {
-    d: "home",
-    c: "chat",
-    s: "sessions",
-    w: "workspaces",
-    r: "research",
-    t: "activity",
-    a: "audit",
-    m: "memory",
-    b: "status",
-    x: "status",
-    ".": "settings",
-    n: "notices" as any,
-  };
-  const target = map[ch];
-  state.gPending = false;
-  if (state.gTimer) clearTimeout(state.gTimer);
-  if (!target) {
-    state.dirty = true;
-    return true;
-  }
-  if (target === "notices") {
-    state.overlay = "notifications";
-  } else {
-    setView(state, target as ShellViewId);
-  }
-  state.dirty = true;
-  return true;
-}
-
-async function handleEnter(state: ShellState): Promise<void> {
-  if (state.overlay === "palette") {
-    const items = filteredPalette(state);
-    const item = items[state.paletteIndex];
-    if (item) await item.run();
-    return;
-  }
-  if (state.overlay === "notifications" || state.overlay === "quick" || state.overlay === "help" || state.overlay === "model") {
-    state.overlay = "none";
-    state.dirty = true;
-    return;
-  }
-  if (state.overlay === "mode") {
-    state.overlay = "none";
-    state.dirty = true;
-    return;
-  }
-  if (state.overlay === "exit") {
-    state.shouldExit = true;
-    return;
-  }
-  if (state.overlay === "confirm" && state.confirm) {
-    const resolver = state.confirm.resolve;
-    const value = state.confirm.defaultYes;
-    state.confirm = undefined;
-    state.overlay = "none";
-    resolver(value);
-    state.dirty = true;
-    return;
-  }
-  if (state.overlay === "startup") {
-    if (state.startupSection === "workspace") {
-      const selected = state.wm.listWorkspaces()[state.workspaceIndex];
-      if (selected) await switchWorkspace(state, selected.id);
-    } else {
-      setView(state, "sessions");
-    }
-    state.overlay = "none";
-    state.focus = "composer";
-    state.dirty = true;
-    return;
-  }
-
-  const value = state.input.trim();
-  state.input = "";
-  state.cursor = 0;
-  if (!value) {
-    state.dirty = true;
-    return;
-  }
-  if (state.busy) {
-    notify(state, "warn", "XR is already working", "Wait for the current run or interrupt with Esc/Ctrl+C.");
-    return;
-  }
-  if (state.inputHistory[state.inputHistory.length - 1] !== value) state.inputHistory.push(value);
-  state.inputHistoryIndex = -1;
-  if (value.startsWith("/")) await handleSlashCommand(state, value);
-  else await runTask(state, value);
-}
-
-function insertText(state: ShellState, text: string): void {
-  const before = state.input.slice(0, state.cursor);
-  const after = state.input.slice(state.cursor);
-  state.input = before + text + after;
-  state.cursor += text.length;
-  state.dirty = true;
-}
-
-function deleteBackward(state: ShellState): void {
-  if (state.cursor <= 0) return;
-  state.input = state.input.slice(0, state.cursor - 1) + state.input.slice(state.cursor);
-  state.cursor -= 1;
-  state.dirty = true;
-}
-
-async function handleKey(state: ShellState, key: KeyEvent): Promise<void> {
-  // Global: Ctrl+C
-  if (key.name === "ctrl+c") {
-    if (state.busy) {
-      /**
-       * A-19 — real interruption, not best-effort cosmetics: abort the run's
-       * controller; the loop stops at its next checkpoint and reports
-       * stopped:"cancelled". A pending approval is denied first (fail-closed)
-       * so a run waiting on the confirm overlay stops immediately.
-       */
-      if (state.overlay === "confirm" && state.confirm) {
-        state.confirm.resolve(false);
-        state.confirm = undefined;
-        state.overlay = "none";
-      }
-      state.runAbort?.abort();
-      notify(state, "warn", "Interrupt requested", "Stopping current run at the next checkpoint.");
-      state.busy = false;
-      state.busyLabel = "idle";
-      finalizeLiveAssistantMessage(state);
       state.dirty = true;
-      return;
-    }
-    if (state.overlay !== "none") {
+      return true;
+
+    case "/new":
+    case "/clear":
+      state.chat = [];
+      state.sessionTitle = "new session";
+      state.dirty = true;
+      setAvatarState(state, "idle");
+      notify(state, "ok", "New session started");
+      return true;
+
+    case "/model":
+      if (args) {
+        // Model switch handled by provider system
+        // This is a placeholder - actual implementation uses xr providers set
+        notify(state, "info", `Model switch: ${args} (use xr providers set for full control)`);
+      }
       state.overlay = "none";
-      state.dirty = true;
-      return;
-    }
-    state.shouldExit = true;
-    return;
-  }
-
-  // Confirm overlay
-  if (state.overlay === "confirm" && state.confirm) {
-    if (key.name === "enter" || key.char?.toLowerCase() === "y") {
-      const resolve = state.confirm.resolve;
-      const value = key.char?.toLowerCase() === "y" ? true : state.confirm.defaultYes;
-      state.confirm = undefined;
-      state.overlay = "none";
-      resolve(value);
-      state.dirty = true;
-      return;
-    }
-    if (key.char?.toLowerCase() === "n" || key.name === "esc") {
-      const resolve = state.confirm.resolve;
-      state.confirm = undefined;
-      state.overlay = "none";
-      resolve(false);
-      state.dirty = true;
-      return;
-    }
-    return;
-  }
-
-  // Exit overlay
-  if (state.overlay === "exit") {
-    if (key.name === "enter" || key.char?.toLowerCase() === "y") {
-      state.shouldExit = true;
-      return;
-    }
-    if (key.name === "esc" || key.char?.toLowerCase() === "n") {
-      state.overlay = "none";
-      state.exitArmed = false;
-      state.dirty = true;
-      return;
-    }
-    return;
-  }
-
-  // Esc priority: overlay → interrupt → collapse → exit prompt
-  if (key.name === "esc") {
-    if (state.overlay !== "none") {
-      state.overlay = "none";
-      state.confirm = undefined;
-      state.dirty = true;
-      return;
-    }
-    if (state.busy) {
-      // A-19 — Esc aborts like Ctrl+C.
-      state.runAbort?.abort();
-      state.busy = false;
-      state.busyLabel = "idle";
-      finalizeLiveAssistantMessage(state);
-      notify(state, "warn", "Interrupted", "Stopping current run at the next checkpoint.");
-      return;
-    }
-    if (state.focus !== "composer") {
       state.focus = "composer";
-      state.dirty = true;
-      return;
-    }
-    state.overlay = "exit";
-    state.dirty = true;
-    return;
-  }
+      return true;
 
-  // Global chords
-  if (key.name === "ctrl+k") {
-    state.overlay = "palette";
-    state.paletteQuery = "";
-    state.paletteIndex = 0;
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "ctrl+n") {
-    state.overlay = state.overlay === "notifications" ? "none" : "notifications";
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "ctrl+w") {
-    state.overlay = "startup";
-    state.startupSection = "workspace";
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "ctrl+j") {
-    state.overlay = state.overlay === "quick" ? "none" : "quick";
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "ctrl+l") {
-    state.chat = state.chat.slice(0, 1);
-    notify(state, "info", "Chat cleared");
-    return;
-  }
-  if (key.name === "ctrl+d") {
-    if (!state.input) {
-      state.overlay = "exit";
-      state.dirty = true;
-    }
-    return;
-  }
-  if (key.name === "alt+p") {
-    state.overlay = "model";
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "shift+tab") {
-    cycleMode(state);
-    return;
-  }
+    case "/providers":
+    case "/provider":
+      setView(state, "providers");
+      state.overlay = "none";
+      return true;
 
-  // g-chord
-  if (state.gPending && key.name === "char" && key.char) {
-    handleGChord(state, key.char);
-    return;
-  }
-  if (key.name === "char" && key.char === "g" && state.overlay === "none" && state.focus !== "composer" && !state.input) {
-    state.gPending = true;
-    if (state.gTimer) clearTimeout(state.gTimer);
-    state.gTimer = setTimeout(() => { state.gPending = false; state.dirty = true; }, 1000);
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "char" && key.char === "?" && state.overlay === "none" && !state.input) {
-    state.overlay = "help";
-    state.helpSeen++;
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "char" && key.char === "/" && state.overlay === "none" && state.focus !== "composer" && !state.input) {
-    state.focus = "composer";
-    state.dirty = true;
-    return;
-  }
+    case "/agents":
+      setView(state, "agents");
+      state.overlay = "none";
+      return true;
 
-  // Palette input
-  if (state.overlay === "palette") {
-    if (key.name === "up") {
-      state.paletteIndex = Math.max(0, state.paletteIndex - 1);
-      state.dirty = true;
-      return;
-    }
-    if (key.name === "down") {
-      const items = filteredPalette(state);
-      state.paletteIndex = Math.min(Math.max(0, items.length - 1), state.paletteIndex + 1);
-      state.dirty = true;
-      return;
-    }
-    if (key.name === "enter") {
-      await handleEnter(state);
-      return;
-    }
-    if (key.name === "backspace") {
-      state.paletteQuery = state.paletteQuery.slice(0, -1);
-      state.paletteIndex = 0;
-      state.dirty = true;
-      return;
-    }
-    if (key.name === "char" && key.char) {
-      state.paletteQuery += key.char;
-      state.paletteIndex = 0;
-      state.dirty = true;
-      return;
-    }
-    if (key.name === "paste" && key.paste) {
-      state.paletteQuery += key.paste;
-      state.dirty = true;
-      return;
-    }
-    return;
-  }
+    case "/skills":
+    case "/skill":
+      setView(state, "skills");
+      state.overlay = "none";
+      return true;
 
-  // Startup overlay navigation
-  if (state.overlay === "startup") {
-    if (key.name === "tab") {
-      state.startupSection = state.startupSection === "workspace" ? "session" : "workspace";
-      state.dirty = true;
-      return;
-    }
-    if (key.name === "up") {
-      if (state.startupSection === "workspace") state.workspaceIndex = Math.max(0, state.workspaceIndex - 1);
-      else state.sessionIndex = Math.max(0, state.sessionIndex - 1);
-      state.dirty = true;
-      return;
-    }
-    if (key.name === "down") {
-      if (state.startupSection === "workspace") {
-        state.workspaceIndex = Math.min(Math.max(0, state.wm.listWorkspaces().length - 1), state.workspaceIndex + 1);
-      } else {
-        state.sessionIndex = Math.min(Math.max(0, state.sessions.slice(0, 6).length - 1), state.sessionIndex + 1);
+    case "/memory":
+      setView(state, "memory");
+      state.overlay = "none";
+      return true;
+
+    case "/settings":
+    case "/config":
+      setView(state, "settings");
+      state.overlay = "none";
+      return true;
+
+    case "/dashboard":
+    case "/home":
+    case "/":
+      setView(state, "home");
+      state.overlay = "none";
+      return true;
+
+    case "/security":
+      setView(state, "security");
+      state.overlay = "none";
+      return true;
+
+    case "/usage":
+    case "/budget":
+      setView(state, "usage");
+      state.overlay = "none";
+      return true;
+
+    case "/exit":
+    case "/quit":
+      state.shouldExit = true;
+      return true;
+
+    case "/cancel":
+      if (state.runAbort) {
+        state.runAbort();
+        state.runAbort = null;
+        state.busy = false;
+        state.busyLabel = "cancelled";
+        setAvatarState(state, "idle");
+        notify(state, "warn", "Task cancelled");
       }
+      return true;
+
+    default:
+      // Unknown command - show help
+      notify(state, "warn", `Unknown command: ${cmd}`);
+      state.overlay = "help";
       state.dirty = true;
-      return;
+      return true;
+  }
+}
+
+// ── Input Handling ────────────────────────────────────────────────────────────
+
+/**
+ * Process key input and update state.
+ * Returns true if input was handled.
+ */
+function handleInput(state: ShellState, key: KeyEvent): boolean {
+  // Palette open
+  if (state.overlay === "palette") {
+    if (key.type === "Enter") {
+      const items = paletteItems(state);
+      const item = items[state.paletteIndex];
+      if (item) {
+        item.run();
+        state.overlay = "none";
+        state.dirty = true;
+        return true;
+      }
     }
-    if (key.name === "enter") {
-      await handleEnter(state);
-      return;
+    if (key.type === "Escape") {
+      state.overlay = "none";
+      state.dirty = true;
+      return true;
     }
-    return;
+    if (key.type === "char") {
+      state.paletteQuery = key.char;
+      state.paletteIndex = 0;
+      state.dirty = true;
+      return true;
+    }
+    if (key.type === "arrow" && key.key === "down") {
+      state.paletteIndex = Math.min(state.paletteIndex + 1, 15);
+      state.dirty = true;
+      return true;
+    }
+    if (key.type === "arrow" && key.key === "up") {
+      state.paletteIndex = Math.max(state.paletteIndex - 1, 0);
+      state.dirty = true;
+      return true;
+    }
+    return true;
   }
 
-  // Other overlays: enter dismisses
-  if (state.overlay !== "none") {
-    if (key.name === "enter") {
-      await handleEnter(state);
-      return;
+  // Help overlay
+  if (state.overlay === "help") {
+    if (key.type === "Escape" || (key.type === "char" && key.char === "?")) {
+      state.overlay = "none";
+      state.dirty = true;
+      return true;
     }
-    return;
+    return true;
   }
 
-  // Tab: cycle focus when composer empty; else (future) complete
-  if (key.name === "tab") {
-    if (!state.input) {
-      const order: ShellState["focus"][] = ["composer", "sidebar", "main", "inspector"];
-      const i = order.indexOf(state.focus);
-      state.focus = order[(i + 1) % order.length]!;
-      state.dirty = true;
-      return;
+  // Composer input
+  if (state.focus === "composer") {
+    if (key.type === "Enter") {
+      // Execute input
+      const input = state.input.trim();
+      if (input) {
+        // Check for slash command
+        if (handleSlashCommand(state, input)) {
+          state.input = "";
+          state.cursor = 0;
+          state.dirty = true;
+          return true;
+        }
+
+        // Regular message - add to chat and trigger agent
+        appendMessage(state, "user", input);
+        state.input = "";
+        state.cursor = 0;
+        state.busy = true;
+        state.busyLabel = "thinking";
+        setAvatarState(state, "thinking");
+        state.dirty = true;
+
+        // In a real implementation, this would trigger the agent loop
+        // For now, simulate a response
+        setTimeout(() => {
+          updateOrAppendAssistantMessage(state, "I understand. How can I help you with that?");
+          state.busy = false;
+          state.busyLabel = "idle";
+          setAvatarState(state, "idle");
+          state.dirty = true;
+        }, 1000);
+      }
+      return true;
     }
-    // slash complete stub
-    if (state.input.startsWith("/") && !state.input.includes(" ")) {
-      const cmds = ["help", "status", "mode", "model", "budget", "sessions", "workspace", "audit", "memory", "research", "clear", "exit"];
-      const partial = state.input.slice(1).toLowerCase();
-      const match = cmds.find((c) => c.startsWith(partial));
-      if (match) {
-        state.input = `/${match} `;
+
+    if (key.type === "Escape") {
+      state.input = "";
+      state.cursor = 0;
+      state.dirty = true;
+      return true;
+    }
+
+    if (key.type === "char") {
+      state.input = state.input.slice(0, state.cursor) + key.char + state.input.slice(state.cursor);
+      state.cursor++;
+      state.dirty = true;
+      return true;
+    }
+
+    if (key.type === "arrow" && key.key === "left") {
+      state.cursor = Math.max(0, state.cursor - 1);
+      state.dirty = true;
+      return true;
+    }
+
+    if (key.type === "arrow" && key.key === "right") {
+      state.cursor = Math.min(state.input.length, state.cursor + 1);
+      state.dirty = true;
+      return true;
+    }
+
+    if (key.type === "arrow" && key.key === "up") {
+      if (state.inputHistory.length > 0) {
+        state.inputHistoryIndex = Math.max(0, state.inputHistoryIndex - 1);
+        state.input = state.inputHistory[state.inputHistoryIndex] ?? "";
         state.cursor = state.input.length;
         state.dirty = true;
       }
+      return true;
     }
-    return;
+
+    if (key.type === "arrow" && key.key === "down") {
+      if (state.inputHistoryIndex < state.inputHistory.length - 1) {
+        state.inputHistoryIndex++;
+        state.input = state.inputHistory[state.inputHistoryIndex] ?? "";
+        state.cursor = state.input.length;
+        state.dirty = true;
+      } else {
+        state.inputHistoryIndex = state.inputHistory.length;
+        state.input = "";
+        state.cursor = 0;
+        state.dirty = true;
+      }
+      return true;
+    }
+
+    if (key.type === "backspace") {
+      if (state.cursor > 0) {
+        state.input = state.input.slice(0, state.cursor - 1) + state.input.slice(state.cursor);
+        state.cursor--;
+        state.dirty = true;
+      }
+      return true;
+    }
+
+    if (key.type === "delete") {
+      if (state.cursor < state.input.length) {
+        state.input = state.input.slice(0, state.cursor) + state.input.slice(state.cursor + 1);
+        state.dirty = true;
+      }
+      return true;
+    }
   }
 
   // Sidebar navigation
   if (state.focus === "sidebar") {
-    if (key.name === "up" || key.char === "k") {
-      state.sidebarIndex = (state.sidebarIndex - 1 + SHELL_VIEW_ORDER.length) % SHELL_VIEW_ORDER.length;
-      state.view = SHELL_VIEW_ORDER[state.sidebarIndex]!;
-      state.dirty = true;
-      return;
+    if (key.type === "Enter") {
+      const view = SHELL_VIEW_ORDER[state.sidebarIndex];
+      if (view) {
+        setView(state, view);
+        state.focus = "main";
+        state.dirty = true;
+      }
+      return true;
     }
-    if (key.name === "down" || key.char === "j") {
-      state.sidebarIndex = (state.sidebarIndex + 1) % SHELL_VIEW_ORDER.length;
-      state.view = SHELL_VIEW_ORDER[state.sidebarIndex]!;
+    if (key.type === "arrow" && key.key === "down") {
+      state.sidebarIndex = Math.min(state.sidebarIndex + 1, SHELL_VIEW_ORDER.length - 1);
       state.dirty = true;
-      return;
+      return true;
     }
-    if (key.name === "enter") {
+    if (key.type === "arrow" && key.key === "up") {
+      state.sidebarIndex = Math.max(0, state.sidebarIndex - 1);
+      state.dirty = true;
+      return true;
+    }
+    if (key.type === "Escape") {
       state.focus = "composer";
       state.dirty = true;
-      return;
+      return true;
     }
   }
 
-  // Main list navigation
-  if (state.focus === "main") {
-    if (state.view === "sessions") {
-      if (key.name === "up" || key.char === "k") {
-        state.sessionIndex = Math.max(0, state.sessionIndex - 1);
-        state.dirty = true;
-        return;
-      }
-      if (key.name === "down" || key.char === "j") {
-        state.sessionIndex = Math.min(Math.max(0, state.sessions.length - 1), state.sessionIndex + 1);
-        state.dirty = true;
-        return;
-      }
-    }
-    if (state.view === "workspaces") {
-      if (key.name === "up" || key.char === "k") {
-        state.workspaceIndex = Math.max(0, state.workspaceIndex - 1);
-        state.dirty = true;
-        return;
-      }
-      if (key.name === "down" || key.char === "j") {
-        state.workspaceIndex = Math.min(Math.max(0, state.wm.listWorkspaces().length - 1), state.workspaceIndex + 1);
-        state.dirty = true;
-        return;
-      }
-      if (key.name === "enter") {
-        const ws = state.wm.listWorkspaces()[state.workspaceIndex];
-        if (ws) await switchWorkspace(state, ws.id);
-        return;
-      }
-    }
+  return false;
+}
+
+// ── Keyboard Shortcuts ────────────────────────────────────────────────────────
+
+/**
+ * Handle keyboard shortcuts (not input chars).
+ */
+function handleShortcut(state: ShellState, key: KeyEvent): boolean {
+  // Ctrl+K - Command palette
+  if (key.ctrl && key.key === "k") {
+    state.overlay = state.overlay === "palette" ? "none" : "palette";
+    state.paletteQuery = "";
+    state.paletteIndex = 0;
+    state.dirty = true;
+    return true;
   }
 
-  // Composer readline
-  if (key.name === "enter") {
-    await handleEnter(state);
-    return;
-  }
-  if (key.name === "backspace") {
-    // ensure focus composer on edit
-    state.focus = "composer";
-    deleteBackward(state);
-    return;
-  }
-  if (key.name === "ctrl+a") {
-    state.cursor = 0;
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "ctrl+e") {
-    state.cursor = state.input.length;
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "ctrl+u") {
-    state.input = state.input.slice(state.cursor);
-    state.cursor = 0;
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "left") {
-    state.cursor = Math.max(0, state.cursor - 1);
-    state.focus = "composer";
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "right") {
-    state.cursor = Math.min(state.input.length, state.cursor + 1);
-    state.focus = "composer";
-    state.dirty = true;
-    return;
-  }
-  if (key.name === "up" || key.name === "ctrl+p") {
-    if (state.focus === "composer") {
-      const next = state.inputHistory.length - 1 - (state.inputHistoryIndex + 1);
-      if (next >= 0) {
-        state.inputHistoryIndex += 1;
-        state.input = state.inputHistory[state.inputHistory.length - 1 - state.inputHistoryIndex] ?? state.input;
-        state.cursor = state.input.length;
-        state.dirty = true;
-      }
-      return;
-    }
-  }
-  if (key.name === "down") {
-    if (state.focus === "composer") {
-      if (state.inputHistoryIndex > 0) {
-        state.inputHistoryIndex -= 1;
-        state.input = state.inputHistory[state.inputHistory.length - 1 - state.inputHistoryIndex] ?? "";
-        state.cursor = state.input.length;
-      } else if (state.inputHistoryIndex === 0) {
-        state.inputHistoryIndex = -1;
-        state.input = "";
-        state.cursor = 0;
-      }
+  // Ctrl+C - Cancel current operation
+  if (key.ctrl && key.key === "c") {
+    if (state.busy && state.runAbort) {
+      state.runAbort();
+      state.runAbort = null;
+      state.busy = false;
+      state.busyLabel = "cancelled";
+      setAvatarState(state, "idle");
+      notify(state, "warn", "Operation cancelled");
       state.dirty = true;
-      return;
+    }
+    return true;
+  }
+
+  // Escape - Close overlays / cancel
+  if (key.type === "Escape" && !key.ctrl && !key.alt) {
+    if (state.overlay !== "none") {
+      state.overlay = "none";
+      state.dirty = true;
+      return true;
     }
   }
-  if (key.name === "paste" && key.paste != null) {
-    state.focus = "composer";
-    insertText(state, key.paste);
-    return;
+
+  // Alt+P - Provider switch
+  if (key.alt && key.key === "p") {
+    setView(state, "providers");
+    state.focus = "main";
+    state.overlay = "none";
+    state.dirty = true;
+    return true;
   }
-  if (key.name === "char" && key.char) {
-    // Any printable refocuses composer (Lazygit-style)
-    state.focus = "composer";
-    insertText(state, key.char);
-    return;
+
+  // ? - Help
+  if (key.type === "char" && key.char === "?" && !key.ctrl && !key.alt) {
+    state.overlay = state.overlay === "help" ? "none" : "help";
+    state.dirty = true;
+    return true;
+  }
+
+  // g commands (goto)
+  if (key.ctrl && key.key === "g") {
+    // Handled as a prefix - next key determines destination
+    state.gPending = true;
+    return true;
+  }
+
+  if (state.gPending && key.type === "char") {
+    state.gPending = false;
+    const goTo: Record<string, ShellViewId> = {
+      "c": "chat",
+      "s": "sessions",
+      "w": "workspaces",
+      "r": "research",
+      "a": "agents",
+      "m": "memory",
+      "f": "files",
+      "k": "skills",
+      "p": "providers",
+      "d": "dashboard",
+      "u": "usage",
+      "x": "security",
+    };
+    const view = goTo[key.char.toLowerCase()];
+    if (view) {
+      setView(state, view);
+      state.focus = "main";
+      state.dirty = true;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+// ── Main Input Handler ────────────────────────────────────────────────────────
+
+/**
+ * Process a key event.
+ */
+export function handleKey(state: ShellState, key: KeyEvent): void {
+  // First check shortcuts
+  if (handleShortcut(state, key)) return;
+
+  // Then handle input
+  if (handleInput(state, key)) return;
+
+  // Fallback - update avatar state based on busy status
+  const derivedState = deriveAvatarState(state);
+  setAvatarState(state, derivedState);
+}
+
+// ── Animation Loop ────────────────────────────────────────────────────────────
+
+/**
+ * Update state for animations (spinner, etc.)
+ */
+export function tick(state: ShellState): void {
+  if (state.busy) {
+    state.spinnerIndex = (state.spinnerIndex + 1) % SPINNER_FRAMES.length;
+    state.dirty = true;
+
+    // Update avatar state based on busy label
+    const derivedState = deriveAvatarState(state);
+    setAvatarState(state, derivedState);
   }
 }
 
-// ── Public entry ──────────────────────────────────────────────────────────────
+// ── Render Loop ───────────────────────────────────────────────────────────────
 
+/**
+ * Render the shell frame if dirty.
+ */
+export function render(state: ShellState, terminal: Terminal): void {
+  if (!state.dirty) return;
+
+  const layout = computeLayout(terminal.cols, terminal.rows, state.showInspector);
+  const frame = assembleFrame(state, layout);
+
+  terminal.clear();
+  for (const line of frame) {
+    terminal.writeLine(line);
+  }
+
+  state.dirty = false;
+}
+
+// ── Start Shell ───────────────────────────────────────────────────────────────
+
+/**
+ * Run the Shell (fullscreen terminal interface).
+ */
 export async function runShell(): Promise<void> {
-  const term = new Terminal();
-  if (!term.isTTY) {
-    process.stdout.write("XR: fullscreen Shell requires an interactive terminal.\nRun `xr help` or pass a task directly.\n");
-    return;
-  }
-
+  const terminal = new Terminal();
   const state = createState();
-  refreshState(state);
 
-  term.enter({ altScreen: true, bracketedPaste: true, mouse: false });
+  terminal.start();
 
-  const paint = () => {
-    const geom = computeLayout(term.cols, term.rows, state.showInspector);
-    const items = filteredPalette(state).map((i) => ({
-      label: i.label,
-      description: i.description,
-      shortcut: i.shortcut,
-    }));
-    const frame = assembleFrame(state, geom, items);
-    term.paint(frame);
-    state.dirty = false;
-  };
+  // Initial render
+  state.dirty = true;
+  render(state, terminal);
 
-  // Startup animation (real phases, no artificial delay past readiness)
-  const frames = 6;
-  for (let i = 0; i < frames; i++) {
-    state.bootPhase = i;
-    state.spinnerIndex = i;
-    state.overlay = "startup";
-    paint();
-    await new Promise((r) => setTimeout(r, 110));
-  }
-  state.bootPhase = 6;
-
-  term.onInput(async (data) => {
-    const key = parseKey(data);
-    await handleKey(state, key);
-    if (state.dirty) paint();
+  // Input handler
+  terminal.onKey((key) => {
+    handleKey(state, key);
+    tick(state);
+    render(state, terminal);
   });
 
-  term.onResizeEvent(() => {
-    term.invalidate();
-    state.dirty = true;
-    paint();
-  });
-
-  // Spinner ticker only when busy or startup
-  const ticker = setInterval(() => {
-    if (state.busy || state.overlay === "startup") {
-      state.spinnerIndex = (state.spinnerIndex + 1) % SPINNER_FRAMES.length;
-      state.dirty = true;
-    }
-    // expire notices after 4s for non-errors
-    const now = Date.now();
-    const before = state.notices.length;
-    state.notices = state.notices.filter((n) =>
-      n.level === "error" || now - n.at < 4000,
-    );
-    if (state.notices.length !== before) state.dirty = true;
-    if (state.dirty) paint();
-  }, 120);
-
-  paint();
-
+  // Keep running until exit
   while (!state.shouldExit) {
-    await new Promise((r) => setTimeout(r, 40));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    tick(state);
+    if (state.dirty) {
+      render(state, terminal);
+    }
   }
 
-  clearInterval(ticker);
-  if (state.gTimer) clearTimeout(state.gTimer);
-  term.leave();
-  process.stdout.write(`\n  ✓ XR session closed. Thanks for using XR.\n\n`);
+  terminal.stop();
 }

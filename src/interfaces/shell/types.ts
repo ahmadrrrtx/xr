@@ -1,47 +1,84 @@
 /**
- * XR 3.1 Shell — shared types
- * Vocabulary: docs/xr-3.1/XR-3.1-INFORMATION-ARCHITECTURE.md
+ * XR 3.1 Shell — shared types (ENHANCED)
+ * Includes avatar state support
  */
 
-import type { ShellViewId } from "../../ui/icons.ts";
-import type { WorkspaceManager } from "../../core/workspace.ts";
-import type { Store } from "../../state/workspace-store.ts";
+import type { AvatarState } from "../../ui/avatar.ts";
 
-export type { ShellViewId };
+// ── Shell Views ──────────────────────────────────────────────────────────────
 
-export type OverlayId =
-  | "none"
-  | "startup"
-  | "palette"
-  | "notifications"
-  | "quick"
-  | "confirm"
-  | "help"
-  | "model"
-  | "mode"
-  | "exit";
+export type ShellViewId =
+  | "chat"           // Main conversation
+  | "sessions"       // Recent tasks
+  | "research"       // Research reports
+  | "agents"         // Agent management
+  | "workflows"      // Multi-agent workflows
+  | "automation"     // Automations
+  | "memory"         // Memory browser
+  | "files"          // File browser
+  | "skills"         // Skills browser
+  | "providers"      // Provider management
+  | "models"         // Local model management
+  | "settings"       // Settings
+  | "dashboard"      // Overview dashboard
+  | "security"       // Security status
+  | "usage"          // Usage/spending
+  | "home";          // Home/overview
 
-export type FocusPane = "sidebar" | "main" | "inspector" | "composer";
+// ── Mode States ──────────────────────────────────────────────────────────────
 
-export type ModeState = "agent" | "plan" | "ask";
+export type ModeState = "agent" | "chat" | "research" | "code";
 
-export type Severity = "info" | "ok" | "warn" | "error";
+// ── Focus Areas ──────────────────────────────────────────────────────────────
+
+export type FocusArea = "composer" | "sidebar" | "main" | "inspector";
+
+// ── Overlay States ───────────────────────────────────────────────────────────
+
+export type OverlayState = "none" | "startup" | "palette" | "help" | "confirm" | "error";
+
+// ── Severity Levels ──────────────────────────────────────────────────────────
+
+export type Severity = "ok" | "warn" | "error" | "info";
+
+// ── Chat Message ─────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: "user" | "assistant" | "tool" | "agent" | "system" | "error";
+  content: string;
+  meta?: string;       // "live" for streaming, "XR" for final, tool name, etc.
+  at: number;          // Timestamp
+}
+
+// ── Session Row ──────────────────────────────────────────────────────────────
+
+export interface SessionRow {
+  id: number;
+  title: string;
+  mode: ModeState;
+  status: "running" | "success" | "failed" | "cancelled";
+  created_at: number;
+}
+
+// ── Research Row ─────────────────────────────────────────────────────────────
+
+export interface ResearchRow {
+  id: number;
+  title: string;
+  sourceCount: number;
+  created_at: number;
+}
+
+// ── Project Metadata ─────────────────────────────────────────────────────────
 
 export interface ProjectMeta {
   name: string;
   techStack?: string[];
   frameworks?: string[];
-  conventions?: string[];
-  testingFramework?: string;
   description?: string;
 }
 
-export interface ChatMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-  at: number;
-  meta?: string;
-}
+// ── Timeline Event ───────────────────────────────────────────────────────────
 
 export interface TimelineEvent {
   at: number;
@@ -50,101 +87,136 @@ export interface TimelineEvent {
   level: Severity;
 }
 
+// ── Notice ───────────────────────────────────────────────────────────────────
+
 export interface Notice {
   id: string;
+  at: number;
   title: string;
   detail?: string;
   level: Severity;
-  at: number;
 }
+
+// ── Palette Item ─────────────────────────────────────────────────────────────
 
 export interface PaletteItem {
   id: string;
   label: string;
   description: string;
   keywords: string[];
-  section: "recent" | "commands" | "navigation" | "skills" | "settings";
+  section: string;
   shortcut?: string;
-  run: () => Promise<void> | void;
+  run: () => void;
 }
 
-export interface ConfirmState {
-  title: string;
-  detail?: string;
-  defaultYes: boolean;
-  resolve: (value: boolean) => void;
-}
-
-export interface SessionRow {
-  id: string;
-  title: string;
-  mode: string;
-  status: string;
-  created_at: number;
-}
-
-export interface ResearchRow {
-  id: string;
-  topic: string;
-  depth: string;
-  status: string;
-  updated_at: number;
-}
+// ── Shell State ──────────────────────────────────────────────────────────────
 
 export interface ShellState {
+  // Environment
   cwd: string;
   meta: ProjectMeta;
-  wm: WorkspaceManager;
-  store: Store;
+
+  // Workspace
+  wm: import("../../core/workspace.ts").WorkspaceManager;
+  store: import("../../state/workspace-store.ts").Store;
   workspaceId: string;
   sessionTitle: string;
+
+  // Model/Provider
   provider: string;
   model: string;
   mode: ModeState;
-  budget: number;
+  budget: number;           // Per-task budget in USD (0 = unlimited)
+
+  // Usage tracking
   totalSpent: number;
   totalTokens: number;
+
+  // Execution state
   busy: boolean;
   busyLabel: string;
-  /**
-   * A-19 — the abort handle for the run currently in flight. Ctrl+C / Esc
-   * abort it; the loop stops at its next checkpoint and reports
-   * `stopped: "cancelled"` (no fake completion, no run-on in the background).
-   */
-  runAbort: AbortController | null;
+  runAbort: ((() => void) | null);
   spinnerIndex: number;
+
+  // View state
   view: ShellViewId;
   sidebarIndex: number;
-  focus: FocusPane;
-  overlay: OverlayId;
-  // Composer
+  focus: FocusArea;
+  overlay: OverlayState;
+
+  // Input state
   input: string;
   cursor: number;
   inputHistory: string[];
   inputHistoryIndex: number;
-  // Content
+
+  // Chat
   chat: ChatMessage[];
   chatScroll: number;
+
+  // Timeline & notices
   timeline: TimelineEvent[];
   notices: Notice[];
-  // Overlays
+
+  // Palette
   paletteQuery: string;
   paletteIndex: number;
-  startupSection: "workspace" | "session";
+
+  // Startup state
+  startupSection: string;
   workspaceIndex: number;
   sessionIndex: number;
   sessions: SessionRow[];
   research: ResearchRow[];
-  confirm?: ConfirmState;
+
+  // Exit handling
   exitArmed: boolean;
-  // g-chord
   gPending: boolean;
-  gTimer?: ReturnType<typeof setTimeout>;
-  // Flags
   shouldExit: boolean;
+
+  // Dirty flag for re-render
   dirty: boolean;
+
+  // Inspector visibility
   showInspector: boolean;
+
+  // Boot phases
   bootPhase: number;
+
+  // Help tracking
   helpSeen: number;
+
+  // Audit chain
   auditValid: boolean | null;
+
+  // ── ENHANCED: Avatar state ──────────────────────────────────────────────
+  avatarState: AvatarState;
+  avatarStateLabel: () => string;  // Derived from state
+}
+
+// ── View Options ─────────────────────────────────────────────────────────────
+
+export interface ViewOptions {
+  width: number;
+  height: number;
+  showSidebar: boolean;
+  showInspector: boolean;
+}
+
+// ── Layout Geometry ──────────────────────────────────────────────────────────
+
+export interface LayoutGeom {
+  cols: number;
+  rows: number;
+  headerH: number;
+  composerH: number;
+  statusH: number;
+  bodyH: number;
+  sidebarW: number;
+  inspectorW: number;
+  mainW: number;
+  showSidebar: boolean;
+  showInspector: boolean;
+  iconRail: boolean;
+  singlePane: boolean;
 }

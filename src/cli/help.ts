@@ -1,468 +1,685 @@
 /**
- * XR 3.1.5 (Helios) — Rich help system
+ * XR 3.1 CLI — Enhanced Help and Output System
  *
- * Progressive disclosure: overview → group → command → topic.
- * Spec: IA §5, Accessibility §4 (80-col, plain language), Design System voice.
+ * Enhanced CLI with:
+ * - Comprehensive help system
+ * - Command suggestions
+ * - Better error messages
+ * - Consistent output styling
+ * - Machine-readable output support
  */
 
-import {
-  CATALOG,
-  GROUP_LABELS,
-  GROUP_ORDER,
-  catalogByGroup,
-  getCatalogEntry,
-  resolveCommandName,
-  searchCatalog,
-  XR_VERSION,
-  XR_CLI_CODENAME,
-  type CatalogEntry,
-} from "./catalog.ts";
-import {
-  banner,
-  heading,
-  tip,
-  code,
-  xrCyan,
-  xrDim,
-  xrBold,
-  xrGreen,
-  xrAmber,
-  xrViolet,
-  emitJson,
-  isJsonMode,
-  printDidYouMean,
-} from "./output.ts";
-import { allAliasesAndNames } from "./catalog.ts";
+import { xrCyan, xrGreen, xrAmber, xrDim, xrBold, xrRed } from "../ui/theme.ts";
+import { SYM } from "../ui/theme.ts";
 
-const COL = 38;
+// ── Help Sections ──────────────────────────────────────────────────────────────
 
-function padCmd(cmd: string, width = COL): string {
-  const bare = cmd.length;
-  if (bare >= width) return cmd + " ";
-  return cmd + " ".repeat(width - bare);
+export interface CommandHelp {
+  command: string;
+  description: string;
+  usage: string;
+  examples?: string[];
+  options?: { flag: string; description: string }[];
+  related?: string[];
 }
 
-function printEntryLine(entry: CatalogEntry, prefix = "xr "): void {
-  const label = prefix + entry.name;
-  console.log(`  ${xrCyan(padCmd(label))} ${xrDim(entry.description)}`);
-}
-
-// ── Main help ─────────────────────────────────────────────────────────────────
-
-export function showHelp(topic?: string, opts?: { all?: boolean }): void {
-  if (topic) {
-    showTopicOrCommandHelp(topic);
-    return;
-  }
-
-  if (isJsonMode()) {
-    emitJson({
-      version: XR_VERSION,
-      codename: XR_CLI_CODENAME,
-      commands: CATALOG.filter((c) => opts?.all || !c.hidden).map((c) => ({
-        name: c.name,
-        description: c.description,
-        usage: c.usage,
-        group: c.group,
-        aliases: c.aliases ?? [],
-        needsKernel: c.needsKernel,
-      })),
-    });
-    return;
-  }
-
-  banner(`v${XR_VERSION} · CLI ${XR_CLI_CODENAME}`);
-
-  // Quick start — teach, don't just list
-  console.log(`  ${xrBold("Quick start")}`);
-  console.log(`  ${xrDim("─".repeat(46))}`);
-  console.log(`  ${xrCyan("xr onboarding")}               ${xrDim("first-time setup wizard")}`);
-  console.log(`  ${xrCyan("xr")}                          ${xrDim("open the fullscreen Shell")}`);
-  console.log(`  ${xrCyan('xr "write a hello world"')}    ${xrDim("run a task (one-shot)")}`);
-  console.log(`  ${xrCyan("xr serve")}                    ${xrDim("start Control Center (web)")}`);
-  console.log(`  ${xrCyan("xr doctor")}                   ${xrDim("system health check")}`);
-  console.log();
-  console.log(`  ${xrBold("Change model anytime")}`);
-  console.log(`  ${xrDim("─".repeat(46))}`);
-  console.log(`  ${xrCyan("xr providers set <id> [model]")} ${xrDim("primary route (e.g. ollama qwen2.5:7b)")}`);
-  console.log(`  ${xrCyan("xr models set <runtime> <model>")} ${xrDim("local runtime selection")}`);
-  console.log(`  ${xrDim("Shell: Alt+P · /model <provider> [model]  ·  status bar always shows active model")}`);
-  console.log();
-
-  const byGroup = catalogByGroup(Boolean(opts?.all));
-
-  for (const group of GROUP_ORDER) {
-    const entries = byGroup.get(group) ?? [];
-    if (!entries.length) continue;
-    console.log(`  ${xrBold(GROUP_LABELS[group])}`);
-    console.log(`  ${xrDim("─".repeat(46))}`);
-    for (const entry of entries) {
-      printEntryLine(entry);
-    }
-    console.log();
-  }
-
-  // Global flags
-  console.log(`  ${xrBold("Global flags")}`);
-  console.log(`  ${xrDim("─".repeat(46))}`);
-  const flags: Array<[string, string]> = [
-    ["--help, -h", "show help"],
-    ["--version, -v", "print version"],
-    ["--json", "machine-readable JSON on stdout"],
-    ["--yaml", "YAML output (where supported)"],
-    ["--format text|json|yaml|markdown", "output format"],
-    ["--quiet, -q", "suppress non-essential output"],
-    ["--verbose", "extra detail"],
-    ["--debug", "debug mode (also XR_DEBUG=1)"],
-    ["--no-color", "disable ANSI color (also NO_COLOR=1)"],
-    ["--yes, -y", "assume yes for confirmations"],
-    ["--workspace <id>", "target workspace"],
-    ["--mode agent|plan|ask", "execution mode"],
-    ["--model <name>", "model override"],
-    ["--provider <id>", "provider override"],
-    ["--budget <usd>", "per-task spend ceiling"],
-    ["--dry-run", "simulate without side effects"],
-  ];
-  for (const [f, d] of flags) {
-    console.log(`  ${xrCyan(padCmd(f, 36))} ${xrDim(d)}`);
-  }
-  console.log();
-
-  // Modes vocabulary (IA)
-  console.log(`  ${xrBold("Modes")}  ${xrDim("(same in Shell · Control Center · CLI)")}`);
-  console.log(`  ${xrDim("─".repeat(46))}`);
-  console.log(`  ${xrCyan("agent")}  ${xrDim("execute tools, write files, run shell (approvals enforced)")}`);
-  console.log(`  ${xrViolet("plan")}   ${xrDim("produce a plan only — no tool execution")}`);
-  console.log(`  ${xrDim("ask")}    ${xrDim("answer-only, read-only, cheap")}`);
-  console.log();
-
-  console.log(`  ${xrDim("Topic help:")}  ${xrCyan("xr help <topic>")}`);
-  console.log(
-    `  ${xrDim("Topics:")}  ${["shell", "providers", "models", "memory", "security", "skills", "research", "workspace", "budget", "scripting"]
-      .map((t) => xrCyan(t))
-      .join("  ")}`,
-  );
-  console.log();
-  console.log(`  ${xrDim("Docs")}     ${xrCyan("https://github.com/ahmadrrrtx/xr")}`);
-  console.log(`  ${xrDim("Website")}  ${xrCyan("https://xr-gules.vercel.app")}`);
-  console.log();
-  tip("A user should not need docs for common tasks — try xr doctor and xr \"hello\".");
-  console.log();
-}
-
-// ── Command / topic help ──────────────────────────────────────────────────────
-
-function showTopicOrCommandHelp(topic: string): void {
-  const t = topic.toLowerCase().trim();
-
-  // Built-in topics first (may share names with commands, e.g. "security")
-  if (TOPIC_HANDLERS[t]) {
-    TOPIC_HANDLERS[t]!();
-    return;
-  }
-
-  // Exact command?
-  const resolved = resolveCommandName(t) ?? resolveCommandName(t.replace(/^xr\s+/, ""));
-  if (resolved) {
-    showCommandHelp(resolved);
-    return;
-  }
-
-  // Fuzzy search catalog
-  const hits = searchCatalog(t);
-  if (hits.length === 1) {
-    showCommandHelp(hits[0]!.name);
-    return;
-  }
-  if (hits.length > 1) {
-    if (isJsonMode()) {
-      emitJson({ query: t, matches: hits.map((h) => h.name) });
-      return;
-    }
-    banner();
-    console.log(`  ${xrBold(`Help matching “${t}”`)}\n`);
-    for (const h of hits.slice(0, 12)) printEntryLine(h);
-    console.log();
-    tip(`Try: xr help ${hits[0]!.name}`);
-    console.log();
-    return;
-  }
-
-  if (isJsonMode()) {
-    emitJson({ ok: false, error: { message: `Unknown help topic: ${t}` } });
-    return;
-  }
-
-  banner();
-  console.log(`  ${xrAmber("!")} Unknown help topic: ${xrBold(t)}\n`);
-  printDidYouMean(t, [
-    ...allAliasesAndNames(),
-    "shell",
-    "providers",
-    "models",
-    "memory",
-    "security",
-    "skills",
-    "research",
-    "workspace",
-    "budget",
-    "scripting",
-  ]);
-  console.log();
-  tip("xr help            full command list");
-  tip("xr help scripting  flags, exit codes, piping");
-  console.log();
-}
-
-export function showCommandHelp(name: string): void {
-  const entry = getCatalogEntry(name);
-  if (!entry) {
-    showHelp(name);
-    return;
-  }
-
-  if (isJsonMode()) {
-    emitJson(entry);
-    return;
-  }
-
-  banner();
-  console.log(`  ${xrBold("xr " + entry.name)}  ${xrDim(entry.description)}`);
-  console.log();
-  console.log(`  ${xrDim("Usage")}`);
-  console.log(`    ${xrCyan(entry.usage)}`);
-  console.log();
-
-  if (entry.aliases?.length) {
-    console.log(`  ${xrDim("Aliases")}  ${entry.aliases.map((a) => xrCyan(a)).join(xrDim(" · "))}`);
-    console.log();
-  }
-
-  if (entry.subcommands?.length) {
-    console.log(`  ${xrDim("Subcommands")}`);
-    for (const sub of entry.subcommands) {
-      console.log(`    ${xrCyan(padCmd(sub.name, 16))} ${xrDim(sub.description)}`);
-    }
-    console.log();
-  }
-
-  if (entry.examples?.length) {
-    console.log(`  ${xrDim("Examples")}`);
-    for (const ex of entry.examples) {
-      console.log(`    ${xrCyan("$")} ${ex.cmd}`);
-      console.log(`      ${xrDim(ex.description)}`);
-    }
-    console.log();
-  }
-
-  if (entry.related?.length) {
-    console.log(
-      `  ${xrDim("Related")}  ${entry.related.map((r) => xrCyan("xr " + r)).join(xrDim(" · "))}`,
-    );
-    console.log();
-  }
-
-  console.log(`  ${xrDim("Also:")} ${xrCyan("xr help")} · ${xrCyan("xr doctor")} · ${xrCyan("xr --json")} for scripts`);
-  console.log();
-}
-
-// ── Topics ────────────────────────────────────────────────────────────────────
-
-const TOPIC_HANDLERS: Record<string, () => void> = {
-  shell: () => topicShell(),
-  tui: () => topicShell(),
-  security: () => topicSecurity(),
-  trust: () => topicSecurity(),
-  providers: () => topicProviders(),
-  models: () => topicModels(),
-  memory: () => topicMemory(),
-  research: () => topicResearch(),
-  skills: () => topicSkills(),
-  marketplace: () => topicSkills(),
-  workspace: () => topicWorkspace(),
-  workspaces: () => topicWorkspace(),
-  budget: () => topicBudget(),
-  cost: () => topicBudget(),
-  scripting: () => topicScripting(),
-  json: () => topicScripting(),
-  ci: () => topicScripting(),
-  modes: () => topicModes(),
-  mode: () => topicModes(),
-  voice: () => {
-    showCommandHelp("voice");
+/**
+ * All CLI commands with help
+ */
+export const COMMAND_HELP: CommandHelp[] = [
+  // Core
+  {
+    command: "xr <task>",
+    description: "Execute a task using the current provider/model",
+    usage: "xr \"refactor the authentication module\"",
+    examples: [
+      "xr \"What files are in this project?\"",
+      "xr \"Help me debug this error\"",
+      "xr \"Write a summary of the codebase\"",
+    ],
+    related: ["xr (no args)", "xr serve"],
   },
-  plugins: () => showCommandHelp("plugins"),
-  mcp: () => showCommandHelp("mcp"),
-  shield: () => showCommandHelp("shield"),
-  audit: () => showCommandHelp("audit"),
+  {
+    command: "xr (no args)",
+    description: "Open the fullscreen Shell (TUI)",
+    usage: "xr",
+    examples: ["xr"],
+    related: ["xr <task>", "xr serve"],
+  },
+  {
+    command: "xr serve",
+    description: "Start the dashboard + chat server at localhost:3141",
+    usage: "xr serve [--port 3141]",
+    examples: ["xr serve", "xr serve --port 8080"],
+    related: ["xr", "xr <task>"],
+  },
+
+  // Provider management
+  {
+    command: "xr providers list",
+    description: "List all available providers",
+    usage: "xr providers list",
+    examples: ["xr providers list"],
+    related: ["xr providers set", "xr providers add"],
+  },
+  {
+    command: "xr providers set <provider> [model]",
+    description: "Switch to a provider and optionally select a model",
+    usage: "xr providers set <provider> [model]",
+    examples: [
+      "xr providers set openai gpt-4o-mini",
+      "xr providers set claude",
+      "xr providers set ollama qwen2.5:7b",
+    ],
+    related: ["xr providers list", "xr providers add"],
+  },
+  {
+    command: "xr providers add <provider>",
+    description: "Configure a new provider by entering API key",
+    usage: "xr providers add <provider>",
+    examples: ["xr providers add claude", "xr providers add gemini"],
+    related: ["xr providers list", "xr providers set"],
+  },
+  {
+    command: "xr providers test",
+    description: "Test connectivity to all configured providers",
+    usage: "xr providers test",
+    examples: ["xr providers test"],
+    related: ["xr providers list"],
+  },
+
+  // Model management
+  {
+    command: "xr models list",
+    description: "List available local models",
+    usage: "xr models list",
+    examples: ["xr models list"],
+    related: ["xr models set", "xr providers list"],
+  },
+  {
+    command: "xr models set <runtime> <model>",
+    description: "Set the default local model",
+    usage: "xr models set <runtime> <model>",
+    examples: ["xr models set ollama qwen2.5:7b"],
+    related: ["xr models list"],
+  },
+
+  // Onboarding
+  {
+    command: "xr onboarding",
+    description: "Run the first-time setup wizard",
+    usage: "xr onboarding [--yes]",
+    examples: ["xr onboarding", "xr onboarding --yes"],
+    related: ["xr doctor"],
+  },
+
+  // Health
+  {
+    command: "xr doctor",
+    description: "Check if XR can actually run tasks (exits non-zero if not)",
+    usage: "xr doctor [--deep] [--json]",
+    examples: [
+      "xr doctor",
+      "xr doctor --deep",
+      "xr doctor --json",
+    ],
+    related: ["xr onboarding"],
+  },
+
+  // Agents
+  {
+    command: "xr agents list",
+    description: "List configured agents",
+    usage: "xr agents list",
+    examples: ["xr agents list"],
+    related: ["xr agents plan", "xr agents create"],
+  },
+  {
+    command: "xr agents plan <task>",
+    description: "Run a multi-agent workflow to plan and execute a task",
+    usage: "xr agents plan <task>",
+    examples: ["xr agents plan \"refactor this repo safely\""],
+    related: ["xr agents list"],
+  },
+
+  // Skills
+  {
+    command: "xr skills list",
+    description: "List available skills",
+    usage: "xr skills list",
+    examples: ["xr skills list"],
+    related: ["xr skill browse", "xr skill install"],
+  },
+  {
+    command: "xr skill browse",
+    description: "Browse and search skills",
+    usage: "xr skill browse [query]",
+    examples: ["xr skill browse", "xr skill browse file"],
+    related: ["xr skills list"],
+  },
+  {
+    command: "xr skill install <skill>",
+    description: "Install a skill",
+    usage: "xr skill install <skill>",
+    examples: ["xr skill install file-ops"],
+    related: ["xr skill browse", "xr skills list"],
+  },
+
+  // MCP
+  {
+    command: "xr mcp list",
+    description: "List connected MCP servers",
+    usage: "xr mcp list",
+    examples: ["xr mcp list"],
+    related: ["xr mcp add", "xr mcp remove"],
+  },
+  {
+    command: "xr mcp add <name>",
+    description: "Add a new MCP server connection",
+    usage: "xr mcp add <name> [--transport stdio|sse|http]",
+    examples: ["xr mcp add googledocs", "xr mcp add custom --transport http"],
+    related: ["xr mcp list"],
+  },
+  {
+    command: "xr mcp remove <name>",
+    description: "Remove an MCP server connection",
+    usage: "xr mcp remove <name>",
+    examples: ["xr mcp remove googledocs"],
+    related: ["xr mcp list"],
+  },
+
+  // Memory
+  {
+    command: "xr memory list",
+    description: "List saved memories",
+    usage: "xr memory list [category]",
+    examples: ["xr memory list", "xr memory list project"],
+    related: ["xr memory recall", "xr memory delete"],
+  },
+  {
+    command: "xr memory recall <query>",
+    description: "Search memories with explainable results",
+    usage: "xr memory recall <query>",
+    examples: ["xr memory recall \"project preferences\""],
+    related: ["xr memory list"],
+  },
+  {
+    command: "xr memory delete <id>",
+    description: "Delete a memory entry",
+    usage: "xr memory delete <id>",
+    examples: ["xr memory delete mem_123"],
+    related: ["xr memory list"],
+  },
+  {
+    command: "xr memory prune",
+    description: "Remove expired memories",
+    usage: "xr memory prune",
+    examples: ["xr memory prune"],
+    related: ["xr memory list"],
+  },
+
+  // Research
+  {
+    command: "xr research <query>",
+    description: "Research a topic (offline by default)",
+    usage: "xr research <query> [--allow-public-web]",
+    examples: [
+      "xr research \"XR AI agent architectures\"",
+      "xr research \"TypeScript performance patterns\" --allow-public-web",
+    ],
+    related: ["xr memory recall"],
+  },
+  {
+    command: "xr research deep <query>",
+    description: "Deep research with public web access (requires egress config)",
+    usage: "xr research deep <query>",
+    examples: ["xr research deep \"latest AI agent frameworks\""],
+    related: ["xr research"],
+  },
+
+  // Security
+  {
+    command: "xr audit verify",
+    description: "Verify the hash-chained audit log integrity",
+    usage: "xr audit verify",
+    examples: ["xr audit verify"],
+    related: ["xr verify-log"],
+  },
+  {
+    command: "xr verify-log",
+    description: "Alias for audit verify (verify offline)",
+    usage: "xr verify-log",
+    examples: ["xr verify-log"],
+    related: ["xr audit verify"],
+  },
+
+  // Spending
+  {
+    command: "xr usage",
+    description: "Show token and spend usage",
+    usage: "xr usage [--json]",
+    examples: ["xr usage", "xr usage --json"],
+    related: ["xr budget"],
+  },
+  {
+    command: "xr budget <amount>",
+    description: "Set per-task budget in USD",
+    usage: "xr budget <amount>",
+    examples: ["xr budget 50", "xr budget 0 (unlimited)"],
+    related: ["xr usage"],
+  },
+
+  // Voice
+  {
+    command: "xr voice",
+    description: "Start voice interaction mode",
+    usage: "xr voice",
+    examples: ["xr voice"],
+    related: ["xr (no args)"],
+  },
+
+  // Computer control
+  {
+    command: "xr computer",
+    description: "Show computer control capabilities",
+    usage: "xr computer",
+    examples: ["xr computer"],
+    related: ["xr agents plan"],
+  },
+
+  // Configuration
+  {
+    command: "xr config",
+    description: "Show current configuration",
+    usage: "xr config [--json]",
+    examples: ["xr config", "xr config --json"],
+    related: ["xr settings"],
+  },
+
+  // Version
+  {
+    command: "xr --version",
+    description: "Show XR version",
+    usage: "xr --version",
+    examples: ["xr --version"],
+    related: [],
+  },
+  {
+    command: "xr --help",
+    description: "Show this help message",
+    usage: "xr --help",
+    examples: ["xr --help"],
+    related: [],
+  },
+];
+
+// ── Help Rendering ─────────────────────────────────────────────────────────────
+
+/**
+ * Render full CLI help
+ */
+export function renderCLIHelp(width: number = 80): string[] {
+  const lines: string[] = [];
+
+  // Header
+  lines.push("");
+  lines.push(xrBold("XR — The AI Agent Runtime You Can Actually Audit"));
+  lines.push(xrDim("BYOK · local-first · spend-capped · tamper-evident"));
+  lines.push("");
+  lines.push(xrDim("Usage:"));
+  lines.push(xrBold("  xr <task>"));
+  lines.push(xrDim("    Execute a task with the current provider/model"));
+  lines.push("");
+  lines.push(xrBold("  xr"));
+  lines.push(xrDim("    Open the fullscreen Shell (TUI)"));
+  lines.push("");
+  lines.push(xrBold("  xr serve"));
+  lines.push(xrDim("    Start dashboard + chat at localhost:3141"));
+  lines.push("");
+  lines.push(xrBold("Commands:"));
+  lines.push(xrDim("─".repeat(Math.min(width - 4, 60))));
+  lines.push("");
+
+  // Group commands by category
+  const categories = [
+    {
+      title: "Provider & Model",
+      commands: ["providers list", "providers set", "providers add", "providers test", "models list", "models set"],
+    },
+    {
+      title: "Onboarding & Health",
+      commands: ["onboarding", "doctor"],
+    },
+    {
+      title: "Agents & Skills",
+      commands: ["agents list", "agents plan", "skills list", "skill browse", "skill install"],
+    },
+    {
+      title: "MCP",
+      commands: ["mcp list", "mcp add", "mcp remove"],
+    },
+    {
+      title: "Memory",
+      commands: ["memory list", "memory recall", "memory delete", "memory prune"],
+    },
+    {
+      title: "Research",
+      commands: ["research", "research deep"],
+    },
+    {
+      title: "Security & Audit",
+      commands: ["audit verify", "verify-log"],
+    },
+    {
+      title: "Usage & Spending",
+      commands: ["usage", "budget"],
+    },
+    {
+      title: "Voice & Computer",
+      commands: ["voice", "computer"],
+    },
+    {
+      title: "Configuration",
+      commands: ["config"],
+    },
+  ];
+
+  for (const category of categories) {
+    lines.push(xrBold(category.title));
+    for (const cmd of category.commands) {
+      const help = COMMAND_HELP.find(c => c.command.includes(cmd));
+      const desc = help?.description ?? "";
+      lines.push(`  ${xrCyan(cmd.padEnd(22))} ${xrDim(desc)}`);
+    }
+    lines.push("");
+  }
+
+  // Help for specific command
+  lines.push(xrDim("─".repeat(Math.min(width - 4, 60))));
+  lines.push("");
+  lines.push(xrBold("Tips:"));
+  lines.push(`  ${SYM.info} ${xrDim("Run ${xrCyan("xr <command> --help")} for details on a specific command")}`);
+  lines.push(`  ${SYM.info} ${xrDim("Use ${xrCyan("--json")} flag for machine-readable output")}`);
+  lines.push(`  ${SYM.info} ${xrDim("Exit codes: 0=ok  1=error  2=usage  3=network  4=denied  5=not found  130=interrupted")}`);
+  lines.push("");
+  lines.push(xrDim("Documentation:"));
+  lines.push(`  ${xrCyan("xr --help")}                    This help`);
+  lines.push(`  ${xrCyan("xr doctor")}                   Health check`);
+  lines.push(`  ${xrCyan("xr onboarding")}               First-run wizard`);
+  lines.push("");
+
+  return lines;
+}
+
+/**
+ * Render help for a specific command
+ */
+export function renderCommandHelp(command: string, width: number = 80): string[] | null {
+  const help = COMMAND_HELP.find(c => c.command.toLowerCase().includes(command.toLowerCase()));
+
+  if (!help) return null;
+
+  const lines: string[] = [];
+  lines.push("");
+  lines.push(xrBold(help.command));
+  lines.push(xrDim(help.description));
+  lines.push("");
+  lines.push(xrDim("Usage:"));
+  lines.push(xrCyan(`  ${help.usage}`));
+  lines.push("");
+
+  if (help.options && help.options.length > 0) {
+    lines.push(xrDim("Options:"));
+    for (const opt of help.options) {
+      lines.push(`  ${xrCyan(opt.flag.padEnd(16))} ${xrDim(opt.description)}`);
+    }
+    lines.push("");
+  }
+
+  if (help.examples && help.examples.length > 0) {
+    lines.push(xrDim("Examples:"));
+    for (const ex of help.examples) {
+      lines.push(`  ${xrDim("$ xr " + ex)}`);
+    }
+    lines.push("");
+  }
+
+  if (help.related && help.related.length > 0) {
+    lines.push(xrDim("Related:"));
+    for (const rel of help.related) {
+      lines.push(`  ${xrCyan(rel)}`);
+    }
+    lines.push("");
+  }
+
+  return lines;
+}
+
+// ── Error Handling ─────────────────────────────────────────────────────────────
+
+/**
+ * Error types with suggestions
+ */
+export interface CLIError {
+  code: string;
+  message: string;
+  suggestion?: string;
+  exitCode?: number;
+}
+
+/**
+ * Known CLI errors with helpful suggestions
+ */
+export const KNOWN_CLI_ERRORS: Record<string, CLIError> = {
+  "NO_PROVIDER_CONFIGURED": {
+    code: "NO_PROVIDER_CONFIGURED",
+    message: "No provider is configured. XR needs a provider to execute tasks.",
+    suggestion: "Run 'xr onboarding' to set up a provider, or 'xr providers add <provider>' to add one.",
+    exitCode: 1,
+  },
+  "PROVIDER_UNREACHABLE": {
+    code: "PROVIDER_UNREACHABLE",
+    message: "The configured provider cannot be reached.",
+    suggestion: "Check your internet connection. Try 'xr providers test' to verify connectivity.",
+    exitCode: 3,
+  },
+  "API_KEY_INVALID": {
+    code: "API_KEY_INVALID",
+    message: "The API key for this provider appears to be invalid.",
+    suggestion: "Run 'xr providers add <provider>' to enter a new API key.",
+    exitCode: 1,
+  },
+  "MODEL_NOT_FOUND": {
+    code: "MODEL_NOT_FOUND",
+    message: "The requested model is not available.",
+    suggestion: "Run 'xr models list' to see available models, or 'xr providers set <provider> [model]' to choose a different one.",
+    exitCode: 5,
+  },
+  "BUDGET_EXCEEDED": {
+    code: "BUDGET_EXCEEDED",
+    message: "The task budget has been exceeded.",
+    suggestion: "Increase the budget with 'xr budget <amount>' or use a local model to avoid per-token costs.",
+    exitCode: 4,
+  },
+  "RATE_LIMIT": {
+    code: "RATE_LIMIT",
+    message: "Rate limit exceeded. Try again later.",
+    suggestion: "Wait a moment and try again, or use a local model if available.",
+    exitCode: 3,
+  },
+  "TASK_CANCELLED": {
+    code: "TASK_CANCELLED",
+    message: "The task was cancelled.",
+    suggestion: "No action needed — the task stopped safely.",
+    exitCode: 130,
+  },
+  "PERMISSION_DENIED": {
+    code: "PERMISSION_DENIED",
+    message: "XR does not have permission to perform this action.",
+    suggestion: "Check your permissions with 'xr config' or run XR with appropriate permissions.",
+    exitCode: 4,
+  },
+  "INTERNAL_ERROR": {
+    code: "INTERNAL_ERROR",
+    message: "An internal error occurred.",
+    suggestion: "Try again. If the problem persists, check the logs or report an issue.",
+    exitCode: 1,
+  },
 };
 
-function topicShell(): void {
-  banner();
-  heading("XR Shell");
-  console.log(`  The Shell is the terminal-native fullscreen experience.`);
-  console.log(`  (Internal name “TUI” is never shown to users.)\n`);
-  console.log(`  Start:  ${xrCyan("xr")}  or  ${xrCyan("xr --tui")}\n`);
-  console.log(`  ${xrBold("Essentials")}`);
-  console.log(`  ${xrDim("  ·")} Composer always ready — type natural language or /commands`);
-  console.log(`  ${xrDim("  ·")} ${xrCyan("Ctrl+K")} command palette`);
-  console.log(`  ${xrDim("  ·")} ${xrCyan("g")} then ${xrCyan("d/c/s/w/r/…")} go-to navigation`);
-  console.log(`  ${xrDim("  ·")} ${xrCyan("?")} contextual keyboard help`);
-  console.log(`  ${xrDim("  ·")} Status bar: workspace · mode · provider/model · spend · audit`);
-  console.log(`  ${xrDim("  ·")} Modes: agent / plan / ask (Shift+Tab cycles)\n`);
-  tip("Open Control Center anytime: xr serve");
-  console.log();
+/**
+ * Render an error with suggestion
+ */
+export function renderCLIError(error: CLIError | string, width: number = 80): string[] {
+  const lines: string[] = [];
+
+  const known = typeof error === "string"
+    ? (KNOWN_CLI_ERRORS[error] ?? { code: "UNKNOWN", message: error, suggestion: undefined, exitCode: 1 })
+    : error;
+
+  lines.push("");
+  lines.push(xrRed("┌" + "─".repeat(Math.min(width - 4, 50)) + "┐"));
+  lines.push(xrRed(`│ ${SYM.error} Error: ${known.code}`));
+  lines.push(xrRed(`│ ${known.message}`));
+  lines.push(xrRed("│"));
+
+  if (known.suggestion) {
+    lines.push(xrAmber(`│ ${SYM.warn} Try: ${known.suggestion}`));
+    lines.push(xrAmber("│"));
+  }
+
+  lines.push(xrRed("└" + "─".repeat(Math.min(width - 4, 50)) + "┘"));
+  lines.push("");
+
+  return lines;
 }
 
-function topicSecurity(): void {
-  banner();
-  heading("XR Security & Trust");
-  console.log(`  Security features are ${xrGreen("code-enforced")}, not optional.\n`);
-  console.log(`  ${xrGreen("•")} ${xrBold("Tamper-evident audit")}   SHA-256 hash chain on every action`);
-  console.log(`  ${xrGreen("•")} ${xrBold("Hard budget ceiling")}    agent cannot exceed the cap`);
-  console.log(`  ${xrGreen("•")} ${xrBold("Egress allow-list")}      only configured domains`);
-  console.log(`  ${xrGreen("•")} ${xrBold("Injection defense")}      attack lab + signed report`);
-  console.log(`  ${xrGreen("•")} ${xrBold("Approval gates")}         consent for risky tools`);
-  console.log(`  ${xrGreen("•")} ${xrBold("Local-first")}            no data leaves by default\n`);
-  code("xr audit verify", "verify audit chain");
-  code("xr attacks", "run injection benchmark");
-  code("xr shield status", "security overview");
-  code("xr doctor", "full health check");
-  console.log();
+/**
+ * Try to interpret an error and provide help
+ */
+export function interpretError(errorMessage: string): CLIError | null {
+  const lower = errorMessage.toLowerCase();
+
+  if (lower.includes("no provider") || lower.includes("provider not configured")) {
+    return KNOWN_CLI_ERRORS.NO_PROVIDER_CONFIGURED;
+  }
+  if (lower.includes("unreachable") || lower.includes("connection") || lower.includes("network")) {
+    return KNOWN_CLI_ERRORS.PROVIDER_UNREACHABLE;
+  }
+  if (lower.includes("invalid") && (lower.includes("key") || lower.includes("api"))) {
+    return KNOWN_CLI_ERRORS.API_KEY_INVALID;
+  }
+  if (lower.includes("model") && (lower.includes("not found") || lower.includes("not available"))) {
+    return KNOWN_CLI_ERRORS.MODEL_NOT_FOUND;
+  }
+  if (lower.includes("budget") || lower.includes("exceeded")) {
+    return KNOWN_CLI_ERRORS.BUDGET_EXCEEDED;
+  }
+  if (lower.includes("rate limit") || lower.includes("too many")) {
+    return KNOWN_CLI_ERRORS.RATE_LIMIT;
+  }
+  if (lower.includes("cancelled") || lower.includes("interrupt")) {
+    return KNOWN_CLI_ERRORS.TASK_CANCELLED;
+  }
+  if (lower.includes("permission") || lower.includes("denied") || lower.includes("access")) {
+    return KNOWN_CLI_ERRORS.PERMISSION_DENIED;
+  }
+
+  return null;
 }
 
-function topicProviders(): void {
-  banner();
-  heading("Providers");
-  console.log(`  ${xrDim("Supported:")} Ollama · Claude · OpenAI · Gemini · Groq · DeepSeek`);
-  console.log(`              Together · Mistral · Cohere · Cerebras · OpenRouter · Bedrock\n`);
-  console.log(`  ${xrBold("You are never stuck on the default model.")}\n`);
-  code("xr providers list", "list + key status + primary");
-  code("xr providers set ollama qwen2.5:7b", "change primary model");
-  code("xr providers set openai gpt-4o-mini", "switch to cloud (BYOK)");
-  code("xr providers add openai", "store API key securely");
-  code("xr providers test", "health-check");
-  console.log();
-  console.log(`  ${xrDim("Also:")} Shell Alt+P · /model <provider> [model] · Control Center → Providers`);
-  console.log();
+// ── Command Suggestions ────────────────────────────────────────────────────────
+
+/**
+ * Suggest similar commands when user types something unknown
+ */
+export function suggestCommands(unknownCmd: string): string[] {
+  const lower = unknownCmd.toLowerCase();
+  const suggestions: string[] = [];
+
+  // Check for partial matches
+  for (const help of COMMAND_HELP) {
+    const cmdLower = help.command.toLowerCase();
+
+    if (cmdLower.includes(lower) || lower.includes(cmdLower.split(" ")[0])) {
+      suggestions.push(help.command);
+    }
+  }
+
+  // Check for common typos
+  const typoMap: Record<string, string[]> = {
+    "provier": ["providers list", "providers set", "providers add"],
+    "modle": ["models list", "models set"],
+    "skil": ["skills list", "skill browse"],
+    "memroy": ["memory list", "memory recall"],
+    "reseatch": ["research"],
+    "budg": ["budget", "usage"],
+    "onborad": ["onboarding"],
+    "docotr": ["doctor"],
+    "agant": ["agents list", "agents plan"],
+    "mcpo": ["mcp list", "mcp add"],
+  };
+
+  for (const [typo, correct] of Object.entries(typoMap)) {
+    if (lower.includes(typo)) {
+      suggestions.push(...correct);
+    }
+  }
+
+  // Deduplicate and limit
+  return [...new Set(suggestions)].slice(0, 5);
 }
 
-function topicModels(): void {
-  banner();
-  heading("Local models");
-  console.log(`  ${xrBold("Change local model anytime — XR is not locked to the onboarding default.")}\n`);
-  code("xr models", "status + how to change");
-  code("xr models set ollama llama3.2", "change local model (persists)");
-  code("xr models recommend", "best model for this machine");
-  code("xr models install", "install recommended");
-  code("xr models list", "families + runtimes");
-  code("xr models test", "smoke-test active model");
-  console.log();
-  console.log(`  ${xrDim("Also:")} xr providers set · Shell Alt+P · Control Center → Models → Change model`);
-  console.log();
+/**
+ * Render command suggestions
+ */
+export function renderCommandSuggestions(unknownCmd: string, width: number = 80): string[] | null {
+  const suggestions = suggestCommands(unknownCmd);
+
+  if (suggestions.length === 0) return null;
+
+  const lines: string[] = [];
+  lines.push("");
+  lines.push(xrAmber("Did you mean?"));
+  for (const suggestion of suggestions) {
+    const help = COMMAND_HELP.find(c => c.command === suggestion);
+    const desc = help?.description ?? "";
+    lines.push(`  ${xrCyan(suggestion.padEnd(22))} ${xrDim(desc)}`);
+  }
+  lines.push("");
+  lines.push(xrDim(`Run ${xrCyan("xr --help")} for all commands`));
+
+  return lines;
 }
 
-function topicMemory(): void {
-  banner();
-  heading("Memory");
-  console.log(`  XR remembers ${xrGreen("only what you explicitly tell it to")}. Local-first, inspectable.\n`);
-  console.log(`  ${xrBold("Write")}`);
-  code('xr memory add "prefer TypeScript" --category preference');
-  code('xr memory add "tmp note" --ttl 3600');
-  code("xr memory remove <id>");
-  console.log();
-  console.log(`  ${xrBold("Inspect")}`);
-  code("xr memory list");
-  code('xr memory recall "query"');
-  code("xr memory health");
-  console.log();
-  tip('Disable: config "memory.enabled": false  or  XR_MEMORY_DISABLED=1');
-  console.log();
+// ── Machine-Readable Output ─────────────────────────────────────────────────────
+
+/**
+ * Format output as JSON
+ */
+export function toJSON(obj: unknown): string {
+  return JSON.stringify(obj, null, 2);
 }
 
-function topicResearch(): void {
-  banner();
-  heading("Research");
-  code('xr research "AI agents 2026"', "run a research job");
-  code("xr research deep \"…\"", "deeper multi-source pass");
-  code("xr research status", "recent sessions");
-  console.log();
+/**
+ * Create a success response
+ */
+export function successResponse(data: unknown, message?: string): string {
+  return JSON.stringify({
+    status: "success",
+    message,
+    data,
+  }, null, 2);
 }
 
-function topicSkills(): void {
-  banner();
-  heading("Skills & Marketplace");
-  code("xr skills list", "unified runtime catalog");
-  code("xr skill search <query>", "search");
-  code("xr skill install <id>", "install");
-  code("xr skill doctor", "runtime health");
-  tip("Full UI: xr serve → Marketplace");
-  console.log();
+/**
+ * Create an error response
+ */
+export function errorResponse(error: string, code?: string, suggestion?: string): string {
+  return JSON.stringify({
+    status: "error",
+    code,
+    error,
+    suggestion,
+  }, null, 2);
 }
-
-function topicWorkspace(): void {
-  banner();
-  heading("Workspaces");
-  console.log(`  A workspace is an isolation boundary: its own memory, audit, sessions, budget.\n`);
-  code("xr workspace list");
-  code("xr workspace create demo \"Demo project\"");
-  code("xr workspace use demo");
-  code("xr workspace delete demo");
-  console.log();
-}
-
-function topicBudget(): void {
-  banner();
-  heading("Budget");
-  console.log(`  Hard per-task ceilings are code-enforced. Soft daily/monthly caps warn.\n`);
-  code("xr budget", "status");
-  code("xr budget set 10", "monthly cap USD");
-  code('xr "task" --budget 0.25', "per-task hard cap");
-  console.log();
-}
-
-function topicModes(): void {
-  banner();
-  heading("Modes");
-  console.log(`  ${xrCyan("agent")}  execute actions, tools, shell, files — approvals enforced`);
-  console.log(`  ${xrViolet("plan")}   step-by-step plan with checkboxes — no side effects`);
-  console.log(`  ${xrDim("ask")}    answer only — no tools, cheapest\n`);
-  code('xr run "…" --mode plan');
-  code('xr ask "…"');
-  code('xr plan "…"');
-  tip("In Shell: Shift+Tab cycles modes; status bar always shows the active mode.");
-  console.log();
-}
-
-function topicScripting(): void {
-  banner();
-  heading("Scripting & automation");
-  console.log(`  ${xrBold("Output")}`);
-  console.log(`  ${xrDim("  ·")} Human text by default (TTY: color + glyphs)`);
-  console.log(`  ${xrDim("  ·")} ${xrCyan("--json")} → machine-readable on stdout`);
-  console.log(`  ${xrDim("  ·")} Non-TTY / pipes: no ANSI, no spinners`);
-  console.log(`  ${xrDim("  ·")} ${xrCyan("--quiet")} suppresses non-essential lines`);
-  console.log(`  ${xrDim("  ·")} Errors → stderr; data → stdout\n`);
-  console.log(`  ${xrBold("Exit codes")}`);
-  console.log(`  ${xrDim("  0")} success`);
-  console.log(`  ${xrDim("  1")} general error`);
-  console.log(`  ${xrDim("  2")} invalid usage`);
-  console.log(`  ${xrDim("  3")} network / auth`);
-  console.log(`  ${xrDim("  4")} security / denied`);
-  console.log(`  ${xrDim("  5")} not found`);
-  console.log(`  ${xrDim("130")} interrupted (Ctrl+C)\n`);
-  console.log(`  ${xrBold("Environment")}`);
-  code("NO_COLOR=1", "disable color");
-  code("XR_JSON=1", "force JSON");
-  code("XR_QUIET=1", "quiet mode");
-  code("XR_DEBUG=1", "debug / stack traces");
-  code("XR_WORKSPACE=id", "default workspace");
-  console.log();
-  console.log(`  ${xrBold("Examples")}`);
-  code('xr doctor --json | jq .checks');
-  code('xr providers list --json');
-  code('xr audit verify --json');
-  console.log();
-}
-
-export { showTopicOrCommandHelp };

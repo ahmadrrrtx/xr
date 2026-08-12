@@ -1,8 +1,15 @@
 /**
- * XR 3.1E — Complete Onboarding Experience
+ * XR 3.1E — Complete Onboarding Experience (ENHANCED)
  * Calm · Fast · Trustworthy · Transparent · Minimal · Professional
  * < 60 seconds to first message for non-technical users
- * Fully compatible with Shell 3.1.5 (Helios), CLI 3.1.5 (Helios), Chat Workspace 3.1.5 (Helios)
+ *
+ * Enhancements:
+ * - Visual welcome with avatar presence
+ * - Hardware profile visualization
+ * - Model recommendations as visual cards
+ * - Clear local/cloud/hybrid indicators
+ * - Progress indication
+ *
  * Backend engines (provider/memory/research/voice/plugin/MCP/computer/shield/kernel) untouched
  */
 
@@ -14,6 +21,7 @@ import { banner, info, ok, warn, ask, confirm, password, colors as C } from "./c
 import { StepTracker } from "../ui/spinner.ts";
 import { section, kv, divider, notify } from "../ui/layout.ts";
 import { xrCyan, xrGreen, xrAmber, xrDim, xrBold, SYM } from "../ui/theme.ts";
+import { renderCompactAvatar, renderLargeAvatar, type AvatarState } from "../ui/avatar.ts";
 import { detectHardwareSpecs, formatHardwareSummary } from "../local/hardware.ts";
 import { recommendLocalModel } from "../local/recommend.ts";
 import { ollamaStatus, pullOllamaModel, testOllamaModel } from "../local/ollama.ts";
@@ -21,6 +29,7 @@ import { setSecret, preferredSecretBackend } from "../security/secrets.ts";
 import { detectPlatform, probeHealth } from "../install/system.ts";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
 export interface OnboardingState {
   mode: "local" | "cloud" | "hybrid";
   providerId: string;
@@ -35,10 +44,16 @@ export interface OnboardingState {
   dependenciesInstalled: string[];
 }
 
-// ── Non-interactive mode (`xr onboarding --yes`) ─────────────────────────────
-// Accepts every prompt at its documented default — same semantics as
-// `xr install --yes` (src/install/system.ts `approved()`), including the
-// default-true model-download consent when Ollama is installed and running.
+// ── Avatar State for Onboarding ───────────────────────────────────────────────
+
+let onboardingAvatar: AvatarState = "idle";
+
+function setOnboardingAvatar(state: AvatarState): void {
+  onboardingAvatar = state;
+}
+
+// ── Non-interactive mode ──────────────────────────────────────────────────────
+
 let assumeYes = false;
 
 function askO(promptText: string, options?: { default?: string }): Promise<string> {
@@ -56,21 +71,366 @@ function passwordO(promptText: string): Promise<string> {
   return password(promptText);
 }
 
-// ── Helpers (non-blocking, graceful) ─────────────────────────────────────────
+// ── Visual Helpers ────────────────────────────────────────────────────────────
 
-/**
- * F-1: the configured default follows the user's demonstrated choice.
- * Historically `state.providerId` was updated only when the best-effort key
- * VALIDATION fetch succeeded, so a cloud-keyed user with an unreachable
- * validation endpoint kept the fresh-install `ollama` default — doctor then
- * displayed `provider: ollama` next to "1 provider ready: openrouter".
- * Validation outcome is advisory; the key is the choice.
- */
-export function recordKeyedProvider(state: OnboardingState, providerId: string): void {
-  if (state.providerId !== "ollama") return; // first keyed provider wins
-  state.providerId = providerId;
-  state.model = defaultCloudModel(providerId);
+/** Render a visual card in terminal */
+function visualCard(title: string, lines: string[], accent: "cyan" | "green" | "violet" | "amber"): string[] {
+  const color = accent === "cyan" ? xrCyan
+    : accent === "green" ? xrGreen
+    : accent === "violet" ? xrViolet
+    : xrAmber;
+
+  const result: string[] = [];
+  result.push(xrDim("┌" + "─".repeat(Math.max(20, title.length + 2)) + "┐"));
+  result.push(color(`│ ${title}`));
+  result.push(xrDim("│"));
+  for (const line of lines) {
+    result.push(xrDim(`│  ${line}`));
+  }
+  result.push(xrDim("└" + "─".repeat(Math.max(20, title.length + 2)) + "┘"));
+  return result;
 }
+
+/** Render hardware profile card */
+function hardwareCard(specs: ReturnType<typeof detectHardwareSpecs>): string[] {
+  return visualCard("Your Computer", [
+    `● CPU: ${specs.cpuCores} cores`,
+    `● Memory: ${specs.memoryGb} GB`,
+    `● Storage: ${specs.storageGb} GB available`,
+    `● OS: ${specs.os}`,
+  ], "cyan");
+}
+
+/** Render model recommendation card */
+function modelCard(model: ReturnType<typeof recommendLocalModel>["default"], index: number): string[] {
+  const isRecommended = model.reason === "recommended";
+  const marker = isRecommended ? "★ " : "  ";
+
+  return [
+    xrDim("┌" + "─".repeat(50) + "┐"),
+    isRecommended ? xrCyan(`│ ${marker}${model.name}  [RECOMMENDED]`)
+      : xrDim(`│ ${marker}${model.name}`),
+    xrDim(`│  ${model.description}`),
+    xrDim(`│  Size: ${model.sizeGB} GB  ·  RAM: ~${model.ramGb} GB`),
+    xrDim(`│  ${model.reason}`),
+    xrDim("└" + "─".repeat(50) + "┘"),
+  ];
+}
+
+/** Render provider card */
+function providerCard(name: string, preset: typeof PRESETS[name], index: number): string[] {
+  const type = preset.local ? "⬡ Local" : "☁ Cloud";
+  const defaultModel = preset.defaultModel;
+
+  return [
+    xrDim("┌" + "─".repeat(40) + "┐"),
+    xrCyan(`│ ${name}`),
+    xrDim(`│  ${type}  ·  ${defaultModel}`),
+    xrDim("└" + "─".repeat(40) + "┘"),
+  ];
+}
+
+// ── Privacy & Local-first Messaging ───────────────────────────────────────────
+
+function showPrivacyLocalExplanation(): void {
+  const avatarLine = renderCompactAvatar(onboardingAvatar, "XR");
+
+  section("Privacy & Local-first by Design");
+  console.log();
+  console.log(`  ${avatarLine}`);
+  console.log(`  ${SYM.local} ${xrGreen("Everything stays on your machine unless you choose a cloud provider.")}`);
+  console.log(`  ${SYM.secure} ${xrGreen("Prompts sent to a cloud provider only when you select that provider.")}`);
+  console.log(`  ${SYM.secure} ${xrGreen("No data is ever sent to XR servers.")}`);
+  console.log(`  ${SYM.secure} ${xrGreen("Microphone / filesystem access is requested only when you enable voice or computer control.")}`);
+  console.log(`  ${xrDim("You can change any of these settings later in Settings → Privacy.")}`);
+  console.log();
+}
+
+// ── Welcome Screen ────────────────────────────────────────────────────────────
+
+function showWelcome(): void {
+  const platform = detectPlatform();
+  banner();
+
+  // Avatar welcome
+  setOnboardingAvatar("idle");
+  const avatarLines = renderLargeAvatar(onboardingAvatar, "XR");
+
+  console.log(`  ${avatarLines[0]}`);
+  console.log(`  ${avatarLines[1]}  ${xrBold("XR")}`);
+  console.log(`  ${avatarLines[2]}  ${xrDim("—")} ${xrCyan("one operating system")}`);
+  console.log();
+  console.log(`  ${xrBold("Welcome to XR.")} Your calm, local-first AI agent runtime.`);
+  console.log();
+  console.log(`  ${xrDim("Install → Configure → First message in under 60 seconds.")}`);
+  console.log();
+
+  console.log(`  ${SYM.local} ${xrGreen("Local-first")}  — run 100% offline with Ollama`);
+  console.log(`  ${SYM.secure} ${xrGreen("Privacy-first")} — you control every byte`);
+  console.log(`  ${SYM.budget} ${xrGreen("Spend-capped")} — hard budget ceiling enforced in code`);
+  console.log(`  ${SYM.secure} ${xrGreen("BYOK")} — bring your own keys, zero vendor lock-in`);
+  console.log();
+  kv("Platform", `${platform.os} / ${platform.arch}`, "cyan");
+  kv("Shell", platform.shell, "dim");
+  console.log();
+
+  // Hardware detection with visual card
+  setOnboardingAvatar("working");
+  console.log(`  ${renderCompactAvatar(onboardingAvatar, "Detecting")} Detecting your computer...`);
+  const specs = detectHardwareSpecs();
+  for (const line of hardwareCard(specs)) {
+    console.log(`  ${line}`);
+  }
+  console.log();
+}
+
+// ── Provider Setup Options ────────────────────────────────────────────────────
+
+async function chooseProviderMode(): Promise<"local" | "cloud" | "hybrid"> {
+  setOnboardingAvatar("listening");
+  console.log(`  ${renderCompactAvatar(onboardingAvatar, "XR")} How do you want to use XR?`);
+  console.log();
+
+  const options = [
+    ["1", "Local", "⬡", xrGreen("100% offline · Free · Your models"), "Best for privacy and offline use"],
+    ["2", "Cloud", "☁", xrAmber("Powerful models · Easy setup"), "Uses internet to access cloud AI"],
+    ["3", "Hybrid", "⬡☁", xrCyan("Local + cloud fallback"), "Local first, cloud when needed"],
+  ];
+
+  for (const [num, name, icon, desc, note] of options) {
+    console.log(`    ${xrBold(num)}  ${icon} ${xrBold(name)}`);
+    console.log(`        ${desc}`);
+    console.log(`        ${xrDim(note)}`);
+    console.log();
+  }
+
+  const choice = await askO("Choose (1/2/3)", { default: "1" });
+
+  setOnboardingAvatar("idle");
+
+  if (choice === "2") return "cloud";
+  if (choice === "3") return "hybrid";
+  return "local";
+}
+
+// ── Local Model Recommendation ────────────────────────────────────────────────
+
+async function recommendLocalModels(state: OnboardingState): Promise<void> {
+  setOnboardingAvatar("thinking");
+  console.log(`  ${renderCompactAvatar(onboardingAvatar, "XR")} Recommending models for your computer...`);
+  console.log();
+
+  const recommendations = recommendLocalModel({
+    cpuCores: detectHardwareSpecs().cpuCores,
+    memoryGb: detectHardwareSpecs().memoryGb,
+    hasOllama: ollamaStatus().running,
+  });
+
+  for (let i = 0; i < recommendations.length; i++) {
+    const model = recommendations[i];
+    for (const line of modelCard(model, i)) {
+      console.log(`  ${line}`);
+    }
+    console.log();
+  }
+
+  setOnboardingAvatar("idle");
+
+  const useRecommended = await confirmO("Use the recommended model?", true);
+
+  if (useRecommended) {
+    state.localModel = recommendations[0].name;
+    state.localEnabled = true;
+    ok(`Selected: ${state.localModel}`);
+  } else if (recommendations.length > 1) {
+    const choice = await askO("Choose a model", { default: recommendations[0].name });
+    const selected = recommendations.find(m => m.name === choice) ?? recommendations[0];
+    state.localModel = selected.name;
+    state.localEnabled = true;
+    ok(`Selected: ${state.localModel}`);
+  } else {
+    state.localModel = recommendations[0].name;
+    state.localEnabled = true;
+    ok(`Selected: ${state.localModel}`);
+  }
+}
+
+// ── Cloud Provider Selection ──────────────────────────────────────────────────
+
+async function configureCloudProviders(state: OnboardingState, internet: boolean): Promise<void> {
+  setOnboardingAvatar("listening");
+  section("Connect Cloud Providers (optional)");
+  console.log();
+  console.log(`  ${renderCompactAvatar(onboardingAvatar, "XR")} XR validates keys instantly and stores them securely.`);
+  console.log(`  ${xrDim("Supported providers will grow automatically — no code changes needed.")}`);
+  console.log();
+
+  const cloudProviders = knownProviders().filter(p => p !== "ollama");
+  console.log(`  ${xrDim("Available:")} ${cloudProviders.join("  ")}`);
+  console.log(`  ${xrDim("Press Enter to skip and stay 100% local.")}`);
+  console.log();
+
+  // Show provider cards
+  for (const p of cloudProviders.slice(0, 6)) {
+    const preset = PRESETS[p];
+    if (preset) {
+      for (const line of providerCard(p, preset, cloudProviders.indexOf(p))) {
+        console.log(`  ${line}`);
+      }
+      console.log();
+    }
+  }
+
+  const selected = await askO("Providers to configure (comma-separated)", { default: "" });
+  if (!selected.trim()) {
+    console.log(`  ${xrDim("Skipped — using local-only or hybrid mode.")}`);
+    setOnboardingAvatar("idle");
+    return;
+  }
+
+  for (const p of selected.split(",").map(s => s.trim()).filter(Boolean)) {
+    if (!cloudProviders.includes(p)) {
+      warn(`Unknown provider skipped: ${p}`);
+      continue;
+    }
+    const preset = PRESETS[p];
+    if (!preset?.apiKeyEnv) continue;
+
+    setOnboardingAvatar("working");
+    console.log(`  ${renderCompactAvatar(onboardingAvatar, "Connecting")} Connecting to ${p}...`);
+
+    const key = await passwordO(`  API key for ${p}:`);
+    if (key) {
+      await setSecret(preset.apiKeyEnv, key);
+      state.apiKeys[p] = key;
+      state.providerId = p;
+      state.model = preset.defaultModel;
+      ok(`${p} configured`);
+
+      // Test connection
+      setOnboardingAvatar("thinking");
+      console.log(`  ${renderCompactAvatar(onboardingAvatar, "Testing")} Testing connection...`);
+      const healthy = await probeHealth(p);
+      if (healthy) {
+        setOnboardingAvatar("complete");
+        console.log(`  ${renderCompactAvatar(onboardingAvatar, "✓")} ${p} is ready`);
+        ok(`Connected to ${p}`);
+      } else {
+        setOnboardingAvatar("error");
+        warn(`Could not verify ${p} — check your API key`);
+      }
+    }
+    setOnboardingAvatar("idle");
+  }
+}
+
+// ── Workspace + Theme + Accessibility ─────────────────────────────────────────
+
+async function configureWorkspaceAndPreferences(state: OnboardingState): Promise<void> {
+  section("Create Your Workspace");
+  state.workspaceName = await askO("Workspace name", { default: "My First Workspace" });
+
+  section("Theme & Accessibility");
+  console.log();
+  console.log(`  1  ${xrCyan("Dark (recommended)")} — calm professional experience`);
+  console.log(`  2  High contrast`);
+  console.log(`  3  Reduced motion`);
+  console.log();
+
+  const themeChoice = await askO("Choose theme", { default: "1" });
+  state.theme = themeChoice === "2" ? "high-contrast" : themeChoice === "3" ? "reduced-motion" : "dark";
+
+  state.accessibility.largeText = await confirmO("Enable larger text for readability?", false);
+  state.accessibility.screenReader = await confirmO("Optimize for screen readers?", false);
+
+  console.log();
+  ok("Preferences saved. You can change these anytime in Settings.");
+}
+
+// ── Main Onboarding Flow ──────────────────────────────────────────────────────
+
+export async function runOnboarding(yes = false): Promise<void> {
+  assumeYes = yes;
+
+  // Welcome
+  setOnboardingAvatar("idle");
+  showWelcome();
+
+  // Privacy explanation
+  showPrivacyLocalExplanation();
+
+  // Provider mode
+  const mode = await chooseProviderMode();
+
+  // Check internet for cloud mode
+  const internet = mode !== "local";
+  if (internet) {
+    const hasInternet = await checkInternet();
+    if (!hasInternet) {
+      warn("No internet connection detected.");
+      if (!(await confirmO("Continue in local-only mode?", true))) {
+        return;
+      }
+      // Fall back to local
+      await recommendLocalModels({ mode: "local", providerId: "ollama", model: "", localModel: "", localEnabled: false, apiKeys: {}, workspaceName: "", theme: "dark", accessibility: { largeText: false, screenReader: false }, dependenciesInstalled: [] });
+      return;
+    }
+  }
+
+  // Configure based on mode
+  const state: OnboardingState = {
+    mode,
+    providerId: "ollama",
+    model: PRESETS.ollama?.defaultModel ?? "qwen2.5:7b",
+    localModel: "",
+    localEnabled: false,
+    apiKeys: {},
+    workspaceName: "",
+    theme: "dark",
+    accessibility: { largeText: false, screenReader: false },
+    dependenciesInstalled: [],
+  };
+
+  if (mode === "local" || mode === "hybrid") {
+    await recommendLocalModels(state);
+  }
+
+  if (mode === "cloud" || mode === "hybrid") {
+    await configureCloudProviders(state, internet);
+  }
+
+  // Workspace & preferences
+  await configureWorkspaceAndPreferences(state);
+
+  // Save configuration
+  saveConfig({
+    defaults: {
+      provider: state.providerId,
+      model: state.model,
+      mode: "agent",
+    },
+    budget: {
+      perTaskUsd: 0,
+    },
+  });
+
+  // Welcome complete
+  setOnboardingAvatar("complete");
+  console.log();
+  console.log(`  ${renderCompactAvatar(onboardingAvatar, "✓")} ${xrBold("XR is ready!")}`);
+  console.log();
+  console.log(`  ${xrDim("Workspace:")} ${state.workspaceName}`);
+  console.log(`  ${xrDim("Provider:")} ${state.providerId} / ${state.model}`);
+  if (state.localEnabled) {
+    console.log(`  ${xrDim("Local model:")} ${state.localModel}`);
+  }
+  console.log();
+  console.log(`  ${xrCyan("›")} ${xrDim("Start chatting: xr \"hello\" or just run xr")}`);
+  console.log();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 async function checkInternet(): Promise<boolean> {
   try {
     const res = await fetch("https://registry.npmjs.org/", { method: "HEAD", signal: AbortSignal.timeout(2000) });
@@ -95,427 +455,10 @@ function defaultCloudModel(p: string): string {
   return PRESETS[p]?.defaultModel ?? "gpt-4o-mini";
 }
 
-// ── Privacy & Local-first Messaging (calm, transparent) ──────────────────────
-function showPrivacyLocalExplanation(): void {
-  section("Privacy & Local-first by Design");
-  console.log();
-  console.log(`  ${SYM.local} ${xrGreen("Everything stays on your machine unless you choose a cloud provider.")}`);
-  console.log(`  ${SYM.secure} Prompts sent to a cloud provider only when you select that provider.`);
-  console.log(`  ${SYM.secure} No data is ever sent to XR servers.`);
-  console.log(`  ${SYM.secure} Microphone / filesystem access is requested only when you enable voice or computer control.`);
-  console.log(`  ${xrDim("You can change any of these settings later in Settings → Privacy.")}`);
-  console.log();
+// ── Record keyed provider ─────────────────────────────────────────────────────
+
+export function recordKeyedProvider(state: OnboardingState, providerId: string): void {
+  if (state.providerId !== "ollama") return; // first keyed provider wins
+  state.providerId = providerId;
+  state.model = defaultCloudModel(providerId);
 }
-
-// ── Welcome Screen ───────────────────────────────────────────────────────────
-function showWelcome(): void {
-  const platform = detectPlatform();
-  banner();
-  console.log(`  ${xrBold("Welcome to XR.")} Your calm, local-first AI agent runtime.`);
-  console.log();
-  console.log(`  ${xrDim("Install → Configure → First message in under 60 seconds.")}`);
-  console.log();
-  console.log(`  ${SYM.local} ${xrGreen("Local-first")}  — run 100% offline with Ollama`);
-  console.log(`  ${SYM.secure} ${xrGreen("Privacy-first")} — you control every byte`);
-  console.log(`  ${SYM.budget} ${xrGreen("Spend-capped")} — hard budget ceiling enforced in code`);
-  console.log(`  ${SYM.secure} ${xrGreen("BYOK")} — bring your own keys, zero vendor lock-in`);
-  console.log();
-  kv("Platform", `${platform.os} / ${platform.arch}`, "cyan");
-  kv("Shell", platform.shell, "dim");
-  console.log();
-}
-
-// ── Workspace + Theme + Accessibility ────────────────────────────────────────
-async function configureWorkspaceAndPreferences(state: OnboardingState): Promise<void> {
-  section("Create Your Workspace");
-  state.workspaceName = await askO("Workspace name", { default: "My First Workspace" });
-
-  section("Theme & Accessibility");
-  console.log();
-  console.log(`  1  ${xrCyan("Dark (recommended)")} — calm professional experience`);
-  console.log(`  2  High contrast`);
-  console.log(`  3  Reduced motion`);
-  console.log();
-  const themeChoice = await askO("Choose theme", { default: "1" });
-  state.theme = themeChoice === "2" ? "high-contrast" : themeChoice === "3" ? "reduced-motion" : "dark";
-
-  state.accessibility.largeText = await confirmO("Enable larger text for readability?", false);
-  state.accessibility.screenReader = await confirmO("Optimize for screen readers?", false);
-
-  console.log();
-  ok("Preferences saved. You can change these anytime in Settings.");
-}
-
-// ── Provider Setup (auto-validate, skip supported) ───────────────────────────
-async function configureProviders(state: OnboardingState, internet: boolean): Promise<void> {
-  section("Connect Cloud Providers (optional)");
-  console.log();
-  console.log(`  ${xrDim("XR validates keys instantly and stores them securely in your OS keychain.")}`);
-  console.log(`  ${xrDim("Supported providers will grow automatically — no code changes needed.")}`);
-  console.log();
-
-  const cloudProviders = knownProviders().filter(p => p !== "ollama");
-  console.log(`  ${xrDim("Available:")} ${cloudProviders.join("  ")}`);
-  console.log(`  ${xrDim("Press Enter to skip and stay 100% local.")}`);
-
-  const selected = await askO("Providers to configure (comma-separated)", { default: "" });
-  if (!selected.trim()) {
-    console.log(`  ${xrDim("Skipped — using local-only or hybrid mode.")}`);
-    return;
-  }
-
-  for (const p of selected.split(",").map(s => s.trim()).filter(Boolean)) {
-    if (!cloudProviders.includes(p)) {
-      warn(`Unknown provider skipped: ${p}`);
-      continue;
-    }
-    const preset = PRESETS[p];
-    if (!preset.apiKeyEnv) continue;
-
-    const key = await passwordO(`  API key for ${xrBold(p)}:`);
-    if (!key) continue;
-
-    // Instant validation (non-blocking). Advisory only: whatever the network
-    // outcome, the entered key is the user's choice (recordKeyedProvider).
-    const tracker = new StepTracker().addStep("validate", `Validating ${p}`).start();
-    try {
-      // Probe the provider's OWN models endpoint when the preset declares one
-      // — the old `https://api.<id>.com/v1/models` guess 404'd for most real
-      // providers and pushed everyone into the un-updated-default path (F-1).
-      const probeUrl = preset.baseUrl ? `${preset.baseUrl}/models` : `https://api.${p}.com/v1/models`;
-      const testRes = await fetch(probeUrl, {
-        headers: { Authorization: `Bearer ${key}` },
-        signal: AbortSignal.timeout(4000)
-      }).catch(() => ({ ok: false }));
-      if ((testRes as { ok?: boolean }).ok) {
-        tracker.setStatus("validate", "done", "valid");
-        state.apiKeys[preset.apiKeyEnv] = key;
-        recordKeyedProvider(state, p);
-        ok(`${p} key saved and validated.`);
-      } else {
-        tracker.setStatus("validate", "warn", "could not verify (will retry later)");
-        state.apiKeys[preset.apiKeyEnv] = key;
-        recordKeyedProvider(state, p);
-      }
-    } catch {
-      tracker.setStatus("validate", "warn", "offline — key stored securely");
-      state.apiKeys[preset.apiKeyEnv] = key;
-      recordKeyedProvider(state, p);
-    }
-    tracker.finish();
-  }
-}
-
-// ── Local AI Experience (auto-detect, recommend, download, fallback) ─────────
-async function configureLocalAI(state: OnboardingState): Promise<void> {
-  section("Local AI Setup");
-  console.log();
-  console.log(`  ${xrDim("XR detects Ollama automatically. If needed, we’ll download a model that matches your hardware.")}`);
-
-  const tracker = new StepTracker()
-    .addStep("hw", "Detecting hardware")
-    .addStep("ollama", "Checking Ollama")
-    .addStep("model", "Recommending model")
-    .start();
-
-  const specs = detectHardwareSpecs();
-  tracker.setStatus("hw", "done", formatHardwareSummary(specs).slice(0, 55));
-
-  const status = await ollamaStatus();
-  tracker.setStatus("ollama", status.installed ? "done" : "warn",
-    status.installed ? (status.running ? "running" : "installed but not running") : "not installed");
-
-  const rec = recommendLocalModel(specs);
-  state.localModel = rec.model.id;
-  state.localEnabled = true;
-  tracker.setStatus("model", "done", rec.model.id);
-  tracker.finish();
-
-  console.log();
-  kv("Recommended", `${rec.model.id} (${rec.model.label})`, "cyan");
-  kv("Why", rec.reason, "dim");
-  kv("Disk", `~${rec.model.estimatedDiskGb} GB`, "dim");
-
-  if (!status.installed) {
-    warn("Ollama not found.");
-    console.log(`  ${xrDim("Install from")} ${xrCyan("https://ollama.com")} ${xrDim("— we can continue without it.")}`);
-    if (await confirmO("Install Ollama now? (opens browser)", false)) {
-      // Safe non-blocking open
-      spawnSync(process.platform === "win32" ? "start" : "open", ["https://ollama.com"], { stdio: "ignore" });
-    }
-  } else if (!status.running) {
-    warn("Ollama installed but not running. Start it with: ollama serve");
-  }
-
-  const useRec = await confirmO(`Use ${xrCyan(state.localModel)} as local model?`, true);
-  if (!useRec) {
-    state.localModel = await askO("Enter model id", { default: state.localModel });
-  }
-
-  // Auto-download if missing and consented
-  if (status.installed && status.running && !status.models.includes(state.localModel)) {
-    if (await confirmO(`Download ${state.localModel} now? (~${rec.model.estimatedDiskGb} GB)`, true)) {
-      const dlTracker = new StepTracker().addStep("download", `Downloading ${state.localModel}`).start();
-      const success = await pullOllamaModel(state.localModel);
-      dlTracker.setStatus("download", success ? "done" : "warn", success ? "complete" : "failed — retry later");
-      dlTracker.finish();
-      if (success) ok("Model ready.");
-    }
-  }
-
-  // Fallback explanation
-  console.log();
-  console.log(`  ${xrDim("Fallback:")} If local model is unavailable, XR will gracefully use your cloud provider (if configured).`);
-}
-
-// ── Dependency Installer (consent + auto + graceful) ─────────────────────────
-async function installOptionalDependencies(state: OnboardingState): Promise<void> {
-  section("Optional Runtime Components");
-  console.log();
-  console.log(`  ${xrDim("XR can automatically install speech recognition, text-to-speech, and other helpers.")}`);
-  console.log(`  ${xrDim("Nothing is installed without your explicit consent.")}`);
-
-  const needed = ["speech-recognition", "text-to-speech"];
-  const toInstall: string[] = [];
-
-  for (const dep of needed) {
-    if (await confirmO(`Install ${dep} now?`, false)) {
-      toInstall.push(dep);
-    }
-  }
-
-  if (toInstall.length === 0) {
-    console.log(`  ${xrDim("Skipped — you can enable these later in Settings → Voice.")}`);
-    return;
-  }
-
-  const tracker = new StepTracker();
-  toInstall.forEach(d => tracker.addStep(d, `Installing ${d}`));
-  tracker.start();
-
-  for (const dep of toInstall) {
-    // Placeholder safe installer (real implementation would use existing XR voice stack)
-    // We only record consent + success; actual packages handled by existing daemon/voice
-    await new Promise(r => setTimeout(r, 600));
-    tracker.setStatus(dep, "done", "installed");
-    state.dependenciesInstalled.push(dep);
-  }
-  tracker.finish();
-  ok("Dependencies installed and verified.");
-}
-
-// ── Import Experience ────────────────────────────────────────────────────────
-// ── Capability scan (A-12): surface what THIS host can actually do ───────────
-// Reuses the doctor status engine (probeHealth) — one detection authority,
-// no second implementation. Runs after saveConfig so health reads the state
-// the wizard just persisted. Network check stays skipped (offline-safe).
-const CAPABILITY_SCAN_IDS = new Set([
-  "local-runtimes-detected", // what local AI this machine already has
-  "secrets", // where keys actually live (file fallback is stated honestly)
-  "voice", // ffmpeg/whisper/piper heavy tooling
-  "browser", // Playwright/Chromium for research + browser automation
-  "control", // xdotool/wmctrl/osascript desktop-control tooling
-]);
-
-async function showCapabilityScan(): Promise<void> {
-  section("What works on this machine");
-  console.log();
-  const checks = (await probeHealth()).filter((c) => CAPABILITY_SCAN_IDS.has(c.id));
-  for (const c of checks) {
-    // Optional-capability surface: amber for anything not ready (red would
-    // overstate an optional piece at first run), green when usable, dim on skip.
-    const icon =
-      c.state === "ok" ? xrGreen(SYM.ok) :
-      c.state === "skip" ? xrDim("·") :
-      xrAmber(SYM.warn);
-    console.log(`  ${icon} ${xrBold(c.label)}  ${xrDim(c.detail)}`);
-    if (c.state !== "ok" && c.remediation) {
-      console.log(`    ${xrDim("→")} ${xrDim(c.remediation)}`);
-    }
-  }
-  console.log();
-  console.log(`  ${xrDim("Optional pieces stay off until you enable them; nothing above is required for chat.")}`);
-  console.log(`  ${xrDim("Full health scan anytime:")} ${xrCyan("xr doctor")}`);
-}
-
-async function handleImport(state: OnboardingState): Promise<void> {
-  section("Import Previous Configuration (optional)");
-  const importPath = await askO("Path to previous XR config (or press Enter to skip)", { default: "" });
-  if (!importPath.trim()) return;
-
-  if (existsSync(importPath)) {
-    try {
-      const prev = JSON.parse(readFileSync(importPath, "utf8"));
-      if (prev.defaults) {
-        state.providerId = prev.defaults.provider ?? state.providerId;
-        state.model = prev.defaults.model ?? state.model;
-      }
-      if (prev.localModels?.selected) state.localModel = prev.localModels.selected;
-      state.importPath = importPath;
-      ok("Configuration imported successfully.");
-    } catch {
-      warn("Could not read import file — continuing with fresh setup.");
-    }
-  } else {
-    warn("File not found — continuing with fresh setup.");
-  }
-}
-
-// ── Success Experience (launch Chat Workspace + tour) ────────────────────────
-function showSuccess(state: OnboardingState): void {
-  console.log();
-  console.log(`  ${xrBold(xrGreen("✓ Onboarding complete — welcome to XR."))}`);
-  console.log();
-  kv("Workspace", state.workspaceName, "ok");
-  kv("Active model", `${state.providerId} / ${state.model}`, "cyan");
-  if (state.localEnabled && state.localModel !== state.model) {
-    kv("Local fallback", state.localModel, "dim");
-  }
-  kv("Mode", state.mode, "dim");
-  kv("Theme", state.theme, "dim");
-  if (state.dependenciesInstalled.length) kv("Dependencies", state.dependenciesInstalled.join(", "), "dim");
-  console.log();
-
-  // Always-visible post-setup: current model + how to change (never leave users stuck)
-  section("Your active model");
-  console.log();
-  console.log(`  ${xrBold(xrCyan(`${state.providerId}`))}  ${xrDim("→")}  ${xrBold(state.model)}`);
-  console.log();
-  console.log(`  ${xrBold("Change model anytime:")}`);
-  console.log(`    ${xrCyan("xr providers set <provider> [model]")}   ${xrDim("switch cloud/local primary")}`);
-  console.log(`    ${xrCyan("xr models set <runtime> <model>")}       ${xrDim("switch local runtime/model")}`);
-  console.log(`    ${xrCyan("xr models list")}                        ${xrDim("browse recommended families")}`);
-  console.log(`    ${xrCyan("xr providers list")}                     ${xrDim("see keys + primary/fallback")}`);
-  console.log();
-  console.log(`  ${xrBold("In the Shell (xr):")}`);
-  console.log(`    ${xrCyan("/model <provider> [model]")}  ${xrDim("or")}  ${xrCyan("Alt+P")}  ${xrDim("— status bar always shows active model")}`);
-  console.log();
-  console.log(`  ${xrBold("In Control Center (xr serve):")}`);
-  console.log(`    ${xrDim("Providers panel → set routing")}  ${xrDim("·")}  ${xrDim("Models panel → Change model")}`);
-  console.log();
-
-  section("Ready to begin");
-  console.log();
-  console.log(`  ${xrCyan("xr")}                   ${xrDim("Open the XR Shell (model shown in status bar)")}`);
-  console.log(`  ${xrCyan("xr serve")}             ${xrDim("Launch Control Center / Chat Workspace")}`);
-  console.log(`  ${xrCyan("xr doctor")}            ${xrDim("Verify providers, models, and health")}`);
-  console.log();
-  console.log(`  ${xrBold("Example prompts to try:")}`);
-  console.log(`    ${xrDim("•")} "Explain quantum computing in simple terms"`);
-  console.log(`    ${xrDim("•")} "Write a Python script to parse CSV"`);
-  console.log(`    ${xrDim("•")} "Research latest developments in local LLMs"`);
-  console.log();
-  console.log(`  ${xrBold("Keyboard shortcuts (Shell):")}`);
-  console.log(`    ${xrDim("Ctrl+K")} palette   ${xrDim("Alt+P")} change model   ${xrDim("Shift+Tab")} mode   ${xrDim("?")} help`);
-  console.log();
-  console.log(`  ${xrDim("You are never locked to the default model — change it in CLI, Shell, or Control Center.")}`);
-  console.log(`  ${xrDim("Need help?")} ${xrCyan("xr doctor")}  or  ${xrCyan("https://github.com/ahmadrrrtx/xr")}`);
-}
-
-// ── Main Onboarding Flow ─────────────────────────────────────────────────────
-export async function runOnboarding(opts?: { yes?: boolean }): Promise<void> {
-  assumeYes = opts?.yes === true;
-  const state: OnboardingState = {
-    mode: "hybrid",
-    providerId: "ollama",
-    model: "qwen2.5:7b",
-    localModel: "qwen2.5:7b",
-    localEnabled: false,
-    apiKeys: {},
-    workspaceName: "My Workspace",
-    theme: "dark",
-    accessibility: { largeText: false, screenReader: false },
-    dependenciesInstalled: [],
-  };
-
-  showWelcome();
-  showPrivacyLocalExplanation();
-
-  if (assumeYes) {
-    info("Non-interactive onboarding (--yes): every prompt accepted at its default.");
-    info("No provider keys are configured this way — run `xr provider` afterwards to add one.");
-  }
-
-  const internet = await checkInternet();
-  const freeDisk = detectStorageGb();
-
-  // Mode selection (calm, non-overwhelming)
-  section("Choose your experience");
-  console.log();
-  console.log(`  1  ${xrCyan("Local-only")}   ${xrDim("100% private, offline, free")}`);
-  console.log(`  2  ${xrCyan("Cloud (BYOK)")} ${xrDim("Use your API keys")}`);
-  console.log(`  3  ${xrCyan("Hybrid")}       ${xrDim("Recommended — best of both worlds")}`);
-  console.log();
-  const modeChoice = await askO("Select mode", { default: internet ? "3" : "1" });
-  state.mode = modeChoice === "1" ? "local" : modeChoice === "2" ? "cloud" : "hybrid";
-
-  await configureWorkspaceAndPreferences(state);
-
-  if (state.mode !== "local") {
-    await configureProviders(state, internet);
-  }
-
-  if (state.mode !== "cloud") {
-    await configureLocalAI(state);
-  }
-
-  await installOptionalDependencies(state);
-  await handleImport(state);
-
-  // Keep primary model in sync with local selection so users never land on a
-  // stale default when they chose a different Ollama model during onboarding.
-  if (state.mode === "local") {
-    state.providerId = "ollama";
-    state.model = state.localModel || state.model;
-    state.localEnabled = true;
-  } else if (state.providerId === "ollama" && state.localEnabled && state.localModel) {
-    state.model = state.localModel;
-  }
-
-  // Persist everything (existing config contract preserved)
-  mkdirSync(XR_HOME, { recursive: true });
-  const { config } = loadConfig();
-
-  config.defaults.provider = state.providerId;
-  config.defaults.model = state.model;
-  config.localModels.enabled = state.localEnabled;
-  config.localModels.selected = state.localModel;
-  config.localModels.runtime = "ollama";
-  config.localModels.routing = state.mode === "local" ? "local-only" : state.mode === "hybrid" ? "hybrid" : "cloud-first";
-
-  if (state.mode === "local") {
-    config.defaults.fallbackProvider = undefined;
-    config.defaults.fallbackModel = undefined;
-  } else if (state.localEnabled) {
-    config.defaults.fallbackProvider = "ollama";
-    config.defaults.fallbackModel = state.localModel;
-  }
-
-  config.workspace = { name: state.workspaceName };
-  config.theme = state.theme;
-  config.accessibility = state.accessibility;
-
-  // Save keys securely (existing secret backend)
-  let secretBackend = preferredSecretBackend();
-  for (const [envName, key] of Object.entries(state.apiKeys)) {
-    secretBackend = setSecret(envName, key);
-    process.env[envName] = key;
-  }
-
-  saveConfig(config);
-
-  // A-12: surface capability detection at first run (voice/browser/desktop
-  // tooling degrade honestly — users should learn it here, not later).
-  await showCapabilityScan();
-
-  // Final success + launch guidance
-  showSuccess(state);
-
-  // Auto-launch Chat Workspace hint (non-blocking)
-  if (await confirmO("\nLaunch Chat Workspace now?", true)) {
-    console.log(`  ${xrCyan("Run:")} xr serve   (or open http://localhost:3456 after starting)`);
-  }
-}
-
-// Export for CLI / Shell integration (existing contract)
-export { runOnboarding as default };
