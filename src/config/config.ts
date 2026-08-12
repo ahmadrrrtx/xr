@@ -93,6 +93,8 @@ const ConfigSchema = z.object({
   // ── Stage 3: Universal Provider Engine ─────────────────────────────────────
   providerEngine: z
     .object({
+      /** GAP-001 — model-call ceiling (ms); never unbounded. Env: XR_PROVIDER_TIMEOUT_MS. */
+      requestTimeoutMs: z.number().int().positive().max(3_600_000).default(120_000),
       routingStrategy: z
         .enum([
           "primary",

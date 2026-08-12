@@ -1,8 +1,9 @@
 /** XR 2.1A — Unified Skill Runtime CLI. */
 import { Command, CommandContext } from "../core/command-registry.ts";
+import { countBundledSkills, describeSkillCounts } from "../skills/counts.ts";
 import { Tokens } from "../core/tokens.ts";
 import { SkillService } from "../services/skill-service.ts";
-import { colors as C, heading, ok, warn, error, tip } from "../interfaces/cli.ts";
+import { colors as C, heading, info, ok, warn, error, tip } from "../interfaces/cli.ts";
 import { SKILL_CATEGORIES, type SkillCategory, type SkillPermissionScope } from "../skills/schema.ts";
 import type { UnifiedSkillRecord } from "../skills/adapters.ts";
 
@@ -96,7 +97,14 @@ export class SkillsCommand implements Command {
               (!kind || row.kind === kind) &&
               (!type || row.skillType === type),
           );
-          heading(`Unified Skills (${visible.length})`);
+          // GAP-008 — the header said "Unified Skills (79)" while the README
+          // and release manifest said 65: both true, different populations
+          // (loaded runtime records incl. role/research/MCP/learned packs vs
+          // bundled directories). Name the population so the numbers can no
+          // longer be read as contradicting each other.
+          const bundled = countBundledSkills();
+          heading(`Loaded skill records (${visible.length})`);
+          info(`bundled on disk: ${describeSkillCounts(bundled)}`);
           for (const row of visible) printUnifiedSkill(row, boolFlag(flags, "verbose"));
           return;
         }
@@ -119,7 +127,7 @@ export class SkillsCommand implements Command {
             ));
             return;
           }
-          heading(`Skills by type (${rows.length} total)`);
+          heading(`Loaded skill records by type (${rows.length} total)`);
           for (const skillType of ["executable", "connector", "prompt-pack", "knowledge-pack", "experimental"]) {
             const count = byType.get(skillType) ?? 0;
             const en = enabled.get(skillType) ?? 0;

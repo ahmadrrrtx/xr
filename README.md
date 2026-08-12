@@ -92,7 +92,7 @@ distribution is the compiled per-target binary; source checkout is the contribut
 | **Scoop** | Windows | download `scoop/xr.json` from the release · `scoop install ./xr.json` | manifest generated + verified in CI |
 | **.deb** | Debian / Ubuntu | download `xr_<ver>_amd64.deb` from the [release](https://github.com/ahmadrrrtx/xr/releases) · `sudo dpkg -i xr_*_amd64.deb` | real `dpkg` install + remove tested on every PR |
 | **Docker** | any container runtime | `docker run ghcr.io/ahmadrrrtx/xr:latest` | image built + scanned in CI; GHCR publication from the first tagged release |
-| **npm** | any | `bun add -g @rrrtx/xr` | published by the release workflow with OIDC provenance |
+| **npm** | any | `bun add -g @rrrtx/xr` | **⚠ STALE — the npm `latest` dist-tag is `3.1.5`, not 7.1.0.** No 7.x release has been published or tagged yet, so this command installs an older build than the one this page documents. Until a 7.x release is cut, install from the binary channel or build from source. Publication is wired (release workflow, OIDC provenance) but has not run. See [known limitations](docs/release/7.1.0/known-limitations.md). |
 | **Prerelease (beta channel)** | any | tags `v*-beta.*` → npm `beta` dist-tag · `docker run ghcr.io/ahmadrrrtx/xr:beta` | prerelease handling is part of the release workflow |
 
 Channel configs are **generated from the release manifest** and drift-gated

@@ -20,7 +20,8 @@
  * retry is restricted to transient failures only.
  */
 
-import type { Message, ModelTurn, Provider, Tool } from "../core/types.ts";
+import type { ChatOptions, Message, ModelTurn, Provider, Tool } from "../core/types.ts";
+import { ProviderAbortError } from "../providers/request-guard.ts";
 import {
   contextManifest,
   type ContextManifest,
@@ -32,7 +33,13 @@ import type { ModelClass } from "./types.ts";
 
 // ── Three-tier error classification ─────────────────────────────────────────
 
-export type ErrorClass = "transient" | "permanent" | "semantic";
+/**
+ * GAP-001 — "cancelled" is a FOURTH class, deliberately distinct from the
+ * three failure classes. Transient/permanent/semantic all describe a provider
+ * that misbehaved and may justify a retry or failover; "cancelled" describes
+ * the caller stopping the work. It must never trigger either.
+ */
+export type ErrorClass = "transient" | "permanent" | "semantic" | "cancelled";
 
 export interface ClassifiedError {
   cls: ErrorClass;
@@ -61,6 +68,13 @@ const SEMANTIC =
  * advance remains permitted, mirroring the existing trigger table.
  */
 export function classifyError(err: unknown): ClassifiedError {
+  // GAP-001 — a cancelled turn is not a provider fault. Without this it fell
+  // through to "unclassified failure" → permanent → the degradation engine
+  // dutifully failed over to the NEXT provider, issuing fresh requests for a
+  // run the user had just stopped. Cancellation is terminal for the whole call.
+  if (err instanceof ProviderAbortError) {
+    return { cls: "cancelled", reason: err.message };
+  }
   if (err instanceof SemanticFailure) {
     return { cls: "semantic", reason: err.message };
   }
@@ -250,7 +264,7 @@ export class ResilientProvider implements Provider {
     }
   }
 
-  async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
+  async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
     const sleep = this.deps.sleep ?? DEFAULT_SLEEP;
     const random = this.deps.random ?? Math.random;
     const warn = this.deps.warn ?? ((l: string) => console.warn(l));
@@ -312,7 +326,7 @@ export class ResilientProvider implements Provider {
       for (let retry = 0; ; retry++) {
         const t0 = Date.now();
         try {
-          const turn = await provider.chat(messages, tools);
+          const turn = await provider.chat(messages, tools, options);
           const validation = validateTurn(turn);
           if (!validation.ok) throw new SemanticFailure(validation.reason!);
           const ms = Date.now() - t0;
@@ -330,6 +344,12 @@ export class ResilientProvider implements Provider {
         } catch (e) {
           const ms = Date.now() - t0;
           const classified = classifyError(e);
+          // GAP-001 — cancellation is terminal for the ENTIRE call, not just
+          // this attempt. `break` would only leave the retry loop and the
+          // outer target loop would keep failing over to further providers,
+          // issuing new requests for work the user already stopped. Rethrow so
+          // the loop reports an honest `cancelled` outcome.
+          if (classified.cls === "cancelled") throw e;
           lastError = classified;
           attempts.push(this.attempt(target, classified.cls, classified.reason, ms));
           if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, false);

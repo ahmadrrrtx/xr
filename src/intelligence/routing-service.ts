@@ -45,6 +45,7 @@
  */
 
 import type { Provider } from "../core/types.ts";
+import { ProviderAbortError } from "../providers/request-guard.ts";
 import type { XRConfig } from "../config/config.ts";
 import { registry } from "../providers/registry.ts";
 import { PRESETS } from "../providers/presets.ts";
@@ -447,17 +448,23 @@ export class FallbackProvider implements Provider {
   async chat(
     messages: Parameters<Provider["chat"]>[0],
     tools: Parameters<Provider["chat"]>[1],
+    options?: Parameters<Provider["chat"]>[2],
   ): ReturnType<Provider["chat"]> {
     try {
-      return await this.primary.chat(messages, tools);
+      return await this.primary.chat(messages, tools, options);
     } catch (e) {
+      // GAP-001 — failover exists for a provider that FAILED, not for a turn
+      // the user cancelled or that blew the deadline. Retrying those would
+      // double the latency the timeout was meant to bound and would ignore an
+      // explicit stop request.
+      if (e instanceof ProviderAbortError) throw e;
       // Phase 0 · T11 — name the actual fallback target, including the model,
       // so "falling back to ollama" can never describe a retry of the same
       // model on the same endpoint.
       console.warn(
         `\x1b[33m! Primary provider (${this.describe(this.primary)}) failed: ${(e as Error).message}. Falling back to ${this.describe(this.fallback)}...\x1b[0m`,
       );
-      return await this.fallback.chat(messages, tools);
+      return await this.fallback.chat(messages, tools, options);
     }
   }
 

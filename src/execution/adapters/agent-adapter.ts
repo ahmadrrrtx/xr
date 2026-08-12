@@ -23,6 +23,7 @@
  */
 import type {
   ApprovalRequest,
+  ChatOptions,
   Message,
   ModelTurn,
   Provider,
@@ -70,7 +71,10 @@ export async function runAgentWithFabric(
     id: deps.provider.id,
     label: deps.provider.label,
     health: deps.provider.health.bind(deps.provider),
-    chat: async (messages: Message[], tools: Tool[]): Promise<ModelTurn> => {
+    // GAP-001 — the wrapper MUST forward chat options. Dropping them here
+    // would silently strip the caller's cancellation signal and the request
+    // timeout for every fabric-recorded run.
+    chat: async (messages: Message[], tools: Tool[], chatOptions?: ChatOptions): Promise<ModelTurn> => {
       const inputSummary = redact(
         safeJson({ mode, messageCount: messages.length, toolCount: tools.length, task: task.slice(0, 200) }),
       );
@@ -94,7 +98,7 @@ export async function runAgentWithFabric(
           : undefined,
         audit: (event, detail) => deps.auditStore?.audit?.(event, detail, fabric.sessionId ?? null),
         run: async (ctx) => {
-          turn = await deps.provider.chat(messages, tools);
+          turn = await deps.provider.chat(messages, tools, chatOptions);
           if (turn.usage) {
             ctx.recordUsage({
               inTokens: turn.usage.inTokens,

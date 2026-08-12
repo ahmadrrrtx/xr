@@ -22,6 +22,8 @@ import type {
   ToolContext,
 } from "./types.ts";
 import { getTool, toolsForMode } from "../tools/registry.ts";
+import { isCancellation } from "../providers/request-guard.ts";
+import { frameToolOutput } from "../security/tool-output.ts";
 import type { SessionRepo } from "../state/repos/session-repo.ts";
 import type { AuditRepo } from "../state/repos/audit-repo.ts";
 import type { CostRepo } from "../state/repos/cost-repo.ts";
@@ -495,7 +497,12 @@ export async function runAgentLoop(
 
       say(`\x1b[2m▸ think  (step ${stepIdx + 1}/${maxSteps}) · ${provider.label} · ${governor.meter()}\x1b[0m`);
       const compacted = compact(messages, { maxChars: 16000, keepRecent: 6 });
-      const turn = await provider.chat(compacted, tools);
+      // GAP-001 — hand the caller's cancellation token to the transport itself.
+      // Loop checkpoints alone could not interrupt an in-flight model call, so
+      // a stalled provider was unrecoverable (reproduced live: Ctrl+C printed
+      // "stopping at the next step" and then hung until the process was
+      // killed). The provider now also applies a bounded default timeout.
+      const turn = await provider.chat(compacted, tools, { signal: deps.signal });
       if (turn.usage) {
         governor.record(turn.usage.inTokens, turn.usage.outTokens);
         try {
@@ -555,7 +562,22 @@ export async function runAgentLoop(
           sessionStore.addStep(`st_${randomUUID().slice(0, 8)}`, sessionId, stepIdx, "act", call.tool, {
             ok: result.ok,
           });
-          messages.push({ role: "tool", name: call.tool, content: result.output });
+          // GAP-003 — tool output is UNTRUSTED DATA. Before this it was pushed
+          // raw, so any file/page/MCP response could inject instructions into
+          // the model's stream. Now it is scanned, delimited and audited.
+          // Non-blocking by design: the content is still delivered in full.
+          const framed = frameToolOutput(call.tool, result.output);
+          if (framed.flagged) {
+            say(
+              `  \x1b[33m! untrusted content flagged in ${call.tool} output: ${framed.signatures.join(", ")}\x1b[0m`,
+            );
+            auditStore.audit(
+              "security.untrusted_content",
+              { tool: call.tool, signatures: framed.signatures },
+              sessionId,
+            );
+          }
+          messages.push({ role: "tool", name: call.tool, content: framed.content });
           toolCtx.onToolUse?.({ tool: call.tool, ok: result.ok });
         } catch (e) {
           const msg = `tool error: ${(e as Error).message}`;
@@ -578,6 +600,12 @@ export async function runAgentLoop(
       routingDecisionId: deps.routingDecision?.decisionId,
     };
   } catch (e) {
+    // GAP-001 — a run the USER cancelled must end `cancelled`, not `error`.
+    // Now that the caller's signal reaches the transport, an in-flight model
+    // call can reject with ProviderAbortError; reporting that as a generic
+    // error would be exactly the fake/false outcome XR forbids (the loop's own
+    // contract is success | failed | cancelled, honestly stamped).
+    if (isCancellation(e)) return cancelledResult(stepIdx);
     sessionStore.endSession(sessionId, "error");
     auditStore.audit("session.error", { error: (e as Error).message }, sessionId);
     say(`\x1b[31m✗ error: ${(e as Error).message}\x1b[0m`);

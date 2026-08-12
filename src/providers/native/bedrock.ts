@@ -15,7 +15,8 @@
  *       Best for enterprise users with existing AWS infrastructure.
  *       No free tier, but has sustained-use discounts.
  */
-import type { Message, ModelTurn, Provider, Tool } from "../../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool, ChatOptions } from "../../core/types.ts";
+import { guardedRequest } from "../request-guard.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 
 interface BedrockOptions {
@@ -168,7 +169,7 @@ export class BedrockProvider implements Provider {
     return this.model;
   }
 
-  async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
+  async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
     const token = await this.getAuthToken();
     const modelId = this.getBedrockModelId();
     const bedrockModel = BedrockProvider.MODEL_MAP[this.model.toLowerCase()];
@@ -195,16 +196,20 @@ export class BedrockProvider implements Provider {
     try {
       const signedHeaders = await this.signRequest();
       
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": signedHeaders,
-          "X-Amz-Date": new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z",
-          ...(this.sessionToken ? { "X-Amz-Security-Token": this.sessionToken } : {}),
-        },
-        body: JSON.stringify(body),
-      });
+      // GAP-001 — bounded + cancellable (was: no signal, no timeout).
+      const res = await guardedRequest(this.id, options, (signal) =>
+        fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": signedHeaders,
+            "X-Amz-Date": new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z",
+            ...(this.sessionToken ? { "X-Amz-Security-Token": this.sessionToken } : {}),
+          },
+          body: JSON.stringify(body),
+          signal,
+        }),
+      );
 
       if (!res.ok) {
         const txt = await res.text().catch(() => "");

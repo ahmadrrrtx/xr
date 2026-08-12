@@ -11,7 +11,8 @@
  *   - cloud models → native JSON object mode
  *   - everything → deterministic auto-repair as a final safety net.
  */
-import type { Message, ModelTurn, Provider, Tool } from "../core/types.ts";
+import type { ChatOptions, Message, ModelTurn, Provider, Tool } from "../core/types.ts";
+import { guardedRequest } from "./request-guard.ts";
 import { buildEnvelopeGBNF } from "../reliability/grammar.ts";
 import { repairToTurn } from "../reliability/repair.ts";
 import { profileFor, type ModelProfile } from "../reliability/profiles.ts";
@@ -75,7 +76,7 @@ export class OpenAICompatProvider implements Provider {
     ].join("\n");
   }
 
-  async chat(messages: Message[], tools: Tool[]): Promise<ModelTurn> {
+  async chat(messages: Message[], tools: Tool[], chatOptions?: ChatOptions): Promise<ModelTurn> {
     const sys: Message = {
       role: "system",
       content: this.systemEnvelope(tools),
@@ -111,11 +112,17 @@ export class OpenAICompatProvider implements Provider {
       body.options = options;
     }
 
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: this.headers(),
-      body: JSON.stringify(body),
-    });
+    // GAP-001 — bounded + cancellable. Before this the call had no signal and
+    // no timeout: a provider that stalled hung the whole runtime with no way
+    // out, and Ctrl+C could not reach the socket.
+    const res = await guardedRequest(this.id, chatOptions, (signal) =>
+      fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify(body),
+        signal,
+      }),
+    );
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
       throw new Error(

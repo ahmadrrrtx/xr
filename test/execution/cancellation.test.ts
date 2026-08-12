@@ -46,7 +46,25 @@ afterEach(() => {
   // "error: EBUSY: resource busy or locked" from THIS line (PR #45 check-run
   // 93173409316 annotations). Node's rmSync retries EBUSY/EPERM internally —
   // same contract as test/helpers/suite-tmp.ts (R-8).
-  rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
+  //
+  // The retries were necessary but NOT sufficient. When they are exhausted
+  // rmSync still THROWS, and a throwing afterEach marks the test `(fail)` even
+  // though every assertion in it passed — which is exactly what the Windows
+  // lane reported: the three `execution cancellation` tests failed with no
+  // assertion diff, on main as well as on PRs (main@3308aff job 93181649605
+  // and PR #48 job 94138640579 carry an identical annotation list).
+  //
+  // Temp-directory cleanup is HYGIENE, not an assertion. It must never decide
+  // whether the behaviour under test is correct. The suite's own R-8 root
+  // sweep (test/helpers/suite-tmp.ts) reclaims anything left behind on the
+  // next run, so swallowing a residual EBUSY here loses nothing real.
+  try {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 50 });
+  } catch (e) {
+    // Surfaced, never fatal: a locked temp dir is an OS artifact, not a defect
+    // in cancellation semantics.
+    console.warn(`[cleanup] could not remove ${dir}: ${(e as Error).message}`);
+  }
 });
 
 function baseOpts(overrides: Record<string, unknown> = {}): Parameters<ExecutionService["execute"]>[0] {

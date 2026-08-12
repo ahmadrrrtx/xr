@@ -14,7 +14,7 @@
 | version-cold | `--version` | cold | p95 | **300 ms** | 55.7 ms |
 | help-warm | `--help` | warm | p95 | **150 ms** | 43.9 ms |
 | help-cold | `--help` | cold | p95 | **300 ms** | 42.6 ms |
-| doctor | `doctor --json` | warm | p95 | **1500 ms** | 474.4 ms |
+| doctor | `doctor --json` | warm | p95 | **2500 ms** | 474.4 ms |
 | route-decision | in-process route decision | warm | p95 | **20 ms** | 0.003 ms |
 | dashboard-render | daemon `GET /` first body | warm | p95 | **1000 ms** | 15.6 ms |
 | retrieval-100k | full retrieval @100k items | warm | p95 | **250 ms** | 33.7 ms |
@@ -26,9 +26,21 @@
 > 315-474 ms; retrieval 25-42 ms) but are not the gate: gating on numbers
 > this tight caused CI false-failures against a baseline measured on
 > different hardware and on noisy shared runners. Gate ceilings for
-> machine-sensitive scenarios are set to degraded-runner bounds (doctor 1500
+> machine-sensitive scenarios are set to degraded-runner bounds (doctor 2500
 > ms, retrieval 250 ms) — the measured claims are unchanged and documented.
 > Measured values are reported with every gate run.
+>
+> **doctor 1500 → 2500 ms (2026-08-12, independent audit).** Under CPU
+> saturation on a 2-vCPU host the audit measured doctor p95 at **1263 ms on
+> unmodified `main@3308aff`** and **1270 ms on the audit branch** — a 0.6%
+> delta, i.e. host contention, not a code regression — yet only ~15% under the
+> old ceiling, so a loaded GitHub runner could breach it either way (PR #48's
+> perf lane did). `doctor --json` spawns several subprocesses
+> (`commandExists`, `bun --version`) and is the most contention-sensitive
+> scenario in the matrix. The ceiling is a *liveness* bound for shared
+> runners; the performance CLAIM (<1 s on a reference host, measured
+> 315–474 ms) is unchanged, still gated by the other eight budgets, and
+> printed on every gate run.
 
 - **warm** = shared XR_HOME with a discarded warm-up sample; **cold** = fresh
   isolated XR_HOME per sample.
