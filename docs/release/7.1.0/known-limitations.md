@@ -151,6 +151,28 @@ fresh-machine attempts).
 
 ---
 
+## 7b. Distribution: the npm channel is behind the source
+
+**Audit GAP-002 (2026-08-12, independent red-team).** The npm `latest` dist-tag for
+`@rrrtx/xr` is **`3.1.5`**, while this source tree is **7.1.0**. Published versions are
+0.2.0, 3.0.0–3.0.3, 3.1.5; remote git tags stop at `v7.0.0` — there is **no `v7.1.0`
+tag and no 7.x npm release**.
+
+Consequence, stated plainly: a user who follows `bun add -g @rrrtx/xr` receives a build
+roughly four minors older than the one this documentation describes, so the 7.x
+capability claims on those pages are **not verifiable for that user**. The release
+workflow, channel generation and drift gates are all wired and pass in CI — the publish
+step has simply never run for a 7.x tag.
+
+*Until closed:* install from the binary channel or build from source. The README install
+table marks the npm row STALE.
+
+*To close:* cut and publish a signed 7.x release, then re-point the npm row. A CI gate
+comparing `release.manifest.json` against the live npm dist-tag should land with it, so
+this divergence cannot recur silently.
+
+---
+
 ## 8. What XR is — and is not
 
 **XR is:** a local-first, provider-neutral CLI agent runtime you self-host; governed by a policy
