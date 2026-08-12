@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-09T01:23:11.470Z",
+  "generatedAt": "2026-08-12T13:19:15.862Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -51,8 +51,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 515,
-    "testFiles": 226,
+    "sourceFiles": 516,
+    "testFiles": 230,
     "cliCommands": 41,
     "daemonRoutes": 104,
     "providers": 26,
@@ -103,7 +103,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 29746
+      "bytes": 30103
     },
     {
       "path": "SECURITY.md",
@@ -395,7 +395,6 @@
     "src/install/system.ts",
     "src/install/uninstall.ts",
     "src/integrations/credentials.ts",
-    "src/integrations/oauth.ts",
     "src/integrations/registry.ts",
     "src/intelligence/behavioral.ts",
     "src/intelligence/capability.ts",
@@ -503,6 +502,7 @@
     "src/providers/openai-compat.ts",
     "src/providers/presets.ts",
     "src/providers/registry.ts",
+    "src/providers/request-guard.ts",
     "src/providers/stream-metrics.ts",
     "src/reliability/grammar.ts",
     "src/reliability/profiles.ts",
@@ -543,10 +543,10 @@
     "src/security/egress-proxy.ts",
     "src/security/guard.ts",
     "src/security/lab.ts",
-    "src/security/policies.ts",
     "src/security/private-ip.ts",
     "src/security/secrets.ts",
     "src/security/shield.ts",
+    "src/security/tool-output.ts",
     "src/services/agent-service.ts",
     "src/services/budget-service.ts",
     "src/services/config-service.ts",
@@ -562,6 +562,7 @@
     "src/skills/adapters.ts",
     "src/skills/autolearn.ts",
     "src/skills/compatibility.ts",
+    "src/skills/counts.ts",
     "src/skills/dependencies.ts",
     "src/skills/download-engine.ts",
     "src/skills/engine.ts",
@@ -802,6 +803,7 @@
     "test/perf/scan-cache.test.ts",
     "test/perf/stall-detection.test.ts",
     "test/perf/startup-latency.test.ts",
+    "test/phase0/agents-run-contract.test.ts",
     "test/phase0/cli-spine.test.ts",
     "test/phase0/credential-vault.test.ts",
     "test/phase0/install-container.test.ts",
@@ -814,6 +816,7 @@
     "test/plugins/host.test.ts",
     "test/plugins/loader.test.ts",
     "test/polish.test.ts",
+    "test/providers/request-guard.test.ts",
     "test/release/beta-survey.test.ts",
     "test/release/changelog.test.ts",
     "test/release/channels.test.ts",
@@ -841,6 +844,7 @@
     "test/security/nodevm-wording.test.ts",
     "test/security/secrets.test.ts",
     "test/security/shield.test.ts",
+    "test/security/tool-output-framing.test.ts",
     "test/services/agent-service.test.ts",
     "test/services/planning-service.test.ts",
     "test/skills-loader.test.ts",
@@ -850,6 +854,7 @@
     "test/skills-sdk-2.1b.test.ts",
     "test/skills-unified-runtime.test.ts",
     "test/skills.test.ts",
+    "test/skills/counts-authority.test.ts",
     "test/skills/quality.test.ts",
     "test/state/memory-to-context-migration.test.ts",
     "test/state/workspace-store.test.ts",
