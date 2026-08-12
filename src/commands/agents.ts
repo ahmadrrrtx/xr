@@ -4,6 +4,7 @@
 
 import { Command, CommandContext } from "../core/command-registry.ts";
 import { Tokens } from "../core/tokens.ts";
+import { EXIT } from "../cli/flags.ts";
 import { MultiAgentService } from "../services/multi-agent-service.ts";
 import { banner, colors as C, info, ok, warn } from "../interfaces/cli.ts";
 import type { WorkflowKind } from "../agents/types.ts";
@@ -172,7 +173,11 @@ export class AgentsCommand implements Command {
     if (sub === "run") {
       const goal = flags.positionals.join(" ").trim();
       if (!goal) throw new Error('Usage: xr agents run "your task"');
-      banner("Running Multi-Agent Workflow");
+      // GAP-005 — `--json` was accepted globally and implemented for `plan`,
+      // but `run` printed the banner and human progress lines regardless, so
+      // its output could not be parsed. In JSON mode emit nothing but the
+      // final record.
+      if (!flags.json) banner("Running Multi-Agent Workflow");
       const events = ctx.registry.resolve(Tokens.Events);
       const startedAt = Date.now();
       let activeWorkflowId: string | null = null;
@@ -216,13 +221,17 @@ export class AgentsCommand implements Command {
         if (payload?.error) console.log(`    ${payload.error}`);
       };
 
-      events.on("agents.workflow.updated", onWorkflow);
-      events.on("agents.task.started", onStarted);
-      events.on("agents.task.ready", onReady);
-      events.on("agents.task.note", onNote);
-      events.on("agents.task.completed", onCompleted);
-      events.on("agents.task.blocked", onBlocked);
-      events.on("agents.task.failed", onFailed);
+      // GAP-005 — progress lines are human output; they must not pollute the
+      // machine-readable stream.
+      if (!flags.json) {
+        events.on("agents.workflow.updated", onWorkflow);
+        events.on("agents.task.started", onStarted);
+        events.on("agents.task.ready", onReady);
+        events.on("agents.task.note", onNote);
+        events.on("agents.task.completed", onCompleted);
+        events.on("agents.task.blocked", onBlocked);
+        events.on("agents.task.failed", onFailed);
+      }
 
       try {
         const record = await svc.runWorkflow({
@@ -236,10 +245,57 @@ export class AgentsCommand implements Command {
           maxSteps: flags.maxSteps,
           maxTokens: flags.maxTokens,
         });
+        const durationMs = Date.now() - startedAt;
+
+        /**
+         * GAP-004 — a blocked or failed workflow exited 0.
+         *
+         * `docs/guides/cli-compat.md` states that a failed command never exits
+         * 0 silently, but this branch only ever printed a warning: CI wrapping
+         * `xr agents run` was green even when the workflow produced no
+         * synthesis at all. Terminal status now maps to the documented codes.
+         */
+        if (record.status === "completed") {
+          // exit 0 — leave process.exitCode unset
+        } else if (record.status === "cancelled") {
+          process.exitCode = EXIT.INTERRUPT;
+        } else {
+          process.exitCode = EXIT.ERROR;
+        }
+
+        if (flags.json) {
+          console.log(
+            JSON.stringify(
+              {
+                workflowId: record.workflowId,
+                status: record.status,
+                kind: record.kind,
+                goal: record.goal,
+                durationMs,
+                finalOutput: record.finalOutput?.summary ?? null,
+                tasks: record.tasks.map((t) => ({
+                  taskId: t.taskId,
+                  agentId: t.agentId,
+                  role: t.role,
+                  name: t.name,
+                  status: t.status,
+                  reviewState: t.reviewState,
+                  blockedReason: t.blockedReason ?? null,
+                  errors: t.errors,
+                })),
+                errors: record.errors,
+              },
+              null,
+              2,
+            ),
+          );
+          return;
+        }
+
         console.log(`\nworkflow ...... ${record.workflowId}`);
         console.log(`status ........ ${record.status}`);
         console.log(`kind .......... ${record.kind}`);
-        console.log(`duration ...... ${(((Date.now() - startedAt) / 1000).toFixed(1))}s`);
+        console.log(`duration ...... ${((durationMs / 1000).toFixed(1))}s`);
         if (record.finalOutput?.summary) {
           console.log(`\n${C.bold("Final output")}`);
           console.log(record.finalOutput.summary);
