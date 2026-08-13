@@ -22,6 +22,11 @@ const TOKEN = "g-token";
 // ── route-level harness against a temp project dir ───────────────────────
 let projectDir = "";
 let h: ReturnType<typeof makeHandler>;
+// Captured BEFORE any chdir so afterAll can restore it on ANY host (the
+// earlier hardcoded "/home/user/repo" only existed in the sandbox — on CI it
+// leaked the temp cwd into sibling test files in the same bun worker and
+// broke repo-relative scans: single-writer, SBOM, skills-count).
+const ORIG_CWD = process.cwd();
 
 beforeAll(() => {
   projectDir = mkdtempSync(join(tmpdir(), "xr-g-proj-"));
@@ -41,9 +46,9 @@ beforeAll(() => {
 // bun batches multiple test files into shared workers: the chdir above MUST
 // be restored or the temp cwd leaks into the next file in the same worker
 // (breaking repo-relative scans like the single-writer / SBOM / skills-count
-// gates). Restore unconditionally after this file's tests.
+// gates). Restore to the captured original cwd — host-agnostic.
 afterAll(() => {
-  try { process.chdir("/home/user/repo"); } catch { /* ignore */ }
+  try { process.chdir(ORIG_CWD); } catch { /* ignore */ }
 });
 const get = (p: string) =>
   new Request(`http://127.0.0.1:7842${p}`, { headers: { authorization: `Bearer ${TOKEN}` } });

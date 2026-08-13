@@ -22,9 +22,13 @@ function renderSessionList() {
     || (s.status || "").toLowerCase().indexOf(q) !== -1);
   box.innerHTML = rows.length ? rows.map(s => {
     const bClass = s.status === "done" ? "badge-green" : s.status === "running" ? "badge-cyan" : "badge-amber";
-    return \`<div class="stat-row xr-s-69" role="button" tabindex="0" data-xr-action="\${act('loadSessionDetail', s.id)}" title="Open session steps">
-      <div><div class="xr-s-70">\${escapeHtml(s.title)}</div><div class="muted xr-s-71">\${s.id}</div></div>
-      <span class="badge \${bClass}">\${s.status}</span>
+    // Phase G a11y fix — the Copy button must be a SIBLING of the row, never
+    // nested inside the role=button container (axe nested-interactive).
+    return \`<div class="sess-row">
+      <div class="stat-row xr-s-69 sess-open" role="button" tabindex="0" data-xr-action="\${act('loadSessionDetail', s.id)}" title="Open session steps">
+        <div><div class="xr-s-70">\${escapeHtml(s.title)}</div><div class="muted xr-s-71">\${s.id}</div></div>
+        <span class="badge \${bClass}">\${s.status}</span>
+      </div>
       <button type="button" class="btn btn-ghost sess-copy" data-xr-action="\${act('copyText', s.id)}" title="Copy session id">Copy id</button>
     </div>\`;
   }).join("") : (q ? '<div class="muted">No sessions match "' + escapeHtml(q) + '".</div>' : "<div class='muted'>No sessions stored.</div>");

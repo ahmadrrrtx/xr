@@ -89,8 +89,10 @@ function onbGo(step) {
   if (step === "local") onbRenderLocal();
   if (step === "security") onbRenderSecurity();
   if (step === "done") onbRenderDone();
-  const firstBtn = document.querySelector('.onb-step[data-step="' + step + '"] .btn');
-  if (firstBtn) firstBtn.focus({ preventScroll: true });
+  // Deliberately NO auto-focus here: the overlay opens on page load for a
+  // first-run, and yanking focus on load is an accessibility anti-pattern
+  // (WCAG 2.4.3). Keyboard users Tab into the dialog naturally; pointer
+  // users click its buttons directly.
 }
 function onbNext() {
   if (onb.step === "welcome") return onbGo("mode");

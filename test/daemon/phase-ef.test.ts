@@ -24,7 +24,10 @@ const TOKEN = "ef-token";
 function fresh() {
   const tmp = mkdtempSync(join(tmpdir(), "xr-ef-"));
   process.env.XR_HOME = join(tmp, "home");
-  return { store: new Store(join(tmp, "d.db")), h: makeHandler(new Store(join(tmp, "d.db")), TOKEN) };
+  // ONE store on the file, shared by the handler (a second open of the same
+  // SQLite file could contend on Windows).
+  const store = new Store(join(tmp, "d.db"));
+  return { store, h: makeHandler(store, TOKEN) };
 }
 const get = (path: string) =>
   new Request(`http://127.0.0.1:7842${path}`, { headers: { authorization: `Bearer ${TOKEN}` } });

@@ -623,7 +623,9 @@ export const STYLE_UI = `/* ── Chat Session Workspace (Liquid Layout) ──
 .approval-risk { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 10px; color: var(--muted); margin-bottom: 8px; }
 .approval-risk-reason { font-style: italic; }
 
-.sess-copy { padding: 2px 6px; font-size: 10px; font-family: var(--font-mono); flex: none; }
+.sess-row { display: flex; align-items: center; gap: 6px; }
+.sess-row .sess-open { flex: 1; min-width: 0; }
+.sess-copy { padding: 2px 6px; font-size: 10px; font-family: var(--font-mono); flex: none; min-height: 24px; }
 
 /* ── Phase C · C-3 — streaming cursor on the active assistant message ──── */
 .msg.streaming .msg-bubble::after {
