@@ -35,6 +35,94 @@ export const OkResponse = z.looseObject({ ok: z.boolean() });
 /** Free-form JSON object response (envelope stable = always an object). */
 export const ObjectResponse = z.looseObject({});
 
+// ── Onboarding (Phase B · B-1) ───────────────────────────────────────────────
+
+export const OnboardingStatusResponse = z.looseObject({
+  needsSetup: z.boolean().describe("True when this install has no working route yet (no provider key and no running local model)."),
+  reasons: z.array(z.string()).describe("Plain-language reasons, for the GUI's honest 'why'."),
+  cloud: z.looseObject({
+    configured: z.number().describe("Hosted providers with a stored key."),
+    ready: z.number().describe("Configured providers whose health probe succeeded."),
+    count: z.number().describe("Total hosted provider presets."),
+  }),
+  local: z.looseObject({
+    runtime: z.string().describe("Active local runtime id (e.g. ollama)."),
+    healthy: z.boolean(),
+    running: z.boolean(),
+    installed: z.number().describe("Installed local model count."),
+  }),
+  internet: z.boolean().describe("Best-effort reachability probe (never blocks the response)."),
+  config: z.looseObject({
+    provider: z.string(),
+    model: z.string(),
+    memory: z.boolean(),
+    voice: z.boolean(),
+    approval: z.boolean(),
+  }),
+});
+
+export const OnboardingProviderRequest = z.looseObject({
+  providerId: z.string().min(1).max(80).describe("Hosted provider preset id (from /api/providers)."),
+  apiKey: z.string().min(1).max(2048).describe("Provider API key — stored in the OS keychain or sealed file, never returned."),
+  model: z.string().max(200).optional().describe("Optional default model for this provider."),
+  probe: z.boolean().optional().describe("Run a live health probe after saving (default true; the save itself never fails on probe outcome)."),
+});
+
+export const OnboardingProviderResponse = z.looseObject({
+  ok: z.boolean(),
+  provider: z.string(),
+  model: z.string(),
+  secretBackend: z.string().describe("Where the key was stored (keychain or sealed file)."),
+  health: z.nullable(z.looseObject({ ok: z.boolean(), detail: z.nullable(z.string()), latencyMs: z.nullable(z.number()) }))
+    .describe("Advisory live probe result — the key is saved regardless."),
+});
+
+export const OnboardingCompleteRequest = z.looseObject({});
+
+// ── Workspace files (Phase G · G-1/G-2; experimental surface) ───────────────
+
+export const FilesListResponse = z.looseObject({
+  root: z.string().describe("Absolute project root being browsed (process.cwd())."),
+  cwd: z.string().describe("Relative path currently listed ('' = root)."),
+  entries: z.array(z.looseObject({
+    name: z.string(),
+    rel: z.string().describe("Path relative to root ('' = root itself)."),
+    type: z.enum(["file", "dir"]),
+    size: z.number().describe("Bytes; 0 for directories."),
+    mtime: z.number().describe("Last-modified epoch ms."),
+    git: z.nullable(z.enum(["clean", "modified", "staged", "untracked", "added", "deleted"])).describe("Per-file git status from the real porcelain output; null when not a git repo."),
+    isText: z.boolean().optional().describe("Best-effort text detection for files."),
+  })),
+  git: z.looseObject({ branch: z.nullable(z.string()), dirty: z.boolean() }).optional()
+    .describe("Repository-level status from gitSummary (cwd)."),
+  truncated: z.boolean().describe("True when the entry list was capped for safety."),
+});
+
+export const FilesReadRequest = z.looseObject({
+  path: z.string().max(2000).describe("Path relative to the project root."),
+});
+
+export const FilesReadResponse = z.looseObject({
+  path: z.string(),
+  content: z.string(),
+  size: z.number(),
+  truncated: z.boolean().describe("True when the file was capped at the read limit."),
+  isText: z.boolean(),
+});
+
+export const FilesDiffRequest = z.looseObject({
+  path: z.string().max(2000).describe("Path relative to the project root (must be inside)."),
+});
+
+export const FilesDiffResponse = z.looseObject({
+  path: z.string(),
+  diff: z.string().describe("Real `git diff -- <path>` output; empty for untracked files."),
+  ok: z.boolean(),
+  tracked: z.boolean(),
+});
+
+
+
 const chatRole = z.enum(["system", "user", "assistant", "tool"]);
 
 // ── Requests ─────────────────────────────────────────────────────────────────

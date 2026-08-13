@@ -12,10 +12,10 @@
   --xr-border-2: #2D3748;
   --xr-text: #F9FAFB;
   --xr-text-dim: #9CA3AF;
-  --xr-muted: #6B7280;
+  --xr-muted: #7A8FB0;
   --xr-primary: #00D4FF;
   --xr-cyan: #00D4FF;
-  --xr-violet: #A855F7;
+  --xr-violet: #6048F8;
   --xr-success: #00FF88;
   --xr-green: #00FF88;
   --xr-warning: #F59E0B;
@@ -65,6 +65,6 @@
   --xr-glow-amber: 0 0 20px rgba(245,158,11,.15);
   --xr-glow-red: 0 0 24px rgba(255,77,77,.2);
   --xr-focus: 0 0 0 1px rgba(0,212,255,.4), 0 0 20px rgba(0,212,255,.15);
-  --xr-gradient-brand: linear-gradient(90deg, #00D4FF, #7AA7FF, #A855F7);
+  --xr-gradient-brand: linear-gradient(90deg, #00D4FF, #7AA7FF, #6048F8);
   --xr-gradient-shield: radial-gradient(circle, rgba(0,212,255,.22), transparent 60%);
 }

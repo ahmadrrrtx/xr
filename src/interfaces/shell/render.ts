@@ -13,7 +13,8 @@ import {
 import { SHELL_VIEW_ORDER, NAV_ITEMS, SECTION_LABELS, icon, type GlyphId } from "../../ui/icons.ts";
 import { renderOfficialBannerFrame, renderCompactBrand } from "../../ui/brand.ts";
 import { isLocal } from "../../cost/pricing.ts";
-import type { ShellState, ChatMessage, Severity } from "./types.ts";
+import type { ShellState, ChatMessage, Severity, AgentDetail } from "./types.ts";
+import type { StatusChip } from "../../ui/primitives.ts";
 import type { LayoutGeom } from "./layout.ts";
 import { loadConfig } from "../../config/config.ts";
 import { MemoryStore } from "../../context/memory/store.ts";
@@ -134,6 +135,22 @@ function renderChat(state: ShellState, width: number, height: number): string[] 
     const head = `${messagePrefix(msg.role)} ${xrDim(humanTime(msg.at))}${msg.meta ? xrDim(` · ${msg.meta}`) : ""}`;
     rendered.push(head);
     for (const w of wrapAnsi(msg.content, usable - 2)) rendered.push(`  ${w}`);
+    rendered.push("");
+  }
+  // Phase D · D-1 — agent work feed: the real tool/step timeline (fed by the
+  // run loop's say()) shown in the chat per the detail level. none = final
+  // answers only; brief = titles; detailed = titles + detail lines. This is
+  // the honest equivalent of a "reasoning visibility" toggle — the runtime
+  // has no per-turn reasoning channel, so we control what IS real.
+  if (state.agentDetail !== "none" && state.timeline.length) {
+    const count = state.agentDetail === "detailed" ? 6 : 4;
+    rendered.push(xrDim("agent work"));
+    for (const e of state.timeline.slice(0, count)) {
+      rendered.push(`  ${timelineIcon(e.level)} ${clipAnsi(e.title, usable - 4)}`);
+      if (state.agentDetail === "detailed" && e.detail) {
+        rendered.push(`      ${clipAnsi(e.detail, usable - 6)}`);
+      }
+    }
     rendered.push("");
   }
   // scroll from bottom
@@ -405,11 +422,25 @@ export function renderComposer(state: ShellState, width: number): string[] {
 // ── Status bar ────────────────────────────────────────────────────────────────
 
 export function renderStatusBar(state: ShellState, width: number): string {
-  const conn = isLocal(state.provider) ? statusDot("local") : statusDot("cloud");
+  const local = isLocal(state.provider);
+  const conn = local ? statusDot("local") : statusDot("cloud");
+  // Phase D · D-1 — GUI parity: explicit LOCAL / CLOUD word on wide terminals
+  // (same vocabulary as the dashboard locality badges; isLocal() is the same
+  // authority the daemon's ov.provider.local mirrors).
+  const connValue = width >= 116
+    ? `${conn} ${local ? "LOCAL" : "CLOUD"} ${state.workspaceId}`
+    : `${conn} ${state.workspaceId}`;
   const spendTone =
     state.budget > 0 && state.totalSpent >= state.budget * 0.95 ? "red" as const :
     state.budget > 0 && state.totalSpent >= state.budget * 0.8 ? "amber" as const :
     "dim" as const;
+  // Real spend + real token count from store.costSummary() (no estimates).
+  const tokens = state.totalTokens >= 1000
+    ? `${(state.totalTokens / 1000).toFixed(1)}k`
+    : String(state.totalTokens);
+  const spendValue = width >= 104
+    ? `$${state.totalSpent.toFixed(4)} · ${tokens} tok`
+    : `$${state.totalSpent.toFixed(4)}`;
   const activity = state.busy
     ? spinnerFrame(state.spinnerIndex, state.busyLabel)
     : xrDim("idle");
@@ -422,24 +453,30 @@ export function renderStatusBar(state: ShellState, width: number): string {
   // Always-visible model chip: label "model" + provider/id so users never wonder
   // what is active or how to change it (Alt+P / /model).
   const modelChipValue = `${state.provider}/${state.model}`;
-  const modelTone = isLocal(state.provider) ? "green" as const : "amber" as const;
+  const modelTone = local ? "green" as const : "amber" as const;
   // On narrow terminals keep the model id; on wider ones show the change hint.
   const showHint = width >= 100;
   const rightHint = state.gPending
     ? "g…"
     : showHint
-      ? "Alt+P change model"
+      ? "Alt+P change model · Ctrl+T agent detail"
       : undefined;
 
-  return statusBar([
-    { label: "", value: `${conn} ${state.workspaceId}`, tone: isLocal(state.provider) ? "green" : "amber" },
+  const chips: StatusChip[] = [
+    { label: "", value: connValue, tone: local ? "green" : "amber" },
     { label: "", value: state.mode, tone: "cyan" },
     { label: "model", value: modelChipValue, tone: modelTone },
-    { label: "", value: `$${state.totalSpent.toFixed(4)}`, tone: spendTone },
-    { label: "", value: activity, tone: "cyan" },
-    { label: "", value: audit, tone: "dim" },
-    { label: "", value: bell, tone: "dim" },
-  ], width, rightHint);
+    { label: "", value: spendValue, tone: spendTone },
+  ];
+  // Honest context: how many messages are in this session (the daemon keeps
+  // the last 10 in history; this is the session size, not a fake "window %").
+  if (width >= 88) chips.push({ label: "ctx", value: String(state.chat.length), tone: "dim" });
+  if (width >= 122) chips.push({ label: "agt", value: state.agentDetail, tone: "cyan" });
+  chips.push({ label: "", value: activity, tone: "cyan" });
+  chips.push({ label: "", value: audit, tone: "dim" });
+  chips.push({ label: "", value: bell, tone: "dim" });
+
+  return statusBar(chips, width, rightHint);
 }
 
 // ── Overlays ──────────────────────────────────────────────────────────────────

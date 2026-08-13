@@ -24,14 +24,6 @@
   "threshold": 800,
   "waivers": [
     {
-      "path": "src/daemon/dashboard/client-script.ts",
-      "lines": 2111,
-      "owner": "daemon",
-      "reason": "A single exported string constant containing the Control Center's browser application. It is DATA to the daemon, never executed server-side, and has zero branching or imports, so LOC does not represent server-side complexity. Phase 4 \u00b7 T5 appended the CSP-safe action dispatcher (allowlist parser) and act() helper; the file remains a single exported string constant (data, not server-side logic). Phase 8 \u00b7 T3/T1 appended the keyboard/a11y behavior (aria-current state machine, dialog focus trap/return, Enter/Space activation bridge, tool-card accordion fix) and the versioned-API v1() rewrite (+61 lines, still declarative browser data). Phase 8 \u00b7 T4 appended the progressive-disclosure nav (Start-here area, collapsible persisted areas), honest readiness banner, undo button, and standardized capability badges (+193 lines, still declarative browser data).",
-      "plan": "Phase 3 replaces the inline string with real client modules served as static assets; the split is blocked on the asset-pipeline decision, not on this file.",
-      "review": "2026-12-31"
-    },
-    {
       "path": "src/state/workspace-store.ts",
       "lines": 1629,
       "owner": "state",
@@ -40,18 +32,10 @@
       "review": "2026-12-31"
     },
     {
-      "path": "src/daemon/dashboard/markup.ts",
-      "lines": 1276,
-      "owner": "daemon",
-      "reason": "The HTML shell of the Control Center: one template literal with placeholder tokens. Same reasoning as client-script.ts \u2014 declarative markup, not logic. Phase 4 \u00b7 T5 converted inline handlers/styles to data-xr-action + utility classes (size-neutral; +split plan unchanged). Phase 8 \u00b7 T3 made the shell WCAG-2.2-AA conformant (buttons not href-less anchors, landmarks, labels, dialog semantics) \u2014 net -22 lines.",
-      "plan": "Split per view (health / chat / audit / settings) alongside the Phase-3 asset pipeline.",
-      "review": "2026-12-31"
-    },
-    {
       "path": "src/interfaces/shell/app.ts",
-      "lines": 1226,
+      "lines": 1246,
       "owner": "interfaces",
-      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope. A-19 (launch RC) appended the abort-controller wiring (run-scoped controller, fail-closed approval denial, Ctrl+C/Esc reaching the loop's checkpoints; +23 lines, still a single state machine).",
+      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope. A-19 (launch RC) appended the abort-controller wiring (run-scoped controller, fail-closed approval denial, Ctrl+C/Esc reaching the loop's checkpoints; +23 lines, still a single state machine). Phase D (2026-08-13): +20 (agent-detail Ctrl+T handler, agentDetail state); split plan unchanged.",
       "plan": "Extract slash-command handling and the palette into interfaces/shell/commands.ts and palette.ts. Deferred: the Shell is the surface most exposed to Phase-3 UX work and splitting it twice would be churn.",
       "review": "2026-12-31"
     },

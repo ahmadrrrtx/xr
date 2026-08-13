@@ -294,8 +294,10 @@ export function helpBindings(width: number): string[] {
     ["Ctrl+N", "Notifications"],
     ["Ctrl+W", "Workspace picker"],
     ["Ctrl+J", "Quick actions"],
-    ["g then d/c/s/w/r/…", "Go-to navigation"],
+    ["Ctrl+T", "Agent detail: none / brief / detailed (Ctrl+T cycles)"],
+    ["g d/c/s/w/r/t/a/m/b/x/./n", "Go-to: home/chat/sessions/workspaces/research/activity/audit/memory/status/settings/notices"],
     ["/", "Focus composer"],
+    ["/inspect", "Toggle the inspector pane"],
     ["?", "This help"],
     ["Tab", "Cycle panels / complete"],
     ["Esc", "Dismiss / interrupt / back"],
@@ -306,5 +308,9 @@ export function helpBindings(width: number): string[] {
     ["Shift+Tab", "Cycle mode (agent/plan/ask)"],
     ["Ctrl+D", "Exit (empty input)"],
   ];
-  return rows.map(([k, v]) => clipAnsi(`${xrCyan(k.padEnd(22))} ${xrDim(v)}`, width));
+  const body = rows.map(([k, v]) => clipAnsi(`${xrCyan(k.padEnd(24))} ${xrDim(v)}`, width));
+  body.push("");
+  body.push(clipAnsi(xrDim("status bar: ● locality · mode · model · $ spend · ctx msgs · agt detail"), width));
+  body.push(clipAnsi(xrDim("GUI parity: modes Ask→ask · Plan→plan · Agent→agent (Research is a composer toggle)"), width));
+  return body;
 }

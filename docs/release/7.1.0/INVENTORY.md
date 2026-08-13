@@ -1,15 +1,15 @@
 # XR 7.1.0 Repository Inventory
 
-Generated: 2026-08-12T14:50:28.314Z
+Generated: 2026-08-13T11:37:24.916Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 516 |
-| Test files | 230 |
+| Source files | 531 |
+| Test files | 238 |
 | CLI commands | 41 |
-| Daemon routes | 104 |
+| Daemon routes | 110 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -126,6 +126,9 @@ Generated: 2026-08-12T14:50:28.314Z
 - GET `/api/environment/policy` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
 - GET `/api/environment/sessions` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
 - GET `/api/environment/status` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/files` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
+- GET `/api/files/diff` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
+- GET `/api/files/read` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
 - GET `/api/health` — open (src/daemon/routes/system.routes.ts)
 - GET `/api/memory` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
 - DELETE `/api/memory/*` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
@@ -135,6 +138,9 @@ Generated: 2026-08-12T14:50:28.314Z
 - GET `/api/models` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/models/select` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/models/test` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- POST `/api/onboarding/complete` — local bearer token or dashboard query token (src/daemon/routes/onboarding.routes.ts)
+- POST `/api/onboarding/provider` — local bearer token or dashboard query token (src/daemon/routes/onboarding.routes.ts)
+- GET `/api/onboarding/status` — local bearer token or dashboard query token (src/daemon/routes/onboarding.routes.ts)
 - GET `/api/openapi.json` — local bearer token or dashboard query token (src/daemon/routes/meta.routes.ts)
 - GET `/api/overview` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - ANY `/api/plugins*` — local bearer token or dashboard query token (src/daemon/routes/extensions.routes.ts)
