@@ -56,6 +56,11 @@ jobs:
         run: bunx tsc --noEmit
       - name: Full unit suite for this OS (one computation authority)
         shell: bash
+        # Safety net (not the fix): the parity runner already segments + retries
+        # crash-class exits. This bound catches a future true hang (e.g. a stuck
+        # subprocess) well before the 60-min job limit, with a clear step-level
+        # failure. Normal runtime is ~1–6 min per OS.
+        timeout-minutes: 30
         run: |
           # ONE computation authority for WHAT runs: scripts/platform-parity.ts.
           # HOW it runs: per-directory segments via scripts/parity-suite-runner.sh.
@@ -72,6 +77,7 @@ jobs:
           bash scripts/parity-suite-runner.sh ${{ matrix.bunOs }}
       - name: Golden path (hermetic)
         shell: bash
+        timeout-minutes: 10
         run: bun run golden-path
         env:
           HOME: /tmp/xr-cross-${{ matrix.bunOs }}-home

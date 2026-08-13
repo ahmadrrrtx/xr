@@ -2,7 +2,7 @@
  * XR 3.1E — Complete Onboarding Experience
  * Calm · Fast · Trustworthy · Transparent · Minimal · Professional
  * < 60 seconds to first message for non-technical users
- * Fully compatible with Shell 3.1.5 (Helios), CLI 3.1.5 (Helios), Chat Workspace 3.1.5 (Helios)
+ * Fully compatible with the Shell, CLI, and Chat Workspace surfaces
  * Backend engines (provider/memory/research/voice/plugin/MCP/computer/shield/kernel) untouched
  */
 

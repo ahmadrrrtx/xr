@@ -1,5 +1,5 @@
 /**
- * XR 3.1.5 (Helios) — Global CLI flag parsing
+ * XR — Global CLI flag parsing
  *
  * Shared flags every command understands. Keeps naming consistent with the
  * Shell (mode / workspace / model / budget vocabulary from IA §1).

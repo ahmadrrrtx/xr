@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.0 — 2026-08-13
+
+### Rebaseline
+
+- **identity:** deliberate semver rebaseline — the 7.1.0 (Truth) codebase is
+  re-identified as **1.0.0 (Truth)**, the first stable line. No functionality
+  was added or removed in the re-identification; the full feature history
+  remains under §7.1.0 and below, and the frozen 7.x artifacts stay under
+  `docs/release/7.0.1/` and `docs/historical/`. All active surfaces
+  (`package.json`, `src/core/version.ts`, README, `install.sh`, `install.ps1`,
+  website, packaging channels) are stamped from `release.manifest.json` at
+  `1.0.0`.
+
+### Hardening (final release verification)
+
+- **ci:** fixed the cross-platform parity failures at root cause — SQLite
+  `database is locked` escaping the retry contract on the connection-open path
+  (`write-gate.ts` open retry + new open-churn regression test), macOS `/var`
+  vs `/private/var` realpath normalization in the files-list test, and the
+  Windows `bun build --compile` panic (documented, evidence-bound win32
+  exclusion; the Windows binary is still natively built + smoke-tested by the
+  release and channel-install workflows).
+- **plugins:** Windows-safe filesystem primitives (bounded retry on
+  `renameSync`/`rmSync`) for plugin install/update/rollback/remove.
+
 ## 7.1.0 — 2026-08-05
 
 ### Features

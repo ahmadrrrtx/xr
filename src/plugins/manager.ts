@@ -16,6 +16,41 @@ import { SENSITIVE_PERMISSIONS, type PermissionScope, type PluginCommand, type P
 import { CapabilityProvenanceStore } from "../platform/capabilities/provenance.ts";
 import { capabilityId } from "../platform/capabilities/types.ts";
 
+/**
+ * Windows-safe filesystem primitives (CF-3). On Windows, antivirus (Defender)
+ * and the search indexer can hold transient handles on freshly written plugin
+ * files, turning `renameSync`/`rmSync` into EBUSY/EPERM throws. `rmSync`
+ * already supports `maxRetries`/`retryDelay` for exactly this class; `renameSync`
+ * does not, so wrap it with the same bounded, backoff retry contract. On
+ * POSIX these are no-ops (first attempt succeeds).
+ */
+const sleepBuffer = new Int32Array(new SharedArrayBuffer(4));
+function syncSleep(ms: number): void {
+  try {
+    Atomics.wait(sleepBuffer, 0, 0, ms);
+  } catch {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      /* spin */
+    }
+  }
+}
+function rmSyncRetry(path: string): void {
+  rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+}
+function renameSyncRetry(src: string, dest: string, attempts = 10): void {
+  for (let i = 0; ; i++) {
+    try {
+      renameSync(src, dest);
+      return;
+    } catch (e) {
+      if (i >= attempts) throw e;
+      syncSleep(100 * (i + 1));
+    }
+  }
+}
+
+
 export interface LoadedPlugin {
   id: string;
   manifest: PluginManifest;
@@ -103,7 +138,7 @@ export class PluginManager {
     const previousEntry = this.registry.get(manifest.id);
 
     try {
-      if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true });
+      if (existsSync(tmp)) rmSyncRetry(tmp);
       mkdirSync(tmp, { recursive: true });
       cpSync(src, tmp, { recursive: true, dereference: false });
 
@@ -111,8 +146,8 @@ export class PluginManager {
       if (!post.ok || !post.manifest) throw new Error(post.errors.join("; ") || "staged plugin failed validation");
       if (post.manifest.id !== manifest.id) throw new Error("staged manifest id changed during install");
 
-      if (hadPrevious) renameSync(dest, bak);
-      renameSync(tmp, dest);
+      if (hadPrevious) renameSyncRetry(dest, bak);
+      renameSyncRetry(tmp, dest);
 
       const rollbackSnapshots: PluginRollbackSnapshot[] = [...(previousEntry?.rollback ?? [])];
       if (existsSync(bak) && previousEntry) {
@@ -128,7 +163,7 @@ export class PluginManager {
           at: Date.now(),
         });
       }
-      if (existsSync(bak)) rmSync(bak, { recursive: true, force: true });
+      if (existsSync(bak)) rmSyncRetry(bak);
 
       const granted = effectiveGrant(manifest.permissions, grantedPermissions);
       const installedHash = hashEntrypoint(dest, manifest);
@@ -152,8 +187,8 @@ export class PluginManager {
       }));
       return { ok: true, manifest, requestedPermissions: granted, warnings: prep.warnings };
     } catch (e) {
-      try { if (existsSync(tmp)) rmSync(tmp, { recursive: true, force: true }); } catch {}
-      try { if (existsSync(bak) && !existsSync(dest)) renameSync(bak, dest); } catch {}
+      try { if (existsSync(tmp)) rmSyncRetry(tmp); } catch {}
+      try { if (existsSync(bak) && !existsSync(dest)) renameSyncRetry(bak, dest); } catch {}
       return { ok: false, manifest, reason: (e as Error).message, warnings: prep.warnings };
     }
   }
@@ -163,7 +198,7 @@ export class PluginManager {
     if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
     await this.disposeOne(id);
     const dir = this.registry.dirFor(id);
-    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+    if (existsSync(dir)) rmSyncRetry(dir);
     this.registry.remove(id);
     this.store.audit("plugin.remove", { plugin: id });
     recordProvenance((p) => p.recordEvent(capabilityId("plugin", id), "remove", { actor: "user", detail: "plugin uninstalled", outcome: { status: "success" } }));
@@ -229,7 +264,7 @@ export class PluginManager {
         mkdirSync(dirname(currentBackup), { recursive: true });
         cpSync(dest, currentBackup, { recursive: true, dereference: false });
       }
-      if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
+      if (existsSync(dest)) rmSyncRetry(dest);
       cpSync(snapshot.dir, dest, { recursive: true, dereference: false });
       const v = validatePlugin(dest);
       if (!v.ok || !v.manifest) throw new Error(v.errors.join("; ") || "rollback snapshot failed validation");

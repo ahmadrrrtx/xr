@@ -119,13 +119,41 @@ export interface WriteGateOptions {
  * switch fails instantly with SQLITE_BUSY.
  */
 export function openDatabase(path: string, opts: { create?: boolean; readonly?: boolean } = {}): Database {
-  const db = new Database(path, { create: opts.create ?? true, readonly: opts.readonly ?? false });
-  db.exec("PRAGMA busy_timeout = 5000;");
-  if (!opts.readonly) db.exec("PRAGMA journal_mode = WAL;");
-  db.exec("PRAGMA synchronous = NORMAL;");
-  db.exec("PRAGMA foreign_keys = ON;");
-  if (!opts.readonly) db.exec("PRAGMA wal_autocheckpoint = 1000;");
-  return db;
+  // A contended OPEN is the one un-gated path that can still surface a raw
+  // SQLITE_BUSY ("database is locked") in SQLite — e.g. `journal_mode = WAL`
+  // needs a brief exclusive lock, and under a CPU-starved cross-process writer
+  // the 5000 ms busy_timeout can be outlasted. The WriteGate only exists AFTER
+  // this function returns, so it cannot absorb this class of failure. Retry the
+  // whole open+PRAGMA sequence with bounded jittered backoff (same contract as
+  // WriteGate.run); any non-busy error (corrupt file, permission) still throws
+  // immediately, and a half-open connection is closed before retrying so no
+  // leaked file handle is left behind.
+  const maxAttempts = 8;
+  for (let attempt = 0; ; ) {
+    let db: Database | null = null;
+    try {
+      db = new Database(path, { create: opts.create ?? true, readonly: opts.readonly ?? false });
+      db.exec("PRAGMA busy_timeout = 5000;");
+      if (!opts.readonly) db.exec("PRAGMA journal_mode = WAL;");
+      db.exec("PRAGMA synchronous = NORMAL;");
+      db.exec("PRAGMA foreign_keys = ON;");
+      if (!opts.readonly) db.exec("PRAGMA wal_autocheckpoint = 1000;");
+      return db;
+    } catch (e) {
+      try {
+        db?.close();
+      } catch {
+        /* never opened far enough to close */
+      }
+      if (isBusy(e) && attempt < maxAttempts) {
+        attempt += 1;
+        const exponential = Math.min(50 * 2 ** (attempt - 1), 2000);
+        syncSleep((exponential * (0.5 + Math.random())) | 0);
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 export class WriteGate {

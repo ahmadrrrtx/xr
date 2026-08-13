@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-13T11:37:24.916Z",
+  "generatedAt": "2026-08-13T15:34:56.392Z",
   "version": {
     "name": "@rrrtx/xr",
-    "version": "7.1.0",
+    "version": "1.0.0",
     "codename": "Truth",
-    "display": "7.1.0 (Truth)",
-    "displayVersion": "7.1.0 (Truth)",
+    "display": "1.0.0 (Truth)",
+    "displayVersion": "1.0.0 (Truth)",
     "repo": "https://github.com/ahmadrrrtx/xr",
     "homepage": "https://xr-gules.vercel.app",
     "npm": "https://www.npmjs.com/package/@rrrtx/xr",
@@ -17,7 +17,7 @@
   },
   "package": {
     "name": "@rrrtx/xr",
-    "version": "7.1.0",
+    "version": "1.0.0",
     "packageManager": "bun@1.3.14",
     "engines": {
       "bun": ">=1.3.0"
@@ -52,7 +52,7 @@
   },
   "counts": {
     "sourceFiles": 531,
-    "testFiles": 238,
+    "testFiles": 239,
     "cliCommands": 41,
     "daemonRoutes": 110,
     "providers": 26,
@@ -83,7 +83,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 67911
+      "bytes": 69173
     },
     {
       "path": "CODEOWNERS",
@@ -103,7 +103,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 30103
+      "bytes": 30194
     },
     {
       "path": "SECURITY.md",
@@ -135,7 +135,7 @@
     },
     {
       "path": "release.manifest.json",
-      "bytes": 10406
+      "bytes": 10608
     },
     {
       "path": "tsconfig.json",
@@ -854,6 +854,7 @@
     "test/reliability/idempotency.test.ts",
     "test/reliability/migration-race.test.ts",
     "test/reliability/migrations.test.ts",
+    "test/reliability/open-churn.test.ts",
     "test/reliability/provider-canaries.test.ts",
     "test/reliability/rpo-rto.test.ts",
     "test/reliability/single-writer.test.ts",

@@ -1,5 +1,9 @@
 # XR 7.1.0 (Truth) — Release Candidate Notes
 
+> **Superseded.** 1.0.0 is a deliberate semver rebaseline of 7.1.0 (Truth); the
+> shipped release notes are [`1.0.0/RELEASE_NOTES.md`](1.0.0/RELEASE_NOTES.md).
+> This file is kept as the frozen engineering-delta record of the 7.1.0 RC.
+
 **Status:** release candidate · **Date:** 2026-08-08
 **Branch:** `chore/xr-launch-cleanup` · **Tip at record time:** `fd82fff`
 (pre-incident SHA — see tracker §Work log, "Environment incident": the branch
@@ -8,7 +12,7 @@ was later reconstituted as one squashed commit with identical content)
 This document is the **engineering delta** of the 7.1.0 release candidate —
 what changed relative to the pre-cleanup baseline `main @ 9f5840c`, with the
 verified evidence. It complements (does not replace) the product-facing
-[`7.1.0/RELEASE_NOTES.md`](7.1.0/RELEASE_NOTES.md). The canonical tracker is
+[`1.0.0/RELEASE_NOTES.md`](1.0.0/RELEASE_NOTES.md). The canonical tracker is
 [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md); findings ledger:
 [`../audits/XR_RUNTIME_AUDIT.md`](../audits/XR_RUNTIME_AUDIT.md).
 
@@ -94,7 +98,7 @@ markdown).
 - [`../security/KNOWN_LIMITATIONS.md`](../security/KNOWN_LIMITATIONS.md) —
   canonical register (policy-isolation scope, cosign real-tag note, env
   hydration, doctor-readiness honesty).
-- [`7.1.0/known-limitations.md`](7.1.0/known-limitations.md) — the 7.1.0
+- [`1.0.0/known-limitations.md`](1.0.0/known-limitations.md) — the release-scoped
   release excerpt (§4 covers the A-13 scheduler/executor limitations).
 - [`../development/GETTING_STARTED.md`](../development/GETTING_STARTED.md) —
   golden path plus the "what the workflow engine does **not** do yet" box.

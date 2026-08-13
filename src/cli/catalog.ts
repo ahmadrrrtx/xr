@@ -1,5 +1,5 @@
 /**
- * XR 3.1.5 (Helios) — Canonical command catalog
+ * XR — Canonical command catalog
  *
  * Single source of truth for help, discovery, aliases, and routing metadata.
  * Version and codename are now derived from src/core/version.ts — no hardcodes.

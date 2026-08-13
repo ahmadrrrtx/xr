@@ -10,11 +10,11 @@ the [false-claim template](../../.github/ISSUE_TEMPLATE/false_claim.yml).
 
 | Platform | Tier | Validated by | Evidence |
 |---|---|---|---|
-| Linux x64 (glibc) | **Tier 1 — primary** | full unit suite (211 files), typecheck, golden path, nightly golden path, first-task survey, deb install test, binary smoke | `ci.yml`, `cross-platform.yml`, `nightly.yml`, `channel-install.yml` |
+| Linux x64 (glibc) | **Tier 1 — primary** | full unit suite (239 files), typecheck, golden path, nightly golden path, first-task survey, deb install test, binary smoke | `ci.yml`, `cross-platform.yml`, `nightly.yml`, `channel-install.yml` |
 | Linux arm64 | Tier 2 | canonical build cross-compiles + container path linux/arm64; full-suite parity pending a native arm runner | `release.yml` matrix (build-only, smoke skipped — recorded) |
-| macOS arm64 | **Tier 1** | typecheck + full unit suite (211 files, POSIX-compatible) + golden path on every push/PR; binary build + native smoke in release matrix | `cross-platform.yml`, `release.yml` |
+| macOS arm64 | **Tier 1** | typecheck + full unit suite (239 files, POSIX-compatible) + golden path on every push/PR; binary build + native smoke in release matrix | `cross-platform.yml`, `release.yml` |
 | macOS x64 (Intel) | Tier 2 | canonical build cross-compiles; native smoke unavailable on arm64 runners (recorded honestly) | `release.yml` |
-| Windows x64 | **Tier 1*** | typecheck + unit suite (207 files; 4 documented POSIX-only exclusions with reasons) + golden path on every push/PR; binary build + native smoke; winget/scoop manifest binding tests | `cross-platform.yml`, `channel-install.yml`, `test/platform/exclusions.json` |
+| Windows x64 | **Tier 1*** | typecheck + unit suite (234 files; 5 documented exclusions with reasons) + golden path on every push/PR; binary build + native smoke; winget/scoop manifest binding tests | `cross-platform.yml`, `channel-install.yml`, `test/platform/exclusions.json` |
 | Termux (Android) | Tier 3 | installer path only (community) | `install.sh` termux branch |
 
 \* The full-parity Windows/macOS jobs are introduced by Phase 9; the first green
@@ -25,7 +25,10 @@ Exclusions (the *only* files not executed per OS; each must carry a reason and a
 `since` tag, guarded by `bun run platform:parity:check` in CI):
 Linux: none · macOS: none · Windows: `crash-injection.test.ts`,
 `policy-gate-adversarial.test.ts`, `cli-spine.test.ts`,
-`update-uninstall.test.ts` (POSIX signal/path semantics).
+`update-uninstall.test.ts` (POSIX signal/path semantics) and
+`binary-smoke.test.ts` (`bun build --compile` panics on Windows hosted runners —
+Bun runtime defect; the Windows binary is still built + natively smoke-tested by
+`release.yml` and `channel-install.yml`).
 
 ## Distribution channels (install/update/uninstall)
 

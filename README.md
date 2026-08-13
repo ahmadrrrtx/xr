@@ -22,12 +22,12 @@
 <!-- XR:RELEASE-IDENTITY:BEGIN -->
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
 
-**Version:** `7.1.0 (Truth)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
+**Version:** `1.0.0 (Truth)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
 
 > **Status: Public Beta.** @rrrtx/xr is honestly labeled beta software: install and use it,
 > expect the documented golden path to work on the validated platforms, and check the
 > [support matrix](docs/release/SUPPORT_MATRIX.md) and
-> [known-limitations register](docs/release/7.1.0/known-limitations.md) before adopting it
+> [known-limitations register](docs/release/1.0.0/known-limitations.md) before adopting it
 > for anything critical. `v*-beta.*` tags land on the prerelease channel (npm `beta` dist-tag,
 > GitHub prerelease) for early adopters; feedback goes through the
 > [beta loop](docs/release/BETA.md).
@@ -85,14 +85,14 @@ distribution is the compiled per-target binary; source checkout is the contribut
 
 | Channel | Platform | Command | Status |
 |---|---|---|---|
-| **Binary (default, verified)** | Linux / macOS / Termux / WSL | `curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh \| bash` | install-success survey (≥99% gate) runs nightly per OS family — job introduced by Phase 9, first runner evidence lands with the merge; locally 3/3 @ 7.1.0 |
+| **Binary (default, verified)** | Linux / macOS / Termux / WSL | `curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh \| bash` | install-success survey (≥99% gate) runs nightly per OS family — job introduced by Phase 9, first runner evidence lands with the merge; locally 3/3 @ 1.0.0 |
 | **Binary (default, verified)** | Windows PowerShell | `iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)` | same job, Windows lane |
 | **Homebrew** | macOS / Linux | `brew install ahmadrrrtx/tap/xr` | formula generated + verified in CI; tap publication from the first tagged release |
 | **WinGet** | Windows | `winget install ahmadrrrtx.XR` | manifests generated + verified in CI; community-repo submission follows the first tagged release |
 | **Scoop** | Windows | download `scoop/xr.json` from the release · `scoop install ./xr.json` | manifest generated + verified in CI |
 | **.deb** | Debian / Ubuntu | download `xr_<ver>_amd64.deb` from the [release](https://github.com/ahmadrrrtx/xr/releases) · `sudo dpkg -i xr_*_amd64.deb` | real `dpkg` install + remove tested on every PR |
 | **Docker** | any container runtime | `docker run ghcr.io/ahmadrrrtx/xr:latest` | image built + scanned in CI; GHCR publication from the first tagged release |
-| **npm** | any | `bun add -g @rrrtx/xr` | **⚠ STALE — the npm `latest` dist-tag is `3.1.5`, not 7.1.0.** No 7.x release has been published or tagged yet, so this command installs an older build than the one this page documents. Until a 7.x release is cut, install from the binary channel or build from source. Publication is wired (release workflow, OIDC provenance) but has not run. See [known limitations](docs/release/7.1.0/known-limitations.md). |
+| **npm** | any | `bun add -g @rrrtx/xr` | **⚠ STALE — the npm `latest` dist-tag is `3.1.5` (pre-rebaseline history), not 1.0.0.** No 1.x release has been published or tagged yet, so this command installs the old build. Because `3.1.5` sorts *higher* than `1.0.0`, the first 1.0.0 publish must re-point `latest` explicitly (`npm dist-tag add @rrrtx/xr@1.0.0 latest`) — the release runbook handles this. Until then, install from the binary channel or build from source. See [known limitations](docs/release/1.0.0/known-limitations.md). |
 | **Prerelease (beta channel)** | any | tags `v*-beta.*` → npm `beta` dist-tag · `docker run ghcr.io/ahmadrrrtx/xr:beta` | prerelease handling is part of the release workflow |
 
 Channel configs are **generated from the release manifest** and drift-gated
@@ -314,7 +314,7 @@ xr/
 ├─ skills/                   bundled skill manifests
 ├─ plugins/                  bundled plugins
 ├─ scripts/                  gates, release machinery, parity runner, perf budgets
-├─ test/                     226-file suite (mirrors src/ areas) + helpers + fixtures
+├─ test/                     239-file suite (mirrors src/ areas) + helpers + fixtures
 ├─ docs/                     product, development, release, security, historical
 └─ website/                  docs/marketing site (Next.js; scanned by claim-lint)
 ```
@@ -410,17 +410,17 @@ Exit codes are stable for scripting (`docs/guides/cli-compat.md`):
 Every performance claim is a **published budget with a measured baseline and a CI regression
 gate**:
 
-- `--version` / `--help` **p95 < 150 ms warm / < 300 ms cold** (measured 37.5 / 40.7 ms warm,
-  35.9 / 40.0 ms cold on the 7.1.0 baseline);
-- `doctor` **< 1 s measured** (456 ms; gate ceiling 1500 ms for shared runners) · route
-  decision **< 20 ms** (sub-ms) · dashboard first render **< 1 s** (5.7 ms) · retrieval
-  **25–33 ms @100k items** (gate ceiling 250 ms);
+- `--version` / `--help` **p95 < 150 ms warm / < 300 ms cold** (measured 39.8 / 40.5 ms warm,
+  40.8 / 42.5 ms cold on the 1.0.0 baseline);
+- `doctor` **< 1 s measured** (586 ms p95; gate ceiling 2500 ms for shared runners) · route
+  decision **< 20 ms** (sub-ms) · dashboard first render **< 1 s** (12.1 ms) · retrieval
+  **24–29 ms @100k items** (gate ceiling 250 ms);
 - fast path performs **zero synchronous FS/process I/O** (lint-enforced);
 - a command boots only the subsystems it needs (boot profiles).
 
 Full budgets, the boot-profile model, the regression gate and profiling tooling:
 [`docs/perf/PERF-BUDGETS.md`](docs/perf/PERF-BUDGETS.md). Baseline artifact:
-`docs/perf/baseline-7.1.0-source.json` (regenerate per release with `bun run perf:baseline`).
+`docs/perf/baseline-1.0.0-source.json` (regenerate per release with `bun run perf:baseline`).
 
 ---
 
@@ -430,7 +430,7 @@ XR's differentiator is that its claims are checked by machines on every PR:
 
 | Gate | What it pins |
 |---|---|
-| `bun test` + parity suite | **2,812 tests** across 226 files; one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and self-diagnosing failure annotations |
+| `bun test` + parity suite | **2,938 tests** across 239 files; one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and self-diagnosing failure annotations |
 | `release:check` + `claim-lint` | version identity stamped everywhere; every public claim has evidence; prohibited/supervised terms fail the build |
 | `baseline:inventory` | source-derived repository inventory regenerated and compared |
 | `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, file-size discipline (waivers are explicit) |

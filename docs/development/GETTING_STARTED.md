@@ -150,7 +150,7 @@ xr uninstall --purge         # removes everything, including your data
 ## Know before you rely on it
 
 - **Known limitations (release artifact):**
-  [`../release/7.1.0/known-limitations.md`](../release/7.1.0/known-limitations.md) —
+  [`../release/1.0.0/known-limitations.md`](../release/1.0.0/known-limitations.md) —
   the maintained list of what is *not* yet real, including no third-party
   certifications and policy-not-isolation on some platforms.
 - **Workflow engine (A-13):** tool-action nodes run only with an injected

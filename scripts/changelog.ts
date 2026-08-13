@@ -5,7 +5,7 @@
  * One changelog authority for the release pipeline (Art. XXII/XIX): sections
  * are derived mechanically from git history — never hand-written marketing.
  *
- *   bun run scripts/changelog.ts --version 7.1.0 [--from v7.0.0] [--to HEAD]
+ *   bun run scripts/changelog.ts --version 1.0.0 [--from v7.0.0] [--to HEAD]
  *                                    [--date 2026-08-05] [--write] [--check]
  *
  * Modes:

@@ -12,7 +12,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $Repo = 'ahmadrrrtx/xr'
 $Branch = 'main'
-$Version = '7.1.0'
+$Version = '1.0.0'
 
 function Step($m) { Write-Host "  ▸ $m" -ForegroundColor Cyan }
 function Ok($m) { Write-Host "  ✓ $m" -ForegroundColor Green }

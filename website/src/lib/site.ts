@@ -8,7 +8,7 @@
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 7.1.0 (Truth) — from release.manifest.json
+ *   Version: 1.0.0 (Truth) — from release.manifest.json (rebaselined from 7.1.0)
  */
 
 export const site = {
@@ -21,9 +21,9 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "7.1.0",
+  version: "1.0.0",
   codename: "Truth",
-  displayVersion: "7.1.0 (Truth)",
+  displayVersion: "1.0.0 (Truth)",
   /** Bundled skills, mechanically counted from skills/ at stamp time. */
   skillCount: 65,
   nav: [

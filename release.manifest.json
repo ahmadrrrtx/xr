@@ -1,10 +1,10 @@
 {
   "$schema": "./docs/release/release-manifest.schema.json",
   "manifestVersion": 2,
-  "comment": "XR RELEASE MANIFEST — the single source of truth for release identity and every public claim. Constitution Article XXII.1 ('One release manifest stamps version across version.ts, package.json, README, installers, website ... CI fails on drift') and Article XIX.1 ('no public claim without an evidence link'). Edit THIS file, then run `bun run release:stamp`. Never hand-edit a stamped surface.",
+  "comment": "XR RELEASE MANIFEST — the single source of truth for release identity and every public claim. Constitution Article XXII.1 ('One release manifest stamps version across version.ts, package.json, README, installers, website ... CI fails on drift') and Article XIX.1 ('no public claim without an evidence link'). Edit THIS file, then run `bun run release:stamp`. Never hand-edit a stamped surface. NOTE (2026-08-13): 1.0.0 is a DELIBERATE semver rebaseline of 7.1.0 (Truth) — the same codebase, re-identified as the first stable line. Historical 7.x artifacts remain under docs/ as frozen records.",
   "identity": {
     "name": "@rrrtx/xr",
-    "version": "7.1.0",
+    "version": "1.0.0",
     "codename": "Truth",
     "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
     "author": "Muhammad Ahmad (@ahmadrrrtx)",
@@ -102,7 +102,7 @@
     {
       "id": "signed-releases",
       "text": "Tagged releases ship cosign keyless signatures over SHA256SUMS, a CycloneDX SBOM and SLSA3 provenance for every per-target artifact.",
-      "evidence": ".github/workflows/release.yml (gates → 5-target matrix → SHA256SUMS → cosign sign-blob → SLSA generator_generic_slsa3 with wired outputs.digests); docs/release/VERIFYING_RELEASES.md. Verifiable from the public Rekor log after the first tagged release ≥ 7.1.0.",
+      "evidence": ".github/workflows/release.yml (gates → 5-target matrix → SHA256SUMS → cosign sign-blob → SLSA generator_generic_slsa3 with wired outputs.digests); docs/release/VERIFYING_RELEASES.md. Verifiable from the public Rekor log after the first tagged release ≥ 1.0.0.",
       "expires": "2027-07-31"
     },
     {
