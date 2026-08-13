@@ -12,7 +12,7 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "7.1.0",
+  version: "1.0.0",
   codename: "Truth",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",

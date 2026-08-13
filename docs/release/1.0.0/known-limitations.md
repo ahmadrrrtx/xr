@@ -1,11 +1,12 @@
-# XR 7.1.0 (Truth) — Known Limitations
+# XR 1.0.0 (Truth) — Known Limitations
 
-**Status:** frozen release excerpt · **Generated for:** release 7.1.0 · **Last reviewed:** 2026-08-08
+**Status:** frozen release excerpt · **Generated for:** release 1.0.0 (rebaselined from 7.1.0) · **Last reviewed:** 2026-08-08
 
 > **Canonical register:** [`docs/security/KNOWN_LIMITATIONS.md`](../../security/KNOWN_LIMITATIONS.md).
 > This document is the **release-scoped excerpt** of that register, frozen at
-> the 7.1.0 cut (closes audit finding A-15 — the two registers were parallel
-> lists that could drift). Post-release changes land in the canonical register
+> the 1.0.0 cut (a deliberate semver rebaseline of 7.1.0; closes audit finding
+> A-15 — the two registers were parallel lists that could drift). Post-release
+> changes land in the canonical register
 > first and flow into the next version's excerpt; this snapshot is corrected
 > in place only for false-claim defects. The §-numbers below are the detail
 > text the canonical register's "Detail" column points at.
@@ -41,12 +42,12 @@ with credentials you cannot afford to lose.
 
 *To close:* container/VM-grade placement for high-risk actions on every OS family.
 
-### Signed releases start at v7.1.0
-Tagged releases ≥ 7.1.0 ship cosign keyless signatures over `SHA256SUMS`, a CycloneDX SBOM, and
+### Signed releases start at v1.0.0
+Tagged releases ≥ 1.0.0 ship cosign keyless signatures over `SHA256SUMS`, a CycloneDX SBOM, and
 SLSA3 provenance, verifiable from the public Rekor log
-([docs/release/VERIFYING_RELEASES.md](../VERIFYING_RELEASES.md)). Releases **before** 7.1.0 were
-never published as verified artifacts (the GitHub release feed held only a stale v3.0.0, npm
-lagged at 3.1.5 while source was 7.0.x — the exact drift this release closes).
+([docs/release/VERIFYING_RELEASES.md](../VERIFYING_RELEASES.md)). The pre-rebaseline 7.x history
+was never published as verified artifacts (the GitHub release feed held only a stale v3.0.0, npm
+lagged at 3.1.5 while source moved 7.0.x → 7.1.0 — the exact drift this release closes).
 
 ---
 
@@ -57,7 +58,7 @@ They cannot be structurally validated and install-tested without rpm/snapcraft t
 and "supported" means validated. *To close:* an rpm builder validated by `dnf install` in CI and a
 snapcraft build with a store or local-install test. When those tests exist, the channel ships.
 
-### Channel-manager publications start with the first tagged 7.1.x release
+### Channel-manager publications start with the first tagged 1.0.0 release
 The Homebrew tap push, GHCR publish, and WinGet community-repo submission are wired and tested
 structurally, but they only have artifacts to publish **once a tag is cut**. The weekly
 `channel-install.yml` job performs REAL installs (apt/brew/scoop) from the published assets and
@@ -112,8 +113,9 @@ Screenshots are available through `computer_control`.
 - Clipboard tools require `pbcopy`/`pbpaste` (macOS), `xclip` (Linux) or PowerShell (Windows).
 
 ### Cross-platform CI is full-parity (was: Linux-only)
-Since Phase 1, macOS + Windows run in CI; since 7.1.0 they run **typecheck + the full unit suite
-(minus four documented, reason-guarded POSIX exclusions) + the golden path** on every push/PR
+Since Phase 1, macOS + Windows run in CI; since the 1.0.0 rebaseline (formerly 7.1.0) they run
+**typecheck + the full unit suite (minus documented, reason-guarded exclusions) + the golden
+path** on every push/PR
 (`test/platform/exclusions.json` is the only skip list, validated in CI).
 
 ---
@@ -154,15 +156,16 @@ fresh-machine attempts).
 ## 7b. Distribution: the npm channel is behind the source
 
 **Audit GAP-002 (2026-08-12, independent red-team).** The npm `latest` dist-tag for
-`@rrrtx/xr` is **`3.1.5`**, while this source tree is **7.1.0**. Published versions are
-0.2.0, 3.0.0–3.0.3, 3.1.5; remote git tags stop at `v7.0.0` — there is **no `v7.1.0`
-tag and no 7.x npm release**.
+`@rrrtx/xr` is **`3.1.5`** (pre-rebaseline history), while this source tree is **1.0.0**.
+Published versions are 0.2.0, 3.0.0–3.0.3, 3.1.5; remote git tags stop at `v7.0.0` — there is
+**no `v1.0.0` tag and no 1.x npm release** yet.
 
-Consequence, stated plainly: a user who follows `bun add -g @rrrtx/xr` receives a build
-roughly four minors older than the one this documentation describes, so the 7.x
-capability claims on those pages are **not verifiable for that user**. The release
-workflow, channel generation and drift gates are all wired and pass in CI — the publish
-step has simply never run for a 7.x tag.
+Consequence, stated plainly: a user who follows `bun add -g @rrrtx/xr` receives the stale
+3.1.5 build, so the 1.0.0 capability claims on these pages are **not verifiable for that
+user**. Because `3.1.5` sorts **higher** than `1.0.0` under semver, the first 1.0.0 publish
+must also explicitly re-point the `latest` dist-tag (`npm dist-tag add @rrrtx/xr@1.0.0
+latest`) — the release runbook handles this. The release workflow, channel generation and
+drift gates are all wired and pass in CI — the publish step has simply never run.
 
 *Until closed:* install from the binary channel or build from source. The README install
 table marks the npm row STALE.

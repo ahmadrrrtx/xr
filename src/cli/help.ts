@@ -1,5 +1,5 @@
 /**
- * XR 3.1.5 (Helios) — Rich help system
+ * XR — Rich help system
  *
  * Progressive disclosure: overview → group → command → topic.
  * Spec: IA §5, Accessibility §4 (80-col, plain language), Design System voice.

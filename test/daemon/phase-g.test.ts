@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../../src/state/workspace-store.ts";
@@ -58,7 +58,11 @@ describe("G-1 — files.list is real and scope-enforced", () => {
     const res = await h(get("/api/v1/files"));
     expect(res.status).toBe(200);
     const body: any = await res.json();
-    expect(body.root).toBe(projectDir);
+    // macOS: /var is a symlink to /private/var, so process.cwd() (used by the
+    // route as its root authority) returns the PHYSICAL path while the raw
+    // mkdtemp path keeps the symlink. Normalize both sides so the assertion is
+    // host-agnostic (no-op on Linux/Windows).
+    expect(body.root).toBe(realpathSync(projectDir));
     const names = (body.entries || []).map((e: any) => e.name);
     expect(names).toContain("hello.txt");
     expect(names).toContain("sub");

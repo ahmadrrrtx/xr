@@ -1,6 +1,6 @@
 # Extending XR — where things go, and why
 
-**Applies to:** XR 7.1.0 and later (post Phase 2)
+**Applies to:** XR 1.0.0 and later (post Phase 2; 1.0.0 = rebaseline of 7.1.0)
 **Companion:** `docs/phase2/BOUNDARIES.md` (the enforced layer rules)
 
 Phase 2 reduced XR to **one contract per concern**. This is that contract.

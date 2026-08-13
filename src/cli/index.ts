@@ -1,5 +1,5 @@
 /**
- * XR 3.1.5 (Helios) — CLI public API
+ * XR — CLI public API
  *
  * Import from here for professional CLI helpers shared by commands.
  */

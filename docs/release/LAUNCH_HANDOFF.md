@@ -1,18 +1,17 @@
-# XR 7.1.0 — Launch Handoff (maintainer runbook)
+# XR 1.0.0 — Launch Handoff (maintainer runbook)
 
 **Scope:** everything the maintainer (with GitHub/npm credentials — the launch
-engineering sandbox has none) must do to cut the signed `v7.1.0` release and
-close VALIDATED finding **A-2 / F-3** — npm `@rrrtx/xr` still serves 3.1.5 (4
-versions behind), no `v7.1.0` tag exists.
+engineering sandbox has none) must do to cut the signed `v1.0.0` release and
+close VALIDATED finding **A-2 / F-3** — npm `@rrrtx/xr` still serves 3.1.5, no
+`v1.0.0` tag exists. **1.0.0 is a deliberate semver rebaseline of 7.1.0 (Truth)**;
+see `CHANGELOG.md §1.0.0` and `docs/release/1.0.0/RELEASE_NOTES.md`.
 
-**Verified in-sandbox on `chore/xr-launch-cleanup`:** all 14 local ci-parity
-gates PASS at every batch (publisher-parity, binary-attestation, channel-matrix
-contracts, SBOM/manifest/attestation refs, homebrew/scoop/winget formulas on
-this machine); full `bun test` green throughout the program (latest: **2,795
-pass / 13 skip / 0 fail** — 13 live-browser a11y skips); 13/13 check gates
-PASS; `bun run baseline:inventory` regenerates clean. Re-run the gate list
-below before tagging — the launch-gates checklist lives in
-[`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) §Launch-gates.
+**Verified in-sandbox:** all local ci-parity gates PASS (publisher-parity,
+binary-attestation, channel-matrix contracts, SBOM/manifest/attestation refs,
+homebrew/scoop/winget formulas); full `bun test` green (**2925 pass / 13 skip /
+0 fail**); golden path `ok:true`; `release:check` + `channel:check` +
+`claim-lint` + `changelog:check` green at 1.0.0. Re-run the gate list below
+before tagging.
 
 ---
 
@@ -21,65 +20,67 @@ below before tagging — the launch-gates checklist lives in
 ```bash
 # on the release branch, clean tree
 bun install --frozen-lockfile
-bun run typecheck && bun test && bun run release:check && bun run channel:check
-bash scripts/_prepare-release-handoff.sh   # writes release-handoff/<UTC>/
+bun run typecheck && bun test
+bun run release:check && bun run channel:check && bun run changelog:check && bun run claim-lint
 ```
-
-The script already runs each packaging gate and writes its output into the
-handoff dir. Review the printout before proceeding.
 
 ## 2. Tag + push
 
 ```bash
-git tag -s v7.1.0 -m "XR 7.1.0 (Truth)"          # GPG/SSH-signed tag
-git push origin chore/xr-launch-cleanup v7.1.0   # or merge to main first per repo flow
+git tag -s v1.0.0 -m "XR 1.0.0 (Truth)"          # GPG/SSH-signed tag
+git push origin main v1.0.0                        # tag on the release commit
 ```
 
-`.github/workflows/release.yml` builds on the tag: linux-x64/arm64/musl,
-darwin-arm64(x64), windows-x64(zipped), optics gate per artifact, sqlite-vernal
-probe double-run (flaky-network retry), release-notes gate, then **the pinned
-attestation step**: `actions/attest-build-provenance@674c6b4a431ff21b8b0b3eb14712d8b1693544cb # v4.0.0`, `subject-path: dist/binaries/**`.
+`.github/workflows/release.yml` builds on the tag: linux-x64/arm64,
+darwin-arm64/x64, windows-x64, optics gate per artifact, release-notes gate,
+then the pinned attestation step with `subject-path: dist/binaries/**`.
 
-## 3. Verify artifact channels
-
-From the run's artifacts (and the checksums in `release-handoff/<UTC>/`):
+## 3. Verify artifacts & channels locally
 
 ```bash
-./install.sh --dry-run --channel stable     # what users will resolve
-bun scripts/channel-matrix-contracts.ts --release-type production --check
-bun scripts/binary-attestation.ts           # provenance record verification
-bun scripts/publisher-parity.ts             # brew/scoop/winget formula parity
+bun run channel:check      # channel configs in sync with release.manifest.json
+bun run release:check      # identity surfaces in sync
+bun run scripts/build-matrix.ts --targets linux-x64 --out dist   # canonical binary + smoke
+bun run scripts/build-deb.ts --bin dist/xr-linux-x64 --out dist/xr_1.0.0_amd64.deb
+sudo dpkg -i dist/xr_1.0.0_amd64.deb && /usr/bin/xr --version && sudo dpkg -r xr
 ```
 
-## 4. Publish to npm (closes A-2)
+(`install.sh` flags: `-y/--yes`, `--allow-system`, `--mode=<minimal|local|byok|hybrid|full>`;
+it downloads the compiled binary and self-smokes `--version` before wiring PATH.)
+
+## 4. Publish to npm (closes A-2) — AND re-point `latest`
+
+Because the published history tops out at `3.1.5`, and `3.1.5` sorts **higher**
+than `1.0.0` under semver, a plain `npm publish` will **not** move `latest`.
+The dist-tag must be re-pointed explicitly:
 
 ```bash
-npm publish --access public --otp <otp>     # dist-tag: latest
-npm view @rrrtx/xr version                   # expect 7.1.0
+npm publish --access public --otp <otp>              # publishes 1.0.0
+npm dist-tag add @rrrtx/xr@1.0.0 latest              # re-point latest (rebaseline)
+npm view @rrrtx/xr dist-tags                         # expect latest: 1.0.0
 ```
 
-Note the historical drift this closes: `latest` has been 3.1.5 while source was
-7.1.0. After publish, the channel manifest (`release.channels.json`,
-stable→7.1.0) and npm agree.
+Note the historical drift this closes: `latest` had been 3.1.5 while source
+moved through 7.0.x → 7.1.0. After publish + the dist-tag re-point, npm and the
+source agree.
 
 ## 5. GitHub Release body
 
-Use `docs/release/7.1.0/` (INVENTORY.md + known-limitations.md) as the honest
-source: supported platforms table comes from `docs/release/SUPPORT_MATRIX.md`;
-do not paste benchmark numbers that are not in `docs/release/7.1.0/` artifacts.
+Use `docs/release/1.0.0/` (INVENTORY.md + RELEASE_NOTES.md + known-limitations.md)
+as the honest source: supported platforms table comes from
+`docs/release/SUPPORT_MATRIX.md`; do not paste benchmark numbers that are not in
+the `docs/release/1.0.0/` or `docs/perf/baseline-1.0.0-*` artifacts.
 
 ## 6. Cosign / Rekor proof (KNOWN_LIMITATIONS #6)
 
 `docs/security/KNOWN_LIMITATIONS.md` entry #6 stays **open until the first real
 signed tag exists**: after step 2, verify and attach a Rekor log proof
-(`rekor-cli get --log-index …` / `cosign verify-blob`), then close the entry
-with the proof reference. The sandbox already verified the *wiring* of the
-attestation step (pinned action, subject glob) — only the real tag can produce
-the real proof.
+(`cosign verify-blob` / Rekor lookup), then close the entry with the proof
+reference. Only the real tag can produce the real proof.
 
 ## 7. Cosmetic follow-ups (safe anytime)
 
 `packaging/winget/` license/author/publisher strings use a neutral
-`ahmadrrrtx` GitHub URL — cosmetics only; the winget validator gate
-(`bun scripts/winget-val.ts`) passes either way. Homebrew formula class-name
-map lives in `scripts/homebrew-publish.ts` (verified vs `packaging/homebrew/`).
+`ahmadrrrtx` GitHub URL — cosmetics only; the winget manifests are
+schema-validated in the `channel-install.yml` Windows lane. The channel configs
+themselves are generated by `scripts/channel-manifest.ts` (never hand-edited).

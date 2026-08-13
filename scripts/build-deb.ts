@@ -15,7 +15,7 @@
  * test/release/channels.test.ts in pure TS, and installed by `dpkg-deb`/`dpkg`
  * in the cross-OS channel-install CI job.
  *
- *   bun run scripts/build-deb.ts --bin dist/xr-linux-x64 --out dist/xr_7.1.0_amd64.deb
+ *   bun run scripts/build-deb.ts --bin dist/xr-linux-x64 --out dist/xr_1.0.0_amd64.deb
  */
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";

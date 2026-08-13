@@ -248,7 +248,7 @@ async function runPerfBenchmarks(asJson: boolean): Promise<void> {
 
   banner();
   console.log(C.bold("CLI performance microbenchmarks"));
-  console.log(C.dim(`  ${samples}-run median · targets from XR 3.1.5 (Helios) performance standards\n`));
+  console.log(C.dim(`  ${samples}-run median · targets from XR performance standards\n`));
   for (const r of results) {
     const mark = r.pass ? C.green("PASS") : C.red("FAIL");
     console.log(

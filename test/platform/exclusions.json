@@ -25,6 +25,12 @@
       "excludeOn": ["win32"],
       "since": "phase-9",
       "reason": "Atomic update plan exercises POSIX rename/chmod shell assumptions on tmp dirs; the channel-managed update paths are tested on win32 in test/update/. Recorded here by Phase 9 (conservative) — macOS/Linux keep full coverage."
+    },
+    {
+      "pattern": "test/perf/binary-smoke.test.ts",
+      "excludeOn": ["win32"],
+      "since": "phase-10",
+      "reason": "bun build --compile panics on Windows hosted runners (Bun runtime defect 'Internal assertion failure' — crash class exit 3, reproduced on job 94456012670), not an XR defect. The compiled Windows binary is still built and natively smoke-tested by release.yml (5-target matrix) and channel-install.yml (winget/scoop lane). Restore here when Bun fixes the compile panic."
     }
   ]
 }

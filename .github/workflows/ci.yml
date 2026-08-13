@@ -180,6 +180,7 @@ jobs:
 
       - name: Run test suite
         shell: bash
+        timeout-minutes: 25
         # A single monolithic `bun test` process intermittently dies mid-run
         # on HOSTED runners (linux exit 1 at ~68s — no test-failure output;
         # same crash class the cross-platform parity lanes were segmented to
@@ -213,6 +214,7 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Reliability suite
+        timeout-minutes: 20
         run: bun run reliability:test
 
 
@@ -363,7 +365,7 @@ jobs:
       - name: Hot-path sync-I/O lint
         run: bun run hot-path-lint
       - name: Performance regression gate (budgets + baseline)
-        run: bun run perf:gate --samples 21 --mode source --baseline docs/perf/baseline-7.0.1-source.json
+        run: bun run perf:gate --samples 21 --mode source --baseline docs/perf/baseline-1.0.0-source.json
 
   # ── 5g. Phase 8 DX gates: unit tier budget + ownership map sync ───────────
   # The contributor inner loop must stay under 5 s (measured); the public

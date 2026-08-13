@@ -1,6 +1,6 @@
 # Verifying an XR Release (Phase 9 — per-target signed distribution)
 
-Every tagged release ≥ 7.1.0 ships independently verifiable proof for **every**
+Every tagged release ≥ 1.0.0 ships independently verifiable proof for **every**
 artifact — the five compiled binaries, the windows channel zip, the `.deb`,
 the npm tarball, the source archive, and the container image:
 

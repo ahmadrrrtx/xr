@@ -63,7 +63,11 @@ import {
  *   · C-3 streaming: polite live-region announcer + cursor + code note;
  *   · C-4 sessions: search + copy-id.
  */
-const POST_PHASE4_SHA256 = "9771c81abace6fac24b06aa5f0f954392b82d2f26e6186a00f83c60ff0c29ade";
+// Re-pinned at 1.0.0 (rebaseline): the rendered document embeds the release
+// version, so the post-hardening hash changes with the identity. The security
+// invariants the hash pins (no inline script/style/onclick, token never
+// embedded) are asserted separately above.
+const POST_PHASE4_SHA256 = "16778f168d4acf7df8a365a638b95e27363d10208c12fd3b4806547f8af0444b";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {

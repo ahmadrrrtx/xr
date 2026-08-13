@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * XR 3.1.5 (Helios) — Product CLI bootstrap
+ * XR — Product CLI bootstrap
  *
  * Professional command-line entry aligned with Shell redesign.
  *
@@ -12,7 +12,7 @@
  *
  * Everything else boots the kernel lazily via the CLI router.
  *
- * Spec: docs/xr-3.1/*  ·  CLI redesign XR 3.1.5 (Helios)
+ * Spec: docs/xr-3.1/*  ·  CLI redesign XR
  */
 
 import { runCli } from "./cli/router.ts";

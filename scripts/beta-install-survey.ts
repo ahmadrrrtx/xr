@@ -10,7 +10,7 @@
  *
  * Sources (same canonical set either way — Art. XXII):
  *   --release-dir <dir>    local canonical assets (nightly: built in-job)
- *   --release-url <base>   real published release (e.g. .../releases/download/v7.1.0)
+ *   --release-url <base>   real published release (e.g. .../releases/download/v1.0.0)
  *
  * Report (one JSON line): { ok, os, rate, runs, successes, failures:[step…] }.
  * Exit 0 only when rate ≥ --target (default 0.99) — the Beta acceptance gate

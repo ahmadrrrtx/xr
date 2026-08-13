@@ -2,7 +2,7 @@
 
 One navigation map. Three classes of material:
 
-1. **Current** — authoritative for the shipped runtime (`7.1.x`).
+1. **Current** — authoritative for the shipped runtime (`1.x`; 1.0.0 is a deliberate semver rebaseline of 7.1.0).
 2. **Audits** — external/verification audits this project acts on.
 3. **Historical** — completed campaign deliverables, phase reports, and
    superseded docs. Preserved, not deleted — but they do not govern claims.

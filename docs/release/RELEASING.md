@@ -78,6 +78,6 @@ replacement; the Rekor entry is permanent (by design — that's the point).
   — the Phase-4 wiring (undefined outputs → empty subjects) is fixed and
   regression-tested (`test/release/release-workflow.test.ts`).
 - npm publish uses OIDC trusted publishing; the long-lived `NPM_TOKEN` secret
-  is no longer referenced (revoke it after the first 7.1.0 publish).
+  is no longer referenced (revoke it after the first 1.0.0 publish).
 - Channel configs live in `packaging/` as *generated* files; never hand-edit —
   `channel:sync` regenerates, `channel:check` fails CI on drift.

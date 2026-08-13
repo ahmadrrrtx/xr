@@ -1,4 +1,4 @@
-/** XR 3.1.6 Phase 0 — local baseline status helpers.
+/** XR Phase 0 — local baseline status helpers.
  *
  * These helpers are deliberately small and local-only. They do not introduce a
  * telemetry pipeline or change runtime semantics; they provide stable summary
