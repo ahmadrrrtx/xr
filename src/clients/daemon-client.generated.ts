@@ -121,6 +121,36 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/config");
   }
 
+  /** First-run status: does this install need setup, and why. */
+  async onboardingStatus(): Promise<z.infer<typeof S.OnboardingStatusResponse>> {
+    return await this.call("GET", "/api/v1/onboarding/status");
+  }
+
+  /** Save a hosted provider API key (BYOK) and set it as the default route. The key is stored in the OS keychain or sealed file and is never returned. The save succeeds even when the live probe fails — the outcome is reported honestly. */
+  async onboardingProvider(body: z.infer<typeof S.OnboardingProviderRequest>): Promise<z.infer<typeof S.OnboardingProviderResponse>> {
+    return await this.call("POST", "/api/v1/onboarding/provider", body);
+  }
+
+  /** Record onboarding completion in the audit log (the honest completion record). */
+  async onboardingComplete(body: z.infer<typeof S.OnboardingCompleteRequest>): Promise<z.infer<typeof S.OkResponse>> {
+    return await this.call("POST", "/api/v1/onboarding/complete", body);
+  }
+
+  /** List the project root (process.cwd()) — one level, scope-enforced, with real per-file git status. */
+  async filesList(): Promise<z.infer<typeof S.FilesListResponse>> {
+    return await this.call("GET", "/api/v1/files");
+  }
+
+  /** Read a text file inside the project root (scope-enforced, size-capped). */
+  async filesRead(body: z.infer<typeof S.FilesReadRequest>): Promise<z.infer<typeof S.FilesReadResponse>> {
+    return await this.call("GET", "/api/v1/files/read", body);
+  }
+
+  /** Real `git diff` for a tracked file inside the project root. */
+  async filesDiff(body: z.infer<typeof S.FilesDiffRequest>): Promise<z.infer<typeof S.FilesDiffResponse>> {
+    return await this.call("GET", "/api/v1/files/diff", body);
+  }
+
   /** One-shot chat completion streamed as Server-Sent Events. (SSE stream — returns the raw Response). */
   async chatStreamPost(body: z.infer<typeof S.ChatStreamRequest>): Promise<Response> {
     return await this.raw("POST", "/api/v1/chat", body);

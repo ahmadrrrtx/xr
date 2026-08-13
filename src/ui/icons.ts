@@ -57,7 +57,7 @@ const GLYPH: Record<GlyphId, string> = {
   research:      "◆",
   plugins:       "⌁",
   skills:        "⬢",
-  voice:         "🎤",
+  voice:         "♪", // sound/speech glyph (terminal-safe; NOT emoji)
   shield:        "⛨",
   audit:         "≡",
   settings:      "···",

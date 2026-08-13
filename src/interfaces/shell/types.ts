@@ -25,6 +25,23 @@ export type FocusPane = "sidebar" | "main" | "inspector" | "composer";
 
 export type ModeState = "agent" | "plan" | "ask";
 
+/**
+ * Phase D · D-1 — how much of the agent's REAL work (the tool/step timeline
+ * fed by the run loop) is shown in the chat feed. There is no per-turn
+ * reasoning channel in the runtime, so this honestly controls timeline
+ * visibility instead of pretending to toggle model "thinking":
+ *   · none     — final answers only
+ *   · brief    — tool/step titles (default)
+ *   · detailed — titles + detail lines
+ */
+export type AgentDetail = "none" | "brief" | "detailed";
+
+/** Pure cycle helper (testable): none → brief → detailed → none. */
+export function cycleAgentDetail(current: AgentDetail): AgentDetail {
+  const order: AgentDetail[] = ["none", "brief", "detailed"];
+  return order[(order.indexOf(current) + 1) % order.length]!;
+}
+
 export type Severity = "info" | "ok" | "warn" | "error";
 
 export interface ProjectMeta {
@@ -101,6 +118,7 @@ export interface ShellState {
   provider: string;
   model: string;
   mode: ModeState;
+  agentDetail: AgentDetail;
   budget: number;
   totalSpent: number;
   totalTokens: number;

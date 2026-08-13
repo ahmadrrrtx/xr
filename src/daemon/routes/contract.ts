@@ -38,6 +38,15 @@ import {
   WorkspaceCreateRequest,
   WorkspaceSwitchRequest,
   BudgetSetRequest,
+  OnboardingStatusResponse,
+  OnboardingProviderRequest,
+  OnboardingProviderResponse,
+  OnboardingCompleteRequest,
+  FilesListResponse,
+  FilesReadRequest,
+  FilesReadResponse,
+  FilesDiffRequest,
+  FilesDiffResponse,
 } from "./schemas.ts";
 
 export type Stability = "stable" | "experimental";
@@ -409,6 +418,50 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     stability: "experimental",
     template: "/api/business/privacy/{subject}",
     pathParams: [{ name: "subject", description: "Subject (org/workspace/id)." }],
+  },
+
+  // ── Phase G · workspace files (experimental surface) ────────────────────
+  "files.list": {
+    summary: "List the project root (process.cwd()) — one level, scope-enforced, with real per-file git status.",
+    tag: "workspace",
+    stability: "experimental",
+    response: FilesListResponse,
+  },
+  "files.read": {
+    summary: "Read a text file inside the project root (scope-enforced, size-capped).",
+    tag: "workspace",
+    stability: "experimental",
+    request: FilesReadRequest,
+    response: FilesReadResponse,
+  },
+  "files.diff": {
+    summary: "Real `git diff` for a tracked file inside the project root.",
+    tag: "workspace",
+    stability: "experimental",
+    request: FilesDiffRequest,
+    response: FilesDiffResponse,
+  },
+
+  // ── Phase B · onboarding (first-run GUI flow; experimental surface) ──────
+  "onboarding.status": {
+    summary: "First-run status: does this install need setup, and why.",
+    tag: "onboarding",
+    stability: "experimental",
+    response: OnboardingStatusResponse,
+  },
+  "onboarding.provider": {
+    summary: "Save a hosted provider API key (BYOK) and set it as the default route. The key is stored in the OS keychain or sealed file and is never returned. The save succeeds even when the live probe fails — the outcome is reported honestly.",
+    tag: "onboarding",
+    stability: "experimental",
+    request: OnboardingProviderRequest,
+    response: OnboardingProviderResponse,
+  },
+  "onboarding.complete": {
+    summary: "Record onboarding completion in the audit log (the honest completion record).",
+    tag: "onboarding",
+    stability: "experimental",
+    request: OnboardingCompleteRequest,
+    response: OkResponse,
   },
 
   // ── Phase 8 · meta operations (registered by meta.routes.ts) ──────────────

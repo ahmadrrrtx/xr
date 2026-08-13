@@ -22,11 +22,17 @@ export const COLOR = {
   border2:   "#2D3748",
   text:      "#F9FAFB",
   textDim:   "#9CA3AF",
-  muted:     "#6B7280",
+  // Phase 8 · T3 raised muted to #7A8FB0 (≥5:1 on every surface, WCAG 1.4.3);
+  // 2026-08 UX Phase A aligns the shared token to that verified value so the
+  // dashboard and TUI render identical neutrals (single source of truth).
+  muted:     "#7A8FB0",
 
   primary:   "#00D4FF",
   cyan:      "#00D4FF",
-  violet:    "#A855F7",
+  // Official brand indigo (pixel-verified from Colour palate of xr logo.png:
+  // #6048F8). Replaces the legacy Tailwind-purple #A855F7 (F-3). The old
+  // purple remains only as a legacy chart color (data2).
+  violet:    "#6048F8",
   success:   "#00FF88",
   green:     "#00FF88",
   warning:   "#F59E0B",
@@ -36,6 +42,7 @@ export const COLOR = {
 
   // Extended data colors (charts only)
   data1: "#00D4FF",
+  // Legacy chart color (pre-2026-08 official-palette alignment). Charts only.
   data2: "#A855F7",
   data3: "#00FF88",
   data4: "#F59E0B",
@@ -53,7 +60,8 @@ export type ColorToken = keyof typeof COLOR;
 export const RGB = {
   primary:  [0, 212, 255] as const,
   cyan:     [0, 212, 255] as const,
-  violet:   [168, 85, 247] as const,
+  // Official brand indigo (COLOR.violet #6048F8) — truecolor ANSI for the TUI.
+  violet:   [96, 72, 248] as const,
   success:  [0, 255, 136] as const,
   green:    [0, 255, 136] as const,
   warning:  [245, 158, 11] as const,
@@ -162,7 +170,7 @@ export const SHADOW = {
 // ── Gradients ─────────────────────────────────────────────────────────────────
 
 export const GRADIENT = {
-  brand: "linear-gradient(90deg, #00D4FF, #7AA7FF, #A855F7)",
+  brand: "linear-gradient(90deg, #00D4FF, #7AA7FF, #6048F8)",
   shield: "radial-gradient(circle, rgba(0,212,255,.22), transparent 60%)",
 } as const;
 

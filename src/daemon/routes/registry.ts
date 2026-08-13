@@ -20,6 +20,8 @@ import { contextRoutes } from "./context.routes.ts";
 import { providersRoutes } from "./providers.routes.ts";
 import { shieldRoutes } from "./shield.routes.ts";
 import { systemRoutes } from "./system.routes.ts";
+import { onboardingRoutes } from "./onboarding.routes.ts";
+import { filesRoutes } from "./files.routes.ts";
 import { trustRoutes } from "./trust.routes.ts";
 import type { DaemonRoute } from "./router.ts";
 import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
@@ -28,6 +30,8 @@ import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
 export function listBaseRoutes(): DaemonRoute[] {
   return [
     ...systemRoutes(),
+    ...onboardingRoutes(),
+    ...filesRoutes(),
     ...chatRoutes(),
     ...agentsRoutes(),
     ...budgetRoutes(),

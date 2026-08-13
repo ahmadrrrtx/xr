@@ -52,7 +52,7 @@ export function systemRoutes(): DaemonRoute[] {
       id: "dashboard.alias.get",
       path: "/dashboard",
       method: "GET",
-      handle: ({ html, token }) => html(dashboardHtml(token)),
+      handle: ({ html, token }) => html(dashboardHtml(token).replace('<body data-route="home">', '<body data-route="dashboard">')),
     }),
     // Phase 4 · T5 — external dashboard assets under strict CSP
     // (script-src 'self'; the client app is never inline).
@@ -81,7 +81,7 @@ export function systemRoutes(): DaemonRoute[] {
       id: "chat.page.get",
       path: "/chat",
       method: "GET",
-      handle: ({ html, token }) => html(dashboardHtml(token).replace("loadDashboard();", "navigateTo('chat'); loadDashboard();")),
+      handle: ({ html, token }) => html(dashboardHtml(token).replace('<body data-route="home">', '<body data-route="chat">')),
     }),
     route({
       id: "overview.get",
@@ -260,7 +260,16 @@ export function systemRoutes(): DaemonRoute[] {
           injectInChat: config.memory.injectInChat,
           recallLimit: config.memory.recallLimit,
         },
-        voice: { enabled: config.voice.enabled, mode: config.voice.mode },
+        // Phase E · E-2 — non-secret voice pipeline detail so the dashboard
+        // can show the real local backends and the offline-capable note.
+        voice: {
+          enabled: config.voice.enabled,
+          mode: config.voice.mode,
+          sttBackend: config.voice.sttBackend ?? "auto",
+          ttsBackend: config.voice.ttsBackend ?? "auto",
+          wakeWord: config.voice.wakeWord ?? null,
+          microphonePermission: config.voice.microphonePermission ?? "unknown",
+        },
         security: {
           requireApproval: config.security.requireApproval,
           egressAllowlist: config.security.egressAllowlist,

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-12T14:50:28.314Z",
+  "generatedAt": "2026-08-13T11:37:24.916Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "7.1.0",
@@ -51,10 +51,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 516,
-    "testFiles": 230,
+    "sourceFiles": 531,
+    "testFiles": 238,
     "cliCommands": 41,
-    "daemonRoutes": 104,
+    "daemonRoutes": 110,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -283,8 +283,21 @@
     "src/daemon/api/openapi.ts",
     "src/daemon/auth-page.ts",
     "src/daemon/dashboard.ts",
+    "src/daemon/dashboard/client-chat.ts",
+    "src/daemon/dashboard/client-core.ts",
+    "src/daemon/dashboard/client-panels-a.ts",
+    "src/daemon/dashboard/client-panels-b.ts",
+    "src/daemon/dashboard/client-panels-c.ts",
+    "src/daemon/dashboard/client-runtime.ts",
     "src/daemon/dashboard/client-script.ts",
     "src/daemon/dashboard/markup.ts",
+    "src/daemon/dashboard/page-head.ts",
+    "src/daemon/dashboard/page-panels-a.ts",
+    "src/daemon/dashboard/page-panels-b.ts",
+    "src/daemon/dashboard/page-tail.ts",
+    "src/daemon/dashboard/style-shell.ts",
+    "src/daemon/dashboard/style-tokens.ts",
+    "src/daemon/dashboard/style-ui.ts",
     "src/daemon/dashboard/styles.ts",
     "src/daemon/plugin-api.ts",
     "src/daemon/routes/agents.routes.ts",
@@ -297,9 +310,11 @@
     "src/daemon/routes/control.routes.ts",
     "src/daemon/routes/environment.routes.ts",
     "src/daemon/routes/extensions.routes.ts",
+    "src/daemon/routes/files.routes.ts",
     "src/daemon/routes/index.ts",
     "src/daemon/routes/memory.routes.ts",
     "src/daemon/routes/meta.routes.ts",
+    "src/daemon/routes/onboarding.routes.ts",
     "src/daemon/routes/providers.routes.ts",
     "src/daemon/routes/registry.ts",
     "src/daemon/routes/router.ts",
@@ -723,6 +738,13 @@
     "test/daemon.test.ts",
     "test/daemon/dashboard-split.test.ts",
     "test/daemon/dispatcher.test.ts",
+    "test/daemon/honesty.test.ts",
+    "test/daemon/onboarding-routes.test.ts",
+    "test/daemon/phase-b.test.ts",
+    "test/daemon/phase-c.test.ts",
+    "test/daemon/phase-ef.test.ts",
+    "test/daemon/phase-g.test.ts",
+    "test/daemon/token-drift.test.ts",
     "test/deployment/capsule.test.ts",
     "test/deployment/placement-engine.test.ts",
     "test/deployment/profiles.test.ts",
@@ -886,6 +908,7 @@
     "test/ux/disclosure.test.ts",
     "test/ux/mode-color.test.ts",
     "test/ux/onboarding-yes.test.ts",
+    "test/ux/shell-parity.test.ts",
     "test/ux/sus.test.ts",
     "test/ux/undo.test.ts",
     "test/voice.test.ts",
@@ -1745,6 +1768,27 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/files.routes.ts",
+      "id": "files.list",
+      "method": "GET",
+      "path": "/api/files",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/files.routes.ts",
+      "id": "files.diff",
+      "method": "GET",
+      "path": "/api/files/diff",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/files.routes.ts",
+      "id": "files.read",
+      "method": "GET",
+      "path": "/api/files/read",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/system.routes.ts",
       "id": "health.get",
       "method": "GET",
@@ -1805,6 +1849,27 @@
       "id": "models.test",
       "method": "POST",
       "path": "/api/models/test",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/onboarding.routes.ts",
+      "id": "onboarding.complete",
+      "method": "POST",
+      "path": "/api/onboarding/complete",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/onboarding.routes.ts",
+      "id": "onboarding.provider",
+      "method": "POST",
+      "path": "/api/onboarding/provider",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/onboarding.routes.ts",
+      "id": "onboarding.status",
+      "method": "GET",
+      "path": "/api/onboarding/status",
       "auth": "local bearer token or dashboard query token"
     },
     {

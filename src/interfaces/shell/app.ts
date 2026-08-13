@@ -25,8 +25,9 @@ import { computeLayout } from "./layout.ts";
 import { assembleFrame } from "./render.ts";
 import type {
   ShellState, ModeState, Severity, ProjectMeta, PaletteItem,
-  SessionRow, ResearchRow, ChatMessage,
+  SessionRow, ResearchRow, ChatMessage, AgentDetail,
 } from "./types.ts";
+import { cycleAgentDetail } from "./types.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -151,6 +152,7 @@ function createState(): ShellState {
     provider: config.defaults.provider ?? "ollama",
     model: config.defaults.model ?? "qwen2.5:7b",
     mode: (config.defaults.mode as ModeState) ?? "agent",
+    agentDetail: "brief",
     budget: config.budget.perTaskUsd ?? 0,
     totalSpent: 0,
     totalTokens: 0,
@@ -890,6 +892,24 @@ async function handleKey(state: ShellState, key: KeyEvent): Promise<void> {
   }
   if (key.name === "shift+tab") {
     cycleMode(state);
+    return;
+  }
+
+  // Phase D · D-1 — agent detail level (none/brief/detailed). Ctrl+T cycles;
+  // this controls how much of the real tool/step timeline the chat shows.
+  if (key.name === "ctrl+t") {
+    state.agentDetail = cycleAgentDetail(state.agentDetail);
+    notify(
+      state,
+      "info",
+      "Agent detail",
+      state.agentDetail === "none"
+        ? "Showing final answers only (Ctrl+T cycles)."
+        : state.agentDetail === "brief"
+          ? "Showing tool/step titles (Ctrl+T cycles)."
+          : "Showing full tool/step detail (Ctrl+T cycles).",
+    );
+    state.dirty = true;
     return;
   }
 

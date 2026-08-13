@@ -1210,7 +1210,7 @@ export function getProviderEnvStatus(): Array<{ id: string; label: string; hasKe
   return Object.values(PRESETS).map((p) => ({
     id: p.id,
     label: p.label,
-    hasKey: p.apiKeyEnv ? Boolean(process.env[p.apiKeyEnv]) : true,
+    hasKey: p.apiKeyEnv ? Boolean(process.env[p.apiKeyEnv] || getSecretSyncCached(p.apiKeyEnv)) : true,
     tier: p.tier,
   }));
 }

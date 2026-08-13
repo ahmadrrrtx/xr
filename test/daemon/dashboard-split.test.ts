@@ -36,8 +36,34 @@ import {
  *   the rendered document embeds the stamped version (one occurrence); the
  *   7.0.1→7.0.1 back-substitution reproduces the Phase-8 pin exactly, proving
  *   the only delta is the deliberate version stamp.
+ *
+ * Phase A bump (2026-08-13, UX Phase A — DELIBERATE):
+ *   · voice panel honesty (fake Enable/Test buttons removed; real config
+ *     state + copy-to-clipboard CLI commands; no simulated outcomes);
+ *   · locality chips (topbar + sidebar) fed by real route state;
+ *   · composer meta row (real budget meter + honest context line);
+ *   · composer flag chips, skills/security/research categories, shield
+ *     heading and emergency stop: emoji → inline SVG line icons;
+ *   · settings toggles reflect real config and are disabled (read-only).
+ *
+ * Phase B bump (2026-08-13, UX Phase B — DELIBERATE):
+ *   · first-run onboarding overlay (real engines: provider key via the
+ *     secrets vault, local-model set, budget cap, audit completion);
+ *   · chat empty-state hero (avatar + suggested prompts + capability chips);
+ *   · shell refinements: sidebar relabels (Start/Ask/Capabilities/Guard/
+ *     System), default view = Chat, sidebar-collapse + inspector toggles.
+ *
+ * Phase C bump (2026-08-13, UX Phase C — DELIBERATE):
+ *   · C-1 component split (byte-identical fragments for client / page / CSS;
+ *     the three dashboard waivers were retired);
+ *   · fixed a REAL served-script SyntaxError in the onboarding code
+ *     (lost-backslash escaping: onbSelectProvider/onbSetLocal/copyText/
+ *     onbGo attributes) — new parse gate in phase-c.test.ts;
+ *   · C-2 approval cards render WHAT / WHY / RISK from the real plane;
+ *   · C-3 streaming: polite live-region announcer + cursor + code note;
+ *   · C-4 sessions: search + copy-id.
  */
-const POST_PHASE4_SHA256 = "809c745eb99cb40bc9de85f494153770bdbc6b9a602279fd68520b0092657a58";
+const POST_PHASE4_SHA256 = "9771c81abace6fac24b06aa5f0f954392b82d2f26e6186a00f83c60ff0c29ade";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {
