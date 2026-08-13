@@ -26,8 +26,12 @@ coverage/
 *.db-wal
 
 # Environment files (secrets)
+# Glob-based so a new variant (.env.production, .env.staging.local, …) is
+# ignored by default rather than one commit away from being published.
 .env
-.env.local
+.env.*
+!.env.example
+!.env.sample
 
 # OS noise
 .DS_Store
