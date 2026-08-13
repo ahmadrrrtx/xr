@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-13T17:50:35.219Z",
+  "generatedAt": "2026-08-13T17:55:34.452Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -75,7 +75,7 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 667
+      "bytes": 837
     },
     {
       "path": ".gitleaksignore",
@@ -83,7 +83,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 69173
+      "bytes": 72083
     },
     {
       "path": "CODEOWNERS",
