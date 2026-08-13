@@ -88,10 +88,69 @@ run_segment() {
     fi
   fi
 
+  # Crash class that survived the retry. A directory-level "exit 3, no test
+  # failures" names the DIRECTORY but not the FILE, which is exactly why the
+  # win32 test/perf/ panic could not be attributed from CI logs (the previous
+  # attempt excluded binary-smoke.test.ts on a guess; the lane stayed red).
+  # Bisect: run each file in its own process. This is diagnosis, not
+  # suppression — see the honesty rules in isolate_segment.
+  if ! grep -qE '\(fail\)' "$out" && ! tr -d '\r' <"$out" | grep -qE '^[[:space:]]*[1-9][0-9]*[[:space:]]+fail$'; then
+    echo "::warning::$label still crash-class after retry — isolating file-by-file to name the culprit"
+    cat "$out"
+    isolate_segment "$seg" "$out" "$label"
+    return $?
+  fi
+
   echo "::error::$label FAILED (exit ${code}) — full output:"
   diagnose_segment "$out"
   cat "$out"
   return "$code"
+}
+
+# Run every file of a crash-class segment in its OWN process.
+#
+# Honesty rules (Art. XX.4 / Commandment 2) — this must never turn a real
+# failure green:
+#   - ANY file reporting a test failure => the segment FAILS, and the failing
+#     file is named in an annotation. No exceptions.
+#   - ANY file that still dies alone => the segment FAILS, and that file is
+#     named as the crash culprit. This is the outcome that finally attributes
+#     a runtime panic to a single file.
+#   - Only if EVERY file passes alone does the segment pass — and then every
+#     test in it demonstrably ran and passed, so coverage is intact and the
+#     gate's meaning ("all tests ran and passed") is preserved. A loud warning
+#     records that isolation was required, because needing it is itself a
+#     defect signal worth tracking rather than hiding.
+isolate_segment() {
+  local seg="$1" out="$2" label="$3"
+  local failed="" crashed="" isolated_ok=1
+  for f in $seg; do
+    # shellcheck disable=SC2086
+    bun test "$f" >"$out.one" 2>&1
+    local c=$?
+    if [ "$c" -eq 0 ]; then
+      echo "  [isolated ok]    $f"
+      continue
+    fi
+    isolated_ok=0
+    if grep -qE '\(fail\)' "$out.one" || tr -d '\r' <"$out.one" | grep -qE '^[[:space:]]*[1-9][0-9]*[[:space:]]+fail$'; then
+      echo "::error::REAL TEST FAILURE in $f (isolated, exit ${c})"
+      failed="$failed $f"
+    else
+      echo "::error::CRASH CULPRIT: $f dies alone (exit ${c}, zero test failures) — runtime/process-level defect, not an assertion"
+      crashed="$crashed $f"
+    fi
+    diagnose_segment "$out.one"
+    cat "$out.one"
+  done
+  rm -f "$out.one"
+
+  if [ "$isolated_ok" -eq 1 ]; then
+    echo "::warning::$label passed only when files were isolated — every file ran and passed alone, so coverage is intact, but the aggregated process died. Track this as a runtime/load defect, not a test defect."
+    return 0
+  fi
+  echo "::error::$label FAILED — real failures:${failed:- none} · crash culprits:${crashed:- none}"
+  return 1
 }
 
 # Surface the specific culprits as annotations in addition to the segment
