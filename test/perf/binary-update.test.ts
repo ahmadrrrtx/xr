@@ -84,14 +84,31 @@ describe("Phase 3 · T2 — binary distribution update contract", () => {
       const plan = createBinaryUpdatePlan({
         packageRoot: dir,
         version: "7.0.1",
-        baseUrl: "file:///nonexistent", // install step will fail → no swap
+        baseUrl: "https://xr.invalid/releases", // install step will fail → no swap
         canary: () => ({ healthy: true }),
+        // Deterministic unreachable transport. Previously this test pointed
+        // baseUrl at `file:///nonexistent`, which behaves differently per OS:
+        // on POSIX that is a valid-but-missing path and bun's fetch reports a
+        // clean ENOENT, but on Windows `file:///nonexistent` is a MALFORMED
+        // Win32 path (no drive letter) and resolving it inside bun's fetch
+        // took the whole test process down with
+        // `panic(main thread): Internal assertion failure` — crash-class exit
+        // 3 with zero reported test failures, which red-lined the Windows
+        // parity lane.
+        //
+        // Injecting the failure instead of relying on a filesystem/URL edge
+        // case tests the SAME contract (download fails ⇒ no swap, current
+        // binary kept) identically and deterministically on every OS, with no
+        // network and no OS-specific path parsing.
+        fetchImpl: (async () => {
+          throw new Error("network unreachable (injected)");
+        }) as unknown as typeof fetch,
       });
       expect(plan).not.toBeNull();
       expect(plan!.current).toBe(current);
 
       const result = await applyUpdate(plan!);
-      // Download URL unreachable → install fails → current kept (rollback).
+      // Download unreachable → install fails → current kept (rollback).
       expect(result.ok).toBe(false);
       expect(existsSync(current)).toBe(true);
     } finally {

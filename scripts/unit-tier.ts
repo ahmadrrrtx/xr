@@ -102,4 +102,17 @@ function main(): void {
   }
 }
 
-main();
+// Only run the tier when this script is the entrypoint (`bun run unit-tier`).
+//
+// Without this guard, ANY module that imports UNIT_TIER also EXECUTES the
+// whole tier as a side effect of the import. test/architecture/unit-tier.test.ts
+// imports the manifest to validate it, so running that test spawned a nested
+// `bun test` of 17 files inside a test process. On Windows the nested run
+// exited 1 and took the parent process with it — a crash-class exit with zero
+// reported test failures, which red-lined the Windows parity lane.
+//
+// Every other script in scripts/ already uses this guard; unit-tier.ts was the
+// lone exception.
+if (import.meta.main) {
+  main();
+}
