@@ -148,8 +148,16 @@ export class PluginManager {
     const manifest = prep.manifest;
     const src = isAbsolute(source) ? source : resolve(this.cwd, source);
     const dest = this.registry.dirFor(manifest.id);
-    const tmp = `${dest}.stage-${Date.now()}`;
-    const bak = `${dest}.bak-${Date.now()}`;
+    // Same uniqueness hazard as rollbackSnapshotDir(): `Date.now()` alone is
+    // not unique, so two installs of the same plugin inside one millisecond
+    // (update → rollback → re-install in a single test, or two fast CLI calls)
+    // reuse the SAME staging and backup directories. The second install then
+    // stages into the first one's tree and `renameSyncRetry(dest, bak)` can
+    // clobber a backup that is still the only copy of the previous version.
+    // A random suffix removes the dependence on clock granularity.
+    const stamp = `${Date.now()}-${randomUUID().slice(0, 8)}`;
+    const tmp = `${dest}.stage-${stamp}`;
+    const bak = `${dest}.bak-${stamp}`;
     const hadPrevious = existsSync(dest);
     const previousEntry = this.registry.get(manifest.id);
 
