@@ -1,5 +1,6 @@
 /** XR Stage 10 — high-level plugin platform manager. */
 import { cpSync, existsSync, mkdirSync, rmSync, renameSync, statSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, resolve } from "node:path";
 import type { Store } from "../state/workspace-store.ts";
 import { loadConfig, type XRConfig } from "../config/config.ts";
@@ -79,8 +80,23 @@ function recordProvenance(record: (store: CapabilityProvenanceStore) => void): v
   }
 }
 
+/**
+ * A unique directory for one rollback snapshot.
+ *
+ * The name used to be `${Date.now()}-${version}`, which is NOT unique: two
+ * snapshots of the same version taken inside the same millisecond produce the
+ * identical path (measured: ~100% of back-to-back calls). An update
+ * immediately followed by a rollback does exactly that, so the second snapshot
+ * was written on top of the first — `cpSync` merged the two trees and the
+ * "previous version" a rollback restored could be a mix of both. Faster hosts
+ * hit the same-millisecond window more often, which is why this surfaced on
+ * the Windows lane first.
+ *
+ * A random suffix makes the path unique regardless of clock granularity.
+ */
 function rollbackSnapshotDir(dest: string, version: string | undefined): string {
-  return `${dest}.rollback/${Date.now()}-${safeRollbackVersion(version)}`;
+  const unique = `${Date.now()}-${randomUUID().slice(0, 8)}`;
+  return `${dest}.rollback/${unique}-${safeRollbackVersion(version)}`;
 }
 
 export interface InstallResult {
