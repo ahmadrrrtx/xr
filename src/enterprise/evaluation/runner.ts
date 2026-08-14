@@ -403,11 +403,26 @@ export class EvaluationRunner {
       registryDigest,
     });
 
+    // ONE clock read, ONE provenance object, hashed and stored.
+    //
+    // This previously read `Date.now()` TWICE — once for the stored provenance
+    // and once for the digest input. When a millisecond boundary fell between
+    // the two reads (measurable under load), the digest was computed over a
+    // `finishedAt` that differed from the one persisted, so every subsequent
+    // read-back recomputed a different hash and reported `integrityValid:
+    // false` on an untampered run. That turns the tamper-evidence signal into
+    // a false positive — the one thing an integrity check must never do.
+    // Regression-guarded by test/evaluation/integrity-race.test.ts.
+    const finishedProvenance = Object.freeze({
+      ...provenance,
+      finishedAt: opts.now ?? Date.now(),
+    });
+
     const finished: EvaluationRun = Object.freeze({
-      provenance: Object.freeze({ ...provenance, finishedAt: opts.now ?? Date.now() }),
+      provenance: finishedProvenance,
       suites: Object.freeze(suiteResults),
       integrity: computeIntegrity(
-        { provenance: Object.freeze({ ...provenance, finishedAt: opts.now ?? Date.now() }), suites: suiteResults },
+        { provenance: finishedProvenance, suites: suiteResults },
         registryDigest,
       ),
     });

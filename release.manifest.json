@@ -250,6 +250,9 @@
   ],
   "scannedSurfaces": [
     "README.md",
+    "SECURITY.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
     "website/src/**/*.{ts,tsx}",
     "install.sh",
     "install.ps1",

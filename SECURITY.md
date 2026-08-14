@@ -2,7 +2,17 @@
 
 ## Overview
 
-XR is designed as a secure AI Operating System. This document describes the security architecture, threat model, and implementation details for plugin isolation, browser sandboxing, and environment restriction.
+XR is a local-first AI agent runtime that enforces policy, approvals, budgets and a
+tamper-evident audit chain inside its execution path. This document describes the security
+architecture, threat model, and implementation details for plugin isolation, browser
+sandboxing, and environment restriction.
+
+> **Scope of these guarantees.** XR enforces **in-process policy**, not kernel or VM
+> confinement. It is a guard rail, not a sandbox escape boundary, and it is not a substitute
+> for a human reviewing consequential actions. XR holds **no external security certification**
+> (no SOC 2, ISO 27001, HIPAA, PCI-DSS or FedRAMP audit exists). Known gaps are tracked as a
+> first-class release artifact in
+> [`docs/security/KNOWN_LIMITATIONS.md`](docs/security/KNOWN_LIMITATIONS.md).
 
 ## Critical Security Properties
 
@@ -45,7 +55,7 @@ XR is designed as a secure AI Operating System. This document describes the secu
 
 **File: `src/plugins/loader.ts`**
 
-1. **VM-based Isolation** (Primary Security Boundary)
+1. **VM-based Isolation** (Defense-in-Depth — NOT the security boundary)
    - Plugin code runs in an in-process `node:vm` realm (defense-in-depth; OS isolation is the boundary)
    - Context has NO access to Node.js built-ins
    - Only explicitly provided globals are available
@@ -321,19 +331,40 @@ When reviewing MCP code:
 
 ## Reporting Security Issues
 
-Please report security vulnerabilities to: security@xr-project.org
+**Please do not open a public issue for a vulnerability.**
 
-We follow responsible disclosure:
-1. Report the issue privately
-2. We confirm and triage within 48 hours
-3. We develop and test a fix
-4. We release the fix and notify users
-5. We publicly disclose after fix is deployed
+Report privately through
+[**GitHub Security Advisories**](https://github.com/ahmadrrrtx/xr/security/advisories/new) —
+this is the canonical channel and it is private between you and the maintainer.
+
+### Supported versions
+
+| Version | Supported |
+|---|---|
+| `1.0.x` (current) | ✅ security fixes |
+| `< 1.0.0` (pre-rebaseline `3.x`/`7.x` history) | ❌ not supported — upgrade |
+
+### What to expect
+
+XR is maintained by a single maintainer, so this process states effort, not a contractual SLA:
+
+1. You report privately via a GitHub Security Advisory.
+2. Acknowledgement on a best-effort basis, typically within a few days.
+3. Triage: the issue is confirmed and severity assessed against the threat model below.
+4. A fix is developed with a regression test.
+5. The fix ships in a release, and the advisory is published with credit unless you prefer
+   otherwise.
+
+Please include: affected version (`xr --version`), platform, reproduction steps, and the
+impact you believe it has. If a report depends on a capability XR already documents as
+out-of-scope (see the scope note at the top and the known-limitations register), say so — it
+is still worth reporting, it just may be a documentation fix rather than a code fix.
 
 ## Security Updates
 
-- **2026-07-15**: Initial security architecture (Phase 1-3 complete)
-  - VM-based plugin isolation
+- **2026-07-15**: Initial security architecture (Phases 1-3 landed)
+  - Plugin loading through an in-process `node:vm` realm as defense-in-depth, with
+    risk-tiered OS-level isolation as the actual boundary (Phase 4 · T8)
   - Browser sandbox enabled by default
   - MCP environment allow-listing
 

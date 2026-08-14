@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-13T15:34:56.392Z",
+  "generatedAt": "2026-08-13T17:55:34.452Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -52,7 +52,7 @@
   },
   "counts": {
     "sourceFiles": 531,
-    "testFiles": 239,
+    "testFiles": 240,
     "cliCommands": 41,
     "daemonRoutes": 110,
     "providers": 26,
@@ -75,7 +75,7 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 667
+      "bytes": 837
     },
     {
       "path": ".gitleaksignore",
@@ -83,15 +83,19 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 69173
+      "bytes": 72083
     },
     {
       "path": "CODEOWNERS",
       "bytes": 4561
     },
     {
+      "path": "CODE_OF_CONDUCT.md",
+      "bytes": 5490
+    },
+    {
       "path": "CONTRIBUTING.md",
-      "bytes": 8387
+      "bytes": 9015
     },
     {
       "path": "Dockerfile",
@@ -103,11 +107,11 @@
     },
     {
       "path": "README.md",
-      "bytes": 30194
+      "bytes": 30475
     },
     {
       "path": "SECURITY.md",
-      "bytes": 15608
+      "bytes": 17323
     },
     {
       "path": "bun.lock",
@@ -135,7 +139,7 @@
     },
     {
       "path": "release.manifest.json",
-      "bytes": 10608
+      "bytes": 10676
     },
     {
       "path": "tsconfig.json",
@@ -776,6 +780,7 @@
     "test/environment/workflow-binding.test.ts",
     "test/evaluation/harness.test.ts",
     "test/evaluation/integration.test.ts",
+    "test/evaluation/integrity-race.test.ts",
     "test/evaluation/security.test.ts",
     "test/execution/adapters.test.ts",
     "test/execution/cancellation.test.ts",

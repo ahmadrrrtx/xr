@@ -21,11 +21,42 @@ import {
 } from "../../src/update/atomic-updater.ts";
 import { applyUpdate } from "../../src/update/selfheal.ts";
 
-/** A fake "binary": a shell script that reports a version. */
+/**
+ * A fake "binary" file used for LAYOUT DETECTION only (existence + filename).
+ *
+ * The contents are never executed by these cases, so a shebang script is fine
+ * on every OS. Use `fakeExecutable` when the file must actually be spawned.
+ */
 function fakeBinary(dir: string, name: string, version: string): string {
   const bin = join(dir, name);
   writeFileSync(bin, `#!/usr/bin/env bash\necho "v${version} (Truth)"\nexit 0\n`);
   if (process.platform !== "win32") chmodSync(bin, 0o755);
+  return bin;
+}
+
+/**
+ * A fake binary that is genuinely SPAWNABLE on the host OS.
+ *
+ * Windows has no shebang support: `CreateProcess` cannot run an extensionless
+ * `#!/usr/bin/env bash` file, and spawning one from `bun test` on a hosted
+ * Windows runner takes the whole test process down with
+ * `panic(main thread): Internal assertion failure` — a crash-class exit 3 with
+ * zero reported test failures, which is what red-lined the Windows parity lane.
+ *
+ * So on win32 write a `.cmd` batch file (natively executable) and elsewhere a
+ * chmod +x shell script. Both print the same version string and exit 0, so the
+ * canary contract under test is identical on every platform — the coverage is
+ * preserved rather than skipped.
+ */
+function fakeExecutable(dir: string, baseName: string, version: string): string {
+  if (process.platform === "win32") {
+    const bin = join(dir, `${baseName}.cmd`);
+    writeFileSync(bin, `@echo off\r\necho v${version} (Truth)\r\nexit /b 0\r\n`);
+    return bin;
+  }
+  const bin = join(dir, baseName);
+  writeFileSync(bin, `#!/usr/bin/env bash\necho "v${version} (Truth)"\nexit 0\n`);
+  chmodSync(bin, 0o755);
   return bin;
 }
 
@@ -71,7 +102,9 @@ describe("Phase 3 · T2 — binary distribution update contract", () => {
   test("binary canary accepts doctor exit 1 by design (no provider)", () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-bin-canary-"));
     try {
-      const bin = fakeBinary(dir, "xr-fake", "7.0.1");
+      // This case SPAWNS the fake, so it must be natively executable on the
+      // host OS (a bash shebang is unspawnable on Windows — see fakeExecutable).
+      const bin = fakeExecutable(dir, "xr-fake", "7.0.1");
       // fake binary always exits 0 → canary healthy for --version; doctor
       // probe in binaryCanary also runs the fake (exit 0) → healthy.
       const r = binaryCanary(bin, 30_000);

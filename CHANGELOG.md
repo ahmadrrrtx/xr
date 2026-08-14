@@ -25,6 +25,59 @@
 - **plugins:** Windows-safe filesystem primitives (bounded retry on
   `renameSync`/`rmSync`) for plugin install/update/rollback/remove.
 
+### Fixed (release-readiness pass)
+
+- **evaluation:** run integrity no longer depends on clock timing.
+  `EvaluationRunner.run()` read `Date.now()` twice — once for the stored
+  provenance and once for the digest input — so when a millisecond boundary
+  fell between the two reads, the persisted digest covered a `finishedAt`
+  that differed from the one persisted and every read-back reported
+  `integrityValid: false` for an untampered run. A tamper-evidence signal
+  that fires on untouched data is worse than none. Now one clock read, one
+  frozen provenance object, hashed and stored. Regression-guarded by
+  `test/evaluation/integrity-race.test.ts` (ticking-clock, deterministic —
+  fails 3/4 against the previous code).
+
+### Security
+
+- **docs:** `SECURITY.md` no longer contradicts the implementation. It
+  described XR as a "secure AI Operating System" (a term `release.manifest.json`
+  prohibits) and called the `node:vm` realm the "Primary Security Boundary"
+  while `src/plugins/sandbox-worker.ts` documents that `node:vm` is *not* a
+  security boundary. Both corrected to the real posture: in-process policy,
+  `node:vm` as defense-in-depth, OS isolation as the boundary.
+- **docs:** vulnerability reports were directed to `security@xr-project.org`,
+  a domain with no DNS record — reports would have bounced. Replaced with
+  GitHub Security Advisories, a supported-version table, and an effort-based
+  (explicitly non-contractual) response process.
+- **ci:** `claim-lint` now scans `SECURITY.md`, `CONTRIBUTING.md` and
+  `CODE_OF_CONDUCT.md`. Those files were outside `scannedSurfaces`, which is
+  why the prohibited claim above was never caught.
+- **chore:** `.gitignore` now ignores all `.env.*` variants (previously only
+  `.env` and `.env.local`), with negations keeping `.env.example`/`.env.sample`
+  committable.
+
+### Added
+
+- **docs:** `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1) — previously absent
+  and referenced by nothing.
+- **docs:** `docs/release/RELEASE_READINESS_1.0.0.md` — evidence-bound
+  readiness matrix and the exact release procedure.
+
+### Changed
+
+- **ci:** the parity suite runner now attributes a crash-class segment failure
+  to a specific file. A directory-level "exit 3, no test failures" named only
+  the directory, which is why the Windows `test/perf/` panic was never pinned
+  down. On a crash-class exit that survives the retry, each file is re-run in
+  its own process: a real test failure or a file that dies alone fails the
+  segment and is named; only if every file passes alone does the segment pass,
+  with a loud warning. Real failures still fail immediately without isolation.
+- **docs:** README restructured for first-time readers (plain-language opening,
+  Mermaid architecture/lifecycle/provider/extensibility/security diagrams,
+  long tables behind `<details>`); test counts refreshed to the measured
+  3,191 tests across 240 files.
+
 ## 7.1.0 — 2026-08-05
 
 ### Features

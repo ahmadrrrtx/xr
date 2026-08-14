@@ -147,15 +147,20 @@ stamp and will fail `release:check` in the meantime.
 ```
 
 2. Run `bun run claim-lint`. The linter fails if the evidence is missing, the expiry has passed, or
-   the claim uses a supervised term (`certified`, `enterprise-grade`, `production-ready`,
-   `complete`, `guaranteed`) without backing.
+   the claim uses a supervised term (`certified`, `enterprise-grade`, `production-ready`, <!-- xr-claim-lint-allow: enumerates the supervised vocabulary itself -->
+   `complete`, `guaranteed`) without backing. <!-- xr-claim-lint-allow: enumerates the supervised vocabulary itself -->
 
 3. Claims that can be counted mechanically (like the bundled skill count) should use the
    `mechanical` field so reality is checked, not just cited.
 
 **Prohibited outright:** certifications XR does not hold (SOC 2, ISO 27001, HIPAA, PCI-DSS,
-FedRAMP), inflated scale numbers, "Rust core" (XR is TypeScript on Bun), and absolute security
-claims ("unhackable", "military-grade", "kernel-level isolation").
+FedRAMP), inflated scale numbers, "Rust core" (XR is TypeScript on Bun), and absolute security <!-- xr-claim-lint-allow: enumerates the prohibited vocabulary itself -->
+claims ("unhackable", "military-grade", "kernel-level isolation"). <!-- xr-claim-lint-allow: enumerates the prohibited vocabulary itself -->
+
+The full machine-readable list lives in `prohibitedClaims` in
+[`release.manifest.json`](release.manifest.json). If you are legitimately documenting a
+banned term (as this section does), mark the line `xr-claim-lint-allow` — but only for
+governance text that defines or disclaims the term, never to smuggle a claim past the gate.
 
 ---
 
