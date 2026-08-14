@@ -69,9 +69,9 @@ test("full local lifecycle with effects asserted at each step", async () => {
   // 4. install (staged + validated; registry commit; provenance event).
   const src = makePlugin("life-demo", "1.0.0");
   const prep = mgr.prepareInstall(src);
-  expect(prep.ok).toBe(true);
+  expect(prep.ok, `prepareInstall failed: ${prep.reason ?? "no reason"}`).toBe(true);
   const committed = mgr.commitInstall(src, [], { enable: false });
-  expect(committed.ok).toBe(true);
+  expect(committed.ok, `commitInstall failed: ${committed.reason ?? "no reason"}`).toBe(true);
   const d = service.inspect("plugin:life-demo");
   expect(d).not.toBeNull();
   expect(d!.lifecycle.installed).toBe(true);
@@ -79,7 +79,7 @@ test("full local lifecycle with effects asserted at each step", async () => {
 
   // 5. enable → 6. use (provenance outcome).
   const enabled = await service.enable("plugin:life-demo");
-  expect(enabled.ok).toBe(true);
+  expect(enabled.ok, `enable failed: ${(enabled as { reason?: string }).reason ?? "no reason"}`).toBe(true);
   service.recordUse("plugin:life-demo", { outcome: "success", runId: "env_lifecycle" });
   const used = service.whatWasUsed({ runId: "env_lifecycle" });
   expect(used.some((u) => u.capabilityId === "plugin:life-demo" && u.outcomes.success === 1)).toBe(true);
@@ -97,21 +97,21 @@ test("full local lifecycle with effects asserted at each step", async () => {
   // 7b. update to v2 WITHOUT escalation applies cleanly (snapshot created).
   const v2b = makePlugin("life-demo", "2.0.0");
   const upd2 = mgr.update("life-demo", v2b);
-  expect(upd2.ok).toBe(true);
+  expect(upd2.ok, `non-escalating update failed: ${upd2.reason ?? "no reason"}`).toBe(true);
   expect(service.inspect("plugin:life-demo")?.version).toBe("2.0.0");
 
   // 8. rollback (snapshot restore; authority revoked; provenance event).
   const rollbackResult = (mgr as any).rollback?.("life-demo");
-  expect(rollbackResult?.ok).toBe(true);
+  expect(rollbackResult?.ok, `rollback failed: ${rollbackResult?.reason ?? "no reason"}`).toBe(true);
   expect(service.inspect("plugin:life-demo")?.version).toBe("1.0.0");
   expect(service.provenanceOf("plugin:life-demo")?.summary.rollbacks).toBeGreaterThanOrEqual(1);
 
   // 9. quarantine → 10. uninstall.
   const quarantined = await service.quarantine("plugin:life-demo", "lifecycle test quarantine");
-  expect(quarantined.ok).toBe(true);
+  expect(quarantined.ok, `quarantine failed: ${(quarantined as { reason?: string }).reason ?? "no reason"}`).toBe(true);
   expect(service.inspect("plugin:life-demo")?.lifecycle.state).toBe("quarantined");
   const removed = await mgr.remove("life-demo");
-  expect(removed.ok).toBe(true);
+  expect(removed.ok, `remove failed: ${removed.reason ?? "no reason"}`).toBe(true);
   expect(service.provenanceOf("plugin:life-demo")?.events.some((e) => e.kind === "remove")).toBe(true);
 });
 
