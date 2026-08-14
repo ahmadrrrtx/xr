@@ -94,7 +94,23 @@ describe("T12 · installer is non-interactive-safe", () => {
   });
 
   test("install.ps1 exposes a non-interactive switch", () => {
-    expect(installPs1).toMatch(/\$Yes|-Yes/);
+    // The switch lives on Invoke-XrInstall (a real function parameter), not on
+    // a top-level param() block — a top-level param() breaks `iex (irm ...)`.
+    expect(installPs1).toMatch(/\[switch\]\$AssumeYes/);
+  });
+
+  test("install.ps1 short-circuits prompts when the switch is given", () => {
+    expect(installPs1).toMatch(/if \(\$AssumeYes\) \{ return \$DefaultYes \}/);
+  });
+
+  test("install.ps1 never blocks on a prompt without a TTY", () => {
+    // Unattended runs (CI, packer images) must decline rather than hang on
+    // Read-Host, mirroring install.sh's is_tty contract.
+    expect(installPs1).toMatch(/if \(-not \(Test-XrInteractive\)\) \{ return \$false \}/);
+  });
+
+  test("install.ps1 propagates the non-interactive flag to the nested wizard", () => {
+    expect(installPs1).toMatch(/if \(\$AssumeYes\) \{ \$wizardArgs \+= '--yes' \}/);
   });
 
   test("both installers are stamped from the release manifest", () => {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-13T17:55:34.452Z",
+  "generatedAt": "2026-08-14T11:56:11.227Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -52,7 +52,7 @@
   },
   "counts": {
     "sourceFiles": 531,
-    "testFiles": 240,
+    "testFiles": 242,
     "cliCommands": 41,
     "daemonRoutes": 110,
     "providers": 26,
@@ -107,7 +107,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 30475
+      "bytes": 30484
     },
     {
       "path": "SECURITY.md",
@@ -127,7 +127,7 @@
     },
     {
       "path": "install.ps1",
-      "bytes": 9180
+      "bytes": 16494
     },
     {
       "path": "install.sh",
@@ -839,6 +839,7 @@
     "test/phase0/stub-tools.test.ts",
     "test/phase0/surface-parity.test.ts",
     "test/phase0/workflow-effects.test.ts",
+    "test/platform/provenance-write-amplification.test.ts",
     "test/plugins.test.ts",
     "test/plugins/host.test.ts",
     "test/plugins/loader.test.ts",
@@ -847,6 +848,7 @@
     "test/release/beta-survey.test.ts",
     "test/release/changelog.test.ts",
     "test/release/channels.test.ts",
+    "test/release/installer-powershell.test.ts",
     "test/release/installer-verify.test.ts",
     "test/release/platform-parity.test.ts",
     "test/release/release-workflow.test.ts",
