@@ -70,11 +70,25 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
   });
 
   test("npm publishes under OIDC with dist-tags (stable → latest, beta → beta)", () => {
-    expect(workflow).toContain("bun pm publish --provenance --tag beta");
-    expect(workflow).toContain("bun pm publish --provenance --tag latest");
+    // The npm CLI performs the publish. Two bun commands are wrong here:
+    //   - `bun pm publish` is not a bun subcommand at all (bun 1.3.14 prints
+    //     the `bun pm` usage block and exits 1);
+    //   - `bun publish` exists but does not implement npm's OIDC
+    //     trusted-publishing handshake (oven-sh/bun#22423).
+    // Either one fails the npm channel AFTER the GitHub Release is published.
+    expect(workflow).toContain("npm publish --provenance --access public --tag beta");
+    expect(workflow).toContain("npm publish --provenance --access public --tag latest");
+    expect(workflow).not.toContain("bun pm publish");
+    // Match the run line: explanatory comments may name the command.
+    expect(workflow).not.toMatch(/^\s*bun publish /m);
+    // OIDC trusted publishing needs npm >= 11.5.1 on Node >= 22.
+    expect(workflow).toContain("actions/setup-node@v4");
+    expect(workflow).toContain("npm install -g npm@latest");
     expect(workflow).toContain("id-token: write");
-    // No long-lived npm token is consumed anymore (trusted publishing).
-    expect(workflow).not.toContain("NODE_AUTH_TOKEN");
+    // No long-lived npm token is consumed (trusted publishing). A set OR empty
+    // auth-token env makes npm skip OIDC and fall back to token auth (404).
+    expect(workflow).not.toMatch(/^\s*NODE_AUTH_TOKEN:/m);
+    expect(workflow).not.toContain("secrets.NPM_TOKEN");
   });
 
   test("docker publishes to GHCR with attestations + cosign image signature", () => {

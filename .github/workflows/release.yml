@@ -282,16 +282,27 @@ jobs:
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-      - name: Install (frozen, no scripts)
-        run: bun install --frozen-lockfile --ignore-scripts
+      # npm CLI does the PUBLISH (not bun): bun's publish does not implement
+      # npm's OIDC trusted-publishing handshake (oven-sh/bun#22423) and fails
+      # with "missing authentication" even when id-token: write is granted.
+      # Trusted publishing needs npm >= 11.5.1 on Node >= 22, so pin both.
+      # NODE_AUTH_TOKEN is deliberately never set: an empty or present token
+      # makes npm skip OIDC and fall back to token auth, which then 404s.
+      - name: Setup Node (npm OIDC trusted publishing)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: Ensure npm supports trusted publishing
+        run: |
+          npm install -g npm@latest
+          npm --version
       - name: Publish with provenance (prerelease → beta dist-tag)
         run: |
           if [ "${{ needs.assemble.outputs.prerelease }}" = "true" ]; then
-            bun pm publish --provenance --tag beta
+            npm publish --provenance --access public --tag beta
           else
-            bun pm publish --provenance --tag latest
+            npm publish --provenance --access public --tag latest
           fi
 
   # ── 7. Docker channel (GHCR, attestations, cosign) ────────────────────────
