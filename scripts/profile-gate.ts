@@ -101,7 +101,24 @@ function runScenario(def: ScenarioDef): ProfileSummary {
   );
   const file = join(dir, `${def.id}.cpuprofile`);
   if (!existsSync(file)) {
-    throw new Error(`profile not produced for ${def.id} (exit ${proc.status}): ${proc.stderr?.toString().slice(0, 300)}`);
+    // The profiler subprocess produced no .cpuprofile. This is an
+    // INFRASTRUCTURE failure (bun/V8 writer died, runner OOM, sandbox denied
+    // the profile dir), not a CPU-budget verdict — but it used to surface as
+    // an uncaught throw, so the job exited 1 with no gate output at all and
+    // nothing said which scenario or why. Fail with the evidence attached.
+    const err = (proc.stderr?.toString() ?? "").trim();
+    const out = (proc.stdout?.toString() ?? "").trim();
+    const detail = [
+      `profile not produced for "${def.id}"`,
+      `exit=${proc.status}`,
+      proc.signal ? `signal=${proc.signal}` : "",
+      proc.error ? `spawnError=${proc.error.message}` : "",
+      err ? `stderr=${err.slice(0, 500)}` : "",
+      !err && out ? `stdout=${out.slice(0, 300)}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    throw new Error(detail);
   }
   const summary = summarizeProfile(JSON.parse(readFileSync(file, "utf8")) as CpuProfile, def.id);
   rmSync(dir, { recursive: true, force: true });
@@ -175,8 +192,22 @@ async function main(): Promise<void> {
 
   for (const def of defs) {
     // Median-of-N keeps one noisy sample from deciding (same philosophy as perf-gate).
+    //
+    // A sample that fails to PRODUCE a profile is an infrastructure failure,
+    // not a measurement: retry it once with a fresh subprocess. This never
+    // masks a budget violation — a produced profile is always measured and
+    // always judged. Only the "no profile at all" case is retried, and if the
+    // retry also fails the gate still errors with the captured diagnostics.
     const runs: ProfileSummary[] = [];
-    for (let i = 0; i < Math.max(1, args.samples); i++) runs.push(runScenario(def));
+    for (let i = 0; i < Math.max(1, args.samples); i++) {
+      try {
+        runs.push(runScenario(def));
+      } catch (e) {
+        console.warn(`[profile-gate] ${def.id}: sample ${i + 1} produced no profile — retrying once`);
+        console.warn(`[profile-gate]   cause: ${(e as Error).message}`);
+        runs.push(runScenario(def));
+      }
+    }
     runs.sort((a, b) => a.cpuMs - b.cpuMs);
     const median = runs[Math.floor(runs.length / 2)];
     results.push(median);
