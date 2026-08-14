@@ -168,9 +168,17 @@ diagnose_segment() {
   grep -E '^[[:space:]]*\(fail\)[[:space:]]' "$out" | head -8 | tr -d '\r' \
     | sed -e 's/[[:space:]]*\[[0-9.]*ms\][[:space:]]*$//' -e 's/^[[:space:]]*/::error::FAILED TEST: /' \
     | cut -c1-256
-  # 2. File/module-level errors: "error: <summary>" (hook throws etc.)
-  grep -E '^error: ' "$out" | head -4 | tr -d '\r' \
-    | sed 's/^/::error::ERROR: /' | cut -c1-256
+  # 2. File/module-level errors: "error: <summary>" (hook throws etc.).
+  #    NOT anchored to column 0: bun indents errors that belong to a test body,
+  #    and an anchored pattern silently missed those — a failing Windows-only
+  #    assertion then produced a named test with NO visible cause.
+  grep -E '^[[:space:]]*error: ' "$out" | head -6 | tr -d '\r' \
+    | sed 's/^[[:space:]]*/::error::ERROR: /' | cut -c1-256
+  # 2b. The assertion diff itself (Expected/Received), which is what actually
+  #     identifies a wrong value. Without this a red lane names the test but
+  #     never says what differed.
+  grep -E '^[[:space:]]*(Expected|Received)([[:space:]]*:|[[:space:]])' "$out" | head -8 | tr -d '\r' \
+    | sed 's/^[[:space:]]*/::error::ASSERT: /' | cut -c1-256
   # 3. Stack frames that locate an error: "at <fn> (path:line:col)"
   grep -E '^[[:space:]]*at .*[\\/][^()]+:[0-9]+:[0-9]+' "$out" | head -4 | tr -d '\r' \
     | sed 's/^[[:space:]]*/::error::FRAME: /' | cut -c1-256
