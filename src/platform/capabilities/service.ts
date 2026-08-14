@@ -216,7 +216,15 @@ export class CapabilityService implements LifecycleHook {
 
     // Phase 7 · T1 — index descriptors into the provenance graph (derived,
     // bounded, cheap: only first-seen and version-changes write events).
-    for (const row of rows) this.provenance().indexDescriptor(row);
+    //
+    // Indexed as ONE batch through ONE store instance. The previous form
+    // (`new CapabilityProvenanceStore()` per row via this.provenance()) made
+    // every row a fresh writer whose first mutation always flushed, so a
+    // single list() rewrote the whole graph file once per descriptor (~153
+    // atomic write+rename pairs). That write amplification is what timed the
+    // capability lifecycle test out on the Windows runner. One store + one
+    // flush produces an identical graph.
+    this.provenance().indexDescriptors(rows);
 
     return rows.sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
   }

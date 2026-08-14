@@ -105,7 +105,7 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 | Channel | Platform | Command |
 |---|---|---|
 | **Binary** (default) | Linux · macOS · Termux · WSL | `curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh \| bash` |
-| **Binary** (default) | Windows PowerShell | `iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)` |
+| **Binary** (default) | Windows PowerShell 5.1 / 7+ | `iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)` |
 | **Homebrew** | macOS · Linux | `brew install ahmadrrrtx/tap/xr` |
 | **WinGet** | Windows | `winget install ahmadrrrtx.XR` |
 | **Scoop** | Windows | download `scoop/xr.json` from the release · `scoop install ./xr.json` |

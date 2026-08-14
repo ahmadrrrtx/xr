@@ -20,9 +20,20 @@ an effect-asserting script in CI (`scripts/golden-path.ts`, exercised by
 # Linux / macOS / Termux / WSL — default verified binary channel
 curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh | bash
 
-# Windows PowerShell
+# Windows PowerShell (Windows PowerShell 5.1 and PowerShell 7+)
 iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)
 ```
+
+To pass options on Windows, download the script first and call it as a file —
+`iex` cannot forward arguments:
+
+```powershell
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1 -OutFile install.ps1
+.\install.ps1 -AssumeYes -InstallMode minimal -TargetDirectory C:\tools\xr
+```
+
+Supported switches: `-AssumeYes` (non-interactive), `-AllowSystem`,
+`-InstallMode minimal|local|byok|hybrid|full`, `-TargetDirectory <path>`.
 
 Other channels (Homebrew, WinGet, Scoop, `.deb`, Docker, npm) install the same
 signed artifacts — table and per-channel status: [`README.md — Install XR`](../../README.md#-install-xr).

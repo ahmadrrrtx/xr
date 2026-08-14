@@ -211,7 +211,42 @@ export class CapabilityProvenanceStore {
 
   // ── Mutations (single writer: the store instance) ──────────────────────────
 
+  /**
+   * Index MANY descriptors as one unit of work: mutate the in-memory graph
+   * for every row, then persist ONCE.
+   *
+   * Why this exists (Windows CI root cause, Phase 10): `indexDescriptor` is
+   * called once per descriptor by `CapabilityService.list()`, and each call
+   * ends in `maybeFlush()`. A flush is a FULL rewrite of the graph
+   * (`JSON.stringify(state)` → tmp file → `renameSync`). With ~153
+   * descriptors that is 153 whole-file rewrites per `list()`, and `list()` is
+   * called by `inspect`/`discover`/`provenanceOf`, so one capability
+   * lifecycle test performed ~1,700 rewrites totalling ~125 MB of write
+   * traffic. On Linux/macOS (tmpfs, cheap rename) that is ~1.8 s and passes;
+   * on the Windows runner every write+rename pays NTFS metadata cost plus
+   * Defender real-time scanning, pushing a single test past Bun's 5 s
+   * per-test timeout — which is exactly the observed CI signature (a `(fail)`
+   * line with no assertion diff).
+   *
+   * Batching is semantically identical: the same nodes, edges and events are
+   * produced in the same order, and the graph is still written atomically by
+   * a single writer. Only the number of intermediate rewrites changes.
+   */
+  indexDescriptors(descriptors: readonly CapabilityDescriptor[], actor = "system"): void {
+    if (descriptors.length === 0) return;
+    for (const descriptor of descriptors) this.applyDescriptor(descriptor, actor);
+    this.prune();
+    this.maybeFlush();
+  }
+
   indexDescriptor(descriptor: CapabilityDescriptor, actor = "system"): void {
+    this.applyDescriptor(descriptor, actor);
+    this.prune();
+    this.maybeFlush();
+  }
+
+  /** Pure in-memory graph mutation for one descriptor (no prune, no flush). */
+  private applyDescriptor(descriptor: CapabilityDescriptor, actor = "system"): void {
     const now = Date.now();
     const existing = this.state.nodes[descriptor.id];
     // First observation = no node AND no prior events (an event recorded by
@@ -236,18 +271,24 @@ export class CapabilityProvenanceStore {
     for (const e of existingDep) this.state.edges.splice(this.state.edges.indexOf(e), 1);
     for (const dep of descriptor.dependencies) {
       if (dep.status !== "satisfied" && dep.status !== "unknown") continue;
-      this.pushEdge({ from: descriptor.id, to: dep.id, kind: "depends-on", version: dep.version, detail: `${dep.type}` });
+      this.addEdge({ from: descriptor.id, to: dep.id, kind: "depends-on", version: dep.version, detail: `${dep.type}` });
     }
     if (versionChanged) {
-      this.pushEvent(descriptor.id, "update", { actor, detail: `${existing!.version} → ${descriptor.version}`, outcome: { status: "unknown" } });
+      this.addEvent(descriptor.id, "update", { actor, detail: `${existing!.version} → ${descriptor.version}`, outcome: { status: "unknown" } });
     } else if (firstObservation) {
-      this.pushEvent(descriptor.id, "install", { actor, detail: `v${descriptor.version} first observed`, outcome: { status: "unknown" } });
+      this.addEvent(descriptor.id, "install", { actor, detail: `v${descriptor.version} first observed`, outcome: { status: "unknown" } });
     }
-    this.prune();
-    this.maybeFlush();
   }
 
   recordEvent(capabilityId: string, kind: ProvenanceEventKind, opts: { actor?: string; runId?: string; detail?: string; outcome?: ProvenanceOutcome } = {}): ProvenanceEvent {
+    const event = this.addEvent(capabilityId, kind, opts);
+    this.prune();
+    this.maybeFlush();
+    return event;
+  }
+
+  /** Pure in-memory event append (no prune, no flush) — see indexDescriptors. */
+  private addEvent(capabilityId: string, kind: ProvenanceEventKind, opts: { actor?: string; runId?: string; detail?: string; outcome?: ProvenanceOutcome } = {}): ProvenanceEvent {
     const event: ProvenanceEvent = {
       id: newId("ev"),
       capabilityId,
@@ -262,13 +303,11 @@ export class CapabilityProvenanceStore {
     const node = this.state.nodes[capabilityId];
     if (node) node.lastSeenAt = event.at;
     if (kind === "rollback") {
-      this.pushEdge({ from: capabilityId, to: capabilityId, kind: "replaced-by", version: opts.detail, detail: "rollback" });
+      this.addEdge({ from: capabilityId, to: capabilityId, kind: "replaced-by", version: opts.detail, detail: "rollback" });
     }
     if (kind === "update") {
-      this.pushEdge({ from: capabilityId, to: capabilityId, kind: "updated-from", version: opts.detail, detail: "update" });
+      this.addEdge({ from: capabilityId, to: capabilityId, kind: "updated-from", version: opts.detail, detail: "update" });
     }
-    this.prune();
-    this.maybeFlush();
     return event;
   }
 
@@ -287,10 +326,16 @@ export class CapabilityProvenanceStore {
   }
 
   private pushEdge(e: { from: string; to: string; kind: ProvenanceEdgeKind; version?: string; detail?: string; at?: number }): ProvenanceEdge {
-    const edge: ProvenanceEdge = { id: newId("edge"), from: e.from, to: e.to, kind: e.kind, at: e.at ?? Date.now(), version: e.version, detail: e.detail };
-    this.state.edges.push(edge);
+    const edge = this.addEdge(e);
     this.prune();
     this.maybeFlush();
+    return edge;
+  }
+
+  /** Pure in-memory edge append (no prune, no flush) — see indexDescriptors. */
+  private addEdge(e: { from: string; to: string; kind: ProvenanceEdgeKind; version?: string; detail?: string; at?: number }): ProvenanceEdge {
+    const edge: ProvenanceEdge = { id: newId("edge"), from: e.from, to: e.to, kind: e.kind, at: e.at ?? Date.now(), version: e.version, detail: e.detail };
+    this.state.edges.push(edge);
     return edge;
   }
 
