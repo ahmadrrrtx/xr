@@ -224,6 +224,13 @@ export const xrMetrics = {
   placements: register(new Counter("xr_isolation_placements_total", "Isolation placements by tier/backend/outcome.")),
   capabilityExec: register(new Counter("xr_capability_executions_total", "Canonical-envelope executions by capability kind and outcome.")),
   cardinalityOverflow: register(new Counter("xr_cardinality_overflow_total", "Label-values folded into xr_other by cardinality budgets.")),
+  /**
+   * Phase 02 — requests that matched NO route (silent 404s become visible).
+   * Structural labels only: method, mount (v1|legacy|surface) and a coarse
+   * canonical CATEGORY (the first canonical path segment, allowlist-shaped).
+   * Never the raw URL, query string, tokens, headers, or bodies.
+   */
+  httpUnmatchedRoutes: register(new Counter("xr_http_unmatched_routes_total", "Requests that matched no registered route, by method, mount, and canonical category.")),
   // ── Phase 01 · runtime performance observability ──────────────────────────
   runtimeDetectionDuration: register(new Histogram("xr_runtime_detection_duration_ms", "Per-runtime detection duration (ms) by runtime id.")),
   providerHealthDuration: register(new Histogram("xr_provider_health_duration_ms", "Bounded provider health-probe duration (ms) by provider.")),

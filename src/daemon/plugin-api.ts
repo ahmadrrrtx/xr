@@ -8,15 +8,27 @@ function json(data: unknown, status = 200): Response {
   return Response.json(data, { status, headers: { "cache-control": "no-store" } });
 }
 
-export async function handlePluginApi(req: Request, url: URL, store: Store): Promise<Response | null> {
-  if (!url.pathname.startsWith("/api/plugins")) return null;
+/**
+ * Plugin management sub-API adapter.
+ *
+ * `path` is the CANONICAL route path (`/api/plugins/...`) resolved by the
+ * mount layer in routes/index.ts — NOT `url.pathname`, which still carries
+ * the external transport prefix (`/api/v1/...`) for versioned requests.
+ * `url` remains the source of query parameters only.
+ *
+ * Route precedence is deterministic: the dedicated `/api/plugins/catalog`
+ * collection route is matched BEFORE the `/api/plugins/{id}` pattern, so
+ * "catalog" is never mistaken for a plugin id.
+ */
+export async function handlePluginApi(req: Request, url: URL, path: string, store: Store): Promise<Response | null> {
+  if (!path.startsWith("/api/plugins")) return null;
   const mgr = new PluginManager(store, process.cwd());
 
-  if (url.pathname === "/api/plugins/catalog" && req.method === "GET") {
+  if (path === "/api/plugins/catalog" && req.method === "GET") {
     return json({ plugins: searchCatalog(url.searchParams.get("q") ?? "") });
   }
 
-  if (url.pathname === "/api/plugins" && req.method === "GET") {
+  if (path === "/api/plugins" && req.method === "GET") {
     await mgr.loadEnabled();
     return json({ summary: mgr.summary(), plugins: mgr.health().map((h) => ({
       id: h.entry.id,
@@ -37,7 +49,7 @@ export async function handlePluginApi(req: Request, url: URL, store: Store): Pro
     })) });
   }
 
-  const m = url.pathname.match(/^\/api\/plugins\/([^/]+)(?:\/(enable|disable|remove|permissions|inspect))?$/);
+  const m = path.match(/^\/api\/plugins\/([^/]+)(?:\/(enable|disable|remove|permissions|inspect))?$/);
   if (!m) return json({ error: "unknown plugin API route" }, 404);
   const id = decodeURIComponent(m[1]);
   const action = m[2] ?? "inspect";

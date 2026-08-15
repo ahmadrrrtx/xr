@@ -98,6 +98,27 @@ export function matchRouteId(path: string, method: string, routes: DaemonRoute[]
   return "unmatched";
 }
 
+/**
+ * Phase 02 — bounded observability label for an UNMATCHED request.
+ *
+ * Returns the first canonical path segment (e.g. "/api/v1/skills/nope" →
+ * "skills") but ONLY when that segment is a known route namespace; anything
+ * else folds into "other". This keeps unmatched-route metrics actionable
+ * ("the skills namespace is 404ing") while bounding cardinality — a raw URL
+ * label would let any caller mint unbounded series. Never carries the query
+ * string, tokens, headers, or bodies.
+ */
+export function unmatchedCategory(canonicalPath: string, routes: DaemonRoute[] = listDaemonRoutes()): string {
+  if (!canonicalPath.startsWith("/api")) return "other";
+  const segment = canonicalPath.slice("/api".length).split("/").filter(Boolean)[0];
+  if (!segment) return "root";
+  for (const r of routes) {
+    const known = r.pathLabel().slice("/api".length).split("/").filter(Boolean)[0];
+    if (known && known === segment) return segment;
+  }
+  return "other";
+}
+
 /** Find the contract metadata of the FIRST route that would serve this request. */
 function contractFor(path: string, method: string, routes: DaemonRoute[]): ApiOperationMeta | null {
   for (const r of routes) {
