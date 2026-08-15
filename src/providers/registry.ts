@@ -18,13 +18,20 @@ export interface RegistryEntry {
 
 export class ProviderRegistry {
   private entries = new Map<string, RegistryEntry>();
+  /** Phase 01 — bumped on every mutation; catalog cache fingerprints include it. */
+  private _version = 0;
+
+  get version(): number {
+    return this._version;
+  }
 
   register(preset: ProviderPreset, factory: ProviderFactory): void {
     this.entries.set(preset.id, { preset, factory });
+    this._version++;
   }
 
   unregister(id: string): void {
-    this.entries.delete(id);
+    if (this.entries.delete(id)) this._version++;
   }
 
   has(id: string): boolean {
@@ -70,7 +77,7 @@ export class ProviderRegistry {
     // Remove stale custom entries that are no longer in config
     for (const [id, entry] of this.entries) {
       if (entry.preset.kind === "custom" && !config.providerEngine?.customProviders?.find((c: any) => c.id === id)) {
-        this.entries.delete(id);
+        this.unregister(id);
       }
     }
 

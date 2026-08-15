@@ -9,20 +9,12 @@ import { fingerprint } from "../../context/memory/rag.ts";
 import { MemoryStore } from "../../context/memory/store.ts";
 import { dashboardHtml, dashboardCssAsset, dashboardScriptAsset } from "../dashboard.ts";
 import { AUTH_PAGE_SCRIPT } from "../auth-page.ts";
+import { gitSummaryCached } from "../state/cache.ts";
 import { assetResponse, route, type DaemonRoute } from "./router.ts";
 
 async function gitSummary(cwd: string): Promise<{ branch: string; dirty: boolean }> {
-  try {
-    const { runCommand } = await import("../../util/process.ts");
-    const [branch, status] = await Promise.all([
-      runCommand("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd, timeoutMs: 3000 }),
-      runCommand("git", ["status", "--porcelain"], { cwd, timeoutMs: 3000 }),
-    ]);
-    if (!branch.ok || !status.ok) return { branch: "no git", dirty: false };
-    return { branch: branch.stdout.trim() || "detached", dirty: status.stdout.trim().length > 0 };
-  } catch {
-    return { branch: "no git", dirty: false };
-  }
+  // Phase 01 — cached 5 s so dashboard polling never re-runs git per request.
+  return (await gitSummaryCached(cwd)) ?? { branch: "no git", dirty: false };
 }
 
 export function systemRoutes(): DaemonRoute[] {

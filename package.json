@@ -53,6 +53,7 @@
     "build:binary:local": "bun run scripts/build-matrix.ts --targets $(node -e 'console.log(process.platform+\"-\"+process.arch)')",
     "perf:baseline": "bun run scripts/perf-baseline.ts",
     "perf:gate": "bun run scripts/perf-gate.ts",
+    "perf:daemon-routes": "bun run scripts/perf-daemon-routes.ts",
     "hot-path-lint": "bun run scripts/hot-path-lint.ts",
     "sbom": "bun run scripts/sbom.ts",
     "supply:check": "bun run scripts/license-check.ts && bun run scripts/sbom.ts --out /tmp/xr-sbom.json",
