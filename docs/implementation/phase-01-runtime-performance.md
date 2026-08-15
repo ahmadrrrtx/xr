@@ -323,6 +323,56 @@ dashboard render 11.8 ms, retrieval 29.9 ms, route decision 0.0 ms).
 - Full suite on the final tree: **2990 pass / 19 skip / 0 fail** (3009 tests).
   Boundaries 0 violations · hot-path-lint 0 sync calls.
 
+## 16d. Spec test-matrix compliance (45 required items → coverage)
+
+| # | Spec item | Covered by | Status |
+|---|---|---|:--:|
+| 1 | parallel runtime detection | runtime-detection: bounded-parallel test | ✅ |
+| 2 | bounded timeout | runtime-detection fallback + provider-health bounded timeout | ✅ |
+| 3 | fallback on timeout | runtime-detection "deterministic fallback" | ✅ |
+| 4 | runtime cache hit | runtime-detection cached lookup | ✅ |
+| 5 | runtime cache expiration | TtlCache primitive hit/miss/expiry + SWR tests | ✅ |
+| 6 | commandExists cache | runtime-detection commandExists memo | ✅ |
+| 7 | concurrent runtime dedup | runtime-detection 5-caller dedup | ✅ |
+| 8 | failed runtime detection | runtime-detection blackhole fallback rows | ✅ |
+| 9 | mixed healthy/unhealthy | runtime-detection mixed-endpoint test | ✅ |
+| 10 | platform-specific behavior | Windows GPU parse + commandExists probe selection | ✅ |
+| 11 | provider health timeout | provider-health bounded timeout (2.5 s) | ✅ |
+| 12 | provider health success | provider-health success + cached | ✅ |
+| 13 | provider health failure | provider-health negative + auth short-circuit | ✅ |
+| 14 | provider health cache | provider-health hit/negative-cache tests | ✅ |
+| 15 | concurrent health dedup | provider-health 5-caller dedup | ✅ |
+| 16 | catalog built once | provider-health catalog-once + daemon ≤1 build | ✅ |
+| 17 | catalog invalidation | provider-health config/key invalidation | ✅ |
+| 18 | config change invalidates | runtime-detection fingerprint + catalog config tests | ✅ |
+| 19 | hardware no event-loop block | hardware async max-gap test | ✅ |
+| 20 | hardware cache | hardware cached-lookup test | ✅ |
+| 21 | hardware cache expiration | hardware SWR integration + TtlCache primitive | ✅ |
+| 22 | background refresh | hardware lifecycle + SWR tests | ✅ |
+| 23 | hardware command failure | hardware missing-tools test | ✅ |
+| 24 | Windows PowerShell behavior | hardware parseWindowsGpu unit test | ✅ |
+| 25 | missing GPU tools | hardware missing-tools test | ✅ |
+| 26 | health endpoint no heavy detection | daemon-routes health assertion | ✅ |
+| 27 | overview lightweight | daemon-routes overview assertion | ✅ |
+| 28 | dashboard no duplicate computation | daemon-routes client assertions + catalog-once | ✅ |
+| 29 | dashboard loads within target | daemon-routes endpoint bounds | ✅ |
+| 30 | no Bun timeout | daemon-routes all-endpoint bounds (blackhole) | ✅ |
+| 31–38 | cache primitive matrix (hit/miss/TTL/SWR/dedup/rejection/invalidation/bound) | runtime-detection TtlCache describe block (8 tests) | ✅ |
+| 39 | all existing unit tests | full suite 2990 pass | ✅ |
+| 40 | all existing integration tests | full suite incl. daemon/intelligence/perf | ✅ |
+| 41 | security tests | test/security+trust+state 209 pass | ✅ |
+| 42 | CLI tests | full suite CLI/phase0/tools | ✅ |
+| 43 | daemon tests | test/daemon 88 pass | ✅ |
+| 44 | Windows tests where available | platform:parity (win32 240) + win-specific units | ✅ |
+| 45 | build/typecheck/lint | typecheck + boundaries + hot-path-lint + full `bun run ci` | ✅ |
+
+Enforcement choice: the Phase-01 latency targets (p95 < 2.5 s / < 3 s / first paint < 2 s)
+are enforced by test/perf/daemon-routes.test.ts with CI-tolerant ceilings under the
+reproducible blackhole environment, and by scripts/perf-daemon-routes.ts for
+human-measured p50/p95/max. They are NOT added to scripts/perf/budgets.json because
+that gate measures CLI-process scenarios; the daemon-endpoint budgets live in
+docs/perf/PERF-BUDGETS.md §12 and are covered by the perf test suite on every run.
+
 ## 17. Known limitations
 
 1. **Timeout ≠ cancellation for provider health** — the underlying 8 s-bounded

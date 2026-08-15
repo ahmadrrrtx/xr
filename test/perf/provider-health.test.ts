@@ -220,6 +220,33 @@ describe("Phase 01 — health cache correctness", () => {
   });
 });
 
+describe("Phase 01 — health cache kill switch", () => {
+  test("XR_HEALTH_CACHE=0 disables caching but keeps bounded probes (no cache pollution)", async () => {
+    process.env.XR_HEALTH_CACHE = "0";
+    try {
+      const { checkProviderHealthCached, providerHealthCacheStats } = await import("../../src/providers/health.ts");
+      const config = await freshConfig();
+      const statsBefore = providerHealthCacheStats();
+      const started = Date.now();
+      await checkProviderHealthCached(config, "groq"); // auth-negative, no network
+      const first = Date.now() - started;
+      await checkProviderHealthCached(config, "groq"); // would be a cache hit if caching were on
+      // Bounded, works, and the cache was never READ or WRITTEN: hits/misses/
+      // entries/pending are all frozen at their pre-test values (entries may
+      // be non-zero from earlier tests in the shared process — the kill switch
+      // must simply not interact with them).
+      expect(first).toBeLessThan(1000);
+      const after = providerHealthCacheStats();
+      expect(after.hits).toBe(statsBefore.hits);
+      expect(after.misses).toBe(statsBefore.misses);
+      expect(after.entries).toBe(statsBefore.entries);
+      expect(after.pending).toBe(statsBefore.pending);
+    } finally {
+      delete process.env.XR_HEALTH_CACHE;
+    }
+  });
+});
+
 describe("Phase 01 — catalog cache", () => {
   test("catalog is built once per config state; repeats are cache hits", async () => {
     const { buildCatalog, invalidateCatalogCache, catalogCacheStats } = await import("../../src/intelligence/catalog.ts");
@@ -245,6 +272,22 @@ describe("Phase 01 — catalog cache", () => {
     const misses1 = catalogCacheStats().misses;
     buildCatalog(b);
     expect(catalogCacheStats().misses).toBeGreaterThan(misses1);
+  });
+
+  test("XR_CATALOG_CACHE=0 disables the catalog cache (fresh build every call)", async () => {
+    process.env.XR_CATALOG_CACHE = "0";
+    try {
+      const { buildCatalog, catalogCacheStats } = await import("../../src/intelligence/catalog.ts");
+      const config = await freshConfig();
+      const missesBefore = catalogCacheStats().misses;
+      const c1 = buildCatalog(config);
+      const c2 = buildCatalog(config);
+      expect(c1).not.toBe(c2); // fresh build each time — never a cached instance
+      expect(catalogCacheStats().misses).toBe(missesBefore); // stats untouched
+      expect(c1.providers.length).toBe(c2.providers.length);
+    } finally {
+      delete process.env.XR_CATALOG_CACHE;
+    }
   });
 
   test("storing an API key invalidates the catalog (credentialAvailable changes)", async () => {

@@ -4,8 +4,8 @@
  * The GUI first-run flow is a THIN ORCHESTRATOR over the same engines the CLI
  * wizard (`src/interfaces/onboard.ts`) uses — one authority, no duplicated
  * logic:
- *   · status   → getProviderEnvStatus() + buildProvider().health() +
- *                detectAllRuntimes() + best-effort internet probe
+ *   · status   → getProviderEnvStatus() + cached bounded provider health +
+ *                detectAllRuntimes() + cached best-effort internet probe
  *   · provider → setSecret() (OS keychain / sealed file) + defaults write
  *                via saveConfig() + advisory health probe (save never fails
  *                on probe outcome — mirrors the CLI's F-1 behavior)
@@ -17,7 +17,7 @@
  */
 
 import { loadConfig, saveConfig, getProviderEnvStatus } from "../../config/config.ts";
-import { PRESETS, buildProvider } from "../../providers/factory.ts";
+import { PRESETS } from "../../providers/factory.ts";
 import { checkProviderHealthCached, invalidateProviderHealthCache } from "../../providers/health.ts";
 import { detectAllRuntimes } from "../../local/runtimes.ts";
 import { setSecretAsync, clearSecretMemo, getSecretSyncCached } from "../../security/secrets.ts";
