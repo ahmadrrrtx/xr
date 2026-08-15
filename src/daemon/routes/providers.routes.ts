@@ -1,8 +1,10 @@
-/** XR Daemon — providers, local models, and workspace routes. */
+/** XR Daemon — providers, local models, and workspace routes.
+ * Phase 04 — canonical provider gateway integration.
+ */
 
-import { loadConfig, saveConfig, getProviderEnvStatus } from "../../config/config.ts";
+import { loadConfig, saveConfig } from "../../config/config.ts";
 import { getHardwareSpecs, formatHardwareSummary } from "../../local/hardware.ts";
-import { checkProviderHealthCached } from "../../providers/health.ts";
+import { providerGateway } from "../../providers/gateway.ts";
 import { recommendLocalAI } from "../../local/recommend.ts";
 import { detectAllRuntimes, detectRuntime, testLocalModel } from "../../local/runtimes.ts";
 import { isLocalRuntimeId, providerIdForRuntime, validateLocalModelId } from "../../local/registry.ts";
@@ -10,7 +12,6 @@ import { XRShieldService } from "../../security/shield.ts";
 import { Tokens } from "../../core/tokens.ts";
 import { WorkspaceSwitchFailedError } from "../../core/errors.ts";
 import { IntelligenceRouter } from "../../intelligence/router.ts";
-import { buildCatalog } from "../../intelligence/catalog.ts";
 import { BehavioralStore, behavioralView } from "../../intelligence/behavioral.ts";
 import { RoutingHealth, healthView } from "../../intelligence/health.ts";
 import { RoutingSlo } from "../../intelligence/slo.ts";
@@ -30,28 +31,33 @@ export function providersRoutes(): DaemonRoute[] {
       path: "/api/providers",
       method: "GET",
       handle: async ({ json, config }) => {
-        // Phase 01 — catalog is built ONCE per request (and then served from
-        // the fingerprint-keyed cache for subsequent requests); per-provider
-        // health is bounded (2.5 s), cached (60 s positive / 15 s negative)
-        // and deduplicated — no more N+1 catalog rebuilds, no more 8–16 s
-        // health stalls behind a 10 s Bun timeout.
-        const status = getProviderEnvStatus();
-        const rows = await Promise.all(status.map(async (p) => {
-          try {
-            const health = await checkProviderHealthCached(config, p.id);
-            return {
-              id: p.id,
-              label: p.label,
-              tier: p.tier,
-              hasKey: p.hasKey,
-              healthy: health.ok,
-              latencyMs: health.latencyMs ?? null,
-              detail: health.detail ?? null,
-            };
-          } catch {
-            return { id: p.id, label: p.label, tier: p.tier, hasKey: p.hasKey, healthy: false, latencyMs: null, detail: "unavailable" };
-          }
-        }));
+        // Phase 04 — canonical provider gateway: ONE source of truth for listing + health
+        // Uses registry.list() via gateway (includes custom), health bounded 2500ms cached, credential status central.
+        // No N+1 catalog rebuilds, no 120s blocking.
+        const presets = providerGateway.list(config);
+        const healths = await providerGateway.healthAll(config);
+
+        const healthMap = new Map(healths.map((h) => [h.id, h]));
+
+        const rows = presets.map((p) => {
+          const health = healthMap.get(p.id);
+          const cred = providerGateway.credentialStatus(p.id);
+          return {
+            id: p.id,
+            label: p.label,
+            tier: p.tier,
+            kind: p.kind,
+            hasKey: cred.available,
+            authOk: health?.authOk ?? cred.available,
+            healthy: health?.ok ?? false,
+            latencyMs: health?.latencyMs ?? null,
+            detail: health?.detail ?? null,
+            capabilities: p.capabilities,
+            defaultModel: p.defaultModel,
+            cached: (health as any)?.cached ?? false,
+          };
+        });
+
         return json({
           primary: config.defaults.provider,
           model: config.defaults.model,
@@ -65,10 +71,11 @@ export function providersRoutes(): DaemonRoute[] {
       id: "providers.set",
       path: "/api/providers/set",
       method: "POST",
-      handle: async ({ req, json, state }) => {
+      handle: async ({ req, json, state, config }) => {
         try {
           const body = await req.json() as { provider?: string; model?: string; fallbackProvider?: string | null; fallbackModel?: string | null };
-          const allowed = new Set(getProviderEnvStatus().map((p) => p.id));
+          // Phase 04 — use gateway for allowed list (includes custom providers), not just PRESETS
+          const allowed = new Set(providerGateway.list(config).map((p) => p.id));
           if (!body.provider || !allowed.has(body.provider)) return json({ error: "valid provider is required" }, 400);
           if (body.fallbackProvider && !allowed.has(body.fallbackProvider)) return json({ error: "fallbackProvider must be a known provider" }, 400);
           const next = loadConfig().config;
@@ -89,7 +96,7 @@ export function providersRoutes(): DaemonRoute[] {
         }
       },
     }),
-    // XR 4.4 — Intelligence plane route explain
+    // XR 4.4 — Intelligence plane route explain — now via gateway catalog
     route({
       id: "providers.route",
       path: "/api/providers/route",
@@ -98,15 +105,13 @@ export function providersRoutes(): DaemonRoute[] {
         const params = url.searchParams;
         const provider = params.get("provider") ?? undefined;
         const model = params.get("model") ?? undefined;
-        // Untrusted query value: only real ModelClass literals pass (A-6 seam).
         const rawClass = params.get("class") ?? "chat";
         const modelClass = (MODEL_CLASSES.has(rawClass) ? rawClass : "chat") as ModelClass;
         const localOnly = params.get("localOnly") === "1" || params.get("localOnly") === "true";
         const detailed = params.get("detailed") === "1" || params.get("detailed") === "true";
-        // Phase 5 — the daemon explains against the SAME measured metadata and
-        // live breaker state as the agent path (one authority, one data set).
+        const catalog = providerGateway.catalog(config);
         const router = new IntelligenceRouter({
-          catalog: buildCatalog(config),
+          catalog,
           behavioral: behavioralView(new BehavioralStore()),
           health: healthView(new RoutingHealth()),
         });
@@ -122,7 +127,6 @@ export function providersRoutes(): DaemonRoute[] {
         return json(detailed ? { decision, record } : { record, summary: decision.explanation });
       },
     }),
-    // Phase 5 · T6 — routing SLOs + breaker state (persisted, secret-free)
     route({
       id: "providers.slo",
       path: "/api/providers/slo",
@@ -151,7 +155,8 @@ export function providersRoutes(): DaemonRoute[] {
       path: "/api/providers/catalog",
       method: "GET",
       handle: async ({ json, config }) => {
-        const catalog = buildCatalog(config);
+        // Phase 04 — catalog via gateway (cached per config hash, TTL 60s)
+        const catalog = providerGateway.catalog(config);
         return json({
           builtAt: catalog.builtAt,
           providers: catalog.providers.map((p) => ({
@@ -162,8 +167,67 @@ export function providersRoutes(): DaemonRoute[] {
             locality: p.locality.locality,
             credentialAvailable: p.auth.credentialAvailable,
             defaultModel: p.defaultModelId,
+            capabilities: p.capabilities,
+          })),
+          models: catalog.models.map((m) => ({
+            providerId: m.providerId,
+            modelId: m.modelId,
+            isDefault: m.isDefault,
+            capabilities: m.capabilities,
           })),
           modelCount: catalog.models.length,
+        });
+      },
+    }),
+    // Phase 04 — new: provider capabilities endpoint
+    route({
+      id: "providers.capabilities",
+      path: "/api/providers/capabilities",
+      method: "GET",
+      handle: async ({ json, config, url }) => {
+        const id = url.searchParams.get("id");
+        if (id) {
+          const preset = providerGateway.getPreset(id);
+          if (!preset) return json({ error: `unknown provider: ${id}` }, 404);
+          const caps = providerGateway.capabilities(id);
+          const cred = providerGateway.credentialStatus(id);
+          const health = await providerGateway.health(config, id).catch(() => null);
+          return json({
+            id: preset.id,
+            label: preset.label,
+            kind: preset.kind,
+            tier: preset.tier,
+            defaultModel: preset.defaultModel,
+            knownModels: preset.knownModels,
+            capabilities: caps,
+            credential: { required: cred.required, available: cred.available },
+            health: health ? { ok: health.ok, latencyMs: health.latencyMs, detail: health.detail, authOk: health.authOk } : null,
+          });
+        }
+        // All capabilities
+        const presets = providerGateway.list(config);
+        return json({
+          providers: presets.map((p) => ({
+            id: p.id,
+            label: p.label,
+            kind: p.kind,
+            tier: p.tier,
+            capabilities: providerGateway.capabilities(p.id),
+          })),
+        });
+      },
+    }),
+    // Phase 04 — new: fallback chain endpoint
+    route({
+      id: "providers.fallback",
+      path: "/api/providers/fallback",
+      method: "GET",
+      handle: async ({ json, config }) => {
+        const chain = await providerGateway.fallbackChain(config);
+        return json({
+          allowed: chain.allowed,
+          explanation: chain.explanation,
+          steps: chain.steps,
         });
       },
     }),
@@ -205,17 +269,11 @@ export function providersRoutes(): DaemonRoute[] {
           const executor = state.agentExecutor;
           if (!executor) return json({ error: "agent executor unavailable" }, 503);
 
-          // Phase 03 · T3.2 — the canonical lifecycle, never inline:
-          //   previousStore.close(); setActiveId(); getStore(); new Shield...
-          // XRApp.switchWorkspace() owns the state transition, background-job
-          // stop/start, provider rebinding, health events, audit and rollback.
           const previousId = state.workspaceManager.getActiveId();
           try {
             await executor.switchWorkspace(id);
           } catch (e) {
             if (e instanceof WorkspaceSwitchFailedError) {
-              // Stable, observable, preserves the previous workspace, health is
-              // updated by XRApp internals, and the failure is audited.
               state.store.audit("workspace.switch_failed", {
                 from: previousId,
                 to: id,
@@ -226,8 +284,6 @@ export function providersRoutes(): DaemonRoute[] {
             throw e;
           }
 
-          // Re-sync the daemon's routing state from the canonical app so every
-          // other route sees the new workspace's store/shield/manager.
           const app = executor.app;
           if (app) {
             state.app = app;
@@ -249,19 +305,21 @@ export function providersRoutes(): DaemonRoute[] {
       method: "GET",
       handle: async ({ json, config }) => {
         try {
-          // Phase 01 — hardware comes from the async 5-minute cache, runtimes
-          // from the 60 s config-keyed cache, and the selected runtime's status
-          // is sourced from the SAME detection (previously: hardware + full
-          // detection + a THIRD single-runtime detection per request).
+          // Phase 04 — models.list now also shows gateway catalog + gateway fallback chain
           const specs = await getHardwareSpecs();
           const runtimes = await detectAllRuntimes();
-          const local = config.localModels; // fully typed in the schema
+          const local = config.localModels;
           const selectedRuntime = local.runtime ?? "ollama";
           const selectedModel = local.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
           const selectedStatus = isLocalRuntimeId(selectedRuntime)
             ? runtimes.find((r) => r.id === selectedRuntime)
             : undefined;
           const recommendation = recommendLocalAI(specs, { useCase: local.useCase ?? "general", preferredRuntime: isLocalRuntimeId(selectedRuntime) ? selectedRuntime : undefined, runtimes });
+
+          // Gateway catalog info
+          const catalog = providerGateway.catalog(config);
+          const fallbackChain = await providerGateway.fallbackChain(config);
+
           return json({
             selected: {
               runtime: selectedRuntime,
@@ -275,6 +333,12 @@ export function providersRoutes(): DaemonRoute[] {
             recommendation,
             runtimes,
             installed: Array.isArray(local.installed) ? local.installed : [],
+            catalog: {
+              modelCount: catalog.models.length,
+              providerCount: catalog.providers.length,
+              builtAt: catalog.builtAt,
+            },
+            fallbackChain,
           });
         } catch (e) {
           return json({ error: (e as Error).message }, 500);
@@ -338,8 +402,6 @@ export function providersRoutes(): DaemonRoute[] {
             next.defaults.fallbackProvider = providerIdForRuntime(runtime);
             next.defaults.fallbackModel = model;
           }
-          // providers is a zod-passthrough map: narrow once to the override
-          // shape this route writes, instead of an `any` write (A-6 seam).
           const providersMap = next.providers as Record<string, Record<string, unknown> | undefined>;
           const overrideId = providerIdForRuntime(runtime);
           providersMap[overrideId] = {

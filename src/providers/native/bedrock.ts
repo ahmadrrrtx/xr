@@ -15,8 +15,9 @@
  *       Best for enterprise users with existing AWS infrastructure.
  *       No free tier, but has sustained-use discounts.
  */
-import type { Message, ModelTurn, Provider, Tool, ChatOptions } from "../../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChunk } from "../../core/types.ts";
 import { guardedRequest } from "../request-guard.ts";
+import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 
 interface BedrockOptions {
@@ -39,6 +40,10 @@ export class BedrockProvider implements Provider {
   id = "bedrock";
   label = "AWS Bedrock";
   private model: string;
+
+  get modelId(): string {
+    return this.model;
+  }
   private region: string;
   private accessKey?: string;
   private secretKey?: string;
@@ -347,6 +352,26 @@ export class BedrockProvider implements Provider {
     return repairToTurn(completion);
   }
 
+  async *chatStream(
+    messages: import("../../core/types.ts").Message[],
+    tools: import("../../core/types.ts").Tool[],
+    options?: import("../../core/types.ts").ChatOptions,
+  ): AsyncGenerator<ProviderStreamChunk> {
+    try {
+      const turn = await this.chat(messages, tools, options);
+      if (turn.message) {
+        yield { text: turn.message, providerId: this.id, model: this.model };
+      }
+      for (const tc of turn.toolCalls ?? []) {
+        yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
+      }
+      yield { usage: turn.usage, finish: true, providerId: this.id, model: this.model };
+    } catch (e) {
+      throw normalizeProviderError(e, this.id, this.model);
+    }
+  }
+
+  
   async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
     if (!this.accessKey && !process.env.AWS_WEB_IDENTITY_TOKEN_FILE) {
       // Check if AWS CLI is configured

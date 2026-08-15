@@ -8,8 +8,9 @@
  * 
  * Cost: NOT free, but great quality. Use Groq/Ollama for zero-cost.
  */
-import type { Message, ModelTurn, Provider, Tool, ChatOptions } from "../../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChunk } from "../../core/types.ts";
 import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
+import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 
 interface AnthropicOptions {
@@ -48,6 +49,10 @@ export class AnthropicProvider implements Provider {
   label = "Anthropic Claude";
   private apiKey: string;
   private model: string;
+
+  get modelId(): string {
+    return this.model;
+  }
   
   // Claude model capability profiles
   private static readonly MODELS: Record<string, { 
@@ -321,6 +326,26 @@ export class AnthropicProvider implements Provider {
     return { ...repairToTurn(content), usage };
   }
 
+  async *chatStream(
+    messages: import("../../core/types.ts").Message[],
+    tools: import("../../core/types.ts").Tool[],
+    options?: import("../../core/types.ts").ChatOptions,
+  ): AsyncGenerator<ProviderStreamChunk> {
+    try {
+      const turn = await this.chat(messages, tools, options);
+      if (turn.message) {
+        yield { text: turn.message, providerId: this.id, model: this.model };
+      }
+      for (const tc of turn.toolCalls ?? []) {
+        yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
+      }
+      yield { usage: turn.usage, finish: true, providerId: this.id, model: this.model };
+    } catch (e) {
+      throw normalizeProviderError(e, this.id, this.model);
+    }
+  }
+
+  
   async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
     const start = Date.now();
     const apiKey = this.apiKey;

@@ -10,12 +10,16 @@
  *   - local models → GBNF grammar (Ollama `format`) for 100% valid tool calls.
  *   - cloud models → native JSON object mode
  *   - everything → deterministic auto-repair as a final safety net.
+ *
+ * Phase 04: Adds chatStream() via SSE, modelId exposure, listModels(), error normalization.
  */
-import type { ChatOptions, Message, ModelTurn, Provider, Tool } from "../core/types.ts";
+
+import type { ChatOptions, Message, ModelTurn, Provider, Tool, ProviderStreamChunk } from "../core/types.ts";
 import { guardedRequest } from "./request-guard.ts";
 import { buildEnvelopeGBNF } from "../reliability/grammar.ts";
 import { repairToTurn } from "../reliability/repair.ts";
 import { profileFor, type ModelProfile } from "../reliability/profiles.ts";
+import { normalizeProviderError } from "./errors.ts";
 
 export interface OpenAICompatOptions {
   id: string;
@@ -48,6 +52,10 @@ export class OpenAICompatProvider implements Provider {
     this.profile = profileFor(opts.id, opts.model);
   }
 
+  get modelId(): string {
+    return this.model;
+  }
+
   protected headers(): Record<string, string> {
     const h: Record<string, string> = {
       "Content-Type": "application/json",
@@ -76,7 +84,7 @@ export class OpenAICompatProvider implements Provider {
     ].join("\n");
   }
 
-  async chat(messages: Message[], tools: Tool[], chatOptions?: ChatOptions): Promise<ModelTurn> {
+  protected buildChatBody(messages: Message[], tools: Tool[], stream: boolean): Record<string, unknown> {
     const sys: Message = {
       role: "system",
       content: this.systemEnvelope(tools),
@@ -91,14 +99,12 @@ export class OpenAICompatProvider implements Provider {
             : m.content,
       })),
       temperature: 0,
-      stream: false,
+      stream,
     };
 
-    // body is Record<string, unknown> — build provider-specific extras as
-    // typed locals instead of poking at `any` (A-6 seam).
     const options: Record<string, unknown> = {};
     if (this.profile.structure === "grammar") {
-      body.format = "json";
+      (body as any).format = "json";
       options.grammar = buildEnvelopeGBNF(tools.map((t) => t.name));
       options.temperature = 0;
     } else if (this.profile.structure === "json_mode") {
@@ -112,34 +118,215 @@ export class OpenAICompatProvider implements Provider {
       body.options = options;
     }
 
-    // GAP-001 — bounded + cancellable. Before this the call had no signal and
-    // no timeout: a provider that stalled hung the whole runtime with no way
-    // out, and Ctrl+C could not reach the socket.
-    const res = await guardedRequest(this.id, chatOptions, (signal) =>
-      fetch(`${this.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: this.headers(),
-        body: JSON.stringify(body),
-        signal,
-      }),
-    );
+    return body;
+  }
+
+  async chat(messages: Message[], tools: Tool[], chatOptions?: ChatOptions): Promise<ModelTurn> {
+    const body = this.buildChatBody(messages, tools, false);
+
+    try {
+      const res = await guardedRequest(this.id, chatOptions, (signal) =>
+        fetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: this.headers(),
+          body: JSON.stringify(body),
+          signal,
+        }),
+      );
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(
+          `provider ${this.id} HTTP ${res.status}: ${txt.slice(0, 200)}`,
+        );
+      }
+      const json: any = await res.json();
+      const content: string =
+        json?.choices?.[0]?.message?.content ?? "";
+      const usage = json?.usage
+        ? {
+            inTokens: json.usage.prompt_tokens ?? 0,
+            outTokens: json.usage.completion_tokens ?? 0,
+          }
+        : undefined;
+
+      return { ...repairToTurn(content), usage };
+    } catch (e) {
+      throw normalizeProviderError(e, this.id, this.model);
+    }
+  }
+
+  /**
+   * Phase 04 — streaming via SSE.
+   * Yields normalized ProviderStreamChunk {text, toolCall, usage, finish}
+   * Preserves cancellation via signal.
+   */
+  async *chatStream(
+    messages: Message[],
+    tools: Tool[],
+    chatOptions?: ChatOptions,
+  ): AsyncGenerator<ProviderStreamChunk> {
+    const body = this.buildChatBody(messages, tools, true);
+
+    let res: Response;
+    try {
+      res = await guardedRequest(this.id, chatOptions, (signal) =>
+        fetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            ...this.headers(),
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify(body),
+          signal,
+        }),
+      );
+    } catch (e) {
+      throw normalizeProviderError(e, this.id, this.model);
+    }
+
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      throw new Error(
-        `provider ${this.id} HTTP ${res.status}: ${txt.slice(0, 200)}`,
+      throw normalizeProviderError(
+        new Error(`provider ${this.id} HTTP ${res.status}: ${txt.slice(0, 200)}`),
+        this.id,
+        this.model,
       );
     }
-    const json: any = await res.json();
-    const content: string =
-      json?.choices?.[0]?.message?.content ?? "";
-    const usage = json?.usage
-      ? {
-          inTokens: json.usage.prompt_tokens ?? 0,
-          outTokens: json.usage.completion_tokens ?? 0,
-        }
-      : undefined;
 
-    return { ...repairToTurn(content), usage };
+    if (!res.body) {
+      // No body — fallback to non-streaming
+      const json: any = await res.json().catch(() => ({}));
+      const content: string = json?.choices?.[0]?.message?.content ?? "";
+      const turn = repairToTurn(content);
+      if (turn.message) {
+        yield { text: turn.message, providerId: this.id, model: this.model };
+      }
+      for (const tc of turn.toolCalls) {
+        yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
+      }
+      yield { usage: turn.usage, finish: true, providerId: this.id, model: this.model };
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullContent = "";
+    let usage: { inTokens: number; outTokens: number } | undefined;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        // Keep incomplete line in buffer
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (!trimmed.startsWith("data:")) continue;
+          const data = trimmed.slice(5).trim();
+          if (data === "[DONE]") {
+            // End of stream — parse full content for tool calls
+            if (fullContent) {
+              try {
+                const turn = repairToTurn(fullContent);
+                for (const tc of turn.toolCalls) {
+                  yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
+                }
+              } catch {
+                // ignore parse errors, already yielded text
+              }
+            }
+            yield { usage, finish: true, providerId: this.id, model: this.model };
+            return;
+          }
+          try {
+            const json: any = JSON.parse(data);
+            // Handle usage
+            if (json.usage) {
+              usage = {
+                inTokens: json.usage.prompt_tokens ?? 0,
+                outTokens: json.usage.completion_tokens ?? 0,
+              };
+            }
+            const choice = json.choices?.[0];
+            if (!choice) continue;
+
+            // Delta content (streaming)
+            const delta = choice.delta ?? {};
+            const content = delta.content ?? choice.message?.content ?? "";
+
+            if (content) {
+              fullContent += content;
+              // Try to yield incremental text, but avoid yielding partial JSON envelope noise
+              // We yield the raw content token
+              yield { text: content, providerId: this.id, model: this.model };
+            }
+
+            // Tool call delta (for providers supporting native tool calling)
+            if (delta.tool_calls) {
+              for (const tc of delta.tool_calls) {
+                const fn = tc.function;
+                if (fn?.name) {
+                  let args: Record<string, unknown> = {};
+                  try {
+                    args = typeof fn.arguments === "string" ? JSON.parse(fn.arguments) : fn.arguments ?? {};
+                  } catch {
+                    args = {};
+                  }
+                  yield {
+                    toolCall: { tool: fn.name, args },
+                    providerId: this.id,
+                    model: this.model,
+                  };
+                }
+              }
+            }
+          } catch {
+            // Skip malformed SSE line
+            continue;
+          }
+        }
+      }
+
+      // Stream ended without [DONE] — finalize
+      if (fullContent) {
+        try {
+          const turn = repairToTurn(fullContent);
+          for (const tc of turn.toolCalls) {
+            yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
+          }
+        } catch {
+          // ignore
+        }
+      }
+      yield { usage, finish: true, providerId: this.id, model: this.model };
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {}
+    }
+  }
+
+  async listModels(): Promise<string[]> {
+    try {
+      const res = await fetch(`${this.baseUrl}/models`, {
+        headers: this.headers(),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!res.ok) return [];
+      const json: any = await res.json();
+      if (Array.isArray(json.data)) {
+        return json.data.map((m: any) => String(m.id ?? m.name ?? "")).filter(Boolean);
+      }
+      return [];
+    } catch {
+      return [];
+    }
   }
 
   async health(): Promise<{

@@ -150,11 +150,34 @@ export interface ChatOptions {
   timeoutMs?: number;
 }
 
+/**
+ * XR Phase 04 — Provider Streaming chunk (normalized)
+ */
+export interface ProviderStreamChunk {
+  text?: string;
+  toolCall?: { tool: string; args: Record<string, unknown> };
+  usage?: { inTokens: number; outTokens: number };
+  finish?: boolean;
+  reasoning?: string;
+  model?: string;
+  providerId?: string;
+}
+
 export interface Provider {
   id: string;
   label: string;
   /** Run one turn of the loop. Implementations parse tool calls. */
   chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn>;
+  /** Optional streaming variant: yields normalized chunks */
+  chatStream?(
+    messages: Message[],
+    tools: Tool[],
+    options?: ChatOptions,
+  ): AsyncGenerator<ProviderStreamChunk>;
   /** Quick liveness/health check. */
   health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }>;
+  /** Optional: get model id for this provider instance */
+  modelId?: string;
+  /** Optional: list known models (for dynamic discovery) */
+  listModels?(): Promise<string[]>;
 }

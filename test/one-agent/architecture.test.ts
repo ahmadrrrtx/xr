@@ -63,8 +63,10 @@ test("daemon workspace switch uses the canonical XRApp.switchWorkspace, not inli
 
 test("provider health is served by the shared ProviderHealthChecker", () => {
   const prov = codeOnly(read("src/daemon/routes/providers.routes.ts"));
-  // providers.list must use the shared cached health engine.
-  expect(prov).toMatch(/checkProviderHealthCached\(/);
+  // Phase 04 — providers.list must use the shared cached health engine via gateway
+  // which internally uses checkProviderHealthCached bounded cached deduped.
+  const usesSharedHealth = /checkProviderHealthCached\(/.test(prov) || /providerGateway\.health/.test(prov) || /providerGateway\.healthAll/.test(prov);
+  expect(usesSharedHealth).toBeTrue();
 });
 
 test("surface identity: daemon records itself as the canonical daemon surface", () => {

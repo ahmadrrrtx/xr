@@ -226,6 +226,8 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   "providers.route": { summary: "Show the explainable routing decision for a task profile.", tag: "providers", stability: "stable" },
   "providers.slo": { summary: "Routing SLO measurements (selection-latency compliance).", tag: "providers", stability: "stable" },
   "providers.catalog": { summary: "Full provider/model catalog with capabilities.", tag: "providers", stability: "stable" },
+  "providers.capabilities": { summary: "Provider capabilities (supported features per provider). Phase 04 gateway.", tag: "providers", stability: "stable" },
+  "providers.fallback": { summary: "Resolved fallback chain (primary → fallbackProvider → local). Phase 04 gateway.", tag: "providers", stability: "stable" },
   "workspaces.list": { summary: "List workspaces and the active one.", tag: "workspaces", stability: "stable" },
   "workspaces.create": {
     summary: "Create a workspace.",
