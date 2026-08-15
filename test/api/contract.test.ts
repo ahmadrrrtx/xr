@@ -22,6 +22,15 @@ import { LEGACY_SUNSET_HTTP_DATE } from "../../src/daemon/routes/contract.ts";
 
 const TOKEN = "phase02-contract-token";
 
+/**
+ * `/api/skills*` builds a SkillService (directory re-scan) per request, so a
+ * v1+legacy pair costs ~300 ms on a fast Linux runner and multiples of that on
+ * a contended Windows runner — this test timed out against Bun's 5 s default on
+ * Windows CI. The endpoint cost is pre-existing and out of Phase 02 scope; the
+ * assertion here is equivalence, never latency, so the timeout is generous.
+ */
+const SLOW_ENDPOINT_TIMEOUT_MS = 60_000;
+
 let server: ReturnType<typeof Bun.serve>;
 let base: string;
 
@@ -74,20 +83,20 @@ describe("Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression
       expect(typeof body).toBe("object");
       // The pre-Phase-02 failure mode was exactly this body:
       expect((body as { error?: string }).error).not.toBe("not found");
-    });
+    }, SLOW_ENDPOINT_TIMEOUT_MS);
   }
 
   test("GET /api/v1/skills returns the skills runtime shape", async () => {
     const body = (await (await get("/api/v1/skills")).json()) as { health?: unknown; skills?: unknown[] };
     expect(body.health).toBeDefined();
     expect(Array.isArray(body.skills)).toBe(true);
-  });
+  }, SLOW_ENDPOINT_TIMEOUT_MS);
 
   test("GET /api/v1/skills/health returns the runtime health envelope", async () => {
     const body = (await (await get("/api/v1/skills/health")).json()) as { total?: number; enabled?: number };
     expect(typeof body.total).toBe("number");
     expect(typeof body.enabled).toBe("number");
-  });
+  }, SLOW_ENDPOINT_TIMEOUT_MS);
 
   test("GET /api/v1/skills/marketplace returns marketplace aggregates", async () => {
     const body = (await (await get("/api/v1/skills/marketplace")).json()) as {
@@ -98,7 +107,7 @@ describe("Phase 02 — v1 mount reaches the sub-API adapters (the 404 regression
     expect(Array.isArray(body.skills)).toBe(true);
     expect(Array.isArray(body.registries)).toBe(true);
     expect(typeof body.stats?.installed).toBe("number");
-  });
+  }, SLOW_ENDPOINT_TIMEOUT_MS);
 
   test("GET /api/v1/plugins returns the plugin summary shape", async () => {
     const body = (await (await get("/api/v1/plugins")).json()) as {
@@ -126,19 +135,19 @@ describe("Phase 02 — legacy mount stays functional, with deprecation headers",
       expect(res.headers.get("sunset")).toBe(LEGACY_SUNSET_HTTP_DATE);
       expect(res.headers.get("x-xr-api-version")).toBe("v0-legacy");
       expect(res.headers.get("link")).toContain('rel="deprecation"');
-    });
+    }, SLOW_ENDPOINT_TIMEOUT_MS);
   }
 
   test("legacy Link header advertises the v1 alternate for the SAME resource", async () => {
     const res = await get("/api/skills/marketplace");
     expect(res.headers.get("link")).toContain("/api/v1/skills/marketplace");
-  });
+  }, SLOW_ENDPOINT_TIMEOUT_MS);
 
   test("v1 responses carry NO deprecation headers", async () => {
     const res = await get("/api/v1/skills");
     expect(res.headers.get("deprecation")).toBeNull();
     expect(res.headers.get("sunset")).toBeNull();
-  });
+  }, SLOW_ENDPOINT_TIMEOUT_MS);
 });
 
 describe("Phase 02 — canonicalization equivalence (v1 ≡ legacy)", () => {
@@ -152,7 +161,7 @@ describe("Phase 02 — canonicalization equivalence (v1 ≡ legacy)", () => {
       // Same canonical handler ⇒ same response KEYS (values may carry
       // timing/ordering-sensitive fields, so shape is the stable assertion).
       expect(Object.keys(ja as object).sort()).toEqual(Object.keys(jb as object).sort());
-    });
+    }, SLOW_ENDPOINT_TIMEOUT_MS);
   }
 });
 
@@ -163,7 +172,7 @@ describe("Phase 02 — unknown sub-paths are explicit, not silent", () => {
     const body = (await res.json()) as { error?: string };
     // The adapter answered (known domain), so it is NOT the generic router body.
     expect(body.error).toBe("unknown skills API route");
-  });
+  }, SLOW_ENDPOINT_TIMEOUT_MS);
 
   test("unknown plugins sub-path → adapter's own 404 envelope", async () => {
     const res = await get("/api/v1/plugins/definitely/not/a/route");

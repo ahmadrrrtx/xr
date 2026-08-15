@@ -77,7 +77,7 @@ function renderMarketplace() {
       ? (s.enabled ? \`<button class="btn btn-ghost" data-xr-action="event.stopPropagation(); \${act('skillAction', s.id, 'disable')}">Disable</button>\` : \`<button class="btn" data-xr-action="event.stopPropagation(); \${act('skillAction', s.id, 'enable')}">Enable</button>\`)
       : \`<button class="btn btn-primary" data-xr-action="event.stopPropagation(); \${act('installMarketplaceSkill', s.id)}">Install</button>\`;
     return \`
-      <div class="mp-skill-card\${sel}" role="button" tabindex="0" data-xr-action="\${act('inspectMarketplaceSkill', s.id)}">
+      <div class="mp-skill-card\${sel}" data-xr-action="\${act('inspectMarketplaceSkill', s.id)}">
         <div class="mp-skill-top">
           <div class="mp-skill-icon">\${skillInitials(s.name)}</div>
           <div class="xr-s-93">
@@ -86,7 +86,7 @@ function renderMarketplace() {
           </div>
         </div>
         <div class="mp-desc">\${escapeHtml(s.description || "")}</div>
-        <div class="mp-actions">\${action}</div>
+        <div class="mp-actions"><button class="btn btn-ghost" aria-label="Details for \${escapeHtml(s.name)}" data-xr-action="event.stopPropagation(); \${act('inspectMarketplaceSkill', s.id)}">Details</button>\${action}</div>
       </div>
     \`;
   }).join("") : "<div class='mp-panel-empty'>No matching Skills available in registry.</div>";

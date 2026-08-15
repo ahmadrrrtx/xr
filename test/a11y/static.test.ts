@@ -102,7 +102,16 @@ describe("T3 static — every form control has an accessible name (4.1.2 / 3.3.2
     // \${...} escapes appear as literal ${...} in the string.
     expect(DASHBOARD_SCRIPT).toContain('chat-session-item ${c.id === chatState.activeId ? "active" : ""}" role="button" tabindex="0"');
     expect(DASHBOARD_SCRIPT).toContain('class="tool-head" role="button" tabindex="0" aria-expanded="false"');
-    expect(DASHBOARD_SCRIPT).toContain('mp-skill-card${sel}" role="button" tabindex="0"');
+    // Marketplace cards are NOT role="button": the card contains real
+    // <button> children (Details / Install / Enable), and a widget role
+    // wrapping interactive descendants is an axe `nested-interactive`
+    // violation (WCAG 4.1.2). Before Phase 02 the skills marketplace 404'd,
+    // so this panel always rendered empty and the live axe sweep never saw
+    // a card. With the canonical route fixed the cards render, so the card
+    // is now a plain container and every action is a native button.
+    expect(DASHBOARD_SCRIPT).toContain('mp-skill-card${sel}" data-xr-action=');
+    expect(DASHBOARD_SCRIPT).not.toContain('mp-skill-card${sel}" role="button"');
+    expect(DASHBOARD_SCRIPT).toContain('aria-label="Details for ');
     expect(DASHBOARD_SCRIPT).toContain('badge-x" aria-label="Remove attachment ');
     // Enter/Space bridge for non-native action elements:
     expect(DASHBOARD_SCRIPT).toContain(`if (ev.key !== 'Enter' && ev.key !== ' ') return;`);

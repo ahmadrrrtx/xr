@@ -18,6 +18,19 @@ import { makeHandler } from "../../src/daemon/server.ts";
 const TOKEN = "phase02-perf-token";
 const P95_BUDGET_MS = 500;
 const SAMPLES = 20;
+/**
+ * Per-test timeout. `/api/skills` constructs a SkillService per request and
+ * re-scans the skill directories, which costs ~70 ms per request even on a
+ * fast Linux runner (~1.5 s for 20 samples) and several times that on a
+ * contended Windows runner. That is PRE-EXISTING endpoint cost, not Phase 02
+ * overhead — optimizing it is explicitly out of Phase 02 scope. Bun's default
+ * 5 s per-test budget is therefore too tight for a 20-sample loop on slow
+ * hardware: the tests timed out on Windows CI while every individual request
+ * was still far inside the 500 ms p95 budget. The gate below is the p95
+ * assertion; this timeout only stops the harness from killing the sampler
+ * before it can report.
+ */
+const TEST_TIMEOUT_MS = 120_000;
 
 let handler: (req: Request) => Promise<Response> | Response;
 
@@ -54,7 +67,7 @@ describe("Phase 02 performance sanity (PASS/FAIL only)", () => {
       // Recorded for the phase report; the assertion is the gate.
       console.log(`[perf-sanity] ${path} p95=${value.toFixed(1)}ms budget=${P95_BUDGET_MS}ms`);
       expect(value).toBeLessThan(P95_BUDGET_MS);
-    });
+    }, TEST_TIMEOUT_MS);
   }
 
   test("the v1 mount adds no material overhead over the legacy mount", async () => {
@@ -62,5 +75,5 @@ describe("Phase 02 performance sanity (PASS/FAIL only)", () => {
     console.log(`[perf-sanity] mount delta: v1=${v1.toFixed(1)}ms legacy=${legacy.toFixed(1)}ms`);
     // Canonicalization is a string slice; allow generous slack for CI noise.
     expect(v1).toBeLessThan(Math.max(legacy * 3, 50));
-  });
+  }, TEST_TIMEOUT_MS * 2); // this test runs the sampler twice
 });

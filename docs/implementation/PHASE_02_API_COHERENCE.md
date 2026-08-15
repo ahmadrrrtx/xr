@@ -371,6 +371,49 @@ Phase 01 work was reset, moved, or destroyed.
 4. **The perf gate is a sanity check, not a benchmark** — small sample, single
    process, no isolation from host noise. It catches pathological regressions only.
 
+### 17.1 Post-PR CI findings (follow-up commit)
+
+PR #60 surfaced two CI failures that the Linux sandbox run had not. Both were
+diagnosed to root cause, reproduced locally, and fixed. `CI / Quality Gate`
+was a third red check but is **not an independent failure**: `ci.yml` defines
+it as `if: always()` over `needs: [... a11y ...]`, so it simply mirrors the
+a11y result.
+
+**(a) `CI / Accessibility` — axe `nested-interactive` on the skills panel.**
+Phase 02 *caused* this, and correctly so. The marketplace card was authored as
+`<div class="mp-skill-card" role="button" tabindex="0">` while **containing**
+native `<button>` children (Install / Enable / Disable). That is a WCAG 4.1.2
+violation (a widget role may not wrap interactive descendants). It never fired
+before because `/api/v1/skills/marketplace` returned 404, so the panel always
+rendered its empty state and the live axe sweep had **no card to scan**. Fixing
+canonical routing made the panel render real data and exposed the latent defect.
+
+Verified by construction, not by inference: the same test run against baseline
+`4540e745` **passes**, and against this branch **fails** with
+`nested-interactive` on `.mp-skill-card[role="button"]`.
+
+The fix removes the redundant widget role — the card becomes a plain container
+and every action is a native button, with a new explicitly-labelled
+`Details` button carrying the inspect action that the card role used to
+provide. Keyboard operability is therefore *better* than before (real buttons
+instead of a synthetic Enter/Space bridge), and no affordance is lost. The
+static assertion in `test/a11y/static.test.ts` that pinned the old markup was
+updated to pin the accessible markup instead.
+
+**(b) `Cross-Platform CI / Windows` — 5 s per-test timeouts, not budget breaches.**
+The Windows failures in Phase-02-owned files were **harness timeouts**, never
+p95 assertions: `/api/skills*` constructs a `SkillService` per request and
+re-scans the skill directories, costing ~70 ms per request on a fast Linux
+runner and several times that on a contended Windows runner. A 20-sample loop
+therefore exceeds Bun's default 5 s per-test budget while every individual
+request stays far inside the 500 ms p95 gate. Per-repo convention
+(`test/perf/*`, `test/a11y/*` use explicit per-test timeouts) the sampling
+tests now declare generous explicit timeouts. **No budget was relaxed** — the
+p95 gate is still `< 500 ms` and the equivalence assertions are unchanged.
+
+The pre-request endpoint cost is pre-existing and is explicitly **not**
+optimized here (Phase 02 is not a performance phase); it is recorded in §18.
+
 ---
 
 ## 18. Deferred findings (later phases — NOT implemented here)
@@ -383,6 +426,11 @@ Phase 01 work was reset, moved, or destroyed.
 3. **Per-operation request/response schema coverage** for the sub-APIs.
 4. **Legacy-mount usage telemetry** ahead of the 2027-08-01 sunset, so the
    removal decision is data-driven.
+5. **`/api/skills*` constructs a `SkillService` (and re-scans the skill
+   directories) on every request** — ~70 ms per call on a fast Linux runner,
+   materially worse on contended Windows. Caching or hoisting the service is a
+   real fix but is a performance change, out of Phase 02 scope. Recorded here
+   because it is what forced explicit per-test timeouts in §17.1(b).
 
 ---
 
