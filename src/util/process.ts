@@ -17,6 +17,12 @@ export interface RunCommandOptions {
   /** Inherit / ignore / pipe. Default: pipe for stdout+stderr, ignore stdin unless input provided. */
   stdio?: "pipe" | "ignore" | "inherit";
   windowsHide?: boolean;
+  /**
+   * Phase 06 — caller cancellation. When it fires, the child process is
+   * terminated and the result reports `error: "cancelled"` (NOT timeout, NOT
+   * success). An already-aborted signal fails fast without spawning.
+   */
+  signal?: AbortSignal;
 }
 
 export interface RunCommandResult {
@@ -53,6 +59,11 @@ export async function runCommand(
   const maxBuffer = opts.maxBuffer ?? 8 * 1024 * 1024;
   const shell = opts.shell === true;
   const windowsHide = opts.windowsHide !== false;
+
+  // Phase 06 — fail fast: an already-aborted signal must not spawn a child.
+  if (opts.signal?.aborted) {
+    return { ok: false, status: null, stdout: "", stderr: "cancelled before start", signal: "SIGTERM", error: "cancelled" };
+  }
 
   if (useBunSpawn() && !shell) {
     return runWithBun(cmd, args, opts, timeoutMs, maxBuffer);
@@ -97,6 +108,7 @@ async function runWithBun(
   }
 
   let timedOut = false;
+  let cancelled = false;
   const timer =
     timeoutMs > 0
       ? setTimeout(() => {
@@ -108,6 +120,17 @@ async function runWithBun(
           }
         }, timeoutMs)
       : null;
+
+  // Phase 06 — caller cancellation reaches the child process.
+  const onAbort = (): void => {
+    cancelled = true;
+    try {
+      proc.kill();
+    } catch {
+      /* ignore */
+    }
+  };
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
 
   try {
     const [stdoutRaw, stderrRaw, exitCode] = await Promise.all([
@@ -121,11 +144,24 @@ async function runWithBun(
     ]);
 
     if (timer) clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onAbort);
 
     let stdout = decode(stdoutRaw);
     let stderr = decode(stderrRaw);
     if (stdout.length > maxBuffer) stdout = stdout.slice(0, maxBuffer);
     if (stderr.length > maxBuffer) stderr = stderr.slice(0, maxBuffer);
+
+    // Phase 06 — cancellation wins attribution over timeout (honesty).
+    if (cancelled) {
+      return {
+        ok: false,
+        status: null,
+        stdout,
+        stderr: stderr || `${cmd} cancelled`,
+        signal: "SIGTERM",
+        error: "cancelled",
+      };
+    }
 
     if (timedOut) {
       return {
@@ -147,13 +183,14 @@ async function runWithBun(
     };
   } catch (e) {
     if (timer) clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onAbort);
     return {
       ok: false,
       status: null,
       stdout: "",
-      stderr: (e as Error).message,
-      signal: null,
-      error: (e as Error).message,
+      stderr: cancelled ? "cancelled" : (e as Error).message,
+      signal: cancelled ? "SIGTERM" : null,
+      error: cancelled ? "cancelled" : (e as Error).message,
     };
   }
 }
@@ -185,6 +222,11 @@ function runWithNode(
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      try {
+        cleanupAbort();
+      } catch {
+        /* listener cleanup is best-effort */
+      }
       resolve(result);
     };
 
@@ -199,6 +241,21 @@ function runWithNode(
             }
           }, timeoutMs)
         : null;
+
+    // Phase 06 — caller cancellation reaches the child process (node path).
+    let cancelled = false;
+    const onAbort = (): void => {
+      cancelled = true;
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        /* ignore */
+      }
+    };
+    opts.signal?.addEventListener("abort", onAbort, { once: true });
+    const cleanupAbort = (): void => {
+      opts.signal?.removeEventListener("abort", onAbort);
+    };
 
     if (opts.input != null && child.stdin) {
       child.stdin.end(opts.input);
@@ -225,6 +282,18 @@ function runWithNode(
     });
 
     child.on("close", (code, signal) => {
+      // Phase 06 — cancellation wins attribution over timeout (honesty).
+      if (cancelled) {
+        finish({
+          ok: false,
+          status: null,
+          stdout,
+          stderr: stderr || `${cmd} cancelled`,
+          signal: signal ?? "SIGTERM",
+          error: "cancelled",
+        });
+        return;
+      }
       if (timedOut) {
         finish({
           ok: false,

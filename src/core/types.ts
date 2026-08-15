@@ -55,6 +55,15 @@ export interface Tool {
 export interface ToolContext {
   /** Working directory the agent is allowed to touch. */
   cwd: string;
+  /**
+   * Phase 06 — cooperative cancellation for this run, forwarded from the
+   * surface's abort handle (Ctrl+C / workflow stop / execution cancel).
+   * Tools whose underlying operations support interruption (subprocesses,
+   * fetch) MUST observe it; tools that cannot interrupt safely must ignore
+   * it and document that limitation — absence of interruption must never be
+   * reported as cancellation.
+   */
+  signal?: AbortSignal;
   /** Ask the human to approve a risky action. Returns true if approved. */
   approve(req: ApprovalRequest): Promise<boolean>;
   /** Append an entry to the tamper-evident audit log. */

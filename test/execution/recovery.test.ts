@@ -214,3 +214,135 @@ describe("XR 4.3 RecoveryManager", () => {
     expect(status.action).toBe("requires_approval");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 06 — honesty gates: corrupted checkpoints, broken audit chain,
+// authority revalidation, and the verify-before-resume invariant.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("Phase 06 · recovery honesty gates", () => {
+  let db: ExecutionDb;
+  let checkpoints: CheckpointManager;
+  let leases: LeaseManager;
+  let recovery: RecoveryManager;
+
+  beforeEach(() => {
+    db = makeDb();
+    checkpoints = new CheckpointManager(db);
+    leases = new LeaseManager(db);
+    recovery = new RecoveryManager(db, checkpoints, leases);
+    checkpoints.migrate();
+    leases.migrate();
+    recovery.migrate();
+  });
+
+  test("BROKEN AUDIT CHAIN blocks recovery even with a safe checkpoint (step 23/47)", () => {
+    const guarded = new RecoveryManager(db, checkpoints, leases, {
+      auditChain: () => ({ valid: false, reason: "hash mismatch at entry 42" }),
+    });
+    guarded.migrate();
+    const rec = makeRecord("authorized"); // would otherwise auto-resume
+    checkpoints.createCheckpoint(rec, "task_accepted"); // always-safe kind
+    const c = guarded.classify(rec);
+    expect(c.action).toBe("blocked");
+    expect(c.classification).toBe("audit_chain_broken");
+    expect(c.reason).toContain("hash mismatch");
+  });
+
+  test("intact audit chain permits normal classification", () => {
+    const guarded = new RecoveryManager(db, checkpoints, leases, {
+      auditChain: () => ({ valid: true }),
+    });
+    guarded.migrate();
+    const rec = makeRecord("authorized");
+    checkpoints.createCheckpoint(rec, "task_accepted");
+    const c = guarded.classify(rec);
+    expect(c.action).toBe("auto_resume");
+    expect(c.classification).toBe("safe");
+  });
+
+  test("CORRUPTED checkpoint blocks resume (step 22) — never resume garbage", () => {
+    const rec = makeRecord("running", "non_idempotent");
+    checkpoints.createCheckpoint(rec, "step_started");
+    // Corrupt the stored payload so it fails structural validation
+    db.prepare(`UPDATE execution_checkpoints SET kind = 'not_a_kind' WHERE run_id = ?`).run(rec.id.runId);
+    const c = recovery.classify(rec);
+    expect(c.action).toBe("blocked");
+    expect(c.classification).toBe("checkpoint_invalid");
+  });
+
+  test("AUTHORITY MISMATCH blocks resume (step 24/49) — no privilege escalation", () => {
+    let rec = makeRecord("authorized");
+    rec = {
+      ...rec,
+      trust: {
+        classification: { tier: "tier0_in_process", reasons: ["safe"], requiredApprovalLevel: "none", classifierVersion: "policy-v1" },
+        decision: { kind: "in_process_ok", requestedTier: "tier0_in_process", placement: "in_process", reason: "safe", decidedAt: Date.now(), policyVersion: "policy-v1" },
+        credentialScope: { mode: "none", refs: [], envNames: [] },
+      },
+    } as ExecutionRecord;
+    checkpoints.createCheckpoint(rec, "policy_admitted"); // carries authority snapshot (policy-v1)
+
+    // Environment changed: current authority now rejects that snapshot.
+    const guarded = new RecoveryManager(db, checkpoints, leases, {
+      authority: (snap) =>
+        snap.policyVersion === "policy-v1"
+          ? { ok: false, reason: "policy version rotated to policy-v2" }
+          : { ok: true },
+    });
+    guarded.migrate();
+    const c = guarded.classify(rec);
+    expect(c.action).toBe("blocked");
+    expect(c.classification).toBe("authority_expired");
+    expect(c.reason).toContain("policy-v2");
+  });
+
+  test("verifyRecoveryBasis requires a valid checkpoint BEFORE any resume claim (step 5)", () => {
+    const rec = makeRecord("authorized");
+    // No checkpoint at all → basis fails honestly
+    let basis = recovery.verifyRecoveryBasis(rec);
+    expect(basis.ok).toBe(false);
+    expect(basis.reason).toContain("no checkpoint");
+
+    // Valid safe checkpoint → basis passes
+    checkpoints.createCheckpoint(rec, "task_accepted");
+    basis = recovery.verifyRecoveryBasis(rec);
+    expect(basis.ok).toBe(true);
+    expect(basis.checkpoint?.kind).toBe("task_accepted");
+  });
+
+  test("verifyRecoveryBasis refuses unsafe resume boundaries (step 5 + 11)", () => {
+    // running record, non-idempotent action, checkpoint that is NOT side-effect safe
+    const rec = makeRecord("running", "non_idempotent");
+    checkpoints.createCheckpoint(rec, "step_started"); // idempotency-dependent, unsafe here
+    const basis = recovery.verifyRecoveryBasis(rec);
+    expect(basis.ok).toBe(false);
+    expect(basis.reason).toContain("not side-effect-safe");
+  });
+
+  test("verifyRecoveryBasis enforces audit + authority gates", () => {
+    let rec = makeRecord("authorized");
+    rec = {
+      ...rec,
+      trust: {
+        classification: { tier: "tier0_in_process", reasons: ["safe"], requiredApprovalLevel: "none", classifierVersion: "vA" },
+        decision: { kind: "in_process_ok", requestedTier: "tier0_in_process", placement: "in_process", reason: "safe", decidedAt: Date.now(), policyVersion: "vA" },
+        credentialScope: { mode: "none", refs: [], envNames: [] },
+      },
+    } as ExecutionRecord;
+    checkpoints.createCheckpoint(rec, "task_accepted");
+
+    const brokenAudit = new RecoveryManager(db, checkpoints, leases, {
+      auditChain: () => ({ valid: false, reason: "chain gap" }),
+    });
+    brokenAudit.migrate();
+    expect(brokenAudit.verifyRecoveryBasis(rec).ok).toBe(false);
+    expect(brokenAudit.verifyRecoveryBasis(rec).reason).toContain("audit chain broken");
+
+    const rotated = new RecoveryManager(db, checkpoints, leases, {
+      authority: () => ({ ok: false, reason: "credentials revoked" }),
+    });
+    rotated.migrate();
+    expect(rotated.verifyRecoveryBasis(rec).ok).toBe(false);
+    expect(rotated.verifyRecoveryBasis(rec).reason).toContain("credentials revoked");
+  });
+});

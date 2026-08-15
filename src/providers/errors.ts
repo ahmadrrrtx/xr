@@ -17,6 +17,13 @@ export type ProviderErrorKind =
   | "network_failure"
   | "context_length"
   | "content_policy_refusal"
+  /**
+   * Phase 06 — the provider answered, but the answer is structurally invalid
+   * (invalid JSON, missing required fields, unexpected events). NOT retryable
+   * against the same provider; execution state must not be mutated from it and
+   * success must never be claimed.
+   */
+  | "malformed_response"
   | "unknown_provider_failure";
 
 export interface ProviderErrorDetails {
@@ -92,6 +99,7 @@ function isRetryableKind(kind: ProviderErrorKind): boolean {
     case "unsupported_capability":
     case "context_length":
     case "content_policy_refusal":
+    case "malformed_response":
     case "unknown_provider_failure":
       return false;
     default:
@@ -201,6 +209,21 @@ function redactSecrets(text: string): string {
 
 export function redactText(text: string): string {
   return redactSecrets(text);
+}
+
+/**
+ * Phase 06 · Step 29 — canonical error for a structurally invalid provider
+ * answer (invalid JSON, missing required fields, unexpected events).
+ * Non-retryable against the same provider; callers must NOT mark the turn
+ * successful and must NOT mutate execution state from the malformed payload.
+ */
+export function malformedProviderResponseError(providerId: string, detail?: string, modelId?: string): ProviderError {
+  return new ProviderError(
+    "malformed_response",
+    providerId,
+    `provider ${providerId} returned a malformed response${detail ? ` (${redactSecrets(detail.slice(0, 160))})` : ""}`,
+    { modelId, retryable: false, details: { providerMessage: "malformed response" } },
+  );
 }
 
 /** Helper: should this error be retried? */

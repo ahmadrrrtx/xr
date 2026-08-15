@@ -41,6 +41,7 @@ import {
   ExecutionTimeoutError,
   NonIdempotentRetryBlockedError,
 } from "./errors.ts";
+import { decideRetry } from "./retry-classification.ts";
 import { CheckpointManager } from "./checkpoint.ts";
 import { LeaseManager } from "./lease.ts";
 import { RecoveryManager } from "./recovery.ts";
@@ -72,6 +73,20 @@ export interface ExecutionServiceDeps {
    * recovery status changes (for daemon/CLI UX updates).
    */
   onRecoveryStatus?: (status: RecoveryStatus) => void;
+  /**
+   * Phase 06 — audit-chain integrity verifier. When wired, startup recovery
+   * BLOCKS rather than resumes if the tamper-evident chain is broken.
+   */
+  verifyAuditChain?: () => { valid: boolean; reason?: string };
+  /**
+   * Phase 06 — authority revalidation hook. Decides whether a checkpoint's
+   * authority snapshot is still acceptable under CURRENT policy/credentials.
+   * Absent hook = pre-Phase-06 behavior (snapshot not revalidated).
+   */
+  validateAuthority?: (
+    snapshot: NonNullable<import("./types.ts").ExecutionCheckpoint["authoritySnapshot"]>,
+    record: ExecutionRecord,
+  ) => { ok: boolean; reason?: string };
 }
 
 export class ExecutionService {
@@ -93,7 +108,12 @@ export class ExecutionService {
     const db = deps.repo.rawDb;
     this.checkpoints = new CheckpointManager(db);
     this.leases = new LeaseManager(db);
-    this.recovery = new RecoveryManager(db, this.checkpoints, this.leases);
+    // Phase 06 — wire the integrity/authority verification hooks so recovery
+    // classification and resume-basis checks can enforce the hard boundaries.
+    this.recovery = new RecoveryManager(db, this.checkpoints, this.leases, {
+      ...(deps.verifyAuditChain ? { auditChain: deps.verifyAuditChain } : {}),
+      ...(deps.validateAuthority ? { authority: deps.validateAuthority } : {}),
+    });
     // Migration: ensure all Phase 4 tables exist
     this.checkpoints.migrate();
     this.leases.migrate();
@@ -185,13 +205,37 @@ export class ExecutionService {
     if (classification.action === "blocked" && !opts?.force) return null;
     if (classification.action === "requires_approval" && !opts?.force) return null;
 
-    // Record the recovery decision
+    /**
+     * Phase 06 · Step 5 — checkpoint BEFORE claiming resume. Even a favorable
+     * classification does not authorize a resume claim until a valid recovery
+     * checkpoint has been LOADED AND VERIFIED. `force` (explicit user action)
+     * may override classification but never skips basis verification — a
+     * corrupted checkpoint is never resumed, by anyone.
+     */
+    const basis = this.recovery.verifyRecoveryBasis(record);
+    if (!basis.ok) {
+      this.recovery.recordDecision(
+        "execution", runId,
+        "blocked", "checkpoint_invalid",
+        `Resume refused: ${basis.reason}`,
+        opts?.force ? "user" : "system",
+      );
+      this.deps.audit?.("execution.recovery_blocked", { runId, reason: basis.reason });
+      return null;
+    }
+
+    // Record the recovery decision (only after basis verified)
     this.recovery.recordDecision(
       "execution", runId,
       "auto_resume", classification.classification,
       classification.reason,
       opts?.force ? "user" : "system",
     );
+    // Phase 06 — durable marker that a recovery decision was made from a
+    // verified basis (ALWAYS_SAFE kind; auditable resume point).
+    this.checkpoints.createCheckpoint(record, "recovery_decided", {
+      progressSummary: `recovery basis verified: ${basis.checkpoint?.kind ?? "none"}`,
+    });
 
     // For recoverable executions that were pre-action, reset to queued
     if (!wasInFlight(record.state) || record.state === "awaiting_approval") {
@@ -215,6 +259,7 @@ export class ExecutionService {
    */
   async startupRecovery(workspaceId: string): Promise<RecoveryStatus[]> {
     const results: RecoveryStatus[] = [];
+    const startedAt = Date.now(); // Phase 06 · Step 53 — measure discovery/classification
 
     // Acquire recovery lease to prevent duplicate startup recovery
     const recoveryLease = this.leases.acquire("recovery", workspaceId, workspaceId, { ttlMs: 60000 });
@@ -243,10 +288,18 @@ export class ExecutionService {
         // Notify
         this.deps.onRecoveryStatus?.(status);
 
-        // Auto-resume safe work
+        // Auto-resume safe work — but only CLAIM resume if the basis was
+        // actually loaded + verified (Step 5). resumeRecoverable returns null
+        // when verification fails; that is reported honestly as blocked.
         if (classification.action === "auto_resume") {
-          await this.resumeRecoverable(record.id.runId, { force: true });
-          status.recoveryState = "resumed";
+          const resumed = await this.resumeRecoverable(record.id.runId, { force: true });
+          if (resumed) {
+            status.recoveryState = "resumed";
+          } else {
+            status.recoveryState = "recovery_blocked";
+            status.safeToResume = false;
+            status.blockedReason = status.blockedReason ?? "resume basis failed verification";
+          }
         }
       }
 
@@ -261,6 +314,22 @@ export class ExecutionService {
       }
     } finally {
       this.leases.release("recovery", workspaceId, "recovery_complete");
+      /**
+       * Phase 06 · Step 53 — measure startup-recovery discovery+classification
+       * and persist the duration so `recovery.status.get` can report a REAL
+       * RTO figure (not a marketing "zero"). Target budget: <5 s.
+       */
+      const durationMs = Date.now() - startedAt;
+      try {
+        this.checkpoints.setMaintenanceMeta("startup_recovery_last_duration_ms", String(durationMs));
+        this.checkpoints.setMaintenanceMeta("startup_recovery_last_at", String(Date.now()));
+        this.checkpoints.setMaintenanceMeta("startup_recovery_last_count", String(results.length));
+        this.deps.audit?.("execution.startup_recovery", {
+          workspaceId, discovered: results.length, durationMs,
+        });
+      } catch {
+        /* observability is best-effort */
+      }
     }
 
     return results;
@@ -331,9 +400,110 @@ export class ExecutionService {
   async executeInner(opts: ExecuteOptions): Promise<ExecutionRecord> {
     const now = Date.now();
     let claimedKey: string | null = null; // Phase 1 (T5): idempotency slot claimed before the effect
+    let workflowLease: import("./types.ts").ExecutionLease | null = null; // Phase 06: one owner per workflow
     const runId = opts.runId ?? `ex_${randomUUID().slice(0, 10)}`;
     const correlationId = opts.correlationId ?? runId;
     const placement: Placement = opts.placement ?? { kind: "in_process" };
+
+    /**
+     * Phase 06 · Step 25 — lease protection. Two owners must NEVER execute the
+     * same workflow concurrently: the second caller is rejected honestly (the
+     * lease protocol has no wait queue) instead of racing into duplicated side
+     * effects. Lease is released in the `finally` below; a crash leaves it
+     * unreleased and stale-detectable by PID, so restart can take over.
+     */
+    if (opts.workflowId) {
+      /**
+       * In-process gate first: the durable lease cannot distinguish two
+       * concurrent executions inside ONE runtime (same PID renews its own
+       * lease), so live in-flight records with the same workflowId are a hard
+       * rejection too. Same verdict, same audit event, same error code.
+       */
+      for (const liveRec of this.live.values()) {
+        if (liveRec.id.workflowId === opts.workflowId && liveRec.id.runId !== runId) {
+          const blockedAt = Date.now();
+          const record: ExecutionRecord = {
+            id: {
+              runId, workspaceId: opts.workspaceId, sessionId: opts.sessionId,
+              workflowId: opts.workflowId, taskId: opts.taskId, attempt: 1, correlationId,
+            },
+            state: "failed",
+            actor: opts.actor,
+            intent: opts.intent,
+            policy: [],
+            evidence: [],
+            artifacts: [],
+            history: [
+              { from: null, to: "created", at: blockedAt, reason: "execution created" },
+              { from: "created", to: "failed", at: blockedAt, reason: "workflow already executing in this runtime" },
+            ],
+            createdAt: blockedAt,
+            updatedAt: blockedAt,
+            adapterVersion: EXECUTION_ADAPTER_VERSION,
+            outcome: {
+              kind: "failed",
+              message: `Workflow ${opts.workflowId} is already executing in this runtime — duplicate execution rejected.`,
+              at: blockedAt,
+              error: {
+                code: "WORKFLOW_LEASE_HELD",
+                message: "workflow already executing in this runtime",
+                retryable: false,
+                sideEffectUnknown: false,
+                category: "policy",
+              },
+            },
+          };
+          try {
+            this.deps.repo.save(record);
+          } catch {
+            /* best-effort persistence of the rejection */
+          }
+          this.deps.audit?.("execution.lease_rejected", { runId, workflowId: opts.workflowId, scope: "in_process" });
+          return record;
+        }
+      }
+      workflowLease = this.leases.acquire("workflow", opts.workflowId, opts.workspaceId);
+      if (!workflowLease) {
+        const blockedAt = Date.now();
+        const record: ExecutionRecord = {
+          id: {
+            runId, workspaceId: opts.workspaceId, sessionId: opts.sessionId,
+            workflowId: opts.workflowId, taskId: opts.taskId, attempt: 1, correlationId,
+          },
+          state: "created",
+          actor: opts.actor,
+          intent: opts.intent,
+          policy: [],
+          evidence: [],
+          artifacts: [],
+          history: [{ from: null, to: "created", at: blockedAt, reason: "execution created" }],
+          createdAt: blockedAt,
+          updatedAt: blockedAt,
+          adapterVersion: EXECUTION_ADAPTER_VERSION,
+        };
+        record.outcome = {
+          kind: "failed",
+          message: `Workflow ${opts.workflowId} is already being executed by another owner — duplicate execution rejected by lease.`,
+          at: blockedAt,
+          error: {
+            code: "WORKFLOW_LEASE_HELD",
+            message: "workflow lease held by another live owner",
+            retryable: false,
+            sideEffectUnknown: false,
+            category: "policy",
+          },
+        };
+        try {
+          record.state = "failed";
+          record.history.push({ from: "created", to: "failed", at: blockedAt, reason: "workflow lease held by another owner" });
+          this.deps.repo.save(record);
+        } catch {
+          /* best-effort persistence of the rejection */
+        }
+        this.deps.audit?.("execution.lease_rejected", { runId, workflowId: opts.workflowId });
+        return record;
+      }
+    }
 
     const record: ExecutionRecord = {
       id: {
@@ -472,6 +642,12 @@ export class ExecutionService {
                 category: "reconciliation",
               },
             };
+            // Phase 06 — honest transition path: the execution did start
+            // (it evaluated its idempotency claim) and failed pre-effect.
+            // Firing "fail" from "queued" is an invalid transition, so move
+            // through "start" first; history stays auditable and the durable
+            // state ends in "failed", never stuck mid-lifecycle.
+            this.applyTransition(runId, record, "start", "evaluating idempotency claim");
             this.applyTransition(runId, record, "fail", "reconciliation required");
             this.deps.audit?.("execution.reconciliation_required", { runId, idempotencyKey: opts.idempotencyKey });
             return this.finalize(runId, record);
@@ -510,6 +686,12 @@ export class ExecutionService {
                 category: "reconciliation",
               },
             };
+            // Phase 06 — honest transition path: the execution did start
+            // (it evaluated its idempotency claim) and failed pre-effect.
+            // Firing "fail" from "queued" is an invalid transition, so move
+            // through "start" first; history stays auditable and the durable
+            // state ends in "failed", never stuck mid-lifecycle.
+            this.applyTransition(runId, record, "start", "evaluating idempotency claim");
             this.applyTransition(runId, record, "fail", "reconciliation required");
             this.deps.audit?.("execution.reconciliation_required", { runId, idempotencyKey: opts.idempotencyKey });
             return this.finalize(runId, record);
@@ -532,6 +714,14 @@ export class ExecutionService {
         record.startedAt = startedAt;
         this.applyTransition(runId, record, "start", attempt > 1 ? `attempt ${attempt}` : "execution started");
         this.emit({ type: "transition", runId, from: record.history[record.history.length - 2]?.from ?? null, to: "running", at: startedAt });
+        /**
+         * Phase 06 · Step 27 (crash windows) — persist the running state
+         * BEFORE the action executes. A crash mid-effect must be classifiable
+         * honestly: with the durable state still "queued", recovery could not
+         * tell that a side effect was possible and would overclaim safety.
+         * "running" is the durable signal that side effects may now occur.
+         */
+        this.persist(runId);
 
         const timeoutMs = Math.min(
           opts.timeoutMs ?? EXECUTION_BOUNDS.DEFAULT_TIMEOUT_MS,
@@ -612,6 +802,16 @@ export class ExecutionService {
               },
             };
             this.applyTransition(runId, record, "cancel", "cancelled");
+            /**
+             * Phase 06 · Step 7+17 — the cancellation cleanup boundary is
+             * checkpointed honestly. NOTE: this does NOT assert the side
+             * effect was avoided — `record.cancellation.sideEffectPossible`
+             * carries that truth, and `cancellation_requested` remains
+             * side-effect-UNSAFE by design.
+             */
+            this.checkpoints.createCheckpoint(record, "cleanup_completed", {
+              progressSummary: `cancellation cleanup completed (side-effect ${record.cancellation.sideEffectPossible ? "possible" : "not possible"})`,
+            });
             break;
           }
 
@@ -633,11 +833,35 @@ export class ExecutionService {
               },
             };
             this.applyTransition(runId, record, "timeout", "timeout fired");
-            if (attempt < maxAttempts && !sideEffectUnknown && opts.isRetryable && (await opts.isRetryable(lastErr, attempt))) {
+            /**
+             * Phase 06 · Step 11/12/38 — retry through the canonical decision:
+             * timeout is RETRYABLE, but only if the operation is side-effect
+             * safe and the bounded budget allows. `opts.isRetryable` is a VETO
+             * hook, never an override of the safety gates.
+             */
+            const timeoutDecision = await decideRetry({
+              error: lastErr,
+              idempotency: opts.idempotency,
+              sideEffectUnknown,
+              attempt,
+              startedAt,
+              budget: {
+                maxAttempts,
+                baseDelayMs: opts.retryBackoffMs,
+                deadlineMs: opts.timeoutMs ? opts.timeoutMs * maxAttempts : undefined,
+              },
+              callerAllowsRetry: opts.isRetryable,
+            });
+            if (timeoutDecision.verdict === "retry") {
+              this.deps.audit?.("execution.retry", {
+                runId, attempt: attempt + 1,
+                category: timeoutDecision.classification.category,
+                delayMs: timeoutDecision.delayMs,
+              });
               // Reset state for retry by creating a child-like continuation. But our retry
               // model keeps the same runId and increments attempt, so transition back to queued.
               this.resetForRetry(record);
-              await sleep(opts.retryBackoffMs ?? 100);
+              await sleep(timeoutDecision.delayMs);
               continue;
             }
             break;
@@ -659,20 +883,39 @@ export class ExecutionService {
           };
           this.applyTransition(runId, record, "fail", safeMessage(lastErr));
 
-          const canRetry =
-            attempt < maxAttempts &&
-            opts.idempotency !== "non_idempotent" &&
-            opts.idempotency !== "unknown_unsafe" &&
-            (!record.outcome.error?.sideEffectUnknown) &&
-            (!opts.isRetryable || (await opts.isRetryable(lastErr, attempt)));
+          /**
+           * Phase 06 · Step 11/12/38/40 — the JOINT retry decision:
+           * error class + side-effect class + idempotency + budget. A retry
+           * reuses the SAME record (same runId, same idempotencyKey), so the
+           * logical idempotency identity is preserved across attempts — a
+           * retry never mints a fresh key for the same logical effect.
+           */
+          const decision = await decideRetry({
+            error: lastErr,
+            idempotency: opts.idempotency,
+            sideEffectUnknown: !!record.outcome.error?.sideEffectUnknown,
+            attempt,
+            startedAt,
+            budget: {
+              maxAttempts,
+              baseDelayMs: opts.retryBackoffMs,
+              deadlineMs: opts.timeoutMs ? opts.timeoutMs * maxAttempts : undefined,
+            },
+            callerAllowsRetry: opts.isRetryable,
+          });
+          this.deps.audit?.("execution.retry_decision", {
+            runId, verdict: decision.verdict,
+            category: decision.classification.category,
+            code: decision.classification.code,
+          });
 
-          if (canRetry) {
+          if (decision.verdict === "retry") {
             this.resetForRetry(record);
-            await sleep(opts.retryBackoffMs ?? 100);
+            await sleep(decision.delayMs);
             continue;
           }
 
-          if (opts.idempotency === "non_idempotent" && record.outcome.error?.sideEffectUnknown) {
+          if (decision.verdict === "reconcile" || (opts.idempotency === "non_idempotent" && record.outcome.error?.sideEffectUnknown)) {
             // Honest reporting: we don't know if the side effect happened; upgrade to reconciliation_required.
             record.outcome = {
               ...record.outcome,
@@ -723,6 +966,13 @@ export class ExecutionService {
     } finally {
       this.live.delete(runId);
       this.cancelFlags.delete(runId);
+      // Phase 06 — always release the workflow lease so subsequent legitimate
+      // executions of the same workflow can proceed. A crash skips this and
+      // leaves the lease stale-detectable (PID liveness), which is the
+      // designed takeover path — never silent double execution.
+      if (workflowLease && opts.workflowId) {
+        this.leases.release("workflow", opts.workflowId, "execution_finished");
+      }
     }
   }
 
@@ -904,6 +1154,17 @@ export class ExecutionService {
     });
     rec.trust = evaluation.trust;
     this.persist(runId);
+
+    /**
+     * Phase 06 · Step 7 — checkpoint at environment admission. `env_admitted`
+     * was a declared safe kind but was never written; recovery now has a real
+     * boundary between policy admission and isolated execution.
+     */
+    if (evaluation.outcome.kind === "ran_in_environment") {
+      this.checkpoints.createCheckpoint(rec, "env_admitted", {
+        progressSummary: `environment admitted (${evaluation.trust.decision.placement})`,
+      });
+    }
 
     if (evaluation.outcome.kind === "blocked") {
       rec.action = this.buildAction(opts, rec, { kind: "in_process", description: "blocked before placement" });

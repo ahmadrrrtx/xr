@@ -295,17 +295,44 @@ export async function printStatus(args: string[] = []): Promise<void> {
   const opts = parseOptions(args);
   const json = args.includes("--json");
   const checks = await probeHealth(opts);
+  /**
+   * Phase 06 · Step 37 — `xr status` exposes UNRESOLVED WORK honestly:
+   * interrupted executions, how many are recoverable, how many need approval,
+   * how many are blocked. Dynamic literal-path import (compile-safe); a store
+   * failure degrades to "unavailable," never a crash.
+   */
+  let durableWork: import("../execution/status-summary.ts").RecoveryWorkSummary | null = null;
+  try {
+    const { collectRecoveryWorkSummary } = await import("../execution/status-summary.ts");
+    durableWork = collectRecoveryWorkSummary();
+  } catch {
+    durableWork = null;
+  }
   if (json) {
     // Installation health, not task readiness — see SummarizeOptions.requireRunnable.
     const summary = summarizeHealthChecks(checks, REQUIRED_HEALTH_CHECK_IDS, { requireRunnable: false });
     if (summary.exitCode !== 0) process.exitCode = summary.exitCode;
-    console.log(JSON.stringify({ platform: detectPlatform(), summary, checks }, null, 2));
+    console.log(JSON.stringify({ platform: detectPlatform(), summary, checks, durableWork }, null, 2));
     return;
   }
   banner();
   console.log(C.bold("XR System Status"));
   for (const c of checks) {
     console.log(`  ${c.label.padEnd(20)} ${stateIcon(c.state)} ${c.detail}`);
+  }
+  // Phase 06 · Step 37 — durable-execution section (honest counts, no claims).
+  console.log("");
+  console.log(C.bold("Durable Work"));
+  if (!durableWork || !durableWork.available) {
+    console.log(`  ${"unresolved work".padEnd(20)} ${stateIcon("warn")} ${durableWork?.error ? `unavailable (${durableWork.error})` : "workspace store unavailable"}`);
+  } else if (durableWork.interrupted === 0) {
+    console.log(`  ${"unresolved work".padEnd(20)} ${stateIcon("ok")} none — no interrupted executions in workspace "${durableWork.workspaceId}"`);
+  } else {
+    console.log(`  ${"interrupted".padEnd(20)} ${stateIcon("warn")} ${durableWork.interrupted} execution(s) need attention`);
+    console.log(`  ${"recoverable".padEnd(20)} ${stateIcon("ok")} ${durableWork.recoverable} can auto-resume from a verified checkpoint`);
+    console.log(`  ${"needs approval".padEnd(20)} ${stateIcon("warn")} ${durableWork.needsApproval} side-effect status unknown — human decision required`);
+    console.log(`  ${"blocked".padEnd(20)} ${stateIcon(durableWork.blocked > 0 ? "fail" : "ok")} ${durableWork.blocked} cannot resume (review required)`);
+    console.log(`  ${"".padEnd(20)} ${C.dim("→ details: xr execution --recovery · resume: xr execution --resume <runId>")}`);
   }
   const summary = summarizeHealthChecks(checks, REQUIRED_HEALTH_CHECK_IDS, { requireRunnable: false });
   if (summary.exitCode !== 0) process.exitCode = summary.exitCode;

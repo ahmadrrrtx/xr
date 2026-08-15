@@ -211,3 +211,34 @@ export async function runExecutionCmd(args: ExecutionCmdArgs = {}): Promise<void
     console.log(formatLine(s, { color }));
   }
 }
+
+// ── Phase 06 — CLI wiring ─────────────────────────────────────────────────
+// The execution/recovery command was previously unreachable: the banner and
+// docs pointed at `xr execution` while no router entry existed. This class
+// registers the command properly (Step 37).
+
+import { Command, CommandContext } from "../core/command-registry.ts";
+
+export class ExecutionCommand implements Command {
+  name = "execution";
+  description = "execution history & durable-execution recovery status";
+  usage =
+    "xr execution [--json] [--limit N] [--session SID] [--run RUNID] [--recovery] [--resume RUNID] [--cancel RUNID]";
+
+  async execute(ctx: CommandContext): Promise<void> {
+    const args: ExecutionCmdArgs = {};
+    const a = ctx.args;
+    for (let i = 0; i < a.length; i++) {
+      const t = a[i];
+      if (t === "--json") args.json = true;
+      else if (t === "--limit") args.limit = Number(a[++i]);
+      else if (t === "--session") args.session = a[++i];
+      else if (t === "--run") args.run = a[++i];
+      else if (t === "--recovery") args.recovery = true;
+      else if (t === "--resume") args.resume = a[++i];
+      else if (t === "--cancel") args.cancel = a[++i];
+      else if (t === "--workspace" || t === "-w") args.workspace = a[++i];
+    }
+    await runExecutionCmd(args);
+  }
+}

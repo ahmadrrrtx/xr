@@ -248,27 +248,40 @@ export class XRApp {
       const results = await (execService as any).startupRecovery(workspaceId);
 
       if (results && results.length > 0) {
+        const resumed = results.filter((r: any) => r.recoveryState === "resumed");
         const blocked = results.filter((r: any) => r.recoveryState === "recovery_blocked");
         const pending = results.filter((r: any) => r.recoveryState === "startup_recovery_pending");
 
         if (blocked.length > 0 || pending.length > 0) {
           this.events.emit("recovery.pending" as any, {
             total: results.length,
+            resumed: resumed.length,
             blocked: blocked.length,
             needsApproval: pending.length,
             timestamp: Date.now(),
           });
         }
 
-        // Phase 1 UX: crash-recovery banner on next launch (Part 22).
-        if (blocked.length > 0 || pending.length > 0) {
-          // eslint-disable-next-line no-console
-          console.warn(
-            `\n  ⚠ XR recovered ${results.length} interrupted execution(s) from a previous run. ` +
-              `${blocked.length} blocked (needs review), ${pending.length} awaiting approval. ` +
-              `Run \`xr status\` or \`xr execution list\` for details.\n`,
-          );
-        }
+        /**
+         * Phase 06 · Step 36 — HONEST recovery banner. The banner reports
+         * exactly what happened: discovery is not recovery. "Recovered" is
+         * only claimed for executions actually resumed from a verified
+         * checkpoint; everything else is reported as awaiting approval or
+         * blocked (needs review).
+         */
+        const parts: string[] = [];
+        if (resumed.length > 0) parts.push(`${resumed.length} recovered from a verified checkpoint`);
+        if (pending.length > 0) parts.push(`${pending.length} awaiting approval (side-effect status unknown)`);
+        if (blocked.length > 0) parts.push(`${blocked.length} blocked (needs review)`);
+        const unresolved = pending.length + blocked.length;
+        // eslint-disable-next-line no-console
+        console.warn(
+          `\n  ⚠ XR found ${results.length} interrupted execution(s) from a previous run: ` +
+            `${parts.join(", ")}. ` +
+            (unresolved > 0
+              ? `Run \`xr status\` or \`xr execution --recovery\` for details.\n`
+              : `Details: \`xr status\`.\n`),
+        );
       }
     } catch (err) {
       // Startup recovery is best-effort — never prevent the runtime from starting.
@@ -702,6 +715,69 @@ export class XRApp {
           }
         } catch {
           /* best-effort maintenance */
+        }
+      },
+    });
+
+    /**
+     * Phase 06 · Steps 31–33 — checkpoint pruning scheduler (daily).
+     *
+     * Design constraints honored:
+     *   - runs at most once per PRUNE_INTERVAL_MS even though the job ticks
+     *     hourly (last-run timestamp lives in durable maintenance metadata,
+     *     so restarts neither repeat nor forget the schedule);
+     *   - only deletes eligible checkpoints of TERMINATED executions past
+     *     retention; unresolved work and unacknowledged cancellations are
+     *     protected inside pruneDetailed();
+     *   - bounded batch (1000 rows per run);
+     *   - never blocks startup (first tick happens on the interval, and the
+     *     due-check makes the immediate post-boot tick a fast no-op);
+     *   - a failed prune records the failure and never crashes the runtime;
+     *   - structured observability: prune started/completed/failed events +
+     *     tamper-evident audit entry with counts (never payloads).
+     */
+    const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
+    const PRUNE_TICK_MS = 60 * 60 * 1000; // hourly due-check
+    this.backgroundServices.registerJob({
+      id: "checkpoint_pruner",
+      name: "Durable-Execution Checkpoint Pruner (daily)",
+      intervalMs: PRUNE_TICK_MS,
+      owner: "xr.kernel",
+      restartOnWorkspaceSwitch: true,
+      run: async () => {
+        try {
+          const execService = this.registry.tryResolve(Tokens.Execution);
+          if (!execService) return; // execution fabric not booted in this profile
+          const checkpoints = execService.checkpoints;
+
+          const lastRaw = checkpoints.getMaintenanceMeta("checkpoint_prune_last_at");
+          const lastAt = lastRaw ? Number.parseInt(lastRaw, 10) : Number.NaN;
+          if (Number.isFinite(lastAt) && Date.now() - lastAt < PRUNE_INTERVAL_MS) {
+            return; // not due yet — fast no-op
+          }
+
+          this.events.emit("checkpoint.prune_started" as any, { timestamp: Date.now() });
+          const result = checkpoints.pruneDetailed();
+          checkpoints.setMaintenanceMeta("checkpoint_prune_last_at", String(Date.now()));
+
+          const detail = {
+            deleted: result.deleted,
+            durationMs: result.durationMs,
+            ok: !result.error,
+            ...(result.error ? { error: result.error.slice(0, 200) } : {}),
+          };
+          try {
+            const audit = this.registry.tryResolve(Tokens.AuditStore);
+            audit?.audit(result.error ? "checkpoint.prune_failed" : "checkpoint.prune_completed", detail);
+          } catch {
+            /* audit is best-effort; pruning observability must not fail pruning */
+          }
+          this.events.emit((result.error ? "checkpoint.prune_failed" : "checkpoint.prune_completed") as any, {
+            ...detail,
+            timestamp: Date.now(),
+          });
+        } catch {
+          /* a broken scheduler must never take down the runtime */
         }
       },
     });

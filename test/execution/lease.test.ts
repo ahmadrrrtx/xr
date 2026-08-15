@@ -116,3 +116,76 @@ describe("XR 4.3 LeaseManager", () => {
     expect(id1).toBe(id2);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 06 · Step 25 — LEASE PROTECTION. Two owners over the SAME workflow:
+// exactly one may execute; the other must be rejected. This is the guard that
+// makes concurrent duplicate side effects impossible.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("Phase 06 · lease contention — one owner per workflow", () => {
+  test("worker B is rejected while worker A holds the workflow lease", () => {
+    const db = makeDb();
+    const workerA = new LeaseManager(db);
+    const workerB = new LeaseManager(db);
+    workerA.migrate();
+
+    // Distinct instance identities (two "processes").
+    expect(workerA.instanceIdentity).not.toBe(workerB.instanceIdentity);
+
+    const leaseA = workerA.acquire("workflow", "wf_shared", "ws_test");
+    expect(leaseA).not.toBeNull();
+
+    // Worker B must NOT be able to execute the same workflow concurrently.
+    const leaseB = workerB.acquire("workflow", "wf_shared", "ws_test");
+    expect(leaseB).toBeNull();
+    expect(workerB.holdsLease("workflow", "wf_shared")).toBe(false);
+    expect(workerA.holdsLease("workflow", "wf_shared")).toBe(true);
+  });
+
+  test("after worker A releases, worker B may take over", () => {
+    const db = makeDb();
+    const workerA = new LeaseManager(db);
+    const workerB = new LeaseManager(db);
+    workerA.migrate();
+
+    expect(workerA.acquire("workflow", "wf_handoff", "ws_test")).not.toBeNull();
+    expect(workerB.acquire("workflow", "wf_handoff", "ws_test")).toBeNull();
+
+    workerA.release("workflow", "wf_handoff", "completed");
+    // Now B can acquire (the row is released → re-inserted fresh).
+    const leaseB = workerB.acquire("workflow", "wf_handoff", "ws_test");
+    expect(leaseB).not.toBeNull();
+    expect(workerB.holdsLease("workflow", "wf_handoff")).toBe(true);
+  });
+
+  test("a stale (dead-owner) lease can be taken over when allowed", () => {
+    const db = makeDb();
+    const workerA = new LeaseManager(db);
+    workerA.migrate();
+
+    // Simulate a lease owned by a dead PID (e.g. a crashed XR process).
+    db.prepare(
+      `INSERT INTO execution_leases (lease_id, target_type, target_id, workspace_id, owner_pid, owner_instance_id, acquired_at, expires_at, stale)
+       VALUES ('lse_dead', 'workflow', 'wf_crashed', 'ws_test', 99999999, 'xr_dead_instance', ?, ?, 0)`,
+    ).run(Date.now(), Date.now() + 300000);
+
+    // Takeover allowed (default) → worker A acquires.
+    const lease = workerA.acquire("workflow", "wf_crashed", "ws_test", { allowTakeover: true });
+    expect(lease).not.toBeNull();
+    expect(workerA.holdsLease("workflow", "wf_crashed")).toBe(true);
+  });
+
+  test("takeover refused when allowTakeover=false", () => {
+    const db = makeDb();
+    const workerA = new LeaseManager(db);
+    workerA.migrate();
+
+    db.prepare(
+      `INSERT INTO execution_leases (lease_id, target_type, target_id, workspace_id, owner_pid, owner_instance_id, acquired_at, expires_at, stale)
+       VALUES ('lse_dead2', 'workflow', 'wf_crashed2', 'ws_test', 99999998, 'xr_dead_instance2', ?, ?, 0)`,
+    ).run(Date.now(), Date.now() + 300000);
+
+    const lease = workerA.acquire("workflow", "wf_crashed2", "ws_test", { allowTakeover: false });
+    expect(lease).toBeNull();
+  });
+});

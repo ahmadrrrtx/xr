@@ -20,7 +20,7 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionDb } from "./repository.ts";
 import { wasInFlight, sideEffectPossible } from "./state-machine.ts";
-import type { CheckpointManager } from "./checkpoint.ts";
+import { verifyCheckpoint, isSideEffectSafe, type CheckpointManager } from "./checkpoint.ts";
 import type { LeaseManager } from "./lease.ts";
 import {
   DURABILITY_BOUNDS,
@@ -41,6 +41,37 @@ const RECOVERY_TABLE = "execution_recoveries";
 const CANCEL_TABLE = "execution_cancellations";
 const ENV_TABLE = "environment_attachments";
 
+// ── Phase 06 — verification hooks (honesty gates) ─────────────────────────
+
+/**
+ * Optional integrity gates consulted during classification/resume. Recovery
+ * must never resume from corrupted state or on a broken audit chain, and must
+ * not continue under authority that is no longer valid. Hooks are optional so
+ * pre-Phase-06 wiring keeps identical behavior; when present they are BINDING.
+ */
+export interface RecoveryVerificationHooks {
+  /**
+   * Audit-chain integrity. Returning `{ valid: false }` BLOCKS recovery for
+   * every in-flight execution — audit integrity is a hard security boundary.
+   */
+  auditChain?: () => { valid: boolean; reason?: string };
+  /**
+   * Authority revalidation (spec step 24/49): is the checkpoint's authority
+   * snapshot still acceptable under CURRENT policy/credential state?
+   */
+  authority?: (
+    snapshot: NonNullable<import("./types.ts").ExecutionCheckpoint["authoritySnapshot"]>,
+    record: ExecutionRecord,
+  ) => { ok: boolean; reason?: string };
+}
+
+/** Result of verifying that a resume claim has a real basis (spec step 5). */
+export interface RecoveryBasis {
+  ok: boolean;
+  reason: string;
+  checkpoint: import("./types.ts").ExecutionCheckpoint | null;
+}
+
 // ── Recovery Manager ──────────────────────────────────────────────────────
 
 export class RecoveryManager {
@@ -48,6 +79,7 @@ export class RecoveryManager {
     private readonly db: ExecutionDb,
     private readonly checkpoints: CheckpointManager,
     private readonly leases: LeaseManager,
+    private readonly hooks: RecoveryVerificationHooks = {},
   ) {}
 
   /** Idempotent schema migration for all recovery tables. */
@@ -179,6 +211,55 @@ export class RecoveryManager {
       };
     }
 
+    // 1b. Phase 06 — audit-chain integrity is a HARD boundary. When a
+    // verifier is wired and reports the chain broken, nothing may resume
+    // silently, regardless of checkpoints or idempotency (spec step 23/47).
+    if (this.hooks.auditChain) {
+      let chain: { valid: boolean; reason?: string };
+      try {
+        chain = this.hooks.auditChain();
+      } catch (e) {
+        chain = { valid: false, reason: `audit verification failed: ${(e as Error)?.message ?? "unknown"}` };
+      }
+      if (!chain.valid) {
+        return {
+          action: "blocked",
+          classification: "audit_chain_broken",
+          reason: `Audit chain integrity check failed — recovery blocked: ${chain.reason ?? "chain invalid"}`,
+        };
+      }
+    }
+
+    // 1c. Phase 06 — a checkpoint that will serve as a resume basis must be
+    // structurally valid. Corrupted checkpoints block, never resume (step 22).
+    if (lastCheckpoint) {
+      const check = verifyCheckpoint(lastCheckpoint);
+      if (!check.valid) {
+        return {
+          action: "blocked",
+          classification: "checkpoint_invalid",
+          reason: `Latest checkpoint is invalid (${check.reason ?? "unknown"}) — refusing to resume from corrupted state.`,
+        };
+      }
+      // Authority revalidation (spec step 24/49): a checkpoint recorded under
+      // authority X does not grant authority Y after restart.
+      if (lastCheckpoint.authoritySnapshot && this.hooks.authority) {
+        let verdict: { ok: boolean; reason?: string };
+        try {
+          verdict = this.hooks.authority(lastCheckpoint.authoritySnapshot, record);
+        } catch (e) {
+          verdict = { ok: false, reason: `authority validation failed: ${(e as Error)?.message ?? "unknown"}` };
+        }
+        if (!verdict.ok) {
+          return {
+            action: "blocked",
+            classification: "authority_expired",
+            reason: `Authority snapshot no longer valid — ${verdict.reason ?? "authority mismatch"}. Re-admission required.`,
+          };
+        }
+      }
+    }
+
     // 2. Check if action was pre-flight (safe)
     if (!wasInFlight(state) || state === "awaiting_approval") {
       return {
@@ -248,6 +329,72 @@ export class RecoveryManager {
       classification: "safe",
       reason: `Execution in "${state}" with known checkpoint — safe to resume.`,
     };
+  }
+
+  /**
+   * Phase 06 · Step 5 — "checkpoint BEFORE claiming resume."
+   *
+   * XR must NEVER report "resumed" until a valid recovery checkpoint has been
+   * loaded AND verified. This is the gate the resume path must cross. It runs
+   * the full verification sequence:
+   *
+   *   locate latest checkpoint → validate checkpoint structure → validate
+   *   execution state → validate authority snapshot → validate audit chain.
+   *
+   * Returns ok:false with a reason if ANY gate fails; callers must treat a
+   * failed basis as "did not resume," never as success.
+   */
+  verifyRecoveryBasis(record: ExecutionRecord): RecoveryBasis {
+    const checkpoint = this.checkpoints.getLatestCheckpoint(record.id.runId);
+
+    // Gate 1 — a checkpoint must exist.
+    if (!checkpoint) {
+      return { ok: false, reason: "no checkpoint found to resume from", checkpoint: null };
+    }
+
+    // Gate 2 — checkpoint structure must be valid.
+    const structural = verifyCheckpoint(checkpoint);
+    if (!structural.valid) {
+      return { ok: false, reason: `checkpoint invalid: ${structural.reason ?? "unknown"}`, checkpoint };
+    }
+
+    // Gate 3 — audit chain integrity (hard boundary when a verifier is wired).
+    if (this.hooks.auditChain) {
+      try {
+        const chain = this.hooks.auditChain();
+        if (!chain.valid) {
+          return { ok: false, reason: `audit chain broken: ${chain.reason ?? "invalid"}`, checkpoint };
+        }
+      } catch (e) {
+        return { ok: false, reason: `audit verification error: ${(e as Error)?.message ?? "unknown"}`, checkpoint };
+      }
+    }
+
+    // Gate 4 — authority snapshot revalidation (no privilege escalation).
+    if (checkpoint.authoritySnapshot && this.hooks.authority) {
+      try {
+        const verdict = this.hooks.authority(checkpoint.authoritySnapshot, record);
+        if (!verdict.ok) {
+          return { ok: false, reason: `authority no longer valid: ${verdict.reason ?? "mismatch"}`, checkpoint };
+        }
+      } catch (e) {
+        return { ok: false, reason: `authority validation error: ${(e as Error)?.message ?? "unknown"}`, checkpoint };
+      }
+    }
+
+    // Gate 5 — side-effect safety of the resume boundary itself. Recomputed
+    // from the CURRENT record idempotency (not just the stored flag) so a
+    // later-reclassified action cannot sneak past an old safe flag.
+    const idempotency = record.action?.idempotency;
+    if (!checkpoint.sideEffectSafe && !isSideEffectSafe(checkpoint.kind, idempotency)) {
+      return {
+        ok: false,
+        reason: `resume boundary "${checkpoint.kind}" is not side-effect-safe for idempotency "${idempotency ?? "unknown"}"`,
+        checkpoint,
+      };
+    }
+
+    return { ok: true, reason: "checkpoint loaded and verified", checkpoint };
   }
 
   /**
