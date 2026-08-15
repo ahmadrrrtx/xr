@@ -30,21 +30,31 @@ function publicRecord(record: ReturnType<SkillService["listUnified"]>[number]) {
   };
 }
 
-export async function handleSkillsApi(req: Request, url: URL): Promise<Response | null> {
-  if (!url.pathname.startsWith("/api/skills")) return null;
+/**
+ * Skills sub-API adapter.
+ *
+ * `path` is the CANONICAL route path (`/api/skills/...`) resolved by the
+ * mount layer in routes/index.ts — NOT `url.pathname`, which still carries
+ * the external transport prefix (`/api/v1/...`) for versioned requests.
+ * Matching on `url.pathname` here is what made every `/api/v1/skills*`
+ * request fall through to a 404 (Phase 02). `url` remains the source of
+ * query parameters only.
+ */
+export async function handleSkillsApi(req: Request, url: URL, path: string): Promise<Response | null> {
+  if (!path.startsWith("/api/skills")) return null;
   const service = new SkillService();
 
-  if (url.pathname === "/api/skills" && req.method === "GET") {
+  if (path === "/api/skills" && req.method === "GET") {
     const q = url.searchParams.get("q")?.trim();
     const rows = q ? service.searchUnified(q, 80) : service.listUnified();
     return json({ health: service.runtimeHealth(), skills: rows.map(publicRecord) });
   }
 
-  if (url.pathname === "/api/skills/health" && req.method === "GET") {
+  if (path === "/api/skills/health" && req.method === "GET") {
     return json(service.runtimeHealth());
   }
 
-  if (url.pathname === "/api/skills/marketplace" && req.method === "GET") {
+  if (path === "/api/skills/marketplace" && req.method === "GET") {
     const q = url.searchParams.get("q")?.trim() ?? "";
     const local = (q ? service.searchUnified(q, 120) : service.listUnified()).map(publicRecord);
     let online: any[] = [];
@@ -92,21 +102,21 @@ export async function handleSkillsApi(req: Request, url: URL): Promise<Response 
     });
   }
 
-  if (url.pathname === "/api/skills/marketplace/sync" && req.method === "POST") {
+  if (path === "/api/skills/marketplace/sync" && req.method === "POST") {
     return json({ results: await service.syncRegistries() });
   }
 
-  if (url.pathname === "/api/skills/marketplace/updates" && req.method === "GET") {
+  if (path === "/api/skills/marketplace/updates" && req.method === "GET") {
     return json({ updates: await service.checkUpdates() });
   }
 
-  if (url.pathname === "/api/skills/marketplace/install" && req.method === "POST") {
+  if (path === "/api/skills/marketplace/install" && req.method === "POST") {
     const body = (await req.json().catch(() => ({}))) as { id?: string; registryId?: string; versionRange?: string };
     if (!body.id) return json({ error: "expected { id }" }, 400);
     return json(await service.installOnline(body.id, { registryId: body.registryId, versionRange: body.versionRange }));
   }
 
-  const m = url.pathname.match(/^\/api\/skills\/([^/]+)(?:\/(enable|disable|remove|inspect|permissions|dependencies))?$/);
+  const m = path.match(/^\/api\/skills\/([^/]+)(?:\/(enable|disable|remove|inspect|permissions|dependencies))?$/);
   if (!m) return json({ error: "unknown skills API route" }, 404);
   const id = decodeURIComponent(m[1]);
   const action = m[2] ?? "inspect";

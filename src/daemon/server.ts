@@ -27,6 +27,7 @@ import {
   htmlResponse,
   resolveMount,
   matchRouteId,
+  unmatchedCategory,
   safeJson,
   sseResponse,
   type DaemonResponseHelpers,
@@ -367,6 +368,15 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
       const statusClass = `${Math.floor(status / 100)}xx`;
       xrMetrics.httpRequests.inc({ route: routeId, method, status: statusClass });
       xrMetrics.httpDuration.observe({ route: routeId }, durationMs);
+      // Phase 02 — silent route drift is observable: count requests that
+      // matched no route, with bounded structural labels only.
+      if (routeId === "unmatched" && mount.kind !== "surface") {
+        xrMetrics.httpUnmatchedRoutes.inc({
+          method,
+          mount: mount.kind,
+          category: unmatchedCategory(canonical),
+        });
+      }
       structuredLog("info", "http.request", {
         route: routeId,
         method,
