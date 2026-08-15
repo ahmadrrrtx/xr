@@ -284,6 +284,24 @@ dashboard render 11.8 ms, retrieval 29.9 ms, route decision 0.0 ms).
   identically on the pristine tree (verified by stash). **Pre-existing
   environment sensitivity, not a Phase 01 regression.**
 
+## 16b. Full CI certification + restart/recovery validation
+
+- `bun run ci` (the repository's complete CI definition): **EXIT 0** — typecheck,
+  full test suite, release:check, channel:check, claim-lint, platform:parity:check
+  (245 files · linux 245 · darwin 245 · win32 240), changelog:check,
+  baseline:inventory, ci-capability-gate, api:schema:check (106 operations),
+  client:check, api:compat (0 breaking changes), boundaries (0 violations,
+  540 modules), size-gate, hot-path-lint (0 sync FS/process calls on the fast
+  path), ownership:check, website:marketplace:check.
+- `bun run perf:baseline --samples 21` — regenerated the versioned baseline
+  artifact (docs/perf/baseline-1.0.0-source.json/md); all 9 budgets PASS
+  (version 33.3 ms warm p95, doctor 319.8 ms, dashboard render 12.0 ms,
+  retrieval 26.2 ms, workspace-list 102.3 ms).
+- Live restart/recovery test: daemon boot → exercised endpoints (audit events:
+  workspace.create, onboarding.complete) → hard-killed → restarted → **workspace
+  persisted, audit hash-chain intact (2 entries, verified via API and
+  `xr audit verify`)**, warm endpoints 9–47 ms after restart.
+
 ## 17. Known limitations
 
 1. **Timeout ≠ cancellation for provider health** — the underlying 8 s-bounded
