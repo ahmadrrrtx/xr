@@ -49,10 +49,34 @@ function runChild(env: Record<string, string>): Promise<{ code: number | null; s
  */
 async function runChildUntilCrash(env: Record<string, string>): Promise<{ code: number | null; stdout: string }> {
   let r = await runChild(env);
-  if (r.code !== null && !r.stdout.includes("[crash-point]")) {
+  if (r.code !== null && r.code !== 0 && !r.stdout.includes("[crash-point]")) {
     r = await runChild(env);
   }
   return r;
+}
+
+/**
+ * Platform-honest crash assertion (Phase 06 CI fix).
+ *
+ * The PORTABLE truth that the child died at its deterministic crash point is
+ * its stdout: it printed `[crash-point]` (emitted after the side effect,
+ * immediately before the self-kill) and NEVER printed `[done]` (only emitted
+ * by a clean completion). That semantic holds on every OS.
+ *
+ * The exit-code shape, however, is OS-specific: POSIX surfaces SIGKILL as a
+ * signal death (code === null), while Windows implements it as
+ * TerminateProcess and Bun reports a non-zero exit code — asserting null
+ * there is a POSIX assumption, not a reliability property. Strictness stays
+ * where the semantics are guaranteed; honesty stays everywhere.
+ */
+function expectCrashedAtCrashPoint(r: { code: number | null; stdout: string }): void {
+  expect(r.stdout).toContain("[crash-point]");
+  expect(r.stdout).not.toContain("[done]");
+  if (process.platform !== "win32") {
+    expect(r.code).toBeNull(); // POSIX: killed by signal, no exit code
+  } else {
+    expect(r.code).not.toBe(0); // Windows: TerminateProcess → abnormal exit, never clean
+  }
 }
 
 function openWorkspace(dbPath: string): {
@@ -89,8 +113,7 @@ describe("Phase 06 · real process crash recovery (spec steps 20/21/26/52)", () 
         XR_IDEMPOTENCY: "non_idempotent",
         XR_WORKSPACE: "ws-crash",
       });
-      expect(r.code).toBeNull(); // SIGKILLed — a real crash, not a clean exit
-      expect(r.stdout).toContain("[crash-point]");
+      expectCrashedAtCrashPoint(r); // died at the deterministic crash point
       expect(effectCount(effectFile)).toBe(1); // the effect happened once
 
       // 2. Restart against the SAME database.
@@ -155,7 +178,7 @@ describe("Phase 06 · real process crash recovery (spec steps 20/21/26/52)", () 
         XR_IDEMPOTENCY: "non_idempotent",
         XR_WORKSPACE: "ws-crash",
       });
-      expect(r.code).toBeNull();
+      expectCrashedAtCrashPoint(r);
       expect(effectCount(effectFile)).toBe(0); // effect never ran
 
       const { store, service } = openWorkspace(dbPath);
@@ -207,7 +230,7 @@ describe("Phase 06 · real process crash recovery (spec steps 20/21/26/52)", () 
         XR_IDEMPOTENCY: "idempotent_with_key",
         XR_WORKSPACE: "ws-crash",
       });
-      expect(r.code).toBeNull();
+      expectCrashedAtCrashPoint(r);
       expect(readFileSync(effectFile, "utf8")).toBe("convergent-content-v1");
 
       const { store, service, idem } = openWorkspace(dbPath);

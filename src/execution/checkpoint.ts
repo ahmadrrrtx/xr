@@ -216,11 +216,21 @@ export class CheckpointManager {
     }
   }
 
-  /** Retrieve the latest checkpoint for an execution. */
+  /**
+   * Retrieve the latest checkpoint for an execution.
+   *
+   * Phase 06 CI fix — ordering is `created_at DESC, rowid DESC`: lifecycle
+   * boundaries regularly land in the SAME millisecond on fast runners, and a
+   * bare `created_at DESC` made the "latest" checkpoint nondeterministic on
+   * ties (which flipped the step-7 ordering test on Linux CI). rowid is
+   * monotonic per insert, so ties resolve to the true last-written boundary.
+   */
   getLatestCheckpoint(runId: string): ExecutionCheckpoint | null {
     try {
       const row = this.db
-        .prepare(`SELECT * FROM ${TABLE} WHERE run_id = ? ORDER BY created_at DESC LIMIT 1`)
+        .prepare(
+          `SELECT * FROM ${TABLE} WHERE run_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+        )
         .get<CheckpointRow>(runId);
       return row ? rowToCheckpoint(row) : null;
     } catch {
@@ -232,7 +242,9 @@ export class CheckpointManager {
   getCheckpoints(runId: string, limit = 50): ExecutionCheckpoint[] {
     try {
       const rows = this.db
-        .prepare(`SELECT * FROM ${TABLE} WHERE run_id = ? ORDER BY created_at DESC LIMIT ?`)
+        .prepare(
+          `SELECT * FROM ${TABLE} WHERE run_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+        )
         .all<CheckpointRow>(runId, limit);
       return rows.map(rowToCheckpoint);
     } catch {
@@ -245,7 +257,7 @@ export class CheckpointManager {
     try {
       const rows = this.db
         .prepare(
-          `SELECT * FROM ${TABLE} WHERE workflow_id = ? ORDER BY created_at DESC LIMIT ?`,
+          `SELECT * FROM ${TABLE} WHERE workflow_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`,
         )
         .all<CheckpointRow>(workflowId, 100);
       return rows.map(rowToCheckpoint);

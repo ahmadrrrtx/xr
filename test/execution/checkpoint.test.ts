@@ -207,6 +207,33 @@ describe("Phase 06 · checkpoint payload integrity (spec step 6)", () => {
     ).toBe(false);
   });
 
+  test("latest-checkpoint ordering is deterministic even for same-millisecond boundaries", () => {
+    /**
+     * Phase 06 CI fix regression — fast runners write consecutive lifecycle
+     * boundaries within ONE millisecond. With bare `ORDER BY created_at DESC`
+     * the "latest" row on a tie is nondeterministic (flipped the step-7
+     * ordering test on Linux CI). rowid tiebreak must resolve ties to the
+     * true last-written boundary.
+     */
+    const rec = makeRecord();
+    const first = mgr.createCheckpoint(rec, "step_started");
+    const second = mgr.createCheckpoint(rec, "tool_call_completed");
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    // Force the pathological case: both rows share one timestamp.
+    db.prepare(`UPDATE execution_checkpoints SET created_at = ? WHERE run_id = ?`).run(
+      first!.createdAt,
+      "ex_test123",
+    );
+    const latest = mgr.getLatestCheckpoint("ex_test123");
+    expect(latest?.checkpointId).toBe(second!.checkpointId);
+    expect(latest?.kind).toBe("tool_call_completed");
+    // And the ordered list agrees.
+    const all = mgr.getCheckpoints("ex_test123");
+    expect(all[0].kind).toBe("tool_call_completed");
+    expect(all[1].kind).toBe("step_started");
+  });
+
   test("CHECKPOINT_KINDS contains exactly the documented lifecycle boundaries", () => {
     const kinds: string[] = [...CHECKPOINT_KINDS].sort();
     expect(kinds).toEqual([
