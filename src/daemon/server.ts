@@ -22,6 +22,7 @@ import { NamespaceSandboxBackend } from "../runtime/trust/environment/namespace.
 import { ContainerBackend } from "../runtime/trust/environment/container.ts";
 import { GVisorBackend } from "../runtime/trust/environment/gvisor.ts";
 import { FirecrackerBackend } from "../runtime/trust/environment/firecracker.ts";
+import { createAgentExecutor } from "./agent-executor.ts";
 import {
   createRouteHandler,
   htmlResponse,
@@ -231,11 +232,16 @@ function makeDaemonTrust(): TrustService {
 /** Build the request handler (pure; used by both serve() and tests). */
 export function makeHandler(initialStore: Store, token: string, opts: { rateLimit?: number } = {}) {
   const workspaceManager = new WorkspaceManager();
+  const agentExecutor = createAgentExecutor();
   const state: DaemonState = {
     store: initialStore,
     shield: new XRShieldService(initialStore),
     workspaceManager,
     trust: makeDaemonTrust(),
+    // Phase 03 — the daemon uses the SAME AgentService composition root as the
+    // CLI (lazily booted on first task/workspace-switch). Chat and workspace
+    // switching route through it instead of duplicating orchestration.
+    agentExecutor,
   };
   const routes = createRouteHandler();
   // Phase 4 · T5 — rate limiting: generous default, but bounded (429).

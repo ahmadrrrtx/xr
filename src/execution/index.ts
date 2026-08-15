@@ -33,6 +33,7 @@ export * from "./repository.ts";
 export * from "./inspection.ts";
 export * from "./checkpoint.ts";
 export * from "./lease.ts";
+export * from "./lane.ts";
 export * from "./recovery.ts";
 export * as adapters from "./adapters/index.ts";
 export * as workflow from "./workflow/index.ts";

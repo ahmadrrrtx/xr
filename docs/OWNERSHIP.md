@@ -88,6 +88,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/multi-agent-e2e.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/multi-agent.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/observability/` | @ahmadrrrtx | explicit entry |
+| `test/one-agent/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/perf/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/phase0/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/platform/` | @ahmadrrrtx | default (@ahmadrrrtx) |
