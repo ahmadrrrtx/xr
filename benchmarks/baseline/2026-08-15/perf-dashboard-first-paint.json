@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-15T11:50:22.151Z",
+  "commit": "96802988904b0ce3c477f501b23de0009b28c751",
+  "method": "HTML GET / (session cookie) + Promise.all of client-core loadDashboard endpoints (overview,cost,control,memory,providers,security,models). Meaningful paint = html_ms + aggregate_parallel_ms.",
+  "playwright": "NOT_USED",
+  "playwrightReason": "Endpoint-level measurement is deterministic and does not require browser; HTML render budget already covered by scripts/perf/dashboard-bench.ts in existing gate.",
+  "samples": 7,
+  "html": {
+    "sampleCount": 7,
+    "p50": 10.179073999985121,
+    "p95": 13.87931099999696,
+    "min": 7.687807999987854,
+    "max": 13.87931099999696,
+    "mean": 10.46610185713923,
+    "stdev": 2.0161007475563726
+  },
+  "aggregateParallelEndpoints": {
+    "sampleCount": 7,
+    "p50": 541.9875000000029,
+    "p95": 632.702335000009,
+    "min": 518.8740649999818,
+    "max": 632.702335000009,
+    "mean": 550.1355679999999,
+    "stdev": 38.084244002382306
+  },
+  "firstMeaningfulPaint": {
+    "sampleCount": 7,
+    "p50": 553.3197720000171,
+    "p95": 646.581646000006,
+    "min": 526.5618729999696,
+    "max": 646.581646000006,
+    "mean": 560.6016698571392,
+    "stdev": 39.7111685865984,
+    "definition": "html_ms + wall-clock of parallel dashboard API batch",
+    "phase01TargetMs": 2000,
+    "vsTarget": "MEETS_TARGET"
+  },
+  "breakdown": {
+    "html": {
+      "sampleCount": 7,
+      "p50": 10.179073999985121,
+      "p95": 13.87931099999696,
+      "min": 7.687807999987854,
+      "max": 13.87931099999696,
+      "mean": 10.46610185713923,
+      "stdev": 2.0161007475563726
+    },
+    "overview": {
+      "sampleCount": 7,
+      "p50": 53.71776899998076,
+      "p95": 90.41824599998654,
+      "min": 49.90474299999187,
+      "max": 90.41824599998654,
+      "mean": 63.427205285708105,
+      "stdev": 15.88360977409163
+    },
+    "cost": {
+      "sampleCount": 7,
+      "p50": 33.708754999999655,
+      "p95": 72.15383899997687,
+      "min": 31.309490999992704,
+      "max": 72.15383899997687,
+      "mean": 41.70566014285266,
+      "stdev": 15.066809772568728
+    },
+    "control": {
+      "sampleCount": 7,
+      "p50": 33.70783600001596,
+      "p95": 72.1382459999877,
+      "min": 31.3018929999962,
+      "max": 72.1382459999877,
+      "mean": 41.69735357142885,
+      "stdev": 15.064140393499592
+    },
+    "memory": {
+      "sampleCount": 7,
+      "p50": 33.70262399999774,
+      "p95": 72.1315450000111,
+      "min": 31.291946000012103,
+      "max": 72.1315450000111,
+      "mean": 41.68386799999904,
+      "stdev": 15.067509050856149
+    },
+    "providers": {
+      "sampleCount": 7,
+      "p50": 541.4092019999953,
+      "p95": 632.229262000008,
+      "min": 518.6910899999784,
+      "max": 632.229262000008,
+      "mean": 549.8420518571407,
+      "stdev": 37.99792443382379
+    },
+    "security": {
+      "sampleCount": 7,
+      "p50": 36.22214100000565,
+      "p95": 73.66755899999407,
+      "min": 31.48363200001768,
+      "max": 73.66755899999407,
+      "mean": 47.59238157143201,
+      "stdev": 18.59053559457514
+    },
+    "models": {
+      "sampleCount": 7,
+      "p50": 70.77346700000635,
+      "p95": 108.16954500001157,
+      "min": 68.90900499999407,
+      "max": 108.16954500001157,
+      "mean": 82.31189685714655,
+      "stdev": 16.400750228288334
+    }
+  },
+  "forensicHistorical": {
+    "bunRequestTimeout": "~10s",
+    "dashboardFirstPaint": ">10s timeout"
+  }
+}

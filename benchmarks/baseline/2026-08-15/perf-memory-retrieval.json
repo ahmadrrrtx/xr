@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-15T11:50:22.151Z",
+  "commit": "96802988904b0ce3c477f501b23de0009b28c751",
+  "method": "in-process MemoryStore.recall / search on 50 seeded entries, isolated Store",
+  "corpusSize": 50,
+  "query": "concise answers local-first",
+  "recall": {
+    "sampleCount": 11,
+    "p50": 1.8805029999930412,
+    "p95": 5.121951999986777,
+    "min": 1.5179139999963809,
+    "max": 5.121951999986777,
+    "mean": 2.214302636360199,
+    "stdev": 1.0286012852357356,
+    "samplesMs": [
+      5.12,
+      1.98,
+      1.65,
+      1.86,
+      1.55,
+      1.52,
+      1.84,
+      2.85,
+      1.88,
+      2.07,
+      2.04
+    ],
+    "hitCounts": [
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5,
+      5
+    ],
+    "meanHits": 5
+  },
+  "search": {
+    "sampleCount": 11,
+    "p50": 0.5017480000096839,
+    "p95": 1.5179910000006203,
+    "min": 0.4244710000057239,
+    "max": 1.5179910000006203,
+    "mean": 0.5935949090899985,
+    "stdev": 0.31468301244674807,
+    "samplesMs": [
+      1.52,
+      0.7,
+      0.5,
+      0.51,
+      0.51,
+      0.5,
+      0.43,
+      0.46,
+      0.49,
+      0.48,
+      0.42
+    ]
+  },
+  "referenceBudgetMs": 250,
+  "vsTarget": "MEETS_TARGET",
+  "note": "Memory may be disabled in default config for chat injection; engine APIs still work in-process."
+}

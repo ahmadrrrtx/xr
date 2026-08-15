@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-15T11:50:22.151Z",
+  "commit": "96802988904b0ce3c477f501b23de0009b28c751",
+  "command": "bun test test/reliability/golden-path.test.ts",
+  "code": 0,
+  "ms": 856.4008909999975,
+  "timedOut": false,
+  "stdoutTail": "bun test v1.3.14 (0d9b296a)\n",
+  "stderrTail": "\ntest/reliability/golden-path.test.ts:\n(pass) Phase 1 · golden path (install → answer → restart → resume → answer → uninstall) > full journey passes every effect assertion [737.34ms]\n\n 1 pass\n 0 fail\n 18 expect() calls\nRan 1 test across 1 file. [850.00ms]\n",
+  "status": "PASS"
+}
