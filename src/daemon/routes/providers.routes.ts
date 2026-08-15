@@ -7,6 +7,8 @@ import { recommendLocalAI } from "../../local/recommend.ts";
 import { detectAllRuntimes, detectRuntime, testLocalModel } from "../../local/runtimes.ts";
 import { isLocalRuntimeId, providerIdForRuntime, validateLocalModelId } from "../../local/registry.ts";
 import { XRShieldService } from "../../security/shield.ts";
+import { Tokens } from "../../core/tokens.ts";
+import { WorkspaceSwitchFailedError } from "../../core/errors.ts";
 import { IntelligenceRouter } from "../../intelligence/router.ts";
 import { buildCatalog } from "../../intelligence/catalog.ts";
 import { BehavioralStore, behavioralView } from "../../intelligence/behavioral.ts";
@@ -200,14 +202,40 @@ export function providersRoutes(): DaemonRoute[] {
           const body = await req.json() as { id?: string };
           const id = (body.id ?? "").trim();
           if (!id) return json({ error: "workspace id is required" }, 400);
+          const executor = state.agentExecutor;
+          if (!executor) return json({ error: "agent executor unavailable" }, 503);
+
+          // Phase 03 · T3.2 — the canonical lifecycle, never inline:
+          //   previousStore.close(); setActiveId(); getStore(); new Shield...
+          // XRApp.switchWorkspace() owns the state transition, background-job
+          // stop/start, provider rebinding, health events, audit and rollback.
           const previousId = state.workspaceManager.getActiveId();
-          if (previousId !== id) {
-            const previousStore = state.store;
-            state.workspaceManager.setActiveId(id);
-            state.store = state.workspaceManager.getStore(id);
-            state.shield = new XRShieldService(state.store);
-            try { previousStore.close(); } catch {}
+          try {
+            await executor.switchWorkspace(id);
+          } catch (e) {
+            if (e instanceof WorkspaceSwitchFailedError) {
+              // Stable, observable, preserves the previous workspace, health is
+              // updated by XRApp internals, and the failure is audited.
+              state.store.audit("workspace.switch_failed", {
+                from: previousId,
+                to: id,
+                error: e.message,
+              });
+              return json({ error: e.message, workspace: { from: previousId, to: id } }, 503);
+            }
+            throw e;
           }
+
+          // Re-sync the daemon's routing state from the canonical app so every
+          // other route sees the new workspace's store/shield/manager.
+          const app = executor.app;
+          if (app) {
+            state.app = app;
+            state.workspaceManager = app.workspaces;
+            state.store = app.registry.resolve(Tokens.Store);
+            state.shield = new XRShieldService(state.store);
+          }
+
           state.store.audit("workspace.switch", { from: previousId, to: id });
           return json({ ok: true, active: state.workspaceManager.getActiveId() });
         } catch (e) {

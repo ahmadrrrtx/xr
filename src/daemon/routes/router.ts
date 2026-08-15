@@ -5,6 +5,8 @@ import type { XRConfig } from "../../config/config.ts";
 import type { XRShieldService } from "../../security/shield.ts";
 import type { WorkspaceManager } from "../../core/workspace.ts";
 import type { TrustService } from "../../runtime/trust/service.ts";
+import type { XRApp } from "../../core/app.ts";
+import type { AgentExecutorHandle } from "../agent-executor.ts";
 
 export interface DaemonState {
   store: Store;
@@ -12,6 +14,14 @@ export interface DaemonState {
   workspaceManager: WorkspaceManager;
   /** XR 4.2 — Trust & Isolation service (backend availability, health, classify). */
   trust?: TrustService;
+  /**
+   * Phase 03 — the daemon's canonical XRApp composition root (lazily booted by
+   * the AgentExecutor). Route code must NEVER re-implement agent/workspace
+   * orchestration inline; it resolves the canonical services through here.
+   */
+  app?: XRApp;
+  /** Phase 03 — the daemon's AgentService boundary (one execution path). */
+  agentExecutor?: AgentExecutorHandle;
 }
 
 export interface DaemonResponseHelpers {
