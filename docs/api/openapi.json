@@ -3023,13 +3023,114 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "text": {
+                    "event_id": {
+                      "description": "Monotonic per-stream sequence (ordering/resume foundation).",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "type": {
+                      "description": "Canonical event discriminator.",
+                      "type": "string",
+                      "enum": [
+                        "status",
+                        "token",
+                        "tool_call",
+                        "tool_result",
+                        "usage",
+                        "done",
+                        "error"
+                      ]
+                    },
+                    "status": {
+                      "description": "Status label (provider_selection, provider_ready, cancelled, ...).",
                       "type": "string"
                     },
+                    "text": {
+                      "description": "Legacy observation line (via say).",
+                      "type": "string"
+                    },
+                    "token": {
+                      "description": "Token delta text for type=token.",
+                      "type": "string"
+                    },
+                    "tool": {
+                      "description": "Tool id for type=tool_call/tool_result.",
+                      "type": "string"
+                    },
+                    "id": {
+                      "description": "Tool call id correlating tool_call and tool_result.",
+                      "type": "string"
+                    },
+                    "args": {
+                      "description": "Tool arguments for type=tool_call."
+                    },
+                    "ok": {
+                      "description": "Tool success for type=tool_result.",
+                      "type": "boolean"
+                    },
+                    "result": {
+                      "description": "Tool output for type=tool_result.",
+                      "type": "string"
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "inTokens": {
+                          "type": "number"
+                        },
+                        "outTokens": {
+                          "type": "number"
+                        }
+                      },
+                      "additionalProperties": {}
+                    },
+                    "fullText": {
+                      "description": "Final generated text (backward-compatible final result).",
+                      "type": "string"
+                    },
+                    "finishReason": {
+                      "description": "Loop stop reason (done|error|budget|max_steps|approval|cancelled).",
+                      "type": "string"
+                    },
+                    "ttftMs": {
+                      "description": "Time to first token, ms.",
+                      "type": "number"
+                    },
+                    "totalMs": {
+                      "description": "Total generation duration, ms.",
+                      "type": "number"
+                    },
+                    "code": {
+                      "description": "Structured error code for type=error.",
+                      "type": "string"
+                    },
+                    "message": {
+                      "description": "Human-readable message for type=error/status.",
+                      "type": "string"
+                    },
+                    "retryable": {
+                      "description": "Whether the error may be retried.",
+                      "type": "boolean"
+                    },
                     "done": {
+                      "description": "Legacy terminal flag.",
+                      "type": "boolean"
+                    },
+                    "finalMessage": {
+                      "description": "Legacy terminal full text.",
+                      "type": "string"
+                    },
+                    "stopped": {
+                      "description": "Legacy stop reason.",
+                      "type": "string"
+                    },
+                    "cancelled": {
+                      "description": "Legacy cancellation flag.",
                       "type": "boolean"
                     },
                     "error": {
+                      "description": "Legacy error message.",
                       "type": "string"
                     }
                   },

@@ -1,0 +1,116 @@
+From 8d8e495eef57b38ac8dca94a019f8d4c80120c5b Mon Sep 17 00:00:00 2001
+From: XR Agent <agent@arena.ai>
+Date: Sat, 15 Aug 2026 19:19:43 +0000
+Subject: [PATCH] fix(ci): size-gate waiver + migration tests for
+ CONFIG_VERSION 19
+
+---
+ docs/perf/SIZE-WAIVERS.json        |  4 ++--
+ test/context/migration.test.ts     |  4 ++--
+ test/environment/migration.test.ts | 19 +++++++++++--------
+ 3 files changed, 15 insertions(+), 12 deletions(-)
+
+diff --git a/docs/perf/SIZE-WAIVERS.json b/docs/perf/SIZE-WAIVERS.json
+index a119786..1eabcbc 100644
+--- a/docs/perf/SIZE-WAIVERS.json
++++ b/docs/perf/SIZE-WAIVERS.json
+@@ -89,9 +89,9 @@
+     },
+     {
+       "path": "src/config/config.ts",
+-      "lines": 1216,
++      "lines": 1236,
+       "owner": "config",
+-      "reason": "A single Zod schema plus load/save. It is one cohesive declaration and the single source of truth for configuration shape; splitting the schema would create multiple partial truths. Phase 4 \u00b7 T1/T4 added security.hardened + security.allowedHosts schema fields and the env-override helper. Phase 5 added the additive difficultyRouting/breaker/retry intelligencePlane fields and migration 17\u219218 (+47 lines, schema-only). Phase 8 \u00b7 T2 added the additive telemetry subtree (opt-in, structural-by-default, redacted, local-first; +30 lines, schema-only, no migration needed \u2014 defaults fill). Launch S-1 \u00b7 F3 added the additive envOverrides/envOverridesLocked fields and applyEnvOverrides (explicit env-var -> config-path contract with proto-pollution guards and schema re-validation; +83 lines, no migration needed - defaults fill), pinned by test/config/env-overrides.test.ts. Audit GAP-001 added the additive providerEngine.requestTimeoutMs field (per-request model-call ceiling; +2 lines, schema-only, defaults fill so no migration is needed), pinned by test/providers/request-guard.test.ts.",
++      "reason": "A single Zod schema plus load/save. It is one cohesive declaration and the single source of truth for configuration shape; splitting the schema would create multiple partial truths. Phase 4 \u00b7 T1/T4 added security.hardened + security.allowedHosts schema fields and the env-override helper. Phase 5 added the additive difficultyRouting/breaker/retry intelligencePlane fields and migration 17\u219218 (+47 lines, schema-only). Phase 8 \u00b7 T2 added the additive telemetry subtree (opt-in, structural-by-default, redacted, local-first; +30 lines, schema-only, no migration needed \u2014 defaults fill). Launch S-1 \u00b7 F3 added the additive envOverrides/envOverridesLocked fields and applyEnvOverrides (explicit env-var -> config-path contract with proto-pollution guards and schema re-validation; +83 lines, no migration needed - defaults fill), pinned by test/config/env-overrides.test.ts. Audit GAP-001 added the additive providerEngine.requestTimeoutMs field (per-request model-call ceiling; +2 lines, schema-only, defaults fill so no migration is needed), pinned by test/providers/request-guard.test.ts. Phase 04 added healthTimeoutMs field separate from requestTimeoutMs (bounded health 2.5s vs request 120s) + migration 18\u219219 (+20 lines, schema-only).",
+       "plan": "Split into per-section schema modules composed into one exported ConfigSchema, preserving the single export.",
+       "review": "2026-12-31"
+     },
+diff --git a/test/context/migration.test.ts b/test/context/migration.test.ts
+index 28897f4..d713735 100644
+--- a/test/context/migration.test.ts
++++ b/test/context/migration.test.ts
+@@ -212,9 +212,9 @@ describe("XR 4.5 migration: existing XR 4.4 workspace", () => {
+ // ── Config migration ───────────────────────────────────────────────────────
+ 
+ describe("XR 4.5 config migration 14 → 15", () => {
+-  test("the config version is 18 (Phase 5) and the knowledge block exists with safe defaults", () => {
++  test("the config version is 19 (Phase 04 + Phase 5) and the knowledge block exists with safe defaults", () => {
+     const { config } = loadConfig();
+-    expect(CONFIG_VERSION).toBe(18);
++    expect(CONFIG_VERSION).toBe(19);
+     expect(config.knowledge.enabled).toBe(true);
+     expect(config.knowledge.enforceScope).toBe(true);
+     expect(config.knowledge.compressionFailSafe).toBe(true);
+diff --git a/test/environment/migration.test.ts b/test/environment/migration.test.ts
+index 2bfc813..1e3baef 100644
+--- a/test/environment/migration.test.ts
++++ b/test/environment/migration.test.ts
+@@ -21,14 +21,14 @@ const LEGACY_V15 = {
+   budget: { perTaskUsd: 0.25, perTaskTokens: 200000 },
+ };
+ 
+-describe("config migration 15 → 18 (raw chain)", () => {
+-  test("CONFIG_VERSION is 17", () => {
+-    expect(CONFIG_VERSION).toBe(18);
++describe("config migration 15 → 19 (raw chain)", () => {
++  test("CONFIG_VERSION is 19", () => {
++    expect(CONFIG_VERSION).toBe(19);
+   });
+ 
+   test("a v15 config gains the environment block with safe defaults", () => {
+     const raw = migrateRawConfig(structuredClone(LEGACY_V15)) as Record<string, any>;
+-    expect(raw.version).toBe(18);
++    expect(raw.version).toBe(19);
+     const env = raw.environment;
+     expect(env.enabled).toBe(true);
+     expect(env.modalities).toEqual({
+@@ -53,6 +53,9 @@ describe("config migration 15 → 18 (raw chain)", () => {
+     expect(raw.capabilities.enabled).toBe(true);
+     expect(raw.capabilities.updateRequiresReview).toBe(true);
+     expect(raw.capabilities.quarantineOnVerificationFailure).toBe(true);
++    // Phase 04 - healthTimeoutMs separate
++    expect(raw.providerEngine.healthTimeoutMs).toBe(2500);
++    expect(raw.providerEngine.requestTimeoutMs).toBe(120_000);
+   });
+ 
+   test("existing blocks are preserved by the migration", () => {
+@@ -70,7 +73,7 @@ describe("config migration 15 → 18 (raw chain)", () => {
+       environment: { enabled: false, modalities: { browser: false } },
+     };
+     const raw = migrateRawConfig(legacyWithEnv) as Record<string, any>;
+-    expect(raw.version).toBe(18);
++    expect(raw.version).toBe(19);
+     expect(raw.environment.enabled).toBe(false);
+     expect(raw.environment.modalities.browser).toBe(false);
+     expect(raw.capabilities.enabled).toBe(true);
+@@ -83,7 +86,7 @@ describe("config migration 15 → 18 (raw chain)", () => {
+       environment: { enabled: true },
+       capabilities: { enabled: false, requireSignedPackages: true },
+     }) as Record<string, any>;
+-    expect(raw.version).toBe(18);
++    expect(raw.version).toBe(19);
+     expect(raw.capabilities.enabled).toBe(false);
+     expect(raw.capabilities.requireSignedPackages).toBe(true);
+   });
+@@ -92,7 +95,7 @@ describe("config migration 15 → 18 (raw chain)", () => {
+     const parsed = ConfigSchema.safeParse(migrateRawConfig(structuredClone(LEGACY_V15)));
+     expect(parsed.success).toBe(true);
+     if (parsed.success) {
+-      expect(parsed.data.version).toBe(18);
++      expect(parsed.data.version).toBe(19);
+       expect(parsed.data.environment.vision.allowCloud).toBe(false);
+       expect(parsed.data.capabilities.updateRequiresReview).toBe(true);
+       expect(parsed.data.control.enabled).toBe(true);
+@@ -102,7 +105,7 @@ describe("config migration 15 → 18 (raw chain)", () => {
+   test("a v17 config does not re-migrate (idempotent)", () => {
+     const once = migrateRawConfig(structuredClone(LEGACY_V15)) as Record<string, any>;
+     const twice = migrateRawConfig(once) as Record<string, any>;
+-    expect(twice.version).toBe(18);
++    expect(twice.version).toBe(19);
+     expect(JSON.stringify(twice.environment)).toBe(JSON.stringify(once.environment));
+     expect(JSON.stringify(twice.capabilities)).toBe(JSON.stringify(once.capabilities));
+   });
+-- 
+2.47.3
+

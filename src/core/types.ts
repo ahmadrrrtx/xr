@@ -163,6 +163,68 @@ export interface ProviderStreamChunk {
   providerId?: string;
 }
 
+/**
+ * XR Phase 05 — the CANONICAL chat streaming event contract.
+ *
+ * Every surface (dashboard, CLI, TUI, API) that streams a chat generation
+ * consumes ONE of these events. There is exactly one definition: the agent
+ * loop (AgentDeps.onStreamEvent) produces them, the execution fabric forwards
+ * them, and the HTTP edge serializes them to SSE. Nothing re-declares the
+ * shape elsewhere.
+ *
+ * Compatibility: the legacy SSE shape `{ text?, done?, error? }` (emitted via
+ * the route's observation `say` hook) remains intact for consumers that
+ * predate Phase 05. The typed events below are ADDs to the stream contract.
+ */
+export type ChatStreamEvent =
+  | {
+      type: "status";
+      status: string;
+      /** Provider id once resolved (e.g. "provider_selection"/"provider_ready"). */
+      provider?: string;
+      model?: string;
+      message?: string;
+      runId?: string;
+    }
+  | { type: "token"; text: string }
+  | {
+      type: "tool_call";
+      id: string;
+      tool: string;
+      args: unknown;
+    }
+  | {
+      type: "tool_result";
+      id: string;
+      tool: string;
+      ok: boolean;
+      result?: string;
+      error?: string;
+    }
+  | {
+      type: "usage";
+      usage: { inTokens: number; outTokens: number };
+    }
+  | {
+      type: "done";
+      fullText: string;
+      usage?: { inTokens: number; outTokens: number };
+      finishReason?: string;
+      steps: number;
+      ttftMs?: number;
+      totalMs?: number;
+    }
+  | {
+      type: "error";
+      code: string;
+      message: string;
+      retryable?: boolean;
+      detail?: string;
+    };
+
+/** Callback a surface supplies to receive canonical streaming events. */
+export type StreamEventSink = (event: ChatStreamEvent) => void;
+
 export interface Provider {
   id: string;
   label: string;

@@ -125,6 +125,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/workflow/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/api-compat.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/baseline-inventory.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/benchmark-ttft.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/beta-install-survey.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/build-deb.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/build-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

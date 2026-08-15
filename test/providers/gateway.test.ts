@@ -523,3 +523,98 @@ describe("Contract: Same task different provider structure", () => {
     expect(turn1.usage === undefined || typeof turn1.usage.inTokens === "number").toBeTrue();
   });
 });
+
+describe("Phase 05 — Gateway Fallback Execution", () => {
+  /** Build a config whose effective chain is primary→fallback, no local step. */
+  function chainConfig(primary: string, fallback: string) {
+    const { config } = loadConfig();
+    config.defaults.provider = primary;
+    config.defaults.model = "mock-model";
+    config.defaults.fallbackProvider = fallback;
+    config.defaults.fallbackModel = "mock-model";
+    (config as any).intelligencePlane = {
+      ...(config as any).intelligencePlane,
+      allowFallback: true,
+      allowCloudFallback: false,
+      localityPolicy: "cloud_only",
+    };
+    return config;
+  }
+
+  function installMocks(primaryFactory: () => unknown, fallbackFactory: () => unknown) {
+    const mockRegistry = new ProviderRegistry();
+    mockRegistry.register({ ...PRESETS["ollama"], id: "mock-primary", label: "Primary", apiKeyEnv: undefined } as any, primaryFactory as any);
+    mockRegistry.register({ ...PRESETS["ollama"], id: "mock-fallback", label: "Fallback", apiKeyEnv: undefined } as any, fallbackFactory as any);
+    const originalEntries = (registry as any).entries;
+    (registry as any).entries = (mockRegistry as any).entries;
+    return () => {
+      (registry as any).entries = originalEntries;
+    };
+  }
+
+  test("a retryable primary failure falls back to the fallback provider (bounded, auditable)", async () => {
+    const restore = installMocks(() => new MockRateLimitProvider(), () => new MockSuccessProvider());
+    try {
+      const gateway = new ProviderGateway();
+      const out = await gateway.executeWithFallback(
+        chainConfig("mock-primary", "mock-fallback"),
+        [],
+        [],
+        { provider: "mock-primary", model: "mock-model" },
+      );
+      expect(out.providerId).toBe("mock-fallback");
+      expect(out.turn.message).toBe("ok");
+      // Both steps were attempted and recorded (audit-friendly).
+      expect(out.attempted.length).toBe(2);
+      expect(out.attempted[0]).toContain("mock-primary");
+      expect(out.attempted[1]).toContain("mock-fallback");
+    } finally {
+      restore();
+    }
+  });
+
+  test("a NON-retryable (auth) failure is NOT blindly retried or fallen-back", async () => {
+    const restore = installMocks(() => new MockAuthFailProvider(), () => new MockSuccessProvider());
+    try {
+      const gateway = new ProviderGateway();
+      await expect(
+        gateway.executeWithFallback(
+          chainConfig("mock-primary", "mock-fallback"),
+          [],
+          [],
+          { provider: "mock-primary", model: "mock-model" },
+        ),
+      ).rejects.toThrow();
+    } finally {
+      restore();
+    }
+  });
+
+  test("fallback is bounded: it does not fall back on cancellation (user stop wins)", async () => {
+    const { ProviderAbortError } = await import("../../src/providers/request-guard.ts");
+    const canceling = {
+      id: "mock-primary",
+      label: "Primary",
+      async chat(): Promise<ModelTurn> {
+        throw new ProviderAbortError("cancelled", "mock-primary");
+      },
+      async health() {
+        return { ok: false };
+      },
+    };
+    const restore = installMocks(() => canceling, () => new MockSuccessProvider());
+    try {
+      const gateway = new ProviderGateway();
+      await expect(
+        gateway.executeWithFallback(
+          chainConfig("mock-primary", "mock-fallback"),
+          [],
+          [],
+          { provider: "mock-primary", model: "mock-model" },
+        ),
+      ).rejects.toMatchObject({ name: "ProviderAbortError", kind: "cancelled" });
+    } finally {
+      restore();
+    }
+  });
+});

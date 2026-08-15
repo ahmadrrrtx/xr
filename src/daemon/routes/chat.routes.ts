@@ -22,7 +22,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { Mode } from "../../core/types.ts";
+import type { ChatStreamEvent, Mode, StreamEventSink } from "../../core/types.ts";
 import { LaneBusyError } from "../../execution/lane.ts";
 import { ProviderOfflineError } from "../agent-executor.ts";
 import { route, type DaemonRoute } from "./router.ts";
@@ -112,26 +112,86 @@ export function chatRoutes(): DaemonRoute[] {
           const stream = new ReadableStream({
             async start(controller) {
               const enc = new TextEncoder();
-              let done = false;
+              let closed = false;
+              let seq = 0;
+              // Phase 05 — canonical serialization. Each event gets a monotonic
+              // `event_id` (satisfies the event-ordering/resume-foundation
+              // requirement without breaking consumers that parse `data: JSON`).
               const send = (data: object) => {
-                if (done) return;
-                controller.enqueue(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
+                if (closed) return;
+                seq += 1;
+                controller.enqueue(enc.encode(`data: ${JSON.stringify({ ...data, event_id: seq })}\n\n`));
               };
               const close = () => {
-                if (done) return;
-                done = true;
+                if (closed) return;
+                closed = true;
                 controller.enqueue(enc.encode("data: [DONE]\n\n"));
                 releaseOnce();
                 controller.close();
               };
 
-              // Immediate acknowledgement (Phase 03 · T3.9) — never wait for the
-              // provider's complete response before acknowledging.
+              // ── Immediate acknowledgement (Phase 03 · T3.9 / Phase 05) ─────
+              // The first SSE event IS the ack and doubles as the
+              // `provider_selection` status event, so the client sees state the
+              // instant the stream opens — never a silent wait.
               const runId = `dash_${randomUUID().slice(0, 8)}`;
-              send({ acknowledged: true, runId, mode });
+              xrMetrics.chatStreamStarted.inc();
+              send({
+                acknowledged: true,
+                runId,
+                mode,
+                type: "status",
+                status: "provider_selection",
+                provider: body.provider,
+                model: body.model,
+              });
 
+              const requestStart = Date.now();
+              let ttftMs: number | undefined;
+              let firstTokenSent = false;
               const started = Date.now();
               const span = makeChatSpan({ model: body.model ?? "unknown", provider: body.provider ?? "unknown", prompt: body.message! });
+
+              // Phase 05 — canonical stream event sink. The loop (via the
+              // execution fabric) forwards structured events; the route only
+              // serializes them to SSE. Provider token deltas arrive here as
+              // `token` events — real streaming, never a chunked fullText.
+              const onStreamEvent: StreamEventSink = (ev) => {
+                if (closed) return;
+                switch (ev.type) {
+                  case "token":
+                    if (!firstTokenSent) {
+                      firstTokenSent = true;
+                      ttftMs = Date.now() - requestStart;
+                      xrMetrics.chatTtft.observe(
+                        { provider: body.provider ?? "unknown", model: body.model ?? "unknown" },
+                        ttftMs,
+                      );
+                    }
+                    send({ type: "token", text: ev.text });
+                    break;
+                  case "tool_call":
+                    xrMetrics.chatToolCalls.inc({ tool: ev.tool, outcome: "requested" });
+                    send({ type: "tool_call", id: ev.id, tool: ev.tool, args: ev.args });
+                    break;
+                  case "tool_result":
+                    xrMetrics.chatToolCalls.inc({ tool: ev.tool, outcome: ev.ok ? "ok" : "error" });
+                    send({ type: "tool_result", id: ev.id, tool: ev.tool, ok: ev.ok, result: ev.result, error: ev.error });
+                    break;
+                  case "usage":
+                    send({ type: "usage", usage: ev.usage });
+                    break;
+                  case "status":
+                    send({ type: "status", status: ev.status, provider: ev.provider, model: ev.model, message: ev.message });
+                    break;
+                  case "done":
+                    send({ type: "done", fullText: ev.fullText, usage: ev.usage, finishReason: ev.finishReason, steps: ev.steps, ttftMs: ev.ttftMs, totalMs: ev.totalMs });
+                    break;
+                  case "error":
+                    send({ type: "error", code: ev.code, message: ev.message, retryable: ev.retryable, detail: ev.detail });
+                    break;
+                }
+              };
 
               await runInSpan(span, async () => {
                 try {
@@ -148,8 +208,12 @@ export function chatRoutes(): DaemonRoute[] {
                     toolsDeny: body.toolsDeny,
                     surface: "daemon",
                     signal: runController.signal,
-                    // Streaming (Phase 03 · T3.8): the loop's incremental output
-                    // is forwarded as text events as it is produced.
+                    // Phase 05 — structured streaming events from the loop.
+                    onStreamEvent,
+                    // Streaming (Phase 03 · T3.8): the loop's incremental
+                    // observation lines are forwarded as legacy text events for
+                    // backward compatibility (the canonical token events come
+                    // through onStreamEvent).
                     say: (line) => send({ text: stripAnsi(line) }),
                     // Approval (Phase 03 · T3.6): dangerous tools always surface
                     // an approval event and are DENIED by default (safe default;
@@ -161,17 +225,34 @@ export function chatRoutes(): DaemonRoute[] {
                     },
                   });
 
+                  const totalMs = Date.now() - started;
                   endGenAiSpan(span, {
                     ok: result.stopped === "done",
                     outTokens: undefined,
                     finishReason: result.stopped,
                   });
-                  xrMetrics.llmDuration.observe({ provider: body.provider ?? "unknown", model: body.model ?? "unknown" }, Date.now() - started);
+                  xrMetrics.llmDuration.observe({ provider: body.provider ?? "unknown", model: body.model ?? "unknown" }, totalMs);
 
                   if (result.stopped === "cancelled") {
-                    send({ cancelled: true, finalMessage: result.finalMessage, steps: result.steps });
+                    xrMetrics.chatStreamCancelled.inc();
+                    send({ cancelled: true, finalMessage: result.finalMessage, steps: result.steps, type: "status", status: "cancelled" });
                   } else {
-                    send({ done: true, finalMessage: result.finalMessage, steps: result.steps, stopped: result.stopped });
+                    xrMetrics.chatStreamCompleted.inc();
+                    // Single terminal frame carrying BOTH the canonical done
+                    // event (type:"done", fullText, finish metadata) and the
+                    // legacy `{done:true, finalMessage}` shape, so new and old
+                    // consumers both see exactly one terminal event.
+                    send({
+                      type: "done",
+                      fullText: result.finalMessage,
+                      finishReason: result.stopped,
+                      steps: result.steps,
+                      ttftMs,
+                      totalMs,
+                      done: true,
+                      finalMessage: result.finalMessage,
+                      stopped: result.stopped,
+                    });
                   }
                   state.store.audit("chat.message", {
                     mode,
@@ -181,16 +262,20 @@ export function chatRoutes(): DaemonRoute[] {
                     output: result.finalMessage.slice(0, 200),
                   });
                 } catch (e) {
+                  xrMetrics.chatStreamError.inc();
                   const msg = e instanceof Error ? e.message : String(e);
                   endGenAiSpan(span, { ok: false, errorType: (e as Error)?.name ?? "Error" });
-                  send({ error: msg });
+                  send({ type: "error", code: "GENERATION_FAILED", message: msg, retryable: false, error: msg });
                 } finally {
                   close();
                 }
               });
             },
             cancel() {
-              // Client dropped the stream → cooperative cancellation.
+              // Client dropped the stream → cooperative cancellation. The
+              // provider request aborts via the run's signal (never a fake
+              // "stopped sending tokens" while the provider keeps burning).
+              xrMetrics.chatStreamCancelled.inc();
               runController.abort();
               releaseOnce();
             },

@@ -17,13 +17,16 @@ import type {
   ApprovalRequest,
   Message,
   Mode,
+  ModelTurn,
   Provider,
   Tool,
+  ToolCall,
   ToolContext,
 } from "./types.ts";
 import { getTool, toolsForMode } from "../tools/registry.ts";
 import { isCancellation } from "../providers/request-guard.ts";
 import { frameToolOutput } from "../security/tool-output.ts";
+import { repairToTurn } from "../reliability/repair.ts";
 import type { SessionRepo } from "../state/repos/session-repo.ts";
 import type { AuditRepo } from "../state/repos/audit-repo.ts";
 import type { CostRepo } from "../state/repos/cost-repo.ts";
@@ -54,6 +57,13 @@ export interface AgentDeps {
   };
   /** UI hook: stream a line to the user. */
   say(line: string): void;
+  /**
+   * Phase 05 — canonical streaming event sink. When supplied, the loop emits
+   * structured token / tool_call / tool_result / status / done / error events
+   * as generation progresses (real provider token deltas, never a post-hoc
+   * chunk of fullText). Optional: absent callers keep the non-streaming path.
+   */
+  onStreamEvent?: import("./types.ts").StreamEventSink;
   /** UI hook: ask the human to approve a risky action. */
   approve(req: ApprovalRequest): Promise<boolean>;
   /** UI hook: budget exceeded — ask whether to raise it / stop. Returns extra budget or null to stop. */
@@ -191,6 +201,84 @@ export interface AgentResult {
   /** XR 4.4 — routing decision id when intelligence plane selected the model. */
   routingDecisionId?: string;
 }
+
+/**
+ * Phase 05 — run ONE model turn, preferring the provider's streaming variant.
+ *
+ * When the provider exposes `chatStream`, token deltas are surfaced to the
+ * surface via `onStreamEvent({type:"token"})` AS they arrive (real provider
+ * streaming — never a post-hoc chunk of fullText). Tool calls are accumulated
+ * and the accumulated envelope is parsed at the end for the authoritative
+ * `done`/message. When the provider only implements `chat()` (legacy), the
+ * exact non-streaming behavior is preserved and the whole message is emitted
+ * as a single token event (compatible with consumers that predate streaming).
+ *
+ * Returns the turn plus whether real streaming was used, so the caller can
+ * avoid double-printing the full message via `say`.
+ */
+async function runModelTurn(
+  provider: Provider,
+  messages: Message[],
+  tools: Tool[],
+  deps: Pick<AgentDeps, "signal" | "onStreamEvent">,
+): Promise<{ turn: ModelTurn; streamed: boolean }> {
+  const sink = deps.onStreamEvent;
+  const chatStream = (provider as Provider & { chatStream?: (m: Message[], t: Tool[], o?: { signal?: AbortSignal }) => AsyncGenerator<import("./types.ts").ProviderStreamChunk> }).chatStream;
+
+  if (typeof chatStream === "function") {
+    let text = "";
+    const toolCalls: ToolCall[] = [];
+    let usage: { inTokens: number; outTokens: number } | undefined;
+    let finish = false;
+
+    const addToolCall = (tool: string, args: Record<string, unknown>) => {
+      const existing = toolCalls.some(
+        (t) => t.tool === tool && JSON.stringify(t.args) === JSON.stringify(args),
+      );
+      if (existing) return;
+      toolCalls.push({ tool, args });
+      sink?.({ type: "tool_call", id: `tc_${toolCalls.length}`, tool, args });
+    };
+
+    for await (const chunk of chatStream.call(provider, messages, tools, { signal: deps.signal })) {
+      if (chunk.text) {
+        text += chunk.text;
+        sink?.({ type: "token", text: chunk.text });
+      }
+      if (chunk.toolCall) addToolCall(chunk.toolCall.tool, chunk.toolCall.args);
+      if (chunk.usage) usage = chunk.usage;
+      if (chunk.finish) finish = true;
+    }
+
+    // Parse the accumulated envelope for the authoritative done/message/tool calls.
+    let done = finish;
+    let message = text;
+    try {
+      const parsed = repairToTurn(text);
+      if (parsed.toolCalls.length > 0) {
+        for (const tc of parsed.toolCalls) addToolCall(tc.tool, tc.args);
+      }
+      if (typeof parsed.done === "boolean") done = parsed.done;
+      if (parsed.message) message = parsed.message;
+      usage = usage ?? parsed.usage;
+    } catch {
+      // Keep accumulated text + finish-based semantics.
+    }
+
+    sink?.({ type: "usage", usage: { inTokens: usage?.inTokens ?? 0, outTokens: usage?.outTokens ?? 0 } });
+    return { turn: { message, toolCalls, done, usage }, streamed: true };
+  }
+
+  // Non-streaming fallback (legacy path, unchanged semantics).
+  const turn = await provider.chat(messages, tools, { signal: deps.signal });
+  if (turn.message) sink?.({ type: "token", text: turn.message });
+  for (const [i, tc] of (turn.toolCalls ?? []).entries()) {
+    sink?.({ type: "tool_call", id: `tc_${i + 1}`, tool: tc.tool, args: tc.args });
+  }
+  if (turn.usage) sink?.({ type: "usage", usage: turn.usage });
+  return { turn, streamed: false };
+}
+
 export async function runAgentLoop(
   task: string,
   mode: Mode,
@@ -421,6 +509,8 @@ export async function runAgentLoop(
   messages.push({ role: "user", content: task });
   let finalMessage = "";
   let stepIdx = 0;
+  /** Phase 05 — emit provider_ready status once, before the first model turn. */
+  let providerReadyEmitted = false;
 
   // Stage 6 — fold the finished conversation into a compact session summary.
   // Best-effort, separate store, never throws, never confuses with long-term
@@ -496,13 +586,24 @@ export async function runAgentLoop(
       }
 
       say(`\x1b[2m▸ think  (step ${stepIdx + 1}/${maxSteps}) · ${provider.label} · ${governor.meter()}\x1b[0m`);
+      if (!providerReadyEmitted) {
+        providerReadyEmitted = true;
+        deps.onStreamEvent?.({
+          type: "status",
+          status: "provider_ready",
+          provider: provider.id,
+          model: (provider as { modelId?: string }).modelId,
+        });
+      }
       const compacted = compact(messages, { maxChars: 16000, keepRecent: 6 });
       // GAP-001 — hand the caller's cancellation token to the transport itself.
       // Loop checkpoints alone could not interrupt an in-flight model call, so
       // a stalled provider was unrecoverable (reproduced live: Ctrl+C printed
       // "stopping at the next step" and then hung until the process was
       // killed). The provider now also applies a bounded default timeout.
-      const turn = await provider.chat(compacted, tools, { signal: deps.signal });
+      // Phase 05 — the turn prefers the provider's streaming variant so real
+      // token deltas flow to the surface (see runModelTurn).
+      const { turn, streamed } = await runModelTurn(provider, compacted, tools, deps);
       if (turn.usage) {
         governor.record(turn.usage.inTokens, turn.usage.outTokens);
         try {
@@ -519,7 +620,7 @@ export async function runAgentLoop(
         toolCalls: turn.toolCalls.map((c) => c.tool),
       });
 
-      if (turn.message) say(`\x1b[36m◆ ${turn.message}\x1b[0m`);
+      if (turn.message && !streamed) say(`\x1b[36m◆ ${turn.message}\x1b[0m`);
       messages.push({ role: "assistant", content: JSON.stringify({ message: turn.message, tool_calls: turn.toolCalls, done: turn.done }) });
 
       // A-19 — an abort that landed while the model turn was in flight takes
@@ -542,7 +643,9 @@ export async function runAgentLoop(
         };
       }
 
-      for (const call of turn.toolCalls) {
+      for (let toolIdx = 0; toolIdx < turn.toolCalls.length; toolIdx++) {
+        const call = turn.toolCalls[toolIdx];
+        const toolCallId = `tc_${toolIdx + 1}`;
         // A-19 — between tool calls: a mid-batch abort skips the rest.
         if (isCancelled()) return cancelledResult(stepIdx + 1);
 
@@ -550,6 +653,7 @@ export async function runAgentLoop(
         if (!tool || !tools.some((t) => t.name === call.tool)) {
           const msg = `tool "${call.tool}" is not available in ${mode} mode`;
           say(`\x1b[31m✗ ${msg}\x1b[0m`);
+          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: msg });
           messages.push({ role: "tool", name: call.tool, content: msg });
           auditStore.audit("tool.blocked", { tool: call.tool, mode }, sessionId);
           continue;
@@ -559,6 +663,7 @@ export async function runAgentLoop(
           const result = await tool.run(call.args, toolCtx);
           const tag = result.ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
           say(`  ${tag} ${result.output.split("\n")[0].slice(0, 100)}`);
+          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: result.ok, result: result.output });
           sessionStore.addStep(`st_${randomUUID().slice(0, 8)}`, sessionId, stepIdx, "act", call.tool, {
             ok: result.ok,
           });
@@ -582,6 +687,7 @@ export async function runAgentLoop(
         } catch (e) {
           const msg = `tool error: ${(e as Error).message}`;
           say(`  \x1b[31m✗ ${msg}\x1b[0m`);
+          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: (e as Error).message });
           messages.push({ role: "tool", name: call.tool, content: msg });
           auditStore.audit("tool.error", { tool: call.tool, error: (e as Error).message }, sessionId);
           toolCtx.onToolUse?.({ tool: call.tool, ok: false, error: (e as Error).message });

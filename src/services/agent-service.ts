@@ -59,6 +59,12 @@ export interface AgentRunOverrides {
   toolsAllow?: string[];
   toolsDeny?: string[];
   say?: (line: string) => void;
+  /**
+   * Phase 05 — canonical streaming event sink, forwarded through the envelope
+   * to the loop. Receives token / tool_call / tool_result / status / usage /
+   * done / error events as generation progresses.
+   */
+  onStreamEvent?: import("../core/types.ts").StreamEventSink;
   approve?: (req: ApprovalRequest) => Promise<boolean>;
   memoryEnabled?: boolean;
   /**
@@ -266,6 +272,8 @@ export class AgentService implements LifecycleHook {
       },
       // A-19 — cooperative cancellation threaded to the loop's checkpoints.
       ...(overrides.signal ? { signal: overrides.signal } : {}),
+      // Phase 05 — canonical streaming event sink threaded to the loop.
+      ...(overrides.onStreamEvent ? { onStreamEvent: overrides.onStreamEvent } : {}),
       /**
        * Phase 4 · T1 — placement ENFORCEMENT on the canonical path: the run's
        * tool contexts get the Trust service (so high-risk tools isolate or

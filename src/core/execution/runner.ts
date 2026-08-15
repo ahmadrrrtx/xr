@@ -59,6 +59,11 @@ export interface EnvelopeContext {
    */
   readonly onToolUse?: (info: { tool: string; ok: boolean; error?: string }) => void;
   /**
+   * Phase 05 — canonical streaming event sink, forwarded to the loop so token
+   * / tool_call / tool_result / status / usage events reach the surface.
+   */
+  readonly onStreamEvent?: import("../types.ts").StreamEventSink;
+  /**
    * A-19 — cooperative cancellation for this run, forwarded to the loop.
    * Surfaces abort their own runs (Shell Ctrl+C/Esc, `xr run` SIGINT, workflow
    * stop); the loop observes the signal at its checkpoints.
@@ -118,6 +123,7 @@ export async function runEnvelope(
     ...(context.hardened !== undefined ? { hardened: context.hardened } : {}),
     ...(context.allowedHosts ? { allowedHosts: context.allowedHosts } : {}),
     ...(context.onToolUse ? { onToolUse: context.onToolUse } : {}),
+    ...(context.onStreamEvent ? { onStreamEvent: context.onStreamEvent } : {}),
     ...(context.signal ? { signal: context.signal } : {}),
     runId: envelope.evidence.envelopeId,
   };

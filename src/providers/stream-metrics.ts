@@ -26,7 +26,7 @@
 import { mkdirSync, readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import type { ModelTurn, Message, Tool, Provider, ChatOptions } from "../core/types.ts";
+import type { ModelTurn, Message, Tool, Provider, ChatOptions, ProviderStreamChunk } from "../core/types.ts";
 
 /** Resolved at call time so tests/embedders can isolate via env. */
 const XR_HOME_DIR = () => process.env.XR_HOME ?? join(homedir(), ".xr");
@@ -158,7 +158,11 @@ export class StreamingMetricsCollector {
  * recorded after each chat().
  */
 export function withTurnMetrics(provider: Provider, collector: StreamingMetricsCollector, modelId?: string): Provider {
-  const model = modelId ?? provider.id;
+  const model = modelId ?? (provider as { modelId?: string }).modelId ?? provider.id;
+
+  const record = (m: Omit<TurnMetrics, "at">) =>
+    collector.record({ ...m, at: new Date().toISOString() });
+
   return {
     id: provider.id,
     label: provider.label,
@@ -209,8 +213,64 @@ export function withTurnMetrics(provider: Provider, collector: StreamingMetricsC
         throw e;
       }
     },
+    /**
+     * Phase 05 — forward the streaming variant so the canonical path actually
+     * streams (before this fix the decorator only wrapped chat(), which meant
+     * chatStream() was silently dropped on the default run path and the loop
+     * always fell back to non-streaming chat()).
+     */
+    async *chatStream(messages: Message[], tools: Tool[], options?: ChatOptions): AsyncGenerator<ProviderStreamChunk> {
+      const stream = provider.chatStream;
+      if (typeof stream !== "function") {
+        // No native streaming — behave as the non-streaming path via chat().
+        const turn = await provider.chat(messages, tools, options);
+        if (turn.message) yield { text: turn.message, providerId: provider.id, model };
+        for (const tc of turn.toolCalls ?? []) yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: provider.id, model };
+        if (turn.usage) yield { usage: turn.usage, finish: true, providerId: provider.id, model };
+        return;
+      }
+      const started = performance.now();
+      let ttft = 0;
+      let out = 0;
+      let inTok = 0;
+      let settled = false;
+      const settle = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        record({
+          providerId: provider.id,
+          model,
+          ttftMs: Math.round(ttft || (performance.now() - started)),
+          totalMs: Math.round(performance.now() - started),
+          outTokens: out,
+          inTokens: inTok,
+          tokensPerSec: (performance.now() - started) > 0 ? Math.round((out / (performance.now() - started)) * 1000) : 0,
+          cancelLatencyMs: 0,
+          highWaterKb: undefined,
+        });
+      };
+      try {
+        for await (const chunk of stream.call(provider, messages, tools, options)) {
+          if (!ttft) ttft = performance.now() - started;
+          if (chunk.text) out += estimateTokens(chunk.text);
+          if (chunk.usage) { inTok = chunk.usage.inTokens ?? inTok; out = chunk.usage.outTokens ?? out; }
+          yield chunk;
+        }
+        settle(true);
+      } catch (e) {
+        settle(false);
+        throw e;
+      }
+    },
     async health() {
       return provider.health();
+    },
+    // Forward optional surface so callers can still discover model/listings.
+    get modelId() {
+      return (provider as { modelId?: string }).modelId ?? model;
+    },
+    async listModels() {
+      return provider.listModels ? provider.listModels() : [];
     },
   };
 }
