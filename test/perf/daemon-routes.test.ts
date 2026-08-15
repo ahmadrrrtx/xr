@@ -146,6 +146,71 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
     expect(body.error).toContain("Provider offline");
   }, 15_000);
 
+  test("chat with a dead primary but healthy fallback succeeds via the bounded fallback health gate", async () => {
+    // Fake healthy server that can serve a chat completion.
+    const healthy = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch(req) {
+        const url = new URL(req.url);
+        if (url.pathname.endsWith("/models")) return Response.json({ data: [{ id: "qwen2.5:7b" }] });
+        if (url.pathname.endsWith("/chat/completions")) {
+          return Response.json({ choices: [{ message: { content: "fallback reply" } }], usage: { prompt_tokens: 2, completion_tokens: 3 } });
+        }
+        return Response.json({ ok: true });
+      },
+    });
+    const home2 = mkdtempSync(join(tmpdir(), "xr-fb-"));
+    const prevHome2 = process.env.XR_HOME;
+    process.env.XR_HOME = home2;
+    const { invalidateConfigCache } = await import("../../src/config/cache.ts");
+    invalidateConfigCache("all");
+    try {
+      const { loadConfig, saveConfig } = await import("../../src/config/config.ts");
+      const { config } = loadConfig();
+      config.defaults.provider = "ollama";
+      config.defaults.model = "qwen2.5:7b";
+      config.defaults.fallbackProvider = "lmstudio";
+      config.defaults.fallbackModel = "qwen2.5:7b";
+      config.providerEngine.routingStrategy = "primary"; // deterministic primary+fallback
+      (config.localModels as Record<string, any>).runtimes.ollama = {
+        ...((config.localModels as Record<string, any>).runtimes.ollama ?? {}),
+        baseUrl: "http://127.0.0.1:1", // dead primary (connection refused instantly)
+      };
+      (config.localModels as Record<string, any>).runtimes.lmstudio = {
+        ...((config.localModels as Record<string, any>).runtimes.lmstudio ?? {}),
+        baseUrl: `http://127.0.0.1:${healthy.port}`,
+      };
+      saveConfig(config);
+      const { makeHandler } = await import("../../src/daemon/server.ts");
+      const { Store } = await import("../../src/state/workspace-store.ts");
+      const store = new Store(join(home2, "d.db"));
+      const h = makeHandler(store, TOKEN);
+      const started = Date.now();
+      const res = await h(
+        new Request("http://127.0.0.1:3141/api/v1/chat", {
+          method: "POST",
+          headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+          body: JSON.stringify({ message: "hello" }),
+        }),
+      );
+      const elapsed = Date.now() - started;
+      expect(res.status).toBe(200); // NOT 503 — fallback health gate passed
+      expect(elapsed).toBeLessThan(10_000); // bounded probes + fast chat
+      const text = await res.text();
+      expect(text).toContain("fallback reply");
+      expect(text).toContain("done");
+    } finally {
+      process.env.XR_HOME = prevHome2;
+      try {
+        rmSync(home2, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+      healthy.stop();
+    }
+  }, 20_000);
+
   test("repeat dashboard traffic is served from caches (warm requests are fast)", async () => {
     // Warm every endpoint once (populates caches), then measure.
     await handler(get("/api/v1/providers"));

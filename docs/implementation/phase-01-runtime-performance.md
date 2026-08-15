@@ -373,6 +373,29 @@ human-measured p50/p95/max. They are NOT added to scripts/perf/budgets.json beca
 that gate measures CLI-process scenarios; the daemon-endpoint budgets live in
 docs/perf/PERF-BUDGETS.md §12 and are covered by the perf test suite on every run.
 
+## 16e. Final hardening pass 2 (2026-08-15)
+
+- **Fallback health gate fix (chat)**: the bounded health gate now probes the
+  FALLBACK after a failed/timed-out primary (2.5 s bound each, worst case 5 s —
+  still far under the Bun timeout). Previously a hanging primary hid a healthy
+  fallback behind a false 503. New E2E test: dead primary (connection refused)
+  + healthy fallback → chat returns the fallback's completion with 200 (was a
+  guaranteed 503 pre-fix). Verified `buildProviderWithDecision` with
+  `routingStrategy: "primary"` yields the FallbackProvider deterministically.
+- **Dashboard first-meaningful-paint measured end-to-end** (HTML + the client's
+  stage-one batch, as the browser executes it):
+
+  | Scenario | HTML shell | Stage-one (light cells) | **FMP** | Stage-two (provider/model) |
+  |---|---|---:|---:|---:|
+  | Normal env | 12 ms | 26 ms | **38 ms** | 6 ms |
+  | Blackhole, immediate cold hit | 9 ms | 24 ms | **33 ms** | 7 467 ms worst / 2 ms warm |
+
+  Target < 2 s → **38 ms normal, 33 ms worst-case cold** — the dashboard paints
+  its lightweight shell instantly and fills the heavy cells lazily from the
+  shared caches, exactly the Phase-01 target architecture. (The 7.5 s stage-two
+  worst case is the documented all-ports-hanging cold bound; daemon prewarm
+  usually hides even that, and repeats are 2 ms.)
+
 ## 17. Known limitations
 
 1. **Timeout ≠ cancellation for provider health** — the underlying 8 s-bounded

@@ -21,18 +21,28 @@ export function chatRoutes(): DaemonRoute[] {
           const body = await req.json() as { message?: string; history?: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }> };
           if (!body?.message) return json({ error: "expected { message: string }" }, 400);
 
-          // Phase 01 — health gate is BOUNDED (2.5 s) instead of the previous
-          // 8–32 s stall behind Bun's 10 s timeout, and served from the shared
-          // cache when no fallback chain is wired (same probe providers.list
-          // just ran). Fallback-chain providers keep FallbackProvider.health()
-          // semantics (primary then fallback) but under the same bound.
+          // Phase 01 — health gate is BOUNDED (2.5 s per probe) instead of the
+          // previous 8–32 s stall behind Bun's 10 s timeout, and served from
+          // the shared cache when no fallback chain is wired (same probe
+          // providers.list just ran). Fallback-chain providers are probed
+          // PRIMARY-then-FALLBACK under the same bound each, so a hanging
+          // primary no longer hides a healthy fallback (worst case 2×2.5 s,
+          // still far under the Bun timeout).
           const { provider } = buildProviderWithDecision(config, {});
           const model = (config as { defaults?: { model?: string } }).defaults?.model ?? "unknown";
           const providerName = provider.id || (config as { defaults?: { provider?: string } }).defaults?.provider || "unknown";
+          const timeoutDetail = `health check timed out after ${HEALTH_BOUND_MS} ms`;
           let health: { ok: boolean; detail?: string | null; latencyMs?: number | null };
           if (provider instanceof FallbackProvider) {
-            const h = await bounded(provider.health(), HEALTH_BOUND_MS, { ok: false, detail: `health check timed out after ${HEALTH_BOUND_MS} ms` });
-            health = h;
+            const primary = await bounded(provider.primary.health(), HEALTH_BOUND_MS, { ok: false, detail: timeoutDetail });
+            if (primary.ok) {
+              health = primary;
+            } else {
+              const fallback = await bounded(provider.fallback.health(), HEALTH_BOUND_MS, { ok: false, detail: timeoutDetail });
+              health = fallback.ok
+                ? { ...fallback, detail: `primary offline (${primary.detail ?? "unreachable"}); using fallback ${provider.fallbackId}` }
+                : fallback;
+            }
           } else {
             health = await checkProviderHealthCached(config, provider.id, model);
           }
