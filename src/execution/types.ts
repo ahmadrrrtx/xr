@@ -559,10 +559,13 @@ export type RecoveryAction =
 export type RecoveryClassification =
   | "safe"                    // action hadn't started or is naturally idempotent
   | "unknown_side_effect"     // action may have executed; side effect unknown
-  | "authority_expired"       // credentials/grants expired
+  | "authority_expired"       // credentials/grants expired or authority mismatch
   | "environment_lost"        // isolation environment was lost
   | "cancellation_pending"    // cancellation was requested before crash
-  | "non_idempotent_unsafe";  // non-idempotent action with unknown result
+  | "non_idempotent_unsafe"   // non-idempotent action with unknown result
+  // Phase 06 — honesty classifications: recovery is BLOCKED, never guessed.
+  | "checkpoint_invalid"      // no valid checkpoint to resume from
+  | "audit_chain_broken";     // audit integrity failed — hard boundary
 
 // ── Checkpoint ────────────────────────────────────────────────────────────
 

@@ -76,6 +76,8 @@ const REGISTRY_NAME: Record<string, string> = {
   security: "shield",
   audit: "audit",
   "verify-log": "audit",
+  // Phase 06 — durable-execution history & recovery surface.
+  execution: "execution",
   log: "logs",
   logs: "logs",
   telemetry: "telemetry",

@@ -78,6 +78,11 @@ export const shellTool: Tool = {
   requiresApproval: true,
   async run(args, ctx): Promise<ToolResult> {
     const cmd = String(args.cmd ?? "");
+    // Phase 06 — an already-cancelled run must not start new side effects.
+    if (ctx.signal?.aborted) {
+      ctx.audit("shell.cancelled", { stage: "before_start" });
+      return { ok: false, output: "shell command cancelled before start" };
+    }
     const decision = checkAction({ tool: "shell", args: { cmd } }, {
       egressAllowlist: ctx.egressAllowlist ?? [],
       requireApproval: ["shell"],
@@ -103,6 +108,14 @@ export const shellTool: Tool = {
     // host-authority fallback exists only with hardened mode explicitly OFF
     // (compat path), and is audited as a degraded execution.
     if (ctx.runIsolated) {
+      /**
+       * Phase 06 · Step 18 — DOCUMENTED LIMITATION: the isolated runner
+       * (Trust service environments) does not currently accept an
+       * AbortSignal, so cancellation of an in-flight isolated command takes
+       * effect at the loop's next checkpoint, not inside the environment.
+       * We do NOT pretend the environment stopped; it runs to its own
+       * timeout. This is an honest capability gap, not a silent success.
+       */
       const { request, executable } = shellTrustSpec(cmd, ctx.cwd, {
         timeoutMs: 120_000,
         maxOutputBytes: 4 * 1024 * 1024,
@@ -129,8 +142,20 @@ export const shellTool: Tool = {
       };
     }
     try {
-      const proc = await runCommand("bash", ["-lc", cmd], { cwd: ctx.cwd, timeoutMs: 120_000, maxBuffer: 4 * 1024 * 1024 });
+      // Phase 06 · Step 18 — the run's AbortSignal reaches the subprocess: a
+      // Ctrl+C during a shell command terminates the child and is audited as
+      // a cancellation (never reported as success or timeout).
+      const proc = await runCommand("bash", ["-lc", cmd], {
+        cwd: ctx.cwd,
+        timeoutMs: 120_000,
+        maxBuffer: 4 * 1024 * 1024,
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+      });
       const out = proc.stdout + proc.stderr;
+      if (proc.error === "cancelled") {
+        ctx.audit("shell.cancelled", { cmd });
+        return { ok: false, output: out.slice(0, 4000) || "shell command cancelled" };
+      }
       ctx.audit("shell.run", { cmd, exit: proc.status });
       return { ok: proc.ok, output: out.slice(0, 4000) || `(exit ${proc.status})` };
     } catch (e) {

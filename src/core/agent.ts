@@ -365,6 +365,10 @@ export async function runAgentLoop(
     allowedHosts: deps.allowedHosts ?? [],
     dryRun: deps.dryRun ?? false,
     hardened,
+    // Phase 06 · Step 15/18 — propagate cancellation into tool execution so a
+    // Ctrl+C reaches interruptible subprocesses/network ops, not just the
+    // loop's checkpoints. Tools that cannot interrupt safely ignore it.
+    ...(deps.signal ? { signal: deps.signal } : {}),
     ...(deps.onToolUse ? { onToolUse: deps.onToolUse } : {}),
     ...(deps.trust
       ? {
@@ -651,11 +655,34 @@ export async function runAgentLoop(
 
         const tool = resolveTool(call.tool);
         if (!tool || !tools.some((t) => t.name === call.tool)) {
+          /**
+           * Phase 06 · Step 30 — a request for a nonexistent tool is a
+           * MALFORMED TOOL CALL: deterministic, NON_RETRYABLE. It is surfaced
+           * honestly to the model and the audit trail — never executed, never
+           * silently retried, never allowed to corrupt the session.
+           */
           const msg = `tool "${call.tool}" is not available in ${mode} mode`;
           say(`\x1b[31m✗ ${msg}\x1b[0m`);
           deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: msg });
           messages.push({ role: "tool", name: call.tool, content: msg });
-          auditStore.audit("tool.blocked", { tool: call.tool, mode }, sessionId);
+          // Phase 06 — `tool.blocked` is the established contract; the
+          // `reason` records WHY (nonexistent tool = malformed, non-retryable).
+          auditStore.audit("tool.blocked", { tool: call.tool, mode, reason: "unknown_tool" }, sessionId);
+          continue;
+        }
+        /**
+         * Phase 06 · Step 30 — invalid arguments are rejected BEFORE
+         * execution. args must be a plain object; anything else is a
+         * malformed call (policy/safety checks receive untrusted input
+         * otherwise). Dangerous paths are still caught by the tools' own
+         * path-escape guards — this is the first gate, not the only one.
+         */
+        if (call.args === null || typeof call.args !== "object" || Array.isArray(call.args)) {
+          const msg = `tool "${call.tool}" received invalid arguments (expected an object)`;
+          say(`\x1b[31m✗ ${msg}\x1b[0m`);
+          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: msg });
+          messages.push({ role: "tool", name: call.tool, content: msg });
+          auditStore.audit("tool.malformed_call", { tool: call.tool, reason: "invalid_arguments" }, sessionId);
           continue;
         }
         say(`\x1b[2m▸ tool   ⚙ ${call.tool}(${JSON.stringify(call.args)})\x1b[0m`);

@@ -578,6 +578,26 @@ export const CATALOG: CatalogEntry[] = [
     ],
   },
   {
+    name: "execution",
+    description: "execution history & durable-execution recovery status",
+    usage: "xr execution [--json] [--limit N] [--session SID] [--run RUNID] [--recovery] [--resume RUNID]",
+    group: "work",
+    glyph: "activity",
+    // NOTE: no "exec" alias — `xr exec` is a legacy alias of `run` (task mode).
+    needsKernel: false,
+    examples: [
+      { cmd: "xr execution", description: "recent execution records" },
+      { cmd: "xr execution --recovery", description: "interrupted work and how to resolve it" },
+      { cmd: "xr execution --resume <runId>", description: "resume a recoverable execution" },
+    ],
+    related: ["status", "audit", "session"],
+    topics: ["execution", "recovery", "reliability", "durable"],
+    subcommands: [
+      { name: "--recovery", description: "unresolved/interrupted executions with honest classification" },
+      { name: "--resume", description: "resume a recoverable execution from a verified checkpoint" },
+    ],
+  },
+  {
     name: "attacks",
     description: "run prompt-injection defense benchmark",
     usage: "xr attacks [--json]",

@@ -214,10 +214,52 @@ export function systemRoutes(): DaemonRoute[] {
             registry?: { tryResolve?: (token: unknown) => unknown; Tokens?: { Execution?: unknown } };
           };
           const execService = carrier.registry?.tryResolve?.(carrier.registry?.Tokens?.Execution) as
-            | { getRecoveryPending(workspaceId: string): unknown }
+            | {
+                getRecoveryPending(workspaceId: string): unknown;
+                checkpoints?: { getMaintenanceMeta(key: string): string | null };
+              }
             | undefined;
+          /**
+           * Phase 06 · Steps 34/35 — HONEST RPO/RTO. We report the model we
+           * actually implement and the MEASURED last recovery duration — we do
+           * NOT claim zero data loss, because a crash between two checkpoint
+           * boundaries loses the work done since the last boundary.
+           *
+           *  RPO (data loss on crash): one lifecycle boundary. Checkpoints are
+           *      written at task-accept/plan/policy/env/step/model-turn/tool,
+           *      so worst-case loss = work since the last boundary.
+           *  RTO (time to recover): startup discovery+classification, measured.
+           */
+          const readMeta = (key: string): number | null => {
+            try {
+              const raw = execService?.checkpoints?.getMaintenanceMeta(key);
+              const n = raw == null ? NaN : Number.parseInt(raw, 10);
+              return Number.isFinite(n) ? n : null;
+            } catch {
+              return null;
+            }
+          };
+          const rpoRto = {
+            rpo: {
+              model: "checkpoint_per_lifecycle_boundary",
+              boundary: "task_accepted/plan/policy/env/step/model_turn/tool_call",
+              worstCaseLoss: "work performed since the last checkpoint boundary",
+              zeroDataLoss: false,
+            },
+            rto: {
+              model: "startup_recovery_discovery_and_classification",
+              budgetMs: 5000,
+              lastMeasuredMs: readMeta("startup_recovery_last_duration_ms"),
+              lastRecoveredCount: readMeta("startup_recovery_last_count"),
+              lastRunAt: readMeta("startup_recovery_last_at"),
+            },
+          };
           if (!execService || typeof execService.getRecoveryPending !== "function") {
-            return json({ recovery: [], summary: { pending: 0, blocked: 0, safeToResume: 0 } });
+            return json({
+              recovery: [],
+              summary: { pending: 0, blocked: 0, safeToResume: 0, needsApproval: 0 },
+              rpoRto,
+            });
           }
           const pending = execService.getRecoveryPending(state.workspaceManager.getActiveId()) as
             Array<{ recoveryState?: unknown; safeToResume?: unknown }>;
@@ -227,7 +269,9 @@ export function systemRoutes(): DaemonRoute[] {
               pending: pending.length,
               blocked: pending.filter((r) => r.recoveryState === "recovery_blocked").length,
               safeToResume: pending.filter((r) => r.safeToResume).length,
+              needsApproval: pending.filter((r) => r.recoveryState === "startup_recovery_pending").length,
             },
+            rpoRto,
           });
         } catch (e) {
           return json({ error: (e as Error).message }, 500);

@@ -88,7 +88,20 @@ export class LeaseManager {
       } else if (isProcessDead(existing.ownerPid)) {
         // Stale lease — takeover if allowed
         if (opts.allowTakeover !== false) {
+          /**
+           * Phase 06 fix — mark stale AND remove the dead owner's row before
+           * the fresh INSERT. Previously the row was only marked stale, so the
+           * UNIQUE(target_type,target_id) constraint rejected the takeover
+           * INSERT and work abandoned by a crashed process could never be
+           * re-acquired. Marking preserves forensics in the audit trail of the
+           * caller; the row itself is dead weight.
+           */
           this.markStale(existing.leaseId);
+          try {
+            this.db.prepare(`DELETE FROM ${TABLE} WHERE lease_id = ?`).run(existing.leaseId);
+          } catch {
+            // best-effort; the INSERT below will surface any hard failure
+          }
           // Fall through to acquire
         } else {
           return null;

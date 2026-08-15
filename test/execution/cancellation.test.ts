@@ -166,3 +166,108 @@ describe("execution cancellation", () => {
     expect(persisted!.outcome!.kind).toBe("cancelled");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 06 · Steps 15–18 — CANCELLATION PROPAGATION.
+// The run's AbortSignal must reach provider transports AND interruptible tool
+// subprocesses, and its outcome must be attributed HONESTLY (cancelled ≠
+// timeout ≠ success). Cancellation is audited and NEVER treated as proof that
+// a side effect did not happen.
+// ═══════════════════════════════════════════════════════════════════════════
+import { runCommand } from "../../src/util/process.ts";
+import { guardedRequest, ProviderAbortError, isCancellation, isTimeout } from "../../src/providers/request-guard.ts";
+import { isSideEffectSafe } from "../../src/execution/checkpoint.ts";
+
+describe("Phase 06 · cancellation propagation (spec steps 15–18)", () => {
+  test("AbortSignal reaches subprocesses: runCommand kills the child and reports 'cancelled'", async () => {
+    const controller = new AbortController();
+    const p = runCommand("sleep", ["5"], { timeoutMs: 30_000, signal: controller.signal });
+    // Let the child start, then cancel.
+    await new Promise((r) => setTimeout(r, 100));
+    controller.abort();
+    const started = Date.now();
+    const result = await p;
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("cancelled"); // NOT "timeout", NOT success
+    expect(Date.now() - started).toBeLessThan(3000); // child actually died
+  }, 10_000);
+
+  test("already-aborted signal fails fast without spawning", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const result = await runCommand("sleep", ["5"], { signal: controller.signal });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("cancelled");
+  });
+
+  test("provider transport receives the signal: caller abort → 'cancelled', never 'timeout'", async () => {
+    const controller = new AbortController();
+    const p = guardedRequest("test-provider", { signal: controller.signal, timeoutMs: 30_000 }, (signal) => {
+      return new Promise<string>((resolve, reject) => {
+        const t = setTimeout(() => resolve("late"), 5000);
+        signal.addEventListener("abort", () => {
+          clearTimeout(t);
+          reject(new Error("aborted"));
+        });
+      });
+    });
+    setTimeout(() => controller.abort(), 20);
+    let caught: unknown;
+    try {
+      await p;
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ProviderAbortError);
+    expect(isCancellation(caught)).toBe(true); // honest attribution
+    expect(isTimeout(caught)).toBe(false);
+  });
+
+  test("shell tool honors ctx.signal and audits the cancellation", async () => {
+    const { shellTool } = await import("../../src/tools/system.ts");
+    const audits: Array<{ event: string; detail: Record<string, unknown> }> = [];
+    const controller = new AbortController();
+    const ctx = {
+      cwd: dir,
+      approve: async () => true,
+      audit: (event: string, detail: Record<string, unknown>) => audits.push({ event, detail }),
+      dryRun: false,
+      hardened: false, // compat path: direct subprocess (the one we can cancel)
+      signal: controller.signal,
+    } as unknown as Parameters<typeof shellTool.run>[1];
+
+    const p = shellTool.run({ cmd: "sleep 5" }, ctx);
+    await new Promise((r) => setTimeout(r, 150));
+    controller.abort();
+    const result = await p;
+    expect(result.ok).toBe(false);
+    expect(result.output.toLowerCase()).toContain("cancel");
+    expect(audits.some((a) => a.event === "shell.cancelled")).toBe(true);
+    expect(audits.some((a) => a.event === "shell.run")).toBe(false); // never reported as executed-ok
+  }, 15_000);
+
+  test("an already-cancelled run does not start new shell side effects", async () => {
+    const { shellTool } = await import("../../src/tools/system.ts");
+    const audits: Array<{ event: string }> = [];
+    const controller = new AbortController();
+    controller.abort();
+    const ctx = {
+      cwd: dir,
+      approve: async () => true,
+      audit: (event: string) => audits.push({ event }),
+      dryRun: false,
+      hardened: false,
+      signal: controller.signal,
+    } as unknown as Parameters<typeof shellTool.run>[1];
+    const result = await shellTool.run({ cmd: "echo side-effect >> should-not-exist.txt" }, ctx);
+    expect(result.ok).toBe(false);
+    expect(audits.some((a) => a.event === "shell.cancelled")).toBe(true);
+  });
+
+  test("cancellation_requested remains side-effect-UNSAFE (step 17)", () => {
+    // A cancellation may land during an external mutation — it is NOT proof
+    // the effect was avoided. The taxonomy must keep saying so.
+    expect(isSideEffectSafe("cancellation_requested")).toBe(false);
+    expect(isSideEffectSafe("cancellation_requested", "naturally_idempotent")).toBe(false);
+  });
+});

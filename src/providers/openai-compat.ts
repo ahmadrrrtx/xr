@@ -19,7 +19,7 @@ import { guardedRequest } from "./request-guard.ts";
 import { buildEnvelopeGBNF } from "../reliability/grammar.ts";
 import { repairToTurn } from "../reliability/repair.ts";
 import { profileFor, type ModelProfile } from "../reliability/profiles.ts";
-import { normalizeProviderError } from "./errors.ts";
+import { normalizeProviderError, malformedProviderResponseError } from "./errors.ts";
 
 export interface OpenAICompatOptions {
   id: string;
@@ -139,7 +139,21 @@ export class OpenAICompatProvider implements Provider {
           `provider ${this.id} HTTP ${res.status}: ${txt.slice(0, 200)}`,
         );
       }
-      const json: any = await res.json();
+      /**
+       * Phase 06 · Step 29 — malformed-response handling. Invalid JSON or a
+       * missing `choices` array is a STRUCTURAL provider failure: classified
+       * honestly (non-retryable against this provider), never coerced into a
+       * silent empty success, and never used to mutate execution state.
+       */
+      let json: any;
+      try {
+        json = await res.json();
+      } catch {
+        throw malformedProviderResponseError(this.id, "response body is not valid JSON", this.model);
+      }
+      if (!json || typeof json !== "object" || !Array.isArray(json?.choices)) {
+        throw malformedProviderResponseError(this.id, "missing required field: choices[]", this.model);
+      }
       const content: string =
         json?.choices?.[0]?.message?.content ?? "";
       const usage = json?.usage

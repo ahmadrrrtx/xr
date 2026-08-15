@@ -72,7 +72,20 @@ export function failObservation(summary: string, opts: Partial<ExecutionObservat
   };
 }
 
-/** Infer idempotency class from capability identity (conservative defaults). */
+/**
+ * Infer idempotency class from capability identity (conservative defaults).
+ *
+ * Phase 06 · Steps 10/43/44 — the full side-effecting tool inventory lives in
+ * docs/implementation/PHASE_06_RELIABILITY.md §6. Classification rules:
+ *   - reads/pure lookups        → naturally_idempotent
+ *   - file writes with key      → idempotent_with_key (content-addressed)
+ *   - delete                    → idempotent_with_key (second delete is a no-op
+ *                                 that the key keeps from erroring twice)
+ *   - shell / git mutations / external mutations → NEVER auto-idempotent.
+ *     Arbitrary shell semantics cannot be proven repeatable (`cmd >> file`,
+ *     package installs, git push…), so they stay `unknown_unsafe`: no silent
+ *     retry, crash → approval/reconciliation. That is the honest answer.
+ */
 export function defaultIdempotency(cap: CapabilityIdentity): IdempotencyClass {
   if (cap.kind === "model_call") return "non_idempotent";
   if (cap.kind === "core_tool") {
@@ -84,11 +97,24 @@ export function defaultIdempotency(cap: CapabilityIdentity): IdempotencyClass {
       case "web_search":
       case "system_apps":
       case "system_clipboard_read":
+      case "git_status":
+      case "git_diff":
+      case "git_log":
         return "naturally_idempotent";
       case "write_file":
       case "delete_file":
-      case "shell":
         return "idempotent_with_key";
+      // Phase 06 · Step 43 — shell was `idempotent_with_key`; that was an
+      // overclaim. Arbitrary commands are NOT provably repeatable, so the
+      // fabric must treat them as unsafe-to-retry (fail closed).
+      case "shell":
+      case "git_commit":
+      case "git_push":
+      case "git_pull":
+      case "git_stash":
+      case "git_branch":
+      case "computer_control":
+      case "system_clipboard_write":
       default:
         return "unknown_unsafe";
     }

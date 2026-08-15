@@ -85,3 +85,65 @@ describe("XR 4.1 execution state machine", () => {
     expect(entry.reason).toBe("intent accepted");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 06 · Step 4 — STATE MACHINE INTEGRITY.
+// Invalid transitions must be REJECTED, never silently accepted. Terminal and
+// post-terminal states must not quietly re-enter the active lifecycle.
+// ═══════════════════════════════════════════════════════════════════════════
+describe("Phase 06 · state machine integrity (spec step 4)", () => {
+  test("the canonical happy-path lifecycle is valid end to end", () => {
+    let s: any = null;
+    s = transition("r", s, "plan").next;            // task_accepted → plan_recorded
+    expect(s).toBe("planned");
+    s = transition("r", s, "submit_policy").next;   // → policy_admitted path
+    expect(s).toBe("awaiting_policy");
+    s = transition("r", s, "authorize").next;       // policy admitted
+    expect(s).toBe("authorized");
+    s = transition("r", s, "queue").next;           // env/step ready
+    expect(s).toBe("queued");
+    s = transition("r", s, "start").next;           // step_started
+    expect(s).toBe("running");
+    s = transition("r", s, "observe").next;         // tool/model turn observed
+    expect(s).toBe("observing");
+    s = transition("r", s, "succeed").next;         // step_completed / cleanup
+    expect(s).toBe("succeeded");
+  });
+
+  test("terminal states reject re-entry into the active lifecycle", () => {
+    // cancelled → tool_call_completed must NOT be accepted
+    expect(() => transition("r", "cancelled", "observe")).toThrow();
+    expect(() => transition("r", "cancelled", "succeed")).toThrow();
+    expect(() => transition("r", "cancelled", "start")).toThrow();
+    // succeeded/cleanup_completed → step_started must NOT silently succeed
+    expect(() => transition("r", "succeeded", "start")).toThrow();
+    expect(() => transition("r", "succeeded", "queue")).toThrow();
+    expect(() => transition("r", "failed", "start")).toThrow();
+    expect(() => transition("r", "timed_out", "observe")).toThrow();
+  });
+
+  test("skipping required stages is rejected", () => {
+    // cannot start running before authorize/queue
+    expect(() => transition("r", "created", "start")).toThrow();
+    expect(() => transition("r", "planned", "start")).toThrow();
+    // cannot succeed from created without ever running
+    expect(() => transition("r", "created", "succeed")).toThrow();
+  });
+
+  test("retry is only legal from failed/timed_out (pre-side-effect), enforced by service", () => {
+    expect(transition("r", "failed", "retry").next).toBe("queued");
+    expect(transition("r", "timed_out", "retry").next).toBe("queued");
+    // running cannot 'retry' itself mid-flight
+    expect(() => transition("r", "running", "retry")).toThrow();
+    // succeeded cannot retry
+    expect(() => transition("r", "succeeded", "retry")).toThrow();
+  });
+
+  test("every transition is explicit + auditable (returns entry with from/to)", () => {
+    const { next, entry } = transition("r", "authorized", "queue", "ready");
+    expect(next).toBe("queued");
+    expect(entry.from).toBe("authorized");
+    expect(entry.to).toBe("queued");
+    expect(entry.reason).toBe("ready");
+  });
+});
