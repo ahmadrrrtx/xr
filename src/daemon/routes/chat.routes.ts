@@ -1,6 +1,9 @@
 /** XR Daemon — chat routes. */
 
-import { buildProvider } from "../../providers/factory.ts";
+import { buildProviderWithDecision } from "../../providers/factory.ts";
+import { FallbackProvider } from "../../intelligence/routing-service.ts";
+import { checkProviderHealthCached, HEALTH_BOUND_MS } from "../../providers/health.ts";
+import { bounded } from "../../util/concurrency.ts";
 import type { Message } from "../../core/types.ts";
 import { route, type DaemonRoute } from "./router.ts";
 import { chatSpan as makeChatSpan, endChatSpan as endGenAiSpan } from "../../observability/instrument.ts";
@@ -18,12 +21,22 @@ export function chatRoutes(): DaemonRoute[] {
           const body = await req.json() as { message?: string; history?: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }> };
           if (!body?.message) return json({ error: "expected { message: string }" }, 400);
 
-          const provider = buildProvider(config, {});
-          const health = await provider.health();
-          if (!health.ok) return json({ error: `Provider offline: ${health.detail ?? "unreachable"}` }, 503);
-
+          // Phase 01 — health gate is BOUNDED (2.5 s) instead of the previous
+          // 8–32 s stall behind Bun's 10 s timeout, and served from the shared
+          // cache when no fallback chain is wired (same probe providers.list
+          // just ran). Fallback-chain providers keep FallbackProvider.health()
+          // semantics (primary then fallback) but under the same bound.
+          const { provider } = buildProviderWithDecision(config, {});
           const model = (config as { defaults?: { model?: string } }).defaults?.model ?? "unknown";
           const providerName = provider.id || (config as { defaults?: { provider?: string } }).defaults?.provider || "unknown";
+          let health: { ok: boolean; detail?: string | null; latencyMs?: number | null };
+          if (provider instanceof FallbackProvider) {
+            const h = await bounded(provider.health(), HEALTH_BOUND_MS, { ok: false, detail: `health check timed out after ${HEALTH_BOUND_MS} ms` });
+            health = h;
+          } else {
+            health = await checkProviderHealthCached(config, provider.id, model);
+          }
+          if (!health.ok) return json({ error: `Provider offline: ${health.detail ?? "unreachable"}` }, 503);
 
           let cancelled = false;
           const stream = new ReadableStream({

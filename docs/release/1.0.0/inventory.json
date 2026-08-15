@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-14T11:56:11.227Z",
+  "generatedAt": "2026-08-15T09:36:07.872Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -51,8 +51,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 531,
-    "testFiles": 242,
+    "sourceFiles": 533,
+    "testFiles": 246,
     "cliCommands": 41,
     "daemonRoutes": 110,
     "providers": 26,
@@ -328,6 +328,7 @@
     "src/daemon/routes/trust.routes.ts",
     "src/daemon/server.ts",
     "src/daemon/skills-api.ts",
+    "src/daemon/state/cache.ts",
     "src/enterprise/audit/export.ts",
     "src/enterprise/audit/redaction.ts",
     "src/enterprise/audit/retention.ts",
@@ -666,6 +667,7 @@
     "src/util/fs-async.ts",
     "src/util/process.ts",
     "src/util/scan-cache.ts",
+    "src/util/ttl-cache.ts",
     "src/voice/audio.ts",
     "src/voice/cli.ts",
     "src/voice/hardware.ts",
@@ -819,6 +821,8 @@
     "test/perf/binary-smoke.test.ts",
     "test/perf/binary-update.test.ts",
     "test/perf/boot-profile.test.ts",
+    "test/perf/daemon-routes.test.ts",
+    "test/perf/hardware.test.ts",
     "test/perf/hot-path-lint.test.ts",
     "test/perf/incremental-index.test.ts",
     "test/perf/load-admission.test.ts",
@@ -826,7 +830,9 @@
     "test/perf/model-switch.test.ts",
     "test/perf/perf-gate.test.ts",
     "test/perf/profile-gate.test.ts",
+    "test/perf/provider-health.test.ts",
     "test/perf/render-perf.test.ts",
+    "test/perf/runtime-detection.test.ts",
     "test/perf/scan-cache.test.ts",
     "test/perf/stall-detection.test.ts",
     "test/perf/startup-latency.test.ts",

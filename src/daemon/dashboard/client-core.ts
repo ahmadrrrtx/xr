@@ -132,16 +132,19 @@ function updateBentoSummary() {
 }
 
 // ── Home Dashboard loader
+// Phase 01 — two-stage load: the lightweight cells (overview/cost/control/
+// memory/security) render FIRST so the first meaningful paint never waits for
+// the slowest endpoint; the heavier provider/model cells render from shared
+// daemon-side caches in stage two. No endpoint is fetched twice: the results
+// are passed into the helper functions instead of re-fetching.
 async function loadDashboard() {
   try {
-    const [ov, cost, ctrl, mem, providers, security, models] = await Promise.allSettled([
+    const [ov, cost, ctrl, mem, security] = await Promise.allSettled([
       api("/api/overview"),
       api("/api/cost"),
       api("/api/control/status"),
       api("/api/memory"),
-      api("/api/providers"),
-      api("/api/security"),
-      api("/api/models")
+      api("/api/security")
     ]);
 
     if (ov.status === "fulfilled") {
@@ -198,6 +201,12 @@ async function loadDashboard() {
     }
 
     updateBentoSummary();
+
+    // Stage two — provider/model cells (served from shared daemon caches).
+    const [providers, models] = await Promise.allSettled([
+      api("/api/providers"),
+      api("/api/models")
+    ]);
     if (models.status === "fulfilled") {
       const m = models.value;
       const selected = m.selected ?? {};
@@ -221,11 +230,16 @@ async function loadDashboard() {
           </div>\`).join("")
       : "<div class='muted'>No logs recorded yet.</div>";
 
-    await loadProviderChip();
+    // Phase 01 — reuse the data already fetched in this load: no duplicate
+    // /api/overview + /api/providers + /api/config round-trips per paint.
+    const ovDone = ov.status === "fulfilled" ? ov.value : null;
+    const providersDone = providers.status === "fulfilled" ? providers.value : null;
+    await loadProviderChip(ovDone, providersDone);
     await loadTrustPanel();
-    loadComposerMeta();
-    loadVoiceStatus();
-    syncSettingsFromConfig();
+    const cfg = await api("/api/config").catch(function () { return null; });
+    loadComposerMeta(cfg);
+    loadVoiceStatus(cfg);
+    syncSettingsFromConfig(cfg);
   } catch(e) {
     toast("Dashboard load failed: " + e.message, "err");
   }
@@ -260,9 +274,16 @@ async function loadTrustPanel() {
   }
 }
 
-async function loadProviderChip() {
+async function loadProviderChip(ovResult, providersResult) {
   try {
-    const [ov, providers] = await Promise.all([api("/api/overview"), api("/api/providers")]);
+    // Phase 01 — reuse data already fetched by loadDashboard when available;
+    // standalone callers (provider switch) still self-fetch.
+    let ov, providers;
+    if (ovResult && providersResult) { ov = ovResult; providers = providersResult; }
+    else {
+      const r = await Promise.all([api("/api/overview"), api("/api/providers")]);
+      ov = r[0]; providers = r[1];
+    }
     const budget = ov.budget?.perTaskUsd ?? 0;
     document.getElementById("chip-budget-label").textContent = budget > 0 ? "Cap $" + budget.toFixed(2) : "No cap";
 
@@ -306,11 +327,12 @@ async function loadProviderChip() {
 // messages of history per reply; the client mirrors it with history.slice(-10)
 // in streamChat(). We surface both facts honestly instead of pretending a
 // "context window %" that no API provides.
-async function loadComposerMeta() {
+async function loadComposerMeta(cfg) {
   const box = document.getElementById("composer-meta");
   if (!box) return;
   try {
-    const [budget, config] = await Promise.all([api("/api/budget"), api("/api/config")]);
+    // Phase 01 — config is fetched once per dashboard load and shared.
+    const [budget, config] = cfg ? [await api("/api/budget"), cfg] : await Promise.all([api("/api/budget"), api("/api/config")]);
     const usage = budget.usage || {};
     const dayUsd = Number(usage.dayUsd ?? 0);
     const taskCap = Number(budget.config && budget.config.perTaskUsd ? budget.config.perTaskUsd : 0);
@@ -360,12 +382,12 @@ async function loadComposerMeta() {
 }
 
 // ── Phase A · A-1 — honest voice panel state, from the real config.
-async function loadVoiceStatus() {
+async function loadVoiceStatus(cfg) {
   const el = document.getElementById("voice-config-state");
   const note = document.getElementById("voice-offline-note");
   if (!el) return;
   try {
-    const config = await api("/api/config");
+    const config = cfg || await api("/api/config");
     const v = config.voice || {};
     const mode = v.mode || "off";
     const on = !!v.enabled;
@@ -395,8 +417,8 @@ async function loadVoiceStatus() {
 
 // ── Phase A · A-7 — settings panes are read-only in this build: reflect the
 // real config values and never let the user believe a toggle persisted.
-function syncSettingsFromConfig() {
-  api("/api/config").then(function (config) {
+function syncSettingsFromConfig(cfg) {
+  (cfg ? Promise.resolve(cfg) : api("/api/config")).then(function (config) {
     const voice = config.voice || {};
     const setPtt = document.getElementById("set-voice-ptt");
     if (setPtt) {

@@ -55,6 +55,41 @@ export function yieldEventLoop(): Promise<void> {
   });
 }
 
+/**
+ * Bound a promise with a wall-clock deadline (Phase 01).
+ *
+ * Returns `fallback` when the deadline elapses first. The timer is unref'd so
+ * it never keeps the process alive. NOTE: this is a RACE, not cancellation —
+ * the underlying operation keeps running until it settles on its own. Callers
+ * must pair it with dedup/caching so raced operations are not repeated (see
+ * src/providers/health.ts; documented in docs/perf/PERF-BUDGETS.md §Phase 01).
+ */
+export function bounded<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve(fallback);
+    }, ms);
+    (timer as unknown as { unref?: () => void }).unref?.();
+    promise.then(
+      (v) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(v);
+      },
+      () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(fallback);
+      },
+    );
+  });
+}
+
 /** Bound concurrent plugin tree hash / static scans. */
 export const pluginIoLimit = new Semaphore(2);
 

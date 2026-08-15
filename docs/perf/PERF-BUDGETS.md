@@ -200,3 +200,75 @@ for warm scenarios, ≥9 samples for gate runs, ≥21 for baseline artifacts,
 p95 as the metric, and a 30% noise budget in the regression gate (Phase 4 · T4; see scripts/perf/budgets.json note for the measured rationale). If a budget
 is missed the real number is reported with the blocker — a budget is never
 claimed without being measured (Phase-0/1/2 honesty discipline).
+
+## 12. Phase 01 — daemon runtime performance (P0)
+
+### 12.1 Critical-path budgets (Phase 01 gate)
+
+| Metric | Baseline (main@9680298) | Target | Actual (this host, normal env) | Actual (blackhole worst case) | Status |
+|---|---:|---:|---:|---:|---:|
+| providers.list | 16.0 s server-side; client killed at Bun 10 s | p95 < 2.5 s | 3–4 ms warm | 3 ms warm / 2.5 s cold (health bound) | PASS |
+| models.list | ~36 s server-side; client killed at 10 s | p95 < 2.5 s | 1–2 ms | 2 ms (cached) | PASS |
+| onboarding.status | 30.6 s server-side; client killed at 10 s | p95 < 3 s | 1–2 ms | 1 ms warm / ~2.6 s cold | PASS |
+| runtime detection (11 runtimes) | 29 s sequential | 10 runtimes < 3 s (normal) | 19 ms cold | 7.5 s cold / 0.1 ms warm | PASS |
+| cached runtime lookup | n/a (no cache) | < 50 ms | 0.1 ms | 0.1 ms | PASS |
+| hardware detection request impact | 3.5 s sync per request | no stall > 100 ms | 13 ms async | async; 0 ms request impact | PASS |
+| chat.stream offline 503 | 32 s → 503 | bounded health | 3 ms (negative cache) | 2.5 s → 503 (bound) | PASS |
+| dashboard first paint | fails (10 s timeout) | < 2 s | sub-100 ms (cached) | ~2.6 s cold / < 100 ms warm | PASS |
+| Bun 10 s request timeout | triggered on every heavy endpoint | never on normal loading | not triggered | not triggered | PASS |
+| catalog N+1 per providers.list | 26 builds | ≤ 1 build | 0–1 build | 0–1 build | PASS |
+
+Measured with `bun run scripts/perf-daemon-routes.ts --samples 5` (normal) and
+`XR_BENCH_BLACKHOLE=1 bun run scripts/perf-daemon-routes.ts --samples 3`
+(blackhole = TCP listeners on all 9 local-runtime ports that accept but never
+answer, plus slow nvidia-smi/lspci shims — reproduces the forensic audit
+environment). Full regression coverage: test/perf/runtime-detection.test.ts,
+provider-health.test.ts, hardware.test.ts, daemon-routes.test.ts.
+
+### 12.2 Cache design (one primitive: src/util/ttl-cache.ts)
+
+| Resource | Key | TTL | SWR | Negative | Invalidation | Stale policy |
+|---|---|---:|---:|---:|---|---|
+| runtime detection | config fingerprint (baseUrls, cliCommands, localModels, defaults) | 60 s | 30 s | — | config change → new key | stale served + background refresh |
+| hardware specs | "default" | 5 min | 5 min | — | XR_HARDWARE_CACHE_TTL_MS; background refresh at startup + every TTL | stale served + background refresh |
+| intelligence catalog | config + registry.version + API-key presence | 60 s | 15 s | — | config/registry/key change → new key | stale served + microtask rebuild |
+| provider health | provider id + model | 60 s | 15 s | 15 s (failures) | key stored/cleared via auth short-circuit | stale served + background refresh |
+| internet probe | "default" | 15 s | — | same | — | never stale beyond TTL |
+| git summary | cwd | 5 s | — | — | — | never stale beyond TTL |
+
+Kill switches (env, consistent with the existing XR_* override pattern):
+`XR_RUNTIME_CACHE=0`, `XR_HARDWARE_CACHE=0`, `XR_CATALOG_CACHE=0`,
+`XR_HEALTH_CACHE=0` — each disables ONLY its cache; the bounded/parallel
+implementations remain active (never fall back to the old unbounded
+sequential behavior). TTL knobs: `XR_RUNTIME_CACHE_TTL_MS`,
+`XR_HARDWARE_CACHE_TTL_MS`, `XR_CATALOG_CACHE_TTL_MS`, `XR_HEALTH_CACHE_TTL_MS`
+(precedent: `XR_CONFIG_CACHE_TTL_MS`).
+
+### 12.3 Bounded concurrency & timeout semantics
+
+- Runtime probes: Semaphore(5) bounded parallelism (never sequential, never an
+  unbounded Promise.all). Per-runtime operation bounded by
+  max(commandExists 1.5 s, HTTP probe 2.5 s) because the two run concurrently.
+  11 runtimes ⇒ 3 waves ≈ 7.5 s worst case cold; typical envs 19–300 ms.
+- Provider health: bounded race at 2500 ms + dedup (one in-flight probe per
+  provider+model) + cache. **Timeout ≠ cancellation:** the underlying
+  `provider.health()` fetch (8 s internal bound per probe) continues after the
+  race because the `Provider` interface has no signal plumbing — the cache
+  ensures the raced probe is never repeated within the TTL. Documented
+  limitation; real cancellation is deferred (provider gateway, Phase 4).
+- Rejected work is never cached; pending slots are removed on rejection so the
+  next caller retries (no cache poisoning). Caches are memory-bounded
+  (maxEntries with oldest-eviction).
+- Stale-while-revalidate applies ONLY where staleness is benign (runtime
+  health display, hardware, catalog). `models.select` / `models.test` /
+  onboarding key-save stay FRESH (direct bounded probes, never cached).
+- No authorization decision, secret, or user-scoped value is cached anywhere.
+
+### 12.4 What must NOT regress (guarded by tests)
+
+- `/api/health` and `/api/overview` never trigger runtime/hardware/catalog
+  work (asserted in test/perf/daemon-routes.test.ts).
+- Windows/Linux/macOS probe parity: `where`/`command` selection,
+  PowerShell path, nvidia-smi/lspci parsing preserved in the async variants
+  (statfsSync stays sync — a cheap <1 ms syscall).
+- API contracts unchanged; response shapes identical.

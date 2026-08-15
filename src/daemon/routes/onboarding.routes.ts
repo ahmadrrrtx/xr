@@ -18,22 +18,11 @@
 
 import { loadConfig, saveConfig, getProviderEnvStatus } from "../../config/config.ts";
 import { PRESETS, buildProvider } from "../../providers/factory.ts";
+import { checkProviderHealthCached } from "../../providers/health.ts";
 import { detectAllRuntimes } from "../../local/runtimes.ts";
 import { setSecretAsync, clearSecretMemo, getSecretSyncCached } from "../../security/secrets.ts";
+import { checkInternetCached } from "../state/cache.ts";
 import { route, type DaemonRoute } from "./router.ts";
-
-/** Best-effort reachability probe; never blocks or throws. */
-async function checkInternet(): Promise<boolean> {
-  try {
-    const res = await fetch("https://registry.npmjs.org/", {
-      method: "HEAD",
-      signal: AbortSignal.timeout(2000),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
 
 export function onboardingRoutes(): DaemonRoute[] {
   return [
@@ -49,25 +38,29 @@ export function onboardingRoutes(): DaemonRoute[] {
         const configured = Object.values(PRESETS)
           .filter((p) => p.apiKeyEnv && Boolean(process.env[p.apiKeyEnv] || getSecretSyncCached(p.apiKeyEnv)))
           .map((p) => p.id);
-        // Health probes run IN PARALLEL and are bounded (~2.5 s each): the
-        // status call is an advisory "is anything ready" check and must never
-        // take 8 s × N providers (health()'s own timeout) or block the
-        // dashboard/first-run flow on a slow network.
+        // Health probes run IN PARALLEL, are bounded (~2.5 s each), and are
+        // served from the shared health cache (60 s positive / 15 s negative):
+        // the status call is an advisory "is anything ready" check and must
+        // never take 8 s × N providers or re-probe the same provider on every
+        // dashboard poll.
         const ready: string[] = [];
-        const bounded = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
-          Promise.race([p, new Promise<null>((res) => setTimeout(() => res(null), ms))]);
         await Promise.all(
           configured.map(async (id) => {
             try {
-              const provider = buildProvider(config, { provider: id });
-              const health = await bounded(provider.health(), 2500);
-              if (health?.ok) ready.push(id);
+              const health = await checkProviderHealthCached(config, id);
+              if (health.ok) ready.push(id);
             } catch {
-              // health() already reports failure internally; never break status.
+              // checkProviderHealthCached already reports failure internally;
+              // never break status.
             }
           }),
         );
-        const runtimes = await detectAllRuntimes();
+        // Phase 01 — runtime detection and the internet probe are independent;
+        // run them concurrently (was sequential: detection + up to 2 s probe).
+        const [runtimes, internet] = await Promise.all([
+          detectAllRuntimes(),
+          checkInternetCached(),
+        ]);
         const localRuntime = config.localModels.runtime ?? "ollama";
         const localInfo = runtimes.find((r) => r.id === localRuntime);
         const localHealthy = localInfo?.healthy === true;
@@ -79,7 +72,6 @@ export function onboardingRoutes(): DaemonRoute[] {
         } else if (ready.length === 0) {
           reasons.push("Your configured route(s) are not reachable right now.");
         }
-        const internet = await checkInternet();
         return json({
           needsSetup: configured.length === 0 && !localHealthy,
           reasons,
@@ -136,12 +128,12 @@ export function onboardingRoutes(): DaemonRoute[] {
           });
 
           // Advisory probe — the key is saved regardless of its outcome
-          // (mirrors the CLI onboarding F-1 contract).
+          // (mirrors the CLI onboarding F-1 contract). Bounded + cached
+          // (Phase 01): a hanging endpoint cannot stall the save flow.
           let health: { ok: boolean; detail: string | null; latencyMs: number | null } | null = null;
           if (body.probe !== false) {
             try {
-              const provider = buildProvider(next, { provider: providerId });
-              const h = await provider.health();
+              const h = await checkProviderHealthCached(next, providerId);
               health = { ok: h.ok, detail: h.detail ?? null, latencyMs: h.latencyMs ?? null };
             } catch (e) {
               health = { ok: false, detail: (e as Error).message, latencyMs: null };

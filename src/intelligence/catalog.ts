@@ -6,7 +6,9 @@
 import type { XRConfig } from "../config/config.ts";
 import { registry } from "../providers/registry.ts";
 import { PRESETS, type ProviderPreset } from "../providers/presets.ts";
-import { getSecret } from "../security/secrets.ts";
+import { getSecret, getSecretSyncCached } from "../security/secrets.ts";
+import { TtlCache } from "../util/ttl-cache.ts";
+import { xrMetrics } from "../observability/metrics.ts";
 import {
   descriptorFromPreset,
   modelsFromPreset,
@@ -24,6 +26,90 @@ export interface IntelligenceCatalog {
   builtAt: number;
 }
 
+// ── Phase 01 · catalog cache ─────────────────────────────────────────────────
+//
+// Every provider resolution (RoutingService → IntelligenceRouter → buildCatalog)
+// used to rebuild the FULL provider/model catalog — a providers.list request
+// with 26 providers ran 26 identical catalog builds (N+1). The catalog is
+// now cached keyed by a CONFIG + REGISTRY + ENV fingerprint:
+//   · config dimensions that shape the catalog (defaults, provider
+//     capabilities, localModels, providers map, customProviders);
+//   · the provider-registry version (customs synced/removed invalidate);
+//   · API-key PRESENCE bits for keyed presets (a key stored/cleared
+//     invalidates — credentialAvailable is part of the catalog).
+// TTL 60 s + stale-while-revalidate 15 s. Rollback: XR_CATALOG_CACHE=0.
+
+const CATALOG_CACHE_TTL_MS =
+  Number(process.env.XR_CATALOG_CACHE_TTL_MS ?? 60_000) > 0
+    ? Number(process.env.XR_CATALOG_CACHE_TTL_MS ?? 60_000)
+    : 60_000;
+const CATALOG_CACHE_SWR_MS = 15_000;
+
+export function catalogCacheEnabled(): boolean {
+  const raw = process.env.XR_CATALOG_CACHE;
+  return raw === undefined || raw === "" || !/^(0|false|off|no)$/i.test(raw);
+}
+
+const catalogCache = new TtlCache<IntelligenceCatalog>({
+  ttlMs: CATALOG_CACHE_TTL_MS,
+  staleWhileRevalidateMs: CATALOG_CACHE_SWR_MS,
+  maxEntries: 8,
+  onStats: (event) => {
+    if (event === "hit") xrMetrics.catalogCacheHits.inc();
+    else if (event === "miss") xrMetrics.catalogCacheMisses.inc();
+    else if (event === "dedup") xrMetrics.deduplicatedRequests.inc({ resource: "catalog" });
+    else xrMetrics.catalogCacheRefreshes.inc();
+  },
+});
+
+/** Keys currently refreshing in the background (sync API — no promise to await). */
+const refreshing = new Set<string>();
+
+/** Test/ops hooks. */
+export function catalogCacheStats() {
+  return { ...catalogCache.stats(), enabled: catalogCacheEnabled(), ttlMs: CATALOG_CACHE_TTL_MS };
+}
+export function invalidateCatalogCache(): void {
+  catalogCache.clear();
+  refreshing.clear();
+}
+
+/**
+ * Fingerprint of everything that shapes the catalog. The catalog is a pure
+ * function of (config, registry, key presence), so this key makes the cache
+ * self-invalidating on any relevant change.
+ */
+export function catalogFingerprint(config?: XRConfig): string {
+  const keyPresence: Record<string, boolean> = {};
+  for (const preset of Object.values(PRESETS)) {
+    if (preset.apiKeyEnv) {
+      keyPresence[preset.apiKeyEnv] = !!(process.env[preset.apiKeyEnv] || getSecretSyncCached(preset.apiKeyEnv));
+    }
+  }
+  return JSON.stringify({
+    defaults: config
+      ? {
+          provider: config.defaults.provider,
+          model: config.defaults.model,
+          fallbackProvider: config.defaults.fallbackProvider ?? null,
+          fallbackModel: config.defaults.fallbackModel ?? null,
+        }
+      : null,
+    localModels: config
+      ? {
+          runtime: (config.localModels as any)?.runtime ?? null,
+          selected: (config.localModels as any)?.selected ?? null,
+          runtimes: (config.localModels as any)?.runtimes ?? {},
+        }
+      : null,
+    providers: config ? (config.providers as Record<string, unknown>) ?? {} : null,
+    providerCapabilities: config ? (config.providerEngine as any)?.providerCapabilities ?? {} : null,
+    customProviders: config ? (config.providerEngine as any)?.customProviders ?? [] : null,
+    registryVersion: registry.version,
+    keyPresence,
+  });
+}
+
 function credentialAvailable(preset: ProviderPreset): boolean {
   if (!preset.apiKeyEnv) return true;
   return !!(process.env[preset.apiKeyEnv] || getSecret(preset.apiKeyEnv));
@@ -33,7 +119,7 @@ function credentialAvailable(preset: ProviderPreset): boolean {
  * Build a fresh catalog from registry (built-ins + custom) and optional config
  * overlays (providerCapabilities, local runtime health).
  */
-export function buildCatalog(config?: XRConfig): IntelligenceCatalog {
+function buildCatalogUncached(config?: XRConfig): IntelligenceCatalog {
   const presets = new Map<string, ProviderPreset>();
 
   // Built-in presets
@@ -98,6 +184,39 @@ export function buildCatalog(config?: XRConfig): IntelligenceCatalog {
   }
 
   return { providers, models, builtAt: Date.now() };
+}
+
+/**
+ * Cached catalog. Configuration/registry/key-presence fingerprint keyed, so a
+ * config change, a custom provider sync, or a stored/cleared API key
+ * invalidates automatically. Stale values are served for the SWR window while
+ * a single background rebuild runs (the catalog is CPU-only, so the rebuild
+ * happens in a microtask and never blocks a request).
+ */
+export function buildCatalog(config?: XRConfig): IntelligenceCatalog {
+  if (!catalogCacheEnabled()) return buildCatalogUncached(config);
+
+  const key = catalogFingerprint(config);
+  const hit = catalogCache.get(key);
+  if (hit) {
+    if (hit.stale && !refreshing.has(key)) {
+      refreshing.add(key);
+      queueMicrotask(() => {
+        try {
+          catalogCache.set(key, buildCatalogUncached(config));
+        } finally {
+          refreshing.delete(key);
+        }
+      });
+    }
+    return hit.value;
+  }
+
+  // First caller in a burst builds; every other caller in the same tick hits
+  // the cache — this is what collapses the per-provider N+1 rebuild.
+  const catalog = buildCatalogUncached(config);
+  catalogCache.set(key, catalog);
+  return catalog;
 }
 
 function applyCapabilityOverride(pd: ProviderDescriptor, override: any): void {

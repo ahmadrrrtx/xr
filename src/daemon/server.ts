@@ -388,6 +388,16 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   // Prefetch secrets into process.env without blocking the first health check.
   void hydrateSecretsAsync().catch(() => {});
 
+  // Phase 01 — probe hardware + runtimes in the BACKGROUND so the first
+  // dashboard load hits warm caches instead of paying 3.5 s + N×2.5 s of
+  // detection on the request path. Never blocks startup or /api/health.
+  void import("../local/hardware.ts").then(({ startHardwareBackgroundRefresh }) => {
+    startHardwareBackgroundRefresh();
+  }).catch(() => {});
+  void import("../local/runtimes.ts").then(({ detectAllRuntimes }) => {
+    void detectAllRuntimes().catch(() => {});
+  }).catch(() => {});
+
   const handler = makeHandler(store, token);
 
   // Phase 8 · T2 — observability lifecycle: resolves the telemetry config

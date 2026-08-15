@@ -224,6 +224,23 @@ export const xrMetrics = {
   placements: register(new Counter("xr_isolation_placements_total", "Isolation placements by tier/backend/outcome.")),
   capabilityExec: register(new Counter("xr_capability_executions_total", "Canonical-envelope executions by capability kind and outcome.")),
   cardinalityOverflow: register(new Counter("xr_cardinality_overflow_total", "Label-values folded into xr_other by cardinality budgets.")),
+  // ── Phase 01 · runtime performance observability ──────────────────────────
+  runtimeDetectionDuration: register(new Histogram("xr_runtime_detection_duration_ms", "Per-runtime detection duration (ms) by runtime id.")),
+  providerHealthDuration: register(new Histogram("xr_provider_health_duration_ms", "Bounded provider health-probe duration (ms) by provider.")),
+  hardwareDetectionDuration: register(new Histogram("xr_hardware_detection_duration_ms", "Hardware detection duration (ms).")),
+  runtimeCacheHits: register(new Counter("xr_runtime_cache_hits_total", "Runtime detection cache hits.")),
+  runtimeCacheMisses: register(new Counter("xr_runtime_cache_misses_total", "Runtime detection cache misses (full detections started).")),
+  runtimeCacheRefreshes: register(new Counter("xr_runtime_cache_refreshes_total", "Background (stale-while-revalidate) runtime detections.")),
+  providerHealthCacheHits: register(new Counter("xr_provider_health_cache_hits_total", "Provider health cache hits.")),
+  providerHealthCacheMisses: register(new Counter("xr_provider_health_cache_misses_total", "Provider health cache misses (probes started).")),
+  providerHealthCacheRefreshes: register(new Counter("xr_provider_health_cache_refreshes_total", "Background provider health refreshes.")),
+  catalogCacheHits: register(new Counter("xr_catalog_cache_hits_total", "Intelligence catalog cache hits.")),
+  catalogCacheMisses: register(new Counter("xr_catalog_cache_misses_total", "Intelligence catalog cache misses (rebuilds started).")),
+  catalogCacheRefreshes: register(new Counter("xr_catalog_cache_refreshes_total", "Background catalog rebuilds.")),
+  hardwareCacheHits: register(new Counter("xr_hardware_cache_hits_total", "Hardware specs cache hits.")),
+  hardwareCacheMisses: register(new Counter("xr_hardware_cache_misses_total", "Hardware specs cache misses (detections started).")),
+  hardwareCacheRefreshes: register(new Counter("xr_hardware_cache_refreshes_total", "Background hardware detections.")),
+  deduplicatedRequests: register(new Counter("xr_deduplicated_requests_total", "Requests folded onto an in-flight operation by resource.")),
 };
 
 export function metric(name: string): Metric | undefined {

@@ -1,8 +1,8 @@
 /** XR Daemon — providers, local models, and workspace routes. */
 
 import { loadConfig, saveConfig, getProviderEnvStatus } from "../../config/config.ts";
-import { buildProvider, buildProviderWithDecision } from "../../providers/factory.ts";
-import { detectHardwareSpecs, formatHardwareSummary } from "../../local/hardware.ts";
+import { getHardwareSpecs, formatHardwareSummary } from "../../local/hardware.ts";
+import { checkProviderHealthCached } from "../../providers/health.ts";
 import { recommendLocalAI } from "../../local/recommend.ts";
 import { detectAllRuntimes, detectRuntime, testLocalModel } from "../../local/runtimes.ts";
 import { isLocalRuntimeId, providerIdForRuntime, validateLocalModelId } from "../../local/registry.ts";
@@ -28,11 +28,15 @@ export function providersRoutes(): DaemonRoute[] {
       path: "/api/providers",
       method: "GET",
       handle: async ({ json, config }) => {
+        // Phase 01 — catalog is built ONCE per request (and then served from
+        // the fingerprint-keyed cache for subsequent requests); per-provider
+        // health is bounded (2.5 s), cached (60 s positive / 15 s negative)
+        // and deduplicated — no more N+1 catalog rebuilds, no more 8–16 s
+        // health stalls behind a 10 s Bun timeout.
         const status = getProviderEnvStatus();
         const rows = await Promise.all(status.map(async (p) => {
           try {
-            const provider = buildProvider(config, { provider: p.id });
-            const health = await provider.health();
+            const health = await checkProviderHealthCached(config, p.id);
             return {
               id: p.id,
               label: p.label,
@@ -217,12 +221,18 @@ export function providersRoutes(): DaemonRoute[] {
       method: "GET",
       handle: async ({ json, config }) => {
         try {
-          const specs = detectHardwareSpecs();
+          // Phase 01 — hardware comes from the async 5-minute cache, runtimes
+          // from the 60 s config-keyed cache, and the selected runtime's status
+          // is sourced from the SAME detection (previously: hardware + full
+          // detection + a THIRD single-runtime detection per request).
+          const specs = await getHardwareSpecs();
           const runtimes = await detectAllRuntimes();
           const local = config.localModels; // fully typed in the schema
           const selectedRuntime = local.runtime ?? "ollama";
           const selectedModel = local.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
-          const selectedStatus = isLocalRuntimeId(selectedRuntime) ? await detectRuntime(selectedRuntime) : undefined;
+          const selectedStatus = isLocalRuntimeId(selectedRuntime)
+            ? runtimes.find((r) => r.id === selectedRuntime)
+            : undefined;
           const recommendation = recommendLocalAI(specs, { useCase: local.useCase ?? "general", preferredRuntime: isLocalRuntimeId(selectedRuntime) ? selectedRuntime : undefined, runtimes });
           return json({
             selected: {
