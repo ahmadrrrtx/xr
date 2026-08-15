@@ -265,10 +265,37 @@ export const HealthResponse = z.looseObject({
 });
 
 /** Chat SSE events (streamed as `data: <json>\n\n`, terminated by [DONE]). */
+/**
+ * Chat SSE events (streamed as `data: <json>\n\n`, terminated by [DONE]).
+ * Phase 05 — the canonical streaming event contract. Every event carries a
+ * monotonic `event_id` and a `type` discriminator; the legacy fields (`text`,
+ * `done`, `error`, `finalMessage`, `cancelled`) are retained so pre-Phase-05
+ * consumers keep working. Fields are optional/loose so this stays additive.
+ */
 export const ChatStreamEvent = z.looseObject({
-  text: z.string().optional(),
-  done: z.boolean().optional(),
-  error: z.string().optional(),
+  event_id: z.number().int().positive().optional().describe("Monotonic per-stream sequence (ordering/resume foundation)."),
+  type: z.enum(["status", "token", "tool_call", "tool_result", "usage", "done", "error"]).optional().describe("Canonical event discriminator."),
+  status: z.string().optional().describe("Status label (provider_selection, provider_ready, cancelled, ...)."),
+  text: z.string().optional().describe("Legacy observation line (via say)."),
+  token: z.string().optional().describe("Token delta text for type=token."),
+  tool: z.string().optional().describe("Tool id for type=tool_call/tool_result."),
+  id: z.string().optional().describe("Tool call id correlating tool_call and tool_result."),
+  args: z.unknown().optional().describe("Tool arguments for type=tool_call."),
+  ok: z.boolean().optional().describe("Tool success for type=tool_result."),
+  result: z.string().optional().describe("Tool output for type=tool_result."),
+  usage: z.looseObject({ inTokens: z.number().optional(), outTokens: z.number().optional() }).optional(),
+  fullText: z.string().optional().describe("Final generated text (backward-compatible final result)."),
+  finishReason: z.string().optional().describe("Loop stop reason (done|error|budget|max_steps|approval|cancelled)."),
+  ttftMs: z.number().optional().describe("Time to first token, ms."),
+  totalMs: z.number().optional().describe("Total generation duration, ms."),
+  code: z.string().optional().describe("Structured error code for type=error."),
+  message: z.string().optional().describe("Human-readable message for type=error/status."),
+  retryable: z.boolean().optional().describe("Whether the error may be retried."),
+  done: z.boolean().optional().describe("Legacy terminal flag."),
+  finalMessage: z.string().optional().describe("Legacy terminal full text."),
+  stopped: z.string().optional().describe("Legacy stop reason."),
+  cancelled: z.boolean().optional().describe("Legacy cancellation flag."),
+  error: z.string().optional().describe("Legacy error message."),
 });
 
 export const AgentSummary = z.looseObject({ id: z.string(), name: z.string() });

@@ -297,7 +297,15 @@ async function streamChat(text, assistantMsg) {
   if(!res.ok) { throw new Error('API routing failed or token expired.'); }
   const reader = res.body?.getReader(); const decoder = new TextDecoder(); let reply="";
   if(reader){
-    while(true){ const r=await reader.read(); if(r.done) break; const chunk=decoder.decode(r.value,{stream:true}); const lines=chunk.split("\\n"); for(const line of lines){ if(!line.startsWith('data: ')) continue; const data=line.slice(6).trim(); if(data==='[DONE]') continue; try{ const j=JSON.parse(data); if(j.error) throw new Error(j.error); if(j.delta){ reply+=j.delta; } if(j.text){ reply=j.text; } } catch(e){ if(data && data[0] !== '{') reply+=data; } assistantMsg.content=reply; renderMessages(); } }
+    while(true){ const r=await reader.read(); if(r.done) break; const chunk=decoder.decode(r.value,{stream:true}); const lines=chunk.split("\\n"); for(const line of lines){ if(!line.startsWith('data: ')) continue; const data=line.slice(6).trim(); if(data==='[DONE]') continue; try{ const j=JSON.parse(data); if(j.error) throw new Error(j.error);
+      // Phase 05 canonical streaming contract:
+      if(j.type==='status'){ if(j.status==='provider_selection'||j.status==='provider_ready'){ renderRuntime(); } continue; }
+      if(j.type==='token'){ reply+=j.text; }
+      else if(j.type==='done'){ reply=j.fullText || j.finalMessage || reply; }
+      else if(j.type==='error'){ throw new Error(j.message || j.error || 'generation failed'); }
+      else if(j.delta){ reply+=j.delta; }
+      else if(j.text){ reply=j.text; } // legacy fullText replacement
+    } catch(e){ if(data && data[0] !== '{') reply+=data; } assistantMsg.content=reply; renderMessages(); } }
   } else { const j=await res.json(); reply=j.reply || j.content || ''; assistantMsg.content=reply; }
   updateToolEvent(toolId,'done','Completed execution');
   announceStream("Response complete");
