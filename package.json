@@ -66,7 +66,10 @@
     "client:generate": "bun run scripts/generate-client.ts --write",
     "client:check": "bun run scripts/generate-client.ts --check",
     "profile:gate": "bun run scripts/profile-gate.ts",
-    "unit-tier": "bun run scripts/unit-tier.ts"
+    "unit-tier": "bun run scripts/unit-tier.ts",
+    "baseline:phase00": "bun run scripts/phase00/capture-baseline.ts",
+    "baseline:phase00:validate": "bun run scripts/phase00/validate-baseline.ts",
+    "baseline:phase00:quick": "XR_BASELINE_QUICK=1 bun run scripts/phase00/capture-baseline.ts"
   },
   "repository": {
     "type": "git",

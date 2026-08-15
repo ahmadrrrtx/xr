@@ -272,3 +272,40 @@ sequential behavior). TTL knobs: `XR_RUNTIME_CACHE_TTL_MS`,
   PowerShell path, nvidia-smi/lspci parsing preserved in the async variants
   (statfsSync stays sync — a cheap <1 ms syscall).
 - API contracts unchanged; response shapes identical.
+
+## 13. Phase 00 frozen baseline artifacts (2026-08-15)
+
+Phase 00 captured a **machine-readable freeze** of repository reality for
+future comparison. It does **not** replace the Phase 01 gate above.
+
+| Layer | Meaning |
+|---|---|
+| **Forensic historical** | Pre-remediation observations from audit docs (e.g. providers.list ~17–18s). Reference only. |
+| **Frozen baseline artifacts** | `benchmarks/baseline/2026-08-15/` — host-specific measurements from the Phase 00 capture host. |
+| **Phase 01 gate (section 12)** | Binding critical-path budgets + blackhole worst-case measurements. |
+| **Future result** | Post-phase measurements compared to section 12 targets **and** re-run capture methodology. |
+
+### Commands
+
+```bash
+bun run baseline:phase00              # full capture → benchmarks/baseline/<date>/
+bun run baseline:phase00:validate     # artifact integrity (not performance targets)
+bun run baseline:phase00:quick        # reduced samples
+bun run scripts/perf-daemon-routes.ts # Phase 01 daemon route microbench
+```
+
+### Semantics
+
+- **PASS / FAIL** — check outcome under capture conditions (failures are recorded, not fixed).
+- **PRE-EXISTING GAP** — exceeds a *future* target; not a regression against a freeze.
+- **REGRESSION** — worse than a same-methodology baseline on the comparison host.
+
+Machine-readable summary: `benchmarks/baseline/2026-08-15/baseline-summary.json`.  
+Human report: `benchmarks/baseline/2026-08-15/BASELINE_REPORT.md`.  
+Handoff: `docs/implementation/PHASE_00_HANDOFF.md`.
+
+> Note: the 2026-08-15 capture was taken on an empty isolated XR_HOME (no API
+> keys, no local runtimes). Fast-fail health probes dominate those numbers.
+> Section 12's blackhole worst-case remains the authoritative Phase 01
+> performance evidence for bounded-timeout behavior.
+

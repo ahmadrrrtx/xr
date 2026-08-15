@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "phase": "XR Phase 00 \u2014 Baseline / Freeze / Safety",
+  "generatedAt": "2026-08-15T11:50:22.151Z",
+  "baselineDate": "2026-08-15",
+  "currentBaselineCommit": "96802988904b0ce3c477f501b23de0009b28c751",
+  "historicalPrePhase01Commit": {
+    "status": "UNKNOWN_OR_IDENTICAL",
+    "note": "Current HEAD still contains sequential detectAllRuntimes (src/local/runtimes.ts) and unbounded provider health in providers.routes.ts. No Phase-01 performance commit is present on this clone. Forensic historical numbers (providers ~17-18s etc.) are REFERENCE ONLY, not this baseline.",
+    "evidenceFiles": [
+      "src/local/runtimes.ts",
+      "src/daemon/routes/providers.routes.ts",
+      "src/local/hardware.ts"
+    ],
+    "forensicReferenceCommitMentionedInAudits": "9680298"
+  },
+  "workingTreeCleanAtCaptureStart": false,
+  "xr": {
+    "name": "@rrrtx/xr",
+    "version": "1.0.0",
+    "codename": "Truth",
+    "display": "1.0.0 (Truth)",
+    "displayVersion": "1.0.0 (Truth)",
+    "repo": "https://github.com/ahmadrrrtx/xr",
+    "homepage": "https://xr-gules.vercel.app",
+    "npm": "https://www.npmjs.com/package/@rrrtx/xr",
+    "description": "XR \u2014 a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
+    "author": "Muhammad Ahmad (@ahmadrrrtx)",
+    "license": "MIT",
+    "pluginApi": 2
+  },
+  "environment": {
+    "bun": "1.3.14",
+    "node": "20.20.2",
+    "os": "linux/x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "ramGb": 1.9
+  },
+  "gates": {
+    "typecheck": "PASS",
+    "boundaries": "PASS",
+    "tests": "PASS",
+    "security": "PASS",
+    "reliability": "PASS",
+    "audit": "PASS",
+    "goldenPath": "PASS"
+  },
+  "tests": {
+    "passed": 2950,
+    "failed": 0,
+    "skipped": 19,
+    "expectCalls": 13143,
+    "files": 242,
+    "durationMs": 59378.61102800001,
+    "status": "PASS",
+    "note": "Full suite re-run after docs/OWNERSHIP.md regenerated for new phase00 scripts. Counts from final Bun summary."
+  },
+  "performance": {
+    "cli": {
+      "version": {
+        "p50": 41.14078700001119,
+        "p95": 52.20169899999746,
+        "max": 57.84094200000982,
+        "samples": 21
+      },
+      "version-warm": {
+        "p50": 42.184433999995235,
+        "p95": 53.72167500000796,
+        "max": 53.764475000003586,
+        "samples": 21
+      },
+      "help": {
+        "p50": 40.62096400000155,
+        "p95": 45.75742500000342,
+        "max": 48.9902679999941,
+        "samples": 21
+      },
+      "help-warm": {
+        "p50": 40.34269000000495,
+        "p95": 49.330189000000246,
+        "max": 55.32860800001072,
+        "samples": 21
+      },
+      "providers-list": {
+        "p50": 160.1117959999974,
+        "p95": 199.98720299999695,
+        "max": 203.76386600000842,
+        "samples": 21
+      },
+      "models-list": {
+        "p50": 156.0025719999976,
+        "p95": 171.9959630000085,
+        "max": 179.87014699999418,
+        "samples": 21
+      },
+      "doctor-json": {
+        "p50": 380.0083270000032,
+        "p95": 403.90915099999984,
+        "max": 403.9515759999922,
+        "samples": 21
+      },
+      "config-show": {
+        "p50": 116.00784500000009,
+        "p95": 125.41642900000443,
+        "max": 132.037691000005,
+        "samples": 21
+      }
+    },
+    "daemonStartup": {
+      "sampleCount": 7,
+      "p50": 6.4210129999992205,
+      "p95": 52.82404700000188,
+      "min": 4.531543999997666,
+      "max": 52.82404700000188,
+      "mean": 12.846884857141829,
+      "stdev": 17.673111847562602
+    },
+    "providers_list": {
+      "p50": 533.0569340000075,
+      "p95": 640.3046029999969,
+      "max": 640.3046029999969,
+      "vsTarget": "MEETS_TARGET"
+    },
+    "models_list": {
+      "p50": 37.85283099999651,
+      "p95": 51.18033699999796,
+      "max": 51.18033699999796,
+      "vsTarget": "MEETS_TARGET"
+    },
+    "onboarding_status": {
+      "p50": 60.19753399999172,
+      "p95": 85.04236000000674,
+      "max": 85.04236000000674,
+      "vsTarget": "MEETS_TARGET"
+    },
+    "overview": {
+      "p50": 25.426405000005616,
+      "p95": 45.98597100000188,
+      "max": 45.98597100000188,
+      "vsTarget": "MEETS_TARGET"
+    },
+    "health": {
+      "p50": 0.4301359999954002,
+      "p95": 0.744739000001573,
+      "max": 0.744739000001573,
+      "vsTarget": "MEETS_TARGET"
+    },
+    "dashboardFirstMeaningfulPaint": {
+      "p50": 553.3197720000171,
+      "p95": 646.581646000006,
+      "max": 646.581646000006,
+      "vsTarget": "MEETS_TARGET"
+    },
+    "chatTtft": {
+      "p50": 4.995885999989696,
+      "p95": 11.863368000020273,
+      "statusCodes": [
+        503,
+        503,
+        503,
+        503,
+        503
+      ]
+    },
+    "memoryRecall": {
+      "p50": 1.8805029999930412,
+      "p95": 5.121951999986777,
+      "vsTarget": "MEETS_TARGET"
+    },
+    "tools": {
+      "read_file": {
+        "p50": 0.006649999995715916,
+        "p95": 0.2843880000000354
+      },
+      "write_file": {
+        "p50": 0.018712999997660518,
+        "p95": 0.43494300000020303
+      },
+      "list_dir": {
+        "p50": 0.23332500000833534,
+        "p95": 1.0397769999981392
+      },
+      "shell": {
+        "p50": 7.423580000002403,
+        "p95": 15.93837000001804
+      }
+    }
+  },
+  "semantics": {
+    "PASS": "Check succeeded under baseline capture conditions.",
+    "FAIL": "Check failed; recorded as baseline reality (not silently fixed).",
+    "PRE_EXISTING_GAP": "Measurement exceeds a future Phase target; NOT a regression against this freeze.",
+    "REGRESSION": "Reserved for future phases: worse than this frozen baseline on the same host methodology.",
+    "BLOCKED": "Could not run due to missing capability/provider/environment.",
+    "UNAVAILABLE": "Tooling/environment cannot perform the measurement."
+  },
+  "preExistingIssues": [
+    "chat POST returns 503/error without configured provider (PRE-EXISTING; Phase 05 scope)",
+    "detectAllRuntimes is still sequential (for-await) \u2014 Phase 01 work item",
+    "providers.list health() appears unbounded \u2014 Phase 01 work item",
+    "hardware.ts still uses spawnSync on request path \u2014 Phase 01 work item"
+  ],
+  "missingArtifacts": [],
+  "artifactDir": "benchmarks/baseline/2026-08-15/",
+  "hashes": {
+    "commit.txt": "58c5eca2fa42d7e840c6c4477c272c97d919821bba443dbc96e697316854d335",
+    "git.json": "282bf4d0a59da8ca518ed89c0283dd268e096113772d5be72c660478e83deff2",
+    "versions.json": "e11e12922e41137ec3a343f7826445a3aecd81171b6b6344102fcd923bcd225e",
+    "hardware.json": "1fd2b5d1ac5d3168ffec89f43e10ee31b22746fefdc40ce5f003e8504c1cf9fa",
+    "typecheck.json": "f8f65abe84de013d5ae3f51db8492cc4580f03ed080a6815104b9248de468d99",
+    "boundaries.json": "53ec1c556aa466cd3388389d7a78b9da746885550d38370b2cc3a680a87097b6",
+    "test-results.json": "7779cb675983550db0a7306ea5fe02b80b47392fe31a2f5caecaeab57f5e2024",
+    "perf-cli.json": "5186f7113dd2fa4785c67a0a4f59847083fb4bc9ea5698eab002cd4f20ae06bb",
+    "perf-daemon.json": "dac00f9b1ccc0c70542eb447c3bc38d9865ca8d5a802eeb3e97607f59c359d8c",
+    "perf-dashboard-first-paint.json": "a76864a78cf2c0d91759fcca43d0e51d6724ccf01c6b5e16a8e6ce37ee414ef6",
+    "perf-chat-ttft.json": "37e3c2f53703f33d8d8a7454c2488c4fe8d4f433cb8418e684832b6867c30565",
+    "perf-tools.json": "e2a726958845180aada69bf318582a20b8d9e6ecfc308224804441b90d16fe97",
+    "perf-memory-retrieval.json": "fd27d10535c88856b0fcf66c6f2a67f2c7b68d834ed78687c3fc0c7629b11e84",
+    "security.json": "4622fee63bcb9ef7c5f37a3c8b7aad32e045e8f5fcb7239a63aee11c3f5bd636",
+    "audit.json": "54c2f946fc1b9a401b163a75f31f31d8966d45e70846dd2d65de0a7fa03d8cc5",
+    "reliability.json": "fe727f39583bd90ec6c7cb5411d471cae27fcaee6fcf3d89897151afdde8301e",
+    "golden-tasks.json": "3824f116814644477823b6f8f8856dc075ee67896387f442ed5fc72f47ea1638",
+    "BASELINE_REPORT.md": "264353f021d306aca15fdb22767d6d82929125b7a50c44baeefa587d8ead75b4"
+  },
+  "phase00CaptureComplete": true,
+  "phase00ProductionCodeUnchanged": true,
+  "note": "Phase 00 does not require meeting Phase 01 performance targets. It requires honest measurement.",
+  "ownershipMapRegenerated": true,
+  "articleXIIGateBaselinePreserved": true,
+  "performanceRounded": {
+    "cli_version_p95_ms": 52.2,
+    "cli_help_p95_ms": 45.76,
+    "cli_providers_p95_ms": 199.99,
+    "cli_models_p95_ms": 172.0,
+    "cli_doctor_p95_ms": 403.91,
+    "daemon_startup_p95_ms": 52.82,
+    "providers_list_p50_ms": 533.06,
+    "providers_list_p95_ms": 640.3,
+    "models_list_p50_ms": 37.85,
+    "models_list_p95_ms": 51.18,
+    "onboarding_p50_ms": 60.2,
+    "onboarding_p95_ms": 85.04,
+    "overview_p95_ms": 45.99,
+    "health_p95_ms": 0.74,
+    "dashboard_fmp_p95_ms": 646.58,
+    "chat_ttft_p95_ms": 11.86,
+    "chat_status_codes": [
+      503,
+      503,
+      503,
+      503,
+      503
+    ],
+    "memory_recall_p95_ms": 5.12
+  }
+}

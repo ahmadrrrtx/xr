@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-15T11:50:22.151Z",
+  "commit": "96802988904b0ce3c477f501b23de0009b28c751",
+  "method": "src/local/hardware.ts detectHardwareSpecs()",
+  "host": {
+    "platform": "linux",
+    "arch": "x64",
+    "release": "6.1.158+",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "cpuCount": 2,
+    "totalRamBytes": 2081390592,
+    "freeRamBytes": 1549680640,
+    "totalRamGb": 1.9,
+    "freeRamGb": 1.4
+  },
+  "specs": {
+    "os": "linux",
+    "osRelease": "6.1.158+",
+    "arch": "x64",
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "cpuCores": 2,
+    "totalRamGb": 1.9,
+    "freeRamGb": 1.4,
+    "availableDiskGb": 19.6,
+    "gpus": [],
+    "acceleration": [],
+    "tier": "unsupported",
+    "suitability": {
+      "lightweight": false,
+      "medium": false,
+      "heavy": false,
+      "reason": "Local AI is constrained: 1.9GB RAM and 19.6GB free disk detected."
+    }
+  }
+}

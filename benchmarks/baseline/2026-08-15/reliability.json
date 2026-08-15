@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-15T11:50:22.151Z",
+  "commit": "96802988904b0ce3c477f501b23de0009b28c751",
+  "command": "bun test test/reliability/ test/execution/ test/agent-cancel.test.ts",
+  "code": 0,
+  "timedOut": false,
+  "durationMs": 14355.038497000001,
+  "passed": 133,
+  "failed": 0,
+  "status": "PASS",
+  "coverage": [
+    "golden-path",
+    "audit chain",
+    "idempotency",
+    "crash injection",
+    "migrations",
+    "single-writer",
+    "execution fabric",
+    "cancellation"
+  ],
+  "stdoutTail": "bun test v1.3.14 (0d9b296a)\n\u2717 groq          FAIL 1ms \u00b7 chat probe failed (HTTP 401)\ncanaries: 0 pass / 1 fail / 0 skip \u2014 1 presets (2026-08-15T11:52:03.068Z)\n\u00b7 anthropic     SKIP no ANTHROPIC_API_KEY in env \u2014 canary not configured\ncanaries: 0 pass / 0 fail / 1 skip \u2014 1 presets (2026-08-15T11:52:03.068Z)\n[RTO] cold restart 2ms (open 2ms + verify)\n",
+  "stderrTail": "riant > legacy db.transaction passthrough routes through the gate and is atomic [9.65ms]\n\ntest/reliability/store-edge.test.ts:\n(pass) Phase 1 \u00b7 store edge cases > legacy constructor detects a slash-path without .db as a legacy path [8.87ms]\n(pass) Phase 1 \u00b7 store edge cases > empty embedding array is stored as NULL (index_state none) [11.34ms]\n(pass) Phase 1 \u00b7 store edge cases > updateMemory: explicit null clears expiry; non-finite clears it; content edit clears embedding [9.94ms]\n(pass) Phase 1 \u00b7 store edge cases > setMemoryProvenance keeps existing values when fields are undefined [8.61ms]\n(pass) Phase 1 \u00b7 store edge cases > remember dedups by (project, kind, content) even across concurrent-ish calls [8.25ms]\n\ntest/reliability/update-uninstall.test.ts:\n(pass) Phase 1 \u00b7 atomic update \u2014 state machine > install failure \u2192 current kept, no activation [0.48ms]\n(pass) Phase 1 \u00b7 atomic update \u2014 state machine > health-canary failure \u2192 automatic rollback (discard candidate) [0.18ms]\n(pass) Phase 1 \u00b7 atomic update \u2014 state machine > activate failure \u2192 current kept [0.15ms]\n(pass) Phase 1 \u00b7 atomic update \u2014 state machine > success \u2192 candidate activated exactly once [0.17ms]\n(pass) Phase 1 \u00b7 atomic update \u2014 git checkout integration > forced canary failure on the candidate \u2192 rollback keeps the working install intact [70.25ms]\n(pass) Phase 1 \u00b7 atomic update \u2014 git checkout integration > successful update swaps blue-green: v2 active, previous discarded [51.36ms]\n(pass) Phase 1 \u00b7 atomic update \u2014 git checkout integration > layout detection + no-op when already up to date [0.47ms]\n(pass) Phase 1 \u00b7 uninstall > --keep-data: launcher + install dir + PATH entry removed, data kept [1.17ms]\n(pass) Phase 1 \u00b7 uninstall > --purge: data home removed too [0.43ms]\n(pass) Phase 1 \u00b7 uninstall > running checkout is never deleted [0.35ms]\n(pass) Phase 1 \u00b7 uninstall > uninstall resolves the standard paths from HOME [0.14ms]\n\n 133 pass\n 0 fail\n 528 expect() calls\nRan 133 tests across 23 files. [14.33s]\n"
+}

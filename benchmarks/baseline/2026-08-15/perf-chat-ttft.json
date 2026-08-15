@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-15T11:50:22.151Z",
+  "commit": "96802988904b0ce3c477f501b23de0009b28c751",
+  "endpoint": "POST /api/chat",
+  "prompt": "hello",
+  "provider": "configured default (isolated XR_HOME — typically no key / no local runtime)",
+  "samples": 5,
+  "samplesMs": [
+    11.9,
+    5,
+    4.1,
+    8.9,
+    3.4
+  ],
+  "statusCodes": [
+    503,
+    503,
+    503,
+    503,
+    503
+  ],
+  "notes": [
+    "status=503 ttftMs=12 totalMs=12 body={\"error\":\"Provider offline: Unable to connect. Is the computer able to access the url?\"}",
+    "status=503 ttftMs=5 totalMs=5 body={\"error\":\"Provider offline: Unable to connect. Is the computer able to access the url?\"}",
+    "status=503 ttftMs=4 totalMs=4 body={\"error\":\"Provider offline: Unable to connect. Is the computer able to access the url?\"}",
+    "status=503 ttftMs=9 totalMs=9 body={\"error\":\"Provider offline: Unable to connect. Is the computer able to access the url?\"}",
+    "status=503 ttftMs=3 totalMs=3 body={\"error\":\"Provider offline: Unable to connect. Is the computer able to access the url?\"}"
+  ],
+  "sampleCount": 5,
+  "p50": 4.995885999989696,
+  "p95": 11.863368000020273,
+  "min": 3.3823170000105165,
+  "max": 11.863368000020273,
+  "mean": 6.643080800003372,
+  "stdev": 3.6060649885975655,
+  "forensicHistorical": "chat.stream.post 503 after ~16.5s",
+  "phase01TargetMs": null,
+  "phase05StreamingTargetMs": 2000,
+  "statusLabel": "PRE_EXISTING_FAILURE_503",
+  "interpretation": "Isolated XR_HOME has no provider credentials and no local runtime. 503/error is expected baseline behavior, not a measurement fabrication. Phase 05 owns streaming TTFT fixes."
+}

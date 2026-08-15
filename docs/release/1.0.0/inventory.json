@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-15T10:17:47.438Z",
+  "generatedAt": "2026-08-15T12:23:00.345Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -135,7 +135,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 4703
+      "bytes": 4952
     },
     {
       "path": "release.manifest.json",

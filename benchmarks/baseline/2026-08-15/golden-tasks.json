@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-15T11:50:22.151Z",
+  "commit": "96802988904b0ce3c477f501b23de0009b28c751",
+  "suite": "scripts/golden-path.ts (hermetic install→answer→restart→resume→uninstall)",
+  "note": "Repository ships a single hermetic golden-path journey (not 16 external forensic scenarios). Those 16 scenarios are specified for a later certification phase and are not implemented as an executable suite in this tree.",
+  "command": "bun run scripts/golden-path.ts",
+  "code": 0,
+  "timedOut": false,
+  "durationMs": 761.0019199999806,
+  "status": "PASS",
+  "checks": [
+    "CHECK install-wizard-exit-0",
+    "CHECK install-creates-config",
+    "CHECK install-creates-db",
+    "CHECK first-answer-succeeded",
+    "CHECK first-answer-audited",
+    "CHECK chain-intact-after-first",
+    "CHECK restart-preserves-audit",
+    "CHECK chain-intact-after-restart",
+    "CHECK recovery-runs",
+    "CHECK no-unresolved-work",
+    "CHECK second-answer-succeeded",
+    "CHECK chain-intact-final",
+    "CHECK uninstall-launcher-removed",
+    "CHECK uninstall-data-kept",
+    "CHECK uninstall-launcher-gone",
+    "CHECK uninstall-keeps-shared-dir",
+    "CHECK uninstall-data-home-present"
+  ],
+  "stdoutTail": "CHECK install-wizard-exit-0\nCHECK install-creates-config\nCHECK install-creates-db\nCHECK first-answer-succeeded\nCHECK first-answer-audited\nCHECK chain-intact-after-first\nCHECK restart-preserves-audit\nCHECK chain-intact-after-restart\nCHECK recovery-runs\nCHECK no-unresolved-work\nCHECK second-answer-succeeded\nCHECK chain-intact-final\nCHECK uninstall-launcher-removed\nCHECK uninstall-data-kept\nCHECK uninstall-launcher-gone\nCHECK uninstall-keeps-shared-dir\nCHECK uninstall-data-home-present\n{\"ok\":true,\"version\":\"1.0.0\",\"steps\":[\"install-wizard-exit-0\",\"install-creates-config\",\"install-creates-db\",\"first-answer-succeeded\",\"first-answer-audited\",\"chain-intact-after-first\",\"restart-preserves-audit\",\"chain-intact-after-restart\",\"recovery-runs\",\"no-unresolved-work\",\"second-answer-succeeded\",\"chain-intact-final\",\"uninstall-launcher-removed\",\"uninstall-data-kept\",\"uninstall-launcher-gone\",\"uninstall-keeps-shared-dir\",\"uninstall-data-home-present\"],\"auditEntries\":4,\"chainValid\":true,\"firstOutcome\":\"succeeded\",\"secondOutcome\":\"succeeded\",\"recoveryCount\":0}\n",
+  "stderrTail": ""
+}

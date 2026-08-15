@@ -152,6 +152,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/perf-daemon-routes.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/perf-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/perf/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/phase00/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/phase2-move-module.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/platform-parity.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |

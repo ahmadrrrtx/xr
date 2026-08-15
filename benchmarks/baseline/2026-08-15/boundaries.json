@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-15T11:50:22.151Z",
+  "commit": "96802988904b0ce3c477f501b23de0009b28c751",
+  "command": "bun run boundaries",
+  "code": 0,
+  "ms": 6924.301424999998,
+  "timedOut": false,
+  "stdoutTail": "\n\u001b[32m✔\u001b[39m no dependency violations found (538 modules, 1740 dependencies cruised)\n\n",
+  "stderrTail": "$ bun ./node_modules/dependency-cruiser/bin/dependency-cruise.mjs --config .dependency-cruiser.cjs --output-type err-long src\n",
+  "status": "PASS"
+}
