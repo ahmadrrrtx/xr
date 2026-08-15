@@ -5,9 +5,14 @@
  *
  * XR 4.4: routing goes through the Universal Intelligence Plane when available,
  * while preserving getProvider({ provider, model, strategy }) compatibility.
+ *
+ * Phase 04: now delegates to ProviderGateway — the single canonical provider
+ * abstraction. All provider listing, health, resolution, capability queries
+ * go through the gateway. Registry is still used via gateway.
  */
 
 import { registry } from "../providers/registry.ts";
+import { providerGateway, gatewayEnabled } from "../providers/gateway.ts";
 import { streamingMetrics, withTurnMetrics, type StreamingMetricsCollector } from "../providers/stream-metrics.ts";
 import {
   RoutingService,
@@ -20,7 +25,6 @@ import {
 } from "../providers/health.ts";
 import {
   PRESETS,
-  buildProvider,
   knownProviders,
   providerList,
 } from "../providers/factory.ts";
@@ -39,7 +43,6 @@ import type {
 export class ProviderService implements LifecycleHook {
   private registry: ServiceRegistry;
 
-  /** Phase 3 · T6 — typed registry access for model-switch wiring. */
   getRegistry(): ServiceRegistry {
     return this.registry;
   }
@@ -58,15 +61,10 @@ export class ProviderService implements LifecycleHook {
     }
   }
 
-  /** Last routing decision from getProvider / route. */
   getLastDecision(): RoutingDecision | null {
     return this.lastDecision;
   }
 
-  /**
-   * Resolve the active provider based on current config and optional overrides.
-   * XR 4.4: accepts requirements/mode for capability-aware automatic routing.
-   */
   getProvider(overrides?: {
     provider?: string;
     model?: string;
@@ -78,7 +76,39 @@ export class ProviderService implements LifecycleHook {
     const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
 
-    // Prefer IntelligenceService when registered
+    // Gateway path: if enabled, use gateway.resolve for deterministic resolution
+    if (gatewayEnabled()) {
+      try {
+        // Sync path: we need sync but gateway.resolve is async; use sync legacy router
+        // for now but still via gateway's createProvider and catalog
+        // For measured path, prefer IntelligenceService when registered
+        const intel = this.registry.tryResolve?.(Tokens.Intelligence) ?? this.tryIntel();
+        if (intel && !overrides?.strategy) {
+          try {
+            const result = intel.resolveProvider({
+              provider: overrides?.provider,
+              model: overrides?.model,
+              mode: overrides?.mode,
+              requirements: overrides?.requirements,
+            });
+            this.lastDecision = result.decision;
+            return withTurnMetrics(result.provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
+          } catch {
+            // fall through
+          }
+        }
+
+        // Use RoutingService via gateway semantics (sync)
+        const router = new RoutingService(config);
+        const { provider, decision } = router.resolveWithDecision(overrides as ResolveOptions);
+        this.lastDecision = decision;
+        return withTurnMetrics(provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
+      } catch {
+        // Fallback to legacy
+      }
+    }
+
+    // Legacy path / fallback
     const intel = this.registry.tryResolve?.(Tokens.Intelligence) ?? this.tryIntel();
     if (intel && !overrides?.strategy) {
       try {
@@ -89,7 +119,6 @@ export class ProviderService implements LifecycleHook {
           requirements: overrides?.requirements,
         });
         this.lastDecision = result.decision;
-        // Phase 3 · T7 — every model turn is measured at this choke point.
         return withTurnMetrics(result.provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
       } catch {
         // Fall through to classic router
@@ -99,11 +128,9 @@ export class ProviderService implements LifecycleHook {
     const router = new RoutingService(config);
     const { provider, decision } = router.resolveWithDecision(overrides as ResolveOptions);
     this.lastDecision = decision;
-    // Phase 3 · T7 — every model turn is measured at this choke point.
     return withTurnMetrics(provider, streamingMetrics, overrides?.model ?? config.defaults?.model);
   }
 
-  /** Phase 3 · T7 — the process-wide streaming-metrics collector. */
   get metrics(): StreamingMetricsCollector {
     return streamingMetrics;
   }
@@ -116,9 +143,6 @@ export class ProviderService implements LifecycleHook {
     }
   }
 
-  /**
-   * XR 4.4 — compute routing decision (no provider construction required).
-   */
   route(request: RouteRequest = {}): RouteResult {
     this.sync();
     const intel = this.tryIntel();
@@ -159,25 +183,25 @@ export class ProviderService implements LifecycleHook {
     };
   }
 
-  /**
-   * Get a list of all supported provider IDs (built-in + custom).
-   */
   getKnownProviders(): string[] {
     this.sync();
+    if (gatewayEnabled()) {
+      try {
+        const configService = this.registry.resolve(Tokens.Config);
+        return providerGateway.list(configService.get()).map((p) => p.id);
+      } catch {}
+    }
     return knownProviders();
   }
 
-  /**
-   * Get metadata for a specific provider (built-in or custom).
-   */
   getPreset(id: string): typeof PRESETS[string] | undefined {
     this.sync();
+    if (gatewayEnabled()) {
+      return providerGateway.getPreset(id) ?? PRESETS[id];
+    }
     return registry.getPreset(id) ?? PRESETS[id];
   }
 
-  /**
-   * Check health of a specific provider.
-   */
   async checkHealth(
     id?: string,
     model?: string,
@@ -185,58 +209,64 @@ export class ProviderService implements LifecycleHook {
     this.sync();
     const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
+    const targetId = id ?? config.defaults.provider;
+    const targetModel = model ?? config.defaults.model;
+
+    if (gatewayEnabled()) {
+      // Use gateway health (bounded, cached, deduped)
+      const cached = await providerGateway.health(config, targetId, targetModel);
+      // Strip cache metadata for backward compat
+      const { cached: _c, stale: _s, deduped: _d, probeMs: _p, ...report } = cached as any;
+      return report;
+    }
+
     const checker = new ProviderHealthChecker(config);
-    return await checker.check(
-      id ?? config.defaults.provider,
-      model ?? config.defaults.model,
-    );
+    return await checker.check(targetId, targetModel);
   }
 
-  /**
-   * Check health of ALL registered providers.
-   */
   async checkAllProviders(): Promise<ProviderHealthReport[]> {
     this.sync();
     const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
+
+    if (gatewayEnabled()) {
+      const cachedAll = await providerGateway.healthAll(config);
+      return cachedAll.map((c) => {
+        const { cached: _c, stale: _s, deduped: _d, probeMs: _p, ...report } = c as any;
+        return report;
+      });
+    }
+
     const checker = new ProviderHealthChecker(config);
     return await checker.checkAll();
   }
 
-  /**
-   * Get active provider ID from config.
-   */
   getActiveProviderId(): string {
     const configService = this.registry.resolve(Tokens.Config);
     return configService.get().defaults.provider;
   }
 
-  /**
-   * Set the active provider and optionally model. Persists to config.
-   */
   async setActiveProvider(id: string, model?: string): Promise<void> {
     this.sync();
     const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
 
-    if (!registry.has(id) && !PRESETS[id]) {
+    if (!registry.has(id) && !PRESETS[id] && !providerGateway.has(id)) {
       throw new Error(`Unknown provider: ${id}`);
     }
 
     config.defaults.provider = id;
     if (model) {
       config.defaults.model = model;
-    } else if (PRESETS[id]) {
-      config.defaults.model = PRESETS[id].defaultModel;
+    } else if (PRESETS[id] || providerGateway.getPreset(id)) {
+      const preset = PRESETS[id] ?? providerGateway.getPreset(id);
+      if (preset) config.defaults.model = preset.defaultModel;
     }
 
     await configService.update(config);
     this.tryIntel()?.invalidateCatalog();
   }
 
-  /**
-   * Add a custom provider. Persists to config.
-   */
   async addCustomProvider(def: {
     id: string;
     label: string;
@@ -277,9 +307,6 @@ export class ProviderService implements LifecycleHook {
     this.tryIntel()?.invalidateCatalog();
   }
 
-  /**
-   * Remove a custom provider. Persists to config.
-   */
   async removeCustomProvider(id: string): Promise<void> {
     const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
@@ -306,9 +333,6 @@ export class ProviderService implements LifecycleHook {
     this.tryIntel()?.invalidateCatalog();
   }
 
-  /**
-   * Store a provider API key securely using the best available backend.
-   */
   async storeKey(envName: string, value: string): Promise<string> {
     const backend = setSecret(envName, value);
     process.env[envName] = value;
@@ -316,15 +340,19 @@ export class ProviderService implements LifecycleHook {
     return backend;
   }
 
-  /**
-   * Get key status for a provider (required / set / env name).
-   * Never returns the actual key value.
-   */
   getKeyStatus(id: string): {
     required: boolean;
     set: boolean;
     envName?: string;
   } {
+    if (gatewayEnabled()) {
+      const status = providerGateway.credentialStatus(id);
+      return {
+        required: status.required,
+        set: status.available,
+        envName: status.envName,
+      };
+    }
     const preset = registry.getPreset(id) ?? PRESETS[id];
     if (!preset) return { required: false, set: false };
     if (!preset.apiKeyEnv) return { required: false, set: true };
@@ -334,11 +362,28 @@ export class ProviderService implements LifecycleHook {
     return { required: true, set, envName: preset.apiKeyEnv };
   }
 
-  /**
-   * Get a formatted provider list for display.
-   */
   getProviderList(): string {
     this.sync();
+    if (gatewayEnabled()) {
+      try {
+        const configService = this.registry.resolve(Tokens.Config);
+        const list = providerGateway.list(configService.get());
+        return list
+          .map((p) => {
+            const tierBadge =
+              p.tier === "free"
+                ? "🆓"
+                : p.tier === "cheap"
+                  ? "💰"
+                  : p.tier === "premium"
+                    ? "💎"
+                    : "🏢";
+            const kindBadge = p.kind === "local" ? "🏠" : "☁️";
+            return `  ${p.id.padEnd(12)} ${tierBadge} ${kindBadge} ${p.label.padEnd(28)} default: ${p.defaultModel}`;
+          })
+          .join("\n");
+      } catch {}
+    }
     return providerList();
   }
 

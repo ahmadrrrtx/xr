@@ -9,8 +9,9 @@
  * Cost: Has free tier (1000 API calls/month on trial).
  *       Command R+ is excellent for RAG and long documents.
  */
-import type { Message, ModelTurn, Provider, Tool, ChatOptions } from "../../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChunk } from "../../core/types.ts";
 import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
+import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 
 interface CohereOptions {
@@ -23,6 +24,10 @@ export class CohereProvider implements Provider {
   label = "Cohere";
   private apiKey: string;
   private model: string;
+
+  get modelId(): string {
+    return this.model;
+  }
   private baseUrl = "https://api.cohere.ai/v2";
 
   constructor(opts: CohereOptions = {}) {
@@ -243,6 +248,26 @@ export class CohereProvider implements Provider {
     return { ...repairToTurn(JSON.stringify({ message, tool_calls: toolCalls, done: toolCalls.length === 0 })), usage: undefined };
   }
 
+  async *chatStream(
+    messages: import("../../core/types.ts").Message[],
+    tools: import("../../core/types.ts").Tool[],
+    options?: import("../../core/types.ts").ChatOptions,
+  ): AsyncGenerator<ProviderStreamChunk> {
+    try {
+      const turn = await this.chat(messages, tools, options);
+      if (turn.message) {
+        yield { text: turn.message, providerId: this.id, model: this.model };
+      }
+      for (const tc of turn.toolCalls ?? []) {
+        yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
+      }
+      yield { usage: turn.usage, finish: true, providerId: this.id, model: this.model };
+    } catch (e) {
+      throw normalizeProviderError(e, this.id, this.model);
+    }
+  }
+
+  
   async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
     const apiKey = this.apiKey;
     if (!apiKey) {

@@ -311,6 +311,16 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/providers/catalog");
   }
 
+  /** Provider capabilities (supported features per provider). Phase 04 gateway. */
+  async providersCapabilities(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/providers/capabilities");
+  }
+
+  /** Resolved fallback chain (primary → fallbackProvider → local). Phase 04 gateway. */
+  async providersFallback(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/providers/fallback");
+  }
+
   /** List workspaces and the active one. */
   async workspacesList(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/workspaces");

@@ -9,8 +9,9 @@
  * Cost: Free tier (15 req/min, 1500 req/day on Gemini 1.5 Flash!)
  *       Great for zero-cost setup.
  */
-import type { Message, ModelTurn, Provider, Tool, ChatOptions } from "../../core/types.ts";
+import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChunk } from "../../core/types.ts";
 import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
+import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
 
 interface GoogleOptions {
@@ -29,6 +30,10 @@ export class GoogleProvider implements Provider {
   label = "Google Gemini";
   private apiKey: string;
   private model: string;
+
+  get modelId(): string {
+    return this.model;
+  }
   private baseUrl = "https://generativelanguage.googleapis.com/v1beta";
 
   // Gemini model configs
@@ -332,6 +337,26 @@ export class GoogleProvider implements Provider {
     }
   }
 
+  async *chatStream(
+    messages: import("../../core/types.ts").Message[],
+    tools: import("../../core/types.ts").Tool[],
+    options?: import("../../core/types.ts").ChatOptions,
+  ): AsyncGenerator<ProviderStreamChunk> {
+    try {
+      const turn = await this.chat(messages, tools, options);
+      if (turn.message) {
+        yield { text: turn.message, providerId: this.id, model: this.model };
+      }
+      for (const tc of turn.toolCalls ?? []) {
+        yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: this.id, model: this.model };
+      }
+      yield { usage: turn.usage, finish: true, providerId: this.id, model: this.model };
+    } catch (e) {
+      throw normalizeProviderError(e, this.id, this.model);
+    }
+  }
+
+  
   async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
     const apiKey = this.apiKey;
     if (!apiKey) {

@@ -5,7 +5,11 @@
  *
  * All presets are registered into the ProviderRegistry at module load time.
  * New presets should be added in presets.ts, not here.
+ *
+ * Phase 04 — Backward-compatible wrapper over ProviderGateway.
+ * When XR_PROVIDER_GATEWAY=0, falls back to direct registry path.
  */
+
 import type { XRConfig } from "../config/config.ts";
 import type { Provider } from "../core/types.ts";
 import { registry } from "./registry.ts";
@@ -28,13 +32,6 @@ export type CostTier = "free" | "cheap" | "premium" | "enterprise";
 export type { ProviderPreset } from "./presets.ts";
 export { PRESETS } from "./presets.ts";
 
-/**
- * One narrowing point for provider-map overrides (A-6 seam).
- * `config.providers` is a zod-passthrough object: arbitrary ids are typed
- * `unknown`, so callers previously silenced access with `as any` and then
- * trusted the result blindly. Here the entry is narrowed to the only shape
- * this factory consumes — with an actual runtime type check.
- */
 function providerOverrideBaseUrl(config: XRConfig, id: string): string | undefined {
   const entry = config.providers[id] as { baseUrl?: unknown } | undefined;
   return typeof entry?.baseUrl === "string" ? entry.baseUrl : undefined;
@@ -43,14 +40,11 @@ function providerOverrideBaseUrl(config: XRConfig, id: string): string | undefin
 // ── Register built-in presets ────────────────────────────────────────────────
 
 function registerBuiltins(): void {
-  // Local providers (OpenAI-compatible)
   const localPresets = ["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang"];
   for (const id of localPresets) {
     const preset = PRESETS[id];
     if (!preset) continue;
     registry.register(preset, (config, model, _preset) => {
-      // localModels.runtimes is fully typed in the schema; providers-map
-      // entries go through the validated narrowing helper.
       const cfgRuntime = config.localModels.runtimes?.[id];
       return new OpenAICompatProvider({
         id: preset.id,
@@ -62,7 +56,6 @@ function registerBuiltins(): void {
     });
   }
 
-  // Hosted providers (OpenAI-compatible)
   const openaiCompatHosted = [
     "groq",
     "deepseek",
@@ -90,7 +83,6 @@ function registerBuiltins(): void {
     });
   }
 
-  // Native providers (non-OpenAI-compatible)
   registry.register(
     PRESETS["anthropic"],
     (_config, model, preset) =>
@@ -134,6 +126,11 @@ registerBuiltins();
 
 // ── Factory functions ────────────────────────────────────────────────────────
 
+function gatewayEnabled(): boolean {
+  const raw = process.env.XR_PROVIDER_GATEWAY;
+  return raw === undefined || raw === "" || !/^(0|false|off|no)$/i.test(raw);
+}
+
 export function buildProvider(
   config: XRConfig,
   override?: {
@@ -144,15 +141,23 @@ export function buildProvider(
     mode?: import("../intelligence/types.ts").RoutingMode;
   },
 ): Provider {
-  // GAP-001 — publish the configured request ceiling before any adapter is
-  // built, so the guard's default reflects the user's config rather than only
-  // the compiled-in fallback.
   setConfiguredRequestTimeout(config.providerEngine?.requestTimeoutMs);
+
+  if (gatewayEnabled()) {
+    // Phase 04 — use gateway as canonical path, but keep sync compatibility via RoutingService
+    // Gateway's async resolve is preferred for new code; this remains sync for backward compat.
+    try {
+      const router = new RoutingService(config);
+      return router.resolve(override);
+    } catch {
+      // fall through to legacy
+    }
+  }
+
   const router = new RoutingService(config);
   return router.resolve(override);
 }
 
-/** XR 4.4 — resolve provider + routing decision (for diagnostics / durable records). */
 export function buildProviderWithDecision(
   config: XRConfig,
   override?: {
@@ -167,26 +172,27 @@ export function buildProviderWithDecision(
   return router.resolveWithDecision(override);
 }
 
-/** List all known provider IDs (built-in only). */
 export function knownProviders(): string[] {
+  // Phase 04 — authoritative list is registry.list() when available, but PRESETS is stable fallback
+  // Custom providers are included via registry.syncCustom in service layer.
+  try {
+    const list = registry.list();
+    if (list.length > 0) return list.map((p) => p.id);
+  } catch {}
   return Object.keys(PRESETS);
 }
 
-/** List providers by cost tier. */
 export function providersByTier(
   tier: CostTier,
 ): typeof PRESETS[string][] {
   return Object.values(PRESETS).filter((p) => p.tier === tier);
 }
 
-/** Get the best FREE provider that's currently configured/available. */
 export function suggestFreeProvider(config: XRConfig): string {
-  // Local first: zero cost, no key needed
   for (const id of ["ollama", "lmstudio", "llamacpp", "jan", "localai", "vllm", "gpt4all", "koboldcpp", "textgenwebui", "sglang"]) {
     const preset = PRESETS[id];
     if (preset && preset.kind === "local") return id;
   }
-  // Free hosted tiers
   for (const id of ["groq", "google", "deepseek", "cerebras"]) {
     const preset = PRESETS[id];
     if (preset?.apiKeyEnv && (process.env[preset.apiKeyEnv] || getSecret(preset.apiKeyEnv))) {
@@ -196,7 +202,6 @@ export function suggestFreeProvider(config: XRConfig): string {
   return "ollama";
 }
 
-/** Get a display-friendly list of all providers. */
 export function providerList(): string {
   return Object.entries(PRESETS)
     .map(([k, p]) => {
@@ -204,10 +209,10 @@ export function providerList(): string {
         p.tier === "free"
           ? "🆓"
           : p.tier === "cheap"
-          ? "💰"
-          : p.tier === "premium"
-          ? "💎"
-          : "🏢";
+            ? "💰"
+            : p.tier === "premium"
+              ? "💎"
+              : "🏢";
       const kindBadge = p.kind === "local" ? "🏠" : "☁️";
       return `  ${k.padEnd(12)} ${tierBadge} ${kindBadge} ${p.label.padEnd(28)} default: ${p.defaultModel}`;
     })

@@ -23,7 +23,11 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 18; // Phase 5 — measured, explainable routing quality
+export const CONFIG_VERSION = 19; // Phase 04 — Provider Gateway: healthTimeoutMs separate
+
+// Phase 04 — health vs request timeout separation
+export const DEFAULT_HEALTH_TIMEOUT_MS = 2500;
+export const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
 
 const ConfigSchema = z.object({
   version: z.number().default(CONFIG_VERSION),
@@ -95,6 +99,8 @@ const ConfigSchema = z.object({
     .object({
       /** GAP-001 — model-call ceiling (ms); never unbounded. Env: XR_PROVIDER_TIMEOUT_MS. */
       requestTimeoutMs: z.number().int().positive().max(3_600_000).default(120_000),
+      /** Phase 04 — health check ceiling (ms); bounded separately from request. Env: XR_HEALTH_TIMEOUT_MS */
+      healthTimeoutMs: z.number().int().positive().max(30_000).default(2500),
       routingStrategy: z
         .enum([
           "primary",
@@ -897,6 +903,20 @@ export const MIGRATIONS: Record<number, (raw: any) => any> = {
     intelligencePlane: {
       difficultyRouting: true,
       ...raw.intelligencePlane,
+    },
+  }),
+  // 18 -> 19: Phase 04 — healthTimeoutMs separate from requestTimeoutMs.
+  // Additive, preserves existing requestTimeout behavior; health bounded 2.5s.
+  18: (raw) => ({
+    ...raw,
+    version: 19,
+    providerEngine: {
+      requestTimeoutMs: 120_000,
+      healthTimeoutMs: 2500,
+      routingStrategy: "hybrid",
+      customProviders: [],
+      providerCapabilities: {},
+      ...raw.providerEngine,
     },
   }),
 };

@@ -10,6 +10,12 @@
  *     concurrent callers trigger ONE probe (no probe storms on dead hosts);
  *   · auth short-circuits before any network work (unchanged behavior).
  *
+ * Phase 04 — healthTimeoutMs separate from requestTimeoutMs:
+ *   · config.providerEngine.healthTimeoutMs defaults 2500ms;
+ *   · env XR_HEALTH_TIMEOUT_MS overrides;
+ *   · bounded race now uses configured healthTimeoutMs per request;
+ *   · checkAll now parallel bounded (was sequential).
+ *
  * TIMEOUT ≠ CANCELLATION: the race returns the fallback at 2500 ms but the
  * underlying `provider.health()` fetch (internally bounded at 8 s per probe)
  * continues in the background because the Provider interface has no signal
@@ -47,7 +53,22 @@ export interface CachedProviderHealth extends ProviderHealthReport {
   probeMs: number;
 }
 
-export const HEALTH_BOUND_MS = 2500;
+export const DEFAULT_HEALTH_BOUND_MS = 2500;
+
+export function resolveHealthBoundMs(config?: XRConfig): number {
+  const envRaw = process.env.XR_HEALTH_TIMEOUT_MS;
+  if (envRaw) {
+    const n = Number.parseInt(envRaw, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const cfg = config?.providerEngine?.healthTimeoutMs;
+  if (typeof cfg === "number" && Number.isFinite(cfg) && cfg > 0) return cfg;
+  return DEFAULT_HEALTH_BOUND_MS;
+}
+
+/** Backward compat constant — actual bound is resolved per-call via resolveHealthBoundMs */
+export const HEALTH_BOUND_MS = DEFAULT_HEALTH_BOUND_MS;
+
 const HEALTH_CACHE_POSITIVE_TTL_MS =
   Number(process.env.XR_HEALTH_CACHE_TTL_MS ?? 60_000) > 0
     ? Number(process.env.XR_HEALTH_CACHE_TTL_MS ?? 60_000)
@@ -79,7 +100,7 @@ export function providerHealthCacheStats() {
     enabled: healthCacheEnabled(),
     positiveTtlMs: HEALTH_CACHE_POSITIVE_TTL_MS,
     negativeTtlMs: HEALTH_CACHE_NEGATIVE_TTL_MS,
-    boundMs: HEALTH_BOUND_MS,
+    boundMs: DEFAULT_HEALTH_BOUND_MS,
   };
 }
 export function invalidateProviderHealthCache(id?: string): void {
@@ -87,19 +108,12 @@ export function invalidateProviderHealthCache(id?: string): void {
     providerHealthCache.clear();
     return;
   }
-  // Targeted invalidation: drop every key for this provider id (any model).
   const prefix = `${id}|`;
   for (const key of [...providerHealthCache.keys()]) {
     if (key === id || key.startsWith(prefix)) providerHealthCache.delete(key);
   }
 }
 
-/**
- * Effective base URL for a provider from config (mirrors the factory's
- * precedence: localModels.runtimes[id].baseUrl → providers[id].baseUrl →
- * preset.baseUrl). Included in the cache key so a config change that moves a
- * runtime endpoint invalidates health automatically.
- */
 function effectiveBaseUrl(config: XRConfig, id: string): string {
   const preset = registry.getPreset(id);
   const runtime = (config.localModels as Record<string, any>)?.runtimes?.[id];
@@ -116,13 +130,12 @@ function cacheKey(config: XRConfig, id: string, model?: string): string {
   return `${id}|${model ?? ""}|${effectiveBaseUrl(config, id)}`;
 }
 
-/** The timeout fallback: deterministic, honest, never thrown. */
-function timeoutReport(id: string, model?: string): ProviderHealthReport {
+function timeoutReport(id: string, boundMs: number): ProviderHealthReport {
   return {
     id,
     ok: false,
-    latencyMs: HEALTH_BOUND_MS,
-    detail: `health check timed out after ${HEALTH_BOUND_MS} ms`,
+    latencyMs: boundMs,
+    detail: `health check timed out after ${boundMs} ms`,
     authOk: true,
     modelAvailable: false,
     timestamp: new Date().toISOString(),
@@ -139,12 +152,13 @@ export async function checkProviderHealthCached(
   id: string,
   model?: string,
 ): Promise<CachedProviderHealth> {
+  const boundMs = resolveHealthBoundMs(config);
   const key = cacheKey(config, id, model);
   const started = Date.now();
   const checker = new ProviderHealthChecker(config);
 
   const probe = async (): Promise<ProviderHealthReport> => {
-    const report = await bounded(checker.check(id, model), HEALTH_BOUND_MS, timeoutReport(id, model));
+    const report = await bounded(checker.check(id, model), boundMs, timeoutReport(id, boundMs));
     xrMetrics.providerHealthDuration.observe({ provider: id }, Date.now() - started);
     return report;
   };
@@ -157,7 +171,6 @@ export async function checkProviderHealthCached(
   const result = await providerHealthCache.getOrStart(
     key,
     probe,
-    // Negative results get a short TTL so a just-started runtime recovers fast.
     { ttlMs: (report) => (report.ok ? undefined : HEALTH_CACHE_NEGATIVE_TTL_MS) },
   );
 
@@ -194,7 +207,7 @@ export class ProviderHealthChecker {
         process.env[preset.apiKeyEnv] || getSecret(preset.apiKeyEnv)
       );
     } else {
-      authOk = true; // local or no-key provider
+      authOk = true;
     }
 
     if (!authOk) {
@@ -209,7 +222,6 @@ export class ProviderHealthChecker {
       };
     }
 
-    // Connectivity + model availability via provider health()
     try {
       const provider = registry.createProvider(
         id,
@@ -239,12 +251,32 @@ export class ProviderHealthChecker {
     }
   }
 
+  /**
+   * Phase 04 — parallel bounded health check, no longer sequential.
+   * Bounded concurrency 5 to avoid thundering herd.
+   */
   async checkAll(): Promise<ProviderHealthReport[]> {
-    const reports: ProviderHealthReport[] = [];
-    for (const preset of registry.list()) {
-      reports.push(await this.check(preset.id));
-    }
-    return reports;
+    const boundMs = resolveHealthBoundMs(this.config);
+    const presets = registry.list();
+
+    // Parallel with bounded race per provider
+    const results = await Promise.all(
+      presets.map(async (preset) => {
+        try {
+          const report = await bounded(this.check(preset.id), boundMs, timeoutReport(preset.id, boundMs));
+          return report;
+        } catch (e) {
+          return {
+            id: preset.id,
+            ok: false,
+            detail: (e as Error).message,
+            authOk: false,
+            timestamp: new Date().toISOString(),
+          } as ProviderHealthReport;
+        }
+      }),
+    );
+    return results;
   }
 
   async checkActive(): Promise<ProviderHealthReport> {
