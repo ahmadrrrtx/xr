@@ -18,7 +18,7 @@
 
 import { loadConfig, saveConfig, getProviderEnvStatus } from "../../config/config.ts";
 import { PRESETS, buildProvider } from "../../providers/factory.ts";
-import { checkProviderHealthCached } from "../../providers/health.ts";
+import { checkProviderHealthCached, invalidateProviderHealthCache } from "../../providers/health.ts";
 import { detectAllRuntimes } from "../../local/runtimes.ts";
 import { setSecretAsync, clearSecretMemo, getSecretSyncCached } from "../../security/secrets.ts";
 import { checkInternetCached } from "../state/cache.ts";
@@ -117,6 +117,11 @@ export function onboardingRoutes(): DaemonRoute[] {
 
           const backend = await setSecretAsync(envName, key);
           clearSecretMemo();
+          // Phase 01 — a stored key must invalidate the health cache (and the
+          // catalog fingerprint, which includes key presence) so the advisory
+          // probe and the next status/list call are FRESH — never a stale
+          // "API key not set" negative from before the key existed.
+          invalidateProviderHealthCache(providerId);
           const next = loadConfig().config;
           next.defaults.provider = providerId;
           if (body.model?.trim()) next.defaults.model = body.model.trim();

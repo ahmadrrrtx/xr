@@ -217,6 +217,11 @@ export class TtlCache<V> {
     return this.entries.size;
   }
 
+  /** Live keys (for targeted invalidation). */
+  keys(): string[] {
+    return [...this.entries.keys()];
+  }
+
   private backgroundRefresh(
     key: string,
     work: () => Promise<V>,

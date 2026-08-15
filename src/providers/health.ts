@@ -82,12 +82,38 @@ export function providerHealthCacheStats() {
     boundMs: HEALTH_BOUND_MS,
   };
 }
-export function invalidateProviderHealthCache(): void {
-  providerHealthCache.clear();
+export function invalidateProviderHealthCache(id?: string): void {
+  if (id === undefined) {
+    providerHealthCache.clear();
+    return;
+  }
+  // Targeted invalidation: drop every key for this provider id (any model).
+  const prefix = `${id}|`;
+  for (const key of [...providerHealthCache.keys()]) {
+    if (key === id || key.startsWith(prefix)) providerHealthCache.delete(key);
+  }
 }
 
-function cacheKey(id: string, model?: string): string {
-  return `${id}|${model ?? ""}`;
+/**
+ * Effective base URL for a provider from config (mirrors the factory's
+ * precedence: localModels.runtimes[id].baseUrl → providers[id].baseUrl →
+ * preset.baseUrl). Included in the cache key so a config change that moves a
+ * runtime endpoint invalidates health automatically.
+ */
+function effectiveBaseUrl(config: XRConfig, id: string): string {
+  const preset = registry.getPreset(id);
+  const runtime = (config.localModels as Record<string, any>)?.runtimes?.[id];
+  const providerEntry = config.providers[id] as { baseUrl?: unknown } | undefined;
+  const raw =
+    runtime?.baseUrl ??
+    (typeof providerEntry?.baseUrl === "string" ? providerEntry.baseUrl : undefined) ??
+    preset?.baseUrl ??
+    "";
+  return String(raw).replace(/\/$/, "");
+}
+
+function cacheKey(config: XRConfig, id: string, model?: string): string {
+  return `${id}|${model ?? ""}|${effectiveBaseUrl(config, id)}`;
 }
 
 /** The timeout fallback: deterministic, honest, never thrown. */
@@ -113,7 +139,7 @@ export async function checkProviderHealthCached(
   id: string,
   model?: string,
 ): Promise<CachedProviderHealth> {
-  const key = cacheKey(id, model);
+  const key = cacheKey(config, id, model);
   const started = Date.now();
   const checker = new ProviderHealthChecker(config);
 

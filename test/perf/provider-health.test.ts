@@ -145,6 +145,81 @@ describe("Phase 01 — provider health", () => {
   });
 });
 
+describe("Phase 01 — health cache correctness", () => {
+  test("storing a key invalidates the stale auth-negative for that provider (fresh probe next)", async () => {
+    const { checkProviderHealthCached, invalidateProviderHealthCache } = await import("../../src/providers/health.ts");
+    const { PRESETS } = await import("../../src/providers/presets.ts");
+    invalidateProviderHealthCache();
+    const config = await freshConfig();
+    const env = PRESETS["groq"]!.apiKeyEnv!;
+    const had = process.env[env];
+    try {
+      // No key → cached auth-negative ("API key ... not set").
+      const before = await checkProviderHealthCached(config, "groq");
+      expect(before.ok).toBe(false);
+      expect(before.detail).toContain("API key");
+      // The daemon's onboarding.provider path invalidates after storing a key.
+      process.env[env] = "sk-test-12345";
+      invalidateProviderHealthCache("groq");
+      const after = await checkProviderHealthCached(config, "groq");
+      // Fresh probe (network to api.groq.com from CI is unreachable): the
+      // detail must NO LONGER be the stale auth message.
+      expect(after.detail).not.toContain("API key");
+      expect(after.cached).toBe(false);
+    } finally {
+      if (had === undefined) delete process.env[env];
+      else process.env[env] = had;
+    }
+  });
+
+  test("a config baseUrl change invalidates the health cache (new key)", async () => {
+    const { checkProviderHealthCached, invalidateProviderHealthCache, providerHealthCacheStats } =
+      await import("../../src/providers/health.ts");
+    invalidateProviderHealthCache();
+    const srv1 = fakeHealthyServer();
+    const srv2 = fakeHealthyServer();
+    try {
+      const config = await freshConfig(`http://127.0.0.1:${srv1.port}`);
+      const h1 = await checkProviderHealthCached(config, "ollama");
+      expect(h1.ok).toBe(true);
+      const hitsAfter1 = providerHealthCacheStats().hits;
+      // Same config, same baseUrl → cache hit.
+      await checkProviderHealthCached(config, "ollama");
+      expect(providerHealthCacheStats().hits).toBe(hitsAfter1 + 1);
+      // Different baseUrl (models.select writes a new one) → new key → fresh probe.
+      const config2 = await freshConfig(`http://127.0.0.1:${srv2.port}`);
+      const h2 = await checkProviderHealthCached(config2, "ollama");
+      expect(h2.ok).toBe(true);
+      expect(h2.cached).toBe(false);
+    } finally {
+      srv1.stop();
+      srv2.stop();
+    }
+  });
+
+  test("metrics never leak API-key values (Phase 01 series render secret-free)", async () => {
+    const { checkProviderHealthCached, invalidateProviderHealthCache } = await import("../../src/providers/health.ts");
+    const { renderPrometheus, resetMetrics } = await import("../../src/observability/metrics.ts");
+    const { PRESETS } = await import("../../src/providers/presets.ts");
+    invalidateProviderHealthCache();
+    const env = PRESETS["groq"]!.apiKeyEnv!;
+    const had = process.env[env];
+    const SECRET = "sk-super-secret-phase01-7f3a91";
+    try {
+      process.env[env] = SECRET;
+      const config = await freshConfig();
+      await checkProviderHealthCached(config, "groq"); // auth passes → probe runs (fails fast offline)
+      const out = renderPrometheus();
+      expect(out).toContain("xr_provider_health_duration_ms");
+      expect(out).not.toContain(SECRET);
+    } finally {
+      if (had === undefined) delete process.env[env];
+      else process.env[env] = had;
+      resetMetrics();
+    }
+  });
+});
+
 describe("Phase 01 — catalog cache", () => {
   test("catalog is built once per config state; repeats are cache hits", async () => {
     const { buildCatalog, invalidateCatalogCache, catalogCacheStats } = await import("../../src/intelligence/catalog.ts");

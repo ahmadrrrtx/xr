@@ -302,6 +302,27 @@ dashboard render 11.8 ms, retrieval 29.9 ms, route decision 0.0 ms).
   persisted, audit hash-chain intact (2 entries, verified via API and
   `xr audit verify`)**, warm endpoints 9–47 ms after restart.
 
+## 16c. Final hardening pass (2026-08-15, follow-up)
+
+- **Health-cache correctness fix**: the health cache key now includes the
+  provider's EFFECTIVE BASE URL (localModels.runtimes → providers → preset
+  precedence, mirroring the factory), so a `models.select`-style baseUrl change
+  invalidates health automatically. `invalidateProviderHealthCache(id)` enables
+  targeted invalidation, and the `onboarding.provider` route now invalidates the
+  stored provider's health cache when a key is saved — the advisory probe and
+  the next status/list call are always FRESH, never a stale "API key not set"
+  negative (answers the spec's "what happens after a provider is installed?").
+- **5 new tests** (Phase 01 suite now 40):
+  · mixed healthy/unhealthy runtimes in one bounded-parallel detection
+    (live fake Ollama endpoint + failing peers, deterministic statuses);
+  · Windows PowerShell GPU JSON parsing (cross-platform unit coverage of the
+    win32 probe path);
+  · key-store invalidates the stale auth-negative (fresh probe next);
+  · config baseUrl change invalidates the health cache (new key → fresh probe);
+  · Phase 01 metrics never render API-key values (secret-free exposition).
+- Full suite on the final tree: **2990 pass / 19 skip / 0 fail** (3009 tests).
+  Boundaries 0 violations · hot-path-lint 0 sync calls.
+
 ## 17. Known limitations
 
 1. **Timeout ≠ cancellation for provider health** — the underlying 8 s-bounded

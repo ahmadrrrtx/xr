@@ -127,6 +127,22 @@ describe("Phase 01 — hardware detection", () => {
     }
   }, 15_000);
 
+  test("Windows PowerShell GPU output parses correctly (cross-platform unit test)", async () => {
+    const { parseWindowsGpu } = await import("../../src/local/hardware.ts");
+    const rows = parseWindowsGpu(
+      '[{"Name":"NVIDIA GeForce RTX 4090","AdapterRAM":25769803776},{"Name":"Intel(R) UHD Graphics 630","AdapterRAM":1073741824}]',
+    );
+    expect(rows.length).toBe(2);
+    expect(rows[0]).toMatchObject({ vendor: "nvidia", vramGb: 24 });
+    expect(rows[0]!.acceleration).toContain("cuda");
+    expect(rows[1]).toMatchObject({ vendor: "intel" });
+    expect(rows[1]!.acceleration).toContain("directml");
+    // Single object (not an array) and garbage both degrade safely.
+    expect(parseWindowsGpu('{"Name":"AMD Radeon RX 6800","AdapterRAM":17179869184}')[0]).toMatchObject({ vendor: "amd", vramGb: 16 });
+    expect(parseWindowsGpu("not json")).toEqual([]);
+    expect(parseWindowsGpu("")).toEqual([]);
+  });
+
   test("background refresh lifecycle can be started and stopped without throwing", async () => {
     const { startHardwareBackgroundRefresh, stopHardwareBackgroundRefresh, getHardwareSpecs, invalidateHardwareCache } =
       await import("../../src/local/hardware.ts");

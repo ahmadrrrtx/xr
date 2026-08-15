@@ -164,7 +164,8 @@ function parseNvidia(out: string): GpuInfo[] {
   });
 }
 
-function parseWindowsGpu(out: string): GpuInfo[] {
+/** Exported for cross-platform unit testing of the Windows parsing logic. */
+export function parseWindowsGpu(out: string): GpuInfo[] {
   if (!out) return [];
   try {
     const parsed = JSON.parse(out);

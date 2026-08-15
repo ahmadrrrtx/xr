@@ -55,6 +55,62 @@ describe("Phase 01 — runtime detection", () => {
     }
   }, 20_000);
 
+  test("mixed healthy/unhealthy runtimes: a live endpoint is healthy, a hanging one is not, failures are deterministic", async () => {
+    // Healthy fake server on an ephemeral port; the remaining runtimes fail
+    // fast (ECONNREFUSED). Assert both outcomes come back correctly from ONE
+    // bounded-parallel detection.
+    const healthy = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch(req) {
+        const url = new URL(req.url);
+        if (url.pathname === "/api/tags") return Response.json({ models: [{ name: "qwen2.5:7b" }] });
+        if (url.pathname === "/api/version") return Response.json({ version: "0.5.0" });
+        return Response.json({ data: [{ id: "fake-model" }] });
+      },
+    });
+    try {
+      const { detectAllRuntimes, invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+      const { loadConfig, saveConfig } = await import("../../src/config/config.ts");
+      const { invalidateConfigCache } = await import("../../src/config/cache.ts");
+      invalidateRuntimeCache();
+      const home = mkdtempSync(join(tmpdir(), "xr-mixed-"));
+      const prevHome = process.env.XR_HOME;
+      process.env.XR_HOME = home;
+      invalidateConfigCache("all");
+      try {
+        const { config } = loadConfig();
+        (config.localModels as Record<string, any>).runtimes.ollama = {
+          ...((config.localModels as Record<string, any>).runtimes.ollama ?? {}),
+          baseUrl: `http://127.0.0.1:${healthy.port}`,
+        };
+        saveConfig(config);
+        const runtimes = await detectAllRuntimes();
+        const ollama = runtimes.find((r) => r.id === "ollama");
+        expect(ollama?.healthy).toBe(true);
+        expect(ollama?.models).toContain("qwen2.5:7b");
+        expect(ollama?.version).toBe("0.5.0");
+        // Every other runtime got a deterministic non-healthy row.
+        for (const r of runtimes) {
+          if (r.id === "ollama") continue;
+          expect(r.healthy).toBe(false);
+          expect(typeof r.detail).toBe("string");
+          expect(r.detail.length).toBeGreaterThan(0);
+        }
+      } finally {
+        process.env.XR_HOME = prevHome;
+        invalidateConfigCache("all");
+        try {
+          rmSync(home, { recursive: true, force: true });
+        } catch {
+          /* ignore */
+        }
+      }
+    } finally {
+      healthy.stop();
+    }
+  }, 15_000);
+
   test("cached runtime lookup is < 50 ms (target) and < 100 ms (CI tolerance)", async () => {
     if (!blackhole) return;
     const { detectAllRuntimes } = await import("../../src/local/runtimes.ts");
