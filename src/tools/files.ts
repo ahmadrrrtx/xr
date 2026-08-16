@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, relative, isAbsolute } from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { readTrustRequest, workspaceWriteTrustRequest } from "../runtime/trust/tool-support.ts";
+import { classifySensitiveWrite } from "../security/trust-handoff.ts";
 
 /** Keep the agent inside its working directory (no escaping with ../). */
 function safePath(cwd: string, p: string): string {
@@ -59,10 +60,31 @@ export const writeFileTool: Tool = {
     const old = existsSync(p) ? readFileSync(p, "utf8") : "";
     const diff = makeDiff(old, newContent);
 
+    // Phase 07 · Trust Handoff — writes to sensitive/executable config files
+    // (.git/config, .git/hooks/*, .claude/settings.local.json, .vscode/tasks.json,
+    // *.code-workspace, package.json scripts, CI, Dockerfile, shell rc, …) are
+    // consumed and EXECUTED by a trusted external component OUTSIDE XR's sandbox
+    // after the turn ends. Surface an explicit, informed human approval that
+    // shows the trusted consumer and the execution implication. We never
+    // silently block legitimate files, and the model's own "approval" never
+    // counts as the required human approval.
+    const trust = classifySensitiveWrite(String(args.path ?? ""), ctx.cwd);
+    if (trust.requiresApproval) {
+      ctx.audit("write_file.trust_handoff", {
+        path: String(args.path),
+        classification: trust.classification,
+        ruleId: trust.ruleId,
+      });
+    }
+
     const approved = await ctx.approve({
       tool: "write_file",
-      reason: existsSync(p) ? `overwrite ${args.path}` : `create ${args.path}`,
-      preview: diff,
+      reason: trust.requiresApproval
+        ? `TRUST-HANDOFF WRITE [${trust.classification}] ${existsSync(p) ? "overwrite" : "create"} ${args.path} — consumed by: ${trust.trustedComponent}. ${trust.reason}`
+        : existsSync(p)
+          ? `overwrite ${args.path}`
+          : `create ${args.path}`,
+      preview: trust.requiresApproval ? `${trust.executionImplication ?? ""}\n\n--- diff ---\n${diff}` : diff,
     });
     if (!approved) {
       ctx.audit("write_file.denied", { path: String(args.path) });
