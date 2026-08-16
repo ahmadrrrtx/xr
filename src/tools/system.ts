@@ -8,6 +8,7 @@ import type { Tool, ToolResult } from "../core/types.ts";
 import { checkAction } from "../security/guard.ts";
 import { runCommand } from "../util/process.ts";
 import { shellTrustSpec } from "../runtime/trust/tool-support.ts";
+import { resolveShellCommandIdentity, decideExecIntegrity } from "../security/exec-integrity.ts";
 
 function safe(cwd: string, p: string): string | null {
   const abs = isAbsolute(p) ? p : resolve(cwd, p);
@@ -83,6 +84,22 @@ export const shellTool: Tool = {
       ctx.audit("shell.cancelled", { stage: "before_start" });
       return { ok: false, output: "shell command cancelled before start" };
     }
+    // Phase 07 · Content-hash execution integrity (APPLICATION-LEVEL). Resolve
+    // the interpreter + best-effort direct executables, hash their CONTENT
+    // (symlink-canonicalized), and decide per XR_EXEC_INTEGRITY mode. Default
+    // mode is `audit` (record + allow) so existing workflows are unchanged.
+    // This is defense-in-depth, NOT a kernel boundary — see exec-integrity.ts.
+    const execIdentity = resolveShellCommandIdentity(cmd, ctx.cwd);
+    const execDecision = decideExecIntegrity(execIdentity);
+    ctx.audit("shell.exec_identity", {
+      mode: execDecision.mode,
+      decision: execDecision.decision,
+      interpreter: execIdentity.interpreter?.canonical,
+      interpreterHash: execIdentity.interpreter?.hash?.slice(0, 16),
+      directCount: execIdentity.direct.length,
+      unknownCount: execDecision.unknown.length,
+      unknown: execDecision.unknown.map((u) => u.token),
+    });
     const decision = checkAction({ tool: "shell", args: { cmd } }, {
       egressAllowlist: ctx.egressAllowlist ?? [],
       requireApproval: ["shell"],
@@ -91,7 +108,14 @@ export const shellTool: Tool = {
       ctx.audit("shell.blocked", { cmd, reason: decision.reason });
       return { ok: false, output: `blocked: ${decision.reason}` };
     }
-    const approved = await ctx.approve({ tool: "shell", reason: `run: ${cmd}`, preview: cmd });
+    const approved = await ctx.approve({
+      tool: "shell",
+      reason:
+        execDecision.decision === "requireApproval" || execDecision.decision === "deny"
+          ? `run: ${cmd}\n\n[execution-integrity ${execDecision.mode}] unknown binary hash(es): ${execDecision.reasons.join("; ")}`
+          : `run: ${cmd}`,
+      preview: cmd,
+    });
     if (!approved) {
       ctx.audit("shell.denied", { cmd });
       return { ok: false, output: "shell denied" };
@@ -140,6 +164,14 @@ export const shellTool: Tool = {
         ok: false,
         output: "blocked: shell requires an isolated execution environment, but none is wired (hardened mode). Set XR_TRUST_HARDENED=0 only on hosts where this is explicitly accepted.",
       };
+    }
+    // Phase 07 · Enforcement on the host-authority (degraded) path: in
+    // `enforce` mode an unknown/unresolved binary is denied outright (fail
+    // closed). The isolated-runner path above remains the stronger boundary
+    // and is governed by its own environment, so we do not deny there.
+    if (execDecision.decision === "deny") {
+      ctx.audit("shell.exec_integrity_denied", { cmd, reasons: execDecision.reasons });
+      return { ok: false, output: `blocked by execution-integrity gate (mode=enforce): ${execDecision.reasons.join("; ")}` };
     }
     try {
       // Phase 06 · Step 18 — the run's AbortSignal reaches the subprocess: a

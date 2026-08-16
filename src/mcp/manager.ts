@@ -25,6 +25,7 @@ import { wrapMcpTool, wrapMcpResource, wrapMcpPrompt } from "./client.ts";
 import { CapabilityProvenanceStore } from "../platform/capabilities/provenance.ts";
 import { capabilityId } from "../platform/capabilities/types.ts";
 import { McpAllowlist } from "./allowlist.ts";
+import { scanMcpToolDescription } from "../security/guard.ts";
 
 /** Phase 7 · T1 — best-effort provenance recording from the MCP plane. */
 function recordMcpProvenance(record: (store: CapabilityProvenanceStore) => void): void {
@@ -311,7 +312,23 @@ export class McpManager {
       const resDefs = await client.listResources();
       const promptDefs = await client.listPrompts();
 
-      const tools: Tool[] = toolDefs.map((d) => wrapMcpTool(client, entry.id, d));
+      // Phase 07 · MCP tool-description poisoning. Descriptions are
+      // attacker-controlled text from an external server; treat them as
+      // untrusted DATA. Scan each, audit any injection match, and prepend a
+      // warning into the description the model sees. This NEVER changes
+      // authority: permissions/allowlists/credentials live in checkAction,
+      // McpAllowlist, and the capability system, not in a description string.
+      const tools: Tool[] = toolDefs.map((d) => {
+        const scan = scanMcpToolDescription(d);
+        if (scan.poisoned) {
+          this.store.audit("mcp.tool_description_poisoned", {
+            server: entry.id,
+            tool: d.name,
+            signatures: scan.signatures,
+          });
+        }
+        return wrapMcpTool(client, entry.id, { ...d, description: scan.description });
+      });
       const resources: Tool[] = resDefs.map((d) => wrapMcpResource(client, entry.id, d));
       const prompts: Tool[] = promptDefs.map((d) => wrapMcpPrompt(client, entry.id, d));
 
