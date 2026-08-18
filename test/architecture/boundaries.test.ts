@@ -166,7 +166,7 @@ const LAYER_RULES: Array<{
     name: "kernel-stays-kernel",
     from: /^src\/(core|state|security|config|util|cost)\//,
     fromNot: /^src\/core\/(app\.ts|providers\.ts|providers\/|agent\.ts|execution\/)/,
-    to: /^src\/(execution|context|intelligence|providers|agents|control|runtime|services|reliability|tools|plugins|skills|mcp|platform|integrations|computer|automation|local|research|business|enterprise|interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)\//,
+    to: /^src\/(execution|context|intelligence|providers|agents|control|runtime|services|reliability|tools|plugins|skills|mcp|platform|capabilities|integrations|computer|automation|local|research|business|enterprise|interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)\//,
     toNot: /^src\/(providers\/presets\.ts|context\/repository\.ts|interfaces\/cli\.ts)$/,
   },
   {
@@ -178,7 +178,7 @@ const LAYER_RULES: Array<{
   },
   {
     name: "platform-not-above",
-    from: /^src\/(tools|plugins|skills|mcp|platform|integrations|computer|automation)\//,
+    from: /^src\/(tools|plugins|skills|mcp|platform|capabilities|integrations|computer|automation)\//,
     to: /^src\/(business|enterprise|interfaces|cli|commands|daemon|telegram|voice)\//,
     toNot: /^src\/interfaces\/cli\.ts$/,
   },
@@ -279,13 +279,14 @@ describe("T8 — the L0–L6 boundary table is enforced", () => {
 });
 
 describe("T8 — retired modules stay retired (one authority per concern)", () => {
+  // Phase 08: src/capabilities was reintroduced as unified capability system
+  // (previously retired to platform/capabilities). It is now L2 Platform.
   const RETIRED = [
     "src/memory/",
     "src/workflow/",
     "src/providers/routing.ts",
     "src/services/extensibility-bridge.ts",
     "src/trust/",
-    "src/capabilities/",
     "src/deployment/",
     "src/environment/",
     "src/evaluation/",
@@ -311,8 +312,9 @@ describe("T8 — retired modules stay retired (one authority per concern)", () =
     expect(offenders).toEqual([]);
   });
 
-  test("no phase-named top-level module remains", () => {
-    const PHASE_NAMED = ["baseline", "capabilities", "deployment", "environment", "evaluation", "trust"];
+  test("no phase-named top-level module remains (except capabilities which is now unified Phase 08 L2)", () => {
+    // Phase 08: capabilities is now canonical unified system, not phase-named retired
+    const PHASE_NAMED = ["baseline", "deployment", "environment", "evaluation", "trust"];
     const present = PHASE_NAMED.filter((d) => FILES.some((f) => f.startsWith(`src/${d}/`)));
     expect(present).toEqual([]);
   });
