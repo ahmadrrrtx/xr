@@ -158,6 +158,7 @@ describe("onboarding --yes", () => {
       theme: "dark" as const,
       accessibility: { largeText: false, screenReader: false },
       dependenciesInstalled: [],
+      memoryEnabled: true,
     };
     // A key was entered and stored — even on the "could not verify" path the
     // default must follow it (validation is advisory, the key is the choice).

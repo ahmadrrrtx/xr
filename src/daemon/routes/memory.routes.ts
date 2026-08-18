@@ -1,7 +1,8 @@
 /** XR Daemon — durable memory routes. */
 
 import { isMemoryEnabled } from "../../config/config.ts";
-import { MemoryStore } from "../../context/memory/store.ts";
+import { IsolatedMemoryStore } from "../../context/isolated-store.ts";
+import { inspectMemoryEngine } from "../../context/engine.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
 export function memoryRoutes(): DaemonRoute[] {
@@ -11,7 +12,7 @@ export function memoryRoutes(): DaemonRoute[] {
       path: "/api/memory",
       method: "GET",
       handle: ({ json, state }) => {
-        const mem = new MemoryStore(state.store);
+        const mem = new IsolatedMemoryStore(state.store);
         const entries = mem.list().map((e) => ({
           id: e.id,
           category: e.category,
@@ -23,7 +24,7 @@ export function memoryRoutes(): DaemonRoute[] {
           expiresAt: e.expiresAt ?? null,
           updatedAt: e.updatedAt,
         }));
-        return json({ enabled: isMemoryEnabled(), count: mem.count(), stats: mem.stats(), health: mem.health(), entries });
+        return json({ enabled: isMemoryEnabled(), count: mem.count(), stats: mem.stats(), health: mem.health(), engine: inspectMemoryEngine(state.store), entries });
       },
     }),
     route({
@@ -31,8 +32,8 @@ export function memoryRoutes(): DaemonRoute[] {
       path: "/api/memory/health",
       method: "GET",
       handle: ({ json, state }) => {
-        const mem = new MemoryStore(state.store);
-        return json({ enabled: isMemoryEnabled(), ...mem.health() });
+        const mem = new IsolatedMemoryStore(state.store);
+        return json({ enabled: isMemoryEnabled(), ...mem.health(), engine: inspectMemoryEngine(state.store) });
       },
     }),
     route({
@@ -42,7 +43,7 @@ export function memoryRoutes(): DaemonRoute[] {
       handle: ({ json, url, state }) => {
         const q = (url.searchParams.get("q") ?? "").trim();
         if (!q) return json({ results: [] });
-        const mem = new MemoryStore(state.store);
+        const mem = new IsolatedMemoryStore(state.store);
         const results = mem.search(q).map((e) => ({
           id: e.id,
           category: e.category,
@@ -60,7 +61,7 @@ export function memoryRoutes(): DaemonRoute[] {
       method: "DELETE",
       handle: ({ json, path, state }) => {
         const key = decodeURIComponent(path.slice("/api/memory/".length));
-        const mem = new MemoryStore(state.store);
+        const mem = new IsolatedMemoryStore(state.store);
         if (key === "*" || key === "all") {
           const n = mem.clear();
           state.store.audit("memory.clear_all", { removed: n });

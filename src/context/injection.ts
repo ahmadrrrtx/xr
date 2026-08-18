@@ -31,6 +31,7 @@ import {
 } from "./types.ts";
 import { maskExternalPaths, maskSecrets } from "./poison.ts";
 import { gateItems, type IntegrityFinding } from "./integrity.ts";
+import { discloseContent, shouldExpandFull, type DisclosureDepth } from "./budget.ts";
 
 /** Opening/closing fence for quarantined content. Deliberately unmistakable. */
 const QUARANTINE_OPEN = "<<<XR_UNTRUSTED_CONTENT_BEGIN>>>";
@@ -72,6 +73,16 @@ export interface InjectionOptions {
    *  - "detailed": adds source, scope, consent, reason (inspection mode)
    */
   detail?: "concise" | "detailed";
+  /**
+   * Phase 09 — progressive disclosure of item BODIES.
+   *  - "metadata": title / type only
+   *  - "summary":  first ~1536 characters (default)
+   *  - "full":     full item body (still bounded)
+   * Full content is also used when an explicit tool lookup asked for it.
+   */
+  disclosure?: DisclosureDepth;
+  /** Force full body for these item ids (memory_get / explicit lookup). */
+  expandIds?: readonly string[];
   /** Redaction toggles (defaults come from the package grant). */
   maskSecrets?: boolean;
   maskExternalPaths?: boolean;
@@ -89,6 +100,7 @@ export interface InjectionOptions {
 export function buildInjectionPackage(pkg: ContextPackage, opts: InjectionOptions = {}): InjectionPackage {
   const maxChars = Math.min(opts.maxChars ?? pkg.grant.maxChars, CONTEXT_BOUNDS.maxPackageChars);
   const detail = opts.detail ?? "concise";
+  const expandIds = new Set(opts.expandIds ?? []);
   const doMaskSecrets = opts.maskSecrets ?? pkg.grant.redact.maskSecrets;
   const doMaskPaths = opts.maskExternalPaths ?? pkg.grant.redact.maskExternalPaths;
   const workspaceRoot = opts.workspaceRoot ?? "";
@@ -162,7 +174,7 @@ export function buildInjectionPackage(pkg: ContextPackage, opts: InjectionOption
 
   // ── 1. Instruction channel (system role) ────────────────────────────────
   if (instructionItems.length) {
-    const lines = instructionItems.map((ri) => `- ${renderItemLine(ri, detail, render)}`);
+    const lines = instructionItems.map((ri) => `- ${renderItemLine(ri, detail, render, opts.disclosure, expandIds)}`);
     pushBlock(
       "instruction",
       "instructions",
@@ -190,7 +202,7 @@ export function buildInjectionPackage(pkg: ContextPackage, opts: InjectionOption
     if (!items || !items.length) continue;
     dataSections.push(`${TIER_HEADERS[tier]}:`);
     for (const ri of items) {
-      dataSections.push(`- ${renderItemLine(ri, detail, render)}`);
+      dataSections.push(`- ${renderItemLine(ri, detail, render, opts.disclosure, expandIds)}`);
       dataIds.push(ri.item.id);
     }
     dataSections.push("");
@@ -268,10 +280,19 @@ function renderItemLine(
   ri: RetrievedItem,
   detail: "concise" | "detailed",
   render: (s: string) => string,
+  disclosure?: DisclosureDepth,
+  expandIds: ReadonlySet<string> = new Set(),
 ): string {
   const meta = renderMeta(ri, detail);
-  const body = render(boundText(ri.item.content.replace(/\s+/g, " ").trim(), 600));
-  return `${body} [${meta}]`;
+  const depth = shouldExpandFull({
+    requested: disclosure,
+    similarity: ri.explanation.similarity,
+    explicitLookup: expandIds.has(ri.item.id),
+  });
+  const raw = discloseContent(ri.item.content.replace(/\s+/g, " ").trim(), depth, {
+    title: ri.item.title,
+  });
+  return `${render(raw)} [${meta}]`;
 }
 
 /** Render the safe metadata suffix for an item. */

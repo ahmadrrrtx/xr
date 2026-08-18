@@ -8,6 +8,7 @@ import { PRESETS } from "../providers/presets.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore } from "../context/memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
+import { engineLabel, inspectMemoryEngine } from "../context/engine.ts";
 import { banner, colors as C, ok, warn } from "../interfaces/cli.ts";
 import { pluginDoctorLine } from "../plugins/cli.ts";
 import {
@@ -52,6 +53,7 @@ export class DoctorCommand implements Command {
     const mem = new MemoryStore(store);
     const memHealth = mem.health();
     const memEnabled = isMemoryEnabled();
+    const engine = inspectMemoryEngine(store);
     const researchRows = store.listResearch(5);
     const researchCount = store.researchCount();
     const latestResearch = researchRows[0];
@@ -66,7 +68,15 @@ export class DoctorCommand implements Command {
       } catch(e){ checks.push({ id:"providers", label:"Provider health", state:"warn", detail:(e as Error).message });}
       checks.push({ id:"research", label:"Research engine", state:"ok", detail:`${researchCount} sessions` });
       if (deep) { try { const { checkVoiceStack } = await import("../voice/index.ts"); for(const c of (await checkVoiceStack()).checks) checks.push({ id:c.id, label:c.label, state:c.state, detail:c.detail }); } catch(e){ checks.push({ id:"voice", label:"Voice stack", state:"warn", detail:(e as Error).message });} }
-      checks.push({ id:"memory", label:"Memory engine", state: memEnabled ? "ok" : "warn", detail: `${memHealth.total} entries` });
+      checks.push({
+        id: "memory",
+        label: "Memory engine",
+        state: engine.enabled ? (engine.store === "healthy" ? "ok" : "warn") : "warn",
+        detail: engine.detail,
+      });
+      checks.push({ id: "memory-store", label: "Memory store", state: engine.store === "healthy" ? "ok" : engine.store === "error" ? "fail" : "warn", detail: engine.store });
+      checks.push({ id: "memory-retrieval", label: "Memory retrieval", state: engine.retrieval === "healthy" ? "ok" : "warn", detail: engine.retrieval });
+      checks.push({ id: "memory-index", label: "Memory index", state: engine.index === "healthy" ? "ok" : "warn", detail: `${engine.index} · ${engine.indexCount} indexed` });
       try { const { PluginManager } = await import("../plugins/manager.ts"); const pm = new PluginManager(store, ctx.cwd); await pm.loadEnabled(); const ps = pm.summary(); checks.push({ id:"plugins", label:"Plugin platform", state: ps.errored ? "warn" : "ok", detail: `${ps.installed} installed, ${ps.enabled} enabled, ${ps.errored} need attention` }); } catch(e){ checks.push({ id:"plugins", label:"Plugin platform", state:"warn", detail:(e as Error).message }); }
       try { const { McpManager } = await import("../mcp/manager.ts"); const mm = new McpManager(store, ctx.cwd); await mm.loadEnabled(); const ms = mm.summary(); checks.push({ id:"mcp", label:"MCP platform", state: ms.errored ? "warn" : "ok", detail: `${ms.installed} servers, ${ms.enabled} enabled, ${ms.healthy} healthy` }); } catch(e){ checks.push({ id:"mcp", label:"MCP platform", state:"warn", detail:(e as Error).message }); }
       if (deep) { try { const caps = ctx.registry.resolve(Tokens.Capabilities).health(); checks.push({ id:"capabilities", label:"Capability Ecosystem", state: caps.quarantined ? "warn" : "ok", detail: `${caps.total} capabilities, ${caps.certified} certified, ${caps.quarantined} quarantined` }); } catch(e){ checks.push({ id:"capabilities", label:"Capability Ecosystem", state:"warn", detail:(e as Error).message }); } }

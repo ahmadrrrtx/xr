@@ -171,6 +171,63 @@ export {
 } from "./memory/store.ts";
 
 export {
+  IsolatedMemoryStore,
+  stampWorkspace,
+  invalidateMemoryIndexes,
+} from "./isolated-store.ts";
+
+export {
+  inspectMemoryEngine,
+  verifyWorkspaceIsolation,
+  recordRetrievalLatency,
+  recordCompaction,
+  markCompacting,
+  engineLabel,
+  ENGINE_STATES,
+  type EngineState,
+  type MemoryEngineReport,
+  type ComponentHealth,
+} from "./engine.ts";
+
+export {
+  buildBudgetPlan,
+  enforceBudget,
+  discloseContent,
+  shouldExpandFull,
+  PROGRESSIVE_SUMMARY_CHARS,
+  CONTEXT_LAYERS,
+  type ContextLayer,
+  type DisclosureDepth,
+  type BudgetPlan,
+  type BudgetItem,
+  type EnforceResult,
+} from "./budget.ts";
+
+export {
+  WorkingMemory,
+  SessionMemory,
+  WORKING_MEMORY_BOUNDS,
+  type WorkingKind,
+  type WorkingItem,
+  type SessionTurn,
+} from "./working.ts";
+
+export {
+  MEMORY_SCOPE_KINDS,
+  parseMemoryScope,
+  normalizeMemoryScope,
+  isExplicitGlobalScope,
+  isSessionScope,
+  memoryBelongsToWorkspace,
+  type MemoryScopeKind,
+  type ParsedMemoryScope,
+} from "./memory-scope.ts";
+
+export { microCompact, type MicroCompactOptions, type MicroCompactResult } from "./microcompact.ts";
+
+export { considerSkillPromotion, type PromotionRequest, type PromotionDecision } from "./skill-promotion.ts";
+
+export {
   MEMORY_CATEGORIES,
   MEMORY_SOURCES,
   GLOBAL_SCOPE,

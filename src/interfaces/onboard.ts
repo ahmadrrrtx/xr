@@ -33,6 +33,8 @@ export interface OnboardingState {
   accessibility: { largeText: boolean; screenReader: boolean };
   importPath?: string;
   dependenciesInstalled: string[];
+  /** Phase 09 — durable memory. Default on; only stores what the user asks. */
+  memoryEnabled: boolean;
 }
 
 // ── Non-interactive mode (`xr onboarding --yes`) ─────────────────────────────
@@ -103,8 +105,24 @@ function showPrivacyLocalExplanation(): void {
   console.log(`  ${SYM.secure} Prompts sent to a cloud provider only when you select that provider.`);
   console.log(`  ${SYM.secure} No data is ever sent to XR servers.`);
   console.log(`  ${SYM.secure} Microphone / filesystem access is requested only when you enable voice or computer control.`);
+  console.log(`  ${SYM.secure} Durable memory stores only what you explicitly ask XR to remember.`);
   console.log(`  ${xrDim("You can change any of these settings later in Settings → Privacy.")}`);
   console.log();
+}
+
+async function configureMemoryConsent(state: OnboardingState): Promise<void> {
+  section("Durable Memory");
+  console.log();
+  console.log(`  ${xrDim("XR can remember facts, preferences, and project context across sessions.")}`);
+  console.log(`  ${xrDim("Nothing is stored unless you ask (\"remember …\"). Secrets are never kept.")}`);
+  console.log(`  ${xrDim("Disable anytime: config memory.enabled=false  or  XR_MEMORY_DISABLED=1")}`);
+  console.log();
+  state.memoryEnabled = await confirmO("Enable durable memory? (recommended)", true);
+  if (state.memoryEnabled) {
+    ok("Memory enabled — local-only, consent-gated, workspace-isolated.");
+  } else {
+    warn("Memory disabled. Continuity will not persist across sessions.");
+  }
 }
 
 // ── Welcome Screen ───────────────────────────────────────────────────────────
@@ -426,6 +444,7 @@ export async function runOnboarding(opts?: { yes?: boolean }): Promise<void> {
     theme: "dark",
     accessibility: { largeText: false, screenReader: false },
     dependenciesInstalled: [],
+    memoryEnabled: true,
   };
 
   showWelcome();
@@ -450,6 +469,7 @@ export async function runOnboarding(opts?: { yes?: boolean }): Promise<void> {
   state.mode = modeChoice === "1" ? "local" : modeChoice === "2" ? "cloud" : "hybrid";
 
   await configureWorkspaceAndPreferences(state);
+  await configureMemoryConsent(state);
 
   if (state.mode !== "local") {
     await configureProviders(state, internet);
@@ -494,6 +514,7 @@ export async function runOnboarding(opts?: { yes?: boolean }): Promise<void> {
   config.workspace = { name: state.workspaceName };
   config.theme = state.theme;
   config.accessibility = state.accessibility;
+  config.memory.enabled = state.memoryEnabled;
 
   // Save keys securely (existing secret backend)
   let secretBackend = preferredSecretBackend();
