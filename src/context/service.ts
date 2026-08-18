@@ -16,6 +16,8 @@ import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
 import type { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore, projectScopeFromCwd } from "./memory/store.ts";
+import { IsolatedMemoryStore } from "./isolated-store.ts";
+import { recordRetrievalLatency } from "./engine.ts";
 import {
   CONTEXT_POLICY_VERSION,
   DEFAULT_USER_ID,
@@ -269,7 +271,7 @@ export class ContextService implements LifecycleHook {
     const extra: ExternalCandidate[] = [];
     if (grant.allowedTiers.includes("long_term_memory") && opts.memoryEnabled !== false) {
       try {
-        const mem = opts.memoryStore ?? new MemoryStore(this.store);
+        const mem = opts.memoryStore ?? new IsolatedMemoryStore(this.store);
         const entries = mem.list({ scope: grant.scope.projectScope });
         for (const e of entries) {
           extra.push({
@@ -282,7 +284,8 @@ export class ContextService implements LifecycleHook {
       }
     }
 
-    return assembler.assemble(
+    const started = Date.now();
+    const pkg = await assembler.assemble(
       {
         grant,
         queryIntent: req.intent,
@@ -294,6 +297,8 @@ export class ContextService implements LifecycleHook {
       },
       extra,
     );
+    recordRetrievalLatency(Date.now() - started);
+    return pkg;
   }
 
   /** Revalidate a package after a resume. */

@@ -6,7 +6,8 @@ import { configCacheStats, isMemoryEnabled } from "../../config/config.ts";
 import { isLocal } from "../../cost/pricing.ts";
 import { runLab } from "../../security/lab.ts";
 import { fingerprint } from "../../context/memory/rag.ts";
-import { MemoryStore } from "../../context/memory/store.ts";
+import { IsolatedMemoryStore } from "../../context/isolated-store.ts";
+import { inspectMemoryEngine } from "../../context/engine.ts";
 import { dashboardHtml, dashboardCssAsset, dashboardScriptAsset } from "../dashboard.ts";
 import { AUTH_PAGE_SCRIPT } from "../auth-page.ts";
 import { gitSummaryCached } from "../state/cache.ts";
@@ -82,7 +83,7 @@ export function systemRoutes(): DaemonRoute[] {
       handle: async ({ json, state, config }) => {
         const store = state.store;
         const project = basename(process.cwd());
-        const memory = new MemoryStore(store);
+        const memory = new IsolatedMemoryStore(store);
         const git = await gitSummary(process.cwd());
         return json({
           version: versionInfo(),
@@ -101,7 +102,7 @@ export function systemRoutes(): DaemonRoute[] {
           audit: { count: store.auditCount(), chain: store.verifyChain() },
           skills: { learned: store.skillCount(), frozen: store.frozenCount() },
           ragChunks: store.ragCount(project),
-          memory: { enabled: isMemoryEnabled(), count: memory.count(), health: memory.health() },
+          memory: { enabled: isMemoryEnabled(), count: memory.count(), health: memory.health(), engine: inspectMemoryEngine(store) },
           research: { count: store.researchCount(), recent: store.listResearch(4) },
           git,
           budget: {

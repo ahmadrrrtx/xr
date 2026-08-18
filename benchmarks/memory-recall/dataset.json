@@ -1,0 +1,20 @@
+{
+  "name": "xr-phase09-memory-recall",
+  "protocol": "inject-once / query-many, deterministic id assertions, no LLM judge",
+  "items": [
+    { "id": "pref-ts", "content": "User prefers TypeScript and Bun for backend work", "type": "memory", "tags": ["preference"] },
+    { "id": "pref-dark", "content": "User prefers dark mode in every editor", "type": "memory", "tags": ["preference"] },
+    { "id": "fact-port", "content": "The API listens on port 8080 after the 2026 migration", "type": "memory", "tags": ["fact"] },
+    { "id": "fact-port-old", "content": "The API listens on port 3000", "type": "memory", "tags": ["fact"], "staleDaysAgo": 400, "supersededBy": "fact-port" },
+    { "id": "proj-provider", "content": "Project migrated from provider X to provider Y", "type": "knowledge", "tags": ["project"] },
+    { "id": "proj-provider-old", "content": "Project uses provider X", "type": "knowledge", "tags": ["project"], "staleDaysAgo": 200, "supersededBy": "proj-provider" },
+    { "id": "ws-a-secret", "content": "WORKSPACE_A_SECRET widget rotation procedure", "type": "memory", "workspaceId": "wsA" },
+    { "id": "ws-b-public", "content": "Workspace B public onboarding copy", "type": "memory", "workspaceId": "wsB" }
+  ],
+  "queries": [
+    { "id": "q-runtime", "query": "what runtime and language do I prefer", "expectTop1": "pref-ts" },
+    { "id": "q-port", "query": "which port does the API listen on", "expectTop1": "fact-port", "expectAbsent": ["fact-port-old"] },
+    { "id": "q-provider", "query": "which provider does the project use", "expectTop1": "proj-provider", "expectAbsent": ["proj-provider-old"] },
+    { "id": "q-theme", "query": "editor colour theme preference", "expectTop1": "pref-dark" }
+  ]
+}
