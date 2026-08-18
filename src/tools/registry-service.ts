@@ -293,8 +293,22 @@ export class ToolRegistryService {
 
   // ── Phase 08 — lifecycle management ─────────────────────────────────────
 
+  private findEntryIncludingDisabled(idOrName: string): RegisteredTool | undefined {
+    // Direct qualified id lookup (includes disabled)
+    const direct = this.entries.get(idOrName);
+    if (direct) return direct;
+    // Search by exposedName, name, id
+    for (const e of this.entries.values()) {
+      if (e.exposedName === idOrName || e.name === idOrName || e.id === idOrName) return e;
+    }
+    // Bare name via bareNames map
+    const holder = this.bareNames.get(idOrName);
+    if (holder) return this.entries.get(holder);
+    return undefined;
+  }
+
   setLifecycle(idOrName: string, lifecycle: CapabilityLifecycleState, reason?: string): boolean {
-    const entry = this.resolve(idOrName) ?? this.entries.get(idOrName);
+    const entry = this.findEntryIncludingDisabled(idOrName);
     if (!entry) return false;
     const prev = entry.lifecycle ?? "unknown";
     if (prev === lifecycle) return true;
@@ -310,7 +324,7 @@ export class ToolRegistryService {
   }
 
   getLifecycle(idOrName: string): CapabilityLifecycleState | undefined {
-    const entry = this.resolve(idOrName) ?? this.entries.get(idOrName);
+    const entry = this.findEntryIncludingDisabled(idOrName);
     return entry?.lifecycle;
   }
 

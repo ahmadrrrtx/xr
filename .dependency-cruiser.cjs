@@ -219,7 +219,7 @@ module.exports = {
     // ── One source of truth per concern (Cmdt 6) ─────────────────────────────
     // Phase 08: src/capabilities was reintroduced as unified capability system
     // (previously retired to platform/capabilities). The old retired path
-    // list no longer includes capabilities — it is now L2 Platform.
+    // list no longer includes capabilities - it is now L2 Platform.
     {
       name: "no-retired-modules",
       severity: "error",

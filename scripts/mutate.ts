@@ -33,7 +33,8 @@ const GATED: GatedModule[] = [
   { path: "src/services/review-decision.ts", tests: ["test/phase0/reviewer-fail-closed.test.ts"] },
   { path: "src/integrations/credentials.ts", tests: ["test/phase0/credential-vault.test.ts"] },
   // ── Phase 2 authorities (Part 10: mutation on envelope / registry / router) ──
-  { path: "src/tools/registry-service.ts", tests: ["test/tools/semantics-contract.test.ts"] },
+  // Phase 08: added lifecycle/trust/scope enforcement — include new capability tests that exercise new branches
+  { path: "src/tools/registry-service.ts", tests: ["test/tools/semantics-contract.test.ts", "test/tools/registry-phase08.test.ts", "test/capabilities/no-bypass.test.ts", "test/capabilities/security-matrix.test.ts", "test/capabilities/self-grant.test.ts", "test/capabilities/inventory.test.ts"] },
   { path: "src/intelligence/routing-service.ts", tests: ["test/intelligence/locality-invariant.test.ts", "test/intelligence/integration.test.ts"] },
   { path: "src/core/execution/envelope.ts", tests: ["test/core/no-bypass.test.ts", "test/core/envelope.test.ts"] },
 ];
