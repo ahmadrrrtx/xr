@@ -13,6 +13,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 |---|---|---|
 | `src/agents/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/automation/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `src/capabilities/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/cli/` | @ahmadrrrtx | explicit entry |
 | `src/clients/` | @ahmadrrrtx | explicit entry |
 | `src/commands/` | @ahmadrrrtx | default (@ahmadrrrtx) |

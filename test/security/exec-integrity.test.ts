@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from "bun:test";
-import { mkdtempSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, symlinkSync, rmSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -25,6 +25,13 @@ try {
 }
 
 const realHash = hashFileContent(real)!;
+const realCanonical = (() => {
+  try {
+    return realpathSync(real);
+  } catch {
+    return real;
+  }
+})();
 
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -37,13 +44,13 @@ describe("Phase 07 · content-hash execution identity", () => {
 
   it("resolves a token to a canonical path + hash", () => {
     const id = resolveToken(real, dir);
-    expect(id.canonical).toBe(real);
+    expect(id.canonical).toBe(realCanonical);
     expect(id.hash).toBe(realHash);
   });
 
   it("symlink canonicalization yields the TARGET's hash (content is identity)", () => {
     const id = resolveToken(link, dir);
-    expect(id.canonical).toBe(real); // not the symlink
+    expect(id.canonical).toBe(realCanonical); // not the symlink, target canonical (realpath)
     expect(id.hash).toBe(realHash); // shares the approved hash
   });
 

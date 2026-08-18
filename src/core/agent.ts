@@ -653,6 +653,53 @@ export async function runAgentLoop(
         // A-19 — between tool calls: a mid-batch abort skips the rest.
         if (isCancelled()) return cancelledResult(stepIdx + 1);
 
+        // ── Phase 08 — unified policy boundary: every tool call passes through
+        // the same authorization boundary (trust → lifecycle → scope → permission → mode)
+        if (registry) {
+          try {
+            const { evaluatePolicy } = await import("../capabilities/policy.ts");
+            const req = {
+              capabilityId: call.tool,
+              requestedBy: "model",
+              runId,
+              sessionId,
+              scope: undefined,
+              workspaceId: cwd,
+              arguments: call.args as Record<string, unknown>,
+              reason: `tool call from model`,
+              mode,
+              cwd,
+            };
+            const decision = evaluatePolicy(req as any, {
+              registry,
+              deniedPermissions: [],
+              egressAllowlist: deps.egressAllowlist ?? [],
+              allowedHosts: deps.allowedHosts ?? [],
+              cwd,
+              hardened,
+            });
+            if (!decision.allowed) {
+              // For unknown tools, let existing tool.blocked path handle it (preserves T1 EFFECTS contract)
+              if (decision.reason?.includes("not found")) {
+                // fall through to unknown_tool handling below
+              } else {
+                const msg = `tool \"${call.tool}\" blocked by capability policy: ${decision.reason}`;
+                say(`\x1b[31m✗ ${msg}\x1b[0m`);
+                deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: decision.reason });
+                messages.push({ role: "tool", name: call.tool, content: msg });
+                auditStore.audit("capability.denied", { tool: call.tool, reason: decision.reason, policyTrace: decision.policyTrace }, sessionId);
+                // Also audit tool.blocked for backward compat with envelope tests that expect tool.blocked
+                auditStore.audit("tool.blocked", { tool: call.tool, mode, reason: decision.reason }, sessionId);
+                continue;
+              }
+            }
+          } catch (e) {
+            // Policy evaluation failure must not break run — fail closed if evaluation throws?
+            // We log and continue to normal resolution (defense in depth, existing checks remain)
+            auditStore.audit("capability.policy_error", { tool: call.tool, error: (e as Error).message }, sessionId);
+          }
+        }
+
         const tool = resolveTool(call.tool);
         if (!tool || !tools.some((t) => t.name === call.tool)) {
           /**

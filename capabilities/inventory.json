@@ -1,0 +1,291 @@
+{
+  "generatedAt": "2026-08-18T13:24:40.068Z",
+  "total": 14,
+  "capabilities": [
+    {
+      "id": "core:check_package",
+      "name": "check_package",
+      "exposedName": "check_package",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "shared",
+      "permissions": [
+        "network.fetch"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:computer_control",
+      "name": "computer_control",
+      "exposedName": "computer_control",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "host",
+      "permissions": [
+        "computer.input",
+        "computer.desktop",
+        "computer.browser",
+        "computer.system"
+      ],
+      "riskTier": "tier2",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:delete_file",
+      "name": "delete_file",
+      "exposedName": "delete_file",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "workspace",
+      "permissions": [
+        "filesystem.delete"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:fetch_url",
+      "name": "fetch_url",
+      "exposedName": "fetch_url",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "shared",
+      "permissions": [
+        "network.fetch"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:list_dir",
+      "name": "list_dir",
+      "exposedName": "list_dir",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "workspace",
+      "permissions": [
+        "filesystem.read"
+      ],
+      "riskTier": "tier0",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:read_file",
+      "name": "read_file",
+      "exposedName": "read_file",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "workspace",
+      "permissions": [
+        "filesystem.read"
+      ],
+      "riskTier": "tier0",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:shell",
+      "name": "shell",
+      "exposedName": "shell",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "shared",
+      "permissions": [
+        "runtime.shell",
+        "filesystem.read",
+        "filesystem.write"
+      ],
+      "riskTier": "tier2",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:system_apps",
+      "name": "system_apps",
+      "exposedName": "system_apps",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "host",
+      "permissions": [
+        "computer.desktop"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:system_clipboard_read",
+      "name": "system_clipboard_read",
+      "exposedName": "system_clipboard_read",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "host",
+      "permissions": [
+        "computer.desktop"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:system_clipboard_write",
+      "name": "system_clipboard_write",
+      "exposedName": "system_clipboard_write",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "host",
+      "permissions": [
+        "computer.desktop"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:system_notify",
+      "name": "system_notify",
+      "exposedName": "system_notify",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "host",
+      "permissions": [
+        "computer.desktop"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:system_open_app",
+      "name": "system_open_app",
+      "exposedName": "system_open_app",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "host",
+      "permissions": [
+        "computer.desktop"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:web_search",
+      "name": "web_search",
+      "exposedName": "web_search",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "shared",
+      "permissions": [
+        "network.fetch"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    },
+    {
+      "id": "core:write_file",
+      "name": "write_file",
+      "exposedName": "write_file",
+      "kind": "core",
+      "source": "core",
+      "provider": "core",
+      "version": "core",
+      "lifecycle": "enabled",
+      "trust": "official",
+      "scope": "workspace",
+      "permissions": [
+        "filesystem.write"
+      ],
+      "riskTier": "tier1",
+      "provenance": {
+        "source": "builtin"
+      },
+      "shadowed": "none"
+    }
+  ]
+}

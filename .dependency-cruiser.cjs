@@ -23,7 +23,8 @@
  *                 src/intelligence, src/providers, src/agents, src/control,
  *                 src/runtime/** (trust), src/services, src/reliability
  *   L2 Platform   src/tools, src/plugins, src/skills, src/mcp,
- *                 src/platform/**, src/integrations, src/computer,
+ *                 src/platform/**, src/capabilities/** (Phase 08 unified),
+ *                 src/integrations, src/computer,
  *                 src/automation, src/local, src/research
  *   L3/L4         plugins + skills are packaged out-of-tree; their HOSTS are L2
  *   L5 Business   extensions/business-os (governed extension over L0)
@@ -111,7 +112,7 @@ module.exports = {
       to: {
         path:
           "^src/(execution|context|intelligence|providers|agents|control|runtime|services|reliability|" +
-          "tools|plugins|skills|mcp|platform|integrations|computer|automation|local|research|" +
+          "tools|plugins|skills|mcp|platform|capabilities|integrations|computer|automation|local|research|" +
           "business|enterprise|" +
           "interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)/",
         pathNot:
@@ -152,7 +153,7 @@ module.exports = {
       severity: "error",
       comment: "L2 Platform must not reach into Business, Enterprise or a surface.",
       from: {
-        path: "^src/(tools|plugins|skills|mcp|platform|integrations|computer|automation)/",
+        path: "^src/(tools|plugins|skills|mcp|platform|capabilities|integrations|computer|automation)/",
       },
       to: {
         path: "^src/(business|enterprise|interfaces|cli|commands|daemon|telegram|voice)/",
@@ -216,6 +217,9 @@ module.exports = {
     },
 
     // ── One source of truth per concern (Cmdt 6) ─────────────────────────────
+    // Phase 08: src/capabilities was reintroduced as unified capability system
+    // (previously retired to platform/capabilities). The old retired path
+    // list no longer includes capabilities - it is now L2 Platform.
     {
       name: "no-retired-modules",
       severity: "error",
@@ -226,7 +230,7 @@ module.exports = {
       to: {
         path:
           "^src/(memory/|workflow/|providers/routing\\.ts|services/extensibility-bridge\\.ts|" +
-          "trust/|capabilities/|deployment/|environment/|evaluation/|baseline/)",
+          "trust/|deployment/|environment/|evaluation/|baseline/)",
       },
     },
 
