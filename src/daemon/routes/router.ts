@@ -7,6 +7,7 @@ import type { WorkspaceManager } from "../../core/workspace.ts";
 import type { TrustService } from "../../runtime/trust/service.ts";
 import type { XRApp } from "../../core/app.ts";
 import type { AgentExecutorHandle } from "../agent-executor.ts";
+import type { ResearchJobRegistry } from "../../research/jobs.ts";
 
 export interface DaemonState {
   store: Store;
@@ -22,6 +23,8 @@ export interface DaemonState {
   app?: XRApp;
   /** Phase 03 — the daemon's AgentService boundary (one execution path). */
   agentExecutor?: AgentExecutorHandle;
+  /** Phase 10 — shared research job registry (jobs/cancellation/SSE). */
+  researchRegistry?: ResearchJobRegistry;
 }
 
 export interface DaemonResponseHelpers {

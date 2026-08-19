@@ -303,3 +303,37 @@ export const AgentSummary = z.looseObject({ id: z.string(), name: z.string() });
 export const ProblemExample = z.looseObject({
   error: z.string(),
 });
+
+// ── Phase 10 · research operations ───────────────────────────────────────────
+
+export const ResearchOperationRequest = z.looseObject({
+  query: z.string().max(2000).optional().describe("Search query (search intent)."),
+  url: z.string().max(2048).optional().describe("Target URL (scrape/map/crawl intent)."),
+  urls: z.array(z.string().max(2048)).max(64).optional().describe("Target URLs (extract intent)."),
+  schema: z.looseObject({}).optional().describe("JSON schema for structured extraction."),
+  depth: z.enum(["quick", "deep"]).optional(),
+  max_pages: z.number().int().min(1).max(500).optional().describe("Page cap override."),
+  max_depth: z.number().int().min(0).max(10).optional().describe("Depth cap override."),
+});
+export type ResearchOperationRequest = z.infer<typeof ResearchOperationRequest>;
+
+export const ResearchJobResponse = z.looseObject({
+  job: z.looseObject({
+    id: z.string(),
+    kind: z.string(),
+    state: z.string(),
+    provider: z.string().optional(),
+    sources: z.array(z.looseObject({})).optional(),
+    citations: z.array(z.looseObject({})).optional(),
+    result: z.unknown().optional(),
+    error: z.string().optional(),
+    createdAt: z.number().optional(),
+    updatedAt: z.number().optional(),
+  }),
+});
+export type ResearchJobResponse = z.infer<typeof ResearchJobResponse>;
+
+export const ResearchJobsListResponse = z.looseObject({
+  jobs: z.array(z.looseObject({ id: z.string(), kind: z.string(), state: z.string() })),
+  count: z.number().int(),
+});

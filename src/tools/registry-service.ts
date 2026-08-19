@@ -90,6 +90,12 @@ const READ_ONLY_CORE = new Set([
   "check_package",
   "system_apps",
   "system_clipboard_read",
+  // Phase 10 — research capabilities are read-only network operations.
+  "research_search",
+  "research_scrape",
+  "research_crawl",
+  "research_map",
+  "research_extract",
 ]);
 
 /**

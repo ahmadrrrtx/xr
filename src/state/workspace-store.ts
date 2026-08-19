@@ -280,6 +280,19 @@ export class WorkspaceStore {
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      -- Phase 10: durable research jobs (search/scrape/crawl/map/extract).
+      -- Separate from research_sessions so a long-running crawl job never
+      -- masquerades as a finished research session (and vice versa).
+      CREATE TABLE IF NOT EXISTS research_jobs (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT NOT NULL,
+        kind TEXT NOT NULL,            -- search|scrape|crawl|map|extract
+        status TEXT NOT NULL,          -- truthful ResearchJobState
+        request TEXT NOT NULL,         -- JSON ResearchRequest
+        data TEXT NOT NULL,            -- JSON ResearchJob
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
       -- v0.9: durable, user-controlled memory (long-term facts, preferences,
       -- project & workflow memory, do-not-remember rules). Distinct from the
       -- RAG-coupled \`memory\` table above: every row here is EXPLICITLY created,
@@ -1315,6 +1328,57 @@ export class WorkspaceStore {
         .query<{ c: number }, []>(`SELECT COUNT(*) c FROM research_sessions`)
         .get()?.c ?? 0
     );
+  }
+
+  // ---- Phase 10: research jobs ----
+
+  /** Insert or update a durable research job (JSON blob + indexed columns). */
+  saveResearchJob(id: string, workspaceId: string, kind: string, status: string, requestJson: string, dataJson: string): void {
+    const now = Date.now();
+    this.write(() => {
+      const exists = this.db
+        .query<{ c: number }, [string]>(`SELECT COUNT(*) c FROM research_jobs WHERE id=?`)
+        .get(id);
+      if (exists && exists.c > 0) {
+        this.db
+          .query(`UPDATE research_jobs SET workspace_id=?, kind=?, status=?, request=?, data=?, updated_at=? WHERE id=?`)
+          .run(workspaceId, kind, status, requestJson, dataJson, now, id);
+      } else {
+        this.db
+          .query(`INSERT INTO research_jobs (id,workspace_id,kind,status,request,data,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)`)
+          .run(id, workspaceId, kind, status, requestJson, dataJson, now, now);
+      }
+    });
+  }
+
+  getResearchJob(id: string): { id: string; data: string } | null {
+    return (
+      this.db
+        .query<{ id: string; data: string }, [string]>(`SELECT id,data FROM research_jobs WHERE id=?`)
+        .get(id) ?? null
+    );
+  }
+
+  listResearchJobs(limit = 50): Array<{ id: string; kind: string; status: string; updated_at: number }> {
+    return this.db
+      .query<{ id: string; kind: string; status: string; updated_at: number }, [number]>(
+        `SELECT id,kind,status,updated_at FROM research_jobs ORDER BY updated_at DESC LIMIT ?`,
+      )
+      .all(limit);
+  }
+
+  researchJobCount(): number {
+    return (
+      this.db
+        .query<{ c: number }, []>(`SELECT COUNT(*) c FROM research_jobs`)
+        .get()?.c ?? 0
+    );
+  }
+
+  deleteResearchJob(id: string): void {
+    this.write(() => {
+      this.db.query(`DELETE FROM research_jobs WHERE id=?`).run(id);
+    });
   }
 
   // ---- Block 8: schedules ----

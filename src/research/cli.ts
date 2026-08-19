@@ -33,6 +33,10 @@ import { DEPTH_BUDGETS } from "./types.ts";
 import { renderReport, renderSourcesList, renderTerminalSummary } from "./report.ts";
 import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { isMemoryEnabled } from "../config/config.ts";
+import { buildResearchPool, researchLimitsFromConfig } from "./factory.ts";
+import { ResearchJobRegistry } from "./jobs.ts";
+import { runResearchOperation } from "./runner.ts";
+import type { ResearchJob, ResearchRequest } from "./provider-types.ts";
 
 /** Build engine deps with the same routing/budget logic the agent uses. */
 function buildEngine(
@@ -477,6 +481,164 @@ function statusColor(s: string): string {
   return C.cyan(s);
 }
 
+// ── Phase 10 — provider-based operations ────────────────────────────────────
+
+function buildOps(store: Store): { config: ReturnType<typeof loadConfig>["config"]; pool: ReturnType<typeof buildResearchPool>["pool"]; registry: ResearchJobRegistry; limits: ReturnType<typeof researchLimitsFromConfig> } {
+  const { config } = loadConfig();
+  const { pool } = buildResearchPool(config);
+  const registry = new ResearchJobRegistry(store, store.workspaceId ?? "default");
+  const limits = researchLimitsFromConfig(config);
+  return { config, pool, registry, limits };
+}
+
+async function runOp(store: Store, request: Omit<ResearchRequest, "source">): Promise<ResearchJob> {
+  const { config, pool, registry, limits } = buildOps(store);
+  return runResearchOperation(
+    {
+      pool,
+      registry,
+      egressAllowlist: config.security.egressAllowlist,
+      allowedHosts: config.security.allowedHosts,
+      workspaceId: store.workspaceId ?? "default",
+      audit: (event, detail) => store.audit(event, detail),
+    },
+    { ...request, limits: request.limits ?? limits, source: "cli" },
+  );
+}
+
+function printJob(job: ResearchJob): void {
+  console.log();
+  const stateColor = job.state === "completed" ? C.green : job.state === "partial" || job.state === "budget_exhausted" ? C.yellow : C.red;
+  console.log(`${C.bold("job")} ${C.cyan(job.id)} ${C.dim(`(${job.kind})`)} → ${stateColor(job.state)}${job.error ? ` ${C.dim(job.error)}` : ""}`);
+  if (job.provider) console.log(`  provider ....... ${C.dim(job.provider)}`);
+  console.log(`  sources ....... ${job.sources.length} · citations ${job.citations.length}`);
+  for (const s of job.sources.slice(0, 20)) {
+    console.log(`  ${C.cyan(`[${s.sourceId}]`)} ${s.title ?? ""} ${C.dim(s.url)} ${s.verification === "retrieved" ? C.green("retrieved") : C.dim(s.verification)}`);
+  }
+  if (job.kind === "extract" && job.result) {
+    try {
+      console.log(`  data .......... ${C.dim(JSON.stringify((job.result as { data?: unknown }).data).slice(0, 600))}`);
+    } catch {
+      /* ignore */
+    }
+  }
+  if (job.progress.message) console.log(`  note .......... ${C.dim(job.progress.message)}`);
+}
+
+async function doSearch(store: Store, topic: string): Promise<void> {
+  banner();
+  if (!topic.trim()) {
+    warn(`Usage: xr research search "query"`);
+    return;
+  }
+  console.log(`${C.bold("🔬 Research search")} ${C.dim("query:")} ${topic}\n`);
+  const job = await runOp(store, { intent: "search", query: topic.trim() });
+  printJob(job);
+}
+
+async function doScrape(store: Store, url: string): Promise<void> {
+  banner();
+  if (!url.trim()) {
+    warn(`Usage: xr research scrape <url>`);
+    return;
+  }
+  console.log(`${C.bold("🔬 Research scrape")} ${C.dim("url:")} ${url}\n`);
+  const job = await runOp(store, { intent: "scrape", urls: [url.trim()] });
+  printJob(job);
+  const src = job.sources[0];
+  if (src?.text) console.log(`\n${C.dim("content preview:")}\n${src.text.slice(0, 1600)}${src.text.length > 1600 ? "\n…(truncated)" : ""}\n`);
+}
+
+async function doCrawl(store: Store, url: string, opts: { maxPages?: number; maxDepth?: number }): Promise<void> {
+  banner();
+  if (!url.trim()) {
+    warn(`Usage: xr research crawl <url> [--max-pages N] [--max-depth N]`);
+    return;
+  }
+  console.log(`${C.bold("🔬 Research crawl")} ${C.dim("url:")} ${url}\n`);
+  const job = await runOp(store, { intent: "crawl", urls: [url.trim()], limits: { maxPages: opts.maxPages, maxDepth: opts.maxDepth } });
+  printJob(job);
+}
+
+async function doMap(store: Store, url: string): Promise<void> {
+  banner();
+  if (!url.trim()) {
+    warn(`Usage: xr research map <url>`);
+    return;
+  }
+  console.log(`${C.bold("🔬 Research map")} ${C.dim("url:")} ${url}\n`);
+  const job = await runOp(store, { intent: "map", urls: [url.trim()] });
+  printJob(job);
+}
+
+async function doExtract(store: Store, url: string, schemaText: string): Promise<void> {
+  banner();
+  if (!url.trim()) {
+    warn(`Usage: xr research extract <url> '<json-schema>'`);
+    return;
+  }
+  let schema: Record<string, unknown> = {};
+  if (schemaText.trim()) {
+    try {
+      schema = JSON.parse(schemaText) as Record<string, unknown>;
+    } catch {
+      warn("Could not parse schema JSON — proceeding without a schema.");
+    }
+  }
+  console.log(`${C.bold("🔬 Research extract")} ${C.dim("url:")} ${url}\n`);
+  const job = await runOp(store, { intent: "extract", urls: [url.trim()], schema });
+  printJob(job);
+}
+
+function doProviders(): void {
+  banner();
+  const { config } = loadConfig();
+  const { pool } = buildResearchPool(config);
+  console.log(`${C.bold("🔬 Research providers")}\n`);
+  for (const p of pool.list()) {
+    console.log(`  ${C.cyan(p.id)} ${C.dim(`(${p.label})`)} → ${p.capabilities().join(", ")}`);
+  }
+}
+
+function doJobStatus(store: Store, id?: string): void {
+  banner();
+  const { registry } = buildOps(store);
+  if (id) {
+    const job = registry.get(id);
+    if (!job) {
+      info(`Research job not found: ${id}`);
+      return;
+    }
+    printJob(job);
+    return;
+  }
+  const jobs = registry.list().length ? registry.list() : [];
+  const persisted = jobs.length ? [] : registry.listPersisted(20);
+  console.log(`${C.bold("🔬 Research jobs")} ${C.dim(`(${jobs.length || persisted.length})`)}\n`);
+  if (!jobs.length && !persisted.length) {
+    info("No research jobs yet. Try: xr research search \"query\"");
+    return;
+  }
+  for (const j of jobs) {
+    console.log(`  ${C.cyan(j.id)} ${statusColor(j.state)} ${C.dim(`(${j.kind})`)}`);
+  }
+  for (const p of persisted) {
+    console.log(`  ${C.cyan(p.id)} ${statusColor(p.status)} ${C.dim(`(${p.kind})`)}`);
+  }
+}
+
+function doCancel(store: Store, id: string | undefined): void {
+  banner();
+  if (!id) {
+    warn(`Usage: xr research cancel <job-id>`);
+    return;
+  }
+  const { registry } = buildOps(store);
+  const result = registry.cancel(id);
+  if (!result.ok) warn(`cancel: ${result.reason}`);
+  else ok(`cancelled ${id}`);
+}
+
 /**
  * Entry point. `argv` is everything AFTER `research`.
  * `override` carries --provider/--model/--budget parsed by index.ts.
@@ -484,7 +646,7 @@ function statusColor(s: string): string {
 export async function handleResearchCommand(
   argv: string[],
   store: Store,
-  override: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean } = {},
+  override: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean; maxPages?: number; maxDepth?: number } = {},
 ): Promise<void> {
   const parsed = parseResearchArgs(argv, override);
   const sub = (parsed.args[0] ?? "").toLowerCase();
@@ -531,6 +693,25 @@ export async function handleResearchCommand(
     case "list":
     case "history":
       return doList(store);
+    // ── Phase 10 — provider operations ──────────────────────────────────────
+    case "search":
+      return doSearch(store, rest);
+    case "scrape":
+      return doScrape(store, rest);
+    case "crawl":
+      return doCrawl(store, rest, { maxPages: parsed.override.maxPages, maxDepth: parsed.override.maxDepth });
+    case "map":
+      return doMap(store, rest);
+    case "extract":
+      return doExtract(store, parsed.args[1], parsed.args.slice(2).join(" "));
+    case "providers":
+      return doProviders();
+    case "jobs":
+      return doJobStatus(store);
+    case "job":
+      return doJobStatus(store, parsed.args[1]);
+    case "cancel":
+      return doCancel(store, parsed.args[1]);
     case "help":
     case "--help":
     case "-h":
@@ -541,7 +722,7 @@ export async function handleResearchCommand(
   }
 }
 
-function parseResearchArgs(argv: string[], base: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean }) {
+function parseResearchArgs(argv: string[], base: { provider?: string; model?: string; budget?: number; allowPublicWeb?: boolean; liveSourcesOnly?: boolean; maxPages?: number; maxDepth?: number }) {
   const args: string[] = [];
   const override = { ...base };
   for (let i = 0; i < argv.length; i++) {
@@ -551,6 +732,8 @@ function parseResearchArgs(argv: string[], base: { provider?: string; model?: st
     else if (a === "--budget") override.budget = Number(argv[++i]);
     else if (a === "--allow-public-web") override.allowPublicWeb = true;
     else if (a === "--live-sources-only") override.liveSourcesOnly = true;
+    else if (a === "--max-pages") override.maxPages = Number(argv[++i]);
+    else if (a === "--max-depth") override.maxDepth = Number(argv[++i]);
     else args.push(a);
   }
   return { args, override };
@@ -576,7 +759,16 @@ function printResearchHelp(): void {
   console.log(`  xr research export [id] [path] write report to markdown (+ json)`);
   console.log(`  xr research refresh [id]       re-check source freshness`);
   console.log(`  xr research remember [id]     save this finding to durable memory`);
-  console.log(`  xr research list               recent research sessions\n`);
+  console.log(`  xr research list               recent research sessions`);
+  console.log(`  xr research search \"q\"        provider search (SearXNG / Firecrawl)`);
+  console.log(`  xr research scrape <url>       scrape one page to clean text`);
+  console.log(`  xr research crawl <url>        bounded async crawl (--max-pages/--max-depth)`);
+  console.log(`  xr research map <url>          map a site's URLs (discovery)`);
+  console.log(`  xr research extract <url> [schema]  structured extraction`);
+  console.log(`  xr research providers          list research providers + capabilities`);
+  console.log(`  xr research jobs               list research jobs`);
+  console.log(`  xr research job <id>           inspect a research job`);
+  console.log(`  xr research cancel <id>        cancel a running research job\n`);
   console.log(`${C.bold("Flags")}`);
   console.log(`  --provider [id]   override provider   --model [id]   override model`);
   console.log(`  --budget [usd]    per-research USD ceiling (cloud providers)`);

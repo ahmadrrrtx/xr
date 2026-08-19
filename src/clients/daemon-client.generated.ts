@@ -66,6 +66,51 @@ export class XRDaemonClient {
     return (await res.json()) as T;
   }
 
+  /** Search the web through XR's research providers (SearXNG / Firecrawl) and return normalized sources. */
+  async researchSearch(body: z.infer<typeof S.ResearchOperationRequest>): Promise<z.infer<typeof S.ResearchJobResponse>> {
+    return await this.call("POST", "/api/v1/research/search", body);
+  }
+
+  /** Scrape one public URL into normalized markdown/text with metadata, content hash, and citations. */
+  async researchScrape(body: z.infer<typeof S.ResearchOperationRequest>): Promise<z.infer<typeof S.ResearchJobResponse>> {
+    return await this.call("POST", "/api/v1/research/scrape", body);
+  }
+
+  /** Map a site's URLs (discovery only). */
+  async researchMap(body: z.infer<typeof S.ResearchOperationRequest>): Promise<z.infer<typeof S.ResearchJobResponse>> {
+    return await this.call("POST", "/api/v1/research/map", body);
+  }
+
+  /** Start a bounded async crawl job (poll GET /api/research/jobs/{id} or stream /api/research/stream/{id}). */
+  async researchCrawl(body: z.infer<typeof S.ResearchOperationRequest>): Promise<z.infer<typeof S.ResearchJobResponse>> {
+    return await this.call("POST", "/api/v1/research/crawl", body);
+  }
+
+  /** Extract schema-validated structured data from URLs. */
+  async researchExtract(body: z.infer<typeof S.ResearchOperationRequest>): Promise<z.infer<typeof S.ResearchJobResponse>> {
+    return await this.call("POST", "/api/v1/research/extract", body);
+  }
+
+  /** List research jobs (live + persisted). */
+  async researchJobsList(): Promise<z.infer<typeof S.ResearchJobsListResponse>> {
+    return await this.call("GET", "/api/v1/research/jobs");
+  }
+
+  /** Inspect one research job by id. */
+  async researchJobsGet(id: string): Promise<z.infer<typeof S.ResearchJobResponse>> {
+    return await this.call("GET", `/api/v1/research/jobs/${encodeURIComponent(id)}`);
+  }
+
+  /** Cancel a running research job (truthful cancelled state; partial results preserved). */
+  async researchJobsCancel(id: string): Promise<z.infer<typeof S.OkResponse>> {
+    return await this.call("POST", `/api/v1/research/jobs/${encodeURIComponent(id)}/cancel`);
+  }
+
+  /** Stream research progress as Server-Sent Events. (SSE stream — returns the raw Response). */
+  async researchJobsStream(id: string): Promise<Response> {
+    return await this.raw("GET", `/api/v1/research/stream/${encodeURIComponent(id)}`);
+  }
+
   /** Liveness/version health probe (unauthenticated). */
   async healthGet(): Promise<z.infer<typeof S.HealthResponse>> {
     return await this.call("GET", "/api/v1/health");
