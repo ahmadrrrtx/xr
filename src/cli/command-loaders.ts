@@ -47,6 +47,7 @@ export const COMMAND_LOADERS: Readonly<Record<string, CommandLoaderEntry>> = {
   control: { path: "../commands/install.ts", symbol: "ControlCommand" },
   env: { path: "../commands/install.ts", symbol: "EnvironmentCommand" },
   research: { path: "../commands/install.ts", symbol: "ResearchCommand" },
+  repo: { path: "../commands/repo.ts", symbol: "RepoCommand" },
   uninstall: { path: "../commands/uninstall.ts", symbol: "UninstallCommand" },
   // Core config / providers.
   config: { path: "../commands/config.ts", symbol: "ConfigCommand" },
@@ -144,6 +145,8 @@ async function importCommandModule(path: string): Promise<Record<string, new () 
       return (await import("../commands/enterprise.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/evaluate.ts":
       return (await import("../commands/evaluate.ts")) as unknown as Record<string, new () => Command>;
+    case "../commands/repo.ts":
+      return (await import("../commands/repo.ts")) as unknown as Record<string, new () => Command>;
     default:
       throw new Error(`command-loaders: no literal import for "${path}"`);
   }

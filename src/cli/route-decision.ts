@@ -32,6 +32,8 @@ const REGISTRY_NAME: Record<string, string> = {
   ask: "ask",
   plan: "plan",
   research: "research",
+  repo: "repo",
+  repomap: "repo",
   agents: "agents",
   agent: "agents",
   control: "control",

@@ -18,6 +18,7 @@ import { fetchUrlTool, webSearchTool, checkPackageTool } from "./web.ts";
 import { SYSTEM_TOOLS } from "../computer/system-control.ts";
 import { computerControlTool } from "./control.ts";
 import { RESEARCH_TOOLS } from "../research/tools.ts";
+import { REPO_TOOLS } from "../repo/tools.ts";
 
 const ALL: Tool[] = [
   // File operations
@@ -33,6 +34,8 @@ const ALL: Tool[] = [
   checkPackageTool,
   // Phase 10 — research capabilities (search/scrape/crawl/map/extract)
   ...RESEARCH_TOOLS,
+  // Phase 11 — repository intelligence (map/search/symbols/deps/context/diff)
+  ...REPO_TOOLS,
   // JARVIS system control (cross-platform)
   ...SYSTEM_TOOLS,
   // v0.8.1 — safe multi-step computer control (planner-driven)
@@ -40,7 +43,7 @@ const ALL: Tool[] = [
 ];
 
 // Read-only tools — safe in plan/ask modes (no state change, no exec, no system access)
-const READ_ONLY = ["read_file", "list_dir", "fetch_url", "web_search", "check_package", "system_apps", "system_clipboard_read", "research_search", "research_scrape", "research_crawl", "research_map", "research_extract"];
+const READ_ONLY = ["read_file", "list_dir", "fetch_url", "web_search", "check_package", "system_apps", "system_clipboard_read", "research_search", "research_scrape", "research_crawl", "research_map", "research_extract", "repo_map", "repo_search", "repo_symbols", "repo_dependencies", "repo_context", "repo_diff"];
 
 // Agent gets everything
 const MODE_ALLOW: Record<Mode, string[]> = {

@@ -1,0 +1,34 @@
+{
+  "measuredAt": "2026-08-19T10:34:09.698Z",
+  "host": {
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "initial": {
+    "files": 121,
+    "durationMs": 46,
+    "cacheMisses": 121
+  },
+  "incremental": {
+    "durationMs": 12,
+    "changedFiles": 0,
+    "cacheHits": 121,
+    "cacheMisses": 0,
+    "hitRate": 1
+  },
+  "query": {
+    "p50": 0.35963599999999474,
+    "p95": 0.6270269999999982,
+    "samples": 21
+  },
+  "repoMap": {
+    "p50": 8.425846000000007,
+    "p95": 14.203632999999968,
+    "tokens": 624,
+    "budget": 1024,
+    "files": 121,
+    "symbols": 122,
+    "estimator": "xr-code-approx-v1",
+    "tokenCheck": 624
+  }
+}

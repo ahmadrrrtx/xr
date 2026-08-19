@@ -25,7 +25,7 @@
  *   L2 Platform   src/tools, src/plugins, src/skills, src/mcp,
  *                 src/platform/**, src/capabilities/** (Phase 08 unified),
  *                 src/integrations, src/computer,
- *                 src/automation, src/local, src/research
+ *                 src/automation, src/local, src/research, src/repo
  *   L3/L4         plugins + skills are packaged out-of-tree; their HOSTS are L2
  *   L5 Business   extensions/business-os (governed extension over L0)
  *   L6 Enterprise src/enterprise/** (incl. deployment, evaluation, baseline)
@@ -112,7 +112,7 @@ module.exports = {
       to: {
         path:
           "^src/(execution|context|intelligence|providers|agents|control|runtime|services|reliability|" +
-          "tools|plugins|skills|mcp|platform|capabilities|integrations|computer|automation|local|research|" +
+          "tools|plugins|skills|mcp|platform|capabilities|integrations|computer|automation|local|research|repo|" +
           "business|enterprise|" +
           "interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)/",
         pathNot:

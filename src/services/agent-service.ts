@@ -27,6 +27,8 @@ import {
 import { runEnvelope, type EnvelopeContext, type EnvelopeStores } from "../core/execution/runner.ts";
 import { buildToolRegistry } from "../tools/registry-builder.ts";
 import { buildMemoryTools } from "../context/tools.ts";
+import { projectScopeFromCwd } from "../context/memory/store.ts";
+import { buildRepoCandidates, createRepoIntelligence, isRepoIntelligenceEnabled } from "../repo/index.ts";
 import { ProviderService } from "./provider-service.ts";
 import { BudgetService } from "./budget-service.ts";
 import { ConfigService } from "./config-service.ts";
@@ -320,6 +322,26 @@ export class AgentService implements LifecycleHook {
       try {
         const contextSvc = this.registry.tryResolve(Tokens.Context);
         if (contextSvc) {
+          // Phase 11 — seed a token-budgeted repo map when the index is already
+          // ready. Never await a cold index here (TTFT). A miss starts
+          // background indexing; the model can still request repo_* tools.
+          const repoExtras = isRepoIntelligenceEnabled()
+            ? await buildRepoCandidates(
+                createRepoIntelligence({
+                  workspaceId: unifiedStore.workspaceId,
+                  root: process.cwd(),
+                  store: unifiedStore,
+                }),
+                {
+                  workspaceId: unifiedStore.workspaceId,
+                  projectScope: projectScopeFromCwd(process.cwd()),
+                  task,
+                },
+              ).catch((err) => {
+                diagnostics.push(`repo context degraded: ${err instanceof Error ? err.message : String(err)}`);
+                return [];
+              })
+            : [];
           const pkg = await contextSvc.requestContext(
             {
               requester: { kind: "agent", id: "primary", role: overrides.agentRole ?? "agent" },
@@ -336,7 +358,7 @@ export class AgentService implements LifecycleHook {
               lexicalOnly: config.knowledge.lexicalOnly,
               ...(overrides.runId ? { runId: overrides.runId } : {}),
             },
-            { memoryEnabled: memoryOn, memoryStore: engine },
+            { memoryEnabled: memoryOn, memoryStore: engine, extras: repoExtras },
           );
           (envelopeContext as { contextPackage?: unknown }).contextPackage = pkg;
           (envelopeContext as { contextMode?: string }).contextMode = config.knowledge.injectionMode;

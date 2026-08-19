@@ -74,6 +74,12 @@ export function inferPermissionsFromToolName(name: string): CapabilityPermission
   switch (name) {
     case "read_file":
     case "list_dir":
+    case "repo_map":
+    case "repo_search":
+    case "repo_symbols":
+    case "repo_dependencies":
+    case "repo_context":
+    case "repo_diff":
       return ["filesystem.read"];
     case "write_file":
       return ["filesystem.write"];
