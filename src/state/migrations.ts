@@ -277,7 +277,87 @@ const MIGRATION_3: Migration = {
   },
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3];
+/**
+ * Migration 4 — Phase 11 · Repository Intelligence tables.
+ * Additive: repo_files / repo_symbols / repo_edges / repo_index_meta /
+ * repo_parse_cache. Down drops them. Audit chain untouched.
+ */
+const MIGRATION_4: Migration = {
+  version: 4,
+  name: "repo_intelligence",
+  up(store: WorkspaceStore) {
+    store.exec(`
+      CREATE TABLE IF NOT EXISTS repo_index_meta (
+        workspace_id TEXT NOT NULL,
+        root TEXT NOT NULL,
+        git_root TEXT,
+        state TEXT NOT NULL,
+        index_version INTEGER NOT NULL,
+        parser_version INTEGER NOT NULL,
+        indexed_at INTEGER NOT NULL,
+        error TEXT,
+        stats_json TEXT NOT NULL DEFAULT '{}',
+        PRIMARY KEY (workspace_id)
+      );
+      CREATE TABLE IF NOT EXISTS repo_files (
+        workspace_id TEXT NOT NULL,
+        path TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        language TEXT,
+        git_status TEXT NOT NULL DEFAULT 'unknown',
+        indexed_at INTEGER NOT NULL,
+        parser_confidence TEXT NOT NULL DEFAULT 'none',
+        PRIMARY KEY (workspace_id, path)
+      );
+      CREATE INDEX IF NOT EXISTS idx_repo_files_hash ON repo_files(workspace_id, content_hash);
+      CREATE TABLE IF NOT EXISTS repo_symbols (
+        workspace_id TEXT NOT NULL,
+        symbol_id TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        start_line INTEGER NOT NULL,
+        end_line INTEGER NOT NULL,
+        signature TEXT,
+        exported INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (workspace_id, symbol_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_repo_symbols_name ON repo_symbols(workspace_id, name);
+      CREATE INDEX IF NOT EXISTS idx_repo_symbols_file ON repo_symbols(workspace_id, file_path);
+      CREATE TABLE IF NOT EXISTS repo_edges (
+        workspace_id TEXT NOT NULL,
+        from_file TEXT NOT NULL,
+        to_file TEXT NOT NULL,
+        edge_type TEXT NOT NULL,
+        symbol TEXT,
+        kind TEXT NOT NULL,
+        specifier TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, from_file, to_file, edge_type, specifier)
+      );
+      CREATE INDEX IF NOT EXISTS idx_repo_edges_to ON repo_edges(workspace_id, to_file);
+      CREATE TABLE IF NOT EXISTS repo_parse_cache (
+        workspace_id TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        parser_version INTEGER NOT NULL,
+        language TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, content_hash, parser_version)
+      );
+    `);
+  },
+  down(store: WorkspaceStore) {
+    store.exec(`
+      DROP TABLE IF EXISTS repo_parse_cache;
+      DROP TABLE IF EXISTS repo_edges;
+      DROP TABLE IF EXISTS repo_symbols;
+      DROP TABLE IF EXISTS repo_files;
+      DROP TABLE IF EXISTS repo_index_meta;
+    `);
+  },
+};
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4];
 
 /** Latest known schema version. */
 export const LATEST_SCHEMA_VERSION: number = MIGRATIONS.reduce(

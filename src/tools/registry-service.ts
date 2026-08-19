@@ -96,6 +96,13 @@ const READ_ONLY_CORE = new Set([
   "research_crawl",
   "research_map",
   "research_extract",
+  // Phase 11 — repository intelligence is read-only.
+  "repo_map",
+  "repo_search",
+  "repo_symbols",
+  "repo_dependencies",
+  "repo_context",
+  "repo_diff",
 ]);
 
 /**

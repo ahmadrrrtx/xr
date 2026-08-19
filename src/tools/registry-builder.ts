@@ -78,6 +78,7 @@ function coreMetadataForTool(toolName: string): CapabilityMetadata {
   const perms = inferPermissionsFromToolName(toolName);
   const isHost = toolName === "computer_control" || toolName.startsWith("system_");
   const isNetwork = ["fetch_url", "web_search", "check_package", "research_search", "research_scrape", "research_crawl", "research_map", "research_extract"].includes(toolName);
+  const isRepo = toolName.startsWith("repo_");
   const isShell = toolName === "shell";
   const isWrite = toolName === "write_file" || toolName === "delete_file";
 
@@ -87,7 +88,7 @@ function coreMetadataForTool(toolName: string): CapabilityMetadata {
   else if (isNetwork) riskTier = "tier1";
 
   let scope: CapabilityMetadata["scope"] = "shared";
-  if (["read_file", "write_file", "list_dir", "delete_file"].includes(toolName)) scope = "workspace";
+  if (["read_file", "write_file", "list_dir", "delete_file"].includes(toolName) || isRepo) scope = "workspace";
   else if (isHost) scope = "host";
   else if (isNetwork) scope = "shared";
 

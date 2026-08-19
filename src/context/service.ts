@@ -221,7 +221,7 @@ export class ContextService implements LifecycleHook {
       // Memory disabled → no long-term memory tier, but task/instruction context
       // still flows so the agent keeps working (§10.6 preserve behavior).
       const g = buildGrant(
-        { ...grantReq, requestedTiers: (req.tiers ?? ["immediate", "recent", "task_summary", "instructions"]) },
+        { ...grantReq, requestedTiers: (req.tiers ?? ["immediate", "recent", "task_summary", "project_knowledge", "instructions"]) },
         { memoryScopeKind: req.memoryScopeKind, includeUserMemory: false },
       );
       return { ...g, allowedTiers: g.allowedTiers.filter((t) => t !== "long_term_memory") };
@@ -248,7 +248,7 @@ export class ContextService implements LifecycleHook {
    */
   async requestContext(
     req: RequestContextOptions,
-    opts: { memoryEnabled?: boolean; memoryStore?: MemoryStore } = {},
+    opts: { memoryEnabled?: boolean; memoryStore?: MemoryStore; extras?: readonly ExternalCandidate[] } = {},
   ): Promise<ContextPackage> {
     const grant = this.grant(req, opts);
     return this.assembleWithGrant(grant, req, opts);
@@ -258,7 +258,7 @@ export class ContextService implements LifecycleHook {
   async assembleWithGrant(
     grant: ContextGrant,
     req: RequestContextOptions,
-    opts: { memoryEnabled?: boolean; memoryStore?: MemoryStore } = {},
+    opts: { memoryEnabled?: boolean; memoryStore?: MemoryStore; extras?: readonly ExternalCandidate[] } = {},
   ): Promise<ContextPackage> {
     if (this.route.reason === "not yet routed") this.refreshRoute();
 
@@ -268,7 +268,8 @@ export class ContextService implements LifecycleHook {
     const assembler = new ContextAssembler(this.repo, retrieval);
 
     // Adapt durable user memory into candidates when the grant allows the tier.
-    const extra: ExternalCandidate[] = [];
+    // Phase 11 extras (repo map, research facts) share this path — no privileged lane.
+    const extra: ExternalCandidate[] = [...(opts.extras ?? [])];
     if (grant.allowedTiers.includes("long_term_memory") && opts.memoryEnabled !== false) {
       try {
         const mem = opts.memoryStore ?? new IsolatedMemoryStore(this.store);

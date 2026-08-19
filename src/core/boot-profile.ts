@@ -140,6 +140,7 @@ export const COMMAND_PROFILES: Readonly<Record<string, readonly string[] | null>
   control: ["state"],
   env: ["state"],
   research: ["state"],
+  repo: ["state"],
 
   // Config + provider plane.
   config: ["config"],

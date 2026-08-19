@@ -40,6 +40,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `src/plugins/` | @ahmadrrrtx | explicit entry |
 | `src/providers/` | @ahmadrrrtx | explicit entry |
 | `src/reliability/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `src/repo/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/research/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/runtime/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/schemas/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -100,6 +101,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/release/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/reliability.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/reliability/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/repo-map/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/research.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/research/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/security.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -164,6 +166,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/provider-canaries.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/recall-benchmark.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-manifest.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/repo-intelligence-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/size-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sums.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
