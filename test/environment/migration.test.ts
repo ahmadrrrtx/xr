@@ -1,5 +1,5 @@
 /**
- * XR 5.1/5.2+ — Config migration 15 → 18 tests (additive, behavior-preserving).
+ * XR 5.1/5.2+ — Config migration 15 → 20 tests (additive, behavior-preserving).
  *
  * The migration chain is tested directly on raw objects (no disk, no shared
  * config-cache state), so results are identical regardless of which test files
@@ -21,14 +21,14 @@ const LEGACY_V15 = {
   budget: { perTaskUsd: 0.25, perTaskTokens: 200000 },
 };
 
-describe("config migration 15 → 19 (raw chain)", () => {
+describe("config migration 15 → 20 (raw chain)", () => {
   test("CONFIG_VERSION is 19", () => {
-    expect(CONFIG_VERSION).toBe(19);
+    expect(CONFIG_VERSION).toBe(20);
   });
 
   test("a v15 config gains the environment block with safe defaults", () => {
     const raw = migrateRawConfig(structuredClone(LEGACY_V15)) as Record<string, any>;
-    expect(raw.version).toBe(19);
+    expect(raw.version).toBe(20);
     const env = raw.environment;
     expect(env.enabled).toBe(true);
     expect(env.modalities).toEqual({
@@ -56,6 +56,12 @@ describe("config migration 15 → 19 (raw chain)", () => {
     // Phase 04 - healthTimeoutMs separate
     expect(raw.providerEngine.healthTimeoutMs).toBe(2500);
     expect(raw.providerEngine.requestTimeoutMs).toBe(120_000);
+    // Phase 10 - research providers: Firecrawl OFF by default, limits bounded.
+    expect(raw.research.firecrawl.enabled).toBe(false);
+    expect(raw.research.firecrawl.baseUrl).toBe("https://api.firecrawl.dev");
+    expect(raw.research.maxPages).toBe(20);
+    expect(raw.research.maxDepth).toBe(2);
+    expect(raw.research.sameDomainOnly).toBe(false);
   });
 
   test("existing blocks are preserved by the migration", () => {
@@ -73,7 +79,7 @@ describe("config migration 15 → 19 (raw chain)", () => {
       environment: { enabled: false, modalities: { browser: false } },
     };
     const raw = migrateRawConfig(legacyWithEnv) as Record<string, any>;
-    expect(raw.version).toBe(19);
+    expect(raw.version).toBe(20);
     expect(raw.environment.enabled).toBe(false);
     expect(raw.environment.modalities.browser).toBe(false);
     expect(raw.capabilities.enabled).toBe(true);
@@ -86,7 +92,7 @@ describe("config migration 15 → 19 (raw chain)", () => {
       environment: { enabled: true },
       capabilities: { enabled: false, requireSignedPackages: true },
     }) as Record<string, any>;
-    expect(raw.version).toBe(19);
+    expect(raw.version).toBe(20);
     expect(raw.capabilities.enabled).toBe(false);
     expect(raw.capabilities.requireSignedPackages).toBe(true);
   });
@@ -95,7 +101,7 @@ describe("config migration 15 → 19 (raw chain)", () => {
     const parsed = ConfigSchema.safeParse(migrateRawConfig(structuredClone(LEGACY_V15)));
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.version).toBe(19);
+      expect(parsed.data.version).toBe(20);
       expect(parsed.data.environment.vision.allowCloud).toBe(false);
       expect(parsed.data.capabilities.updateRequiresReview).toBe(true);
       expect(parsed.data.control.enabled).toBe(true);
@@ -105,7 +111,7 @@ describe("config migration 15 → 19 (raw chain)", () => {
   test("a v17 config does not re-migrate (idempotent)", () => {
     const once = migrateRawConfig(structuredClone(LEGACY_V15)) as Record<string, any>;
     const twice = migrateRawConfig(once) as Record<string, any>;
-    expect(twice.version).toBe(19);
+    expect(twice.version).toBe(20);
     expect(JSON.stringify(twice.environment)).toBe(JSON.stringify(once.environment));
     expect(JSON.stringify(twice.capabilities)).toBe(JSON.stringify(once.capabilities));
   });

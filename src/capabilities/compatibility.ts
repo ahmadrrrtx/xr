@@ -82,8 +82,15 @@ export function inferPermissionsFromToolName(name: string): CapabilityPermission
     case "shell":
       return ["runtime.shell", "filesystem.read", "filesystem.write"];
     case "fetch_url":
-    case "web_search":
     case "check_package":
+      return ["network.fetch"];
+    case "web_search":
+    case "research_search":
+      return ["network.search"];
+    case "research_scrape":
+    case "research_crawl":
+    case "research_map":
+    case "research_extract":
       return ["network.fetch"];
     case "system_open_app":
     case "system_clipboard_write":

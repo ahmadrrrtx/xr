@@ -47,6 +47,9 @@ import {
   FilesReadResponse,
   FilesDiffRequest,
   FilesDiffResponse,
+  ResearchOperationRequest,
+  ResearchJobResponse,
+  ResearchJobsListResponse,
 } from "./schemas.ts";
 
 export type Stability = "stable" | "experimental";
@@ -127,6 +130,73 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     stability: "experimental",
     template: "/api/research/{id}",
     pathParams: [{ name: "id", description: "Research run id." }],
+  },
+
+  // ── research operations + jobs (Phase 10) ──────────────────────────────────
+  "research.search": {
+    summary: "Search the web through XR's research providers (SearXNG / Firecrawl) and return normalized sources.",
+    tag: "research",
+    stability: "experimental",
+    request: ResearchOperationRequest,
+    response: ResearchJobResponse,
+  },
+  "research.scrape": {
+    summary: "Scrape one public URL into normalized markdown/text with metadata, content hash, and citations.",
+    tag: "research",
+    stability: "experimental",
+    request: ResearchOperationRequest,
+    response: ResearchJobResponse,
+  },
+  "research.map": {
+    summary: "Map a site's URLs (discovery only).",
+    tag: "research",
+    stability: "experimental",
+    request: ResearchOperationRequest,
+    response: ResearchJobResponse,
+  },
+  "research.crawl": {
+    summary: "Start a bounded async crawl job (poll GET /api/research/jobs/{id} or stream /api/research/stream/{id}).",
+    tag: "research",
+    stability: "experimental",
+    request: ResearchOperationRequest,
+    response: ResearchJobResponse,
+  },
+  "research.extract": {
+    summary: "Extract schema-validated structured data from URLs.",
+    tag: "research",
+    stability: "experimental",
+    request: ResearchOperationRequest,
+    response: ResearchJobResponse,
+  },
+  "research.jobs.list": {
+    summary: "List research jobs (live + persisted).",
+    tag: "research",
+    stability: "stable",
+    response: ResearchJobsListResponse,
+  },
+  "research.jobs.get": {
+    summary: "Inspect one research job by id.",
+    tag: "research",
+    stability: "stable",
+    template: "/api/research/jobs/{id}",
+    pathParams: [{ name: "id", description: "Research job id." }],
+    response: ResearchJobResponse,
+  },
+  "research.jobs.cancel": {
+    summary: "Cancel a running research job (truthful cancelled state; partial results preserved).",
+    tag: "research",
+    stability: "stable",
+    template: "/api/research/jobs/{id}/cancel",
+    pathParams: [{ name: "id", description: "Research job id." }],
+    response: OkResponse,
+  },
+  "research.jobs.stream": {
+    summary: "Stream research progress as Server-Sent Events.",
+    tag: "research",
+    stability: "experimental",
+    sse: true,
+    template: "/api/research/stream/{id}",
+    pathParams: [{ name: "id", description: "Research job id." }],
   },
   "recovery.status.get": { summary: "Durable-execution recovery status (unresolved work, RPO/RTO).", tag: "system", stability: "stable" },
   "config.safe.get": { summary: "Effective configuration with secrets redacted.", tag: "system", stability: "stable" },

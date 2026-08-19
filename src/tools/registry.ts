@@ -17,6 +17,7 @@ import { listDirTool, deleteFileTool, shellTool } from "./system.ts";
 import { fetchUrlTool, webSearchTool, checkPackageTool } from "./web.ts";
 import { SYSTEM_TOOLS } from "../computer/system-control.ts";
 import { computerControlTool } from "./control.ts";
+import { RESEARCH_TOOLS } from "../research/tools.ts";
 
 const ALL: Tool[] = [
   // File operations
@@ -30,6 +31,8 @@ const ALL: Tool[] = [
   fetchUrlTool,
   webSearchTool,
   checkPackageTool,
+  // Phase 10 — research capabilities (search/scrape/crawl/map/extract)
+  ...RESEARCH_TOOLS,
   // JARVIS system control (cross-platform)
   ...SYSTEM_TOOLS,
   // v0.8.1 — safe multi-step computer control (planner-driven)
@@ -37,7 +40,7 @@ const ALL: Tool[] = [
 ];
 
 // Read-only tools — safe in plan/ask modes (no state change, no exec, no system access)
-const READ_ONLY = ["read_file", "list_dir", "fetch_url", "web_search", "check_package", "system_apps", "system_clipboard_read"];
+const READ_ONLY = ["read_file", "list_dir", "fetch_url", "web_search", "check_package", "system_apps", "system_clipboard_read", "research_search", "research_scrape", "research_crawl", "research_map", "research_extract"];
 
 // Agent gets everything
 const MODE_ALLOW: Record<Mode, string[]> = {

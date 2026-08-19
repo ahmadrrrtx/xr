@@ -80,12 +80,15 @@ function buildClient(ops: ApiOperation[], schemaNames: Map<unknown, string>): st
       : JSON.stringify(op.path);
 
     if (op.meta.sse) {
+      // Phase 10 — SSE routes may have no request body (GET streams). Use the
+      // route's real method and only pass `body` when a request schema exists.
+      const bodyArg = reqName ? ", body" : "";
       methods.push({
         name,
         source:
           `  /** ${op.meta.summary} (SSE stream — returns the raw Response). */\n` +
           `  async ${name}(${sig.replace(/^, /, "")}): Promise<Response> {\n` +
-          `    return await this.raw("POST", ${pathExpr}, body);\n` +
+          `    return await this.raw("${op.method}", ${pathExpr}${bodyArg});\n` +
           `  }`,
       });
       continue;

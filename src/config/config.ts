@@ -23,7 +23,7 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 19; // Phase 04 — Provider Gateway: healthTimeoutMs separate
+export const CONFIG_VERSION = 20; // Phase 10 — research providers (Firecrawl) + limits
 
 // Phase 04 — health vs request timeout separation
 export const DEFAULT_HEALTH_TIMEOUT_MS = 2500;
@@ -529,6 +529,39 @@ const ConfigSchema = z.object({
     })
     .default({}),
   /**
+   * Phase 10 — Web Research / Firecrawl.
+   * Provider-agnostic: SearXNG + direct fetch always work when configured;
+   * Firecrawl is an OPTIONAL provider (off by default). Limits are bounded —
+   * a missing limit never means infinite. Secrets come from the env var named
+   * by `firecrawl.apiKeyEnv` (never inline in config).
+   */
+  research: z
+    .object({
+      firecrawl: z
+        .object({
+          enabled: z.boolean().default(false),
+          baseUrl: z.string().url().default("https://api.firecrawl.dev"),
+          apiKeyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/).default("FIRECRAWL_API_KEY"),
+          timeoutMs: z.number().int().positive().max(300_000).default(30_000),
+          maxPages: z.number().int().min(1).max(500).default(20),
+          maxDepth: z.number().int().min(0).max(10).default(2),
+          maxConcurrency: z.number().int().min(1).max(10).default(2),
+        })
+        .default({}),
+      maxPages: z.number().int().min(1).max(500).default(20),
+      maxDepth: z.number().int().min(0).max(10).default(2),
+      maxConcurrency: z.number().int().min(1).max(8).default(3),
+      maxRequests: z.number().int().min(1).max(1000).default(50),
+      maxBytes: z.number().int().min(1024).max(64 * 1024 * 1024).default(4 * 1024 * 1024),
+      maxDurationMs: z.number().int().min(1000).max(3_600_000).default(120_000),
+      allowedDomains: z.array(z.string().max(200)).max(200).default([]),
+      blockedDomains: z.array(z.string().max(200)).max(500).default([]),
+      sameDomainOnly: z.boolean().default(false),
+      includeSubdomains: z.boolean().default(true),
+      allowPublicWeb: z.boolean().default(false),
+    })
+    .default({}),
+  /**
    * Phase 8 · T2 — privacy-respecting telemetry (Constitution Art. XXI).
    * OPT-IN: `enabled` defaults to false (nothing is emitted or exported);
    * structural-by-default (durations, model/tool names, token counts,
@@ -919,6 +952,38 @@ export const MIGRATIONS: Record<number, (raw: any) => any> = {
       ...raw.providerEngine,
     },
   }),
+  // 19 -> 20: Phase 10 — research providers (Firecrawl) + bounded limits.
+  // Additive and behavior-preserving: SearXNG/direct-fetch keep working, the
+  // Firecrawl provider is OFF by default, and every limit has a safe ceiling.
+  19: (raw) => {
+    const r = (raw as { research?: any }).research ?? {};
+    return {
+      ...raw,
+      version: 20,
+      research: {
+        maxPages: r.maxPages ?? 20,
+        maxDepth: r.maxDepth ?? 2,
+        maxConcurrency: r.maxConcurrency ?? 3,
+        maxRequests: r.maxRequests ?? 50,
+        maxBytes: r.maxBytes ?? 4 * 1024 * 1024,
+        maxDurationMs: r.maxDurationMs ?? 120_000,
+        allowedDomains: r.allowedDomains ?? [],
+        blockedDomains: r.blockedDomains ?? [],
+        sameDomainOnly: r.sameDomainOnly ?? false,
+        includeSubdomains: r.includeSubdomains ?? true,
+        allowPublicWeb: r.allowPublicWeb ?? false,
+        firecrawl: {
+          enabled: r.firecrawl?.enabled ?? false,
+          baseUrl: r.firecrawl?.baseUrl ?? "https://api.firecrawl.dev",
+          apiKeyEnv: r.firecrawl?.apiKeyEnv ?? "FIRECRAWL_API_KEY",
+          timeoutMs: r.firecrawl?.timeoutMs ?? 30_000,
+          maxPages: r.firecrawl?.maxPages ?? 20,
+          maxDepth: r.firecrawl?.maxDepth ?? 2,
+          maxConcurrency: r.firecrawl?.maxConcurrency ?? 2,
+        },
+      },
+    };
+  },
 };
 
 function migrate(raw: any): any {
@@ -1168,6 +1233,7 @@ const PROVIDER_KEY_ENVS = [
   "FIREWORKS_API_KEY",
   "SAMBANOVA_API_KEY",
   "HF_API_KEY",
+  "FIRECRAWL_API_KEY",
 ];
 
 /**

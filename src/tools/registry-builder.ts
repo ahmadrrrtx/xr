@@ -77,7 +77,7 @@ function describe(err: unknown): string {
 function coreMetadataForTool(toolName: string): CapabilityMetadata {
   const perms = inferPermissionsFromToolName(toolName);
   const isHost = toolName === "computer_control" || toolName.startsWith("system_");
-  const isNetwork = ["fetch_url", "web_search", "check_package"].includes(toolName);
+  const isNetwork = ["fetch_url", "web_search", "check_package", "research_search", "research_scrape", "research_crawl", "research_map", "research_extract"].includes(toolName);
   const isShell = toolName === "shell";
   const isWrite = toolName === "write_file" || toolName === "delete_file";
 

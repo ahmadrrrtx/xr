@@ -101,6 +101,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/reliability.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/reliability/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/research.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/research/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/security.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/security/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/services/` | @ahmadrrrtx | default (@ahmadrrrtx) |

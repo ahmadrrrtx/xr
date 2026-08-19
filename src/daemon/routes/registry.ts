@@ -23,12 +23,16 @@ import { systemRoutes } from "./system.routes.ts";
 import { onboardingRoutes } from "./onboarding.routes.ts";
 import { filesRoutes } from "./files.routes.ts";
 import { trustRoutes } from "./trust.routes.ts";
+import { researchRoutes } from "./research.routes.ts";
 import type { DaemonRoute } from "./router.ts";
 import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
 
 /** Base daemon routes (everything except the Phase-8 meta routes). */
 export function listBaseRoutes(): DaemonRoute[] {
   return [
+    // Phase 10 — research routes precede system routes so job paths resolve
+    // before the `research.get` prefix route (GET /api/research/{id}).
+    ...researchRoutes(),
     ...systemRoutes(),
     ...onboardingRoutes(),
     ...filesRoutes(),
