@@ -20,6 +20,10 @@ function renderSessionList() {
     || (s.title || "").toLowerCase().indexOf(q) !== -1
     || (s.id || "").toLowerCase().indexOf(q) !== -1
     || (s.status || "").toLowerCase().indexOf(q) !== -1);
+  if (!rows.length && !q) {
+    box.innerHTML = '<div class="empty-teach"><strong>No sessions yet.</strong><p class="muted">Start your first task — ask XR to analyze this repository.</p><button type="button" class="btn btn-primary" data-xr-action="' + act('navigateTo', 'chat') + '">Open chat</button></div>';
+    return;
+  }
   box.innerHTML = rows.length ? rows.map(s => {
     const bClass = s.status === "done" ? "badge-green" : s.status === "running" ? "badge-cyan" : "badge-amber";
     // Phase G a11y fix — the Copy button must be a SIBLING of the row, never
@@ -375,7 +379,7 @@ async function loadMemory() {
           <button class="btn btn-danger xr-s-11" data-xr-action="\${act('deleteMemory', e.id)}" title="Delete permanently">✕</button>
         </div>
       </div>
-    \`).join("") : "<div class='muted'>Durable vector memory is empty.</div>";
+    \`).join("") : "<div class='empty-teach'><strong>No memory yet.</strong><p class='muted'>Memory appears as XR learns durable context you ask it to keep.</p></div>";
   } catch {}
 }
 
@@ -447,14 +451,14 @@ async function loadResearchPanel() {
     document.getElementById("research-latest").innerHTML = latest.topic ? \`
       <strong>\${escapeHtml(latest.topic)}</strong>
       <p class="muted xr-s-89">\${escapeHtml(latest.synthesis?.shortAnswer || latest.summary || "Draft synthesized OK")}</p>
-    \` : "<div class='muted'>No active research runs.</div>";
+    \` : "<div class='empty-teach'><strong>No research yet.</strong><p class='muted'>Ask XR to research a topic, or run: xr research &quot;…&quot;</p></div>";
 
     document.getElementById("research-list").innerHTML = recent.length ? recent.map(r => \`
       <div class="stat-row xr-s-90" role="button" tabindex="0" data-xr-action="\${act('loadResearchDetail', r.id)}">
         <div><strong>\${escapeHtml(r.topic)}</strong><br><span class="muted">\${r.id}</span></div>
         <span class="badge \${r.status === "done" ? "badge-green" : "badge-gray"}">\${r.status}</span>
       </div>
-    \`).join("") : "<div class='muted'>No previous research logs.</div>";
+    \`).join("") : "<div class='empty-teach'><strong>No research yet.</strong><p class='muted'>Ask XR to research a topic, or run: xr research &quot;…&quot;</p></div>";
   } catch {}
 }
 

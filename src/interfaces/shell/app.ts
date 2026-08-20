@@ -8,11 +8,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { loadConfig, saveConfig, isMemoryEnabled } from "../../config/config.ts";
-import { buildProvider, knownProviders } from "../../providers/factory.ts";
+import { buildProvider } from "../../providers/factory.ts";
 import { priceFor, isLocal } from "../../cost/pricing.ts";
 import { Store } from "../../state/workspace-store.ts";
 import { MemoryStore, projectScopeFromCwd, type CaptureOutcome } from "../../context/memory/store.ts";
-import { detectRuntime } from "../../local/runtimes.ts";
 import { runLab } from "../../security/lab.ts";
 import { buildAuditReport } from "../../export/report.ts";
 import { executeOnSurface } from "../../services/surface-execution.ts";
@@ -25,9 +24,12 @@ import { computeLayout } from "./layout.ts";
 import { assembleFrame } from "./render.ts";
 import type {
   ShellState, ModeState, Severity, ProjectMeta, PaletteItem,
-  SessionRow, ResearchRow, ChatMessage, AgentDetail,
+  SessionRow, ResearchRow, ChatMessage,
 } from "./types.ts";
 import { cycleAgentDetail } from "./types.ts";
+import { buildPaletteItems, filterPaletteItems } from "./palette.ts";
+import { dispatchSlash, SLASH_COMPLETE } from "./slash.ts";
+import { CANCELLATION_BUSY_LABEL, CANCELLATION_USER_COPY, streamStatusLabel } from "../../ui/ux-vocabulary.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -203,50 +205,10 @@ function createState(): ShellState {
 // ── Palette ───────────────────────────────────────────────────────────────────
 
 function paletteItems(state: ShellState): PaletteItem[] {
-  const go = (view: ShellViewId) => () => {
-    setView(state, view);
-    state.overlay = "none";
-    state.focus = "composer";
-  };
-  return [
-    { id: "nav-home", label: "Open Overview", description: "Home dashboard", keywords: ["dashboard", "home"], section: "navigation", shortcut: "g d", run: go("home") },
-    { id: "nav-chat", label: "Open Chat", description: "Conversation workspace", keywords: ["assistant", "messages"], section: "navigation", shortcut: "g c", run: go("chat") },
-    { id: "nav-sessions", label: "Open Sessions", description: "Recent tasks and chats", keywords: ["history"], section: "navigation", shortcut: "g s", run: go("sessions") },
-    { id: "nav-workspaces", label: "Open Workspaces", description: "Switch isolated workspaces", keywords: ["projects"], section: "navigation", shortcut: "g w", run: go("workspaces") },
-    { id: "nav-research", label: "Open Research", description: "Citable research runs", keywords: ["report"], section: "navigation", shortcut: "g r", run: go("research") },
-    { id: "nav-activity", label: "Open Activity", description: "Tool timeline", keywords: ["timeline"], section: "navigation", shortcut: "g t", run: go("activity") },
-    { id: "nav-audit", label: "Open Audit Log", description: "Tamper-evident chain", keywords: ["security", "chain"], section: "navigation", shortcut: "g a", run: go("audit") },
-    { id: "nav-memory", label: "Open Memory", description: "Durable knowledge", keywords: ["rag", "remember"], section: "navigation", run: go("memory") },
-    { id: "nav-status", label: "Open Status", description: "System overview", keywords: ["health"], section: "navigation", run: go("status") },
-    { id: "nav-settings", label: "Open Settings", description: "Runtime configuration", keywords: ["config"], section: "settings", shortcut: "g .", run: go("settings") },
-    { id: "notices", label: "Notification Center", description: "Recent notices", keywords: ["alerts"], section: "commands", shortcut: "Ctrl+N", run: () => { state.overlay = "notifications"; state.dirty = true; } },
-    { id: "quick", label: "Quick Actions", description: "High-frequency ops", keywords: ["actions"], section: "commands", shortcut: "Ctrl+J", run: () => { state.overlay = "quick"; state.dirty = true; } },
-    { id: "workspace-picker", label: "Workspace Picker", description: "Switch workspace", keywords: ["workspace"], section: "commands", shortcut: "Ctrl+W", run: () => { state.overlay = "startup"; state.startupSection = "workspace"; state.dirty = true; } },
-    { id: "mode", label: "Switch Mode", description: "agent / plan / ask", keywords: ["mode"], section: "commands", shortcut: "Shift+Tab", run: () => { state.overlay = "mode"; state.dirty = true; } },
-    { id: "model", label: "Change Model", description: `Active: ${state.provider}/${state.model}`, keywords: ["model", "provider", "switch", "ollama", "openai", "claude"], section: "commands", shortcut: "Alt+P", run: () => { state.overlay = "model"; state.dirty = true; } },
-    { id: "help", label: "Keyboard Help", description: "All bindings", keywords: ["keys", "shortcuts"], section: "commands", shortcut: "?", run: () => { state.overlay = "help"; state.helpSeen++; state.dirty = true; } },
-    { id: "serve", label: "Control Center guide", description: "How to launch xr serve", keywords: ["dashboard", "browser"], section: "commands", run: () => {
-      appendMessage(state, "assistant", "Run `xr serve` in another terminal, then open http://127.0.0.1:3141 — same XR, browser surface.", "guide");
-      state.overlay = "none"; setView(state, "chat");
-    }},
-    { id: "security-lab", label: "Run Security Lab", description: "Injection benchmark", keywords: ["security"], section: "commands", run: async () => { state.overlay = "none"; await runSecurityLab(state); } },
-    { id: "audit-export", label: "Export Signed Audit", description: "Write xr-audit-*.md", keywords: ["export"], section: "commands", run: async () => { state.overlay = "none"; await exportAudit(state); } },
-    { id: "clear", label: "Clear Chat View", description: "Keep history, clear screen", keywords: ["clear"], section: "commands", shortcut: "Ctrl+L", run: () => {
-      state.chat = state.chat.slice(0, 1);
-      state.overlay = "none";
-      notify(state, "info", "Chat cleared");
-    }},
-    { id: "exit", label: "Exit XR", description: "Leave the shell", keywords: ["quit"], section: "commands", run: () => { state.overlay = "exit"; state.dirty = true; } },
-  ];
+  return buildPaletteItems(state, { setView, appendMessage, notify, runSecurityLab, exportAudit });
 }
-
 function filteredPalette(state: ShellState): PaletteItem[] {
-  const q = state.paletteQuery.trim().toLowerCase();
-  const items = paletteItems(state);
-  if (!q) return items;
-  return items.filter((item) =>
-    [item.label, item.description, ...item.keywords].join(" ").toLowerCase().includes(q),
-  );
+  return filterPaletteItems(state, paletteItems(state));
 }
 
 // ── Confirm / lab / export ────────────────────────────────────────────────────
@@ -282,187 +244,7 @@ async function exportAudit(state: ShellState): Promise<void> {
 // ── Slash commands ────────────────────────────────────────────────────────────
 
 async function handleSlashCommand(state: ShellState, input: string): Promise<void> {
-  const [rawName, ...rest] = input.slice(1).split(/\s+/);
-  const name = rawName?.toLowerCase() ?? "";
-  const args = rest.join(" ").trim();
-
-  switch (name) {
-    case "help":
-    case "?":
-      state.overlay = "help";
-      state.helpSeen++;
-      break;
-    case "status":
-      setView(state, "status");
-      break;
-    case "workspace":
-    case "workspaces":
-      state.overlay = "startup";
-      state.startupSection = "workspace";
-      setView(state, "workspaces");
-      break;
-    case "sessions":
-      setView(state, "sessions");
-      break;
-    case "logs":
-    case "audit":
-      setView(state, "audit");
-      break;
-    case "context":
-    case "memory":
-      setView(state, "memory");
-      break;
-    case "activity":
-      setView(state, "activity");
-      break;
-    case "research":
-      setView(state, "research");
-      break;
-    case "home":
-    case "overview":
-      setView(state, "home");
-      break;
-    case "settings":
-    case "config":
-      setView(state, "settings");
-      break;
-    case "palette":
-      state.overlay = "palette";
-      state.paletteQuery = "";
-      state.paletteIndex = 0;
-      break;
-    case "notifications":
-    case "notice":
-      state.overlay = "notifications";
-      break;
-    case "quick":
-      state.overlay = "quick";
-      break;
-    case "models":
-    case "local": {
-      const { config } = loadConfig();
-      const local: any = config.localModels;
-      const runtime = local.runtime ?? "ollama";
-      const status = await detectRuntime(runtime);
-      appendMessage(state, "assistant", [
-        "Local models",
-        `• runtime: ${status.label} (${status.id})`,
-        `• selected: ${local.selected ?? config.defaults.model ?? "none"}`,
-        `• health: ${status.healthy ? "healthy" : status.running ? "running" : status.installed ? "installed" : "not found"}`,
-        `• models: ${(status.models ?? []).slice(0, 6).join(", ") || "none"}`,
-      ].join("\n"), "models");
-      setView(state, "chat");
-      break;
-    }
-    case "dashboard":
-    case "serve":
-      appendMessage(state, "assistant", "Run `xr serve` then open http://127.0.0.1:3141 for Control Center.", "guide");
-      setView(state, "chat");
-      break;
-    case "mode": {
-      const next = args as ModeState;
-      if (!["agent", "plan", "ask"].includes(next)) {
-        notify(state, "warn", "Usage", "/mode agent|plan|ask");
-        break;
-      }
-      state.mode = next;
-      const { config } = loadConfig();
-      config.defaults.mode = next;
-      saveConfig(config);
-      notify(state, "ok", "Mode updated", next);
-      break;
-    }
-    case "model": {
-      const parts = args.split(/\s+/).filter(Boolean);
-      if (!parts.length) {
-        // No args → open the model overlay (discoverable switcher)
-        state.overlay = "model";
-        state.dirty = true;
-        notify(state, "info", "Change model", `Active: ${state.provider} / ${state.model}`);
-        break;
-      }
-      const provider = parts[0];
-      if (!provider || !knownProviders().includes(provider)) {
-        notify(state, "warn", "Unknown provider", knownProviders().join(", "));
-        appendMessage(
-          state,
-          "assistant",
-          `Unknown provider "${provider}".\nKnown: ${knownProviders().join(", ")}\n\nTry:\n  /model ollama qwen2.5:7b\n  /model openai gpt-4o-mini\n  xr providers list\n  xr models list`,
-          "system",
-        );
-        break;
-      }
-      state.provider = provider;
-      if (parts[1]) state.model = parts[1]!;
-      const { config } = loadConfig();
-      config.defaults.provider = state.provider;
-      config.defaults.model = state.model;
-      // Keep local selection aligned when primary is a local runtime
-      if (provider === "ollama" || provider === "lmstudio" || provider === "jan" || provider === "localai" || provider === "vllm") {
-        const local: any = config.localModels ?? {};
-        local.enabled = true;
-        local.selected = state.model;
-        local.provider = provider;
-        config.localModels = local;
-      }
-      saveConfig(config);
-      notify(state, "ok", "Model updated", `${state.provider} / ${state.model}`);
-      appendMessage(
-        state,
-        "assistant",
-        `Active model is now ${state.provider} / ${state.model}.\nStatus bar and sidebar always show the current model.\nSwitch again with Alt+P or /model <provider> [model].`,
-        "system",
-      );
-      break;
-    }
-    case "budget": {
-      if (!args) {
-        const { config } = loadConfig();
-        const cost = state.store.costSummary();
-        appendMessage(state, "assistant", [
-          "Budget summary",
-          `• per-task cap: ${config.budget.perTaskUsd > 0 ? `$${config.budget.perTaskUsd}` : "none"}`,
-          `• total spent: $${cost.totalUsd.toFixed(4)}`,
-          `• total tokens: ${cost.totalTokens.toLocaleString()}`,
-        ].join("\n"), "budget");
-        setView(state, "chat");
-        break;
-      }
-      const next = Number.parseFloat(args);
-      if (!Number.isFinite(next)) {
-        notify(state, "warn", "Usage", "/budget 0.25");
-        break;
-      }
-      state.budget = next;
-      const { config } = loadConfig();
-      config.budget.perTaskUsd = next;
-      saveConfig(config);
-      notify(state, "ok", "Budget updated", `$${next.toFixed(2)}`);
-      break;
-    }
-    case "security-lab":
-      await runSecurityLab(state);
-      break;
-    case "export-audit":
-      await exportAudit(state);
-      break;
-    case "clear":
-      state.chat = state.chat.slice(0, 1);
-      notify(state, "info", "Chat cleared");
-      break;
-    case "inspect":
-      state.showInspector = !state.showInspector;
-      notify(state, "info", state.showInspector ? "Inspector shown" : "Inspector hidden");
-      break;
-    case "exit":
-    case "quit":
-      state.overlay = "exit";
-      break;
-    default:
-      notify(state, "warn", "Unknown slash command", `/${name} — try /help`);
-      break;
-  }
-  state.dirty = true;
+  await dispatchSlash(state, input, { setView, notify, appendMessage, runSecurityLab, exportAudit });
 }
 
 // ── Memory capture ────────────────────────────────────────────────────────────
@@ -523,7 +305,7 @@ async function runTask(state: ShellState, task: string): Promise<void> {
   state.sessionTitle = task.slice(0, 48);
   setView(state, "chat");
   state.busy = true;
-  state.busyLabel = `connecting to ${state.provider}`;
+  state.busyLabel = streamStatusLabel("provider_selection");
   state.spinnerIndex = 0;
   state.dirty = true;
 
@@ -537,7 +319,7 @@ async function runTask(state: ShellState, task: string): Promise<void> {
   }
 
   notify(state, "ok", "Connected", `${state.provider}${health.latencyMs ? ` · ${health.latencyMs}ms` : ""}`);
-  state.busyLabel = state.mode === "plan" ? "planning" : state.mode === "ask" ? "reading" : "thinking";
+  state.busyLabel = state.mode === "plan" ? streamStatusLabel("preparing") : streamStatusLabel("generating");
 
   const before = state.store.costSummary();
   const memoryEngine = new MemoryStore(state.store);
@@ -769,10 +551,8 @@ async function handleKey(state: ShellState, key: KeyEvent): Promise<void> {
         state.overlay = "none";
       }
       state.runAbort?.abort();
-      notify(state, "warn", "Interrupt requested", "Stopping current run at the next checkpoint.");
-      state.busy = false;
-      state.busyLabel = "idle";
-      finalizeLiveAssistantMessage(state);
+      state.busyLabel = CANCELLATION_BUSY_LABEL;
+      notify(state, "warn", "Cancellation requested", CANCELLATION_USER_COPY);
       state.dirty = true;
       return;
     }
@@ -833,10 +613,9 @@ async function handleKey(state: ShellState, key: KeyEvent): Promise<void> {
     if (state.busy) {
       // A-19 — Esc aborts like Ctrl+C.
       state.runAbort?.abort();
-      state.busy = false;
-      state.busyLabel = "idle";
-      finalizeLiveAssistantMessage(state);
-      notify(state, "warn", "Interrupted", "Stopping current run at the next checkpoint.");
+      state.busyLabel = CANCELLATION_BUSY_LABEL;
+      notify(state, "warn", "Cancellation requested", CANCELLATION_USER_COPY);
+      state.dirty = true;
       return;
     }
     if (state.focus !== "composer") {
@@ -1023,7 +802,7 @@ async function handleKey(state: ShellState, key: KeyEvent): Promise<void> {
     }
     // slash complete stub
     if (state.input.startsWith("/") && !state.input.includes(" ")) {
-      const cmds = ["help", "status", "mode", "model", "budget", "sessions", "workspace", "audit", "memory", "research", "clear", "exit"];
+      const cmds = SLASH_COMPLETE;
       const partial = state.input.slice(1).toLowerCase();
       const match = cmds.find((c) => c.startsWith(partial));
       if (match) {

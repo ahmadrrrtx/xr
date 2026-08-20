@@ -33,10 +33,10 @@
     },
     {
       "path": "src/interfaces/shell/app.ts",
-      "lines": 1246,
+      "lines": 1025,
       "owner": "interfaces",
-      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope. A-19 (launch RC) appended the abort-controller wiring (run-scoped controller, fail-closed approval denial, Ctrl+C/Esc reaching the loop's checkpoints; +23 lines, still a single state machine). Phase D (2026-08-13): +20 (agent-detail Ctrl+T handler, agentDetail state); split plan unchanged.",
-      "plan": "Extract slash-command handling and the palette into interfaces/shell/commands.ts and palette.ts. Deferred: the Shell is the surface most exposed to Phase-3 UX work and splitting it twice would be churn.",
+      "reason": "The interactive Shell controller: state machine, key handling, agent runs. Phase 12 extracted palette (palette.ts) and slash dispatch (slash.ts) so this module shrank 1246→1025; remaining size is the run loop + key handler, still one state machine.",
+      "plan": "Further extract key handling into interfaces/shell/keys.ts if it grows again. Do not re-inline palette/slash.",
       "review": "2026-12-31"
     },
     {

@@ -556,11 +556,22 @@ function filesAsk(rel) {
 // cover all 26 areas with the real panel ids (previously a hand-kept list of
 // 17 with a broken Shield mapping: it pointed at a nonexistent panel id).
 const PALETTE_KEYS = { dashboard: "g d", chat: "g c", sessions: "g t", workspaces: "g w", providers: "g p", memory: "g m", research: "g r", shield: "g s", audit: "g a", settings: "g ." };
-const PALETTE_ITEMS = Object.keys(NAV_LABELS).map((id) => ({
+const PALETTE_NAV = Object.keys(NAV_LABELS).map((id) => ({
   label: "Go to " + NAV_LABELS[id],
   action: () => navigateTo(id),
   key: PALETTE_KEYS[id] || undefined,
 }));
+const PALETTE_COMMANDS = [
+  { label: "Switch model / provider", action: () => navigateTo("providers"), key: "Alt+P" },
+  { label: "New chat task", action: () => { navigateTo("chat"); chatNewChat(); }, key: "/" },
+  { label: "Open memory", action: () => navigateTo("memory") },
+  { label: "Start research panel", action: () => navigateTo("research") },
+  { label: "Show tools / capabilities", action: () => navigateTo("capabilities") },
+  { label: "Show permissions / shield", action: () => navigateTo("shield") },
+  { label: "Show status / overview", action: () => navigateTo("dashboard") },
+  { label: "Interrupt generation", action: () => { if (typeof stopChatGeneration === "function") stopChatGeneration(); }, key: "Esc" },
+];
+const PALETTE_ITEMS = PALETTE_NAV.concat(PALETTE_COMMANDS);
 
 let paletteFocusIdx = 0;
 // Phase 8 · T3 — dialog focus bookkeeping: where focus returns on close.
@@ -605,7 +616,7 @@ document.getElementById("palette-search")?.addEventListener("input", e => {
   renderPaletteResults(e.target.value);
 });
 document.getElementById("palette-search")?.addEventListener("keydown", e => {
-  const matches = PALETTE_ITEMS.filter(item => !item.label.toLowerCase().includes(e.target.value.toLowerCase()));
+  const matches = PALETTE_ITEMS.filter(item => !e.target.value || item.label.toLowerCase().includes(e.target.value.toLowerCase()));
   // Modal focus trap (WCAG 2.1.2): the input is the dialog's sole tabbable
   // control, so Tab/Shift+Tab stay pinned to it until the dialog closes.
   if (e.key === "Tab") { e.preventDefault(); return; }
@@ -625,8 +636,10 @@ document.getElementById("palette")?.addEventListener("click", e => {
 let gKeyReady = false;
 document.addEventListener("keydown", e => {
   if (document.getElementById("palette")?.classList.contains("open") && e.key === "Escape") { e.preventDefault(); closePalette(); return; }
+  if (e.key === "k" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); openPalette(); return; }
+  if ((e.key === "p" || e.key === "P") && e.altKey) { e.preventDefault(); navigateTo("providers"); return; }
   if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
-  if (e.key === "?" || (e.key === "k" && (e.metaKey || e.ctrlKey))) { e.preventDefault(); openPalette(); return; }
+  if (e.key === "?") { e.preventDefault(); openPalette(); return; }
   if (e.key === "/") { e.preventDefault(); navigateTo("chat"); setTimeout(() => document.getElementById("chat-input")?.focus(), 0); return; }
   if (e.key === "g") { gKeyReady = true; setTimeout(() => gKeyReady = false, 1000); return; }
   if (gKeyReady) {

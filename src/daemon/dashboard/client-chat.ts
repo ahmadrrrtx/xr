@@ -12,6 +12,44 @@ let chatAbortController = null;
 let chatState = loadChatState();
 let chatDraftTimer = 0;
 let chatToolSeq = 0;
+let chatRunId = "";
+
+function apiMode(m) {
+  const x = String(m || "").toLowerCase();
+  if (x === "agent") return "agent";
+  if (x === "plan") return "plan";
+  return "ask";
+}
+function setRunStatus(text) {
+  const el = document.getElementById("chat-run-status");
+  if (el) { el.textContent = text || ""; el.hidden = !text; }
+}
+function summarizeToolArgs(args, max) {
+  max = max || 72;
+  if (args == null) return "";
+  if (typeof args === "string") return args.length > max ? args.slice(0, max) + "…" : args;
+  if (typeof args !== "object") return String(args);
+  const prefer = ["path","file","query","url","command","cmd","target","name","id"];
+  for (let i = 0; i < prefer.length; i++) {
+    const v = args[prefer[i]];
+    if (typeof v === "string" && v) return v.length > max ? v.slice(0, max) + "…" : v;
+  }
+  try {
+    const json = JSON.stringify(args);
+    if (!json || json === "{}") return "";
+    return json.length > max ? json.slice(0, max) + "…" : json;
+  } catch (e) { return ""; }
+}
+function isSourceTool(name) {
+  return /search|fetch_url|research|scrape|crawl/i.test(String(name || ""));
+}
+function ensureMsgMeta(m) {
+  if (!m.tools) m.tools = [];
+  if (!m.sources) m.sources = [];
+  if (!m.approvals) m.approvals = [];
+  if (!m.open) m.open = {};
+  return m;
+}
 
 function loadChatState() {
   try {
@@ -170,7 +208,7 @@ function renderMessage(m, i) {
   return \`<div class="msg \${role}\${st}">
     <div class="msg-avatar-col"><div class="msg-avatar-icon">\${avatarName}</div></div>
     <div class="msg-content-col">
-      <div class="msg-bubble">\${formatReply(m.content || "")}\${renderArtifacts(m)}\${renderStreamNote(m)}</div>
+      <div class="msg-bubble">\${formatReply(m.content || "")}\${renderArtifacts(m)}\${renderStreamNote(m)}\${renderDisclosures(m, i)}</div>
       <div class="msg-meta">
         <span>\${avatarName} · \${new Date(m.ts || Date.now()).toLocaleTimeString()}</span>
         <span class="msg-actions">
@@ -228,7 +266,7 @@ function updateComposerContext() {
   const text = input?.value || "";
   const chips = [];
   if (text.startsWith("/")) chips.push(['Command', text.split(/\s+/)[0]]);
-  if (chatState.toggles.memory) chips.push(['RAG Memory', 'active']);
+  if (chatState.toggles.memory) chips.push(['Memory', 'active']);
   box.innerHTML = chips.map(c => '<span class="badge badge-cyan"><strong>'+escapeHtml(c[0])+'</strong>: '+escapeHtml(c[1])+'</span>').join("");
 }
 
@@ -259,7 +297,7 @@ function editMessage(idx){ const c=activeChat(); if(!c || !c.messages[idx]) retu
 
 function insertHint(text) { const input=document.getElementById('chat-input'); if(!input) return; input.value=text; input.focus(); autoResize(input); updateComposerContext(); saveDraftSoon(); }
 function toggleComposerFlag(key){ chatState.toggles[key]=!chatState.toggles[key]; saveChatState(); renderComposer(); renderRuntime(); if(key==='memory') loadMemoryPeek(); }
-function cycleChatMode(){ const modes=['Ask','Plan','Research','Agent']; const i=modes.indexOf(chatState.mode); chatState.mode=modes[(i+1)%modes.length]; saveChatState(); renderComposer(); renderRuntime(); }
+function cycleChatMode(){ const modes=['Ask','Plan','Agent']; const i=modes.indexOf(chatState.mode); chatState.mode=modes[(i+1)%modes.length]; saveChatState(); renderComposer(); renderRuntime(); }
 function openAttachmentPicker(){ document.getElementById('chat-file-input')?.click(); }
 function removeAttachment(i){ const c=activeChat(); if(!c) return; c.attachments.splice(i,1); saveChatState(); renderAttachments(); }
 function addFilesToComposer(files){ const c=activeChat(); if(!c || !files) return; Array.from(files).forEach(f => c.attachments.push({ name:f.name, size:f.size, type:f.type || 'application/octet-stream' })); saveChatState(); renderAttachments(); toast(files.length+' file(s) attached', 'ok'); }
@@ -284,41 +322,291 @@ async function sendChatMessage(forcedText, skipUserAppend) {
     assistantMsg.streaming=false; chatStreaming=false; chatAbortController=null; if(btn){ btn.classList.remove('stop'); } chat.updatedAt=Date.now(); saveChatState(); renderChatWorkspace(); input?.focus();
     loadComposerMeta();
     applyAvatarState();
+    setRunStatus("");
   }
 }
 
-function stopChatGeneration(){ if(chatAbortController) chatAbortController.abort(); chatStreaming=false; announceStream("Stopped"); applyAvatarState(); const c=activeChat(); if(c){ const m=c.messages.find(x=>x.streaming); if(m){ m.streaming=false; m.content += '\\n\\n_Stopped by administrator._'; } saveChatState(); renderMessages(); } }
+function stopChatGeneration(){
+  if (chatAbortController) chatAbortController.abort();
+  announceStream("Stopped");
+  setRunStatus("Cancellation requested. Waiting for a safe checkpoint…");
+  applyAvatarState();
+  const c = activeChat();
+  if (c) {
+    const m = c.messages.find(function (x) { return x.streaming; });
+    if (m) m.pendingCancel = true;
+    saveChatState();
+    renderMessages();
+  }
+}
 
 async function streamChat(text, assistantMsg) {
   announceStream("XR is responding");
-  const toolId = addToolEvent('AI chat prompt','Call provider hot-path routing','running','Streaming...');
-  const history = activeChat().messages.filter(m=>!m.streaming).slice(-10).map(m=>({ role:m.role, content:m.content }));
-  const res = await fetch(BASE + "/api/v1/chat", { method:"POST", headers:{ Authorization:"Bearer "+TOKEN, "Content-Type":"application/json" }, body:JSON.stringify({ message:text, history }), signal: chatAbortController.signal });
-  if(!res.ok) { throw new Error('API routing failed or token expired.'); }
-  const reader = res.body?.getReader(); const decoder = new TextDecoder(); let reply="";
-  if(reader){
-    while(true){ const r=await reader.read(); if(r.done) break; const chunk=decoder.decode(r.value,{stream:true}); const lines=chunk.split("\\n"); for(const line of lines){ if(!line.startsWith('data: ')) continue; const data=line.slice(6).trim(); if(data==='[DONE]') continue; try{ const j=JSON.parse(data); if(j.error) throw new Error(j.error);
-      // Phase 05 canonical streaming contract:
-      if(j.type==='status'){ if(j.status==='provider_selection'||j.status==='provider_ready'){ renderRuntime(); } continue; }
-      if(j.type==='token'){ reply+=j.text; }
-      else if(j.type==='done'){ reply=j.fullText || j.finalMessage || reply; }
-      else if(j.type==='error'){ throw new Error(j.message || j.error || 'generation failed'); }
-      else if(j.delta){ reply+=j.delta; }
-      else if(j.text){ reply=j.text; } // legacy fullText replacement
-    } catch(e){ if(data && data[0] !== '{') reply+=data; } assistantMsg.content=reply; renderMessages(); } }
-  } else { const j=await res.json(); reply=j.reply || j.content || ''; assistantMsg.content=reply; }
-  updateToolEvent(toolId,'done','Completed execution');
+  setRunStatus(typeof xrStatusLabel === "function" ? xrStatusLabel("provider_selection") : "Selecting provider");
+  ensureMsgMeta(assistantMsg);
+  const toolId = addToolEvent("AI chat prompt", "Call provider hot-path routing", "running", "Streaming...");
+  const history = activeChat().messages.filter(function (m) { return !m.streaming; }).slice(-10).map(function (m) { return { role: m.role, content: m.content }; });
+  const body = { message: text, history: history, mode: apiMode(chatState.mode) };
+  if (chatState.toggles.research) body.toolsAllow = ["web_search", "fetch_url", "research_search", "research_scrape"];
+  const res = await fetch(BASE + "/api/v1/chat", { method: "POST", headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" }, body: JSON.stringify(body), signal: chatAbortController.signal });
+  if (!res.ok) { throw new Error("API routing failed or token expired."); }
+  const reader = res.body && res.body.getReader();
+  const decoder = new TextDecoder();
+  let reply = "";
+  if (reader) {
+    while (true) {
+      const r = await reader.read();
+      if (r.done) break;
+      const chunk = decoder.decode(r.value, { stream: true });
+      const lines = chunk.split("\\n");
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") continue;
+        try {
+          const j = JSON.parse(data);
+          if (j.runId) chatRunId = j.runId;
+          if (j.approval_required) {
+            ensureMsgMeta(assistantMsg).approvals.push(j.approval_required);
+            setRunStatus(typeof xrStatusLabel === "function" ? xrStatusLabel("waiting_for_approval") : "Waiting for approval");
+            addToolEvent(j.approval_required.tool || "tool", j.approval_required.reason || "approval", "pending", summarizeToolArgs(j.approval_required.args));
+            assistantMsg.content = reply;
+            renderMessages();
+            continue;
+          }
+          if (j.type === "status") {
+            if (j.status === "cancelled" || j.cancelled) {
+              setRunStatus("Cancellation requested. Waiting for a safe checkpoint…");
+            } else {
+              setRunStatus(typeof xrStatusLabel === "function" ? xrStatusLabel(j.status) : (j.message || j.status || ""));
+            }
+            if (j.status === "provider_selection" || j.status === "provider_ready" || j.provider || j.model) {
+              if (j.provider) chatState.provider = j.provider;
+              if (j.model) chatState.model = j.model;
+              renderRuntime();
+            }
+            continue;
+          }
+          if (j.type === "token") { reply += (j.text || ""); }
+          else if (j.type === "tool_call") {
+            const preview = summarizeToolArgs(j.args);
+            ensureMsgMeta(assistantMsg).tools.push({ id: j.id, tool: j.tool, args: preview, status: "running" });
+            if (isSourceTool(j.tool)) assistantMsg.sources.push({ tool: j.tool, args: preview, status: "pending" });
+            addToolEvent(j.tool || "tool", preview, "running", preview);
+            setRunStatus(isSourceTool(j.tool)
+              ? (typeof xrStatusLabel === "function" ? xrStatusLabel("searching_web") : "Searching web")
+              : (typeof xrStatusLabel === "function" ? xrStatusLabel("running_tool") : "Running tool"));
+            setAvatarState("working");
+          }
+          else if (j.type === "tool_result") {
+            const tools = ensureMsgMeta(assistantMsg).tools;
+            const t = tools.find(function (x) { return x.id === j.id; });
+            if (t) t.status = j.ok ? "done" : "error";
+            if (isSourceTool(j.tool) && j.ok) {
+              const src = assistantMsg.sources.find(function (s) { return s.tool === j.tool && s.status === "pending"; });
+              if (src) src.status = "verified";
+            }
+            updateToolEvent(j.id, j.ok ? "done" : "err", j.ok ? (j.result || "ok") : (j.error || "failed"));
+          }
+          else if (j.type === "usage") { assistantMsg.usage = j.usage; }
+          else if (j.type === "done") {
+            reply = j.fullText || j.finalMessage || reply;
+            assistantMsg.ttftMs = j.ttftMs;
+            assistantMsg.totalMs = j.totalMs;
+            assistantMsg.usage = j.usage || assistantMsg.usage;
+            setRunStatus("");
+          }
+          else if (j.type === "error") { throw new Error(j.message || j.error || "generation failed"); }
+          else if (j.error && !j.type) { throw new Error(j.error); }
+          else if (j.delta) { reply += j.delta; }
+          else if (j.text && j.type !== "token") { reply = j.text; }
+        } catch (e) {
+          if (e && e.message && data && data[0] === "{") throw e;
+          if (data && data[0] !== "{") reply += data;
+        }
+        assistantMsg.content = reply;
+        renderMessages();
+      }
+    }
+  } else {
+    const j = await res.json();
+    reply = j.reply || j.content || "";
+    assistantMsg.content = reply;
+  }
+  updateToolEvent(toolId, "done", "Completed execution");
   announceStream("Response complete");
+  setRunStatus("");
 }
 
 async function handleSlashCommand(text, assistantMsg) {
-  const parts=text.split(/\\s+/); const cmd=parts[0].toLowerCase(); const arg=text.slice(cmd.length).trim();
-  if(cmd==='/plan'){ const id=addToolEvent('Control Planner','Dry-run checklists plan','running',arg); const j=await apiPost('/api/control/plan',{ task:arg || 'Build code project', noMemory:!chatState.toggles.memory }); updateToolEvent(id,'done','Plan synthesized'); assistantMsg.content = '### Planned automation checkpoints\\n\\n' + formatPlan(j.plan || []) + '\\n\\n_Planner routing: '+(j.source || 'default')+'_'; return; }
-  if(cmd==='/status'){ const id=addToolEvent('System status','Load core status cards','running','Loading...'); const all=await Promise.allSettled([api('/api/overview'),api('/api/cost'),api('/api/control/status'),api('/api/providers'),api('/api/models'),api('/api/trust')]); updateToolEvent(id,'done','Complete status'); assistantMsg.content=formatStatus(all); return; }
-  if(cmd==='/memory'){ const id=addToolEvent('RAG Memory','Fetch memory lists','running',arg || 'all'); const q=arg ? await api('/api/memory/search?q='+encodeURIComponent(arg)) : await api('/api/memory'); updateToolEvent(id,'done','Memory fetched'); assistantMsg.content=formatMemory(q, arg); loadMemoryPeek(); return; }
-  if(cmd==='/budget'){ const id=addToolEvent('Governor budget','Assess spend ceilings','running','Checking...'); const j=await api('/api/cost'); updateToolEvent(id,'done','Budget check finished'); assistantMsg.content='### Budget controls\\n- Spent: **$'+Number(j.totalUsd||0).toFixed(6)+'**\\n- Tokens processed: **'+Number(j.totalTokens||0).toLocaleString()+'**'; return; }
-  if(cmd==='/clear'){ activeChat().messages=[]; assistantMsg.content='Workspace chat cleared.'; return; }
+  const parts = text.split(/\\s+/);
+  const cmd = parts[0].toLowerCase();
+  const arg = text.slice(cmd.length).trim();
+  if (cmd === "/help" || cmd === "/?") {
+    assistantMsg.content = (typeof xrSlashHelp === "function" ? xrSlashHelp() : "Try /status /model /memory /budget /plan /clear");
+    return;
+  }
+  if (cmd === "/plan") {
+    const id = addToolEvent("Control Planner", "Dry-run checklists plan", "running", arg);
+    const j = await apiPost("/api/control/plan", { task: arg || "Build code project", noMemory: !chatState.toggles.memory });
+    updateToolEvent(id, "done", "Plan synthesized");
+    assistantMsg.content = "### Planned automation checkpoints\\n\\n" + formatPlan(j.plan || []) + "\\n\\n_Planner routing: " + (j.source || "default") + "_";
+    assistantMsg.plan = j.plan;
+    return;
+  }
+  if (cmd === "/status") {
+    const id = addToolEvent("System status", "Load core status cards", "running", "Preparing");
+    const all = await Promise.allSettled([api("/api/overview"), api("/api/cost"), api("/api/control/status"), api("/api/providers"), api("/api/models"), api("/api/trust")]);
+    updateToolEvent(id, "done", "Complete status");
+    assistantMsg.content = formatStatus(all);
+    return;
+  }
+  if (cmd === "/memory") {
+    const id = addToolEvent("Memory", "Fetch memory lists", "running", arg || "all");
+    const q = arg ? await api("/api/memory/search?q=" + encodeURIComponent(arg)) : await api("/api/memory");
+    updateToolEvent(id, "done", "Memory fetched");
+    assistantMsg.content = formatMemory(q, arg);
+    loadMemoryPeek();
+    return;
+  }
+  if (cmd === "/budget") {
+    const id = addToolEvent("Governor budget", "Assess spend ceilings", "running", "Checking...");
+    const j = await api("/api/cost");
+    updateToolEvent(id, "done", "Budget check finished");
+    assistantMsg.content = "### Budget controls\\n- Spent: **$" + Number(j.totalUsd || 0).toFixed(6) + "**\\n- Tokens processed: **" + Number(j.totalTokens || 0).toLocaleString() + "**";
+    return;
+  }
+  if (cmd === "/clear") {
+    activeChat().messages = [];
+    assistantMsg.content = "Workspace chat cleared. The audit log is unchanged.";
+    return;
+  }
+  if (cmd === "/model" || cmd === "/provider") {
+    const id = addToolEvent("Provider", "Show active route", "running", arg || "status");
+    const j = await api("/api/providers");
+    updateToolEvent(id, "done", "Route loaded");
+    const bits = arg.split(/\\s+/).filter(Boolean);
+    if (bits.length) {
+      try {
+        await apiPost("/api/providers/set", { provider: bits[0], model: bits[1] || undefined });
+        assistantMsg.content = "Active route set to **" + bits[0] + (bits[1] ? (" / " + bits[1]) : "") + "**. All surfaces share this config.";
+        loadProviderChip();
+      } catch (e) {
+        assistantMsg.content = "Could not set provider: " + (e.message || e) + "\\n\\nActive: " + (j.primary || "?") + " / " + (j.model || "?");
+      }
+    } else {
+      assistantMsg.content = "### Active route\\n- Provider: **" + (j.primary || "—") + "**\\n- Model: **" + (j.model || "—") + "**\\n- Fallback: " + (j.fallback ? (j.fallback + " / " + (j.fallbackModel || "")) : "none") + "\\n\\nSwitch with \`/model <provider> [model]\` or Alt+P.";
+    }
+    return;
+  }
+  if (cmd === "/research") {
+    const id = addToolEvent("Research", "List research jobs", "running", arg || "recent");
+    const j = await api("/api/research").catch(function () { return api("/api/research/jobs"); });
+    updateToolEvent(id, "done", "Research fetched");
+    const recent = j.recent || j.jobs || [];
+    if (!recent.length) assistantMsg.content = "No research yet.\\n\\nAsk XR to research a topic, or run: xr research \\"…\\"";
+    else assistantMsg.content = "### Research\\n\\n" + recent.slice(0, 8).map(function (r) { return "- **" + (r.topic || r.kind || r.id) + "** — " + (r.status || r.state || ""); }).join("\\n");
+    return;
+  }
+  if (cmd === "/tools") {
+    const id = addToolEvent("Capabilities", "List tools", "running", "");
+    const j = await api("/api/capabilities");
+    updateToolEvent(id, "done", "Capabilities loaded");
+    const list = j.capabilities || j.items || j.descriptors || [];
+    assistantMsg.content = list.length
+      ? ("### Capabilities\\n\\n" + list.slice(0, 20).map(function (c) { return "- **" + (c.id || c.name) + "** — " + (c.description || c.provider || ""); }).join("\\n"))
+      : "Capability inventory is empty or the route returned no descriptors.";
+    return;
+  }
+  if (cmd === "/permissions") {
+    const j = await api("/api/config");
+    const req = ((j.security && j.security.requireApproval) || []);
+    assistantMsg.content = "### Permissions\\n- requireApproval: **" + (req.length ? req.join(", ") : "none listed") + "**\\n- hardened: " + ((j.security && j.security.hardened) ? "yes" : "no") + "\\n\\nXR Shield is always enforced. The model cannot grant itself capabilities.";
+    return;
+  }
+  if (cmd === "/session" || cmd === "/sessions") {
+    const j = await api("/api/sessions");
+    const rows = j.sessions || [];
+    assistantMsg.content = rows.length
+      ? ("### XR sessions\\n\\n" + rows.slice(0, 12).map(function (s) { return "- \`" + s.id + "\` **" + (s.title || "") + "** — " + (s.status || "") + " · " + (s.mode || ""); }).join("\\n"))
+      : "No sessions yet.\\n\\nStart your first task — ask XR to analyze this repository.";
+    return;
+  }
+  if (cmd === "/doctor") {
+    assistantMsg.content = "The full diagnostic is \`xr doctor\` in the CLI. \`/status\` shows live runtime state from the daemon. This command does not invent a doctor pass.";
+    return;
+  }
+  if (cmd === "/compact") {
+    assistantMsg.content = "Context compaction runs inside the engine when the token budget requires it. There is no /compact HTTP switch — XR will not pretend to compact.";
+    return;
+  }
   await streamChat(text, assistantMsg);
+}
+
+function renderDisclosures(m, i) {
+  ensureMsgMeta(m);
+  const chips = [];
+  if (m.tools.length) chips.push({ key: "tools", label: "Tools · " + m.tools.length });
+  if (m.sources.length) chips.push({ key: "sources", label: "Sources · " + m.sources.length });
+  if (m.plan) chips.push({ key: "plan", label: "Plan" });
+  if (m.usage) chips.push({ key: "cost", label: "Cost" });
+  if (m.ttftMs || m.totalMs) chips.push({ key: "latency", label: "Latency" });
+  if (m.approvals.length) chips.push({ key: "approvals", label: "Approval · " + m.approvals.length });
+  if (!chips.length && !m.pendingCancel) return "";
+  let html = '<div class="msg-disclosures">';
+  chips.forEach(function (c) {
+    const open = !!m.open[c.key];
+    html += '<button type="button" class="disclosure-chip' + (open ? " open" : "") + '" aria-expanded="' + (open ? "true" : "false") + '" data-xr-action="' + act("toggleDisclosure", i, c.key) + '">' + c.label + "</button>";
+  });
+  html += "</div>";
+  if (m.open.tools && m.tools.length) {
+    html += '<div class="disclosure-body">' + m.tools.map(function (t) {
+      return '<div class="tool-inline ' + (t.status || "") + '"><span class="tool-inline-name">' + escapeHtml(t.tool) + '</span> <span class="muted">' + escapeHtml(t.args || "") + '</span> <span class="tool-indicator">' + escapeHtml(t.status || "") + "</span></div>";
+    }).join("") + "</div>";
+  }
+  if (m.open.sources && m.sources.length) {
+    html += '<div class="disclosure-body">' + m.sources.map(function (s) {
+      return '<div class="source-inline">' + escapeHtml(s.tool) + " · " + escapeHtml(s.args || "") + " · " + escapeHtml(s.status || "") + "</div>";
+    }).join("") + "</div>";
+  }
+  if (m.open.cost && m.usage) {
+    html += '<div class="disclosure-body muted">tokens in ' + (m.usage.inTokens || 0) + " · out " + (m.usage.outTokens || 0) + "</div>";
+  }
+  if (m.open.latency) {
+    html += '<div class="disclosure-body muted">TTFT ' + (m.ttftMs != null ? m.ttftMs + "ms" : "—") + " · total " + (m.totalMs != null ? m.totalMs + "ms" : "—") + "</div>";
+  }
+  if (m.open.plan && m.plan) {
+    html += '<div class="disclosure-body">' + escapeHtml(typeof m.plan === "string" ? m.plan : JSON.stringify(m.plan)).slice(0, 800) + "</div>";
+  }
+  if (m.approvals.length) {
+    html += m.approvals.map(function (a) {
+      return '<div class="approval-card" role="group" aria-label="Approval: ' + escapeHtml(a.tool || "tool") + '">' +
+        '<div class="approval-what">XR wants to: ' + escapeHtml(a.tool || "tool") + "</div>" +
+        '<div class="approval-why">' + escapeHtml(a.reason || a.preview || "This action needs your permission.") + "</div>" +
+        (a.args ? '<div class="muted">' + escapeHtml(typeof a.args === "string" ? a.args : summarizeToolArgs(a.args)) + "</div>" : "") +
+        '<div class="approval-btns">' +
+          '<button class="btn btn-primary" data-xr-action="answerChatApproval(\\'' + a.id + '\\',true)">Approve</button>' +
+          '<button class="btn btn-danger" data-xr-action="answerChatApproval(\\'' + a.id + '\\',false)">Reject</button>' +
+        "</div></div>";
+    }).join("");
+  }
+  if (m.pendingCancel) html += '<div class="muted">Cancellation requested. Waiting for a safe checkpoint…</div>';
+  return html;
+}
+function toggleDisclosure(i, key) {
+  const c = activeChat();
+  if (!c || !c.messages[i]) return;
+  ensureMsgMeta(c.messages[i]);
+  c.messages[i].open[key] = !c.messages[i].open[key];
+  renderMessages();
+}
+async function answerChatApproval(id, approved) {
+  try {
+    await apiPost("/api/chat/approve", { id: id, approved: !!approved });
+    toast(approved ? "Action authorized" : "Action blocked", approved ? "ok" : "warn");
+  } catch (e) {
+    toast(e.message || "Approval failed", "err");
+  }
 }
 
 function formatPlan(plan){ if(Array.isArray(plan)) return plan.map((s,i)=> (typeof s==='string' ? (i+1)+'. '+s : (i+1)+'. **'+(s.kind||s.action||'Step')+'** — '+(s.summary||s.command||JSON.stringify(s)))).join('\\n'); return typeof plan==='string'?plan:JSON.stringify(plan,null,2); }

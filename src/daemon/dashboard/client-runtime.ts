@@ -299,8 +299,15 @@ document.addEventListener("keydown", function (ev) {
 // (the client app is an external CSP asset, so routes signal intent on the
 // <body> element instead of inline script).
 const routeMarker = document.body && document.body.dataset ? (document.body.dataset.route || "") : "";
-if (routeMarker === "chat" || routeMarker === "dashboard") navigateTo(routeMarker);
-loadDashboard();
+// Phase 12 — paint the shell first. Chat-first routes must not wait on the
+// overview bundle; dashboard data loads only when that panel is active.
+if (routeMarker === "dashboard") {
+  navigateTo("dashboard");
+} else {
+  navigateTo(routeMarker === "chat" ? "chat" : "chat");
+  loadProviderChip();
+  loadComposerMeta();
+}
 applyShellPrefs();
 onboardingInit();
 
@@ -338,7 +345,7 @@ function act(fn) {
 // attributes and dispatched here through a STRICT PARSER + ALLOWLIST — never
 // eval, never a dynamic call outside the allowlist. Unknown functions or
 // malformed expressions are ignored (fail closed).
-var XR_ACTIONS = new Set(["answerApproval","approveMemory","capabilityInspect","capabilityQuarantine","chatArchiveActive","chatBranchFromLast","chatExportActive","chatNewChat","chatSelectChat","chatTogglePin","clearMemory","clearNotifications","closePalette","copyText","createWorkspace","cycleChatMode","deleteMemory","doMemSearch","downloadArtifact","editMessage","emergencyStopControl","exportFullData","focusChangeModel","insertHint","inspectMarketplaceSkill","installMarketplaceSkill","killProcess","loadAuditLog","loadBudgetPanel","loadCapabilities","loadMarketplace","loadMcp","loadModels","loadPlugins","loadResearchDetail","loadResearchPanel","loadSessionDetail","loadSessionsPanel","loadWorkspaces","navigateTo","openAttachmentPicker","openPalette","pickInstalledModel","pluginAction","pluginRemove","quarantineFile","refreshAll","registerMcp","removeAttachment","removeMcp","revokeMemory","runSecLab","runShieldScan","saveAllSettings","saveBudgetConfig","saveModelSelection","saveProviderRouting","searchPlugins","sendChatMessage","setMarketFilter","setMarketQuery","setMarketSort","setTimeout","skillAction","switchSettingsPane","switchShieldTab","switchWorkspaceUI","syncMarketplace","testModelSelection","toast","toggleComposerFlag","toggleShieldAdBlock","verifyAuditLedger","toggleSidebar","toggleInspector","quickPrompt","onbGo","onbNext","onbBack","onbPickMode","onbSelectProvider","onbConnectProvider","onbSetLocal","onbSetBudget","onbComplete","onbSkip","loadFiles","filesEnterDir","filesSelect","filesShowDiff","filesCopy","filesAsk"]);
+var XR_ACTIONS = new Set(["answerApproval","answerChatApproval","approveMemory","capabilityInspect","capabilityQuarantine","chatArchiveActive","chatBranchFromLast","chatExportActive","chatNewChat","chatSelectChat","chatTogglePin","clearMemory","clearNotifications","closePalette","copyText","createWorkspace","cycleChatMode","deleteMemory","doMemSearch","downloadArtifact","editMessage","emergencyStopControl","exportFullData","focusChangeModel","insertHint","inspectMarketplaceSkill","installMarketplaceSkill","killProcess","loadAuditLog","loadBudgetPanel","loadCapabilities","loadMarketplace","loadMcp","loadModels","loadPlugins","loadResearchDetail","loadResearchPanel","loadSessionDetail","loadSessionsPanel","loadWorkspaces","navigateTo","openAttachmentPicker","openPalette","pickInstalledModel","pluginAction","pluginRemove","quarantineFile","refreshAll","registerMcp","removeAttachment","removeMcp","revokeMemory","runSecLab","runShieldScan","saveAllSettings","saveBudgetConfig","saveModelSelection","saveProviderRouting","searchPlugins","sendChatMessage","setMarketFilter","setMarketQuery","setMarketSort","setTimeout","skillAction","switchSettingsPane","switchShieldTab","switchWorkspaceUI","syncMarketplace","testModelSelection","toast","toggleComposerFlag","toggleDisclosure","toggleShieldAdBlock","verifyAuditLedger","toggleSidebar","toggleInspector","quickPrompt","onbGo","onbNext","onbBack","onbPickMode","onbSelectProvider","onbConnectProvider","onbSetLocal","onbSetBudget","onbComplete","onbSkip","loadFiles","filesEnterDir","filesSelect","filesShowDiff","filesCopy","filesAsk"]);
 document.addEventListener('click', function (ev) {
   var el = ev.target && ev.target.closest ? ev.target.closest('[data-xr-action]') : null;
   if (!el) return;

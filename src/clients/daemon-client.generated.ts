@@ -201,6 +201,11 @@ export class XRDaemonClient {
     return await this.raw("POST", "/api/v1/chat", body);
   }
 
+  /** Human decision for a pending chat tool approval (fail-closed; the model cannot approve itself). */
+  async chatApprovePost(body: z.infer<typeof S.ChatApproveRequest>): Promise<z.infer<typeof S.ChatApproveResponse>> {
+    return await this.call("POST", "/api/v1/chat/approve", body);
+  }
+
   /** List built-in agent roles (supervisor, planner, executor). */
   async agentsList(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/agents");

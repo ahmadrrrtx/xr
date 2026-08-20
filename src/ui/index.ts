@@ -130,3 +130,31 @@ export {
   renderOfficialBannerFrame,
   renderCompactBrand,
 } from "./brand.ts";
+
+// Phase 12 — shared vocabulary (labels only; backend remains source of truth)
+export {
+  XR_IDENTITY,
+  MODE_WORDS,
+  canonicalMode,
+  modeLabel,
+  STREAM_STATUS_LABEL,
+  streamStatusLabel,
+  CANCELLATION_BUSY_LABEL,
+  CANCELLATION_USER_COPY,
+  summarizeToolArgs,
+  isSourceTool,
+  SOURCE_TOOL_NAMES,
+  SHORTCUTS,
+  EMPTY_COPY,
+  ERROR_COPY,
+  SECURITY_COPY,
+  type ModeWord,
+  type LocalityWord,
+} from "./ux-vocabulary.ts";
+export {
+  SLASH_COMMANDS,
+  slashNamesFor,
+  formatSlashHelp,
+  type SlashCommandDef,
+  type SlashSurface,
+} from "./slash-catalog.ts";
