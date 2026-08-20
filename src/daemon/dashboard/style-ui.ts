@@ -637,4 +637,58 @@ export const STYLE_UI = `/* ── Chat Session Workspace (Liquid Layout) ──
 }
 @keyframes xrStreamBlink { to { visibility: hidden; } }
 .msg-streaming-note { font-size: 10px; color: var(--muted); font-family: var(--font-mono); margin-top: 4px; }
+
+/* ── Phase 12 — progressive disclosure, run status, empty teaching ──── */
+.chat-run-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cyan);
+  padding: 0 8px;
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-run-status[hidden] { display: none; }
+.msg-disclosures { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.disclosure-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  min-height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface2);
+  color: var(--textDim);
+  cursor: pointer;
+}
+.disclosure-chip:hover, .disclosure-chip.open { border-color: var(--cyan); color: var(--cyan); }
+.disclosure-body {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--textDim);
+}
+.tool-inline, .source-inline { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
+.tool-inline-name { font-weight: 700; color: var(--text); }
+.tool-inline.running .tool-indicator { color: var(--cyan); }
+.tool-inline.done .tool-indicator { color: var(--green); }
+.tool-inline.error .tool-indicator { color: var(--red); }
+.empty-teach { padding: 16px; font-size: 13px; line-height: 1.6; color: var(--textDim); }
+.empty-teach strong { display: block; color: var(--text); margin-bottom: 6px; }
+.empty-teach .btn { margin-top: 10px; }
+@media (max-width: 1100px) {
+  .chat-wrap { grid-template-columns: 200px minmax(0, 1fr) 240px; }
+}
+@media (max-width: 860px) {
+  .chat-wrap { grid-template-columns: minmax(0, 1fr); }
+  .chat-sidebar, .chat-inspector { display: none; }
+  .bento-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 `;

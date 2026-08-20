@@ -18,6 +18,8 @@ import type { StatusChip } from "../../ui/primitives.ts";
 import type { LayoutGeom } from "./layout.ts";
 import { loadConfig } from "../../config/config.ts";
 import { MemoryStore } from "../../context/memory/store.ts";
+import { CORE_VERSION, CODENAME } from "../../core/version.ts";
+import { CANCELLATION_BUSY_LABEL, streamStatusLabel } from "../../ui/ux-vocabulary.ts";
 
 function humanTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -33,7 +35,7 @@ function timelineIcon(level: Severity): string {
 
 export function renderHeader(state: ShellState, cols: number): string[] {
   const brand = `${xrBold(xrCyan("XR"))}${xrDim(" · ")}${xrCyan("AI Operating System")}`;
-  const right = xrDim(`v3.1`);
+  const right = xrDim(`v${CORE_VERSION} (${CODENAME})`);
   const gap = Math.max(1, cols - visibleLength(brand) - visibleLength(right));
   const line1 = clipAnsi(brand + " ".repeat(gap) + right, cols);
 
@@ -127,6 +129,17 @@ function renderChat(state: ShellState, width: number, height: number): string[] 
   const lines: string[] = [];
   lines.push(`${xrBold("Chat")}${xrDim(" · ")}${state.sessionTitle || "new session"}${xrDim(" · ")}${state.mode}`);
   lines.push(xrDim(hline(Math.max(10, width - 2))));
+  if (state.busy) {
+    const cancelling = state.busyLabel === CANCELLATION_BUSY_LABEL;
+    lines.push(cancelling
+      ? xrAmber(CANCELLATION_BUSY_LABEL)
+      : `${xrCyan("TASK")} ${xrDim("·")} ${state.busyLabel || streamStatusLabel("generating")}`);
+    const steps = state.timeline.slice(0, 4);
+    for (const e of steps) {
+      lines.push(`  ${timelineIcon(e.level)} ${clipAnsi(e.title, Math.max(12, width - 6))}`);
+    }
+    lines.push(xrDim(hline(Math.max(10, width - 2))));
+  }
 
   const usable = Math.max(20, width - 2);
   const messages = state.chat.slice(-40);

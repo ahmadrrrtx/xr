@@ -131,6 +131,25 @@ export const ChatStreamRequest = z.looseObject({
   message: z.string().min(1),
   history: z.array(z.looseObject({ role: chatRole, content: z.string() })).optional()
     .describe("Trailing conversation history (last ≤10 turns are used)."),
+  mode: z.enum(["agent", "ask", "plan"]).optional()
+    .describe("Execution mode. Default ask (read-only). agent/plan are policy-gated."),
+  sessionId: z.string().optional().describe("Durable session id (same store as CLI/TUI)."),
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  toolsAllow: z.array(z.string()).optional()
+    .describe("Optional allow-list of tool names for this turn (still policy-gated)."),
+  toolsDeny: z.array(z.string()).optional(),
+});
+
+export const ChatApproveRequest = z.looseObject({
+  id: z.string().min(1).describe("Approval id from the stream's approval_required event."),
+  approved: z.boolean(),
+});
+
+export const ChatApproveResponse = z.looseObject({
+  ok: z.boolean(),
+  approved: z.boolean().optional(),
+  error: z.string().optional(),
 });
 
 export const BudgetSetRequest = z.looseObject({

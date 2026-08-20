@@ -18,6 +18,8 @@ import {
   CapabilityIdRequest,
   ChatStreamEvent,
   ChatStreamRequest,
+  ChatApproveRequest,
+  ChatApproveResponse,
   ControlApproveRequest,
   ControlPlanRequest,
   EnvironmentCloseRequest,
@@ -209,6 +211,13 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     request: ChatStreamRequest,
     response: ChatStreamEvent,
     sse: true,
+  },
+  "chat.approve.post": {
+    summary: "Human decision for a pending chat tool approval (fail-closed; the model cannot approve itself).",
+    tag: "chat",
+    stability: "stable",
+    request: ChatApproveRequest,
+    response: ChatApproveResponse,
   },
   "agents.list": { summary: "List built-in agent roles (supervisor, planner, executor).", tag: "agents", stability: "stable" },
   "agents.workflow.get": {

@@ -12,7 +12,10 @@ export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
             <h1>Overview</h1>
             <div class="section-sub">XR Operating Console — <span id="dash-project" class="mono">loading…</span></div>
           </div>
-          <button class="btn" data-xr-action="refreshAll()">↻ Refresh state</button>
+          <div class="xr-s-17">
+            <button class="btn btn-primary" data-xr-action="navigateTo('chat')">New task</button>
+            <button class="btn" data-xr-action="refreshAll()">↻ Refresh state</button>
+          </div>
         </div>
 
         <div class="grid grid-4 xr-s-6">
@@ -84,7 +87,7 @@ export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
           <div class="matrix-cell">
             <div class="matrix-cell-head"><span class="matrix-cell-title">9. Computer Use</span><div class="matrix-cell-status green" id="h-cell-computer"></div></div>
             <div class="matrix-cell-val" id="h-val-computer">Opt-in Ready</div>
-            <div class="matrix-cell-sub">Jarvis permissions</div>
+            <div class="matrix-cell-sub">Computer-use permissions</div>
           </div>
           <div class="matrix-cell">
             <div class="matrix-cell-head"><span class="matrix-cell-title">10. Background tasks</span><div class="matrix-cell-status green" id="h-cell-tasks"></div></div>
@@ -141,6 +144,7 @@ export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
                 <div class="chat-header-model" id="chat-model-label">local-first · BYOK</div>
               </div>
               <div class="chat-status-row" id="chat-status-row"></div>
+              <div class="chat-run-status" id="chat-run-status" role="status" aria-live="polite" hidden></div>
               <div class="topbar-spacer"></div>
               <button class="btn btn-ghost" data-xr-action="chatTogglePin()" id="chat-pin-btn">Pin</button>
               <button class="btn btn-ghost" data-xr-action="chatBranchFromLast()">Branch</button>
@@ -180,7 +184,7 @@ export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
                 <div class="composer-meta" id="composer-meta" aria-live="polite"></div>
                 <div class="attachment-row" id="attachment-row"></div>
                 <div class="composer-input-row">
-                  <textarea id="chat-input" placeholder="Ask XR anything... /for commands, @for context" rows="1" aria-label="Message XR — press Enter to send, Shift+Enter for a new line"></textarea>
+                  <textarea id="chat-input" placeholder="Ask XR anything. Enter send · Shift+Enter newline · / commands" rows="1" aria-label="Message XR — press Enter to send, Shift+Enter for a new line"></textarea>
                   <button class="composer-send" id="chat-send-btn" data-xr-action="sendChatMessage()" aria-label="Send message" title="Send message">
                     <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                   </button>

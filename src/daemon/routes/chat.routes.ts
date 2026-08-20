@@ -29,6 +29,12 @@ import { route, type DaemonRoute } from "./router.ts";
 import { chatSpan as makeChatSpan, endChatSpan as endGenAiSpan } from "../../observability/instrument.ts";
 import { withSpan as runInSpan } from "../../observability/tracer.ts";
 import { xrMetrics } from "../../observability/metrics.ts";
+import { summarizeToolArgs } from "../../ui/ux-vocabulary.ts";
+import {
+  waitForChatApproval,
+  resolveChatApproval,
+  cancelChatApprovals,
+} from "../chat-approvals.ts";
 
 /** Chat request body (typed, minimal surface). */
 interface ChatBody {
@@ -109,6 +115,7 @@ export function chatRoutes(): DaemonRoute[] {
             release();
           };
 
+          const runId = `dash_${randomUUID().slice(0, 8)}`;
           const stream = new ReadableStream({
             async start(controller) {
               const enc = new TextEncoder();
@@ -134,7 +141,6 @@ export function chatRoutes(): DaemonRoute[] {
               // The first SSE event IS the ack and doubles as the
               // `provider_selection` status event, so the client sees state the
               // instant the stream opens — never a silent wait.
-              const runId = `dash_${randomUUID().slice(0, 8)}`;
               xrMetrics.chatStreamStarted.inc();
               send({
                 acknowledged: true,
@@ -215,13 +221,45 @@ export function chatRoutes(): DaemonRoute[] {
                     // backward compatibility (the canonical token events come
                     // through onStreamEvent).
                     say: (line) => send({ text: stripAnsi(line) }),
-                    // Approval (Phase 03 · T3.6): dangerous tools always surface
-                    // an approval event and are DENIED by default (safe default;
-                    // a dashboard approval UI can upgrade this later). Policy is
-                    // never weakened for HTTP.
+                    // Approval (Phase 03 · T3.6 / Phase 12): dangerous tools
+                    // always surface an approval event. The stream PAUSES until
+                    // the authenticated human POSTs /api/chat/approve. Timeout
+                    // and abort fail closed (deny). The model cannot approve
+                    // itself. Policy still gates execution after this returns.
                     approve: async (req) => {
-                      send({ approval_required: { tool: req.tool, reason: req.reason, args: req.args } });
-                      return false;
+                      // After the stream has closed the run cannot take a
+                      // human decision — fail closed immediately (preserves
+                      // the Phase 03 "denied by default" contract for callers
+                      // that probe approve() after the turn).
+                      if (closed || runController.signal.aborted) return false;
+                      const approvalId = randomUUID();
+                      send({
+                        type: "status",
+                        status: "waiting_for_approval",
+                        message: `Approval required: ${req.tool}`,
+                      });
+                      send({
+                        approval_required: {
+                          id: approvalId,
+                          tool: req.tool,
+                          reason: req.reason,
+                          args: summarizeToolArgs(req.args),
+                          preview: req.preview,
+                        },
+                      });
+                      const approved = await waitForChatApproval(
+                        approvalId,
+                        runId,
+                        req.tool,
+                        runController.signal,
+                      );
+                      state.store.audit("chat.approval", {
+                        id: approvalId,
+                        runId,
+                        tool: req.tool,
+                        approved,
+                      });
+                      return approved;
                     },
                   });
 
@@ -276,6 +314,7 @@ export function chatRoutes(): DaemonRoute[] {
               // provider request aborts via the run's signal (never a fake
               // "stopped sending tokens" while the provider keeps burning).
               xrMetrics.chatStreamCancelled.inc();
+              cancelChatApprovals(runId);
               runController.abort();
               releaseOnce();
             },
@@ -293,6 +332,21 @@ export function chatRoutes(): DaemonRoute[] {
           }
           return json({ error: (e as Error).message }, 400);
         }
+      },
+    }),
+    route({
+      id: "chat.approve.post",
+      path: "/api/chat/approve",
+      method: "POST",
+      handle: async ({ req, json, state }) => {
+        const body = (await req.json().catch(() => ({}))) as { id?: unknown; approved?: unknown };
+        const id = typeof body.id === "string" ? body.id : "";
+        if (!id) return json({ error: "expected { id: string, approved: boolean }" }, 400);
+        const approved = body.approved === true;
+        const ok = resolveChatApproval(id, approved);
+        state.store.audit("chat.approval.resolve", { id, approved, matched: ok });
+        if (!ok) return json({ ok: false, error: "no pending approval with that id" }, 404);
+        return json({ ok: true, approved });
       },
     }),
   ];

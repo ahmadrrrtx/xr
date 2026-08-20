@@ -46,6 +46,11 @@ This directory is the design authority for the XR UI/UX transformation
 Research notes: `research/` (terminal tech, 3D/avatar, ui-ux-pro-max
 evaluation, brand asset pixel analysis).
 
+**Phase 12 (XR 3.x UX Unification):**
+[XR_UX_ARCHITECTURE.md](XR_UX_ARCHITECTURE.md) (principles, shared state,
+shortcuts, status vocabulary) and [SURFACE_PARITY.md](SURFACE_PARITY.md)
+(CLI / TUI / Chat / Dashboard capability matrix).
+
 ## Non-negotiables (all docs agree)
 
 - Official logo/avatar are authoritative — never redrawn.

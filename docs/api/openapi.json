@@ -3008,6 +3008,38 @@
                       ],
                       "additionalProperties": {}
                     }
+                  },
+                  "mode": {
+                    "description": "Execution mode. Default ask (read-only). agent/plan are policy-gated.",
+                    "type": "string",
+                    "enum": [
+                      "agent",
+                      "ask",
+                      "plan"
+                    ]
+                  },
+                  "sessionId": {
+                    "description": "Durable session id (same store as CLI/TUI).",
+                    "type": "string"
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "model": {
+                    "type": "string"
+                  },
+                  "toolsAllow": {
+                    "description": "Optional allow-list of tool names for this turn (still policy-gated).",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "toolsDeny": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -3137,6 +3169,136 @@
                       "type": "string"
                     }
                   },
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/chat/approve": {
+      "post": {
+        "operationId": "chat.approve.post",
+        "summary": "Human decision for a pending chat tool approval (fail-closed; the model cannot approve itself).",
+        "tags": [
+          "chat"
+        ],
+        "x-xr-stability": "stable",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "description": "Approval id from the stream's approval_required event.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "approved": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "approved"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "approved": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
                   "additionalProperties": {}
                 }
               }
