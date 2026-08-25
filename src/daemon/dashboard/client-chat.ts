@@ -12,6 +12,14 @@ let chatAbortController = null;
 let chatState = loadChatState();
 let chatDraftTimer = 0;
 let chatToolSeq = 0;
+// Phase 12 · Phase D — the canonical run status of the in-flight chat run,
+// straight from the shared vocabulary in src/core/ux-status.ts (interpolated
+// into this served script as xrStatusLabel/xrStatusTone). null when idle.
+let chatRunStatus = null;
+let chatRunStatusDetail = null;
+// Maps a canonical tool_call event id to the timeline card rendering it, so a
+// tool_result lands on the SAME card instead of creating a second one.
+let chatToolCards = {};
 
 function loadChatState() {
   try {
@@ -135,6 +143,36 @@ function announceStream(msg) {
   const el = document.getElementById("xr-stream-announcer");
   if (el) el.textContent = msg;
 }
+/**
+ * Phase 12 · Phase D — one truthful status line for the run.
+ *
+ * The Control Center used to swallow every status except the two provider ones,
+ * so during a long run it showed nothing but a fabricated "Streaming..." card.
+ * This renders the canonical label instead, in the existing status row, and
+ * mirrors it to the polite live region (never a focus-stealing one).
+ *
+ * Pass null to clear it when the run ends.
+ */
+function setChatRunStatus(status, detail) {
+  chatRunStatus = status || null;
+  chatRunStatusDetail = detail || null;
+  if (chatRunStatus) {
+    announceStream(xrStatusLabel(chatRunStatus, chatRunStatusDetail));
+    if (xrStatusTone(chatRunStatus) === "wait") setAvatarState("idle");
+    else setAvatarState("working");
+  }
+  renderRuntime();
+}
+/** Human-readable one-line summary of tool arguments.
+ *  Tool args are untrusted data and can be huge or secret-bearing, so the card
+ *  shows a bounded summary; the full value stays in the collapsible body. */
+function summarizeToolArgs(args) {
+  if (args === null || args === undefined) return "";
+  try {
+    const s = typeof args === "string" ? args : JSON.stringify(args);
+    return s.length > 120 ? s.slice(0, 120) + "\\u2026" : s;
+  } catch (e) { return ""; }
+}
 function renderStreamNote(m) {
   if (!m.streaming) return "";
   const content = m.content || "";
@@ -217,7 +255,14 @@ function renderRuntime() {
   const chips = [
     ['cyan','Provider',chatState.provider], ['cyan','Model',chatState.model], ['ok','Mode',chatState.mode]
   ];
-  if (row) row.innerHTML = chips.map(c => '<span class="status-chip '+(c[0]==='ok'?'ok':'warn')+'">'+c[1]+': '+escapeHtml(c[2])+'</span>').join("");
+  // Phase 12 · Phase D — the run's canonical status rides alongside the
+  // provider/model/mode chips, so the header says what XR is doing right now
+  // in the same words the Shell uses. Tone comes from the shared vocabulary.
+  if (chatRunStatus) {
+    const tone = xrStatusTone(chatRunStatus);
+    chips.push([tone === "ok" ? "ok" : tone === "error" ? "err" : "warn", "Status", xrStatusLabel(chatRunStatus, chatRunStatusDetail)]);
+  }
+  if (row) row.innerHTML = chips.map(c => '<span class="status-chip '+(c[0]==='ok'?'ok':c[0]==='err'?'err':'warn')+'">'+escapeHtml(c[1])+': '+escapeHtml(c[2])+'</span>').join("");
   if (kv) kv.innerHTML = '<div class="kv"><span>Workspace</span><span>'+escapeHtml(chatState.workspace)+'</span></div><div class="kv"><span>Provider</span><span>'+escapeHtml(chatState.provider)+'</span></div><div class="kv"><span>Model</span><span>'+escapeHtml(chatState.model)+'</span></div>';
 }
 
@@ -284,31 +329,76 @@ async function sendChatMessage(forcedText, skipUserAppend) {
     assistantMsg.streaming=false; chatStreaming=false; chatAbortController=null; if(btn){ btn.classList.remove('stop'); } chat.updatedAt=Date.now(); saveChatState(); renderChatWorkspace(); input?.focus();
     loadComposerMeta();
     applyAvatarState();
+    // Phase 12 — never leave a stale status chip behind (brief §16). Whatever
+    // happened, the run is over, so the run status is cleared here rather than
+    // left describing work that is no longer in flight.
+    chatToolCards = {};
+    setChatRunStatus(null);
   }
 }
 
-function stopChatGeneration(){ if(chatAbortController) chatAbortController.abort(); chatStreaming=false; announceStream("Stopped"); applyAvatarState(); const c=activeChat(); if(c){ const m=c.messages.find(x=>x.streaming); if(m){ m.streaming=false; m.content += '\\n\\n_Stopped by administrator._'; } saveChatState(); renderMessages(); } }
+function stopChatGeneration(){ if(chatAbortController) chatAbortController.abort(); chatStreaming=false;
+  // Phase 12 · Phase D — a truthful interrupt. The abort signals the daemon,
+  // which cancels cooperatively at the loop's next checkpoint, so this says
+  // "requested" rather than claiming the work already stopped.
+  announceStream("Cancellation requested");
+  Object.keys(chatToolCards).forEach(function(k){ updateToolEvent(chatToolCards[k].card, 'err', 'Interrupted \u2014 no result reported.'); });
+  chatToolCards = {};
+  setChatRunStatus("cancelled", null);
+  applyAvatarState(); const c=activeChat(); if(c){ const m=c.messages.find(x=>x.streaming); if(m){ m.streaming=false; m.content += '\\n\\n_Stopped by administrator._'; } saveChatState(); renderMessages(); } }
 
 async function streamChat(text, assistantMsg) {
-  announceStream("XR is responding");
-  const toolId = addToolEvent('AI chat prompt','Call provider hot-path routing','running','Streaming...');
+  // Phase 12 · Phase D — the fabricated "Call provider hot-path routing /
+  // Streaming..." card is gone. It described work XR was not doing and hid the
+  // work XR WAS doing: the route had been emitting real tool_call/tool_result/
+  // usage events all along and this client dropped every one of them. The
+  // timeline now shows the tools that really ran and the status line shows what
+  // XR is really doing, both from the canonical event stream.
+  chatToolCards = {};
+  setChatRunStatus("preparing", null);
   const history = activeChat().messages.filter(m=>!m.streaming).slice(-10).map(m=>({ role:m.role, content:m.content }));
   const res = await fetch(BASE + "/api/v1/chat", { method:"POST", headers:{ Authorization:"Bearer "+TOKEN, "Content-Type":"application/json" }, body:JSON.stringify({ message:text, history }), signal: chatAbortController.signal });
-  if(!res.ok) { throw new Error('API routing failed or token expired.'); }
-  const reader = res.body?.getReader(); const decoder = new TextDecoder(); let reply="";
+  if(!res.ok) { setChatRunStatus(null); throw new Error('API routing failed or token expired.'); }
+  const reader = res.body?.getReader(); const decoder = new TextDecoder(); let reply=""; let usage=null;
   if(reader){
     while(true){ const r=await reader.read(); if(r.done) break; const chunk=decoder.decode(r.value,{stream:true}); const lines=chunk.split("\\n"); for(const line of lines){ if(!line.startsWith('data: ')) continue; const data=line.slice(6).trim(); if(data==='[DONE]') continue; try{ const j=JSON.parse(data); if(j.error) throw new Error(j.error);
-      // Phase 05 canonical streaming contract:
-      if(j.type==='status'){ if(j.status==='provider_selection'||j.status==='provider_ready'){ renderRuntime(); } continue; }
+      // Phase 05 canonical streaming contract — consumed in full (Phase 12):
+      if(j.type==='status'){
+        setChatRunStatus(j.status, j.status==='tool_running' ? j.message : null);
+        if(j.status==='provider_selection'||j.status==='provider_ready'){ renderRuntime(); }
+        continue;
+      }
       if(j.type==='token'){ reply+=j.text; }
-      else if(j.type==='done'){ reply=j.fullText || j.finalMessage || reply; }
+      else if(j.type==='tool_call'){
+        // Real tool, real (bounded, untrusted) arguments, real running state.
+        const cardId = addToolEvent(j.tool || 'tool', null, 'running', summarizeToolArgs(j.args) || 'Running\\u2026');
+        if(j.id) chatToolCards[j.id] = { card: cardId, t0: Date.now() };
+        setChatRunStatus('tool_running', j.tool || null);
+      }
+      else if(j.type==='tool_result'){
+        const rec = j.id ? chatToolCards[j.id] : null;
+        // Tool output is DATA, never instructions: it goes through escapeHtml
+        // into the collapsible body exactly as the framing layer intends.
+        const body = j.ok ? (j.result || 'Completed') : (j.error || 'Failed');
+        const took = rec ? ' \\u00b7 ' + (Date.now() - rec.t0) + 'ms' : '';
+        if(rec) updateToolEvent(rec.card, j.ok ? 'done' : 'err', body + took);
+        else addToolEvent(j.tool || 'tool', null, j.ok ? 'done' : 'err', body + took);
+        if(j.id) delete chatToolCards[j.id];
+      }
+      else if(j.type==='usage'){ usage = j.usage || usage; }
+      else if(j.type==='done'){ reply=j.fullText || j.finalMessage || reply; if(j.usage) usage=j.usage; }
       else if(j.type==='error'){ throw new Error(j.message || j.error || 'generation failed'); }
       else if(j.delta){ reply+=j.delta; }
       else if(j.text){ reply=j.text; } // legacy fullText replacement
     } catch(e){ if(data && data[0] !== '{') reply+=data; } assistantMsg.content=reply; renderMessages(); } }
   } else { const j=await res.json(); reply=j.reply || j.content || ''; assistantMsg.content=reply; }
-  updateToolEvent(toolId,'done','Completed execution');
-  announceStream("Response complete");
+  // Any tool whose result never arrived is left honest. The old code stamped
+  // every run "Completed execution" regardless; claiming success for work whose
+  // outcome was never observed is exactly what must not happen.
+  Object.keys(chatToolCards).forEach(function(k){ updateToolEvent(chatToolCards[k].card, 'err', 'No result reported \\u2014 the run ended first.'); });
+  chatToolCards = {};
+  setChatRunStatus(null);
+  announceStream(usage ? 'Response complete \\u00b7 ' + (usage.inTokens || 0) + ' tokens in / ' + (usage.outTokens || 0) + ' out' : 'Response complete');
 }
 
 async function handleSlashCommand(text, assistantMsg) {

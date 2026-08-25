@@ -68,10 +68,29 @@ describe("C-2 — approval cards are WHAT / WHY / RISK, driven by the real plane
 describe("C-3 — streaming transparency", () => {
   test("a polite live-region announcer exists and is announced on start/end/stop/error", () => {
     expect(DASHBOARD_PAGE).toContain('id="xr-stream-announcer" class="xr-sr-only" aria-live="polite"');
-    expect(DASHBOARD_SCRIPT).toContain('announceStream("XR is responding")');
-    expect(DASHBOARD_SCRIPT).toContain('announceStream("Response complete")');
-    expect(DASHBOARD_SCRIPT).toContain('announceStream("Stopped")');
+    /**
+     * Phase 12 · Phase D — the wording changed DELIBERATELY, the guarantee did
+     * not: every one of start / end / stop / error still reaches the SAME
+     * polite live region, and none of them steals focus.
+     *
+     *   "XR is responding"     → setChatRunStatus("preparing") → announces the
+     *                             canonical label. The old string was a vague
+     *                             placeholder; the new one names the real state
+     *                             and is refined by every subsequent status.
+     *   "Response complete"    → still announced, now with the REAL token usage
+     *                             from the `usage` event when one arrived.
+     *   "Stopped"              → "Cancellation requested". The abort signals the
+     *                             daemon, which cancels cooperatively at the
+     *                             loop's next checkpoint — claiming it already
+     *                             stopped overstated what the UI knows (§17).
+     *   "XR hit an error"      → unchanged.
+     */
+    expect(DASHBOARD_SCRIPT).toContain('setChatRunStatus("preparing", null)');
+    expect(DASHBOARD_SCRIPT).toContain("'Response complete'");
+    expect(DASHBOARD_SCRIPT).toContain('announceStream("Cancellation requested")');
     expect(DASHBOARD_SCRIPT).toContain('announceStream("XR hit an error")');
+    // The announcer must stay polite and must never be given focus.
+    expect(DASHBOARD_SCRIPT).not.toContain('getElementById("xr-stream-announcer").focus');
   });
 
   test("the sr-only utility visually hides the announcer", () => {
@@ -105,5 +124,40 @@ describe("C-4 — sessions search & resume affordances", () => {
   test("no fake resume is offered (opening a session shows real steps)", () => {
     expect(DASHBOARD_SCRIPT).not.toContain("resumeSession");
     expect(DASHBOARD_SCRIPT).toContain('title="Open session steps"');
+  });
+});
+
+describe("Phase 12 · Phase D — chat consumes the canonical stream honestly", () => {
+  test("the fabricated tool card is gone", () => {
+    // This card described work XR was not doing ("Call provider hot-path
+    // routing") and was stamped "Completed execution" on every run regardless
+    // of outcome — the fake progress brief §7 forbids.
+    // Asserted against the EXECUTABLE form: the phrase also appears in the
+    // explanatory comment above the replacement, and a comment is not behaviour.
+    expect(DASHBOARD_SCRIPT).not.toContain("addToolEvent('AI chat prompt'");
+    expect(DASHBOARD_SCRIPT).not.toContain("updateToolEvent(toolId,'done','Completed execution')");
+    // The single unconditional card the old code created for every request.
+    expect(DASHBOARD_SCRIPT).not.toContain("const toolId = addToolEvent(");
+  });
+
+  test("real tool_call / tool_result / usage events are consumed", () => {
+    expect(DASHBOARD_SCRIPT).toContain("j.type==='tool_call'");
+    expect(DASHBOARD_SCRIPT).toContain("j.type==='tool_result'");
+    expect(DASHBOARD_SCRIPT).toContain("j.type==='usage'");
+    // A result must land on the SAME card as its call, correlated by event id.
+    expect(DASHBOARD_SCRIPT).toContain("chatToolCards[j.id]");
+  });
+
+  test("an unobserved tool outcome is never reported as success", () => {
+    expect(DASHBOARD_SCRIPT).toContain("No result reported");
+  });
+
+  test("the shared status vocabulary is interpolated, not duplicated", () => {
+    // Interpolated from src/core/ux-status.ts — the browser copy cannot drift
+    // from the kernel copy because there is only one copy.
+    expect(DASHBOARD_SCRIPT).toContain("XR_RUN_STATUS_LABEL");
+    expect(DASHBOARD_SCRIPT).toContain("function xrStatusLabel(status, detail)");
+    // JSON.stringify emits compact JSON — assert the real serialized form.
+    expect(DASHBOARD_SCRIPT).toContain('"awaiting_approval":"Waiting for approval"');
   });
 });
