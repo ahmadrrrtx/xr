@@ -8,6 +8,7 @@ export type Mode = "agent" | "plan" | "ask";
 
 /** Trust level of a value/step — basis of the Dual-LLM separation (later phase). */
 import type { EnvironmentExecutable, TrustRequest } from "../runtime/trust/types.ts";
+import type { RunStatus } from "./ux-status.ts";
 
 export type Trust = "trusted" | "quarantined";
 
@@ -188,7 +189,24 @@ export interface ProviderStreamChunk {
 export type ChatStreamEvent =
   | {
       type: "status";
-      status: string;
+      /**
+       * Phase 12 · Phase C — a canonical run status from the single shared
+       * vocabulary in `src/core/ux-status.ts`.
+       *
+       * This used to be an unconstrained `string`, which is why the three
+       * surfaces drifted: the loop emitted three ad-hoc values, the Shell
+       * invented its own labels, and the Control Center ignored all but two.
+       * Narrowing it here makes a typo'd or invented status a compile error, so
+       * every surface necessarily renders the same vocabulary.
+       *
+       * The WIRE contract stays permissive on purpose (`ChatStreamEvent` in
+       * `src/daemon/routes/schemas.ts` is a loose object with `status:
+       * z.string()`), because pre-Phase-05 consumers and resumed streams may
+       * carry older labels. `runStatusLabel()` humanises anything unknown
+       * rather than dropping it — so tightening the type costs no
+       * compatibility.
+       */
+      status: RunStatus;
       /** Provider id once resolved (e.g. "provider_selection"/"provider_ready"). */
       provider?: string;
       model?: string;
