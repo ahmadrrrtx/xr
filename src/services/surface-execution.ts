@@ -27,7 +27,7 @@
  * When a kernel IS available, callers should prefer `AgentService.execute()`.
  */
 
-import type { ApprovalRequest, Mode, Provider } from "../core/types.ts";
+import type { ApprovalRequest, Mode, Provider, StreamEventSink } from "../core/types.ts";
 import type { Store } from "../state/workspace-store.ts";
 import type { MemoryStore } from "../context/memory/store.ts";
 import {
@@ -67,6 +67,16 @@ export interface SurfaceExecuteRequest {
   readonly onDiagnostic?: (note: string) => void;
   /** A-19 — the surface's abort handle for this run (Shell Ctrl+C/Esc). */
   readonly signal?: AbortSignal;
+  /**
+   * Phase 12 · Phase C/E — the canonical streaming event sink.
+   *
+   * The Shell previously could not see structured progress at all: it scraped
+   * the human-readable `say()` lines and hardcoded its own status words, so the
+   * same run read differently than it did in the Control Center. Forwarding the
+   * same sink the daemon route uses means every surface describes one run with
+   * one vocabulary (`src/core/ux-status.ts`) instead of three.
+   */
+  readonly onStreamEvent?: StreamEventSink;
 }
 
 /**
@@ -145,6 +155,7 @@ export async function executeOnSurface(
     ...(request.memoryStore ? { memoryStore: request.memoryStore } : {}),
     ...(request.sessionSummary ? { sessionSummary: request.sessionSummary } : {}),
     ...(request.signal ? { signal: request.signal } : {}),
+    ...(request.onStreamEvent ? { onStreamEvent: request.onStreamEvent } : {}),
   };
 
   return await runEnvelope(envelope, { store: request.store }, context);

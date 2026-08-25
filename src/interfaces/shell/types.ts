@@ -6,6 +6,7 @@
 import type { ShellViewId } from "../../ui/icons.ts";
 import type { WorkspaceManager } from "../../core/workspace.ts";
 import type { Store } from "../../state/workspace-store.ts";
+import { runStatusLabel } from "../../core/ux-status.ts";
 
 export type { ShellViewId };
 
@@ -165,4 +166,22 @@ export interface ShellState {
   bootPhase: number;
   helpSeen: number;
   auditValid: boolean | null;
+}
+
+/**
+ * Phase 12 · Phase E — map a canonical stream event to the Shell status line.
+ *
+ * Pure so it can be tested without a terminal. The Shell used to invent its own
+ * words here ("planning", "reading", "thinking"); it now renders the same
+ * vocabulary the Control Center does, from `src/core/ux-status.ts`.
+ *
+ * Returns `null` for events that carry no status, so the caller keeps the
+ * current label instead of blanking it.
+ */
+export function busyLabelForEvent(
+  ev: import("../../core/types.ts").ChatStreamEvent,
+): string | null {
+  if (ev.type !== "status") return null;
+  // `tool_running` carries the real tool name in `message`.
+  return runStatusLabel(ev.status, ev.status === "tool_running" ? ev.message : undefined);
 }
