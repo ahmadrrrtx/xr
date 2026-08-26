@@ -161,3 +161,76 @@ describe("Phase 12 · Phase D — chat consumes the canonical stream honestly", 
     expect(DASHBOARD_SCRIPT).toContain('"awaiting_approval":"Waiting for approval"');
   });
 });
+
+describe("Phase 12 · Phase G — chat header reflects daemon truth, not browser fiction", () => {
+  test("provider/model/workspace are no longer localStorage fakes", () => {
+    // These defaults let the header name a provider the CLI and Shell had never
+    // heard of — "CLI says one model, dashboard says another".
+    expect(DASHBOARD_SCRIPT).not.toContain('state.provider || "Auto"');
+    expect(DASHBOARD_SCRIPT).not.toContain('state.model || "Auto"');
+    expect(DASHBOARD_SCRIPT).not.toContain('state.workspace || "Default"');
+    // And they are hydrated from the daemon instead.
+    expect(DASHBOARD_SCRIPT).toContain("async function syncChatRuntime()");
+    expect(DASHBOARD_SCRIPT).toContain('api("/api/providers")');
+  });
+
+  test("unknown provider renders as unknown, never as a plausible guess", () => {
+    // The escape is resolved at compose time, so the served script carries the
+    // real U+2026 character (allowed by the emoji gate — it is not a pictograph).
+    expect(DASHBOARD_SCRIPT).toContain("chatState.provider || 'detecting\u2026'");
+  });
+
+  test("the mode control cycles only real modes and is actually sent", () => {
+    // "Research" was a fourth option mapping to no server mode, and the value
+    // was never sent at all — the control changed a label and nothing else.
+    expect(DASHBOARD_SCRIPT).toContain("const modes=['ask','plan','agent']");
+    expect(DASHBOARD_SCRIPT).not.toContain("'Ask','Plan','Research','Agent'");
+    expect(DASHBOARD_SCRIPT).toContain("mode: chatState.mode");
+  });
+
+  test("the dead fake approval/budget state is gone", () => {
+    expect(DASHBOARD_SCRIPT).not.toContain('state.approval || "Ask"');
+    expect(DASHBOARD_SCRIPT).not.toContain('state.budget || "Guarded"');
+  });
+});
+
+describe("Phase 12 · Phase H — the new surfaces are accessible and frame tool output as data", () => {
+  test("the run status is conveyed in text, never by colour alone", () => {
+    // WCAG 1.4.1 — the chip carries the label; the class only paints.
+    expect(DASHBOARD_SCRIPT).toContain("xrStatusLabel(chatRunStatus, chatRunStatusDetail)");
+    expect(DASHBOARD_SCRIPT).toContain("escapeHtml(c[1])+': '+escapeHtml(c[2])");
+  });
+
+  test("tool output is written as text, never parsed as markup", () => {
+    // §10 — tool results are untrusted DATA. updateToolEvent assigns textContent,
+    // and addToolEvent escapes, so a tool returning markup cannot inject UI or
+    // masquerade as an XR instruction.
+    expect(DASHBOARD_SCRIPT).toContain("const out=el.querySelector('.tool-body'); if(out) out.textContent=result||'';");
+    expect(DASHBOARD_SCRIPT).toContain("tool-body\">'+escapeHtml(result||'')+'</div>'");
+  });
+
+  test("tool arguments are bounded before display", () => {
+    expect(DASHBOARD_SCRIPT).toContain("function summarizeToolArgs(args)");
+    expect(DASHBOARD_SCRIPT).toContain("s.length > 120");
+  });
+
+  test("the status announcer is polite and is never focused", () => {
+    expect(DASHBOARD_PAGE).toContain('id="xr-stream-announcer" class="xr-sr-only" aria-live="polite"');
+    expect(DASHBOARD_SCRIPT).not.toContain('announcer").focus');
+  });
+
+  test("no banned emoji were introduced by the new chrome", () => {
+    // The honesty gate already sweeps the whole script; this pins that the new
+    // status/tool copy stays within XR's allowed symbol vocabulary.
+    // Computed once and asserted once — a per-character expect() inflates the
+    // suite's assertion count by ~157k and makes that number meaningless.
+    const allowed = new Set([0x26a0, 0x2713, 0x2715]);
+    const banned: string[] = [];
+    for (const ch of DASHBOARD_SCRIPT) {
+      const cp = ch.codePointAt(0)!;
+      if (cp >= 0x1f000 && cp <= 0x1faff) banned.push(ch);
+      else if (cp >= 0x2600 && cp <= 0x27bf && !allowed.has(cp)) banned.push(ch);
+    }
+    expect(banned).toEqual([]);
+  });
+});

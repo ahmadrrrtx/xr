@@ -49,12 +49,18 @@ function normalizeChatState(state) {
   let activeId = state.activeId && chats.some(c => c.id === state.activeId) ? state.activeId : (chats[0]?.id || "");
   return {
     activeId,
-    mode: state.mode || "Ask",
-    provider: state.provider || "Auto",
-    model: state.model || "Auto",
-    workspace: state.workspace || "Default",
-    approval: state.approval || "Ask",
-    budget: state.budget || "Guarded",
+    // Phase 12 · Phase G — mode is the ONE piece of run state the browser owns,
+    // because the user picks it. It is validated against the real Mode union
+    // (src/core/types.ts: "agent" | "plan" | "ask") and now actually SENT with
+    // the request. The default mirrors the server's own default: safe read-only.
+    mode: ["agent", "plan", "ask"].indexOf(state.mode) >= 0 ? state.mode : "ask",
+    // provider / model / workspace are DAEMON state, not browser state. They are
+    // hydrated by syncChatRuntime(). Until then they are empty and render as
+    // "detecting…" — never as a plausible-looking fake ("Auto"/"Default") that
+    // silently contradicts what the CLI and the Shell report.
+    provider: "",
+    model: "",
+    workspace: "",
     toggles: Object.assign({ memory: true, research: false, shield: true, computer: false }, state.toggles || {}),
     chats
   };
@@ -80,6 +86,10 @@ function buildChatUI() {
   setupDropZone();
   renderChatWorkspace();
   refreshInspectorData();
+  // Phase 12 · Phase G — the header reads the daemon's real provider/model/
+  // workspace, not a localStorage guess. Async and non-blocking: the shell
+  // paints first and the values land when they arrive.
+  void syncChatRuntime();
 }
 
 function renderChatWorkspace() {
@@ -253,7 +263,7 @@ function renderRuntime() {
   const row = document.getElementById("chat-status-row");
   const kv = document.getElementById("chat-runtime-kv");
   const chips = [
-    ['cyan','Provider',chatState.provider], ['cyan','Model',chatState.model], ['ok','Mode',chatState.mode]
+    ['cyan','Provider',chatState.provider || 'detecting\u2026'], ['cyan','Model',chatState.model || 'detecting\u2026'], ['ok','Mode',chatState.mode]
   ];
   // Phase 12 · Phase D — the run's canonical status rides alongside the
   // provider/model/mode chips, so the header says what XR is doing right now
@@ -263,7 +273,7 @@ function renderRuntime() {
     chips.push([tone === "ok" ? "ok" : tone === "error" ? "err" : "warn", "Status", xrStatusLabel(chatRunStatus, chatRunStatusDetail)]);
   }
   if (row) row.innerHTML = chips.map(c => '<span class="status-chip '+(c[0]==='ok'?'ok':c[0]==='err'?'err':'warn')+'">'+escapeHtml(c[1])+': '+escapeHtml(c[2])+'</span>').join("");
-  if (kv) kv.innerHTML = '<div class="kv"><span>Workspace</span><span>'+escapeHtml(chatState.workspace)+'</span></div><div class="kv"><span>Provider</span><span>'+escapeHtml(chatState.provider)+'</span></div><div class="kv"><span>Model</span><span>'+escapeHtml(chatState.model)+'</span></div>';
+  if (kv) kv.innerHTML = '<div class="kv"><span>Workspace</span><span>'+escapeHtml(chatState.workspace || 'detecting\u2026')+'</span></div><div class="kv"><span>Provider</span><span>'+escapeHtml(chatState.provider || 'detecting\u2026')+'</span></div><div class="kv"><span>Model</span><span>'+escapeHtml(chatState.model || 'detecting\u2026')+'</span></div>';
 }
 
 function updateComposerContext() {
@@ -304,7 +314,33 @@ function editMessage(idx){ const c=activeChat(); if(!c || !c.messages[idx]) retu
 
 function insertHint(text) { const input=document.getElementById('chat-input'); if(!input) return; input.value=text; input.focus(); autoResize(input); updateComposerContext(); saveDraftSoon(); }
 function toggleComposerFlag(key){ chatState.toggles[key]=!chatState.toggles[key]; saveChatState(); renderComposer(); renderRuntime(); if(key==='memory') loadMemoryPeek(); }
-function cycleChatMode(){ const modes=['Ask','Plan','Research','Agent']; const i=modes.indexOf(chatState.mode); chatState.mode=modes[(i+1)%modes.length]; saveChatState(); renderComposer(); renderRuntime(); }
+// Phase 12 · Phase G — only the three REAL modes. "Research" was a fourth
+// option mapping to nothing: the server has no research mode, and the value was
+// never sent at all, so cycling it changed a label and nothing else.
+function cycleChatMode(){ const modes=['ask','plan','agent']; const i=modes.indexOf(chatState.mode); chatState.mode=modes[(i+1)%modes.length]; saveChatState(); renderComposer(); renderRuntime(); }
+/**
+ * Phase 12 · Phase G — hydrate the chat header from the daemon.
+ *
+ * Provider, model and workspace used to be localStorage strings defaulting to
+ * "Auto"/"Auto"/"Default", so the header could name a provider the CLI and the
+ * Shell had never heard of — precisely the "CLI says one model, dashboard says
+ * another" divergence. One agent must read the same from every window.
+ *
+ * Failure is silent on purpose: if the daemon is unreachable the fields stay
+ * empty and render as "detecting…". Inventing a value would be worse than
+ * admitting we do not know.
+ */
+async function syncChatRuntime() {
+  try {
+    const p = await api("/api/providers");
+    if (p && p.primary) { chatState.provider = p.primary; chatState.model = p.model || ""; }
+  } catch (e) {}
+  try {
+    const ov = await api("/api/overview");
+    if (ov && ov.project) chatState.workspace = ov.project;
+  } catch (e) {}
+  renderRuntime();
+}
 function openAttachmentPicker(){ document.getElementById('chat-file-input')?.click(); }
 function removeAttachment(i){ const c=activeChat(); if(!c) return; c.attachments.splice(i,1); saveChatState(); renderAttachments(); }
 function addFilesToComposer(files){ const c=activeChat(); if(!c || !files) return; Array.from(files).forEach(f => c.attachments.push({ name:f.name, size:f.size, type:f.type || 'application/octet-stream' })); saveChatState(); renderAttachments(); toast(files.length+' file(s) attached', 'ok'); }
@@ -334,6 +370,9 @@ async function sendChatMessage(forcedText, skipUserAppend) {
     // left describing work that is no longer in flight.
     chatToolCards = {};
     setChatRunStatus(null);
+    // A run can move the effective provider (fallback). Re-read it so the
+    // header never keeps describing the pre-run state.
+    void syncChatRuntime();
   }
 }
 
@@ -357,7 +396,7 @@ async function streamChat(text, assistantMsg) {
   chatToolCards = {};
   setChatRunStatus("preparing", null);
   const history = activeChat().messages.filter(m=>!m.streaming).slice(-10).map(m=>({ role:m.role, content:m.content }));
-  const res = await fetch(BASE + "/api/v1/chat", { method:"POST", headers:{ Authorization:"Bearer "+TOKEN, "Content-Type":"application/json" }, body:JSON.stringify({ message:text, history }), signal: chatAbortController.signal });
+  const res = await fetch(BASE + "/api/v1/chat", { method:"POST", headers:{ Authorization:"Bearer "+TOKEN, "Content-Type":"application/json" }, body:JSON.stringify({ message:text, history, mode: chatState.mode }), signal: chatAbortController.signal });
   if(!res.ok) { setChatRunStatus(null); throw new Error('API routing failed or token expired.'); }
   const reader = res.body?.getReader(); const decoder = new TextDecoder(); let reply=""; let usage=null;
   if(reader){
