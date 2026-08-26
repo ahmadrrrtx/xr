@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-19T11:00:55.596Z",
+  "generatedAt": "2026-08-26T00:48:09.694Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -51,8 +51,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 603,
-    "testFiles": 293,
+    "sourceFiles": 604,
+    "testFiles": 294,
     "cliCommands": 42,
     "daemonRoutes": 121,
     "providers": 26,
@@ -303,6 +303,7 @@
     "src/core/stall-detector.ts",
     "src/core/tokens.ts",
     "src/core/types.ts",
+    "src/core/ux-status.ts",
     "src/core/version.ts",
     "src/core/workspace.ts",
     "src/cost/estimate.ts",
@@ -1044,6 +1045,7 @@
     "test/trust/verify.test.ts",
     "test/update/channels-update.test.ts",
     "test/util/process.test.ts",
+    "test/ux-status.test.ts",
     "test/ux/disclosure.test.ts",
     "test/ux/mode-color.test.ts",
     "test/ux/onboarding-yes.test.ts",
