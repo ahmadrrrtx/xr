@@ -70,6 +70,8 @@ Supporting gaps:
 | 4 | Chat truthful status line (§7) | Statuses other than 2 dropped | `announceStream` polite live region | No status line | Drive one status line from the shared vocabulary | `client-chat.ts`, `client-core.ts` (vocabulary interpolation) | vocabulary present in served script | Low |
 | 5 | TUI consumes canonical state (§16) | Hardcoded `busyLabel` | Shell `state.busyLabel`, `addTimeline` | TUI invents vocabulary | Feed `busyLabel` from `onStreamEvent` statuses via shared labels | `shell/app.ts`, `shell/types.ts` | label-parity test | Med — TUI hot path |
 | 6 | Docs (§41) | Absent | rich `docs/ux/01–12` corpus | No architecture/parity doc | Author both docs from verified code | `docs/ux/*.md` (new) | n/a | None |
+| 7 | Cross-surface state consistency (§31) | Chat header read `chatState.provider/model/workspace` from `localStorage` with fake defaults `"Auto"`/`"Auto"`/`"Default"`; `approval`/`budget` were dead fakes; `mode` cycled a non-existent `Research` value and was never sent | `/api/providers` → `primary`/`model`; `/api/overview` → `project`; `ChatBody.mode` already accepted | Header could contradict the CLI/Shell; the mode control was a no-op | Hydrate from the daemon, validate mode against `Mode`, send it, drop dead fakes, render unknown as `detecting…` | `client-chat.ts` | 4 static gates | Low — no markup change, so the HTML SHA pin holds |
+| 8 | Performance verification (§37/§40) | Harnesses exist but unmeasured this cycle | `scripts/perf/dashboard-bench.ts`, `scripts/perf-daemon-routes.ts` | No numbers | Run both; record p50/p95/max | n/a (docs) | n/a | None |
 
 **Explicitly out of scope this pass** (would require inventing unsupported
 functionality, which the brief forbids): `@file/@folder/@session` mentions

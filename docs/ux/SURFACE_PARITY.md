@@ -27,6 +27,8 @@ surface can appear to support something the backend does not.
 | Tool-call visibility | SUPPORTED `say()` timeline | SUPPORTED timeline + `Ctrl+T` detail | **SUPPORTED** real tool cards | **SUPPORTED** | `tool_call` / `tool_result` events |
 | Tool approval | SUPPORTED confirm prompt | SUPPORTED `promptConfirm` overlay | PARTIAL inspector approvals list | SUPPORTED approvals panel | `capabilities/policy.ts`, `/api/control/pending` |
 | Provider switch | SUPPORTED `xr providers set` | SUPPORTED `Alt+P`, `/model` | N/A (per-request) | SUPPORTED providers panel | `providers/gateway.ts` |
+| **Active provider/model shown** | SUPPORTED from config | SUPPORTED status bar + sidebar | **SUPPORTED** hydrated from `/api/providers` (was a localStorage fake `"Auto"`) | SUPPORTED | `XRConfig.defaults` |
+| **Execution mode (agent/plan/ask)** | SUPPORTED `xr run --mode` | SUPPORTED `Shift+Tab`, `/mode` | **SUPPORTED** — now validated against `Mode` and actually sent (was a no-op cycling a non-existent `Research` mode) | N/A | `Mode` union, `ChatBody.mode` |
 | Model switch | SUPPORTED `xr models set` | SUPPORTED `Alt+P`, `/model` | N/A | SUPPORTED models panel | `providers/factory.ts`, `local/registry.ts` |
 | Fallback visibility | SUPPORTED | SUPPORTED | PARTIAL provider chips refresh | SUPPORTED | `providers/fallback-chain.ts` |
 | Memory status | SUPPORTED `xr memory …` | SUPPORTED `/memory`, memory view | SUPPORTED `/memory` | SUPPORTED memory panel | `context/memory/store.ts` |
@@ -58,6 +60,8 @@ Bold = changed or newly truthful in Phase 12.
 | Truthful run status (all surfaces) | 3 free-form strings on an unconstrained `status: string`; TUI invented "planning"/"reading"/"thinking"; dashboard dropped all but 2 | 12-status canonical vocabulary in `src/core/ux-status.ts`; TUI footer and dashboard chip render the same labels from the same table |
 | Loop progress events | Only `provider_ready` emitted from the loop | `compacting_context`, `generating`, `tool_running` (with tool name), `budget_stopped`, `finishing` added at verified points |
 | Surface stream access | `executeOnSurface` had no stream sink, so the Shell structurally *could not* see structured events | `onStreamEvent` forwarded through the one shared surface entry — Shell, Telegram and Voice all get it by construction |
+| **Chat header state** | `provider`/`model`/`workspace` were `localStorage` strings defaulting to `"Auto"`/`"Auto"`/`"Default"`; `approval`/`budget` were dead fakes | Hydrated from the daemon; unknown renders as `detecting…`; re-synced after each run so a fallback is reflected; dead fakes removed |
+| **Mode control** | Cycled `Ask/Plan/Research/Agent` — `Research` is not a member of `Mode` — and the value was **never sent**, so the control was a no-op | Cycles the three real modes, validated against the union, and sent with the request |
 
 ---
 

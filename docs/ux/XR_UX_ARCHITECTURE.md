@@ -138,6 +138,36 @@ therefore **interpolated** from the kernel module — the same pattern
 `style-tokens.ts` already uses for `COLOR`. A test executes the interpolated JS
 and asserts it equals the TypeScript tables, so the browser copy cannot drift.
 
+### 3.5 Browser-owned vs daemon-owned state (Phase G)
+
+A browser surface may own state that **only the user chooses**. It may not own
+state that describes **the agent**. Phase 12 found and fixed a live violation:
+
+| Field | Before | After |
+|---|---|---|
+| `chatState.provider` | `localStorage`, default `"Auto"` | hydrated from `/api/providers` → `primary` |
+| `chatState.model` | `localStorage`, default `"Auto"` | hydrated from `/api/providers` → `model` |
+| `chatState.workspace` | `localStorage`, default `"Default"` | hydrated from `/api/overview` → `project` |
+| `chatState.mode` | `localStorage`; cycled `Ask/Plan/Research/Agent`; **never sent** | validated against the real `Mode` union and **sent with the request** |
+| `chatState.approval` / `.budget` | fake literals `"Ask"` / `"Guarded"` | removed (dead state, never displayed) |
+
+The consequence before the fix: the chat header could read `Provider: Auto ·
+Model: Auto` while the CLI and Shell reported the configured
+`ollama/qwen2.5:7b` — the exact "different windows, different truths" failure.
+Worse, the mode chip cycled through four modes including `Research`, which is
+**not a member of `Mode`** (`"agent" | "plan" | "ask"`), and the value was never
+transmitted — so the control changed a label and nothing else. That is a fake
+control, which this repository's own honesty gates exist to prevent.
+
+Rules that now hold:
+
+1. Unknown daemon state renders as `detecting…`, **never** as a plausible guess.
+2. If the daemon is unreachable the fields stay empty. Inventing a value would be
+   worse than admitting ignorance.
+3. State is re-synced after each run, because a fallback may have moved the
+   effective provider.
+4. A control that cannot reach the backend must not be rendered as if it could.
+
 ---
 
 ## 4. Interaction model
@@ -274,13 +304,41 @@ vocabularies.
 
 ## 9. Performance budgets
 
-| Target | Measured this phase |
+Measured this phase with the project's own harnesses (Bun 1.3.14, pinned).
+
+**CLI fast paths** — `bun run src/index.ts`, warm:
+
+| Command | Measured |
 |---|---|
-| `xr --version` | 34–42 ms |
-| `xr --help` | 35–38 ms |
-| Dashboard first useful paint | two-stage `loadDashboard`; light cells paint before provider/model cells |
-| Command palette | local command metadata only — no backend call to render |
-| Provider selector | cached state; async refresh |
+| `--version` | 36–37 ms |
+| `--help` | 37–43 ms |
+
+**Dashboard render** — `scripts/perf/dashboard-bench.ts` (9 samples):
+p50 **7.4 ms**, p99 **18.1 ms**, min 4.6 ms.
+
+**Daemon endpoints** — `scripts/perf-daemon-routes.ts` (5 samples, p50/p95/max ms):
+
+| Endpoint | p50 | p95 | max |
+|---|---|---|---|
+| `health` | 0 | 3 | 3 |
+| `overview` | 12 | 12 | 12 |
+| `providers.list` | 3 | 4 | 4 |
+| `models.list` | 1 | 2 | 2 |
+| `onboarding.status` | 1 | 1 | 1 |
+| `chat` (offline 503 path) | 1 | 2 | 2 |
+
+For context, the supplied audits recorded `providers.list` at **17–18 s**,
+`models.list` at **7–13 s** and `onboarding.status` at **10–12 s**. Those were
+fixed by Phases 01/04; this table confirms they remain fixed.
+
+Phase G adds two calls on chat-panel open (`/api/providers` ≈ 3 ms,
+`/api/overview` ≈ 12 ms). Both are `await`-free with respect to paint — issued
+after `renderChatWorkspace()` — so they cost no time-to-shell.
+
+**Command palette** — verified to make **zero** backend calls on open:
+`openPalette()` is DOM-only, and the Shell's `paletteItems()` builds from local
+metadata (the `async` in that function is inside `run:` callbacks, which fire on
+*selection*, not on open). Opening is therefore effectively instant.
 
 Rules that must not regress:
 
