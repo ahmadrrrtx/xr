@@ -575,6 +575,9 @@ export async function runAgentLoop(
           : null;
         if (!extra) {
           say(`\x1b[33m⏸ stopped — ${decision.reason}\x1b[0m`);
+          // Phase 12 · Phase C — a budget stop is its own honest state, not a
+          // generic error: nothing failed, XR stopped to respect the cap.
+          deps.onStreamEvent?.({ type: "status", status: "budget_stopped", message: decision.reason });
           sessionStore.endSession(sessionId, "stopped");
           auditStore.audit("budget.stop", { snapshot: governor.snapshot() }, sessionId);
           return {
@@ -599,7 +602,13 @@ export async function runAgentLoop(
           model: (provider as { modelId?: string }).modelId,
         });
       }
+      // Phase 12 · Phase C — publish truthful progress instead of leaving the
+      // surface to guess. Both of these are real work the loop is doing right
+      // here, so naming them is honest; the brief's §7 rule is that a state
+      // must correspond to something actually happening.
+      deps.onStreamEvent?.({ type: "status", status: "compacting_context" });
       const compacted = compact(messages, { maxChars: 16000, keepRecent: 6 });
+      deps.onStreamEvent?.({ type: "status", status: "generating" });
       // GAP-001 — hand the caller's cancellation token to the transport itself.
       // Loop checkpoints alone could not interrupt an in-flight model call, so
       // a stalled provider was unrecoverable (reproduced live: Ctrl+C printed
@@ -633,6 +642,10 @@ export async function runAgentLoop(
 
       if (turn.done && turn.toolCalls.length === 0) {
         finalMessage = turn.message;
+        // Phase 12 · Phase C — "Finishing" covers the real work that still
+        // happens after the last token: session summary + session close.
+        // Naming it means the surface never looks frozen at the end of a run.
+        deps.onStreamEvent?.({ type: "status", status: "finishing" });
         // Stage 6 — optionally fold the conversation into a session summary.
         maybeSaveSessionSummary();
         sessionStore.endSession(sessionId, "done");
@@ -733,6 +746,10 @@ export async function runAgentLoop(
           continue;
         }
         say(`\x1b[2m▸ tool   ⚙ ${call.tool}(${JSON.stringify(call.args)})\x1b[0m`);
+        // Phase 12 · Phase C — the surface learns a tool is running from the
+        // canonical vocabulary (not by scraping the say() line above). The
+        // matching `tool_result` event carries the outcome.
+        deps.onStreamEvent?.({ type: "status", status: "tool_running", message: call.tool });
         try {
           const result = await tool.run(call.args, toolCtx);
           const tag = result.ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";

@@ -5,9 +5,19 @@
  * the composed template literal, so escaping must not be edited here alone.
  */
 
+import { UX_STATUS_JS } from "../../core/ux-status.ts";
+
 export const CORE = `
 const TOKEN = "__TOKEN__";
 const BASE = window.location.origin;
+
+// ── Phase 12 · Phase C/D — the canonical UX status vocabulary ────────────────
+// Interpolated from src/core/ux-status.ts (the single source of truth), exactly
+// as the design tokens below are interpolated from src/ui/tokens.ts. This served
+// client is a concatenated string and cannot import, so interpolating is what
+// keeps the browser copy from drifting from the kernel copy — the drift that
+// produced three different descriptions of one run.
+${UX_STATUS_JS}
 
 // ── API request helper (Phase 8 · T1 — the dashboard consumes the VERSIONED API)
 function v1(path) {

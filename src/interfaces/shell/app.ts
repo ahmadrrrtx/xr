@@ -16,6 +16,7 @@ import { detectRuntime } from "../../local/runtimes.ts";
 import { runLab } from "../../security/lab.ts";
 import { buildAuditReport } from "../../export/report.ts";
 import { executeOnSurface } from "../../services/surface-execution.ts";
+import { runStatusLabel } from "../../core/ux-status.ts";
 import { WorkspaceManager } from "../../core/workspace.ts";
 import { SHELL_VIEW_ORDER, type ShellViewId } from "../../ui/icons.ts";
 import { stripAnsi } from "../../ui/ansi.ts";
@@ -27,7 +28,7 @@ import type {
   ShellState, ModeState, Severity, ProjectMeta, PaletteItem,
   SessionRow, ResearchRow, ChatMessage, AgentDetail,
 } from "./types.ts";
-import { cycleAgentDetail } from "./types.ts";
+import { busyLabelForEvent, cycleAgentDetail } from "./types.ts";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -523,7 +524,8 @@ async function runTask(state: ShellState, task: string): Promise<void> {
   state.sessionTitle = task.slice(0, 48);
   setView(state, "chat");
   state.busy = true;
-  state.busyLabel = `connecting to ${state.provider}`;
+  // Phase 12 · Phase E — shared vocabulary, not Shell-invented words.
+  state.busyLabel = runStatusLabel("preparing", state.provider);
   state.spinnerIndex = 0;
   state.dirty = true;
 
@@ -537,7 +539,8 @@ async function runTask(state: ShellState, task: string): Promise<void> {
   }
 
   notify(state, "ok", "Connected", `${state.provider}${health.latencyMs ? ` · ${health.latencyMs}ms` : ""}`);
-  state.busyLabel = state.mode === "plan" ? "planning" : state.mode === "ask" ? "reading" : "thinking";
+  // The canonical stream refines this from the first status event.
+  state.busyLabel = runStatusLabel("preparing", state.mode);
 
   const before = state.store.costSummary();
   const memoryEngine = new MemoryStore(state.store);
@@ -576,6 +579,11 @@ async function runTask(state: ShellState, task: string): Promise<void> {
     signal: controller.signal,
     say,
     onDiagnostic: (note) => addTimeline(state, "warn", note),
+    // Phase 12 · Phase E — status line driven by canonical events, not say().
+    onStreamEvent: (ev) => {
+      const label = busyLabelForEvent(ev);
+      if (label !== null && label !== state.busyLabel) { state.busyLabel = label; state.dirty = true; }
+    },
     approve: async (req) => {
       return await promptConfirm(
         state,
