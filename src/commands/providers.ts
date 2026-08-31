@@ -8,6 +8,7 @@ import { ProviderService } from "../services/provider-service.ts";
 import { ConfigService } from "../services/config-service.ts";
 import { PRESETS } from "../providers/presets.ts";
 import { capabilityLabels } from "../providers/capabilities.ts";
+import { usageError } from "../cli/errors.ts";
 import {
   banner,
   ask,
@@ -97,6 +98,9 @@ function printUsage(): void {
   ${C.bold("Change model / provider (never stuck on default)")}
   xr providers set <id> [model]  set active provider and optional model
   xr providers add               add a custom OpenAI-compatible endpoint
+  xr providers add --id <id> --base-url <url> --model <model> [--label <label>]
+                     [--key-env <ENV>] [--header "Name: value"] [--yes]
+                                 non-interactive add (scripts/CI; never prompts)
   xr providers remove <id>       remove a custom provider
   xr providers refresh           re-sync custom providers from config
 
@@ -184,10 +188,218 @@ async function listProviders(
 
 }
 
+/**
+ * Non-interactive `providers add` flag surface (Phase 0, M-05).
+ *
+ * `xr providers add --yes` must work unattended (CI canaries, automation,
+ * black-box tests) and produce EXACTLY the same config record as the
+ * interactive path — same fields, same zod-validated shape, same key
+ * storage. Nothing here may weaken validation: ids and base URLs get the
+ * same (stricter-or-equal) checks as the interactive path, and key material
+ * is never echoed or logged.
+ *
+ * The router treats `-y/--yes`, `--model`, `--provider` and `--header`-like
+ * tokens per its own rules; this parser only reads what reaches the command,
+ * so its contract is: any flag position, any order, missing value = usage
+ * error (never a prompt) when `--yes` was requested.
+ */
+export interface AddProviderFlags {
+  id?: string;
+  label?: string;
+  baseUrl?: string;
+  model?: string;
+  keyEnv?: string;
+  headers: Array<{ name: string; value: string }>;
+  yes: boolean;
+  /** first non-flag token (positional id — kept for backward compatibility). */
+  positionalId?: string;
+  /** unrecognized tokens (reported; never silently guessed). */
+  unknown: string[];
+}
+
+/** Next token is a usable value only when it exists and is not another flag. */
+function nextValue(args: string[], i: number): string | undefined {
+  const next = args[i + 1];
+  if (next == null || next.startsWith("-")) return undefined;
+  return next;
+}
+
+/**
+ * Global flags the router re-injects onto every command's argv (see
+ * cli/router.ts reinjectGlobalFlags). They are output/routing concerns, not
+ * provider-add inputs — the parser must tolerate them in any position so a
+ * strict `--yes` invocation doesn't reject its own harness.
+ */
+const REINJECTED_BOOL_FLAGS = new Set([
+  "--no-color", "--json", "--yaml", "--quiet", "-q", "--verbose", "--debug",
+  "--dry-run", "--dryRun", "--tui", "--help", "-h",
+]);
+
+/** Global value flags re-injected by the router; consume flag AND its value. */
+const REINJECTED_VALUE_FLAGS = new Set([
+  "--format", "--output", "-o", "--workspace", "-w", "--provider", "-p",
+  "--mode", "--budget", "--max-tokens", "--maxTokens", "--resume",
+]);
+
+export function parseAddProviderFlags(args: string[]): AddProviderFlags {
+  const out: AddProviderFlags = { headers: [], yes: false, unknown: [] };
+  const positional: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (REINJECTED_BOOL_FLAGS.has(a)) continue;
+    if (REINJECTED_VALUE_FLAGS.has(a)) {
+      // Skip the re-injected value so it can never land in positional args.
+      if (nextValue(args, i) !== undefined) i++;
+      continue;
+    }
+    if (a.startsWith("--") && a.includes("=") && REINJECTED_VALUE_FLAGS.has(a.slice(0, a.indexOf("=")))) {
+      continue;
+    }
+    switch (a) {
+      case "--id":
+        out.id = nextValue(args, i) ?? (out.unknown.push("--id"), undefined);
+        if (out.id !== undefined) i++;
+        break;
+      case "--label":
+        out.label = nextValue(args, i) ?? (out.unknown.push("--label"), undefined);
+        if (out.label !== undefined) i++;
+        break;
+      case "--base-url":
+        out.baseUrl = nextValue(args, i) ?? (out.unknown.push("--base-url"), undefined);
+        if (out.baseUrl !== undefined) i++;
+        break;
+      case "--model":
+        out.model = nextValue(args, i) ?? (out.unknown.push("--model"), undefined);
+        if (out.model !== undefined) i++;
+        break;
+      case "--key-env":
+        out.keyEnv = nextValue(args, i) ?? (out.unknown.push("--key-env"), undefined);
+        if (out.keyEnv !== undefined) i++;
+        break;
+      case "--header": {
+        const raw = nextValue(args, i);
+        if (raw == null || !raw.includes(":")) {
+          out.unknown.push("--header (expected \"Name: value\")");
+          break;
+        }
+        i++;
+        const idx = raw.indexOf(":");
+        out.headers.push({ name: raw.slice(0, idx).trim(), value: raw.slice(idx + 1).trim() });
+        break;
+      }
+      case "--yes":
+      case "-y":
+        out.yes = true;
+        break;
+      default:
+        if (a.startsWith("-")) out.unknown.push(a);
+        else positional.push(a);
+    }
+  }
+  if (positional.length > 0) out.positionalId = positional[0];
+  return out;
+}
+
+/** Same shape as the interactive path accepts (lowercase, no spaces). */
+export function validateProviderId(id: string): string | null {
+  if (!/^[a-z0-9_-]+$/i.test(id)) {
+    return "provider id must contain only a-z, 0-9, '-' and '_'";
+  }
+  return null;
+}
+
+/** Stricter-or-equal to the interactive path: URL that parses, http(s), no embedded credentials. */
+export function validateBaseUrl(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return "base URL is not a valid URL";
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") {
+    return "base URL must be http:// or https://";
+  }
+  if (u.username || u.password) {
+    return "base URL must not embed credentials";
+  }
+  return null;
+}
+
 async function addProvider(
   ps: ProviderService,
   args: string[],
 ): Promise<void> {
+  const flags = parseAddProviderFlags(args);
+
+  // ── Non-interactive path: `--yes` requested → unattended, never prompts. ──
+  if (flags.yes) {
+    // A known flag whose value is missing reads as unknown from the parser;
+    // report it as the precise error (missing value), never a vague one.
+    const KNOWN_VALUE_FLAGS = new Set(["--id", "--label", "--base-url", "--model", "--key-env"]);
+    const missingValues = flags.unknown.filter((u) => KNOWN_VALUE_FLAGS.has(u));
+    const otherUnknown = flags.unknown.filter((u) => !KNOWN_VALUE_FLAGS.has(u));
+    if (missingValues.length > 0) {
+      throw usageError(
+        `Missing value for: ${missingValues.join(", ")}`,
+        "xr providers add --id <id> --base-url <url> --model <model> [--label <label>] [--key-env <ENV>] [--header \"Name: value\"] [--yes]",
+      );
+    }
+    if (otherUnknown.length > 0) {
+      throw usageError(
+        `Unrecognized argument(s): ${otherUnknown.join(", ")}`,
+        "xr providers add --id <id> --base-url <url> --model <model> [--label <label>] [--key-env <ENV>] [--header \"Name: value\"] [--yes]",
+      );
+    }
+    const id = flags.id ?? flags.positionalId;
+    const missing: string[] = [];
+    if (!id) missing.push("--id");
+    if (!flags.baseUrl) missing.push("--base-url");
+    if (!flags.model) missing.push("--model");
+    if (missing.length > 0) {
+      throw usageError(
+        `Missing required flag(s) for unattended add: ${missing.join(", ")}`,
+        "xr providers add --id <id> --base-url <url> --model <model> --yes",
+      );
+    }
+    const idErr = validateProviderId(id!);
+    if (idErr) throw usageError(`Invalid --id: ${idErr}`, "xr providers add --id <id> --yes");
+    const urlErr = validateBaseUrl(flags.baseUrl!);
+    if (urlErr) throw usageError(`Invalid --base-url: ${urlErr}`, "xr providers add --base-url <url> --yes");
+
+    const headers: Record<string, string> = {};
+    for (const h of flags.headers) {
+      if (!h.name || !h.value) {
+        throw usageError('Invalid --header (expected "Name: value")', 'xr providers add --header "X-Test: 1" --yes');
+      }
+      headers[h.name] = h.value;
+    }
+
+    await ps.addCustomProvider({
+      id: id!,
+      label: flags.label ?? id!,
+      baseUrl: flags.baseUrl!,
+      defaultModel: flags.model!,
+      apiKeyEnv: flags.keyEnv,
+      headers: Object.keys(headers).length ? headers : undefined,
+    });
+
+    // Mirror the interactive path's key handling: when the operator names a
+    // key env var and the value is present in the process environment, store
+    // it in the same secure backend. The value itself is NEVER printed or
+    // logged here — only the backend name, as the interactive path does.
+    if (flags.keyEnv && process.env[flags.keyEnv]) {
+      const backend = await ps.storeKey(flags.keyEnv, process.env[flags.keyEnv]!);
+      ok(`Key saved securely in ${backend}.`);
+    } else if (flags.keyEnv) {
+      info(`No value found in \$${flags.keyEnv} — key will be read from the environment at call time.`);
+    }
+
+    ok(`Custom provider "${id}" added.`);
+    info(`Set it active with: xr providers set ${id}`);
+    return;
+  }
+
+  // ── Interactive path (unchanged, Phase 0 baseline behavior). ─────────────
   banner();
   console.log(C.bold("Add Custom Provider"));
   info(
@@ -195,16 +407,18 @@ async function addProvider(
   );
 
   const id =
-    args[0] ||
+    flags.id ??
+    flags.positionalId ??
     (await ask("Provider ID (short, lowercase, no spaces)", {
       default: "custom",
     }));
-  const label = await ask("Provider label", { default: id });
-  const baseUrl = await ask("Base URL (e.g., http://localhost:8080/v1)", {
-    default: "http://localhost:8080/v1",
-  });
-  const defaultModel = await ask("Default model name", { default: "model" });
-  const useKey = await confirm("Does this provider require an API key?", false);
+  const label = flags.label ?? (await ask("Provider label", { default: id }));
+  const baseUrl =
+    flags.baseUrl ?? (await ask("Base URL (e.g., http://localhost:8080/v1)", {
+      default: "http://localhost:8080/v1",
+    }));
+  const defaultModel = flags.model ?? (await ask("Default model name", { default: "model" }));
+  const useKey = (await confirm("Does this provider require an API key?", false)) && !flags.keyEnv;
   let apiKeyEnv: string | undefined;
   let apiKeyValue: string | undefined;
   if (useKey) {
@@ -216,8 +430,9 @@ async function addProvider(
     );
   }
 
-  const headers: Record<string, string> = {};
-  if (await confirm("Add custom headers?", false)) {
+  let headers: Record<string, string> = {};
+  for (const h of flags.headers) headers[h.name] = h.value;
+  if (Object.keys(headers).length === 0 && (await confirm("Add custom headers?", false))) {
     while (true) {
       const h = await ask("Header name (blank to finish)", { default: "" });
       if (!h) break;
@@ -231,12 +446,12 @@ async function addProvider(
     label,
     baseUrl,
     defaultModel,
-    apiKeyEnv,
+    apiKeyEnv: flags.keyEnv ?? apiKeyEnv,
     headers: Object.keys(headers).length ? headers : undefined,
   });
 
-  if (apiKeyEnv && apiKeyValue) {
-    const backend = await ps.storeKey(apiKeyEnv, apiKeyValue);
+  if (apiKeyValue) {
+    const backend = await ps.storeKey(apiKeyEnv!, apiKeyValue);
     ok(`Key saved securely in ${backend}.`);
   }
 

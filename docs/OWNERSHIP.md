@@ -74,6 +74,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/daemon.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/deployment/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/e2e-blackbox/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/ecosystem.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/enterprise/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/environment/` | @ahmadrrrtx | default (@ahmadrrrtx) |

@@ -31,6 +31,12 @@
       "excludeOn": ["win32"],
       "since": "phase-10",
       "reason": "bun build --compile panics on Windows hosted runners (Bun runtime defect 'Internal assertion failure' — crash class exit 3, reproduced on job 94456012670), not an XR defect. The compiled Windows binary is still built and natively smoke-tested by release.yml (5-target matrix) and channel-install.yml (winget/scoop lane). Restore here when Bun fixes the compile panic."
-    }
-  ]
+    },
+  {
+    "pattern": "test/e2e-blackbox/",
+    "excludeOn": ["win32"],
+    "since": "phase-0",
+    "reason": "Phase 0 black-box lane spawns the real CLI and asserts POSIX signal contracts (cancel.test.ts: SIGINT mid-flight must exit 130 with signal SIGINT; hygiene: SIGKILL reaping semantics); Node on win32 cannot deliver SIGINT (TerminateProcess only) so the contract is untestable there by construction. Linux-verified (ci.yml ubuntu lane is the reference); darwin runs POSIX signals identically so the cross-platform lane covers it. Same class as the crash-injection.test.ts exclusion."
+  }
+]
 }

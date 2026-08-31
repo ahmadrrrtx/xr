@@ -8,7 +8,17 @@
 #   2. full unit suite    minus ONLY the documented exclusions in
 #                         test/platform/exclusions.json — each with a reason,
 #                         each guarded by `platform-parity.ts --validate` so a
-#                         test can never vanish silently (Art. XX.4/XX.5)
+#                         test can never vanish silently (Art. XX.4/XX.5).
+#                         One additional lane carve-out: test/e2e-blackbox/
+#                         is excluded from the parity suite on ALL OSes. Those
+#                         suites spawn real CLIs against stub servers and are
+#                         owned by dedicated CI lanes: the capture suites run
+#                         in `CI / test / e2e-blackbox`, and the F-02/F-03
+#                         kill proofs are RED on HEAD until Phase 1 by design
+#                         and run only in the advisory `CI / test /
+#                         e2e-blackbox-proof` lane. Running them inside the
+#                         parity suite would fail every OS lane on HEAD with
+#                         the very proofs that must stay red.
 #   3. golden path        (hermetic install → answer → restart → resume →
 #                          answer → uninstall, asserting real effects)
 #
@@ -74,7 +84,10 @@ jobs:
           # any real test failure fails immediately and prints its full output.
           # The count guard makes a silent skip impossible (Art. XX.4/XX.5):
           # executed files MUST equal the authority's list.
-          bash scripts/parity-suite-runner.sh ${{ matrix.bunOs }}
+          # test/e2e-blackbox/ is excluded here (see header): the spawn-heavy
+          # black-box suites are owned by the dedicated lanes in ci.yml, and
+          # the kill proofs are RED on HEAD until Phase 1.
+          bash scripts/parity-suite-runner.sh ${{ matrix.bunOs }} --exclude '^test/e2e-blackbox/'
       - name: Golden path (hermetic)
         shell: bash
         timeout-minutes: 10

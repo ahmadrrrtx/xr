@@ -1,24 +1,109 @@
 /**
- * XR Phase 10 — Firecrawl adapter translation tests (offline; guardedFetch mocked).
+ * XR Phase 10 — Firecrawl adapter translation tests (hermetic; REAL local stub).
  *
  * Proves the adapter normalizes Firecrawl wire shapes into XR's internal model,
  * drops SSRF-blocked URLs, validates extraction output against the schema, and
  * never surfaces the API key.
+ *
+ * HISTORY (Phase 0 test-isolation fix): this file previously mocked
+ * `mock.module("../../src/security/egress-proxy.ts")` — which in Bun's
+ * single-process `bun test` LEAKS into every other test file in the process
+ * (module mocks are global and cannot be restored). That leak is what made
+ * `test/security/egress-proxy.test.ts` fail 13/16 under a monolith `bun test`
+ * (the diagnosed F-14 "environment-sensitive egress failures" — it was never
+ * DNS or port contention: `checkEgressTarget` had been replaced by a
+ * `async () => ({ ok: true })` stub from THIS file). The adapter now runs
+ * against a real local HTTP stub: stronger tests (real status codes, real
+ * headers), zero module pollution.
  */
 
-import { test, expect, mock } from "bun:test";
+import { test, expect, beforeAll, afterAll } from "bun:test";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { hostnameOf } from "../../src/research/url-guard.ts";
 import { defaultResearchLimits } from "../../src/research/jobs.ts";
 import { ResearchProviderError } from "../../src/research/provider-types.ts";
 import type { ResearchProviderContext } from "../../src/research/providers/types.ts";
 import { shallowValidate } from "../../src/research/providers/firecrawl.ts";
 
+const EXPECTED_KEY = "fc-expected-key";
+let server: Server;
+let port: number;
+let baseUrl: string;
+
+beforeAll(async () => {
+  server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => {
+      const body = Buffer.concat(chunks).toString("utf8");
+      const url = req.url ?? "";
+
+      if (req.headers.authorization !== `Bearer ${EXPECTED_KEY}`) {
+        res.writeHead(401, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "unauthorized", success: false }));
+        return;
+      }
+
+      if (url === "/v1/search" && req.method === "POST") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            success: true,
+            data: [
+              { title: "Good", url: "https://example.com/a", description: "d", publishedDate: "2026-01-01T00:00:00.000Z" },
+              { title: "Blocked", url: "http://169.254.169.254/x" },
+            ],
+          }),
+        );
+        return;
+      }
+      if (url === "/v1/scrape" && req.method === "POST") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            success: true,
+            data: {
+              markdown: "# Title\n\nBody text",
+              metadata: { title: "T", description: "D", language: "en", sourceURL: "https://example.com/a", publishedDate: "2026-01-01T00:00:00.000Z", author: "Alice" },
+              links: ["https://example.com/b"],
+            },
+          }),
+        );
+        return;
+      }
+      if (url === "/v1/crawl/cj1" && req.method === "GET") {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            success: true,
+            status: "completed",
+            total: 1,
+            completed: 1,
+            data: [{ markdown: "# P", metadata: { title: "P", sourceURL: "https://example.com/p" } }],
+          }),
+        );
+        return;
+      }
+      res.writeHead(404, { "content-type": "application/json" });
+      res.end(JSON.stringify({ success: false, error: `unhandled ${req.method} ${url}` }));
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  port = (server.address() as AddressInfo).port;
+  baseUrl = `http://127.0.0.1:${port}`;
+});
+
+afterAll(async () => {
+  await new Promise<void>((r) => server.close(() => r()));
+});
+
 function ctx(overrides: Partial<ResearchProviderContext> = {}): ResearchProviderContext {
   return {
     signal: undefined,
     audit: () => {},
-    egressAllowlist: ["api.firecrawl.dev"],
-    allowedHosts: [],
+    egressAllowlist: ["127.0.0.1"],
+    allowedHosts: [`127.0.0.1:${port}`],
     limits: defaultResearchLimits(),
     consume: () => {},
     budget: () => ({ exhausted: false }),
@@ -41,61 +126,11 @@ test("shallowValidate accepts conforming objects and rejects violations", () => 
   expect(shallowValidate("not an object", schema).ok).toBe(false);
 });
 
-// ── adapter translation (guardedFetch mocked) ────────────────────────────────
+// ── adapter translation (real guardedFetch against the local stub) ──────────
 
 test("adapter normalizes search/scrape/crawl responses into XR's model", async () => {
-  let callNo = 0;
-  mock.module("../../src/security/egress-proxy.ts", () => ({
-    guardedFetch: async () => {
-      callNo++;
-      if (callNo === 1) {
-        // /v1/search
-        return {
-          ok: true,
-          status: 200,
-          body: JSON.stringify({
-            success: true,
-            data: [
-              { title: "Good", url: "https://example.com/a", description: "d", publishedDate: "2026-01-01T00:00:00.000Z" },
-              { title: "Blocked", url: "http://169.254.169.254/x" },
-            ],
-          }),
-        };
-      }
-      if (callNo === 2) {
-        // /v1/scrape
-        return {
-          ok: true,
-          status: 200,
-          body: JSON.stringify({
-            success: true,
-            data: {
-              markdown: "# Title\n\nBody text",
-              metadata: { title: "T", description: "D", language: "en", sourceURL: "https://example.com/a", publishedDate: "2026-01-01T00:00:00.000Z", author: "Alice" },
-              links: ["https://example.com/b"],
-            },
-          }),
-        };
-      }
-      // /v1/crawl/{id}
-      return {
-        ok: true,
-        status: 200,
-        body: JSON.stringify({
-          success: true,
-          status: "completed",
-          total: 1,
-          completed: 1,
-          data: [{ markdown: "# P", metadata: { title: "P", sourceURL: "https://example.com/p" } }],
-        }),
-      };
-    },
-    defaultResolve: async () => ["93.184.216.34"],
-    checkEgressTarget: async () => ({ ok: true }),
-  }));
-
   const { FirecrawlProvider } = await import("../../src/research/providers/firecrawl.ts");
-  const provider = new FirecrawlProvider({ baseUrl: "https://api.firecrawl.dev", apiKey: "fc-secret-key", timeoutMs: 5000, maxPages: 5, maxDepth: 2, maxConcurrency: 2 });
+  const provider = new FirecrawlProvider({ baseUrl, apiKey: EXPECTED_KEY, timeoutMs: 5000, maxPages: 5, maxDepth: 2, maxConcurrency: 2 });
 
   const search = await provider.search("q", {}, ctx());
   expect(search.sources.length).toBe(1); // blocked 169.254.169.254 dropped
@@ -119,13 +154,8 @@ test("adapter normalizes search/scrape/crawl responses into XR's model", async (
 });
 
 test("adapter maps HTTP errors to classified, key-free errors", async () => {
-  mock.module("../../src/security/egress-proxy.ts", () => ({
-    guardedFetch: async () => ({ ok: false, status: 401, body: "unauthorized" }),
-    defaultResolve: async () => ["93.184.216.34"],
-    checkEgressTarget: async () => ({ ok: true }),
-  }));
   const { FirecrawlProvider } = await import("../../src/research/providers/firecrawl.ts");
-  const provider = new FirecrawlProvider({ baseUrl: "https://api.firecrawl.dev", apiKey: "fc-secret-key", timeoutMs: 5000, maxPages: 5, maxDepth: 2, maxConcurrency: 2 });
+  const provider = new FirecrawlProvider({ baseUrl, apiKey: "fc-secret-key", timeoutMs: 5000, maxPages: 5, maxDepth: 2, maxConcurrency: 2 });
   let caught: unknown;
   try {
     await provider.search("q", {}, ctx());
@@ -140,13 +170,8 @@ test("adapter maps HTTP errors to classified, key-free errors", async () => {
 });
 
 test("adapter refuses unconfigured API key and non-allowlisted host", async () => {
-  mock.module("../../src/security/egress-proxy.ts", () => ({
-    guardedFetch: async () => ({ ok: true, status: 200, body: "{}" }),
-    defaultResolve: async () => ["93.184.216.34"],
-    checkEgressTarget: async () => ({ ok: true }),
-  }));
   const { FirecrawlProvider } = await import("../../src/research/providers/firecrawl.ts");
-  const noKey = new FirecrawlProvider({ baseUrl: "https://api.firecrawl.dev", timeoutMs: 5000, maxPages: 5, maxDepth: 2, maxConcurrency: 2 });
+  const noKey = new FirecrawlProvider({ baseUrl, timeoutMs: 5000, maxPages: 5, maxDepth: 2, maxConcurrency: 2 });
   expect(noKey.configured()).toBe(false);
   let e1: unknown;
   try {
@@ -156,7 +181,7 @@ test("adapter refuses unconfigured API key and non-allowlisted host", async () =
   }
   expect((e1 as ResearchProviderError).kind).toBe("authentication_failure");
 
-  const notAllowed = new FirecrawlProvider({ baseUrl: "https://api.firecrawl.dev", apiKey: "k", timeoutMs: 5000, maxPages: 5, maxDepth: 2, maxConcurrency: 2 });
+  const notAllowed = new FirecrawlProvider({ baseUrl, apiKey: EXPECTED_KEY, timeoutMs: 5000, maxPages: 5, maxDepth: 2, maxConcurrency: 2 });
   let e2: unknown;
   try {
     await notAllowed.search("q", {}, ctx({ egressAllowlist: [] }));

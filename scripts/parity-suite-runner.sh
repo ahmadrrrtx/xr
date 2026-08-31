@@ -36,13 +36,30 @@
 #   - No GNU-only tools: uses only grep -E (POSIX ERE), tr, cut, sort, wc,
 #     mkdir — all present on macOS and Linux.
 #
-# Usage: bash scripts/parity-suite-runner.sh <linux|darwin|win32>
+# Usage: bash scripts/parity-suite-runner.sh <linux|darwin|win32> [--exclude <regex>]
+#
+# --exclude: a POSIX ERE matched against each file path (grep -Ev); the lane
+# sharding in .github/workflows/ci.yml uses it to split the matrix into
+# test / core, test / security, test / reliability-spawn and
+# test / e2e-blackbox. The executed-files guard (RAN == EXPECTED) applies to
+# the FILTERED set, so a file can never silently vanish from a lane either.
 
 # Fail fast if the OS argument is missing (explicit, not a nounset trap).
-: "${1:?usage: parity-suite-runner.sh <linux|darwin|win32>}"
+: "${1:?usage: parity-suite-runner.sh <linux|darwin|win32> [--exclude <regex>]}"
 OS="$1"
+EXCLUDE=""
+if [ "${2:-}" = "--exclude" ]; then
+  EXCLUDE="${3:-}"
+  if [ -z "$EXCLUDE" ]; then
+    echo "::error::--exclude requires a regex argument" >&2
+    exit 1
+  fi
+fi
 
 FILES=$(bun run scripts/platform-parity.ts --os "$OS" --args)
+if [ -n "$EXCLUDE" ]; then
+  FILES=$(echo "$FILES" | tr ' ' '\n' | grep -Ev "$EXCLUDE" | tr '\n' ' ')
+fi
 EXPECTED=$(echo "$FILES" | wc -w)
 echo "running $EXPECTED test files (per-directory segments, one computation authority)"
 

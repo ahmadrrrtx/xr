@@ -142,6 +142,14 @@
       "reason": "The agent loop: Observe \u2192 Think \u2192 Act with cancellation checkpoints, context injection, memory recall, budget governance, trust isolated execution, capability policy boundary (Phase 08), tool-output framing, session lifecycle. Phase 08 added unified policy evaluation (trust\u2192lifecycle\u2192scope\u2192permission\u2192mode) before tool execution (+40 lines). All in one state machine by design; splitting the loop risks reintroducing the multiple-entry defect Phase 2 closed.",
       "plan": "Extract context injection, memory recall, and budget governance into collaborators behind the existing loop facade, preserving the single ACTION phase authority. Scheduled with next agent-loop refactor after Phase 08 certification.",
       "review": "2027-03-31"
+    },
+    {
+      "path": "src/commands/providers.ts",
+      "lines": 911,
+      "owner": "commands",
+      "reason": "Phase 0 (reconciliation execution plan) mandates additive non-interactive `xr providers add --id --label --base-url --model [--key-env] [--header] --yes` flags in this module: the flag parser, strict validators (id/base-url/header), --yes unattended path, and usage text; all additive, no behavior change to the interactive path.",
+      "plan": "Split the additive flag surface into src/commands/providers-add-flags.ts (parser + validators + add-by-flags command), leaving providers.ts as the router - scheduled with the Phase 1 providers hardening.",
+      "review": "2026-10-31"
     }
   ]
 }
