@@ -233,6 +233,53 @@ Do **not** open a public issue for a vulnerability. Follow the coordinated discl
 - Adversarial tests belong with the thing they attack: `test/phase0/policy-gate-adversarial.test.ts`
   is the corpus for `src/security/guard.ts`.
 
+### Suite environment requirements (Phase 0)
+
+The full suite is honest only in a defined environment: the SAME tests report
+3,427 pass elsewhere and hundreds of environment-sensitive failures in a
+constrained box. Before you trust a count, check the lane + environment it was
+measured in — every CI lane now prints its pass/fail/skip counts in the job
+summary (`.github/workflows/ci.yml`, `test / core`, `test / security`,
+`test / reliability-spawn`, `test / e2e-blackbox`).
+
+| Requirement | Spec | Why / who enforces |
+|---|---|---|
+| Bun | **1.3.14** (CI pin via `.bun-version` + `packageManager`); 1.4.x is the verified dev baseline | `bun test` is the one runner; feature drift between versions is a real parity class (cross-platform.yml) |
+| OS | Linux x64 (CI: `ubuntu-latest`); macOS/Windows supported with platform-specific exclusions | `scripts/platform-parity.ts` is the one computation authority for file selection |
+| Network | **None required.** Every e2e suite talks to a local stub (`test/helpers/stub-openai.ts` binds `127.0.0.1:0`); external canaries skip without provider secrets | A hermetic suite must run offline; `test/e2e-blackbox/*` never dials out |
+| Ports | Ephemeral-port availability on loopback; hook suites and e2e stubs must never collide with a hardcoded port | `test/helpers/suite-tmp.ts` preload + `isPortFree`/`assertStubClosed` hygiene in `test/e2e-blackbox/hygiene.test.ts` (zero leaked listeners is a TEST) |
+| Process spawn | Enough headroom to fork real CLI children (`bun run src/index.ts`) — a few dozen concurrent short-lived processes | `test/e2e-blackbox/*` + `test/reliability/*` are spawn classes; the `test / reliability-spawn` lane exists because they are the first to show resource pressure |
+| Env vars | `NO_COLOR=1` for stable stdout contracts; `XR_HOME`/`HOME` are forced to an isolated temp dir by the harness; `XR_PROVIDER_TIMEOUT_MS` controls provider-side timeout simulation | `test/e2e-blackbox/helpers.ts` (`spawnCli`) scrubs and forces these on every child |
+| Locale/time | TZ/LC_ALL not asserted by the suite today — do not add a test that depends on them without documenting it | — |
+
+**Lane commands (reproduce CI locally):**
+
+```bash
+bun test                                   # whole suite (~150s, one process) — the sanity view
+bash scripts/parity-suite-runner.sh linux  # test / core (per-directory segments; one crash-class retry)
+# test / security: find-based set of test/security test/trust test/capabilities
+#                  (+ root security.test.ts trust.test.ts); egress-proxy.test.ts runs
+#                  FIRST with its one-retry quarantine, exactly as in CI
+bun run reliability:test                   # test / reliability-spawn
+# test / e2e-blackbox: the five capture suites + `bun test test/e2e-blackbox/streaming-matrix.test.ts -t "behavior capture"`
+
+# NOTE: the F-02/F-03 KILL PROOFS are RED on HEAD until Phase 1:
+bun test test/e2e-blackbox/streaming-matrix.test.ts -t "kill proofs"
+```
+
+**Hard time budgets:** bun has no per-file timeout. Spawn-heavy suites pass an
+explicit per-test `timeout` (e.g. `60_000`) and `helpers.ts` SIGKILLs any child
+that exceeds its cap; CI lane steps carry `timeout-minutes` that match the
+lane's slowest legitimate run. If a lane dies with no test-failure output, the
+parity runner retries once (crash-class) — a real `(fail)` is NEVER retried
+except the one documented egress quarantine (see below).
+
+**One retry, and only one, for exactly one test:** `test/security/egress-proxy.test.ts`
+"timeouts are enforced" has a residual label race (timer vs. socket-destroy
+handler — the true timeout can surface as "connection error: socket hang up").
+Phase 0 made the assertion deterministic but kept the plan-mandated one-retry
+quarantine in the CI `test / security` lane, scoped to that file only.
+
 ---
 
 ## Known limitations
