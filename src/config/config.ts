@@ -725,6 +725,10 @@ export const MIGRATIONS: Record<number, (raw: any) => any> = {
         : oldRouting === "cloud-first"
         ? "cloudFirst"
         : "hybrid";
+    // Phase 1 · M-04 — spread the EXISTING providerEngine first so a legacy /
+    // hand-edited config KEEPS its customProviders and providerCapabilities
+    // instead of having them wiped to [] on first load. Defaults only fill gaps.
+    const prev = raw.providerEngine ?? {};
     return {
       ...raw,
       version: 9,
@@ -732,6 +736,7 @@ export const MIGRATIONS: Record<number, (raw: any) => any> = {
         routingStrategy,
         customProviders: [],
         providerCapabilities: {},
+        ...prev,
       },
     };
   },

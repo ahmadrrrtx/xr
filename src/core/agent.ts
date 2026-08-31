@@ -12,7 +12,7 @@
  * The historical name `runAgent` is retained as a deprecated alias for
  * out-of-tree callers and is scheduled for removal in 8.0.0 (ADR-0002).
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import type {
   ApprovalRequest,
   Message,
@@ -216,6 +216,56 @@ export interface AgentResult {
  * Returns the turn plus whether real streaming was used, so the caller can
  * avoid double-printing the full message via `say`.
  */
+/**
+ * Phase 1 — a turn is `content | tool_calls | error`, never an empty "done".
+ * Build an honest remediation hint for the audit/error surface (never content).
+ */
+function emptyTurnError(status: ModelTurn["status"]): string {
+  if (status === "undecodable") {
+    return "model did not produce a decodable turn (undecodable output); check the model/endpoint, or use a local runtime with grammar support";
+  }
+  return "model did not produce a usable turn (empty response); check the model/endpoint, or use a local runtime with grammar support";
+}
+
+/**
+ * Audit-safe fingerprint of a turn's tail (last 200 chars). NEVER carries the
+ * content itself — only a short hash so the audit can prove "a turn happened"
+ * without storing model output.
+ */
+function tailHash(content: string): string {
+  const tail = (content ?? "").slice(-200);
+  return createHash("sha256").update(tail).digest("hex").slice(0, 16);
+}
+
+/**
+ * Phase 1 · F-13 — estimate per-turn usage when the provider omits it, so a
+ * buggy/hostile provider cannot silently meter $0. In/out split is a heuristic
+ * (~4 chars/token) from this turn's actual content + prompt size.
+ */
+function estimateTurnUsage(turn: ModelTurn, messages: Message[]): { inTokens: number; outTokens: number } {
+  const promptChars = messages.reduce((n, m) => n + (m.content?.length ?? 0), 0);
+  const outChars = (turn.message?.length ?? 0) + JSON.stringify(turn.toolCalls ?? []).length;
+  return {
+    inTokens: Math.ceil(promptChars / 4),
+    outTokens: Math.ceil(outChars / 4),
+  };
+}
+
+/**
+ * Apply the Phase 1 strict turn contract: an empty/undecodable turn (no
+ * content AND no tool calls) becomes an explicit honest `error` — never a
+ * fabricated completion. `done:true` is preserved only when genuinely declared.
+ */
+function finalizeTurn(turn: ModelTurn): ModelTurn {
+  const hasContent = (turn.message ?? "").trim().length > 0;
+  const hasToolCalls = (turn.toolCalls ?? []).length > 0;
+  if (!hasContent && !hasToolCalls && !turn.error) {
+    turn.done = false;
+    turn.error = emptyTurnError(turn.status ?? "empty");
+  }
+  return turn;
+}
+
 async function runModelTurn(
   provider: Provider,
   messages: Message[],
@@ -225,7 +275,14 @@ async function runModelTurn(
   const sink = deps.onStreamEvent;
   const chatStream = (provider as Provider & { chatStream?: (m: Message[], t: Tool[], o?: { signal?: AbortSignal }) => AsyncGenerator<import("./types.ts").ProviderStreamChunk> }).chatStream;
 
-  if (typeof chatStream === "function") {
+  const caps = provider.capabilities;
+  const canStream = typeof chatStream === "function";
+
+  // Phase 1 · F-03 — honor the declared capability catalog. A provider that
+  // declares `streaming:false` is never asked to stream.
+  const streaming = canStream && (caps === undefined ? true : caps.streaming === true);
+
+  if (streaming) {
     let text = "";
     const toolCalls: ToolCall[] = [];
     let usage: { inTokens: number; outTokens: number } | undefined;
@@ -253,30 +310,42 @@ async function runModelTurn(
     // Parse the accumulated envelope for the authoritative done/message/tool calls.
     let done = finish;
     let message = text;
+    let status: ModelTurn["status"] = toolCalls.length > 0 ? "parsed" : "empty";
     try {
       const parsed = repairToTurn(text);
+      status = parsed.status ?? status;
       if (parsed.toolCalls.length > 0) {
         for (const tc of parsed.toolCalls) addToolCall(tc.tool, tc.args);
       }
-      if (typeof parsed.done === "boolean") done = parsed.done;
+      // Phase 1 · turn contract reconciliation: `parsed.done` is authoritative
+      // ONLY when we actually decoded an envelope (status === "parsed"). When the
+      // transport delivered a complete turn as a PLAIN message (no JSON envelope,
+      // e.g. a native/decoded provider that marks finish:true), we keep the
+      // transport's completion signal (`finish`) as `done` — the model did
+      // produce real content, and overwriting it with repairToTurn's done:false
+      // would loop every native/plain provider to max_steps.
+      if (typeof parsed.done === "boolean" && parsed.status === "parsed") done = parsed.done;
       if (parsed.message) message = parsed.message;
       usage = usage ?? parsed.usage;
+      // If there is real content but it produced no decodable turn, still a turn.
+      if (message.trim().length > 0) status = "parsed";
     } catch {
       // Keep accumulated text + finish-based semantics.
     }
 
-    sink?.({ type: "usage", usage: { inTokens: usage?.inTokens ?? 0, outTokens: usage?.outTokens ?? 0 } });
-    return { turn: { message, toolCalls, done, usage }, streamed: true };
+    const turn: ModelTurn = finalizeTurn({ message, toolCalls, done, usage, status });
+    sink?.({ type: "usage", usage: { inTokens: turn.usage?.inTokens ?? 0, outTokens: turn.usage?.outTokens ?? 0 } });
+    return { turn, streamed: true };
   }
 
-  // Non-streaming fallback (legacy path, unchanged semantics).
+  // Non-streaming path (honours streaming:false).
   const turn = await provider.chat(messages, tools, { signal: deps.signal });
   if (turn.message) sink?.({ type: "token", text: turn.message });
   for (const [i, tc] of (turn.toolCalls ?? []).entries()) {
     sink?.({ type: "tool_call", id: `tc_${i + 1}`, tool: tc.tool, args: tc.args });
   }
   if (turn.usage) sink?.({ type: "usage", usage: turn.usage });
-  return { turn, streamed: false };
+  return { turn: finalizeTurn(turn), streamed: false };
 }
 
 export async function runAgentLoop(
@@ -284,7 +353,13 @@ export async function runAgentLoop(
   mode: Mode,
   deps: AgentDeps,
 ): Promise<AgentResult> {
-  const { provider, cwd, say } = deps;
+  const { provider, cwd } = deps;
+  // Phase 1 · NO_COLOR — the agent status lines carry hardcoded ANSI escapes
+  // (e.g. "\x1b[2m▸ think", "\x1b[33m⚠", "\x1b[36m◆") that bypass the themed
+  // printer. When NO_COLOR is set they must not leak to the surface.
+  const noColor = (process.env.NO_COLOR ?? "") !== "" || (process.env.FORCE_COLOR ?? "") === "0";
+  const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, "");
+  const say = (line: string): void => deps.say(noColor ? stripAnsi(line) : line);
   const sessionStore = deps.sessionStore ?? deps.store;
   const auditStore = deps.auditStore ?? deps.store;
   const costStore = deps.costStore ?? deps.store;
@@ -617,16 +692,71 @@ export async function runAgentLoop(
       // Phase 05 — the turn prefers the provider's streaming variant so real
       // token deltas flow to the surface (see runModelTurn).
       const { turn, streamed } = await runModelTurn(provider, compacted, tools, deps);
+
+      // ── Phase 1 · F-02/M-02/M-06 — strict turn contract ─────────────────────
+      // A turn that is `error` (empty/undecodable, no content and no tool
+      // calls) ends the run honestly as stopped:"error" with an audited
+      // turn.empty / turn.undecodable event. Never a fake completion.
+      if (turn.error) {
+        const event = turn.status === "undecodable" ? "turn.undecodable" : "turn.empty";
+        auditStore.audit(
+          event,
+          {
+            step: stepIdx,
+            // Hash of the tail (last-200 chars) — never the content itself.
+            tailHash: tailHash(turn.message),
+            reason: turn.error,
+          },
+          sessionId,
+        );
+        // Keep the run-failure marker for consumers that grep `session.error`.
+        auditStore.audit("session.error", { error: turn.error, step: stepIdx }, sessionId);
+        sessionStore.endSession(sessionId, "error");
+        say(`\x1b[31m✗ error: ${turn.error}\x1b[0m`);
+        deps.onStreamEvent?.({ type: "error", code: "turn.empty", message: turn.error });
+        return {
+          sessionId,
+          finalMessage: turn.error,
+          steps: stepIdx + 1,
+          stopped: "error",
+          meter: governor.meter(),
+          routingDecisionId: deps.routingDecision?.decisionId,
+        };
+      }
+
+      // NOTE (Phase 1): a `done:false` turn that carries a real message and no
+      // tool calls is treated as an in-progress turn and the loop continues
+      // (bounded by maxSteps → honest "max_steps"). We do NOT hard-fail it:
+      // the model produced real content. The strict turn contract only fails on
+      // a turn with NO content AND NO tool calls, which `finalizeTurn` already
+      // converts to `turn.error` (empty/undecodable) above.
+      // estimate it and flag it. A buggy/hostile provider cannot meter $0.
       if (turn.usage) {
         governor.record(turn.usage.inTokens, turn.usage.outTokens);
         try {
           const stepUsd =
             (turn.usage.inTokens / 1_000_000) * (deps.pricing?.inPerMTok ?? 0) +
             (turn.usage.outTokens / 1_000_000) * (deps.pricing?.outPerMTok ?? 0);
-          costStore.recordCost(sessionId, provider.id, provider.label, turn.usage.inTokens, turn.usage.outTokens, stepUsd);
+          costStore.recordCost(sessionId, provider.id, provider.label, turn.usage.inTokens, turn.usage.outTokens, stepUsd, "provider");
         } catch {
           /* best-effort */
         }
+      } else {
+        const est = estimateTurnUsage(turn, messages);
+        governor.record(est.inTokens, est.outTokens);
+        try {
+          const stepUsd =
+            (est.inTokens / 1_000_000) * (deps.pricing?.inPerMTok ?? 0) +
+            (est.outTokens / 1_000_000) * (deps.pricing?.outPerMTok ?? 0);
+          costStore.recordCost(sessionId, provider.id, provider.label, est.inTokens, est.outTokens, stepUsd, "estimated");
+        } catch {
+          /* best-effort */
+        }
+        auditStore.audit(
+          "usage.estimated",
+          { step: stepIdx, inTokens: est.inTokens, outTokens: est.outTokens },
+          sessionId,
+        );
       }
       sessionStore.addStep(`st_${randomUUID().slice(0, 8)}`, sessionId, stepIdx, "think", null, {
         message: turn.message,

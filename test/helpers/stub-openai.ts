@@ -350,8 +350,19 @@ export function startStubOpenAI(opts: StubOpenAIOptions = {}): Promise<StubOpenA
         }
 
         case "slow": {
+          // A well-behaved OpenAI-compatible server honors `stream`: serve SSE
+          // only for a stream request, else a normal JSON completion.
           setTimeout(() => {
             if (closed) return;
+            if (!streamWanted) {
+              respondJson(200, {
+                choices: [
+                  { message: { role: "assistant", content: ENVELOPE(message) }, finish_reason: "stop" },
+                ],
+                usage: { prompt_tokens: 6, completion_tokens: 7, total_tokens: 13 },
+              });
+              return;
+            }
             res.writeHead(200, {
               "content-type": "text/event-stream",
               "cache-control": "no-cache",

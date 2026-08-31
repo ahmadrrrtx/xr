@@ -357,7 +357,33 @@ const MIGRATION_4: Migration = {
   },
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4];
+/**
+ * Migration 5 — `cost_events.usage_source` (Phase 1 · F-13).
+ * Additive: adds one NOT NULL column with a safe default. Cost honesty: when a
+ * provider omits usage, XR meters an estimate and stamps this column so a
+ * buggy/hostile provider cannot silently record $0 without a trace.
+ * Down: drops the column (destructive, but on a stats table this is safe and
+ * reversible — the pre-existing data is untouched).
+ */
+const MIGRATION_5: Migration = {
+  version: 5,
+  name: "cost_events_usage_source",
+  up(store: WorkspaceStore) {
+    // SQLite has no ADD COLUMN IF NOT EXISTS; guard via pragma table_info.
+    const cols = (store as any).prepare
+      ? (store as any).prepare("PRAGMA table_info(cost_events)").all()
+      : [];
+    const has = (cols as Array<{ name: string }>).some((c) => c.name === "usage_source");
+    if (!has) {
+      store.exec(`ALTER TABLE cost_events ADD COLUMN usage_source TEXT NOT NULL DEFAULT 'provider'`);
+    }
+  },
+  down(store: WorkspaceStore) {
+    store.exec(`ALTER TABLE cost_events DROP COLUMN usage_source`);
+  },
+};
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5];
 
 /** Latest known schema version. */
 export const LATEST_SCHEMA_VERSION: number = MIGRATIONS.reduce(

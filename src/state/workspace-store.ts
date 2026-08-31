@@ -242,7 +242,8 @@ export class WorkspaceStore {
         in_tokens INTEGER NOT NULL,
         out_tokens INTEGER NOT NULL,
         usd REAL NOT NULL,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        usage_source TEXT NOT NULL DEFAULT 'provider'
       );
       CREATE TABLE IF NOT EXISTS budget_config (
         id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -1211,12 +1212,13 @@ export class WorkspaceStore {
     inTokens: number,
     outTokens: number,
     usd: number,
+    usageSource: string = "provider",
   ): void {
     this.db
       .query(
-        `INSERT INTO cost_events (session_id,provider,model,in_tokens,out_tokens,usd,created_at) VALUES (?,?,?,?,?,?,?)`,
+        `INSERT INTO cost_events (session_id,provider,model,in_tokens,out_tokens,usd,created_at,usage_source) VALUES (?,?,?,?,?,?,?,?)`,
       )
-      .run(sessionId, provider, model, inTokens, outTokens, usd, Date.now());
+      .run(sessionId, provider, model, inTokens, outTokens, usd, Date.now(), usageSource);
   }
 
   clearCosts(): void {

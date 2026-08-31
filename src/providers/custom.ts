@@ -4,6 +4,7 @@
  */
 
 import { OpenAICompatProvider } from "./openai-compat.ts";
+import type { ProviderCapabilitiesFlags } from "../core/types.ts";
 
 export interface CustomProviderOptions {
   id: string;
@@ -13,6 +14,8 @@ export interface CustomProviderOptions {
   apiKeyEnv?: string;
   extraHeaders?: Record<string, string>;
   apiKey?: string;
+  /** Declared transport capabilities (resolver-owned, Phase 1). */
+  capabilities?: ProviderCapabilitiesFlags;
 }
 
 export class CustomProvider extends OpenAICompatProvider {
@@ -25,6 +28,7 @@ export class CustomProvider extends OpenAICompatProvider {
       apiKeyEnv: opts.apiKeyEnv,
       extraHeaders: opts.extraHeaders,
       apiKey: opts.apiKey,
+      capabilities: opts.capabilities,
     });
   }
 }

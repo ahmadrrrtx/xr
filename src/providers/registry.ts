@@ -10,10 +10,21 @@
  *  - Methods: register, get, list, has, resolve, etc.
  */
 
-import type { Provider } from "../core/types.ts";
+import type { Provider, ProviderCapabilitiesFlags } from "../core/types.ts";
 import type { XRConfig } from "../config/config.ts";
 import type { ProviderPreset } from "./presets.ts";
 import { CustomProvider } from "./custom.ts";
+
+/** Map a preset's capability bag onto the transport flags the loop reads (Phase 1). */
+function capabilitiesFromPreset(preset: ProviderPreset): ProviderCapabilitiesFlags {
+  const c = preset.capabilities ?? { chat: true };
+  return {
+    streaming: Boolean(c.streaming ?? c.chat),
+    toolUse: Boolean(c.toolUse ?? c.functionCalling),
+    functionCalling: Boolean(c.functionCalling ?? c.toolUse),
+    jsonMode: Boolean(c.jsonMode),
+  };
+}
 
 export type ProviderFactory = (config: XRConfig, model: string, preset: ProviderPreset) => Provider;
 
@@ -125,7 +136,11 @@ export class ProviderRegistry {
           .join("\n")
       );
     }
-    return entry.factory(config, model, entry.preset);
+    const provider = entry.factory(config, model, entry.preset);
+    // Phase 1 — the resolver/registry is the SINGLE owner of declared transport
+    // capabilities; the agent loop reads them to honor the capability catalog.
+    provider.capabilities = capabilitiesFromPreset(entry.preset);
+    return provider;
   }
 
   list(): ProviderPreset[] {
@@ -172,6 +187,7 @@ export class ProviderRegistry {
           model: model || custom.defaultModel,
           apiKeyEnv: custom.apiKeyEnv,
           extraHeaders: custom.headers,
+          capabilities: custom.capabilities ?? { chat: true },
         });
       });
     }
