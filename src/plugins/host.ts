@@ -29,6 +29,7 @@ import { getSecret } from "../security/secrets.ts";
 import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { admitContextWrite } from "../context/poison.ts";
 import { BudgetManager } from "../cost/manager.ts";
+import { CostGovernor } from "../cost/governor.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
 import type { Message } from "../core/types.ts";
@@ -400,14 +401,21 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
         if (!Array.isArray(messages) || messages.length === 0) throw new Error("messages must be non-empty array");
         const total = messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : 0), 0);
         if (total > MAX_PROVIDER_MESSAGES) throw new Error(`messages too large (max ${MAX_PROVIDER_MESSAGES})`);
-        const budget = new BudgetManager(store);
         const providerId = (config as any).defaults?.provider ?? config.defaults?.provider;
         const model = (config as any).defaults?.model ?? config.defaults?.model;
         if (!isLocal(providerId)) {
-          const status = budget.getStatus();
-          if (status.isOverBudget) {
-            audit("provider.blocked", { reason: "budget exhausted" });
-            return { ok: false, message: "", reason: `budget exhausted ($${status.monthlySpend.toFixed(2)} / $${status.monthlyCap.toFixed(2)})` };
+          // Phase 2 · F-12 — budget decisions happen ONLY inside the
+          // Governor (architecture test). A plugin-hosted provider call is
+          // admitted through the same checkBeforeStep facade every surface
+          // uses; no ad-hoc isOverBudget gate outside the Governor.
+          const price = priceFor(providerId, model) ?? { inPerMTok: 0, outPerMTok: 0 };
+          const governor = new CostGovernor({}, price, new BudgetManager(store));
+          const decision = governor.checkBeforeStep();
+          if (!decision.allow) {
+            audit("provider.blocked", { reason: decision.reason });
+            // Keep the established "budget exhausted" contract while carrying
+            // the Governor's specific finding.
+            return { ok: false, message: "", reason: `budget exhausted (${decision.reason})` };
           }
         }
         try {

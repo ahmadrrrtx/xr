@@ -33,6 +33,7 @@ import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
 import { setSecret, getSecret } from "../security/secrets.ts";
+import { hydrateProviderEnv, secretBrokerSync } from "../security/secret-broker.ts";
 import type {
   RouteRequest,
   RouteResult,
@@ -335,7 +336,10 @@ export class ProviderService implements LifecycleHook {
 
   async storeKey(envName: string, value: string): Promise<string> {
     const backend = setSecret(envName, value);
-    process.env[envName] = value;
+    // Phase 2 · F-24 — ambient hydration moves behind the broker seam:
+    // XR_SECRETS_ENV_COMPAT (default on for 1.0, off in 2.0). The durable
+    // backend write always happens; only the process.env mirror is gated.
+    hydrateProviderEnv(envName, value);
     this.tryIntel()?.invalidateCatalog();
     return backend;
   }
@@ -356,9 +360,9 @@ export class ProviderService implements LifecycleHook {
     const preset = registry.getPreset(id) ?? PRESETS[id];
     if (!preset) return { required: false, set: false };
     if (!preset.apiKeyEnv) return { required: false, set: true };
-    const set = !!(
-      process.env[preset.apiKeyEnv] || getSecret(preset.apiKeyEnv)
-    );
+    // Phase 2 · F-24 — key presence through the broker seam (env hydration
+    // compat-gated; durable backend always consulted).
+    const set = Boolean(secretBrokerSync(preset.apiKeyEnv));
     return { required: true, set, envName: preset.apiKeyEnv };
   }
 

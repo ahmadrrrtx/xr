@@ -34,6 +34,7 @@ import { join } from "node:path";
 import { homedir, platform } from "node:os";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { commandExists, runCommand } from "../util/process.ts";
+import { envSecretCompatEnabled } from "./env-compat.ts";
 
 export type SecretBackend = "macos-keychain" | "linux-secret-service" | "windows-dpapi" | "file";
 
@@ -330,7 +331,10 @@ export function setSecret(name: string, value: string): SecretBackend {
     void setSecretAsync(name, value).catch(() => {});
   }
   setFileSecret(name, value);
-  process.env[name] = value;
+  // Phase 2 · F-24 — the write path obeys the same compat gate as reads:
+  // with XR_SECRETS_ENV_COMPAT off, the durable store is updated but the
+  // key is never mirrored into process.env.
+  if (envSecretCompatEnabled()) process.env[name] = value;
   return "file";
 }
 
@@ -339,12 +343,18 @@ export function setSecret(name: string, value: string): SecretBackend {
  */
 export function getSecretSyncCached(name: string): string | undefined {
   assertSafeName(name);
-  if (process.env[name]) return process.env[name];
+  // Phase 2 · F-24 — ambient env is only part of the read path while compat
+  // is on; with XR_SECRETS_ENV_COMPAT off, the durable backends are the only
+  // authority (the 2.0 posture the broker seam is headed for).
+  if (envSecretCompatEnabled() && process.env[name]) return process.env[name];
   if (secretMemo.has(name)) return secretMemo.get(name);
   const file = getFileSecret(name);
   if (file) {
     secretMemo.set(name, file);
-    process.env[name] = file;
+    // Phase 2 · F-24 — ambient hydration is compat-gated: with
+    // XR_SECRETS_ENV_COMPAT off, the value is memoized (never re-read from
+    // disk) but deliberately NOT mirrored into process.env.
+    if (envSecretCompatEnabled()) process.env[name] = file;
     return file;
   }
   return undefined;

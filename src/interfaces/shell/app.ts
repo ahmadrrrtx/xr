@@ -16,6 +16,8 @@ import { detectRuntime } from "../../local/runtimes.ts";
 import { runLab } from "../../security/lab.ts";
 import { buildAuditReport } from "../../export/report.ts";
 import { executeOnSurface } from "../../services/surface-execution.ts";
+import { makeApprover } from "../../control/approval-store.ts";
+import { renderPreviewText } from "../../control/preview.ts";
 import { runStatusLabel } from "../../core/ux-status.ts";
 import { WorkspaceManager } from "../../core/workspace.ts";
 import { SHELL_VIEW_ORDER, type ShellViewId } from "../../ui/icons.ts";
@@ -257,6 +259,35 @@ function promptConfirm(state: ShellState, title: string, detail?: string, defaul
     state.confirm = { title, detail, defaultYes, resolve };
     state.overlay = "confirm";
     state.dirty = true;
+  });
+}
+
+/**
+ * Phase 2 · F-11/F-26 — the Shell's consent path: durable records + structured
+ * previews + TTL default-deny. The interactive prompt races the store (the
+ * dashboard can answer the same record); an unanswered prompt auto-denies.
+ */
+function shellApprover(
+  state: ShellState,
+  config: ReturnType<typeof loadConfig>["config"],
+): (req: import("../../core/types.ts").ApprovalRequest) => Promise<boolean> {
+  return makeApprover(state.store, {
+    surface: "shell",
+    defaultTtlMs: config.approvals.defaultTtlMs,
+    perSurface: config.approvals.perSurface,
+    prompt: async (record, decide) => {
+      const structured = record.preview
+        ? renderPreviewText(record.preview)
+        : `${record.reason}`;
+      const ttlSec = Math.round(record.ttlMs / 1000);
+      const answer = await promptConfirm(
+        state,
+        `Approve ${record.tool}? [risk: ${record.riskTier}] · auto-deny in ${ttlSec}s`,
+        structured,
+        true,
+      );
+      decide(answer);
+    },
   });
 }
 
@@ -584,14 +615,10 @@ async function runTask(state: ShellState, task: string): Promise<void> {
       const label = busyLabelForEvent(ev);
       if (label !== null && label !== state.busyLabel) { state.busyLabel = label; state.dirty = true; }
     },
-    approve: async (req) => {
-      return await promptConfirm(
-        state,
-        `Approve ${req.tool}?`,
-        `${req.reason}${req.preview ? `\n\n${req.preview}` : ""}`,
-        true,
-      );
-    },
+    // Phase 2 · F-11/F-26 — durable, structured consent: the TUI prompt races
+    // the durable record (dashboard can answer too); TTL default-deny applies.
+    approve: shellApprover(state, config),
+    deniedPermissions: config.capabilities.deniedPermissions,
     onOverBudget: async (meter, reason) => {
       const approved = await promptConfirm(
         state,

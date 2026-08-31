@@ -383,7 +383,65 @@ const MIGRATION_5: Migration = {
   },
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5];
+/**
+ * Migration 6 — Phase 2 · F-11/F-12: durable `approvals` + `reservations`
+ * tables for EXISTING databases (the baseline schema in WorkspaceStore covers
+ * fresh ones). Additive: two tables + indexes. The audit chain is untouched.
+ *
+ * One-release cutover: there is no dual mode — after this migration the
+ * durable consent plane and the atomic budget-admission tables exist on every
+ * database, old and new. Down: drops both tables (destructive only for data
+ * this migration itself introduced).
+ */
+const MIGRATION_6: Migration = {
+  version: 6,
+  name: "phase2_approvals_reservations",
+  up(store: WorkspaceStore) {
+    store.exec(`
+      CREATE TABLE IF NOT EXISTS approvals (
+        id TEXT PRIMARY KEY,
+        task_id TEXT,
+        run_id TEXT,
+        session_id TEXT,
+        tool TEXT NOT NULL,
+        args_hash TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        preview_json TEXT NOT NULL,
+        risk_tier TEXT NOT NULL DEFAULT 'unknown',
+        surface TEXT NOT NULL DEFAULT 'unknown',
+        requested_at INTEGER NOT NULL,
+        ttl_ms INTEGER NOT NULL,
+        decision TEXT,
+        decided_by_channel TEXT,
+        decided_by_user TEXT,
+        decided_at INTEGER,
+        latency_ms INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_approvals_pending ON approvals(decision, requested_at);
+      CREATE INDEX IF NOT EXISTS idx_approvals_session ON approvals(session_id);
+
+      CREATE TABLE IF NOT EXISTS reservations (
+        id TEXT PRIMARY KEY,
+        env_id TEXT NOT NULL,
+        est_usd REAL NOT NULL,
+        est_tokens INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        actual_usd REAL,
+        actual_tokens INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status, created_at);
+      CREATE INDEX IF NOT EXISTS idx_reservations_env ON reservations(env_id, status);
+    `);
+  },
+  down(store: WorkspaceStore) {
+    store.exec(`DROP TABLE IF EXISTS approvals;`);
+    store.exec(`DROP TABLE IF EXISTS reservations;`);
+  },
+};
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6];
 
 /** Latest known schema version. */
 export const LATEST_SCHEMA_VERSION: number = MIGRATIONS.reduce(

@@ -1,4 +1,5 @@
 import { BudgetManager, BudgetCheckResult } from "./manager.ts";
+import type { ReservationStoreLike } from "../state/repos/reservation-repo.ts";
 
 export interface Budget {
   /** Hard ceiling in USD for this task (0 or undefined = local/free, no $ cap). */
@@ -29,6 +30,15 @@ export class CostGovernor {
   private outTokens = 0;
   private usd = 0;
   private steps = 0;
+  /**
+   * Phase 2 · F-12 — the open reservation for the currently-admitted step
+   * (settled at the head of the next checkBeforeStep). Undefined when no
+   * admission layer is wired or nothing is currently admitted.
+   */
+  private openReservationId: string | undefined;
+  /** Usage snapshot at the moment the open reservation was admitted. */
+  private lastCommittedUsd = 0;
+  private lastCommittedTokens = 0;
 
   constructor(
     private budget: Budget,
@@ -41,6 +51,15 @@ export class CostGovernor {
      * per-task ceiling in any way.
      */
     private budgetManager?: BudgetManager,
+    /**
+     * Phase 2 · F-12 — reservation store (atomic check-and-reserve). OPTIONAL:
+     * absent callers keep the read-then-decide per-task behavior unchanged.
+     * When present, admission is a serialized write transaction and the race
+     * between processes is impossible by construction.
+     */
+    private reservationStore?: ReservationStoreLike,
+    /** Phase 2 · F-12 — task env id (session/run) for per-task reservations. */
+    private envId?: string,
   ) {}
 
   /** Record real usage after a model call. */
@@ -66,8 +85,17 @@ export class CostGovernor {
    * Pre-flight check BEFORE the next step. Estimates the next call's cost from
    * the running average and refuses if it would breach a ceiling.
    * Returns allow:false → the loop must pause and ask the human.
+   *
+   * Phase 2 · F-12 — when an admission layer is wired this is the in-loop
+   * facade over admitStep: the previous reservation is settled against actual
+   * usage, then the next admission runs inside ONE serialized write
+   * transaction (global + per-task caps evaluated atomically).
    */
   checkBeforeStep(): GovernorDecision {
+    // Settle the previous step's reservation against ACTUAL usage before the
+    // next admission, so reservations track reality and never drift.
+    this.settleOpenReservation();
+
     const snap = this.snapshot();
 
     // 1. Global Budget Check
@@ -117,10 +145,106 @@ export class CostGovernor {
       };
     }
 
+    // 3. Phase 2 · F-12 — atomic admission (check-and-reserve as a write
+    //    transaction). Authoritative for store-backed runs: it re-checks the
+    //    global + per-task caps against recorded spend PLUS active
+    //    reservations from every process sharing this workspace.
+    if (this.reservationStore && this.envId) {
+      const cfg = this.budgetManager?.getConfig();
+      const admitted = this.admitStep({
+        envId: this.envId,
+        estUsd,
+        estTokens,
+        monthlyCapUsd: cfg?.monthly_cap ?? null,
+        dailyCapUsd: cfg?.daily_cap ?? null,
+        taskUsdCap: this.budget.maxUsd ?? null,
+        taskTokenCap: this.budget.maxTokens ?? null,
+      });
+      if (!admitted.allow) {
+        return {
+          allow: false,
+          reason: admitted.reason ?? "budget admission denied",
+          snapshot: snap,
+          suggestLocal: admitted.suggestLocal,
+        };
+      }
+    }
+
     return { 
       allow: true, 
       warning: globalCheck.warning 
     };
+  }
+
+  /**
+   * Phase 2 · F-12 — Governor v1 admission primitive. Performs the
+   * check-and-reserve inside the reservation store's serialized write
+   * transaction (see ReservationRepo). Returns the reservation id on allow so
+   * the caller can commit/release it explicitly.
+   */
+  admitStep(est: {
+    envId: string;
+    estUsd: number;
+    estTokens: number;
+    monthlyCapUsd?: number | null;
+    dailyCapUsd?: number | null;
+    taskUsdCap?: number | null;
+    taskTokenCap?: number | null;
+  }): GovernorDecision & { reservationId?: string } {
+    if (!this.reservationStore) {
+      return { allow: true };
+    }
+    const result = this.reservationStore.admit(
+      est.envId,
+      est.estUsd,
+      est.estTokens,
+      {
+        monthlyCapUsd: est.monthlyCapUsd ?? null,
+        dailyCapUsd: est.dailyCapUsd ?? null,
+        taskUsdCap: est.taskUsdCap ?? null,
+        taskTokenCap: est.taskTokenCap ?? null,
+      },
+    );
+    if (!result.ok) {
+      return { allow: false, reason: result.reason, snapshot: this.snapshot(), suggestLocal: result.suggestLocal };
+    }
+    this.openReservationId = result.reservationId;
+    this.lastCommittedUsd = this.snapshot().usd;
+    this.lastCommittedTokens = this.snapshot().totalTokens;
+    return { allow: true, reservationId: result.reservationId };
+  }
+
+  /** Phase 2 · F-12 — settle an explicit reservation against actual usage. */
+  commit(reservationId: string, actualUsd: number, actualTokens: number): void {
+    this.reservationStore?.commit(reservationId, actualUsd, actualTokens);
+    if (this.openReservationId === reservationId) {
+      this.openReservationId = undefined;
+    }
+  }
+
+  /** Phase 2 · F-12 — release a reservation without usage (cancelled path). */
+  releaseReservation(reservationId?: string): void {
+    if (!this.reservationStore) return;
+    if (reservationId) this.reservationStore.release(reservationId);
+    else if (this.openReservationId) this.reservationStore.release(this.openReservationId);
+    this.openReservationId = undefined;
+  }
+
+  /** Settle the open reservation with the usage accrued since admission. */
+  private settleOpenReservation(): void {
+    if (!this.reservationStore || !this.openReservationId) return;
+    const snap = this.snapshot();
+    this.reservationStore.commit(
+      this.openReservationId,
+      snap.usd - this.lastCommittedUsd,
+      snap.totalTokens - this.lastCommittedTokens,
+    );
+    this.openReservationId = undefined;
+  }
+
+  /** Phase 2 · F-12 — teardown: settle any open reservation for this task. */
+  close(): void {
+    this.settleOpenReservation();
   }
 
   overBudget(): boolean {

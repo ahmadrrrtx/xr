@@ -21,6 +21,9 @@
       "name": "agents"
     },
     {
+      "name": "approvals"
+    },
+    {
       "name": "budget"
     },
     {
@@ -285,6 +288,327 @@
               "application/json": {
                 "schema": {
                   "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/approvals": {
+      "get": {
+        "operationId": "approvals.list",
+        "summary": "Durable pending approvals across all surfaces (workspace store).",
+        "tags": [
+          "approvals"
+        ],
+        "x-xr-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pending": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "taskId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "runId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sessionId": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "tool": {
+                            "type": "string"
+                          },
+                          "argsHash": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "description": "Model-shaped reason text — untrusted, framed as data.",
+                            "type": "string"
+                          },
+                          "preview": {
+                            "description": "Structured preview (diff / interpreted command / redacted args).",
+                            "anyOf": [
+                              {},
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "riskTier": {
+                            "type": "string"
+                          },
+                          "surface": {
+                            "type": "string"
+                          },
+                          "requestedAt": {
+                            "type": "number"
+                          },
+                          "ttlMs": {
+                            "type": "number"
+                          },
+                          "expiresAt": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskId",
+                          "runId",
+                          "sessionId",
+                          "tool",
+                          "argsHash",
+                          "reason",
+                          "preview",
+                          "riskTier",
+                          "surface",
+                          "requestedAt",
+                          "ttlMs",
+                          "expiresAt"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "pending"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/approvals/{approvalId}/decision": {
+      "post": {
+        "operationId": "approvals.decide",
+        "summary": "Decide a durable approval request (approve/deny). TTL default-deny applies.",
+        "tags": [
+          "approvals"
+        ],
+        "x-xr-stability": "stable",
+        "parameters": [
+          {
+            "name": "approvalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Durable approval record id (e.g. ap_1a2b3c4d)."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "approved": {
+                    "description": "True = approve the pending action; false = deny.",
+                    "type": "boolean"
+                  },
+                  "userId": {
+                    "description": "Optional operator identity recorded in the audit.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "approved"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "additionalProperties": {}
                 }
               }
             }

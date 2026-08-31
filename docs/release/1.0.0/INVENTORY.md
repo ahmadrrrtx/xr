@@ -1,15 +1,15 @@
 # XR 1.0.0 Repository Inventory
 
-Generated: 2026-08-26T00:48:09.694Z
+Generated: 2026-08-31T19:23:45.384Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 604 |
-| Test files | 294 |
+| Source files | 612 |
+| Test files | 311 |
 | CLI commands | 42 |
-| Daemon routes | 121 |
+| Daemon routes | 123 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -73,6 +73,8 @@ Generated: 2026-08-26T00:48:09.694Z
 - GET `/api` — local bearer token or dashboard query token (src/daemon/routes/meta.routes.ts)
 - GET `/api/agents` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
 - GET `/api/agents/workflows/*` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
+- GET `/api/approvals` — local bearer token or dashboard query token (src/daemon/routes/approvals.routes.ts)
+- POST `/api/approvals/*` — local bearer token or dashboard query token (src/daemon/routes/approvals.routes.ts)
 - GET `/api/audit` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/budget` — local bearer token or dashboard query token (src/daemon/routes/budget.routes.ts)
 - POST `/api/budget/set` — local bearer token or dashboard query token (src/daemon/routes/budget.routes.ts)

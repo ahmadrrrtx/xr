@@ -99,6 +99,8 @@ export async function runEnvelope(
     ...(observation.onOverBudget ? { onOverBudget: observation.onOverBudget } : {}),
     budget: { ...policy.budget },
     pricing: { ...policy.pricing },
+    // Phase 2 · F-06 — real deny-lists reach the loop from workspace config.
+    ...(policy.deniedPermissions ? { deniedPermissions: policy.deniedPermissions } : {}),
     maxSteps: plan.maxSteps,
     egressAllowlist: [...policy.egressAllowlist],
     dryRun: policy.dryRun,

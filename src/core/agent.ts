@@ -29,11 +29,13 @@ import { frameToolOutput } from "../security/tool-output.ts";
 import { repairToTurn } from "../reliability/repair.ts";
 import type { SessionRepo } from "../state/repos/session-repo.ts";
 import type { AuditRepo } from "../state/repos/audit-repo.ts";
-import type { CostRepo } from "../state/repos/cost-repo.ts";
+import { CostRepo } from "../state/repos/cost-repo.ts";
 import type { UserMemoryRepo } from "../state/repos/user-memory-repo.ts";
 import type { WorkspaceStore as Store } from "../state/workspace-store.ts";
 import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
 import { BudgetManager } from "../cost/manager.ts";
+import { ReservationRepo } from "../state/repos/reservation-repo.ts";
+import { buildStructuredPreview } from "../control/preview.ts";
 import { compact } from "../context/memory/compact.ts";
 import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { buildMemoryBlock, buildContextMessages } from "../context/memory/inject.ts";
@@ -76,6 +78,14 @@ export interface AgentDeps {
   maxSteps?: number;
   /** Domains the agent may contact (egress allow-list). */
   egressAllowlist?: string[];
+  /**
+   * Phase 2 · F-06 — workspace denied permissions, threaded into every
+   * `evaluatePolicy` call at the loop boundary. Sourced from the workspace
+   * config (`capabilities.deniedPermissions`); absent only for out-of-tree
+   * callers that never loaded a config, in which case the loop treats the
+   * list as empty and audits the absence (`capability.policy.deny_list_absent`).
+   */
+  deniedPermissions?: readonly string[];
   /** Dry-run: simulate side effects, never write/execute. */
   dryRun?: boolean;
   /**
@@ -369,16 +379,23 @@ export async function runAgentLoop(
   }
   const maxSteps = deps.maxSteps ?? 12;
   
+  const sessionId = `s_${randomUUID().slice(0, 8)}`;
+  sessionStore.createSession(sessionId, task.slice(0, 80), mode);
+  auditStore.audit("session.start", { task, mode, provider: provider.id }, sessionId);
+
   const budgetManager = new BudgetManager(costStore);
+  // Phase 2 · F-12 — Governor v1: atomic admission over the same workspace
+  // store. The reservation layer is wired whenever a cost store exists (it is
+  // the same SQLite connection), so global caps are race-safe across
+  // processes from the very first step.
+  const reservationRepo = new ReservationRepo(costStore instanceof CostRepo ? costStore.store : costStore);
   const governor = new CostGovernor(
     deps.budget ?? {},
     deps.pricing ?? { inPerMTok: 0, outPerMTok: 0 },
     budgetManager,
+    reservationRepo,
+    sessionId,
   );
-  
-  const sessionId = `s_${randomUUID().slice(0, 8)}`;
-  sessionStore.createSession(sessionId, task.slice(0, 80), mode);
-  auditStore.audit("session.start", { task, mode, provider: provider.id }, sessionId);
 
   /**
    * Phase 2 · T2 — tool discovery.
@@ -433,7 +450,41 @@ export async function runAgentLoop(
   const hardened = deps.hardened ?? true;
   const toolCtx: ToolContext = {
     cwd,
-    approve: deps.approve,
+    // Phase 2 · F-11/F-26 — every approval raised inside the loop carries a
+    // structured preview (diff / interpreted command) and the run identity,
+    // so the consent plane can persist a durable, decision-ready record and
+    // never has to trust raw model prose. The surface's own approve()
+    // implementation receives the enriched request.
+    approve: (req) => {
+      let structuredPreview: import("../control/preview.ts").StructuredPreview | undefined;
+      let riskTier: string | undefined = req.riskTier;
+      try {
+        if (!riskTier) {
+          const entry = deps.toolRegistry?.resolve?.(req.tool) as
+            | { riskTier?: string; tool?: { riskTier?: string } }
+            | undefined;
+          riskTier = entry?.riskTier ?? entry?.tool?.riskTier;
+        }
+        structuredPreview = buildStructuredPreview({
+          tool: req.tool,
+          args: req.args,
+          reason: req.reason,
+          cwd,
+          riskTier,
+        });
+      } catch {
+        // A preview failure must never block the approval flow itself.
+        structuredPreview = undefined;
+      }
+      return deps.approve({
+        ...req,
+        structuredPreview,
+        riskTier: riskTier ?? req.riskTier,
+        sessionId,
+        runId,
+        taskId: runId,
+      });
+    },
     audit: (event: string, detail: Record<string, unknown>) =>
       auditStore.audit(event, detail, sessionId),
     egressAllowlist: deps.egressAllowlist ?? [],
@@ -590,6 +641,8 @@ export async function runAgentLoop(
   let stepIdx = 0;
   /** Phase 05 — emit provider_ready status once, before the first model turn. */
   let providerReadyEmitted = false;
+  /** Phase 2 · F-06 — audit the empty-deny-list fallback exactly once per run. */
+  let denyListAbsentAudited = false;
 
   // Stage 6 — fold the finished conversation into a compact session summary.
   // Best-effort, separate store, never throws, never confuses with long-term
@@ -813,9 +866,21 @@ export async function runAgentLoop(
               mode,
               cwd,
             };
+            // Phase 2 · F-06 — real deny-lists from workspace config. An absent
+            // list (no workspace config on an out-of-tree path) is audited once
+            // per run so the fallback is never silent.
+            const deniedPermissions = deps.deniedPermissions ?? [];
+            if (!deps.deniedPermissions && !denyListAbsentAudited) {
+              denyListAbsentAudited = true;
+              auditStore.audit(
+                "capability.policy.deny_list_absent",
+                { tool: call.tool, note: "no workspace config provided; denying by config is disabled for this run" },
+                sessionId,
+              );
+            }
             const decision = evaluatePolicy(req as any, {
               registry,
-              deniedPermissions: [],
+              deniedPermissions,
               egressAllowlist: deps.egressAllowlist ?? [],
               allowedHosts: deps.allowedHosts ?? [],
               cwd,
@@ -831,15 +896,42 @@ export async function runAgentLoop(
                 deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: decision.reason });
                 messages.push({ role: "tool", name: call.tool, content: msg });
                 auditStore.audit("capability.denied", { tool: call.tool, reason: decision.reason, policyTrace: decision.policyTrace }, sessionId);
+                // Phase 2 · F-06 — a policy ENGINE fault (evaluatePolicy converted
+                // an internal throw into a deny decision) is audited distinctly:
+                // the boundary denied on error, not on a policy rule.
+                if (decision.reason === "policy_error") {
+                  auditStore.audit(
+                    "capability.deny_error",
+                    {
+                      tool: call.tool,
+                      error: decision.policyTrace?.join(" ") ?? "policy evaluation failed",
+                      note: "denied (fail closed)",
+                    },
+                    sessionId,
+                  );
+                }
                 // Also audit tool.blocked for backward compat with envelope tests that expect tool.blocked
                 auditStore.audit("tool.blocked", { tool: call.tool, mode, reason: decision.reason }, sessionId);
                 continue;
               }
             }
           } catch (e) {
-            // Policy evaluation failure must not break run — fail closed if evaluation throws?
-            // We log and continue to normal resolution (defense in depth, existing checks remain)
-            auditStore.audit("capability.policy_error", { tool: call.tool, error: (e as Error).message }, sessionId);
+            // ── Phase 2 · F-06 — DENY-ON-THROW (the "fail closed?" question is
+            // answered: yes). A policy evaluation failure is a denial, not a
+            // pass: the tool is NOT executed, the event is audited as
+            // `capability.deny_error`, and the loop continues to the next call.
+            const msg = `tool "${call.tool}" blocked by capability policy: policy_error`;
+            say(`\x1b[31m✗ ${msg}\x1b[0m`);
+            deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: "policy_error" });
+            messages.push({ role: "tool", name: call.tool, content: msg });
+            auditStore.audit(
+              "capability.deny_error",
+              { tool: call.tool, error: (e as Error).message, note: "evaluation threw — denied (fail closed)" },
+              sessionId,
+            );
+            // Backward-compat marker: policy denials of this class still read as denials.
+            auditStore.audit("capability.denied", { tool: call.tool, reason: "policy_error" }, sessionId);
+            continue;
           }
         }
 
@@ -944,6 +1036,10 @@ export async function runAgentLoop(
       meter: governor.meter(),
       routingDecisionId: deps.routingDecision?.decisionId,
     };
+  } finally {
+    // Phase 2 · F-12 — settle the open reservation on every exit path so a
+    // finished run never leaves phantom headroom beyond the short TTL window.
+    governor.close();
   }
 }
 

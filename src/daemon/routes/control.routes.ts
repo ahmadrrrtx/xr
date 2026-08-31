@@ -1,6 +1,6 @@
 /** XR Daemon — computer-control and plan-memory routes. */
 
-import { approvals } from "../../control/approvals.ts";
+import { approvals, bindApprovals } from "../../control/approvals.ts";
 import { listPermissions } from "../../control/permissions.ts";
 import { isDisabled } from "../../control/service.ts";
 import { planningService } from "../../services/planning-service.ts";
@@ -15,16 +15,17 @@ export function controlRoutes(): DaemonRoute[] {
       id: "control.status",
       path: "/api/control/status",
       method: "GET",
-      handle: async ({ json }) => {
+      handle: async ({ json, state }) => {
         const kill = isDisabled();
         const { detectCapabilitiesAsync } = await import("../../control/adapter.ts");
         const caps = await detectCapabilitiesAsync();
+        bindApprovals(state.store);
         return json({
           enabled: !kill.disabled,
           disabledReason: kill.reason ?? null,
           capabilities: caps,
           browser: browserStatus(),
-          pending: approvals.list().length,
+          pending: approvals.listRecords().length,
         });
       },
     }),
@@ -45,7 +46,12 @@ export function controlRoutes(): DaemonRoute[] {
       id: "control.pending",
       path: "/api/control/pending",
       method: "GET",
-      handle: ({ json }) => json({ pending: approvals.list() }),
+      handle: ({ json, state }) => {
+        // Phase 2 · F-11 — durable records (cross-process view): the daemon
+        // lists the store-backed queue, not an in-process map.
+        bindApprovals(state.store);
+        return json({ pending: approvals.listRecords() });
+      },
     }),
     route({
       id: "control.approve",
@@ -57,6 +63,7 @@ export function controlRoutes(): DaemonRoute[] {
           if (typeof body?.id !== "string" || typeof body?.approved !== "boolean") {
             return json({ error: "expected { id: string, approved: boolean }" }, 400);
           }
+          bindApprovals(state.store);
           const handled = approvals.answer(body.id, body.approved);
           state.store.audit(`control.approve.${body.approved ? "granted" : "denied"}`, { id: body.id });
           return json({ ok: handled });

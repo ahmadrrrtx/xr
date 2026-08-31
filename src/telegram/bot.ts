@@ -21,6 +21,8 @@ import {
 } from "./render.ts";
 import { executeOnSurface } from "../services/surface-execution.ts";
 import { loadConfig } from "../config/config.ts";
+import { getApprovalStore } from "../control/approval-store.ts";
+import { renderPreviewText } from "../control/preview.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
 import { runLab } from "../security/lab.ts";
@@ -66,23 +68,61 @@ export class TelegramBot {
     });
   }
 
-  /** Approval callback used by the agent loop. Sends buttons, awaits the tap. */
+  /**
+   * Approval callback used by the agent loop.
+   *
+   * Phase 2 · F-11/F-26 — every approval is now a DURABLE record (the store
+   * id is the button id), the TTL comes from `approvals.defaultTtlMs`
+   * (default 5 min — the old hardcoded behavior preserved as a special case),
+   * and the preview is the structured breakdown (diff / interpreted command).
+   * The local `pending` map remains only as the in-process fast path.
+   */
   approver(chatId: number) {
-    return (req: { tool: string; reason: string; preview?: string }): Promise<boolean> => {
-      const id = Math.random().toString(36).slice(2, 8);
-      const msg = approvalMessage({ id, ...req });
-      this.deps.store.audit("telegram.approval.request", { tool: req.tool });
+    return (req: {
+      tool: string;
+      reason: string;
+      preview?: string;
+      args?: Record<string, unknown>;
+      structuredPreview?: import("../control/preview.ts").StructuredPreview;
+      riskTier?: string;
+      taskId?: string;
+      runId?: string;
+      sessionId?: string;
+    }): Promise<boolean> => {
+      const { config } = loadConfig();
+      const approvalStore = getApprovalStore(this.deps.store, {
+        defaultTtlMs: config.approvals.defaultTtlMs,
+        perSurface: config.approvals.perSurface,
+      });
+      const handle = approvalStore.request({
+        tool: req.tool,
+        reason: req.reason,
+        args: req.args,
+        preview: req.structuredPreview,
+        riskTier: req.riskTier,
+        surface: "telegram",
+        taskId: req.taskId ?? null,
+        runId: req.runId ?? null,
+        sessionId: req.sessionId ?? null,
+      });
+      this.deps.store.audit("telegram.approval.request", { tool: req.tool, approvalId: handle.id });
+      const msg = approvalMessage({
+        id: handle.id,
+        tool: req.tool,
+        reason: req.reason,
+        preview: handle.record.preview ? renderPreviewText(handle.record.preview) : req.preview,
+        riskTier: handle.record.riskTier,
+      });
+      void this.send(chatId, msg);
       return new Promise<boolean>((resolve) => {
-        this.pending.set(id, resolve);
-        void this.send(chatId, msg);
-        // Default-deny after 5 min (fail closed).
-        setTimeout(() => {
-          if (this.pending.has(id)) {
-            this.pending.delete(id);
-            this.deps.store.audit("telegram.approval.timeout", { tool: req.tool });
-            resolve(false);
+        this.pending.set(handle.id, resolve);
+        void handle.outcome.then((o) => {
+          this.pending.delete(handle.id);
+          if (o.timedOut) {
+            this.deps.store.audit("telegram.approval.timeout", { tool: req.tool, approvalId: handle.id });
           }
-        }, 5 * 60 * 1000);
+          resolve(o.approved);
+        });
       });
     };
   }
@@ -96,13 +136,23 @@ export class TelegramBot {
       if (!isAllowed(userId, this.deps.allowedIds)) return;
       const parsed = parseCallback(cq.data ?? "");
       if (parsed && this.pending.has(parsed.id)) {
-        const resolve = this.pending.get(parsed.id)!;
-        this.pending.delete(parsed.id);
-        resolve(parsed.decision === "approve");
-        this.deps.store.audit("telegram.approval.answered", { decision: parsed.decision });
+        // Phase 2 · F-11 — the decision lands in the durable store first
+        // (cross-process capable); the local resolver is the fast path.
+        const approved = parsed.decision === "approve";
+        const approvalStore = getApprovalStore(this.deps.store);
+        const decided = approvalStore.decide(parsed.id, approved, {
+          channel: "telegram",
+          userId: String(userId),
+        });
+        if (decided) {
+          const resolve = this.pending.get(parsed.id)!;
+          this.pending.delete(parsed.id);
+          resolve(approved);
+          this.deps.store.audit("telegram.approval.answered", { decision: parsed.decision, approvalId: parsed.id });
+        }
         await this.call("answerCallbackQuery", {
           callback_query_id: cq.id,
-          text: parsed.decision === "approve" ? "✅ approved" : "❌ rejected",
+          text: approved ? "✅ approved" : "❌ rejected",
         });
       }
       return;

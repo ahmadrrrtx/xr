@@ -22,7 +22,7 @@
  *     growth; a checkpoint runs on close.
  */
 import { Database } from "bun:sqlite";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { join, dirname, resolve } from "node:path";
 import { existsSync, mkdirSync, copyFileSync, readFileSync, rmSync } from "node:fs";
 import { XR_HOME } from "../config/config.ts";
@@ -38,6 +38,33 @@ import {
 import { runMigrationsUp } from "./migrations.ts";
 
 const GENESIS = "xr-genesis";
+
+/** Phase 2 · F-12 — default lifetime of an uncommitted budget reservation. */
+export const DEFAULT_RESERVATION_TTL_MS = (() => {
+  const raw = Number(process.env.XR_RESERVATION_TTL_MS);
+  return Number.isFinite(raw) && raw >= 1000 ? raw : 120_000;
+})();
+
+/** Phase 2 · F-11 — a durable approval record row (decision IS NULL = pending). */
+export interface ApprovalRow {
+  id: string;
+  task_id: string | null;
+  run_id: string | null;
+  session_id: string | null;
+  tool: string;
+  args_hash: string;
+  reason: string;
+  preview_json: string;
+  risk_tier: string;
+  surface: string;
+  requested_at: number;
+  ttl_ms: number;
+  decision: "approved" | "denied" | "timed_out" | null;
+  decided_by_channel: string | null;
+  decided_by_user: string | null;
+  decided_at: number | null;
+  latency_ms: number | null;
+}
 
 /** A process-shared read-write connection for one database file (max 1 RW per file). */
 interface SharedConnection {
@@ -146,6 +173,10 @@ export class WorkspaceStore {
     WorkspaceStore._lastOpened = this;
     this.migrate();
     runMigrationsUp(this);
+    // Phase 2 · F-12 — startup recovery: uncommitted reservations older than
+    // the TTL are released before anything can consume the caps again. A
+    // crashed process can therefore never leave permanent headroom consumed.
+    this.releaseStaleReservations(DEFAULT_RESERVATION_TTL_MS, Date.now());
     // Phase 1 (T1): fail-closed detection of a pre-existing broken chain.
     this.chainBrokenAt = this.verifyChain().valid ? null : (this.verifyChain().brokenAt ?? null);
   }
@@ -360,6 +391,50 @@ export class WorkspaceStore {
       CREATE INDEX IF NOT EXISTS idx_exec_correlation ON execution_records(correlation_id);
       CREATE INDEX IF NOT EXISTS idx_exec_state ON execution_records(workspace_id, state);
       CREATE INDEX IF NOT EXISTS idx_exec_capability ON execution_records(workspace_id, capability_kind, created_at DESC);
+
+      -- ── Phase 2 · Decision Boundary Hardening ─────────────────────────────
+      -- approvals: durable consent records (F-11/M-10). decision IS NULL =
+      -- pending; 'approved' | 'denied' | 'timed_out' once resolved. TTL
+      -- default-deny is enforced by the approval store (never a stuck task).
+      CREATE TABLE IF NOT EXISTS approvals (
+        id TEXT PRIMARY KEY,
+        task_id TEXT,
+        run_id TEXT,
+        session_id TEXT,
+        tool TEXT NOT NULL,
+        args_hash TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        preview_json TEXT NOT NULL,
+        risk_tier TEXT NOT NULL DEFAULT 'unknown',
+        surface TEXT NOT NULL DEFAULT 'unknown',
+        requested_at INTEGER NOT NULL,
+        ttl_ms INTEGER NOT NULL,
+        decision TEXT,
+        decided_by_channel TEXT,
+        decided_by_user TEXT,
+        decided_at INTEGER,
+        latency_ms INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_approvals_pending ON approvals(decision, requested_at);
+      CREATE INDEX IF NOT EXISTS idx_approvals_session ON approvals(session_id);
+
+      -- reservations: atomic budget admission (F-12). One row per admitted
+      -- step; 'active' reservations count against the caps until committed
+      -- (settled with actual usage) or expired by the TTL sweep. UNIQUE is
+      -- structural (id is the PK); the single writer makes admission atomic.
+      CREATE TABLE IF NOT EXISTS reservations (
+        id TEXT PRIMARY KEY,
+        env_id TEXT NOT NULL,
+        est_usd REAL NOT NULL,
+        est_tokens INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        actual_usd REAL,
+        actual_tokens INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status, created_at);
+      CREATE INDEX IF NOT EXISTS idx_reservations_env ON reservations(env_id, status);
     `);
 
     // v0.9 semantic recall: ensure the embedding column exists on DBs created
@@ -1223,6 +1298,245 @@ export class WorkspaceStore {
 
   clearCosts(): void {
     this.db.query(`DELETE FROM cost_events`).run();
+  }
+
+  /** Phase 2 · F-12 — per-session spend, used for per-task reservation caps. */
+  getSessionCostTotals(sessionId: string): { usd: number; inTokens: number; outTokens: number; totalTokens: number } {
+    const row = this.db
+      .query<{ usd: number | null; in_tokens: number | null; out_tokens: number | null }, [string]>(
+        `SELECT COALESCE(SUM(usd),0) AS usd,
+                COALESCE(SUM(in_tokens),0) AS in_tokens,
+                COALESCE(SUM(out_tokens),0) AS out_tokens
+         FROM cost_events WHERE session_id = ?`,
+      )
+      .get(sessionId);
+    const inTokens = row?.in_tokens ?? 0;
+    const outTokens = row?.out_tokens ?? 0;
+    return { usd: row?.usd ?? 0, inTokens, outTokens, totalTokens: inTokens + outTokens };
+  }
+
+  // ── Phase 2 · Reservations (atomic budget admission) ──────────────────────
+
+  /**
+   * Phase 2 · F-12 — atomic check-and-reserve inside ONE serialized write
+   * transaction (single SQLite writer): stale reservations are swept, global
+   * (monthly/daily) and per-task caps are evaluated against recorded spend
+   * PLUS active reservations, and the admission row is inserted. Two
+   * processes can never both pass: the write gate serializes the txn and the
+   * second writer sees the first writer's reservation.
+   */
+  reservationAdmit(
+    envId: string,
+    estUsd: number,
+    estTokens: number,
+    caps: { monthlyCapUsd: number | null; dailyCapUsd: number | null; taskUsdCap: number | null; taskTokenCap: number | null },
+  ): { ok: true; reservationId: string } | { ok: false; reason: string; suggestLocal: boolean } {
+    return this.write(() => {
+      const now = Date.now();
+      this.releaseStaleReservations(DEFAULT_RESERVATION_TTL_MS, now);
+
+      const cfg = this.getBudgetConfig();
+      const monthlyCap = caps.monthlyCapUsd ?? cfg?.monthly_cap ?? 10.0;
+      const dailyCap = caps.dailyCapUsd ?? cfg?.daily_cap ?? null;
+      const autoFallback = cfg?.auto_fallback ?? true;
+
+      const startOfDay = new Date().setHours(0, 0, 0, 0);
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+      const monthlySpend = this.getSpendForPeriod(startOfMonth);
+      const dailySpend = dailyCap !== null ? this.getSpendForPeriod(startOfDay) : 0;
+
+      const active = this.reservationActiveTotals();
+      const reservedUsd = active.usd;
+      const reservedTokens = active.tokens;
+
+      if (estUsd > 0 && monthlySpend + reservedUsd + estUsd > monthlyCap) {
+        return {
+          ok: false,
+          reason: `Monthly cap of $${monthlyCap} reached (Current: $${(monthlySpend + reservedUsd).toFixed(4)} incl. $${reservedUsd.toFixed(4)} in-flight reservations)`,
+          suggestLocal: autoFallback,
+        };
+      }
+      if (estUsd > 0 && dailyCap !== null && dailySpend + reservedUsd + estUsd > dailyCap) {
+        return {
+          ok: false,
+          reason: `Daily cap of $${dailyCap} reached (Current: $${(dailySpend + reservedUsd).toFixed(4)} incl. in-flight reservations)`,
+          suggestLocal: autoFallback,
+        };
+      }
+
+      const session = envId ? this.getSessionCostTotals(envId) : { usd: 0, totalTokens: 0 };
+      const envActive = this.db
+        .query<{ u: number; t: number }, [string]>(
+          `SELECT COALESCE(SUM(est_usd),0) AS u, COALESCE(SUM(est_tokens),0) AS t
+           FROM reservations WHERE env_id = ? AND status = 'active'`,
+        )
+        .get(envId);
+      const taskUsd = session.usd + (envActive?.u ?? 0);
+      const taskTokens = session.totalTokens + (envActive?.t ?? 0);
+      if (caps.taskUsdCap !== null && caps.taskUsdCap !== undefined && caps.taskUsdCap > 0 && taskUsd + estUsd > caps.taskUsdCap) {
+        return {
+          ok: false,
+          reason: `next step (~$${estUsd.toFixed(4)}) would exceed per-task spend ceiling ($${caps.taskUsdCap}) — $${taskUsd.toFixed(4)} already spent/reserved`,
+          suggestLocal: false,
+        };
+      }
+      if (caps.taskTokenCap !== null && caps.taskTokenCap !== undefined && caps.taskTokenCap > 0 && taskTokens + estTokens > caps.taskTokenCap) {
+        return {
+          ok: false,
+          reason: `next step (~${Math.round(estTokens)} tok) would exceed per-task token ceiling (${caps.taskTokenCap}) — ${Math.round(taskTokens)} already spent/reserved`,
+          suggestLocal: false,
+        };
+      }
+
+      const reservationId = `res_${randomUUID().slice(0, 8)}`;
+      this.db
+        .query(
+          `INSERT INTO reservations (id, env_id, est_usd, est_tokens, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'active', ?, ?)`,
+        )
+        .run(reservationId, envId, estUsd, estTokens, now, now);
+      return { ok: true, reservationId };
+    });
+  }
+
+  /** Settle a reservation with actual usage (called after the step completes). */
+  reservationCommit(reservationId: string, actualUsd: number, actualTokens: number): void {
+    this.write(() => {
+      this.db
+        .query(
+          `UPDATE reservations SET status = 'settled', actual_usd = ?, actual_tokens = ?, updated_at = ?
+           WHERE id = ? AND status = 'active'`,
+        )
+        .run(actualUsd, actualTokens, Date.now(), reservationId);
+    });
+  }
+
+  /** Release a reservation without usage (denied/cancelled paths). */
+  reservationRelease(reservationId: string): void {
+    this.write(() => {
+      this.db
+        .query(`UPDATE reservations SET status = 'released', updated_at = ? WHERE id = ? AND status = 'active'`)
+        .run(Date.now(), reservationId);
+    });
+  }
+
+  /** Release every active reservation belonging to one task env (run teardown). */
+  reservationReleaseForEnv(envId: string): void {
+    this.write(() => {
+      this.db
+        .query(`UPDATE reservations SET status = 'released', updated_at = ? WHERE env_id = ? AND status = 'active'`)
+        .run(Date.now(), envId);
+    });
+  }
+
+  /** Release every active reservation older than the TTL (startup recovery). */
+  releaseStaleReservations(ttlMs: number, now: number): void {
+    this.db
+      .query(`UPDATE reservations SET status = 'expired', updated_at = ? WHERE status = 'active' AND created_at <= ?`)
+      .run(now, now - ttlMs);
+  }
+
+  reservationActiveTotals(): { usd: number; tokens: number } {
+    const row = this.db
+      .query<{ u: number; t: number }, []>(
+        `SELECT COALESCE(SUM(est_usd),0) AS u, COALESCE(SUM(est_tokens),0) AS t
+         FROM reservations WHERE status = 'active'`,
+      )
+      .get();
+    return { usd: row?.u ?? 0, tokens: row?.t ?? 0 };
+  }
+
+  reservationCountByStatus(): Record<string, number> {
+    const rows = this.db
+      .query<{ status: string; c: number }, []>(`SELECT status, COUNT(*) AS c FROM reservations GROUP BY status`)
+      .all();
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.status] = r.c;
+    return out;
+  }
+
+  // ── Phase 2 · Approvals (durable consent records) ─────────────────────────
+
+  approvalInsert(row: {
+    id: string; taskId: string | null; runId: string | null; sessionId: string | null;
+    tool: string; argsHash: string; reason: string; previewJson: string; riskTier: string;
+    surface: string; requestedAt: number; ttlMs: number;
+  }): void {
+    this.write(() => {
+      this.db
+        .query(
+          `INSERT INTO approvals (id, task_id, run_id, session_id, tool, args_hash, reason,
+                                   preview_json, risk_tier, surface, requested_at, ttl_ms)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(row.id, row.taskId, row.runId, row.sessionId, row.tool, row.argsHash, row.reason,
+          row.previewJson, row.riskTier, row.surface, row.requestedAt, row.ttlMs);
+    });
+  }
+
+  approvalGet(id: string): ApprovalRow | null {
+    const row = this.db.query<ApprovalRow, [string]>(`SELECT * FROM approvals WHERE id = ?`).get(id);
+    return row ?? null;
+  }
+
+  approvalListPending(): ApprovalRow[] {
+    return this.db
+      .query<ApprovalRow, []>(`SELECT * FROM approvals WHERE decision IS NULL ORDER BY requested_at ASC`)
+      .all();
+  }
+
+  approvalListBySession(sessionId: string): ApprovalRow[] {
+    return this.db
+      .query<ApprovalRow, [string]>(`SELECT * FROM approvals WHERE session_id = ? ORDER BY requested_at DESC`)
+      .all(sessionId);
+  }
+
+  /** Record a decision. Returns true only if the row was still pending. */
+  approvalDecide(
+    id: string,
+    decision: "approved" | "denied",
+    byChannel: string,
+    byUser: string | null,
+    now: number,
+  ): boolean {
+    return this.write(() => {
+      const before = this.db.query<{ requested_at: number }, [string]>(`SELECT requested_at FROM approvals WHERE id = ? AND decision IS NULL`).get(id);
+      if (!before) return false;
+      this.db
+        .query(
+          `UPDATE approvals SET decision = ?, decided_by_channel = ?, decided_by_user = ?,
+                   decided_at = ?, latency_ms = ? WHERE id = ? AND decision IS NULL`,
+        )
+        .run(decision, byChannel, byUser, now, now - before.requested_at, id);
+      return true;
+    });
+  }
+
+  /** TTL default-deny sweep: expire every pending approval past its deadline. */
+  approvalExpirePending(now: number): number {
+    return this.write(() => {
+      const rows = this.db
+        .query<{ id: string; requested_at: number }, [number]>(
+          `SELECT id, requested_at FROM approvals WHERE decision IS NULL AND requested_at + ttl_ms <= ?`,
+        )
+        .all(now);
+      for (const r of rows) {
+        this.db
+          .query(
+            `UPDATE approvals SET decision = 'timed_out', decided_by_channel = 'ttl',
+                     decided_at = ?, latency_ms = ? WHERE id = ? AND decision IS NULL`,
+          )
+          .run(now, now - r.requested_at, r.id);
+      }
+      return rows.length;
+    });
+  }
+
+  approvalPurge(sessionId: string): number {
+    return this.write(() => {
+      const r = this.db.query(`DELETE FROM approvals WHERE session_id = ?`).run(sessionId);
+      return Number(r.changes ?? 0);
+    });
   }
 
   // ---- Budget Management ----

@@ -56,6 +56,11 @@ export interface SurfaceExecuteRequest {
   readonly dryRun?: boolean;
   readonly say?: (line: string) => void;
   readonly approve: (req: ApprovalRequest) => Promise<boolean>;
+  /**
+   * Phase 2 · F-06 — workspace denied permissions from the surface's config.
+   * Absent surfaces keep the audited empty fallback in the loop.
+   */
+  readonly deniedPermissions?: readonly string[];
   readonly onOverBudget?: (
     meter: string,
     reason: string,
@@ -136,6 +141,7 @@ export async function executeOnSurface(
       egressAllowlist: request.egressAllowlist ?? [],
       dryRun: request.dryRun ?? false,
       approve: request.approve,
+      ...(request.deniedPermissions ? { deniedPermissions: request.deniedPermissions } : {}),
     },
     placement: {
       placement: "in_process",

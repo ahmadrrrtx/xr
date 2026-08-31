@@ -96,6 +96,11 @@ export interface EnvelopePolicy {
   readonly toolsAllow?: readonly string[];
   readonly toolsDeny?: readonly string[];
   readonly approve: (req: ApprovalRequest) => Promise<boolean>;
+  /**
+   * Phase 2 · F-06 — workspace denied permissions, threaded into every
+   * evaluatePolicy call at the loop boundary (denied always wins).
+   */
+  readonly deniedPermissions?: readonly string[];
 }
 
 /** PLACEMENT — where the action runs. Phase 2 records it; Phase 4 enforces tiers. */

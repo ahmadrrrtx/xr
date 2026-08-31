@@ -29,6 +29,7 @@ import { route, type DaemonRoute } from "./router.ts";
 import { chatSpan as makeChatSpan, endChatSpan as endGenAiSpan } from "../../observability/instrument.ts";
 import { withSpan as runInSpan } from "../../observability/tracer.ts";
 import { xrMetrics } from "../../observability/metrics.ts";
+import { getApprovalStore } from "../../control/approval-store.ts";
 
 /** Chat request body (typed, minimal surface). */
 interface ChatBody {
@@ -62,7 +63,7 @@ export function chatRoutes(): DaemonRoute[] {
       id: "chat.stream.post",
       path: "/api/chat",
       method: "POST",
-      handle: async ({ req, json, sse, state }) => {
+      handle: async ({ req, json, sse, state, config }) => {
         try {
           const body = (await req.json()) as ChatBody;
           if (!body?.message || typeof body.message !== "string") {
@@ -215,13 +216,57 @@ export function chatRoutes(): DaemonRoute[] {
                     // backward compatibility (the canonical token events come
                     // through onStreamEvent).
                     say: (line) => send({ text: stripAnsi(line) }),
-                    // Approval (Phase 03 · T3.6): dangerous tools always surface
-                    // an approval event and are DENIED by default (safe default;
-                    // a dashboard approval UI can upgrade this later). Policy is
-                    // never weakened for HTTP.
+                    // Approval (Phase 2 · F-11/F-26): every approval is a
+                    // DURABLE record the dashboard lists (GET /api/approvals)
+                    // and decides (POST /api/approvals/:id/decision). The task
+                    // awaits the decision; an unanswered approval hits the TTL
+                    // default-deny. Policy is never weakened for HTTP.
                     approve: async (req) => {
-                      send({ approval_required: { tool: req.tool, reason: req.reason, args: req.args } });
-                      return false;
+                      try {
+                        // Config is present via the router; `?.` keeps direct
+                        // handler invocations (tests) on the schema defaults.
+                        const approvalsCfg = config?.approvals;
+                        const approvalStore = getApprovalStore(state.store, {
+                          defaultTtlMs: approvalsCfg?.defaultTtlMs,
+                          perSurface: approvalsCfg?.perSurface,
+                        });
+                        const handle = approvalStore.request({
+                          tool: req.tool,
+                          reason: req.reason,
+                          args: req.args,
+                          preview: req.structuredPreview,
+                          riskTier: req.riskTier,
+                          surface: "daemon",
+                          taskId: req.taskId ?? null,
+                          runId: req.runId ?? null,
+                          sessionId: req.sessionId ?? null,
+                        });
+                        send({
+                          approval_required: {
+                            id: handle.id,
+                            tool: req.tool,
+                            reason: req.reason,
+                            args: req.args,
+                            riskTier: handle.record.riskTier,
+                            preview: handle.record.preview,
+                            ttlMs: handle.record.ttlMs,
+                          },
+                        });
+                        const outcome = await handle.outcome;
+                        return outcome.approved;
+                      } catch (err) {
+                        // Phase 2 · F-06 — fail closed: a consent-plane fault
+                        // can never become a silent approval over HTTP.
+                        try {
+                          state.store.audit("chat.approval.error", {
+                            tool: req.tool,
+                            error: String(err),
+                          });
+                        } catch {
+                          /* audit sink may be absent in minimal contexts */
+                        }
+                        return false;
+                      }
                     },
                   });
 

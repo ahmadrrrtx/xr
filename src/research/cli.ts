@@ -23,6 +23,7 @@ import { loadConfig, XR_HOME } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
 import { BudgetManager } from "../cost/manager.ts";
+import { CostGovernor } from "../cost/governor.ts";
 import { banner, ok, warn, info, colors as C } from "../interfaces/cli.ts";
 import type { ResearchDepth, ResearchMode, ResearchSession } from "./types.ts";
 import { WebSearchCapability } from "./search.ts";
@@ -49,14 +50,20 @@ function buildEngine(
   let providerId = override.provider ?? config.defaults.provider;
   const model = override.model ?? config.defaults.model;
 
-  // Budget-aware fallback to local (mirrors src/index.ts default-task routing).
+  // Budget-aware fallback to local (mirrors src/index.ts default-task
+  // routing). Phase 2 · F-12 — the decision runs INSIDE the Governor:
+  // checkBeforeStep is the single budget decision point; the fallback is
+  // taken only when the Governor reports the global cap with auto_fallback.
   if (!isLocal(providerId)) {
-    const bm = new BudgetManager(store);
-    const status = bm.getStatus();
-    const cfg = bm.getConfig();
-    if (status.isOverBudget && cfg.auto_fallback) {
+    const governor = new CostGovernor(
+      { maxUsd: perTaskBudgetUsd ?? config.budget.perTaskUsd, maxTokens: config.budget.perTaskTokens },
+      priceFor(providerId, model),
+      new BudgetManager(store),
+    );
+    const decision = governor.checkBeforeStep();
+    if (!decision.allow && decision.suggestLocal) {
       const localModel = config.localModels.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
-      warn(`Global budget exhausted ($${status.monthlySpend.toFixed(2)} / $${status.monthlyCap.toFixed(2)}).`);
+      warn(`Global budget exhausted: ${decision.reason}`);
       warn(`Falling back to local model: ${localModel}`);
       providerId = "ollama";
     }

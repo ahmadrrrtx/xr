@@ -11,7 +11,7 @@ import { classify } from "./classify.ts";
 import { execute } from "./executor.ts";
 import { detectCapabilities, isControlReady } from "./adapter.ts";
 import { auditPlanned, auditExecuted, auditDenied, auditDisabled } from "./audit.ts";
-import { approvals } from "./approvals.ts";
+import { approvals, bindApprovals } from "./approvals.ts";
 import { rememberPlan } from "./memory.ts";
 import { checkPermissionForAction } from "./permissions.ts";
 
@@ -132,6 +132,11 @@ export async function runAction(
   raw: unknown,
   opts: ControlOptions,
 ): Promise<RunResult> {
+  // Phase 2 · F-11 — durable approvals: bind the process-wide queue to the
+  // workspace store every action runs against, so the CLI prompt and the
+  // dashboard decide ONE durable record (cross-process capable, TTL
+  // default-deny), never an in-memory promise.
+  bindApprovals(store);
   const kill = isDisabled();
   if (kill.disabled) {
     const result: ActionResult = { ok: false, skipped: true, message: `computer control is disabled (${kill.reason})` };

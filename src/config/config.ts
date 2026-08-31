@@ -13,6 +13,7 @@ import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 import { getSecret, getSecretSyncCached, listFileSecrets } from "../security/secrets.ts";
+import { envSecretCompatEnabled, hydrateProviderEnv, secretBrokerSync } from "../security/secret-broker.ts";
 import { PRESETS } from "../providers/presets.ts";
 import {
   getCachedConfig,
@@ -502,6 +503,16 @@ const ConfigSchema = z.object({
       deniedPermissions: z.array(z.string()).default([]),
       /** Discovery never ranks by popularity alone; this keeps evidence-biased ranking enabled. */
       evidenceWeightedDiscovery: z.boolean().default(true),
+    })
+    .default({}),
+  // Phase 2 · F-11 — durable consent plane. TTL default-deny on EVERY surface:
+  // an unanswered approval is a denied action, never a stuck process.
+  approvals: z
+    .object({
+      /** Default time-to-live for an approval request before default-deny. */
+      defaultTtlMs: z.number().int().min(5_000).max(86_400_000).default(300_000),
+      /** Per-surface TTL overrides (e.g. { "telegram": 300000, "daemon": 120000 }). Additive. */
+      perSurface: z.record(z.string(), z.number().int().min(5_000).max(86_400_000)).default({}),
     })
     .default({}),
   // XR 1.0 — plugin ecosystem. Local-first and explicit by design. The plugin
@@ -1249,8 +1260,11 @@ const PROVIDER_KEY_ENVS = [
  *   never blocks the event loop on keychain IPC per request.
  */
 function loadLocalSecrets(opts: { skipOsProbe?: boolean } = {}): void {
+  // Phase 2 · F-24 — ambient env hydration is gated behind the secret-broker
+  // compat flag (default ON for 1.0). When off, keys are only resolved
+  // lazily via SecretBroker.get() and never land in process.env.
   const envPath = join(XR_HOME, ".env");
-  if (existsSync(envPath)) {
+  if (existsSync(envPath) && envSecretCompatEnabled()) {
     try { chmodSync(envPath, 0o600); } catch {}
     try {
       // Route through secrets.ts: it owns the format (AES-256-GCM sealed
@@ -1268,7 +1282,7 @@ function loadLocalSecrets(opts: { skipOsProbe?: boolean } = {}): void {
     try {
       const cached = getSecretSyncCached(envName);
       if (cached) {
-        process.env[envName] = cached;
+        hydrateProviderEnv(envName, cached);
         continue;
       }
     } catch { /* ignore */ }
@@ -1276,7 +1290,7 @@ function loadLocalSecrets(opts: { skipOsProbe?: boolean } = {}): void {
     // First-load only: may use OS keychain (sync, rare).
     try {
       const value = getSecret(envName);
-      if (value) process.env[envName] = value;
+      if (value) hydrateProviderEnv(envName, value);
     } catch { /* ignore */ }
   }
 
@@ -1290,7 +1304,7 @@ export async function hydrateSecretsAsync(): Promise<void> {
     try {
       const { getSecretAsync } = await import("../security/secrets.ts");
       const value = await getSecretAsync(envName);
-      if (value) process.env[envName] = value;
+      if (value) hydrateProviderEnv(envName, value);
     } catch { /* ignore */ }
   }
   markSecretsLoaded();
@@ -1301,7 +1315,9 @@ export function getProviderEnvStatus(): Array<{ id: string; label: string; hasKe
   return Object.values(PRESETS).map((p) => ({
     id: p.id,
     label: p.label,
-    hasKey: p.apiKeyEnv ? Boolean(process.env[p.apiKeyEnv] || getSecretSyncCached(p.apiKeyEnv)) : true,
+    // Phase 2 · F-24 — key presence resolved through the broker seam (env
+    // hydration compat-gated); the durable backend always answers.
+    hasKey: p.apiKeyEnv ? Boolean(secretBrokerSync(p.apiKeyEnv)) : true,
     tier: p.tier,
   }));
 }

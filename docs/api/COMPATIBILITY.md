@@ -94,3 +94,4 @@ error *messages* are not (they may be reworded without notice).
 | Date | Change |
 |---|---|
 | 2026-08 (Phase 8) | `/api/v1` mount introduced; legacy `/api/*` deprecated, sunset 2027-08-01; first generated contract (99 operations) + typed client; breaking-change detection added to CI |
+| 2026-08 (Phase 2) | Additive, non-breaking: `GET /api/approvals` (`approvals.list`, stable) lists durable pending approval records across surfaces; `POST /api/approvals/{approvalId}/decision` (`approvals.decide`, stable) approves/denies a pending approval (400 missing `approved`, 404 unknown id, 409 already decided/timed out). Both are served from the same durable consent store as the legacy `/api/control/pending` + `/api/control/approve` pair, which remain for compatibility. TTL default-deny applies: an unanswered approval is denied, never stuck. |

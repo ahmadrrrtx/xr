@@ -28,6 +28,7 @@
 
 import type { ChatOptions, Message, ModelTurn, Provider, Tool, ProviderStreamChunk, ProviderCapabilitiesFlags } from "../core/types.ts";
 import { guardedRequest } from "./request-guard.ts";
+import { secretBrokerSync } from "../security/secret-broker.ts";
 import { buildEnvelopeGBNF } from "../reliability/grammar.ts";
 import { repairToTurn } from "../reliability/repair.ts";
 import { profileFor, type ModelProfile } from "../reliability/profiles.ts";
@@ -108,9 +109,11 @@ export class OpenAICompatProvider implements Provider {
     this.label = opts.label;
     this.baseUrl = opts.baseUrl.replace(/\/$/, "");
     this.model = opts.model;
+    // Phase 2 · F-24 — the key comes through the broker seam: explicit
+    // override wins, then env (compat-gated), then the durable backend.
     this.apiKey =
       opts.apiKey ??
-      (opts.apiKeyEnv ? process.env[opts.apiKeyEnv] : undefined);
+      (opts.apiKeyEnv ? secretBrokerSync(opts.apiKeyEnv) : undefined);
     this.extraHeaders = opts.extraHeaders ?? {};
     this.profile = profileFor(opts.id, opts.model);
     this.capabilities = opts.capabilities;

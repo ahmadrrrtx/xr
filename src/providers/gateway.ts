@@ -46,7 +46,7 @@ import { capabilityResolver, type ProviderCapability, type NormalizedCapabilitie
 import { resolveFallbackChain, type FallbackChain } from "./fallback-chain.ts";
 import { normalizeProviderError, ProviderError, isRetryableProviderError } from "./errors.ts";
 import { isCancellation } from "./request-guard.ts";
-import { getSecret, getSecretSyncCached } from "../security/secrets.ts";
+import { secretBrokerSync } from "../security/secret-broker.ts";
 import { TtlCache } from "../util/ttl-cache.ts";
 import { bounded } from "../util/concurrency.ts";
 import { xrMetrics } from "../observability/metrics.ts";
@@ -421,7 +421,9 @@ export class ProviderGateway {
     const preset = this.getPreset(providerId);
     if (!preset) return { required: false, available: false };
     if (!preset.apiKeyEnv) return { required: false, available: true };
-    const available = Boolean(process.env[preset.apiKeyEnv] || getSecretSyncCached(preset.apiKeyEnv) || getSecret(preset.apiKeyEnv));
+    // Phase 2 · F-24 — key presence through the broker seam (env hydration
+    // compat-gated; durable backend always consulted).
+    const available = Boolean(secretBrokerSync(preset.apiKeyEnv));
     return { required: true, available, envName: preset.apiKeyEnv };
   }
 
@@ -432,7 +434,8 @@ export class ProviderGateway {
   resolveCredential(providerId: string): string | undefined {
     const preset = this.getPreset(providerId);
     if (!preset?.apiKeyEnv) return undefined;
-    return process.env[preset.apiKeyEnv] || getSecretSyncCached(preset.apiKeyEnv) || getSecret(preset.apiKeyEnv);
+    // Phase 2 · F-24 — credential resolution through the broker seam.
+    return secretBrokerSync(preset.apiKeyEnv);
   }
 
   // ── Model Resolution ──────────────────────────────────────────────────────
