@@ -126,16 +126,48 @@ export interface ToolCall {
   args: Record<string, unknown>;
 }
 
-/** What the model returns each turn: either tool calls, or a final answer. */
+/**
+ * What the model returns each turn: either tool calls, a final answer, or an
+ * explicit honest error — NEVER a silent empty "done" (Phase 1 · Turn Contract).
+ *
+ * A turn is `content | tool_calls | error`. A turn that is none of those
+ * (empty or undecodable) carries `status` empty/undecodable and `done:false`;
+ * the agent loop converts it to `stopped:"error"` with an audited
+ * `turn.empty` / `turn.undecodable` event. `done:true` is only ever set from a
+ * model-declared completion (the envelope's `done:true`, or a native
+ * `finish_reason` of "stop"), never inferred from an empty tool-call list.
+ */
 export interface ModelTurn {
-  /** The model's reasoning / message (shown to user). */
+  /** The model's reasoning / message (shown to user). May be empty only if tool_calls or error are present. */
   message: string;
-  /** Tool calls to execute this turn. Empty = done. */
+  /** Tool calls to execute this turn. Empty is not itself "done". */
   toolCalls: ToolCall[];
-  /** True when the model considers the task complete. */
+  /** True only when the model declared the task complete. */
   done: boolean;
+  /**
+   * Explicit model/transport error (Phase 1). When set, the loop ends
+   * `stopped:"error"` and never reports a fake completion.
+   */
+  error?: string;
+  /** Parse classification. `empty` ⇒ no content arrived; `undecodable` ⇒ content was not a valid turn. */
+  status?: "parsed" | "empty" | "undecodable";
   /** Token usage for cost accounting (Phase 1). */
   usage?: { inTokens: number; outTokens: number };
+  /** Whether `usage` was provider-reported or estimated (cost honesty, F-13). */
+  usageSource?: "provider" | "estimated";
+}
+
+/**
+ * Declared transport capabilities for a provider instance (resolver-owned).
+ * The agent loop reads these to honor the capability catalog on the hot path
+ * (Phase 1): `streaming:false` ⇒ call `chat()`; `functionCalling` ⇒ native
+ * OpenAI `tools`; `toolUse:false` ⇒ envelope protocol only.
+ */
+export interface ProviderCapabilitiesFlags {
+  streaming: boolean;
+  toolUse: boolean;
+  functionCalling: boolean;
+  jsonMode: boolean;
 }
 
 /** A chat message in the running conversation. */
@@ -267,6 +299,12 @@ export interface Provider {
   health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }>;
   /** Optional: get model id for this provider instance */
   modelId?: string;
+  /**
+   * Declared transport capabilities for this instance (resolver-owned, Phase 1).
+   * Absent ⇒ caller must default conservatively (envelope mode, streaming only
+   * when the transport actually exposes `chatStream` and is confirmed capable).
+   */
+  capabilities?: ProviderCapabilitiesFlags;
   /** Optional: list known models (for dynamic discovery) */
   listModels?(): Promise<string[]>;
 }

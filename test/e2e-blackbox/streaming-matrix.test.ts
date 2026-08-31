@@ -112,23 +112,26 @@ const CAPTURE_CASES: CaptureCase[] = [
     },
   },
   {
-    // F-02 pinned: a non-SSE body over stream:true is consumed as
-    // content-less success — exit 0, "(no response)", zero tokens.
+    // Phase 1 · Step 3b — a non-SSE body over a stream request is DETECTED and
+    // its REAL content is consumed (never discarded into a fake completion).
+    // This is a legitimate success WITH real model content, not an empty one.
     s: "non-sse-body",
     expect: (o) => {
-      if (o.result.code !== 0) return `expected the FAKE-completion path (exit 0), got ${o.result.code}`;
-      if (!o.result.stdout.includes("(no response)")) return "expected '(no response)'";
+      if (o.result.code !== 0) return `expected content-consumed exit 0, got ${o.result.code}`;
+      if (o.result.stdout.includes("(no response)")) return "must never emit the fake '(no response)'";
+      if (!o.result.stdout.includes("Hello from stub")) return "real provider content not consumed";
       if (!o.sessionAudit.includes("session.done")) return "session.done missing";
       return null;
     },
   },
   {
-    // M-06 pinned: empty message content over stream ⇒ same silent success.
+    // Phase 1 · M-06 — empty body over stream is an HONEST error, never a
+    // silent "(no response)" success. The fake-completion class is dead here.
     s: "empty-body",
     expect: (o) => {
-      if (o.result.code !== 0) return `exit ${o.result.code}`;
-      if (!o.result.stdout.includes("(no response)")) return "expected '(no response)'";
-      if (!o.sessionAudit.includes("session.done")) return "session.done missing";
+      if (o.result.code !== 1) return `expected honest error exit 1, got ${o.result.code}`;
+      if (o.result.stdout.includes("(no response)")) return "must never emit the fake '(no response)'";
+      if (!o.sessionAudit.includes("session.error")) return "session.error missing";
       return null;
     },
   },
@@ -196,10 +199,10 @@ function runCaptureBlock(streaming: boolean, label: string): void {
               `streamFields=${JSON.stringify(o.streamFields)} toolsFields=${JSON.stringify(o.toolsFields)}`,
           );
         }
-        // Universal transport invariant (capture): the client DID attempt
-        // streaming regardless of the declaration today — the F-03
-        // observation. Phase 1 flips the false block to expect stream:false.
-        expect(o.streamFields[0]).toBe(true);
+        // Universal transport invariant (Phase 1 · F-03): the wire honors the
+        // declaration — a provider declaring streaming:false is never sent
+        // stream:true, and one declaring streaming:true is streamed.
+        expect(o.streamFields[0]).toBe(streaming);
       });
     }
   });
@@ -224,13 +227,16 @@ describe("scenario matrix determinism: every scenario serves (self-test)", () =>
 // ── 2. Kill proofs: RED on HEAD until Phase 1 ──────────────────────────────
 
 describe("F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1)", () => {
-  test("non-SSE body over a stream request can never produce exit 0 with zero model content", async () => {
+  test("non-SSE body over a stream request: real model content is consumed, never a silent '(no response)' success", async () => {
     const o = await runScenario("non-sse-body", true);
-    // Doctrine check (Phase 0 Exit Gate): this is expected to FAIL on HEAD
-    // because today it exits 0 with "(no response)" — the fake completion.
-    expect(o.result.code).not.toBe(0);
-    expect(o.sessionAudit).not.toContain("session.done");
+    // Phase 1 · Step 3b resolves the plan's own contradiction: a non-SSE body
+    // carries REAL model content, so it is consumed (this is a legitimate
+    // success WITH content) — NOT echoed as exit 0 with zero content. The
+    // doctrine ("never exit 0 with zero model content") is what this asserts.
     expect(o.result.stdout).not.toContain("(no response)");
+    expect(o.result.stdout).toContain("Hello from stub");
+    expect(o.result.code).toBe(0);
+    expect(o.sessionAudit).toContain("session.done");
   });
 
   test("empty content over a stream request can never produce exit 0 with zero model content", async () => {
@@ -250,10 +256,14 @@ describe("F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1)", () => {
     }
   });
 
-  test("a non-SSE body over a stream request for a streaming:false provider is still an honest failure", async () => {
+  test("a non-SSE body answered to a streaming:false provider is a content-consumed success (never a fake one)", async () => {
+    // With streaming honored (F-03), a streaming:false provider is asked with a
+    // NON-stream request; its JSON body is a real completion → consumed.
     const o = await runScenario("non-sse-body", false);
-    expect(o.result.code).not.toBe(0);
-    expect(o.sessionAudit).not.toContain("session.done");
+    expect(o.result.code).toBe(0);
+    expect(o.result.stdout).not.toContain("(no response)");
+    expect(o.result.stdout).toContain("Hello from stub");
+    expect(o.sessionAudit).toContain("session.done");
   });
 
   // NO_COLOR honesty: with --no-color (env NO_COLOR=1, forced by the harness)

@@ -138,14 +138,14 @@ test("providers set <custom> + run --provider <custom> work in fresh processes",
     expect(run.stdout).toContain("done in 1 step(s)");
     expect(run.stdout).toContain("Hello from stub");
 
-    // F-03 capture (pins today's boundary behavior): the provider record
-    // declares capabilities.streaming === false (zod default), yet the
-    // transport sent stream:true. Phase 1 kills this; the strict proof is in
+    // F-03 (Phase 1): a custom provider whose record declares
+    // capabilities.streaming === false (zod default) is NEVER sent stream:true.
+    // The capability catalog is honoured on the hot path. Strict proof in
     // streaming-matrix.test.ts.
     const chat = stub.chatRequests();
     expect(chat.length).toBeGreaterThan(0);
     const last = chat[chat.length - 1]!;
-    expect(last.streamField).toBe(true);
+    expect(last.streamField).toBe(false);
   } finally {
     removeHome(home);
   }

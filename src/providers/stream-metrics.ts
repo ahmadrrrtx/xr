@@ -223,10 +223,15 @@ export function withTurnMetrics(provider: Provider, collector: StreamingMetricsC
       const stream = provider.chatStream;
       if (typeof stream !== "function") {
         // No native streaming — behave as the non-streaming path via chat().
+        // Phase 1 · turn contract: this IS a complete non-streamed turn, so it
+        // must ALWAYS yield finish:true (previously it only did when usage was
+        // present, and never for an empty turn — which made the loop wait for a
+        // finish signal that never came and then silently completed on garbage).
         const turn = await provider.chat(messages, tools, options);
         if (turn.message) yield { text: turn.message, providerId: provider.id, model };
         for (const tc of turn.toolCalls ?? []) yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: provider.id, model };
-        if (turn.usage) yield { usage: turn.usage, finish: true, providerId: provider.id, model };
+        if (turn.usage) yield { usage: turn.usage, providerId: provider.id, model };
+        yield { finish: true, providerId: provider.id, model };
         return;
       }
       const started = performance.now();
@@ -272,6 +277,11 @@ export function withTurnMetrics(provider: Provider, collector: StreamingMetricsC
     async listModels() {
       return provider.listModels ? provider.listModels() : [];
     },
+    // Phase 1 · F-03 — forward the provider's declared transport capabilities.
+    // This decorator sits between the loop and the real adapter on the default
+    // run path, so dropping `capabilities` made the loop read undefined and
+    // always stream — defeating the streaming:false capability declaration.
+    capabilities: (provider as { capabilities?: import("./../core/types.ts").ProviderCapabilitiesFlags }).capabilities,
   };
 }
 

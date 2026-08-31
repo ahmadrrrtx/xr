@@ -653,6 +653,15 @@ export class MultiAgentService implements LifecycleHook {
     ) {
       throw new Error("worker stopped at the step limit without producing a final answer");
     }
+    // Phase 1 · F-16/M-01 — a worker that "completed" with an EMPTY placeholder
+    // output must not be fed downstream as real work. The strict turn contract
+    // makes the agent loop return stopped:"error" for empty turns, but this is
+    // defense-in-depth at the orchestration layer: never record an empty-turn
+    // worker as a completed task.
+    const final = (result.finalMessage ?? "").trim();
+    if (result.stopped === "done" && (final === "" || final === "(no response)")) {
+      throw new Error("worker produced an empty turn (no final answer); not a completion");
+    }
 
     return {
       summary: (result.finalMessage || "No final message produced.").trim(),

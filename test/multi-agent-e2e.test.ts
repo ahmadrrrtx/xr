@@ -144,6 +144,42 @@ describe("launch P0 · multi-agent workflow completes end-to-end", () => {
     }
   });
 
+  test("Phase 1 · F-16: a worker that fake-completes an EMPTY turn fails the workflow, never 'completed'", async () => {
+    // A worker whose run "succeeded" (stopped:"done") but produced a placeholder
+    // "(no response)" output must NOT be recorded as completed nor fed
+    // downstream as real work. (Before the turn contract, the agent loop
+    // returned stopped:"done" with "(no response)" and the workflow reported a
+    // silent empty success.)
+    const registry = new ServiceRegistry();
+    const store = new WorkspaceStore(join(HOME, "service-f16.db"));
+    registry.registerValue(Tokens.Store, store);
+    registry.registerValue(Tokens.WorkflowStore, new WorkflowRepo(store));
+    registry.registerValue(Tokens.AuditStore, new AuditRepo(store));
+    registry.registerValue(Tokens.Events, new EventBus());
+    registry.registerValue(Tokens.Agent, {
+      async runScopedTask() {
+        return {
+          finalMessage: "(no response)", // the old fake-completion placeholder
+          sessionId: "stub",
+          stopped: "done" as const,
+          steps: 1,
+          meter: "0 tok · $0",
+        };
+      },
+    } as unknown as AgentService);
+    const svc = new MultiAgentService(registry);
+    try {
+      const record = await svc.runWorkflow({ goal: "Summarize the repository layout", cwd: process.cwd() });
+      const workers = record.tasks.filter((t) =>
+        ["researcher", "builder", "reviewer", "synthesizer"].includes(t.role),
+      );
+      expect(workers.every((t) => t.status !== "completed")).toBe(true);
+      expect(record.status).toBe("failed");
+    } finally {
+      store.close();
+    }
+  }, 60_000);
+
   test("a worker whose model call errors is a FAILED task, not a fake completion", async () => {
     // Launch reliability fix (S-2): before this, stopped:"error" was recorded
     // as a completed task and the transport error flowed downstream as if it

@@ -13,7 +13,7 @@
 import type { XRConfig } from "../config/config.ts";
 import type { Provider } from "../core/types.ts";
 import { registry } from "./registry.ts";
-import { RoutingService } from "../intelligence/routing-service.ts";
+import { resolveProvider, resolveProviderSync, type ResolveOptions } from "./resolver.ts";
 import { PRESETS } from "./presets.ts";
 import { OpenAICompatProvider } from "./openai-compat.ts";
 import {
@@ -25,7 +25,6 @@ import {
   CerebrasProvider,
 } from "./native/index.ts";
 import { getSecret } from "../security/secrets.ts";
-import { setConfiguredRequestTimeout } from "./request-guard.ts";
 
 export type CostTier = "free" | "cheap" | "premium" | "enterprise";
 
@@ -125,51 +124,18 @@ function registerBuiltins(): void {
 registerBuiltins();
 
 // ── Factory functions ────────────────────────────────────────────────────────
+//
+// Phase 1 · Step 5 — these are now thin delegating aliases over the single
+// provider resolver (src/providers/resolver.ts). The resolver is the ONLY owner
+// of custom-provider registration and capability association. Kept as aliases
+// so existing in-tree call sites compile; deprecated in 2.0.
 
-function gatewayEnabled(): boolean {
-  const raw = process.env.XR_PROVIDER_GATEWAY;
-  return raw === undefined || raw === "" || !/^(0|false|off|no)$/i.test(raw);
+export function buildProvider(config: XRConfig, override?: ResolveOptions): Provider {
+  return resolveProviderSync(config, override);
 }
 
-export function buildProvider(
-  config: XRConfig,
-  override?: {
-    provider?: string;
-    model?: string;
-    strategy?: import("../intelligence/routing-service.ts").RoutingStrategy;
-    requirements?: Partial<import("../intelligence/types.ts").TaskRequirements>;
-    mode?: import("../intelligence/types.ts").RoutingMode;
-  },
-): Provider {
-  setConfiguredRequestTimeout(config.providerEngine?.requestTimeoutMs);
-
-  if (gatewayEnabled()) {
-    // Phase 04 — use gateway as canonical path, but keep sync compatibility via RoutingService
-    // Gateway's async resolve is preferred for new code; this remains sync for backward compat.
-    try {
-      const router = new RoutingService(config);
-      return router.resolve(override);
-    } catch {
-      // fall through to legacy
-    }
-  }
-
-  const router = new RoutingService(config);
-  return router.resolve(override);
-}
-
-export function buildProviderWithDecision(
-  config: XRConfig,
-  override?: {
-    provider?: string;
-    model?: string;
-    strategy?: import("../intelligence/routing-service.ts").RoutingStrategy;
-    requirements?: Partial<import("../intelligence/types.ts").TaskRequirements>;
-    mode?: import("../intelligence/types.ts").RoutingMode;
-  },
-) {
-  const router = new RoutingService(config);
-  return router.resolveWithDecision(override);
+export function buildProviderWithDecision(config: XRConfig, override?: ResolveOptions) {
+  return resolveProvider(config, override);
 }
 
 export function knownProviders(): string[] {

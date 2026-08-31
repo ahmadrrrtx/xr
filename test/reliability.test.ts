@@ -46,10 +46,31 @@ test("repair: smart quotes", () => {
   expect(t.message).toBe("hello");
 });
 
-test("repair: garbage falls back to a safe done turn", () => {
+test("repair: garbage is an undecodable turn, never a fake done (Phase 1)", () => {
   const t = repairToTurn("the model said something weird with no json");
-  expect(t.done).toBe(true);
+  expect(t.done).toBe(false);
+  expect(t.status).toBe("undecodable");
   expect(t.toolCalls.length).toBe(0);
+});
+
+test("repair: empty input is an empty turn, never a fake done (Phase 1)", () => {
+  const t = repairToTurn("");
+  expect(t.done).toBe(false);
+  expect(t.status).toBe("empty");
+  expect(t.message).toBe("");
+});
+
+test("repair: done:false with no tool calls is NOT coerced to done (Phase 1 · M-02)", () => {
+  const t = repairToTurn('{"message":"","done":false}');
+  expect(t.done).toBe(false);
+  expect(t.status).toBe("parsed");
+});
+
+test("repair: a non-empty message preserves its text even without a decodable turn (Phase 1)", () => {
+  const t = repairToTurn("Hi there, plain answer");
+  expect(t.message).toBe("Hi there, plain answer");
+  expect(t.done).toBe(false);
+  expect(t.status).toBe("undecodable");
 });
 
 test("repair: malformed tool_calls are filtered", () => {
