@@ -127,7 +127,11 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
     const res = await handler(get("/api/v1/models"));
     const elapsed = Date.now() - started;
     expect(res.status).toBe(200);
-    expect(elapsed).toBeLessThan(4000);
+    // 5000 ms budget: the contract under test is "no 10 s client timeout" —
+    // the original 4000 ms bound flaked on loaded Windows hosted runners at
+    // ~4034 ms (0.8% over, pure scheduling noise; observed in PR #73). 5000 ms
+    // still proves the regression class (36 s → <5 s) with real headroom.
+    expect(elapsed).toBeLessThan(5000);
   }, 20_000);
 
   test("chat.stream returns a fast, honest 503 when the provider is unreachable (was 32 s)", async () => {
