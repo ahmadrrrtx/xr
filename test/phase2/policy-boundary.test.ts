@@ -22,7 +22,6 @@ import type { Provider } from "../../src/core/types.ts";
 let tmp: string;
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "xr-p2-policy-"));
-  process.env.XR_HOME = join(tmp, "home");
 });
 
 /** A provider that emits exactly one tool call, then finishes. */

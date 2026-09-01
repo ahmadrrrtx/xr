@@ -25,3 +25,7 @@ test/environment/privacy.test.ts:jwt:25
 test/context/security.test.ts:generic-api-key:569
 test/trust/credentials.test.ts:generic-api-key:15
 test/state/workspace-store.test.ts:generic-api-key:178
+# Phase 2 (F-26) structured-preview fixtures: fake secret-shaped specimens our
+# redactor is PROVEN to strip (same intent as the observability entries above).
+test/phase2/preview.test.ts:curl-auth-header:129
+test/phase2/preview.test.ts:aws-access-token:143

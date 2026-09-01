@@ -26,7 +26,6 @@ let decideHandle: DaemonRouteHandler;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "xr-p2-daemon-ap-"));
-  process.env.XR_HOME = join(tmp, "home");
   resetApprovalStores();
   store = new WorkspaceStore("w", join(tmp, "xr.db"));
   const routes = approvalRoutes();

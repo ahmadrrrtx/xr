@@ -25,7 +25,6 @@ import { ReservationRepo } from "../../src/state/repos/reservation-repo.ts";
 let tmp: string;
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "xr-p2-mig-"));
-  process.env.XR_HOME = join(tmp, "home");
 });
 
 /** Build a pre-Phase-2 database: baseline tables + migrations 1..5 applied. */

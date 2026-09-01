@@ -8,7 +8,7 @@
  *                 + one in-flight reservation
  */
 
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect, beforeEach } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,13 +21,9 @@ import { CostRepo } from "../../src/state/repos/cost-repo.ts";
 let tmp: string;
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "xr-p2-res-"));
-  process.env.XR_HOME = join(tmp, "home");
-  // Short reservation TTL for the sweep tests.
-  process.env.XR_RESERVATION_TTL_MS = "500";
-});
-
-afterEach(() => {
-  delete process.env.XR_RESERVATION_TTL_MS;
+  // Reservation TTL is snapshotted at module load (like CI production
+  // startup); tests that need a short TTL pass XR_RESERVATION_TTL_MS in the
+  // CHILD process's spawn env instead of mutating shared process.env.
 });
 
 function freshStore(name: string, monthlyCap: number): Store {
@@ -98,7 +94,7 @@ describe("reservation unit math", () => {
     // release it.
     await new Promise((r) => setTimeout(r, 1300));
     const proc = Bun.spawn({
-      cmd: ["bun", "run", join(import.meta.dir, "fixtures", "reservation-recovery.ts"), join(tmp, "u4.db")],
+      cmd: [process.execPath, "run", join(import.meta.dir, "fixtures", "reservation-recovery.ts"), join(tmp, "u4.db")],
       stdout: "pipe",
       stderr: "inherit",
       env: { ...process.env, XR_RESERVATION_TTL_MS: "1000" },
@@ -148,7 +144,7 @@ describe("F-12 · race property: two processes cannot both pass the cap", () => 
       // racing the same shared DB file.
       const spawnAdmit = (envId: string) =>
         Bun.spawn({
-          cmd: ["bun", "run", join(import.meta.dir, "fixtures", "admit.ts"), dbPath, envId, "1.0"],
+          cmd: [process.execPath, "run", join(import.meta.dir, "fixtures", "admit.ts"), dbPath, envId, "1.0"],
           stdout: "pipe",
           stderr: "inherit",
         });

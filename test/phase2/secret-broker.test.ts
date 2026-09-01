@@ -1,111 +1,95 @@
 /**
  * XR Phase 2 · F-24 — SECRET BROKER SEAM tests.
  *
- *   [Unit] flag semantics: XR_SECRETS_ENV_COMPAT defaults ON for 1.0; only
- *          explicit off-values disable ambient hydration
- *   [Unit] compat ON  — setSecret hydrates process.env (1.0 behavior)
- *   [Unit] compat OFF — setSecret persists durably but NEVER lands in env;
- *          resolution still succeeds through the broker
- *   [Unit] hydrateProviderEnv is the one write gate
+ *   [Unit]  flag semantics: XR_SECRETS_ENV_COMPAT defaults ON for 1.0; only
+ *           explicit off-values disable ambient hydration (pure predicate —
+ *           no process.env mutation, safe under bun's shared-env threads)
+ *   [Child] compat ON  — the 1.0 posture runs in a CHILD process (hermetic
+ *           spawn env): setSecret hydrates process.env, the broker resolves,
+ *           hydrateProviderEnv writes env
+ *   [Child] compat OFF — the 2.0 posture runs in a CHILD process whose own
+ *           module-load snapshot sees the flag off: setSecret persists
+ *           durably but never lands in env, the broker still resolves,
+ *           hydrateProviderEnv is a no-op, and an ambient env value loses to
+ *           the durable answer.
+ *
+ * Nothing in this file mutates shared process.env: `bun test` runs test files
+ * in threads that share it, so a mutation here would change secret behavior
+ * for every other file running in parallel.
  */
 
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { describe, test, expect } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  envSecretCompatEnabled,
-  hydrateProviderEnv,
-  secretBroker,
-  secretBrokerSync,
-} from "../../src/security/secret-broker.ts";
-import { setSecret } from "../../src/security/secrets.ts";
+import { isOffValue } from "../../src/security/env-compat.ts";
 
-let tmp: string;
-const savedFlag = process.env.XR_SECRETS_ENV_COMPAT;
-const savedHome = process.env.XR_HOME;
-
-beforeEach(() => {
-  tmp = mkdtempSync(join(tmpdir(), "xr-p2-sec-"));
-  process.env.XR_HOME = join(tmp, "home");
-  delete process.env.XR_SECRETS_ENV_COMPAT;
-});
-
-afterEach(() => {
-  if (savedFlag === undefined) delete process.env.XR_SECRETS_ENV_COMPAT;
-  else process.env.XR_SECRETS_ENV_COMPAT = savedFlag;
-  if (savedHome === undefined) delete process.env.XR_HOME;
-  else process.env.XR_HOME = savedHome;
-});
-
-describe("flag semantics", () => {
+describe("flag semantics (pure predicate, no env mutation)", () => {
   test("defaults ON for 1.0 (unset / empty)", () => {
-    expect(envSecretCompatEnabled()).toBe(true);
-    process.env.XR_SECRETS_ENV_COMPAT = "";
-    expect(envSecretCompatEnabled()).toBe(true);
+    expect(isOffValue(undefined)).toBe(false);
+    expect(isOffValue("")).toBe(false);
+    expect(isOffValue("   ")).toBe(false);
   });
 
   test("explicit off-values disable ambient hydration", () => {
     for (const off of ["0", "false", "off", "False", " OFF "]) {
-      process.env.XR_SECRETS_ENV_COMPAT = off;
-      expect(envSecretCompatEnabled()).toBe(false);
+      expect(isOffValue(off)).toBe(true);
     }
   });
 
   test("on-values and typos keep 1.0 behavior (fail-safe toward working providers)", () => {
     for (const on of ["1", "true", "on", "TRUE", "yolo"]) {
-      process.env.XR_SECRETS_ENV_COMPAT = on;
-      expect(envSecretCompatEnabled()).toBe(true);
+      expect(isOffValue(on)).toBe(false);
     }
   });
 });
 
-describe("compat ON (1.0 behavior)", () => {
-  const envOf = (k: string): string | undefined => (process.env as Record<string, string | undefined>)[k];
-
-  test("setSecret hydrates process.env and the broker resolves it", () => {
-    delete process.env.XR_BROKER_TEST_ON;
-    setSecret("XR_BROKER_TEST_ON", "v1-secret");
-    expect(envOf("XR_BROKER_TEST_ON")).toBe("v1-secret");
-    expect(secretBrokerSync("XR_BROKER_TEST_ON")).toBe("v1-secret");
+/** Run one hermetic fixture child and return its single JSON line. */
+async function runFixture(fixture: string, extraEnv: Record<string, string>): Promise<Record<string, unknown>> {
+  const proc = Bun.spawn({
+    // process.execPath (not a bare "bun") so the child spawn resolves the
+    // exact same binary on every platform (Windows-safe).
+    cmd: [process.execPath, "run", join(import.meta.dir, "fixtures", fixture)],
+    stdout: "pipe",
+    stderr: "inherit",
+    env: {
+      ...process.env,
+      XR_HOME: join(mkdtempSync(join(tmpdir(), "xr-p2-sec-")), "home"),
+      ...extraEnv,
+    },
   });
+  const out = await new Response(proc.stdout).text();
+  await proc.exited;
+  const lines = out.trim().split("\n").filter((l) => l.trim().length > 0);
+  return JSON.parse(lines[lines.length - 1]) as Record<string, unknown>;
+}
 
-  test("hydrateProviderEnv writes env when compat is on", () => {
-    delete process.env.XR_BROKER_TEST_ON2;
-    hydrateProviderEnv("XR_BROKER_TEST_ON2", "v2-secret");
-    expect(envOf("XR_BROKER_TEST_ON2")).toBe("v2-secret");
-  });
+describe("compat ON (1.0 behavior, hermetic child process)", () => {
+  test("setSecret hydrates process.env; broker sync + async resolve; hydrateProviderEnv writes", async () => {
+    const r = await runFixture("secret-compat-on.ts", {});
+    expect(r.flagEnabled).toBe(true);
+    expect(r.envAfterSet).toBe("v1-secret");
+    expect(r.synced).toBe("v1-secret");
+    expect(r.asynced).toBe("v5-secret");
+    expect(r.envAfterHydrate).toBe("v2-secret");
+  }, 30_000);
 });
 
-describe("compat OFF (2.0 seam behavior)", () => {
-  const envOf = (k: string): string | undefined => (process.env as Record<string, string | undefined>)[k];
-
+describe("compat OFF (2.0 seam behavior, hermetic child process)", () => {
   test("setSecret persists durably but NEVER lands in env; broker still resolves", async () => {
-    process.env.XR_SECRETS_ENV_COMPAT = "0";
-    delete process.env.XR_BROKER_TEST_OFF;
+    const r = await runFixture("secret-compat-off.ts", { XR_SECRETS_ENV_COMPAT: "0" });
 
-    setSecret("XR_BROKER_TEST_OFF", "v3-secret");
-    expect(envOf("XR_BROKER_TEST_OFF")).toBeUndefined();
-
-    // Sync + async broker paths resolve through the durable backend.
-    expect(secretBrokerSync("XR_BROKER_TEST_OFF")).toBe("v3-secret");
-    expect(await secretBroker.get("XR_BROKER_TEST_OFF")).toBe("v3-secret");
-    expect(envOf("XR_BROKER_TEST_OFF")).toBeUndefined();
-  });
-
-  test("hydrateProviderEnv is a no-op when compat is off", () => {
-    process.env.XR_SECRETS_ENV_COMPAT = "0";
-    delete process.env.XR_BROKER_TEST_OFF2;
-    hydrateProviderEnv("XR_BROKER_TEST_OFF2", "v4-secret");
-    expect(envOf("XR_BROKER_TEST_OFF2")).toBeUndefined();
-  });
-
-  test("an ambient env value is ignored with compat off — the durable answer wins", () => {
-    process.env.XR_SECRETS_ENV_COMPAT = "0";
-    delete process.env.XR_BROKER_TEST_OFF3;
-    setSecret("XR_BROKER_TEST_OFF3", "durable");
-    process.env.XR_BROKER_TEST_OFF3 = "ambient-should-not-win";
-    // With compat OFF the broker does not consult process.env at all.
-    expect(secretBrokerSync("XR_BROKER_TEST_OFF3")).toBe("durable");
-  });
+    // The child's own snapshot sees the flag off.
+    expect(r.flagEnabled).toBe(false);
+    // setSecret wrote the durable store but never hydrated process.env…
+    expect(r.envAfterSet).toBeUndefined();
+    // …and both broker paths still resolve through the durable backend.
+    expect(r.synced).toBe("v3-secret");
+    expect(r.asynced).toBe("v3-secret");
+    expect(r.envAfterResolve).toBeUndefined();
+    // hydrateProviderEnv is a no-op when compat is off.
+    expect(r.envAfterHydrate).toBeUndefined();
+    // An ambient env value loses to the durable answer.
+    expect(r.ambientWins).toBe("durable");
+  }, 30_000);
 });

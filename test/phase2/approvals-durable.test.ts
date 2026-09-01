@@ -19,7 +19,6 @@ import { ApprovalStore, resetApprovalStores, getApprovalStore } from "../../src/
 let tmp: string;
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "xr-p2-ap-"));
-  process.env.XR_HOME = join(tmp, "home");
   resetApprovalStores();
 });
 
@@ -128,10 +127,10 @@ describe("kill -9 mid-approval (real process death)", () => {
   test("a record raised by a killed process is resolvable after restart", async () => {
     const dbPath = join(tmp, "kill.db");
     const proc = Bun.spawn({
-      cmd: ["bun", "run", join(import.meta.dir, "fixtures", "raise-approval.ts"), dbPath, "60000"],
+      cmd: [process.execPath, "run", join(import.meta.dir, "fixtures", "raise-approval.ts"), dbPath, "60000"],
       stdout: "pipe",
       stderr: "inherit",
-      env: { ...process.env, XR_HOME: join(tmp, "home") },
+      env: { ...process.env },
     });
     const raw = (await new Response(proc.stdout).text()).trim();
     await proc.exited;
@@ -155,10 +154,10 @@ describe("kill -9 mid-approval (real process death)", () => {
   test("an unanswered record past TTL default-denies after restart — never stuck", async () => {
     const dbPath = join(tmp, "kill2.db");
     const proc = Bun.spawn({
-      cmd: ["bun", "run", join(import.meta.dir, "fixtures", "raise-approval.ts"), dbPath, "300"],
+      cmd: [process.execPath, "run", join(import.meta.dir, "fixtures", "raise-approval.ts"), dbPath, "300"],
       stdout: "pipe",
       stderr: "inherit",
-      env: { ...process.env, XR_HOME: join(tmp, "home") },
+      env: { ...process.env },
     });
     const raw = (await new Response(proc.stdout).text()).trim();
     await proc.exited;
@@ -184,14 +183,16 @@ describe("cross-process approval (CLI task decided by another process)", () => {
   test("process A raises + waits; process B decides; A resolves approved", async () => {
     const dbPath = join(tmp, "cross.db");
     const proc = Bun.spawn({
-      cmd: ["bun", "run", join(import.meta.dir, "fixtures", "raise-and-wait.ts"), dbPath, "30000"],
+      // process.execPath (not a bare "bun") so the child spawn resolves the
+      // exact same binary on every platform (Windows-safe).
+      cmd: [process.execPath, "run", join(import.meta.dir, "fixtures", "raise-and-wait.ts"), dbPath, "30000"],
       stdout: "pipe",
       stderr: "inherit",
-      env: { ...process.env, XR_HOME: join(tmp, "home") },
+      env: { ...process.env },
     });
 
-    // Consume the child's stdout once: ID line first, decide, then the
-    // outcome JSON at the end.
+    // Consume the child's stdout once: the id JSON line first, decide, then
+    // the outcome JSON line at the end.
     const decoder = new TextDecoder();
     let id: string | null = null;
     let buf = "";
@@ -201,10 +202,16 @@ describe("cross-process approval (CLI task decided by another process)", () => {
       const lines = buf.split("\n");
       buf = lines.pop() ?? "";
       for (const line of lines) {
-        if (line.startsWith("ID:")) {
-          id = line.slice(3).trim();
-        } else if (line.startsWith("{") && outcomeJson === null) {
-          outcomeJson = line;
+        if (!line.startsWith("{")) continue;
+        try {
+          const parsed = JSON.parse(line) as { id?: string; outcome?: unknown };
+          if (parsed.id && id === null) {
+            id = parsed.id;
+          } else if (parsed.outcome && outcomeJson === null) {
+            outcomeJson = line;
+          }
+        } catch {
+          /* ignore partial lines */
         }
       }
       if (id && !outcomeJson) {

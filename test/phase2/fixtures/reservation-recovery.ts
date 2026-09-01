@@ -8,6 +8,7 @@
  * reservations older than the TTL; this fixture prints the active totals
  * AFTER open (post-sweep) and then attempts a fresh admission.
  */
+import { writeSync } from "node:fs";
 import { Store } from "../../../src/state/workspace-store.ts";
 import { ReservationRepo } from "../../../src/state/repos/reservation-repo.ts";
 
@@ -21,5 +22,5 @@ const admit = repo.admit("recovery-task", 1.0, 1000, {
   taskUsdCap: null,
   taskTokenCap: null,
 });
-process.stdout.write(JSON.stringify({ totalsAfterOpen, admitOk: admit.ok }));
+writeSync(1, JSON.stringify({ totalsAfterOpen, admitOk: admit.ok }));
 store.close();

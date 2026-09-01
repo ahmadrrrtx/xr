@@ -26,7 +26,6 @@ import {
 let tmp: string;
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "xr-p2-pv-"));
-  process.env.XR_HOME = join(tmp, "home");
 });
 
 describe("structured previews per tool class", () => {
