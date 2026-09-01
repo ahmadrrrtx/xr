@@ -103,6 +103,38 @@ export interface ToolContext {
   onToolUse?: (info: { tool: string; ok: boolean; error?: string }) => void;
 }
 
+/** Phase 2 · F-26 — structured preview kind (canonical in core so the kernel
+ *  never imports the control layer; control/preview.ts re-exports). */
+export type PreviewKind = "diff" | "new-file" | "file-delete" | "command" | "generic";
+
+/** One section of a structured approval preview. */
+export interface PreviewSection {
+  title: string;
+  body: string;
+  kind: "code" | "text" | "table";
+  /** Set when the body was truncated for display safety. */
+  truncated?: boolean;
+}
+
+/**
+ * Phase 2 · F-26 — structured approval preview (diff / interpreted command /
+ * redacted args). Canonical shape lives HERE (kernel layer) so every layer
+ * can reference it without upward imports; the renderers in control/preview.ts
+ * produce it and re-export the type for convenience.
+ */
+export interface StructuredPreview {
+  kind: PreviewKind;
+  tool: string;
+  riskTier: string;
+  /**
+   * Model-shaped reason text. UNTRUSTED DATA — framed in the UI, never
+   * authoritative. Deliberately a separate field from the structured
+   * sections so a prompt-injection attempt cannot replace the facts.
+   */
+  untrustedReason: string;
+  sections: PreviewSection[];
+}
+
 export interface ApprovalRequest {
   tool: string;
   reason: string;
@@ -110,6 +142,17 @@ export interface ApprovalRequest {
   args?: Record<string, unknown>;
   /** A human-readable preview (e.g. a diff). */
   preview?: string;
+  /**
+   * Phase 2 · F-26 — structured preview. When present, surfaces render THIS
+   * instead of raw text; `reason` stays visible but framed as untrusted
+   * model text.
+   */
+  structuredPreview?: StructuredPreview;
+  /** Phase 2 · F-11 — durable-approval identity fields (additive). */
+  riskTier?: string;
+  taskId?: string;
+  runId?: string;
+  sessionId?: string;
 }
 
 export interface ToolResult {

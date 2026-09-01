@@ -3,11 +3,28 @@
  * and the approval queue. No real OS / network / browser calls.
  */
 
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ActionSchema } from "../src/control/types.ts";
 import { classify } from "../src/control/classify.ts";
 import { _internal_parsePlan } from "../src/control/planner.ts";
-import { approvals } from "../src/control/approvals.ts";
+import { approvals, bindApprovals } from "../src/control/approvals.ts";
+import { WorkspaceStore } from "../src/state/workspace-store.ts";
+
+// Phase 2 · F-11 — the approval queue is durable: bind it to a workspace
+// store for the queue tests (an unbound queue fails closed by design).
+let queueStore: WorkspaceStore;
+beforeAll(() => {
+  const dir = mkdtempSync(join(tmpdir(), "xr-control-plan-"));
+  process.env.XR_HOME = join(dir, "home");
+  queueStore = new WorkspaceStore("queue", join(dir, "xr.db"));
+  bindApprovals(queueStore);
+});
+afterAll(() => {
+  queueStore.close();
+});
 
 // ── browser action schema ──────────────────────────────────────────────────
 

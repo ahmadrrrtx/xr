@@ -22,8 +22,10 @@ export function approvalMessage(opts: {
   tool: string;
   reason: string;
   preview?: string;
+  riskTier?: string;
 }): OutgoingMessage {
-  const lines = [`🔒 *Approval needed*`, `tool: \`${opts.tool}\``, `${opts.reason}`];
+  const risk = opts.riskTier && opts.riskTier !== "unknown" ? ` · risk: ${opts.riskTier}` : "";
+  const lines = [`🔒 *Approval needed*${risk}`, `tool: \`${opts.tool}\``, `${opts.reason}`];
   if (opts.preview) {
     const clipped = opts.preview.split("\n").slice(0, 20).join("\n");
     lines.push("```\n" + clipped.slice(0, 600) + "\n```");

@@ -24,7 +24,7 @@ import {
   BedrockProvider,
   CerebrasProvider,
 } from "./native/index.ts";
-import { getSecret } from "../security/secrets.ts";
+import { secretBrokerSync } from "../security/secret-broker.ts";
 
 export type CostTier = "free" | "cheap" | "premium" | "enterprise";
 
@@ -161,7 +161,9 @@ export function suggestFreeProvider(config: XRConfig): string {
   }
   for (const id of ["groq", "google", "deepseek", "cerebras"]) {
     const preset = PRESETS[id];
-    if (preset?.apiKeyEnv && (process.env[preset.apiKeyEnv] || getSecret(preset.apiKeyEnv))) {
+    // Phase 2 · F-24 — key presence through the broker seam (env hydration
+    // compat-gated; durable backend always consulted).
+    if (preset?.apiKeyEnv && secretBrokerSync(preset.apiKeyEnv)) {
       return id;
     }
   }

@@ -42,6 +42,8 @@ import { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore } from "../context/memory/store.ts";
 import { priceFor } from "../cost/pricing.ts";
 import type { ApprovalRequest, Mode, Provider } from "../core/types.ts";
+import { makeApprover } from "../control/approval-store.ts";
+import { renderPreviewText } from "../control/preview.ts";
 
 /**
  * Overrides accepted by both runTask and runScopedTask. runTask is a thin
@@ -445,11 +447,28 @@ export class AgentService implements LifecycleHook {
         dryRun: overrides.dryRun ?? false,
         ...(overrides.toolsAllow ? { toolsAllow: overrides.toolsAllow } : {}),
         ...(overrides.toolsDeny ? { toolsDeny: overrides.toolsDeny } : {}),
+        // Phase 2 · F-06 — workspace deny-list threaded to the loop boundary
+        // (fallback [] when the config block is absent — audited default).
+        deniedPermissions: config.capabilities?.deniedPermissions ?? [],
         approve:
           overrides.approve ??
-          (async (req) => {
-            const preview = req.preview ? `\n${req.preview}` : "";
-            return await confirm(`Approve ${req.tool}? ${req.reason}${preview}`, false);
+          // Phase 2 · F-11/F-26 — CLI consent via the durable approval store:
+          // structured preview, TTL default-deny, cross-process resolvable.
+          makeApprover(unifiedStore, {
+            surface: "cli",
+            defaultTtlMs: config.approvals?.defaultTtlMs,
+            perSurface: config.approvals?.perSurface,
+            prompt: async (record, decide) => {
+              const structured = record.preview
+                ? renderPreviewText(record.preview)
+                : `(no structured preview) reason: ${record.reason}`;
+              const ttlSec = Math.round(record.ttlMs / 1000);
+              const answer = await confirm(
+                `Approve ${record.tool}? [risk: ${record.riskTier}] (auto-deny in ${ttlSec}s)\n${structured}`,
+                false,
+              );
+              decide(answer);
+            },
           }),
       },
       placement: {

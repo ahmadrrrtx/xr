@@ -27,7 +27,7 @@
 
 import type { XRConfig } from "../config/config.ts";
 import { registry } from "./registry.ts";
-import { getSecret } from "../security/secrets.ts";
+import { secretBrokerSync } from "../security/secret-broker.ts";
 import { bounded } from "../util/concurrency.ts";
 import { TtlCache } from "../util/ttl-cache.ts";
 import { xrMetrics } from "../observability/metrics.ts";
@@ -203,9 +203,8 @@ export class ProviderHealthChecker {
     // Auth check (never reveals the key value)
     let authOk = false;
     if (preset.apiKeyEnv) {
-      authOk = !!(
-        process.env[preset.apiKeyEnv] || getSecret(preset.apiKeyEnv)
-      );
+      // Phase 2 · F-24 — auth presence through the broker seam.
+      authOk = Boolean(secretBrokerSync(preset.apiKeyEnv));
     } else {
       authOk = true;
     }

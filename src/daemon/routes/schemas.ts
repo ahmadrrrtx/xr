@@ -35,6 +35,33 @@ export const OkResponse = z.looseObject({ ok: z.boolean() });
 /** Free-form JSON object response (envelope stable = always an object). */
 export const ObjectResponse = z.looseObject({});
 
+// ── Phase 2 · F-11 — durable approvals ───────────────────────────────────────
+
+export const ApprovalDecisionRequest = z.looseObject({
+  approved: z.boolean().describe("True = approve the pending action; false = deny."),
+  userId: z.string().optional().describe("Optional operator identity recorded in the audit."),
+});
+
+export const ApprovalsListResponse = z.looseObject({
+  pending: z.array(
+    z.looseObject({
+      id: z.string(),
+      taskId: z.string().nullable(),
+      runId: z.string().nullable(),
+      sessionId: z.string().nullable(),
+      tool: z.string(),
+      argsHash: z.string(),
+      reason: z.string().describe("Model-shaped reason text — untrusted, framed as data."),
+      preview: z.unknown().nullable().describe("Structured preview (diff / interpreted command / redacted args)."),
+      riskTier: z.string(),
+      surface: z.string(),
+      requestedAt: z.number(),
+      ttlMs: z.number(),
+      expiresAt: z.number(),
+    }),
+  ),
+});
+
 // ── Onboarding (Phase B · B-1) ───────────────────────────────────────────────
 
 export const OnboardingStatusResponse = z.looseObject({

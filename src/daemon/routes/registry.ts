@@ -8,6 +8,7 @@
  */
 
 import { agentsRoutes } from "./agents.routes.ts";
+import { approvalRoutes } from "./approvals.routes.ts";
 import { budgetRoutes } from "./budget.routes.ts";
 import { chatRoutes } from "./chat.routes.ts";
 import { capabilityRoutes } from "./capabilities.routes.ts";
@@ -34,6 +35,9 @@ export function listBaseRoutes(): DaemonRoute[] {
     // before the `research.get` prefix route (GET /api/research/{id}).
     ...researchRoutes(),
     ...systemRoutes(),
+    // Phase 2 · F-11 — durable approval endpoints (before control routes so
+    // /api/approvals/* resolves before the control prefix routes).
+    ...approvalRoutes(),
     ...onboardingRoutes(),
     ...filesRoutes(),
     ...chatRoutes(),

@@ -166,6 +166,16 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/config");
   }
 
+  /** Durable pending approvals across all surfaces (workspace store). */
+  async approvalsList(): Promise<z.infer<typeof S.ApprovalsListResponse>> {
+    return await this.call("GET", "/api/v1/approvals");
+  }
+
+  /** Decide a durable approval request (approve/deny). TTL default-deny applies. */
+  async approvalsDecide(approvalId: string, body: z.infer<typeof S.ApprovalDecisionRequest>): Promise<z.infer<typeof S.OkResponse>> {
+    return await this.call("POST", `/api/v1/approvals/${encodeURIComponent(approvalId)}/decision`, body);
+  }
+
   /** First-run status: does this install need setup, and why. */
   async onboardingStatus(): Promise<z.infer<typeof S.OnboardingStatusResponse>> {
     return await this.call("GET", "/api/v1/onboarding/status");

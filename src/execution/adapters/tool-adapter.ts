@@ -97,8 +97,11 @@ export async function executeTool(
   const toolCtx: ToolContext = {
     cwd: opts.cwd,
     approve: async (req) => {
-      // Fabric handles approval at the top-level; inner approval is passed through.
-      if (!opts.approve) return true;
+      // Phase 2 · F-06 — fail-closed: with no approval authority wired, an
+      // approval-requiring tool is DENIED. The fabric handles approval at
+      // the top level and passes the surface's approver through; an absent
+      // approver can never silently auto-approve (no-bypass invariant).
+      if (!opts.approve) return false;
       return opts.approve(req);
     },
     audit: (event, detail) => {

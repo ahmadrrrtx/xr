@@ -47,7 +47,42 @@ function defaultTrust(): CapabilityTrust {
   };
 }
 
+/**
+ * Phase 2 · F-06 — deny-on-throw at the single choke point.
+ *
+ * `evaluatePolicy` NEVER throws to its caller. Any exception inside the
+ * evaluation core is converted into a deny decision with
+ * `reason: "policy_error"` and a policy trace naming the fault. Execution
+ * must never proceed past a failed policy evaluation: the answer to the old
+ * in-code question ("fail closed if evaluation throws?") is YES.
+ *
+ * The signature is unchanged; the semantics are now total (every input maps
+ * to a decision object).
+ */
 export function evaluatePolicy(
+  request: CapabilityRequest,
+  ctx: PolicyContext,
+): CapabilityDecision {
+  try {
+    return evaluatePolicyCore(request, ctx);
+  } catch (e) {
+    return {
+      allowed: false,
+      reason: "policy_error",
+      requiresApproval: false,
+      riskTier: "blocked",
+      trust: defaultTrust(),
+      effectivePermissions: [],
+      lifecycle: "unknown",
+      cacheable: false,
+      policyTrace: [
+        `policy_error: evaluation threw ${(e as Error)?.message ?? String(e)} — denied (fail closed)`,
+      ],
+    };
+  }
+}
+
+function evaluatePolicyCore(
   request: CapabilityRequest,
   ctx: PolicyContext,
 ): CapabilityDecision {
