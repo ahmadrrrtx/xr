@@ -141,6 +141,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/channel-manifest.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/ci-capability-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/claim-lint.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/consumer-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/dashboard-csp-convert.py` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/e2e-artifact.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/first-task-survey.ts` | @ahmadrrrtx | explicit entry |
@@ -175,11 +176,13 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/size-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sums.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sus.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/tag-npm-invariant.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/unit-tier.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/ux/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/validate-baseline.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/verify-release.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/verify-security.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/write-sums.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `extensions/business-os/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `extensions/vscode/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 
