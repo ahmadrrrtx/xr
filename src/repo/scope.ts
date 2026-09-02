@@ -10,10 +10,24 @@ import { lstatSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { canonicalPath } from "../security/guard.ts";
 
+/**
+ * Canonicalize `root` the same way candidates are canonicalized.
+ *
+ * macOS GitHub runners (and developer machines) expose tmpdir as `/var/folders/…`
+ * which realpath's to `/private/var/folders/…`. Comparing a non-realpathed root
+ * against a realpathed file makes `relative()` start with `..` and every file
+ * looks out-of-scope — the Phase 11 indexer then reports `files: 0` and the
+ * whole repo-map suite fails. Linux is unaffected (`/tmp` is not a symlink).
+ */
+export function canonicalRoot(root: string): string {
+  return canonicalPath(resolve(root), root);
+}
+
 export function resolveInsideRoot(root: string, candidate: string): string | null {
-  const abs = isAbsolute(candidate) ? candidate : resolve(root, candidate);
-  const canon = canonicalPath(abs, root);
-  const rel = relative(root, canon);
+  const canonRoot = canonicalRoot(root);
+  const abs = isAbsolute(candidate) ? candidate : resolve(canonRoot, candidate);
+  const canon = canonicalPath(abs, canonRoot);
+  const rel = relative(canonRoot, canon);
   if (rel.startsWith("..") || isAbsolute(rel)) return null;
   return canon;
 }
@@ -49,7 +63,8 @@ export function scopedStat(root: string, absolute: string): ScopedStat | null {
     }
   }
 
-  const inside = resolveInsideRoot(root, target);
+  const canonRoot = canonicalRoot(root);
+  const inside = resolveInsideRoot(canonRoot, target);
   if (!inside) return null;
 
   let st = lst;
@@ -61,7 +76,7 @@ export function scopedStat(root: string, absolute: string): ScopedStat | null {
     }
   }
 
-  const rel = relative(root, inside).split(sep).join("/");
+  const rel = relative(canonRoot, inside).split(sep).join("/");
   return {
     absolute: inside,
     relativePath: rel,
@@ -74,5 +89,5 @@ export function scopedStat(root: string, absolute: string): ScopedStat | null {
 }
 
 export function toPosixRelative(root: string, absolute: string): string {
-  return relative(root, absolute).split(sep).join("/");
+  return relative(canonicalRoot(root), absolute).split(sep).join("/");
 }

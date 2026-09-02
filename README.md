@@ -11,7 +11,8 @@ under a policy gate, your approval, a spend ceiling, and a hash-chained log you 
 
 [![CI](https://github.com/ahmadrrrtx/xr/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmadrrrtx/xr/actions/workflows/ci.yml)
 [![Cross-platform](https://github.com/ahmadrrrtx/xr/actions/workflows/cross-platform.yml/badge.svg)](https://github.com/ahmadrrrtx/xr/actions/workflows/cross-platform.yml)
-[![npm](https://img.shields.io/npm/v/@rrrtx/xr?style=flat-square&color=cb3837&logo=npm)](https://www.npmjs.com/package/@rrrtx/xr)
+[![npm latest (legacy)](https://img.shields.io/npm/v/@rrrtx/xr/latest?label=npm%20latest%20(legacy)&style=flat-square&color=6b7280&logo=npm)](https://www.npmjs.com/package/@rrrtx/xr)
+[![npm beta](https://img.shields.io/npm/v/@rrrtx/xr/beta?label=npm%20beta&style=flat-square&color=cb3837&logo=npm)](https://www.npmjs.com/package/@rrrtx/xr?activeTab=versions)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
@@ -113,12 +114,14 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 | **Docker** | any | `docker run ghcr.io/ahmadrrrtx/xr:latest` |
 | **From source** | any | `git clone https://github.com/ahmadrrrtx/xr && cd xr && bun install` |
 
-> **⚠ npm is stale right now.** The npm `latest` dist-tag is `3.1.5` (pre-rebaseline history),
-> not 1.0.0, and no 1.x release has been tagged yet — so `bun add -g @rrrtx/xr` installs the old
-> build. Because `3.1.5` sorts *higher* than `1.0.0`, the first 1.0.0 publish must re-point the
-> tag explicitly; the [release runbook](docs/release/RELEASING.md) handles this. Until then use
-> the binary channel or build from source. See
-> [known limitations](docs/release/1.0.0/known-limitations.md).
+> **⚠ npm `latest` is still the 3.x line.** The badges above are dual on purpose: `latest (legacy)`
+> is `3.1.5` (pre-rebaseline) and `beta` is empty until Phase 3 publishes `1.0.0-beta.1`.
+> `bun add -g @rrrtx/xr` therefore installs the old build. Because `3.1.5` sorts *higher* than
+> `1.0.0`, the first **stable** 1.0.0 publish must re-point `latest` explicitly (`npm dist-tag add
+> @rrrtx/xr@1.0.0 latest`) — a beta must not move that tag. See the
+> [release runbook](docs/release/RELEASING.md), the [version ladder](docs/HISTORY.md), and
+> [known limitations](docs/release/1.0.0/known-limitations.md). Until then use the binary
+> channel or build from source.
 
 Every channel installs the same canonical build. Tagged releases ship cosign keyless signatures
 over `SHA256SUMS`, a CycloneDX SBOM and SLSA3 provenance — verify with
@@ -565,6 +568,7 @@ binary/npm/git layouts) and are atomic with an automatic rollback path.
 | [`docs/guides/cli-compat.md`](docs/guides/cli-compat.md) | Exit codes, global flags, `--yes` semantics, scripting envs |
 | [`docs/security/KNOWN_LIMITATIONS.md`](docs/security/KNOWN_LIMITATIONS.md) | Canonical known-limitations register (living) |
 | [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md) | Platform/channel support truth per release |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Version ladder (0.2 / 3.x / 4.x / 7.x / 1.x) — npm `latest` is still 3.1.5 |
 | [`docs/release/RELEASING.md`](docs/release/RELEASING.md) | The release runbook |
 | [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md) | cosign/SBOM/SLSA verification walkthrough |
 | [`docs/release/BETA.md`](docs/release/BETA.md) | Beta loop and feedback channel |

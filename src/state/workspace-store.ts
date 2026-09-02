@@ -39,11 +39,18 @@ import { runMigrationsUp } from "./migrations.ts";
 
 const GENESIS = "xr-genesis";
 
-/** Phase 2 · F-12 — default lifetime of an uncommitted budget reservation. */
-export const DEFAULT_RESERVATION_TTL_MS = (() => {
+/** Phase 2 · F-12 — documented default lifetime of an uncommitted budget reservation. */
+export const DEFAULT_RESERVATION_TTL_MS = 120_000;
+
+/**
+ * Runtime reservation TTL. Read at *use* time (not module load) so a child
+ * process spawned with `XR_RESERVATION_TTL_MS` for the startup-recovery test
+ * actually observes the short TTL. Floor 1000ms; anything else → 120s.
+ */
+export function reservationTtlMs(): number {
   const raw = Number(process.env.XR_RESERVATION_TTL_MS);
-  return Number.isFinite(raw) && raw >= 1000 ? raw : 120_000;
-})();
+  return Number.isFinite(raw) && raw >= 1000 ? raw : DEFAULT_RESERVATION_TTL_MS;
+}
 
 /** Phase 2 · F-11 — a durable approval record row (decision IS NULL = pending). */
 export interface ApprovalRow {
@@ -138,6 +145,10 @@ export class WorkspaceStore {
   private readonly openedPath: string;
   private readonly sharedKey: string;
   private closed = false;
+  /** True after `close()` — ApprovalStore timers/pollers must no-op against this. */
+  get isClosed(): boolean {
+    return this.closed;
+  }
   /** Phase 1: first broken audit index detected (null = chain intact). */
   private chainBrokenAt: number | null = null;
 
@@ -176,7 +187,7 @@ export class WorkspaceStore {
     // Phase 2 · F-12 — startup recovery: uncommitted reservations older than
     // the TTL are released before anything can consume the caps again. A
     // crashed process can therefore never leave permanent headroom consumed.
-    this.releaseStaleReservations(DEFAULT_RESERVATION_TTL_MS, Date.now());
+    this.releaseStaleReservations(reservationTtlMs(), Date.now());
     // Phase 1 (T1): fail-closed detection of a pre-existing broken chain.
     this.chainBrokenAt = this.verifyChain().valid ? null : (this.verifyChain().brokenAt ?? null);
   }
@@ -1323,6 +1334,7 @@ export class WorkspaceStore {
    * (monthly/daily) and per-task caps are evaluated against recorded spend
    * PLUS active reservations, and the admission row is inserted. Two
    * processes can never both pass: the write gate serializes the txn and the
+  d the
    * second writer sees the first writer's reservation.
    */
   reservationAdmit(
@@ -1333,7 +1345,7 @@ export class WorkspaceStore {
   ): { ok: true; reservationId: string } | { ok: false; reason: string; suggestLocal: boolean } {
     return this.write(() => {
       const now = Date.now();
-      this.releaseStaleReservations(DEFAULT_RESERVATION_TTL_MS, now);
+      this.releaseStaleReservations(reservationTtlMs(), now);
 
       const cfg = this.getBudgetConfig();
       const monthlyCap = caps.monthlyCapUsd ?? cfg?.monthly_cap ?? 10.0;
@@ -1431,6 +1443,7 @@ export class WorkspaceStore {
 
   /** Release every active reservation older than the TTL (startup recovery). */
   releaseStaleReservations(ttlMs: number, now: number): void {
+    if (this.closed) return;
     this.db
       .query(`UPDATE reservations SET status = 'expired', updated_at = ? WHERE status = 'active' AND created_at <= ?`)
       .run(now, now - ttlMs);

@@ -117,9 +117,12 @@ export async function verifyRelease(opts: {
   // 4. Signature: cosign keyless (Rekor) when available, else local Ed25519.
   const cosign = await runCommand("cosign", ["version"], { timeoutMs: 8000, env: { PATH: process.env.PATH ?? "" } });
   if (cosign.ok && opts.cosignIdentity) {
+    const identityFlag = opts.cosignIdentity.includes("*")
+      ? "--certificate-identity-regexp"
+      : "--certificate-identity";
     const args = [
       "verify-blob",
-      "--certificate-identity", opts.cosignIdentity,
+      identityFlag, opts.cosignIdentity,
       "--certificate-oidc-issuer", opts.cosignIssuer ?? "https://token.actions.githubusercontent.com",
       "--bundle", `${opts.artifact}.bundle`,
       opts.artifact,

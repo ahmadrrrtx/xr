@@ -10,7 +10,8 @@
  *   · A provider is probed only when there is something real to probe with —
  *     hosted presets need their API key in env; local runtimes need a CI
  *     endpoint (`XR_CANARY_BASEURL_<ID>`). Otherwise the row is `skip` —
- *     never a fake pass, and a skip never fails the run.
+ *     never a fake pass. A sweep of ONLY skips fails the run (exit 2)
+ *     unless XR_CANARY_ALLOW_EMPTY=1 (deliberate, audited skip).
  *   · A configured provider that fails `health()` fails the run (exit 1).
  *     No auth-failure is downgraded, no endpoint-error is blessed.
  *   · The probe is the adapter's own `health()` — the same live call
@@ -215,6 +216,19 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       ...results.map((r) => `| ${r.id} | ${r.status} | ${r.status === "skip" ? r.skipReason : `${r.latencyMs ?? "?"}ms · ${r.detail}`} |`),
     ];
     appendFileSync(stepSummary, lines.join("\n") + "\n");
+  }
+  const configured = report.pass + report.fail;
+  if (configured === 0) {
+    if (process.env.XR_CANARY_ALLOW_EMPTY === "1") {
+      console.warn(
+        "XR_CANARY_ALLOW_EMPTY=1 — audited skip of zero-provider canary (no live probe ran)",
+      );
+      return 0;
+    }
+    console.error(
+      "no providers configured — set at least one canary secret (or XR_CANARY_ALLOW_EMPTY=1 for a deliberate, audited skip)",
+    );
+    return 2;
   }
   return report.fail > 0 ? 1 : 0;
 }

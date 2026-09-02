@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  issues: write # notify job upserts a nightly-failure issue on red runs
 
 jobs:
   golden-path-linux:
@@ -52,14 +53,14 @@ jobs:
 
       - name: Run golden path inside the container
         run: |
-          # The image mounts the repo as the workdir with the data volume at
-          # /data; golden-path runs the CLI + runtime against a hermetic home.
-          docker run --rm \
+          # Do NOT bind-mount $PWD over /app: that hides the image's
+          # node_modules (and used to 404 scripts/golden-path.ts before
+          # scripts/ was COPY'd into the image). Override ENTRYPOINT
+          # (`bun run src/index.ts`) so extra args are not treated as a task.
+          docker run --rm --entrypoint bun \
             -e HOME=/tmp/xr-home \
             -e XR_HOME=/tmp/xr-data \
-            -v "$PWD":/app \
-            -w /app \
-            xr:nightly bun run scripts/golden-path.ts
+            xr:nightly run scripts/golden-path.ts
 
   # ── Phase 8 · T4 ────────────────────────────────────────────────────────────
   # First-task success-rate survey: 20 fresh-machine attempts (install → boot
@@ -120,9 +121,8 @@ jobs:
       - name: Build the canonical asset for this OS
         run: bun run scripts/build-matrix.ts --targets ${{ matrix.target }} --out survey-assets
       - name: Generate checksum manifest (the signable unit)
-        shell: bash
-        working-directory: survey-assets
-        run: sha256sum * > SHA256SUMS
+        # Portable: macOS/Windows runners do not ship GNU `sha256sum`.
+        run: bun run scripts/write-sums.ts survey-assets
       - name: Run the install survey (10 fresh attempts, gate ≥ 0.99)
         shell: bash
         run: |
@@ -134,3 +134,63 @@ jobs:
           name: beta-install-${{ matrix.bunOs }}
           path: beta-install-${{ matrix.bunOs }}.json
           retention-days: 90
+
+  notify:
+    name: Notify on nightly failure
+    if: failure()
+    needs: [golden-path-linux, golden-path-container, first-task-survey, beta-install-survey]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Upsert nightly-failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "Nightly Golden Path failed";
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              "The Nightly Golden Path workflow failed.",
+              "",
+              `Run: ${runUrl}`,
+              "",
+              "This issue is auto-upserted so a red nightly is never silent (Phase 3 · F-15).",
+            ].join("\n");
+            try {
+              const issues = await github.rest.issues.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: "open",
+                per_page: 50,
+              });
+              const existing = issues.data.find((i) => i.title === title);
+              if (existing) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: existing.number,
+                  body,
+                });
+              } else {
+                try {
+                  await github.rest.issues.create({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    title,
+                    body,
+                    labels: ["nightly-failure"],
+                  });
+                } catch {
+                  await github.rest.issues.create({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    title,
+                    body,
+                  });
+                }
+              }
+            } catch (err) {
+              core.warning(`nightly notify failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
+            }

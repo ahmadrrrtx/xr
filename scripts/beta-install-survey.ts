@@ -123,8 +123,18 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)]!;
 }
 
+/** `--name=value` AND `--name value` (nightly used the space-separated form and exited 2). */
+export function argValue(argv: string[], name: string, dflt = ""): string {
+  const eq = argv.find((a) => a.startsWith(`--${name}=`));
+  if (eq) return eq.split("=").slice(1).join("=");
+  const i = argv.indexOf(`--${name}`);
+  if (i >= 0 && argv[i + 1] && !argv[i + 1]!.startsWith("--")) return argv[i + 1]!;
+  return dflt;
+}
+
 async function main(): Promise<void> {
-  const arg = (name: string, dflt = ""): string => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=") ?? dflt;
+  const argv = process.argv.slice(2);
+  const arg = (name: string, dflt = ""): string => argValue(argv, name, dflt);
   const runs = Math.max(1, Number.parseInt(arg("runs", "10"), 10) || 10);
   const target = Number.parseFloat(arg("target", "0.99"));
   const releaseDir = arg("release-dir");

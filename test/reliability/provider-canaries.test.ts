@@ -118,10 +118,15 @@ describe("provider canaries (R-6)", () => {
     expect(report.results[0].id).toBe("groq");
   });
 
-  test("a sweep of only skips exits 0", async () => {
+  test("a sweep of only skips fails closed (exit 2) unless XR_CANARY_ALLOW_EMPTY=1", async () => {
     setEnv("ANTHROPIC_API_KEY", undefined);
+    setEnv("XR_CANARY_ALLOW_EMPTY", undefined);
     const code = await main(["--only", "anthropic"]);
-    expect(code).toBe(0);
+    expect(code).toBe(2);
+
+    setEnv("XR_CANARY_ALLOW_EMPTY", "1");
+    const skipped = await main(["--only", "anthropic"]);
+    expect(skipped).toBe(0);
   });
 
   test("unknown preset id is a fail row, never a crash", async () => {

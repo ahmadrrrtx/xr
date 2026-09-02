@@ -88,3 +88,8 @@ claim for anything it could not check. Keyless/Rekor proof exists only after
 the Release workflow has actually run on a real tag (Constitution Art. IX.4) —
 the workflow's structural integrity is itself tested by
 `test/release/release-workflow.test.ts`.
+
+On every tagged release the same command runs as an **independent job**
+(`verify-release` in `.github/workflows/release.yml`) against the signed
+bundle only — it does not reuse the assemble workspace. `SHA256SUMS` includes
+the CycloneDX SBOM (assemble writes SBOM first, then `scripts/write-sums.ts`).

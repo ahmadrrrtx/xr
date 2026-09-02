@@ -1,0 +1,31 @@
+# =============================================================================
+# XR Phase 3 — weekly consumer smoke (fresh install = audited artifact)
+#
+# Installs the published @rrrtx/xr 1.x package into a clean XR_HOME and
+# runs doctor + one hermetic task against a local OpenAI-compat stub.
+# Until a 1.x version exists on npm the job is an honest skip
+# (`--skip-if-unpublished`). The post-publish lane in release.yml smokes
+# the just-published version without that skip.
+# =============================================================================
+name: Consumer smoke
+
+on:
+  schedule:
+    - cron: "11 4 * * 1" # Monday 04:11 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  consumer-smoke:
+    name: Fresh npm install + hermetic task
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Consumer smoke (skip if no 1.x on npm yet)
+        run: bun run scripts/consumer-smoke.ts --from-npm --skip-if-unpublished

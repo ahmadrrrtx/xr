@@ -50,6 +50,9 @@ async function main(): Promise<void> {
   if (!XR_HOME) fail("env", "XR_HOME must be set");
   const HOME = process.env.HOME ?? homedir();
   const packageRoot = join(import.meta.dir, "..");
+  console.log(
+    `GOLDEN_PATH start bun=${process.execPath} platform=${process.platform} XR_HOME=${XR_HOME} HOME=${HOME} root=${packageRoot}`,
+  );
 
   // ── 1. Install ──────────────────────────────────────────────────────────
   // Use the absolute bun binary path — bare "bun" is not reliably resolvable

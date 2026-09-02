@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { argValue } from "../../scripts/beta-install-survey.ts";
 
 const POSIX = process.platform !== "win32";
 const SURVEY = join(import.meta.dir, "..", "..", "scripts", "beta-install-survey.ts");
@@ -41,6 +42,14 @@ function runSurvey(dir: string, runs = 2): { status: number | null; report: { ok
   const line = (res.stdout ?? "").trim().split("\n").pop() ?? "{}";
   return { status: res.status, report: JSON.parse(line) as { ok: boolean; rate: number; failures: unknown[] } };
 }
+
+describe("Phase 3 — beta-install-survey accepts space-separated flags", () => {
+  test("argValue parses --name=value and --name value", () => {
+    expect(argValue(["--release-dir=/tmp/a", "--runs=3"], "release-dir")).toBe("/tmp/a");
+    expect(argValue(["--release-dir", "/tmp/b", "--runs", "4"], "release-dir")).toBe("/tmp/b");
+    expect(argValue(["--runs", "4"], "release-dir", "missing")).toBe("missing");
+  });
+});
 
 describe("Phase 9 · T6 — Beta install survey measures install success", () => {
   test.skipIf(!POSIX)("a healthy canonical asset set installs at 100% (gate passes)", () => {

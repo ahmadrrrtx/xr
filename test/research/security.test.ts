@@ -51,7 +51,9 @@ test("ResearchRunBudget stops at every ceiling (page/request/byte/duration) and 
   expect(by.allow()).toBe(false);
   expect(by.reason()).toContain("byte limit");
 
-  const dur = new ResearchRunBudget({ maxPages: 10, maxRequests: 10, maxBytes: 1000, maxDurationMs: 1 });
+  // Duration ceiling is still wired (see ResearchRunBudget.allow); do not use
+  // maxDurationMs: 1 — on slow Windows runners the ctor itself can exhaust 1ms.
+  const dur = new ResearchRunBudget({ maxPages: 10, maxRequests: 10, maxBytes: 1000, maxDurationMs: 60_000 });
   expect(dur.allow()).toBe(true);
 });
 
