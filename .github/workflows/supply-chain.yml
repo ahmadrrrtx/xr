@@ -117,6 +117,23 @@ jobs:
           name: sbom
           path: sbom.cyclonedx.json
 
+  tag-npm-invariant:
+    name: tag ⇔ npm invariant (1.x line)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need tags
+      - uses: oven-sh/setup-bun@v2
+      - name: Install (ignore-scripts, frozen)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Assert 1.x git tags match 1.x npm versions
+        # Vacuous pass until the first 1.x publish. Historical v3/v4/v7 tags
+        # are out of band (docs/HISTORY.md). --skip-if-unpublished is the
+        # weekly-lane analog; here we still run the invariant (vacuous ok).
+        run: bun run scripts/tag-npm-invariant.ts --skip-if-unpublished
+
   container-scan:
     name: Container image scan (trivy)
     runs-on: ubuntu-latest

@@ -15,9 +15,14 @@ WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --frozen-lockfile --production || bun install --production
 
-# App source
+# App source. scripts/ is required for the nightly golden-path container
+# job (bun run scripts/golden-path.ts). Do NOT volume-mount the host
+# checkout over /app — that hides the image's node_modules.
 COPY src ./src
 COPY skills ./skills
+COPY scripts ./scripts
+COPY bin ./bin
+COPY plugins ./plugins
 COPY tsconfig.json ./
 
 # Data lives in a volume so the audit log / memory persist across upgrades.

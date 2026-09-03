@@ -13,10 +13,11 @@
  * (the resolution seam), so the gate has exactly ONE definition.
  *
  * The flag is SNAPSHOT at module load (env flags describe process start-up
- * posture — same pattern as DEFAULT_RESERVATION_TTL_MS). Snapshotting also
- * keeps the gate immune to mid-process env mutations: `bun test` runs test
- * files in threads that share process.env, so a live read would let one
- * file's flag mutation change every other file's secret behavior.
+ * posture). Snapshotting also keeps the gate immune to mid-process env
+ * mutations: `bun test` runs test files in threads that share process.env,
+ * so a live read would let one file's flag mutation change every other
+ * file's secret behavior. (Reservation TTL is the opposite: it is read at
+ * *use* time via reservationTtlMs() so a child process can override it.)
  */
 
 /** Pure predicate: does a raw env value disable ambient hydration? */

@@ -149,3 +149,57 @@ describe("Phase 9 · T6 — nightly beta install survey on 3 OS families", () =>
     expect(nightly).toContain("beta-install-${{ matrix.bunOs }}");
   });
 });
+
+describe("Phase 3 — artifact truth (release.yml + nightly + dockerfile)", () => {
+  const dockerfile = readFileSync(join(ROOT, "Dockerfile"), "utf8");
+  const canaries = readFileSync(join(ROOT, ".github", "workflows", "provider-canaries.yml"), "utf8");
+  const supply = readFileSync(join(ROOT, ".github", "workflows", "supply-chain.yml"), "utf8");
+  const consumerWf = readFileSync(join(ROOT, ".github", "workflows", "consumer-smoke.yml"), "utf8");
+
+  test("publish jobs are tag-gated; untagged dispatch uses the manifest version", () => {
+    for (const job of ["publish-npm", "release", "provenance", "publish-docker", "publish-channels", "consumer-smoke", "verify-release"]) {
+      const slice = workflow.slice(workflow.indexOf(`  ${job}:`));
+      const head = slice.slice(0, 400);
+      expect(head).toContain("if: github.ref_type == 'tag'");
+    }
+    expect(workflow).toContain("untagged dispatch");
+    expect(workflow).toContain('GITHUB_REF_TYPE');
+  });
+
+  test("SBOM is generated before SHA256SUMS; sums use write-sums.ts (no GNU sha256sum)", () => {
+    const sbomIdx = workflow.indexOf("scripts/sbom.ts --out dist/sbom.cyclonedx.json");
+    const sumsIdx = workflow.indexOf("scripts/write-sums.ts dist");
+    expect(sbomIdx).toBeGreaterThan(-1);
+    expect(sumsIdx).toBeGreaterThan(sbomIdx);
+    expect(workflow).toContain("write-sums.ts dist --print-with-manifest");
+    expect(workflow).not.toMatch(/sha256sum \*/);
+    expect(workflow).toContain("cosign verify-blob");
+    expect(workflow).toContain("scripts/verify-release.ts");
+    expect(workflow).toContain("scripts/consumer-smoke.ts --from-npm");
+  });
+
+  test("nightly uses write-sums, does not overlay $PWD on /app, and notifies on failure", () => {
+    expect(nightly).toContain("scripts/write-sums.ts survey-assets");
+    expect(nightly).not.toMatch(/sha256sum \*/);
+    expect(nightly).not.toContain('"$PWD":/app');
+    expect(nightly).toContain("--entrypoint bun");
+    expect(nightly).toContain("Nightly Golden Path failed");
+    expect(nightly).toContain("issues: write");
+  });
+
+  test("Dockerfile copies scripts/ bin/ plugins/ so the container golden-path can run", () => {
+    expect(dockerfile).toContain("COPY scripts ./scripts");
+    expect(dockerfile).toContain("COPY bin ./bin");
+    expect(dockerfile).toContain("COPY plugins ./plugins");
+  });
+
+  test("canaries fail closed on empty; ALLOW_EMPTY is a repo variable", () => {
+    expect(canaries).toContain("XR_CANARY_ALLOW_EMPTY: ${{ vars.XR_CANARY_ALLOW_EMPTY }}");
+  });
+
+  test("supply-chain runs the 1.x tag⇔npm invariant; weekly consumer-smoke skips if unpublished", () => {
+    expect(supply).toContain("tag-npm-invariant.ts");
+    expect(consumerWf).toContain("--skip-if-unpublished");
+    expect(consumerWf).toContain("--from-npm");
+  });
+});

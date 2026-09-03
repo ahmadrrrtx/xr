@@ -123,8 +123,12 @@ jobs:
       - name: Resolve release version + channel
         id: version
         run: |
-          V="${GITHUB_REF_NAME#v}"
-          if [ -z "$V" ]; then V="$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("release.manifest.json","utf8")).identity.version)')"; fi
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="$(bun -e 'console.log(JSON.parse(require("fs").readFileSync("release.manifest.json","utf8")).identity.version)')"
+            echo "untagged dispatch — assembling manifest version $V (npm/GH publish is tag-gated)"
+          fi
           echo "value=$V" >> "$GITHUB_OUTPUT"
       - name: Prerelease channel detection (semver suffix → prerelease)
         id: meta
@@ -166,20 +170,17 @@ jobs:
           V="${{ steps.version.outputs.value }}"
           bun run scripts/changelog.ts --version "$V" --write
           git diff -- CHANGELOG.md
-      - name: Generate SHA256SUMS over every publishable artifact
-        working-directory: dist
-        run: |
-          sha256sum xr-* rrrtx-xr-*.tgz > SHA256SUMS
-          cat SHA256SUMS
       - name: Generate CycloneDX SBOM (locked deps)
         run: bun run scripts/sbom.ts --out dist/sbom.cyclonedx.json
+      - name: Generate SHA256SUMS over every publishable artifact (incl. SBOM)
+        # SBOM is generated FIRST so it is checksummed. Portable writer — no GNU sha256sum.
+        run: bun run scripts/write-sums.ts dist
       - name: Emit SLSA subjects from the real artifact digests
         id: subjects
-        working-directory: dist
         run: |
-          SUBJECTS="$(sha256sum xr-* *.tgz sbom.cyclonedx.json SHA256SUMS)"
+          SUBJECTS="$(bun run scripts/write-sums.ts dist --print-with-manifest)"
           echo "$SUBJECTS"
-          echo "base64=$(echo "$SUBJECTS" | base64 -w0)" >> "$GITHUB_OUTPUT"
+          echo "base64=$(printf '%s' "$SUBJECTS" | base64 -w0)" >> "$GITHUB_OUTPUT"
       - name: Upload release bundle
         uses: actions/upload-artifact@v4
         with:
@@ -215,6 +216,16 @@ jobs:
           for f in rrrtx-xr-*.tgz sbom.cyclonedx.json; do
             cosign sign-blob --yes "$f" --bundle "$f.bundle"
           done
+      - name: Verify the checksum signature we just wrote (fail closed)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        working-directory: dist
+        run: |
+          cosign verify-blob \
+            --certificate-identity-regexp 'https://github.com/ahmadrrrtx/xr/.github/workflows/release.yml@refs/tags/v.*' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            --bundle SHA256SUMS.bundle \
+            SHA256SUMS
       - name: Upload signed bundle
         uses: actions/upload-artifact@v4
         with:
@@ -227,6 +238,7 @@ jobs:
   # ── 4. GitHub Release (assets + changelog notes) ──────────────────────────
   release:
     name: GitHub Release (signed assets)
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [sign]
@@ -259,6 +271,7 @@ jobs:
   # ── 5. SLSA3 provenance over the REAL digests (the Phase-4 fix) ───────────
   provenance:
     name: SLSA provenance (build level 3)
+    if: github.ref_type == 'tag'
     needs: [assemble, release]
     permissions:
       actions: read
@@ -272,6 +285,7 @@ jobs:
   # ── 6. npm channel (OIDC trusted publishing; dist-tag latest|beta) ────────
   publish-npm:
     name: Publish npm (trusted publishing, provenance)
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [assemble, sign]
@@ -308,6 +322,7 @@ jobs:
   # ── 7. Docker channel (GHCR, attestations, cosign) ────────────────────────
   publish-docker:
     name: Publish Docker (GHCR + cosign sign)
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [assemble, sign]
@@ -359,6 +374,7 @@ jobs:
   # ── 8. Channel stamping from the SIGNED checksums (no channel drift) ──────
   publish-channels:
     name: Stamp + publish channel manifests (homebrew/winget/scoop)
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [assemble, release]
@@ -406,3 +422,56 @@ jobs:
           else
             echo "tap already in sync"
           fi
+
+  # ── 9. Independent artifact verification (fresh workspace, signed bundle) ─
+  verify-release:
+    name: Verify signed artifacts (verify-release.ts)
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [assemble, sign]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Download signed bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-bundle
+          path: dist
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: verify-release.ts against the signed npm tarball + SBOM + sums
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          ART="$(ls dist/rrrtx-xr-*.tgz | head -1)"
+          bun run scripts/verify-release.ts \
+            --artifact "$ART" \
+            --sums dist/SHA256SUMS \
+            --sbom dist/sbom.cyclonedx.json \
+            --cosign-identity "https://github.com/ahmadrrrtx/xr/.github/workflows/release.yml@refs/tags/v.*"
+
+  # ── 10. Consumer smoke: the published npm artifact is the audited one ─────
+  consumer-smoke:
+    name: Consumer smoke (fresh npm install)
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [publish-npm, assemble]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Smoke the just-published package in a clean XR_HOME
+        run: bun run scripts/consumer-smoke.ts --from-npm ${{ needs.assemble.outputs.version }}

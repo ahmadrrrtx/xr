@@ -38,6 +38,34 @@ bun run scripts/build-deb.ts --bin dist/xr-linux-x64 --out dist/
 bun run scripts/beta-install-survey.ts --release-dir dist --runs 5
 ```
 
+## 2b. Phase 3 — Artifact truth (1.x line)
+
+- **Publish is tag-gated.** `workflow_dispatch` on `release.yml` assembles
+  against `release.manifest.json`'s version (dry-run). npm, GitHub Release,
+  SLSA, Docker, channels, `verify-release`, and consumer-smoke jobs run only
+  when `github.ref_type == 'tag'`.
+- **SBOM is checksummed.** Assemble writes CycloneDX *then* `scripts/write-sums.ts`
+  (portable; no GNU `sha256sum`). SLSA subjects are SHA256SUMS entries plus the
+  hash of SHA256SUMS itself (`--print-with-manifest`).
+- **Post-sign verify.** The sign job `cosign verify-blob`s the checksums it just
+  signed. An independent `verify-release` job downloads *only* the signed bundle
+  and runs `scripts/verify-release.ts`.
+- **npm dist-tags.** Prerelease tags (`v1.0.0-beta.1`) publish with `--tag beta`.
+  Stable tags publish `--tag latest`. Because **`3.1.5` is still `latest` and
+  sorts above `1.0.0`**, the first stable 1.0.0 publish must also
+  `npm dist-tag add @rrrtx/xr@1.0.0 latest` (operator). Do **not** auto-repoint
+  `latest` from a beta. Repair commands are print-only:
+  `bun run scripts/tag-npm-invariant.ts --repair`.
+- **Consumer smoke.** `release.yml` smokes the just-published version;
+  `.github/workflows/consumer-smoke.yml` runs weekly with
+  `--skip-if-unpublished`.
+- **Canaries / nightly.** Zero-provider canaries fail unless
+  `vars.XR_CANARY_ALLOW_EMPTY=1`. Nightly uses `write-sums.ts`, does not
+  bind-mount `$PWD` over the image `/app`, and upserts issue
+  "Nightly Golden Path failed" on red.
+
+Rehearsal for this phase is `v1.0.0-beta.1`. Stable 1.0.0 / `latest` waits for P2.
+
 ## 3. Merge → tag → unattended release
 
 ```bash
@@ -47,11 +75,14 @@ git push origin main --tags
 
 On the tag, `.github/workflows/release.yml` runs — **unattended**:
 gates → 5-target matrix build (+native smoke, +windows zip) → npm tarball +
-source archive + `.deb` → `SHA256SUMS` → CycloneDX SBOM → conventional-commit
-changelog → **cosign keyless `sign-blob`** → GitHub Release (prerelease honored)
-→ **SLSA3 provenance** → npm OIDC publish (`latest`/`beta`) → GHCR image +
-cosign signature → channel manifests stamped from the signed sums and attached
-(+ tap push when operator-enabled).
+source archive + `.deb` → CycloneDX SBOM → `SHA256SUMS` (includes SBOM) →
+conventional-commit changelog → **cosign keyless `sign-blob`** + verify-blob →
+GitHub Release (prerelease honored) → **SLSA3 provenance** → npm OIDC publish
+(`beta` for prerelease, `latest` for stable) → independent `verify-release.ts`
+→ consumer-smoke of the published version → GHCR image + cosign signature →
+channel manifests stamped from the signed sums and attached (+ tap push when
+operator-enabled). Untagged `workflow_dispatch` stops after assemble/sign
+(dry-run).
 
 ## 4. Post-release verification (evidence, not ceremony)
 

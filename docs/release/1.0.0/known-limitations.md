@@ -125,8 +125,12 @@ path** on every push/PR
 - The suite includes effect tests, adversarial corpora, black-box CLI exit-code tests, crash
   injection, art**ifact**-level E2E (`test/reliability/artifact-e2e.test.ts`), channel install
   tests, and **mutation testing on critical modules** (`bun run mutation:run`, threshold 0.6).
-- **Provider canaries are still absent** (nothing continuously verifies real provider APIs).
-  *To close:* read-only probe canaries per provider on a schedule.
+- **Provider canaries exist** (`.github/workflows/provider-canaries.yml`,
+  `scripts/provider-canaries.ts`) and fail closed: a sweep of zero configured
+  providers exits 2 unless `XR_CANARY_ALLOW_EMPTY=1` (deliberate, audited skip
+  via repo variable). Unconfigured presets are SKIP, never a fake pass; a
+  configured preset whose live `health()` fails is a red job. Coverage equals
+  the secrets provisioned — nothing is claimed beyond that evidence.
 
 ---
 
@@ -168,11 +172,19 @@ latest`) — the release runbook handles this. The release workflow, channel gen
 drift gates are all wired and pass in CI — the publish step has simply never run.
 
 *Until closed:* install from the binary channel or build from source. The README install
-table marks the npm row STALE.
+table marks the npm row STALE, and the badge row shows **both** `latest (legacy)` and
+`beta` so the 3.1.5 tag cannot be mistaken for 1.0.0.
 
-*To close:* cut and publish a signed 7.x release, then re-point the npm row. A CI gate
-comparing `release.manifest.json` against the live npm dist-tag should land with it, so
-this divergence cannot recur silently.
+*To close (Phase 3, this line — not a 7.x republish):*
+
+1. Cut `v1.0.0-beta.1` and let `release.yml` publish it to the npm **`beta`** dist-tag
+   (prerelease). Do **not** move `latest` yet — `3.1.5` sorts higher than `1.0.0`, and
+   a beta must not become the default install.
+2. After P2, cut stable `v1.0.0` and run `npm dist-tag add @rrrtx/xr@1.0.0 latest`
+   (operator; print-only from `bun run scripts/tag-npm-invariant.ts --repair`).
+3. The 1.x tag ⇔ npm invariant (`scripts/tag-npm-invariant.ts`, supply-chain job)
+   binds `v1.*` git tags to published `1.*` npm versions. Historical `v3`/`v4`/`v7`
+   tags stay out of band ([`docs/HISTORY.md`](../../HISTORY.md)).
 
 ---
 

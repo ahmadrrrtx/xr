@@ -256,6 +256,7 @@
     "website/src/**/*.{ts,tsx}",
     "install.sh",
     "install.ps1",
-    "package.json"
+    "package.json",
+    "docs/HISTORY.md"
   ]
 }

@@ -150,9 +150,20 @@ export function getApprovalStore(
   return created;
 }
 
-/** Test seam: drop cached instances (XR_HOME switches in tests). */
+/**
+ * Test seam: drop the instance cache (XR_HOME switches in tests).
+ *
+ * MUST NOT dispose other concurrent bun tests' stores — bun runs files in
+ * parallel and they share this module Map. Leftover timers are `unref()`'d
+ * and catch closed-db errors; that is the safety net, not a global dispose.
+ */
 export function resetApprovalStores(): void {
   instances.clear();
+}
+
+function unrefHandle(h: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>): void {
+  const maybe = h as { unref?: () => void };
+  if (typeof maybe.unref === "function") maybe.unref();
 }
 
 export class ApprovalStore {
@@ -180,6 +191,30 @@ export class ApprovalStore {
 
   ttlFor(surface: string, override?: number): number {
     return Math.max(1, override ?? this.perSurface[surface] ?? this.defaultTtlMs);
+  }
+
+  /** True when the backing WorkspaceStore has been closed. */
+  private storeAlive(): boolean {
+    return !this.store.isClosed;
+  }
+
+  /** Best-effort row fetch; never throws after the store is closed. */
+  private safeGet(id: string): ApprovalRow | null {
+    try {
+      if (!this.storeAlive()) return null;
+      return this.store.approvalGet(id);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Drop waiters/timers for this instance. Same-file `afterEach` may call
+   * this; concurrent files must not — see `resetApprovalStores()`.
+   */
+  dispose(): void {
+    for (const id of [...this.timers.keys()]) this.cleanup(id);
+    instances.delete(this.store);
   }
 
   /**
@@ -247,11 +282,12 @@ export class ApprovalStore {
 
     // TTL default-deny, enforced locally by every process that raised the
     // request (the DB-side sweep in expirePending covers the rest).
-    this.timers.set(
-      id,
-      setTimeout(() => {
+    // `unref()` so a leftover timer cannot keep a bun test process alive
+    // after the store is closed; try/catch + isClosed is the closed-db net.
+    const timer = setTimeout(() => {
+      try {
         this.expire(id, ttlMs);
-        const finalRow = this.store.approvalGet(id);
+        const finalRow = this.safeGet(id);
         settle({
           approved: false,
           timedOut: true,
@@ -259,24 +295,33 @@ export class ApprovalStore {
           decidedBy: finalRow?.decided_by_channel ? { channel: finalRow.decided_by_channel } : undefined,
           latencyMs: finalRow?.latency_ms ?? ttlMs,
         });
-      }, ttlMs),
-    );
+      } catch {
+        settle({
+          approved: false,
+          timedOut: true,
+          decision: "timed_out",
+          latencyMs: ttlMs,
+        });
+      }
+    }, ttlMs);
+    unrefHandle(timer);
+    this.timers.set(id, timer);
 
     // Cross-process bridge: poll the durable row so a daemon (or another
     // process) decision resolves this process's waiter.
-    this.pollers.set(
-      id,
-      setInterval(() => {
-        try {
-          const row = this.store.approvalGet(id);
-          if (!row || row.decision === null) return;
-          this.recordDecision(id);
-          settle(this.outcomeOf(row));
-        } catch {
-          /* store hiccups must never wedge the waiter — the TTL timer still fires */
-        }
-      }, APPROVAL_POLL_MS),
-    );
+    const poller = setInterval(() => {
+      try {
+        if (!this.storeAlive()) return;
+        const row = this.store.approvalGet(id);
+        if (!row || row.decision === null) return;
+        this.recordDecision(id);
+        settle(this.outcomeOf(row));
+      } catch {
+        /* store hiccups must never wedge the waiter — the TTL timer still fires */
+      }
+    }, APPROVAL_POLL_MS);
+    unrefHandle(poller);
+    this.pollers.set(id, poller);
 
     return { id, record, outcome };
   }
@@ -292,55 +337,87 @@ export class ApprovalStore {
     approved: boolean,
     by: { channel: string; userId?: string | null },
   ): boolean {
-    const ok = this.store.approvalDecide(id, approved ? "approved" : "denied", by.channel, by.userId ?? null, Date.now());
-    if (ok) {
-      this.store.audit("approval.decided", {
-        approvalId: id,
-        decision: approved ? "approved" : "denied",
-        byChannel: by.channel,
-        byUser: by.userId ?? null,
-      });
-      // In-process fast path: resolve the waiter without waiting for a poll tick.
-      const settle = this.waiters.get(id);
-      if (settle) {
-        const row = this.store.approvalGet(id);
-        if (row) this.recordDecision(id);
-        settle(row ? this.outcomeOf(row) : { approved, timedOut: false, decision: approved ? "approved" : "denied", decidedBy: by });
+    try {
+      if (!this.storeAlive()) return false;
+      const ok = this.store.approvalDecide(id, approved ? "approved" : "denied", by.channel, by.userId ?? null, Date.now());
+      if (ok) {
+        try {
+          this.store.audit("approval.decided", {
+            approvalId: id,
+            decision: approved ? "approved" : "denied",
+            byChannel: by.channel,
+            byUser: by.userId ?? null,
+          });
+        } catch {
+          /* closed between decide and audit — the row is already decided */
+        }
+        // In-process fast path: resolve the waiter without waiting for a poll tick.
+        const settle = this.waiters.get(id);
+        if (settle) {
+          const row = this.safeGet(id);
+          if (row) this.recordDecision(id);
+          settle(row ? this.outcomeOf(row) : { approved, timedOut: false, decision: approved ? "approved" : "denied", decidedBy: by });
+        }
       }
+      return ok;
+    } catch {
+      return false;
     }
-    return ok;
   }
 
   /** Mark an expired pending approval as timed_out (idempotent, audited). */
   expire(id: string, ttlMs?: number): boolean {
-    const row = this.store.approvalGet(id);
-    if (!row || row.decision !== null) return false;
-    if (row.requested_at + row.ttl_ms > Date.now()) return false;
-    const n = this.store.approvalExpirePending(Date.now());
-    if (n > 0) {
-      this.store.audit("approval.timed_out", { approvalId: id, ttlMs: ttlMs ?? row.ttl_ms });
-      return true;
+    try {
+      if (!this.storeAlive()) return false;
+      const row = this.store.approvalGet(id);
+      if (!row || row.decision !== null) return false;
+      if (row.requested_at + row.ttl_ms > Date.now()) return false;
+      const n = this.store.approvalExpirePending(Date.now());
+      if (n > 0) {
+        try {
+          this.store.audit("approval.timed_out", { approvalId: id, ttlMs: ttlMs ?? row.ttl_ms });
+        } catch {
+          /* closed between expire and audit — the row is already timed_out */
+        }
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
     }
-    return false;
   }
 
   /** TTL sweep over every pending record past its deadline. */
   sweepExpired(now: number = Date.now()): number {
-    const expired = this.store
-      .approvalListPending()
-      .filter((r) => r.requested_at + r.ttl_ms <= now);
-    for (const r of expired) {
-      this.store.audit("approval.timed_out", { approvalId: r.id, ttlMs: r.ttl_ms });
+    try {
+      if (!this.storeAlive()) return 0;
+      const expired = this.store
+        .approvalListPending()
+        .filter((r) => r.requested_at + r.ttl_ms <= now);
+      for (const r of expired) {
+        try {
+          this.store.audit("approval.timed_out", { approvalId: r.id, ttlMs: r.ttl_ms });
+        } catch {
+          /* closed between list and audit */
+        }
+      }
+      return this.store.approvalExpirePending(now);
+    } catch {
+      return 0;
     }
-    return this.store.approvalExpirePending(now);
   }
 
   listPending(): ApprovalRecord[] {
-    return this.store.approvalListPending().map(rowToRecord);
+    try {
+      if (!this.storeAlive()) return [];
+      return this.store.approvalListPending().map(rowToRecord);
+    } catch {
+      return [];
+    }
   }
 
   get(id: string): ApprovalRecord | null {
-    const row = this.store.approvalGet(id);
+    const row = this.safeGet(id);
     return row ? rowToRecord(row) : null;
   }
 
@@ -362,22 +439,37 @@ export class ApprovalStore {
    * resolves within TTL or default-denies).
    */
   waitFor(id: string): Promise<ApprovalOutcome> {
-    const row = this.store.approvalGet(id);
+    let row: ApprovalRow | null;
+    try {
+      if (!this.storeAlive()) {
+        return Promise.resolve({ approved: false, timedOut: true, decision: "timed_out", decidedBy: { channel: "closed" } });
+      }
+      row = this.store.approvalGet(id);
+    } catch {
+      return Promise.resolve({ approved: false, timedOut: true, decision: "timed_out", decidedBy: { channel: "closed" } });
+    }
     if (!row) return Promise.resolve({ approved: false, timedOut: true, decision: "timed_out", decidedBy: { channel: "missing" } });
     if (row.decision !== null) return Promise.resolve(this.outcomeOf(row));
 
     const handle = new Promise<ApprovalOutcome>((resolve) => {
       this.waiters.set(id, resolve);
-      const deadline = row.requested_at + row.ttl_ms;
-      this.timers.set(id, setTimeout(() => {
-        this.expire(id);
-        const finalRow = this.store.approvalGet(id);
-        resolve(finalRow && finalRow.decision !== null
-          ? this.outcomeOf(finalRow)
-          : { approved: false, timedOut: true, decision: "timed_out", decidedBy: { channel: "ttl" } });
-      }, Math.max(0, deadline - Date.now())));
-      this.pollers.set(id, setInterval(() => {
+      const deadline = row!.requested_at + row!.ttl_ms;
+      const timer = setTimeout(() => {
         try {
+          this.expire(id);
+          const finalRow = this.safeGet(id);
+          resolve(finalRow && finalRow.decision !== null
+            ? this.outcomeOf(finalRow)
+            : { approved: false, timedOut: true, decision: "timed_out", decidedBy: { channel: "ttl" } });
+        } catch {
+          resolve({ approved: false, timedOut: true, decision: "timed_out", decidedBy: { channel: "ttl" } });
+        }
+      }, Math.max(0, deadline - Date.now()));
+      unrefHandle(timer);
+      this.timers.set(id, timer);
+      const poller = setInterval(() => {
+        try {
+          if (!this.storeAlive()) return;
           const current = this.store.approvalGet(id);
           if (!current || current.decision === null) return;
           this.recordDecision(id);
@@ -385,7 +477,9 @@ export class ApprovalStore {
         } catch {
           /* TTL timer still guarantees settlement */
         }
-      }, APPROVAL_POLL_MS));
+      }, APPROVAL_POLL_MS);
+      unrefHandle(poller);
+      this.pollers.set(id, poller);
     });
     return handle;
   }
@@ -407,7 +501,7 @@ export class ApprovalStore {
   private recordDecision(id: string): void {
     const settle = this.waiters.get(id);
     if (!settle) return;
-    const row = this.store.approvalGet(id);
+    const row = this.safeGet(id);
     if (!row || row.decision === null) return;
     this.cleanup(id);
     settle(this.outcomeOf(row));

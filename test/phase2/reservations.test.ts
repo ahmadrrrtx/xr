@@ -12,7 +12,7 @@ import { describe, test, expect, beforeEach } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Store } from "../../src/state/workspace-store.ts";
+import { Store, reservationTtlMs, DEFAULT_RESERVATION_TTL_MS } from "../../src/state/workspace-store.ts";
 import { ReservationRepo } from "../../src/state/repos/reservation-repo.ts";
 import { CostGovernor } from "../../src/cost/governor.ts";
 import { BudgetManager } from "../../src/cost/manager.ts";
@@ -21,9 +21,9 @@ import { CostRepo } from "../../src/state/repos/cost-repo.ts";
 let tmp: string;
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), "xr-p2-res-"));
-  // Reservation TTL is snapshotted at module load (like CI production
-  // startup); tests that need a short TTL pass XR_RESERVATION_TTL_MS in the
-  // CHILD process's spawn env instead of mutating shared process.env.
+  // Reservation TTL is read at use time (reservationTtlMs()). Tests that
+  // need a short TTL still pass XR_RESERVATION_TTL_MS in the CHILD process's
+  // spawn env so they do not mutate shared process.env for concurrent files.
 });
 
 function freshStore(name: string, monthlyCap: number): Store {
@@ -32,6 +32,23 @@ function freshStore(name: string, monthlyCap: number): Store {
   store.setBudgetConfig({ monthly_cap: monthlyCap, daily_cap: null });
   return store;
 }
+
+describe("reservation TTL is read at use time", () => {
+  test("reservationTtlMs() observes XR_RESERVATION_TTL_MS at call time (floor 1000ms)", () => {
+    const prev = process.env.XR_RESERVATION_TTL_MS;
+    try {
+      delete process.env.XR_RESERVATION_TTL_MS;
+      expect(reservationTtlMs()).toBe(DEFAULT_RESERVATION_TTL_MS);
+      process.env.XR_RESERVATION_TTL_MS = "2500";
+      expect(reservationTtlMs()).toBe(2500);
+      process.env.XR_RESERVATION_TTL_MS = "500"; // below floor
+      expect(reservationTtlMs()).toBe(DEFAULT_RESERVATION_TTL_MS);
+    } finally {
+      if (prev === undefined) delete process.env.XR_RESERVATION_TTL_MS;
+      else process.env.XR_RESERVATION_TTL_MS = prev;
+    }
+  });
+});
 
 describe("reservation unit math", () => {
   test("admit reserves headroom; commit settles; release frees it", () => {

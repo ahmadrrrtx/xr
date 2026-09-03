@@ -111,6 +111,19 @@ describe("durable approval lifecycle", () => {
     store.close();
   });
 
+  test("expire / sweep / decide after store.close() do not throw", () => {
+    const store = new Store(join(tmp, "closed.db"));
+    const approvals = new ApprovalStore(store, { defaultTtlMs: 30_000 });
+    const handle = approvals.request({ tool: "shell", reason: "x", surface: "cli", ttlMs: 30_000 });
+    store.close();
+    expect(approvals.expire(handle.id)).toBe(false);
+    expect(approvals.sweepExpired()).toBe(0);
+    expect(approvals.decide(handle.id, true, { channel: "cli" })).toBe(false);
+    expect(approvals.listPending()).toEqual([]);
+    expect(approvals.get(handle.id)).toBeNull();
+    approvals.dispose();
+  });
+
   test("the pending list only contains undecided records", async () => {
     const store = new Store(join(tmp, "p.db"));
     const approvals = new ApprovalStore(store);
