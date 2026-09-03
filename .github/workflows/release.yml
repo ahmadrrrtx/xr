@@ -258,7 +258,7 @@ jobs:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [sign]
+    needs: [assemble, sign]
     permissions:
       contents: write
     steps:
@@ -322,6 +322,12 @@ jobs:
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
+      # package.json prepublishOnly is `bun run release:check && bun run claim-lint`.
+      # Without bun on PATH, npm publish exits 127 (first v1.0.0-beta.1 miss).
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install (frozen, no scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
       # npm CLI does the PUBLISH (not bun): bun's publish does not implement
       # npm's OIDC trusted-publishing handshake (oven-sh/bun#22423) and fails
       # with "missing authentication" even when id-token: write is granted.
@@ -405,7 +411,7 @@ jobs:
     timeout-minutes: 20
     needs: [assemble, release]
     permissions:
-      contents: read
+      contents: write # attach stamped channel files to the GitHub Release
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4

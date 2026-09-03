@@ -78,6 +78,9 @@ describe("Phase 9 · T1/T2 — release.yml is a complete signed release pipeline
     // Either one fails the npm channel AFTER the GitHub Release is published.
     expect(workflow).toContain("npm publish --provenance --access public --tag beta");
     expect(workflow).toContain("npm publish --provenance --access public --tag latest");
+    expect(workflow).toMatch(/Publish npm[\s\S]*setup-bun/);
+    expect(workflow).toMatch(/Stamp \+ publish channel manifests[\s\S]*contents: write/);
+    expect(workflow).toMatch(/GitHub Release \(signed assets\)[\s\S]*needs: \[assemble, sign\]/);
     expect(workflow).not.toContain("bun pm publish");
     // Match the run line: explanatory comments may name the command.
     expect(workflow).not.toMatch(/^\s*bun publish /m);
