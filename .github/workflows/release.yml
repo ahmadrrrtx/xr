@@ -204,7 +204,24 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: release-bundle
-          path: dist
+          path: bundle
+      - name: Flatten artifact into dist/ (upload-artifact v4 keeps the dist/ prefix)
+        run: |
+          mkdir -p dist
+          if [ -f bundle/dist/SHA256SUMS ]; then
+            cp -a bundle/dist/. dist/
+          elif [ -f bundle/SHA256SUMS ]; then
+            cp -a bundle/. dist/
+          else
+            echo "::error::SHA256SUMS not found in release-bundle"
+            find bundle -maxdepth 4 -type f | head -50
+            exit 1
+          fi
+          if [ -f bundle/CHANGELOG.md ] && [ ! -f dist/CHANGELOG.md ]; then
+            cp bundle/CHANGELOG.md dist/CHANGELOG.md
+          fi
+          test -f dist/SHA256SUMS
+          ls -la dist
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
       - name: Sign checksums + npm tarball + SBOM keylessly
@@ -249,7 +266,16 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: signed-bundle
-          path: dist
+          path: bundle
+      - name: Flatten artifact into dist/
+        run: |
+          mkdir -p dist
+          if [ -f bundle/dist/SHA256SUMS ]; then cp -a bundle/dist/. dist/
+          elif [ -f bundle/SHA256SUMS ]; then cp -a bundle/. dist/
+          else echo "::error::SHA256SUMS missing"; find bundle -maxdepth 4 -type f | head -50; exit 1
+          fi
+          if [ -f bundle/CHANGELOG.md ] && [ ! -f dist/CHANGELOG.md ]; then cp bundle/CHANGELOG.md dist/CHANGELOG.md; fi
+          test -f dist/SHA256SUMS
       - name: Extract release notes for this version
         run: |
           V="${{ needs.assemble.outputs.version }}"
@@ -389,7 +415,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: signed-bundle
-          path: dist
+          path: bundle
+      - name: Flatten artifact into dist/
+        run: |
+          mkdir -p dist
+          if [ -f bundle/dist/SHA256SUMS ]; then cp -a bundle/dist/. dist/
+          elif [ -f bundle/SHA256SUMS ]; then cp -a bundle/. dist/
+          else echo "::error::SHA256SUMS missing"; find bundle -maxdepth 4 -type f | head -50; exit 1
+          fi
+          test -f dist/SHA256SUMS
       - name: Stamp all channel manifests from the signed SHA256SUMS
         run: bun run scripts/channel-manifest.ts --stamp --sums dist/SHA256SUMS --out dist/channels
       - name: Publish stamped channels as release assets (homebrew/winget/scoop)
@@ -443,7 +477,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: signed-bundle
-          path: dist
+          path: bundle
+      - name: Flatten artifact into dist/
+        run: |
+          mkdir -p dist
+          if [ -f bundle/dist/SHA256SUMS ]; then cp -a bundle/dist/. dist/
+          elif [ -f bundle/SHA256SUMS ]; then cp -a bundle/. dist/
+          else echo "::error::SHA256SUMS missing"; find bundle -maxdepth 4 -type f | head -50; exit 1
+          fi
+          test -f dist/SHA256SUMS
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
       - name: verify-release.ts against the signed npm tarball + SBOM + sums
