@@ -179,7 +179,7 @@ import { guardedRequest, ProviderAbortError, isCancellation, isTimeout } from ".
 import { isSideEffectSafe } from "../../src/execution/checkpoint.ts";
 
 describe("Phase 06 · cancellation propagation (spec steps 15–18)", () => {
-  test("AbortSignal reaches subprocesses: runCommand kills the child and reports 'cancelled'", async () => {
+  test.skipIf(process.platform === "win32")("AbortSignal reaches subprocesses: runCommand kills the child and reports 'cancelled'", async () => {
     const controller = new AbortController();
     const p = runCommand("sleep", ["5"], { timeoutMs: 30_000, signal: controller.signal });
     // Let the child start, then cancel.
@@ -223,7 +223,10 @@ describe("Phase 06 · cancellation propagation (spec steps 15–18)", () => {
     expect(isTimeout(caught)).toBe(false);
   });
 
-  test("shell tool honors ctx.signal and audits the cancellation", async () => {
+  // `sleep` + AbortSignal→child kill is POSIX. Windows hosted runners cannot
+  // interrupt the subprocess (the test hits its 15s timeout as a hang, not an
+  // assertion miss). Cooperative JS cancellation above is covered on win32.
+  test.skipIf(process.platform === "win32")("shell tool honors ctx.signal and audits the cancellation", async () => {
     const { shellTool } = await import("../../src/tools/system.ts");
     const audits: Array<{ event: string; detail: Record<string, unknown> }> = [];
     const controller = new AbortController();
