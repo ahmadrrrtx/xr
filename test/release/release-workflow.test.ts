@@ -176,6 +176,8 @@ describe("Phase 3 — artifact truth (release.yml + nightly + dockerfile)", () =
     expect(workflow).toContain("cosign verify-blob");
     expect(workflow).toContain("scripts/verify-release.ts");
     expect(workflow).toContain("scripts/consumer-smoke.ts --from-npm");
+    expect(workflow).toContain("Flatten artifact into dist/");
+    expect(workflow).toContain("bundle/dist/SHA256SUMS");
   });
 
   test("nightly uses write-sums, does not overlay $PWD on /app, and notifies on failure", () => {
