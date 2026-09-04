@@ -215,9 +215,18 @@ jobs:
       - name: Run test / core (parity-segmented, crash-class retry once)
         shell: bash
         timeout-minutes: 25
+        # NOTE: the step shell defaults to `bash -e -o pipefail`, which aborts
+        # the step the instant the suite exits non-zero — BEFORE the `rc=$?`
+        # capture and the `cat` below run. That made every red lane emit an
+        # EMPTY log (and swallowed the runner's ::error:: annotations), so a
+        # failing segment could never be diagnosed from CI. Disabling errexit
+        # for the capture-and-report block guarantees the log and summary are
+        # always emitted; the explicit `exit ${rc}` preserves the real status.
         run: |
+          set +e
           bash scripts/parity-suite-runner.sh linux --exclude '^test/(security|trust|capabilities|reliability|e2e-blackbox)/' > /tmp/xr-lane-core.log 2>&1
           rc=$?
+          set -e
           PASS=$(grep -cE '\(pass\)' /tmp/xr-lane-core.log || true)
           FAIL=$(grep -cE '\(fail\)' /tmp/xr-lane-core.log || true)
           SKIP=$(grep -cE '\(skip\)' /tmp/xr-lane-core.log || true)
@@ -255,6 +264,7 @@ jobs:
         shell: bash
         timeout-minutes: 10
         run: |
+          set +e
           bun test test/security/egress-proxy.test.ts > /tmp/xr-egress.log 2>&1
           rc=$?
           if [ ${rc} -ne 0 ]; then
@@ -262,6 +272,7 @@ jobs:
             bun test test/security/egress-proxy.test.ts > /tmp/xr-egress.log 2>&1
             rc=$?
           fi
+          set -e
           PASS=$(grep -cE '\(pass\)' /tmp/xr-egress.log || true)
           FAIL=$(grep -cE '\(fail\)' /tmp/xr-egress.log || true)
           echo "| test / security (egress quarantine) | ${PASS} pass | ${FAIL} fail |" >> "${GITHUB_STEP_SUMMARY}"
@@ -272,10 +283,12 @@ jobs:
         shell: bash
         timeout-minutes: 15
         run: |
+          set +e
           FILES=$(find test/security test/trust test/capabilities -name '*.test.ts' ! -name 'egress-proxy.test.ts' | sort)
           # shellcheck disable=SC2086
           bun test ${FILES} test/security.test.ts test/trust.test.ts > /tmp/xr-lane-security.log 2>&1
           rc=$?
+          set -e
           PASS=$(grep -cE '\(pass\)' /tmp/xr-lane-security.log || true)
           FAIL=$(grep -cE '\(fail\)' /tmp/xr-lane-security.log || true)
           SKIP=$(grep -cE '\(skip\)' /tmp/xr-lane-security.log || true)
@@ -307,8 +320,10 @@ jobs:
         shell: bash
         timeout-minutes: 20
         run: |
+          set +e
           bun run reliability:test > /tmp/xr-lane-reliability.log 2>&1
           rc=$?
+          set -e
           PASS=$(grep -cE '\(pass\)' /tmp/xr-lane-reliability.log || true)
           FAIL=$(grep -cE '\(fail\)' /tmp/xr-lane-reliability.log || true)
           SKIP=$(grep -cE '\(skip\)' /tmp/xr-lane-reliability.log || true)
@@ -343,6 +358,7 @@ jobs:
         shell: bash
         timeout-minutes: 30
         run: |
+          set +e
           bun test \
             test/e2e-blackbox/run-lifecycle.test.ts \
             test/e2e-blackbox/providers-lifecycle.test.ts \
@@ -354,6 +370,7 @@ jobs:
           bun test test/e2e-blackbox/streaming-matrix.test.ts -t "behavior capture" >> /tmp/xr-lane-e2e.log 2>&1
           rc2=$?
           if [ ${rc} -eq 0 ]; then rc=${rc2}; fi
+          set -e
           PASS=$(grep -cE '\(pass\)' /tmp/xr-lane-e2e.log || true)
           FAIL=$(grep -cE '\(fail\)' /tmp/xr-lane-e2e.log || true)
           SKIP=$(grep -cE '\(skip\)' /tmp/xr-lane-e2e.log || true)
@@ -387,8 +404,10 @@ jobs:
         shell: bash
         timeout-minutes: 15
         run: |
+          set +e
           bun test test/e2e-blackbox/streaming-matrix.test.ts -t "kill proofs" > /tmp/xr-lane-proof.log 2>&1
           rc=$?
+          set -e
           PASS=$(grep -cE '\(pass\)' /tmp/xr-lane-proof.log || true)
           FAIL=$(grep -cE '\(fail\)' /tmp/xr-lane-proof.log || true)
           echo "| test / e2e-blackbox-proof (kill proofs) | ${PASS} pass | ${FAIL} fail |" >> "${GITHUB_STEP_SUMMARY}"
