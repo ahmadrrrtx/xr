@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+### Phase 4 — Evidence Integrity (signed audit, F-08)
+
+- **audit:** the SHA-256 hash chain was tamper-*evident* but a local attacker
+  with SQLite write access could truncate and rebuild every link consistently
+  (F-08). The chain is now tamper-*resistant*: a per-install **Ed25519** signing
+  key is generated on first real boot and stored through the existing secret
+  backends (Keychain / secret-service / DPAPI / AES-GCM file fallback); the
+  public key is embedded in an `audit.keyed` event, checkpoints are signed
+  every N entries, and the latest **signed head** (`audit_head`) cannot be
+  forged without the private key.
+- **cli:** `xr audit verify --crypto` replays the chain *and* verifies Ed25519
+  signatures, head-counter monotonicity and the signed head; `--anchor`
+  append-verifies remote anchors; `--crypto-legacy` accepts a pre-keying
+  unsigned chain. Exit codes: `0` verified, `1` integrity failure, `2` signing
+  key unavailable (limited to chain). New `xr audit anchor` (push one
+  checkpoint), `xr audit export-key <file>` (encrypted, passphrase-sealed key
+  backup), and `xr audit re-key --yes` (audited key rotation; the old segment
+  stays verifiable to the re-key point).
+- **anchor (opt-in, default off):** `audit.anchor.{enabled,sink,intervalMs}` —
+  pushes a redacted signed checkpoint to an operator-controlled `file://` or
+  egress-gated `https://` sink (must be on the egress allowlist; refusals are
+  audited and skipped, fail-safe never fail-stop; offline-first preserved).
+  Scheduled hourly in long-running processes and on clean exit.
+- **state:** reversible migration 7 adds `audit_log.head_counter/sig` and the
+  `audit_head`/`audit_anchors` tables, additive only — the hash chain is never
+  re-keyed by a migration and existing unsigned chains stay verifiable.
+- **docs:** `docs/security/AUDIT-EVIDENCE.md` states the exact threat model —
+  the signature protects against silent local rewrite without the key, not
+  against an attacker who also exfiltrates the key (the anchor narrows that gap).
+- Kill proof: a wholesale truncate + consistent-hash rebuild now fails
+  `verify --crypto` (case (b) in the tamper matrix), covered in CI by
+  `test/security/audit-crypto.test.ts`, `test/security/audit-anchor.test.ts` and
+  the black-box `test/e2e-blackbox/audit-crypto.test.ts`.
+
 ## 1.0.0 — 2026-08-13
 
 ### Rebaseline

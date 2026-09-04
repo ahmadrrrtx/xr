@@ -441,7 +441,93 @@ const MIGRATION_6: Migration = {
   },
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6];
+/**
+ * Migration 7 — Phase 4 (Evidence Integrity, F-08): signed audit chain.
+ *
+ * Additive ONLY — the SHA-256 hash chain is never re-keyed or rewritten:
+ *   - `audit_log.head_counter` INTEGER NULL — running monotonic counter for the
+ *     signed segment (null on legacy/unsigned entries). A wholesale
+ *     truncate-and-rebuild without the private key cannot restore a valid
+ *     head signature.
+ *   - `audit_log.sig` TEXT NULL — Ed25519 signature over the checkpoint/head
+ *     message for every Nth signed entry (and keyed/rekey events).
+ *   - `audit_head` — the latest signed head: {counter,entry_hash,sig,pubkey},
+ *     updated on every signed append. Tamper-resistant because its `sig` is
+ *     unforgeable without the private key.
+ *   - `audit_anchors` — append-verified records of checkpoint hashes published
+ *     to an operator-configured remote anchor sink.
+ *
+ * Existing unsigned chains remain readable and verifiable (chain-only /
+ * `--crypto-legacy`); keying happens on next real boot, not in the migration.
+ *
+ * Down: drops the columns/tables this migration introduced. Columns use the
+ * guarded DROP (SQLite >= 3.35) wrapped in a pragma check so older engines
+ * downgrade without error.
+ */
+const MIGRATION_7: Migration = {
+  version: 7,
+  name: "phase4_signed_audit",
+  up(store: WorkspaceStore) {
+    const cols = (store as any).prepare
+      ? ((store as any).prepare("PRAGMA table_info(audit_log)").all() as Array<{ name: string }>)
+      : [];
+    const has = (n: string) => cols.some((c) => c.name === n);
+    if (!has("head_counter")) {
+      store.exec(`ALTER TABLE audit_log ADD COLUMN head_counter INTEGER`);
+    }
+    if (!has("sig")) {
+      store.exec(`ALTER TABLE audit_log ADD COLUMN sig TEXT`);
+    }
+    store.exec(`
+      CREATE TABLE IF NOT EXISTS audit_head (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        counter INTEGER NOT NULL,
+        entry_hash TEXT NOT NULL,
+        entry_id INTEGER NOT NULL,
+        sig TEXT NOT NULL,
+        pubkey TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS audit_anchors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        counter INTEGER NOT NULL,
+        entry_hash TEXT NOT NULL,
+        entry_id INTEGER NOT NULL,
+        sig TEXT NOT NULL,
+        pubkey TEXT NOT NULL,
+        sink TEXT NOT NULL,
+        anchored_at INTEGER NOT NULL,
+        verified_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_anchors_counter ON audit_anchors(counter);
+    `);
+  },
+  down(store: WorkspaceStore) {
+    store.exec(`DROP TABLE IF EXISTS audit_head;`);
+    store.exec(`DROP TABLE IF EXISTS audit_anchors;`);
+    const cols = (store as any).prepare
+      ? ((store as any).prepare("PRAGMA table_info(audit_log)").all() as Array<{ name: string }>)
+      : [];
+    const has = (n: string) => cols.some((c) => c.name === n);
+    // ALTER TABLE DROP COLUMN is SQLite >= 3.35; fail soft on older engines.
+    if (has("sig")) {
+      try {
+        store.exec(`ALTER TABLE audit_log DROP COLUMN sig`);
+      } catch {
+        /* older SQLite — column simply remains */
+      }
+    }
+    if (has("head_counter")) {
+      try {
+        store.exec(`ALTER TABLE audit_log DROP COLUMN head_counter`);
+      } catch {
+        /* older SQLite — column simply remains */
+      }
+    }
+  },
+};
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6, MIGRATION_7];
 
 /** Latest known schema version. */
 export const LATEST_SCHEMA_VERSION: number = MIGRATIONS.reduce(
@@ -496,6 +582,8 @@ export function runMigrationsUp(store: WorkspaceStore, target: number = LATEST_S
       ran.push(m.name);
     });
   }
+  // Re-sync signing state (migration 7 may have just added the tables).
+  (store as unknown as { refreshAuditKeyingState?: () => void }).refreshAuditKeyingState?.();
   return ran;
 }
 
@@ -520,5 +608,9 @@ export function runMigrationsDown(store: WorkspaceStore, target: number = 0): st
       reverted.push(m.name);
     });
   }
+  // Migration 7 (signed audit) drops its columns/tables on the way down; sync
+  // the store's in-memory signing state so appends match the on-disk schema.
+  const refresh = (store as unknown as { refreshAuditKeyingState?: () => void }).refreshAuditKeyingState;
+  if (refresh) refresh.call(store);
   return reverted;
 }

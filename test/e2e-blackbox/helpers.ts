@@ -112,6 +112,12 @@ export function spawnCli(
   const env: Record<string, string> = { ...process.env } as Record<string, string>;
   delete env.XR_HOME;
   delete env.HOME;
+  // Test-only switches that belong to the PARENT test process, not to the real
+  // CLI under test: the bunfig suite preload sets XR_AUDIT_NO_AUTOKEY=1 so
+  // in-process unit constructors stay side-effect-free, but the spawned CLI
+  // must run the REAL boot path (auto-keying). Scrub these at the boundary.
+  delete env.XR_AUDIT_NO_AUTOKEY;
+  delete env.XR_AUDIT_SIGN_EVERY;
   env.XR_HOME = home;
   env.HOME = home;
   env.NO_COLOR = "1";

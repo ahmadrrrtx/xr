@@ -60,6 +60,13 @@ process.env.TMPDIR = root; // POSIX: node:os tmpdir() checks TMPDIR first
 process.env.TMP = root; // Windows parity
 process.env.TEMP = root; // Windows parity
 
+// Phase 4 (F-08): the unit suite constructs WorkspaceStore directly and makes
+// exact audit-count / audit-order assertions. Boot-time Ed25519 keying appends
+// an `audit.keyed` event, so the unit-suite constructor path suppresses it; the
+// signed-chain behaviours are covered by test/security/audit-signer.test.ts and
+// the black-box CLI suites (which spawn the real CLI with keying enabled).
+process.env.XR_AUDIT_NO_AUTOKEY = "1";
+
 if (KEEP) {
   console.log(`[suite-tmp] XR_TEST_TMP_KEEP=1 — suite temp root kept at ${root}`);
 } else {
