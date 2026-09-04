@@ -1542,6 +1542,10 @@ export class WorkspaceStore {
 
   /** Append-verification of remote anchor records (pure read). */
   verifyAnchors(): AnchorVerifyResult {
+    // No signed schema (down-migrated) → there are no anchor records at all.
+    if (!this.signedSchema) {
+      return { verified: 0, failed: [], highestCounter: null, anchorLag: false };
+    }
     return verifyAnchorRecords(this.readSource);
   }
 
@@ -1560,11 +1564,16 @@ export class WorkspaceStore {
 
   /** Count of stored anchor records. */
   anchorCount(): number {
+    // Degrade honestly on a down-migrated (pre-migration-7) schema: the
+    // audit_anchors table is absent, so there are trivially zero anchors.
+    if (!this.signedSchema) return 0;
     return this.db.query<{ c: number }, []>(`SELECT COUNT(*) c FROM audit_anchors`).get()?.c ?? 0;
   }
 
   /** Current signed head payload (for anchor export), or null if unkeyed. */
   headForAnchor(): { counter: number; entry_hash: string; entry_id: number; sig: string; pubkey: string } | null {
+    // No signed schema (down-migrated) → no signed head to export.
+    if (!this.signedSchema) return null;
     const head = this.db
       .query<
         { counter: number; entry_hash: string; entry_id: number; sig: string; pubkey: string },

@@ -42,16 +42,46 @@ describe("Phase 01 — runtime detection", () => {
 
   test("deterministic fallback on timeout: every runtime gets a status row, none throws", async () => {
     if (!blackhole) return;
-    const { detectAllRuntimes } = await import("../../src/local/runtimes.ts");
-    const runtimes = await detectAllRuntimes();
-    for (const r of runtimes) {
-      expect(typeof r.id).toBe("string");
-      expect(r.healthy).toBe(false);
-      expect(typeof r.detail).toBe("string");
-      expect(r.detail.length).toBeGreaterThan(0);
-      expect(Array.isArray(r.models)).toBe(true);
-      expect(typeof r.installed).toBe("boolean");
-      expect(typeof r.configured).toBe("boolean");
+    const { detectAllRuntimes, invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+    const { invalidateConfigCache } = await import("../../src/config/cache.ts");
+    // Hermetic: a sibling test ("mixed healthy") spins up a LIVE endpoint and
+    // mutates config/env. Run this assertion against a FRESH isolated HOME
+    // with the runtime+config caches cleared, so the result reflects a real
+    // all-blackholed detection — never a cached healthy row leaked across
+    // tests or processes (this assertion flaked red on loaded CI runners
+    // because it trusted whatever the bounded-parallel test had cached).
+    const { mkdtempSync: mkdtemp, rmSync: rm } = await import("node:fs");
+    const { tmpdir: tmp } = await import("node:os");
+    const { join: joinPath } = await import("node:path");
+    const home = mkdtemp(joinPath(tmp(), "xr-det-timeout-"));
+    const prevHome = process.env.XR_HOME;
+    process.env.XR_HOME = home;
+    invalidateConfigCache("all");
+    invalidateRuntimeCache();
+    try {
+      const runtimes = await detectAllRuntimes();
+      // 11 runtimes are expected (every blackholed port yields a row); guard
+      // the count too so a missing row can never pass silently.
+      expect(runtimes.length).toBeGreaterThanOrEqual(10);
+      for (const r of runtimes) {
+        expect(typeof r.id).toBe("string");
+        expect(r.healthy).toBe(false);
+        expect(typeof r.detail).toBe("string");
+        expect(r.detail.length).toBeGreaterThan(0);
+        expect(Array.isArray(r.models)).toBe(true);
+        expect(typeof r.installed).toBe("boolean");
+        expect(typeof r.configured).toBe("boolean");
+      }
+    } finally {
+      invalidateRuntimeCache();
+      if (prevHome === undefined) delete process.env.XR_HOME;
+      else process.env.XR_HOME = prevHome;
+      invalidateConfigCache("all");
+      try {
+        rm(home, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
     }
   }, 20_000);
 
