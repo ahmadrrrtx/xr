@@ -79,12 +79,44 @@ mkdir -p "$LOGDIR" || {
 }
 trap 'rm -rf "$LOGDIR"' EXIT
 
+# Per-segment wall-clock watchdog. A hung bun test process (observed on
+# Windows when a spawned fixture never exits) previously stalled the whole
+# 30-min step with no culprit. We cap EACH segment at SEG_TIMEOUT seconds so a
+# hang fails the segment fast and loudly. GNU/macOS `timeout` is used where
+# present; otherwise a portable POSIX shell watchdog (background killer) works
+# on Git-Bash/Windows. XR_SEG_TIMEOUT overrides for slow CI runners.
+SEG_TIMEOUT="${XR_SEG_TIMEOUT:-420}"
+
+run_bun_test() {
+  # run_bun_test <file-list-arg-string> <out-file>  → exit code of bun test
+  local files="$1" out="$2"
+  if command -v timeout >/dev/null 2>&1; then
+    # shellcheck disable=SC2086
+    timeout --signal=TERM --kill-after=15s "${SEG_TIMEOUT}s" bun test $files >"$out" 2>&1
+    return $?
+  fi
+  # Portable fallback (Git-Bash on Windows has no `timeout`).
+  # shellcheck disable=SC2086
+  bun test $files >"$out" 2>&1 &
+  local pid=$!
+  (
+    sleep "$SEG_TIMEOUT"
+    kill "$pid" 2>/dev/null
+    sleep 15
+    kill -9 "$pid" 2>/dev/null
+  ) &
+  local watcher=$!
+  wait "$pid"
+  local code=$?
+  kill "$watcher" 2>/dev/null
+  return "$code"
+}
+
 # Run one segment. Return 0 on success; on a crash-class exit (non-zero with
 # zero test failures) retry once with a fresh process before giving up.
 run_segment() {
   local seg="$1" out="$2" label="$3"
-  # shellcheck disable=SC2086
-  bun test $(echo "$seg") >"$out" 2>&1
+  run_bun_test "$seg" "$out"
   local code=$?
   if [ "$code" -eq 0 ]; then
     cat "$out"
@@ -94,10 +126,9 @@ run_segment() {
   # Crash-class detection: no per-test failures AND no non-zero fail summary.
   # `tr -d '\r'` normalizes Windows CRLF so the summary regex matches.
   if ! grep -qE '\(fail\)' "$out" && ! tr -d '\r' <"$out" | grep -qE '^[[:space:]]*[1-9][0-9]*[[:space:]]+fail$'; then
-    echo "::warning::$label exit code ${code} with 0 test failures (bun process crash/teardown class) — retrying once with a fresh process"
+    echo "::warning::$label exit code ${code} with 0 test failures (bun process crash/teardown/hang class) — retrying once with a fresh process"
     cat "$out"
-    # shellcheck disable=SC2086
-    bun test $(echo "$seg") >"$out" 2>&1
+    run_bun_test "$seg" "$out"
     code=$?
     if [ "$code" -eq 0 ]; then
       cat "$out"
@@ -142,8 +173,7 @@ isolate_segment() {
   local seg="$1" out="$2" label="$3"
   local failed="" crashed="" isolated_ok=1
   for f in $seg; do
-    # shellcheck disable=SC2086
-    bun test "$f" >"$out.one" 2>&1
+    run_bun_test "$f" "$out.one"
     local c=$?
     if [ "$c" -eq 0 ]; then
       echo "  [isolated ok]    $f"

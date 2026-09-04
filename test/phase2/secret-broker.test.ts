@@ -58,10 +58,35 @@ async function runFixture(fixture: string, extraEnv: Record<string, string>): Pr
       ...extraEnv,
     },
   });
-  const out = await new Response(proc.stdout).text();
-  await proc.exited;
-  const lines = out.trim().split("\n").filter((l) => l.trim().length > 0);
-  return JSON.parse(lines[lines.length - 1]) as Record<string, unknown>;
+  // Watchdog: a fixture child that fails to exit (a lingering event-loop
+  // handle / async secret backend, observed on Windows) must never hang the
+  // whole suite. Kill it and surface a loud error instead of a 30-min stall.
+  const watchdog = setTimeout(() => {
+    try {
+      proc.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
+  }, 20_000);
+  (watchdog as unknown as { unref?: () => void }).unref?.();
+  try {
+    const out = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+    clearTimeout(watchdog);
+    if (exitCode !== 0) {
+      throw new Error(`fixture ${fixture} exited with code ${exitCode}`);
+    }
+    const lines = out.trim().split("\n").filter((l) => l.trim().length > 0);
+    return JSON.parse(lines[lines.length - 1] as string) as Record<string, unknown>;
+  } catch (err) {
+    clearTimeout(watchdog);
+    try {
+      proc.kill("SIGKILL");
+    } catch {
+      /* already gone */
+    }
+    throw err;
+  }
 }
 
 describe("compat ON (1.0 behavior, hermetic child process)", () => {

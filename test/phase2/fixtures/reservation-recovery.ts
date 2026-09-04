@@ -24,3 +24,6 @@ const admit = repo.admit("recovery-task", 1.0, 1000, {
 });
 writeSync(1, JSON.stringify({ totalsAfterOpen, admitOk: admit.ok }));
 store.close();
+// Explicit exit: a lingering event-loop handle (background store jobs) must not
+// keep this fixture alive on Windows, which would hang the parent's awaited exit.
+process.exit(0);
