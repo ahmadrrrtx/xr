@@ -9,9 +9,19 @@
  *   a git tag v1.*  ⇔  a published npm version 1.*
  *   a published npm 1.*  ⇔  a git tag v1.*
  *
- * Vacuous pass: no 1.x tags AND no 1.x npm versions (today's HEAD, before
- * the first Phase-3 publish). Fail closed as soon as either side exists
- * without the other.
+ * STABLE vs PRE-RELEASE: the gate binds STABLE 1.x releases (1.0.0, 1.2.3 …).
+ * Pre-release identifiers (1.0.0-beta.1, 1.0.0-rc.2, alpha …) are NOT part of
+ * the stable line: a beta tag pushed during development legitimately has no
+ * stable npm counterpart until the stable 1.0.0 publish, and a published beta
+ * must never gate the release line (npm `latest` is never repointed at a
+ * pre-release — see repairCommands). Pre-releases are therefore surfaced for
+ * visibility (gitPre / npmPre) but never fail the invariant. This matches the
+ * CI intent documented in .github/workflows/supply-chain.yml ("vacuous pass
+ * until the first 1.x publish").
+ *
+ * Vacuous pass: no STABLE 1.x tags AND no STABLE 1.x npm versions (today's
+ * HEAD — only the out-of-band v1.0.0-beta.1 preview tag exists). Fails closed
+ * as soon as a STABLE version exists on one side without the other.
  *
  * Repair is print-only unless `--yes` is passed (operator-only mutation).
  *
@@ -28,6 +38,16 @@ const HISTORICAL = /^(v3\.|v4\.|v7\.|backup-)/;
 const LINE_1_TAG = /^v1\./;
 const LINE_1_VER = /^1\./;
 
+// A semver pre-release is anything after a hyphen in the [major.minor.patch]
+// core: 1.0.0-beta.1, 1.2.3-rc.2, 1.0.0-alpha.0. The build metadata suffix
+// (+sha) is stripped before this test so "1.0.0+20260101" stays stable.
+const PRERELEASE = /-\w/;
+
+export function isPrerelease(version: string): boolean {
+  const core = version.replace(/^v/, "").split("+")[0];
+  return PRERELEASE.test(core);
+}
+
 export type TagClass = "historical" | "line-1" | "other";
 
 export function classifyGitTag(tag: string): TagClass {
@@ -38,8 +58,14 @@ export function classifyGitTag(tag: string): TagClass {
 
 export interface InvariantResult {
   ok: boolean;
+  /** STABLE 1.x git versions (pre-releases excluded). */
   git1: string[];
+  /** STABLE 1.x npm versions (pre-releases excluded). */
   npm1: string[];
+  /** Pre-release 1.x git tags, surfaced for visibility (do not gate). */
+  gitPre: string[];
+  /** Pre-release 1.x npm versions, surfaced for visibility (do not gate). */
+  npmPre: string[];
   missingOnNpm: string[];
   missingOnGit: string[];
 }
@@ -48,8 +74,14 @@ export function assertTagNpmInvariant(opts: {
   gitTags: string[];
   npmVersions: string[];
 }): InvariantResult {
-  const git1 = opts.gitTags.filter((t) => classifyGitTag(t) === "line-1").map((t) => t.replace(/^v/, ""));
-  const npm1 = opts.npmVersions.filter((v) => LINE_1_VER.test(v));
+  const line1 = opts.gitTags
+    .filter((t) => classifyGitTag(t) === "line-1")
+    .map((t) => t.replace(/^v/, ""));
+  const git1 = line1.filter((v) => !isPrerelease(v));
+  const gitPre = line1.filter((v) => isPrerelease(v));
+  const npmLine1 = opts.npmVersions.filter((v) => LINE_1_VER.test(v));
+  const npm1 = npmLine1.filter((v) => !isPrerelease(v));
+  const npmPre = npmLine1.filter((v) => isPrerelease(v));
   const npmSet = new Set(npm1);
   const gitSet = new Set(git1);
   const missingOnNpm = git1.filter((v) => !npmSet.has(v));
@@ -58,6 +90,8 @@ export function assertTagNpmInvariant(opts: {
     ok: missingOnNpm.length === 0 && missingOnGit.length === 0,
     git1,
     npm1,
+    gitPre,
+    npmPre,
     missingOnNpm,
     missingOnGit,
   };
@@ -121,12 +155,19 @@ async function main(): Promise<void> {
   const result = assertTagNpmInvariant({ gitTags, npmVersions: packument.versions });
 
   if (skipIfUnpublished && result.git1.length === 0 && result.npm1.length === 0) {
-    console.log("tag⇔npm: skip — no 1.x git tags and no 1.x npm versions yet (vacuous pass)");
+    const pre = result.gitPre.length + result.npmPre.length;
+    console.log(
+      `tag⇔npm: skip — no STABLE 1.x publish yet (vacuous pass)${
+        pre ? `; ${pre} pre-release version(s) present but out of the stable gate: git [${result.gitPre.join(", ")}] npm [${result.npmPre.join(", ")}]` : ""
+      }`,
+    );
     return;
   }
 
-  console.log(`tag⇔npm: git 1.x = [${result.git1.join(", ") || "none"}]`);
-  console.log(`tag⇔npm: npm 1.x = [${result.npm1.join(", ") || "none"}]`);
+  console.log(`tag⇔npm: git 1.x (stable) = [${result.git1.join(", ") || "none"}]`);
+  console.log(`tag⇔npm: npm 1.x (stable) = [${result.npm1.join(", ") || "none"}]`);
+  if (result.gitPre.length) console.log(`tag⇔npm: git pre-release (not gated) = [${result.gitPre.join(", ")}]`);
+  if (result.npmPre.length) console.log(`tag⇔npm: npm pre-release (not gated) = [${result.npmPre.join(", ")}]`);
   console.log(`tag⇔npm: dist-tags = ${JSON.stringify(packument.distTags)}`);
 
   if (repair) {
