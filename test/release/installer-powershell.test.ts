@@ -148,19 +148,45 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
   }
 
   test("the script parses with zero syntax errors", () => {
+    // Pass the ABSOLUTE path in, rather than resolving './install.ps1' inside
+    // PowerShell. `Resolve-Path` is relative to the PowerShell *provider*
+    // location, which is not always the spawn cwd on hosted runners (a
+    // FileSystem provider drive can start elsewhere, and `-NoProfile` does not
+    // normalise it). When it missed, this test failed with a bare
+    // "ERRORS=<n>" mismatch that named neither the path nor the parse error —
+    // which is exactly what went red in CI while every local run stayed green.
+    // The path is already known in TypeScript; hand it over and remove the
+    // whole failure mode. Backslashes are escaped for the single-quoted
+    // PowerShell literal so Windows paths survive verbatim.
+    const psPath = ps1Path.replace(/'/g, "''");
     const { out, status } = run(
       `$e=$null;$t=$null;` +
-        `$p=(Resolve-Path './install.ps1' -ErrorAction Stop).Path;` +
-        `[void][System.Management.Automation.Language.Parser]::ParseFile($p,[ref]$t,[ref]$e);` +
-        `Write-Output ("ERRORS=" + ($e | Measure-Object).Count)`,
+        `[void][System.Management.Automation.Language.Parser]::ParseFile('${psPath}',[ref]$t,[ref]$e);` +
+        `Write-Output ("ERRORS=" + ($e | Measure-Object).Count);` +
+        // Emit each parse diagnostic so a failure is self-diagnosing in the CI
+        // annotation instead of requiring a local repro that may not reproduce.
+        `$e | ForEach-Object { Write-Output ("DIAG=" + $_.Extent.StartLineNumber + ": " + $_.Message) }`,
     );
-    // On Linux/macOS, pwsh may be missing full parser or return empty due to environment
-    // Treat empty or missing ERRORS token as environment skip, not code defect (static checks already cover syntax)
+    // A host that cannot run the parser at all (missing assembly, sandboxed
+    // runner) produces no ERRORS token. That is an environment gap, not a
+    // defect in install.ps1 — the static assertions above already cover syntax
+    // on every OS. Skip loudly rather than fail dishonestly.
     if (!out || !out.includes("ERRORS=")) {
-      console.warn(`[installer-powershell] no ERRORS token from pwsh, status=${status}, out=${out.slice(0, 200)} — skipping (environment)`);
+      console.warn(
+        `[installer-powershell] no ERRORS token from pwsh, status=${status}, out=${out.slice(0, 200)} — skipping (environment)`,
+      );
       return;
     }
-    expect(out).toContain("ERRORS=0");
+    // Anchor the match: `toContain("ERRORS=0")` also matches "ERRORS=04".
+    const count = out.match(/ERRORS=(\d+)/)?.[1];
+    const diagnostics = out
+      .split(/\r?\n/)
+      .filter((l) => l.startsWith("DIAG="))
+      .join("\n");
+    expect(
+      count,
+      `install.ps1 failed to parse under ${shell}. Parser diagnostics:\n${diagnostics || "(none reported)"}`,
+    ).toBe("0");
   });
 
   test("Invoke-Expression of the script does NOT raise ValidateSetFailure", () => {
