@@ -345,7 +345,7 @@ export const CATALOG: CatalogEntry[] = [
   {
     name: "memory",
     description: "durable, inspectable, user-controlled memory",
-    usage: "xr memory [list|add|search|recall|remove|health|export|…]",
+    usage: "xr memory [list|add|search|recall|remove|conflicts|resolve|consolidate|forget|export|…]",
     group: "context",
     glyph: "memory",
     aliases: ["mem"],
@@ -354,6 +354,8 @@ export const CATALOG: CatalogEntry[] = [
       { cmd: 'xr memory add "prefer TypeScript" --category preference', description: "save a preference" },
       { cmd: "xr memory list", description: "show memories" },
       { cmd: 'xr memory recall "coding style"', description: "semantic recall" },
+      { cmd: "xr memory consolidate --dry-run", description: "preview folding old notes (supersedes, never deletes)" },
+      { cmd: "xr memory export notes.md --md", description: "portable export (quarantined rows labelled)" },
     ],
     related: ["workspace", "config", "session"],
     topics: ["memory", "context"],

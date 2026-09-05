@@ -311,12 +311,16 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
         if (typeof query !== "string" || !query.trim()) throw new Error("invalid query");
         if (query.length > 1000) throw new Error("query too long (max 1000)");
         audit("memory.recall", { k: opts?.k ?? 5 });
-        const res = await mem.recallSemantic(query, { scope, k: Math.min(opts?.k ?? 5, 50) });
-        return res.map((e) => ({
+        // Phase 7: a plugin reads as a non-coordinator role — rows sequestered to other
+        // roles stay hidden. Hits are DATA to plugin code (never a prompt), so trust is
+        // reported as the channel label rather than used to withhold approved rows.
+        const hits = await mem.recallSemanticExplain(query, { scope, k: Math.min(opts?.k ?? 5, 50), principal: { role: "plugin", agentId: `plugin:${pluginId}` } });
+        return hits.map(({ entry: e, channel }) => ({
           id: e.id,
           category: e.category,
           content: String(e.content).slice(0, 10_000),
           scope: e.scope,
+          channel,
         }));
       });
     }
@@ -349,7 +353,8 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
           content,
           category: (opts?.category as any) ?? "fact",
           scope,
-          source: "import",
+          source: "tool",
+          provenance: { source: "tool", ref: `plugin:${pluginId}` }, // Phase 7: no unsourced write
           importance: opts?.importance,
           tags: [...(opts?.tags ?? []), `plugin:${pluginId}`],
         });

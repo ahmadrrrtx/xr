@@ -170,6 +170,14 @@ export {
   type MemoryHealth,
 } from "./memory/store.ts";
 
+// Phase 7 (F-21) — memory policy layer: retrieval ACL, write provenance/arbitration,
+// consolidation (supersede-only), irreversible forget, labelled export.
+export { aclDecision, retrievalDecision, recallChannel, validateVisibility, COORDINATOR_ROLES } from "./memory/acl.ts";
+export { resolveWriteProvenance, detectWriteConflicts, listConflicts, markConflictResolved, type ConflictRow } from "./memory/provenance.ts";
+export { planConsolidation, applyConsolidation, suggestConsolidation } from "./memory/consolidate.ts";
+export { forgetMemory, planForget, exportBundle, renderMarkdown } from "./memory/forget-export.ts";
+export type { MemoryPrincipal, RecallOpts, WriteProvenance, MemoryKind } from "./memory/types.ts";
+
 export {
   IsolatedMemoryStore,
   stampWorkspace,

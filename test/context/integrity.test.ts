@@ -17,7 +17,10 @@
  *      keeps its clamped trust; nothing becomes a standing instruction.
  *   5. False-positive guard: a benign corpus is admitted untouched.
  *
- * Corpus: benchmarks/poisoning-corpus.json (30 entries, 14 attack classes).
+ * Corpus: benchmarks/poisoning-corpus.json (41 entries — 30 original attack
+ *         entries + the Phase 7 policy-layer extension pois_31–pois_41: ACL
+ *         widening, provenance forgery, forget/consolidation abuse, export
+ *         exfiltration, role impersonation, quarantine escape).
  */
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";

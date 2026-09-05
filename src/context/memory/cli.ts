@@ -15,13 +15,16 @@
  *   xr memory import <path>   import a JSON bundle
  *   xr memory clear           delete everything (asks confirmation)
  *   xr memory summaries       list / clear session summaries
+ *   Phase 7 (F-21): conflicts · resolve · consolidate · forget (irreversible) ·
+ *   export --md — handlers live in ./cli-phase7.ts.
  */
 import type { Store } from "../../state/workspace-store.ts";
 import { MemoryStore, projectScopeFromCwd } from "./store.ts";
 import { MEMORY_CATEGORIES, isCategory, type MemoryCategory, type MemoryEntry } from "./types.ts";
 import { banner, ok, warn, info, confirm, colors as C } from "../../interfaces/cli.ts";
 import { isMemoryEnabled } from "../../config/config.ts";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { PHASE7_HELP, cmdConflicts, cmdConsolidate, cmdExport, cmdForget, cmdResolve, parsePhase7 } from "./cli-phase7.ts";
 
 interface Flags {
   scope?: string;
@@ -44,6 +47,8 @@ interface Flags {
   dryRun: boolean;
   /** Phase 6 — history listing cap. */
   limit?: number;
+  /** Phase 7 — `add --visible-to <role>[,<role>]` (ACL; omit = every role). */
+  visibleTo?: string[];
   rest: string[];
 }
 
@@ -67,6 +72,7 @@ function parseFlags(argv: string[]): Flags {
       if (t) f.tags.push(t);
     } else if (a === "--importance" || a === "-i") f.importance = Number(argv[++i]);
     else if (a === "--limit") f.limit = Number(argv[++i]);
+    else if (a === "--visible-to") f.visibleTo = String(argv[++i] ?? "").split(",").map((r) => r.trim()).filter(Boolean);
     else if (a === "--json") f.json = true;
     else if (a === "--yes" || a === "-y") f.yes = true;
     else f.rest.push(a);
@@ -123,7 +129,7 @@ function printHit(h: { entry: MemoryEntry; sim: number; score: number; reason: s
 
 // ── subcommands ──────────────────────────────────────────────────────────
 
-function cmdStatus(mem: MemoryStore): void {
+async function cmdStatus(mem: MemoryStore, store: Store): Promise<void> {
   banner();
   const enabled = isMemoryEnabled();
   const health = mem.health();
@@ -146,6 +152,13 @@ function cmdStatus(mem: MemoryStore): void {
   if (!enabled) {
     warn('memory is disabled — re-enable by setting "memory.enabled": true (or unset XR_MEMORY_DISABLED)');
   }
+  // Phase 7 — the "startup-suggested" consolidation notice: a read-only probe, never a run.
+  const { suggestConsolidation } = await import("./consolidate.ts");
+  const hint = enabled ? suggestConsolidation(mem) : null;
+  if (hint) info(`consolidate: ${hint.originals} old low-importance notes in ${hint.groups} group(s) could fold into summaries — preview: xr memory consolidate --dry-run`);
+  const { listConflicts } = await import("./provenance.ts");
+  const open = listConflicts(store, { status: "open", limit: 1000 }).length;
+  if (open) warn(`${open} unresolved contradiction(s) — review: xr memory conflicts`);
   info('add with: xr memory add "I prefer TypeScript and Bun" --category preference');
   info('inspect:  xr memory list   ·   recall: xr memory recall "preferences"');
   info('health:   xr memory health');
@@ -222,7 +235,7 @@ function cmdList(mem: MemoryStore, f: Flags): void {
 function cmdAdd(mem: MemoryStore, f: Flags): void {
   const content = f.rest.join(" ").trim();
   if (!content) {
-    warn('usage: xr memory add "<text>" [--category <c>] [--scope <s>] [--tag t] [--importance 1-5] [--ttl <sec>|--ttl-days <n>]');
+    warn('usage: xr memory add "<text>" [--category <c>] [--scope <s>] [--tag t] [--importance 1-5] [--ttl <sec>|--ttl-days <n>] [--visible-to <role>,…]');
     return;
   }
   // Stage 6 — TTL: seconds take precedence over days.
@@ -235,6 +248,8 @@ function cmdAdd(mem: MemoryStore, f: Flags): void {
     category: f.category,
     scope: f.scope,
     source: "user",
+    provenance: { source: "user", ref: "cli:xr memory add" }, // Phase 7 — the CLI is the human
+    ...(f.visibleTo ? { agentVisibility: f.visibleTo } : {}),
     tags: f.tags,
     importance: f.importance,
     ttlMs,
@@ -248,7 +263,12 @@ function cmdAdd(mem: MemoryStore, f: Flags): void {
     return;
   }
   const ttlNote = res.entry?.expiresAt ? ` · expires ${fmtTime(res.entry.expiresAt)}` : "";
-  ok(`remembered ${C.dim(res.entry!.id)} · ${colorCat(res.entry!.category)}${ttlNote}`);
+  const visNote = f.visibleTo && !f.visibleTo.includes("*") ? ` · visible to ${f.visibleTo.join(",")}` : "";
+  ok(`remembered ${C.dim(res.entry!.id)} · ${colorCat(res.entry!.category)}${ttlNote}${visNote}`);
+  // Phase 7 — contradiction arbitration: reported, never auto-resolved.
+  for (const c of res.conflicts ?? []) {
+    warn(`possible contradiction with ${c.withId} (${Math.round(c.similarity * 100)}% similar) → xr memory resolve ${res.entry!.id} ${c.withId} --keep a|b|both`);
+  }
 }
 
 async function cmdEdit(mem: MemoryStore, f: Flags, store: Store): Promise<void> {
@@ -358,8 +378,8 @@ async function cmdRecall(mem: MemoryStore, f: Flags): Promise<void> {
   // Stage 6 — explainable recall: show scores + reasons so retrieval is never
   // a black box. Mirrors chat behaviour (semantic by default, lexical when forced).
   const hits = f.lexical
-    ? mem.recallExplain(q, { scope: f.scope })
-    : await mem.recallSemanticExplain(q, { scope: f.scope });
+    ? mem.recallExplain(q, { scope: f.scope, principal: "user" })
+    : await mem.recallSemanticExplain(q, { scope: f.scope, principal: "user" });
   if (f.json) {
     console.log(JSON.stringify(hits, null, 2));
     return;
@@ -453,18 +473,6 @@ async function cmdSummarize(mem: MemoryStore, f: Flags): Promise<void> {
   }
 }
 
-function cmdExport(mem: MemoryStore, f: Flags): void {
-  const bundle = mem.export();
-  const json = JSON.stringify(bundle, null, 2);
-  const path = f.rest[0];
-  if (!path) {
-    console.log(json);
-    return;
-  }
-  writeFileSync(path, json);
-  ok(`exported ${bundle.entries.length} entr${bundle.entries.length === 1 ? "y" : "ies"} → ${path}`);
-}
-
 function cmdImport(mem: MemoryStore, f: Flags): void {
   const path = f.rest[0];
   if (!path) {
@@ -543,7 +551,7 @@ ${C.bold("Write")}
                          [--scope <s>] [--tag <t>] [--importance 1-5]
                          [--ttl <sec>|--ttl-days <n>]   (entry auto-expires after TTL)
   xr memory edit <id> ["<new text>"] [--category c] [--scope s] [--importance n] [--tag t]
-  xr memory remove <id>              forget one entry (undoable via the ops ledger)
+  xr memory remove <id>              delete one entry (undoable via the ops ledger)
   xr memory undo [opId]              undo the latest (or given) memory op
   xr memory history [--limit n]      what changed, when, by whom (ops ledger)
   xr memory clear [--scope s] [-y]   forget everything / one scope (permanent)
@@ -555,8 +563,9 @@ ${C.bold("Maintain")}
                                      summaries (proposes first, asks to apply)
 
 ${C.bold("Portability")}
-  xr memory export [path]            JSON bundle (stdout if no path)
+  xr memory export [path] [--md]     JSON bundle v2 or Markdown (stdout if no path)
   xr memory import <path>            merge a JSON bundle (dedupes; expired entries dropped)
+${PHASE7_HELP}
 
 ${C.bold("Sessions")}
   xr memory summaries [clear] [--scope s]   conversation recaps (separate store)
@@ -582,12 +591,17 @@ export async function handleMemoryCommand(argv: string[], store: Store): Promise
   // `--scope .` (a convenience for "this project").
   if (flags.scope === ".") flags.scope = projectScopeFromCwd(process.cwd());
 
-  if (!sub || sub === "status") return cmdStatus(mem);
+  if (!sub || sub === "status") return cmdStatus(mem, store);
   if (sub === "help" || sub === "--help" || sub === "-h") return printHelp();
   if (sub === "list" || sub === "ls") return cmdList(mem, flags);
   if (sub === "add") return cmdAdd(mem, flags);
   if (sub === "edit") return cmdEdit(mem, flags, store);
-  if (sub === "remove" || sub === "rm" || sub === "forget") return cmdRemove(mem, flags, store);
+  if (sub === "remove" || sub === "rm") return cmdRemove(mem, flags, store);
+  // Phase 7 — `forget` is now the IRREVERSIBLE erase; `remove` stays undoable.
+  if (sub === "forget") return cmdForget(store, mem, parsePhase7(flags));
+  if (sub === "conflicts") return cmdConflicts(store, mem, parsePhase7(flags));
+  if (sub === "resolve") return cmdResolve(store, mem, parsePhase7(flags));
+  if (sub === "consolidate") return cmdConsolidate(store, mem, parsePhase7(flags));
   if (sub === "undo") return cmdHistoryUndo(store, flags, true);
   if (sub === "history") return cmdHistoryUndo(store, flags, false);
   if (sub === "search") return cmdSearch(mem, flags);
@@ -596,7 +610,7 @@ export async function handleMemoryCommand(argv: string[], store: Store): Promise
   if (sub === "summarize") return cmdSummarize(mem, flags);
   if (sub === "prune" || sub === "gc") return cmdPrune(mem, flags);
   if (sub === "health") return cmdHealth(mem, flags);
-  if (sub === "export") return cmdExport(mem, flags);
+  if (sub === "export") return cmdExport(mem, parsePhase7(flags));
   if (sub === "import") return cmdImport(mem, flags);
   if (sub === "clear") return cmdClear(mem, flags);
   if (sub === "summaries" || sub === "summary") return cmdSummaries(store, flags);

@@ -24,7 +24,7 @@ import {
   type SensitivityLevel,
   type TrustStatus,
 } from "./types.ts";
-import type { MemoryEntry, MemorySource } from "./memory/types.ts";
+import type { MemoryEntry, MemoryEntryWithContext, MemorySource } from "./memory/types.ts";
 
 /** Honest mapping from the legacy `source` enum. Documented in the audit §9.4. */
 const SOURCE_MAP: Record<
@@ -36,6 +36,10 @@ const SOURCE_MAP: Record<
   voice: { provenance: "user_input", actor: "user", trust: "approved_memory" },
   research: { provenance: "research", actor: "system", trust: "generated_synthesis" },
   import: { provenance: "import", actor: "system", trust: "unknown" },
+  // Phase 7 (F-21) — non-human write channels. Never above their provenance ceiling.
+  tool: { provenance: "tool_output", actor: "agent", trust: "untrusted_external" },
+  agent: { provenance: "model_synthesis", actor: "agent", trust: "generated_synthesis" },
+  schedule: { provenance: "model_synthesis", actor: "system", trust: "generated_synthesis" },
 };
 
 const FALLBACK = { provenance: "unknown" as ProvenanceKind, actor: "unknown" as ActorKind, trust: "unknown" as TrustStatus };
@@ -53,13 +57,22 @@ export function memoryEntryToContextItem(entry: MemoryEntry, workspaceId: string
   const map = SOURCE_MAP[entry.source] ?? FALLBACK;
   const isExclusion = entry.category === "exclusion";
 
+  // Phase 7 (F-21): rows written since 4.5 CARRY their consent / trust /
+  // provenance / lineage. The adapter used to overwrite all of it with the
+  // legacy mapping (every row "legacy_unknown", trust from `source`, lineage
+  // null) — so a quarantined or superseded row read by id was presented as
+  // approved, current memory. Stored metadata now wins; the legacy mapping is
+  // only the fallback for rows that genuinely predate it.
+  const meta = entry as MemoryEntryWithContext;
+  const consent = meta.consentState ?? "legacy_unknown";
+  const supersededBy = meta.supersededBy ?? null;
   const freshness = computeFreshness({
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
-    sourceObservedAt: null,
-    staleAfter: null,
+    sourceObservedAt: meta.sourceObservedAt ?? null,
+    staleAfter: meta.staleAfter ?? null,
     expiresAt: entry.expiresAt ?? null,
-    supersededBy: null,
+    supersededBy,
   });
 
   return {
@@ -73,36 +86,36 @@ export function memoryEntryToContextItem(entry: MemoryEntry, workspaceId: string
       projectScope: entry.scope,
       userId: "local",
     },
-    trustStatus: isExclusion ? "trusted_instruction" : map.trust,
-    // The core honesty rule — never fabricate consent.
-    consentState: "legacy_unknown",
-    consentActor: null,
-    consentAt: null,
-    provenanceKind: map.provenance,
-    provenanceRef: null,
-    actorKind: map.actor,
-    actorName: null,
+    trustStatus: isExclusion ? "trusted_instruction" : (meta.trustStatus ?? map.trust),
+    // The core honesty rule — never fabricate consent: stored state or `legacy_unknown`.
+    consentState: consent,
+    consentActor: meta.consentActor ?? null,
+    consentAt: meta.consentAt ?? null,
+    provenanceKind: meta.provenanceKind ?? map.provenance,
+    provenanceRef: meta.provenanceRef ?? null,
+    actorKind: (meta.actorKind as ActorKind | null | undefined) ?? map.actor,
+    actorName: meta.actorName ?? null,
     freshness,
     uncertainty: {
       // Importance is a user ranking, not a truth claim — map it conservatively.
-      confidence: entry.importance >= 4 ? "high" : entry.importance <= 2 ? "low" : "medium",
+      confidence: meta.confidence && meta.confidence !== "unknown" ? meta.confidence : entry.importance >= 4 ? "high" : entry.importance <= 2 ? "low" : "medium",
       contradictedBy: [],
       // We do not know whether the user re-confirmed a legacy entry.
       userConfirmed: false,
       openQuestions: [],
     },
-    sensitivity: inferSensitivity(entry),
+    sensitivity: meta.sensitivity && meta.sensitivity !== "unknown" ? meta.sensitivity : inferSensitivity(entry),
     retention: entry.expiresAt ? "ttl" : "durable",
     links: emptyLinks(),
     // Legacy vectors live in `user_memory.embedding`; the context index does not
     // own them, so this item is "none" from the context layer's perspective.
     indexState: "none",
     embeddingSpace: null,
-    revokedAt: null,
-    revokedReason: null,
+    revokedAt: meta.revokedAt ?? null,
+    revokedReason: meta.revokedReason ?? null,
     deletedAt: null,
-    supersededBy: null,
-    tags: [...entry.tags, "legacy:4.4"],
+    supersededBy,
+    tags: consent === "legacy_unknown" ? [...entry.tags, "legacy:4.4"] : [...entry.tags],
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
     lastAccessedAt: entry.lastAccessedAt ?? null,

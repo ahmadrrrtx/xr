@@ -70,7 +70,7 @@ export class IsolatedMemoryStore extends MemoryStore {
 
   override async recallSemanticExplain(
     query: string,
-    opts: { scope?: string; k?: number; floor?: number } = {},
+    opts: { scope?: string; k?: number; floor?: number; principal?: import("./memory/types.ts").MemoryPrincipal } = {},
   ): Promise<RecallHit[]> {
     const hits = await super.recallSemanticExplain(query, opts);
     return hits.filter((h) => memoryBelongsToWorkspace(h.entry, this.isolated.workspaceId));

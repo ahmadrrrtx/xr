@@ -17,6 +17,8 @@ import { Tokens } from "../core/tokens.ts";
 import type { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore, projectScopeFromCwd } from "./memory/store.ts";
 import { IsolatedMemoryStore } from "./isolated-store.ts";
+import { retrievalDecision } from "./memory/acl.ts";
+import type { MemoryPrincipal } from "./memory/types.ts";
 import { recordRetrievalLatency } from "./engine.ts";
 import {
   CONTEXT_POLICY_VERSION,
@@ -58,6 +60,15 @@ export interface ContextServiceOptions {
   workspaceId?: string;
   /** Skip intelligence-plane routing (tests / offline). */
   lexicalOnly?: boolean;
+}
+
+/**
+ * Phase 7 (F-21): the memory ACL principal for a context requester. Only an
+ * agent WITH a role is a role principal; every other requester (the CLI, the
+ * daemon acting for the owner, a role-less agent record) is the owner.
+ */
+function principalFor(requester: ContextGrant["requester"]): MemoryPrincipal {
+  return requester.kind === "agent" && requester.role ? { role: requester.role, agentId: requester.id } : "user";
 }
 
 export interface RequestContextOptions {
@@ -273,7 +284,10 @@ export class ContextService implements LifecycleHook {
     if (grant.allowedTiers.includes("long_term_memory") && opts.memoryEnabled !== false) {
       try {
         const mem = opts.memoryStore ?? new IsolatedMemoryStore(this.store);
-        const entries = mem.list({ scope: grant.scope.projectScope });
+        // Phase 7 (F-21): the grant's requester is the ACL principal — an agent role only
+        // receives rows whose agent_visibility admits it; the human owner receives all.
+        const principal = principalFor(grant.requester);
+        const entries = mem.list({ scope: grant.scope.projectScope }).filter((e) => retrievalDecision(e, principal).visible);
         for (const e of entries) {
           extra.push({
             item: memoryEntryToContextItem(e, this.wsId),
@@ -447,12 +461,22 @@ export class ContextService implements LifecycleHook {
     return this.lifecycle.promoteStale(scope, opts);
   }
 
-  /** Adapt one legacy `user_memory` row into a context item (read-through). */
-  adaptedMemoryItem(id: string, memoryStore?: MemoryStore): ContextItem | null {
+  /**
+   * Adapt one legacy `user_memory` row into a context item (read-through).
+   *
+   * Phase 7 (F-21): a by-id read is a retrieval like any other, so it passes
+   * the same gate as search — when a `requester` is given, a row the ACL
+   * (or consent/lineage/TTL) hides from that principal reads as absent. The
+   * agent-facing tools (`memory_get`, `memory_navigate`) always pass one;
+   * omitting it means the owner ("user") is reading.
+   */
+  adaptedMemoryItem(id: string, memoryStore?: MemoryStore, requester?: ContextGrant["requester"]): ContextItem | null {
     try {
       const mem = memoryStore ?? new MemoryStore(this.store);
       const entry = mem.get(id);
-      return entry ? memoryEntryToContextItem(entry, this.wsId) : null;
+      if (!entry) return null;
+      if (requester && !retrievalDecision(entry, principalFor(requester)).visible) return null;
+      return memoryEntryToContextItem(entry, this.wsId);
     } catch {
       return null; // legacy adapter is best-effort; absence is honest, not an error
     }

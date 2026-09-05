@@ -101,12 +101,21 @@ describe("T5 — up(): lossless projection into the canonical context store", ()
   test("LOSSLESS: user_memory is not mutated or deleted by the migration", () => {
     runMigrationsDown(store, 1);
     seedLegacy(store);
-    const before = legacySnapshot(store);
+    const before = legacySnapshot(store) as Array<Record<string, unknown>>;
 
+    // Migration 2 itself: byte-identical (the projection reads, never writes, user_memory).
+    runMigrationsUp(store, 2);
+    expect(legacySnapshot(store)).toEqual(before);
+
+    // The rest of the chain is ADDITIVE only. Phase 7 (migration 9) appends
+    // policy columns and backfills them (kind, agent_visibility) — every column
+    // that existed before must still hold exactly the value it held.
     runMigrationsUp(store);
-
-    const after = legacySnapshot(store);
-    expect(after).toEqual(before);
+    const after = legacySnapshot(store) as Array<Record<string, unknown>>;
+    expect(after.length).toBe(before.length);
+    for (let i = 0; i < before.length; i++) {
+      for (const key of Object.keys(before[i]!)) expect(after[i]![key], `${before[i]!.id}.${key}`).toEqual(before[i]![key]);
+    }
   });
 
   test("content is carried across verbatim", () => {

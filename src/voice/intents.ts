@@ -118,7 +118,7 @@ export async function handleDeterministicVoiceIntent(store: Store, text: string,
     const mem = new MemoryStore(store);
     const scope = projectScopeFromCwd(process.cwd());
     if (parsed.kind === "add") {
-      const res = mem.add({ content: parsed.content, category: parsed.category, scope: parsed.category === "project" ? scope : undefined, source: "voice" });
+      const res = mem.add({ content: parsed.content, category: parsed.category, scope: parsed.category === "project" ? scope : undefined, source: "voice", provenance: { source: "user", ref: "voice" } });
       await speak(!res.ok ? `I could not save that. ${res.reason}.` : res.duplicate ? "I already remembered that." : parsed.category === "exclusion" ? "Understood. I will not remember that." : "Got it. I'll remember that.");
       return true;
     }
@@ -169,7 +169,7 @@ export async function handleDeterministicVoiceIntent(store: Store, text: string,
       }
       return true;
     }
-    const results = mem.recall(parsed.query || "preferences", { scope });
+    const results = mem.recall(parsed.query || "preferences", { scope, principal: "user" });
     await speak(results.length ? `Here's what I remember. ${results.slice(0, 4).map((e) => e.content).join(". ")}.` : "I don't have anything saved that's relevant.");
     return true;
   }

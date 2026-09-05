@@ -129,7 +129,7 @@ async function doRun(store: Store, topic: string, depth: ResearchDepth, override
     try {
       const mem = new MemoryStore(store);
       const scope = projectScopeFromCwd(process.cwd());
-      const recalled = mem.recall(topic, { scope, k: 4 });
+      const recalled = mem.recall(topic, { scope, k: 4, principal: "user" });
       if (recalled.length) {
         console.log(`${C.dim("relevant memory:")}`);
         for (const e of recalled) console.log(`  ${C.dim(`• (${e.category}) ${e.content}`)}`);
@@ -375,6 +375,7 @@ async function doRemember(store: Store, id: string | undefined): Promise<void> {
     content: content.slice(0, 1000),
     category: "fact",
     source: "research",
+    provenance: { source: "user", ref: `research:${session.id}` }, // Phase 7: user-commanded save of a synthesis
     tags: ["research", session.depth],
     importance: 3,
   });

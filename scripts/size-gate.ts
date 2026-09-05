@@ -49,8 +49,19 @@ export const THRESHOLD = 800;
  *
  * Raising this number is allowed — it just has to be a decision someone makes
  * on purpose, in a diff, with a reason. That is the whole mechanism.
+ *
+ * ── Phase 7 · 135,000 → 136,000 (memory policy layer, F-21) ────────────────
+ * Phase 7 began at 134,258 LOC (742 of headroom) and adds ~1,200 LOC of new
+ * policy surface that the plan requires in core: retrieval ACL (acl.ts),
+ * mandatory provenance + contradiction ledger (provenance.ts), supersede-only
+ * consolidation (consolidate.ts), irreversible forget + labelled export
+ * (forget-export.ts), their CLI (cli-phase7.ts) and migration 9. None of it
+ * is a satellite candidate — it gates what an agent may recall — and the
+ * waived giants (store.ts, agent.ts, config.ts) were held at their recorded
+ * sizes rather than grown. Measured after the phase: 135,4xx. The step is the
+ * smallest round number that fits; 110k stays the direction of travel.
  */
-export const TREE_CEILING = 135_000;
+export const TREE_CEILING = 136_000;
 
 interface Waiver {
   readonly path: string;
