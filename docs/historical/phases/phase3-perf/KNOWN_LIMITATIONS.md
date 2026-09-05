@@ -1,5 +1,8 @@
 # XR Phase 3 — Known Limitations Register (performance)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Every Phase 3 outcome that is a limitation — not a claim — with evidence,
 owner, and review date. Nothing here is silently accepted.
 

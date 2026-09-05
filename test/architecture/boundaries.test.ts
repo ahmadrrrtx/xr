@@ -22,7 +22,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "../..");
@@ -46,11 +46,24 @@ interface Edge {
   readonly dynamic: boolean;
 }
 
-const EXT = join(ROOT, "extensions/business-os/src");
+/**
+ * Phase 5 · ADR-0028 — the business extension moved to a satellite package.
+ *
+ * It used to live at `extensions/business-os/src` inside this repo and was
+ * walked into the boundary graph so its L5 rules were enforced here. Now that
+ * it is published as `@rrrtx/business-os` the directory is only present in a
+ * development checkout, so the walk is conditional: when the satellite tree is
+ * present the L5 rules still run against it, and when it is absent (a
+ * core-only clone, or the npm tarball) the graph is simply core.
+ *
+ * The invariant that actually matters after extraction — "core imports nothing
+ * from a satellite" — is enforced unconditionally by `no-satellite-imports`
+ * below, and independently by test/architecture/satellite-isolation.test.ts.
+ */
+const EXT = join(ROOT, "satellites/business-os/pkg/src");
 const FILES = [
   ...walk(SRC).map((f) => relative(ROOT, f).replace(/\\/g, "/")),
-  // Phase 7 · T8 — the business extension participates in boundary rules.
-  ...walk(EXT).map((f) => relative(ROOT, f).replace(/\\/g, "/")),
+  ...(existsSync(EXT) ? walk(EXT).map((f) => relative(ROOT, f).replace(/\\/g, "/")) : []),
 ];
 const SOURCES = new Map(FILES.map((f) => [f, readFileSync(join(ROOT, f), "utf8")]));
 
@@ -184,14 +197,18 @@ const LAYER_RULES: Array<{
   },
   {
     name: "business-not-enterprise",
-    from: /^extensions\/business-os\//,
+    from: /^satellites\/business-os\//,
     to: /^src\/(enterprise|interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)\//,
     toNot: /^src\/interfaces\/cli\.ts$/,
   },
   {
-    name: "kernel-no-business-extension",
+    // Phase 5 · ADR-0028 — supersedes "kernel-no-business-extension".
+    // The old rule forbade the KERNEL from importing the extension; after
+    // extraction the rule is stronger and applies to ALL of core: no module
+    // under src/ may import ANY satellite, by any edge kind.
+    name: "no-satellite-imports",
     from: /^src\//,
-    to: /^extensions\/business-os\//,
+    to: /^satellites\//,
   },
   {
     name: "no-one-imports-surfaces",

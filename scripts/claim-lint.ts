@@ -14,6 +14,8 @@
  *   3. EVIDENCE + EXPIRY  — every manifest claim needs live, non-expired evidence.
  *   4. SUPERVISED TERMS   — "certified"/"enterprise"/"complete"… must be backed
  *                           by an evidenced claim, else they are marketing.
+ *   5. CONSTITUTION       — every Article cited anywhere in the tree must exist
+ *                           in docs/CONSTITUTION.md (Phase 5 · F-17).
  *
  *   bun run scripts/claim-lint.ts            # lint the repository
  *   bun run scripts/claim-lint.ts --json     # machine-readable report
@@ -27,7 +29,7 @@ import { join, relative } from "node:path";
 import { ROOT, loadManifest, evaluateSurfaces, countSkills, type ReleaseManifest } from "./release-manifest.ts";
 
 export interface Violation {
-  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical";
+  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical" | "constitution";
   file: string;
   line: number;
   text: string;
@@ -240,6 +242,103 @@ export function lintRepository(manifest: ReleaseManifest, root: string = ROOT): 
   return violations;
 }
 
+
+// ── Gate 5: the Constitution is not a ghost (Phase 5 · F-17) ─────────────────
+
+/**
+ * Until Phase 5, ~300 citations across src/, test/, scripts/, .github/ and
+ * docs/adr/ referred to "Constitution Art. IV.4", "Article XII · Rule 4" and
+ * the like — in code comments, in CI job descriptions, and in gate failure
+ * messages users actually read — while no constitutional text existed anywhere
+ * in the repository. A project whose brand is verifiability was citing a law
+ * that could not be read (audit finding F-17).
+ *
+ * `docs/CONSTITUTION.md` now exists (reconstructed from those citations), and
+ * this gate is what stops it becoming a ghost again: cite an Article that the
+ * document does not define, and CI fails. That makes the citation a checkable
+ * reference rather than a rhetorical flourish.
+ *
+ * The gate is deliberately ARTICLE-level, not clause-level. Clause numbers
+ * (IV.4, XII · Rule 4) are cited far more precisely than the reconstruction can
+ * currently vouch for, and failing the build over a clause this document does
+ * not yet spell out would be enforcing a precision XR does not honestly have.
+ * Article-level is the strongest claim the evidence supports today.
+ */
+const ROMAN = "(?:XXX|XXIX|XXVIII|XXVII|XXVI|XXV|XXIV|XXIII|XXII|XXI|XX|XIX|XVIII|XVII|XVI|XV|XIV|XIII|XII|XI|X|IX|VIII|VII|VI|V|IV|III|II|I)";
+const CITATION_RE = new RegExp(`(?:Article|Art\\.)\\s+(${ROMAN})(?![A-Z])`, "g");
+const CONSTITUTION_PATH = "docs/CONSTITUTION.md";
+/** Directories whose citations are historical record, not live law. */
+const CONSTITUTION_SCAN_ROOTS = ["src", "test", "scripts", ".github"] as const;
+
+function collectCitableFiles(dir: string, out: string[] = []): string[] {
+  let entries: string[];
+  try { entries = readdirSync(dir); } catch { return out; }
+  for (const entry of entries) {
+    if (entry === "node_modules" || entry === ".git") continue;
+    const full = join(dir, entry);
+    let st;
+    try { st = statSync(full); } catch { continue; }
+    if (st.isDirectory()) collectCitableFiles(full, out);
+    else if (/\.(ts|tsx|md|json|ya?ml|cjs)$/.test(entry)) out.push(full);
+  }
+  return out;
+}
+
+export function lintConstitution(root: string = ROOT): Violation[] {
+  const violations: Violation[] = [];
+  const constitutionFile = join(root, CONSTITUTION_PATH);
+
+  if (!existsSync(constitutionFile)) {
+    return [{
+      gate: "constitution",
+      file: CONSTITUTION_PATH,
+      line: 0,
+      text: "",
+      reason:
+        "The Constitution is cited as binding law throughout the tree but the canonical text does not exist. " +
+        "Publish docs/CONSTITUTION.md or strip the citations (Phase 5 · F-17).",
+    }];
+  }
+
+  const text = readFileSync(constitutionFile, "utf8");
+  // An Article is DEFINED when it appears as a heading: "## Article XII — …"
+  const defined = new Set<string>();
+  for (const m of text.matchAll(new RegExp(`^#{1,3}\\s+Article\\s+(${ROMAN})(?![A-Z])`, "gm"))) {
+    defined.add(m[1]!);
+  }
+  // Articles the document explicitly records as unattested are "known absent",
+  // which is an honest answer — but nothing may CITE them.
+  const unattested = new Set<string>();
+  const unattestedSection = /No citation exists[^.]*?\*\*Articles? ([^*]+)\*\*/.exec(text);
+  if (unattestedSection) {
+    for (const m of unattestedSection[1]!.matchAll(new RegExp(ROMAN, "g"))) unattested.add(m[0]);
+  }
+
+  for (const scanRoot of CONSTITUTION_SCAN_ROOTS) {
+    for (const file of collectCitableFiles(join(root, scanRoot))) {
+      const rel = relative(root, file).replace(/\\/g, "/");
+      const lines = readFileSync(file, "utf8").split("\n");
+      lines.forEach((line, i) => {
+        CITATION_RE.lastIndex = 0;
+        for (const m of line.matchAll(CITATION_RE)) {
+          const article = m[1]!;
+          if (defined.has(article)) continue;
+          violations.push({
+            gate: "constitution",
+            file: rel,
+            line: i + 1,
+            text: line.trim().slice(0, 160),
+            reason: unattested.has(article)
+              ? `Cites Article ${article}, which ${CONSTITUTION_PATH} records as UNATTESTED (no surviving text). Remove the citation or reconstruct the Article.`
+              : `Cites Article ${article}, which is not defined in ${CONSTITUTION_PATH} (Art. XIX.1 — no claim without a source).`,
+          });
+        }
+      });
+    }
+  }
+  return violations;
+}
+
 async function main(): Promise<void> {
   const json = process.argv.includes("--json");
   let manifest: ReleaseManifest;
@@ -250,7 +349,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const violations = lintRepository(manifest);
+  const violations = [...lintRepository(manifest), ...lintConstitution()];
 
   if (json) {
     console.log(JSON.stringify({ ok: violations.length === 0, count: violations.length, violations }, null, 2));
@@ -258,7 +357,7 @@ async function main(): Promise<void> {
   }
 
   if (violations.length === 0) {
-    console.log(`[claim-lint] ✓ no unsupported claims · ${manifest.claims.length} evidenced claims · v${manifest.identity.version}`);
+    console.log(`[claim-lint] ✓ no unsupported claims · ${manifest.claims.length} evidenced claims · every cited Article exists in ${CONSTITUTION_PATH} · v${manifest.identity.version}`);
     return;
   }
 

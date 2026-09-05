@@ -1,5 +1,8 @@
 # XR Phase 2 — STEP 7/8: Test Results & Measurements
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 All figures measured on the Phase-2 branch head, Linux (Ubuntu, bun 1.3.14).
 Baseline figures measured on `c1c1831` via a clean `git worktree`.
 

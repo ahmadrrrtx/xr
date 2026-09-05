@@ -1,0 +1,40 @@
+--- boundaries ---
+EXIT=0
+$ bun ./node_modules/dependency-cruiser/bin/dependency-cruise.mjs --config .dependency-cruiser.cjs --output-type err-long src
+
+✔ no dependency violations found (621 modules, 2046 dependencies cruised)
+
+--- size-gate ---
+EXIT=0
+$ bun run scripts/size-gate.ts
+[size-gate] threshold 800 LOC · 16 module(s) over, all waived unless listed below
+[size-gate] ✓ every module is under 800 LOC or has an owned, dated split plan
+--- claim-lint ---
+EXIT=0
+$ bun run scripts/claim-lint.ts
+[claim-lint] ✓ no unsupported claims · 10 evidenced claims · v1.0.0
+--- release:check ---
+EXIT=0
+  ok    website/src/lib/site.ts      in sync at 1.0.0
+  ok    README.md                    in sync at 1.0.0
+  ok    install.sh                   in sync at 1.0.0
+  ok    install.ps1                  in sync at 1.0.0
+
+[release-manifest] all 6 surfaces in sync at 1.0.0 (Truth)
+--- hot-path-lint ---
+EXIT=0
+  src/util/scan-cache.ts: 9
+  src/skills/loader-runtime.ts: 4
+  src/skills/marketplace.ts: 35
+  src/skills/marketplace-store.ts: 7
+  src/plugins/manager.ts: 19
+  src/security/shield.ts: 16
+--- changelog:check ---
+EXIT=0
+$ bun run scripts/changelog.ts --check
+[changelog] ok — entry for 1.0.0 present (749 commits since root)
+--- ownership:check ---
+EXIT=1
+$ bun run scripts/ownership-map.ts --check
+FAIL ownership-map: docs/OWNERSHIP.md is out of sync — run `bun run scripts/ownership-map.ts`
+error: script "ownership:check" exited with code 1

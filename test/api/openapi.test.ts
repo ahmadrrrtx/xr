@@ -85,7 +85,15 @@ test("stability levels are declared per operation (experimental ≠ stable)", ()
 test("versioning policy is embedded (contract extension block)", () => {
   const d = doc();
   expect(d["x-xr-contract"].apiVersion).toBe("v1");
-  expect(d["x-xr-contract"].legacySunset).toContain("8.0.0");
+  // Assert the PROPERTY, not the literal: legacy mounts must be sunset at a
+  // real future major on the current line. This previously pinned "8.0.0",
+  // a version the 1.0.0 re-baseline deleted — so the gate was guarding a
+  // deadline that could never arrive (Phase 5, F-25).
+  const sunset = String(d["x-xr-contract"].legacySunset);
+  expect(sunset).toMatch(/no-earlier-than XR (\d+)\.\d+\.\d+/);
+  const major = Number(sunset.match(/XR (\d+)\./)![1]);
+  const current = Number(String(d.info.version).split(".")[0]);
+  expect(major).toBeGreaterThan(current);
 });
 
 // ── Phase 02 · Task 2.7 — route metadata completeness (anti-drift gate) ──────

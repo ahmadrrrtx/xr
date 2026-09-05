@@ -1,5 +1,8 @@
 # Integration / Capability Guide — XR 5.3
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 ## Capability Ecosystem (XR 5.2) Reused
 
 No new capability ecosystem in Phase 10. Use existing `src/capabilities/`:

@@ -61,7 +61,7 @@ refused under any restrictive policy.
 | **What moved** | `src/memory/` → `src/context/memory/`, re-exported from `context/index.ts` |
 | **Data** | Every `user_memory` row is projected into `context_items` by reversible migration **2** (`memory_to_context_projection`) |
 | **Your data** | **Untouched.** `up()` never mutates or deletes a legacy row |
-| **`xr memory` CLI** | **Still works.** Kept as an alias (Art. XXVII) until no earlier than 8.0.0 |
+| **`xr memory` CLI** | **Still works.** Kept as an alias (Art. XXVII) until no earlier than 2.0.0 |
 | **Consent** | Legacy rows are `legacy_unknown` — never auto-approved. Re-affirm from `xr context` |
 
 ### Rollback
@@ -82,7 +82,7 @@ by `test/state/memory-to-context-migration.test.ts`.
 
 **Why `user_memory` is not dropped:** dropping it would make `down()` lossy and
 break the documented downgrade path. It is retained as the system of record and
-scheduled for removal in 8.0.0 behind its own reversible migration.
+scheduled for removal in 2.0.0 behind its own reversible migration.
 
 ---
 
@@ -126,12 +126,12 @@ Out-of-tree code:
 | | |
 |---|---|
 | **Removed** | `src/services/extensibility-bridge.ts` |
-| **Renamed** | `runAgent` → `runAgentLoop` (the old name remains as a deprecated alias until 8.0.0) |
+| **Renamed** | `runAgent` → `runAgentLoop` (the old name remains as a deprecated alias until 2.0.0) |
 | **New entries** | `AgentService.execute()` and `executeOnSurface()` |
 | **Compatibility** | `AgentService.runTask` / `runScopedTask` unchanged — they now delegate to `execute()` |
 
 If you call `runAgent` from out-of-tree code it still works. Migrate to
-`AgentService.execute()` before 8.0.0.
+`AgentService.execute()` before 2.0.0.
 
 ---
 
@@ -169,10 +169,10 @@ Internal paths only — no public CLI/API path changed.
 | `src/memory/` module | removed | Phase 2 ✔ |
 | `src/workflow/` module | removed | Phase 2 ✔ |
 | six phase-named modules | removed | Phase 2 ✔ |
-| `runAgent` alias | deprecated | **8.0.0** |
-| `AgentDeps.extraTools` | deprecated | **8.0.0** |
-| `xr memory` CLI alias | supported | **no earlier than 8.0.0** |
-| `user_memory` table | system of record | **8.0.0**, behind its own reversible migration |
+| `runAgent` alias | deprecated | **2.0.0** |
+| `AgentDeps.extraTools` | deprecated | **2.0.0** |
+| `xr memory` CLI alias | supported | **no earlier than 2.0.0** |
+| `user_memory` table | system of record | **2.0.0**, behind its own reversible migration |
 
 ---
 

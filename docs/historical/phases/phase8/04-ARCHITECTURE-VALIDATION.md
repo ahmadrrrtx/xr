@@ -1,5 +1,8 @@
 # XR Phase 8 — STEP 4 Architecture Validation
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Each task validated against the Constitution **before coding**, using the Art. ADR-1…12 decision rules and Part 13 checklist. A plan is rejected if it: captures prompt/tool content by default, requires mandatory cloud, regresses Phase 0–7, bypasses the canonical envelope/placement, or claims a11y conformance without manual testing.
 
 ## T1 — Versioned API + OpenAPI + typed clients — **VALIDATED**

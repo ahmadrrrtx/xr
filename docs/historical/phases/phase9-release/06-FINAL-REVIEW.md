@@ -1,5 +1,8 @@
 # Phase 9 — Final Review (STEP 10)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Reviewed:** `feat/phase9-packaging` @ 7.1.0 stamp · reviewer: Phase 9 execution
 **Scope guard (PART 4):** packaging, cross-platform distribution, release engineering,
 Public Beta only. No net-new product features; no Phase-10 enterprise work.

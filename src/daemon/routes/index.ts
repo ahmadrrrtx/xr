@@ -22,7 +22,7 @@ type Mount = { kind: "v1"; canonical: string } | { kind: "legacy"; canonical: st
 /**
  * Resolve which mount a request path belongs to.
  *   /api/v1/x → v1 mount, canonical /api/x
- *   /api/x    → legacy mount (deprecation headers; removed ≥ XR 8.0.0)
+ *   /api/x    → legacy mount (deprecation headers; removed ≥ XR 2.0.0)
  *   other     → HTML/asset surface, untouched
  */
 export function resolveMount(path: string): Mount {

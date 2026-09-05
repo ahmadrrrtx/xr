@@ -1,0 +1,40 @@
+(pass) Node Factory Functions > trigger node [0.04ms]
+(pass) Node Factory Functions > agentic node [0.04ms]
+(pass) Node Factory Functions > human approval node [0.04ms]
+(pass) Node Factory Functions > human review node [0.11ms]
+(pass) Node Factory Functions > branch node [0.07ms]
+(pass) Node Factory Functions > completion node [0.03ms]
+(pass) Node Factory Functions > node graph validation catches cycles [0.25ms]
+(pass) Node Factory Functions > node graph validation catches missing dependencies [0.09ms]
+(pass) Workflow Versioning > createDraft creates version 0 [0.08ms]
+(pass) Workflow Versioning > publishDraft creates version 1 [0.16ms]
+(pass) Workflow Versioning > cannot publish already-published [0.09ms]
+(pass) Workflow Versioning > createNewVersion from published [0.23ms]
+(pass) Workflow Versioning > canMigrateActiveRun accepts compatible versions [0.46ms]
+
+19 tests skipped:
+(skip) T3 live — sign-in page (axe-core, WCAG 2.2 tags) > unauthenticated browser GET returns the accessible 401 sign-in page
+(skip) T3 live — sign-in page (axe-core, WCAG 2.2 tags) > zero axe violations on the sign-in page
+(skip) T3 live — sign-in page (axe-core, WCAG 2.2 tags) > JSON 401 contract for non-browser clients is unchanged
+(skip) T3 live — sign-in page (axe-core, WCAG 2.2 tags) > the token form submits through the one-time bootstrap to the dashboard
+(skip) T3 live — dashboard axe sweep (every panel) > zero axe violations on the initial dashboard
+(skip) T3 live — dashboard axe sweep (every panel) > zero axe violations across ALL 26 panels
+(skip) T3 live — dashboard axe sweep (every panel) > zero axe violations with the command palette open (modal state)
+(skip) T3 live — keyboard operation (real key events) > first Tab lands on the skip link; Enter moves focus to main
+(skip) T3 live — keyboard operation (real key events) > Enter on a nav button switches panel and moves focus into it
+(skip) T3 live — keyboard operation (real key events) > aria-current follows keyboard navigation
+(skip) T3 live — keyboard operation (real key events) > command palette: focus trapped inside, Esc returns focus to the invoker
+(skip) T3 live — keyboard operation (real key events) > letter shortcuts navigate and hand focus to the new panel
+(skip) T3 live — keyboard operation (real key events) > Space/Enter activate a role=button session row (bridge)
+(skip) install.ps1 — executed under powershell > the script parses with zero syntax errors
+(skip) install.ps1 — executed under powershell > Invoke-Expression of the script does NOT raise ValidateSetFailure
+(skip) install.ps1 — executed under powershell > Invoke-Expression does not pollute caller scope with installer variables
+(skip) install.ps1 — executed under powershell > a pre-existing $Mode in the caller's session is left untouched
+(skip) install.ps1 — executed under powershell > dot-sourcing defines Invoke-XrInstall and ValidateSet still rejects bad modes
+(skip) install.ps1 — executed under powershell > a valid -InstallMode binds without a validation error
+
+ 2951 pass
+ 19 skip
+ 0 fail
+ 13566 expect() calls
+Ran 2970 tests across 297 files. [141.57s]

@@ -1,5 +1,8 @@
 # Local / Private Deployment Guide — XR 5.3
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 ## Overview
 
 XR 5.3 is local-first, self-hosted, BYOK, spend-capped, tamper-evident. Sensitive business/personal journeys operate locally/private where providers support it.

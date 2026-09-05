@@ -1,0 +1,90 @@
+#!/usr/bin/env bun
+/**
+ * xr-enterprise — CLI entry for the XR Enterprise satellite.
+ *
+ * Serves two verbs that Phase 5 moved out of core (ADR-0028):
+ *   xr-enterprise enterprise …   (alias: ent)
+ *   xr-enterprise evaluate …     (alias: eval)
+ *
+ * Both commands take a CommandContext and resolve services from the kernel
+ * registry, so this bin borrows core's bootstrap rather than writing a second
+ * one (Art. VI: one execution envelope). It must not shell out to
+ * `xr enterprise` — core answers that with a relocation notice pointing back
+ * here, which would loop forever. The satellite owns the FEATURE; core owns the
+ * ENVELOPE.
+ */
+import { EnterpriseCommand, EnterpriseAliasCommand } from "../src/commands/enterprise.ts";
+import { EvaluateCommand, EvalAliasCommand } from "../src/commands/evaluate.ts";
+
+const HELP = `
+  xr-enterprise — XR Enterprise (a satellite of @rrrtx/xr)
+
+  Usage
+    xr-enterprise enterprise <policy|authority|audit|slo|incident|supply-chain|dr|release|certification|deploy>
+    xr-enterprise evaluate   <run|claims|limitations|compare|export>
+
+  Examples
+    xr-enterprise enterprise policy show
+    xr-enterprise evaluate run --offline
+
+  Docs: https://github.com/ahmadrrrtx/xr-enterprise
+`;
+
+interface KernelLike {
+  commands: { register(cmd: unknown): unknown };
+  executeCommand(name: string, args: string[], cwd: string): Promise<void>;
+  shutdown(): Promise<void>;
+}
+
+async function main(): Promise<number> {
+  const argv = process.argv.slice(2);
+  const head = argv[0];
+
+  if (!head || head === "--help" || head === "-h" || head === "help") {
+    console.log(HELP);
+    return head ? 0 : 2;
+  }
+
+  const verb =
+    head === "enterprise" || head === "ent"
+      ? "enterprise"
+      : head === "evaluate" || head === "eval"
+        ? "evaluate"
+        : null;
+
+  if (!verb) {
+    console.error(`\n  xr-enterprise: unknown command "${head}"\n${HELP}`);
+    return 2;
+  }
+
+  let bootKernelForCommand: (c: string) => Promise<{ kernel: KernelLike }>;
+  try {
+    ({ bootKernelForCommand } = await import("@rrrtx/xr/src/cli/kernel-boot.ts"));
+  } catch {
+    console.error(
+      "\n  xr-enterprise needs the XR runtime.\n\n" +
+        "  These commands run inside the XR kernel (registry, workspace store,\n" +
+        "  approval gate, audit chain) — this package is a satellite, not a fork.\n\n" +
+        "  Install:  bun add -g @rrrtx/xr\n",
+    );
+    return 2;
+  }
+
+  const { kernel } = await bootKernelForCommand(verb);
+  kernel.commands.register(new EnterpriseCommand());
+  kernel.commands.register(new EnterpriseAliasCommand());
+  kernel.commands.register(new EvaluateCommand());
+  kernel.commands.register(new EvalAliasCommand());
+
+  try {
+    await kernel.executeCommand(verb, argv.slice(1), process.cwd());
+    return 0;
+  } catch (err) {
+    console.error("xr-enterprise:", err instanceof Error ? err.message : String(err));
+    return 1;
+  } finally {
+    await kernel.shutdown();
+  }
+}
+
+main().then((code) => process.exit(code));

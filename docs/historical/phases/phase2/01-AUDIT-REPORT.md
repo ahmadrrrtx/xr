@@ -1,5 +1,8 @@
 # XR Phase 2 — STEP 1: Repository Audit Report
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Audited commit:** `c1c1831` (`main`, merge of PR #32 — Phase 1 reliability & persistence core)
 **Audit date:** 2026-07-31
 **Toolchain verified:** bun 1.3.14 (node-compat 24.3.0), TypeScript 5.9.3

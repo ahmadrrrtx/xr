@@ -1,5 +1,8 @@
 # XR v0.7 — Research Mode
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
+
 XR research mode is a **source-first, citation-aware** research workflow. It gathers,
 ranks, verifies, and synthesizes information into a structured report — and refuses to
 fabricate sources or fake certainty.

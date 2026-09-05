@@ -5,3 +5,13 @@
 # suite-owned temp root (see test/helpers/suite-tmp.ts, R-8).
 [test]
 preload = ["./test/helpers/suite-tmp.ts"]
+
+# Phase 5 · ADR-0028 — the core suite runs CORE tests only.
+#
+# `satellites/` holds the extracted xr-enterprise and business-os packages in a
+# development checkout. Their suites belong to those packages and run in their
+# own repos with their own configs; if the root runner also collected them, a
+# "core is green" signal would silently depend on satellite code — exactly the
+# coupling the extraction removed. Root `bun test` is therefore scoped to test/,
+# and the satellites are exercised by `bun test` inside satellites/<pkg>.
+root = "test"

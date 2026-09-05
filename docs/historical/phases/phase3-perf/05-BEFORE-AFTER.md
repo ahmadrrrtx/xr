@@ -1,5 +1,8 @@
 # XR Phase 3 — Before/After Measurements (corrected, fixed harness)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Same host, same harness (`scripts/perf/harness.ts`), isolated XR_HOME, 21 samples,
 single-outlier trim. BEFORE = pristine `main` b8be112 measured via a git worktree;
 AFTER = Phase 3 tree. (Note: an early harness bug — scenario argv never appended —

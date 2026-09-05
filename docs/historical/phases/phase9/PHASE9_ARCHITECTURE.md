@@ -1,5 +1,8 @@
 # XR 5.2 — Phase 9 Architecture: Capability Ecosystem
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 ## Mission
 
 XR 5.2 makes every extension plane inspectable through a common capability descriptor while preserving the execution semantics and security boundaries of each plane. It is a metadata, verification, discovery, and lifecycle layer — not a second plugin system, not a new workflow engine, not a business/control-plane module.

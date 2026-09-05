@@ -106,5 +106,5 @@ contributions. There is no schema to migrate and rollback is a code revert.
 | Item | Status | Removal |
 |---|---|---|
 | ad-hoc `extraTools` concatenation in the envelope | **removed** in Phase 2 | done |
-| `AgentDeps.extraTools` | deprecated; honoured for out-of-tree callers | **8.0.0** |
-| `tools/registry.ts` helpers (`getTool`/`toolsForMode`/`allTools`) | retained as a core-only compatibility surface | reviewed 8.0.0 |
+| `AgentDeps.extraTools` | deprecated; honoured for out-of-tree callers | **2.0.0** |
+| `tools/registry.ts` helpers (`getTool`/`toolsForMode`/`allTools`) | retained as a core-only compatibility surface | reviewed 2.0.0 |

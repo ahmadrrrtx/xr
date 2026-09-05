@@ -1,5 +1,8 @@
 # XR Phase 2 — STEP 3: Research Notes (principles adopted, with sources)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Principles are **adopted, not copied**. Each entry records the principle, the source, and the exact
 way XR applies it in Phase 2.
 

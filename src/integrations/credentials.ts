@@ -37,7 +37,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync, timingSafeEqual } from 'crypto';
-import type { BusinessDatabase } from '../../extensions/business-os/src/core/database.ts';
+import type { BusinessSqlDatabase } from '../core/business-l0.ts';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit nonce — the GCM-recommended size.
@@ -67,7 +67,7 @@ export interface MigrationReport {
 export class CredentialVault {
   private readonly masterKey: string;
 
-  constructor(private db: BusinessDatabase, masterKey: string) {
+  constructor(private db: BusinessSqlDatabase, masterKey: string) {
     if (!masterKey || masterKey.length === 0) {
       throw new CredentialVaultError('master key must be a non-empty string', 'invalid_master_key');
     }

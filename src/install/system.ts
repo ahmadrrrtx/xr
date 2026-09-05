@@ -19,7 +19,7 @@ import { detectAllRuntimes, detectRuntime } from "../local/runtimes.ts";
 import { validateOllamaModelId } from "../local/registry.ts";
 import { knownProviders, PRESETS } from "../providers/factory.ts";
 import { preferredSecretBackend, setSecret } from "../security/secrets.ts";
-import { summarizeHealthChecks, REQUIRED_HEALTH_CHECK_IDS } from "../enterprise/baseline/status.ts";
+import { summarizeHealthChecks, REQUIRED_HEALTH_CHECK_IDS } from "./baseline-status.ts";
 
 export type XROs = "windows" | "macos" | "linux" | "termux" | "unknown";
 export type XRArch = "x64" | "arm64" | "arm" | "unknown";

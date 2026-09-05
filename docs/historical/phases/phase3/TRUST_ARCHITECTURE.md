@@ -1,5 +1,8 @@
 # XR 4.2 — Trust and Isolation: Architecture
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Status: implemented core engine; see `VALIDATION_REPORT.md` for what is verified
 and what remains. Relationship: builds on the XR 4.1 Unified Execution Fabric
 and the Phase 1 runtime kernel; does **not** replace either.

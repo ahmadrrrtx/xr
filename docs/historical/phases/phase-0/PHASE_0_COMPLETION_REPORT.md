@@ -1,5 +1,8 @@
 # XR Phase 0 — Completion Report
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Repository:** `ahmadrrrtx/xr` · **Base commit:** `7be03d9` · **Release:** 7.0.1 "Truth"
 **Date:** 2026-07-31 · **Platform verified:** Linux x64, Bun 1.3.14, TypeScript 5.9.3
 

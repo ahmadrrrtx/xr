@@ -1,5 +1,8 @@
 # XR 2.1A — Unified Skill Runtime Implementation
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
+
 ## 1 Executive Summary
 
 Phase A is now implemented on top of the pushed repository without redesigning the Stage 13 architecture.

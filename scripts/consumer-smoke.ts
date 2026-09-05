@@ -34,6 +34,61 @@ const CLI_ENTRY = join(REPO_ROOT, "src", "index.ts");
 const CONFIG_VERSION = 20;
 const STALE_MARKERS = ["3.1.5", "Unified AI Operating System", "XR 3.0"];
 
+/**
+ * ── Phase 5 · tarball scope assertion (ADR-0028) ────────────────────────────
+ *
+ * A fresh `npm i @rrrtx/xr` must contain the runtime and NOT the extracted
+ * enterprise / business-os implementations. `package.json#files` already
+ * excludes them, but "already excludes them" is exactly the kind of claim that
+ * silently stops being true when someone adds a directory — so the tarball is
+ * inspected rather than trusted.
+ *
+ * What core legitimately keeps (Art. XVI: the kernel holds a thin contract,
+ * extensions hold the implementation):
+ *   · src/core/business-l0.ts             the L0 interfaces the extension satisfies
+ *   · src/core/providers/business.ts      the optional loader (package specifier only)
+ *   · src/daemon/routes/business.routes.ts committed /api/v1 operations that answer
+ *                                          honestly when the extension is absent
+ *   · src/schemas/business-os.skill.json   a schema, not an implementation
+ *
+ * Anything else matching /enterprise|business-os/ under src/ is a regression:
+ * implementation that leaked back into the published artifact.
+ */
+export const TARBALL_CONTRACT_ALLOWLIST = [
+  "package/src/core/business-l0.ts",
+  "package/src/core/providers/business.ts",
+  "package/src/daemon/routes/business.routes.ts",
+  "package/src/schemas/business-os.skill.json",
+] as const;
+
+export interface TarballScopeReport {
+  ok: boolean;
+  totalFiles: number;
+  offenders: string[];
+}
+
+/** Assert an npm tarball ships no extracted satellite implementation. */
+export function checkTarballScope(tgzPath: string): TarballScopeReport {
+  const listed = spawnSync("tar", ["-tzf", tgzPath], { encoding: "utf8" });
+  if (listed.status !== 0) {
+    return { ok: false, totalFiles: 0, offenders: [`tar failed: ${listed.stderr.trim()}`] };
+  }
+  const files = listed.stdout.split("\n").filter(Boolean);
+  const allow = new Set<string>(TARBALL_CONTRACT_ALLOWLIST);
+  const offenders = files.filter(
+    (f) =>
+      // src/ only: docs/ legitimately documents the satellites and the history.
+      f.startsWith("package/src/") &&
+      /enterprise|business-os|business\//i.test(f) &&
+      !allow.has(f),
+  );
+  // Whole directories that must never appear at all.
+  offenders.push(
+    ...files.filter((f) => f.startsWith("package/extensions/") || f.startsWith("package/satellites/")),
+  );
+  return { ok: offenders.length === 0, totalFiles: files.length, offenders };
+}
+
 export interface SmokeReport {
   ok: boolean;
   mode: "from-source" | "from-npm";
@@ -272,6 +327,28 @@ export async function runConsumerSmoke(opts: {
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
+
+  // --tarball <path>: scope-only assertion, used by the release workflow right
+  // after `npm pack` and runnable locally against any built tarball.
+  const tarIdx = argv.indexOf("--tarball");
+  if (tarIdx >= 0) {
+    const tgz = argv[tarIdx + 1];
+    if (!tgz || !existsSync(tgz)) {
+      console.error("[consumer-smoke] --tarball needs a path to an existing .tgz");
+      process.exit(1);
+    }
+    const scope = checkTarballScope(tgz);
+    console.log(JSON.stringify(scope));
+    if (!scope.ok) {
+      console.error(`❌ tarball ships extracted satellite code (${scope.offenders.length}):`);
+      for (const o of scope.offenders) console.error(`   ${o}`);
+      console.error("\nEnterprise and Business OS implementations live in their own packages (ADR-0028).");
+      process.exit(1);
+    }
+    console.log(`✅ tarball scope: ${scope.totalFiles} files, no extracted satellite code`);
+    process.exit(0);
+  }
+
   const skipIfUnpublished = argv.includes("--skip-if-unpublished");
   const fromNpm = argv.includes("--from-npm");
   const fromSource = argv.includes("--from-source") || !fromNpm;

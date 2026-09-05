@@ -110,7 +110,7 @@ is in one commit.
 |---|---|---|
 | `services/extensibility-bridge.ts` | **removed** in Phase 2 | done |
 | direct `runAgent` call-sites (4) | **removed** in Phase 2 | done |
-| `runAgent` deprecated alias | retained for out-of-tree callers | **8.0.0** |
+| `runAgent` deprecated alias | retained for out-of-tree callers | **2.0.0** |
 
 ## Non-claims
 

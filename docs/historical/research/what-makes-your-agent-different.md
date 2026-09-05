@@ -1,4 +1,7 @@
 # What YOUR Agent Does That Others Don't — The Specific, Unique Edge
+
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
 ### Built from real user complaints (Reddit/Dev.to) + cost/reliability research, for @ahmadrrrtx
 *Compiled 2026-06-03. Companion to SENTINEL-agent-research.md & how-agents-work-and-beating-hermes.md.*
 

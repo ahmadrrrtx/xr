@@ -1,5 +1,8 @@
 # Phase 9 — Test & Validation Results (STEPS 6–8)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Validated on:** `feat/phase9-packaging` (working tree @ 7.1.0 stamp) · Bun 1.3.14, Linux x64 sandbox
 **Rule applied:** every line below is a command that was actually executed, with its real output.
 Nothing here is a projection of what CI *would* do; CI-runner evidence is listed separately in §5.

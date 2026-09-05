@@ -1,5 +1,8 @@
 # Phase 12 Validation Report — XR 6.1 Enterprise Trust and Operations
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
+
 **Target:** XR 6.1.0 "Enterprise"
 **Baseline:** XR 6.0.0 "Hybrid" (`main` @ `806cbc1`, Phase 11 merged via PR #27)
 **Branch:** `feature/phase-12-enterprise-trust-and-operations`

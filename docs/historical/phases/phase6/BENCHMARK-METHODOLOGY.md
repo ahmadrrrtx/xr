@@ -1,5 +1,8 @@
 # Phase 6 — Recall Benchmark Methodology
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Artifacts:** `src/context/eval/harness.ts` · `benchmarks/recall/*.json` ·
 `scripts/recall-benchmark.ts` · `test/context/recall-benchmark.test.ts` ·
 live results: `docs/phase6/measured-recall.json`

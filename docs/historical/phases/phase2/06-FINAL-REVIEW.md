@@ -1,5 +1,8 @@
 # XR Phase 2 — STEP 10: Final Engineering Review
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Performed against the live branch head before declaring completion. Every claim
 below was re-measured at review time, not carried forward from an earlier step.
 

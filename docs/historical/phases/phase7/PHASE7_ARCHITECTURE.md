@@ -1,5 +1,8 @@
 # XR 5.0 — Agent and Workflow OS: Architecture
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Target:** XR 5.0.0  
 **Baseline:** XR 4.5.0 (Knowledge and Context OS)  
 **Status:** PHASE 7 COMPLETE — XR 5.0 AGENT AND WORKFLOW OS RELEASE READY

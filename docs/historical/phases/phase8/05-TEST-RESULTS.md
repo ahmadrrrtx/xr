@@ -1,5 +1,8 @@
 # Phase 8 · Step 8 — Test Results & Verification Evidence
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Build:** 7.0.1 + Phase 8 branch · **Date:** 2026-08-03 · **Runner:** bun 1.3.14, Node 20.20.2, Linux x86_64
 **Method:** every number below is a measured output of a listed command; nothing is estimated. Reproduce with the same commands.
 

@@ -30,6 +30,28 @@ const REGISTER = join(ROOT, "docs/perf/SIZE-WAIVERS.json");
 /** Lines of code per module. */
 export const THRESHOLD = 800;
 
+/**
+ * ── Phase 5 · the TREE ceiling (ADR-0028) ───────────────────────────────────
+ *
+ * The per-module threshold above says nothing about total size: a repo can be
+ * 500k LOC with every file under 800 and pass. Phase 5 removed 23,376 LOC of
+ * userless surface from core, and the only thing that keeps that won is a
+ * ceiling on the whole tree — otherwise the sprawl grows back one compliant
+ * 799-line module at a time, which is exactly how it arrived.
+ *
+ * The number is MEASURED, not aspirational. The Phase 5 plan targeted
+ * "≤ ~110,000 LOC", written against a 149,722-LOC tree four phases stale; the
+ * tree was 154,426 when the phase began, and extracting everything the plan
+ * listed would still have landed near 124k. Gating on 110k would have meant
+ * either failing the build forever or deleting genuine runtime to satisfy an
+ * estimate — so the gate holds the line actually achieved, and the roadmap
+ * keeps 110k as a direction of travel (docs/historical/phase-5/loc-census.md).
+ *
+ * Raising this number is allowed — it just has to be a decision someone makes
+ * on purpose, in a diff, with a reason. That is the whole mechanism.
+ */
+export const TREE_CEILING = 135_000;
+
 interface Waiver {
   readonly path: string;
   readonly lines: number;
@@ -63,6 +85,10 @@ function countLines(file: string): number {
 export interface SizeReport {
   ok: boolean;
   threshold: number;
+  /** Total LOC across src/ — the anti-regrowth ceiling (Phase 5). */
+  treeLines: number;
+  treeCeiling: number;
+  treeOver: boolean;
   overThreshold: Array<{ path: string; lines: number }>;
   unwaived: Array<{ path: string; lines: number }>;
   grown: Array<{ path: string; lines: number; waivedAt: number }>;
@@ -91,13 +117,20 @@ export function checkSizes(): SizeReport {
     .filter((w) => !w.owner?.trim() || !w.reason?.trim() || !w.plan?.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(w.review ?? ""))
     .map((w) => w.path);
 
+  const treeLines = sizes.reduce((n, m) => n + m.lines, 0);
+  const treeOver = treeLines > TREE_CEILING;
+
   return {
     ok:
       unwaived.length === 0 &&
       grown.length === 0 &&
       staleWaivers.length === 0 &&
-      malformedWaivers.length === 0,
+      malformedWaivers.length === 0 &&
+      !treeOver,
     threshold: THRESHOLD,
+    treeLines,
+    treeCeiling: TREE_CEILING,
+    treeOver,
     overThreshold,
     unwaived,
     grown,
@@ -121,6 +154,17 @@ if (import.meta.main) {
   }
   for (const p of r.malformedWaivers) {
     console.error(`  FAIL waiver needs owner, reason, plan and an ISO review date: ${p}`);
+  }
+
+  const pct = ((r.treeLines / r.treeCeiling) * 100).toFixed(1);
+  console.log(`[size-gate] tree ${r.treeLines.toLocaleString()} LOC of ${r.treeCeiling.toLocaleString()} ceiling (${pct}%)`);
+  if (r.treeOver) {
+    console.error(
+      `  FAIL core grew past the Phase 5 ceiling: ${r.treeLines.toLocaleString()} > ${r.treeCeiling.toLocaleString()} LOC.\n` +
+      `       Phase 5 extracted 23,376 LOC to satellite packages so a one-person team could own core.\n` +
+      `       Either move the new surface to a satellite, or raise TREE_CEILING in scripts/size-gate.ts\n` +
+      `       deliberately, in a diff, with a reason (ADR-0028).`,
+    );
   }
 
   if (r.ok) {

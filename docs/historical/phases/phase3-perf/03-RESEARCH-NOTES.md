@@ -1,5 +1,8 @@
 # XR Phase 3 — STEP 3 Research Notes (principles adopted, verified)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 | # | Principle | Source (verified) | Adopted as |
 |---|---|---|---|
 | R1 | `bun build ./src/index.ts --compile --target=<t> --outfile xr` produces a standalone binary embedding the Bun runtime (~60–96 MB); cross-compile targets `bun-linux-x64/arm64`, `bun-darwin-arm64/x64`, `bun-windows-x64` | Bun docs (bun.sh/docs/bundler/executables) + verified in-repo (linux-x64 built in 0.4–0.9 s; linux-arm64 cross-build 1.1 s) | `scripts/build-matrix.ts` matrix |

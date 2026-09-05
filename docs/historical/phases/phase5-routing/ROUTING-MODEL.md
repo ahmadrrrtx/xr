@@ -1,5 +1,8 @@
 # Routing Model (Phase 5)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Scope:** `src/intelligence/` — the single routing authority. This document
 describes the routing model as it exists after Phase 5; it does not replace
 ADR 0012 (the *why*).

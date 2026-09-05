@@ -1,5 +1,8 @@
 # XR 4.5 — User Guide: what XR knows, and your control over it
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 XR 4.5 turns memory into something you can **inspect, question, correct, and
 revoke**. The rule XR follows:
 

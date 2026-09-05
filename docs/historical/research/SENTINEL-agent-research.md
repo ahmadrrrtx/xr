@@ -1,4 +1,7 @@
 # Project SENTINEL — Building a Security-First AI Agent That Actually Wins
+
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
 ### Deep research & strategy brief for Muhammad Ahmad (@ahmadrrrtx)
 *Compiled 2026-06-03. $0-cost, fully open-source, community-fame oriented.*
 

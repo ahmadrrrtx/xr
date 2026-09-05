@@ -1,5 +1,8 @@
 # Phase 5 — STEP 1 · Repository Audit Report
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Phase:** 5 — AI Orchestration & Routing Quality
 **Commit audited:** `14c208c` (main, PR #36 merge)
 **Date:** 2026-08-02

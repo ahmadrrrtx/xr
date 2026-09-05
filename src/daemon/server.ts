@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { hydrateSecretsAsync, loadConfig } from "../config/config.ts";
 import { WorkspaceManager } from "../core/workspace.ts";
-import { XRShieldService } from "../security/shield.ts";
+import { XRShieldService } from "../hygiene/scanner.ts";
 import type { Store } from "../state/workspace-store.ts";
 import { TrustService } from "../runtime/trust/service.ts";
 import { CredentialBroker } from "../runtime/trust/credentials.ts";

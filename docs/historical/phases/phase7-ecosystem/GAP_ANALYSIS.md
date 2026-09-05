@@ -1,5 +1,8 @@
 # XR Phase 7 — Gap Analysis (STEP 2)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Maps audited reality → Phase 7 spec (Part 8 tasks) + Constitution (Art. XIV/XV/XVI/XXIV, Part Ten). Each gap is tagged with the test that proves it closed.
 
 ## G1 (T1) — Provenance graph (Part 5: "queryable provenance graph"; §10.7)

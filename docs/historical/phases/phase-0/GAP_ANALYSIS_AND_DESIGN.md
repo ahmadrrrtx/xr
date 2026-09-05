@@ -1,5 +1,8 @@
 # XR Phase 0 — STEPS 2–4: Gap Analysis · Research · Architecture Validation
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Companion to `AUDIT_REPORT.md`. Nothing here restates the audit; this document turns audited
 reality into an ordered, constitutionally-validated implementation plan.
 

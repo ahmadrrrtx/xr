@@ -10,7 +10,7 @@
  * any other module imports it.
  *
  * The historical name `runAgent` is retained as a deprecated alias for
- * out-of-tree callers and is scheduled for removal in 8.0.0 (ADR-0002).
+ * out-of-tree callers and is scheduled for removal in 2.0.0 (ADR-0002).
  */
 import { randomUUID, createHash } from "node:crypto";
 import type {
@@ -119,7 +119,7 @@ export interface AgentDeps {
    * @deprecated Phase 2 · T2. Superseded by `toolRegistry`, which namespaces
    * contributions and arbitrates collisions instead of concatenating a flat
    * list whose bare names could shadow core tools. Still honoured for
-   * out-of-tree callers; removed in 8.0.0 (ADR-0003).
+   * out-of-tree callers; removed in 2.0.0 (ADR-0003).
    */
   extraTools?: Tool[];
   /**
@@ -1051,6 +1051,6 @@ export async function runAgentLoop(
  * In-tree surfaces MUST NOT call this: `test/core/no-bypass.test.ts` asserts
  * that no production module outside `src/core/execution/` imports the loop.
  *
- * Removal: 8.0.0 (ADR-0002).
+ * Removal: 2.0.0 (ADR-0002).
  */
 export const runAgent = runAgentLoop;

@@ -79,13 +79,25 @@ export const BOOT_PATH_FILES: string[] = [
   "src/skills/marketplace.ts",
   "src/skills/marketplace-store.ts",
   "src/plugins/manager.ts",
-  "src/security/shield.ts",
+  "src/hygiene/scanner.ts",
 ];
 
 export interface LintFinding {
   file: string;
   line: number;
   call: string;
+}
+
+/**
+ * Hot-path entries that no longer exist on disk.
+ *
+ * Phase 5 renamed src/security/shield.ts -> src/hygiene/scanner.ts and this
+ * gate kept passing, because a missing file scanned clean. A security lint that
+ * silently loses coverage when someone moves a file is worse than no lint: it
+ * reports green for a module nobody is checking. Missing entries now fail.
+ */
+export function missingHotPaths(): string[] {
+  return [...FAST_PATH_FILES, ...BOOT_PATH_FILES].filter((rel) => !existsSync(join(ROOT, rel)));
 }
 
 export function scanFile(rel: string): LintFinding[] {
@@ -117,6 +129,15 @@ export function inventoryBootPath(): { file: string; count: number }[] {
 }
 
 if (import.meta.main) {
+  const missing = missingHotPaths();
+  if (missing.length > 0) {
+    console.error(`❌ HOT-PATH LIST OUT OF SYNC (${missing.length}):`);
+    for (const m of missing) console.error(`  ${m}  — listed as a hot path but not on disk`);
+    console.error("\nA renamed or deleted module must be repointed here, not silently dropped:");
+    console.error("a hot path that does not exist scans clean and reports green (ADR-0027).");
+    process.exit(1);
+  }
+
   const findings = lintFastPath();
   if (findings.length > 0) {
     console.error(`❌ HOT-PATH SYNC I/O VIOLATIONS (${findings.length}):`);

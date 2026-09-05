@@ -1,5 +1,8 @@
 # XR 5.3 — Personal and Business Operating Layer — Phase 10
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Baseline:** XR 5.2.0 Capability Ecosystem  
 **Target:** XR 5.3.0 Work  
 **Date:** 2026-07-27  

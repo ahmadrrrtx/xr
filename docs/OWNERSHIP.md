@@ -24,9 +24,9 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `src/core/` | @ahmadrrrtx | explicit entry |
 | `src/cost/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/daemon/` | @ahmadrrrtx | explicit entry |
-| `src/enterprise/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/execution/` | @ahmadrrrtx | explicit entry |
 | `src/export/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `src/hygiene/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/i18n/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/index.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/install/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -55,13 +55,13 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `src/update/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/util/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/voice/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `src/xr-shield/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/a11y/` | @ahmadrrrtx | explicit entry |
 | `test/agent-cancel.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/agent.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/api/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/architecture/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/baseline/` | @ahmadrrrtx | default (@ahmadrrrtx) |
-| `test/business/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/capabilities/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/config/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/context/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -73,12 +73,9 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/cost.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon/` | @ahmadrrrtx | default (@ahmadrrrtx) |
-| `test/deployment/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/e2e-blackbox/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/ecosystem.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
-| `test/enterprise/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/environment/` | @ahmadrrrtx | default (@ahmadrrrtx) |
-| `test/evaluation/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/execution/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/fixtures/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/helpers/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -184,7 +181,6 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/verify-release.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/verify-security.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/write-sums.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
-| `extensions/business-os/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `extensions/vscode/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 
 ## How ownership is exercised

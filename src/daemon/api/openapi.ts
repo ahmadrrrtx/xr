@@ -114,7 +114,7 @@ export function buildOpenApi(ops: ApiOperation[]): Record<string, unknown> {
       summary: "The local-first daemon API of the XR AI agent runtime.",
       description:
         "Versioned surface mounted at /api/v1. Legacy /api/* mounts serve during the deprecation " +
-        "window with Deprecation/Sunset headers and are removed no earlier than XR 8.0.0. " +
+        "window with Deprecation/Sunset headers and are removed no earlier than XR 2.0.0. " +
         "Compatibility policy: docs/api/COMPATIBILITY.md. " +
         "Authentication: local bearer token (x-session bootstrap cookie for browsers).",
       license: { name: "MIT", url: "https://opensource.org/licenses/MIT" },
@@ -132,7 +132,7 @@ export function buildOpenApi(ops: ApiOperation[]): Record<string, unknown> {
     "x-xr-contract": {
       apiVersion: "v1",
       generatedFrom: "src/daemon/routes/contract.ts (live route registry)",
-      legacySunset: "no-earlier-than XR 8.0.0",
+      legacySunset: "no-earlier-than XR 2.0.0",
       compatibility: "docs/api/COMPATIBILITY.md",
     },
   };

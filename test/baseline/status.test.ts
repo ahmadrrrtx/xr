@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { redactValue, safeConfigStatus, summarizeHealthChecks, workspaceStatus } from "../../src/enterprise/baseline/status.ts";
+import { redactValue, safeConfigStatus, summarizeHealthChecks, workspaceStatus } from "../../src/install/baseline-status.ts";
 
 const checks = [
   { id: "platform", label: "Platform", state: "ok" as const, detail: "linux/x64" },

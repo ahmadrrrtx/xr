@@ -1,5 +1,8 @@
 # XR 4.1 Phase 2 Validation Report
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
+
 **Release:** XR 4.1.0 — Unified Execution Fabric
 **Baseline commit:** `c563ff3` (XR 4.0.0 Runtime Kernel)
 **Environment:** Linux x64, Bun 1.3.14

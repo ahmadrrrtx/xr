@@ -17,7 +17,7 @@ import {
   safeConfigStatus,
   summarizeHealthChecks,
   workspaceStatus,
-} from "../enterprise/baseline/status.ts";
+} from "../install/baseline-status.ts";
 
 // Bun-friendly dynamic import helper for perf benches (avoid require in types)
 async function loadCatalog() {

@@ -1,5 +1,8 @@
 # Phase 8 · Step 9 — Final Review & Completion Declaration
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Phase:** 8 — UX, Accessibility, Observability & DX Excellence
 **Build:** 7.0.1 (Truth) + Phase 8 branch · **Reviewed:** 2026-08-03
 **Reviewer:** the executing engineering agent, against the 24-part Phase-8

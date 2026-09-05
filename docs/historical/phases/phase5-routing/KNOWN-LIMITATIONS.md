@@ -1,5 +1,8 @@
 # Known Limitations — Phase 5 Routing Quality
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Honest edges of the mechanisms shipped in Phase 5. None of these are
 silent: each points at the test or doc that pins the current behavior.
 

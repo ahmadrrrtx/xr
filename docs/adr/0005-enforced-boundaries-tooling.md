@@ -84,7 +84,7 @@ which for a bun-native repo is the fast local loop.
 | Dynamic-import coverage | architectural test scans `await import()` |
 | One source of truth | one config, two readers |
 
-**Owner:** architecture · **Review:** 8.0.0 — revisit if XR adopts ESLint for
+**Owner:** architecture · **Review:** 2.0.0 — revisit if XR adopts ESLint for
 other reasons, at which point the boundary rules should be *generated* from
 `.dependency-cruiser.cjs` rather than duplicated.
 

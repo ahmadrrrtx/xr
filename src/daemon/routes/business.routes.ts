@@ -15,7 +15,7 @@
  */
 
 import { route, type DaemonRoute, type DaemonRouteContext } from './router.ts';
-import type { BusinessOS } from '../../../extensions/business-os/src/index.ts';
+import type { BusinessOsView } from '../../core/business-l0.ts';
 
 /**
  * Business-service resolution (A-6 seam — one narrowing point, one comment).
@@ -27,7 +27,7 @@ import type { BusinessOS } from '../../../extensions/business-os/src/index.ts';
  * (embedded serve, tests) is honored, checked on the context first, then on
  * state — the carriers the previous scattered `as any` sites consulted.
  */
-async function resolveBusinessOS(ctx: DaemonRouteContext): Promise<BusinessOS | null> {
+async function resolveBusinessOS(ctx: DaemonRouteContext): Promise<BusinessOsView | null> {
   let token: unknown;
   try {
     const { Tokens } = await import('../../core/tokens.ts');
@@ -42,10 +42,40 @@ async function resolveBusinessOS(ctx: DaemonRouteContext): Promise<BusinessOS | 
   for (const carrier of carriers) {
     try {
       const resolved = carrier?.registry?.resolve?.(token);
-      if (resolved) return resolved as BusinessOS;
+      if (resolved) return resolved as BusinessOsView;
     } catch { /* try the next carrier */ }
   }
   return null;
+}
+
+/**
+ * Journey catalogue resolution (Phase 5 · ADR-0028).
+ *
+ * Until Phase 5 these routes imported the journey definitions *directly from
+ * the extension source tree* at request time. That was a genuine runtime edge
+ * from core into an extracted package hiding behind a dynamic import: once the
+ * extension left the repo, GET /api/business/journeys would have thrown a
+ * module-not-found 500 instead of the honest empty answer the rest of this
+ * file is careful to give.
+ *
+ * The catalogue is now read from the extension when it is actually loaded and
+ * answers an empty list when it is not — the same degraded-but-honest contract
+ * every other route here already honours. An empty catalogue with count 0
+ * truthfully says "no journeys are installed", which is exactly the state of a
+ * core-only install (Cmdt 2 — never report an effect that did not happen).
+ */
+interface JourneyCatalogue { readonly id?: string; readonly name?: string }
+
+async function resolveJourneys(ctx: DaemonRouteContext): Promise<JourneyCatalogue[]> {
+  const businessOS = await resolveBusinessOS(ctx);
+  if (!businessOS) return [];
+  const holder = businessOS as unknown as { journeys?: { list?: () => JourneyCatalogue[] } };
+  try {
+    const list = holder.journeys?.list?.();
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
 }
 
 export function businessRoutes(): DaemonRoute[] {
@@ -57,10 +87,10 @@ export function businessRoutes(): DaemonRoute[] {
       handle: async (ctx: DaemonRouteContext) => {
         const businessOS = await resolveBusinessOS(ctx);
         if (!businessOS) {
-          // Extension not served in this process: degraded-but-honest status
-          // (journey definitions are static metadata; counts are zero).
-          const { JOURNEY_DEFINITIONS } = await import(/* @vite-ignore */ new URL('../../../extensions/business-os/src/core/journeys.ts', import.meta.url).href);
-          return ctx.json({ status: { version: '5.3.0', journeys: JOURNEY_DEFINITIONS.length, activeWorkflows: 0, pendingApprovals: 0 }, journeys: JOURNEY_DEFINITIONS });
+          // Extension not served in this process: degraded-but-honest status.
+          // Core ships no journey catalogue of its own (ADR-0028), so the
+          // honest answer is an empty one rather than a 500.
+          return ctx.json({ status: { version: '5.3.0', journeys: 0, activeWorkflows: 0, pendingApprovals: 0, extension: 'not-installed' }, journeys: [] });
         }
 
         const orgId = (ctx.url.searchParams.get('orgId') ?? 'default');
@@ -77,9 +107,9 @@ export function businessRoutes(): DaemonRoute[] {
       id: 'business.journeys.list',
       path: '/api/business/journeys',
       method: 'GET',
-      handle: async (ctx) => {
-        const { JOURNEY_DEFINITIONS } = await import(/* @vite-ignore */ new URL('../../../extensions/business-os/src/core/journeys.ts', import.meta.url).href);
-        return ctx.json({ journeys: JOURNEY_DEFINITIONS, count: JOURNEY_DEFINITIONS.length });
+      handle: async (ctx: DaemonRouteContext) => {
+        const journeys = await resolveJourneys(ctx);
+        return ctx.json({ journeys, count: journeys.length });
       },
     }),
     route({

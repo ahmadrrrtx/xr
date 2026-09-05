@@ -1,5 +1,8 @@
 # XR Architecture after Phase 2 — one substrate, not adjacent subsystems
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Applies to:** XR 7.1.0-dev and later
 **Companions:** `docs/phase2/BOUNDARIES.md` (enforced rules),
 `docs/developer/EXTENDING-XR.md` (how to add things), `docs/adr/0002`–`0008`

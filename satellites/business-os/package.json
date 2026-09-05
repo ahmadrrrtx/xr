@@ -1,0 +1,50 @@
+{
+  "name": "@rrrtx/business-os",
+  "version": "1.0.0",
+  "description": "Business OS — an optional, default-off, effect-verified XR extension over local-first records (CRM, sales, support, projects, finance, HR, scheduling, documents, AI workers). A satellite of @rrrtx/xr; the XR core runtime never imports it. No hosted service, no SLA, no paid tier.",
+  "type": "module",
+  "main": "./pkg/src/index.ts",
+  "exports": {
+    ".": "./pkg/src/index.ts",
+    "./effect-verification": "./pkg/effect-verification.ts",
+    "./effect-specs": "./pkg/effect-specs.ts",
+    "./manifest.json": "./pkg/manifest.json",
+    "./cli": "./pkg/src/cli.ts"
+  },
+  "bin": {
+    "xr-business": "./bin/xr-business"
+  },
+  "files": [
+    "bin",
+    "pkg",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@rrrtx/xr": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahmadrrrtx/business-os.git"
+  },
+  "keywords": [
+    "xr",
+    "ai-agent",
+    "business-os",
+    "crm",
+    "local-first"
+  ],
+  "author": "Muhammad Ahmad (@ahmadrrrtx)",
+  "license": "MIT"
+}
