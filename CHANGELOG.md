@@ -2,6 +2,55 @@
 
 ## Unreleased
 
+### Phase 7 — Memory policy layer (F-21)
+
+- **retrieval ACL:** `MemoryStore.recall*` take an optional `principal`
+  (`"user"` or `{role, agentId}`; default `"user"`). New `agent_visibility`
+  column (JSON role list, default `["*"]` — **existing memories are not
+  restricted**); a list without `*` sequesters the row to those roles, and
+  coordinators are not exempt. Enforced at `recall*`, in the context assembler
+  (grant requester → principal), the agent loop's legacy block, the
+  memory-manager task and the plugin host. `xr memory add --visible-to
+  <role>,…`. Trust never gates retrieval — it labels the hit `channel:
+  "data" | "quarantine"`; recall has no instruction channel by construction.
+- **provenance mandatory:** `add()` resolves `{source: user|tool|agent|schedule,
+  ref}`; `tool`/`agent`/`schedule` writes without a `ref` are **rejected**.
+  Every row stores `provenance_event_id` = the audit hash of its `memory.add`
+  event, plus `kind` (fact|preference|episode|procedure|summary) and
+  `confidence_score`. New write channels `tool`/`agent`/`schedule` with honest
+  trust ceilings; the plugin host now writes as `tool` with `plugin:<id>`.
+- **contradiction arbitration:** a write lexically near (cosine ≥ 0.6, same
+  scope + category) a current row opens a `memory_conflicts` row (bounded to the
+  3 nearest peers) and audits `memory.conflict.detected`; nothing is
+  overwritten. `xr memory conflicts` / `xr memory resolve <a> <b> --keep
+  a|b|both` (loser superseded, undoable). Honest limit: token overlap, not
+  semantic understanding.
+- **consolidation:** `xr memory consolidate [--dry-run] [--max-tokens n]` folds
+  old, low-importance groups into cited `kind: summary` rows and **supersedes**
+  the originals (never deletes; the older `summarize` still deletes and is
+  unchanged). Idempotent (run twice ⇒ same state), metered through its own
+  `CostGovernor` envelope with an honest budget stop, deterministic summariser
+  by default, fully audited (`memory.consolidate.plan|applied|budget_stop`).
+- **forgetting & export:** `xr memory forget <id> | --query | --scope` is the
+  **irreversible** erase (row, cached vector, undo-ledger images, projection;
+  confirmation; `memory.forgotten` audit written last) — `remove` stays the
+  undoable delete. `xr memory export [--md] [--scope] [--include-quarantined]
+  [--no-redact]` emits `xr-memory` v2 (v1 still imports); quarantined/revoked/
+  proposed rows are exported only on request and always carry a
+  `quarantineLabel`; secrets masked by default. Privacy contract:
+  `docs/privacy/MEMORY.md`.
+- **legacy injection deprecated:** `knowledge.injectionMode` `legacy`/`both`
+  still work but raise a `loadConfig()` deprecation warning and are flagged in
+  `xr context status`; removal in 2.0. The legacy block is principal-filtered
+  and drops quarantine-channel hits.
+- **fix:** the memory→context adapter overwrote stored consent/trust/provenance/
+  lineage with the legacy mapping, so a quarantined, revoked or superseded row
+  read by id (`memory_get`, assembler extras) was presented as approved, current
+  memory. Stored metadata now wins; the legacy mapping is only the fallback for
+  rows that predate it (`legacy:4.4` tag is applied only to those).
+- **schema:** migration 9 `phase7_memory_policy` (four additive columns +
+  `memory_conflicts`), backfill from category/confidence, reversible.
+
 ### Phase 6 — Orchestration completion (task runtime, funded trees, resume, verifier)
 
 - **budget (breaking):** a multi-agent workflow now spends **one root envelope for

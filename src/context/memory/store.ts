@@ -54,58 +54,35 @@ import {
   clampImportance,
   isCategory,
   isExpired,
+  kindForCategory,
   ttlToExpiresAt,
   type MemoryCategory,
   type MemoryEntry,
   type MemoryEntryWithContext,
   type MemoryExport,
+  type MemoryKind,
   type MemorySource,
   type RecallHit,
+  type RecallOpts,
+  type WriteProvenance,
 } from "./types.ts";
 import { parseMemoryIntent } from "./intent.ts";
 import { admitContextWrite } from "../poison.ts";
-import type {
-  ActorKind,
-  ConsentState,
-  ProvenanceKind,
-  TrustStatus,
-} from "../types.ts";
-
-/**
- * XR 4.5 — honest mapping from the legacy `source` enum to context metadata.
- * Identical to the migration mapping in `src/context/memory-adapter.ts`, so a
- * row written now and a row migrated from 4.4 are described the same way.
- */
-const SOURCE_TRUST: Record<string, TrustStatus> = {
-  user: "approved_memory",
-  chat: "approved_memory",
-  voice: "approved_memory",
-  research: "generated_synthesis",
-  import: "unknown",
-};
-const SOURCE_PROVENANCE: Record<string, ProvenanceKind> = {
-  user: "user_input",
-  chat: "user_input",
-  voice: "user_input",
-  research: "research",
-  import: "import",
-};
-const SOURCE_ACTOR: Record<string, ActorKind> = {
-  user: "user",
-  chat: "user",
-  voice: "user",
-  research: "system",
-  import: "system",
-};
+// Phase 7 (F-21) — retrieval ACL + write-side provenance/arbitration live in their own modules (docs/privacy/MEMORY.md).
+import { parseVisibility, recallChannel, retrievalDecision, validateVisibility } from "./acl.ts";
+import { confidenceScoreFor, detectWriteConflicts, resolveWriteProvenance, stampPolicyColumns, type MemoryRowP7 } from "./provenance.ts";
+import type { ConsentState, ProvenanceKind } from "../types.ts";
 
 const MAX_CONTENT = 2000;
 
 export interface AddResult {
   ok: boolean;
-  entry?: MemoryEntry;
+  entry?: MemoryEntryWithContext;
   /** True when an identical entry already existed (no duplicate created). */
   duplicate?: boolean;
   reason?: string;
+  /** Phase 7 — open contradiction rows recorded for this write (never auto-resolved). */
+  conflicts?: Array<{ conflictId: string; withId: string; similarity: number }>;
 }
 
 export interface AddInput {
@@ -136,6 +113,14 @@ export interface AddInput {
   provenanceRef?: string | null;
   /** When the underlying source was observed in the world. */
   sourceObservedAt?: number | null;
+
+  // ── Phase 7 (F-21) — memory policy ─────────────────────────────────────
+  /** Required for `tool|agent|schedule` sources (with `ref`); human channels default to `{source:"user"}`. */
+  provenance?: WriteProvenance;
+  /** Role ACL. Omit = `["*"]` (everyone). A list without "*" SEQUESTERS the row to those roles. */
+  agentVisibility?: string[];
+  /** fact|preference|episode|procedure|summary. Defaults from the category. */
+  kind?: MemoryKind;
 }
 
 function rowToEntry(r: MemoryRow): MemoryEntryWithContext {
@@ -173,6 +158,11 @@ function rowToEntry(r: MemoryRow): MemoryEntryWithContext {
     embeddingModel: r.embedding_model ?? null,
     embeddingDim: r.embedding_dim ?? null,
     workspaceId: r.workspace_id ?? null,
+    // Phase 7 (migration 9). Absent on a pre-migration read → the open defaults.
+    agentVisibility: parseVisibility((r as MemoryRowP7).agent_visibility),
+    kind: ((r as MemoryRowP7).kind as MemoryKind | null | undefined) ?? null,
+    confidenceScore: (r as MemoryRowP7).confidence_score ?? null,
+    provenanceEventId: (r as MemoryRowP7).provenance_event_id ?? null,
   };
 }
 
@@ -216,6 +206,12 @@ export class MemoryStore {
     const tags = (input.tags ?? []).map((t) => t.trim()).filter(Boolean);
     const expiresAt = ttlToExpiresAt(input.ttlMs);
 
+    // Phase 7: no unsourced write (tool/agent/schedule must declare a ref); ACL must be well-formed. Fail-soft.
+    const prov = resolveWriteProvenance(source, input.provenance, input.provenanceKind);
+    if (!prov.ok) return { ok: false, reason: prov.reason };
+    const acl = validateVisibility(input.agentVisibility);
+    if (!acl.ok) return { ok: false, reason: `invalid agentVisibility: ${acl.reason}` };
+
     // Rule: a do-not-remember rule blocks matching content (unless we are
     // recording the exclusion rule itself).
     if (category !== "exclusion") {
@@ -257,9 +253,9 @@ export class MemoryStore {
       const admission = admitContextWrite({
         content,
         type: category === "exclusion" ? "knowledge" : "memory",
-        requestedTrust: SOURCE_TRUST[source] ?? "unknown",
-        provenanceKind: SOURCE_PROVENANCE[source] ?? "unknown",
-        actorKind: SOURCE_ACTOR[source] ?? "unknown",
+        requestedTrust: prov.value.requestedTrust,
+        provenanceKind: prov.value.provenanceKind,
+        actorKind: prov.value.actorKind,
         // A direct `add()` is an explicit user/system act; plugin and model
         // paths are downgraded to `proposed` inside the admission gate.
         requestedConsent: input.consentState ?? "approved",
@@ -278,10 +274,10 @@ export class MemoryStore {
         consent === "approved" ? (input.actor ?? "user") : (input.actor ?? source),
       );
       this.store.setMemoryProvenance(id, {
-        provenanceKind: input.provenanceKind ?? SOURCE_PROVENANCE[source] ?? "unknown",
-        provenanceRef: input.provenanceRef ?? null,
-        actorKind: SOURCE_ACTOR[source] ?? "unknown",
-        actorName: input.actor ?? null,
+        provenanceKind: prov.value.provenanceKind,
+        provenanceRef: input.provenanceRef ?? prov.value.provenance.ref ?? null,
+        actorKind: prov.value.actorKind,
+        actorName: input.actor ?? prov.value.provenance.ref ?? null,
         trustStatus: trust,
         confidence: importance >= 4 ? "high" : importance <= 2 ? "low" : "medium",
         sourceObservedAt: input.sourceObservedAt ?? null,
@@ -300,17 +296,26 @@ export class MemoryStore {
       // Never fail a write because metadata stamping failed — the conservative
       // column defaults (legacy_unknown / unknown) already apply.
     }
-    this.store.audit("memory.add", {
+    const eventId = this.store.audit("memory.add", {
       id,
       category,
       scope,
       source,
+      provenance: prov.value.provenance,
+      visibility: acl.visibility,
       // content length only — never the raw content, keeps logs private.
       contentLen: content.length,
       ttlMs: input.ttlMs ?? null,
     });
-    const row = this.store.getMemory(id)!;
-    return { ok: true, entry: rowToEntry(row) };
+    // Phase 7: every row carries its ACL, kind, confidence projection and creating audit event (migration 9).
+    stampPolicyColumns(this.store, id, {
+      agentVisibility: acl.visibility,
+      kind: input.kind ?? kindForCategory(category, tags),
+      confidenceScore: confidenceScoreFor(this.store.getMemory(id)?.confidence),
+      provenanceEventId: eventId,
+    });
+    const conflicts = detectWriteConflicts(this.store, { id, scope, category, content, tags: tags.join(",") });
+    return { ok: true, entry: rowToEntry(this.store.getMemory(id)!), ...(conflicts.length ? { conflicts } : {}) };
   }
 
   update(
@@ -415,24 +420,22 @@ export class MemoryStore {
    * Importance is folded in as a gentle tiebreaker so critical preferences win
    * close calls. Access is recorded (lastAccessedAt + accessCount).
    */
-  recall(
-    query: string,
-    opts: { scope?: string; k?: number; floor?: number } = {},
-  ): MemoryEntryWithContext[] {
+  recall(query: string, opts: RecallOpts = {}): MemoryEntryWithContext[] {
     return this.recallExplain(query, opts).map((h) => h.entry);
   }
 
-  /** Explainable lexical recall — returns hits with scores + reasons. */
-  recallExplain(
-    query: string,
-    opts: { scope?: string; k?: number; floor?: number } = {},
-  ): RecallHit[] {
+  /**
+   * Explainable lexical recall — returns hits with scores + reasons. Phase 7: `opts.principal`
+   * (default `"user"`) drives the retrieval ACL — scope → role visibility → consent → lineage/TTL (acl.ts).
+   */
+  recallExplain(query: string, opts: RecallOpts = {}): RecallHit[] {
     const k = opts.k ?? 5;
     const floor = opts.floor ?? RECALL_FLOOR;
     const q = (query ?? "").trim();
     if (!q) return [];
 
-    const candidates = this.list({ scope: opts.scope }); // exclusions + expired filtered
+    const principal = opts.principal ?? "user";
+    const candidates = this.list({ scope: opts.scope }).filter((e) => retrievalDecision(e, principal).visible); // exclusions + expired filtered
     if (candidates.length === 0) return [];
 
     const qv = lexicalVector(q);
@@ -451,6 +454,7 @@ export class MemoryStore {
         sim: s.sim,
         score: s.score,
         reason: reasonFor(s.sim, s.e, "lexical"),
+        channel: recallChannel(s.e.trustStatus),
       }));
 
     this.touchAccess(hits);
@@ -477,27 +481,22 @@ export class MemoryStore {
    *
    * This never throws: any embedding failure degrades to lexical scoring.
    */
-  async recallSemantic(
-    query: string,
-    opts: { scope?: string; k?: number; floor?: number } = {},
-  ): Promise<MemoryEntryWithContext[]> {
+  async recallSemantic(query: string, opts: RecallOpts = {}): Promise<MemoryEntryWithContext[]> {
     return (await this.recallSemanticExplain(query, opts)).map((h) => h.entry);
   }
 
-  /** Explainable semantic recall — returns hits with scores + reasons. */
-  async recallSemanticExplain(
-    query: string,
-    opts: { scope?: string; k?: number; floor?: number } = {},
-  ): Promise<RecallHit[]> {
+  /** Explainable semantic recall — returns hits with scores + reasons (same ACL as `recallExplain`). */
+  async recallSemanticExplain(query: string, opts: RecallOpts = {}): Promise<RecallHit[]> {
     const k = opts.k ?? 5;
     const floor = opts.floor ?? RECALL_FLOOR;
     const q = (query ?? "").trim();
     if (!q) return [];
 
     // Raw rows so we can read + write the cached embedding column.
+    const principal = opts.principal ?? "user";
     const rows = this.store
       .listMemory({ scope: opts.scope }) // exclusions + expired already filtered
-      .filter((r) => r.category !== "exclusion");
+      .filter((r) => r.category !== "exclusion" && retrievalDecision(rowToEntry(r), principal).visible);
     if (rows.length === 0) return [];
 
     let qvec: number[];
@@ -553,6 +552,7 @@ export class MemoryStore {
         sim: s.sim,
         score: s.score,
         reason: reasonFor(s.sim, rowToEntry(s.row), s.mode),
+        channel: recallChannel(s.row.trust_status),
       }));
 
     this.touchAccess(hits);
@@ -641,6 +641,7 @@ export class MemoryStore {
       source: "user",
       tags: [...old.tags, "correction"],
       importance: old.importance,
+      agentVisibility: old.agentVisibility, // a correction never widens the ACL
     });
     if (!added.ok || !added.entry) {
       return { ok: false, reason: added.reason ?? "could not store the correction" };
@@ -720,16 +721,12 @@ export class MemoryStore {
 
   // ── import / export ───────────────────────────────────────────────────
 
-  export(): MemoryExport {
+  /** Export a bundle. Phase 7: scoped; `includeQuarantined` carries revoked/quarantined/proposed rows with their label. */
+  export(opts: { scope?: string; includeQuarantined?: boolean } = {}): MemoryExport {
     const entries = this.store
-      .listMemory({ includeExclusions: true, includeExpired: true })
+      .listMemory({ scope: opts.scope, includeExclusions: true, includeExpired: true, includeRevoked: opts.includeQuarantined })
       .map(rowToEntry);
-    return {
-      format: "xr-memory",
-      version: 1,
-      exportedAt: Date.now(),
-      entries,
-    };
+    return { format: "xr-memory", version: 2, exportedAt: Date.now(), entries };
   }
 
   /**
@@ -763,6 +760,9 @@ export class MemoryStore {
           source: "import",
           tags: Array.isArray(raw.tags) ? raw.tags : [],
           importance: raw.importance,
+          // Phase 7: ACL + kind round-trip (validated on add).
+          ...(Array.isArray((raw as MemoryEntryWithContext).agentVisibility) ? { agentVisibility: (raw as MemoryEntryWithContext).agentVisibility } : {}),
+          ...((raw as MemoryEntryWithContext).kind ? { kind: (raw as MemoryEntryWithContext).kind as MemoryKind } : {}),
         });
         // Carry expiry over (add() doesn't take an absolute expiresAt directly).
         if (res.ok && !res.duplicate && typeof raw.expiresAt === "number" && Number.isFinite(raw.expiresAt)) {

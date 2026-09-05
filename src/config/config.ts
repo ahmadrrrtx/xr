@@ -369,10 +369,9 @@ const ConfigSchema = z.object({
       enabled: z.boolean().default(true),
       /**
        * Injection mode.
-       *  - "legacy"  : 4.4 behavior (single unlabelled memory block)
-       *  - "context" : 4.5 typed, channel-separated context packages
-       *  - "both"    : context packages, with the legacy block appended
-       *                (transition aid; doubles context cost — not a default)
+       *  - "legacy"  : 4.4 behavior (single unlabelled memory block) — DEPRECATED (Phase 7, F-21)
+       *  - "context" : 4.5 typed, channel-separated context packages (the only path from 2.0)
+       *  - "both"    : context packages + legacy block — DEPRECATED (still works; loadConfig() warns)
        */
       injectionMode: z.enum(["legacy", "context", "both"]).default("context"),
       /**
@@ -1231,6 +1230,7 @@ function loadConfigInner(): { config: XRConfig; warnings: string[] } {
     if (needsWrite) {
       writeFileSync(CONFIG_PATH, JSON.stringify(parsed.data, null, 2));
     }
+    if (parsed.data.knowledge.injectionMode !== "context") warnings.push(`knowledge.injectionMode "${parsed.data.knowledge.injectionMode}" is deprecated (Phase 7) and will be removed in 2.0 — memory is injected as an unlabelled system message on this path. Set it to "context" (channel-separated, ACL-gated). See docs/privacy/MEMORY.md.`);
     setCachedConfig(parsed.data, warnings, CONFIG_PATH, "disk");
     return { config: parsed.data, warnings };
   }

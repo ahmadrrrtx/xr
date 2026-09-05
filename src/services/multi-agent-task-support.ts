@@ -145,7 +145,9 @@ function dependencyById(record: WorkflowRecord, taskId: string): WorkflowTask | 
 
     const scope = projectScopeFromCwd(record.metadata.cwd);
     const engine = new MemoryStore(store);
-    const recalled = engine.recall(record.goal, { scope, k });
+    // Phase 7: the brief is assembled AS the memory_manager role — rows sequestered
+    // to other roles are filtered by the retrieval ACL before anything is rendered.
+    const recalled = engine.recall(record.goal, { scope, k, principal: { role: "memory_manager", agentId: task?.taskId ?? record.workflowId } });
 
     // When user memory is not permitted, only project-scoped entries survive.
     const permitted =

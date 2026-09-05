@@ -116,6 +116,7 @@ function cmdStatus(store: Store, f: Flags): void {
       policyVersion: CONTEXT_POLICY_VERSION,
       workspace: store.workspaceId,
       injectionMode: config.knowledge.injectionMode,
+      injectionModeDeprecated: config.knowledge.injectionMode !== "context",
       enforceScope: config.knowledge.enforceScope,
       lexicalOnly: config.knowledge.lexicalOnly,
       context: health,
@@ -128,7 +129,7 @@ function cmdStatus(store: Store, f: Flags): void {
   out(`  policy            ${CONTEXT_POLICY_VERSION}`);
   out(`  workspace         ${store.workspaceId}`);
   out(`  enabled           ${isKnowledgeEnabled() ? "yes" : "no"}`);
-  out(`  injection mode    ${config.knowledge.injectionMode}`);
+  out(`  injection mode    ${config.knowledge.injectionMode}${config.knowledge.injectionMode === "context" ? "" : C.yellow(" (DEPRECATED — removed in 2.0; set knowledge.injectionMode to \"context\")")}`);
   out(`  scope enforcement ${config.knowledge.enforceScope ? "on" : C.red("OFF (unsafe)")}`);
   out(`  retrieval         ${config.knowledge.lexicalOnly ? "lexical only" : "semantic + rerank"}`);
   out("");

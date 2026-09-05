@@ -24,9 +24,33 @@ export const MEMORY_SOURCES = [
   "voice", // confirmed via voice
   "research", // saved from a research output
   "import", // bulk imported
+  // Phase 7 (F-21) — provenance-mandatory write channels. Never user-trusted.
+  "tool", // a tool result (`provenanceRef` = tool:<name>) — data, quarantined at recall
+  "agent", // a workflow role (`provenanceRef` = agent:<role>) — proposed until the user approves
+  "schedule", // a maintenance job (consolidation) — derived synthesis, never instruction
 ] as const;
 
 export type MemorySource = (typeof MEMORY_SOURCES)[number];
+
+/** Phase 7 — what KIND of memory a row is (orthogonal to the legacy category). */
+export const MEMORY_KINDS = ["fact", "preference", "episode", "procedure", "summary"] as const;
+export type MemoryKind = (typeof MEMORY_KINDS)[number];
+
+/** Phase 7 — the provenance a write MUST declare (`WriteProvenance.source`). */
+export interface WriteProvenance {
+  source: "user" | "tool" | "agent" | "schedule";
+  /** tool:<name> · agent:<role> · a run/plan id. Never invented. */
+  ref?: string;
+}
+
+/** Legacy category → Phase 7 kind (the migration-9 backfill uses the same table). */
+export function kindForCategory(c: MemoryCategory, tags: readonly string[] = []): MemoryKind | null {
+  if (tags.includes("summary")) return "summary";
+  if (c === "preference") return "preference";
+  if (c === "workflow") return "procedure";
+  if (c === "project" || c === "fact") return "fact";
+  return null; // exclusion = user policy, not a memory
+}
 
 /** A fully-formed memory entry (mirrors the user_memory table). */
 export interface MemoryEntry {
@@ -70,12 +94,19 @@ export interface RecallHit {
   score: number;
   /** Human-readable reason this entry was surfaced. */
   reason: string;
+  /**
+   * Phase 7 — which prompt channel the hit may occupy. `quarantine` = untrusted
+   * or unknown trust: shown only delimited (never in the legacy system block,
+   * never as an instruction). Recall can never produce an instruction-channel hit.
+   */
+  channel: "data" | "quarantine";
 }
 
 /** The portable export format (stable across versions). */
 export interface MemoryExport {
   format: "xr-memory";
-  version: 1;
+  /** 2 = Phase 7 (entries carry ACL/kind/quarantine labels; v1 bundles still import). */
+  version: 1 | 2;
   exportedAt: number;
   entries: MemoryEntry[];
 }
@@ -120,6 +151,21 @@ export function isExpired(entry: { expiresAt?: number | null }, now: number = Da
 
 /** Default relevance floor for recall (conservative: weak hits are dropped). */
 export const RECALL_FLOOR = 0.12;
+
+/**
+ * Phase 7 — WHO is recalling. `"user"` is the human owner (CLI, voice, shell);
+ * anything else is role-bearing identity data (an `AgentIdentity` satisfies
+ * this structurally). The ACL in `acl.ts` decides visibility from the role.
+ */
+export type MemoryPrincipal = "user" | { readonly role: string; readonly agentId: string };
+
+/** Options shared by every recall* entry point. `principal` defaults to `"user"`. */
+export interface RecallOpts {
+  scope?: string;
+  k?: number;
+  floor?: number;
+  principal?: MemoryPrincipal;
+}
 
 // ── XR 4.5 (Knowledge and Context OS) — additive context metadata ──────────
 //
@@ -173,6 +219,14 @@ export interface MemoryContextMeta {
   embeddingModel?: string | null;
   embeddingDim?: number | null;
   workspaceId?: string | null;
+  // ── Phase 7 (F-21) — memory policy columns (migration 9) ──────────────
+  /** Role ACL. `["*"]` = every principal (the pre-Phase-7 default). No "*" = sequestered. */
+  agentVisibility?: string[];
+  kind?: MemoryKind | null;
+  /** Numeric projection of `confidence`; NOT a truth claim. */
+  confidenceScore?: number | null;
+  /** Audit-chain hash of the write event that created this row. */
+  provenanceEventId?: string | null;
 }
 
 /** A memory entry with its XR 4.5 context metadata. */

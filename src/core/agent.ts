@@ -708,25 +708,25 @@ export async function runAgentLoop(
         (userMemoryStore && "recallSemantic" in userMemoryStore
           ? (userMemoryStore as unknown as MemoryStore)
           : undefined);
+      // Phase 7 (F-21): principal-filtered recall (run identity role → ACL); this DEPRECATED
+      // legacy block carries data-channel hits only — a quarantine hit never reaches system role.
+      const rOpts = { scope, k: limit, principal: deps.agentIdentity ?? ("user" as const) };
       const hits = engine
-        ? (deps.memory.semantic === false
-          ? engine.recallExplain(task, { scope, k: limit })
-          : await engine.recallSemanticExplain(task, { scope, k: limit }))
+        ? (deps.memory.semantic === false ? engine.recallExplain(task, rOpts) : await engine.recallSemanticExplain(task, rOpts))
         : [];
-      const recalled = hits.map((h) => h.entry);
+      const dataHits = hits.filter((h) => h.channel !== "quarantine");
+      const recalled = dataHits.map((h) => h.entry);
       const block = buildMemoryBlock(recalled);
       if (block) {
         messages.push({ role: "system", content: block });
-        auditStore.audit(
-          "memory.recall",
-          {
-            count: recalled.length,
-            ids: recalled.map((e) => e.id),
-            scores: hits.map((h) => ({ id: h.entry.id, sim: Math.round(h.sim * 100) })),
-            mode: contextMode,
-          },
-          sessionId,
-        );
+        auditStore.audit("memory.recall", {
+          count: recalled.length,
+          ids: recalled.map((e) => e.id),
+          scores: dataHits.map((h) => ({ id: h.entry.id, sim: Math.round(h.sim * 100) })),
+          quarantined: hits.length - dataHits.length,
+          principal: deps.agentIdentity ? `agent:${deps.agentIdentity.role}` : "user",
+          mode: contextMode, legacyInjection: true, // deprecated path — docs/privacy/MEMORY.md
+        }, sessionId);
       }
     } catch {
       /* best-effort: recall must never break a run */

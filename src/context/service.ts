@@ -17,6 +17,8 @@ import { Tokens } from "../core/tokens.ts";
 import type { WorkspaceStore } from "../state/workspace-store.ts";
 import { MemoryStore, projectScopeFromCwd } from "./memory/store.ts";
 import { IsolatedMemoryStore } from "./isolated-store.ts";
+import { retrievalDecision } from "./memory/acl.ts";
+import type { MemoryPrincipal } from "./memory/types.ts";
 import { recordRetrievalLatency } from "./engine.ts";
 import {
   CONTEXT_POLICY_VERSION,
@@ -273,7 +275,11 @@ export class ContextService implements LifecycleHook {
     if (grant.allowedTiers.includes("long_term_memory") && opts.memoryEnabled !== false) {
       try {
         const mem = opts.memoryStore ?? new IsolatedMemoryStore(this.store);
-        const entries = mem.list({ scope: grant.scope.projectScope });
+        // Phase 7 (F-21): the grant's requester is the ACL principal — an agent role only
+        // receives rows whose agent_visibility admits it; the human owner receives all.
+        const principal: MemoryPrincipal =
+          grant.requester.kind === "agent" && grant.requester.role ? { role: grant.requester.role, agentId: grant.requester.id } : "user";
+        const entries = mem.list({ scope: grant.scope.projectScope }).filter((e) => retrievalDecision(e, principal).visible);
         for (const e of entries) {
           extra.push({
             item: memoryEntryToContextItem(e, this.wsId),

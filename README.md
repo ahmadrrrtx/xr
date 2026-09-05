@@ -551,7 +551,7 @@ XR's differentiator is that its claims are checked by machines on every PR.
 | `bun test` + parity suite | **2,946 tests** across 297 files (707 enterprise/business tests moved to the satellites with their code, ADR-0028); one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
 | `release:check` + `claim-lint` | version identity stamped everywhere; every public claim has evidence; prohibited/supervised terms fail the build |
 | `baseline:inventory` | source-derived repository inventory regenerated and compared |
-| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a 135,000-LOC ceiling on the whole tree** |
+| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a 136,000-LOC ceiling on the whole tree** |
 | `claim-lint` constitution gate | every `Article N` cited anywhere in `src/`, `test/`, `scripts/`, `.github/` exists in [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md) |
 | `api:schema:check` + `client:check` + `api:compat` | daemon OpenAPI schema, generated client, compatibility |
 | `channel:check` | channel configs match the release manifest |
@@ -618,7 +618,7 @@ Layering is enforced in CI: the `boundaries` gate + `test/architecture/*` pin al
 directions (surfaces → services → execution/core → state; tools/providers as leaves), and
 `bun run ownership:check` requires every source area to have an owning document. Core imports
 **nothing** from `satellites/` — enforced three ways (dependency-cruiser rule, boundary test,
-isolation test) — and `bun run size-gate` holds the whole tree under a 135,000-LOC ceiling so the
+isolation test) — and `bun run size-gate` holds the whole tree under a 136,000-LOC ceiling so the
 23,376 LOC Phase 5 removed cannot quietly grow back.
 
 ---

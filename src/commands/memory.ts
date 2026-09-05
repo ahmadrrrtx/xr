@@ -20,7 +20,7 @@ export class MemoryCommand implements Command {
   name = "memory";
   description = "durable, inspectable, user-controlled memory";
   usage =
-    'xr memory [status|list|add|edit|remove|search|recall|reindex|summarize|prune|health|export|import|clear|summaries]';
+    'xr memory [status|list|add|edit|remove|search|recall|reindex|summarize|prune|health|export|import|clear|summaries|conflicts|resolve|consolidate|forget]';
 
   async execute(ctx: CommandContext): Promise<void> {
     const { handleMemoryCommand } = await import("../context/memory/cli.ts");

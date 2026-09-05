@@ -17,6 +17,7 @@ the surface (capabilities, approvals, memory, …) keeps its established prefixe
 | `agents.*` | multi-agent plane | plans, identities, partitions, tasks, verdicts |
 | `task.*` | plain-run journal (1-node tasks) | transitions, checkpoints, resumes |
 | `session.*` | agent loop lifecycle | start/done/error/resume/cancel |
+| `memory.*` | durable memory (Phase 7 policy layer) | writes with provenance, contradictions, consolidation, irreversible forgetting |
 
 ## Events
 
@@ -57,6 +58,23 @@ the surface (capabilities, approvals, memory, …) keeps its established prefixe
 | `session.resume` | The loop accepted a resume seed (the note states the documented semantics: model re-asked from a durable transcript). | stepIdx, droppedMessages |
 | `session.cancelled` | A run cancelled mid-flight (workload-aware cancellation). | steps, snapshot |
 | `agents.verifier.decided` | The artifact verifier returned its verdict — approved, changes_requested, rejected, or **unparsable (fail-closed)**. | decision, reason |
+
+### Memory policy (Phase 7 · F-21)
+
+Memory events carry ids, lengths, labels and counts — **never content**
+(pinned by `test/context/phase7-memory-policy.test.ts`). The privacy contract is
+`docs/privacy/MEMORY.md`.
+
+| Event | Fired when | Carries |
+| --- | --- | --- |
+| `memory.add` | A durable memory row was written. Its hash becomes the row's `provenance_event_id`, so every memory points at the ledger entry that created it. | id, category, scope, source, `provenance {source, ref}`, `visibility[]`, contentLen, ttlMs |
+| `memory.conflict.detected` | A write was lexically near (cosine ≥ 0.6, same scope + category) one or more current rows; open rows were added to `memory_conflicts`. Nothing was overwritten. | newId, `conflicts[{conflictId, withId, similarity}]`, detector |
+| `memory.resolve` | The user decided a contradiction (`xr memory resolve`). The loser is SUPERSEDED (kept, undoable), never deleted. | a, b, keep, conflictId, actor |
+| `memory.recall` | The DEPRECATED legacy system-message block was injected. Phase 7 adds the principal and the count of quarantine-channel hits that were dropped. | count, ids, scores, quarantined, principal, `legacyInjection: true` |
+| `memory.consolidate.plan` | `xr memory consolidate` computed its plan (read-only) and is about to apply it. | jobId, groups, originals, alreadyConsolidated, budget, summarizer (`deterministic`/`model`) |
+| `memory.consolidate.applied` | One summary row was written and its originals were superseded (never deleted). | jobId, summaryId, `superseded[]`, scope, category |
+| `memory.consolidate.budget_stop` | The job's own Governor envelope refused the next group; the remaining groups are reported as skipped, their originals intact. | jobId, reason, snapshot |
+| `memory.forgotten` | An IRREVERSIBLE erase completed (row + cached vector + undo-ledger images + projection). Written LAST, so it only claims what happened. | target (id/query/scope), ids, count, purgedLedgerRows, actor, `irreversible: true` |
 
 ## Reading rules
 

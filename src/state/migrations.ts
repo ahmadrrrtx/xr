@@ -201,6 +201,9 @@ const SOURCE_TRUST: Record<string, string> = {
   voice: "approved_memory",
   research: "generated_synthesis",
   import: "unknown",
+  tool: "untrusted_external", // Phase 7 channels (never above their provenance ceiling)
+  agent: "generated_synthesis",
+  schedule: "generated_synthesis",
 };
 const SOURCE_PROVENANCE: Record<string, string> = {
   user: "user_input",
@@ -208,6 +211,9 @@ const SOURCE_PROVENANCE: Record<string, string> = {
   voice: "user_input",
   research: "research",
   import: "import",
+  tool: "tool_output",
+  agent: "model_synthesis",
+  schedule: "model_synthesis",
 };
 const SOURCE_ACTOR: Record<string, string> = {
   user: "user",
@@ -215,6 +221,9 @@ const SOURCE_ACTOR: Record<string, string> = {
   voice: "user",
   research: "system",
   import: "system",
+  tool: "agent",
+  agent: "agent",
+  schedule: "system",
 };
 
 /** Conservative: never claim an item is "public" without evidence. */
@@ -604,7 +613,91 @@ const MIGRATION_8: Migration = {
   },
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6, MIGRATION_7, MIGRATION_8];
+/**
+ * Migration 9 — Phase 7 (Memory Policy Layer, F-21).
+ *
+ * Additive columns on `user_memory` plus one new table. Every column is
+ * nullable or defaulted, so a pre-Phase-7 row reads unchanged:
+ *   - `agent_visibility` — JSON role list (ACL). Default `["*"]` = visible to
+ *     every principal, i.e. EXACTLY the pre-Phase-7 behaviour. Nothing that
+ *     already exists is silently restricted by this migration.
+ *   - `kind` — fact|preference|episode|procedure|summary, backfilled from the
+ *     legacy category (project/fact→fact, preference→preference,
+ *     workflow→procedure, tag `summary`→summary). `exclusion` rows are user
+ *     POLICY, not memory (context types them `instruction`), so their kind
+ *     stays NULL rather than being forced into a memory taxonomy.
+ *   - `confidence_score` — numeric projection of the existing textual
+ *     `confidence` level (high .8 / medium .5 / low .3). NOT a truth claim;
+ *     `unknown` stays NULL — the migration never invents a number.
+ *   - `provenance_event_id` — the audit-chain hash of the write event, set for
+ *     rows written from Phase 7 on. Legacy rows keep NULL (there is no honest
+ *     event to point at; provenance_kind/actor_kind were already backfilled).
+ *   - `memory_conflicts` — contradiction arbitration ledger (open/resolved),
+ *     written on high-similarity writes; never resolves itself.
+ *
+ * Down: drops the table and the four columns (fail-soft on SQLite < 3.35).
+ */
+const MIGRATION_9: Migration = {
+  version: 9,
+  name: "phase7_memory_policy",
+  up(store: WorkspaceStore) {
+    const cols = (store as any).prepare
+      ? ((store as any).prepare("PRAGMA table_info(user_memory)").all() as Array<{ name: string }>)
+      : [];
+    const has = (n: string) => cols.some((c) => c.name === n);
+    if (!has("agent_visibility")) {
+      store.exec(`ALTER TABLE user_memory ADD COLUMN agent_visibility TEXT NOT NULL DEFAULT '["*"]'`);
+    }
+    if (!has("kind")) store.exec(`ALTER TABLE user_memory ADD COLUMN kind TEXT`);
+    if (!has("confidence_score")) store.exec(`ALTER TABLE user_memory ADD COLUMN confidence_score REAL`);
+    if (!has("provenance_event_id")) store.exec(`ALTER TABLE user_memory ADD COLUMN provenance_event_id TEXT`);
+    // Backfill (idempotent: only rows still NULL are touched).
+    store.exec(`
+      UPDATE user_memory SET kind = CASE
+          WHEN (',' || tags || ',') LIKE '%,summary,%' THEN 'summary'
+          WHEN category = 'preference' THEN 'preference'
+          WHEN category = 'workflow' THEN 'procedure'
+          WHEN category IN ('project','fact') THEN 'fact'
+          ELSE NULL END
+        WHERE kind IS NULL;
+      UPDATE user_memory SET confidence_score = CASE confidence
+          WHEN 'high' THEN 0.8 WHEN 'medium' THEN 0.5 WHEN 'low' THEN 0.3 ELSE NULL END
+        WHERE confidence_score IS NULL;
+      UPDATE user_memory SET agent_visibility = '["*"]'
+        WHERE agent_visibility IS NULL OR agent_visibility = '';
+      CREATE TABLE IF NOT EXISTS memory_conflicts (
+        id TEXT PRIMARY KEY,
+        workspace_id TEXT,
+        item_a TEXT NOT NULL,
+        item_b TEXT NOT NULL,
+        similarity REAL NOT NULL,
+        detector TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        resolution TEXT,
+        resolved_by TEXT,
+        resolved_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_memory_conflicts_status ON memory_conflicts(status, created_at DESC);
+    `);
+  },
+  down(store: WorkspaceStore) {
+    store.exec(`DROP TABLE IF EXISTS memory_conflicts;`);
+    const cols = (store as any).prepare
+      ? ((store as any).prepare("PRAGMA table_info(user_memory)").all() as Array<{ name: string }>)
+      : [];
+    for (const col of ["provenance_event_id", "confidence_score", "kind", "agent_visibility"]) {
+      if (!cols.some((c) => c.name === col)) continue;
+      try {
+        store.exec(`ALTER TABLE user_memory DROP COLUMN ${col}`);
+      } catch {
+        /* older SQLite — column simply remains (nullable/defaulted, harmless) */
+      }
+    }
+  },
+};
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6, MIGRATION_7, MIGRATION_8, MIGRATION_9];
 
 /** Latest known schema version. */
 export const LATEST_SCHEMA_VERSION: number = MIGRATIONS.reduce(
