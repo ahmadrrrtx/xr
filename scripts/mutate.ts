@@ -27,7 +27,7 @@ interface GatedModule {
 }
 
 const GATED: GatedModule[] = [
-  { path: "src/state/workspace-store.ts", tests: ["test/state/workspace-store.test.ts", "test/reliability/single-writer.test.ts", "test/reliability/audit-chain-extra.test.ts", "test/reliability/store-edge.test.ts"] },
+  { path: "src/state/workspace-store.ts", tests: ["test/state/workspace-store.test.ts", "test/reliability/single-writer.test.ts", "test/reliability/audit-chain-extra.test.ts", "test/reliability/store-edge.test.ts", "test/phase4/signed-audit-migration.test.ts", "test/phase4/signed-audit-store-branches.test.ts"] },
   { path: "src/state/write-gate.ts", tests: ["test/reliability/single-writer.test.ts", "test/reliability/crash-injection.test.ts"] },
   { path: "src/execution/state-machine.ts", tests: ["test/execution/state-machine.test.ts"] },
   { path: "src/services/review-decision.ts", tests: ["test/phase0/reviewer-fail-closed.test.ts"] },

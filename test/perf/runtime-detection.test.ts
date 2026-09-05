@@ -17,6 +17,40 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startBlackhole, type BlackholeHandle } from "../helpers/blackhole.ts";
 
+/**
+ * Pin EVERY runtime's probe URL to a deterministic endpoint via an isolated
+ * XR_HOME config.
+ *
+ * Why: the default base URLs are `http://localhost:<well-known port>` on the
+ * SHARED CI host. The blackhole binds 127.0.0.1 only, so ambient state outside
+ * our control (localhost resolving to ::1, another process answering on a
+ * well-known port, a real runtime installed on the runner) could make a probe
+ * return JSON and flip a row healthy — the exact flake seen in CI
+ * (run #192/#193: `expect(r.healthy).toBe(false)` received true). Pinning the
+ * config makes the probes go ONLY where this test decides: the blackhole
+ * (never answers) — the detection logic under test is unchanged and the
+ * environment is fully determined.
+ */
+async function pinAllRuntimesTo(home: string, urlFor: (id: string) => string): Promise<void> {
+  const { loadConfig, saveConfig } = await import("../../src/config/config.ts");
+  const { invalidateConfigCache } = await import("../../src/config/cache.ts");
+  const { LOCAL_RUNTIMES } = await import("../../src/local/registry.ts");
+  invalidateConfigCache("all");
+  const { config } = loadConfig();
+  const localModels = ((config.localModels ?? {}) as Record<string, any>);
+  localModels.runtimes = ((localModels.runtimes ?? {}) as Record<string, any>);
+  for (const def of LOCAL_RUNTIMES) {
+    localModels.runtimes[def.id] = {
+      ...((localModels.runtimes[def.id] as any) ?? {}),
+      baseUrl: urlFor(def.id),
+    };
+  }
+  config.localModels = localModels as never;
+  saveConfig(config);
+  const { invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+  invalidateRuntimeCache();
+}
+
 describe("Phase 01 — runtime detection", () => {
   let blackhole: BlackholeHandle | null = null;
 
@@ -31,27 +65,79 @@ describe("Phase 01 — runtime detection", () => {
   test("bounded-parallel detection: 11 runtimes with all ports blackholed completes well under the old ~29 s sequential time", async () => {
     if (!blackhole) return; // ports busy — skip on hosts with real runtimes
     const { detectAllRuntimes, invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
-    invalidateRuntimeCache();
-    const started = Date.now();
-    const runtimes = await detectAllRuntimes();
-    const elapsed = Date.now() - started;
-    // 3 waves × 2.5 s bound = ~7.5 s worst case; generous CI ceiling:
-    expect(elapsed).toBeLessThan(12_000);
-    expect(runtimes.length).toBeGreaterThanOrEqual(10);
+    const { rmSync } = await import("node:fs");
+    // Hermetic: probes go to OUR blackhole (127.0.0.1, never answers), not to
+    // ambient localhost defaults — see pinAllRuntimesTo for the flake history.
+    const home = mkdtempSync(join(tmpdir(), "xr-det-bp-"));
+    const prevHome = process.env.XR_HOME;
+    process.env.XR_HOME = home;
+    const bh = `http://127.0.0.1:${blackhole.ports[0]}`;
+    await pinAllRuntimesTo(home, () => bh);
+    try {
+      const started = Date.now();
+      const runtimes = await detectAllRuntimes();
+      const elapsed = Date.now() - started;
+      // 3 waves × 2.5 s bound = ~7.5 s worst case; generous CI ceiling:
+      expect(elapsed).toBeLessThan(12_000);
+      expect(runtimes.length).toBeGreaterThanOrEqual(10);
+    } finally {
+      if (prevHome === undefined) delete process.env.XR_HOME;
+      else process.env.XR_HOME = prevHome;
+      const { invalidateConfigCache } = await import("../../src/config/cache.ts");
+      invalidateConfigCache("all");
+      invalidateRuntimeCache();
+      try {
+        rmSync(home, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    }
   }, 20_000);
 
   test("deterministic fallback on timeout: every runtime gets a status row, none throws", async () => {
     if (!blackhole) return;
-    const { detectAllRuntimes } = await import("../../src/local/runtimes.ts");
-    const runtimes = await detectAllRuntimes();
-    for (const r of runtimes) {
-      expect(typeof r.id).toBe("string");
-      expect(r.healthy).toBe(false);
-      expect(typeof r.detail).toBe("string");
-      expect(r.detail.length).toBeGreaterThan(0);
-      expect(Array.isArray(r.models)).toBe(true);
-      expect(typeof r.installed).toBe("boolean");
-      expect(typeof r.configured).toBe("boolean");
+    const { detectAllRuntimes, invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+    const { invalidateConfigCache } = await import("../../src/config/cache.ts");
+    // Hermetic twice over: (1) a FRESH isolated XR_HOME with the runtime+config
+    // caches cleared, and (2) every probe PINNED to our own blackhole endpoint
+    // (127.0.0.1, never answers). The earlier version trusted ambient
+    // localhost defaults on shared runners — a row could come back healthy
+    // from state this test does not control (CI runs #192/#193 flaked exactly
+    // there: `expect(r.healthy).toBe(false)` received true).
+    const { mkdtempSync: mkdtemp, rmSync: rm } = await import("node:fs");
+    const { tmpdir: tmp } = await import("node:os");
+    const { join: joinPath } = await import("node:path");
+    const home = mkdtemp(joinPath(tmp(), "xr-det-timeout-"));
+    const prevHome = process.env.XR_HOME;
+    process.env.XR_HOME = home;
+    const bh = `http://127.0.0.1:${blackhole.ports[0]}`;
+    await pinAllRuntimesTo(home, () => bh);
+    invalidateConfigCache("all");
+    invalidateRuntimeCache();
+    try {
+      const runtimes = await detectAllRuntimes();
+      // 11 runtimes are expected (every blackholed port yields a row); guard
+      // the count too so a missing row can never pass silently.
+      expect(runtimes.length).toBeGreaterThanOrEqual(10);
+      for (const r of runtimes) {
+        expect(typeof r.id).toBe("string");
+        expect(r.healthy).toBe(false);
+        expect(typeof r.detail).toBe("string");
+        expect(r.detail.length).toBeGreaterThan(0);
+        expect(Array.isArray(r.models)).toBe(true);
+        expect(typeof r.installed).toBe("boolean");
+        expect(typeof r.configured).toBe("boolean");
+      }
+    } finally {
+      invalidateRuntimeCache();
+      if (prevHome === undefined) delete process.env.XR_HOME;
+      else process.env.XR_HOME = prevHome;
+      invalidateConfigCache("all");
+      try {
+        rm(home, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
     }
   }, 20_000);
 
@@ -84,6 +170,17 @@ describe("Phase 01 — runtime detection", () => {
           ...((config.localModels as Record<string, any>).runtimes.ollama ?? {}),
           baseUrl: `http://127.0.0.1:${healthy.port}`,
         };
+        // Hermetic: the non-ollama runtimes are pinned to a deterministic
+        // CLOSED loopback port (instant ECONNREFUSED → unhealthy) instead of
+        // ambient localhost defaults (see pinAllRuntimesTo for the rationale).
+        const { LOCAL_RUNTIMES } = await import("../../src/local/registry.ts");
+        for (const def of LOCAL_RUNTIMES) {
+          if (def.id === "ollama") continue;
+          (config.localModels as Record<string, any>).runtimes[def.id] = {
+            ...((config.localModels as Record<string, any>).runtimes[def.id] ?? {}),
+            baseUrl: "http://127.0.0.1:9", // discard port — nothing listens
+          };
+        }
         saveConfig(config);
         const runtimes = await detectAllRuntimes();
         const ollama = runtimes.find((r) => r.id === "ollama");
@@ -176,6 +273,14 @@ describe("Phase 01 — runtime detection", () => {
   test("XR_RUNTIME_CACHE=0 disables the cache but keeps detection working (bounded, never sequential)", async () => {
     if (!blackhole) return;
     process.env.XR_RUNTIME_CACHE = "0";
+    // Hermetic probes (see pinAllRuntimesTo): the timing assertions must
+    // measure OUR bounded-parallel detection, not ambient port state.
+    const { mkdtempSync: mkdtemp, rmSync: rm } = await import("node:fs");
+    const home = mkdtemp(join(tmpdir(), "xr-det-nocache-"));
+    const prevHome = process.env.XR_HOME;
+    process.env.XR_HOME = home;
+    const bh = `http://127.0.0.1:${blackhole.ports[0]}`;
+    await pinAllRuntimesTo(home, () => bh);
     try {
       const { detectAllRuntimes, runtimeCacheStats } = await import("../../src/local/runtimes.ts");
       const missesBefore = runtimeCacheStats().misses;
@@ -189,6 +294,17 @@ describe("Phase 01 — runtime detection", () => {
       expect(runtimeCacheStats().misses).toBe(missesBefore); // cache untouched
     } finally {
       delete process.env.XR_RUNTIME_CACHE;
+      if (prevHome === undefined) delete process.env.XR_HOME;
+      else process.env.XR_HOME = prevHome;
+      const { invalidateConfigCache } = await import("../../src/config/cache.ts");
+      invalidateConfigCache("all");
+      const { invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+      invalidateRuntimeCache();
+      try {
+        rm(home, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
     }
   }, 30_000);
 });

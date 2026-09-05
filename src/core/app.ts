@@ -60,6 +60,7 @@ import {
 import { loadDefaultProviders } from "./provider-modules.ts";
 import { DEFAULT_PROVIDER_ORDER } from "./boot-profile.ts";
 import { StallDetector } from "./stall-detector.ts";
+import { registerAuditAnchorJob } from "./audit-anchor-job.ts";
 
 /**
  * Context handed to a ServiceProvider. Providers register services into the
@@ -324,6 +325,14 @@ export class XRApp {
     // Close the single unified database connection.
     const store = this.registry.tryResolve(Tokens.Store);
     if (store) {
+      // Phase 4 (F-08): on-exit anchor push when configured (audit.anchor).
+      // Fail-safe: gated, audited, never blocks shutdown.
+      try {
+        const { pushAnchor } = await import("../security/audit-anchor.ts");
+        await pushAnchor(store, { force: true });
+      } catch {
+        /* anchoring is optional; shutdown always proceeds */
+      }
       try {
         store.close();
       } catch {
@@ -781,5 +790,11 @@ export class XRApp {
         }
       },
     });
+
+    // Phase 4 (Evidence Integrity, F-08) — optional remote audit anchor.
+    // Registered from a dedicated module so the kernel stays within its size
+    // waiver; the job itself is opt-in (audit.anchor.enabled=false by default)
+    // and fail-safe. The on-exit push lives in shutdown().
+    registerAuditAnchorJob(this.registry, this.backgroundServices);
   }
 }

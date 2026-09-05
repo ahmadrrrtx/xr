@@ -39,4 +39,14 @@ async function main(): Promise<void> {
   writeSync(1, JSON.stringify(result) + "\n");
 }
 
-void main();
+// Exit deterministically: the secret backends spawn async OS processes
+// (keychain/secret-service) whose handles can keep the bun event loop alive
+// on Windows, which would hang the parent's `await proc.exited` forever.
+void main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((err) => {
+    writeSync(2, String(err) + "\n");
+    process.exit(1);
+  });

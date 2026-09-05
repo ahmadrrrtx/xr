@@ -30,6 +30,10 @@ try {
   emit(result);
 } catch (err) {
   emit({ ok: false, reason: String(err) });
+  process.exitCode = 1;
 } finally {
   store.close();
+  // Explicit exit: never let a background handle keep this short-lived fixture
+  // alive on Windows (would hang the parent's awaited process exit).
+  process.exit(process.exitCode ?? 0);
 }

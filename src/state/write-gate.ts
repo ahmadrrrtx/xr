@@ -198,6 +198,23 @@ export class WriteGate {
   }
 
   /**
+   * Drop cached prepared statements WITHOUT closing the connection, so DDL that
+   * changes the live schema (e.g. a reversible migration down that drops a
+   * column) is not shadowed by a previously-compiled statement holding the old
+   * column layout. Statements are lazily re-prepared on next use.
+   */
+  resetPrepared(): void {
+    for (const stmt of this.prepared) {
+      try {
+        stmt.finalize();
+      } catch {
+        /* already finalized */
+      }
+    }
+    this.prepared.clear();
+  }
+
+  /**
    * Run `fn` inside one serialized IMMEDIATE write transaction.
    * Re-entrant: nested calls join the open transaction.
    */

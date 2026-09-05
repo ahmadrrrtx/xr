@@ -628,6 +628,39 @@ const ConfigSchema = z.object({
   envOverrides: z.record(z.string()).default({}),
   /** Kill-switch for automation/CI: ignore every envOverrides mapping. */
   envOverridesLocked: z.boolean().default(false),
+  /**
+   * Phase 4 (Evidence Integrity, F-08) — signed-audit configuration.
+   *
+   * The Ed25519 head signature needs NO configuration: every install is keyed
+   * automatically on first boot (private key in the OS keychain / encrypted
+   * file fallback). This section only configures the OPTIONAL remote anchor:
+   *
+   *   - `anchor.enabled` defaults to FALSE — no network traffic ever leaves the
+   *     host without explicit opt-in.
+   *   - `anchor.sink` is an HTTPS PUT endpoint, an `s3://`-style URL, or a
+   *     `file://` path. HTTP(S) sinks MUST be operator-allow-listed: the push
+   *     goes through the same egress gate (`guardedFetch`) as every other
+   *     outbound request, and an un-allow-listed anchor is audited + skipped
+   *     (fail-SAFE — the run continues; local verification never depends on it).
+   *   - The anchor is purely additive: offline-first is preserved; local
+   *     `xr audit verify --crypto` works with no anchor configured.
+   */
+  audit: z
+    .object({
+      signEvery: z.number().int().min(1).max(100_000).default(256),
+      anchor: z
+        .object({
+          enabled: z.boolean().default(false),
+          /** HTTPS URL / s3-style URL / file:// path receiving checkpoint PUTs. */
+          sink: z.string().max(2048).optional(),
+          /** Anchor cadence while long-lived processes run (ms). Default 1h. */
+          intervalMs: z.number().int().min(60_000).max(7 * 24 * 3_600_000).default(3_600_000),
+          /** Also anchor on clean process exit (default true; only when enabled). */
+          anchorOnExit: z.boolean().default(true),
+        })
+        .default({}),
+    })
+    .default({}),
 });
 
 export type XRConfig = z.infer<typeof ConfigSchema>;

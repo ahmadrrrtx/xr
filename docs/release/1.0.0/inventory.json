@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-31T19:23:45.384Z",
+  "generatedAt": "2026-09-05T08:43:36.832Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -51,8 +51,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 612,
-    "testFiles": 311,
+    "sourceFiles": 616,
+    "testFiles": 321,
     "cliCommands": 42,
     "daemonRoutes": 123,
     "providers": 26,
@@ -79,11 +79,11 @@
     },
     {
       "path": ".gitleaksignore",
-      "bytes": 1540
+      "bytes": 1797
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 72083
+      "bytes": 74424
     },
     {
       "path": "CODEOWNERS",
@@ -99,7 +99,7 @@
     },
     {
       "path": "Dockerfile",
-      "bytes": 1495
+      "bytes": 1747
     },
     {
       "path": "LICENSE",
@@ -107,7 +107,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 30484
+      "bytes": 31003
     },
     {
       "path": "SECURITY.md",
@@ -143,11 +143,11 @@
     },
     {
       "path": "package.json",
-      "bytes": 4952
+      "bytes": 5127
     },
     {
       "path": "release.manifest.json",
-      "bytes": 10676
+      "bytes": 10699
     },
     {
       "path": "tsconfig.json",
@@ -272,6 +272,7 @@
     "src/control/vision.ts",
     "src/core/agent.ts",
     "src/core/app.ts",
+    "src/core/audit-anchor-job.ts",
     "src/core/boot-profile.ts",
     "src/core/boot-trace.ts",
     "src/core/business-l0.ts",
@@ -642,6 +643,9 @@
     "src/runtime/trust/verify.ts",
     "src/schemas/business-os.skill.json",
     "src/security/attacks.ts",
+    "src/security/audit-anchor.ts",
+    "src/security/audit-signer.ts",
+    "src/security/audit-verify.ts",
     "src/security/egress-proxy.ts",
     "src/security/env-compat.ts",
     "src/security/exec-integrity.ts",
@@ -858,6 +862,7 @@
     "test/deployment/security-identity-backup.test.ts",
     "test/deployment/sync-offline-residency.test.ts",
     "test/deployment/worker-registry.test.ts",
+    "test/e2e-blackbox/audit-crypto.test.ts",
     "test/e2e-blackbox/budget.test.ts",
     "test/e2e-blackbox/cancel.test.ts",
     "test/e2e-blackbox/hygiene.test.ts",
@@ -962,12 +967,15 @@
     "test/phase1/turn-contract.test.ts",
     "test/phase2/approvals-durable.test.ts",
     "test/phase2/architecture-boundaries.test.ts",
+    "test/phase2/config-migrate-3x.test.ts",
     "test/phase2/daemon-approvals.test.ts",
     "test/phase2/migrations.test.ts",
     "test/phase2/policy-boundary.test.ts",
     "test/phase2/preview.test.ts",
     "test/phase2/reservations.test.ts",
     "test/phase2/secret-broker.test.ts",
+    "test/phase4/signed-audit-migration.test.ts",
+    "test/phase4/signed-audit-store-branches.test.ts",
     "test/platform/provenance-write-amplification.test.ts",
     "test/plugins.test.ts",
     "test/plugins/host.test.ts",
@@ -979,10 +987,13 @@
     "test/release/beta-survey.test.ts",
     "test/release/changelog.test.ts",
     "test/release/channels.test.ts",
+    "test/release/consumer-smoke.test.ts",
     "test/release/installer-powershell.test.ts",
     "test/release/installer-verify.test.ts",
     "test/release/platform-parity.test.ts",
     "test/release/release-workflow.test.ts",
+    "test/release/tag-npm-invariant.test.ts",
+    "test/release/write-sums.test.ts",
     "test/reliability.test.ts",
     "test/reliability/artifact-e2e.test.ts",
     "test/reliability/audit-chain-extra.test.ts",
@@ -1021,6 +1032,9 @@
     "test/research/security.test.ts",
     "test/research/url-guard.test.ts",
     "test/security.test.ts",
+    "test/security/audit-anchor.test.ts",
+    "test/security/audit-crypto.test.ts",
+    "test/security/audit-signer.test.ts",
     "test/security/egress-proxy.test.ts",
     "test/security/exec-integrity.test.ts",
     "test/security/mcp-allowlist.test.ts",

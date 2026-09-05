@@ -10,10 +10,16 @@
  *   · /api/models     ~36 s server-side; client killed by Bun 10 s timeout
  *   · chat.stream.post 32 s → 503
  *
- * This file binds its OWN blackhole servers on EPHEMERAL ports and points the
- * test config's local runtime base URLs at them — no shared fixed ports, so it
- * cannot race other test files (the global-port blackhole is used only by
- * test/perf/runtime-detection.test.ts).
+ * Determinism contract (PR #80 macOS repair): the daemon boots its config
+ * ONCE per process (ConfigService is a boot-time singleton) and wires chat
+ * fallbacks from the intelligence catalog's ranked candidates — so this file
+ * maintains exactly ONE config world for the whole process:
+ *   · primary ollama on a closed port (instant refusal),
+ *   · configured fallback lmstudio on an IN-PROCESS stand-in server whose
+ *     health a test can flip (`lmstudioHealthy`) without touching ports,
+ *   · every other local runtime hard-removed from the chat candidate set
+ *     (model-level chat capability overrides — see onlyChatCapableLocals).
+ * All tests must go through this world; none may rewrite config mid-file.
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -22,6 +28,51 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const TOKEN = "perf-token";
+
+/**
+ * The in-process lmstudio stand-in: a fixed port owned by this file for the
+ * whole run (no other test binds it), with a health flag tests can flip so a
+ * "provider down" scenario needs no socket churn and no config rewrite.
+ */
+const LMSTUDIO_PORT = 46587;
+let lmstudioHealthy = true;
+
+/**
+ * Deterministically remove every local runtime except `keep` from the CHAT
+ * candidate set:
+ *   · model-level `chat: false` capability overrides — a HARD evaluator
+ *     rejection (provider-level overrides do NOT propagate to model
+ *     descriptors, so the models must be overridden explicitly);
+ *   · unhealthy runtime marks (soft scoring factor on top).
+ *
+ * Why: the daemon wires its chat fallback from the intelligence catalog's
+ * ranked compatible candidates (routePinned), NOT from
+ * `defaults.fallbackProvider`. With every local preset compatible by default,
+ * in-process ranking noise (metrics/breaker state accumulated earlier in the
+ * lane) could wire `jan` — dead on CI runners — instead of the configured
+ * healthy fallback (the macOS failure in PR #80). Constraining the candidate
+ * set makes both chat scenarios in this file deterministic while still
+ * exercising the real production path (boot config → catalog → evaluator →
+ * pinned-route chain → bounded preflight health gate → FallbackProvider).
+ */
+async function onlyChatCapableLocals(config: Record<string, any>, keep: string[]): Promise<void> {
+  const { LOCAL_RUNTIMES } = await import("../../src/local/registry.ts");
+  const { PRESETS } = await import("../../src/providers/presets.ts");
+  const capabilities = ((config.providerEngine as Record<string, any>) ?? {}).providerCapabilities ?? {};
+  const runtimes = (config.localModels as Record<string, any>).runtimes;
+  for (const def of LOCAL_RUNTIMES) {
+    if (keep.includes(def.providerId) || keep.includes(def.id)) continue;
+    const preset = (PRESETS as Record<string, any>)[def.providerId];
+    const modelIds = new Set<string>([preset?.defaultModel, ...((preset?.knownModels as string[]) ?? [])].filter(Boolean));
+    capabilities[def.providerId] = {
+      ...capabilities[def.providerId],
+      chat: false,
+      models: Object.fromEntries([...modelIds].map((m) => [m, { chat: false }])),
+    };
+    runtimes[def.id] = { ...(runtimes[def.id] ?? {}), healthy: false, running: false };
+  }
+  config.providerEngine = { ...((config.providerEngine as Record<string, any>) ?? {}), providerCapabilities: capabilities };
+}
 
 function blackholeServer(): { port: number; stop(): void } {
   const server = Bun.serve({
@@ -37,26 +88,56 @@ function blackholeServer(): { port: number; stop(): void } {
 describe("Phase 01 — daemon request path under slow-failing probes", () => {
   let handler: (req: Request) => Promise<Response> | Response;
   let home: string;
+  let healthy: ReturnType<typeof Bun.serve> | null = null;
   const prevHome = process.env.XR_HOME;
-  const blackholes: Array<{ port: number; stop(): void }> = [];
 
   beforeAll(async () => {
     const { invalidateConfigCache } = await import("../../src/config/cache.ts");
     home = mkdtempSync(join(tmpdir(), "xr-routes-"));
     process.env.XR_HOME = home;
     invalidateConfigCache("all");
+    // Cross-file process hygiene: an earlier file in the same lane (e.g.
+    // boot-profile) may have populated the module-level provider-health and
+    // runtime-detection caches against a DIFFERENT XR_HOME/config.
+    const { invalidateProviderHealthCache } = await import("../../src/providers/health.ts");
+    const { invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+    invalidateProviderHealthCache();
+    invalidateRuntimeCache();
 
-    // Point two local runtimes at blackholes so their probes hang (the other
-    // runtimes fail fast with ECONNREFUSED, as on a normal machine).
+    // THE one config world for this process (see the header comment):
+    //   primary ollama → closed port (instant refusal, keeps chat fast);
+    //   fallback lmstudio → in-process healthy server (flippable).
+    healthy = Bun.serve({
+      port: LMSTUDIO_PORT,
+      hostname: "127.0.0.1",
+      fetch(req) {
+        if (!lmstudioHealthy) return new Response("lmstudio stand-in is down", { status: 500 });
+        const url = new URL(req.url);
+        if (url.pathname.endsWith("/models")) return Response.json({ data: [{ id: "qwen2.5:7b" }] });
+        if (url.pathname.endsWith("/chat/completions")) {
+          return Response.json({ choices: [{ message: { content: "fallback reply" } }], usage: { prompt_tokens: 2, completion_tokens: 3 } });
+        }
+        return Response.json({ ok: true });
+      },
+    });
+
     const { loadConfig, saveConfig } = await import("../../src/config/config.ts");
     const { config } = loadConfig();
+    config.defaults.provider = "ollama";
+    config.defaults.model = "qwen2.5:7b";
+    config.defaults.fallbackProvider = "lmstudio";
+    config.defaults.fallbackModel = "qwen2.5:7b";
+    config.providerEngine.routingStrategy = "primary"; // deterministic primary+fallback
     const runtimes = (config.localModels as Record<string, any>).runtimes;
-    for (const id of ["ollama", "lmstudio"]) {
-      const bh = blackholeServer();
-      blackholes.push(bh);
-      runtimes[id] = { ...(runtimes[id] ?? {}), baseUrl: `http://127.0.0.1:${bh.port}` };
-    }
+    runtimes.ollama = { ...(runtimes.ollama ?? {}), baseUrl: "http://127.0.0.1:1" };
+    runtimes.lmstudio = { ...(runtimes.lmstudio ?? {}), baseUrl: `http://127.0.0.1:${LMSTUDIO_PORT}` };
+    // Deterministic chat candidate set (see onlyChatCapableLocals) — applied
+    // BEFORE the first chat boots the daemon kernel, so the boot-captured
+    // ConfigService/IntelligenceService see the same constrained world.
+    await onlyChatCapableLocals(config as unknown as Record<string, any>, ["ollama", "lmstudio"]);
     saveConfig(config);
+    invalidateProviderHealthCache();
+    invalidateRuntimeCache();
 
     const { makeHandler } = await import("../../src/daemon/server.ts");
     const { Store } = await import("../../src/state/workspace-store.ts");
@@ -65,12 +146,10 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
   });
 
   afterAll(() => {
-    for (const bh of blackholes) {
-      try {
-        bh.stop();
-      } catch {
-        /* ignore */
-      }
+    try {
+      healthy?.stop(true);
+    } catch {
+      /* ignore */
     }
     process.env.XR_HOME = prevHome;
     try {
@@ -134,7 +213,45 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
     expect(elapsed).toBeLessThan(5000);
   }, 20_000);
 
-  test("chat.stream returns a fast, honest 503 when the provider is unreachable (was 32 s)", async () => {
+  test("chat.stream returns a fast, honest 503 when the provider chain is unreachable (was 32 s)", async () => {
+    // Take the fallback stand-in DOWN (instant 500s — no port churn): the
+    // effective chain is primary(closed port) → fallback(down) → honest 503.
+    lmstudioHealthy = false;
+    const { invalidateProviderHealthCache } = await import("../../src/providers/health.ts");
+    const { invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+    invalidateProviderHealthCache(); // preflight must probe NOW, not read a cached healthy row
+    invalidateRuntimeCache();
+    try {
+      const started = Date.now();
+      const res = await handler(
+        new Request("http://127.0.0.1:3141/api/v1/chat", {
+          method: "POST",
+          headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+          body: JSON.stringify({ message: "hello" }),
+        }),
+      );
+      const elapsed = Date.now() - started;
+      expect(res.status).toBe(503);
+      expect(elapsed).toBeLessThan(4000);
+      const body: any = await res.json();
+      expect(body.error).toContain("Provider offline");
+    } finally {
+      // Restore the single config world for the tests that follow.
+      lmstudioHealthy = true;
+      invalidateProviderHealthCache();
+      invalidateRuntimeCache();
+    }
+  }, 15_000);
+
+  test("chat with a dead primary but healthy fallback succeeds via the bounded fallback health gate", async () => {
+    // Single config world (see header): primary ollama is on a closed port;
+    // the configured fallback lmstudio is the in-process stand-in and is UP.
+    // The preflight health gate must pass on lmstudio, and the chat must wire
+    // ollama → lmstudio (the ONLY other chat-capable local) and succeed.
+    const { invalidateProviderHealthCache } = await import("../../src/providers/health.ts");
+    const { invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+    invalidateProviderHealthCache(); // never trust a row cached by an earlier test
+    invalidateRuntimeCache();
     const started = Date.now();
     const res = await handler(
       new Request("http://127.0.0.1:3141/api/v1/chat", {
@@ -144,75 +261,11 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
       }),
     );
     const elapsed = Date.now() - started;
-    expect(res.status).toBe(503);
-    expect(elapsed).toBeLessThan(4000);
-    const body: any = await res.json();
-    expect(body.error).toContain("Provider offline");
-  }, 15_000);
-
-  test("chat with a dead primary but healthy fallback succeeds via the bounded fallback health gate", async () => {
-    // Fake healthy server that can serve a chat completion.
-    const healthy = Bun.serve({
-      port: 0,
-      hostname: "127.0.0.1",
-      fetch(req) {
-        const url = new URL(req.url);
-        if (url.pathname.endsWith("/models")) return Response.json({ data: [{ id: "qwen2.5:7b" }] });
-        if (url.pathname.endsWith("/chat/completions")) {
-          return Response.json({ choices: [{ message: { content: "fallback reply" } }], usage: { prompt_tokens: 2, completion_tokens: 3 } });
-        }
-        return Response.json({ ok: true });
-      },
-    });
-    const home2 = mkdtempSync(join(tmpdir(), "xr-fb-"));
-    const prevHome2 = process.env.XR_HOME;
-    process.env.XR_HOME = home2;
-    const { invalidateConfigCache } = await import("../../src/config/cache.ts");
-    invalidateConfigCache("all");
-    try {
-      const { loadConfig, saveConfig } = await import("../../src/config/config.ts");
-      const { config } = loadConfig();
-      config.defaults.provider = "ollama";
-      config.defaults.model = "qwen2.5:7b";
-      config.defaults.fallbackProvider = "lmstudio";
-      config.defaults.fallbackModel = "qwen2.5:7b";
-      config.providerEngine.routingStrategy = "primary"; // deterministic primary+fallback
-      (config.localModels as Record<string, any>).runtimes.ollama = {
-        ...((config.localModels as Record<string, any>).runtimes.ollama ?? {}),
-        baseUrl: "http://127.0.0.1:1", // dead primary (connection refused instantly)
-      };
-      (config.localModels as Record<string, any>).runtimes.lmstudio = {
-        ...((config.localModels as Record<string, any>).runtimes.lmstudio ?? {}),
-        baseUrl: `http://127.0.0.1:${healthy.port}`,
-      };
-      saveConfig(config);
-      const { makeHandler } = await import("../../src/daemon/server.ts");
-      const { Store } = await import("../../src/state/workspace-store.ts");
-      const store = new Store(join(home2, "d.db"));
-      const h = makeHandler(store, TOKEN);
-      const started = Date.now();
-      const res = await h(
-        new Request("http://127.0.0.1:3141/api/v1/chat", {
-          method: "POST",
-          headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
-          body: JSON.stringify({ message: "hello" }),
-        }),
-      );
-      const elapsed = Date.now() - started;
-      expect(res.status).toBe(200); // NOT 503 — fallback health gate passed
-      expect(elapsed).toBeLessThan(10_000); // bounded probes + fast chat
-      const text = await res.text();
-      expect(text).toContain("fallback reply");
-      expect(text).toContain("done");
-    } finally {
-      process.env.XR_HOME = prevHome2;
-      try {
-        rmSync(home2, { recursive: true, force: true });
-      } catch {
-        /* ignore */
-      }
-      healthy.stop();
-    }
+    expect(res.status).toBe(200); // NOT 503 — fallback health gate passed
+    expect(elapsed).toBeLessThan(10_000); // bounded probes + fast chat
+    const text = await res.text();
+    expect(text).toContain("fallback reply");
+    expect(text).toContain("done");
   }, 20_000);
 
   test("repeat dashboard traffic is served from caches (warm requests are fast)", async () => {

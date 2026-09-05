@@ -36,8 +36,54 @@ import {
   openDatabase,
 } from "./write-gate.ts";
 import { runMigrationsUp } from "./migrations.ts";
+import {
+  checkpointMessage,
+  generateAuditIdentity,
+  loadAuditSigningKey,
+  loadOrCreateAuditIdentity,
+  publicIdentityFromPrivate,
+  signCheckpoint,
+  storeAuditSigningKey,
+  DEFAULT_SIGN_EVERY,
+  type LoadedAuditIdentity,
+} from "../security/audit-signer.ts";
+import {
+  verifySignedChain,
+  verifyAnchorRecords,
+  type AuditReadSource,
+  type CryptoVerifyResult,
+  type CryptoVerifySegment,
+  type AnchorVerifyResult,
+  type AnchorRecord,
+} from "../security/audit-verify.ts";
+
+// Re-export the verification result types so existing imports keep working.
+export type {
+  CryptoVerifyResult,
+  CryptoVerifySegment,
+  AnchorVerifyResult,
+  AnchorRecord,
+};
 
 const GENESIS = "xr-genesis";
+
+/** Boot-time auto-keying gate (env). Default ON in production; the unit-test
+ *  suite preload sets it OFF so constructors stay side-effect-free. The
+ *  end-to-end / black-box suites exercise the real keying path. */
+export function auditKeyingEnabledOnBoot(): boolean {
+  return process.env.XR_AUDIT_NO_AUTOKEY !== "1" &&
+    process.env.XR_AUDIT_NO_AUTOKEY !== "true";
+}
+
+export interface AuditKeyedPubkey {
+  /** Row id of the audit.keyed / audit.rekey event that introduced this key. */
+  atId: number;
+  /** Event kind introducing this segment's key. */
+  kind: "audit.keyed" | "audit.rekey";
+  /** SPKI base64 public key for the signed segment beginning at this row. */
+  pubkey: string;
+}
+
 
 /** Phase 2 · F-12 — documented default lifetime of an uncommitted budget reservation. */
 export const DEFAULT_RESERVATION_TTL_MS = 120_000;
@@ -151,6 +197,32 @@ export class WorkspaceStore {
   }
   /** Phase 1: first broken audit index detected (null = chain intact). */
   private chainBrokenAt: number | null = null;
+  /**
+   * Phase 4 (F-08): Ed25519 audit signing identity, loaded lazily. Null until
+   * the chain is (or this process) keyed. The store never performs network I/O
+   * for signing — the key lives in the local secret backends.
+   */
+  private auditIdentity: LoadedAuditIdentity | null = null;
+  /** True when the chain on disk already contains a signed segment. */
+  private auditKeyedOnDisk = false;
+  /** True when a signed segment exists but the private key cannot be loaded. */
+  private auditKeyUnavailable = false;
+  /** The signing public key currently in force (set on keying/re-key). */
+  private currentSigningPubkey: string | null = null;
+  /** Checkpoint signing cadence (env-tunable for tests; default 256). */
+  private readonly signEvery: number;
+  /** True when migration 7's signed-audit columns/tables are present. */
+  private signedSchema = true;
+
+  /** Minimal read adapter for the pure verification module. */
+  private readonly readSource: AuditReadSource = {
+    all: <T,>(sql: string): T[] =>
+      this.db
+        .query<unknown, []>(sql)
+        .all() as T[],
+    get: <T,>(sql: string): T | undefined =>
+      this.db.query<unknown, []>(sql).get() as T | undefined,
+  };
 
   public readonly workspaceId: string;
 
@@ -190,6 +262,309 @@ export class WorkspaceStore {
     this.releaseStaleReservations(reservationTtlMs(), Date.now());
     // Phase 1 (T1): fail-closed detection of a pre-existing broken chain.
     this.chainBrokenAt = this.verifyChain().valid ? null : (this.verifyChain().brokenAt ?? null);
+
+    // Phase 4 (F-08): signing cadence (env-tunable).
+    const every = Number.parseInt(process.env.XR_AUDIT_SIGN_EVERY ?? "", 10);
+    this.signEvery = Number.isFinite(every) && every >= 1 ? every : DEFAULT_SIGN_EVERY;
+
+    // Phase 4 (F-08): detect an already-keyed chain and load the private key if
+    // available. Detection is read-only and constructor-safe; a freshly
+    // generated key is NEVER written here (that happens explicitly through
+    // ensureAuditKeying(), invoked once on real boot), so direct `new
+    // WorkspaceStore(...)` in unit tests keeps zero side effects.
+    this.detectKeyedChain();
+  }
+
+  /** Detect an existing signed segment and load the in-force private key. */
+  private detectKeyedChain(): void {
+    const keying = this.db
+      .query<{ id: number; event: string }, []>(
+        `SELECT id,event FROM audit_log WHERE event IN ('audit.keyed','audit.rekey') ORDER BY id DESC LIMIT 1`,
+      )
+      .get();
+    if (!keying) {
+      this.auditKeyedOnDisk = false;
+      return;
+    }
+    this.auditKeyedOnDisk = true;
+    // The in-force pubkey is carried in the keyed/rekey event's detail.
+    const row = this.db
+      .query<{ detail: string }, [number]>(`SELECT detail FROM audit_log WHERE id = ?`)
+      .get(keying.id);
+    try {
+      const detail = JSON.parse(row?.detail ?? "{}") as { pubkey?: string };
+      this.currentSigningPubkey = detail.pubkey ?? null;
+    } catch {
+      this.currentSigningPubkey = null;
+    }
+    const priv = loadAuditSigningKey();
+    if (priv) {
+      try {
+        this.auditIdentity = { privateKeyB64: priv, ...publicIdentityFromPrivate(priv) };
+        this.auditKeyUnavailable = false;
+      } catch {
+        this.auditIdentity = null;
+        this.auditKeyUnavailable = true;
+      }
+    } else {
+      this.auditIdentity = null;
+      this.auditKeyUnavailable = true;
+    }
+  }
+
+  /**
+   * Refresh the in-memory signing state to match the on-disk schema. Called by
+   * the reversible migration runner after a DOWN migration: rolling back
+   * migration 7 drops the signed-audit columns/tables, so signing must be
+   * suspended in THIS store instance (the chain stays intact; re-running
+   * migrations up re-provisions). Never fabricates a key.
+   */
+  refreshAuditKeyingState(): void {
+    // Signed-audit support exists only when migration 7's columns AND tables
+    // are present. A down migration drops them; in-memory signing must follow.
+    // Read the schema via the RAW connection (not inside the migration's write
+    // transaction): SQLite caches table_info within a transaction and would
+    // report dropped columns as still present.
+    //
+    // Also reset prepared statements: the gated connection caches compiled
+    // statements (including the audit INSERT), and a cached statement holds the
+    // OLD column layout after a down-migration drops head_counter/sig.
+    try {
+      this.gate.resetPrepared();
+    } catch {
+      /* older gate without reset */
+    }
+    const raw = this.gate.rawDb;
+    const hasHead = (
+      raw
+        .query(`SELECT COUNT(*) n FROM sqlite_master WHERE type='table' AND name='audit_head'`)
+        .get() as { n: number }
+    )?.n;
+    const cols = (raw.query(`PRAGMA table_info(audit_log)`).all() as Array<{ name: string }>).map(
+      (c) => c.name,
+    );
+    const signedColumns = cols.includes("head_counter") && cols.includes("sig");
+    if (!hasHead || !signedColumns) {
+      this.signedSchema = false;
+      this.auditKeyedOnDisk = false;
+      this.auditKeyUnavailable = false;
+      this.auditIdentity = null;
+      this.currentSigningPubkey = null;
+      return;
+    }
+    this.signedSchema = true;
+    this.detectKeyedChain();
+  }
+
+  /** True when this install has a signed segment on disk. */
+  get auditIsKeyed(): boolean {
+    return this.auditKeyedOnDisk;
+  }
+
+  /** True when a signed segment exists but the private key cannot be loaded. */
+  get auditSigningKeyMissing(): boolean {
+    return this.auditKeyedOnDisk && this.auditKeyUnavailable;
+  }
+
+  /**
+   * Phase 4 (F-08): key the audit chain on first use. Idempotent and
+   * race-safe: re-checks inside the write transaction (IMMEDIATE serializes
+   * cross-process writers), so two racing boots cannot emit two keyed events.
+   * Returns the public key (or the existing one if already keyed), or null if
+   * the key backend is unavailable. Appending is fail-open for the keying
+   * convenience but signatures are never fabricated: if the key cannot be
+   * created the chain simply remains unsigned and reports that honestly.
+   */
+  /**
+   * Provision signing on the REAL boot path. This is the ONLY place a brand
+   * new key may be generated implicitly:
+   *   - chain already keyed + key present   → no-op (fast path)
+   *   - chain already keyed + key MISSING   → DO NOT regenerate; leave the
+   *     limited "key unavailable" state so `verify --crypto` reports exit code
+   *     2 honestly (silently minting a new key would mask key loss and produce
+   *     a head the on-chain pubkey does not match). Recovery is `xr audit
+   *     re-key`, which appends an explicit, audited segment boundary.
+   *   - chain never keyed                   → generate + publish audit.keyed.
+   * Idempotent and race-safe.
+   */
+  provisionAuditKeying(actor = "boot"): { keyed: boolean; pubkey?: string; fingerprint?: string; keyMissing?: boolean } {
+    if (this.auditKeyedOnDisk && this.auditKeyUnavailable) {
+      return { keyed: false, keyMissing: true };
+    }
+    return this.ensureAuditKeying(actor);
+  }
+
+  ensureAuditKeying(actor = "boot"): { keyed: boolean; pubkey?: string; fingerprint?: string } {
+    if (this.chainBrokenAt !== null) {
+      // Never append to a broken chain — keying cannot paper over tampering.
+      return { keyed: false };
+    }
+    // Fast path: already keyed this process and key is present.
+    if (this.auditKeyedOnDisk && this.auditIdentity) {
+      return {
+        keyed: true,
+        pubkey: this.currentSigningPubkey ?? this.auditIdentity.publicKeyB64,
+        fingerprint: this.auditIdentity.publicKeyFingerprint,
+      };
+    }
+    // If the chain is keyed but THIS process lacks the key, never mint a new
+    // one implicitly — that would fork the signing identity without an audited
+    // re-key boundary. Recovery is explicit via rekeyAudit().
+    if (this.auditKeyedOnDisk && this.auditKeyUnavailable) {
+      return { keyed: false };
+    }
+    const identity = loadOrCreateAuditIdentity();
+    if (!identity) {
+      this.auditKeyUnavailable = true;
+      return { keyed: false };
+    }
+    let didKey = false;
+    this.write(() => {
+      // Re-check under the IMMEDIATE lock: another process may have keyed first.
+      const existing = this.db
+        .query<{ id: number }, []>(
+          `SELECT id FROM audit_log WHERE event IN ('audit.keyed','audit.rekey') ORDER BY id DESC LIMIT 1`,
+        )
+        .get();
+      if (existing) {
+        this.auditKeyedOnDisk = true;
+        this.currentSigningPubkey = this.currentSigningPubkey ?? identity.publicKeyB64;
+        return;
+      }
+      const prev = this.lastHashInTxn();
+      const ts = Date.now();
+      const counter = this.nextCounterInTxn();
+      const safe = this.redact({
+        pubkey: identity.publicKeyB64,
+        fingerprint: identity.publicKeyFingerprint,
+        actor,
+        note: "Per-install Ed25519 audit signing key established. Evidence before this entry is chain-only; evidence from this entry is signed.",
+      });
+      const payload = JSON.stringify({ event: "audit.keyed", detail: safe, prev, ts });
+      const hash = createHash("sha256").update(payload).digest("hex");
+      // The keyed event is itself signed by the new key — it is the first
+      // checkpoint of the new segment and binds the pubkey into the chain.
+      const sig = signCheckpoint(
+        identity.privateKeyB64,
+        checkpointMessage({ entryHash: hash, counter, publicKeyB64: identity.publicKeyB64, kind: "checkpoint" }),
+      );
+      this.db
+        .query(
+          `INSERT INTO audit_log (session_id,event,detail,prev_hash,hash,created_at,head_counter,sig) VALUES (?,?,?,?,?,?,?,?)`,
+        )
+        .run(null, "audit.keyed", JSON.stringify(safe), prev, hash, ts, counter, sig);
+      this.upsertHeadInTxn(counter, hash, sig, identity.publicKeyB64, ts, identity.privateKeyB64);
+      didKey = true;
+    });
+    this.auditIdentity = identity;
+    this.auditKeyedOnDisk = true;
+    this.auditKeyUnavailable = false;
+    this.currentSigningPubkey = identity.publicKeyB64;
+    return {
+      keyed: true,
+      pubkey: identity.publicKeyB64,
+      fingerprint: identity.publicKeyFingerprint,
+      alreadyExisted: !didKey,
+    } as { keyed: boolean; pubkey?: string; fingerprint?: string; alreadyExisted?: boolean };
+  }
+
+  /**
+   * Phase 4 (F-08): rotate the signing key. Appends an `audit.rekey` event
+   * signed by the NEW key over the new segment's first checkpoint; the event
+   * also records the old pubkey so verification can attribute the boundary.
+   * The old segment remains verifiable up to (and including) the re-key point.
+   */
+  rekeyAudit(actor = "operator"): { ok: boolean; pubkey?: string; fingerprint?: string; error?: string } {
+    if (this.chainBrokenAt !== null) return { ok: false, error: "chain is broken; repair before re-key" };
+    // Re-key means a NEW keypair, not the existing one. Rotating to the same key
+    // would be a silent no-op that defeats the purpose.
+    const id = generateAuditIdentity();
+    try {
+      storeAuditSigningKey(id.privateKeyB64);
+    } catch {
+      return { ok: false, error: "secret backend unavailable; cannot store the new key" };
+    }
+    const identity = { privateKeyB64: id.privateKeyB64, publicKeyB64: id.publicKeyB64, publicKeyFingerprint: id.publicKeyFingerprint };
+    const oldPubkey = this.currentSigningPubkey ?? null;
+    this.write(() => {
+      const prev = this.lastHashInTxn();
+      const ts = Date.now();
+      const counter = this.nextCounterInTxn();
+      const safe = this.redact({
+        pubkey: identity.publicKeyB64,
+        fingerprint: identity.publicKeyFingerprint,
+        previousPubkey: oldPubkey,
+        actor,
+        note: "Audit signing key rotated. Prior segment remains verifiable to this point under the previous key.",
+      });
+      const payload = JSON.stringify({ event: "audit.rekey", detail: safe, prev, ts });
+      const hash = createHash("sha256").update(payload).digest("hex");
+      const sig = signCheckpoint(
+        identity.privateKeyB64,
+        checkpointMessage({ entryHash: hash, counter, publicKeyB64: identity.publicKeyB64, kind: "checkpoint" }),
+      );
+      this.db
+        .query(
+          `INSERT INTO audit_log (session_id,event,detail,prev_hash,hash,created_at,head_counter,sig) VALUES (?,?,?,?,?,?,?,?)`,
+        )
+        .run(null, "audit.rekey", JSON.stringify(safe), prev, hash, ts, counter, sig);
+      this.upsertHeadInTxn(counter, hash, sig, identity.publicKeyB64, ts, identity.privateKeyB64);
+    });
+    this.auditIdentity = identity;
+    this.auditKeyedOnDisk = true;
+    this.auditKeyUnavailable = false;
+    this.currentSigningPubkey = identity.publicKeyB64;
+    return { ok: true, pubkey: identity.publicKeyB64, fingerprint: identity.publicKeyFingerprint };
+  }
+
+  // ---- Phase 4: signed-chain internals (run INSIDE the write txn) ----
+
+  private lastHashInTxn(): string {
+    const row = this.db
+      .query<{ hash: string }, []>(`SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1`)
+      .get();
+    return row?.hash ?? GENESIS;
+  }
+
+  /** Next running counter within a signed segment (0 = first signed entry). */
+  private nextCounterInTxn(): number {
+    const row = this.db
+      .query<{ c: number | null }, []>(`SELECT MAX(head_counter) AS c FROM audit_log`)
+      .get();
+    return row?.c == null ? 0 : row.c + 1;
+  }
+
+  private upsertHeadInTxn(
+    counter: number,
+    entryHash: string,
+    checkpointSig: string | null,
+    pubkey: string,
+    ts: number,
+    signingKeyB64?: string,
+  ): void {
+    const entryId = this.db
+      .query<{ id: number }, []>(`SELECT id FROM audit_log ORDER BY id DESC LIMIT 1`)
+      .get()?.id;
+    // The head carries its OWN head-kind signature over the same {entry,
+    // counter, pubkey}, distinct from the in-chain checkpoint-kind signature
+    // (domain separation prevents one being replayed as the other). The
+    // signing key is passed explicitly during keying/re-key (this.auditIdentity
+    // is not assigned until the write commits) and inferred otherwise.
+    const key = signingKeyB64 ?? this.auditIdentity?.privateKeyB64;
+    const headSig = key
+      ? signCheckpoint(
+          key,
+          checkpointMessage({ entryHash, counter, publicKeyB64: pubkey, kind: "head" }),
+        )
+      : checkpointSig;
+    this.db
+      .query(
+        `INSERT INTO audit_head (id,counter,entry_hash,entry_id,sig,pubkey,updated_at)
+         VALUES (1,?,?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET counter=excluded.counter, entry_hash=excluded.entry_hash,
+           entry_id=excluded.entry_id, sig=excluded.sig, pubkey=excluded.pubkey, updated_at=excluded.updated_at`,
+      )
+      .run(counter, entryHash, entryId ?? 0, headSig, pubkey, ts);
   }
 
   /** Execute a mutating block inside the serialized write gate (single writer). */
@@ -227,8 +602,37 @@ export class WorkspaceStore {
         detail TEXT NOT NULL,
         prev_hash TEXT NOT NULL,
         hash TEXT NOT NULL,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        -- Phase 4 (Evidence Integrity, F-08): signed-chain columns. Additive —
+        -- legacy/unsigned rows leave them NULL. See src/security/audit-signer.ts.
+        head_counter INTEGER,
+        sig TEXT
       );
+      -- Phase 4: latest SIGNED head (single row, id=1). Unforgeable without the
+      -- per-install Ed25519 private key, so a wholesale chain rebuild is caught.
+      CREATE TABLE IF NOT EXISTS audit_head (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        counter INTEGER NOT NULL,
+        entry_hash TEXT NOT NULL,
+        entry_id INTEGER NOT NULL,
+        sig TEXT NOT NULL,
+        pubkey TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      -- Phase 4: append-verified remote anchor records (operator-configured,
+      -- egress-gated sink). Never a dependency for local verification.
+      CREATE TABLE IF NOT EXISTS audit_anchors (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        counter INTEGER NOT NULL,
+        entry_hash TEXT NOT NULL,
+        entry_id INTEGER NOT NULL,
+        sig TEXT NOT NULL,
+        pubkey TEXT NOT NULL,
+        sink TEXT NOT NULL,
+        anchored_at INTEGER NOT NULL,
+        verified_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_audit_anchors_counter ON audit_anchors(counter);
       -- Phase 3: non-regressive skills.
       CREATE TABLE IF NOT EXISTS skills (
         id TEXT NOT NULL,
@@ -1008,15 +1412,61 @@ export class WorkspaceStore {
     const safe = this.redact(detail);
     let hash = "";
     this.write(() => {
-      const prev = this.lastHash();
+      const prev = this.lastHashInTxn();
       const ts = Date.now();
       const payload = JSON.stringify({ event, detail: safe, prev, ts });
       hash = createHash("sha256").update(payload).digest("hex");
-      this.db
-        .query(
-          `INSERT INTO audit_log (session_id,event,detail,prev_hash,hash,created_at) VALUES (?,?,?,?,?,?)`,
-        )
-        .run(sessionId, event, JSON.stringify(safe), prev, hash, ts);
+
+      // Phase 4 (F-08): once keyed, stamp the running counter and sign
+      // checkpoints (every Nth entry). The head row is refreshed on every
+      // signed append. Signing failures (missing key) never fabricate a
+      // signature: the entry simply stays unsigned and verification reports
+      // the honest "key unavailable" state. The hash chain is untouched.
+      const keyed = this.auditKeyedOnDisk;
+      const identity = this.auditIdentity;
+      let counter: number | null = null;
+      let sig: string | null = null;
+      if (keyed) {
+        counter = this.nextCounterInTxn();
+        const isBoundary = event === "audit.keyed" || event === "audit.rekey" || event === "audit.repair";
+        if (identity && (isBoundary || counter % this.signEvery === this.signEvery - 1)) {
+          sig = signCheckpoint(
+            identity.privateKeyB64,
+            checkpointMessage({ entryHash: hash, counter, publicKeyB64: identity.publicKeyB64, kind: "checkpoint" }),
+          );
+        }
+      }
+
+      // Use the signed columns only when migration 7's schema is live. On a
+      // down-migrated (baseline) database the columns are absent, so fall back
+      // to the 6-column insert — the hash chain is unaffected either way.
+      if (this.signedSchema) {
+        this.db
+          .query(
+            `INSERT INTO audit_log (session_id,event,detail,prev_hash,hash,created_at,head_counter,sig) VALUES (?,?,?,?,?,?,?,?)`,
+          )
+          .run(sessionId, event, JSON.stringify(safe), prev, hash, ts, counter, sig);
+      } else {
+        this.db
+          .query(
+            `INSERT INTO audit_log (session_id,event,detail,prev_hash,hash,created_at) VALUES (?,?,?,?,?,?)`,
+          )
+          .run(sessionId, event, JSON.stringify(safe), prev, hash, ts);
+      }
+
+      // Maintain the signed head on EVERY keyed append — not only on the
+      // checkpoint cadence. The head is a domain-separated `kind:"head"`
+      // Ed25519 signature over the LATEST entry's {hash, counter, pubkey}, so
+      // the tail between in-chain checkpoints (every Nth entry) is covered
+      // too: a tail-trim cannot rewind audit_head onto an older entry, and a
+      // wholesale rebuild still cannot forge the signature at all (the F-08
+      // kill proof). One Ed25519 sign ≈ microseconds; the append is dominated
+      // by the SQLite write. Without the fix, verify --crypto would reject an
+      // HONEST chain whose last checkpoint was < N entries ago ("head is
+      // stale") — a false positive on every normal install.
+      if (keyed && identity && counter !== null) {
+        this.upsertHeadInTxn(counter, hash, sig, identity.publicKeyB64, ts, identity.privateKeyB64);
+      }
     });
     return hash;
   }
@@ -1078,6 +1528,70 @@ export class WorkspaceStore {
   }
 
   /**
+   * Phase 4 (F-08): cryptographic verification.
+   *
+   *  1. Replays the SHA-256 chain (the pre-existing tamper-evidence) — a single
+   *     edited entry fails here.
+   *  2. Walks signed segments: a segment begins at each `audit.keyed` /
+   *     `audit.rekey` event, whose detail carries the in-force Ed25519 public
+   *     key. Every entry carrying a `sig` must verify against THAT key over the
+   *     checkpoint message {entryHash, counter, pubkey}.
+   *  3. Counter monotonicity: `head_counter` in a signed segment must be a
+   *     strictly-contiguous 0,1,2,… run — a gap/reset reveals truncation.
+   *  4. Head signature: the stored `audit_head` must (a) verify, (b) point at
+   *     the actual latest entry, and (c) carry the in-force key. This is the
+   *     F-08 kill: a wholesale truncate-and-rebuild with recomputed hashes
+   *     cannot reproduce a valid head signature.
+   */
+  verifyCrypto(): CryptoVerifyResult {
+    const chain = this.verifyChain();
+    return verifySignedChain(this.readSource, chain.valid, this.auditIdentity !== null);
+  }
+
+  /** Append-verification of remote anchor records (pure read). */
+  verifyAnchors(): AnchorVerifyResult {
+    // No signed schema (down-migrated) → there are no anchor records at all.
+    if (!this.signedSchema) {
+      return { verified: 0, failed: [], highestCounter: null, anchorLag: false };
+    }
+    return verifyAnchorRecords(this.readSource);
+  }
+
+  /** Persist a verified anchor record (called by the anchor client after a
+   *  successful, egress-gated push). */
+  recordAnchor(a: Omit<AnchorRecord, "anchored_at"> & { anchored_at?: number }): void {
+    this.write(() => {
+      this.db
+        .query(
+          `INSERT INTO audit_anchors (counter,entry_hash,entry_id,sig,pubkey,sink,anchored_at)
+           VALUES (?,?,?,?,?,?,?)`,
+        )
+        .run(a.counter, a.entry_hash, a.entry_id, a.sig, a.pubkey, a.sink, a.anchored_at ?? Date.now());
+    });
+  }
+
+  /** Count of stored anchor records. */
+  anchorCount(): number {
+    // Degrade honestly on a down-migrated (pre-migration-7) schema: the
+    // audit_anchors table is absent, so there are trivially zero anchors.
+    if (!this.signedSchema) return 0;
+    return this.db.query<{ c: number }, []>(`SELECT COUNT(*) c FROM audit_anchors`).get()?.c ?? 0;
+  }
+
+  /** Current signed head payload (for anchor export), or null if unkeyed. */
+  headForAnchor(): { counter: number; entry_hash: string; entry_id: number; sig: string; pubkey: string } | null {
+    // No signed schema (down-migrated) → no signed head to export.
+    if (!this.signedSchema) return null;
+    const head = this.db
+      .query<
+        { counter: number; entry_hash: string; entry_id: number; sig: string; pubkey: string },
+        []
+      >(`SELECT counter,entry_hash,entry_id,sig,pubkey FROM audit_head WHERE id = 1`)
+      .get();
+    return head ?? null;
+  }
+
+  /**
    * Explicit chain repair: truncate suspect entries from the first broken
    * index onward, then append a re-seeding `audit.repair` event (which is
    * itself chained). Destructive — callers must require explicit user
@@ -1092,6 +1606,9 @@ export class WorkspaceStore {
     this.write(() => {
       const r = this.db.query(`DELETE FROM audit_log WHERE id >= ?`).run(brokenAt);
       removed = (r as { changes?: number }).changes ?? 0;
+      // Phase 4: the signed head may have referenced a deleted entry. Drop it;
+      // the re-seeding signed `audit.repair` event below re-establishes it.
+      this.db.query(`DELETE FROM audit_head WHERE id = 1`).run();
     });
     // Refresh the fail-closed flag (chain is now intact), then re-seed.
     this.verifyChain();
