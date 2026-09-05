@@ -1,5 +1,8 @@
 # Phase 6 — Step 1 Audit Report (Memory, Knowledge & Context Quality)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Audited against:** live `main` @ `841e12a` (post PR #37), version `7.0.1`.
 **Method:** every claim below was verified by reading the listed code, then by running the listed gate. Nothing was taken from prior phase reports at face value (Global Rule 1–2, 10).
 

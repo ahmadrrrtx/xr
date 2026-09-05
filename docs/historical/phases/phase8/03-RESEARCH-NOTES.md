@@ -1,5 +1,8 @@
 # XR Phase 8 — STEP 3 Research Notes (principles adopted, with sources)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Verified 2026-08-03. Principle = what XR adopts; it is never a copy/paste from any one source.
 
 ## R1 — OpenTelemetry GenAI observability (adopted for T2)

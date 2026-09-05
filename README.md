@@ -355,16 +355,39 @@ flowchart TB
     style V fill:#0f2e1a,stroke:#51cf66,color:#e6ffe6
 ```
 
+### XR Shield — the enforcement boundary
+
+**XR Shield** is the name for the seven components every consequential action passes
+through. It is not a product tier and not a scanner: it is the code that can say *no*.
+Enumerable in one import — `src/xr-shield/index.ts` — so it can be audited as a unit.
+
+| # | Component | Where | Question it answers | Can refuse? |
+|---|---|---|---|---|
+| 1 | **Capability policy** | `src/capabilities/policy.ts` | Is this capability permitted for this workspace and mode? | ✅ |
+| 2 | **Action guard** | `src/security/guard.ts` | Is the action dangerous once fully decoded and canonicalized? | ✅ |
+| 3 | **Trust lattice + placement** | `src/runtime/trust/` | What risk tier is this, and where may it run? | ✅ |
+| 4 | **Consent / approvals** | `src/control/approval-store.ts` | Has a human approved this? (durable, TTL default-deny) | ✅ |
+| 5 | **Network egress** | `src/security/egress-proxy.ts`, `private-ip.ts` | Is this destination allowed? | ✅ |
+| 6 | **Execution + output integrity** | `src/security/exec-integrity.ts`, `tool-output.ts`, `secret-broker.ts` | Is this binary allowlisted? Is tool output framed as data before re-entering the prompt? Are secrets brokered, not handed over? | ✅ |
+| 7 | **Signed audit evidence** | `src/security/audit-signer.ts`, `audit-verify.ts` | Can this be proven afterwards, and would tampering show? | ➖ records |
+
+This table is generated from `XR_SHIELD_COMPONENTS`, and
+`test/architecture/xr-shield-facade.test.ts` fails if a listed module stops existing —
+the docs cannot drift from the code.
+
+Alongside the boundary, two mechanisms constrain cost and supply chain:
+
 | Mechanism | Where | What it enforces |
 |---|---|---|
-| Policy gate | `src/security/guard.ts` | Risk-classed rules over every tool effect; dangerous classes require approval |
-| Approvals | `src/control/approvals.ts` | Human consent for consequential actions, per workspace, auditable |
 | Budget governor | `src/cost/governor.ts` | USD + token ceilings per task, checked before and during steps |
-| Egress allow-list | `src/security/egress-proxy.ts` | Only configured domains receive data |
-| Secrets | `src/config/config.ts` | OS keychain where available; else AES-256-GCM sealed file (auto-migrates plaintext); redacted from all status output |
-| Audit chain | `src/state/workspace-store.ts`, `src/commands/audit.ts` | SHA-256-linked events; verify offline |
+| Secrets at rest | `src/config/config.ts` | OS keychain where available; else AES-256-GCM sealed file (auto-migrates plaintext); redacted from all status output |
 | Plugin trust | `src/plugins/` | Manifest permissions, tree hashes, static scan, health checks, disable/remove |
 | Prompt injection | `src/core/agent.ts` | Tool output is treated as untrusted **data**, never as instructions |
+
+> **Naming note (Phase 5):** `xr shield` used to be a *host scanner* — processes, startup
+> items, privacy settings. It never governed agent actions, so it is now `xr hygiene`, and
+> "XR Shield" names the boundary above. `xr shield` still works with a deprecation notice
+> until 2.0.0. See [ADR-0027](docs/adr/0027-xr-shield-is-the-enforcement-boundary.md).
 
 > **Honesty box:** XR enforces **in-process policy**, not kernel/VM isolation — a guard rail, not
 > a confinement boundary, and not a substitute for reviewing consequential actions. The gaps are
@@ -434,9 +457,22 @@ xr agents plan "refactor this repo safely"
 <details>
 <summary><b>Business OS extension (optional, default-off)</b></summary>
 
-`extensions/business-os/` is an optional, **default-off**, effect-verified extension over
-local-first records. It is not part of the core runtime and ships no hosted service, no SLA and
-no paid tier. See [`docs/business-os-extension.md`](docs/business-os-extension.md).
+An optional, **default-off**, effect-verified extension over local-first records. It ships no
+hosted service, no SLA and no paid tier.
+
+Since Phase 5 it lives outside core as **`@rrrtx/business-os`** ([ADR-0028](docs/adr/0028-satellite-extraction.md)) —
+core carried 33,759 LOC of enterprise and business surface that no user had installed, and one
+maintainer cannot own review, audit and release weight for capability nobody asked for. Behaviour
+is unchanged: still default-off, still fail-closed, `/api/v1/business/*` still answers honestly
+when the extension is absent.
+
+```bash
+bun add -g @rrrtx/business-os     # business operating layer
+bun add -g @rrrtx/xr-enterprise   # org policy, audit export, SLOs, DR, evaluation harness
+```
+
+See [`docs/business-os-extension.md`](docs/business-os-extension.md) and the
+[migration guide](docs/migration/PHASE-5-SATELLITES.md).
 
 </details>
 
@@ -486,25 +522,30 @@ XR's differentiator is that its claims are checked by machines on every PR.
 
 | Gate | What it pins |
 |---|---|
-| `bun test` + parity suite | **3,191 tests** across 240 files; one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
+| `bun test` + parity suite | **2,946 tests** across 297 files (707 enterprise/business tests moved to the satellites with their code, ADR-0028); one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
 | `release:check` + `claim-lint` | version identity stamped everywhere; every public claim has evidence; prohibited/supervised terms fail the build |
 | `baseline:inventory` | source-derived repository inventory regenerated and compared |
-| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, file-size discipline (waivers explicit) |
+| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a 135,000-LOC ceiling on the whole tree** |
+| `claim-lint` constitution gate | every `Article N` cited anywhere in `src/`, `test/`, `scripts/`, `.github/` exists in [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md) |
 | `api:schema:check` + `client:check` + `api:compat` | daemon OpenAPI schema, generated client, compatibility |
 | `channel:check` | channel configs match the release manifest |
 | supply chain | osv-scanner + bun audit, gitleaks, license scan, SBOM drift, `--ignore-scripts` hygiene, container scan |
 | Quality Gate | single required aggregation check over all of the above |
 
+The evaluation harness moved to `@rrrtx/xr-enterprise` in Phase 5 ([ADR-0028](docs/adr/0028-satellite-extraction.md)):
+
 ```bash
-xr evaluate run --offline      # 14 suites, 38 scenarios, no network required
-xr evaluate claims             # every public claim mapped to its evidence
-xr evaluate limitations        # what the benchmarks do NOT measure
-xr evaluate compare <a> <b>    # regression detection between releases
-xr evaluate export <runId>     # hash-verifiable evidence bundle
+bun add -g @rrrtx/xr-enterprise
+xr-enterprise evaluate run --offline   # 14 suites, 38 scenarios, no network required
+xr-enterprise evaluate claims          # every public claim mapped to its evidence
+xr-enterprise evaluate limitations     # what the benchmarks do NOT measure
+xr-enterprise evaluate compare <a> <b> # regression detection between releases
+xr-enterprise evaluate export <runId>  # hash-verifiable evidence bundle
 ```
 
-`xr evaluate` is outcome-based: a scenario passes only when reality is inspected — an artifact on
-disk, a durable record, a state transition, an audit-chain entry.
+It is outcome-based: a scenario passes only when reality is inspected — an artifact on disk, a
+durable record, a state transition, an audit-chain entry. Typing `xr evaluate` on core prints
+where it went and exits 2; the gates in the table above still run in core CI on every PR.
 
 ---
 
@@ -524,21 +565,24 @@ xr/
 │  ├─ providers/             presets, factory, health, native adapters, openai-compat
 │  ├─ tools/                 tool registry + guarded tools (files, git, control, egress)
 │  ├─ reliability/           turn repair, grammar, profiles
-│  ├─ security/              guard, egress-proxy, attack lab, private-IP checks
+│  ├─ security/              guard, egress-proxy, exec/output integrity, audit signing
+│  ├─ xr-shield/             the enforcement boundary, named and enumerable (ADR-0027)
+│  ├─ hygiene/               host-hygiene scanner (`xr hygiene`; was `shield`)
 │  ├─ state/                 SQLite workspace store, repos, write-gate, migrations
 │  ├─ context/               memory: assembler, retrieval, embeddings, compression
 │  ├─ research/              research engine (offline default, opt-in web)
 │  ├─ mcp/ plugins/ skills/ local/ cost/ control/ computer/ telegram/ voice/
 │  ├─ daemon/                `xr serve`: API routes, dashboard, chat (127.0.0.1)
-│  ├─ enterprise/            optional governance/evaluation surfaces
 │  ├─ update/ install/       atomic updater + channels; install/uninstall
 │  ├─ observability/ ui/     metrics/logs/exporters; design system
 │  └─ index.ts               CLI entry
-├─ extensions/business-os/   optional, default-off, effect-verified extension
+├─ satellites/               extracted packages, released separately (ADR-0028)
+│  ├─ xr-enterprise/         @rrrtx/xr-enterprise — org policy, audit export, SLOs, DR
+│  └─ business-os/           @rrrtx/business-os — default-off business operating layer
 ├─ skills/                   65 bundled skill manifests
 ├─ plugins/                  bundled plugins
 ├─ scripts/                  gates, release machinery, parity runner, perf budgets
-├─ test/                     240-file suite mirroring src/ + helpers + fixtures
+├─ test/                     297-file suite mirroring src/ + helpers + fixtures
 ├─ packaging/                homebrew · winget · scoop manifests (generated)
 ├─ docs/                     product, development, release, security, historical
 └─ website/                  docs/marketing site (Next.js; scanned by claim-lint)
@@ -546,7 +590,10 @@ xr/
 
 Layering is enforced in CI: the `boundaries` gate + `test/architecture/*` pin allowed dependency
 directions (surfaces → services → execution/core → state; tools/providers as leaves), and
-`bun run ownership:check` requires every source area to have an owning document.
+`bun run ownership:check` requires every source area to have an owning document. Core imports
+**nothing** from `satellites/` — enforced three ways (dependency-cruiser rule, boundary test,
+isolation test) — and `bun run size-gate` holds the whole tree under a 135,000-LOC ceiling so the
+23,376 LOC Phase 5 removed cannot quietly grow back.
 
 ---
 
@@ -564,11 +611,13 @@ binary/npm/git layouts) and are atomic with an automatic rollback path.
 
 | Doc | Purpose |
 |---|---|
+| [**`docs/CONSTITUTION.md`**](docs/CONSTITUTION.md) | **The law the codebase cites** — 30 Articles + the Commandments. Enforced: `claim-lint` fails if code cites an Article that isn't there |
 | [`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md) | The golden path: install → onboarding → provider → first task → restart/resume → uninstall |
 | [`docs/guides/cli-compat.md`](docs/guides/cli-compat.md) | Exit codes, global flags, `--yes` semantics, scripting envs |
 | [`docs/security/KNOWN_LIMITATIONS.md`](docs/security/KNOWN_LIMITATIONS.md) | Canonical known-limitations register (living) |
 | [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md) | Platform/channel support truth per release |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Version ladder (0.2 / 3.x / 4.x / 7.x / 1.x) — npm `latest` is still 3.1.5 |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Version ladder (0.2 / 3.x / 4.x / 7.x / 1.x) + the structural ladder of what moved, phase by phase |
+| [`docs/migration/PHASE-5-SATELLITES.md`](docs/migration/PHASE-5-SATELLITES.md) | Phase 5: `xr shield`→`xr hygiene`, satellites, the re-based deprecation timeline |
 | [`docs/release/RELEASING.md`](docs/release/RELEASING.md) | The release runbook |
 | [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md) | cosign/SBOM/SLSA verification walkthrough |
 | [`docs/release/BETA.md`](docs/release/BETA.md) | Beta loop and feedback channel |

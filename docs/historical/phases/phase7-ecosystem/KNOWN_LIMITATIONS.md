@@ -1,5 +1,8 @@
 # Phase 7 — Known limitations (honest scope)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 - **Hosted/operated capability marketplace:** XR's marketplace backend is a
   LOCAL store + online-registry client. There is no hosted registry,
   no central signing authority, and no "certified-by-XR" badge beyond the

@@ -1,5 +1,8 @@
 # XR Phase 7 — Research Notes (STEP 3)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Principles adopted for XR, each verified against an external source and adapted (not copied) to a local-first single-user system. Sources were verified 2026-08-02.
 
 ## 1. TUF / The Update Framework — safe update & rollback

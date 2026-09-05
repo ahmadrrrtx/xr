@@ -1,5 +1,8 @@
 # Behavioral Capability Metadata (Phase 5)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Charter §9.8:** model behavior is *measured and recorded*, never
 vendor-claimed. This note defines what XR measures, how it is stored, and
 exactly how it changes (and does not change) routing.

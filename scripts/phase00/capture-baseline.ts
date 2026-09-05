@@ -32,7 +32,7 @@ import {
   writeText,
 } from "./lib.ts";
 import { versionInfo } from "../../src/core/version.ts";
-import { runtimeEnvironment } from "../../src/enterprise/baseline/status.ts";
+import { runtimeEnvironment } from "../../src/install/baseline-status.ts";
 import { detectHardwareSpecs } from "../../src/local/hardware.ts";
 import { LOCAL_RUNTIMES } from "../../src/local/registry.ts";
 import { PRESETS } from "../../src/providers/presets.ts";

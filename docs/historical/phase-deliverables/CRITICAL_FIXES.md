@@ -1,5 +1,8 @@
 # XR Critical Fixes — 0.2 Storage Unification, 0.3 Shield Honesty, 0.4 Plugin Sandbox Hardening
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
+
 ## 1. Executive Summary
 
 Three critical/high-severity issues identified in the Stage 0 Audit have been fixed in a single coordinated pass:

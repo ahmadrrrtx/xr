@@ -1,5 +1,8 @@
 # XR 7.0 — Migration and Rollback Guide
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **From:** XR 6.1.0 (Enterprise)
 **To:** XR 7.0.0 (Supremacy)
 

@@ -45,7 +45,7 @@ import type { IntelligenceService } from "../intelligence/service.ts";
 import type { CapabilityService } from "../platform/capabilities/service.ts";
 
 // Cross-cutting subsystems.
-import type { XRShieldService } from "../security/shield.ts";
+import type { XRShieldService } from "../hygiene/scanner.ts";
 import type { BusinessOsExtension, BusinessL0 } from "./business-l0.ts";
 import type { ExecutionService } from "../execution/service.ts";
 import type { TrustService } from "../runtime/trust/service.ts";

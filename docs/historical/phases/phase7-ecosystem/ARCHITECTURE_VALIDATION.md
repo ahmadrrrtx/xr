@@ -1,5 +1,8 @@
 # XR Phase 7 — Architecture Validation (STEP 4, before code)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Every plan item checked against the Constitution and Phase 7 scope. A plan that violated an Article was redesigned before coding.
 
 ## Validation per task

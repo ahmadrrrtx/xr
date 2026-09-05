@@ -1,5 +1,8 @@
 # Phase 6 — Step 4 Architecture Validation (before code)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Each task validated against the Constitution. Rejection triggers: second store · retrieved-content-as-authority · asserted recall · mandatory cloud embedding · Phase-0–5 regression.
 
 | Task | ADR-1 boundary | ADR-2 single-authority | ADR-4 authority≠intelligence | ADR-5 local-first | ADR-9 perf | ADR-11 compat | Verdict |

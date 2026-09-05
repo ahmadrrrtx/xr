@@ -1,5 +1,8 @@
 # XR Phase 7 — Audit Report (STEP 1)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Task:** Capability Ecosystem Quality + Business OS Refinement
 **Repo baseline:** `main` @ `bce34a0` (PR #38, Phase 6 landed) — version 7.0.1 (Truth)
 **Audit date:** 2026-08-02 · **Auditor:** autonomous coding agent (Phase 7 contract)

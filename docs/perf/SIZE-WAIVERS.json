@@ -1,6 +1,6 @@
 {
   "$comment": [
-    "XR Phase 2 · T7 — the module size waiver register.",
+    "XR Phase 2 \u00b7 T7 \u2014 the module size waiver register.",
     "",
     "Constitution Art. V.3: 'No module exceeds a defined size/complexity threshold",
     "WITHOUT AN OWNED PLAN TO SPLIT.' The Article permits an over-threshold module",
@@ -8,10 +8,10 @@
     "the line on day one. This file IS that owned plan, and scripts/size-gate.ts",
     "enforces it:",
     "",
-    "  · an over-threshold module missing from this file          -> CI FAILS",
-    "  · a waived module that GROWS beyond its recorded size      -> CI FAILS",
-    "  · a waiver missing owner / reason / plan / ISO review date -> CI FAILS",
-    "  · a waiver for a module now under threshold (stale entry)  -> CI FAILS",
+    "  \u00b7 an over-threshold module missing from this file          -> CI FAILS",
+    "  \u00b7 a waived module that GROWS beyond its recorded size      -> CI FAILS",
+    "  \u00b7 a waiver missing owner / reason / plan / ISO review date -> CI FAILS",
+    "  \u00b7 a waiver for a module now under threshold (stale entry)  -> CI FAILS",
     "",
     "So a waiver is permission to be big today, never permission to get bigger, and",
     "the register cannot silently rot into a list of obsolete excuses.",
@@ -27,7 +27,7 @@
       "path": "src/state/workspace-store.ts",
       "lines": 2539,
       "owner": "state",
-      "reason": "The single-writer WorkspaceStore is the Phase-1 durability invariant (ADR-0001). It owns the baseline schema for every table plus the audit hash chain; splitting the connection owner risks re-introducing the multi-writer defect Phase 1 closed. Phase 10 added the additive research_jobs table + job persistence methods (saveResearchJob/getResearchJob/listResearchJobs/researchJobCount/deleteResearchJob; +64 lines, additive, no migration). Phase 1 added the additive cost_events.usage_source column (baseline CREATE TABLE line +; +2 lines, no destructive change). Phase 2 (F-11/F-12): the store gained the durable approval rows (approvalInsert/Get/ListPending/ListBySession/Decide/ExpirePending/Purge) and the atomic reservation admission (reservationAdmit/Commit/Release/ReleaseForEnv/ActiveTotals) plus the approvals + reservations baseline DDL; +314 lines, additive, both tables are migration-6-covered on existing DBs. Phase 3 (+13): reservationTtlMs() is read at use time (not module load) and isClosed + a closed-store no-op on releaseStaleReservations so leftover approval/reservation timers cannot throw SQLITE_MISUSE after store.close() in the parallel bun test suite. Phase 4 (Evidence Integrity, F-08): the signed-audit chain. The pure read-side verification (signature/counter/head/anchor checks) was extracted to src/security/audit-verify.ts and the Ed25519 signer to src/security/audit-signer.ts to keep this growth minimal; what remains in the store is the single-writer WRITE side (keying/re-key/head upsert, the signed INSERT branch, refreshAuditKeyingState) which must stay inside the IMMEDIATE-write invariant, plus the migration-7 schema (head_counter/sig columns, audit_head/audit_anchors tables). Additive only; the hash chain is never re-keyed. CI repair (2026-09-05): +9 from the down-migration guard branches (05c923a), +8 from the signed-head-per-append fix — audit_head now covers the LATEST entry on every keyed append (an honest install inside the checkpoint window failed its own verify --crypto with \"head is stale\" before this); both changes stay inside the existing signed-audit write path, no new subsystem.",
+      "reason": "The single-writer WorkspaceStore is the Phase-1 durability invariant (ADR-0001). It owns the baseline schema for every table plus the audit hash chain; splitting the connection owner risks re-introducing the multi-writer defect Phase 1 closed. Phase 10 added the additive research_jobs table + job persistence methods (saveResearchJob/getResearchJob/listResearchJobs/researchJobCount/deleteResearchJob; +64 lines, additive, no migration). Phase 1 added the additive cost_events.usage_source column (baseline CREATE TABLE line +; +2 lines, no destructive change). Phase 2 (F-11/F-12): the store gained the durable approval rows (approvalInsert/Get/ListPending/ListBySession/Decide/ExpirePending/Purge) and the atomic reservation admission (reservationAdmit/Commit/Release/ReleaseForEnv/ActiveTotals) plus the approvals + reservations baseline DDL; +314 lines, additive, both tables are migration-6-covered on existing DBs. Phase 3 (+13): reservationTtlMs() is read at use time (not module load) and isClosed + a closed-store no-op on releaseStaleReservations so leftover approval/reservation timers cannot throw SQLITE_MISUSE after store.close() in the parallel bun test suite. Phase 4 (Evidence Integrity, F-08): the signed-audit chain. The pure read-side verification (signature/counter/head/anchor checks) was extracted to src/security/audit-verify.ts and the Ed25519 signer to src/security/audit-signer.ts to keep this growth minimal; what remains in the store is the single-writer WRITE side (keying/re-key/head upsert, the signed INSERT branch, refreshAuditKeyingState) which must stay inside the IMMEDIATE-write invariant, plus the migration-7 schema (head_counter/sig columns, audit_head/audit_anchors tables). Additive only; the hash chain is never re-keyed. CI repair (2026-09-05): +9 from the down-migration guard branches (05c923a), +8 from the signed-head-per-append fix \u2014 audit_head now covers the LATEST entry on every keyed append (an honest install inside the checkpoint window failed its own verify --crypto with \"head is stale\" before this); both changes stay inside the existing signed-audit write path, no new subsystem.",
       "plan": "Extract the per-domain table DDL into schema modules the store composes, leaving connection + WriteGate ownership intact. The signed-audit write side can move to a state/audit-signed.ts mixin operating over the gate once the DDL extraction lands. Deferred to the Phase-5 scope shrink.",
       "review": "2027-03-31"
     },
@@ -35,7 +35,7 @@
       "path": "src/interfaces/shell/app.ts",
       "lines": 1281,
       "owner": "interfaces",
-      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope. A-19 (launch RC) appended the abort-controller wiring (run-scoped controller, fail-closed approval denial, Ctrl+C/Esc reaching the loop's checkpoints; +23 lines, still a single state machine). Phase D (2026-08-13): +20 (agent-detail Ctrl+T handler, agentDetail state); split plan unchanged. Phase 12 (2026-08-26): +8 (canonical stream-event status line — the Shell previously invented its own status words and ignored onStreamEvent; the event→label mapping itself lives in interfaces/shell/types.ts so only the 4-line sink wiring is here). Phase 2 (F-11/F-26): the Shell approval callback became the durable store-backed approver (shellApprover: makeApprover + structured preview in the confirm detail + TTL auto-deny title) and executeOnSurface now threads the workspace deny-list; +27 lines, approval-path wiring only.",
+      "reason": "The interactive Shell controller: state machine, key handling, slash commands and palette. Phase 2 already reduced it by routing execution through the envelope. A-19 (launch RC) appended the abort-controller wiring (run-scoped controller, fail-closed approval denial, Ctrl+C/Esc reaching the loop's checkpoints; +23 lines, still a single state machine). Phase D (2026-08-13): +20 (agent-detail Ctrl+T handler, agentDetail state); split plan unchanged. Phase 12 (2026-08-26): +8 (canonical stream-event status line \u2014 the Shell previously invented its own status words and ignored onStreamEvent; the event\u2192label mapping itself lives in interfaces/shell/types.ts so only the 4-line sink wiring is here). Phase 2 (F-11/F-26): the Shell approval callback became the durable store-backed approver (shellApprover: makeApprover + structured preview in the confirm detail + TTL auto-deny title) and executeOnSurface now threads the workspace deny-list; +27 lines, approval-path wiring only.",
       "plan": "Extract slash-command handling and the palette into interfaces/shell/commands.ts and palette.ts. Deferred: the Shell is the surface most exposed to Phase-3 UX work and splitting it twice would be churn. Phase 12 kept growth to +8 by extracting busyLabelForEvent to shell/types.ts rather than inlining it.",
       "review": "2026-12-31"
     },
@@ -43,7 +43,7 @@
       "path": "src/execution/service.ts",
       "lines": 1488,
       "owner": "execution",
-      "reason": "ExecutionService is the durable-execution authority consolidated in T6 (records, leases, checkpoints, recovery). Phase 4 · T1 extended trustPlacementToExecution for the lattice placements (gvisor/firecracker map to container-class). Phase 8 · T2 wrapped execute() in an OpenTelemetry envelope span (executeInner split; +34 lines, observability wiring only, no new orchestration logic). Phase 06 (+261): mandated durability hardening — workflow lease gating (in-process + cross-process duplicate-execution rejection), persist-on-start so crash windows classify honestly, honest start→fail reconciliation transitions, canonical decideRetry wiring, env_admitted/cleanup_completed checkpoints, and startup-recovery RTO measurement. All of it is the single fabric authority doing its job; none of it is a second system.",
+      "reason": "ExecutionService is the durable-execution authority consolidated in T6 (records, leases, checkpoints, recovery). Phase 4 \u00b7 T1 extended trustPlacementToExecution for the lattice placements (gvisor/firecracker map to container-class). Phase 8 \u00b7 T2 wrapped execute() in an OpenTelemetry envelope span (executeInner split; +34 lines, observability wiring only, no new orchestration logic). Phase 06 (+261): mandated durability hardening \u2014 workflow lease gating (in-process + cross-process duplicate-execution rejection), persist-on-start so crash windows classify honestly, honest start\u2192fail reconciliation transitions, canonical decideRetry wiring, env_admitted/cleanup_completed checkpoints, and startup-recovery RTO measurement. All of it is the single fabric authority doing its job; none of it is a second system.",
       "plan": "Extract lease management and recovery orchestration into collaborators behind the existing ExecutionService facade (the Phase 06 hooks object is the seam). Scheduled with the next execution-fabric refactor pass; Phase 06 deliberately consolidated reliability into the one authority instead of forking it.",
       "review": "2026-12-31"
     },
@@ -51,33 +51,25 @@
       "path": "src/context/memory/store.ts",
       "lines": 1200,
       "owner": "context",
-      "reason": "The memory engine, relocated under context/ by the T5 retirement. It still serves the legacy user_memory table because the migration is lossless and reversible — deleting the source would break the documented downgrade path.",
+      "reason": "The memory engine, relocated under context/ by the T5 retirement. It still serves the legacy user_memory table because the migration is lossless and reversible \u2014 deleting the source would break the documented downgrade path.",
       "plan": "Shrinks naturally as ContextService takes over reads; the file is removed when the legacy table is dropped (no earlier than 8.0.0, per ADR-0006).",
-      "review": "2026-12-31"
-    },
-    {
-      "path": "src/enterprise/types.ts",
-      "lines": 1171,
-      "owner": "enterprise",
-      "reason": "Type declarations only — no runtime code. LOC here is schema surface, not complexity.",
-      "plan": "Split per bounded context (identity / recovery / certification) when the enterprise module next changes materially.",
       "review": "2026-12-31"
     },
     {
       "path": "src/execution/workflow/engine.ts",
       "lines": 1163,
       "owner": "execution",
-      "reason": "The DAG engine relocated under execution/ by the T6 retirement. It keeps delegating agent work through the injected WorkflowAgentRunner (Phase 0 · T3).",
+      "reason": "The DAG engine relocated under execution/ by the T6 retirement. It keeps delegating agent work through the injected WorkflowAgentRunner (Phase 0 \u00b7 T3).",
       "plan": "Extract node executors into execution/workflow/executors/* behind the current engine interface. Deferred to Phase 3.",
       "review": "2026-12-31"
     },
     {
-      "path": "src/security/shield.ts",
-      "lines": 1134,
+      "path": "src/hygiene/scanner.ts",
+      "lines": 1173,
       "owner": "security",
-      "reason": "Prompt-injection detection and response. Splitting a security-critical detector mid-consolidation risks a coverage gap; the canonical policy gate (guard.ts) is already separate.",
-      "plan": "Extract the detector rule set into security/shield-rules.ts, leaving orchestration in shield.ts. Scheduled with the Phase-4 isolation work that also touches this module.",
-      "review": "2027-03-31"
+      "reason": "Host-hygiene scanner: a long flat catalogue of platform-specific probes (processes, startup items, miners, privacy settings) with low branching depth per probe. Renamed from src/security/shield.ts in Phase 5 (ADR-0027); the +39 lines are the header recording that rename plus the SystemHygieneScanner aliases.",
+      "plan": "Split per probe family (process / startup / privacy / quarantine) behind a scanner registry when the hygiene surface next changes materially. Phase 5 deliberately did not do this: the phase adds and removes no behaviour, and splitting a 1.1k-LOC security module is a change that deserves its own review, not a rider on a rename.",
+      "review": "2026-12-01"
     },
     {
       "path": "src/context/repository.ts",
@@ -91,24 +83,16 @@
       "path": "src/config/config.ts",
       "lines": 1356,
       "owner": "config",
-      "reason": "A single Zod schema plus load/save. It is one cohesive declaration and the single source of truth for configuration shape; splitting the schema would create multiple partial truths. Phase 4 · T1/T4 added security.hardened + security.allowedHosts schema fields and the env-override helper. Phase 5 added the additive difficultyRouting/breaker/retry intelligencePlane fields and migration 17→18 (+47 lines, schema-only). Phase 8 · T2 added the additive telemetry subtree (opt-in, structural-by-default, redacted, local-first; +30 lines, schema-only, no migration needed — defaults fill). Launch S-1 · F3 added the additive envOverrides/envOverridesLocked fields and applyEnvOverrides (explicit env-var -> config-path contract with proto-pollution guards and schema re-validation; +83 lines, no migration needed - defaults fill), pinned by test/config/env-overrides.test.ts. Audit GAP-001 added the additive providerEngine.requestTimeoutMs field (per-request model-call ceiling; +2 lines, schema-only, defaults fill so no migration is needed), pinned by test/providers/request-guard.test.ts. Phase 04 added healthTimeoutMs field separate from requestTimeoutMs (bounded health 2.5s vs request 120s) + migration 18→19 (+20 lines, schema-only). Phase 10 added the additive research subtree (Firecrawl provider + bounded limits) and migration 19→20 (+66 lines, schema-only, Firecrawl off by default). Phase 1 fixed migration 8->9 to preserve providerEngine.customProviders (spread-before-defaults; +5 lines). Phase 2 (F-11/F-24): added the additive approvals block (defaultTtlMs + perSurface overrides, schema defaults preserve every existing config) and the secret-broker compat gate in the provider-key hydration path; +16 lines, additive. Phase 4 (F-08): +33 lines for the additive audit.anchor config block (enabled default FALSE, sink/interval/anchorOnExit) and signEvery. No existing section changed shape; default-off means zero anchor network traffic without explicit opt-in.",
+      "reason": "A single Zod schema plus load/save. It is one cohesive declaration and the single source of truth for configuration shape; splitting the schema would create multiple partial truths. Phase 4 \u00b7 T1/T4 added security.hardened + security.allowedHosts schema fields and the env-override helper. Phase 5 added the additive difficultyRouting/breaker/retry intelligencePlane fields and migration 17\u219218 (+47 lines, schema-only). Phase 8 \u00b7 T2 added the additive telemetry subtree (opt-in, structural-by-default, redacted, local-first; +30 lines, schema-only, no migration needed \u2014 defaults fill). Launch S-1 \u00b7 F3 added the additive envOverrides/envOverridesLocked fields and applyEnvOverrides (explicit env-var -> config-path contract with proto-pollution guards and schema re-validation; +83 lines, no migration needed - defaults fill), pinned by test/config/env-overrides.test.ts. Audit GAP-001 added the additive providerEngine.requestTimeoutMs field (per-request model-call ceiling; +2 lines, schema-only, defaults fill so no migration is needed), pinned by test/providers/request-guard.test.ts. Phase 04 added healthTimeoutMs field separate from requestTimeoutMs (bounded health 2.5s vs request 120s) + migration 18\u219219 (+20 lines, schema-only). Phase 10 added the additive research subtree (Firecrawl provider + bounded limits) and migration 19\u219220 (+66 lines, schema-only, Firecrawl off by default). Phase 1 fixed migration 8->9 to preserve providerEngine.customProviders (spread-before-defaults; +5 lines). Phase 2 (F-11/F-24): added the additive approvals block (defaultTtlMs + perSurface overrides, schema defaults preserve every existing config) and the secret-broker compat gate in the provider-key hydration path; +16 lines, additive. Phase 4 (F-08): +33 lines for the additive audit.anchor config block (enabled default FALSE, sink/interval/anchorOnExit) and signEvery. No existing section changed shape; default-off means zero anchor network traffic without explicit opt-in.",
       "plan": "Split into per-section schema modules composed into one exported ConfigSchema, preserving the single export.",
       "review": "2027-03-31"
-    },
-    {
-      "path": "src/commands/enterprise.ts",
-      "lines": 990,
-      "owner": "commands",
-      "reason": "CLI command surface: a long flat dispatch over enterprise subcommands, low branching depth per handler.",
-      "plan": "Split per subcommand group when the enterprise CLI next changes.",
-      "review": "2026-12-31"
     },
     {
       "path": "src/context/types.ts",
       "lines": 1056,
       "owner": "context",
-      "reason": "Type declarations only — the ContextItem model with consent, trust, provenance and freshness. No runtime code.",
-      "plan": "Stable by design; Phase 6 added the lifecycle-stage enum, lifecycle-aware tier resolution (defaultTierForItem) and integrity/channel explanation fields (+67 lines) — declarations only. Revisit only if the context model gains a new aggregate.",
+      "reason": "Type declarations only \u2014 the ContextItem model with consent, trust, provenance and freshness. No runtime code.",
+      "plan": "Stable by design; Phase 6 added the lifecycle-stage enum, lifecycle-aware tier resolution (defaultTierForItem) and integrity/channel explanation fields (+67 lines) \u2014 declarations only. Revisit only if the context model gains a new aggregate.",
       "review": "2026-11-01"
     },
     {
@@ -131,7 +115,7 @@
       "path": "src/cli/catalog.ts",
       "lines": 871,
       "owner": "cli",
-      "reason": "The declarative CLI command catalogue — data, not behaviour. It is the contract the L6 compatibility suite verifies. Phase 06 (+20): registered the previously unwired `xr execution` command (history + durable-execution recovery surface) that the recovery banner and docs already pointed users at.",
+      "reason": "The declarative CLI command catalogue \u2014 data, not behaviour. It is the contract the L6 compatibility suite verifies. Phase 06 (+20): registered the previously unwired `xr execution` command (history + durable-execution recovery surface) that the recovery banner and docs already pointed users at.",
       "plan": "Split per command group if it exceeds 1000 lines.",
       "review": "2026-12-31"
     },
@@ -139,7 +123,7 @@
       "path": "src/core/agent.ts",
       "lines": 1056,
       "owner": "core",
-      "reason": "The agent loop: Observe → Think → Act with cancellation checkpoints, context injection, memory recall, budget governance, trust isolated execution, capability policy boundary (Phase 08), tool-output framing, session lifecycle. Phase 08 added unified policy evaluation (trust→lifecycle→scope→permission→mode) before tool execution (+40 lines). All in one state machine by design; splitting the loop risks reintroducing the multiple-entry defect Phase 2 closed. Phase 1 turn contract: capability-honoring transport, turn.error/empty/undecodable path, stalled_no_tools stop, usage-estimate fallback, tailHash helper (+118 lines). Phase 2 (F-06/F-11/F-26): the loop boundary gained the policy deny-on-throw branch (capability.deny_error audit on policy_error) and the toolCtx.approve enrichment wrapper (riskTier + structured preview + run identity on every approval); +88 lines, decision-boundary hardening, no new orchestration.",
+      "reason": "The agent loop: Observe \u2192 Think \u2192 Act with cancellation checkpoints, context injection, memory recall, budget governance, trust isolated execution, capability policy boundary (Phase 08), tool-output framing, session lifecycle. Phase 08 added unified policy evaluation (trust\u2192lifecycle\u2192scope\u2192permission\u2192mode) before tool execution (+40 lines). All in one state machine by design; splitting the loop risks reintroducing the multiple-entry defect Phase 2 closed. Phase 1 turn contract: capability-honoring transport, turn.error/empty/undecodable path, stalled_no_tools stop, usage-estimate fallback, tailHash helper (+118 lines). Phase 2 (F-06/F-11/F-26): the loop boundary gained the policy deny-on-throw branch (capability.deny_error audit on policy_error) and the toolCtx.approve enrichment wrapper (riskTier + structured preview + run identity on every approval); +88 lines, decision-boundary hardening, no new orchestration.",
       "plan": "Extract context injection, memory recall, and budget governance into collaborators behind the existing loop facade, preserving the single ACTION phase authority. Scheduled with next agent-loop refactor after Phase 08 certification.",
       "review": "2027-03-31"
     },

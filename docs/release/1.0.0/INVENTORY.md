@@ -1,13 +1,13 @@
 # XR 1.0.0 Repository Inventory
 
-Generated: 2026-09-05T08:43:36.832Z
+Generated: 2026-09-05T11:03:46.192Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 616 |
-| Test files | 321 |
+| Source files | 564 |
+| Test files | 297 |
 | CLI commands | 42 |
 | Daemon routes | 123 |
 | Providers | 26 |
@@ -51,14 +51,14 @@ Generated: 2026-09-05T08:43:36.832Z
 - `skills` (extensions, supported) — xr skills [list|search|install|enable|disable|inspect|doctor|…]
 - `plugins` (extensions, supported) — xr plugins [list|search|install|enable|disable|remove|status]
 - `mcp` (extensions, supported) — xr mcp [list|add|remove|enable|disable|tools|health|doctor]
-- `shield` (trust, supported) — xr shield [status|scan|processes|startup|privacy|doctor|…]
+- `hygiene` (trust, supported) — xr hygiene [status|scan|processes|startup|privacy|doctor|…]
 - `trust` (trust, supported) — xr trust [status|classify <command...>] [--json]
 - `audit` (trust, supported) — xr audit [tail|verify|export] [--limit n]
 - `execution` (work, supported) — xr execution [--json] [--limit N] [--session SID] [--run RUNID] [--recovery] [--resume RUNID]
 - `attacks` (trust, supported) — xr attacks [--json]
-- `business` (work, supported) — xr business [status|init|journeys|outcomes|approvals|workers|artifacts|mutations|privacy|work-queue|audit]
-- `evaluate` (trust, supported) — xr evaluate [run|suites|list|inspect|compare|regressions|export|verify|certify|compatibility|claims|limitations|gaps|reproduce]
-- `enterprise` (trust, supported) — xr enterprise [status|policy|authority|audit|slo|incident|supplychain|recovery|release|evidence]
+- `business` (work, supported) — xr business  ·  see: bun add -g @rrrtx/business-os
+- `evaluate` (trust, supported) — xr evaluate  ·  see: bun add -g @rrrtx/xr-enterprise
+- `enterprise` (trust, supported) — xr enterprise  ·  see: bun add -g @rrrtx/xr-enterprise
 - `doctor` (system, supported) — xr doctor [--network] [--json] [--perf]
 - `status` (system, supported) — xr status [--json] [--network]
 - `update` (system, supported) — xr update [--yes]

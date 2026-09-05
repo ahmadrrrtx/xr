@@ -27,8 +27,11 @@
  *                 src/integrations, src/computer,
  *                 src/automation, src/local, src/research, src/repo
  *   L3/L4         plugins + skills are packaged out-of-tree; their HOSTS are L2
- *   L5 Business   extensions/business-os (governed extension over L0)
- *   L6 Enterprise src/enterprise/** (incl. deployment, evaluation, baseline)
+ *   L5 Business   @rrrtx/business-os      — EXTRACTED (Phase 5 · ADR-0028)
+ *   L6 Enterprise @rrrtx/xr-enterprise    — EXTRACTED (Phase 5 · ADR-0028)
+ *                 Both live in satellites/ in a development checkout and are
+ *                 absent from a core-only clone. `no-satellite-imports` keeps
+ *                 core buildable without them.
  *   Surfaces      src/interfaces, src/cli, src/commands, src/daemon,
  *                 src/telegram, src/voice, src/ui, src/i18n, src/export,
  *                 src/install, src/update
@@ -100,7 +103,7 @@ module.exports = {
       severity: "error",
       comment:
         "L0 Kernel contains only what XR needs to BE XR (Art. VI.2). It must " +
-        "not reach into runtime, platform, business, enterprise or any surface. " +
+        "not reach into runtime, platform or any surface. " +
         "The composition root (core/app.ts, core/providers/*), the agent loop " +
         "(core/agent.ts) and the execution envelope (core/execution/**) are L1 " +
         "by the boundary table and are scoped out.",
@@ -113,7 +116,6 @@ module.exports = {
         path:
           "^src/(execution|context|intelligence|providers|agents|control|runtime|services|reliability|" +
           "tools|plugins|skills|mcp|platform|capabilities|integrations|computer|automation|local|research|repo|" +
-          "business|enterprise|" +
           "interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)/",
         pathNot:
           /**
@@ -142,21 +144,21 @@ module.exports = {
         pathNot: "^src/execution/adapters/",
       },
       to: {
-        path: "^src/(business|enterprise|interfaces|cli|commands|daemon|telegram|voice|ui)/",
+        path: "^src/(interfaces|cli|commands|daemon|telegram|voice|ui)/",
         pathNot: "^src/interfaces/cli\\.ts$",
       },
     },
 
-    // ── L2 Platform must not depend on L5/L6 or a surface ────────────────────
+    // ── L2 Platform must not depend on a surface ────────────────────
     {
       name: "platform-not-above",
       severity: "error",
-      comment: "L2 Platform must not reach into Business, Enterprise or a surface.",
+      comment: "L2 Platform must not reach into a surface.",
       from: {
         path: "^src/(tools|plugins|skills|mcp|platform|capabilities|integrations|computer|automation)/",
       },
       to: {
-        path: "^src/(business|enterprise|interfaces|cli|commands|daemon|telegram|voice)/",
+        path: "^src/(interfaces|cli|commands|daemon|telegram|voice)/",
         pathNot: "^src/interfaces/cli\\.ts$",
       },
     },
@@ -169,19 +171,33 @@ module.exports = {
         "Business OS is an extension package over thin kernel contracts " +
         "(Art. §2.2 L5); it must not depend on enterprise deployment concerns " +
         "or surfaces. The kernel must not import the extension statically.",
-      from: { path: "^extensions/business-os/" },
-      to: { path: "^src/(enterprise|interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)/" },
+      from: { path: "^satellites/business-os/" },
+      to: { path: "^src/(interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update)/" },
     },
     {
-      name: "kernel-no-business-extension",
+      /**
+       * Phase 5 · ADR-0028 — supersedes "kernel-no-business-extension".
+       *
+       * The old rule forbade a static import from the kernel into the in-repo
+       * business extension. Phase 5 extracted `src/enterprise` and
+       * `extensions/business-os` into satellite packages, so the invariant is
+       * now both broader and blunter: NO module under src/ may reference a
+       * satellite by any edge. Core must build, test and ship with the
+       * satellites/ directory deleted — that is the whole point of the shrink,
+       * and it is the property this rule keeps true.
+       *
+       * If you find yourself wanting to relax this, you are re-coupling core
+       * to an optional package; add the contract to src/core/ instead and let
+       * the satellite satisfy it structurally (see BusinessOsView in
+       * src/core/business-l0.ts for the pattern).
+       */
+      name: "no-satellite-imports",
       severity: "error",
       comment:
-        "Phase 7 · T8 — the kernel holds ONLY the thin L0 contract; the " +
-        "business extension (extensions/business-os) is loaded dynamically. " +
-        "A static import from src/ into the extension is a constitutional " +
-        "violation (Art. XVI).",
+        "Core must not import satellite packages (xr-enterprise, business-os). " +
+        "Phase 5 · ADR-0028: core ships without satellites/ present.",
       from: { path: "^src/" },
-      to: { path: "^extensions/business-os/" },
+      to: { path: "^satellites/" },
     },
 
     // ── Nothing may import a surface ─────────────────────────────────────────
@@ -204,12 +220,12 @@ module.exports = {
           "^src/interfaces/cli\\.ts$",
           /**
            * `cli/catalog.ts` is the CLI's declarative command CONTRACT (data,
-           * not behaviour). L6 compatibility evidence must read it to prove
-           * "every promised command still exists" — that check is the entire
-           * point of the compatibility suite, and inspecting a contract is not
-           * the same as depending on presentation logic.
+           * not behaviour). Help rendering and the compatibility evidence in
+           * the xr-enterprise satellite both read it to prove "every promised
+           * command still exists"; inspecting a contract is not the same as
+           * depending on presentation logic.
            *
-           * Owner: enterprise/evaluation · Review: 8.0.0
+           * Owner: cli · Review: 2.0.0 (Phase 5 re-baseline)
            */
           "^src/cli/catalog\\.ts$",
         ],

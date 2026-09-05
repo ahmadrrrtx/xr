@@ -1,5 +1,8 @@
 # Phase 13 — XR 7.0 "XR OS Supremacy" — Pre-Implementation Audit Deliverable
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
+
 **Prepared:** 2026-07-28 (Asia/Karachi)
 **Auditor role:** Implementation engineer (pre-coding audit, per prompt §6)
 **Baseline inspected:** live checkout of `https://github.com/ahmadrrrtx/xr`

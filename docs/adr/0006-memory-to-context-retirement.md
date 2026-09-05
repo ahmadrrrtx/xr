@@ -103,8 +103,8 @@ rollback impossible.
 | Item | Status | Removal |
 |---|---|---|
 | `src/memory/` as a top-level module | **removed** in Phase 2 | done |
-| `xr memory` CLI | **kept** as a working alias (Art. XXVII) | no earlier than **8.0.0** |
-| `user_memory` table + `context/memory/*` engine | retained as system of record | **8.0.0**, only after a dated deprecation notice and a second reversible migration that drops it |
+| `xr memory` CLI | **kept** as a working alias (Art. XXVII) | no earlier than **2.0.0** |
+| `user_memory` table + `context/memory/*` engine | retained as system of record | **2.0.0**, only after a dated deprecation notice and a second reversible migration that drops it |
 
 The table is deliberately **not** dropped in Phase 2. Dropping it would make
 `down()` lossy and break the documented downgrade path — a retirement must not

@@ -1,5 +1,8 @@
 # XR Phase 6 — Memory, Knowledge & Context Quality: Architecture
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Status:** shipped (v7.0.1 + Phase 6) · **Basis:** ADR 0013, Constitution
 Art. VIII/XII/XXI/IV · **Audience:** developers and operators of the context
 substrate

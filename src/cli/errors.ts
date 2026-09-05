@@ -70,8 +70,8 @@ export function deniedError(what: string, why?: string): CliError {
     id: "denied",
     what,
     why: why ?? "Security policy or approval gate blocked this action.",
-    fix: "Review xr shield status and approval settings, then retry if intended.",
-    related: ["xr shield status", "xr audit tail"],
+    fix: "Review xr hygiene status and approval settings, then retry if intended.",
+    related: ["xr hygiene status", "xr audit tail"],
     code: EXIT.DENIED,
   });
 }

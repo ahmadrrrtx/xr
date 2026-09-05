@@ -1,5 +1,8 @@
 # XR 4.2 — Platform Support & Isolation Feasibility
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 This matrix is grounded in what was **actually verified** in the reference
 environment and what each backend honestly enforces. Unsupported isolation is
 made **visible** and high-risk work **fails closed** — it is never silently

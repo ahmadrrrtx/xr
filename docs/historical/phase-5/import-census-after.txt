@@ -1,0 +1,112 @@
+TOTAL relative import edges: 3695
+
+===== TARGET: enterprise  (src/enterprise) =====
+INBOUND (core -> enterprise): 0 edges from 0 files
+OUTBOUND (enterprise -> core): 0 edges into:
+
+===== TARGET: business-os  (extensions/business-os) =====
+INBOUND (core -> business-os): 0 edges from 0 files
+OUTBOUND (business-os -> core): 0 edges into:
+
+===== TARGET: research  (src/research) =====
+INBOUND (core -> research): 38 edges from 12 files
+   src/commands/install.ts
+        -> src/research/cli.ts
+   src/daemon/routes/research.routes.ts
+        -> src/research/factory.ts
+        -> src/research/jobs.ts
+        -> src/research/runner.ts
+        -> src/research/provider-types.ts
+   src/daemon/routes/router.ts
+        -> src/research/jobs.ts
+   src/tools/registry.ts
+        -> src/research/tools.ts
+   src/voice/pipeline.ts
+        -> src/research/search.ts
+        -> src/research/budget.ts
+        -> src/research/engine.ts
+   test/research.test.ts
+        -> src/research/search.ts
+        -> src/research/ranking.ts
+        -> src/research/plan.ts
+        -> src/research/llm.ts
+        -> src/research/report.ts
+        -> src/research/engine.ts
+        -> src/research/budget.ts
+   test/research/citations.test.ts
+        -> src/research/citations.ts
+        -> src/research/provider-types.ts
+   test/research/firecrawl.test.ts
+        -> src/research/url-guard.ts
+        -> src/research/jobs.ts
+        -> src/research/provider-types.ts
+        -> src/research/providers/types.ts
+        -> src/research/providers/firecrawl.ts
+   test/research/jobs.test.ts
+        -> src/research/jobs.ts
+        -> src/research/provider-types.ts
+   test/research/runner.test.ts
+        -> src/research/providers/pool.ts
+        -> src/research/providers/types.ts
+        -> src/research/provider-types.ts
+        -> src/research/jobs.ts
+        -> src/research/runner.ts
+   test/research/security.test.ts
+        -> src/research/content-guard.ts
+        -> src/research/budget.ts
+   test/research/url-guard.test.ts
+        -> src/research/url-guard.ts
+OUTBOUND (research -> core): 41 edges into:
+   src/security  x8
+   src/cost  x5
+   src/config  x5
+   src/tools  x5
+   src/state  x4
+   src/context  x4
+   src/core  x4
+   src/providers  x1
+   src/interfaces  x1
+   src/reliability  x1
+   src/observability  x1
+   src/platform  x1
+   src/runtime  x1
+
+===== TARGET: repo  (src/repo) =====
+INBOUND (core -> repo): 18 edges from 12 files
+   scripts/repo-intelligence-bench.ts
+        -> src/repo/index.ts
+        -> src/repo/repo-map.ts
+   src/commands/repo.ts
+        -> src/repo/cli.ts
+   src/services/agent-service.ts
+        -> src/repo/index.ts
+   src/tools/registry.ts
+        -> src/repo/tools.ts
+   test/repo-map/context-combine.test.ts
+        -> src/repo/context.ts
+   test/repo-map/git.test.ts
+        -> src/repo/index.ts
+   test/repo-map/helpers.ts
+        -> src/repo/index.ts
+   test/repo-map/isolation.test.ts
+        -> src/repo/scope.ts
+   test/repo-map/parser.test.ts
+        -> src/repo/parser/index.ts
+   test/repo-map/security.test.ts
+        -> src/repo/index.ts
+        -> src/repo/ignore.ts
+        -> src/repo/scope.ts
+   test/repo-map/token-budget.test.ts
+        -> src/repo/repo-map.ts
+        -> src/repo/tokens.ts
+        -> src/repo/types.ts
+   test/repo-map/tools.test.ts
+        -> src/repo/tools.ts
+OUTBOUND (repo -> core): 16 edges into:
+   src/state  x5
+   src/core  x3
+   src/context  x3
+   src/security  x2
+   src/util  x1
+   src/observability  x1
+   src/runtime  x1

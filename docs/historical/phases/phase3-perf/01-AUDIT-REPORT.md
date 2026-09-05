@@ -1,5 +1,8 @@
 # XR Phase 3 — STEP 1 Audit Report (re-verified against live `main` b8be112)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Date:** 2026-08-01 · **Repository:** github.com/ahmadrrrtx/xr @ `b8be112` (PR #33) · **Host:** Linux x64, 2 vCPU, ~2 GB RAM sandbox · Bun 1.3.14
 
 ## 1. Phase 0–2 re-verification

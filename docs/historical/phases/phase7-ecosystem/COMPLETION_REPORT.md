@@ -1,5 +1,8 @@
 # XR Phase 7 — Completion Report (work log)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Repo:** github.com/ahmadrrrtx/xr @ `main` → Phase-7 commits `ce15563` + `0e8602a`
 **Date:** 2026-08-02 · **Final state:** 2540 tests pass / 0 fail (192 files, 46.7s)
 

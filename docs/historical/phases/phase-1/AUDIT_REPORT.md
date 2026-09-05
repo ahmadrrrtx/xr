@@ -1,5 +1,8 @@
 # Phase 1 — Audit Report (STEP 1)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Audit date:** 2026-07-31
 **Checked out:** `main` @ `d2e84c0` (Phase 0 commit), release identity `7.0.1`
 **Baseline test suite:** 1980 pass / 0 fail (124 files) — Phase 0 floor is green.

@@ -1,4 +1,7 @@
 # 08 — Voice + Mobile Control, and the Rename (pre-build update)
+
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
 ### @ahmadrrrtx · 2026-06-03 · supersedes the name in doc 07
 
 ---

@@ -1,5 +1,8 @@
 # Phase 1 — Architecture Validation (STEP 4)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Validated **before** coding, per task. Any plan that weakens the audit
 guarantee, introduces a second write authority, breaks a Phase-0 fix, adds a
 feature, or breaks compatibility without a reversible migration was rejected.

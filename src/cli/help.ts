@@ -293,6 +293,7 @@ const TOPIC_HANDLERS: Record<string, () => void> = {
   },
   plugins: () => showCommandHelp("plugins"),
   mcp: () => showCommandHelp("mcp"),
+  hygiene: () => showCommandHelp("hygiene"),
   shield: () => showCommandHelp("shield"),
   audit: () => showCommandHelp("audit"),
 };
@@ -326,7 +327,7 @@ function topicSecurity(): void {
   console.log(`  ${xrGreen("•")} ${xrBold("Local-first")}            no data leaves by default\n`);
   code("xr audit verify", "verify audit chain");
   code("xr attacks", "run injection benchmark");
-  code("xr shield status", "security overview");
+  code("xr hygiene status", "host hygiene overview");
   code("xr doctor", "full health check");
   console.log();
 }

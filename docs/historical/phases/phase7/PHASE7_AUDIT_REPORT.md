@@ -1,5 +1,8 @@
 # XR Phase 7 — Mandatory Repository Audit Report
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Baseline:** XR 4.5.0 (Phase 6 — Knowledge and Context OS)
 **Target:** XR 5.0.0 (Phase 7 — Agent and Workflow OS)
 **Status:** Phase 6 verified green (935/941 tests pass, typecheck clean)

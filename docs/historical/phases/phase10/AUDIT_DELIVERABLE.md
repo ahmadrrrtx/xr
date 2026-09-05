@@ -1,4 +1,7 @@
 # PHASE 10 — Personal and Business Operating Layer — Audit Deliverable
+
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
 **Version:** XR 5.2.0 Baseline → XR 5.3.0 Target  
 **Date:** 2026-07-27  
 **Scope:** Audit of all `src/business/`, workflow, execution, trust, intelligence, context, capability contracts, research, integrations, documents/meetings/communication, RBAC, CLI/daemon/dashboard.

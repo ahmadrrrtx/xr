@@ -1,5 +1,8 @@
 # XR Phase 8 — STEP 2 Gap Analysis
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Mapped against Constitution Art. X (honest UX), XI/XVIII (versioned contracts), XII (performance), XXI (privacy), XX (testing), the Phase 8 spec tasks, and live audit findings (`01-AUDIT-REPORT.md`). Ordered by dependency. Every gap names the test/gate that proves closure.
 
 ## Order 1 — contracts first (everything else builds on it)

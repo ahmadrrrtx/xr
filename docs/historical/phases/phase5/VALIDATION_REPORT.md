@@ -1,5 +1,8 @@
 # XR 4.4 Universal Intelligence Plane — Validation Report
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Version:** 4.4.0  
 **Date:** 2026-07-26  
 **Baseline:** XR 4.3.0 @ `436b942` (includes `bb976e4`)  

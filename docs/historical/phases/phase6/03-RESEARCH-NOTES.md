@@ -1,5 +1,8 @@
 # Phase 6 — Step 3 Research Notes (principles adopted, with sources)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Adopted as *principles*; XR is its own runtime, so nothing was copied wholesale.
 
 ## R1 — Production agent-memory patterns (`rohitg00/agentmemory`, ~26k★)

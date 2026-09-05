@@ -1,5 +1,8 @@
 # XR 4.5 — Phase 6 Validation Report
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Product:** XR 4.5.0 Knowledge and Context OS
 **Date:** 2026-07-26
 **Baseline:** XR 4.4.0 Universal Intelligence Plane @ `9eeb2ad`

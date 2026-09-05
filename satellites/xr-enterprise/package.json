@@ -1,0 +1,51 @@
+{
+  "name": "@rrrtx/xr-enterprise",
+  "version": "1.0.0",
+  "description": "XR Enterprise — organization policy, delegated authority, audit export/retention, SLOs, incidents, supply-chain response, disaster recovery, release/support, certification evidence, deployment profiles, and the evaluation harness. A satellite of @rrrtx/xr; the XR core runtime never imports it.",
+  "type": "module",
+  "main": "./src/enterprise/index.ts",
+  "exports": {
+    ".": "./src/enterprise/index.ts",
+    "./deployment": "./src/enterprise/deployment/types.ts",
+    "./deployment/profiles": "./src/enterprise/deployment/profiles.ts",
+    "./evaluation": "./src/enterprise/evaluation/index.ts",
+    "./cli": "./src/cli.ts"
+  },
+  "bin": {
+    "xr-enterprise": "./bin/xr-enterprise"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@rrrtx/xr": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "bun": ">=1.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahmadrrrtx/xr-enterprise.git"
+  },
+  "keywords": [
+    "xr",
+    "ai-agent",
+    "enterprise",
+    "governance",
+    "audit",
+    "compliance"
+  ],
+  "author": "Muhammad Ahmad (@ahmadrrrtx)",
+  "license": "MIT"
+}

@@ -1,5 +1,8 @@
 # XR 5.3 — Local and Private Operation — Privacy Matrix
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 ## Requirement (Spec 6.7)
 
 Sensitive business/personal journeys must operate locally/private where current providers/integrations support it. Cloud transfer requires existing policy/consent.

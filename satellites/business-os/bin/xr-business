@@ -1,0 +1,72 @@
+#!/usr/bin/env bun
+/**
+ * xr-business — CLI entry for the Business OS satellite.
+ *
+ * Business OS commands need a live XR kernel: BusinessCommand.execute() takes a
+ * CommandContext and resolves Tokens.Business / Tokens.BusinessLoader from the
+ * registry. So this bin does NOT re-implement a bootstrap — it borrows core's
+ * (Art. VI: one execution envelope) and registers the satellite's command on it.
+ *
+ * It must not shell out to `xr business`: core answers that verb with a
+ * relocation notice pointing back here, which would be an infinite loop of
+ * advice. The satellite owns the FEATURE; core still owns the ENVELOPE.
+ */
+import { BusinessCommand, BizAliasCommand } from "../src/commands/business.ts";
+
+const HELP = `
+  xr-business — Business OS (an XR extension)
+
+  Usage
+    xr-business <status|init|journeys|outcomes|approvals|workers|artifacts|mutations|privacy|work-queue|audit>
+
+  Business OS is default-off and effect-verified: a module is enabled only when
+  its deterministic effect tests pass. Enable it in your XR config first.
+
+  Docs: https://github.com/ahmadrrrtx/business-os
+`;
+
+async function main(): Promise<number> {
+  const argv = process.argv.slice(2);
+  // Accept both `xr-business status` and `xr-business business status`.
+  const args = argv[0] === "business" || argv[0] === "biz" ? argv.slice(1) : argv;
+
+  if (args.includes("--help") || args.includes("-h")) {
+    console.log(HELP);
+    return 0;
+  }
+
+  let bootKernelForCommand: (c: string) => Promise<{ kernel: KernelLike }>;
+  try {
+    ({ bootKernelForCommand } = await import("@rrrtx/xr/src/cli/kernel-boot.ts"));
+  } catch {
+    console.error(
+      "\n  xr-business needs the XR runtime.\n\n" +
+        "  Business OS is an XR extension, not a standalone program: its commands run\n" +
+        "  inside the XR kernel (registry, workspace store, approval gate, audit chain).\n\n" +
+        "  Install:  bun add -g @rrrtx/xr\n",
+    );
+    return 2;
+  }
+
+  const { kernel } = await bootKernelForCommand("business");
+  kernel.commands.register(new BusinessCommand());
+  kernel.commands.register(new BizAliasCommand());
+
+  try {
+    await kernel.executeCommand("business", args, process.cwd());
+    return 0;
+  } catch (err) {
+    console.error("xr-business:", err instanceof Error ? err.message : String(err));
+    return 1;
+  } finally {
+    await kernel.shutdown();
+  }
+}
+
+interface KernelLike {
+  commands: { register(cmd: unknown): unknown };
+  executeCommand(name: string, args: string[], cwd: string): Promise<void>;
+  shutdown(): Promise<void>;
+}
+
+main().then((code) => process.exit(code));

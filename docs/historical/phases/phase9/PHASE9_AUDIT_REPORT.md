@@ -1,5 +1,8 @@
 # XR 5.2 — Phase 9 Required Repository Audit: Capability Ecosystem
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 - **Baseline audited:** XR 5.1.0 Environment Interaction OS (Phase 8), commit `9ce62bbb75a1d7c94a5c7e720bb2d3af05d56940`.
 - **Target:** XR 5.2.0 Capability Ecosystem.
 - **Audit date:** 2026-07-27.

@@ -289,3 +289,76 @@ export interface BusinessOsExtension {
   health(): { loaded: boolean; modules: string[]; verified: boolean; reason?: string };
   dispose(): Promise<void>;
 }
+
+// ── Phase 5 (ADR-0028): structural view contracts ────────────────────────────
+//
+// Before Phase 5 the daemon's business routes imported `BusinessOS` *from the
+// extension source tree* (`extensions/business-os/src/index.ts`) purely for its
+// TYPE, and the credential vault imported `BusinessDatabase` the same way. Both
+// were type-only, but they made the core tree unbuildable without the extension
+// checked out beside it — a real coupling wearing a type-only disguise, and the
+// exact thing the extraction has to end.
+//
+// The kernel now declares the *shape it consumes* here, at L0, and the
+// extension satisfies it structurally (TypeScript is structurally typed, so no
+// `implements` clause and no import in either direction is required). Core
+// depends on its own contract; the satellite depends on nothing of core's
+// internals. If the extension drifts from this shape, the satellite's own
+// typecheck fails against these interfaces — the contract stays honest without
+// a build-time edge.
+
+/** Minimal prepared-statement surface the credential vault needs. */
+export interface BusinessSqlDatabase {
+  prepare(sql: string): {
+    /** better-sqlite3 / bun:sqlite RunResult — `changes` is the row count. */
+    run(...params: unknown[]): { changes: number; lastInsertRowid?: number | bigint };
+    get(...params: unknown[]): unknown;
+    all(...params: unknown[]): unknown[];
+  };
+}
+
+/**
+ * The read/act surface the daemon's `/api/v1/business/*` routes consume.
+ *
+ * Deliberately typed as `unknown`-returning: the daemon serializes these
+ * straight to JSON and never inspects the domain shape, so the kernel does not
+ * need — and must not acquire — the extension's domain model.
+ */
+export interface BusinessOsView {
+  readonly operatingLayer: {
+    getWorkspaceView(workspaceId: string, orgId?: string): unknown;
+    getOutcomeView(outcomeId: string): unknown;
+    startJourney(input: {
+      journeyId: string;
+      workspaceId: string;
+      orgId?: string;
+      actorId: string;
+      input?: unknown;
+    }): Promise<unknown>;
+  };
+  readonly approvals: {
+    listPending(workspaceId: string, opts?: { limit?: number }): unknown[];
+    getWorkQueue(workspaceId: string): unknown;
+    decide(approvalId: string, decision: Record<string, unknown>): unknown;
+  };
+  readonly outcomes: {
+    listByWorkspace(workspaceId: string, opts?: { limit?: number }): unknown[];
+    getStats(workspaceId: string): unknown;
+  };
+  readonly artifacts: {
+    listByWorkspace(workspaceId: string, opts?: { limit?: number }): unknown[];
+  };
+  readonly recordMutations: {
+    listByWorkspace(workspaceId: string, opts?: { limit?: number }): unknown[];
+  };
+  readonly workerGovernance: {
+    listByWorkspace(workspaceId: string): Array<{ workerId: string }>;
+    inspect(workerId: string): unknown;
+    setEnabled(
+      workerId: string,
+      enabled: boolean,
+      meta: { actorId: string; reason?: string },
+    ): unknown;
+  };
+  readonly privacy: { getPolicy(workspaceId: string): unknown };
+}

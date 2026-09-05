@@ -5,7 +5,7 @@
  * Constitution Art. XVI / Part Eight:
  *   - the kernel holds only the thin L0 record/artifact/identity/audit
  *     contract (src/core/business-l0.ts);
- *   - the extension package (extensions/business-os) is DEFAULT-EXCLUDED:
+ *   - the extension package (@rrrtx/business-os) is DEFAULT-EXCLUDED:
  *     it loads only when (a) the operator enables it AND (b) every requested
  *     module passes its effect-verification gate;
  *   - no business domain schema lives in the kernel; no second engine; the
@@ -19,7 +19,37 @@ import type { ProviderContext, ServiceProvider } from "../app.ts";
 import { Tokens } from "../tokens.ts";
 import { BusinessL0, type BusinessOsExtension } from "../business-l0.ts";
 
-const EXTENSION_ENTRY = new URL("../../../extensions/business-os/src/index.ts", import.meta.url).href;
+/**
+ * Extension entry resolution (Phase 5 · ADR-0028).
+ *
+ * The extension used to live INSIDE this repo, so the entry point was a fixed
+ * relative URL. Phase 5 extracted it to the separately-published
+ * `@rrrtx/business-os`, so core can no longer assume a path on disk — it asks
+ * the module resolver, and it keeps working when the answer is "not installed".
+ *
+ * Only the PACKAGE SPECIFIER is resolved — deliberately no relative fallback
+ * into a sibling checkout. A path fallback would reintroduce exactly the
+ * coupling the extraction removed (and `test/architecture/satellite-isolation`
+ * would fail the build for it, correctly). A contributor working on both trees
+ * links the package (`bun link @rrrtx/business-os`), which is the same code
+ * path a real user takes — so the dev experience exercises the shipping
+ * behaviour instead of a special case that only exists in this repo.
+ *
+ * Failure to resolve is NOT an error: it is the default state of a core-only
+ * install, and `loadExtension` records it as an exclusion reason exactly like a
+ * disabled config or an unverified module (fail-closed).
+ */
+const EXTENSION_SPECIFIER = "@rrrtx/business-os";
+const EFFECT_VERIFICATION_SPECIFIER = "@rrrtx/business-os/effect-verification";
+
+/** Import an optional package; null when it is not installed. */
+async function importOptional<T>(specifier: string): Promise<T | null> {
+  try {
+    return (await import(/* @vite-ignore */ specifier)) as T;
+  } catch {
+    return null; // not installed — the default state of a core-only install
+  }
+}
 
 export class BusinessServiceProvider implements ServiceProvider {
   readonly id = "business";
@@ -93,9 +123,16 @@ export class BusinessServiceProvider implements ServiceProvider {
       // effect tests against a scratch database. Unproven modules are
       // excluded; if a REQUESTED module is unverified, the whole extension
       // stays excluded (fail-closed) with the reason recorded.
-      const evPath = new URL("../../../extensions/business-os/effect-verification.ts", import.meta.url).href;
-      const { verifyBusinessOsModules } = (await import(evPath)) as { verifyBusinessOsModules: () => Promise<Array<{ module: string; status: string }>> };
-      const results = await verifyBusinessOsModules();
+      const ev = await importOptional<{ verifyBusinessOsModules: () => Promise<Array<{ module: string; status: string }>> }>(
+        EFFECT_VERIFICATION_SPECIFIER,
+      );
+      if (!ev) {
+        this.loadAttempted = true;
+        this.exclusionReason =
+          "Business OS is enabled in config but the extension is not installed — install @rrrtx/business-os (Phase 5 · ADR-0028)";
+        return null;
+      }
+      const results = await ev.verifyBusinessOsModules();
       const requested = new Set(config.business.modules ?? results.map((r) => r.module));
       const unverified = results.filter((r) => requested.has(r.module) && r.status !== "verified");
       if (unverified.length > 0) {
@@ -104,7 +141,15 @@ export class BusinessServiceProvider implements ServiceProvider {
         return null;
       }
       // Verified → load the extension over the L0 contract.
-      const mod = (await import(EXTENSION_ENTRY)) as { BusinessOS: new (opts: { db: unknown; l0: BusinessL0 }) => BusinessOsExtension };
+      const mod = await importOptional<{ BusinessOS: new (opts: { db: unknown; l0: BusinessL0 }) => BusinessOsExtension }>(
+        EXTENSION_SPECIFIER,
+      );
+      if (!mod) {
+        this.loadAttempted = true;
+        this.exclusionReason =
+          "Business OS effect-verification passed but the extension entry could not be resolved — install @rrrtx/business-os (Phase 5 · ADR-0028)";
+        return null;
+      }
       const store = registry.resolve(Tokens.Store);
       const l0 = registry.resolve(Tokens.BusinessL0);
       this.instance = new mod.BusinessOS({ db: store, l0 });

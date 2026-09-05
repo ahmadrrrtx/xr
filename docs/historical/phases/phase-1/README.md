@@ -1,5 +1,8 @@
 # Phase 1 — Work Log & Engineering Records
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 > Phase 1 (Reliability & Persistence Core) of the XR roadmap, per the Phase 1
 > Implementation Prompt. All records below reflect the **current repository**
 > (`main` @ `d2e84c0`, release `7.0.1`) — the repository is the source of

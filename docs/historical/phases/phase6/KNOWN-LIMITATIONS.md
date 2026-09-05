@@ -1,5 +1,8 @@
 # Known Limitations — Phase 6 (Memory, Knowledge & Context Quality)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Honest edges of what Phase 6 shipped. None of these are silent: each points
 at the test or code that pins current behavior.
 

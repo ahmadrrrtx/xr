@@ -1,5 +1,8 @@
 # 05 — Test Results (Phase 5)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Date:** 2026-08-02 · **Commit base:** `14c208c` (7.0.1) · **Runner:** bun test (Linux CI-compatible)
 
 Every Phase 5 test asserts **effects** (measurable outcomes), not mocks of

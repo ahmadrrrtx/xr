@@ -1,5 +1,8 @@
 # Routing SLOs (Phase 5)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Routing quality is observed as numbers. The collector (`src/intelligence/
 slo.ts`, `RoutingSlo`) records at the single choke point every decision
 passes through; the sink is a local JSONL file — **never sent anywhere**.

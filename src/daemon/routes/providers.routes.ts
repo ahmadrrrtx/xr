@@ -8,7 +8,7 @@ import { providerGateway } from "../../providers/gateway.ts";
 import { recommendLocalAI } from "../../local/recommend.ts";
 import { detectAllRuntimes, detectRuntime, testLocalModel } from "../../local/runtimes.ts";
 import { isLocalRuntimeId, providerIdForRuntime, validateLocalModelId } from "../../local/registry.ts";
-import { XRShieldService } from "../../security/shield.ts";
+import { XRShieldService } from "../../hygiene/scanner.ts";
 import { Tokens } from "../../core/tokens.ts";
 import { WorkspaceSwitchFailedError } from "../../core/errors.ts";
 import { IntelligenceRouter } from "../../intelligence/router.ts";

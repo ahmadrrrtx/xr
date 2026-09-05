@@ -1,5 +1,8 @@
 # Phase 12 Audit Deliverable — XR 6.1 Enterprise Trust and Operations
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
+
 **Baseline:** XR 6.0.0 (`main` @ `806cbc1`, Phase 11 merged via PR #27)
 **Audit date:** 2026-07-28
 **Branch:** `feature/phase-12-enterprise-trust-and-operations`

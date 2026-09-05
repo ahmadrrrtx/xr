@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-05T08:43:36.832Z",
+  "generatedAt": "2026-09-05T11:03:46.192Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -51,8 +51,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 616,
-    "testFiles": 321,
+    "sourceFiles": 564,
+    "testFiles": 297,
     "cliCommands": 42,
     "daemonRoutes": 123,
     "providers": 26,
@@ -67,7 +67,7 @@
     },
     {
       "path": ".dependency-cruiser.cjs",
-      "bytes": 14613
+      "bytes": 15442
     },
     {
       "path": ".gitattributes",
@@ -107,15 +107,11 @@
     },
     {
       "path": "README.md",
-      "bytes": 31003
+      "bytes": 34760
     },
     {
       "path": "SECURITY.md",
       "bytes": 17323
-    },
-    {
-      "path": "XR_PHASE05.patch",
-      "bytes": 92165
     },
     {
       "path": "bun.lock",
@@ -123,15 +119,11 @@
     },
     {
       "path": "bunfig.toml",
-      "bytes": 285
+      "bytes": 838
     },
     {
       "path": "docker-compose.yml",
       "bytes": 900
-    },
-    {
-      "path": "fix-ci.patch",
-      "bytes": 7749
     },
     {
       "path": "install.ps1",
@@ -185,16 +177,14 @@
     "src/commands/attacks.ts",
     "src/commands/audit.ts",
     "src/commands/budget.ts",
-    "src/commands/business.ts",
     "src/commands/capabilities.ts",
     "src/commands/config.ts",
     "src/commands/context.ts",
     "src/commands/doctor.ts",
-    "src/commands/enterprise.ts",
     "src/commands/environment.ts",
-    "src/commands/evaluate.ts",
     "src/commands/execution.ts",
     "src/commands/help.ts",
+    "src/commands/hygiene.ts",
     "src/commands/install.ts",
     "src/commands/logs.ts",
     "src/commands/mcp.ts",
@@ -203,8 +193,8 @@
     "src/commands/providers.ts",
     "src/commands/repo.ts",
     "src/commands/run-agent.ts",
+    "src/commands/satellite-shims.ts",
     "src/commands/session.ts",
-    "src/commands/shield.ts",
     "src/commands/skills.ts",
     "src/commands/telemetry.ts",
     "src/commands/trust.ts",
@@ -361,59 +351,6 @@
     "src/daemon/server.ts",
     "src/daemon/skills-api.ts",
     "src/daemon/state/cache.ts",
-    "src/enterprise/audit/export.ts",
-    "src/enterprise/audit/redaction.ts",
-    "src/enterprise/audit/retention.ts",
-    "src/enterprise/authority/delegation.ts",
-    "src/enterprise/baseline/status.ts",
-    "src/enterprise/certification/evidence.ts",
-    "src/enterprise/deployment/backup/service.ts",
-    "src/enterprise/deployment/capsule.ts",
-    "src/enterprise/deployment/control-plane/service.ts",
-    "src/enterprise/deployment/identity/service.ts",
-    "src/enterprise/deployment/index.ts",
-    "src/enterprise/deployment/offline/service.ts",
-    "src/enterprise/deployment/placement/engine.ts",
-    "src/enterprise/deployment/profiles.ts",
-    "src/enterprise/deployment/residency/policy.ts",
-    "src/enterprise/deployment/sync/engine.ts",
-    "src/enterprise/deployment/types.ts",
-    "src/enterprise/deployment/workers/registry.ts",
-    "src/enterprise/evaluation/certification.ts",
-    "src/enterprise/evaluation/claims.ts",
-    "src/enterprise/evaluation/comparison.ts",
-    "src/enterprise/evaluation/compatibility.ts",
-    "src/enterprise/evaluation/effects.ts",
-    "src/enterprise/evaluation/fixtures.ts",
-    "src/enterprise/evaluation/gates.ts",
-    "src/enterprise/evaluation/governance.ts",
-    "src/enterprise/evaluation/index.ts",
-    "src/enterprise/evaluation/metrics.ts",
-    "src/enterprise/evaluation/provenance.ts",
-    "src/enterprise/evaluation/report.ts",
-    "src/enterprise/evaluation/repository.ts",
-    "src/enterprise/evaluation/runner.ts",
-    "src/enterprise/evaluation/scoring.ts",
-    "src/enterprise/evaluation/suites/context.ts",
-    "src/enterprise/evaluation/suites/enterprise.ts",
-    "src/enterprise/evaluation/suites/execution.ts",
-    "src/enterprise/evaluation/suites/index.ts",
-    "src/enterprise/evaluation/suites/platform.ts",
-    "src/enterprise/evaluation/suites/trust.ts",
-    "src/enterprise/evaluation/suites/workflow.ts",
-    "src/enterprise/evaluation/types.ts",
-    "src/enterprise/evaluation/verifiers.ts",
-    "src/enterprise/incidents/workflow.ts",
-    "src/enterprise/index.ts",
-    "src/enterprise/operations/slo.ts",
-    "src/enterprise/operations/status.ts",
-    "src/enterprise/policy/bundles.ts",
-    "src/enterprise/policy/engine.ts",
-    "src/enterprise/policy/layers.ts",
-    "src/enterprise/recovery/operations.ts",
-    "src/enterprise/release/channels.ts",
-    "src/enterprise/supplychain/response.ts",
-    "src/enterprise/types.ts",
     "src/execution/adapters/agent-adapter.ts",
     "src/execution/adapters/common.ts",
     "src/execution/adapters/control-adapter.ts",
@@ -445,8 +382,10 @@
     "src/execution/workflow/types.ts",
     "src/execution/workflow/versioning.ts",
     "src/export/report.ts",
+    "src/hygiene/scanner.ts",
     "src/i18n/strings.ts",
     "src/index.ts",
+    "src/install/baseline-status.ts",
     "src/install/system.ts",
     "src/install/uninstall.ts",
     "src/integrations/credentials.ts",
@@ -770,7 +709,8 @@
     "src/voice/tts.ts",
     "src/voice/types.ts",
     "src/voice/vad.ts",
-    "src/voice/wake.ts"
+    "src/voice/wake.ts",
+    "src/xr-shield/index.ts"
   ],
   "tests": [
     "test/a11y/auth-server.test.ts",
@@ -792,14 +732,12 @@
     "test/architecture/boundaries.test.ts",
     "test/architecture/one-store.test.ts",
     "test/architecture/ownership.test.ts",
+    "test/architecture/satellite-isolation.test.ts",
     "test/architecture/size-gate.test.ts",
     "test/architecture/unit-tier.test.ts",
+    "test/architecture/xr-shield-facade.test.ts",
     "test/baseline/doctor.test.ts",
     "test/baseline/status.test.ts",
-    "test/business/adversarial-boundaries.test.ts",
-    "test/business/business.test.ts",
-    "test/business/decoupling.test.ts",
-    "test/business/operating-layer.test.ts",
     "test/capabilities/ecosystem.test.ts",
     "test/capabilities/evidence-trust.test.ts",
     "test/capabilities/inventory.test.ts",
@@ -856,12 +794,6 @@
     "test/daemon/phase-ef.test.ts",
     "test/daemon/phase-g.test.ts",
     "test/daemon/token-drift.test.ts",
-    "test/deployment/capsule.test.ts",
-    "test/deployment/placement-engine.test.ts",
-    "test/deployment/profiles.test.ts",
-    "test/deployment/security-identity-backup.test.ts",
-    "test/deployment/sync-offline-residency.test.ts",
-    "test/deployment/worker-registry.test.ts",
     "test/e2e-blackbox/audit-crypto.test.ts",
     "test/e2e-blackbox/budget.test.ts",
     "test/e2e-blackbox/cancel.test.ts",
@@ -870,17 +802,6 @@
     "test/e2e-blackbox/run-lifecycle.test.ts",
     "test/e2e-blackbox/streaming-matrix.test.ts",
     "test/ecosystem.test.ts",
-    "test/enterprise/audit-export.test.ts",
-    "test/enterprise/authority.test.ts",
-    "test/enterprise/certification.test.ts",
-    "test/enterprise/governance-matrix.test.ts",
-    "test/enterprise/incidents.test.ts",
-    "test/enterprise/operations.test.ts",
-    "test/enterprise/policy.test.ts",
-    "test/enterprise/recovery.test.ts",
-    "test/enterprise/release.test.ts",
-    "test/enterprise/security-adversarial.test.ts",
-    "test/enterprise/supplychain.test.ts",
     "test/environment/adversarial.test.ts",
     "test/environment/browser-policy.test.ts",
     "test/environment/capabilities.test.ts",
@@ -892,10 +813,6 @@
     "test/environment/service.test.ts",
     "test/environment/types.test.ts",
     "test/environment/workflow-binding.test.ts",
-    "test/evaluation/harness.test.ts",
-    "test/evaluation/integration.test.ts",
-    "test/evaluation/integrity-race.test.ts",
-    "test/evaluation/security.test.ts",
     "test/execution/adapters.test.ts",
     "test/execution/cancellation.test.ts",
     "test/execution/checkpoint.test.ts",
@@ -1007,7 +924,6 @@
     "test/reliability/phase06-crash-recovery.test.ts",
     "test/reliability/phase06-golden-scenarios.test.ts",
     "test/reliability/provider-canaries.test.ts",
-    "test/reliability/rpo-rto.test.ts",
     "test/reliability/single-writer.test.ts",
     "test/reliability/store-edge.test.ts",
     "test/reliability/update-uninstall.test.ts",
@@ -1390,12 +1306,13 @@
       "classification": "supported"
     },
     {
-      "name": "shield",
+      "name": "hygiene",
       "aliases": [
+        "shield",
         "security"
       ],
       "group": "trust",
-      "usage": "xr shield [status|scan|processes|startup|privacy|doctor|…]",
+      "usage": "xr hygiene [status|scan|processes|startup|privacy|doctor|…]",
       "needsKernel": true,
       "fastPath": false,
       "classification": "supported"
@@ -1450,8 +1367,8 @@
         "biz"
       ],
       "group": "work",
-      "usage": "xr business [status|init|journeys|outcomes|approvals|workers|artifacts|mutations|privacy|work-queue|audit]",
-      "needsKernel": true,
+      "usage": "xr business  ·  see: bun add -g @rrrtx/business-os",
+      "needsKernel": false,
       "fastPath": false,
       "classification": "supported"
     },
@@ -1462,8 +1379,8 @@
         "benchmark"
       ],
       "group": "trust",
-      "usage": "xr evaluate [run|suites|list|inspect|compare|regressions|export|verify|certify|compatibility|claims|limitations|gaps|reproduce]",
-      "needsKernel": true,
+      "usage": "xr evaluate  ·  see: bun add -g @rrrtx/xr-enterprise",
+      "needsKernel": false,
       "fastPath": false,
       "classification": "supported"
     },
@@ -1473,8 +1390,8 @@
         "ent"
       ],
       "group": "trust",
-      "usage": "xr enterprise [status|policy|authority|audit|slo|incident|supplychain|recovery|release|evidence]",
-      "needsKernel": true,
+      "usage": "xr enterprise  ·  see: bun add -g @rrrtx/xr-enterprise",
+      "needsKernel": false,
       "fastPath": false,
       "classification": "supported"
     },

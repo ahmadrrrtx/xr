@@ -1,5 +1,8 @@
 # XR Phase 1 — Known Limitations Register (update)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Status of the register after Phase 1. Items marked **closed** were resolved;
 new entries are added with evidence. Nothing here is silently accepted — each
 entry has an owner and a review date.

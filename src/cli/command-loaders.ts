@@ -72,16 +72,20 @@ export const COMMAND_LOADERS: Readonly<Record<string, CommandLoaderEntry>> = {
   skills: { path: "../commands/skills.ts", symbol: "SkillsAliasCommand" },
   capabilities: { path: "../commands/capabilities.ts", symbol: "CapabilitiesCommand" },
   capability: { path: "../commands/capabilities.ts", symbol: "CapabilityAliasCommand" },
-  shield: { path: "../commands/shield.ts", symbol: "ShieldCommand" },
+  hygiene: { path: "../commands/hygiene.ts", symbol: "HygieneCommand" },
+  // Deprecated alias for `xr hygiene` (Phase 5 · F-07 · ADR-0027). Removal: 2.0.0.
+  shield: { path: "../commands/hygiene.ts", symbol: "ShieldCommand" },
   trust: { path: "../commands/trust.ts", symbol: "TrustCommand" },
   attacks: { path: "../commands/attacks.ts", symbol: "AttacksCommand" },
-  // Business / enterprise / evaluation.
-  business: { path: "../commands/business.ts", symbol: "BusinessCommand" },
-  biz: { path: "../commands/business.ts", symbol: "BizAliasCommand" },
-  enterprise: { path: "../commands/enterprise.ts", symbol: "EnterpriseCommand" },
-  ent: { path: "../commands/enterprise.ts", symbol: "EnterpriseAliasCommand" },
-  evaluate: { path: "../commands/evaluate.ts", symbol: "EvaluateCommand" },
-  eval: { path: "../commands/evaluate.ts", symbol: "EvalAliasCommand" },
+  // Business / enterprise / evaluation — EXTRACTED in Phase 5 (ADR-0028).
+  // These verbs now resolve to relocation shims that name the satellite
+  // package and exit non-zero; core imports zero satellite code.
+  business: { path: "../commands/satellite-shims.ts", symbol: "BusinessCommand" },
+  biz: { path: "../commands/satellite-shims.ts", symbol: "BizAliasCommand" },
+  enterprise: { path: "../commands/satellite-shims.ts", symbol: "EnterpriseCommand" },
+  ent: { path: "../commands/satellite-shims.ts", symbol: "EnterpriseAliasCommand" },
+  evaluate: { path: "../commands/satellite-shims.ts", symbol: "EvaluateCommand" },
+  eval: { path: "../commands/satellite-shims.ts", symbol: "EvalAliasCommand" },
 };
 
 /**
@@ -133,20 +137,16 @@ async function importCommandModule(path: string): Promise<Record<string, new () 
       return (await import("../commands/skills.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/capabilities.ts":
       return (await import("../commands/capabilities.ts")) as unknown as Record<string, new () => Command>;
-    case "../commands/shield.ts":
-      return (await import("../commands/shield.ts")) as unknown as Record<string, new () => Command>;
+    case "../commands/hygiene.ts":
+      return (await import("../commands/hygiene.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/trust.ts":
       return (await import("../commands/trust.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/attacks.ts":
       return (await import("../commands/attacks.ts")) as unknown as Record<string, new () => Command>;
-    case "../commands/business.ts":
-      return (await import("../commands/business.ts")) as unknown as Record<string, new () => Command>;
-    case "../commands/enterprise.ts":
-      return (await import("../commands/enterprise.ts")) as unknown as Record<string, new () => Command>;
-    case "../commands/evaluate.ts":
-      return (await import("../commands/evaluate.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/repo.ts":
       return (await import("../commands/repo.ts")) as unknown as Record<string, new () => Command>;
+    case "../commands/satellite-shims.ts":
+      return (await import("../commands/satellite-shims.ts")) as unknown as Record<string, new () => Command>;
     default:
       throw new Error(`command-loaders: no literal import for "${path}"`);
   }

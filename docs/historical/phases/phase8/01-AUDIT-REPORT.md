@@ -1,5 +1,8 @@
 # XR Phase 8 — STEP 1 Audit Report
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Repo:** github.com/ahmadrrrtx/xr @ `main` (`e30c2d4`, merge of PR #39 — Phase 7)
 **Audited:** 2026-08-03 · Audit method: live code inspection + live gate execution (typecheck, full suite, release/claim/boundary/size/hot-path/capability gates, golden path) — no reliance on historical reports.
 

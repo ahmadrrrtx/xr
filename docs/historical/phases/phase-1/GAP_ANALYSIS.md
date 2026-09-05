@@ -1,5 +1,8 @@
 # Phase 1 — Gap Analysis (STEP 2)
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 Ordered by dependency (each row maps to Phase-1 tasks / Part 8).
 
 | # | Gap (audited reality vs. requirement) | Constitution / spec basis | Maps to |

@@ -1,0 +1,668 @@
+
+==============================================================================
+ARTICLE II   (1 citations)
+==============================================================================
+  docs/adr/0004-single-routing-authority.md:8
+      intelligence*), Art. II (local-first sovereignty)
+
+==============================================================================
+ARTICLE III   (16 citations)
+==============================================================================
+  src/intelligence/routing-service.ts:4
+      * Constitution Art. III.2 (one source of truth per concern) and Art. VI.3
+  src/intelligence/routing-service.ts:192
+      * the resilient executor's per-hop guard uses this same function (Art. III:
+  src/intelligence/service.ts:193
+      // single choke point every decision passes through (Art. III).
+  src/providers/stream-metrics.ts:23
+      * choke point every model turn passes through (one provider plane, Art. III).
+  src/services/planning-service.ts:4
+      * Constitution Art. III.2 (one source of truth per concern) and Art. IV.4
+  src/tools/registry-service.ts:5
+      * Constitution Art. III (\"Compliant Designs\"): *\"A single `ToolRegistryService`
+  src/update/channels.ts:6
+      * there is exactly one update engine in XR (Art. III). This module adds:
+  src/core/execution/envelope.ts:132
+      /** OUTCOME — the verified result. Effects, not transitions (Art. III.4). */
+  test/core/envelope.test.ts:9
+      * Art. III.4: "Effects, not transitions. Tests and workflows assert real
+  test/core/no-bypass.test.ts:5
+      * bypassing the service."* Art. III Acceptance: *"every surface uses the
+  docs/adr/0002-canonical-execution-envelope.md:6
+      **Constitutional basis:** Art. III.2 (one source of truth per concern), Art. VI.3
+  docs/adr/0003-single-tool-registry.md:6
+      **Constitutional basis:** Art. III "Compliant Designs" (*"A single
+  docs/adr/0004-single-routing-authority.md:6
+      **Constitutional basis:** Art. III.2, Art. VI.3 (one provider/model plane),
+  docs/adr/0006-memory-to-context-retirement.md:8
+      Art. III.2, Art. XXIII (reversibility), Art. IV.5 + Inviolable P5 (consent is
+  docs/adr/0007-workflow-into-execution.md:7
+      substrate"*), Art. III.2, §2.2 boundary law (*"A second implementation of any
+  docs/adr/0012-measured-explainable-routing-quality.md:10
+      Art. III/VI (one routing authority, one provider plane), Art. IV (strict
+
+==============================================================================
+ARTICLE IV   (35 citations)
+==============================================================================
+  src/context/integrity.ts:21
+      * drop (with a recorded, content-free rejection). Fail closed (Art. IV.4).
+  src/intelligence/behavioral.ts:7
+      * Art. IV.5 / Part 19: the metadata is recorded from OBSERVED OUTCOMES of
+  src/intelligence/behavioral.ts:196
+      * Art. IV guard: transport failure is NOT measured capability. A probe
+  src/intelligence/degradation.ts:13
+      *     never a fake success (Constitution Art. IV.2, Art. X.3, Charter §9.5).
+  src/intelligence/difficulty.ts:7
+      * preference model, no model call, nothing opaque (Art. IV.5; the learned
+  src/intelligence/router.ts:57
+      // Typed end-to-end (Art. IV — no `any`), but partial-config tolerant:
+  src/intelligence/router.ts:361
+      // pin — security policy cannot be bypassed (Art. IV.4). Capability
+  src/intelligence/routing-service.ts:35
+      * silently downgrading the user's guarantee (Art. IV.4).
+  src/intelligence/routing-service.ts:213
+      * restrictive policy — ambiguity denies (Art. IV.4).
+  src/intelligence/scorer.ts:98
+      // measurement — Art. IV.5).
+  src/services/agent-service.ts:370
+      // Recorded rather than swallowed (Art. IV: no empty catch).
+  src/services/planning-service.ts:4
+      * Constitution Art. III.2 (one source of truth per concern) and Art. IV.4
+  src/services/planning-service.ts:17
+      * schema gate at all. Art. IV.4 requires ambiguity to deny on BOTH.
+  src/state/migrations.ts:90
+      * ── Migration honesty (Art. IV.5, Inviolable P5) ────────────────────────────
+  src/tools/registry-builder.ts:28
+      * Failures are collected, never swallowed silently (Art. IV — no empty catch).
+  src/tools/registry-service.ts:30
+      * I3. FAIL-CLOSED COLLISIONS (Art. IV.4). If a non-core tool claims a core
+  src/tools/registry-types.ts:63
+      *                    NEITHER gets it (fail closed, Art. IV.4). Both remain
+  src/runtime/trust/policy.ts:49
+      * rejected. Fail-closed everywhere (Art. IV.4 / IX.6).
+  src/core/execution/envelope.ts:90
+      /** POLICY — the constraints the run may not exceed. Ambiguity denies (Art. IV.4). */
+  test/intelligence/behavioral.test.ts:120
+      test("an UNREACHABLE provider refuses measurement — transport failure is never recorded as measured capability (Art. IV)", async () => {
+  test/services/planning-service.test.ts:7
+      * Art. IV.4 requires ambiguity to deny on both paths.
+  test/state/memory-to-context-migration.test.ts:12
+      *   · consent is never fabricated (Art. IV.5 / Inviolable P5)
+  docs/adr/0003-single-tool-registry.md:8
+      (distinct extension semantics), Art. IV.4 (fail closed)
+  docs/adr/0004-single-routing-authority.md:7
+      Art. IV.4 (fail closed), Inviolable P5 (*authority is never granted by
+  docs/adr/0004-single-routing-authority.md:64
+      **Ambiguity denies** (Art. IV.4): an unrecognised provider's locality is
+  docs/adr/0005-enforced-boundaries-tooling.md:7
+      owned plan), Cmdt 6 (one source of truth per concern), Art. IV/P6 (subtraction
+  docs/adr/0006-memory-to-context-retirement.md:8
+      Art. III.2, Art. XXIII (reversibility), Art. IV.5 + Inviolable P5 (consent is
+  docs/adr/0006-memory-to-context-retirement.md:48
+      ### Migration honesty (Art. IV.5, Inviolable P5)
+  docs/adr/0008-phase-named-modules-removed.md:56
+      false claim (Art. IV.5), so the evidence catalogue, evaluation suite contracts
+  docs/adr/0009-restrictiveness-lattice.md:6
+      - **Constitution:** Art. IX.2 (isolation follows risk), Art. IV.4 (fail closed),
+  docs/adr/0012-measured-explainable-routing-quality.md:10
+      Art. III/VI (one routing authority, one provider plane), Art. IV (strict
+  docs/adr/0012-measured-explainable-routing-quality.md:69
+      "measured 0.00" the gates would then enforce (Art. IV).
+  docs/adr/0013-context-quality-measured-recall.md:9
+      @ 100k), Art. XXI (local-first; knowledge works fully offline), Art. IV (strict
+  docs/developer/CAPABILITY_AUTHOR_CONTRACT.md:56
+      6. **No `any`/empty-catch on trust boundaries** (Art. IV).
+  docs/developer/EXTENDING-XR.md:172
+      `approved` (Art. IV.5, Inviolable P5).
+
+==============================================================================
+ARTICLE V   (17 citations)
+==============================================================================
+  src/state/migrations.ts:73
+      * `context/` is the canonical durable-context authority (Constitution Art. V
+  src/context/memory/store.ts:8
+      * exact consolidation as the compliant design (Art. V, "Compliant Designs":
+  test/architecture/boundaries.test.ts:5
+      * Constitution Art. V.2: *"Dependency direction is explicit and acyclic; an
+  test/architecture/size-gate.test.ts:4
+      * Art. V.3: *"No module exceeds a defined size/complexity threshold without an
+  scripts/size-gate.ts:5
+      * Constitution Art. V.3: *"No module exceeds a defined size/complexity
+  scripts/size-gate.ts:8
+      * The gate is deliberately two-tier, because Art. V.3 permits an
+  docs/adr/0005-enforced-boundaries-tooling.md:5
+      **Constitutional basis:** Art. V.2 (*"Dependency direction is explicit and
+  docs/adr/0005-enforced-boundaries-tooling.md:6
+      acyclic; an architectural test enforces it"*), Art. V.3 (size threshold with an
+  docs/adr/0005-enforced-boundaries-tooling.md:56
+      Art. V requires.**
+  docs/adr/0005-enforced-boundaries-tooling.md:111
+      `scripts/size-gate.ts` enforces **800 LOC**. Art. V.3 permits an over-threshold
+  docs/adr/0006-memory-to-context-retirement.md:6
+      **Constitutional basis:** Art. V "Compliant Designs" (*"A `context/` module that
+  docs/adr/0008-phase-named-modules-removed.md:5
+      **Constitutional basis:** Art. V.1 (*"Modules map to the L0–L6 boundary table
+  docs/adr/0008-phase-named-modules-removed.md:6
+      (§2.2), not to roadmap phases"*), Art. V.4 (*"phases are not folders"*),
+  docs/adr/0008-phase-named-modules-removed.md:7
+      Art. V "Forbidden Practices" (*"Phase-named directories"*)
+  docs/adr/0008-phase-named-modules-removed.md:13
+      The Constitution's own rationale for Article V names this defect explicitly:
+  .github/workflows/ci.yml:432
+      # Art. V.2: "Dependency direction is explicit and acyclic; an architectural
+  .github/workflows/ci.yml:433
+      # test enforces it." Art. V.3: no module over the size threshold without an
+
+==============================================================================
+ARTICLE VI   (21 citations)
+==============================================================================
+  src/cli/router.ts:8
+      * Phase 3 changes (Commandment 11 / Article VI · Rule 4):
+  src/core/app.ts:138
+      * needs (Article VI · Rule 4; Commandment 11). `null`/absent = full boot.
+  src/core/boot-profile.ts:4
+      * Article VI · Rule 4 / Commandment 11: "Startup must be lazy and bounded:
+  src/execution/index.ts:9
+      * both persisted run state — a duplicate L1 concern, which Art. VI.3 forbids
+  src/intelligence/routing-service.ts:4
+      * Constitution Art. III.2 (one source of truth per concern) and Art. VI.3
+  src/services/agent-service.ts:4
+      * Phase 2 · T1. Constitution Art. VI.3 ("one execution envelope") and Art. VI
+  src/services/surface-execution.ts:17
+      * is XR's lazy-boot guarantee (Art. VI.4 / Art. XII), and booting a kernel per
+  src/core/execution/envelope.ts:4
+      * Constitution Art. VI.3: *"The Runtime provides ONE execution envelope, ONE
+  src/core/execution/envelope.ts:7
+      * Art. VI Violations: *"A surface calling `runAgent` directly, bypassing the
+  test/core/no-bypass.test.ts:4
+      * Constitution Art. VI Violations: *"A surface calling `runAgent` directly,
+  docs/adr/0001-single-writer-durability-invariant.md:19
+      The Constitution requires (Art. VI "one source of truth per concern", Art. IX
+  docs/adr/0002-canonical-execution-envelope.md:6
+      **Constitutional basis:** Art. III.2 (one source of truth per concern), Art. VI.3
+  docs/adr/0002-canonical-execution-envelope.md:7
+      (one execution envelope), Art. VI "Violations" (*"A surface calling `runAgent`
+  docs/adr/0002-canonical-execution-envelope.md:62
+      guarantee (Art. VI.4, Art. XII). Forcing them through `AgentService` would have
+  docs/adr/0002-canonical-execution-envelope.md:96
+      accepted: Art. VI states the indirection *is* the price of correctness.
+  docs/adr/0004-single-routing-authority.md:6
+      **Constitutional basis:** Art. III.2, Art. VI.3 (one provider/model plane),
+  docs/adr/0005-enforced-boundaries-tooling.md:95
+      - `core/app.ts`, `core/providers.ts` **are** the composition root; Art. VI.1
+  docs/adr/0007-workflow-into-execution.md:6
+      **Constitutional basis:** Art. VI.3 (*"one durable-execution path … one workflow
+  docs/adr/0025-gated-remote-execution.md:6
+      - **Constitution:** Art. VI.3 (one execution envelope, one placement
+  docs/developer/EXTENDING-XR.md:73
+      (Art. VI.4 / XII):
+
+==============================================================================
+ARTICLE VII   (9 citations)
+==============================================================================
+  src/intelligence/behavioral.ts:58
+      /** Inspectable blend weights (Art. VII.3 — explainable). */
+  src/intelligence/degradation.ts:66
+      * Art. VII). Unknown errors classify PERMANENT: no in-place retry (safe side
+  src/intelligence/difficulty.ts:15
+      * a task was judged easy or hard (Art. VII.3 — routing is explainable).
+  src/intelligence/types.ts:70
+      * `TaskRequirements.require.extensions` — no kernel/loop edits (Art. VII.4).
+  test/intelligence/locality-v5.test.ts:4
+      * Constitution Art. VII.3 / XXI.4: sensitive work never silently routes to
+  test/intelligence/model-class-contract.test.ts:5
+      * Constitution Art. VII.1/4: any future model class must be addable through
+  test/intelligence/model-class-contract.test.ts:129
+      * Constitutional proof (Art. VII acceptance), Phase-06-corrected.
+  docs/adr/0012-measured-explainable-routing-quality.md:11
+      typing, fail closed, no claims without evidence), Art. VII (provider-
+  docs/developer/EXTENDING-XR.md:140
+      unknown fails closed (Art. VII.4; proof:
+
+==============================================================================
+ARTICLE VIII   (9 citations)
+==============================================================================
+  src/context/lifecycle.ts:206
+      // span tasks are how task identity gets lost (Art. VIII.4).
+  src/context/undo.ts:6
+      * User control over memory (Art. VIII/XXI; Part 22) is incomplete while every
+  src/daemon/routes/context.routes.ts:144
+      // Phase 8 · T4 — user control over memory includes UNDO (Art. VIII/XXI).
+  src/context/eval/harness.ts:6
+      * Article VIII.5: recall quality is MEASURED, not asserted. This harness is
+  test/architecture/one-store.test.ts:5
+      * (Article VIII — one context store; Article VIII.5 — recall is measured):
+  scripts/recall-benchmark.ts:5
+      * WHY THIS SCRIPT EXISTS (Article VIII.5 — recall is MEASURED, never asserted)
+  docs/adr/0013-context-quality-measured-recall.md:6
+      **Constitutional basis:** Art. VIII (memory: consent, scope, provenance, expiry,
+  docs/adr/0013-context-quality-measured-recall.md:63
+      retrieved content can never become authority (Art. VIII.3).
+
+==============================================================================
+ARTICLE IX   (18 citations)
+==============================================================================
+  src/daemon/server.ts:77
+      * exposure from this change (Article IX; Commandment 13).
+  src/services/review-decision.ts:28
+      * `changes_requested`, never `approved` (Commandment 13; Article IX).
+  src/runtime/trust/lattice.ts:4
+      * Constitution Art. IX.2: *"Isolation follows risk."* Art. IX (Isolation is
+  src/runtime/trust/service.ts:79
+      * downgrade (Art. IX.2). `runPlacements` tracks the strongest placement
+  src/core/execution/envelope.ts:36
+      * governing (Art. IX/XIV) rather than a fifth engine.
+  scripts/guarantee-matrix.ts:8
+      * creep in (Art. IX.4 / XIX: no claim without evidence).
+  scripts/verify-release.ts:12
+      * Claims discipline (Art. IX.4): this script reports EXACTLY what it
+  docs/adr/0001-single-writer-durability-invariant.md:19
+      The Constitution requires (Art. VI "one source of truth per concern", Art. IX
+  docs/adr/0002-canonical-execution-envelope.md:8
+      directly, bypassing the service"*), Art. IX/XIV (governance choke point)
+  docs/adr/0002-canonical-execution-envelope.md:88
+      **Positive.** One choke point to govern (Art. IX/XIV) — policy, audit, context
+  docs/adr/0009-restrictiveness-lattice.md:6
+      - **Constitution:** Art. IX.2 (isolation follows risk), Art. IV.4 (fail closed),
+  docs/adr/0009-restrictiveness-lattice.md:7
+      Art. XII (low-risk stays fast). Art. IX: agents/capabilities may only
+  docs/adr/0010-credential-brokering.md:6
+      - **Constitution:** Art. IX.5 (secrets scoped to task/workspace, revocable,
+  docs/adr/0011-supply-chain-assurance.md:7
+      provenance, checksums, signatures), Art. IX.4 (no public claim without
+  docs/adr/0011-supply-chain-assurance.md:39
+      real tag (evidence link + expiry, Art. IX.4).
+  docs/adr/0022-signed-per-target-default-distribution.md:6
+      - **Constitution:** Art. XXII.3 (signed reproducible releases), Art. IX.4 (claim
+  docs/adr/0025-gated-remote-execution.md:7
+      authority), Art. IX (isolation follows risk; every action attributable and
+
+==============================================================================
+ARTICLE X   (6 citations)
+==============================================================================
+  src/context/cli-phase6.ts:98
+      // Confirmation for destructive precedence decisions (Article X.3).
+  src/intelligence/degradation.ts:13
+      *     never a fake success (Constitution Art. IV.2, Art. X.3, Charter §9.5).
+  src/intelligence/degradation.ts:145
+      /** Concrete repair path for the operator (Art. X.3). */
+  src/providers/model-switch.ts:16
+      *   - HONESTY (Art. X · 1): a canary that cannot reach/auth the candidate
+  docs/adr/0019-accessibility-as-ci-gate.md:10
+      else. Constitution Art. X forbids claiming conformance from automated checks
+  .github/workflows/ci.yml:486
+      # Art. X: WCAG 2.2 AA is claimed only with the automated half green in CI
+
+==============================================================================
+ARTICLE XI   (4 citations)
+==============================================================================
+  src/daemon/routes/contract.ts:10
+      * from what the daemon actually serves (Constitution Art. XI/XVIII).
+  src/daemon/routes/contract.ts:64
+      /** Stability level (Art. XI: experimental is never implied stable). */
+  docs/adr/0017-versioned-public-api-with-generated-contract.md:9
+      "breaking change" was defined by whoever remembered. Constitution Art. XI
+  .github/workflows/ci.yml:464
+      # Art. XI/XVIII/XXVII: the generated OpenAPI/JSON-Schema artifact, the typed
+
+==============================================================================
+ARTICLE XII   (34 citations)
+==============================================================================
+  src/core/app.ts:145
+      // filesystem I/O (Article XII · Rule 4).
+  src/core/provider-modules.ts:7
+      * entire service graph (Article XII · Forbidden: "Eager-importing the whole
+  src/core/stall-detector.ts:4
+      * Article XII · Rule 4: "No synchronous I/O on hot paths; event-loop stalls
+  src/providers/stream-metrics.ts:56
+      const MAX_LINES = 500; // bounded resource (Article XII · Rule 3)
+  src/services/surface-execution.ts:17
+      * is XR's lazy-boot guarantee (Art. VI.4 / Art. XII), and booting a kernel per
+  src/runtime/trust/policy.ts:55
+      * Candidate order per tier — cheapest ADEQUATE backend first (Art. XII:
+  test/context/performance.test.ts:270
+      // The constitutional budget (Art. XII) previously rested on seeds ≤5,000;
+  test/perf/hot-path-lint.test.ts:6
+      * enforceable half of "no sync I/O on hot paths" (Article XII · Rule 4).
+  test/perf/perf-gate.test.ts:174
+      test("published budgets match the Constitution Article XII ceilings", () => {
+  test/perf/startup-latency.test.ts:10
+      * Constitution Article XII ceilings): --version/--help p95 <150ms warm /
+  test/trust/lattice.test.ts:140
+      // Cheapest adequate backend first (Art. XII); the stronger rungs are
+  scripts/hot-path-lint.ts:5
+      * Enforces "no synchronous FS/process I/O on hot paths" (Article XII · Rule 4)
+  scripts/hot-path-lint.ts:124
+      console.error("\nFast-path modules must perform zero synchronous FS/process I/O (Article XII).");
+  scripts/perf-baseline.ts:13
+      * Constitution Article XII · Rule 2: the baseline is the evidence behind every
+  scripts/perf-gate.ts:11
+      * Two independent failure conditions (Article XII):
+  scripts/perf-gate.ts:14
+      *      (scripts/perf/budgets.json; values are the Constitution Article XII
+  scripts/perf-gate.ts:28
+      * (Constitution Art. XII ceilings, never scaled) remain the hard gate.
+  scripts/perf-gate.ts:300
+      console.log("XR PERF GATE " + GATE_VERSION + " - budgets are Constitution Article XII ceilings; regression band is same-host-only (warn on first run, block from run 2).");
+  scripts/profile-gate.ts:3
+      * XR Phase 8 · T2 — CPU profiling gate (Constitution Art. XII).
+  scripts/profile-gate.ts:31
+      /** Absolute CPU budgets (bun-CPU-ms) per scenario — Art. XII, never scaled. */
+  scripts/recall-benchmark.ts:63
+      /** Constitutional retrieval budget (Article XII): p95 at 100k items. */
+  scripts/perf/budgets.json:5
+      "constitution": "Article XII \u00b7 Mandatory Rule 1: --version/--help p95 <150ms warm / <300ms cold. Rule 2: no perf claim without a budget and a regression gate.",
+  scripts/perf/budgets.json:11
+      "note": "Budgets are absolute ceilings for the p95 metric (Constitution Article XII \u2014 the binding contract). doctor gate ceiling 2500ms (measured 315-474ms idle; spec target <1000ms met by measurement on the reference host) \u2014 the ceiling ac
+  scripts/perf/harness.ts:24
+      * Constitution: Article XII · Mandatory Rule 2 — every published number is a
+  scripts/phase00/capture-baseline.ts:979
+      "Phase 00 writes benchmarks/baseline/<date>/ only. Regenerating docs/perf/baseline-*-source.json would clobber the Article XII gate baseline. Use `bun run perf:baseline` explicitly when intentionally refreshing the gate artifact.",
+  docs/adr/0002-canonical-execution-envelope.md:62
+      guarantee (Art. VI.4, Art. XII). Forcing them through `AgentService` would have
+  docs/adr/0005-enforced-boundaries-tooling.md:8
+      before addition), Art. XII (no startup regression)
+  docs/adr/0005-enforced-boundaries-tooling.md:64
+      (P6, Global Rule 4), and it enlarges install surface against Art. XII.
+  docs/adr/0009-restrictiveness-lattice.md:7
+      Art. XII (low-risk stays fast). Art. IX: agents/capabilities may only
+  docs/adr/0009-restrictiveness-lattice.md:30
+      the tier — Art. XII: sub-ms tool calls must not cold-start a microVM); the
+  docs/adr/0013-context-quality-measured-recall.md:8
+      compression; recall measured-and-benchmarked), Art. XII (retrieval p95 < 100 ms
+  docs/adr/0022-signed-per-target-default-distribution.md:7
+      evidence), Art. XII (startup budgets — the compiled binary is the fast path),
+  .github/workflows/ci.yml:506
+      # Art. XII: no startup regression — CPU-profiles CLI cold starts with
+  .github/workflows/ci.yml:538
+      # Art. XII · Rule 2: "No perf claim without a budget and a regression gate."
+
+==============================================================================
+ARTICLE XIV   (8 citations)
+==============================================================================
+  src/tools/registry-service.ts:36
+      * I4. DISTINCT SEMANTICS PRESERVED (Art. XIV/XV, Global Rule 6). `kind` is
+  src/tools/registry-types.ts:29
+      * NOT unified: RUNTIME SEMANTICS (Constitution Art. XIV/XV). A core tool is an
+  src/platform/capabilities/provenance.ts:7
+      * registry (Art. XIV.3). Installed/enabled state stays owned by the
+  src/platform/capabilities/trust.ts:175
+      // any other evidence or popularity (fail-closed trust, Art. XIV).
+  test/tools/semantics-contract.test.ts:4
+      * Constitution Art. XIV/XV and Global Rule 6: registration and discovery are
+  docs/adr/0003-single-tool-registry.md:7
+      `ToolRegistryService` where core/plugins/skills/MCP register"*), Art. XIV/XV
+  docs/adr/0010-credential-brokering.md:7
+      never globally exposed, never logged), Art. XIV.1 (untrusted code isolated).
+  docs/adr/0014-capability-provenance-graph.md:26
+      - The graph is DERIVED evidence, never a second registry (Art. XIV.3); bounds
+
+==============================================================================
+ARTICLE XV   (10 citations)
+==============================================================================
+  src/commands/skills.ts:113
+      // Phase 7 · T5 — honest typed counts (Art. XV.2: counts never
+  src/mcp/allowlist.ts:4
+      * Constitution Art. XV.3 / §10.6: MCP is a first-class governed boundary —
+  src/skills/adapters.ts:38
+      /** Phase 7 · T5 — constitutional skill type (Art. XV.2). */
+  src/skills/schema.ts:36
+      * Phase 7 · T5 — constitutional skill TYPES (Art. XV.2, §10.5).
+  src/skills/schema.ts:235
+      // ── Phase 7 · T5 — constitutional skill type label (Art. XV.2) ───────────
+  src/skills/tool-allowlist.ts:4
+      * Constitution Art. XV: skills are typed, surface-universal capabilities;
+  src/skills/tool-allowlist.ts:47
+      errors.push(`tool allow-list contains wildcard "${t}" — permissive tool lists are refused (Art. XV)`);
+  src/platform/capabilities/trust.ts:4
+      * Constitution Art. XV.4 / §10.2: marketplace trust = signatures + provenance
+  docs/developer/PUBLISH_A_CAPABILITY.md:12
+      runtime registry; `*` is refused at install (Art. XV).
+  docs/developer/PUBLISH_A_CAPABILITY.md:80
+      executable — typing is what keeps counts honest (Art. XV.2).
+
+==============================================================================
+ARTICLE XVI   (5 citations)
+==============================================================================
+  src/core/business-l0.ts:4
+      * Constitution Art. XVI + Part Eight: the kernel holds ONLY a thin
+  src/core/providers/business.ts:5
+      * Constitution Art. XVI / Part Eight:
+  docs/adr/0016-business-os-decoupling.md:7
+      Constitution Art. XVI + Part Eight: Business OS is a governed extension
+  docs/adr/0024-enterprise-operability-gated.md:6
+      - **Constitution:** Art. XVI (enterprise = operated controls + evidence; local
+  docs/adr/0024-enterprise-operability-gated.md:61
+      the "scope creep as facade" failure mode Art. XVI was written to forbid.
+
+==============================================================================
+ARTICLE XVIII   (2 citations)
+==============================================================================
+  scripts/api-compat.ts:9
+      * (Art. XVIII: breaking changes require a deprecation cycle; silent breaks
+  docs/adr/0017-versioned-public-api-with-generated-contract.md:10
+      (APIs are contracts), Art. XVIII (stability is demonstrated, not promised),
+
+==============================================================================
+ARTICLE XIX   (7 citations)
+==============================================================================
+  scripts/changelog.ts:189
+      `[changelog] FAIL — no CHANGELOG.md entry for ${version}. Releases are evidence-bound: run \`bun run changelog:generate\` at release time (Art. XIX/XXII).`,
+  scripts/claim-lint.ts:5
+      * Enforces Constitution Article XIX.1 ("Documentation is source-accurate and
+  scripts/claim-lint.ts:137
+      reason: `Claim "${claim.id}" has no meaningful evidence link (Article XIX.1 / ADR-10).`,
+  scripts/release-manifest.ts:6
+      * public claims (Constitution Article XXII.1, Article XIX.1, Commandment 6).
+  scripts/release-manifest.ts:43
+      * (Art. XIX). Pre-release versions are detected from semver suffixes.
+  scripts/release-manifest.ts:107
+      if (!claim.evidence) throw new Error(`claim "${claim.id}" has no evidence link (Article XIX.1 / ADR-10)`);
+  docs/adr/0024-enterprise-operability-gated.md:46
+      list is extended so CI fails on recurrence (Art. XIX.1/XXII.4).
+
+==============================================================================
+ARTICLE XX   (9 citations)
+==============================================================================
+  src/execution/workflow/engine.ts:881
+      // the record reflects what actually happened (Article XX.1).
+  test/phase0/credential-vault.test.ts:4
+      * Constitution Article XX.1: tests assert effects, not transitions. These tests
+  test/phase0/workflow-effects.test.ts:4
+      * Constitution Article XX.1 requires tests to assert effects, and names the
+  test/platform/exclusions.json:3
+      "comment": "Phase 9 · T4 — the SINGLE exclusion authority for cross-platform test parity (Art. XX.4). A test appears here only when it is OS-specific BY CONSTRUCTION (POSIX signal semantics, POSIX-only policy corpus), each with a reason — never to hi
+  test/workflow/engine.test.ts:211
+      * success: no shell command was ever executed. Constitution Article XX
+  scripts/platform-parity.ts:5
+      * "Supported" means validated (Art. XX.4): each OS runs typecheck + its full
+  scripts/platform-parity.ts:109
+      problems.push(`${ex.pattern}: exclusion needs a real reason (≥20 chars) — no silent skips (Art. XX.5)`);
+  .github/workflows/cross-platform.yml:11
+      #                         test can never vanish silently (Art. XX.4/XX.5).
+  .github/workflows/cross-platform.yml:85
+      # The count guard makes a silent skip impossible (Art. XX.4/XX.5):
+
+==============================================================================
+ARTICLE XXI   (17 citations)
+==============================================================================
+  src/commands/telemetry.ts:6
+      * (Constitution Art. XXI) and this command makes consent explicit and
+  src/config/config.ts:576
+      * Phase 8 · T2 — privacy-respecting telemetry (Constitution Art. XXI).
+  src/context/cli-phase6.ts:256
+      // data (Art. XXI) and are disposable by construction (offline/async).
+  src/daemon/server.ts:353
+      * are ever captured here (structural-only, Art. XXI).
+  src/execution/service.ts:375
+      * only: kind/name/ids/outcome — never payloads (Art. XXI).
+  src/observability/config.ts:4
+      * Constitution Article XXI (non-negotiable):
+  src/observability/metrics.ts:4
+      * Cardinality is BUDGETED (Art. XXI.3): every series label value passes the
+  src/observability/redaction.ts:2
+      * XR Observability — PII/secret redaction (Phase 8 · T2; Art. XXI).
+  src/observability/semconv.ts:8
+      * opt-in only, per the conventions themselves and Art. XXI.
+  test/architecture/ownership.test.ts:47
+      // The privacy boundary (Art. XXI) — telemetry shape changes data exposure.
+  test/context/local-only.test.ts:4
+      * Asserted effects (Part 13.6 / Art. XXI):
+  test/observability/privacy.test.ts:2
+      * XR Phase 8 · T2 — THE PRIVACY GATE (merge-blocking; Art. XXI).
+  docs/adr/0013-context-quality-measured-recall.md:9
+      @ 100k), Art. XXI (local-first; knowledge works fully offline), Art. IV (strict
+  docs/adr/0018-privacy-first-observability.md:10
+      Constitution Art. XXI. XR needs visibility into itself **without** becoming a
+  docs/adr/0024-enterprise-operability-gated.md:7
+      autonomy preserved), Art. XXI (locality/residency/privacy), Art. XXIX/XXX
+  docs/adr/0024-enterprise-operability-gated.md:34
+      mode stays complete and sovereign (Art. XXI/XXX).
+  docs/adr/0025-gated-remote-execution.md:8
+      auditable), Art. XXI (locality is an invariant), Commandment 4 (every
+
+==============================================================================
+ARTICLE XXII   (25 citations)
+==============================================================================
+  src/core/version.ts:7
+      * Constitution Article XXII.1 requires one release manifest to stamp version
+  src/update/channels.ts:4
+      * One contract across every managed distribution channel (Art. XXII.5 /
+  src/update/channels.ts:181
+      * build (Art. XXII.3).
+  scripts/beta-install-survey.ts:11
+      * Sources (same canonical set either way — Art. XXII):
+  scripts/build-deb.ts:6
+      * binary (one canonical build → channel derivation, Art. XXII):
+  scripts/changelog.ts:5
+      * One changelog authority for the release pipeline (Art. XXII/XIX): sections
+  scripts/channel-manifest.ts:3
+      * XR Phase 9 · T3 — one canonical build, many channels (Art. XXII).
+  scripts/channel-manifest.ts:264
+      throw new Error(`channel stamping failed closed: no sha256 for ${key} in SHA256SUMS (one canonical build — Art. XXII)`);
+  scripts/channel-manifest.ts:307
+      problems.push(`${f.relpath}: drifted from the release manifest (run \`bun run channel:sync\`) — Art. XXII forbids channel drift`);
+  scripts/claim-lint.ts:7
+      * evidence link"), Article XXII.4 ("No release label — complete/certified/
+  scripts/claim-lint.ts:63
+      * Article XXII.4 governs *release labels* ("complete/certified/enterprise/supreme"),
+  scripts/claim-lint.ts:155
+      reason: `Claim "${claim.id}" expired on ${claim.expires} — re-evidence it or remove it (Article XXII.4).`,
+  scripts/claim-lint.ts:232
+      reason: `Supervised term "${s.term}" needs an evidenced claim in release.manifest.json (Article XXII.4). Rephrase or add evidence.`,
+  scripts/release-manifest.ts:6
+      * public claims (Constitution Article XXII.1, Article XIX.1, Commandment 6).
+  scripts/release-manifest.ts:92
+      throw new Error(`manifest.identity.version must be semver, got "${id.version}" (Article XXII.2)`);
+  scripts/release-manifest.ts:97
+      // Art. XXII.4/IX.4 — a prerelease version can never wear a "stable" label.
+  scripts/release-manifest.ts:99
+      throw new Error(`prerelease version "${id.version}" cannot be labeled "stable" (Article XXII.4)`);
+  scripts/release-manifest.ts:109
+      throw new Error(`claim "${claim.id}" has no valid expiry date (Article XXII.4)`);
+  scripts/release-manifest.ts:283
+      > (Constitution Article XXII.1).
+  docs/adr/0011-supply-chain-assurance.md:6
+      - **Constitution:** Art. XXII.3 (signed, reproducible releases: SBOM, SLSA
+  docs/adr/0022-signed-per-target-default-distribution.md:6
+      - **Constitution:** Art. XXII.3 (signed reproducible releases), Art. IX.4 (claim
+  docs/adr/0023-one-canonical-build-many-channels.md:6
+      - **Constitution:** Art. XXII.1/XXII.3 (one manifest; version stays in sync
+  docs/developer/release-identity-and-claims.md:141
+      require a matching evidenced claim. This implements Article XXII.4 ("no release label without
+  .github/workflows/release.yml:3
+      # from a `v*` tag. One canonical build → many channels (Constitution Art. XXII).
+
+==============================================================================
+ARTICLE XXIII   (18 citations)
+==============================================================================
+  src/config/config.ts:700
+      * Existing explicit user values are preserved untouched (Article XXIII).
+  src/install/uninstall.ts:166
+      // Phase 9 · T5 — one reversibility contract across channels (Art. XXIII):
+  src/integrations/credentials.ts:36
+      * reversible migration required by Constitution Article XXIII.
+  src/integrations/credentials.ts:174
+      // ─── MIGRATION (Constitution Article XXIII — reversible, no silent loss) ───
+  src/state/migrations.ts:9
+      * Guarantees (Constitution Art. XXIII):
+  src/state/migrations.ts:78
+      * ── Reversibility (Art. XXIII) ──────────────────────────────────────────────
+  src/update/channels.ts:253
+      * back to `currentVersion` (Art. XXIII: no user left without a rollback path).
+  src/update/channels.ts:277
+      // Auto-rollback through the channel's own downgrade path (Art. XXIII).
+  src/context/memory/store.ts:19
+      * delete it (Art. XXIII: every migration reversible; a downgrade must remain
+  test/phase4/signed-audit-migration.test.ts:9
+      * Also verifies migration reversibility (down) per Constitution Art. XXIII.
+  test/state/memory-to-context-migration.test.ts:5
+      * and Art. XXIII requires every migration to be reversible. This suite proves
+  test/state/memory-to-context-migration.test.ts:263
+      // Art. XXIII: "a downgraded database is readable by code that does not know
+  test/update/channels-update.test.ts:97
+      test("forced canary failure: rollback to the PREVIOUS version is dispatched (Art. XXIII)", async () => {
+  scripts/release-manifest.ts:226
+      * is NOT release identity and must survive stamping (Constitution Article XXIII:
+  docs/adr/0006-memory-to-context-retirement.md:8
+      Art. III.2, Art. XXIII (reversibility), Art. IV.5 + Inviolable P5 (consent is
+  docs/adr/0006-memory-to-context-retirement.md:70
+      delete its source, and Art. XXIII requires a downgraded database to remain
+  docs/adr/0022-signed-per-target-default-distribution.md:46
+      to git), preserving the contributor path (Art. XXIII compatibility).
+  docs/developer/release-identity-and-claims.md:72
+      it, which would be a silent break (Article XXIII). Only the release-owned scalars are rewritten.
+
+==============================================================================
+ARTICLE XXIV   (1 citations)
+==============================================================================
+  docs/adr/0016-business-os-decoupling.md:43
+      - Art. XXIV deletion budget satisfied by the move.
+
+==============================================================================
+ARTICLE XXVII   (10 citations)
+==============================================================================
+  src/commands/hygiene.ts:15
+      * one-line notice (Art. XXVII: announce → warn → migrate → remove).
+  src/commands/satellite-shims.ts:9
+      * regression (Art. XXVII: announce → warn → migrate → remove).
+  src/security/shield.ts:17
+      * (Art. XXVII: announce → warn → migrate → remove). It re-exports the module
+  src/services/agent-service.ts:12
+      *     stable compatibility surface (Art. XXVII: no stable surface broken
+  src/services/agent-service.ts:126
+      * daemon and several tests call it by this name (Art. XXVII).
+  src/daemon/routes/contract.ts:92
+      * earlier than XR 8.0.0 (Art. XXVII: announce → warn → migrate → remove).
+  docs/adr/0002-canonical-execution-envelope.md:66
+      as delegating wrappers (Art. XXVII: no stable surface broken without a
+  docs/adr/0006-memory-to-context-retirement.md:9
+      never fabricated), Art. XXVII (deprecation cycle)
+  docs/adr/0006-memory-to-context-retirement.md:106
+      | `xr memory` CLI | **kept** as a working alias (Art. XXVII) | no earlier than **8.0.0** |
+  docs/adr/0017-versioned-public-api-with-generated-contract.md:11
+      and Art. XXVII (breaking changes need a deprecation path) all require more.
+
+==============================================================================
+ARTICLE XXVIII   (1 citations)
+==============================================================================
+  docs/adr/0026-sustainability-governance-path.md:7
+      - **Constitution:** Art. XXVIII (contribution standards), Art. XXIX (open
+
+==============================================================================
+ARTICLE XXIX   (4 citations)
+==============================================================================
+  docs/adr/0023-one-canonical-build-many-channels.md:7
+      across every surface), Art. XXIX (verifiable done), "supported means
+  docs/adr/0024-enterprise-operability-gated.md:7
+      autonomy preserved), Art. XXI (locality/residency/privacy), Art. XXIX/XXX
+  docs/adr/0026-sustainability-governance-path.md:7
+      - **Constitution:** Art. XXVIII (contribution standards), Art. XXIX (open
+  docs/adr/0026-sustainability-governance-path.md:37
+      4. **No cloud-only lock-in** — already constitutional law (Art. XXIX.1);
+
+==============================================================================
+ARTICLE XXX   (1 citations)
+==============================================================================
+  docs/adr/0026-sustainability-governance-path.md:8
+      governance, vendor neutrality), Art. XXX (decade-scale evolution),

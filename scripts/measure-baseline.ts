@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { versionInfo } from "../src/core/version.ts";
-import { runtimeEnvironment } from "../src/enterprise/baseline/status.ts";
+import { runtimeEnvironment } from "../src/install/baseline-status.ts";
 
 const ROOT = join(import.meta.dir, "..");
 /**

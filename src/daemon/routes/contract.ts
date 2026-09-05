@@ -89,7 +89,7 @@ export const V1_PREFIX = "/api/v1";
 /**
  * Deprecation policy for the legacy unversioned mount (docs/api/COMPATIBILITY.md):
  * legacy `/api/*` mounts are announced deprecated in 7.x and are removed no
- * earlier than XR 8.0.0 (Art. XXVII: announce → warn → migrate → remove).
+ * earlier than XR 2.0.0 (Art. XXVII: announce → warn → migrate → remove).
  */
 export const LEGACY_SUNSET_ISO = "2027-08-01";
 export const LEGACY_SUNSET_HTTP_DATE = "Sun, 01 Aug 2027 00:00:00 GMT";

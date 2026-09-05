@@ -1,0 +1,22 @@
+{
+  "$comment": "Size waivers for the xr-enterprise satellite (Phase 5 \u00b7 ADR-0028). Moved out of the core register when the package was extracted; same two-tier semantics as core's gate (over-threshold requires an owned, dated split plan; growth past the waived line fails).",
+  "threshold": 800,
+  "waivers": [
+    {
+      "path": "src/enterprise/types.ts",
+      "lines": 1171,
+      "owner": "enterprise",
+      "reason": "Type declarations only \u2014 no runtime code. LOC here is schema surface, not complexity.",
+      "plan": "Split per bounded context (identity / recovery / certification) when the enterprise module next changes materially.",
+      "review": "2026-12-31"
+    },
+    {
+      "path": "src/commands/enterprise.ts",
+      "lines": 990,
+      "owner": "commands",
+      "reason": "CLI command surface: a long flat dispatch over enterprise subcommands, low branching depth per handler.",
+      "plan": "Split per subcommand group when the enterprise CLI next changes.",
+      "review": "2026-12-31"
+    }
+  ]
+}

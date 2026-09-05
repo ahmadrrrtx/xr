@@ -74,8 +74,10 @@ const REGISTRY_NAME: Record<string, string> = {
   plugins: "plugins",
   plugin: "plugin",
   mcp: "mcp",
+  hygiene: "hygiene",
+  // Phase 5 · ADR-0027 — deprecated aliases for `xr hygiene`.
   shield: "shield",
-  security: "shield",
+  security: "hygiene",
   audit: "audit",
   "verify-log": "audit",
   // Phase 06 — durable-execution history & recovery surface.

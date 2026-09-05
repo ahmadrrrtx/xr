@@ -1,5 +1,8 @@
 # XR 4.5 Knowledge and Context OS — Pre-Implementation Audit
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
+
 **Date:** 2026-07-26
 **Baseline:** XR 4.4.0 Universal Intelligence Plane (Phase 5, released & verified)
 **Commit:** `9eeb2ad` (main, merge of `phase5/universal-intelligence-plane`)

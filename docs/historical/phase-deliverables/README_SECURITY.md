@@ -1,5 +1,8 @@
 # XR Security Fix — README
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../README.md); for what changed since, see [`docs/HISTORY.md`](../../HISTORY.md).
+
+
 ## 🔒 Critical Security Fixes Implemented
 
 This repository contains critical security fixes for the XR AI Operating System. These fixes remediate **TWO CRITICAL RCE (Remote Code Execution) vulnerabilities**.

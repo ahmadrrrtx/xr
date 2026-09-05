@@ -1,5 +1,8 @@
 # Phase 5 — STEP 2 · Gap Analysis
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Inputs:** STEP 1 audit (`01-AUDIT-REPORT.md`), XR Architecture Constitution (Art. VII; Charter §9), Phase 5 Specification.
 **Rule:** every gap carries the test/metric that will prove it closed. No gap → task mapping without a measurable acceptance.
 

@@ -163,6 +163,12 @@ jobs:
             exit 1
           }
           git archive --format=tar.gz -o dist/xr-source.tar.gz HEAD
+      - name: Assert the tarball ships no extracted satellite code (ADR-0028)
+        # Phase 5 moved enterprise + business-os out of core. package.json#files
+        # excludes them, but the published artifact is inspected rather than
+        # trusted: a new directory can silently reintroduce 33k LOC of surface
+        # into every user's install.
+        run: bun run scripts/consumer-smoke.ts --tarball "$(ls dist/rrrtx-xr-*.tgz | head -1)"
       - name: Build the .deb channel artifact from the canonical linux-x64 binary
         run: bun run scripts/build-deb.ts --bin dist/xr-linux-x64 --out dist/xr_${{ steps.version.outputs.value }}_amd64.deb
       - name: Generate the changelog from conventional commits (evidence-bound)

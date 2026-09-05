@@ -1,5 +1,8 @@
 # XR 5.0 — Phase 7 Release Validation Report
 
+> **FROZEN — HISTORICAL RECORD.** This document is preserved as a record of work already completed. It is **not** current guidance: no code imports it, no CI gate reads it, and no release claim depends on it. For the living tree start at [`docs/README.md`](../../../README.md); for what changed since, see [`docs/HISTORY.md`](../../../HISTORY.md).
+
+
 **Release:** XR 5.0.0 — Agent and Workflow OS  
 **Date:** 2026-07-26  
 **Baseline:** XR 4.5.0 (Phase 6)

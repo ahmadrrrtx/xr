@@ -1,7 +1,7 @@
 /** Provider: shield — security shield bound to the unified store. */
 import type { ProviderContext, ServiceProvider } from "../app.ts";
 import { Tokens } from "../tokens.ts";
-import { XRShieldService } from "../../security/shield.ts";
+import { XRShieldService } from "../../hygiene/scanner.ts";
 
 export class ShieldServiceProvider implements ServiceProvider {
   readonly id = "shield";

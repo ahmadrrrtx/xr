@@ -206,38 +206,56 @@ describe("cross-process approval (CLI task decided by another process)", () => {
 
     // Consume the child's stdout once: the id JSON line first, decide, then
     // the outcome JSON line at the end.
+    // Windows hang guard: `for await (… of proc.stdout)` only ends when the
+    // child closes its stdout. If the child wedges, the iterator never settles,
+    // and Bun's per-test timeout cannot interrupt a pending await — the whole
+    // segment rides to the 420s runner cap and dies as exit 124 ("crash
+    // class"), naming no assertion. That is exactly how this file took down the
+    // Windows lane. Bound the child's lifetime independently so a wedge fails
+    // this test in seconds with a readable message.
+    const watchdog = setTimeout(() => {
+      try {
+        proc.kill();
+      } catch {
+        /* already exited */
+      }
+    }, 40_000);
     const decoder = new TextDecoder();
     let id: string | null = null;
     let buf = "";
     let outcomeJson: string | null = null;
-    for await (const chunk of proc.stdout as any) {
-      buf += decoder.decode(chunk);
-      const lines = buf.split("\n");
-      buf = lines.pop() ?? "";
-      for (const line of lines) {
-        if (!line.startsWith("{")) continue;
-        try {
-          const parsed = JSON.parse(line) as { id?: string; outcome?: unknown };
-          if (parsed.id && id === null) {
-            id = parsed.id;
-          } else if (parsed.outcome && outcomeJson === null) {
-            outcomeJson = line;
+    try {
+      for await (const chunk of proc.stdout as any) {
+        buf += decoder.decode(chunk);
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.startsWith("{")) continue;
+          try {
+            const parsed = JSON.parse(line) as { id?: string; outcome?: unknown };
+            if (parsed.id && id === null) {
+              id = parsed.id;
+            } else if (parsed.outcome && outcomeJson === null) {
+              outcomeJson = line;
+            }
+          } catch {
+            /* ignore partial lines */
           }
-        } catch {
-          /* ignore partial lines */
+        }
+        if (id && !outcomeJson) {
+          // Decide from THIS process as soon as the id is known.
+          const store = new Store(dbPath);
+          const approvals = new ApprovalStore(store);
+          expect(approvals.decide(id, true, { channel: "daemon", userId: "op-7" })).toBe(true);
+          store.close();
         }
       }
-      if (id && !outcomeJson) {
-        // Decide from THIS process as soon as the id is known.
-        const store = new Store(dbPath);
-        const approvals = new ApprovalStore(store);
-        expect(approvals.decide(id, true, { channel: "daemon", userId: "op-7" })).toBe(true);
-        store.close();
-      }
+    } finally {
+      clearTimeout(watchdog);
     }
     await proc.exited;
-    expect(id).toBeTruthy();
-    expect(outcomeJson).toBeTruthy();
+    expect(id, "child never emitted an approval id (killed by watchdog?)").toBeTruthy();
+    expect(outcomeJson, "child never emitted an outcome line — killed by the 40s watchdog").toBeTruthy();
     const { outcome } = JSON.parse(outcomeJson!) as {
       outcome: { approved: boolean; decision: string; decidedBy?: { channel: string } };
     };
