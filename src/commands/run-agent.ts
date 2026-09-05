@@ -26,7 +26,7 @@ export class RunAgentCommand implements Command {
   name = "run";
   description = "run a task (default mode)";
   usage =
-    'xr run "<task>" [--mode agent|plan|ask] [--budget usd] [--model name] [--provider id] [--max-tokens n] [--dry-run]';
+    'xr run "<task>" [--mode agent|plan|ask] [--budget usd] [--model name] [--provider id] [--max-tokens n] [--dry-run] [--resume <taskId>]';
 
   async execute(ctx: CommandContext): Promise<void> {
     const { registry, args } = ctx;
@@ -71,14 +71,15 @@ export class RunAgentCommand implements Command {
     }
 
     const task = taskArgs.join(" ").trim();
-    if (!task) {
+    if (!task && !overrides.resume) {
       throw usageError(
         "No task provided",
-        'xr run "your task"   or   xr "your task"',
+        'xr run "your task"   or   xr "your task"   or   xr run --resume <taskId>',
         ["xr help run", "xr ask", "xr plan"],
       );
     }
 
+    const taskText = task || `(resumed ${String(overrides.resume)})`;
     const mode = (overrides.mode as Mode) ?? "agent";
     if (mode !== "agent" && mode !== "plan" && mode !== "ask") {
       throw usageError(
@@ -113,7 +114,7 @@ export class RunAgentCommand implements Command {
     process.on("SIGINT", onSigint);
 
     try {
-      const result = await agentService.runTask(task, mode, {
+      const result = await agentService.runTask(taskText, mode, {
         ...overrides,
         signal: runController.signal,
       });
@@ -143,6 +144,12 @@ export class RunAgentCommand implements Command {
         process.exitCode = EXIT.ERROR;
       }
       if (result.finalMessage) console.log(C.cyan("\n" + result.finalMessage));
+      // Phase 6 · Step 6 — a plain run is checkpointed per step, so an
+      // INCOMPLETE end is a PAUSE, not a loss: the resume handle is printed
+      // with the durable id (the task runtime's own key).
+      if (result.stopped !== "done" && result.sessionId) {
+        tip(`incomplete run checkpointed — continue with: xr run --resume ${result.sessionId}`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       error(msg);

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-05T11:03:46.192Z",
+  "generatedAt": "2026-09-05T14:49:54.956Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -51,8 +51,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 564,
-    "testFiles": 297,
+    "sourceFiles": 570,
+    "testFiles": 306,
     "cliCommands": 42,
     "daemonRoutes": 123,
     "providers": 26,
@@ -82,8 +82,12 @@
       "bytes": 1797
     },
     {
+      "path": "0001-fix-test-perf-daemon-routes-fallback-chat-is-now-det.patch",
+      "bytes": 17259
+    },
+    {
       "path": "CHANGELOG.md",
-      "bytes": 74424
+      "bytes": 78155
     },
     {
       "path": "CODEOWNERS",
@@ -107,7 +111,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 34760
+      "bytes": 36600
     },
     {
       "path": "SECURITY.md",
@@ -147,6 +151,7 @@
     }
   ],
   "sourceFiles": [
+    "src/agents/identity.ts",
     "src/agents/planner.ts",
     "src/agents/registry.ts",
     "src/agents/types.ts",
@@ -372,6 +377,7 @@
     "src/execution/service.ts",
     "src/execution/state-machine.ts",
     "src/execution/status-summary.ts",
+    "src/execution/task-runtime.ts",
     "src/execution/types.ts",
     "src/execution/workflow/engine.ts",
     "src/execution/workflow/index.ts",
@@ -600,6 +606,8 @@
     "src/services/budget-service.ts",
     "src/services/config-service.ts",
     "src/services/mcp-service.ts",
+    "src/services/multi-agent-graph.ts",
+    "src/services/multi-agent-orchestration.ts",
     "src/services/multi-agent-service.ts",
     "src/services/multi-agent-task-support.ts",
     "src/services/planning-service.ts",
@@ -643,8 +651,10 @@
     "src/state/idempotency.ts",
     "src/state/migrations.ts",
     "src/state/repos/audit-repo.ts",
+    "src/state/repos/checkpoint-repo.ts",
     "src/state/repos/cost-repo.ts",
     "src/state/repos/index.ts",
+    "src/state/repos/partition-repo.ts",
     "src/state/repos/project-memory-repo.ts",
     "src/state/repos/reservation-repo.ts",
     "src/state/repos/session-repo.ts",
@@ -893,6 +903,15 @@
     "test/phase2/secret-broker.test.ts",
     "test/phase4/signed-audit-migration.test.ts",
     "test/phase4/signed-audit-store-branches.test.ts",
+    "test/phase6/checkpoint-resume.test.ts",
+    "test/phase6/fragment.test.ts",
+    "test/phase6/identity.test.ts",
+    "test/phase6/migration.test.ts",
+    "test/phase6/mission.test.ts",
+    "test/phase6/partitions.test.ts",
+    "test/phase6/task-runtime.test.ts",
+    "test/phase6/verifier.test.ts",
+    "test/phase6/worker-budget.test.ts",
     "test/platform/provenance-write-amplification.test.ts",
     "test/plugins.test.ts",
     "test/plugins/host.test.ts",

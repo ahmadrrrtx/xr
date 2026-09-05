@@ -1,6 +1,31 @@
 import { BudgetManager, BudgetCheckResult } from "./manager.ts";
 import type { ReservationStoreLike } from "../state/repos/reservation-repo.ts";
 
+/**
+ * Phase 6 · Step 2 — the partition admission interface the Governor consumes.
+ * Implemented by `PartitionRepo` (src/state/repos/partition-repo.ts). Kept as
+ * an interface so the governor stays store-free (same discipline as
+ * `ReservationStoreLike`).
+ */
+export interface PartitionAdmitter {
+  admit(
+    taskId: string,
+    childId: string,
+    estUsd: number,
+    estTokens: number,
+  ): { ok: true; reservationId: string } | { ok: false; reason: string };
+  commit(taskId: string, childId: string, reservationId: string, actualUsd: number, actualTokens: number): void;
+  release(taskId: string, childId: string, reservationId: string): void;
+}
+
+export interface PartitionRef {
+  ledger: PartitionAdmitter;
+  /** Root envelope id — the workflow/task whose root cap bounds the tree. */
+  taskId: string;
+  /** Child partition key — normally the delegated task id. */
+  childId: string;
+}
+
 export interface Budget {
   /** Hard ceiling in USD for this task (0 or undefined = local/free, no $ cap). */
   maxUsd?: number;
@@ -39,6 +64,14 @@ export class CostGovernor {
   /** Usage snapshot at the moment the open reservation was admitted. */
   private lastCommittedUsd = 0;
   private lastCommittedTokens = 0;
+  /**
+   * Phase 6 · F-12 — when set, this governor meters a PARTITIONED worker:
+   * admission goes through the root-envelope ledger (child cap + root cap,
+   * atomically), never through the per-session reservation copy that let
+   * N workers each spend the full root budget.
+   */
+  private partitionRef: PartitionRef | undefined;
+  private openPartitionReservationId: string | undefined;
 
   constructor(
     private budget: Budget,
@@ -70,6 +103,17 @@ export class CostGovernor {
       (inTok / 1_000_000) * this.pricing.inPerMTok +
       (outTok / 1_000_000) * this.pricing.outPerMTok;
     this.steps++;
+  }
+
+  /**
+   * Phase 6 · Step 6 — add EXPLICIT usage (resume seeding): a resumed run
+   * inherits its checkpointed meter exactly, rather than re-pricing tokens
+   * under a possibly-different pricing table.
+   */
+  addUsage(inTok: number, outTok: number, usd: number): void {
+    this.inTokens += inTok;
+    this.outTokens += outTok;
+    this.usd += usd;
   }
 
   snapshot(): CostSnapshot {
@@ -145,10 +189,35 @@ export class CostGovernor {
       };
     }
 
-    // 3. Phase 2 · F-12 — atomic admission (check-and-reserve as a write
-    //    transaction). Authoritative for store-backed runs: it re-checks the
-    //    global + per-task caps against recorded spend PLUS active
-    //    reservations from every process sharing this workspace.
+    // 3. Phase 6 · Step 2 — partitioned admission (worker of a delegated
+    //    tree). Authoritative when attached: the ledger atomically checks the
+    //    CHILD ceiling and the ROOT envelope (settled consumption + every
+    //    child's in-flight estimates) in one write transaction. The per-task
+    //    ceilings above already ARE the child partition's caps.
+    if (this.partitionRef) {
+      const admitted = this.partitionRef.ledger.admit(
+        this.partitionRef.taskId,
+        this.partitionRef.childId,
+        estUsd,
+        estTokens,
+      );
+      if (!admitted.ok) {
+        return {
+          allow: false,
+          reason: admitted.reason,
+          snapshot: snap,
+        };
+      }
+      this.openPartitionReservationId = admitted.reservationId;
+      this.lastCommittedUsd = snap.usd;
+      this.lastCommittedTokens = snap.totalTokens;
+      return { allow: true, warning: globalCheck.warning };
+    }
+
+    // 3b. Phase 2 · F-12 — atomic admission (check-and-reserve as a write
+    //     transaction). Authoritative for store-backed runs: it re-checks the
+    //     global + per-task caps against recorded spend PLUS active
+    //     reservations from every process sharing this workspace.
     if (this.reservationStore && this.envId) {
       const cfg = this.budgetManager?.getConfig();
       const admitted = this.admitStep({
@@ -214,6 +283,21 @@ export class CostGovernor {
     return { allow: true, reservationId: result.reservationId };
   }
 
+  /**
+   * Phase 6 · Step 2 — bind this governor to a partition of a root envelope.
+   * From the moment of attach, every step admission is checked against the
+   * CHILD ceiling and the ROOT envelope in one ledger transaction; the
+   * per-session reservation layer is superseded (its caps are the partition's).
+   */
+  attachPartitionLedger(ref: PartitionRef): void {
+    this.partitionRef = ref;
+  }
+
+  /** The bound partition (for checkpoint/audit records), if any. */
+  get partition(): PartitionRef | undefined {
+    return this.partitionRef;
+  }
+
   /** Phase 2 · F-12 — settle an explicit reservation against actual usage. */
   commit(reservationId: string, actualUsd: number, actualTokens: number): void {
     this.reservationStore?.commit(reservationId, actualUsd, actualTokens);
@@ -224,6 +308,12 @@ export class CostGovernor {
 
   /** Phase 2 · F-12 — release a reservation without usage (cancelled path). */
   releaseReservation(reservationId?: string): void {
+    if (this.partitionRef) {
+      const rid = reservationId ?? this.openPartitionReservationId;
+      if (rid) this.partitionRef.ledger.release(this.partitionRef.taskId, this.partitionRef.childId, rid);
+      this.openPartitionReservationId = undefined;
+      return;
+    }
     if (!this.reservationStore) return;
     if (reservationId) this.reservationStore.release(reservationId);
     else if (this.openReservationId) this.reservationStore.release(this.openReservationId);
@@ -232,6 +322,19 @@ export class CostGovernor {
 
   /** Settle the open reservation with the usage accrued since admission. */
   private settleOpenReservation(): void {
+    if (this.partitionRef) {
+      if (!this.openPartitionReservationId) return;
+      const snap = this.snapshot();
+      this.partitionRef.ledger.commit(
+        this.partitionRef.taskId,
+        this.partitionRef.childId,
+        this.openPartitionReservationId,
+        Math.max(0, snap.usd - this.lastCommittedUsd),
+        Math.max(0, snap.totalTokens - this.lastCommittedTokens),
+      );
+      this.openPartitionReservationId = undefined;
+      return;
+    }
     if (!this.reservationStore || !this.openReservationId) return;
     const snap = this.snapshot();
     this.reservationStore.commit(

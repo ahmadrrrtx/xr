@@ -94,6 +94,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/phase1/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/phase2/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/phase4/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/phase6/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/platform/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/plugins.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/plugins/` | @ahmadrrrtx | default (@ahmadrrrtx) |

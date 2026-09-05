@@ -126,6 +126,21 @@ const BUILTIN: AgentDefinition[] = [
     providerScope: {},
   }),
   def({
+    id: "verifier",
+    role: "verifier",
+    label: "Artifact Verifier",
+    description: "Inspects the ACTUAL artifacts (files, outputs, hashes) a mission produced and decides whether they satisfy the objective. Read-only by capability, not by prompt.",
+    version: CORE_VERSION,
+    enabledByDefault: true,
+    capabilities: ["artifact-inspection", "verdict", "read-only"],
+    permissions: perms({}),
+    // Capability-enforced read-only scope: the verifier has no write, shell,
+    // network, plugin, or memory tool AT ALL — not "asked not to use them".
+    toolScope: allow("read_file", "list_dir"),
+    memoryScope: memory("none", 0, { sharedWithSupervisor: false }),
+    providerScope: {},
+  }),
+  def({
     id: "executor",
     role: "executor",
     label: "Executor",

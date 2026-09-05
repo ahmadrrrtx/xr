@@ -64,6 +64,15 @@ export interface EnvelopeContext {
    */
   readonly onStreamEvent?: import("../types.ts").StreamEventSink;
   /**
+   * Phase 6 — orchestration-plane passthrough wiring (see AgentDeps).
+   */
+  readonly partition?: import("../../cost/governor.ts").PartitionRef;
+  readonly sessionId?: string;
+  readonly resumeFrom?: import("../agent.ts").ResumeFrom;
+  readonly checkpointSink?: (kind: string, payload: Record<string, unknown>) => void;
+  readonly taskLedger?: import("../../execution/task-runtime.ts").TaskRunLedger;
+  readonly agentIdentity?: import("../../agents/identity.ts").AgentIdentity;
+  /**
    * A-19 — cooperative cancellation for this run, forwarded to the loop.
    * Surfaces abort their own runs (Shell Ctrl+C/Esc, `xr run` SIGINT, workflow
    * stop); the loop observes the signal at its checkpoints.
@@ -128,6 +137,14 @@ export async function runEnvelope(
     ...(context.onStreamEvent ? { onStreamEvent: context.onStreamEvent } : {}),
     ...(context.signal ? { signal: context.signal } : {}),
     runId: envelope.evidence.envelopeId,
+    // Phase 6 — orchestration-plane wiring, passed through untouched: the
+    // envelope assembles it, the loop consumes it, the runner forwards.
+    ...(context.partition ? { partition: context.partition } : {}),
+    sessionId: context.sessionId,
+    ...(context.resumeFrom ? { resumeFrom: context.resumeFrom } : {}),
+    ...(context.checkpointSink ? { checkpointSink: context.checkpointSink } : {}),
+    ...(context.taskLedger ? { taskLedger: context.taskLedger } : {}),
+    ...(context.agentIdentity ? { agentIdentity: context.agentIdentity } : {}),
   };
 
   const result = await runAgentLoop(intent.task, intent.mode, deps);

@@ -527,7 +527,84 @@ const MIGRATION_7: Migration = {
   },
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6, MIGRATION_7];
+/**
+ * Migration 8 — Phase 6 (Orchestration Completion): budget partitions,
+ * durable task checkpoints, and partition in-flight reservations.
+ *
+ * Additive ONLY — three new tables, no existing table is modified:
+ *   - `budget_partitions` — the partition ledger. One row per root envelope
+ *     (`child_id = '@root'`) and one per issued child envelope. Caps are set
+ *     at partition time (Σ child caps ≤ root cap is enforced inside the
+ *     partition write transaction); `consumed_*` settles as children commit.
+ *     This is what kills the F-12 N× spend multiplier: a worker's ceiling is
+ *     its partition, never a copy of the root request.
+ *   - `partition_reservations` — in-flight step estimates per partition, the
+ *     race-safe "one admitted reservation beyond the cap" allowance of the
+ *     P2 admission model. Stale rows are swept at admission time, so a
+ *     kill -9 between admit and commit can never double-spend: the sweep
+ *     releases the reservation and the settled `consumed_*` remains the
+ *     only durable spend accounting.
+ *   - `task_checkpoints` — the unified task-runtime journal. Every task
+ *     transition and every plain-run step writes one row under the store's
+ *     WriteGate, hash-chained per task (prev_hash → hash over
+ *     canonical JSON), giving workflows AND plain `xr run` sessions the same
+ *     resumable durability (F-28). Old sessions simply have no rows and are
+ *     documented as unresumable.
+ *
+ * Down: drops the three tables this migration introduced.
+ */
+const MIGRATION_8: Migration = {
+  version: 8,
+  name: "phase6_orchestration",
+  up(store: WorkspaceStore) {
+    store.exec(`
+      CREATE TABLE IF NOT EXISTS budget_partitions (
+        partition_id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        child_id TEXT NOT NULL,
+        agent_id TEXT,
+        cap_usd REAL NOT NULL DEFAULT 0,
+        cap_tokens INTEGER NOT NULL DEFAULT 0,
+        consumed_usd REAL NOT NULL DEFAULT 0,
+        consumed_tokens INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'open',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_partitions_child ON budget_partitions(task_id, child_id);
+
+      CREATE TABLE IF NOT EXISTS partition_reservations (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        child_id TEXT NOT NULL,
+        est_usd REAL NOT NULL,
+        est_tokens INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_pres_status ON partition_reservations(task_id, status);
+
+      CREATE TABLE IF NOT EXISTS task_checkpoints (
+        task_id TEXT NOT NULL,
+        seq INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        prev_hash TEXT,
+        hash TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (task_id, seq)
+      );
+    `);
+  },
+  down(store: WorkspaceStore) {
+    store.exec(`DROP TABLE IF EXISTS task_checkpoints;`);
+    store.exec(`DROP TABLE IF EXISTS partition_reservations;`);
+    store.exec(`DROP TABLE IF EXISTS budget_partitions;`);
+  },
+};
+
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6, MIGRATION_7, MIGRATION_8];
 
 /** Latest known schema version. */
 export const LATEST_SCHEMA_VERSION: number = MIGRATIONS.reduce(

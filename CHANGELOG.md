@@ -2,6 +2,59 @@
 
 ## Unreleased
 
+### Phase 6 — Orchestration completion (task runtime, funded trees, resume, verifier)
+
+- **budget (breaking):** a multi-agent workflow now spends **one root envelope for
+  the whole tree**, not one per worker. `budget.perTaskUsd`/`perTaskTokens` are
+  the ROOT ceiling; the root is partitioned across lanes deterministically
+  (largest-remainder over template role weights, floor-guarded — a lane the floor
+  cannot fund is DENIED, never zero-funded). Every worker step is admitted against
+  its child ceiling AND the shared root in a single ledger transaction; an
+  admitted step may overshoot its estimate once, so the hard bound is
+  `Σ committed ≤ root + one in-flight step`. **A worker request that passes its
+  own `--budget` is ignored on the funded path** — that multiplier is what this
+  fixes. Legacy (unfunded) callers keep the old per-request aliases.
+- **task runtime:** every workflow task — and every plain run, as a 1-node task
+  — moves through an explicit 12-state machine (incl. `recovering`,
+  `awaiting_budget`, `awaiting_approval`, `verifying`) with a pure transition
+  table; illegal events are swallowed by the loop but the ledger throws, and all
+  legal edges are audited (`task.transition` / `agents.task.transition`).
+- **durable resume:** per-step checkpoints (transcript + step index + consumed
+  meter + tool-call sequence) are hash-chained in `task_checkpoints`;
+  `xr run --resume <id>` and `runAgentService.execute({resume})` re-enter the loop
+  from the latest checkpoint. Semantics are documented and honest: the SEED is
+  durable, the model is **re-asked** (no provider replay); runs with no journal,
+  a broken chain, or a truncation envelope are **refused**, never silently
+  restarted. Resumed runs re-seed the spend meter, so a resumed worker does not
+  get a fresh budget for old work.
+- **identities & depth cap:** workers execute under minted identities
+  (`role/parent/task/grant/depth`); spawn depth is capped at 1 **by
+  construction** — a depth-1 worker attempting to delegate is refused and
+  audited. Identity surfaces are framed as data, not instructions.
+- **artifact verifier:** research/build/refactor workflows gain a read-only
+  verifier lane after synthesis (default on; `orchestration.verifier`). It
+  receives the workers' claims plus a deterministic **artifact manifest**
+  (claimed files hashed, missing files named, escapes declined) and must answer
+  with reasoned strict JSON: anything else — prose assurances included — fails
+  the task closed. Deviation from the plan: the plan's verifier toolset listed a
+  `grep` tool; the registry has none, so the verifier ships read-only
+  `read_file`+`list_dir` scope instead.
+- **supervised plan editing (off by default):** for kinds enabled in
+  `orchestration.supervisorEditing`, a supervisor fragment may add/rename/skip
+  tasks under hard locks: strict schema, roles inside the kind's declared set,
+  review/security/verification gates never skippable, completed work immutable,
+  adds fundable only from unallocated root headroom, `planVersion` + bounded
+  edits per workflow. Every refusal is audited (`agents.plan.edit_denied`).
+- **bounded concurrency:** workers run through a gate capped at
+  `orchestration.concurrentWorkers`; budget-blocked and approval-waiting lanes
+  hold their slot only while live.
+- **state:** reversible migration 8 (`phase6_orchestration`) adds
+  `budget_partitions`, `partition_reservations` (TTL-swept at admission, so a
+  kill between admit and commit can neither double-spend nor wedge) and the
+  hash-chained `task_checkpoints` journal.
+- **scope:** single-process. Partitions and reservations are enforced against
+  the shared workspace DB — not across machines.
+
 ### Phase 4 — Evidence Integrity (signed audit, F-08)
 
 - **audit:** the SHA-256 hash chain was tamper-*evident* but a local attacker

@@ -43,6 +43,8 @@ import { MemoryStore } from "../context/memory/store.ts";
 import { priceFor } from "../cost/pricing.ts";
 import type { ApprovalRequest, Mode, Provider } from "../core/types.ts";
 import { makeApprover } from "../control/approval-store.ts";
+import { PartitionRepo } from "../state/repos/partition-repo.ts";
+import { CheckpointRepo } from "../state/repos/checkpoint-repo.ts";
 import { renderPreviewText } from "../control/preview.ts";
 
 /**
@@ -104,7 +106,35 @@ export interface AgentRunOverrides {
    * cancelled this way ends honestly as `stopped: "cancelled"`.
    */
   signal?: AbortSignal;
+
+  // ── Phase 6 — orchestration plane options ────────────────────────────────
+
+  /**
+   * Phase 6 · Step 2 — a Governor CHILD ENVELOPE: this run must spend inside
+   * the partition (task, child). When present, the run's budget/token ceilings
+   * come from the LEDGER row — `budget`/`maxTokens` below become compat
+   * aliases honored only when no ledger is wired (one release, deprecated).
+   */
+  envelope?: { taskId: string; childId: string };
+  /**
+   * Phase 6 · Step 6 — resume a plain run from its last durable checkpoint.
+   * The id is the crashed run's session/task id (`xr run …` prints it;
+   * `xr run --resume <id>` re-enters the loop at the next step). Re-asking the
+   * model from the checkpoint is the DOCUMENTED resume semantics — XR does
+   * not journal provider traffic for bit-exact replay.
+   */
+  resume?: string;
+  /** Phase 6 · Step 3 — attribution identity carried by this run. */
+  agentIdentity?: import("../agents/identity.ts").AgentIdentity;
+  /** Phase 6 · Step 1 — durable task journal for THIS run (plain runs). */
+  taskJournal?: {
+    checkpointSink: (kind: string, payload: Record<string, unknown>) => void;
+    taskLedger: import("../execution/task-runtime.ts").TaskRunLedger;
+  };
 }
+
+/** Phase 6 · Step 6 — consumed-meter shape carried by a resume checkpoint. */
+type ResumeFromConsumed = { inTokens: number; outTokens: number; usd: number };
 
 /** Phase 2 · T1 — the canonical execution request. */
 export interface ExecuteRequest extends AgentRunOverrides {
@@ -163,6 +193,129 @@ export class AgentService implements LifecycleHook {
 
     const config = configService.get();
 
+    // ── Phase 6 · Step 2 — resolve the Governor child envelope ────────────
+    // A partitioned worker runs on LEDGER caps. `req.budget` is not consulted
+    // on this path — which is exactly what kills the F-12 N× multiplier: the
+    // request's ceiling funds the ROOT, the root partitions bound the tree.
+    let partitionRef: import("../cost/governor.ts").PartitionRef | undefined;
+    let envelopeBudget: { maxUsd?: number; maxTokens?: number } | undefined;
+    if (overrides.envelope) {
+      const ledger = new PartitionRepo(this.registry.resolve(Tokens.Store));
+      const rows = ledger.listPartitions(overrides.envelope.taskId);
+      const child = rows.find((r) => r.childId === overrides.envelope!.childId);
+      if (!child) {
+        // Fail closed: an unfunded envelope is a DENIED delegation, never an
+        // unbounded run and never a silent fall back to the root budget.
+        throw new Error(
+          `envelope ${overrides.envelope.taskId}/${overrides.envelope.childId} has no funded partition — delegation refused`,
+        );
+      }
+      if (child.status === "closed") {
+        throw new Error(`partition ${overrides.envelope.taskId}/${overrides.envelope.childId} is closed`);
+      }
+      partitionRef = { ledger, taskId: overrides.envelope.taskId, childId: overrides.envelope.childId };
+      envelopeBudget = {
+        maxUsd: child.capUsd > 0 ? child.capUsd : undefined,
+        maxTokens: child.capTokens > 0 ? child.capTokens : undefined,
+      };
+    }
+
+    // ── Phase 6 · Step 6 — resume from the durable checkpoint ──────────────
+    const runSessionId = overrides.resume ?? `s_${Math.random().toString(36).slice(2, 10)}`;
+    let resumeFrom: import("../core/agent.ts").ResumeFrom | undefined;
+    if (overrides.resume) {
+      const ckpt = new CheckpointRepo(this.registry.resolve(Tokens.Store));
+      const chain = ckpt.verifyChain(overrides.resume);
+      if (!chain.ok) {
+        throw new Error(`resume refused: checkpoint chain for ${overrides.resume} is broken at seq ${chain.brokenAtSeq} (${chain.reason})`);
+      }
+      // latest run.step checkpoint
+      const rows = ckpt.list(overrides.resume).filter((r) => r.kind === "run.step");
+      const last = rows[rows.length - 1];
+      if (!last) {
+        throw new Error(
+          `resume refused: no checkpoint for task ${overrides.resume}. ` +
+            "Only runs started after Phase 6 (plain-run checkpointing) are resumable; older sessions are documented unresumable.",
+        );
+      }
+      const p = last.payload as Record<string, unknown>;
+      if (p.truncated === true || !Array.isArray(p.messages)) {
+        throw new Error(`resume refused: checkpoint #${last.seq} for ${overrides.resume} is a truncation envelope without a rebuildable transcript`);
+      }
+      const consumed = (p.consumed ?? { inTokens: 0, outTokens: 0, usd: 0 }) as ResumeFromConsumed;
+      resumeFrom = {
+        messages: p.messages as import("../core/types.ts").Message[],
+        stepIdx: Number(p.stepIdx ?? 0),
+        toolCallSeq: Number(p.toolCallSeq ?? 0),
+        consumed,
+        droppedMessages: Number(p.droppedMessages ?? 0),
+      };
+      this.registry.resolve(Tokens.AuditStore).audit("task.resumed", {
+        taskId: overrides.resume,
+        fromSeq: last.seq,
+        stepIdx: resumeFrom.stepIdx,
+        droppedMessages: resumeFrom.droppedMessages,
+      }, overrides.resume);
+    }
+
+    // ── Phase 6 · Step 1 — plain runs as 1-node tasks ──────────────────────
+    // When checkpointing is on, every plain run journals transitions + step
+    // snapshots and (for new runs) mints a root identity. The loop fires the
+    // lifecycle edges through `taskLedger`; `plan` is fired here.
+    let journal: {
+      checkpointSink: (kind: string, payload: Record<string, unknown>) => void;
+      taskLedger: import("../execution/task-runtime.ts").TaskRunLedger;
+    } | undefined;
+    if (config.orchestration?.checkpointPlainRuns && !partitionRef) {
+      const ckpt = new CheckpointRepo(this.registry.resolve(Tokens.Store));
+      const audit = this.registry.resolve(Tokens.AuditStore);
+      const { TaskRunLedger } = await import("../execution/task-runtime.ts");
+      const ledger = new TaskRunLedger(runSessionId, resumeFrom ? "recovering" : "created", {
+        onTransition: (rec) => {
+          audit.audit("task.transition", { taskId: runSessionId, from: rec.from, to: rec.to, event: rec.event }, runSessionId);
+        },
+        onCheckpoint: (kind, payload) => {
+          const res = ckpt.append(runSessionId, kind, payload);
+          if (res) audit.audit("task.checkpointed", { taskId: runSessionId, kind, seq: res.seq }, runSessionId);
+        },
+      });
+      if (!resumeFrom) ledger.fire("plan", { mode: request.mode });
+      journal = {
+        checkpointSink: (kind, payload) => {
+          const res = ckpt.append(runSessionId, kind, payload);
+          if (res) audit.audit("task.checkpointed", { taskId: runSessionId, kind, seq: res.seq }, runSessionId);
+        },
+        taskLedger: ledger,
+      };
+    }
+    let runIdentity = overrides.agentIdentity;
+    if (!partitionRef && !runIdentity && journal) {
+      // Root identity for a plain run (depth 0): the SAME identity object
+      // workers carry, one level up — attribution is uniform across the tree.
+      try {
+        const { mintIdentity } = await import("../agents/identity.ts");
+        const mint = mintIdentity({
+          role: "primary",
+          parentId: "user",
+          taskId: runSessionId,
+          grantRef: `budget:config:perTask`,
+          parentDepth: -1,
+        });
+        if (mint.allowed) {
+          runIdentity = mint.identity;
+          this.registry.resolve(Tokens.AuditStore).audit(
+            "agent.minted",
+            { ...mint.identity, surface: overrides.surface ?? "cli" },
+            runSessionId,
+          );
+        }
+      } catch {
+        /* identity is attribution, not authority — a mint failure never blocks a run */
+      }
+    }
+
+
+
     // Stage 6 — the canonical memory engine, backed by the same WorkspaceStore the rest
     // of the system uses, so CLI / TUI / voice / dashboard / agent all share ONE
     // memory. (The legacy UserMemoryRepo stays registered for backward compat.)
@@ -195,7 +348,9 @@ export class AgentService implements LifecycleHook {
       config.defaults.model;
     const pricing = priceFor(provider.id, selectedModel);
 
-    const budget = {
+    const budget = envelopeBudget ?? {
+      // Compat aliases (one release): on the partitioned path these are
+      // IGNORED — the ledger's child envelope is the ceiling (F-12).
       maxUsd: overrides.budget ?? config.budget.perTaskUsd,
       maxTokens: overrides.maxTokens ?? config.budget.perTaskTokens,
     };
@@ -276,6 +431,13 @@ export class AgentService implements LifecycleHook {
       },
       // A-19 — cooperative cancellation threaded to the loop's checkpoints.
       ...(overrides.signal ? { signal: overrides.signal } : {}),
+      // Phase 6 — task-runtime wiring (envelope ref, resume, journal, identity).
+      ...(partitionRef ? { partition: partitionRef } : {}),
+      sessionId: runSessionId,
+      ...(resumeFrom ? { resumeFrom } : {}),
+      ...(journal?.checkpointSink ? { checkpointSink: journal.checkpointSink } : {}),
+      ...(journal?.taskLedger ? { taskLedger: journal.taskLedger } : {}),
+      ...(runIdentity ? { agentIdentity: runIdentity } : {}),
       // Phase 05 — canonical streaming event sink threaded to the loop.
       ...(overrides.onStreamEvent ? { onStreamEvent: overrides.onStreamEvent } : {}),
       /**

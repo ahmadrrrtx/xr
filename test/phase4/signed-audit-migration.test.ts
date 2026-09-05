@@ -72,10 +72,12 @@ describe("Phase 4 · migration 7 + keying on an existing database", () => {
     const dbPath = join(dir, "xr.db");
     try {
       prePhase4Db(dbPath);
-      expect(LATEST_SCHEMA_VERSION).toBe(7);
+      // (Later phases add migrations above 7 — assert THIS one landed, not that
+      // 7 is still the ceiling.)
+      expect(LATEST_SCHEMA_VERSION).toBeGreaterThanOrEqual(7);
 
       const store = new WorkspaceStore("t", dbPath);
-      expect(currentSchemaVersion(store)).toBe(7);
+      expect(currentSchemaVersion(store)).toBeGreaterThanOrEqual(7);
 
       // The legacy unsigned chain still replays.
       expect(store.verifyChain().valid).toBe(true);
@@ -113,8 +115,8 @@ describe("Phase 4 · migration 7 + keying on an existing database", () => {
     try {
       prePhase4Db(dbPath);
       let store = new WorkspaceStore("t", dbPath);
-      expect(currentSchemaVersion(store)).toBe(7);
-      runMigrationsDown(store, 6);
+      expect(currentSchemaVersion(store)).toBeGreaterThanOrEqual(7);
+      runMigrationsDown(store, 6); // below 7: this migration must vanish with any above it
       expect(currentSchemaVersion(store)).toBe(6);
 
       // audit_head / audit_anchors dropped.
@@ -126,7 +128,7 @@ describe("Phase 4 · migration 7 + keying on an existing database", () => {
 
       // Re-applying forward works and the chain still verifies.
       store = new WorkspaceStore("t", dbPath);
-      expect(currentSchemaVersion(store)).toBe(7);
+      expect(currentSchemaVersion(store)).toBe(LATEST_SCHEMA_VERSION); // forward re-applies 7 (and above)
       expect(store.verifyChain().valid).toBe(true);
       store.close();
     } finally {

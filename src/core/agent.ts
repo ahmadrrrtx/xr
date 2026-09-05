@@ -32,7 +32,8 @@ import type { AuditRepo } from "../state/repos/audit-repo.ts";
 import { CostRepo } from "../state/repos/cost-repo.ts";
 import type { UserMemoryRepo } from "../state/repos/user-memory-repo.ts";
 import type { WorkspaceStore as Store } from "../state/workspace-store.ts";
-import { CostGovernor, type Budget, type Pricing } from "../cost/governor.ts";
+import { CostGovernor, type Budget, type Pricing, type PartitionRef } from "../cost/governor.ts";
+import type { TaskRunLedger } from "../execution/task-runtime.ts";
 import { BudgetManager } from "../cost/manager.ts";
 import { ReservationRepo } from "../state/repos/reservation-repo.ts";
 import { buildStructuredPreview } from "../control/preview.ts";
@@ -196,6 +197,35 @@ export interface AgentDeps {
    * resolves or the next step begins.
    */
   signal?: AbortSignal;
+
+  // ── Phase 6 — task runtime, partitions, and resume ──────────────────────
+
+  /**
+   * Phase 6 · Step 2 — the child envelope this run must fit inside. When set,
+   * the governor's step admission goes through the partition ledger (child
+   * cap + root cap, atomic), and the run's per-task ceilings are the
+   * partition's — never a copy of the root request (F-12).
+   */
+  partition?: PartitionRef;
+  /**
+   * Phase 6 · Step 6 — pre-allocated session id (a resumed run continues
+   * under its original id so checkpoints, session, and audit all chain to
+   * the same identity).
+   */
+  sessionId?: string;
+  /**
+   * Phase 6 · Step 6 — resume seed: the transcript, step index, usage, and
+   * tool-call sequence recovered from the latest durable checkpoint. The
+   * model is RE-ASKED from here (documented nondeterminism — XR does not
+   * journal provider traffic for replay).
+   */
+  resumeFrom?: ResumeFrom;
+  /** Phase 6 · Step 6 — durable per-step checkpoint sink (task_checkpoints). */
+  checkpointSink?: (kind: string, payload: Record<string, unknown>) => void;
+  /** Phase 6 · Step 1 — the task ledger for this run (plain runs: 1-node task). */
+  taskLedger?: TaskRunLedger;
+  /** Phase 6 · Step 3 — the identity this run executes under (attribution). */
+  agentIdentity?: import("../agents/identity.ts").AgentIdentity;
 }
 
 export interface AgentResult {
@@ -358,6 +388,37 @@ async function runModelTurn(
   return { turn: finalizeTurn(turn), streamed: false };
 }
 
+/**
+ * Phase 6 · Step 6 — the resume seed rebuilt from a `run.step` checkpoint.
+ * `consumed` re-prices through the SAME CostGovernor, so a resumed run
+ * inherits its real spend against the ceiling; `droppedMessages` records how
+ * much oldest context the checkpoint's size bound forced away (honest
+ * degradation, visible in the resume audit).
+ */
+export interface ResumeFrom {
+  readonly messages: Message[];
+  readonly stepIdx: number;
+  readonly toolCallSeq: number;
+  readonly consumed: { inTokens: number; outTokens: number; usd: number };
+  readonly droppedMessages?: number;
+}
+
+/** Bound the checkpointed transcript; drop OLDEST messages first, keep recent. */
+export function trimMessagesForCheckpoint(
+  messages: readonly Message[],
+  budgetChars = 40_000,
+): { keep: Message[]; dropped: number } {
+  const size = (arr: readonly Message[]): number =>
+    arr.reduce((n, m) => n + (m.content?.length ?? 0) + 24, 0);
+  let dropped = 0;
+  const keep = [...messages];
+  while (keep.length > 1 && size(keep) > budgetChars) {
+    keep.shift();
+    dropped++;
+  }
+  return { keep, dropped };
+}
+
 export async function runAgentLoop(
   task: string,
   mode: Mode,
@@ -379,9 +440,24 @@ export async function runAgentLoop(
   }
   const maxSteps = deps.maxSteps ?? 12;
   
-  const sessionId = `s_${randomUUID().slice(0, 8)}`;
-  sessionStore.createSession(sessionId, task.slice(0, 80), mode);
-  auditStore.audit("session.start", { task, mode, provider: provider.id }, sessionId);
+  const sessionId = deps.sessionId ?? `s_${randomUUID().slice(0, 8)}`;
+  if (deps.resumeFrom) {
+    // A resumed run re-owns its existing session row (the crash left it
+    // 'stopped'); the terminal path re-stamps it honestly. The resume itself
+    // is audited as an explicit event — never hidden inside a normal start.
+    auditStore.audit(
+      "session.resume",
+      {
+        stepIdx: deps.resumeFrom.stepIdx,
+        droppedMessages: deps.resumeFrom.droppedMessages ?? 0,
+        note: "model re-asked from checkpoint — resumed context is deterministic, model output is not",
+      },
+      sessionId,
+    );
+  } else {
+    sessionStore.createSession(sessionId, task.slice(0, 80), mode);
+    auditStore.audit("session.start", { task, mode, provider: provider.id }, sessionId);
+  }
 
   const budgetManager = new BudgetManager(costStore);
   // Phase 2 · F-12 — Governor v1: atomic admission over the same workspace
@@ -396,6 +472,31 @@ export async function runAgentLoop(
     reservationRepo,
     sessionId,
   );
+  // Phase 6 · F-12 — partitioned admission replaces the per-session
+  // reservation layer: the worker's ceiling is its CHILD partition and the
+  // ROOT envelope, checked atomically against every sibling's in-flight work.
+  if (deps.partition) {
+    governor.attachPartitionLedger(deps.partition);
+    auditStore.audit("budget.envelope_bound", {
+      taskId: deps.partition.taskId,
+      childId: deps.partition.childId,
+      ceilings: { usd: deps.budget?.maxUsd ?? null, tokens: deps.budget?.maxTokens ?? null },
+    }, sessionId);
+  }
+  /** Phase 6 · Step 6 — seed a resumed run's meter with its settled usage. */
+  if (deps.resumeFrom) {
+    const c = deps.resumeFrom.consumed;
+    governor.addUsage(c.inTokens, c.outTokens, c.usd);
+  }
+  const fireTask = (event: Parameters<NonNullable<typeof deps.taskLedger>["fire"]>[0], detail?: Record<string, unknown>): void => {
+    try {
+      deps.taskLedger?.fire(event, { ...(detail ?? {}), ...(deps.agentIdentity ? { agentId: deps.agentIdentity.agentId } : {}) });
+    } catch {
+      // The ledger is a durability/attribution layer on top of the loop's
+      // own honest result; an illegal edge is a bug to surface in tests,
+      // never a reason to change the run's outcome here.
+    }
+  };
 
   /**
    * Phase 2 · T2 — tool discovery.
@@ -636,9 +737,27 @@ export async function runAgentLoop(
     messages.push({ role: "system", content: deps.systemPrompt.trim() });
   }
 
-  messages.push({ role: "user", content: task });
+  if (!deps.resumeFrom) {
+    messages.push({ role: "user", content: task });
+  }
   let finalMessage = "";
   let stepIdx = 0;
+  /**
+   * Phase 6 · M-09 — run-scoped, MONOTONIC tool-call ids. Every call gets
+   * `tc_<session>_<n>`; `n` continues across a resume (the checkpoint stores
+   * the sequence), so trace identity survives crashes: the same logical call
+   * keeps the same id in the step records, the checkpoint, and the stream.
+   */
+  let toolCallSeq = deps.resumeFrom?.toolCallSeq ?? 0;
+  if (deps.resumeFrom) {
+    // Rebuild the transcript from the checkpoint (dropped-oldest trimming is
+    // the documented bound). No re-push of the user task — it is already in
+    // the recovered transcript.
+    messages.splice(0, messages.length, ...deps.resumeFrom.messages.map((m) => ({ ...m })));
+    stepIdx = deps.resumeFrom.stepIdx + 1;
+  }
+  // Phase 6 · Step 1 — entering execution is a task transition (started).
+  if (deps.taskLedger) fireTask(deps.resumeFrom ? "recover" : "start", { maxSteps, resumed: !!deps.resumeFrom });
   /** Phase 05 — emit provider_ready status once, before the first model turn. */
   let providerReadyEmitted = false;
   /** Phase 2 · F-06 — audit the empty-deny-list fallback exactly once per run. */
@@ -670,6 +789,7 @@ export async function runAgentLoop(
   const cancelledResult = (steps: number): AgentResult => {
     say(`\x1b[33m⏸ cancelled — interrupted at your request\x1b[0m`);
     sessionStore.endSession(sessionId, "stopped");
+    fireTask("cancel", { steps });
     auditStore.audit("session.cancelled", { steps, snapshot: governor.snapshot() }, sessionId);
     return {
       sessionId,
@@ -707,6 +827,8 @@ export async function runAgentLoop(
           // generic error: nothing failed, XR stopped to respect the cap.
           deps.onStreamEvent?.({ type: "status", status: "budget_stopped", message: decision.reason });
           sessionStore.endSession(sessionId, "stopped");
+          fireTask("budget_block", { reason: decision.reason.slice(0, 300) });
+          fireTask("fail", { reason: "budget ceiling reached; no raise granted" });
           auditStore.audit("budget.stop", { snapshot: governor.snapshot() }, sessionId);
           return {
             sessionId,
@@ -717,6 +839,8 @@ export async function runAgentLoop(
           };
         }
         governor.raise(extra);
+        fireTask("budget_block", { reason: "ceiling reached; human raise pending" });
+        fireTask("budget_raised", { extra });
         auditStore.audit("budget.raised", { extra }, sessionId);
       }
 
@@ -832,6 +956,7 @@ export async function runAgentLoop(
         // Stage 6 — optionally fold the conversation into a session summary.
         maybeSaveSessionSummary();
         sessionStore.endSession(sessionId, "done");
+        fireTask("succeed", { steps: stepIdx + 1 });
         auditStore.audit("session.done", { steps: stepIdx + 1, snapshot: governor.snapshot() }, sessionId);
         return {
           sessionId,
@@ -845,7 +970,11 @@ export async function runAgentLoop(
 
       for (let toolIdx = 0; toolIdx < turn.toolCalls.length; toolIdx++) {
         const call = turn.toolCalls[toolIdx];
-        const toolCallId = `tc_${toolIdx + 1}`;
+        // Phase 6 · M-09 — run-scoped monotonic id (persisted in the step
+        // record below): stable within a run AND across resume (the sequence
+        // number continues from the checkpoint), unlike the old per-batch
+        // `tc_<n>` that restarted on every step and every resume.
+        const toolCallId = `tc_${sessionId}_${++toolCallSeq}`;
         // A-19 — between tool calls: a mid-batch abort skips the rest.
         if (isCancelled()) return cancelledResult(stepIdx + 1);
 
@@ -979,6 +1108,8 @@ export async function runAgentLoop(
           deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: result.ok, result: result.output });
           sessionStore.addStep(`st_${randomUUID().slice(0, 8)}`, sessionId, stepIdx, "act", call.tool, {
             ok: result.ok,
+            // Phase 6 · M-09 — the trace identity for this call, durable.
+            toolCallId,
           });
           // GAP-003 — tool output is UNTRUSTED DATA. Before this it was pushed
           // raw, so any file/page/MCP response could inject instructions into
@@ -1006,9 +1137,36 @@ export async function runAgentLoop(
           toolCtx.onToolUse?.({ tool: call.tool, ok: false, error: (e as Error).message });
         }
       }
+
+      // ── Phase 6 · Step 6 — per-step durable checkpoint ───────────────────
+      // Written at the STEP boundary (transcript + meter + tool-call sequence),
+      // under the store's WriteGate via the checkpoint repo. A kill -9 after
+      // this row means the NEXT resume continues from stepIdx+1 with exactly
+      // the meter the crash left behind — no double-spend, no lost step.
+      if (deps.checkpointSink) {
+        try {
+          const snap = governor.snapshot();
+          const { keep, dropped } = trimMessagesForCheckpoint(messages);
+          deps.checkpointSink("run.step", {
+            stepIdx,
+            droppedMessages: dropped,
+            consumed: { inTokens: snap.inTokens, outTokens: snap.outTokens, usd: snap.usd },
+            toolCallSeq,
+            messages: keep,
+          });
+        } catch {
+          /* checkpoint failure never changes the run's outcome; the resume
+             that needs it will report the gap honestly */
+        }
+      }
+      // (a step boundary is NOT a task state change — the checkpoint row is
+      // the durable fact; ledger edges belong to terminals and gates)
     }
 
     sessionStore.endSession(sessionId, "stopped");
+    // Phase 6 honesty: truncation WITH a substantive answer completes the task
+    // visibly; truncation WITHOUT one is a failure (mirrors the S-2 worker rule).
+    fireTask(finalMessage ? "succeed" : "fail", { stopped: "max_steps", steps: stepIdx });
     auditStore.audit("session.max_steps", { steps: maxSteps }, sessionId);
     return {
       sessionId,
@@ -1026,6 +1184,7 @@ export async function runAgentLoop(
     // contract is success | failed | cancelled, honestly stamped).
     if (isCancellation(e)) return cancelledResult(stepIdx);
     sessionStore.endSession(sessionId, "error");
+    fireTask("fail", { error: (e as Error).message.slice(0, 300) });
     auditStore.audit("session.error", { error: (e as Error).message }, sessionId);
     say(`\x1b[31m✗ error: ${(e as Error).message}\x1b[0m`);
     return {

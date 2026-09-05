@@ -16,6 +16,8 @@ export type AgentRole =
   | "reviewer"
   | "executor"
   | "synthesizer"
+  /** Phase 6 · Step 4 — artifact verifier: read-only inspection of worker outputs. */
+  | "verifier"
   | "memory_manager"
   | "router"
   | "model_selector"
@@ -216,6 +218,32 @@ export interface WorkflowTask {
 
 export interface WorkflowRecord {
   workflowId: string;
+  /**
+   * Phase 6 · Steps 1-2/5 — plan-fragment edit counter. 0 = the untouched
+   * deterministic template (the default of record). Every supervised edit
+   * bumps it and is audited as `plan.edited`.
+   */
+  planVersion?: number;
+  /** Phase 6 · Step 2 — the budget partitions issued for this tree (display copy; the LEDGER is authoritative). */
+  partitions?: Array<{
+    partitionId: string;
+    childId: string;
+    agentId: string | null;
+    capUsd: number;
+    capTokens: number;
+    consumedUsd: number;
+    consumedTokens: number;
+    status: string;
+  }>;
+  /** Phase 6 · Step 3 — identities minted for worker tasks of this run. */
+  agentIdentities?: Array<{
+    agentId: string;
+    role: string;
+    parentId: string;
+    taskId: string;
+    grantRef: string;
+    depth: number;
+  }>;
   kind: WorkflowKind;
   goal: string;
   status: WorkflowStatus;
@@ -247,6 +275,12 @@ export interface WorkflowRecord {
 export interface WorkflowPlanRequest {
   goal: string;
   cwd: string;
+  /**
+   * Phase 6 · Step 4 — attach the read-only artifact verifier after synthesis
+   * for kinds where it is enabled (config `orchestration.verifierKinds`).
+   * The planning authority decides; the template compiles what it is told.
+   */
+  withVerifier?: boolean;
   kind?: WorkflowKind;
   provider?: string;
   model?: string;

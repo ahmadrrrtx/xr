@@ -12,13 +12,25 @@
 
 import { randomUUID } from "node:crypto";
 import { parseReviewDecision } from "./review-decision.ts";
+import { executeWorkflowTask } from "./multi-agent-task-support.ts";
 import {
-  buildTaskPacket,
-  buildSystemPrompt,
-  roleMode,
-  runMemoryManagerTask,
-  runSecurityGateTask,
-} from "./multi-agent-task-support.ts";
+  WorkerGate,
+  addDelegatedTask,
+  fundWorkflow,
+  resolveRootCeilings,
+  maybeApplySupervisedFragment,
+  mirrorPartitions,
+  type FundingResult,
+} from "./multi-agent-orchestration.ts";
+import { TaskRunLedger, statusToTaskState, type TaskState } from "../execution/task-runtime.ts";
+import {
+  dependencyById,
+  dependenciesReady,
+  refreshReadyTasks as refreshReadyTasksCore,
+  recomputeWorkflowStatusCore,
+} from "./multi-agent-graph.ts";
+import { CheckpointRepo } from "../state/repos/checkpoint-repo.ts";
+import { PartitionRepo } from "../state/repos/partition-repo.ts";
 import { ServiceRegistry } from "../core/service-registry.ts";
 import { Tokens } from "../core/tokens.ts";
 import type { LifecycleHook } from "../core/lifecycle.ts";
@@ -27,13 +39,8 @@ import { AgentService } from "./agent-service.ts";
 import { AuditRepo } from "../state/repos/audit-repo.ts";
 import { WorkflowRepo } from "../state/repos/workflow-repo.ts";
 import { WorkspaceStore } from "../state/workspace-store.ts";
-import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { loadConfig } from "../config/config.ts";
-import { scanUntrusted } from "../security/guard.ts";
-import {
-  renderWorkflowPlan,
-  workflowSummary,
-} from "../agents/planner.ts";
+import { workflowSummary } from "../agents/planner.ts";
 import { planningService } from "./planning-service.ts";
 import {
   getAgentByRole,
@@ -58,20 +65,53 @@ export class MultiAgentService implements LifecycleHook {
   constructor(private registry: ServiceRegistry) {}
 
   /**
-   * A-19 — the runs currently executing on THIS service instance, by workflow
-   * id. `getWorkflow` materializes a FRESH record per call, so a
-   * `stopWorkflow` issued while a run is in flight would otherwise only flip
-   * a stale persisted copy the running loop never sees; holding the live
-   * record here lets stop reach the in-flight run directly: it mutates the
-   * live `cancellationState` (observed at the next task boundary) AND aborts
-   * the controller (observed at the in-flight worker's loop checkpoints).
-   * Entries exist only for the duration of `executeWorkflow`; a cancel from
-   * another process remains boundary-checked (durable record), as before.
+   * A-19 — live runs on THIS service instance, by workflow id: stop reaches an
+   * in-flight run by mutating its LIVE record (boundary) and aborting its
+   * controller (mid-step). Cross-process cancels stay boundary-checked on the
+   * durable record. Phase 6 adds per-run task ledgers (Step 1) alongside.
    */
   private workflowRuns = new Map<
     string,
-    { controller: AbortController; record: WorkflowRecord }
+    { controller: AbortController; record: WorkflowRecord; ledgers: Map<string, TaskRunLedger> }
   >();
+
+  /**
+   * Phase 6 · Step 7 — the process-global worker gate. Created from config on
+   * first use; `concurrentWorkers` caps TOTAL parallel workers across every
+   * workflow this instance runs, `perWorkflowWorkers` the lane cap inside one
+   * tree. Exhaustion queues; the bounded wait converts starvation into an
+   * honest per-task failure instead of a deadlock.
+   */
+  private workerGate: WorkerGate | undefined;
+
+  /**
+   * Phase 6 · Step 2 — partition ledger view over the unified store. Lazily
+   * built; a store without migration 8 (fresh-test fixture) degrades to the
+   * legacy per-worker budget path WITH an audit record, never silently.
+   */
+  private partitionLedger(): PartitionRepo {
+    return new PartitionRepo(this.unifiedStore);
+  }
+
+  private checkpoints(): CheckpointRepo {
+    return new CheckpointRepo(this.unifiedStore);
+  }
+
+  private gate(): WorkerGate {
+    if (!this.workerGate) {
+      let cap = 4;
+      let lane = 4;
+      try {
+        const orch = loadConfig().config.orchestration;
+        cap = orch.concurrentWorkers;
+        lane = orch.perWorkflowWorkers;
+      } catch {
+        /* defaults are the conservative ones */
+      }
+      this.workerGate = new WorkerGate(cap, lane);
+    }
+    return this.workerGate;
+  }
 
   private get workflowStore(): WorkflowRepo {
     return this.registry.resolve(Tokens.WorkflowStore);
@@ -189,45 +229,11 @@ export class MultiAgentService implements LifecycleHook {
     }
     const record = this.requireWorkflow(workflowId);
     const agent = getAgentDefinition(agentId)!;
-    const now = Date.now();
-    const leafIds = new Set(record.tasks.map((task) => task.taskId));
-    for (const task of record.tasks) {
-      for (const dep of task.dependencies) leafIds.delete(dep);
-    }
-    const deps = [...leafIds];
-    const taskId = `t_${randomUUID().slice(0, 8)}`;
-    const delegated: WorkflowTask = {
-      workflowId,
-      taskId,
-      agentId: agent.id,
-      role: agent.role,
-      name: `Delegated: ${instruction.slice(0, 60)}`,
-      description: instruction,
-      dependencies: deps,
-      status: deps.length ? "pending" : "ready",
-      inputs: { goal: record.goal, delegatedInstruction: instruction },
-      errors: [],
-      createdAt: now,
-      updatedAt: now,
-      retryCount: 0,
-      maxRetries: 1,
-      permissions: { ...agent.permissions },
-      toolScope: { ...agent.toolScope, tools: [...agent.toolScope.tools] },
-      memoryScope: { ...agent.memoryScope },
-      providerScope: { ...agent.providerScope },
-      reviewState: "not_required",
-      approvalState: "not_required",
-      auditTrail: [],
-      handoffHistory: [],
-      cancellationState: "active",
-      phase: "delegated",
-      delegatedReason: "Manual delegation requested by the operator.",
-    };
-    record.tasks.push(delegated);
-    record.updatedAt = now;
+    const { task } = addDelegatedTask(record, agent, instruction);
+    record.updatedAt = Date.now();
     this.persist(record, "handoff", {
       workflowId,
-      taskId,
+      taskId: task.taskId,
       toAgent: agentId,
       reason: "manual-delegate",
     });
@@ -356,80 +362,31 @@ export class MultiAgentService implements LifecycleHook {
   }
 
   private dependencyById(record: WorkflowRecord, taskId: string): WorkflowTask | undefined {
-    return record.tasks.find((task) => task.taskId === taskId);
-  }
-
-  private dependencyApproved(task: WorkflowTask): boolean {
-    return (
-      task.status === "completed" &&
-      task.reviewState !== "changes_requested" &&
-      task.reviewState !== "rejected"
-    );
+    return dependencyById(record, taskId);
   }
 
   private dependenciesReady(task: WorkflowTask, record: WorkflowRecord): boolean {
-    return task.dependencies.every((depId) => {
-      const dep = this.dependencyById(record, depId);
-      return !!dep && this.dependencyApproved(dep);
+    return dependenciesReady(task, record);
+  }
+
+  /** Phase 6 · Step 1 — the DAG state law moved to `multi-agent-graph.ts` (pure, contract-tested). */
+  private refreshReadyTasks(record: WorkflowRecord): void {
+    refreshReadyTasksCore(record, {
+      onReady: (task) => {
+        this.appendTaskEvent(task, "supervisor", "task.ready", `${task.name} is ready`, { dependencies: task.dependencies });
+        this.emitTaskEvent(CoreEvents.AgentTaskReady, task, record, { dependencies: task.dependencies });
+      },
+      onBlocked: (task, failedGate) => {
+        if (failedGate && task.blockedReason) {
+          this.appendTaskEvent(task, "supervisor", "task.blocked", task.blockedReason, { dependency: failedGate.taskId });
+        }
+        this.emitTaskEvent(CoreEvents.AgentTaskBlocked, task, record, { dependencies: task.dependencies });
+      },
     });
   }
 
-  private refreshReadyTasks(record: WorkflowRecord): void {
-    for (const task of record.tasks) {
-      if (task.status !== "pending") continue;
-      const deps = task.dependencies.map((depId) => this.dependencyById(record, depId)).filter(Boolean) as WorkflowTask[];
-      const failedGate = deps.find((dep) => dep.reviewState === "changes_requested" || dep.reviewState === "rejected");
-      if (failedGate) {
-        task.status = "blocked";
-        task.blockedReason = `blocked by ${failedGate.taskId} (${failedGate.reviewState})`;
-        task.updatedAt = Date.now();
-        this.appendTaskEvent(task, "supervisor", "task.blocked", task.blockedReason, { dependency: failedGate.taskId });
-        this.emitTaskEvent(CoreEvents.AgentTaskBlocked, task, record, { dependency: failedGate.taskId });
-        continue;
-      }
-      if (deps.every((dep) => dep.status === "completed")) {
-        task.status = deps.every((dep) => this.dependencyApproved(dep)) ? "ready" : "blocked";
-        task.updatedAt = Date.now();
-        if (task.status === "ready") {
-          this.appendTaskEvent(task, "supervisor", "task.ready", `${task.name} is ready`, { dependencies: task.dependencies });
-          this.emitTaskEvent(CoreEvents.AgentTaskReady, task, record, { dependencies: task.dependencies });
-        } else {
-          this.emitTaskEvent(CoreEvents.AgentTaskBlocked, task, record, { dependencies: task.dependencies });
-        }
-      }
-    }
-  }
-
   private recomputeWorkflowStatus(record: WorkflowRecord): void {
-    const reviewTasks = record.tasks.filter((task) => task.role === "reviewer" || task.role === "security_checker");
-    if (reviewTasks.some((task) => task.reviewState === "rejected")) record.reviewState = "rejected";
-    else if (reviewTasks.some((task) => task.reviewState === "changes_requested")) record.reviewState = "changes_requested";
-    else if (reviewTasks.length && reviewTasks.every((task) => task.reviewState === "approved" || task.reviewState === "not_required")) record.reviewState = "approved";
-    else record.reviewState = "pending";
-
-    if (record.cancellationState === "requested") {
-      record.status = "paused";
-      return;
-    }
-    if (record.tasks.some((task) => task.status === "failed")) {
-      record.status = "failed";
-      return;
-    }
-    if (record.tasks.some((task) => task.status === "blocked")) {
-      record.status = "blocked";
-      return;
-    }
-    if (record.tasks.some((task) => task.status === "awaiting_review")) {
-      record.status = "awaiting_review";
-      return;
-    }
-    if (record.tasks.every((task) => task.status === "completed" || task.status === "cancelled")) {
-      record.status = "completed";
-      record.currentAgentId = undefined;
-      record.endedAt = record.endedAt ?? Date.now();
-      return;
-    }
-    record.status = "running";
+    recomputeWorkflowStatusCore(record);
   }
 
   private async executeWorkflow(record: WorkflowRecord, req: Partial<WorkflowRunRequest>): Promise<WorkflowRecord> {
@@ -437,7 +394,7 @@ export class MultiAgentService implements LifecycleHook {
     // controller per execution means a resume after a cancelled run is NOT
     // poisoned by the old aborted signal. The entry is removed when the run
     // ends so the map never leaks across runs of the same workflow id.
-    this.workflowRuns.set(record.workflowId, { controller: new AbortController(), record });
+    this.workflowRuns.set(record.workflowId, { controller: new AbortController(), record, ledgers: new Map() });
     try {
       return await this.executeWorkflowLoop(record, req);
     } finally {
@@ -448,7 +405,38 @@ export class MultiAgentService implements LifecycleHook {
   private async executeWorkflowLoop(record: WorkflowRecord, req: Partial<WorkflowRunRequest>): Promise<WorkflowRecord> {
     record.status = "running";
     record.startedAt = record.startedAt ?? Date.now();
-    this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "start" });
+
+    // ── Phase 6 · Step 5 — OPTIONAL supervised plan-fragment editing ─────
+    // Off by default (`orchestration.supervisorEditing`): the deterministic
+    // template remains the default of record. When enabled for the kind, the
+    // supervisor gets ONE model turn to propose add/rename/skip within the
+    // template's declared role set — every accepted edit is a new plan
+    // version, every rejected edit is a visible denial. It can never widen
+    // roles, tools, or budget: role-set lock + funding headroom check, both
+    // enforced in PlanningService.applyPlanFragment against this ledger.
+    await this.maybeEditPlanFragment(record, req);
+
+    // ── Phase 6 · Step 2 — fund the tree BEFORE any worker can spend ─────
+    // root envelope = the request's budget ceilings; every worker then runs
+    // under a PARTITION (Σ child caps ≤ root cap, ledger-enforced). An
+    // unfundable task fails the workflow here — at plan time — rather than
+    // discovering an empty envelope at its first step.
+    const funding = this.fundRecord(record, req);
+    if (!funding.ok || funding.denied.length > 0) {
+      record.status = "failed";
+      record.endedAt = Date.now();
+      for (const d of funding.denied) {
+        record.errors.push(`budget.partition_denied:${d.childId}:${d.reason}`);
+        const task = record.tasks.find((t) => t.taskId === d.childId);
+        if (task && (task.status === "pending" || task.status === "ready")) {
+          task.status = "failed";
+          task.errors.push(`unfunded: ${d.reason}`);
+          task.endedAt = Date.now();
+        }
+      }
+      this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "funding-denied" });
+      return record;
+    }
 
     while (true) {
       if (record.cancellationState === "requested") {
@@ -483,8 +471,30 @@ export class MultiAgentService implements LifecycleHook {
         return record;
       }
 
+      // Phase 6 · Step 7 — the batch still starts in one shot, but EVERY
+      // worker passes through the gate before touching the model: the global
+      // cap (default 4) and the per-workflow lane cap are enforced there, and
+      // a worker that waits too long fails honestly. Queueing, never
+      // oversubscription; a gate-timeout is bounded, so no deadlock.
+      const gate = this.gate();
       const batch = [...ready];
-      await Promise.all(batch.map((task) => this.executeTask(record, task, req)));
+      await Promise.all(
+        batch.map(async (task) => {
+          let release: (() => void) | undefined;
+          try {
+            release = await gate.acquire(record.workflowId);
+            await this.executeTask(record, task, req, funding);
+          } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            task.status = "failed";
+            task.errors.push(message);
+            task.endedAt = Date.now();
+            record.errors.push(`${task.taskId}:${message}`);
+          } finally {
+            release?.();
+          }
+        }),
+      );
       this.recomputeWorkflowStatus(record);
       this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "tick" });
       if ((record.status as WorkflowStatus) === "failed" || (record.status as WorkflowStatus) === "blocked") {
@@ -493,11 +503,21 @@ export class MultiAgentService implements LifecycleHook {
     }
   }
 
-  private async executeTask(record: WorkflowRecord, task: WorkflowTask, req: Partial<WorkflowRunRequest>): Promise<void> {
+  private async executeTask(
+    record: WorkflowRecord,
+    task: WorkflowTask,
+    req: Partial<WorkflowRunRequest>,
+    funding?: FundingResult,
+  ): Promise<void> {
     const agent = getAgentDefinition(task.agentId);
     if (!agent) throw new Error(`Unknown task agent: ${task.agentId}`);
 
     record.currentAgentId = task.agentId;
+    // Phase 6 · Step 1 — the Task Runtime owns the transition; the record
+    // mirrors it. Every fire() is audited AND journaled (checkpoint row), so
+    // "what state is this task in" and "what proves it" are the same event.
+    const ledger = this.ledgerFor(record, task);
+    ledger.fire("start", { agentId: task.agentId, phase: task.phase });
     task.status = "running";
     task.startedAt = task.startedAt ?? Date.now();
     task.updatedAt = Date.now();
@@ -532,6 +552,10 @@ export class MultiAgentService implements LifecycleHook {
         if (task.reviewState === "changes_requested" || task.reviewState === "rejected") {
           task.blockedReason = output.summary.slice(0, 300);
         }
+      } else if (task.role === "verifier") {
+        // The verifier gate's outcome IS its completion; approved was already
+        // audited as verifier.decided. Keep the review vocabulary coherent.
+        task.reviewState = "approved";
       } else {
         // Phase 0 · T10 (audit finding N4): a non-reviewer task completing does
         // not constitute review approval. Leaving it "pending" keeps approval
@@ -547,16 +571,162 @@ export class MultiAgentService implements LifecycleHook {
         summary: output.summary,
       });
       if (task.role === "synthesizer") record.finalOutput = output;
+      // honest terminal state through the runtime (succeed → completed; a
+      // gated review may park downstream work via recomputeWorkflowStatus)
+      if (!ledger.terminal) ledger.fire("succeed", { reviewState: task.reviewState });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       task.status = "failed";
       task.errors.push(message);
       task.endedAt = Date.now();
       task.updatedAt = task.endedAt;
+      if (!ledger.terminal) {
+        try {
+          ledger.fire("fail", { error: message.slice(0, 300) });
+        } catch {
+          /* an illegal terminal double-transition must not mask the original error */
+        }
+      }
       this.appendTaskEvent(task, task.agentId, "task.failed", message);
       this.emitTaskEvent(CoreEvents.AgentTaskFailed, task, record, { error: message });
       record.errors.push(`${task.taskId}:${message}`);
     }
+  }
+
+  /** One ledger per task per live run; hydrated from persisted status on resume. */
+  private ledgerFor(record: WorkflowRecord, task: WorkflowTask): TaskRunLedger {
+    const live = this.workflowRuns.get(record.workflowId);
+    const existing = live?.ledgers.get(task.taskId);
+    if (existing) return existing;
+    const ckpt = this.checkpoints();
+    const journalKey = `${record.workflowId}/${task.taskId}`;
+    const ledger = new TaskRunLedger(journalKey, statusToTaskState(task.status) as TaskState, {
+      onTransition: (rec) => {
+        this.auditStore.audit(
+          "agents.task.transition",
+          { workflowId: record.workflowId, taskId: task.taskId, from: rec.from, to: rec.to, event: rec.event, detail: rec.detail },
+          record.workflowId,
+        );
+      },
+      onCheckpoint: (kind, payload) => {
+        const res = ckpt.append(journalKey, kind, payload);
+        if (res) {
+          this.auditStore.audit("agents.task.checkpointed", { workflowId: record.workflowId, taskId: task.taskId, kind, seq: res.seq }, record.workflowId);
+        }
+      },
+    });
+    live?.ledgers.set(task.taskId, ledger);
+    return ledger;
+  }
+
+  /**
+   * Phase 6 · Step 2 — open the root envelope and cut per-task partitions
+   * (idempotent across resumes). The record copy is DISPLAY ONLY; the ledger
+   * is the authority. `budget.partitioned` is audited exactly once per
+   * workflow lifetime (when new children are created).
+   */
+  private fundRecord(record: WorkflowRecord, req: Partial<WorkflowRunRequest>): FundingResult {
+    let ledger: PartitionRepo | null = null;
+    try {
+      ledger = this.partitionLedger();
+    } catch {
+      ledger = null;
+    }
+    if (!ledger) {
+      // Degraded (pre-migration-8 store): legacy per-worker budget path for
+      // one release, LOUDLY audited — never silent.
+      this.auditStore.audit("agents.budget.partition_unavailable", { workflowId: record.workflowId }, record.workflowId);
+      return { ok: true, headroom: { usd: 0, tokens: 0 }, children: [], denied: [] };
+    }
+    let floors: { floorUsd: number; floorTokens: number; roleWeights?: Partial<Record<string, number>> } = {
+      floorUsd: 0.01,
+      floorTokens: 1000,
+    };
+    try {
+      const orch = loadConfig().config.orchestration;
+      floors = { floorUsd: orch.partitionFloorUsd, floorTokens: orch.partitionFloorTokens, roleWeights: orch.roleWeights };
+    } catch {
+      /* defaults are the conservative ones */
+    }
+    const ceilings = resolveRootCeilings(req, loadConfig().config.budget);
+    const rootCapUsd = ceilings.capUsd;
+    const rootCapTokens = ceilings.capTokens;
+    const before = new Set(ledger.listPartitions(record.workflowId).map((r) => r.childId));
+    const funding = fundWorkflow(ledger, record, ceilings, floors);
+    mirrorPartitions(record, ledger.listPartitions(record.workflowId));
+    const created = ledger.listPartitions(record.workflowId).filter((r) => !before.has(r.childId) && r.childId !== "@root");
+    if (created.length > 0) {
+      this.auditStore.audit(
+        "agents.budget.partitioned",
+        {
+          workflowId: record.workflowId,
+          root: { capUsd: rootCapUsd ?? null, capTokens: rootCapTokens ?? null },
+          children: created.map((c) => ({ childId: c.childId, agentId: c.agentId, capUsd: c.capUsd, capTokens: c.capTokens })),
+          headroom: funding.headroom,
+        },
+        record.workflowId,
+      );
+    }
+    return funding;
+  }
+
+  /**
+   * Phase 6 · Step 5 — supervised fragment editing, delegated to the
+   * orchestration helper (which is unit-tested directly). The service keeps
+   * only the wiring: model turn, headroom source, and the in-place record
+   * mutation + persist that the live work loop requires.
+   */
+  private async maybeEditPlanFragment(record: WorkflowRecord, req: Partial<WorkflowRunRequest>): Promise<void> {
+    let orch: ReturnType<typeof loadConfig>["config"]["orchestration"];
+    try {
+      orch = loadConfig().config.orchestration;
+    } catch {
+      return;
+    }
+    let headroom: (() => { usd: number; tokens: number } | null) = () => null;
+    try {
+      const ledger = this.partitionLedger();
+      headroom = () => ledger.headroom(record.workflowId);
+    } catch {
+      /* legacy path: no ledger, additions denied */
+    }
+    await maybeApplySupervisedFragment({
+      record,
+      orch,
+      ask: async (prompt) =>
+        (await this.agentService.runScopedTask(prompt, "ask", {
+          provider: req.provider ?? record.metadata.requestedProvider,
+          model: req.model ?? record.metadata.requestedModel,
+          budget: req.budget,
+          maxSteps: 1,
+          memoryEnabled: false,
+          agentRole: "supervisor",
+          taskId: record.workflowId,
+          say: () => {},
+        })) as { finalMessage?: string },
+      headroom,
+      apply: (raw, budgetCheck) => {
+        const outcome = planningService.applyPlanFragment(record, raw, {
+          withVerifier: orch.verifier && orch.verifierKinds.includes(record.kind),
+          maxEdits: orch.maxPlanEdits,
+          budgetCheck,
+        });
+        return outcome.ok
+          ? { ok: true as const, record: outcome.record, changes: outcome.changes }
+          : { ok: false as const, errors: outcome.errors };
+      },
+      audit: (event, detail) => this.auditStore.audit(event, detail, record.workflowId),
+      onApplied: (next) => {
+        record.tasks = next.tasks;
+        record.planVersion = next.planVersion;
+        record.rootTaskIds = next.rootTaskIds;
+        this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "plan-edited" });
+      },
+    });
+  }
+
+  private ledgerStateFor(record: WorkflowRecord, task: WorkflowTask): TaskState | undefined {
+    return undefined;
   }
 
   /**
@@ -588,137 +758,36 @@ export class MultiAgentService implements LifecycleHook {
     return parseReviewDecision(output.summary).decision;
   }
 
-
-
-
-
-
-
   private async runTask(
     record: WorkflowRecord,
     task: WorkflowTask,
-    agent: AgentDefinition,
+    agent: ReturnType<typeof getAgentDefinition>,
     req: Partial<WorkflowRunRequest>,
+    funding?: FundingResult,
   ): Promise<AgentExecutionOutput> {
-    if (task.role === "memory_manager") {
-      return runMemoryManagerTask(record, task, this.unifiedStore);
-    }
-    if (task.role === "security_checker") {
-      return await runSecurityGateTask(record, task, req);
-    }
-    if (task.role === "planner") {
-      return {
-        summary: renderWorkflowPlan(record),
-        structured: { workflowId: record.workflowId, kind: record.kind, tasks: record.tasks.length },
-        recommendations: [record.planSummary],
-      };
-    }
-
-    const provider = task.providerScope.provider ?? req.provider ?? record.metadata.requestedProvider;
-    const model = task.providerScope.model ?? req.model ?? record.metadata.requestedModel;
-    const allow = task.toolScope.mode === "allowlist" ? task.toolScope.tools : undefined;
-    const deny = task.toolScope.mode === "denylist" ? task.toolScope.tools : undefined;
-    const result = await this.agentService.runScopedTask(
-      buildTaskPacket(record, task),
-      roleMode(task),
-      this.taskRunOptions(record, task, req, provider, model, allow, deny),
-    );
-
-    // XR launch reliability fix (P1 · S-2): a worker whose model call FAILED is
-    // not a worker that completed. Before this, runAgentLoop's error path came
-    // back as stopped:"error" with the transport error as finalMessage — and the
-    // workflow cheerfully recorded the task "completed", feeding the error text
-    // downstream as if it were research or code. Map stop reasons honestly:
-    // transport errors, budget exhaustion, and declined approvals are task
-    // failures (retryable per maxRetries), not fake completions. A truncated
-    // max-steps run with no final answer is likewise a failure; a truncation
-    // that still produced a substantive answer completes, visibly.
-    if (result.stopped === "error") {
-      throw new Error(`worker model call failed: ${result.finalMessage.slice(0, 200)}`);
-    }
-    if (result.stopped === "budget") {
-      throw new Error("worker stopped: budget ceiling reached before completion");
-    }
-    if (result.stopped === "approval") {
-      throw new Error("worker stopped: a required approval was declined");
-    }
-    // A-19 — an interrupted worker run is a task failure ("interrupted"), NOT
-    // a completion; resumeWorkflow re-arms it under its retry budget.
-    if (result.stopped === "cancelled") {
-      throw new Error("worker interrupted: the run was cancelled");
-    }
-    if (
-      result.stopped === "max_steps" &&
-      (!result.finalMessage || result.finalMessage.includes("(stopped at step limit)"))
-    ) {
-      throw new Error("worker stopped at the step limit without producing a final answer");
-    }
-    // Phase 1 · F-16/M-01 — a worker that "completed" with an EMPTY placeholder
-    // output must not be fed downstream as real work. The strict turn contract
-    // makes the agent loop return stopped:"error" for empty turns, but this is
-    // defense-in-depth at the orchestration layer: never record an empty-turn
-    // worker as a completed task.
-    const final = (result.finalMessage ?? "").trim();
-    if (result.stopped === "done" && (final === "" || final === "(no response)")) {
-      throw new Error("worker produced an empty turn (no final answer); not a completion");
-    }
-
-    return {
-      summary: (result.finalMessage || "No final message produced.").trim(),
-      raw: result.finalMessage,
-      structured: {
-        sessionId: result.sessionId,
-        stopped: result.stopped,
-        steps: result.steps,
-        meter: result.meter,
-      },
-    };
-  }
-
-  private taskRunOptions(
-    record: WorkflowRecord,
-    task: WorkflowTask,
-    req: Partial<WorkflowRunRequest>,
-    provider: string | undefined,
-    model: string | undefined,
-    allow: string[] | undefined,
-    deny: string[] | undefined,
-  ) {
-    // A-19 — the workflow's abort handle reaches every worker's loop
-    // checkpoints; stopWorkflow aborts it for this instance's in-flight run.
-    const workflowSignal = this.workflowRuns.get(record.workflowId)?.controller.signal;
-    return {
-        ...(workflowSignal ? { signal: workflowSignal } : {}),
-        provider,
-        model,
-        budget: req.budget,
-        maxTokens: req.maxTokens,
-        maxSteps: req.maxSteps ?? (task.role === "builder" || task.role === "executor" ? 12 : 6),
-        dryRun: req.dryRun ?? record.metadata.dryRun,
-        systemPrompt: buildSystemPrompt(task),
-        toolsAllow: allow,
-        toolsDeny: deny,
-        say: (line: string) => {
-          const clean = line.replace(/\x1b\[[0-9;]*m/g, "");
-          const text = clean.slice(0, 400);
-          this.appendTaskEvent(task, task.agentId, "note", text);
-          this.emitTaskEvent(CoreEvents.AgentTaskNote, task, record, { note: text });
+    if (!agent) throw new Error(`Unknown task agent: ${task.agentId}`);
+    return await executeWorkflowTask(
+      {
+        record,
+        task,
+        agent,
+        req,
+        funding,
+        unifiedStore: this.unifiedStore,
+        audit: (event, detail) => this.auditStore.audit(event, detail, record.workflowId),
+        runScoped: (prompt, mode, opts) => this.agentService.runScopedTask(prompt, mode, opts),
+        workflowSignal: this.workflowRuns.get(record.workflowId)?.controller.signal,
+        note: (line) => {
+          this.appendTaskEvent(task, task.agentId, "note", line);
+          this.emitTaskEvent(CoreEvents.AgentTaskNote, task, record, { note: line });
         },
-        // ── XR 4.5 — enforce the DECLARED memory scope ──────────────────
-        //
-        // Before 4.5 the fix for over-exposure was blunt: memory off for every
-        // worker. Now the agent's own declared MemoryScope is enforced by the
-        // context policy, so a worker gets exactly the tiers its role permits
-        // — and `kind: "none"` still gets nothing.
-      memoryEnabled:
-        task.memoryScope.kind !== "none" && (task.memoryScope.includeUserMemory ?? false),
-      agentRole: task.role,
-      memoryScopeKind: task.memoryScope.kind,
-      taskId: task.taskId,
-    };
+      },
+    );
   }
 
-
-
+  // Phase 6 · Steps 1-5: the worker execution semantics moved to
+  // `runWorkerTask` (multi-agent-task-support.ts) and the per-worker budget
+  // copy is GONE — workers receive an envelope ref resolved by the Governor
+  // partition ledger (F-12). `taskRunOptions` retired with it.
 
 }
