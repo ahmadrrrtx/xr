@@ -45,6 +45,17 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
     home = mkdtempSync(join(tmpdir(), "xr-routes-"));
     process.env.XR_HOME = home;
     invalidateConfigCache("all");
+    // Cross-file process hygiene: an earlier file in the same lane (e.g.
+    // boot-profile) may have populated the module-level provider-health and
+    // runtime-detection caches against a DIFFERENT XR_HOME/config. Every
+    // assertion below must reflect THIS file's config, so start from empty
+    // caches (observed: fallback resolution using a stale local-runtime
+    // ladder — "fallback Jan" instead of the configured lmstudio — when
+    // boot-profile ran first; CI lane order made this timing-dependent).
+    const { invalidateProviderHealthCache } = await import("../../src/providers/health.ts");
+    const { invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+    invalidateProviderHealthCache();
+    invalidateRuntimeCache();
 
     // Point two local runtimes at blackholes so their probes hang (the other
     // runtimes fail fast with ECONNREFUSED, as on a normal machine).
@@ -169,6 +180,12 @@ describe("Phase 01 — daemon request path under slow-failing probes", () => {
     process.env.XR_HOME = home2;
     const { invalidateConfigCache } = await import("../../src/config/cache.ts");
     invalidateConfigCache("all");
+    // This test's own isolation: the fallback gate must probe THIS config's
+    // endpoints, never a health/runtime row cached for an earlier config.
+    const { invalidateProviderHealthCache } = await import("../../src/providers/health.ts");
+    const { invalidateRuntimeCache } = await import("../../src/local/runtimes.ts");
+    invalidateProviderHealthCache();
+    invalidateRuntimeCache();
     try {
       const { loadConfig, saveConfig } = await import("../../src/config/config.ts");
       const { config } = loadConfig();

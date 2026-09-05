@@ -26,8 +26,14 @@ Phase 4 adds an asymmetric anchor:
 - The **public key is embedded in the chain** in an `audit.keyed` event. That
   event — and every chain **re-key** (`audit.rekey`) — is itself signed and
   starts a signed segment.
-- Checkpoints are signed every N entries (default 256, env-tunable), and the
-  **latest signed head** is kept in a single-row `audit_head` table.
+- Checkpoints are signed every N entries (default 256, env-tunable). The
+  **latest signed head** is kept in a single-row `audit_head` table and is
+  **re-signed on EVERY keyed append** over the latest entry's
+  `{hash, counter, pubkey}` — so the tail between in-chain checkpoints is
+  covered too, and a trimmed or rebuilt tail cannot rewind the head onto an
+  older entry. (Before the 2026-09-05 CI repair, the head was refreshed only
+  on the checkpoint cadence, which made an honest install inside the window
+  fail its own `--crypto` verification with "head is stale".)
 - `xr audit verify --crypto` replays the chain **and** verifies every Ed25519
   signature, checks counter monotonicity, and verifies the signed head.
 - An **optional remote anchor** (`audit.anchor`, default **off**) pushes a

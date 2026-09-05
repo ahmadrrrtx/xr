@@ -281,3 +281,103 @@ describe("Phase 4 · tamper matrix", () => {
     }
   });
 });
+
+/**
+ * Regression (Phase 4 CI repair, 2026-09-05): the signed head must cover the
+ * LATEST entry on EVERY keyed append, not only on the checkpoint cadence.
+ *
+ * The original implementation refreshed `audit_head` only on signed
+ * checkpoints (every Nth entry, N default 256) — so a freshly keyed, entirely
+ * honest install failed its own `xr audit verify --crypto` with
+ * "head is stale (does not cover the latest entry)" until it happened to cross
+ * a checkpoint boundary. Every suite masked it by forcing cadence 1. These
+ * tests run at the PUBLISHED DEFAULT cadence — exactly the acceptance
+ * criterion "`xr audit verify --crypto` passes on an unmodified install".
+ */
+describe("Phase 4 · signed audit — default-cadence honest install (head freshness regression)", () => {
+  function withDefaultCadence<T>(fn: () => T): T {
+    const prev = process.env.XR_AUDIT_SIGN_EVERY;
+    delete process.env.XR_AUDIT_SIGN_EVERY; // force the published DEFAULT_SIGN_EVERY
+    try {
+      return fn();
+    } finally {
+      if (prev === undefined) delete process.env.XR_AUDIT_SIGN_EVERY;
+      else process.env.XR_AUDIT_SIGN_EVERY = prev;
+    }
+  }
+
+  test("a keyed install well inside the checkpoint window verifies green (acceptance criterion 2)", () => {
+    withDefaultCadence(() => {
+      const { store, dir } = freshStore("fresh-install");
+      try {
+        store.ensureAuditKeying("boot");
+        // Far fewer than DEFAULT_SIGN_EVERY entries: the in-chain checkpoint
+        // cadence is never reached, yet verification must pass.
+        for (let i = 0; i < 3; i++) store.audit("honest.event", { i });
+
+        const v = store.verifyCrypto();
+        expect(v.chainValid).toBe(true);
+        expect(v.signaturesValid).toBe(true);
+        expect(v.head?.present).toBe(true);
+        expect(v.head?.matches).toBe(true);
+        expect(v.head?.stale).toBe(false);
+        expect(v.counterError).toBeUndefined();
+      } finally {
+        store.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  test("reopening the store preserves head freshness across process restarts", () => {
+    withDefaultCadence(() => {
+      const { store, dbPath, dir } = freshStore("restart");
+      try {
+        store.ensureAuditKeying("boot");
+        store.audit("before.restart", {});
+        store.close();
+
+        const reopened = new WorkspaceStore("t", dbPath);
+        try {
+          reopened.audit("after.restart", {});
+          const v = reopened.verifyCrypto();
+          expect(v.signaturesValid).toBe(true);
+          expect(v.head?.stale).toBe(false);
+        } finally {
+          reopened.close();
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  test("tail-trim (deleting entries after the last refresh) is detected while the key is held", () => {
+    withDefaultCadence(() => {
+      const { store, dbPath, dir } = freshStore("tail-trim");
+      try {
+        store.ensureAuditKeying("boot");
+        store.audit("keep.me", { v: 1 });
+        store.audit("trim.me", { v: 2 });
+        store.close();
+
+        // Attacker trims the newest entry and rewinds audit_head to match.
+        const raw = new Database(dbPath);
+        raw.query(`DELETE FROM audit_log WHERE detail LIKE '%trim.me%'`).run();
+        raw.query(`DELETE FROM audit_head`).run();
+        raw.close();
+
+        const reopened = new WorkspaceStore("t", dbPath);
+        try {
+          const v = reopened.verifyCrypto();
+          // The head row is gone entirely → the unforgeable-head failure.
+          expect(v.signaturesValid).toBe(false);
+        } finally {
+          reopened.close();
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+});

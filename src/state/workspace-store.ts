@@ -537,7 +537,7 @@ export class WorkspaceStore {
   private upsertHeadInTxn(
     counter: number,
     entryHash: string,
-    checkpointSig: string,
+    checkpointSig: string | null,
     pubkey: string,
     ts: number,
     signingKeyB64?: string,
@@ -1454,10 +1454,18 @@ export class WorkspaceStore {
           .run(sessionId, event, JSON.stringify(safe), prev, hash, ts);
       }
 
-      // Maintain the signed head on every signed append (the F-08 kill proof:
-      // a rebuilt chain cannot reproduce a valid head signature).
-      if (keyed && identity && sig !== null) {
-        this.upsertHeadInTxn(counter!, hash, sig, identity.publicKeyB64, ts, identity.privateKeyB64);
+      // Maintain the signed head on EVERY keyed append — not only on the
+      // checkpoint cadence. The head is a domain-separated `kind:"head"`
+      // Ed25519 signature over the LATEST entry's {hash, counter, pubkey}, so
+      // the tail between in-chain checkpoints (every Nth entry) is covered
+      // too: a tail-trim cannot rewind audit_head onto an older entry, and a
+      // wholesale rebuild still cannot forge the signature at all (the F-08
+      // kill proof). One Ed25519 sign ≈ microseconds; the append is dominated
+      // by the SQLite write. Without the fix, verify --crypto would reject an
+      // HONEST chain whose last checkpoint was < N entries ago ("head is
+      // stale") — a false positive on every normal install.
+      if (keyed && identity && counter !== null) {
+        this.upsertHeadInTxn(counter, hash, sig, identity.publicKeyB64, ts, identity.privateKeyB64);
       }
     });
     return hash;
