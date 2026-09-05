@@ -87,6 +87,7 @@ Where the principal comes from today:
 | `xr memory recall`, voice, research CLI | `"user"` |
 | agent loop legacy block (`src/core/agent.ts`) | the run's `AgentIdentity` (role) or `"user"` |
 | context assembler (`ContextService.assembleWithGrant`) | the grant's requester (`agent` kind + role → role principal) |
+| agent tools `memory_search` / `memory_get` / `memory_navigate` | the tool set's requester (the run's role) — search through the assembler; by-id reads through `adaptedMemoryItem(id, store, requester)`, so a row the ACL hides is reported as absent rather than fetched by id |
 | multi-agent memory-manager task | `memory_manager` |
 | plugin `host.memory.recall` | `plugin` role (hits carry their `channel` label) |
 
@@ -206,7 +207,7 @@ untouched (pinned by test).
 
 | Claim | Status |
 | --- | --- |
-| Per-agent ACL enforced at retrieval | **Real** at `MemoryStore.recall*` and the context assembler; callers that construct a `MemoryStore` and call `recall` without a principal get owner semantics (`"user"`) — deliberate, documented above |
+| Per-agent ACL enforced at retrieval | **Real** at `MemoryStore.recall*`, the context assembler and the agent tools (search, by-id read, navigation); callers that construct a `MemoryStore` and call `recall` without a principal get owner semantics (`"user"`) — deliberate, documented above |
 | Provenance mandatory | **Real** for the three non-human channels; human channels default to `user` (the 70+ existing call sites are the human) |
 | Contradiction arbitration | **Real, lexical** — a detector with a review UX, not semantic understanding |
 | Consolidation | **Real, deterministic** by default; model-backed summariser is an optional hook, no CLI flag yet |

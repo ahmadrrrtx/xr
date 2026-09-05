@@ -21,19 +21,47 @@ Branch `phase7/memory-policy-layer` · base `038d66b` · commit `e5ef3a9` ·
 | Step | Deliverable | Status |
 | --- | --- | --- |
 | 1 Schema | Migration 9: `agent_visibility` (default `["*"]`), `kind`, `confidence_score`, `provenance_event_id`, `memory_conflicts`; backfill; reversible | **Real**, tested on a 4.4-shape DB |
-| 2 ACL at retrieval | `acl.ts` (pure); `recall*` take `principal` (default `"user"`); plumbed at assembler (grant requester), agent loop, memory-manager task, plugin host; `add --visible-to` | **Real** where a principal is passed; owner default documented |
+| 2 ACL at retrieval | `acl.ts` (pure); `recall*` take `principal` (default `"user"`); plumbed at assembler (grant requester), the agent tools (`memory_search` via the assembler; `memory_get`/`memory_navigate` via `adaptedMemoryItem(id, store, requester)` — the by-id bypass found in the post-report re-audit, closed in the second commit), agent loop, memory-manager task, plugin host; `add --visible-to` | **Real** on every in-tree agent-facing reader; owner default documented |
 | 3 Write path | `provenance.ts`: tool/agent/schedule require a `ref` (else rejected); event id = audit hash; lexical conflict detector + ledger; `memory conflicts` / `memory resolve --keep` | **Real, lexical** (token overlap, not semantics) |
 | 4 Consolidation | `consolidate.ts` + `xr memory consolidate [--dry-run] [--max-tokens]`: cited summaries supersede (never delete), idempotent, own `CostGovernor` envelope with honest budget stop; status hint | **Real, deterministic** summariser; model hook programmatic only |
 | 5 Forget / export / docs | `memory forget` irreversible (row + vectors + undo images + projection; audit last); `memory export --md/--scope/--include-quarantined/--no-redact` v2 with labels; `docs/privacy/MEMORY.md` | **Real** |
-| 6 Legacy injection | `loadConfig()` deprecation warning for `legacy`/`both`; `xr context status` flags; legacy block principal-filtered + drops quarantine hits | **Deprecated with working warning**; removal is 2.0 |
+| 6 Legacy injection | `loadConfig()` deprecation warning for `legacy`/`both` (pinned by `test/config/injection-mode-deprecation.test.ts`); `xr context status` flags; legacy block principal-filtered + drops quarantine hits; consolidation notice in `xr memory status` and `xr doctor` | **Deprecated with working warning**; removal is 2.0 |
 
 ## 3. Evidence
 
 - `bunx tsc --noEmit` clean.
-- New suite `test/context/phase7-memory-policy.test.ts`: **29 pass** (ACL matrix; worker-cannot-recall-sequestered lexical+semantic; provenance rejection + schema-level event id; conflict detect/resolve; consolidation supersede/idempotence/visibility split/budget stop; forget by id/query/scope + audit; export labels/redaction/round-trip; poisoning-corpus property — every entry × 3 channels × 3 principals × all 8 tiers ⇒ zero instruction-channel leaks; migration-9 backfill; architecture: policy columns read only by policy modules, capability policy/guard/agent loop never consult them).
+- New suite `test/context/phase7-memory-policy.test.ts`: **34 pass** (agent-tool path: `memory_search`/`memory_get`/`memory_navigate` per role — 3 of these 5 tests fail without the `adaptedMemoryItem` requester gate, proving they bite; ACL matrix; worker-cannot-recall-sequestered lexical+semantic; provenance rejection + schema-level event id; conflict detect/resolve; consolidation supersede/idempotence/visibility split/budget stop; forget by id/query/scope + audit; export labels/redaction/round-trip; poisoning-corpus property — every entry × 3 channels × 3 principals × all 8 tiers ⇒ zero instruction-channel leaks; migration-9 backfill; architecture: policy columns read only by policy modules, capability policy/guard/agent loop never consult them).
 - Regression batches (run per-directory; the whole suite in one invocation exceeds the sandbox timeout): `test/context/*` 21 files green (performance suite included), `test/memory*` 5 files, `plugins/host` 31/31, `state`, `phase6`, `core`, `security`, `tools`, `one-agent`, `api`, `release`, `services`, `daemon`, `research`, `capabilities`, `control`, `execution`, `workflow`, `trust`, `skills`, `intelligence`, `util`, `observability`, `providers`, `phase0/1/2/4`, `baseline`, `platform`, `supply-chain`, `update`, `ux`, `a11y`, `repo-map`, `environment`, `perf`, `e2e-blackbox`, `reliability`, `architecture`, `config` — **all green** (≈3,000 tests, 13 pre-existing skips).
-- Gates: `size-gate` ✓ (135,459 / 136,000), `boundaries` ✓ (no violations, 580 modules), `hot-path-lint` ✓, `claim-lint` ✓, `ownership:check` ✓, `release:check` ✓, `api:schema:check` ✓, `changelog:check` ✓.
+- `test/config/injection-mode-deprecation.test.ts`: **4 pass** (legacy/both load unchanged + exactly one actionable warning naming 2.0, `"context"`, `docs/privacy/MEMORY.md`; `context` silent; warning survives the config cache).
+- Poisoning corpus extended 30 → **41 entries / 26 classes** (`pois_31–pois_41`: ACL widening, provenance forgery, forget/consolidation abuse, export exfiltration, role impersonation, quarantine escape). `test/context/integrity.test.ts` (100 % write-time detection, no instruction channel, render-time gate) and the Phase 7 property test are green over the extended corpus with **no new signatures** — the existing gates already cover attacks aimed at the policy layer itself.
+- Second-pass CI battery (same lanes as `.github/workflows/ci.yml`): see §3a below.
+- Gates: `size-gate` ✓ (135,481 / 136,000), `boundaries` ✓ (no violations, 580 modules), `hot-path-lint` ✓, `claim-lint` ✓, `ownership:check` ✓, `release:check` ✓, `api:schema:check` ✓, `changelog:check` ✓.
 - End-to-end smoke on a real DB: add → contradiction warning → `conflicts` → `resolve --keep a` → superseded row hidden from recall but present in `list --json`/export → `consolidate -y` (1 summary, 3 superseded, 104 tok metered, $0) → second run "nothing eligible" → `forget --query -y` (4 rows) → `undo` restores an *earlier* remove, **not** the forgotten rows → audit shows `memory.add/conflict.detected/resolve/consolidate.plan/consolidate.applied/forgotten`.
+
+## 3a. CI battery — second pass, same lanes as `.github/workflows/ci.yml`
+
+Run locally on the final tree (bun 1.4.2 in the sandbox; CI pins 1.3.14 — no API used here is version-specific), after the re-audit fixes:
+
+| CI job | Command (as in the workflow) | Result |
+| --- | --- | --- |
+| Typecheck | `bunx tsc --noEmit` | ✓ clean |
+| truth-gate | `release:check` · `claim-lint` | ✓ 6 surfaces in sync · 10 evidenced claims |
+| baseline | `baseline:inventory` | ✓ (regenerates `docs/release/1.0.0/inventory.*` — committed) |
+| website | `npm ci` · `npx tsc --noEmit` · `npm run build` | ✓ (tree untouched by Phase 7) |
+| test / core | `parity-suite-runner.sh linux --exclude '^test/(security\|trust\|capabilities\|reliability\|e2e-blackbox)/'` | ✓ 245/245 files · **2,650 pass · 0 fail · 38 skip** (pre-existing platform skips) |
+| test / security | egress quarantine + security/trust/capabilities suites | ✓ 16 + **309 pass · 0 fail** |
+| test / reliability-spawn | `reliability:test` | ✓ **66 pass** |
+| test / e2e-blackbox | 5 capture suites + streaming-matrix "behavior capture" | ✓ **19 + 16 pass** |
+| boundaries | `boundaries` · `size-gate` | ✓ 580 modules, no violations · 135,481 / 136,000 |
+| api-contract | `api:schema:check` · `client:check` · `api:compat` | ✓ 119 operations, no breaking change |
+| a11y | `bun test test/a11y/` | ✓ 37 pass (13 browser-dependent skips here; CI installs chromium) |
+| profiling | `profile:gate` | ✓ within budgets |
+| mutation-gate | `mutation:run` (threshold 0.6) | ✓ all 8 gated modules ≥ 0.60 (unchanged by Phase 7) |
+| perf-gate | `hot-path-lint` · `perf:gate --samples 21 --mode source` | ✓ budgets met; the doctor p95 "regression band" note is the documented first-host warn-only band (doctor median measured 419 ms with the consolidation hint vs 435 ms without — noise, not cost) |
+| unit-tier | `ownership-map --check` · `unit-tier --budget=5000` | ✓ 172 areas · 17 files in 1,146 ms |
+| extra `ci` script gates | `changelog:check` · `channel:check` · `platform:parity:check` · `ci-capability-gate` · `website:marketplace:check` · `ownership:check` | ✓ all |
+
+One CI-only failure was found and fixed during this pass: the new deprecation test wrote its fixture to its own `XR_HOME`, but `config.ts` resolves `XR_HOME` once per process, so inside the `test/config/` segment (one bun process, three files) it targeted the wrong home. The test now writes to `configPath()` (the module's own truth), backs up and restores whatever was there, and passes standalone and in every file order.
 
 ## 4. Deviations from the plan (and why)
 
@@ -50,7 +78,7 @@ Branch `phase7/memory-policy-layer` · base `038d66b` · commit `e5ef3a9` ·
 
 - **Arbitration is lexical.** Flags "Friday vs Thursday" and "tabs vs spaces"; also flags harmless paraphrases; misses contradictions phrased differently. Detector for review, not a judge. Bounded to the 3 nearest peers per write (unbounded it was O(n²) on templated notes and hung the perf suite).
 - **Consolidation is deterministic** unless a summariser function is supplied programmatically; no CLI flag selects a model yet. The budget envelope is real (Governor pre-flight refuses at the ceiling; skipped groups reported). The older `summarize` still deletes — left untouched per its pinned tests.
-- **ACL enforcement is only as good as the principal passed.** Any code that constructs a `MemoryStore` and calls `recall` without a principal gets owner semantics. All in-tree agent-facing readers now pass one; this is documented in MEMORY.md §3.
+- **ACL enforcement is only as good as the principal passed.** Any code that constructs a `MemoryStore` and calls `recall` without a principal gets owner semantics. All in-tree agent-facing readers now pass one — including the by-id tool reads, which the first pass of this report overstated as covered (the post-report re-audit found `memory_get`/`memory_navigate` reading sequestered rows by id; fixed and regression-tested before merge). Documented in MEMORY.md §3.
 - **Forget cannot reach** exported copies, provider-side prompt logs, or the hash-chain rows (ids/lengths only).
 - **Legacy injection is deprecated, not removed** (2.0), as the plan specifies.
 - The memory→context adapter fix changes what `memory_get` reports for 4.5+ rows (stored state instead of `legacy_unknown`); the `legacy:4.4` tag now marks only genuinely legacy rows. Existing tests pass; this is a correctness fix, called out in the CHANGELOG.

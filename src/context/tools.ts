@@ -184,7 +184,9 @@ export function buildMemoryTools(deps: MemoryToolsDeps): Tool[] {
     async run(args, ctx): Promise<ToolResult> {
       const id = String(args.id ?? "").trim();
       if (!id) return { ok: false, output: "memory_get requires an id" };
-      const item = context.repository.getItem(id) ?? context.adaptedMemoryItem(id);
+      // Phase 7 (F-21): the by-id read passes the requester through, so a row the
+      // memory ACL hides from this role reads as absent — same answer as search.
+      const item = context.repository.getItem(id) ?? context.adaptedMemoryItem(id, undefined, requester);
       if (!item) return { ok: true, output: `${RESULT_HEADER}\nNo memory item with id “${boundText(id, 80)}” (or it is outside your scope).` };
       // Scope fence: the caller's grant must cover this item, same rule as search.
       const grant = grantFor(ctx, `inspect ${id}`);
@@ -217,7 +219,7 @@ export function buildMemoryTools(deps: MemoryToolsDeps): Tool[] {
       const relation = String(args.relation ?? "").trim();
       if (!id || !relation) return { ok: false, output: "memory_navigate requires id and relation" };
       const limit = Math.min(Number(args.limit ?? NAVIGATE_LIMIT) || NAVIGATE_LIMIT, 24);
-      const item = context.repository.getItem(id) ?? context.adaptedMemoryItem(id);
+      const item = context.repository.getItem(id) ?? context.adaptedMemoryItem(id, undefined, requester);
       if (!item) return { ok: true, output: `${RESULT_HEADER}\nNo memory item with id “${boundText(id, 80)}”.` };
       const grant = grantFor(ctx, `navigate ${id}`);
 

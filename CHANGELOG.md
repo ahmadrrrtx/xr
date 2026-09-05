@@ -39,10 +39,23 @@
   proposed rows are exported only on request and always carry a
   `quarantineLabel`; secrets masked by default. Privacy contract:
   `docs/privacy/MEMORY.md`.
+- **agent tools honour the ACL:** `memory_search` already went through the
+  assembler's principal filter; `memory_get` / `memory_navigate` read rows by
+  id through the adapter and bypassed it. `ContextService.adaptedMemoryItem`
+  now takes the requester and applies the same retrieval gate (ACL → consent →
+  lineage → TTL), so a sequestered, quarantined or superseded row is reported
+  as absent to an agent that may not see it. Owner reads are unchanged.
 - **legacy injection deprecated:** `knowledge.injectionMode` `legacy`/`both`
-  still work but raise a `loadConfig()` deprecation warning and are flagged in
+  still work but raise a `loadConfig()` deprecation warning (pinned by
+  `test/config/injection-mode-deprecation.test.ts`) and are flagged in
   `xr context status`; removal in 2.0. The legacy block is principal-filtered
-  and drops quarantine-channel hits.
+  and drops quarantine-channel hits. `xr doctor` shows the consolidation
+  suggestion next to the memory health line.
+- **poisoning corpus extended:** `benchmarks/poisoning-corpus.json` grows from
+  30 to 41 entries (pois_31–pois_41) with attacks aimed at the policy layer
+  itself — ACL widening, provenance forgery, forget/consolidation abuse, export
+  exfiltration, role impersonation, quarantine escape — all held to the same
+  never-instruction property by the existing gates (no new signatures needed).
 - **fix:** the memory→context adapter overwrote stored consent/trust/provenance/
   lineage with the legacy mapping, so a quarantined, revoked or superseded row
   read by id (`memory_get`, assembler extras) was presented as approved, current

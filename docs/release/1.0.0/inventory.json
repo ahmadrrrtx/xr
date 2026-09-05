@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-05T14:49:54.956Z",
+  "generatedAt": "2026-09-05T22:35:33.789Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -51,8 +51,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 570,
-    "testFiles": 306,
+    "sourceFiles": 575,
+    "testFiles": 308,
     "cliCommands": 42,
     "daemonRoutes": 123,
     "providers": 26,
@@ -87,7 +87,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 78155
+      "bytes": 82558
     },
     {
       "path": "CODEOWNERS",
@@ -226,11 +226,16 @@
     "src/context/lifecycle.ts",
     "src/context/memory-adapter.ts",
     "src/context/memory-scope.ts",
+    "src/context/memory/acl.ts",
+    "src/context/memory/cli-phase7.ts",
     "src/context/memory/cli.ts",
     "src/context/memory/compact.ts",
+    "src/context/memory/consolidate.ts",
     "src/context/memory/embed.ts",
+    "src/context/memory/forget-export.ts",
     "src/context/memory/inject.ts",
     "src/context/memory/intent.ts",
+    "src/context/memory/provenance.ts",
     "src/context/memory/rag.ts",
     "src/context/memory/store.ts",
     "src/context/memory/summarize.ts",
@@ -760,6 +765,7 @@
     "test/capabilities/tuf-updates.test.ts",
     "test/config/cache.test.ts",
     "test/config/env-overrides.test.ts",
+    "test/config/injection-mode-deprecation.test.ts",
     "test/context/compression.test.ts",
     "test/context/conflicts.test.ts",
     "test/context/durable.test.ts",
@@ -775,6 +781,7 @@
     "test/context/phase09-engine.test.ts",
     "test/context/phase09-isolation.test.ts",
     "test/context/phase09-latency.test.ts",
+    "test/context/phase7-memory-policy.test.ts",
     "test/context/recall-benchmark.test.ts",
     "test/context/retrieval.test.ts",
     "test/context/security.test.ts",
@@ -1217,7 +1224,7 @@
         "mem"
       ],
       "group": "context",
-      "usage": "xr memory [list|add|search|recall|remove|health|export|…]",
+      "usage": "xr memory [list|add|search|recall|remove|conflicts|resolve|consolidate|forget|export|…]",
       "needsKernel": true,
       "fastPath": false,
       "classification": "supported"

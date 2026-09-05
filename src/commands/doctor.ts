@@ -193,6 +193,8 @@ export class DoctorCommand implements Command {
     const memState = !memEnabled ? C.red("✗ disabled") : memHealth.expired > 0 ? C.amber(`! ${memHealth.total} entries (${memHealth.expired} expired)`) : C.green(`✓ ${memHealth.total} entries`);
     console.log(`  enabled ........ ${memState}`);
     if (memEnabled && memHealth.ok) { if (memHealth.byCategory.length) { const cats = memHealth.byCategory.map((s) => `${s.category}: ${s.c}`).join(" · "); console.log(`  by category .... ${C.dim(cats)}`); } }
+    // Phase 7 (F-21) — the startup-suggested consolidation notice: a read-only plan probe, never a run.
+    if (memEnabled && memHealth.ok) { try { const { suggestConsolidation } = await import("../context/memory/consolidate.ts"); const hint = suggestConsolidation(mem); if (hint) console.log(`  consolidate .... ${C.amber(`${hint.originals} old low-importance notes in ${hint.groups} group(s)`)} ${C.dim("→ preview: xr memory consolidate --dry-run")}`); } catch { /* advisory only */ } }
 
     // ── Readiness verdict (drives the exit code) ─────────────────────────────
     const verdict = evaluateRunnable(readinessChecks, []);

@@ -1,13 +1,13 @@
 # XR 1.0.0 Repository Inventory
 
-Generated: 2026-09-05T14:49:54.956Z
+Generated: 2026-09-05T22:35:33.789Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 570 |
-| Test files | 306 |
+| Source files | 575 |
+| Test files | 308 |
 | CLI commands | 42 |
 | Daemon routes | 123 |
 | Providers | 26 |
@@ -41,7 +41,7 @@ Generated: 2026-09-05T14:49:54.956Z
 - `listen` (work, supported) — xr listen
 - `workspace` (context, supported) — xr workspace [list|create|use|switch|delete] …
 - `session` (context, supported) — xr session [list|show|export] [id]
-- `memory` (context, supported) — xr memory [list|add|search|recall|remove|health|export|…]
+- `memory` (context, supported) — xr memory [list|add|search|recall|remove|conflicts|resolve|consolidate|forget|export|…]
 - `context` (context, supported) — xr context [list|inspect|explain|pending|approve|revoke|correct|export]
 - `config` (context, supported) — xr config [get|set|path|reset] [key] [value]
 - `providers` (intelligence, supported) — xr providers [list|set|add|remove|test|status|refresh]
