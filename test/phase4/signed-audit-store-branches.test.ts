@@ -208,7 +208,7 @@ describe("Phase 4 · signed-audit store branches", () => {
     const dir = mkdtempSync(join(tmpdir(), "xr-p4-down-"));
     dirs.push(dir);
     const store = new WorkspaceStore("t", join(dir, "xr.db"));
-    expect(currentSchemaVersion(store)).toBe(7);
+    expect(currentSchemaVersion(store)).toBeGreaterThanOrEqual(7); // 7 applied; later phases may sit above
     store.ensureAuditKeying("test");
     store.audit("while.keyed", {});
     // Roll migration 7 down: signed columns/tables are dropped.

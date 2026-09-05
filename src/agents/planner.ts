@@ -100,6 +100,41 @@ function createTaskFromAgent(
   };
 }
 
+/**
+ * Phase 6 · Step 2 — deterministic partition weights per role. The workflow
+ * root envelope is divided across the template's tasks PROPORTIONAL to these
+ * weights (largest-remainder, ledger-enforced). They are the template's
+ * declaration of "how much rope each lane gets", not a runtime guess.
+ */
+export const DEFAULT_ROLE_WEIGHTS: Readonly<Partial<Record<AgentRole, number>>> = {
+  memory_manager: 0.4,
+  security_checker: 0.5,
+  planner: 1,
+  researcher: 2,
+  builder: 3,
+  executor: 2.5,
+  reviewer: 1,
+  verifier: 0.6,
+  synthesizer: 1,
+};
+
+/** Effective weight for a role with operator overrides merged. */
+export function roleWeightFor(role: AgentRole, overrides?: Partial<Record<AgentRole, number>>): number {
+  const w = overrides?.[role] ?? DEFAULT_ROLE_WEIGHTS[role] ?? 1;
+  return Number.isFinite(w) && w > 0 ? w : 1;
+}
+
+/**
+ * Phase 6 · Step 5 — the DECLARED role set of a template: the only roles a
+ * supervised plan-fragment edit may add work for. Derived from the compiled
+ * template itself (not a hand-maintained list), so it can never drift from
+ * what the executor actually supports.
+ */
+export function templateRoleSetFor(kind: WorkflowKind, withVerifier = false): AgentRole[] {
+  const probe = compileWorkflowPlan({ goal: "template probe", cwd: ".", kind, withVerifier });
+  return [...new Set(probe.tasks.map((t) => t.role))];
+}
+
 export function detectWorkflowKind(goal: string): WorkflowKind {
   const q = goal.toLowerCase();
   if (/(threat|security|vuln|audit|cve|hardening|sandbox|permissions?)/i.test(q)) return "security";
@@ -386,6 +421,32 @@ export function compileWorkflowPlan(req: WorkflowPlanRequest): WorkflowRecord {
     tasks.push(synth);
   }
 
+  // ── Phase 6 · Step 4 — the artifact verifier slot ───────────────────────
+  // Research/build-shaped templates get a verifier AFTER synthesis: a separate
+  // model call with a read-only tool scope that inspects the ACTUAL outputs
+  // (manifest of artifact paths + hashes, delivered as data). An unparsable or
+  // absent verdict FAILS the task — the review decision semantics, extended
+  // from prose gates to artifacts. Security-kind templates already carry a
+  // reviewer gate; unifying means both speak `parseReviewDecision`.
+  if (req.withVerifier) {
+    const synthTask = [...tasks].reverse().find((task) => task.role === "synthesizer");
+    if (synthTask) {
+      const verify = createTask(
+        workflowId,
+        "verifier",
+        "Verify delivered artifacts",
+        "Inspect the artifacts this mission produced (file manifest, hashes, outputs) against the objective. Decide from what EXISTS, not from what was claimed.",
+        {
+          phase: "verification",
+          dependencies: [synthTask.taskId],
+          inputs: { goal: req.goal, verification: "artifacts" },
+          delegatedReason: "Completion is a claim; verification is evidence. The verifier holds the read-only rights to check one against the other.",
+        },
+      );
+      tasks.push(verify);
+    }
+  }
+
   const rootTaskIds = tasks.filter((task) => task.dependencies.length === 0).map((task) => task.taskId);
 
   const record: WorkflowRecord = {
@@ -398,6 +459,9 @@ export function compileWorkflowPlan(req: WorkflowPlanRequest): WorkflowRecord {
     reviewState: "pending",
     approvalState: "not_required",
     cancellationState: "active",
+    // Phase 6 — version the PLAN, not just the tasks: supervised fragment
+    // edits increment it; 0 means "the deterministic template, untouched".
+    planVersion: 0,
     planSummary: planSummary(kind),
     rootTaskIds,
     tasks,

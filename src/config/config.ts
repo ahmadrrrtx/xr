@@ -515,6 +515,48 @@ const ConfigSchema = z.object({
       perSurface: z.record(z.string(), z.number().int().min(5_000).max(86_400_000)).default({}),
     })
     .default({}),
+  /**
+   * Phase 6 — Orchestration plane (multi-agent substrate policy).
+   *
+   * Everything here DEFAULTS to the honest, conservative shape:
+   *   · workers are budget-partitioned off the ROOT envelope (F-12); the
+   *     floors below are the minimum slice a lane may receive.
+   *   · the artifact verifier runs for research/build-shaped templates;
+   *     a kind excluded here has NO completion gate (documented tradeoff).
+   *   · supervisor plan-fragment editing is OFF by default; the deterministic
+   *     template remains the default of record. When on, edits are
+   *     role-set-locked, budget-checked, bounded, and audited.
+   */
+  orchestration: z
+    .object({
+      /** Global parallel-worker cap for THIS process (queue, never fail). */
+      concurrentWorkers: z.number().int().min(1).max(32).default(4),
+      /** Per-workflow in-flight worker cap (lane cap inside one tree). */
+      perWorkflowWorkers: z.number().int().min(1).max(32).default(4),
+      /** Opt-in supervised plan-fragment editing (LLM may add/rename/skip). */
+      supervisorEditing: z.boolean().default(false),
+      supervisorEditingKinds: z
+        .array(z.enum(["general", "research", "build", "refactor", "security", "automation", "business"]))
+        .default(["build", "research"]),
+      /** Upper bound on applied fragment edits per workflow lifetime. */
+      maxPlanEdits: z.number().int().min(0).max(8).default(3),
+      /** Artifact verifier gate. */
+      verifier: z.boolean().default(true),
+      verifierKinds: z
+        .array(z.enum(["general", "research", "build", "refactor", "security", "automation", "business"]))
+        .default(["research", "build", "refactor"]),
+      /** Cheap local profile for the extra model call (falls back to defaults). */
+      verifierProvider: z.string().optional(),
+      verifierModel: z.string().optional(),
+      /** Partition floors: a lane the root cannot fund at the floor is DENIED. */
+      partitionFloorUsd: z.number().min(0).default(0.01),
+      partitionFloorTokens: z.number().int().min(0).default(1000),
+      /** Per-role partition weight overrides (merged over template defaults). */
+      roleWeights: z.record(z.string(), z.number().positive()).default({}),
+      /** Durability for plain `xr run` sessions (per-step checkpoint rows). */
+      checkpointPlainRuns: z.boolean().default(true),
+    })
+    .default({}),
   // XR 1.0 — plugin ecosystem. Local-first and explicit by design. The plugin
   // SYSTEM is always available (so `xr plugins …` works), but whether enabled
   // plugins are LOADED into the agent's tool list is governed here.

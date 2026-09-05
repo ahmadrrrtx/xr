@@ -74,7 +74,9 @@ const WORKER_ROLES = ["researcher", "builder", "reviewer", "synthesizer"] as con
 describe("launch P0 · multi-agent workflow completes end-to-end", () => {
   test("benign goal: all tasks complete, workers execute, finalOutput set", async () => {
     const { svc, store, calls } = wiredService(({ role }) =>
-      role === "reviewer"
+      // Phase 6: the template now carries a read-only ARTIFACT VERIFIER after
+      // synthesis; a completed workflow must earn its approved verdict.
+      role === "reviewer" || role === "verifier"
         ? '{"decision":"approved","reason":"stub review: output is consistent with the goal."}'
         : "Summary: stub worker completed its scoped memo.",
     );
@@ -232,7 +234,7 @@ describe("launch P0 · multi-agent workflow completes end-to-end", () => {
         const recovered = attempts > 1;
         return {
           finalMessage: recovered
-            ? opts?.agentRole === "reviewer"
+            ? opts?.agentRole === "reviewer" || opts?.agentRole === "verifier"
               ? '{"decision":"approved","reason":"recovered review passes."}'
               : "Summary: recovered worker output."
             : "boom: transport down",

@@ -437,20 +437,46 @@ trust plane — an MCP server gets no more privilege than a bundled tool.
 <details>
 <summary><b>Multi-agent workflows</b></summary>
 
-`src/services/multi-agent-service.ts` + `src/agents/` run a planner → reviewer → synthesizer
-pipeline with a deterministic security gate between stages:
+`src/services/multi-agent-service.ts` + `src/agents/` compile a **deterministic plan** per
+goal kind, then execute it as **bounded-concurrency lanes** — planner → parallel
+worker lanes → reviewer → synthesizer, with a deterministic security gate between
+stages and a read-only **artifact verifier** after synthesis:
 
 ```bash
 xr agents list
 xr agents plan "refactor this repo safely"
+xr agents run "compare the three vendor pricing plans"
+xr run "start a long task"          # journaled; crash-safe
+xr run --resume <sessionId>         # continue from the last durable checkpoint
 ```
 
+- **One funded tree, not N budgets.** A workflow gets a single root envelope
+  (`budget.perTaskUsd/perTaskTokens`) that is **partitioned across the workers**;
+  each step admits against its child slice *and* the shared root in one ledger
+  transaction, so the tree can never spend more than the root plus one in-flight
+  step. A worker request that tries to carry its own budget is ignored on this
+  path — deliberately: that was the per-worker multiplier this replaced.
+- **Verifiers earn completion.** The artifact verifier re-checks claimed files
+  against the workspace (hashes, missing files); its verdict must be strict-JSON
+  with a reason — prose assurance, garbage, or a reject all **fail the task**.
+- **Delegation is depth-capped at 1.** Workers carry minted identities and can
+  never spawn their own sub-workers; attempted grandchild spawns are refused and
+  audited, not silently flattened.
+- **Crashes are recoverable, honestly.** Per-step checkpoints carry a hash chain
+  and the consumed meter; a tampered chain or a missing checkpoint **refuses** to
+  resume rather than pretending. A resumed run re-asks the model from the
+  checkpointed transcript — the seed is durable, the model's answer is not.
 - The review gate consumes a **strict-JSON decision** from the deterministic `security_checker`;
   prose-only reviewers fail closed — an unparsable verdict blocks the run rather than waving it through.
 - **Honest failure mapping:** transport errors, budget stops and approval stops mark the task
   failed instead of faking completion.
 - **Cancellation is workload-aware:** stopping a workflow aborts the in-flight worker via a live
   run map; remaining work is marked, never silently dropped.
+
+Concurrency, per-workflow worker caps, plan-fragment supervision, and verifier
+defaults live under `orchestration.*` in the config. The orchestration plane is
+single-process: budgets are enforced against the shared workspace store, not
+across machines.
 
 </details>
 
