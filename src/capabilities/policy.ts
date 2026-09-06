@@ -19,6 +19,7 @@ import type {
   CapabilityPermission,
 } from "./types.ts";
 import { mapLegacyScopes } from "./compatibility.ts";
+import { grants } from "./grant.ts";
 
 export interface PolicyContext {
   registry: ToolRegistryService;
@@ -34,6 +35,22 @@ export interface PolicyContext {
   cwd?: string;
   /** Whether hardened mode. */
   hardened?: boolean;
+  /**
+   * Phase 8 · Step 1 — mint an args-bound grant on ALLOW.
+   *
+   * Opt-in by design: `evaluatePolicy` is called from tests, dry-run planners
+   * and inspection surfaces that ask "would this be allowed?" without intending
+   * to execute. Minting there would burn grant ids and, worse, make a
+   * hypothetical question produce authority. Callers that are about to EXECUTE
+   * set this; callers that are merely asking do not.
+   */
+  mintGrants?: boolean;
+  /** Identity/provenance stamped into any minted grant (P6). */
+  grantIdentity?: {
+    agentId?: string;
+    taskId?: string;
+    ttlMs?: number;
+  };
 }
 
 function defaultTrust(): CapabilityTrust {
@@ -248,6 +265,37 @@ function evaluatePolicyCore(
   // If tool requires approval, decision says requiresApproval true, but allowed true (approval will be asked at execution time)
   trace.push(`approval: requiresApproval=${requiresApproval} → ${requiresApproval ? "will request" : "no approval needed"}`);
 
+  // ── 9. Phase 8 · Step 1 — mint the args-bound grant ───────────────────────
+  //
+  // This is the ONLY place a grant comes into existence, and it happens only
+  // on the allow path. The grant binds the exact arguments the checks above
+  // were performed against, so the executor can prove it is running the call
+  // that was authorized rather than one that was substituted afterwards.
+  //
+  // A decision that carries a grant is NOT cacheable: the grant is single-use
+  // and bound to these arguments, so replaying the decision object would
+  // replay a spent authority.
+  let grant: import("./grant.ts").CapabilityGrant | undefined;
+  if (ctx.mintGrants) {
+    grant = grants.mint({
+      capabilityId: request.capabilityId,
+      args: request.arguments ?? {},
+      scope: request.scope,
+      runId: request.runId,
+      taskId: ctx.grantIdentity?.taskId ?? request.sessionId,
+      agentId: ctx.grantIdentity?.agentId,
+      ttlMs: ctx.grantIdentity?.ttlMs,
+      constraints: {
+        mode: request.mode,
+        riskTier,
+        requiresApproval,
+        effectivePermissions: permissions,
+        hardened: ctx.hardened ?? true,
+      },
+    });
+    trace.push(`grant: minted ${grant.grantId} bound to ${grant.argsHash.slice(0, 23)}… (ttl ${grant.ttlMs}ms)`);
+  }
+
   // All checks passed
   return {
     allowed: true,
@@ -256,8 +304,9 @@ function evaluatePolicyCore(
     trust,
     effectivePermissions: permissions,
     lifecycle,
-    cacheable: true,
+    cacheable: grant === undefined,
     policyTrace: trace,
+    grant,
   };
 }
 

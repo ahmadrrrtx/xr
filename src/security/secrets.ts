@@ -34,7 +34,7 @@ import { join } from "node:path";
 import { homedir, platform } from "node:os";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { commandExists, runCommand } from "../util/process.ts";
-import { envSecretCompatEnabled } from "./env-compat.ts";
+import { envAmbientReadEnabled, envHydrationEnabled } from "./env-compat.ts";
 
 export type SecretBackend = "macos-keychain" | "linux-secret-service" | "windows-dpapi" | "file";
 
@@ -294,7 +294,9 @@ export async function setSecretAsync(name: string, value: string): Promise<Secre
     });
     if (res.ok) {
       secretMemo.set(name, value);
-      process.env[name] = value;
+      // Phase 8 · F-24 — hydration is gated (default OFF). The durable
+      // backend has the value; ambient process.env is no longer a mirror.
+      if (envHydrationEnabled()) process.env[name] = value;
       return backend;
     }
   }
@@ -306,17 +308,19 @@ export async function setSecretAsync(name: string, value: string): Promise<Secre
     });
     if (res.ok) {
       secretMemo.set(name, value);
-      process.env[name] = value;
+      // Phase 8 · F-24 — hydration is gated (default OFF). The durable
+      // backend has the value; ambient process.env is no longer a mirror.
+      if (envHydrationEnabled()) process.env[name] = value;
       return backend;
     }
   }
   if (backend === "windows-dpapi" && (await setWindowsSecretAsync(name, value))) {
     secretMemo.set(name, value);
-    process.env[name] = value;
+    if (envHydrationEnabled()) process.env[name] = value;
     return backend;
   }
   setFileSecret(name, value);
-  process.env[name] = value;
+  if (envHydrationEnabled()) process.env[name] = value;
   return "file";
 }
 
@@ -331,10 +335,9 @@ export function setSecret(name: string, value: string): SecretBackend {
     void setSecretAsync(name, value).catch(() => {});
   }
   setFileSecret(name, value);
-  // Phase 2 · F-24 — the write path obeys the same compat gate as reads:
-  // with XR_SECRETS_ENV_COMPAT off, the durable store is updated but the
-  // key is never mirrored into process.env.
-  if (envSecretCompatEnabled()) process.env[name] = value;
+  // Phase 8 · F-24 — the durable store is always updated; the ambient mirror
+  // happens only under an explicit XR_SECRETS_ENV_HYDRATION=1 opt-in.
+  if (envHydrationEnabled()) process.env[name] = value;
   return "file";
 }
 
@@ -343,20 +346,20 @@ export function setSecret(name: string, value: string): SecretBackend {
  */
 export function getSecretSyncCached(name: string): string | undefined {
   assertSafeName(name);
-  // Phase 2 · F-24 — ambient env is only part of the read path while compat
-  // is on; with XR_SECRETS_ENV_COMPAT off, the durable backends are the only
-  // authority (the 2.0 posture the broker seam is headed for).
-  if (envSecretCompatEnabled() && process.env[name]) return process.env[name];
+  // Phase 8 · F-24 — DURABLE FIRST. A key the operator set through XR is more
+  // authoritative than one inherited from an ambient shell; see the ordering
+  // rationale in secret-broker.ts. Ambient is a fallback source (BYOK), not a
+  // cache of ours, and is consulted only when the posture allows.
   if (secretMemo.has(name)) return secretMemo.get(name);
   const file = getFileSecret(name);
   if (file) {
     secretMemo.set(name, file);
-    // Phase 2 · F-24 — ambient hydration is compat-gated: with
-    // XR_SECRETS_ENV_COMPAT off, the value is memoized (never re-read from
-    // disk) but deliberately NOT mirrored into process.env.
-    if (envSecretCompatEnabled()) process.env[name] = file;
+    // Memoized (so we never re-read/decrypt from disk on the hot path) but
+    // mirrored into process.env only under the explicit hydration opt-in.
+    if (envHydrationEnabled()) process.env[name] = file;
     return file;
   }
+  if (envAmbientReadEnabled() && process.env[name]) return process.env[name];
   return undefined;
 }
 
@@ -376,7 +379,7 @@ export async function getSecretAsync(name: string): Promise<string | undefined> 
     if (res.ok && res.stdout.trim()) {
       const v = res.stdout.trim();
       secretMemo.set(name, v);
-      process.env[name] = v;
+      if (envHydrationEnabled()) process.env[name] = v;
       return v;
     }
   }
@@ -387,7 +390,7 @@ export async function getSecretAsync(name: string): Promise<string | undefined> 
     if (res.ok && res.stdout.trim()) {
       const v = res.stdout.trim();
       secretMemo.set(name, v);
-      process.env[name] = v;
+      if (envHydrationEnabled()) process.env[name] = v;
       return v;
     }
   }
@@ -395,7 +398,7 @@ export async function getSecretAsync(name: string): Promise<string | undefined> 
     const v = await getWindowsSecretAsync(name);
     if (v) {
       secretMemo.set(name, v);
-      process.env[name] = v;
+      if (envHydrationEnabled()) process.env[name] = v;
       return v;
     }
   }

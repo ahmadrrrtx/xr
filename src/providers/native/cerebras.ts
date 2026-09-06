@@ -13,6 +13,7 @@ import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChu
 import { guardedRequest } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
+import { secretBroker } from "../../security/secret-broker.ts";
 
 interface CerebrasOptions {
   model?: string;
@@ -22,7 +23,13 @@ interface CerebrasOptions {
 export class CerebrasProvider implements Provider {
   id = "cerebras";
   label = "Cerebras (Fastest AI)";
-  private apiKey: string;
+  /**
+   * Phase 8 · F-24 — the credential is NOT held on the instance. `apiKeyEnv`
+   * is the NAME of the secret; the value is resolved per request through the
+   * broker, so a long-lived provider object never carries key material and a
+   * heap dump of it yields nothing.
+   */
+  private apiKeyEnv: string;
   private model: string;
 
   get modelId(): string {
@@ -32,12 +39,12 @@ export class CerebrasProvider implements Provider {
 
   constructor(opts: CerebrasOptions = {}) {
     const envKey = opts.apiKeyEnv ?? "CEREBRAS_API_KEY";
-    this.apiKey = process.env[envKey] ?? "";
+    this.apiKeyEnv = envKey;
     this.model = opts.model ?? "cerebras/csm-8b";
   }
 
   async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
-    const apiKey = this.apiKey;
+    const apiKey = (await secretBroker.get(this.apiKeyEnv)) ?? "";
     if (!apiKey) {
       throw new Error(
         `Cerebras API key not found. Set CEREBRAS_API_KEY in your environment.\n` +
@@ -175,7 +182,7 @@ export class CerebrasProvider implements Provider {
 
   
   async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
-    const apiKey = this.apiKey;
+    const apiKey = (await secretBroker.get(this.apiKeyEnv)) ?? "";
     if (!apiKey) {
       return { ok: false, detail: "CEREBRAS_API_KEY not set" };
     }

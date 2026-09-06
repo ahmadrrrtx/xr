@@ -12,6 +12,7 @@ import type {
   CapabilityDecision,
 } from "./types.ts";
 import { evaluatePolicy, type PolicyContext } from "./policy.ts";
+import { grants, grantAuditFields } from "./grant.ts";
 
 export interface ExecutionContext extends PolicyContext {
   /** Tool context for execution (approve, audit, etc). */
@@ -40,7 +41,10 @@ export async function executeCapability(
   request: CapabilityRequest,
   execCtx: ExecutionContext,
 ): Promise<ExecutionResult> {
-  const decision = evaluatePolicy(request, execCtx);
+  // Phase 8 · Step 1 — this function EXECUTES, so it mints. The grant is
+  // threaded into the ToolContext below; the tool re-presents it and the
+  // runtime re-derives the argument hash before any side effect.
+  const decision = evaluatePolicy(request, { ...execCtx, mintGrants: true });
 
   if (!decision.allowed) {
     execCtx.toolContext.audit("capability.denied", {
@@ -62,10 +66,14 @@ export async function executeCapability(
       preview: decision.approvalPreview,
     });
     if (!approved) {
+      // A denied approval must not leave a live grant behind: the authority
+      // it represents was never granted by the human.
+      if (decision.grant) grants.revoke(decision.grant.grantId);
       execCtx.toolContext.audit("capability.approval.denied", {
         capabilityId: request.capabilityId,
         requestedBy: request.requestedBy,
         runId: request.runId,
+        grantId: decision.grant?.grantId,
       });
       return {
         decision: { ...decision, allowed: false, reason: "approval denied by user" },
@@ -77,6 +85,7 @@ export async function executeCapability(
   // Resolve and execute
   const entry = execCtx.registry.resolve(request.capabilityId);
   if (!entry) {
+    if (decision.grant) grants.revoke(decision.grant.grantId);
     execCtx.toolContext.audit("capability.resolve.failed", {
       capabilityId: request.capabilityId,
       reason: "resolve returned undefined after policy allowed",
@@ -88,9 +97,16 @@ export async function executeCapability(
   }
 
   try {
-    const result = await entry.tool.run(request.arguments, execCtx.toolContext);
+    if (decision.grant) {
+      execCtx.toolContext.audit("grant.minted", grantAuditFields(decision.grant));
+    }
+    const toolCtx = decision.grant
+      ? { ...execCtx.toolContext, grantId: decision.grant.grantId }
+      : execCtx.toolContext;
+    const result = await entry.tool.run(request.arguments, toolCtx);
     execCtx.toolContext.audit("capability.executed", {
       capabilityId: request.capabilityId,
+      grantId: decision.grant?.grantId,
       ok: result.ok,
       runId: request.runId,
       trust: decision.trust.level,
@@ -101,6 +117,7 @@ export async function executeCapability(
     execCtx.toolContext.onToolUse?.({ tool: request.capabilityId, ok: result.ok });
     return { decision, result, blocked: false };
   } catch (e) {
+    if (decision.grant) grants.revoke(decision.grant.grantId);
     execCtx.toolContext.audit("capability.error", {
       capabilityId: request.capabilityId,
       error: (e as Error).message,

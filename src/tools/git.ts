@@ -11,6 +11,7 @@
  */
 import { runCommand } from "../util/process.ts";
 import { readTrustRequest, gitMutateTrustRequest } from "../runtime/trust/tool-support.ts";
+import { requireGrant } from "../capabilities/enforce.ts";
 import type { Tool } from "../core/types.ts";
 
 async function gitExec(args: string[], cwd: string, timeout = 15000): Promise<string> {
@@ -67,6 +68,9 @@ export const gitCommitTool: Tool = {
   requiresApproval: true,
   trustRequest: (_args, ctx) => gitMutateTrustRequest("git_commit", ctx.cwd),
   async run(args, ctx) {
+    // Phase 8 · Step 2 — mutates the repository (stages + commits).
+    const gate = requireGrant(ctx, "git_commit", args);
+    if (!gate.ok) return gate.denial;
     const msg = String(args.message || "chore: update via XR");
     const sanitized = msg.replace(/"/g, '\\"').slice(0, 200);
     await gitExec(["add", "-A"], ctx.cwd);
@@ -88,6 +92,9 @@ export const gitBranchTool: Tool = {
   requiresApproval: false,
   trustRequest: (_args, ctx) => gitMutateTrustRequest("git_branch", ctx.cwd),
   async run(args, ctx) {
+    // Phase 8 · Step 2 — `create`/`switch` mutate repository state.
+    const gate = requireGrant(ctx, "git_branch", args);
+    if (!gate.ok) return gate.denial;
     const action = String(args.action || "list");
     const name = String(args.name || "");
 
@@ -133,6 +140,9 @@ export const gitStashTool: Tool = {
   requiresApproval: true,
   trustRequest: (_args, ctx) => gitMutateTrustRequest("git_stash", ctx.cwd),
   async run(args, ctx) {
+    // Phase 8 · Step 2 — moves working-tree changes onto/off the stash.
+    const gate = requireGrant(ctx, "git_stash", args);
+    if (!gate.ok) return gate.denial;
     const action = String(args.action || "save");
     const msg = String(args.message || "");
 
@@ -162,6 +172,9 @@ export const gitPushTool: Tool = {
   parameters: { branch: "string (optional — branch name)", remote: "string (default 'origin')" },
   requiresApproval: true,
   async run(args, ctx) {
+    // Phase 8 · Step 2 — publishes commits to a remote (irreversible).
+    const gate = requireGrant(ctx, "git_push", args);
+    if (!gate.ok) return gate.denial;
     const branch = String(args.branch || "");
     const remote = String(args.remote || "origin");
     const pushArgs = branch ? ["push", remote, branch] : ["push"];
@@ -177,6 +190,9 @@ export const gitPullTool: Tool = {
   parameters: { branch: "string (optional — branch name)", remote: "string (default 'origin')" },
   requiresApproval: true,
   async run(args, ctx) {
+    // Phase 8 · Step 2 — rewrites the working tree from a remote.
+    const gate = requireGrant(ctx, "git_pull", args);
+    if (!gate.ok) return gate.denial;
     const branch = String(args.branch || "");
     const remote = String(args.remote || "origin");
     const pullArgs = branch ? ["pull", remote, branch] : ["pull"];

@@ -98,7 +98,15 @@ export class OpenAICompatProvider implements Provider {
   label: string;
   protected baseUrl: string;
   protected model: string;
+  /**
+   * Phase 8 · F-24 — an EXPLICIT key passed by the caller (custom provider
+   * config, tests). A key that lives in the secret store is NOT copied here:
+   * it is resolved per request in `headers()` so the credential's lifetime is
+   * the request, not the provider object.
+   */
   protected apiKey?: string;
+  /** Name of the secret to resolve through the broker at request time. */
+  protected apiKeyEnv?: string;
   protected extraHeaders: Record<string, string>;
   protected profile: ModelProfile;
   /** Declared transport capabilities (resolver-owned). */
@@ -109,11 +117,10 @@ export class OpenAICompatProvider implements Provider {
     this.label = opts.label;
     this.baseUrl = opts.baseUrl.replace(/\/$/, "");
     this.model = opts.model;
-    // Phase 2 · F-24 — the key comes through the broker seam: explicit
-    // override wins, then env (compat-gated), then the durable backend.
-    this.apiKey =
-      opts.apiKey ??
-      (opts.apiKeyEnv ? secretBrokerSync(opts.apiKeyEnv) : undefined);
+    // Phase 8 · F-24 — an explicit key is honoured; otherwise only the NAME
+    // is retained and the value is brokered lazily per request.
+    this.apiKey = opts.apiKey;
+    this.apiKeyEnv = opts.apiKeyEnv;
     this.extraHeaders = opts.extraHeaders ?? {};
     this.profile = profileFor(opts.id, opts.model);
     this.capabilities = opts.capabilities;
@@ -133,8 +140,12 @@ export class OpenAICompatProvider implements Provider {
       "Content-Type": "application/json",
       ...this.extraHeaders,
     };
-    if (this.apiKey) {
-      h["Authorization"] = `Bearer ${this.apiKey}`;
+    // Resolved at REQUEST time, never cached on the instance: the broker's
+    // own memo keeps this cheap without leaving key material on a long-lived
+    // provider object.
+    const key = this.apiKey ?? (this.apiKeyEnv ? secretBrokerSync(this.apiKeyEnv) : undefined);
+    if (key) {
+      h["Authorization"] = `Bearer ${key}`;
     }
     return h;
   }

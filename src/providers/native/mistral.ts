@@ -13,6 +13,7 @@ import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChu
 import { guardedRequest } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
+import { secretBroker } from "../../security/secret-broker.ts";
 
 interface MistralOptions {
   model?: string;
@@ -22,7 +23,13 @@ interface MistralOptions {
 export class MistralProvider implements Provider {
   id = "mistral";
   label = "Mistral AI";
-  private apiKey: string;
+  /**
+   * Phase 8 · F-24 — the credential is NOT held on the instance. `apiKeyEnv`
+   * is the NAME of the secret; the value is resolved per request through the
+   * broker, so a long-lived provider object never carries key material and a
+   * heap dump of it yields nothing.
+   */
+  private apiKeyEnv: string;
   private model: string;
 
   get modelId(): string {
@@ -48,12 +55,12 @@ export class MistralProvider implements Provider {
 
   constructor(opts: MistralOptions = {}) {
     const envKey = opts.apiKeyEnv ?? "MISTRAL_API_KEY";
-    this.apiKey = process.env[envKey] ?? "";
+    this.apiKeyEnv = envKey;
     this.model = opts.model ?? "mistral-small-latest";
   }
 
   async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
-    const apiKey = this.apiKey;
+    const apiKey = (await secretBroker.get(this.apiKeyEnv)) ?? "";
     if (!apiKey) {
       throw new Error(
         `Mistral API key not found. Set MISTRAL_API_KEY in your environment.\n` +
@@ -212,7 +219,7 @@ export class MistralProvider implements Provider {
 
   
   async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
-    const apiKey = this.apiKey;
+    const apiKey = (await secretBroker.get(this.apiKeyEnv)) ?? "";
     if (!apiKey) {
       return { ok: false, detail: "MISTRAL_API_KEY not set" };
     }

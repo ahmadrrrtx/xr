@@ -22,6 +22,7 @@ import { satisfies, checkCompatibility, parseSemver } from "../src/plugins/compa
 import { buildHost } from "../src/plugins/host.ts";
 import { PluginManager } from "../src/plugins/manager.ts";
 import { loadConfig } from "../src/config/config.ts";
+import { mintTestGrant } from "./helpers/grant.ts";
 
 let store: Store;
 let workdir: string;
@@ -207,12 +208,12 @@ test("security: plugin tool is namespaced + approval-gated by default", async ()
   expect(tool.requiresApproval).toBe(true);
 
   // denied approval → tool does not run
-  const denied = await tool.run({}, { cwd: workdir, approve: async () => false, audit: () => {}, egressAllowlist: [], dryRun: false });
+  const denied = await tool.run({}, { cwd: workdir, approve: async () => false, audit: () => {}, egressAllowlist: [], dryRun: false, grantId: mintTestGrant("plugin.needsok.danger", {}) });
   expect(denied.ok).toBe(false);
   expect(denied.output).toContain("denied");
 
   // approved → runs
-  const approved = await tool.run({}, { cwd: workdir, approve: async () => true, audit: () => {}, egressAllowlist: [], dryRun: false });
+  const approved = await tool.run({}, { cwd: workdir, approve: async () => true, audit: () => {}, egressAllowlist: [], dryRun: false, grantId: mintTestGrant("plugin.needsok.danger", {}) });
   expect(approved.ok).toBe(true);
   expect(approved.output).toBe("ran");
 });

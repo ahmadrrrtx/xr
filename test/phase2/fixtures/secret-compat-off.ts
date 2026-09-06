@@ -9,14 +9,14 @@
  *   { envAfterSet, synced, asynced, envAfterHydrate }
  */
 import { writeSync } from "node:fs";
-import { envSecretCompatEnabled } from "../../../src/security/env-compat.ts";
+import { envHydrationEnabled } from "../../../src/security/env-compat.ts";
 import { secretBroker, secretBrokerSync, hydrateProviderEnv } from "../../../src/security/secret-broker.ts";
 import { setSecret } from "../../../src/security/secrets.ts";
 
 const envOf = (k: string): string | undefined => (process.env as Record<string, string | undefined>)[k];
 
 async function main(): Promise<void> {
-  const result: Record<string, unknown> = { flagEnabled: envSecretCompatEnabled() };
+  const result: Record<string, unknown> = { flagEnabled: envHydrationEnabled() };
 
   setSecret("XR_BROKER_TEST_OFF", "v3-secret");
   result.envAfterSet = envOf("XR_BROKER_TEST_OFF");

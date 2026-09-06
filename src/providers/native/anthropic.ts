@@ -12,6 +12,7 @@ import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChu
 import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
+import { secretBroker } from "../../security/secret-broker.ts";
 
 interface AnthropicOptions {
   model?: string;
@@ -47,7 +48,13 @@ let toolCallCounter = 0;
 export class AnthropicProvider implements Provider {
   id = "anthropic";
   label = "Anthropic Claude";
-  private apiKey: string;
+  /**
+   * Phase 8 · F-24 — the credential is NOT held on the instance. `apiKeyEnv`
+   * is the NAME of the secret; the value is resolved per request through the
+   * broker, so a long-lived provider object never carries key material and a
+   * heap dump of it yields nothing.
+   */
+  private apiKeyEnv: string;
   private model: string;
 
   get modelId(): string {
@@ -71,12 +78,12 @@ export class AnthropicProvider implements Provider {
 
   constructor(opts: AnthropicOptions = {}) {
     const envKey = opts.apiKeyEnv ?? "ANTHROPIC_API_KEY";
-    this.apiKey = process.env[envKey] ?? "";
+    this.apiKeyEnv = envKey;
     this.model = opts.model ?? "claude-3-5-sonnet-20241022";
   }
 
   async chat(messages: Message[], tools: Tool[], options?: ChatOptions): Promise<ModelTurn> {
-    const apiKey = this.apiKey;
+    const apiKey = (await secretBroker.get(this.apiKeyEnv)) ?? "";
     if (!apiKey) {
       throw new Error(
         `Anthropic API key not found. Set ANTHROPIC_API_KEY in your environment.\n` +
@@ -348,7 +355,7 @@ export class AnthropicProvider implements Provider {
   
   async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
     const start = Date.now();
-    const apiKey = this.apiKey;
+    const apiKey = (await secretBroker.get(this.apiKeyEnv)) ?? "";
     
     if (!apiKey) {
       return { ok: false, detail: "ANTHROPIC_API_KEY not set" };

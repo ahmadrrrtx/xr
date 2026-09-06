@@ -7,6 +7,7 @@ import { resolve, relative, isAbsolute } from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { readTrustRequest, workspaceWriteTrustRequest } from "../runtime/trust/tool-support.ts";
 import { classifySensitiveWrite } from "../security/trust-handoff.ts";
+import { requireGrant } from "../capabilities/enforce.ts";
 
 /** Keep the agent inside its working directory (no escaping with ../). */
 function safePath(cwd: string, p: string): string {
@@ -55,6 +56,11 @@ export const writeFileTool: Tool = {
   requiresApproval: true,
   trustRequest: (args, ctx) => workspaceWriteTrustRequest("write_file", ctx.cwd, [String(args.path ?? "")]),
   async run(args, ctx: ToolContext): Promise<ToolResult> {
+    // Phase 8 · Step 1 — args-bound grant check BEFORE any side effect and
+    // before the approval prompt (a prompt is itself a decision surface: the
+    // human must never be asked to approve arguments the policy never saw).
+    const gate = requireGrant(ctx, "write_file", args);
+    if (!gate.ok) return gate.denial;
     const p = safePath(ctx.cwd, String(args.path ?? ""));
     const newContent = String(args.content ?? "");
     const old = existsSync(p) ? readFileSync(p, "utf8") : "";

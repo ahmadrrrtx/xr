@@ -29,20 +29,23 @@ afterAll(() => {
 });
 
 describe("XR 4.2 MCP stdio placement decision (pure)", () => {
-  const F = { isolateStdio: false, allowNet: false, allowUnisolated: false };
+  // Phase 8 · Step 5 — `unisolatedGrant` replaces the removed
+  // XR_MCP_ALLOW_UNISOLATED env flag. It can only be true because a signed,
+  // per-server allowlist entry says so.
+  const F = { isolateStdio: false, allowNet: false, unisolatedGrant: false };
   test("high-risk + sandbox → isolated", () => {
     expect(decideMcpStdioPlacement("high", true, F)).toBe("isolated");
   });
   test("high-risk + no sandbox + no ack → BLOCKED (fail closed)", () => {
     expect(decideMcpStdioPlacement("high", false, F)).toBe("blocked");
   });
-  test("high-risk + no sandbox + explicit ack (hardened OFF) → confined (warned)", () => {
-    expect(decideMcpStdioPlacement("high", false, { ...F, allowUnisolated: true }, false)).toBe("confined");
+  test("high-risk + no sandbox + SIGNED per-server grant (hardened OFF) → confined (warned)", () => {
+    expect(decideMcpStdioPlacement("high", false, { ...F, unisolatedGrant: true }, false)).toBe("confined");
   });
   // Phase 4 · T1 — hardened mode (default): the unisolated escape hatch is
   // refused even with an explicit ack; fail-closed is not negotiable.
-  test("high-risk + no sandbox + explicit ack (hardened ON) → BLOCKED", () => {
-    expect(decideMcpStdioPlacement("high", false, { ...F, allowUnisolated: true }, true)).toBe("blocked");
+  test("high-risk + no sandbox + SIGNED grant (hardened ON) → BLOCKED", () => {
+    expect(decideMcpStdioPlacement("high", false, { ...F, unisolatedGrant: true }, true)).toBe("blocked");
   });
   test("low-risk + sandbox + force → isolated; otherwise confined", () => {
     expect(decideMcpStdioPlacement("low", true, { ...F, isolateStdio: true })).toBe("isolated");

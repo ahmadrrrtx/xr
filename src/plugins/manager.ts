@@ -16,6 +16,8 @@ import type { LoadedSkill } from "../skills/loader.ts";
 import { SENSITIVE_PERMISSIONS, type PermissionScope, type PluginCommand, type PluginContributions, type PluginManifest, type PluginStatus, type PluginTool } from "./types.ts";
 import { CapabilityProvenanceStore } from "../platform/capabilities/provenance.ts";
 import { capabilityId } from "../platform/capabilities/types.ts";
+import { requireGrant } from "../capabilities/enforce.ts";
+import { PluginTrustStore, pluginsAllowUnsignedEnv, pluginRiskTier, highRiskPermissions } from "./signing.ts";
 
 /**
  * Windows-safe filesystem primitives (CF-3). On Windows, antivirus (Defender)
@@ -229,6 +231,36 @@ export class PluginManager {
     return { ok: true };
   }
 
+  /**
+   * Phase 8 · Step 4 — lift an UNSIGNED-quarantine after trust was recorded.
+   *
+   * `enable()` deliberately refuses quarantined plugins: quarantine means "a
+   * human must look at this", and a plain enable would paper over it. But once
+   * an operator HAS looked and recorded trust (`xr plugins allow`), the
+   * quarantine has been addressed and requiring a second manual step would
+   * just teach people to reach for XR_PLUGINS_ALLOW_UNSIGNED.
+   *
+   * This method is narrow on purpose:
+   *   · it re-verifies trust itself rather than believing the caller;
+   *   · it only lifts quarantines whose cause was `unsigned` — a quarantine
+   *     for tampering, an error or a manual review is untouched.
+   */
+  liftUnsignedQuarantine(id: string): { ok: boolean; reason?: string } {
+    const entry = this.registry.get(id);
+    if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
+    if (entry.lifecycleState !== "quarantined") return { ok: true, reason: "not quarantined" };
+    if (!(entry.quarantineReason ?? "").startsWith("unsigned")) {
+      return { ok: false, reason: `quarantine cause is not "unsigned" (${entry.quarantineReason}) — resolve it explicitly` };
+    }
+    if (!entry.treeHash) return { ok: false, reason: "no recorded tree hash" };
+    const verdict = new PluginTrustStore().isTrusted(id, entry.treeHash);
+    if (!verdict.ok) return { ok: false, reason: `still untrusted: ${verdict.reason}` };
+    this.registry.patch(id, { lifecycleState: "installed", quarantineReason: undefined });
+    this.registry.record(id, "unquarantine", `trust recorded (${verdict.kind})`);
+    this.store.audit("plugin.unquarantine", { plugin: id, cause: "unsigned", trust: verdict.kind });
+    return this.enable(id);
+  }
+
   enable(id: string): { ok: boolean; reason?: string } {
     const entry = this.registry.get(id);
     if (!entry) return { ok: false, reason: `plugin not installed: ${id}` };
@@ -375,12 +407,99 @@ export class PluginManager {
     this.loaded.clear();
     this.loadErrors.clear();
     if ((this.config as any).plugins?.enabled === false) return;
+    // Phase 8 · Step 4 — the one-time amnesty runs BEFORE any load, so a user
+    // upgrading into the signing rule never sees a single spurious quarantine.
+    this.grandfatherExistingPlugins();
     const ordered = this.topoSort(this.registry.list().filter((e) => e.enabled && e.lifecycleState !== "quarantined"));
     for (const entry of ordered) await this.loadOne(entry);
   }
 
+  /**
+   * Phase 8 · Step 4 — ONE-TIME GRANDFATHERING.
+   *
+   * Runs only when no plugin trust store exists yet, i.e. exactly once, on the
+   * first run after upgrading into the signing rule. Every plugin already in
+   * the registry gets a trust record bound to the tree hash it has right now.
+   *
+   * The binding to the CURRENT hash is what makes this safe rather than a
+   * blanket amnesty: it vouches for the code the user already had and already
+   * chose to install, and nothing else. Modify a grandfathered plugin
+   * afterwards and it fails the trust check like any other unsigned code.
+   *
+   * If no trust store can be created (no writable XR_HOME, say), this is a
+   * no-op — the load path then applies the normal unsigned rule, which is the
+   * safe direction to fail.
+   */
+  private grandfatherExistingPlugins(): void {
+    const pluginCfg = (this.config as any).plugins ?? {};
+    if (pluginCfg.requireSigned === false) return;
+    try {
+      const store = new PluginTrustStore();
+      if (!store.isUninitialised) return;
+      const existing = this.registry.list();
+      if (!existing.length) return;
+      store.ensureKeys();
+      for (const entry of existing) {
+        if (!entry.treeHash) continue;
+        store.record(entry.id, entry.treeHash, "grandfathered", {
+          by: "upgrade",
+          reason: "present in the registry before plugin signing was enforced",
+        });
+        this.store.audit("plugin.trust.grandfathered", {
+          plugin: entry.id,
+          treeHash: entry.treeHash,
+          note: "auto-issued local trust record on upgrade; bound to the tree hash at upgrade time",
+        });
+      }
+    } catch {
+      /* no trust store possible — fall through to the normal unsigned rule */
+    }
+  }
+
+  /**
+   * Phase 8 · Step 4 — the signing gate.
+   *
+   * Returns a quarantine reason when the plugin may not load, or null when it
+   * may. Split out from loadOne so the decision is testable in isolation.
+   */
+  private signingGate(entry: RegistryEntry): string | null {
+    const pluginCfg = (this.config as any).plugins ?? {};
+    // Default TRUE — new installs must be signed.
+    if (pluginCfg.requireSigned === false) return null;
+    if (pluginsAllowUnsignedEnv()) {
+      console.error(
+        `[plugin security] WARNING: XR_PLUGINS_ALLOW_UNSIGNED=1 — signature checking is DISABLED for "${entry.id}". ` +
+        `This escape hatch is removed in the next release; sign the plugin with \`xr plugins allow ${entry.id}\`.`,
+      );
+      this.store.audit("plugin.trust.bypassed", {
+        plugin: entry.id,
+        note: "XR_PLUGINS_ALLOW_UNSIGNED=1 — unsigned plugin permitted by escape hatch",
+      });
+      return null;
+    }
+    if (!entry.treeHash) {
+      return "no tree hash recorded at install — cannot verify provenance";
+    }
+    const verdict = new PluginTrustStore().isTrusted(entry.id, entry.treeHash);
+    if (!verdict.ok) return verdict.reason;
+    return null;
+  }
+
   private async loadOne(entry: RegistryEntry): Promise<void> {
     const pluginCfg = (this.config as any).plugins ?? {};
+    // Phase 8 · Step 4 — provenance is checked BEFORE the plugin's code is
+    // read or executed. An unsigned plugin is QUARANTINED rather than merely
+    // skipped, so the state is durable and visible in `xr plugins list`
+    // instead of being re-attempted (and re-failing) on every single run.
+    const signingFailure = this.signingGate(entry);
+    if (signingFailure) {
+      const reason = `unsigned or untrusted: ${signingFailure}`;
+      this.loadErrors.set(entry.id, { reason, kind: "untrusted" });
+      this.registry.quarantine(entry.id, reason);
+      this.registry.record(entry.id, "quarantine", reason);
+      this.store.audit("plugin.quarantine", { plugin: entry.id, reason, cause: "unsigned" });
+      return;
+    }
     const requireTrust = pluginCfg.requireTrust !== false;
     const denied: Set<string> = new Set(pluginCfg.deniedPermissions ?? []);
     const granted = entry.grantedPermissions.filter((p) => !denied.has(p));
@@ -495,15 +614,40 @@ export class PluginManager {
 function adaptTool(pluginId: string, pt: PluginTool, granted: PermissionScope[]): Tool {
   const fqName = `plugin.${pluginId}.${pt.name}`;
   const hasSensitiveGrant = granted.some((p) => SENSITIVE_PERMISSIONS.has(p));
-  const requiresApproval = hasSensitiveGrant || pt.requiresApproval !== false;
+  /**
+   * Phase 8 · Step 4 — HIGH-RISK ⇒ TIER-2.
+   *
+   * A plugin declaring shell/process/network is asking for precisely the
+   * capabilities that turn a supply-chain compromise into host access and
+   * exfiltration. Such a tool is forced to Tier-2 and can never opt out of
+   * approval via `requiresApproval: false` in its own manifest — letting
+   * third-party code declare itself safe is the vulnerability, not the fix.
+   */
+  const riskTier = pluginRiskTier(granted as unknown as string[]);
+  const highRisk = riskTier === "tier2";
+  const requiresApproval = highRisk || hasSensitiveGrant || pt.requiresApproval !== false;
   return {
     name: fqName,
     description: `[plugin:${pluginId}] ${pt.description}`,
     parameters: pt.parameters ?? {},
     requiresApproval,
     async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+      // Phase 8 · Step 2 — third-party code runs behind this call; the grant
+      // binding is verified before the plugin sees the arguments at all.
+      const gate = requireGrant(ctx, fqName, args);
+      if (!gate.ok) return gate.denial;
       if (requiresApproval) {
-        const approved = await ctx.approve({ tool: fqName, reason: `run plugin tool from "${pluginId}"`, preview: JSON.stringify(args).slice(0, 300) });
+        const risky = highRiskPermissions(granted as unknown as string[]);
+        const reason = highRisk
+          ? `run TIER-2 plugin tool from "${pluginId}" — declares high-risk permission(s): ${risky.join(", ")}`
+          : `run plugin tool from "${pluginId}"`;
+        const approved = await ctx.approve({
+          tool: fqName,
+          reason,
+          args,
+          riskTier,
+          preview: JSON.stringify(args).slice(0, 300),
+        });
         if (!approved) {
           ctx.audit("plugin.tool.denied", { plugin: pluginId, tool: pt.name });
           return { ok: false, output: "plugin tool call denied" };

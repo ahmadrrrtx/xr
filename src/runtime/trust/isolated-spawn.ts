@@ -161,20 +161,32 @@ export function mcpServerRisk(cfg: {
 export interface McpStdioFlags {
   isolateStdio: boolean;   // XR_MCP_ISOLATE_STDIO=1 (force-isolate even low-risk)
   allowNet: boolean;       // XR_MCP_ISOLATED_NET=1
-  allowUnisolated: boolean; // XR_MCP_ALLOW_UNISOLATED=1 (explicit ack to run high-risk unisolated)
+  /**
+   * Phase 8 · Step 5 — a SIGNED, per-server unisolated grant from the MCP
+   * allowlist (`isolation: "granted-unisolated-by:<key>"`).
+   *
+   * This replaces the removed `XR_MCP_ALLOW_UNISOLATED=1` environment flag.
+   * The difference is not cosmetic: an env var was process-wide, anonymous,
+   * unsigned and unrevocable, whereas this boolean can only be true because a
+   * named ed25519 key signed a statement about THIS server id.
+   */
+  unisolatedGrant: boolean;
 }
 
 export type McpStdioPlacement = "isolated" | "confined" | "blocked";
 
 /**
- * Pure placement decision for an MCP stdio server. High-risk servers are
- * isolated when a sandbox exists; without one they are BLOCKED unless the
- * operator explicitly acknowledges running unisolated. Low-risk servers use
- * the existing confined spawn (or isolation when forced).
+ * Pure placement decision for an MCP stdio server.
  *
- * Phase 4 · T1 — hardened mode: when `hardened` is true the unisolated
- * escape hatch is refused entirely (policy is not confinement; a third-party
- * process with host authority is never acceptable in hardened mode).
+ * High-risk servers are isolated when a sandbox exists; without one they are
+ * BLOCKED unless a SIGNED per-server unisolated grant exists. Low-risk servers
+ * use the existing confined spawn (or isolation when forced).
+ *
+ * Phase 4 · T1 — hardened mode: when `hardened` is true the escape is refused
+ * entirely (policy is not confinement; a third-party process with host
+ * authority is never acceptable in hardened mode). Phase 8 keeps that rule
+ * exactly as it was and only changes what may open the hatch when hardened is
+ * off: a signed, attributable, revocable grant instead of an env var.
  */
 export function decideMcpStdioPlacement(
   risk: McpServerRisk,
@@ -184,7 +196,7 @@ export function decideMcpStdioPlacement(
 ): McpStdioPlacement {
   if (risk === "high") {
     if (sandboxAvailable) return "isolated";
-    if (flags.allowUnisolated && !hardened) return "confined"; // explicit, warned ack (hardened OFF)
+    if (flags.unisolatedGrant && !hardened) return "confined"; // signed per-server grant (hardened OFF)
     return "blocked"; // fail closed
   }
   // low risk

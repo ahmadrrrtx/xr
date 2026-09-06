@@ -24,6 +24,7 @@ import { Store } from "../state/workspace-store.ts";
 import { planningService } from "../services/planning-service.ts";
 import { runTypedPlan, isDisabled } from "../control/service.ts";
 import type { ControlOptions } from "../control/types.ts";
+import { requireGrant } from "../capabilities/enforce.ts";
 
 export const computerControlTool: Tool = {
   name: "computer_control",
@@ -36,6 +37,11 @@ export const computerControlTool: Tool = {
   },
   requiresApproval: true, // The agent must get top-level approval before invoking this at all.
   async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+    // Phase 8 · Step 2 — drives the user's real mouse/keyboard: the highest
+    // side effect any tool in the runtime has. Verified before the plan is
+    // even parsed.
+    const gate = requireGrant(ctx, "computer_control", args);
+    if (!gate.ok) return gate.denial;
     const task = String(args.task ?? "").trim();
     const requestedMode = String(args.mode ?? "auto").toLowerCase();
     const mode: ControlOptions["mode"] =

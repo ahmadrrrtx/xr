@@ -9,6 +9,7 @@ import { hostAllowed, htmlToText } from "../src/tools/egress.ts";
 import { listDirTool, deleteFileTool, shellTool } from "../src/tools/system.ts";
 import { fetchUrlTool, webSearchTool } from "../src/tools/web.ts";
 import type { ToolContext } from "../src/core/types.ts";
+import { withGrant } from "./helpers/grant.ts";
 
 let tmp: string;
 beforeEach(() => {
@@ -24,6 +25,21 @@ function ctx(overrides: Partial<ToolContext> = {}): ToolContext {
     dryRun: false,
     ...overrides,
   };
+}
+
+/**
+ * Phase 8 — a context carrying a REAL, args-bound grant for this exact call.
+ *
+ * Side-effecting tools refuse to run without one (that is the phase's whole
+ * point), so these tests mint the same artifact the agent loop mints. Grants
+ * are single-use, so every call gets a fresh one.
+ */
+function grantedCtx(
+  capabilityId: string,
+  args: Record<string, unknown>,
+  overrides: Partial<ToolContext> = {},
+): ToolContext {
+  return withGrant(ctx(overrides), capabilityId, args);
 }
 
 // ---- egress ----
@@ -68,14 +84,14 @@ test("list_dir lists files", async () => {
 
 test("delete_file requires approval (denied = no delete)", async () => {
   writeFileSync(join(tmp, "d.txt"), "x");
-  const r = await deleteFileTool.run({ path: "d.txt" }, ctx({ approve: async () => false }));
+  const r = await deleteFileTool.run({ path: "d.txt" }, grantedCtx("delete_file", { path: "d.txt" }, { approve: async () => false }));
   expect(r.ok).toBe(false);
   expect(existsSync(join(tmp, "d.txt"))).toBe(true);
 });
 
 test("delete_file dry-run does not delete", async () => {
   writeFileSync(join(tmp, "d.txt"), "x");
-  const r = await deleteFileTool.run({ path: "d.txt" }, ctx({ dryRun: true }));
+  const r = await deleteFileTool.run({ path: "d.txt" }, grantedCtx("delete_file", { path: "d.txt" }, { dryRun: true }));
   expect(r.ok).toBe(true);
   expect(r.output).toContain("[dry-run]");
   expect(existsSync(join(tmp, "d.txt"))).toBe(true);
@@ -83,7 +99,7 @@ test("delete_file dry-run does not delete", async () => {
 
 test("delete_file actually deletes when approved", async () => {
   writeFileSync(join(tmp, "d.txt"), "x");
-  const r = await deleteFileTool.run({ path: "d.txt" }, ctx());
+  const r = await deleteFileTool.run({ path: "d.txt" }, grantedCtx("delete_file", { path: "d.txt" }));
   expect(r.ok).toBe(true);
   expect(existsSync(join(tmp, "d.txt"))).toBe(false);
 });
@@ -92,7 +108,7 @@ test("shell blocks dangerous commands BEFORE approval", async () => {
   let approvalAsked = false;
   const r = await shellTool.run(
     { cmd: "rm -rf /" },
-    ctx({ approve: async () => { approvalAsked = true; return true; } }),
+    grantedCtx("shell", { cmd: "rm -rf /" }, { approve: async () => { approvalAsked = true; return true; } }),
   );
   expect(r.ok).toBe(false);
   expect(r.output).toContain("blocked");
@@ -100,13 +116,13 @@ test("shell blocks dangerous commands BEFORE approval", async () => {
 });
 
 test("shell dry-run does not execute", async () => {
-  const r = await shellTool.run({ cmd: "echo hello" }, ctx({ dryRun: true }));
+  const r = await shellTool.run({ cmd: "echo hello" }, grantedCtx("shell", { cmd: "echo hello" }, { dryRun: true }));
   expect(r.ok).toBe(true);
   expect(r.output).toContain("[dry-run]");
 });
 
 test("shell denied = no run", async () => {
-  const r = await shellTool.run({ cmd: "echo hello" }, ctx({ approve: async () => false }));
+  const r = await shellTool.run({ cmd: "echo hello" }, grantedCtx("shell", { cmd: "echo hello" }, { approve: async () => false }));
   expect(r.ok).toBe(false);
   expect(r.output).toContain("denied");
 });

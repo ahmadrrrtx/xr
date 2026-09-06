@@ -7,15 +7,17 @@ import { banner, ok, warn, info, confirm, colors as C } from "../interfaces/cli.
 import { McpManager } from "./manager.ts";
 import { isMcpPermissionScope, type McpPermissionScope, type McpServerConfigInput } from "./types.ts";
 
-interface Flags { json: boolean; yes: boolean; enable: boolean; grant?: McpPermissionScope[]; rest: string[] }
+interface Flags { json: boolean; yes: boolean; enable: boolean; allowUnisolated: boolean; grant?: McpPermissionScope[]; rest: string[] }
 
 function parseFlags(argv: string[]): Flags {
-  const f: Flags = { json: false, yes: false, enable: false, rest: [] };
+  const f: Flags = { json: false, yes: false, enable: false, allowUnisolated: false, rest: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") f.json = true;
     else if (a === "--yes" || a === "-y") f.yes = true;
     else if (a === "--enable") f.enable = true;
+    // Phase 8 · Step 5 — the signed replacement for XR_MCP_ALLOW_UNISOLATED.
+    else if (a === "--allow-unisolated") f.allowUnisolated = true;
     else if (a === "--grant") {
       const v = argv[++i] ?? "";
       f.grant = v.split(",").map((s) => s.trim()).filter((s): s is McpPermissionScope => isMcpPermissionScope(s));
@@ -57,6 +59,7 @@ export async function handleMcpCommand(argv: string[], store: Store): Promise<vo
     case "allow": case "allowlist": return cmdAllow(mgr, flags);
     case "revoke": return cmdRevoke(mgr, flags);
     case "allowlist-status": return cmdAllowlistStatus(mgr, flags);
+    case "re-sign": case "resign": return cmdReSign(mgr, flags);
     case "help": case "--help": case "-h": return printHelp();
     default:
       warn(`unknown mcp subcommand: ${sub}`);
@@ -67,11 +70,11 @@ export async function handleMcpCommand(argv: string[], store: Store): Promise<vo
 /** Phase 7 · T6 — signed allowlist commands (default-deny MCP). */
 async function cmdAllow(mgr: McpManager, flags: Flags) {
   const id: string = flags.rest[0] ?? "";
-  if (!id) return warn("usage: xr mcp allow <id> [--key <keyId>]");
-  await cmdAllowInner(id);
+  if (!id) return warn("usage: xr mcp allow <id> [--allow-unisolated] [--key <keyId>]");
+  await cmdAllowInner(id, flags.allowUnisolated);
 }
 
-async function cmdAllowInner(id: string) {
+async function cmdAllowInner(id: string, allowUnisolated = false) {
   const { McpAllowlist, defaultAllowlistKeysPath, generateAllowlistKeyPair, writeAllowlistKeys } = await import("./allowlist.ts");
   // Ensure operator keys exist (first run).
   const { existsSync } = await import("node:fs");
@@ -80,8 +83,35 @@ async function cmdAllowInner(id: string) {
     writeAllowlistKeys([pair]);
     ok(`created operator allowlist key ${pair.keyId} at ${defaultAllowlistKeysPath()}`);
   }
-  const result = new McpAllowlist().allow(id, { by: "operator" });
+  if (allowUnisolated) {
+    warn(
+      `--allow-unisolated: "${id}" will be permitted to run WITHOUT kernel isolation. ` +
+      `This is recorded as a signed grant naming your operator key (attributable, revocable with \`xr mcp revoke ${id}\`), ` +
+      `and it is still refused while hardened mode is on.`,
+    );
+  }
+  const result = new McpAllowlist().allow(id, { by: "operator", allowUnisolated: allowUnisolated ? true : undefined });
   if (result.ok) ok(result.reason ?? "allowed"); else warn(result.reason ?? "allow failed");
+}
+
+/**
+ * Phase 8 · rollout — one-time v1 → v2 allowlist upgrade.
+ *
+ * A v1 file still verifies and still gates (read as isolation "required"), so
+ * this is a convenience, not a forced migration. It exists so an operator can
+ * move to the new schema without revoking and re-allowing every server by hand.
+ */
+async function cmdReSign(_mgr: McpManager, flags: Flags) {
+  const { McpAllowlist, MCP_ALLOWLIST_SCHEMA_VERSION } = await import("./allowlist.ts");
+  const allowlist = new McpAllowlist();
+  if (!allowlist.isLegacySchema) {
+    return ok(`allowlist is already schema v${MCP_ALLOWLIST_SCHEMA_VERSION} — nothing to do`);
+  }
+  const result = allowlist.reSign();
+  if (result.ok) {
+    ok(result.reason ?? "re-signed");
+    info("no unisolated grants were created by this upgrade — issue them per server with `xr mcp allow <id> --allow-unisolated`");
+  } else warn(result.reason ?? "re-sign failed");
 }
 
 async function cmdRevoke(mgr: McpManager, flags: Flags) {
@@ -102,11 +132,27 @@ async function cmdAllowlistStatus(mgr: McpManager, flags: Flags) {
   const allowlist = new McpAllowlist();
   const file = allowlist.verifyFile();
   const rows = allowlist.list();
-  if (flags.json) return console.log(JSON.stringify({ verified: file.ok, reason: file.reason, servers: rows }, null, 2));
+  if (flags.json) {
+    return console.log(JSON.stringify({
+      verified: file.ok,
+      reason: file.reason,
+      schemaVersion: allowlist.schemaVersion,
+      legacySchema: allowlist.isLegacySchema,
+      servers: rows,
+    }, null, 2));
+  }
   if (!file.ok) warn(`allowlist ${file.ok ? "verified" : "NOT VERIFIED"}: ${file.reason}`);
   else ok(`allowlist verified: ${file.reason}`);
+  if (allowlist.isLegacySchema) {
+    warn(`allowlist is schema v${allowlist.schemaVersion} (legacy). It still verifies and every server is treated as isolation="required". Run \`xr mcp re-sign\` to upgrade.`);
+  }
   if (!rows.length) return warn("no servers allowlisted (default-deny: nothing can load)");
-  for (const r of rows) console.log(`  ${r.serverId}  granted ${new Date(r.grantedAt).toISOString()} by ${r.by}`);
+  for (const r of rows) {
+    const iso = r.isolation === "required"
+      ? C.dim("isolation: required")
+      : C.amber(`isolation: UNISOLATED grant (${r.isolation.replace("granted-unisolated-by:", "by ")})`);
+    console.log(`  ${r.serverId}  granted ${new Date(r.grantedAt).toISOString()} by ${r.by}  ${iso}`);
+  }
 }
 
 function printHelp(): void {
@@ -126,8 +172,12 @@ function printHelp(): void {
   xr mcp search <query>           search registry
   xr mcp doctor                   MCP platform health
   xr mcp allow <id>               sign server onto the allowlist (default-deny gate)
+    --allow-unisolated            also sign a per-server grant to run WITHOUT
+                                  kernel isolation (attributable + revocable;
+                                  still refused in hardened mode)
   xr mcp revoke <id>              revoke from allowlist (kills live client)
   xr mcp allowlist-status         verify allowlist signature + list entries
+  xr mcp re-sign                  upgrade a v1 allowlist to the v2 schema
 
   Example:
     xr mcp add github stdio npx @modelcontextprotocol/server-github

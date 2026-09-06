@@ -22,7 +22,43 @@ import { describe, test, expect } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isOffValue } from "../../src/security/env-compat.ts";
+import { isOffValue, resolvePosture } from "../../src/security/env-compat.ts";
+
+describe("Phase 8 posture resolution (pure, no env mutation)", () => {
+  test("DEFAULT: hydration OFF (F-24 closed), ambient read ON (BYOK works)", () => {
+    const p = resolvePosture({});
+    expect(p.hydration).toBe(false);
+    expect(p.ambientRead).toBe(true);
+  });
+
+  test("XR_SECRETS_ENV_HYDRATION=1 re-enables the ambient mirror (explicit opt-in)", () => {
+    expect(resolvePosture({ XR_SECRETS_ENV_HYDRATION: "1" }).hydration).toBe(true);
+  });
+
+  test("XR_SECRETS_STRICT=1 seals BOTH directions", () => {
+    const p = resolvePosture({ XR_SECRETS_STRICT: "1" });
+    expect(p.hydration).toBe(false);
+    expect(p.ambientRead).toBe(false);
+  });
+
+  test("XR_SECRETS_ENV_READ=0 disables BYOK without enabling hydration", () => {
+    const p = resolvePosture({ XR_SECRETS_ENV_READ: "0" });
+    expect(p.ambientRead).toBe(false);
+    expect(p.hydration).toBe(false);
+  });
+
+  test("legacy XR_SECRETS_ENV_COMPAT=0 still means the sealed posture", () => {
+    const p = resolvePosture({ XR_SECRETS_ENV_COMPAT: "0" });
+    expect(p.hydration).toBe(false);
+    expect(p.ambientRead).toBe(false);
+  });
+
+  test("legacy XR_SECRETS_ENV_COMPAT=1 restores hydration and is flagged as legacy", () => {
+    const p = resolvePosture({ XR_SECRETS_ENV_COMPAT: "1" });
+    expect(p.hydration).toBe(true);
+    expect(p.legacyFlagUsed).toBe(true);
+  });
+});
 
 describe("flag semantics (pure predicate, no env mutation)", () => {
   test("defaults ON for 1.0 (unset / empty)", () => {
@@ -89,9 +125,9 @@ async function runFixture(fixture: string, extraEnv: Record<string, string>): Pr
   }
 }
 
-describe("compat ON (1.0 behavior, hermetic child process)", () => {
+describe("hydration ON (explicit opt-in, hermetic child process)", () => {
   test("setSecret hydrates process.env; broker sync + async resolve; hydrateProviderEnv writes", async () => {
-    const r = await runFixture("secret-compat-on.ts", {});
+    const r = await runFixture("secret-compat-on.ts", { XR_SECRETS_ENV_HYDRATION: "1" });
     expect(r.flagEnabled).toBe(true);
     expect(r.envAfterSet).toBe("v1-secret");
     expect(r.synced).toBe("v1-secret");
@@ -100,9 +136,9 @@ describe("compat ON (1.0 behavior, hermetic child process)", () => {
   }, 30_000);
 });
 
-describe("compat OFF (2.0 seam behavior, hermetic child process)", () => {
+describe("sealed posture (hermetic child process)", () => {
   test("setSecret persists durably but NEVER lands in env; broker still resolves", async () => {
-    const r = await runFixture("secret-compat-off.ts", { XR_SECRETS_ENV_COMPAT: "0" });
+    const r = await runFixture("secret-compat-off.ts", { XR_SECRETS_STRICT: "1" });
 
     // The child's own snapshot sees the flag off.
     expect(r.flagEnabled).toBe(false);

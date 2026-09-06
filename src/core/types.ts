@@ -101,6 +101,20 @@ export interface ToolContext {
    * callback type).
    */
   onToolUse?: (info: { tool: string; ok: boolean; error?: string }) => void;
+  /**
+   * Phase 8 · Step 1 — the args-bound capability grant authorizing THIS call.
+   *
+   * Minted by the policy engine on allow and threaded to the execution
+   * boundary. A side-effecting tool presents `{grantId, args}` back to the
+   * runtime (`requireGrant` in src/capabilities/enforce.ts) which re-derives
+   * the argument hash before any side effect occurs. Absence is not implicit
+   * permission: in hardened mode a missing grant on a side-effecting path is
+   * a denial.
+   *
+   * Typed as a plain string id so the kernel keeps no import edge into the
+   * capability layer (L0 stays L0 — the boundary table forbids core → platform).
+   */
+  grantId?: string;
 }
 
 /** Phase 2 · F-26 — structured preview kind (canonical in core so the kernel

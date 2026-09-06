@@ -16,6 +16,7 @@ import type {
   IdempotencyClass,
 } from "../types.ts";
 import { EXECUTION_ADAPTER_VERSION } from "../types.ts";
+import { grants, grantAuditFields } from "../../capabilities/grant.ts";
 import {
   IN_PROCESS_PLACEMENT,
   defaultIdempotency,
@@ -94,8 +95,24 @@ export async function executeTool(
 
   // Build a ToolContext that routes through existing audit/approval but does NOT double-record.
   // Audit calls from inside tools go through the caller's audit sink directly (preserves existing behavior).
+  /**
+   * Phase 8 · Step 1 — this adapter is a real execution path (the fabric's
+   * tool boundary), so it mints an args-bound grant exactly like the agent
+   * loop does. Minting HERE rather than accepting one from the caller keeps
+   * the invariant "grants are minted by the runtime, never supplied by a
+   * caller" true: an embedder cannot hand in a grant it fabricated.
+   */
+  const grant = grants.mint({
+    capabilityId: tool.name,
+    args,
+    runId: opts.sessionId ?? opts.workspaceId,
+    taskId: opts.sessionId,
+  });
+  opts.audit?.("grant.minted", grantAuditFields(grant));
+
   const toolCtx: ToolContext = {
     cwd: opts.cwd,
+    grantId: grant.grantId,
     approve: async (req) => {
       // Phase 2 · F-06 — fail-closed: with no approval authority wired, an
       // approval-requiring tool is DENIED. The fabric handles approval at

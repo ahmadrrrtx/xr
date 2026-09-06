@@ -569,6 +569,18 @@ const ConfigSchema = z.object({
        */
       requireTrust: z.boolean().default(true),
       /**
+       * Phase 8 · Step 4 — require a signature (provenance), not merely an
+       * unchanged hash (integrity). Default TRUE: a newly installed plugin
+       * must be signed by a key on the local trust store or it is
+       * quarantined.
+       *
+       * Plugins already installed when this rule arrives are grandfathered
+       * automatically — see src/plugins/signing.ts — so enabling this by
+       * default does not break an upgrade. `XR_PLUGINS_ALLOW_UNSIGNED=1` is a
+       * one-release escape hatch that warns on every use.
+       */
+      requireSigned: z.boolean().default(true),
+      /**
        * Permissions XR will never grant to any plugin, regardless of manifest /
        * user approval (enterprise policy hook). Empty by default.
        */

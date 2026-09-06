@@ -32,7 +32,9 @@ confinement; only OS-level isolation confines.
   VM shares the host process). OS isolation is the boundary; the worker
   capability host is the only API.
 - **MCP:** default-deny permissions; high-risk (credential-bearing) stdio
-  servers run inside a namespace sandbox or are refused; `XR_MCP_ALLOW_UNISOLATED`
+  servers run inside a namespace sandbox or are refused; the former
+  `XR_MCP_ALLOW_UNISOLATED` env flag was DELETED in Phase 8 and replaced by a
+  signed per-server isolation grant in the allowlist (`XR_MCP_ALLOW_UNISOLATED`
   is dead in hardened mode.
 - **Browser:** sandboxed launch flags enforced; root-without-sandbox refused.
 

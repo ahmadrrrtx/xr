@@ -394,6 +394,19 @@ export interface CapabilityDecision {
   readonly cacheable: boolean;
   /** Policy evaluation steps for audit. */
   readonly policyTrace: string[];
+  /**
+   * Phase 8 · Step 1 — the args-bound capability grant minted for an ALLOW.
+   *
+   * Present iff `allowed === true` AND the policy engine was given a grant
+   * minter (`PolicyContext.mintGrants`). The execution boundary presents this
+   * grant back with the arguments it is about to run; a mismatch is a denial.
+   * A denial never carries a grant — an artifact is authority.
+   *
+   * NOTE ON CACHEABILITY: a decision carrying a grant must never be reused
+   * from a cache, because the grant inside it is single-use and args-bound.
+   * The policy engine sets `cacheable: false` whenever it mints.
+   */
+  readonly grant?: import("./grant.ts").CapabilityGrant;
 }
 
 // ---------------------------------------------------------------------------

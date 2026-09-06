@@ -70,6 +70,9 @@ export async function handlePluginsCommand(argv: string[], store: Store): Promis
     case "enable": return cmdEnable(mgr, flags);
     case "disable": return cmdDisable(mgr, flags);
     case "quarantine": return cmdQuarantine(mgr, flags);
+    case "allow": case "trust": return cmdAllow(mgr, flags);
+    case "trust-status": return cmdTrustStatus(mgr, flags);
+    case "untrust": case "trust-revoke": return cmdUntrust(mgr, flags);
     case "rollback": return cmdRollback(mgr, flags);
     case "update": case "upgrade": return cmdUpdate(mgr, flags);
     case "remove": case "uninstall": case "rm": return cmdRemove(mgr, flags);
@@ -94,6 +97,9 @@ function printPluginsHelp(): void {
   xr plugins enable <id>                  enable a plugin
   xr plugins disable <id>                 disable a plugin
   xr plugins quarantine <id> <reason>     disable and quarantine a plugin
+  xr plugins allow <id>                   trust this plugin's current code (lifts unsigned-quarantine)
+  xr plugins trust-status                 list trust records (signed / grandfathered / operator-allowed)
+  xr plugins untrust <id>                 withdraw trust (quarantines on next load)
   xr plugins rollback <id> [version]      restore prior package; permissions reset
   xr plugins update <id> [path]           update after review; blocks new permissions
   xr plugins remove <id>                  uninstall and delete plugin files
@@ -220,6 +226,83 @@ async function cmdQuarantine(mgr: PluginManager, flags: Flags): Promise<void> {
   if (!id) return void warn("usage: xr plugins quarantine <id> <reason>");
   const r = await mgr.quarantine(id, reason);
   if (r.ok) ok(`quarantined ${id}`); else warn(`could not quarantine ${id}: ${r.reason}`);
+}
+
+/**
+ * Phase 8 · Step 4 — `xr plugins allow <id>`.
+ *
+ * Records an operator trust decision for the plugin's CURRENT tree hash and
+ * lifts the quarantine that an unsigned plugin was placed under. The record is
+ * bound to the code that is on disk right now: if the plugin is modified
+ * later, trust does not follow it.
+ */
+async function cmdAllow(mgr: PluginManager, flags: Flags): Promise<void> {
+  const id = flags.rest[0];
+  if (!id) return void warn("usage: xr plugins allow <id>");
+  const entry = mgr.getEntry(id);
+  if (!entry) return void warn(`plugin "${id}" is not installed`);
+  if (!entry.treeHash) return void warn(`plugin "${id}" has no recorded tree hash — reinstall it before trusting`);
+
+  const { PluginTrustStore, pluginRiskTier, highRiskPermissions } = await import("./signing.ts");
+  const store = new PluginTrustStore();
+  const keys = store.ensureKeys();
+  if (!keys) return void warn("could not create or read a plugin signing key");
+
+  const risky = highRiskPermissions(entry.grantedPermissions as unknown as string[]);
+  if (pluginRiskTier(entry.grantedPermissions as unknown as string[]) === "tier2") {
+    warn(
+      `"${id}" declares high-risk permission(s): ${risky.join(", ")}. ` +
+      `Trusting it does NOT auto-approve its tools — they stay Tier-2 and prompt on every call.`,
+    );
+  }
+  const res = store.record(id, entry.treeHash, "operator-allowed", {
+    by: "operator",
+    reason: "explicitly allowed via `xr plugins allow`",
+  });
+  if (!res.ok) return void warn(res.reason ?? "could not record trust");
+  ok(`${res.reason} — bound to tree hash ${entry.treeHash.slice(0, 12)}…`);
+
+  // Lift an unsigned-quarantine so the next load succeeds without a manual
+  // second step; a quarantine for any OTHER reason is deliberately left alone.
+  if (entry.lifecycleState === "quarantined") {
+    const r = mgr.liftUnsignedQuarantine(id);
+    if (r.ok) info(`lifted unsigned-quarantine on ${id}`);
+    else warn(`plugin remains quarantined: ${r.reason}`);
+  }
+}
+
+/** Phase 8 · Step 4 — show which plugins are trusted, and HOW. */
+async function cmdTrustStatus(mgr: PluginManager, flags: Flags): Promise<void> {
+  const { PluginTrustStore } = await import("./signing.ts");
+  const store = new PluginTrustStore();
+  const file = store.verifyFile();
+  const rows = store.list();
+  if (flags.json) {
+    return void console.log(JSON.stringify({ verified: file.ok, reason: file.reason, records: rows }, null, 2));
+  }
+  if (file.ok) ok(`plugin trust store ${file.reason}`);
+  else warn(`plugin trust store NOT verified: ${file.reason}`);
+  if (!rows.length) return void warn("no plugin trust records (every installed plugin is unsigned)");
+  for (const r of rows) {
+    const tag = r.kind === "grandfathered"
+      ? "grandfathered (amnesty — pre-dates signing)"
+      : r.kind === "operator-allowed"
+        ? "operator-allowed"
+        : "signed";
+    const entry = mgr.getEntry(r.pluginId);
+    const drift = entry?.treeHash && entry.treeHash !== r.treeHash ? "  ⚠ CODE CHANGED SINCE TRUSTED" : "";
+    console.log(`  ${r.pluginId}  ${tag}  ${new Date(r.grantedAt).toISOString()}  ${r.treeHash.slice(0, 12)}…${drift}`);
+  }
+}
+
+/** Phase 8 · Step 4 — withdraw trust; the plugin quarantines on next load. */
+async function cmdUntrust(_mgr: PluginManager, flags: Flags): Promise<void> {
+  const id = flags.rest[0];
+  if (!id) return void warn("usage: xr plugins untrust <id>");
+  const { PluginTrustStore } = await import("./signing.ts");
+  const res = new PluginTrustStore().revoke(id);
+  if (res.ok) ok(`${res.reason} — it will be quarantined on next load`);
+  else warn(res.reason ?? "could not revoke trust");
 }
 
 function cmdRollback(mgr: PluginManager, flags: Flags): void {

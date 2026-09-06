@@ -60,8 +60,34 @@ export const THRESHOLD = 800;
  * waived giants (store.ts, agent.ts, config.ts) were held at their recorded
  * sizes rather than grown. Measured after the phase: 135,4xx. The step is the
  * smallest round number that fits; 110k stays the direction of travel.
+ *
+ * ── Phase 8 · 136,000 → 138,000 (capability grants + ecosystem hardening) ───
+ * Phase 8 began at 135,481 LOC (519 of headroom — the tightest start yet) and
+ * adds the authorization surface the plan requires in core:
+ *
+ *   · capabilities/grant.ts + enforce.ts — args-hash-bound, single-use grants
+ *     and the shared enforcement point that closes the policy→execution
+ *     TOCTOU (F-22). Every side-effecting boundary calls it.
+ *   · security/secret-broker.ts + env-compat.ts — the completed broker and the
+ *     split hydration/ambient-read posture that closes F-24.
+ *   · mcp/allowlist.ts — schema v2 per-server signed isolation grants, which
+ *     replace the deleted XR_MCP_ALLOW_UNISOLATED env flag.
+ *   · plugins signing + quarantine, and the headless typed-confirm second
+ *     factor in control/approval-store.ts.
+ *
+ * None of it is a satellite candidate: this is the code that decides whether
+ * an action may happen at all, and moving an authorization boundary out of
+ * core would put the trust decision behind a package boundary the core cannot
+ * verify — the precise inversion Phase 5 was careful to avoid. The waived
+ * giants were held at their recorded sizes except agent.ts, whose growth is
+ * the grant-minting boundary itself (re-waived with a reason).
+ *
+ * 2,000 rather than 1,000: a 519-LOC start plus a security surface this wide
+ * would otherwise need a second raise mid-phase, and a ceiling that moves
+ * twice in one phase stops functioning as a gate. 110k remains the direction
+ * of travel; the Phase 9 budget is explicitly zero-growth.
  */
-export const TREE_CEILING = 136_000;
+export const TREE_CEILING = 138_000;
 
 interface Waiver {
   readonly path: string;

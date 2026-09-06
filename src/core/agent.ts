@@ -980,9 +980,17 @@ export async function runAgentLoop(
 
         // ── Phase 08 — unified policy boundary: every tool call passes through
         // the same authorization boundary (trust → lifecycle → scope → permission → mode)
+        //
+        // Phase 8 · Step 1 — the boundary now MINTS an args-bound grant on
+        // allow, and that grant (not merely the decision's truthiness) is what
+        // authorizes the execution below. `callGrantId` carries it the few
+        // lines to `tool.run`; the executor re-derives the argument hash, so a
+        // mutation between here and there cannot execute.
+        let callGrantId: string | undefined;
         if (registry) {
           try {
             const { evaluatePolicy } = await import("../capabilities/policy.ts");
+            const { grantAuditFields } = await import("../capabilities/grant.ts");
             const req = {
               capabilityId: call.tool,
               requestedBy: "model",
@@ -1014,7 +1022,14 @@ export async function runAgentLoop(
               allowedHosts: deps.allowedHosts ?? [],
               cwd,
               hardened,
+              // Phase 8 — this call site is about to EXECUTE, so it mints.
+              mintGrants: true,
+              grantIdentity: { taskId: runId, agentId: deps.agentIdentity?.agentId },
             });
+            if (decision.allowed && decision.grant) {
+              callGrantId = decision.grant.grantId;
+              auditStore.audit("grant.minted", grantAuditFields(decision.grant), sessionId);
+            }
             if (!decision.allowed) {
               // For unknown tools, let existing tool.blocked path handle it (preserves T1 EFFECTS contract)
               if (decision.reason?.includes("not found")) {
@@ -1062,6 +1077,40 @@ export async function runAgentLoop(
             auditStore.audit("capability.denied", { tool: call.tool, reason: "policy_error" }, sessionId);
             continue;
           }
+        } else {
+          /**
+           * Phase 8 · Step 1 — NO CAPABILITY REGISTRY on this run.
+           *
+           * A grant attests "the runtime authorized THIS call with THESE
+           * arguments, and the arguments did not change on the way to
+           * execution". That is a different question from "does policy permit
+           * this capability", which is what the registry answers. Embedders
+           * that run the loop without a registry (library use, and much of the
+           * existing test surface) still pass through this boundary and still
+           * get approval gating from `tool.requiresApproval` + `approve`, so
+           * the loop is still the authorizing party and must mint.
+           *
+           * Refusing to mint here would not be "more secure" — it would make
+           * the registry-less loop unable to execute ANY side-effecting tool,
+           * which is a functional break rather than a policy decision, and it
+           * would tempt embedders toward a bypass. Minting under a distinct
+           * audit event keeps the invariant (nothing executes without a grant)
+           * while making the weaker provenance explicit and greppable in the
+           * chain.
+           */
+          const { grants, grantAuditFields } = await import("../capabilities/grant.ts");
+          const grant = grants.mint({
+            capabilityId: call.tool,
+            args: call.args as Record<string, unknown>,
+            runId,
+            taskId: sessionId,
+          });
+          callGrantId = grant.grantId;
+          auditStore.audit(
+            "grant.minted",
+            { ...grantAuditFields(grant), policyEvaluated: false, note: "no capability registry on this run — grant binds args only, not policy" },
+            sessionId,
+          );
         }
 
         const tool = resolveTool(call.tool);
@@ -1102,7 +1151,12 @@ export async function runAgentLoop(
         // matching `tool_result` event carries the outcome.
         deps.onStreamEvent?.({ type: "status", status: "tool_running", message: call.tool });
         try {
-          const result = await tool.run(call.args, toolCtx);
+          // Phase 8 · Step 1 — the grant travels WITH the call. The context is
+          // cloned per call rather than mutated, so a grant can never leak
+          // sideways into a concurrent or subsequent tool call sharing the
+          // same base context.
+          const callCtx: ToolContext = callGrantId ? { ...toolCtx, grantId: callGrantId } : toolCtx;
+          const result = await tool.run(call.args, callCtx);
           const tag = result.ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
           say(`  ${tag} ${result.output.split("\n")[0].slice(0, 100)}`);
           deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: result.ok, result: result.output });

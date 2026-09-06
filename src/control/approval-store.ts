@@ -36,6 +36,70 @@ export interface ApprovalIdentity {
   sessionId?: string | null;
 }
 
+/**
+ * ── Phase 8 · Step 6 — HEADLESS TIER-2 SECOND FACTOR ────────────────────────
+ *
+ * On an interactive surface, a Tier-2 approval has an implicit second factor:
+ * a human is looking at a terminal and physically presses a key. Headless
+ * surfaces (the daemon's HTTP decision endpoints) have no such thing — any
+ * client that can reach `POST /api/approvals/:id/decision` can approve a
+ * destructive action with a single boolean. That is the gap: the most
+ * dangerous operations were the easiest to auto-approve.
+ *
+ * The second factor is a TYPED CONFIRMATION PHRASE. To approve a Tier-2
+ * request headlessly the caller must return the exact phrase for that request
+ * (e.g. `approve delete_file to db`), which is derived from the request itself
+ * and shown in the pending record.
+ *
+ * Why a phrase rather than another token:
+ *   · it cannot be replayed against a DIFFERENT request — the phrase is bound
+ *     to the approval id, tool and args hash;
+ *   · it cannot be produced by a client that never READ the request, which is
+ *     precisely the confused-deputy / blind-approval case;
+ *   · it survives being written down in a script only by hard-coding a value
+ *     that changes per request, so automation cannot silently pre-approve.
+ *
+ * Only the HASH of the phrase is stored, exactly as with a password: an
+ * attacker with read access to the approvals table still cannot produce a
+ * valid confirmation for a pending request they cannot see in full.
+ */
+export interface TypedConfirmChallenge {
+  /** The phrase the operator must type back, verbatim. */
+  phrase: string;
+  /** sha256 of the phrase, salted by approval id. Only this is persisted. */
+  hash: string;
+}
+
+/** Risk tiers that require a typed confirmation on a headless surface. */
+export const TYPED_CONFIRM_TIERS = ["tier2", "blocked"] as const;
+
+/**
+ * Derive the confirmation phrase for a request.
+ *
+ * Deliberately human-typable (lowercase words, no punctuation soup) — a phrase
+ * an operator cannot type without error is a phrase they will work around. The
+ * entropy is not the point; the point is that producing it requires having
+ * READ this specific request.
+ */
+export function typedConfirmPhrase(input: { id: string; tool: string; argsHash: string }): string {
+  const shortArgs = input.argsHash.replace("sha256:", "").slice(0, 6);
+  return `approve ${input.tool} ${input.id} ${shortArgs}`;
+}
+
+export function typedConfirmHash(id: string, phrase: string): string {
+  return `sha256:${createHash("sha256").update(`${id}:${phrase}`).digest("hex")}`;
+}
+
+export function typedConfirmChallenge(input: { id: string; tool: string; argsHash: string }): TypedConfirmChallenge {
+  const phrase = typedConfirmPhrase(input);
+  return { phrase, hash: typedConfirmHash(input.id, phrase) };
+}
+
+/** Whether a tier demands the second factor on a headless surface. */
+export function requiresTypedConfirm(riskTier: string | undefined): boolean {
+  return (TYPED_CONFIRM_TIERS as readonly string[]).includes(riskTier ?? "unknown");
+}
+
 export interface ApprovalRequestInput extends ApprovalIdentity {
   tool: string;
   /** Model-shaped reason text. UNTRUSTED: rendered as data, never authority. */
@@ -48,6 +112,12 @@ export interface ApprovalRequestInput extends ApprovalIdentity {
   surface: string;
   /** Per-request override; falls back to perSurface config then the default. */
   ttlMs?: number;
+  /**
+   * Phase 8 · Step 6 — the requesting surface has NO interactive human (the
+   * daemon's HTTP endpoints). Tier-2 requests raised this way require a typed
+   * confirmation phrase to approve.
+   */
+  headless?: boolean;
 }
 
 export interface ApprovalOutcome {
@@ -75,6 +145,12 @@ export interface ApprovalRecord {
   decidedBy: { channel: string; userId: string | null } | null;
   decidedAt: number | null;
   latencyMs: number | null;
+  /**
+   * Phase 8 · Step 6 — present when this request needs a typed confirmation.
+   * The PHRASE is exposed on the in-memory record (the surface must show it to
+   * the operator); only the hash is persisted.
+   */
+  typedConfirm?: TypedConfirmChallenge;
 }
 
 export interface ApprovalHandle {
@@ -175,6 +251,14 @@ export class ApprovalStore {
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
   /** Poll intervals for cross-process decisions. */
   private pollers = new Map<string, ReturnType<typeof setInterval>>();
+  /**
+   * Phase 8 · Step 6 — outstanding typed-confirm challenges (id → challenge).
+   * Held in the process that raised the request; a decision arriving from a
+   * different process is verified by that process against its own copy, and a
+   * process that never saw the challenge cannot approve a Tier-2 request at
+   * all — which is the intended failure direction.
+   */
+  private pendingConfirms = new Map<string, TypedConfirmChallenge>();
 
   constructor(
     public readonly store: WorkspaceStore,
@@ -245,6 +329,26 @@ export class ApprovalStore {
       decidedAt: null,
       latencyMs: null,
     };
+
+    /**
+     * Phase 8 · Step 6 — a headless Tier-2 request gets a typed-confirm
+     * challenge. `headless` is the surface's own declaration: an interactive
+     * surface already has a human in the loop and does not need (or want) a
+     * phrase to type.
+     */
+    if (input.headless && requiresTypedConfirm(record.riskTier)) {
+      const challenge = typedConfirmChallenge({ id, tool: record.tool, argsHash: record.argsHash });
+      record.typedConfirm = challenge;
+      this.pendingConfirms.set(id, challenge);
+      this.store.audit("approval.typed_confirm", {
+        approvalId: id,
+        outcome: "required",
+        tool: record.tool,
+        riskTier: record.riskTier,
+        surface: record.surface,
+        note: "headless tier-2 request — approval requires the typed confirmation phrase",
+      });
+    }
 
     this.store.approvalInsert({
       id,
@@ -332,13 +436,84 @@ export class ApprovalStore {
    * requesting process's waiter resolves immediately (in-process fast path)
    * or within one poll interval (cross-process).
    */
+  /**
+   * Phase 8 · Step 6 — does this pending request still owe a typed
+   * confirmation in THIS process?
+   *
+   * Records rebuilt from SQL carry no challenge (only the hash is persisted,
+   * and the phrase is never written at all), so callers that need to
+   * distinguish "needs confirmation" from "already decided" must ask the live
+   * store rather than inspecting a rehydrated record.
+   */
+  needsTypedConfirm(id: string): boolean {
+    return this.pendingConfirms.has(id);
+  }
+
+  /** The challenge for a pending request, if this process raised it. */
+  typedConfirmFor(id: string): TypedConfirmChallenge | undefined {
+    return this.pendingConfirms.get(id);
+  }
+
+  /** Audit that never throws (the store may have closed under us). */
+  private safeAudit(event: string, fields: Record<string, unknown>): void {
+    try {
+      this.store.audit(event, fields);
+    } catch {
+      /* closed — the decision path must not fail on an audit write */
+    }
+  }
+
   decide(
     id: string,
     approved: boolean,
     by: { channel: string; userId?: string | null },
+    /**
+     * Phase 8 · Step 6 — the typed phrase, required to APPROVE a Tier-2
+     * request on a headless surface. Ignored for denials: a denial is always
+     * safe and must never be blocked by a second factor.
+     */
+    typedConfirm?: string,
   ): boolean {
     try {
       if (!this.storeAlive()) return false;
+
+      // ── Second factor ──────────────────────────────────────────────────
+      // Checked BEFORE the decision is written, so a failed confirmation
+      // leaves the request pending (still deniable by TTL) rather than
+      // consuming it.
+      if (approved) {
+        const challenge = this.pendingConfirms.get(id);
+        if (challenge) {
+          const supplied = (typedConfirm ?? "").trim();
+          if (!supplied) {
+            this.safeAudit("approval.typed_confirm", {
+              approvalId: id,
+              outcome: "missing",
+              byChannel: by.channel,
+              byUser: by.userId ?? null,
+              note: "tier-2 headless approval attempted without the typed confirmation phrase",
+            });
+            return false;
+          }
+          if (typedConfirmHash(id, supplied) !== challenge.hash) {
+            this.safeAudit("approval.typed_confirm", {
+              approvalId: id,
+              outcome: "mismatch",
+              byChannel: by.channel,
+              byUser: by.userId ?? null,
+              note: "typed confirmation did not match the phrase for this request",
+            });
+            return false;
+          }
+          this.safeAudit("approval.typed_confirm", {
+            approvalId: id,
+            outcome: "verified",
+            byChannel: by.channel,
+            byUser: by.userId ?? null,
+          });
+        }
+      }
+
       const ok = this.store.approvalDecide(id, approved ? "approved" : "denied", by.channel, by.userId ?? null, Date.now());
       if (ok) {
         try {
@@ -351,6 +526,7 @@ export class ApprovalStore {
         } catch {
           /* closed between decide and audit — the row is already decided */
         }
+        this.pendingConfirms.delete(id);
         // In-process fast path: resolve the waiter without waiting for a poll tick.
         const settle = this.waiters.get(id);
         if (settle) {
@@ -537,6 +713,13 @@ export interface ApproverSurfaceOptions {
   prompt?: (record: ApprovalRecord, decide: (approved: boolean) => void) => void | Promise<void>;
   /** Optional identity enrichment (session/run ids) from the caller. */
   identity?: ApprovalIdentity;
+  /**
+   * Phase 8 · Step 6 — this surface has no interactive human. Defaults to
+   * `!prompt`: a surface with no prompt hook IS headless by definition, so
+   * existing headless callers get the second factor without changing a line.
+   * An explicit value wins for surfaces that prompt through another channel.
+   */
+  headless?: boolean;
 }
 
 export function makeApprover(
@@ -555,6 +738,7 @@ export function makeApprover(
       preview: req.structuredPreview,
       riskTier: req.riskTier,
       surface: options.surface,
+      headless: options.headless ?? !options.prompt,
       taskId: req.taskId ?? options.identity?.taskId ?? null,
       runId: req.runId ?? options.identity?.runId ?? null,
       sessionId: req.sessionId ?? options.identity?.sessionId ?? null,

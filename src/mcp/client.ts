@@ -17,6 +17,7 @@
 import { spawn, ChildProcess } from "node:child_process";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { CORE_VERSION, PKG } from "../core/version.ts";
+import { requireGrant } from "../capabilities/enforce.ts";
 import {
   buildIsolatedStdioSpawn,
   decideMcpStdioPlacement,
@@ -299,6 +300,26 @@ export class McpClient {
     }
   }
 
+  /**
+   * Read this server's signed isolation posture from the MCP allowlist.
+   *
+   * Fails CLOSED on every error path: a missing allowlist, an unsigned one, a
+   * corrupt file or an exception all resolve to "isolation required". The only
+   * way to get `unisolatedGranted: true` is a validly-signed entry naming this
+   * server id.
+   */
+  private async resolveIsolationGrant(): Promise<{ unisolatedGranted: boolean; grantedBy?: string; reason: string }> {
+    try {
+      const { McpAllowlist } = await import("./allowlist.ts");
+      return new McpAllowlist().isolationFor(this.cfg.id);
+    } catch (e) {
+      return {
+        unisolatedGranted: false,
+        reason: `isolation grant unreadable (${(e as Error).message}) — isolation required (fail closed)`,
+      };
+    }
+  }
+
   private async connectStdio(): Promise<void> {
     // SECURITY: Use allow-listed env only (CRITICAL FIX)
     const env = this.allowedEnv;
@@ -312,10 +333,15 @@ export class McpClient {
     // hatch entirely: a third-party process with host authority is never
     // acceptable when hardened.
     const risk = mcpServerRisk(this.cfg);
+    // Phase 8 · Step 5 — the unisolated escape is a SIGNED per-server grant in
+    // the allowlist, not an environment variable. `XR_MCP_ALLOW_UNISOLATED` is
+    // gone; reading the grant costs one file read of an artifact this client
+    // already depends on for its default-deny gate.
+    const isolationGrant = await this.resolveIsolationGrant();
     const flags: McpStdioFlags = {
       isolateStdio: process.env.XR_MCP_ISOLATE_STDIO === "1",
       allowNet: process.env.XR_MCP_ISOLATED_NET === "1",
-      allowUnisolated: process.env.XR_MCP_ALLOW_UNISOLATED === "1",
+      unisolatedGrant: isolationGrant.unisolatedGranted,
     };
     let hardened = true;
     try {
@@ -330,8 +356,9 @@ export class McpClient {
     if (placement === "blocked") {
       const hint = hardened
         ? "hardened mode is ON: unisolated high-risk servers are refused. Install bubblewrap (or disable hardened mode explicitly with XR_TRUST_HARDENED=0 on hosts where that is accepted)."
-        : `no namespace sandbox (bubblewrap) is available. Install bubblewrap, or set XR_MCP_ALLOW_UNISOLATED=1 ` +
-          `to explicitly accept the confined (non-kernel-isolated) spawn.`;
+        : `no namespace sandbox (bubblewrap) is available. Install bubblewrap, or issue a SIGNED per-server ` +
+          `unisolated grant with \`xr mcp allow ${this.cfg.id} --allow-unisolated\` to explicitly and ` +
+          `attributably accept the confined (non-kernel-isolated) spawn. (${isolationGrant.reason})`;
       throw new Error(
         `MCP stdio server "${this.cfg.id}" is high-risk (carries credentials) and requires isolation, ` +
           `but no namespace sandbox is available. ${hint}`,
@@ -352,7 +379,7 @@ export class McpClient {
         });
         this.isolated = true;
         spawned = true;
-      } else if (risk === "high" && (hardened || !flags.allowUnisolated)) {
+      } else if (risk === "high" && (hardened || !flags.unisolatedGrant)) {
         // Phase 4 · T1 — hardened: never fall through to a host-authority spawn.
         throw new Error(
           `MCP stdio server "${this.cfg.id}" requires isolation but the sandbox could not be prepared${hardened ? " (hardened mode: unisolated fallback refused)" : ""}.`,
@@ -361,10 +388,11 @@ export class McpClient {
     }
 
     if (!spawned) {
-      if (risk === "high" && flags.allowUnisolated && !hardened) {
+      if (risk === "high" && flags.unisolatedGrant && !hardened) {
         this.sandboxWarning =
-          `high-risk MCP stdio server "${this.cfg.id}" running WITHOUT kernel isolation (XR_MCP_ALLOW_UNISOLATED=1). ` +
-          `Env is allow-listed but the process is not sandboxed.`;
+          `high-risk MCP stdio server "${this.cfg.id}" running WITHOUT kernel isolation under a SIGNED grant ` +
+          `issued by "${isolationGrant.grantedBy ?? "unknown"}". Env is allow-listed but the process is not sandboxed. ` +
+          `Revoke with \`xr mcp revoke ${this.cfg.id}\`.`;
         console.error(`[MCP security] WARNING: ${this.sandboxWarning}`);
       }
       this.proc = spawn(this.cfg.command!, this.cfg.args || [], {
@@ -620,6 +648,11 @@ export function wrapMcpTool(client: McpClient, serverId: string, def: McpToolDef
     parameters: def.inputSchema ?? { type: "object", properties: {} },
     requiresApproval: true,
     async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+      // Phase 8 · Step 2 — an MCP call leaves the process; the grant binding is
+      // verified before the request is built, so the args that cross the
+      // transport are provably the args the policy authorized.
+      const gate = requireGrant(ctx, fullName, args);
+      if (!gate.ok) return gate.denial;
       const approved = await ctx.approve({
         tool: fullName,
         reason: `Invoke external MCP tool on server "${serverId}"`,
@@ -652,6 +685,10 @@ export function wrapMcpResource(client: McpClient, serverId: string, def: McpRes
     parameters: { type: "object", properties: { uri: { type: "string", default: def.uri } } },
     requiresApproval: true,
     async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+      // Phase 8 · Step 2 — a resource read is an egress with a server-chosen
+      // URI; it binds like any other call.
+      const gate = requireGrant(ctx, fullName, args);
+      if (!gate.ok) return gate.denial;
       const uri = (args.uri as string) || def.uri;
       try {
         validateResourceUri(uri);

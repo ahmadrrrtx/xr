@@ -5,8 +5,15 @@ import { tmpdir } from "node:os";
 import { shellTool } from "../../src/tools/system.ts";
 import type { ToolContext, IsolatedRunResult } from "../../src/core/types.ts";
 import type { TrustRequest, EnvironmentExecutable } from "../../src/runtime/trust/types.ts";
+import { mintTestGrant } from "../helpers/grant.ts";
 
-function ctxWith(over: Partial<ToolContext> = {}): ToolContext & { events: Array<{ event: string; detail: Record<string, unknown> }> } {
+/**
+ * Phase 8 — the shell tool refuses to execute without an args-bound grant, so
+ * the harness mints a real one for the exact command under test. `cmd` is the
+ * command this context is authorized for; a test that runs a DIFFERENT command
+ * with this context is correctly denied (that is the mutation property).
+ */
+function ctxWith(cmd: string, over: Partial<ToolContext> = {}): ToolContext & { events: Array<{ event: string; detail: Record<string, unknown> }> } {
   const events: Array<{ event: string; detail: Record<string, unknown> }> = [];
   const dir = mkdtempSync(join(tmpdir(), "xr-shell-tool-"));
   return {
@@ -14,6 +21,7 @@ function ctxWith(over: Partial<ToolContext> = {}): ToolContext & { events: Array
     approve: async () => true,
     audit: (event, detail) => events.push({ event, detail }),
     events,
+    grantId: mintTestGrant("shell", { cmd }),
     ...over,
   };
 }
@@ -27,7 +35,7 @@ describe("XR 4.2 shell tool isolation wiring", () => {
       seenExec = exec;
       return { ok: true, exitCode: 0, stdout: "hello-from-sandbox\n", stderr: "", timedOut: false, blocked: false, placement: "namespace_sandbox", verified: true };
     };
-    const ctx = ctxWith({ runIsolated: isolated });
+    const ctx = ctxWith("echo hi", { runIsolated: isolated });
     const res = await shellTool.run({ cmd: "echo hi" }, ctx);
     expect(res.ok).toBe(true);
     expect(res.output).toContain("hello-from-sandbox");
@@ -45,7 +53,7 @@ describe("XR 4.2 shell tool isolation wiring", () => {
       ok: false, exitCode: null, stdout: "", stderr: "required isolation for tier2_isolated is unavailable on this host",
       timedOut: false, blocked: true, reason: "required isolation for tier2_isolated is unavailable on this host",
     });
-    const ctx = ctxWith({ runIsolated: isolated });
+    const ctx = ctxWith("echo hi", { runIsolated: isolated });
     const res = await shellTool.run({ cmd: "echo hi" }, ctx);
     expect(res.ok).toBe(false);
     expect(res.output).toStartWith("blocked:");
@@ -55,7 +63,7 @@ describe("XR 4.2 shell tool isolation wiring", () => {
 
   test("denied approval never reaches the runner", async () => {
     let called = false;
-    const ctx = ctxWith({ approve: async () => false, runIsolated: async () => { called = true; return { ok: true, exitCode: 0, stdout: "", stderr: "", timedOut: false, blocked: false }; } });
+    const ctx = ctxWith("echo hi", { approve: async () => false, runIsolated: async () => { called = true; return { ok: true, exitCode: 0, stdout: "", stderr: "", timedOut: false, blocked: false }; } });
     const res = await shellTool.run({ cmd: "echo hi" }, ctx);
     expect(res.ok).toBe(false);
     expect(res.output).toBe("shell denied");
@@ -66,7 +74,7 @@ describe("XR 4.2 shell tool isolation wiring", () => {
   // Phase 4 · T1 — hardened mode (the default) BLOCKS the host-authority
   // fallback: no runner wired + hardened ⇒ refused, never host bash.
   test("hardened mode: no runner wired → BLOCKED (never host-authority bash)", async () => {
-    const ctx = ctxWith({ hardened: true }); // no runIsolated, hardened on
+    const ctx = ctxWith("echo must-not-run", { hardened: true }); // no runIsolated, hardened on
     const res = await shellTool.run({ cmd: "echo must-not-run" }, ctx);
     expect(res.ok).toBe(false);
     expect(res.output).toContain("blocked:");
@@ -78,7 +86,7 @@ describe("XR 4.2 shell tool isolation wiring", () => {
   // Phase 4 · T1 — the legacy host-authority path survives ONLY as an explicit
   // opt-out (hardened: false), audited as a degraded execution.
   test("hardened OFF: falls back to the legacy in-process path when no runner is wired", async () => {
-    const ctx = ctxWith({ hardened: false }); // no runIsolated, hardened off
+    const ctx = ctxWith("echo legacy-fallback-ok", { hardened: false }); // no runIsolated, hardened off
     const res = await shellTool.run({ cmd: "echo legacy-fallback-ok" }, ctx);
     expect(res.ok).toBe(true);
     expect(res.output).toContain("legacy-fallback-ok");

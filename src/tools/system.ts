@@ -9,6 +9,7 @@ import { checkAction } from "../security/guard.ts";
 import { runCommand } from "../util/process.ts";
 import { shellTrustSpec } from "../runtime/trust/tool-support.ts";
 import { resolveShellCommandIdentity, decideExecIntegrity } from "../security/exec-integrity.ts";
+import { requireGrant } from "../capabilities/enforce.ts";
 
 function safe(cwd: string, p: string): string | null {
   const abs = isAbsolute(p) ? p : resolve(cwd, p);
@@ -50,6 +51,10 @@ export const deleteFileTool: Tool = {
   parameters: { path: "string (relative path)" },
   requiresApproval: true,
   async run(args, ctx): Promise<ToolResult> {
+    // Phase 8 · Step 1 — delete is irreversible; the grant binding is checked
+    // first so a mutated path can never reach the filesystem.
+    const gate = requireGrant(ctx, "delete_file", args);
+    if (!gate.ok) return gate.denial;
     const p = safe(ctx.cwd, String(args.path ?? ""));
     if (!p) return { ok: false, output: "unsafe path" };
     try {
@@ -78,6 +83,11 @@ export const shellTool: Tool = {
   parameters: { cmd: "string (command line)" },
   requiresApproval: true,
   async run(args, ctx): Promise<ToolResult> {
+    // Phase 8 · Step 1 — shell is the highest-consequence core capability:
+    // the grant binding is the FIRST thing checked, before integrity
+    // resolution, before the guard, before the approval prompt.
+    const gate = requireGrant(ctx, "shell", args);
+    if (!gate.ok) return gate.denial;
     const cmd = String(args.cmd ?? "");
     // Phase 06 — an already-cancelled run must not start new side effects.
     if (ctx.signal?.aborted) {

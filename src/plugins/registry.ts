@@ -23,7 +23,7 @@ export function safePluginDirName(id: string): string {
 
 export interface LifecycleEvent {
   at: number;
-  action: "install" | "enable" | "disable" | "update" | "remove" | "load" | "load_error" | "permissions" | "health" | "quarantine" | "rollback" | "review";
+  action: "install" | "enable" | "disable" | "update" | "remove" | "load" | "load_error" | "permissions" | "health" | "quarantine" | "unquarantine" | "rollback" | "review";
   detail?: string;
 }
 

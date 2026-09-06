@@ -19,6 +19,7 @@ import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChu
 import { guardedRequest } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
+import { secretBrokerSync } from "../../security/secret-broker.ts";
 
 interface BedrockOptions {
   model?: string;
@@ -76,9 +77,15 @@ export class BedrockProvider implements Provider {
     const akEnv = opts.accessKeyIdEnv ?? "AWS_ACCESS_KEY_ID";
     const skEnv = opts.secretAccessKeyEnv ?? "AWS_SECRET_ACCESS_KEY";
     
-    this.accessKey = process.env[akEnv];
-    this.secretKey = process.env[skEnv];
-    this.sessionToken = process.env.AWS_SESSION_TOKEN;
+    // Phase 8 · F-24 — resolved through the broker (durable store first, then
+    // ambient) rather than read straight from process.env. Bedrock is the one
+    // provider that legitimately CACHES credentials on the instance: STS
+    // rotation rewrites accessKey/secretKey mid-session (see getSTSToken), so
+    // a per-request callback would discard the refreshed pair. The broker is
+    // still the single resolution path.
+    this.accessKey = secretBrokerSync(akEnv);
+    this.secretKey = secretBrokerSync(skEnv);
+    this.sessionToken = secretBrokerSync("AWS_SESSION_TOKEN");
   }
 
   private async getAuthToken(): Promise<string> {

@@ -10,6 +10,7 @@ import { McpClient, wrapMcpTool } from "../src/mcp/client.ts";
 import { parseSchedule, isDue, describe } from "../src/automation/cron.ts";
 import { sendWebhook } from "../src/automation/webhook.ts";
 import type { ToolContext } from "../src/core/types.ts";
+import { withGrant } from "./helpers/grant.ts";
 
 let tmp: string;
 let store: Store;
@@ -21,6 +22,15 @@ beforeEach(() => {
 
 function ctx(overrides: Partial<ToolContext> = {}): ToolContext {
   return { cwd: tmp, approve: async () => true, audit: () => {}, egressAllowlist: [], dryRun: false, ...overrides };
+}
+
+/**
+ * Phase 8 — a context carrying a REAL grant for the wrapped MCP tool. The
+ * grant is minted against the exact capability id and args the call will use;
+ * see test/helpers/grant.ts for why this is not a bypass.
+ */
+function grantedCtx(capabilityId: string, args: Record<string, unknown>, overrides: Partial<ToolContext> = {}): ToolContext {
+  return withGrant(ctx(overrides), capabilityId, args);
 }
 
 // ---- MCP client ----
@@ -53,7 +63,7 @@ test("wrapped MCP tool is approval-gated (denied = no call)", async () => {
   const tool = wrapMcpTool(client, "db", { name: "query", description: "sql" });
   expect(tool.name).toBe("mcp.db.query");
   expect(tool.requiresApproval).toBe(true);
-  const r = await tool.run({ q: "x" }, ctx({ approve: async () => false }));
+  const r = await tool.run({ q: "x" }, grantedCtx("mcp.db.query", { q: "x" }, { approve: async () => false }));
   expect(r.ok).toBe(false);
   expect(r.output).toContain("denied");
 });
@@ -66,7 +76,7 @@ test("wrapped MCP tool dry-run does not call out", async () => {
   });
   const client = new McpClient({ id: "db", url: "http://x" }, f);
   const tool = wrapMcpTool(client, "db", { name: "query", description: "sql" });
-  const r = await tool.run({ q: "x" }, ctx({ dryRun: true }));
+  const r = await tool.run({ q: "x" }, grantedCtx("mcp.db.query", { q: "x" }, { dryRun: true }));
   expect(r.output).toContain("[dry-run]");
   expect(called).toBe(false);
 });

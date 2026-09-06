@@ -36,8 +36,8 @@
 | Child process surviving cleanup | `--die-with-parent`, `--new-session`, process-group SIGKILL on timeout |
 | Sandbox escape attempts | kernel namespaces (verified); adversarial tests exercise fs/net/env confinement |
 | Browser profile/cookie leakage | (browser trust-tier wiring is remaining work; existing browser sandbox defaults preserved) |
-| Plugin VM/worker membrane escape | existing Phase 0.4 VM hardening tests; high-risk plugin routing to Tier-2 is remaining work |
-| MCP server inherited-env abuse | (MCP trust-tier wiring is remaining work; stdio env inheritance to be stripped on wiring) |
+| Plugin VM/worker membrane escape | existing Phase 0.4 VM hardening tests; **Phase 8**: plugins declaring shell/process/network are forced to Tier-2 (`pluginRiskTier`) and cannot self-declare out of approval |
+| MCP server inherited-env abuse | `createAllowedEnv` allow-lists stdio env; **Phase 8**: provider keys are no longer hydrated into `process.env` at all, so there is nothing to inherit |
 | Malicious tool output causing policy downgrade | classification is deterministic and independent of output |
 | Approval replay / approval for a different action | grant bound to execution id + capability; approval reference recorded on the grant |
 | Stale authority after cancel/workspace switch | grants expire (TTL) and are revoked; workspace-bound validation; `revokeWorkspace` |
@@ -45,6 +45,11 @@
 | Disabling isolation flags in production | no flag downgrades Tier-2; `allowTier1InProcessFallback` is Tier-1 only, explicit, and logged |
 | Root / no-sandbox misuse | running as root voids restricted/isolated placement → refused |
 | Malicious capability declaration vs effective authority | declaration is input only; authority is the grant + verified environment, not the declaration |
+| **Argument mutation between policy and execution (TOCTOU)** | **Phase 8 · F-22**: `evaluatePolicy` mints an args-hash-bound, single-use grant; every side-effecting boundary re-derives the hash via `requireGrant` before acting. Mutating, replaying or retargeting a grant is refused (`test/security/phase8-adversarial.test.ts`) |
+| **Provider credential exfiltration via the environment** | **Phase 8 · F-24**: hydration is OFF by default — XR never writes provider keys into `process.env`. Keys resolve through the broker per request; an architecture test forbids `process.env[PROVIDER_KEY]` reads outside the three-file secret plane |
+| **Unsigned / supply-chain plugin code** | **Phase 8**: `plugins.requireSigned` defaults true; unsigned plugins are quarantined, trust records are ed25519-signed and bound to a tree hash, and tampering fails the whole store closed |
+| **Unattributable MCP isolation escape** | **Phase 8**: `XR_MCP_ALLOW_UNISOLATED` is deleted. Running a high-risk server unisolated now requires a per-server grant inside the signed allowlist (`granted-unisolated-by:<key>`), still refused under hardened mode |
+| **Silent Tier-2 approval on a headless surface** | **Phase 8**: a headless Tier-2 approval requires a typed confirmation phrase bound to the approval id + tool + args hash; only its hash is stored, and failures are audited as `approval.typed_confirm` |
 
 ## Fail-closed rules (high-risk is blocked when…)
 

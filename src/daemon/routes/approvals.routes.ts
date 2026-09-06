@@ -43,6 +43,14 @@ export function approvalRoutes(): DaemonRoute[] {
           requestedAt: r.requestedAt,
           ttlMs: r.ttlMs,
           expiresAt: r.requestedAt + r.ttlMs,
+          /**
+           * Phase 8 · Step 6 — for a Tier-2 request the operator must type
+           * this phrase back to approve. It is served with the PENDING record
+           * (not the decision endpoint) on purpose: a client must have read
+           * the request it is approving.
+           */
+          typedConfirmPhrase: store.typedConfirmFor(r.id)?.phrase,
+          requiresTypedConfirm: store.needsTypedConfirm(r.id),
         }));
         return json({ pending });
       },
@@ -59,6 +67,8 @@ export function approvalRoutes(): DaemonRoute[] {
           const body = (await req.json().catch(() => ({}))) as {
             approved?: boolean;
             userId?: string;
+            /** Phase 8 · Step 6 — required to APPROVE a Tier-2 request. */
+            typedConfirm?: string;
           };
           if (typeof body?.approved !== "boolean") {
             return json({ error: "expected { approved: boolean }" }, 400);
@@ -70,11 +80,29 @@ export function approvalRoutes(): DaemonRoute[] {
           });
           const record = store.get(id);
           if (!record) return json({ error: "approval not found" }, 404);
-          const ok = store.decide(id, body.approved, {
-            channel: "daemon",
-            userId: typeof body.userId === "string" ? body.userId : null,
-          });
+          const ok = store.decide(
+            id,
+            body.approved,
+            {
+              channel: "daemon",
+              userId: typeof body.userId === "string" ? body.userId : null,
+            },
+            typeof body.typedConfirm === "string" ? body.typedConfirm : undefined,
+          );
           if (!ok) {
+            // Distinguish "needs the second factor" from "already gone": a 409
+            // here would send an operator hunting a decided request that is
+            // actually still pending and merely unconfirmed.
+            if (record.decision === null && body.approved && store.needsTypedConfirm(id)) {
+              return json(
+                {
+                  error: "typed confirmation required or incorrect",
+                  hint: "re-read the pending request and POST { approved: true, typedConfirm: \"<phrase>\" }",
+                  riskTier: record.riskTier,
+                },
+                428, // Precondition Required
+              );
+            }
             return json(
               { error: "approval already decided or timed out", decision: record.decision },
               409,
