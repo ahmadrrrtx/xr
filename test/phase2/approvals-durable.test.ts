@@ -137,6 +137,33 @@ describe("durable approval lifecycle", () => {
 });
 
 describe("kill -9 mid-approval (real process death)", () => {
+  /**
+   * Windows hang guard (same failure class as the cross-process test below):
+   * `new Response(proc.stdout).text()` only settles when the child CLOSES
+   * its stdout; on Windows a pipe lingering past process.exit (or a wedged
+   * child) hangs the await forever — Bun's per-test timeout cannot
+   * interrupt a pending stream await, so this file rides to the runner cap
+   * and dies as exit 124 naming no assertion. Bound the child's lifetime
+   * independently so a wedge fails fast with a readable error.
+   */
+  async function readChildStdoutWithWatchdog(proc: Bun.Subprocess, ms: number): Promise<string> {
+    const watchdog = setTimeout(() => {
+      try {
+        proc.kill();
+      } catch {
+        /* already exited */
+      }
+    }, ms);
+    // Callers always spawn with stdout: "pipe" — the base Subprocess type
+    // cannot express that, so narrow to the stream.
+    const stream = proc.stdout as ReadableStream<Uint8Array>;
+    try {
+      return (await new Response(stream).text()).trim();
+    } finally {
+      clearTimeout(watchdog);
+    }
+  }
+
   test("a record raised by a killed process is resolvable after restart", async () => {
     const dbPath = join(tmp, "kill.db");
     const proc = Bun.spawn({
@@ -145,22 +172,32 @@ describe("kill -9 mid-approval (real process death)", () => {
       stderr: "inherit",
       env: { ...process.env },
     });
-    const raw = (await new Response(proc.stdout).text()).trim();
+    const raw = await readChildStdoutWithWatchdog(proc, 20_000);
     await proc.exited;
-    const { id } = JSON.parse(raw) as { id: string };
+    let id: string | undefined;
+    try {
+      id = (JSON.parse(raw) as { id?: string }).id;
+    } catch {
+      /* asserted below */
+    }
+    expect(
+      id,
+      `child stdout was not a single approval-id JSON line (wedge?): ${JSON.stringify(raw.slice(0, 80))}`,
+    ).toBeTruthy();
+    const approvalId: string = id!; // expect above guarantees truthiness
 
     // "Restart": a fresh process's view of the same durable store.
     const store = new Store(dbPath);
     const approvals = new ApprovalStore(store, { defaultTtlMs: 60_000 });
     const pending = approvals.listPending();
-    expect(pending.map((r) => r.id)).toContain(id);
+    expect(pending.map((r) => r.id)).toContain(approvalId);
 
     // Resolvable within TTL…
-    const outcomePromise = approvals.waitFor(id);
-    expect(approvals.decide(id, true, { channel: "daemon", userId: "operator" })).toBe(true);
+    const outcomePromise = approvals.waitFor(approvalId);
+    expect(approvals.decide(approvalId, true, { channel: "daemon", userId: "operator" })).toBe(true);
     const outcome = await outcomePromise;
     expect(outcome.approved).toBe(true);
-    expect(approvals.get(id)?.decidedBy?.channel).toBe("daemon");
+    expect(approvals.get(approvalId)?.decidedBy?.channel).toBe("daemon");
     store.close();
   }, 30_000);
 
@@ -172,21 +209,32 @@ describe("kill -9 mid-approval (real process death)", () => {
       stderr: "inherit",
       env: { ...process.env },
     });
-    const raw = (await new Response(proc.stdout).text()).trim();
+    const raw = await readChildStdoutWithWatchdog(proc, 20_000);
     await proc.exited;
-    const { id } = JSON.parse(raw) as { id: string };
+    let id: string | undefined;
+    try {
+      id = (JSON.parse(raw) as { id?: string }).id;
+    } catch {
+      /* asserted below */
+    }
+    expect(
+      id,
+      `child stdout was not a single approval-id JSON line (wedge?): ${JSON.stringify(raw.slice(0, 80))}`,
+    ).toBeTruthy();
+
+    const approvalId: string = id!; // expect above guarantees truthiness
 
     await new Promise((r) => setTimeout(r, 500)); // age past the 300ms TTL
 
     const store = new Store(dbPath);
     const approvals = new ApprovalStore(store);
     // Re-attaching to an expired record resolves DENIED immediately.
-    const outcome = await approvals.waitFor(id);
+    const outcome = await approvals.waitFor(approvalId);
     expect(outcome.approved).toBe(false);
     expect(outcome.timedOut).toBe(true);
     // And the sweep closes the durable record.
     approvals.sweepExpired();
-    expect(approvals.get(id)?.decision).toBe("timed_out");
+    expect(approvals.get(approvalId)?.decision).toBe("timed_out");
     expect(approvals.listPending()).toHaveLength(0);
     store.close();
   }, 30_000);
