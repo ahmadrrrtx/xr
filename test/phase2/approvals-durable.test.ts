@@ -45,6 +45,7 @@ describe("durable approval lifecycle", () => {
     const events = store.recentAudit(20).map((e) => e.event);
     expect(events).toContain("approval.requested");
     expect(events).toContain("approval.timed_out");
+    approvals.dispose(); // zero live timers at test end (see header note)
     store.close();
   });
 
@@ -67,6 +68,7 @@ describe("durable approval lifecycle", () => {
     expect(approvals.get(handle.id)?.decidedBy?.userId).toBe("u1");
     const events = store.recentAudit(20).map((e) => e.event);
     expect(events).toContain("approval.decided");
+    approvals.dispose(); // zero live timers at test end (see header note)
     store.close();
   });
 
@@ -78,6 +80,7 @@ describe("durable approval lifecycle", () => {
     const outcome = await handle.outcome;
     expect(outcome.approved).toBe(false);
     expect(outcome.decision).toBe("denied");
+    approvals.dispose(); // zero live timers at test end (see header note)
     store.close();
   });
 
@@ -90,6 +93,7 @@ describe("durable approval lifecycle", () => {
     const outcome = await handle.outcome;
     expect(outcome.approved).toBe(true);
     expect(approvals.get(handle.id)?.decision).toBe("approved");
+    approvals.dispose(); // zero live timers at test end (see header note)
     store.close();
   });
 
@@ -108,6 +112,10 @@ describe("durable approval lifecycle", () => {
     const outcome = await outcomePromise;
     expect(outcome.approved).toBe(true);
     expect(outcome.decidedBy?.channel).toBe("daemon");
+    // BOTH instances: the original request's poller only settles on its own
+    // next tick after the row is decided — dispose instead of relying on it.
+    restarted.dispose();
+    approvals.dispose();
     store.close();
   });
 
@@ -132,18 +140,30 @@ describe("durable approval lifecycle", () => {
     expect(approvals.listPending().length).toBe(2);
     approvals.decide(a.id, true, { channel: "cli" });
     expect(approvals.listPending().map((r) => r.id)).toEqual([b.id]);
+    // `b` is still pending: its poller + TTL timer are LIVE. On Windows this
+    // left the bun test process unable to exit (exit-124 class, 2026-09-07).
+    approvals.dispose();
     store.close();
   });
 });
 
-// Windows CI: `Bun.spawn` child stdout pipes hang without closing — the
-// reads (and the cross-process for-await) never settle even when a
-// watchdog kills the child, so the file dies at the segment cap with
-// zero assertion failures (exit 124, "dies alone") — 2026-09-07, runs
-// 34152171256 and 34156612385, Windows full-parity lane. Registered in
-// docs/security/KNOWN_LIMITATIONS.md (#21). The in-process durability
-// coverage runs on every platform; the full spawn matrix runs on the
-// Linux reference lane and macOS.
+// Windows CI history (2026-09-07, Windows full-parity lane, runs
+// 34152171256 / 34156612385 / job 101865773607): this file died at the
+// segment cap with zero output and zero test failures ("dies alone",
+// exit 124) — the process never finished, so no results were flushed.
+// Two contributing causes, in order of evidence:
+//   1. Live timers at file end. This is the only file in its suite
+//      segment that creates setInterval (ApprovalStore cross-process
+//      pollers); a pending record left behind (e.g. the last
+//      in-process test) kept a 150ms poller + 30s TTL timer live, and
+//      on Windows bun 1.3.14 the process would not exit. Every test now
+//      calls approvals.dispose() so the file ends with ZERO live
+//      timers — do not remove those without re-running the Windows lane.
+//   2. Child stdout pipes (spawn tests): unverified on Windows — the
+//      runs above died before spawn-test behavior could be observed.
+//      They remain skipIf(win32) until re-enabled with evidence (a
+//      passing Windows run).
+// Registered in docs/security/KNOWN_LIMITATIONS.md (#21).
 const WIN32_CI_HANG = process.platform === "win32";
 
 describe.skipIf(WIN32_CI_HANG)("kill -9 mid-approval (real process death)", () => {
@@ -208,6 +228,7 @@ describe.skipIf(WIN32_CI_HANG)("kill -9 mid-approval (real process death)", () =
     const outcome = await outcomePromise;
     expect(outcome.approved).toBe(true);
     expect(approvals.get(approvalId)?.decidedBy?.channel).toBe("daemon");
+    approvals.dispose(); // zero live timers at test end (see header note)
     store.close();
   }, 30_000);
 
@@ -246,6 +267,7 @@ describe.skipIf(WIN32_CI_HANG)("kill -9 mid-approval (real process death)", () =
     approvals.sweepExpired();
     expect(approvals.get(approvalId)?.decision).toBe("timed_out");
     expect(approvals.listPending()).toHaveLength(0);
+    approvals.dispose(); // zero live timers at test end (see header note)
     store.close();
   }, 30_000);
 });
