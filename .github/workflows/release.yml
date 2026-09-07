@@ -145,6 +145,27 @@ jobs:
           for f in xr-linux-x64 xr-linux-arm64 xr-darwin-arm64 xr-darwin-x64 xr-windows-x64.exe xr-windows-x64.zip; do
             test -f "dist/$f" || { echo "MISSING dist/$f"; exit 1; }
           done
+      - name: Stamp release version across all Truth surfaces (tag-derived, CI-only)
+        # The tag is the release's source of truth. The repo carries the
+        # in-development Truth line (1.0.0); a tag like v1.0.0-beta.2 must
+        # ship EXACTLY 1.0.0-beta.2 — otherwise the beta consumes the stable
+        # version string and a later v1.0.0 publish collides ("cannot publish
+        # over the previously published version"). Mutates the CI working
+        # tree only; never committed. Per Constitution XXII.1: edit the
+        # manifest, run release:stamp, fail on drift.
+        env:
+          STAMP_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          bun -e '
+            const fs = require("fs");
+            const p = "release.manifest.json";
+            const m = JSON.parse(fs.readFileSync(p, "utf8"));
+            m.identity.version = process.env.STAMP_VERSION;
+            fs.writeFileSync(p, JSON.stringify(m, null, 2) + "\n");
+            console.log("release.manifest.json → " + m.identity.version);
+          '
+          bun run release:stamp
+          bun run release:check
       - name: Pack the npm artifact + source archive
         run: |
           # `bun pm pack --pack-destination` is not honoured by every bun
@@ -297,6 +318,12 @@ jobs:
           name: XR v${{ needs.assemble.outputs.version }}
           body_path: RELEASE-NOTES.md
           prerelease: ${{ needs.assemble.outputs.prerelease == 'true' }}
+          # v1.0.0-beta.1 re-run deadlock (2026-09-03): the first failed run
+          # left an asset-less release for the tag; every later run then died
+          # with `already_exists` on finalize. overwrite: true makes the step
+          # idempotent — an existing release for the tag is adopted, its
+          # assets replaced, name/body refreshed.
+          overwrite: true
           files: |
             dist/*
 
@@ -349,6 +376,25 @@ jobs:
         run: |
           npm install -g npm@latest
           npm --version
+      - name: Stamp release version across all Truth surfaces (tag-derived, CI-only)
+        # Fresh checkout carries the in-development Truth line; stamp from
+        # the tag version before publish so the npm version string matches
+        # the tag (see assemble job). prepublishOnly (release:check +
+        # claim-lint) runs against the STAMPED tree and passes because all
+        # six surfaces are in sync at the stamped version.
+        env:
+          STAMP_VERSION: ${{ needs.assemble.outputs.version }}
+        run: |
+          bun -e '
+            const fs = require("fs");
+            const p = "release.manifest.json";
+            const m = JSON.parse(fs.readFileSync(p, "utf8"));
+            m.identity.version = process.env.STAMP_VERSION;
+            fs.writeFileSync(p, JSON.stringify(m, null, 2) + "\n");
+            console.log("release.manifest.json → " + m.identity.version);
+          '
+          bun run release:stamp
+          bun run release:check
       - name: Publish with provenance (prerelease → beta dist-tag)
         run: |
           if [ "${{ needs.assemble.outputs.prerelease }}" = "true" ]; then
