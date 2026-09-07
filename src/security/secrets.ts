@@ -316,6 +316,7 @@ export async function setSecretAsync(name: string, value: string): Promise<Secre
     return backend;
   }
   setFileSecret(name, value);
+  secretMemo.set(name, value); // mirror OS-backend paths: memo always = latest written value
   if (envSecretCompatEnabled()) process.env[name] = value;
   return "file";
 }
