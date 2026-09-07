@@ -52,6 +52,7 @@ export const COMMAND_LOADERS: Readonly<Record<string, CommandLoaderEntry>> = {
   // Core config / providers.
   config: { path: "../commands/config.ts", symbol: "ConfigCommand" },
   budget: { path: "../commands/budget.ts", symbol: "BudgetCommand" },
+  triggers: { path: "../commands/triggers.ts", symbol: "TriggersCommand" },
   providers: { path: "../commands/providers.ts", symbol: "ProvidersCommand" },
   doctor: { path: "../commands/doctor.ts", symbol: "DoctorCommand" },
   // State surfaces.
@@ -109,6 +110,8 @@ async function importCommandModule(path: string): Promise<Record<string, new () 
       return (await import("../commands/config.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/budget.ts":
       return (await import("../commands/budget.ts")) as unknown as Record<string, new () => Command>;
+    case "../commands/triggers.ts":
+      return (await import("../commands/triggers.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/providers.ts":
       return (await import("../commands/providers.ts")) as unknown as Record<string, new () => Command>;
     case "../commands/doctor.ts":

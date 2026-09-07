@@ -81,6 +81,12 @@ export interface VoiceSettings {
   deviceMetadata: Record<string, unknown>;
   lastTestResult?: VoiceTestResult;
   lastUsedAt?: string;
+  /** Phase 9 voice v2 flags (off by default). */
+  streamingStt?: boolean;
+  serverVad?: boolean;
+  sentenceTts?: boolean;
+  bargeInCancelsRun?: boolean;
+  spokenStatus?: boolean;
 }
 
 export interface VoiceTranscriptEntry {

@@ -40,6 +40,8 @@ import {
   WorkspaceCreateRequest,
   WorkspaceSwitchRequest,
   BudgetSetRequest,
+  TriggerCreateRequest,
+  TriggerPauseRequest,
   OnboardingStatusResponse,
   OnboardingProviderRequest,
   OnboardingProviderResponse,
@@ -229,6 +231,32 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     stability: "stable",
     request: BudgetSetRequest,
     response: OkResponse,
+  },
+  "triggers.list": {
+    summary: "List governed triggers and the global pause-all kill switch.",
+    tag: "triggers",
+    stability: "stable",
+  },
+  "triggers.create": {
+    summary: "Create a governed trigger (requires consentRef + budget).",
+    tag: "triggers",
+    stability: "stable",
+    request: TriggerCreateRequest,
+    response: OkResponse,
+  },
+  "triggers.pause": {
+    summary: "Pause or resume ALL triggers (kill switch). In-flight fires are not cancelled.",
+    tag: "triggers",
+    stability: "stable",
+    request: TriggerPauseRequest,
+    response: OkResponse,
+  },
+  "triggers.get": {
+    summary: "Inspect one trigger by id.",
+    tag: "triggers",
+    stability: "stable",
+    template: "/api/triggers/{id}",
+    pathParams: [{ name: "id", description: "Trigger id." }],
   },
 
   // ── shield ────────────────────────────────────────────────────────────────

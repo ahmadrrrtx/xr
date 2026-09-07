@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-05T22:35:33.789Z",
+  "generatedAt": "2026-09-07T11:07:30.740Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -51,10 +51,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 575,
-    "testFiles": 308,
-    "cliCommands": 42,
-    "daemonRoutes": 123,
+    "sourceFiles": 592,
+    "testFiles": 315,
+    "cliCommands": 43,
+    "daemonRoutes": 127,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -87,7 +87,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 82558
+      "bytes": 83569
     },
     {
       "path": "CODEOWNERS",
@@ -156,12 +156,18 @@
     "src/agents/registry.ts",
     "src/agents/types.ts",
     "src/automation/cron.ts",
+    "src/automation/token-bucket.ts",
+    "src/automation/trigger-spec.ts",
+    "src/automation/triggers.ts",
     "src/automation/webhook.ts",
+    "src/capabilities/authorize.ts",
     "src/capabilities/compatibility.ts",
     "src/capabilities/discovery.ts",
     "src/capabilities/executor.ts",
+    "src/capabilities/grant.ts",
     "src/capabilities/index.ts",
     "src/capabilities/inventory.ts",
+    "src/capabilities/loop-grant.ts",
     "src/capabilities/policy.ts",
     "src/capabilities/request.ts",
     "src/capabilities/service.ts",
@@ -202,12 +208,15 @@
     "src/commands/session.ts",
     "src/commands/skills.ts",
     "src/commands/telemetry.ts",
+    "src/commands/triggers.ts",
     "src/commands/trust.ts",
     "src/commands/uninstall.ts",
     "src/commands/workspace.ts",
     "src/computer/system-control.ts",
     "src/config/cache.ts",
     "src/config/config.ts",
+    "src/config/migrate-21.ts",
+    "src/config/migrate-22.ts",
     "src/context/assembler.ts",
     "src/context/budget.ts",
     "src/context/cli-phase6.ts",
@@ -268,6 +277,7 @@
     "src/control/planner.ts",
     "src/control/preview.ts",
     "src/control/service.ts",
+    "src/control/typed-confirm.ts",
     "src/control/types.ts",
     "src/control/vision.ts",
     "src/core/agent.ts",
@@ -357,6 +367,7 @@
     "src/daemon/routes/schemas.ts",
     "src/daemon/routes/shield.routes.ts",
     "src/daemon/routes/system.routes.ts",
+    "src/daemon/routes/triggers.routes.ts",
     "src/daemon/routes/trust.routes.ts",
     "src/daemon/server.ts",
     "src/daemon/skills-api.ts",
@@ -477,6 +488,7 @@
     "src/platform/environment/service.ts",
     "src/platform/environment/types.ts",
     "src/platform/environment/workflow-binding.ts",
+    "src/plugins/allowlist.ts",
     "src/plugins/catalog.ts",
     "src/plugins/cli.ts",
     "src/plugins/compat.ts",
@@ -487,6 +499,7 @@
     "src/plugins/loader/worker-loader.ts",
     "src/plugins/manager.ts",
     "src/plugins/manifest.ts",
+    "src/plugins/placement.ts",
     "src/plugins/registry.ts",
     "src/plugins/sandbox-worker.ts",
     "src/plugins/skills.ts",
@@ -654,6 +667,8 @@
     "src/skills/verifier.ts",
     "src/skills/version-resolver.ts",
     "src/state/idempotency.ts",
+    "src/state/migrate-10.ts",
+    "src/state/migrate-11.ts",
     "src/state/migrations.ts",
     "src/state/repos/audit-repo.ts",
     "src/state/repos/checkpoint-repo.ts",
@@ -664,6 +679,7 @@
     "src/state/repos/reservation-repo.ts",
     "src/state/repos/session-repo.ts",
     "src/state/repos/skill-repo.ts",
+    "src/state/repos/trigger-repo.ts",
     "src/state/repos/user-memory-repo.ts",
     "src/state/repos/workflow-repo.ts",
     "src/state/store.ts",
@@ -723,6 +739,7 @@
     "src/voice/stt.ts",
     "src/voice/tts.ts",
     "src/voice/types.ts",
+    "src/voice/v2.ts",
     "src/voice/vad.ts",
     "src/voice/wake.ts",
     "src/xr-shield/index.ts"
@@ -747,10 +764,12 @@
     "test/architecture/boundaries.test.ts",
     "test/architecture/one-store.test.ts",
     "test/architecture/ownership.test.ts",
+    "test/architecture/phase8-census.test.ts",
     "test/architecture/satellite-isolation.test.ts",
     "test/architecture/size-gate.test.ts",
     "test/architecture/unit-tier.test.ts",
     "test/architecture/xr-shield-facade.test.ts",
+    "test/automation/triggers.test.ts",
     "test/baseline/doctor.test.ts",
     "test/baseline/status.test.ts",
     "test/capabilities/ecosystem.test.ts",
@@ -919,6 +938,11 @@
     "test/phase6/task-runtime.test.ts",
     "test/phase6/verifier.test.ts",
     "test/phase6/worker-budget.test.ts",
+    "test/phase8/grants.test.ts",
+    "test/phase8/mcp-isolation-grants.test.ts",
+    "test/phase8/plugins-signing.test.ts",
+    "test/phase8/secret-env-census.test.ts",
+    "test/phase8/typed-confirm.test.ts",
     "test/platform/provenance-write-amplification.test.ts",
     "test/plugins.test.ts",
     "test/plugins/host.test.ts",
@@ -1283,6 +1307,18 @@
       ],
       "group": "intelligence",
       "usage": "xr budget [status|set|reset] [amount]",
+      "needsKernel": true,
+      "fastPath": false,
+      "classification": "supported"
+    },
+    {
+      "name": "triggers",
+      "aliases": [
+        "trigger",
+        "cron"
+      ],
+      "group": "intelligence",
+      "usage": "xr triggers [list|create|pause-all|resume-all|enable|disable|delete]",
       "needsKernel": true,
       "fastPath": false,
       "classification": "supported"
@@ -2280,6 +2316,34 @@
       "id": "meta.traces.get",
       "method": "GET",
       "path": "/api/traces/recent",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/triggers.routes.ts",
+      "id": "triggers.list",
+      "method": "GET",
+      "path": "/api/triggers",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/triggers.routes.ts",
+      "id": "triggers.create",
+      "method": "POST",
+      "path": "/api/triggers",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/triggers.routes.ts",
+      "id": "triggers.get",
+      "method": "GET",
+      "prefix": "/api/triggers/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/triggers.routes.ts",
+      "id": "triggers.pause",
+      "method": "POST",
+      "path": "/api/triggers/pause",
       "auth": "local bearer token or dashboard query token"
     },
     {

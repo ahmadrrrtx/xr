@@ -21,6 +21,19 @@ the surface (capabilities, approvals, memory, …) keeps its established prefixe
 
 ## Events
 
+### Triggers (Phase 9)
+
+| Event | Fired when | Carries |
+| --- | --- | --- |
+| `trigger.created` | A trigger is inserted (consent + budget required). | `triggerId`, kind, consent, budget, approvalMode |
+| `trigger.fired` | A fire starts; envelope id is assigned before the spine run. | `triggerId`, `envelopeId`, budget, approvalMode, consent |
+| `trigger.error` | The fire handler threw. | `triggerId`, `envelopeId`, error |
+| `trigger.enabled` / `trigger.disabled` / `trigger.deleted` | Row lifecycle. | `triggerId` |
+| `triggers.paused` / `triggers.resumed` | Global pause-all kill switch. New fires stop; in-flight keep cancel. | actor, inflight |
+| `telegram.rate_limited` | Per-user token bucket refused a message. | userId, chatId |
+| `telegram.chat_budget` | Per-chat Governor envelope exhausted. | chatId, spent, cap |
+| `voice.bargein.cancel_run` | Voice v2 barge-in aborted the in-flight envelope (A-19). | — |
+
 ### Budget & partitions
 
 | Event | Fired when | Carries |

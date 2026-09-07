@@ -19,6 +19,7 @@
 
 import type { WorkspaceStore } from "./workspace-store.ts";
 import { MIGRATION_10 } from "./migrate-10.ts";
+import { MIGRATION_11 } from "./migrate-11.ts";
 
 export interface Migration {
   readonly version: number;
@@ -698,7 +699,7 @@ const MIGRATION_9: Migration = {
   },
 };
 
-export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6, MIGRATION_7, MIGRATION_8, MIGRATION_9, MIGRATION_10];
+export const MIGRATIONS: readonly Migration[] = [MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4, MIGRATION_5, MIGRATION_6, MIGRATION_7, MIGRATION_8, MIGRATION_9, MIGRATION_10, MIGRATION_11];
 
 /** Latest known schema version. */
 export const LATEST_SCHEMA_VERSION: number = MIGRATIONS.reduce(

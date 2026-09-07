@@ -45,6 +45,8 @@ test("extractBudget pulls dollar amount", () => {
 test("parseCommand handles slash commands and free text", () => {
   expect(parseCommand("/status").type).toBe("status");
   expect(parseCommand("/pause").type).toBe("pause");
+  expect(parseCommand("/pause-all").type).toBe("pause-all");
+  expect(parseCommand("/resume-all").type).toBe("resume-all");
   expect(parseCommand("/budget $1.50")).toEqual({ type: "budget", usd: 1.5 });
   const t = parseCommand("refactor auth under $0.25");
   expect(t.type).toBe("task");
@@ -129,6 +131,49 @@ test("rejection button denies a pending action", async () => {
   const id = [...(bot as any).pending.keys()][0];
   await bot.handleUpdate({ callback_query: { id: "cq2", from: { id: 111 }, data: `no:${id}` } });
   expect(await p).toBe(false);
+});
+
+test("/pause-all is visible and audited", async () => {
+  const { fn, calls } = mockFetch();
+  const bot = new TelegramBot({ token: "T", allowedIds: [111], store, fetchFn: fn });
+  await bot.handleUpdate({ message: { from: { id: 111 }, chat: { id: 111 }, text: "/pause-all" } });
+  const sends = calls.filter((c) => c.method === "sendMessage");
+  expect(sends[0].body.text.toLowerCase()).toContain("paused");
+  expect(store.recentAudit().some((e) => e.event === "triggers.paused")).toBe(true);
+});
+
+test("per-user token bucket rate-limits Telegram messages", async () => {
+  const { saveConfig, loadConfig, reloadConfig } = await import("../src/config/config.ts");
+  const { config } = loadConfig();
+  saveConfig({
+    ...config,
+    telegram: { ...config.telegram, rateLimit: { tokens: 1, refillPerSec: 0 } },
+  });
+  reloadConfig();
+  const { fn, calls } = mockFetch();
+  const bot = new TelegramBot({ token: "T", allowedIds: [111], store, fetchFn: fn });
+  await bot.handleUpdate({ message: { from: { id: 111 }, chat: { id: 111 }, text: "/help" } });
+  await bot.handleUpdate({ message: { from: { id: 111 }, chat: { id: 111 }, text: "/help" } });
+  const texts = calls.filter((c) => c.method === "sendMessage").map((c) => c.body.text);
+  expect(texts.some((t: string) => /rate limit/i.test(t))).toBe(true);
+  expect(store.recentAudit().some((e) => e.event === "telegram.rate_limited")).toBe(true);
+});
+
+test("per-chat Governor budget honest-stops when exhausted", async () => {
+  const { saveConfig, loadConfig, reloadConfig } = await import("../src/config/config.ts");
+  const { config } = loadConfig();
+  saveConfig({
+    ...config,
+    telegram: { ...config.telegram, chatBudgets: { maxUsd: 0.01 } },
+  });
+  reloadConfig();
+  const { fn, calls } = mockFetch();
+  const bot = new TelegramBot({ token: "T", allowedIds: [111], store, fetchFn: fn });
+  bot.chatSpendUsd.set(111, 0.01);
+  await bot.handleUpdate({ message: { from: { id: 111 }, chat: { id: 111 }, text: "do a thing" } });
+  const texts = calls.filter((c) => c.method === "sendMessage").map((c) => c.body.text);
+  expect(texts.some((t: string) => /budget exhausted/i.test(t))).toBe(true);
+  expect(store.recentAudit().some((e) => e.event === "telegram.chat_budget")).toBe(true);
 });
 
 test("unauthorized callback cannot resolve an approval", async () => {

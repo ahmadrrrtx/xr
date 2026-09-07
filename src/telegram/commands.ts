@@ -10,6 +10,8 @@ export type TgCommand =
   | { type: "help" }
   | { type: "pause" }
   | { type: "resume" }
+  | { type: "pause-all" }
+  | { type: "resume-all" }
   | { type: "cost" }
   | { type: "budget"; usd: number }
   | { type: "task"; text: string; budgetUsd?: number }
@@ -38,6 +40,10 @@ export function parseCommand(raw: string): TgCommand {
         return { type: "pause" };
       case "resume":
         return { type: "resume" };
+      case "pause-all":
+        return { type: "pause-all" };
+      case "resume-all":
+        return { type: "resume-all" };
       case "cost":
         return { type: "cost" };
       case "budget": {
@@ -69,6 +75,8 @@ export function helpText(): string {
     "/budget $1.00 — set per-task ceiling",
     "/pause — freeze the agent",
     "/resume — continue",
+    "/pause-all — stop scheduled triggers",
+    "/resume-all — resume scheduled triggers",
     "/help — this message",
     "",
     "_Risky actions ask for your ✅/❌ approval right here._",

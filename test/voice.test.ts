@@ -137,6 +137,23 @@ test("bargeIn stops current speech", async () => {
   expect(played.length).toBeGreaterThan(0); // stop() was called
 });
 
+test("barge-in cancels the in-flight run when flagged (A-19)", async () => {
+  const { pipe } = makePipeline(["x"]);
+  (pipe as any).settings.bargeInCancelsRun = true;
+  const ac = new AbortController();
+  (pipe as any).runAbort = ac;
+  pipe.bargeIn(true);
+  expect(ac.signal.aborted).toBe(true);
+  expect(store.recentAudit().some((e) => e.event === "voice.bargein.cancel_run")).toBe(true);
+});
+
+test("spokenStatusLine maps canonical stream events", async () => {
+  const { spokenStatusLine, splitSentences } = await import("../src/voice/v2.ts");
+  expect(spokenStatusLine({ type: "status", status: "tool" } as any)).toBeTruthy();
+  expect(spokenStatusLine({ type: "status", status: "generating" } as any)).toBeNull();
+  expect(splitSentences("One. Two! Three?")).toEqual(["One.", "Two!", "Three?"]);
+});
+
 // ---- wake gating ----
 test("processUtterance ignores speech without wake word when required", async () => {
   const stt = new SpeechToText({ fetchFn: (async () => new Response("{}")) as any });

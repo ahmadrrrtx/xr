@@ -1,15 +1,15 @@
 # XR 1.0.0 Repository Inventory
 
-Generated: 2026-09-05T22:35:33.789Z
+Generated: 2026-09-07T11:07:30.740Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 575 |
-| Test files | 308 |
-| CLI commands | 42 |
-| Daemon routes | 123 |
+| Source files | 592 |
+| Test files | 315 |
+| CLI commands | 43 |
+| Daemon routes | 127 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -47,6 +47,7 @@ Generated: 2026-09-05T22:35:33.789Z
 - `providers` (intelligence, supported) — xr providers [list|set|add|remove|test|status|refresh]
 - `models` (intelligence, supported) — xr models [status|list|recommend|install|remove|set|test|runtimes]
 - `budget` (intelligence, supported) — xr budget [status|set|reset] [amount]
+- `triggers` (intelligence, supported) — xr triggers [list|create|pause-all|resume-all|enable|disable|delete]
 - `capabilities` (extensions, supported) — xr capabilities [list|discover|inspect|permissions|certify|enable|disable|quarantine|rollback]
 - `skills` (extensions, supported) — xr skills [list|search|install|enable|disable|inspect|doctor|…]
 - `plugins` (extensions, supported) — xr plugins [list|search|install|enable|disable|remove|status]
@@ -182,6 +183,10 @@ Generated: 2026-09-05T22:35:33.789Z
 - POST `/api/shield/whitelist` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
 - ANY `/api/skills*` — local bearer token or dashboard query token (src/daemon/routes/extensions.routes.ts)
 - GET `/api/traces/recent` — local bearer token or dashboard query token (src/daemon/routes/meta.routes.ts)
+- GET `/api/triggers` — local bearer token or dashboard query token (src/daemon/routes/triggers.routes.ts)
+- POST `/api/triggers` — local bearer token or dashboard query token (src/daemon/routes/triggers.routes.ts)
+- GET `/api/triggers/*` — local bearer token or dashboard query token (src/daemon/routes/triggers.routes.ts)
+- POST `/api/triggers/pause` — local bearer token or dashboard query token (src/daemon/routes/triggers.routes.ts)
 - GET `/api/trust` — local bearer token or dashboard query token (src/daemon/routes/trust.routes.ts)
 - POST `/api/trust/classify` — local bearer token or dashboard query token (src/daemon/routes/trust.routes.ts)
 - GET `/api/workspaces` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)

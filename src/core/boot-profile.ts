@@ -149,6 +149,7 @@ export const COMMAND_PROFILES: Readonly<Record<string, readonly string[] | null>
 
   // Budget / business / capabilities / skills / shield / trust.
   budget: ["budget"],
+  triggers: ["state"],
   business: ["business"],
   biz: ["business"],
   capabilities: ["capabilities"],

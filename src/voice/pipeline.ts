@@ -35,16 +35,24 @@ export class VoicePipeline {
   private lastAssistantText = "";
   private muted = false;
   private settings: VoiceSettings;
+  /** A-19 abort for the in-flight run (barge-in cancels the RUN when flagged). */
+  private runAbort: AbortController | null = null;
+  spoken: string[] = [];
 
   constructor(private deps: VoiceDeps) {
     this.settings = deps.settings ?? defaultVoiceSettings();
   }
 
-  bargeIn(): void {
+  /** Stop TTS. Pass `cancelRun` to abort the in-flight envelope (A-19). */
+  bargeIn(cancelRun = false): void {
     if (this.speaking) {
       this.speaking.stop();
       this.speaking = null;
       this.deps.store.audit("voice.bargein", {});
+    }
+    if (cancelRun && this.settings.bargeInCancelsRun && this.runAbort) {
+      this.runAbort.abort();
+      this.deps.store.audit("voice.bargein.cancel_run", {});
     }
   }
 
@@ -107,7 +115,7 @@ export class VoicePipeline {
 
     const meta = parseSpokenMetaCommand(command);
     if (meta === "stop" || meta === "cancel") {
-      this.bargeIn();
+      this.bargeIn(true);
       await this.say(meta === "stop" ? "Stopped." : "Cancelled.");
       return { handled: true, reply: meta };
     }
@@ -153,6 +161,8 @@ export class VoicePipeline {
      * Phase 2 · T1 — Voice runs through the canonical execution envelope
      * (Phase 0 · T8 had bridged only its tool set).
      */
+    this.runAbort = new AbortController();
+    const { splitSentences, spokenStatusLine } = await import("./v2.ts");
     const result = await executeOnSurface({
       task: command,
       mode: "agent",
@@ -163,6 +173,15 @@ export class VoicePipeline {
       cwd: process.cwd(),
       say: () => {},
       approve: this.voiceApprover(),
+      signal: this.runAbort.signal,
+      onStreamEvent: (ev) => {
+        if (!this.settings.spokenStatus) return;
+        const line = spokenStatusLine(ev);
+        if (line) {
+          this.spoken.push(line);
+          void this.say(line);
+        }
+      },
       budget: {
         maxUsd: isLocal(providerId) ? undefined : config.budget.perTaskUsd,
         maxTokens: config.budget.perTaskTokens,
@@ -182,7 +201,12 @@ export class VoicePipeline {
     });
 
     const reply = result.finalMessage || `Done. ${result.meter ?? ""}`;
-    await this.say(reply);
+    if (this.settings.sentenceTts) {
+      for (const sentence of splitSentences(reply)) await this.say(sentence);
+    } else {
+      await this.say(reply);
+    }
+    this.runAbort = null;
     return { handled: true, reply };
   }
 

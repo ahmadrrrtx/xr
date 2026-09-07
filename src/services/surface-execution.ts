@@ -82,6 +82,8 @@ export interface SurfaceExecuteRequest {
    * one vocabulary (`src/core/ux-status.ts`) instead of three.
    */
   readonly onStreamEvent?: StreamEventSink;
+  /** Phase 9 — scheduler identity attribution (optional). */
+  readonly agentRole?: string;
 }
 
 /**

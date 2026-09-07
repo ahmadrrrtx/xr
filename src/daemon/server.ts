@@ -460,10 +460,20 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   )}
 `);
 
+  let stopTriggers: () => void = () => {};
+  try {
+    const { TriggerService } = await import("../automation/triggers.ts");
+    const tickMs = bootConfig.triggers?.tickMs ?? 15_000;
+    stopTriggers = new TriggerService(store).startLoop(tickMs).stop;
+  } catch {
+    /* scheduler is additive — a missing table must not prevent serve */
+  }
+
   return {
     port: boundPort,
     token,
     stop: () => {
+      stopTriggers();
       server.stop();
       void shutdownObservability();
     },
