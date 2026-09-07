@@ -88,6 +88,25 @@ jobs:
           # black-box suites are owned by the dedicated lanes in ci.yml, and
           # the kill proofs are RED on HEAD until Phase 1.
           bash scripts/parity-suite-runner.sh ${{ matrix.bunOs }} --exclude '^test/e2e-blackbox/'
+      - name: "Hang diagnostics (win32) — dump approvals-durable stage markers"
+        if: runner.os == 'Windows' && failure()
+        shell: bash
+        # TEMPORARY (2026-09-07): the win32 probe branch of
+        # test/phase2/approvals-durable.test.ts writes xr-dbg-*.txt stage
+        # markers to the OS temp dir. They survive the exit-124 kill (stdout
+        # is buffered per file and lost). A stage with START but no END
+        # marker names the hang. Remove this step with the probe branch.
+        run: |
+          found=0
+          for f in "$TEMP"/xr-dbg-*.txt; do
+            [ -e "$f" ] || continue
+            found=1
+            echo "=== $f ==="
+            cat "$f"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "no markers written — the probe file never started (import/runner level)"
+          fi
       - name: Golden path (hermetic)
         shell: bash
         timeout-minutes: 10
