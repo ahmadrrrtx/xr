@@ -1,0 +1,42 @@
+{
+  "generatedFrom": "src/providers/presets.ts",
+  "note": "catalog-derived so fixtures cannot drift from the capability catalog",
+  "presets": [
+    {
+      "id": "openai",
+      "file": "openai.json",
+      "kind": "hosted",
+      "tier": "premium"
+    },
+    {
+      "id": "anthropic",
+      "file": "anthropic.json",
+      "kind": "hosted",
+      "tier": "premium"
+    },
+    {
+      "id": "groq",
+      "file": "groq.json",
+      "kind": "hosted",
+      "tier": "free"
+    },
+    {
+      "id": "google",
+      "file": "google.json",
+      "kind": "hosted",
+      "tier": "free"
+    },
+    {
+      "id": "ollama",
+      "file": "ollama.json",
+      "kind": "local",
+      "tier": "free"
+    },
+    {
+      "id": "openrouter",
+      "file": "openrouter.json",
+      "kind": "hosted",
+      "tier": "cheap"
+    }
+  ]
+}

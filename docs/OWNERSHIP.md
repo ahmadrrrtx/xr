@@ -146,6 +146,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/dashboard-csp-convert.py` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/e2e-artifact.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/first-task-survey.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/fuzz-canonic.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/gen-dashboard-dispatcher.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/gen-seccomp.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/generate-client.ts` | @ahmadrrrtx | explicit entry |
@@ -170,11 +171,13 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/platform-parity.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/profile-gate.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/provider-canaries.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/provider-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/recall-benchmark.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/release-manifest.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/repo-intelligence-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/size-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/soak.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sums.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sus.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/tag-npm-invariant.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
