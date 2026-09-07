@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "n
 import { getSecret, getSecretSyncCached, listFileSecrets } from "../security/secrets.ts";
 import { envSecretCompatEnabled, hydrateProviderEnv, secretBrokerSync } from "../security/secret-broker.ts";
 import { PRESETS } from "../providers/presets.ts";
+import { migrate20to21 } from "./migrate-21.ts";
 import {
   getCachedConfig,
   setCachedConfig,
@@ -24,8 +25,7 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 20; // Phase 10 — research providers (Firecrawl) + limits
-
+export const CONFIG_VERSION = 21; // Phase 8 — plugin signing + typed-confirm approvals
 // Phase 04 — health vs request timeout separation
 export const DEFAULT_HEALTH_TIMEOUT_MS = 2500;
 export const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
@@ -512,6 +512,8 @@ const ConfigSchema = z.object({
       defaultTtlMs: z.number().int().min(5_000).max(86_400_000).default(300_000),
       /** Per-surface TTL overrides (e.g. { "telegram": 300000, "daemon": 120000 }). Additive. */
       perSurface: z.record(z.string(), z.number().int().min(5_000).max(86_400_000)).default({}),
+      /** Phase 8 — headless Tier-2 requires typed confirm (default true). */
+      typedConfirm: z.boolean().default(true),
     })
     .default({}),
   /**
@@ -573,6 +575,8 @@ const ConfigSchema = z.object({
        * user approval (enterprise policy hook). Empty by default.
        */
       deniedPermissions: z.array(z.string()).default([]),
+      /** Phase 8 — unsigned plugins quarantined (hatch: XR_PLUGINS_ALLOW_UNSIGNED=1). */
+      requireSigned: z.boolean().default(true),
     })
     .default({}),
   business: z
@@ -613,15 +617,7 @@ const ConfigSchema = z.object({
       allowPublicWeb: z.boolean().default(false),
     })
     .default({}),
-  /**
-   * Phase 8 · T2 — privacy-respecting telemetry (Constitution Art. XXI).
-   * OPT-IN: `enabled` defaults to false (nothing is emitted or exported);
-   * structural-by-default (durations, model/tool names, token counts,
-   * placements, SLOs); prompt/tool CONTENT requires explicit per-flag
-   * opt-in below and still passes the redactor. Endpoint defaults to the
-   * LOCAL viewer (standalone OTLP dashboard); no cloud default, and there
-   * is never silent egress.
-   */
+  /** Phase 8 · T2 — opt-in local telemetry (no silent egress). */
   telemetry: z
     .object({
       enabled: z.boolean().default(false),
@@ -1074,6 +1070,8 @@ export const MIGRATIONS: Record<number, (raw: any) => any> = {
       },
     };
   },
+  // 20 -> 21: Phase 8 — plugin signed-allowlist + headless typed-confirm.
+  20: migrate20to21,
 };
 
 function migrate(raw: any): any {
@@ -1335,9 +1333,7 @@ const PROVIDER_KEY_ENVS = [
  *   never blocks the event loop on keychain IPC per request.
  */
 function loadLocalSecrets(opts: { skipOsProbe?: boolean } = {}): void {
-  // Phase 2 · F-24 — ambient env hydration is gated behind the secret-broker
-  // compat flag (default ON for 1.0). When off, keys are only resolved
-  // lazily via SecretBroker.get() and never land in process.env.
+  // Phase 8 — ambient env hydration is gated (default OFF).
   const envPath = join(XR_HOME, ".env");
   if (existsSync(envPath) && envSecretCompatEnabled()) {
     try { chmodSync(envPath, 0o600); } catch {}

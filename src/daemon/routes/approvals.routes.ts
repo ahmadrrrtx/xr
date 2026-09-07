@@ -59,6 +59,7 @@ export function approvalRoutes(): DaemonRoute[] {
           const body = (await req.json().catch(() => ({}))) as {
             approved?: boolean;
             userId?: string;
+            phrase?: string;
           };
           if (typeof body?.approved !== "boolean") {
             return json({ error: "expected { approved: boolean }" }, 400);

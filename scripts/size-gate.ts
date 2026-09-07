@@ -60,8 +60,16 @@ export const THRESHOLD = 800;
  * waived giants (store.ts, agent.ts, config.ts) were held at their recorded
  * sizes rather than grown. Measured after the phase: 135,4xx. The step is the
  * smallest round number that fits; 110k stays the direction of travel.
+ *
+ * ── Phase 8 · 136,000 → 137,000 (capability grants + ecosystem hardening) ──
+ * Phase 8 adds first-class grant artifacts, secret-broker completion,
+ * plugin signed-allowlist, MCP isolation grants (flag removal), and
+ * headless typed-confirm — all required in core by the reconciliation
+ * plan (XR801–XR806). Waived giants were not grown (agent.ts extracted
+ * loop-grant.ts; config.ts extracted migrate-21.ts). Measured ~136.6k.
+ * Smallest round number that fits; 110k stays the direction of travel.
  */
-export const TREE_CEILING = 136_000;
+export const TREE_CEILING = 137_000;
 
 interface Waiver {
   readonly path: string;

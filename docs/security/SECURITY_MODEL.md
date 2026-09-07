@@ -32,8 +32,9 @@ confinement; only OS-level isolation confines.
   VM shares the host process). OS isolation is the boundary; the worker
   capability host is the only API.
 - **MCP:** default-deny permissions; high-risk (credential-bearing) stdio
-  servers run inside a namespace sandbox or are refused; `XR_MCP_ALLOW_UNISOLATED`
-  is dead in hardened mode.
+  servers run inside a namespace sandbox or are refused. Unisolated spawn is a
+  signed allowlist grant (`isolation: "granted-unisolated-by:<key>"`), not an
+  env flag. `XR_MCP_ALLOW_UNISOLATED` is gone from `src/`.
 - **Browser:** sandboxed launch flags enforced; root-without-sandbox refused.
 
 ## 3. Credentials (brokered, never in sandboxes)
@@ -41,8 +42,14 @@ confinement; only OS-level isolation confines.
 - Raw values live only in the `CredentialBroker` (in-memory, TTL, revocable).
 - Plugin workers bootstrap with names only; `secrets.get` is proxied.
 - Trust-path children get explicit env; logs/records are redacted.
-- Known split: provider keys are still hydrated into `process.env` for the
-  provider plane (documented limitation; eliminated with Phase 10 identity).
+- Provider keys resolve through `SecretBroker` (`secretBrokerSync` /
+  `secretBroker.get`). Ambient `process.env` hydration is **off by default**
+  (`XR_SECRETS_ENV_COMPAT` must be explicitly `1`/`true`/`on`/`yes`).
+- Plugins: signed allowlist (MCP pattern); unsigned plugins are quarantined
+  (`XR_PLUGINS_ALLOW_UNSIGNED=1` is a one-release hatch). High-risk plugins
+  (shell/control/browser) require Tier-2 isolation or are refused.
+- Headless Tier-2 (daemon/schedule/cron/webhook/api): typed confirmation
+  phrase (or a stored phrase hash) is required. No silent headless shell.
 
 ## 4. Egress (centralized, connection-time)
 

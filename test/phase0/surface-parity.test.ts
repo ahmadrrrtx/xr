@@ -22,6 +22,8 @@
  * arbitrated registry contents AND that no surface constructs its own execution
  * path. The Phase-0 effect is preserved; the Phase-0 wiring is gone by design.
  */
+process.env.XR_PLUGINS_ALLOW_UNSIGNED ??= "1";
+
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";

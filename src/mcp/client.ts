@@ -24,6 +24,9 @@ import {
   mcpServerRisk,
   type McpStdioFlags,
 } from "../runtime/trust/isolated-spawn.ts";
+import { secretBrokerSync } from "../security/secret-broker.ts";
+import { bindGrant } from "../capabilities/grant.ts";
+import { McpAllowlist, type IsolationGrant } from "./allowlist.ts";
 
 // ── Environment Allow-list ───────────────────────────────────────────────────
 
@@ -99,12 +102,13 @@ function createAllowedEnv(customEnv?: Record<string, string>, apiKeyEnvName?: st
     }
   }
 
-  // Inject API key env var if requested (explicit opt-in, not inherited)
+  // Inject API key env var if requested (explicit opt-in, not inherited).
+  // Resolved through the secret broker so stored keys never need process.env.
   if (apiKeyEnvName) {
     if (!validateEnvKey(apiKeyEnvName)) {
       throw new Error(`invalid apiKeyEnv name: ${apiKeyEnvName}`);
     }
-    const val = process.env[apiKeyEnvName];
+    const val = secretBrokerSync(apiKeyEnvName);
     if (val !== undefined) {
       if (!validateEnvValue(val)) throw new Error(`apiKeyEnv value too large or invalid: ${apiKeyEnvName}`);
       allowed[apiKeyEnvName] = val;
@@ -197,6 +201,8 @@ export interface McpServerConfig {
   args?: string[];
   env?: Record<string, string>;
   apiKeyEnv?: string;
+  /** Phase 8 — signed isolation grant from the allowlist (not an env flag). */
+  isolation?: IsolationGrant;
 }
 
 export interface McpToolDef {
@@ -259,7 +265,7 @@ export class McpClient {
 
     if (cfg.apiKeyEnv) {
       if (!validateEnvKey(cfg.apiKeyEnv)) throw new Error(`invalid apiKeyEnv name: ${cfg.apiKeyEnv}`);
-      this.apiKey = process.env[cfg.apiKeyEnv];
+      this.apiKey = secretBrokerSync(cfg.apiKeyEnv);
     }
 
     // Pre-compute allowed env (critical security boundary)
@@ -312,10 +318,12 @@ export class McpClient {
     // hatch entirely: a third-party process with host authority is never
     // acceptable when hardened.
     const risk = mcpServerRisk(this.cfg);
+    const isolation = this.cfg.isolation ?? lookupIsolationGrant(this.cfg.id);
     const flags: McpStdioFlags = {
       isolateStdio: process.env.XR_MCP_ISOLATE_STDIO === "1",
       allowNet: process.env.XR_MCP_ISOLATED_NET === "1",
-      allowUnisolated: process.env.XR_MCP_ALLOW_UNISOLATED === "1",
+      // Phase 8 — unisolated spawn is a SIGNED allowlist grant, not an env hatch.
+      allowUnisolated: isolation.startsWith("granted-unisolated-by:"),
     };
     let hardened = true;
     try {
@@ -330,8 +338,8 @@ export class McpClient {
     if (placement === "blocked") {
       const hint = hardened
         ? "hardened mode is ON: unisolated high-risk servers are refused. Install bubblewrap (or disable hardened mode explicitly with XR_TRUST_HARDENED=0 on hosts where that is accepted)."
-        : `no namespace sandbox (bubblewrap) is available. Install bubblewrap, or set XR_MCP_ALLOW_UNISOLATED=1 ` +
-          `to explicitly accept the confined (non-kernel-isolated) spawn.`;
+        : `no namespace sandbox (bubblewrap) is available. Install bubblewrap, or grant isolation ` +
+          `"granted-unisolated-by:<key>" on the signed MCP allowlist (xr mcp allow <id> --unisolated).`;
       throw new Error(
         `MCP stdio server "${this.cfg.id}" is high-risk (carries credentials) and requires isolation, ` +
           `but no namespace sandbox is available. ${hint}`,
@@ -363,8 +371,8 @@ export class McpClient {
     if (!spawned) {
       if (risk === "high" && flags.allowUnisolated && !hardened) {
         this.sandboxWarning =
-          `high-risk MCP stdio server "${this.cfg.id}" running WITHOUT kernel isolation (XR_MCP_ALLOW_UNISOLATED=1). ` +
-          `Env is allow-listed but the process is not sandboxed.`;
+          `high-risk MCP stdio server "${this.cfg.id}" running WITHOUT kernel isolation ` +
+          `(signed isolation grant ${isolation}). Env is allow-listed but the process is not sandboxed.`;
         console.error(`[MCP security] WARNING: ${this.sandboxWarning}`);
       }
       this.proc = spawn(this.cfg.command!, this.cfg.args || [], {
@@ -612,6 +620,14 @@ export class McpClient {
 
 // ── Safe XR Tool Wrappers (approval + audit boundary) ───────────────────────
 
+function lookupIsolationGrant(serverId: string): IsolationGrant {
+  try {
+    return new McpAllowlist().isolationGrant(serverId);
+  } catch {
+    return "required";
+  }
+}
+
 export function wrapMcpTool(client: McpClient, serverId: string, def: McpToolDef): Tool {
   const fullName = `mcp.${serverId}.${def.name}`;
   return {
@@ -620,6 +636,11 @@ export function wrapMcpTool(client: McpClient, serverId: string, def: McpToolDef
     parameters: def.inputSchema ?? { type: "object", properties: {} },
     requiresApproval: true,
     async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+      const bound = bindGrant(ctx.grant, args, { capabilityId: fullName, allowConsumed: true });
+      if (!bound.ok) {
+        ctx.audit(`grant.${bound.code}`, { server: serverId, tool: def.name, reason: bound.reason });
+        return { ok: false, output: `blocked: grant ${bound.code}: ${bound.reason}` };
+      }
       const approved = await ctx.approve({
         tool: fullName,
         reason: `Invoke external MCP tool on server "${serverId}"`,
@@ -652,6 +673,11 @@ export function wrapMcpResource(client: McpClient, serverId: string, def: McpRes
     parameters: { type: "object", properties: { uri: { type: "string", default: def.uri } } },
     requiresApproval: true,
     async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+      const bound = bindGrant(ctx.grant, args, { capabilityId: fullName, allowConsumed: true });
+      if (!bound.ok) {
+        ctx.audit(`grant.${bound.code}`, { server: serverId, uri: def.uri, reason: bound.reason });
+        return { ok: false, output: `blocked: grant ${bound.code}: ${bound.reason}` };
+      }
       const uri = (args.uri as string) || def.uri;
       try {
         validateResourceUri(uri);
@@ -690,6 +716,11 @@ export function wrapMcpPrompt(client: McpClient, serverId: string, def: McpPromp
     },
     requiresApproval: false,
     async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+      const bound = bindGrant(ctx.grant, args, { capabilityId: fullName, allowConsumed: true });
+      if (!bound.ok) {
+        ctx.audit(`grant.${bound.code}`, { server: serverId, prompt: def.name, reason: bound.reason });
+        return { ok: false, output: `blocked: grant ${bound.code}: ${bound.reason}` };
+      }
       if (ctx.dryRun) return { ok: true, output: `[dry-run] would fetch prompt ${def.name}` };
       try {
         const result = await client.getPrompt(def.name, args as any);

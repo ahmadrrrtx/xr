@@ -10,3 +10,6 @@ export * from "./request.ts";
 export * from "./executor.ts";
 export * from "./service.ts";
 export * from "./inventory.ts";
+export * from "./grant.ts";
+export * from "./authorize.ts";
+export * from "./loop-grant.ts";

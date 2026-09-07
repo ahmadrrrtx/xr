@@ -6,6 +6,8 @@
  * authority diff is rendered before enable/update (new permissions, risk
  * tier, data scopes); the enable gate refuses reject-level findings.
  */
+process.env.XR_PLUGINS_ALLOW_UNSIGNED ??= "1";
+
 import { beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

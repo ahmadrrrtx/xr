@@ -548,6 +548,30 @@ export function makeApprover(
     perSurface: options.perSurface,
   });
   return async (req) => {
+    // Phase 8 — headless Tier-2 second factor. Interactive surfaces skip this.
+    try {
+      const { gateHeadlessTier2 } = await import("./typed-confirm.ts");
+      const gate = gateHeadlessTier2({
+        store,
+        surface: options.surface,
+        tool: req.tool,
+        riskTier: req.riskTier,
+        phrase: req.phrase,
+      });
+      store.audit("approval.typed_confirm", {
+        tool: req.tool,
+        surface: options.surface,
+        riskTier: req.riskTier,
+        ok: gate.ok,
+        preauthorized: gate.ok ? gate.preauthorized : false,
+        reason: gate.ok ? undefined : gate.reason,
+      });
+      if (!gate.ok) return false;
+    } catch {
+      // typed-confirm table missing must fail closed for headless Tier-2.
+      const { isHeadlessSurface, isTier2Risk } = await import("./typed-confirm.ts");
+      if (isHeadlessSurface(options.surface) && isTier2Risk(req.tool, req.riskTier)) return false;
+    }
     const handle = approvalStore.request({
       tool: req.tool,
       reason: req.reason,

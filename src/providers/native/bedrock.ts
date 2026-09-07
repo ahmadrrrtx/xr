@@ -19,6 +19,7 @@ import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChu
 import { guardedRequest } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
+import { secretBrokerSync } from "../../security/secret-broker.ts";
 
 interface BedrockOptions {
   model?: string;
@@ -75,10 +76,9 @@ export class BedrockProvider implements Provider {
     
     const akEnv = opts.accessKeyIdEnv ?? "AWS_ACCESS_KEY_ID";
     const skEnv = opts.secretAccessKeyEnv ?? "AWS_SECRET_ACCESS_KEY";
-    
-    this.accessKey = process.env[akEnv];
-    this.secretKey = process.env[skEnv];
-    this.sessionToken = process.env.AWS_SESSION_TOKEN;
+    this.accessKey = secretBrokerSync(akEnv);
+    this.secretKey = secretBrokerSync(skEnv);
+    this.sessionToken = secretBrokerSync("AWS_SESSION_TOKEN");
   }
 
   private async getAuthToken(): Promise<string> {

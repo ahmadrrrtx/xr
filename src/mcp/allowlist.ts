@@ -30,12 +30,17 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
-export const MCP_ALLOWLIST_SCHEMA_VERSION = 1;
+export const MCP_ALLOWLIST_SCHEMA_VERSION = 2;
+
+/** Isolation posture stored on the signed allowlist (v2). */
+export type IsolationGrant = "required" | `granted-unisolated-by:${string}`;
 
 export interface AllowlistEntry {
   grantedAt: number;
   by: string;
   reason?: string;
+  /** v2: default "required". Unisolated spawn only with a signed grant. */
+  isolation?: IsolationGrant;
 }
 
 export interface AllowlistSignature {
@@ -44,7 +49,7 @@ export interface AllowlistSignature {
 }
 
 export interface McpAllowlistFile {
-  schemaVersion: typeof MCP_ALLOWLIST_SCHEMA_VERSION;
+  schemaVersion: number;
   generatedAt: number;
   servers: Record<string, AllowlistEntry>;
   signatures: AllowlistSignature[];
@@ -69,15 +74,33 @@ export interface AllowlistResult {
   reason?: string;
 }
 
-function canonicalServers(servers: Record<string, AllowlistEntry>): string {
-  const sorted: Record<string, AllowlistEntry> = {};
-  for (const id of Object.keys(servers).sort()) sorted[id] = servers[id];
-  return JSON.stringify({ schemaVersion: MCP_ALLOWLIST_SCHEMA_VERSION, generatedAt: 0, servers: sorted });
+function canonicalServers(servers: Record<string, AllowlistEntry>, schemaVersion: number): string {
+  const sorted: Record<string, unknown> = {};
+  for (const id of Object.keys(servers).sort()) {
+    const e = servers[id]!;
+    if (schemaVersion >= 2) {
+      sorted[id] = {
+        grantedAt: e.grantedAt,
+        by: e.by,
+        ...(e.reason !== undefined ? { reason: e.reason } : {}),
+        isolation: e.isolation ?? "required",
+      };
+    } else {
+      // v1 digest: entries as stored (no isolation field in the canonical form).
+      sorted[id] = { grantedAt: e.grantedAt, by: e.by, ...(e.reason !== undefined ? { reason: e.reason } : {}) };
+    }
+  }
+  return JSON.stringify({ schemaVersion, generatedAt: 0, servers: sorted });
 }
 
 /** Sign the allowlist payload (servers only; timestamp excluded for replay-free rotation). */
-export function signAllowlist(servers: Record<string, AllowlistEntry>, privateKeyPem: string, keyId: string): AllowlistSignature {
-  const digest = createHash("sha256").update(canonicalServers(servers), "utf8").digest("hex");
+export function signAllowlist(
+  servers: Record<string, AllowlistEntry>,
+  privateKeyPem: string,
+  keyId: string,
+  schemaVersion: number = MCP_ALLOWLIST_SCHEMA_VERSION,
+): AllowlistSignature {
+  const digest = createHash("sha256").update(canonicalServers(servers, schemaVersion), "utf8").digest("hex");
   const sig = cryptoSign(null, Buffer.from(digest, "utf8"), privateKeyPem).toString("base64");
   return { keyId, sig };
 }
@@ -86,7 +109,8 @@ export function verifyAllowlist(
   file: McpAllowlistFile,
   publicKeys: Record<string, string>,
 ): { ok: boolean; reason: string; validKeyIds: string[] } {
-  const digest = createHash("sha256").update(canonicalServers(file.servers), "utf8").digest("hex");
+  const schemaVersion = file.schemaVersion === 1 ? 1 : MCP_ALLOWLIST_SCHEMA_VERSION;
+  const digest = createHash("sha256").update(canonicalServers(file.servers, schemaVersion), "utf8").digest("hex");
   const validKeyIds: string[] = [];
   for (const sig of file.signatures) {
     const publicPem = publicKeys[sig.keyId];
@@ -131,7 +155,11 @@ export class McpAllowlist {
     if (!existsSync(this.allowlistPath)) return { schemaVersion: MCP_ALLOWLIST_SCHEMA_VERSION, generatedAt: 0, servers: {}, signatures: [] };
     try {
       const raw = JSON.parse(readFileSync(this.allowlistPath, "utf8")) as McpAllowlistFile;
-      if (raw?.schemaVersion === MCP_ALLOWLIST_SCHEMA_VERSION && typeof raw.servers === "object" && Array.isArray(raw.signatures)) {
+      if (
+        (raw?.schemaVersion === 1 || raw?.schemaVersion === MCP_ALLOWLIST_SCHEMA_VERSION) &&
+        typeof raw.servers === "object" &&
+        Array.isArray(raw.signatures)
+      ) {
         return raw;
       }
     } catch {
@@ -167,19 +195,58 @@ export class McpAllowlist {
     return { ok: true, reason: `server "${serverId}" is on the signed allowlist (granted ${new Date(this.file.servers[serverId].grantedAt).toISOString()} by ${this.file.servers[serverId].by})` };
   }
 
-  list(): Array<{ serverId: string; grantedAt: number; by: string; reason?: string }> {
+  list(): Array<{ serverId: string; grantedAt: number; by: string; reason?: string; isolation?: IsolationGrant }> {
     return Object.entries(this.file.servers)
-      .map(([serverId, entry]) => ({ serverId, grantedAt: entry.grantedAt, by: entry.by, reason: entry.reason }))
+      .map(([serverId, entry]) => ({
+        serverId,
+        grantedAt: entry.grantedAt,
+        by: entry.by,
+        reason: entry.reason,
+        isolation: entry.isolation ?? "required",
+      }))
       .sort((a, b) => a.serverId.localeCompare(b.serverId));
   }
 
+  /** Signed isolation grant for a server. Missing/unlisted → required (fail closed). */
+  isolationGrant(serverId: string): IsolationGrant {
+    return this.file.servers[serverId]?.isolation ?? "required";
+  }
+
   /** Grant a server (signs the new allowlist). Requires a private signing key. */
-  allow(serverId: string, opts: { by?: string; reason?: string; privateKeyPem?: string; keyId?: string } = {}): AllowlistResult {
+  allow(
+    serverId: string,
+    opts: {
+      by?: string;
+      reason?: string;
+      privateKeyPem?: string;
+      keyId?: string;
+      isolation?: IsolationGrant | "unisolated";
+    } = {},
+  ): AllowlistResult {
     const signer = this.resolveSigner(opts);
     if (!signer) return { ok: false, reason: "no signing key available — configure an allowlist key or pass --key" };
-    this.file.servers[serverId] = { grantedAt: Date.now(), by: opts.by ?? "operator", reason: opts.reason };
+    const by = opts.by ?? "operator";
+    let isolation: IsolationGrant = "required";
+    if (opts.isolation === "unisolated" || opts.reason === "unisolated") {
+      isolation = `granted-unisolated-by:${by}`;
+    } else if (opts.isolation) {
+      isolation = opts.isolation;
+    }
+    this.file.servers[serverId] = { grantedAt: Date.now(), by, reason: opts.reason, isolation };
     this.signAndFlush(signer.privateKeyPem, signer.keyId);
     return { ok: true, reason: `server "${serverId}" allowed and allowlist re-signed (${signer.keyId})` };
+  }
+
+  /** Re-sign as schema v2 (fills missing isolation = required). One-time upgrade helper. */
+  reSign(opts: { privateKeyPem?: string; keyId?: string } = {}): AllowlistResult {
+    const signer = this.resolveSigner(opts);
+    if (!signer) return { ok: false, reason: "no signing key available" };
+    for (const id of Object.keys(this.file.servers)) {
+      const e = this.file.servers[id]!;
+      if (!e.isolation) e.isolation = "required";
+    }
+    this.signAndFlush(signer.privateKeyPem, signer.keyId);
+    return { ok: true, reason: `allowlist re-signed as schema v${MCP_ALLOWLIST_SCHEMA_VERSION} (${signer.keyId})` };
   }
 
   /** Revoke a server and re-sign (revocation kills live clients at the manager layer). */
@@ -207,8 +274,9 @@ export class McpAllowlist {
   }
 
   private signAndFlush(privateKeyPem: string, keyId: string): void {
+    this.file.schemaVersion = MCP_ALLOWLIST_SCHEMA_VERSION;
     this.file.generatedAt = Date.now();
-    this.file.signatures = [signAllowlist(this.file.servers, privateKeyPem, keyId)];
+    this.file.signatures = [signAllowlist(this.file.servers, privateKeyPem, keyId, MCP_ALLOWLIST_SCHEMA_VERSION)];
     const dir = dirname(this.allowlistPath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const tmp = `${this.allowlistPath}.tmp-${process.pid}`;

@@ -12,6 +12,7 @@ import type {
   CapabilityDecision,
 } from "./types.ts";
 import { evaluatePolicy, type PolicyContext } from "./policy.ts";
+import { runAuthorized } from "./authorize.ts";
 
 export interface ExecutionContext extends PolicyContext {
   /** Tool context for execution (approve, audit, etc). */
@@ -88,7 +89,21 @@ export async function executeCapability(
   }
 
   try {
-    const result = await entry.tool.run(request.arguments, execCtx.toolContext);
+    if (decision.grant) {
+      execCtx.toolContext.audit("grant.minted", {
+        grantId: decision.grant.grantId,
+        capabilityId: request.capabilityId,
+        argsHash: decision.grant.argsHash,
+        ttlMs: decision.grant.ttlMs,
+      });
+    }
+    const result = await runAuthorized(
+      entry.tool,
+      request.arguments,
+      execCtx.toolContext,
+      decision.grant,
+      { capabilityId: request.capabilityId, runId: request.runId },
+    );
     execCtx.toolContext.audit("capability.executed", {
       capabilityId: request.capabilityId,
       ok: result.ok,
@@ -96,6 +111,7 @@ export async function executeCapability(
       trust: decision.trust.level,
       lifecycle: decision.lifecycle,
       permissions: decision.effectivePermissions,
+      grantId: decision.grant?.grantId,
     });
     // Record provenance use if onToolUse present
     execCtx.toolContext.onToolUse?.({ tool: request.capabilityId, ok: result.ok });

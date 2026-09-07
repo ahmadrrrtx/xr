@@ -13,6 +13,7 @@ import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChu
 import { guardedRequest } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
+import { secretBrokerSync } from "../../security/secret-broker.ts";
 
 interface CerebrasOptions {
   model?: string;
@@ -22,8 +23,11 @@ interface CerebrasOptions {
 export class CerebrasProvider implements Provider {
   id = "cerebras";
   label = "Cerebras (Fastest AI)";
-  private apiKey: string;
+  private apiKeyEnv: string;
   private model: string;
+  private get apiKey(): string {
+    return secretBrokerSync(this.apiKeyEnv) ?? "";
+  }
 
   get modelId(): string {
     return this.model;
@@ -31,8 +35,7 @@ export class CerebrasProvider implements Provider {
   private baseUrl = "https://api.cerebras.ai/v1";
 
   constructor(opts: CerebrasOptions = {}) {
-    const envKey = opts.apiKeyEnv ?? "CEREBRAS_API_KEY";
-    this.apiKey = process.env[envKey] ?? "";
+    this.apiKeyEnv = opts.apiKeyEnv ?? "CEREBRAS_API_KEY";
     this.model = opts.model ?? "cerebras/csm-8b";
   }
 

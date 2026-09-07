@@ -76,6 +76,8 @@ export async function handlePluginsCommand(argv: string[], store: Store): Promis
     case "run": return cmdRun(mgr, flags);
     case "doctor": case "health": return cmdDoctor(mgr);
     case "skills": return cmdSkills(mgr, flags);
+    case "allow": return cmdAllow(mgr, flags);
+    case "revoke": return cmdRevoke(mgr, flags);
     case "help": case "--help": case "-h": return printPluginsHelp();
     default:
       warn(`unknown plugins command: ${sub}`);
@@ -100,8 +102,37 @@ function printPluginsHelp(): void {
   xr plugins run <id> <cmd> [args...]     run a contributed command
   xr plugins skills                       list skills contributed by enabled plugins
   xr plugins doctor                       health of installed plugins
+  xr plugins allow <id>                   sign plugin onto the allowlist (default-deny load gate)
+  xr plugins revoke <id>                  revoke from the signed plugin allowlist
 
   flags: --yes/-y  --enable  --grant a,b,c  --json`);
+}
+
+async function cmdAllow(mgr: PluginManager, flags: Flags): Promise<void> {
+  const id = flags.rest[0];
+  if (!id) return void warn("usage: xr plugins allow <id>");
+  const { PluginAllowlist, defaultPluginAllowlistKeysPath, generatePluginAllowlistKeyPair, writePluginAllowlistKeys } = await import("./allowlist.ts");
+  const { existsSync } = await import("node:fs");
+  if (!existsSync(defaultPluginAllowlistKeysPath())) {
+    const pair = generatePluginAllowlistKeyPair();
+    writePluginAllowlistKeys([pair]);
+    ok(`created operator plugin allowlist key ${pair.keyId} at ${defaultPluginAllowlistKeysPath()}`);
+  }
+  const entry = mgr.getEntry(id);
+  const result = new PluginAllowlist().allow(id, {
+    by: "operator",
+    treeHash: entry?.treeHash,
+    manifestHash: entry?.installedHash,
+  });
+  if (result.ok) ok(result.reason ?? "allowed"); else warn(result.reason ?? "allow failed");
+}
+
+async function cmdRevoke(mgr: PluginManager, flags: Flags): Promise<void> {
+  const id = flags.rest[0];
+  if (!id) return void warn("usage: xr plugins revoke <id>");
+  const { PluginAllowlist } = await import("./allowlist.ts");
+  const result = new PluginAllowlist().revoke(id);
+  if (result.ok) ok(result.reason ?? "revoked"); else warn(result.reason ?? "revoke failed");
 }
 
 async function cmdList(mgr: PluginManager, flags: Flags): Promise<void> {

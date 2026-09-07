@@ -152,14 +152,14 @@ describe("Phase 01 — health cache correctness", () => {
     invalidateProviderHealthCache();
     const config = await freshConfig();
     const env = PRESETS["groq"]!.apiKeyEnv!;
-    const had = process.env[env];
+    const { setSecret, removeSecret } = await import("../../src/security/secrets.ts");
     try {
       // No key → cached auth-negative ("API key ... not set").
       const before = await checkProviderHealthCached(config, "groq");
       expect(before.ok).toBe(false);
       expect(before.detail).toContain("API key");
-      // The daemon's onboarding.provider path invalidates after storing a key.
-      process.env[env] = "sk-test-12345";
+      // Phase 8 — keys live in the secret broker, not process.env.
+      setSecret(env, "sk-test-12345");
       invalidateProviderHealthCache("groq");
       const after = await checkProviderHealthCached(config, "groq");
       // Fresh probe (network to api.groq.com from CI is unreachable): the
@@ -167,8 +167,7 @@ describe("Phase 01 — health cache correctness", () => {
       expect(after.detail).not.toContain("API key");
       expect(after.cached).toBe(false);
     } finally {
-      if (had === undefined) delete process.env[env];
-      else process.env[env] = had;
+      try { removeSecret(env); } catch { /* ignore */ }
     }
   });
 

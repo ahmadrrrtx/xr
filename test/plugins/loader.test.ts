@@ -11,6 +11,8 @@
  *  - manifest.ts strict permission policy and containment checks
  *  - Bun test runner (describe/test/expect/beforeEach/afterEach)
  */
+process.env.XR_PLUGINS_ALLOW_UNSIGNED ??= "1";
+
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import {

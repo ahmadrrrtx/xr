@@ -1,12 +1,14 @@
 /**
- * XR Phase 2 · F-24 — Secret broker SEAM (ADR-0010 completion lands in
- * Phase 8; this phase makes the seam exist and tested).
+ * XR Phase 8 — Secret broker (the ONLY path for provider credentials).
  *
- * The broker is the single interface through which provider credentials are
- * resolved. Today it wraps the existing env/OS-backend lookup so behavior is
- * unchanged; Phase 8 will make it the ONLY path (env hydration removed in
- * 2.0). `XR_SECRETS_ENV_COMPAT` gates the legacy process.env hydration
- * (see env-compat.ts — the single flag definition).
+ * `SecretBroker.get` resolves a named secret. Order: ambient process.env
+ * (only when XR_SECRETS_ENV_COMPAT is explicitly on), then the durable
+ * secret backends (OS keychain / AES-GCM file store). XR itself never
+ * hydrates stored keys into process.env when compat is off.
+ *
+ * The broker MAY read a user-supplied process.env value (compat on, or
+ * as a last-resort presence check the user exported themselves). XR must
+ * not WRITE stored keys into process.env when compat is off.
  */
 
 import { getSecretSyncCached } from "./secrets.ts";
@@ -14,17 +16,22 @@ import { getSecretSyncCached } from "./secrets.ts";
 import { envSecretCompatEnabled } from "./env-compat.ts";
 export { envSecretCompatEnabled } from "./env-compat.ts";
 
+export interface SecretGetOptions {
+  /** Call-site context for audit / future policy (e.g. "provider"). */
+  context?: string;
+}
+
 export interface SecretBrokerLike {
   /**
-   * Resolve a named secret. Order: ambient process.env (only when env
-   * compat is on), then the durable secret backends (OS keychain /
-   * AES-GCM file store). Never throws; returns undefined when absent.
+   * Resolve a named secret. Never throws; returns undefined when absent.
+   * Never hydrates process.env (that is `hydrateProviderEnv`'s job, and
+   * it is a no-op when compat is off).
    */
-  get(name: string): Promise<string | undefined>;
+  get(name: string, opts?: SecretGetOptions): Promise<string | undefined>;
 }
 
 export const secretBroker: SecretBrokerLike = {
-  async get(name: string): Promise<string | undefined> {
+  async get(name: string, _opts?: SecretGetOptions): Promise<string | undefined> {
     if (envSecretCompatEnabled()) {
       const ambient = process.env[name];
       if (ambient) return ambient;
@@ -56,12 +63,29 @@ export function secretBrokerSync(name: string): string | undefined {
 }
 
 /**
- * Phase 2 · F-24 — hydrate a stored key into process.env ONLY while the
- * compat flag is on. Phase 8 removes ambient hydration entirely; call sites
- * that store keys must go through this helper so the seam is the one gate.
+ * Hydrate a stored key into process.env ONLY while the compat flag is on.
+ * Call sites that store keys must go through this helper so the seam is
+ * the one gate. Phase 8 default: no-op.
  */
 export function hydrateProviderEnv(name: string, value: string): void {
   if (envSecretCompatEnabled()) {
     process.env[name] = value;
   }
+}
+
+/**
+ * Resolve a provider API key: explicit override, then the broker.
+ * Natives / openai-compat use this instead of reading process.env.
+ */
+export function resolveProviderKey(envName: string, explicit?: string): string {
+  if (explicit) return explicit;
+  return secretBrokerSync(envName) ?? "";
+}
+
+/**
+ * Lazy per-request key provider for OpenAI-compat (and any fetch adapter
+ * that can await). Does not cache the raw key on the provider instance.
+ */
+export function apiKeyProvider(envName: string): () => Promise<string | undefined> {
+  return () => secretBroker.get(envName, { context: "provider" });
 }

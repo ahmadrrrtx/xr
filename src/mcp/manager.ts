@@ -378,6 +378,12 @@ export class McpManager {
   private async getOrCreateClient(entry: McpRegistryEntry): Promise<McpClient> {
     if (this.clients.has(entry.id)) return this.clients.get(entry.id)!;
 
+    let isolation: import("./allowlist.ts").IsolationGrant | undefined;
+    try {
+      isolation = new McpAllowlist().isolationGrant(entry.id);
+    } catch {
+      isolation = "required";
+    }
     const client = new McpClient({
       id: entry.id,
       transport: entry.transport,
@@ -386,6 +392,7 @@ export class McpManager {
       args: entry.args,
       env: entry.env,
       apiKeyEnv: entry.apiKeyEnv,
+      isolation,
     });
     this.clients.set(entry.id, client);
     return client;

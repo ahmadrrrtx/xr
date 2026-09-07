@@ -101,6 +101,34 @@ export interface ToolContext {
    * callback type).
    */
   onToolUse?: (info: { tool: string; ok: boolean; error?: string }) => void;
+  /**
+   * Phase 8 — capability grant minted by the policy engine for THIS call.
+   * Wrappers (MCP / plugin) bind it as defense in depth; `runAuthorized`
+   * is the consume site. Forged grant objects fail closed (registry miss).
+   * Kernel-owned type so L0 never imports L2 (grant.ts re-exports).
+   */
+  grant?: CapabilityGrant;
+}
+
+/**
+ * Phase 8 — capability grant artifact (kernel-owned so ToolContext never
+ * imports L2). `src/capabilities/grant.ts` is the mint/verify/consume
+ * authority and re-exports this type.
+ */
+export interface CapabilityGrant {
+  readonly grantId: string;
+  readonly capabilityId: string;
+  readonly argsHash: string;
+  readonly scope?: string;
+  readonly runId?: string;
+  readonly taskId?: string;
+  readonly agentId?: string;
+  readonly issuedBy: "policy-engine";
+  readonly issuedAt: number;
+  readonly ttlMs: number;
+  readonly constraints?: Record<string, unknown>;
+  readonly approvalRef?: string;
+  readonly decision: "allow";
 }
 
 /** Phase 2 · F-26 — structured preview kind (canonical in core so the kernel
@@ -153,6 +181,11 @@ export interface ApprovalRequest {
   taskId?: string;
   runId?: string;
   sessionId?: string;
+  /**
+   * Phase 8 — typed confirmation phrase for headless Tier-2 (daemon /
+   * schedule / cron). Optional; the gate lives in control/typed-confirm.ts.
+   */
+  phrase?: string;
 }
 
 export interface ToolResult {

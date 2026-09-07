@@ -13,6 +13,8 @@
  *  - console output redacts credentials
  *  - mcp capability exposes metadata only (never command/env)
  */
+process.env.XR_PLUGINS_ALLOW_UNSIGNED ??= "1";
+
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
