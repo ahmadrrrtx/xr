@@ -136,7 +136,17 @@ describe("durable approval lifecycle", () => {
   });
 });
 
-describe("kill -9 mid-approval (real process death)", () => {
+// Windows CI: `Bun.spawn` child stdout pipes hang without closing — the
+// reads (and the cross-process for-await) never settle even when a
+// watchdog kills the child, so the file dies at the segment cap with
+// zero assertion failures (exit 124, "dies alone") — 2026-09-07, runs
+// 34152171256 and 34156612385, Windows full-parity lane. Registered in
+// docs/security/KNOWN_LIMITATIONS.md (#21). The in-process durability
+// coverage runs on every platform; the full spawn matrix runs on the
+// Linux reference lane and macOS.
+const WIN32_CI_HANG = process.platform === "win32";
+
+describe.skipIf(WIN32_CI_HANG)("kill -9 mid-approval (real process death)", () => {
   /**
    * Windows hang guard (same failure class as the cross-process test below):
    * `new Response(proc.stdout).text()` only settles when the child CLOSES
@@ -240,7 +250,7 @@ describe("kill -9 mid-approval (real process death)", () => {
   }, 30_000);
 });
 
-describe("cross-process approval (CLI task decided by another process)", () => {
+describe.skipIf(WIN32_CI_HANG)("cross-process approval (CLI task decided by another process)", () => {
   test("process A raises + waits; process B decides; A resolves approved", async () => {
     const dbPath = join(tmp, "cross.db");
     const proc = Bun.spawn({
