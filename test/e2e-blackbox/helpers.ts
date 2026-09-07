@@ -242,7 +242,7 @@ export function writeConfig(home: string, config: Record<string, unknown>): void
  * suites that exercise the RUN side can install a provider the same way the
  * CLI does. `addCustomProvider` writes {id,label,baseUrl,apiKeyEnv,defaultModel,headers,capabilities}.
  */
-export const CONFIG_VERSION = 20;
+export const CONFIG_VERSION = 21;
 
 export function stubProviderConfig(
   providerId: string,

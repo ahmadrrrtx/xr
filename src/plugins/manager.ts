@@ -10,7 +10,12 @@ import { McpClient, wrapMcpTool } from "../mcp/client.ts";
 import { PluginRegistry, type PluginRollbackSnapshot, type RegistryEntry } from "./registry.ts";
 import { effectiveGrant } from "./manifest.ts";
 import { checkCompatibility } from "./compat.ts";
-import { hashEntrypoint, hashPluginTree, loadPlugin, validatePlugin, type LoadResult } from "./loader.ts";
+import { hashEntrypoint, hashPluginTree, loadPlugin, loadPluginInWorker, validatePlugin, type LoadResult } from "./loader.ts";
+import { PluginAllowlist, pluginsAllowUnsigned } from "./allowlist.ts";
+import { decidePluginPlacement, grantedHardBoundaryPerms } from "./placement.ts";
+import { assessPluginRisk } from "../runtime/trust/tool-support.ts";
+import { detectBwrap } from "../runtime/trust/isolated-spawn.ts";
+import { bindGrant } from "../capabilities/grant.ts";
 import { loadPluginSkills } from "./skills.ts";
 import type { LoadedSkill } from "../skills/loader.ts";
 import { SENSITIVE_PERMISSIONS, type PermissionScope, type PluginCommand, type PluginContributions, type PluginManifest, type PluginStatus, type PluginTool } from "./types.ts";
@@ -385,7 +390,52 @@ export class PluginManager {
     const denied: Set<string> = new Set(pluginCfg.deniedPermissions ?? []);
     const granted = entry.grantedPermissions.filter((p) => !denied.has(p));
     const dir = this.registry.dirFor(entry.id);
-    const res: LoadResult = await loadPlugin(dir, { store: this.store, config: this.config, cwd: this.cwd, granted, expectedHash: requireTrust ? entry.installedHash : undefined, expectedTreeHash: requireTrust ? entry.treeHash : undefined });
+
+    // Phase 8 — signed plugin allowlist (default-deny). Unsigned plugins are
+    // quarantined unless XR_PLUGINS_ALLOW_UNSIGNED=1 (one-release hatch) or
+    // config.plugins.requireSigned === false.
+    const requireSigned = pluginCfg.requireSigned !== false;
+    if (requireSigned) {
+      try {
+        const al = new PluginAllowlist();
+        const allowed = al.isAllowed(entry.id, { treeHash: entry.treeHash, manifestHash: entry.installedHash });
+        if (!allowed.ok) {
+          if (pluginsAllowUnsigned()) {
+            this.store.audit("plugin.unsigned_compat", { plugin: entry.id, reason: allowed.reason });
+          } else {
+            this.loadErrors.set(entry.id, { reason: allowed.reason ?? "unsigned", kind: "untrusted" });
+            this.registry.quarantine(entry.id, allowed.reason ?? "unsigned plugin (not on signed allowlist)");
+            this.registry.record(entry.id, "quarantine", allowed.reason);
+            this.store.audit("plugin.quarantine", { plugin: entry.id, reason: allowed.reason, cause: "unsigned" });
+            return;
+          }
+        }
+      } catch (e) {
+        if (!pluginsAllowUnsigned()) {
+          const reason = `plugin allowlist gate error (fail-closed): ${(e as Error).message}`;
+          this.loadErrors.set(entry.id, { reason, kind: "untrusted" });
+          this.store.audit("plugin.quarantine", { plugin: entry.id, reason, cause: "allowlist_error" });
+          return;
+        }
+      }
+    }
+
+    const hard = grantedHardBoundaryPerms(granted);
+    const assessment = assessPluginRisk(granted, granted);
+    const sandboxAvailable = await detectBwrap();
+    const place = decidePluginPlacement(hard, sandboxAvailable, assessment.effectiveTier);
+    if (place === "blocked") {
+      const reason = `high-risk plugin (granted ${hard.join(",")}) requires Tier-2 isolation (bubblewrap); refused`;
+      this.loadErrors.set(entry.id, { reason, kind: "untrusted" });
+      this.registry.setHealth(entry.id, { state: "untrusted", checkedAt: Date.now(), detail: reason, errors: [reason] });
+      this.store.audit("plugin.isolation_denied", { plugin: entry.id, granted: hard, placement: place });
+      return;
+    }
+
+    const loadDeps = { store: this.store, config: this.config, cwd: this.cwd, granted, expectedHash: requireTrust ? entry.installedHash : undefined, expectedTreeHash: requireTrust ? entry.treeHash : undefined };
+    const res: LoadResult = place === "isolated"
+      ? await loadPluginInWorker(dir, loadDeps)
+      : await loadPlugin(dir, loadDeps);
     if (!res.ok) {
       this.loadErrors.set(entry.id, { reason: res.reason, kind: res.kind });
       this.registry.setHealth(entry.id, { state: res.kind === "untrusted" ? "untrusted" : res.kind === "incompatible" ? "incompatible" : "error", checkedAt: Date.now(), detail: res.reason, errors: [res.reason] });
@@ -502,6 +552,11 @@ function adaptTool(pluginId: string, pt: PluginTool, granted: PermissionScope[])
     parameters: pt.parameters ?? {},
     requiresApproval,
     async run(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolResult> {
+      const bound = bindGrant(ctx.grant, args, { capabilityId: fqName, allowConsumed: true });
+      if (!bound.ok) {
+        ctx.audit(`grant.${bound.code}`, { plugin: pluginId, tool: pt.name, reason: bound.reason });
+        return { ok: false, output: `blocked: grant ${bound.code}: ${bound.reason}` };
+      }
       if (requiresApproval) {
         const approved = await ctx.approve({ tool: fqName, reason: `run plugin tool from "${pluginId}"`, preview: JSON.stringify(args).slice(0, 300) });
         if (!approved) {

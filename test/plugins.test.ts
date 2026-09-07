@@ -6,6 +6,8 @@
  * (install → enable → tools → tamper detection → disable → remove), plus the
  * key security guarantees (no ungranted capability; egress + budget gates).
  */
+process.env.XR_PLUGINS_ALLOW_UNSIGNED ??= "1";
+
 import { test, expect, beforeEach } from "bun:test";
 import { mkdtempSync, mkdirSync, writeFileSync, appendFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,6 +23,7 @@ import { parseManifestObject, validatePermissions, effectiveGrant } from "../src
 import { satisfies, checkCompatibility, parseSemver } from "../src/plugins/compat.ts";
 import { buildHost } from "../src/plugins/host.ts";
 import { PluginManager } from "../src/plugins/manager.ts";
+import { mintGrant } from "../src/capabilities/grant.ts";
 import { loadConfig } from "../src/config/config.ts";
 
 let store: Store;
@@ -207,12 +210,14 @@ test("security: plugin tool is namespaced + approval-gated by default", async ()
   expect(tool.requiresApproval).toBe(true);
 
   // denied approval → tool does not run
-  const denied = await tool.run({}, { cwd: workdir, approve: async () => false, audit: () => {}, egressAllowlist: [], dryRun: false });
+  const g1 = mintGrant({ capabilityId: "plugin.needsok.danger", args: {} });
+  const denied = await tool.run({}, { cwd: workdir, approve: async () => false, audit: () => {}, egressAllowlist: [], dryRun: false, grant: g1 });
   expect(denied.ok).toBe(false);
   expect(denied.output).toContain("denied");
 
   // approved → runs
-  const approved = await tool.run({}, { cwd: workdir, approve: async () => true, audit: () => {}, egressAllowlist: [], dryRun: false });
+  const g2 = mintGrant({ capabilityId: "plugin.needsok.danger", args: {} });
+  const approved = await tool.run({}, { cwd: workdir, approve: async () => true, audit: () => {}, egressAllowlist: [], dryRun: false, grant: g2 });
   expect(approved.ok).toBe(true);
   expect(approved.output).toBe("ran");
 });

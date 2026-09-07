@@ -7,15 +7,16 @@ import { banner, ok, warn, info, confirm, colors as C } from "../interfaces/cli.
 import { McpManager } from "./manager.ts";
 import { isMcpPermissionScope, type McpPermissionScope, type McpServerConfigInput } from "./types.ts";
 
-interface Flags { json: boolean; yes: boolean; enable: boolean; grant?: McpPermissionScope[]; rest: string[] }
+interface Flags { json: boolean; yes: boolean; enable: boolean; unisolated: boolean; grant?: McpPermissionScope[]; rest: string[] }
 
 function parseFlags(argv: string[]): Flags {
-  const f: Flags = { json: false, yes: false, enable: false, rest: [] };
+  const f: Flags = { json: false, yes: false, enable: false, unisolated: false, rest: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") f.json = true;
     else if (a === "--yes" || a === "-y") f.yes = true;
     else if (a === "--enable") f.enable = true;
+    else if (a === "--unisolated") f.unisolated = true;
     else if (a === "--grant") {
       const v = argv[++i] ?? "";
       f.grant = v.split(",").map((s) => s.trim()).filter((s): s is McpPermissionScope => isMcpPermissionScope(s));
@@ -56,6 +57,7 @@ export async function handleMcpCommand(argv: string[], store: Store): Promise<vo
     case "doctor": return cmdDoctor(mgr);
     case "allow": case "allowlist": return cmdAllow(mgr, flags);
     case "revoke": return cmdRevoke(mgr, flags);
+    case "re-sign": case "resign": return cmdReSign();
     case "allowlist-status": return cmdAllowlistStatus(mgr, flags);
     case "help": case "--help": case "-h": return printHelp();
     default:
@@ -67,21 +69,33 @@ export async function handleMcpCommand(argv: string[], store: Store): Promise<vo
 /** Phase 7 · T6 — signed allowlist commands (default-deny MCP). */
 async function cmdAllow(mgr: McpManager, flags: Flags) {
   const id: string = flags.rest[0] ?? "";
-  if (!id) return warn("usage: xr mcp allow <id> [--key <keyId>]");
-  await cmdAllowInner(id);
+  if (!id) return warn("usage: xr mcp allow <id> [--unisolated] [--key <keyId>]");
+  await cmdAllowInner(id, flags.unisolated);
 }
 
-async function cmdAllowInner(id: string) {
+async function cmdAllowInner(id: string, unisolated = false) {
   const { McpAllowlist, defaultAllowlistKeysPath, generateAllowlistKeyPair, writeAllowlistKeys } = await import("./allowlist.ts");
-  // Ensure operator keys exist (first run).
   const { existsSync } = await import("node:fs");
   if (!existsSync(defaultAllowlistKeysPath())) {
     const pair = generateAllowlistKeyPair();
     writeAllowlistKeys([pair]);
     ok(`created operator allowlist key ${pair.keyId} at ${defaultAllowlistKeysPath()}`);
   }
-  const result = new McpAllowlist().allow(id, { by: "operator" });
+  const isolation = unisolated ? ("unisolated" as const) : ("required" as const);
+  const result = new McpAllowlist().allow(id, { by: "operator", isolation });
   if (result.ok) ok(result.reason ?? "allowed"); else warn(result.reason ?? "allow failed");
+}
+
+async function cmdReSign() {
+  const { McpAllowlist, defaultAllowlistKeysPath, generateAllowlistKeyPair, writeAllowlistKeys } = await import("./allowlist.ts");
+  const { existsSync } = await import("node:fs");
+  if (!existsSync(defaultAllowlistKeysPath())) {
+    const pair = generateAllowlistKeyPair();
+    writeAllowlistKeys([pair]);
+    ok(`created operator allowlist key ${pair.keyId}`);
+  }
+  const result = new McpAllowlist().reSign();
+  if (result.ok) ok(result.reason ?? "re-signed"); else warn(result.reason ?? "re-sign failed");
 }
 
 async function cmdRevoke(mgr: McpManager, flags: Flags) {
@@ -125,7 +139,8 @@ function printHelp(): void {
   xr mcp health [id]              run health check
   xr mcp search <query>           search registry
   xr mcp doctor                   MCP platform health
-  xr mcp allow <id>               sign server onto the allowlist (default-deny gate)
+  xr mcp allow <id> [--unisolated]  sign server onto the allowlist (default-deny gate)
+  xr mcp re-sign                  re-sign allowlist as schema v2 (fills isolation=required)
   xr mcp revoke <id>              revoke from allowlist (kills live client)
   xr mcp allowlist-status         verify allowlist signature + list entries
 

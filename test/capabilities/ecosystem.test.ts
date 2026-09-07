@@ -1,4 +1,6 @@
 /** XR 5.2 — Capability Ecosystem tests. */
+process.env.XR_PLUGINS_ALLOW_UNSIGNED ??= "1";
+
 import { beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

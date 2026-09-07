@@ -161,7 +161,7 @@ export function mcpServerRisk(cfg: {
 export interface McpStdioFlags {
   isolateStdio: boolean;   // XR_MCP_ISOLATE_STDIO=1 (force-isolate even low-risk)
   allowNet: boolean;       // XR_MCP_ISOLATED_NET=1
-  allowUnisolated: boolean; // XR_MCP_ALLOW_UNISOLATED=1 (explicit ack to run high-risk unisolated)
+  allowUnisolated: boolean; // signed isolation grant `granted-unisolated-by:<key>` (NOT an env flag)
 }
 
 export type McpStdioPlacement = "isolated" | "confined" | "blocked";

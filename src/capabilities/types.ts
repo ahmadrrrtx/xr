@@ -15,6 +15,7 @@
 
 import type { Tool, Mode } from "../core/types.ts";
 import type { ToolKind } from "../tools/registry-types.ts";
+import type { CapabilityGrant } from "./grant.ts";
 
 // ---------------------------------------------------------------------------
 // Provider — who provides the capability, unforgeable, derived from kind.
@@ -394,6 +395,11 @@ export interface CapabilityDecision {
   readonly cacheable: boolean;
   /** Policy evaluation steps for audit. */
   readonly policyTrace: string[];
+  /**
+   * Phase 8 — minted when policy allows. Bound to a frozen args snapshot.
+   * Execution verifies argsHash + ttl + scope and consumes (single-use).
+   */
+  readonly grant?: CapabilityGrant;
 }
 
 // ---------------------------------------------------------------------------

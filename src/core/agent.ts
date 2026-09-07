@@ -41,6 +41,9 @@ import { compact } from "../context/memory/compact.ts";
 import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { buildMemoryBlock, buildContextMessages } from "../context/memory/inject.ts";
 import type { ContextPackage, InjectionPackage } from "../context/types.ts";
+import { mintGrant } from "../capabilities/grant.ts";
+import { runAuthorized } from "../capabilities/authorize.ts";
+import { evaluateLoopGrant } from "../capabilities/loop-grant.ts";
 
 export interface AgentDeps {
   provider: Provider;
@@ -978,90 +981,30 @@ export async function runAgentLoop(
         // A-19 — between tool calls: a mid-batch abort skips the rest.
         if (isCancelled()) return cancelledResult(stepIdx + 1);
 
-        // ── Phase 08 — unified policy boundary: every tool call passes through
-        // the same authorization boundary (trust → lifecycle → scope → permission → mode)
-        if (registry) {
-          try {
-            const { evaluatePolicy } = await import("../capabilities/policy.ts");
-            const req = {
-              capabilityId: call.tool,
-              requestedBy: "model",
-              runId,
-              sessionId,
-              scope: undefined,
-              workspaceId: cwd,
-              arguments: call.args as Record<string, unknown>,
-              reason: `tool call from model`,
-              mode,
-              cwd,
-            };
-            // Phase 2 · F-06 — real deny-lists from workspace config. An absent
-            // list (no workspace config on an out-of-tree path) is audited once
-            // per run so the fallback is never silent.
-            const deniedPermissions = deps.deniedPermissions ?? [];
-            if (!deps.deniedPermissions && !denyListAbsentAudited) {
-              denyListAbsentAudited = true;
-              auditStore.audit(
-                "capability.policy.deny_list_absent",
-                { tool: call.tool, note: "no workspace config provided; denying by config is disabled for this run" },
-                sessionId,
-              );
-            }
-            const decision = evaluatePolicy(req as any, {
-              registry,
-              deniedPermissions,
-              egressAllowlist: deps.egressAllowlist ?? [],
-              allowedHosts: deps.allowedHosts ?? [],
-              cwd,
-              hardened,
-            });
-            if (!decision.allowed) {
-              // For unknown tools, let existing tool.blocked path handle it (preserves T1 EFFECTS contract)
-              if (decision.reason?.includes("not found")) {
-                // fall through to unknown_tool handling below
-              } else {
-                const msg = `tool \"${call.tool}\" blocked by capability policy: ${decision.reason}`;
-                say(`\x1b[31m✗ ${msg}\x1b[0m`);
-                deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: decision.reason });
-                messages.push({ role: "tool", name: call.tool, content: msg });
-                auditStore.audit("capability.denied", { tool: call.tool, reason: decision.reason, policyTrace: decision.policyTrace }, sessionId);
-                // Phase 2 · F-06 — a policy ENGINE fault (evaluatePolicy converted
-                // an internal throw into a deny decision) is audited distinctly:
-                // the boundary denied on error, not on a policy rule.
-                if (decision.reason === "policy_error") {
-                  auditStore.audit(
-                    "capability.deny_error",
-                    {
-                      tool: call.tool,
-                      error: decision.policyTrace?.join(" ") ?? "policy evaluation failed",
-                      note: "denied (fail closed)",
-                    },
-                    sessionId,
-                  );
-                }
-                // Also audit tool.blocked for backward compat with envelope tests that expect tool.blocked
-                auditStore.audit("tool.blocked", { tool: call.tool, mode, reason: decision.reason }, sessionId);
-                continue;
-              }
-            }
-          } catch (e) {
-            // ── Phase 2 · F-06 — DENY-ON-THROW (the "fail closed?" question is
-            // answered: yes). A policy evaluation failure is a denial, not a
-            // pass: the tool is NOT executed, the event is audited as
-            // `capability.deny_error`, and the loop continues to the next call.
-            const msg = `tool "${call.tool}" blocked by capability policy: policy_error`;
-            say(`\x1b[31m✗ ${msg}\x1b[0m`);
-            deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: "policy_error" });
-            messages.push({ role: "tool", name: call.tool, content: msg });
-            auditStore.audit(
-              "capability.deny_error",
-              { tool: call.tool, error: (e as Error).message, note: "evaluation threw — denied (fail closed)" },
-              sessionId,
-            );
-            // Backward-compat marker: policy denials of this class still read as denials.
-            auditStore.audit("capability.denied", { tool: call.tool, reason: "policy_error" }, sessionId);
-            continue;
-          }
+        // Phase 8 — policy mints a grant; runAuthorized consumes it.
+        const gated = evaluateLoopGrant({
+          toolName: call.tool,
+          args: (call.args ?? {}) as Record<string, unknown>,
+          mode,
+          cwd,
+          runId,
+          sessionId,
+          registry,
+          deniedPermissions: deps.deniedPermissions,
+          denyListAbsent: denyListAbsentAudited,
+          audit: (event, detail) => auditStore.audit(event, detail, sessionId),
+          egressAllowlist: deps.egressAllowlist ?? [],
+          allowedHosts: deps.allowedHosts ?? [],
+          hardened,
+          agentId: deps.agentIdentity?.agentId,
+        });
+        denyListAbsentAudited = gated.denyListAbsentAudited;
+        if (gated.gate.kind === "deny") {
+          const msg = `tool "${call.tool}" blocked by capability policy: ${gated.gate.reason}`;
+          say(`\x1b[31m✗ ${msg}\x1b[0m`);
+          deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: false, error: gated.gate.reason });
+          messages.push({ role: "tool", name: call.tool, content: msg });
+          continue;
         }
 
         const tool = resolveTool(call.tool);
@@ -1102,7 +1045,11 @@ export async function runAgentLoop(
         // matching `tool_result` event carries the outcome.
         deps.onStreamEvent?.({ type: "status", status: "tool_running", message: call.tool });
         try {
-          const result = await tool.run(call.args, toolCtx);
+          const callArgs = (call.args ?? {}) as Record<string, unknown>;
+          const callGrant = gated.gate.kind === "allow"
+            ? gated.gate.grant
+            : mintGrant({ capabilityId: call.tool, args: callArgs, runId, taskId: runId, agentId: deps.agentIdentity?.agentId });
+          const result = await runAuthorized(tool, callArgs, toolCtx, callGrant, { capabilityId: call.tool, runId });
           const tag = result.ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m";
           say(`  ${tag} ${result.output.split("\n")[0].slice(0, 100)}`);
           deps.onStreamEvent?.({ type: "tool_result", id: toolCallId, tool: call.tool, ok: result.ok, result: result.output });

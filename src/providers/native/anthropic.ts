@@ -12,6 +12,7 @@ import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChu
 import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
+import { secretBrokerSync } from "../../security/secret-broker.ts";
 
 interface AnthropicOptions {
   model?: string;
@@ -47,7 +48,10 @@ let toolCallCounter = 0;
 export class AnthropicProvider implements Provider {
   id = "anthropic";
   label = "Anthropic Claude";
-  private apiKey: string;
+  private apiKeyEnv: string;
+  private get apiKey(): string {
+    return secretBrokerSync(this.apiKeyEnv) ?? "";
+  }
   private model: string;
 
   get modelId(): string {
@@ -70,8 +74,7 @@ export class AnthropicProvider implements Provider {
   };
 
   constructor(opts: AnthropicOptions = {}) {
-    const envKey = opts.apiKeyEnv ?? "ANTHROPIC_API_KEY";
-    this.apiKey = process.env[envKey] ?? "";
+    this.apiKeyEnv = opts.apiKeyEnv ?? "ANTHROPIC_API_KEY";
     this.model = opts.model ?? "claude-3-5-sonnet-20241022";
   }
 

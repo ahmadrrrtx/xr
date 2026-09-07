@@ -1,8 +1,8 @@
 /**
  * XR Phase 2 · F-24 — SECRET BROKER SEAM tests.
  *
- *   [Unit]  flag semantics: XR_SECRETS_ENV_COMPAT defaults ON for 1.0; only
- *           explicit off-values disable ambient hydration (pure predicate —
+ *   [Unit]  flag semantics: XR_SECRETS_ENV_COMPAT defaults OFF (Phase 8);
+ *           only explicit on-values enable ambient hydration (pure predicate —
  *           no process.env mutation, safe under bun's shared-env threads)
  *   [Child] compat ON  — the 1.0 posture runs in a CHILD process (hermetic
  *           spawn env): setSecret hydrates process.env, the broker resolves,
@@ -25,10 +25,10 @@ import { join } from "node:path";
 import { isOffValue } from "../../src/security/env-compat.ts";
 
 describe("flag semantics (pure predicate, no env mutation)", () => {
-  test("defaults ON for 1.0 (unset / empty)", () => {
-    expect(isOffValue(undefined)).toBe(false);
-    expect(isOffValue("")).toBe(false);
-    expect(isOffValue("   ")).toBe(false);
+  test("defaults OFF for Phase 8 (unset / empty)", () => {
+    expect(isOffValue(undefined)).toBe(true);
+    expect(isOffValue("")).toBe(true);
+    expect(isOffValue("   ")).toBe(true);
   });
 
   test("explicit off-values disable ambient hydration", () => {
@@ -37,10 +37,11 @@ describe("flag semantics (pure predicate, no env mutation)", () => {
     }
   });
 
-  test("on-values and typos keep 1.0 behavior (fail-safe toward working providers)", () => {
-    for (const on of ["1", "true", "on", "TRUE", "yolo"]) {
+  test("only explicit on-values enable ambient hydration (typos fail-safe OFF)", () => {
+    for (const on of ["1", "true", "on", "yes", "TRUE"]) {
       expect(isOffValue(on)).toBe(false);
     }
+    expect(isOffValue("yolo")).toBe(true);
   });
 });
 
@@ -91,7 +92,7 @@ async function runFixture(fixture: string, extraEnv: Record<string, string>): Pr
 
 describe("compat ON (1.0 behavior, hermetic child process)", () => {
   test("setSecret hydrates process.env; broker sync + async resolve; hydrateProviderEnv writes", async () => {
-    const r = await runFixture("secret-compat-on.ts", {});
+    const r = await runFixture("secret-compat-on.ts", { XR_SECRETS_ENV_COMPAT: "1" });
     expect(r.flagEnabled).toBe(true);
     expect(r.envAfterSet).toBe("v1-secret");
     expect(r.synced).toBe("v1-secret");

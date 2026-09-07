@@ -294,7 +294,7 @@ export async function setSecretAsync(name: string, value: string): Promise<Secre
     });
     if (res.ok) {
       secretMemo.set(name, value);
-      process.env[name] = value;
+      if (envSecretCompatEnabled()) process.env[name] = value;
       return backend;
     }
   }
@@ -306,17 +306,17 @@ export async function setSecretAsync(name: string, value: string): Promise<Secre
     });
     if (res.ok) {
       secretMemo.set(name, value);
-      process.env[name] = value;
+      if (envSecretCompatEnabled()) process.env[name] = value;
       return backend;
     }
   }
   if (backend === "windows-dpapi" && (await setWindowsSecretAsync(name, value))) {
     secretMemo.set(name, value);
-    process.env[name] = value;
+    if (envSecretCompatEnabled()) process.env[name] = value;
     return backend;
   }
   setFileSecret(name, value);
-  process.env[name] = value;
+  if (envSecretCompatEnabled()) process.env[name] = value;
   return "file";
 }
 
@@ -376,7 +376,7 @@ export async function getSecretAsync(name: string): Promise<string | undefined> 
     if (res.ok && res.stdout.trim()) {
       const v = res.stdout.trim();
       secretMemo.set(name, v);
-      process.env[name] = v;
+      if (envSecretCompatEnabled()) process.env[name] = v;
       return v;
     }
   }
@@ -387,7 +387,7 @@ export async function getSecretAsync(name: string): Promise<string | undefined> 
     if (res.ok && res.stdout.trim()) {
       const v = res.stdout.trim();
       secretMemo.set(name, v);
-      process.env[name] = v;
+      if (envSecretCompatEnabled()) process.env[name] = v;
       return v;
     }
   }
@@ -395,7 +395,7 @@ export async function getSecretAsync(name: string): Promise<string | undefined> 
     const v = await getWindowsSecretAsync(name);
     if (v) {
       secretMemo.set(name, v);
-      process.env[name] = v;
+      if (envSecretCompatEnabled()) process.env[name] = v;
       return v;
     }
   }

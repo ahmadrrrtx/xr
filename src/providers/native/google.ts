@@ -13,6 +13,7 @@ import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChu
 import { guardedRequest, ProviderAbortError } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
+import { secretBrokerSync } from "../../security/secret-broker.ts";
 
 interface GoogleOptions {
   model?: string;
@@ -28,8 +29,11 @@ interface GeminiContent {
 export class GoogleProvider implements Provider {
   id = "google";
   label = "Google Gemini";
-  private apiKey: string;
+  private apiKeyEnv: string;
   private model: string;
+  private get apiKey(): string {
+    return secretBrokerSync(this.apiKeyEnv) ?? "";
+  }
 
   get modelId(): string {
     return this.model;
@@ -52,8 +56,7 @@ export class GoogleProvider implements Provider {
   };
 
   constructor(opts: GoogleOptions = {}) {
-    const envKey = opts.apiKeyEnv ?? "GOOGLE_API_KEY";
-    this.apiKey = process.env[envKey] ?? "";
+    this.apiKeyEnv = opts.apiKeyEnv ?? "GOOGLE_API_KEY";
     this.model = opts.model ?? "gemini-1.5-flash";
   }
 

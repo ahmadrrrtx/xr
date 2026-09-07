@@ -214,7 +214,7 @@ describe("XR 4.5 migration: existing XR 4.4 workspace", () => {
 describe("XR 4.5 config migration 14 → 15", () => {
   test("the config version is 20 (Phase 10 research providers) and the knowledge block exists with safe defaults", () => {
     const { config } = loadConfig();
-    expect(CONFIG_VERSION).toBe(20);
+    expect(CONFIG_VERSION).toBe(21);
     expect(config.knowledge.enabled).toBe(true);
     expect(config.knowledge.enforceScope).toBe(true);
     expect(config.knowledge.compressionFailSafe).toBe(true);

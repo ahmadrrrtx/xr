@@ -7,6 +7,8 @@
  * the host runtime (failure isolation); the certification gate exists and is
  * runnable.
  */
+process.env.XR_PLUGINS_ALLOW_UNSIGNED ??= "1";
+
 import { beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

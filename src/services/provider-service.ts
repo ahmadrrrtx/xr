@@ -336,9 +336,8 @@ export class ProviderService implements LifecycleHook {
 
   async storeKey(envName: string, value: string): Promise<string> {
     const backend = setSecret(envName, value);
-    // Phase 2 · F-24 — ambient hydration moves behind the broker seam:
-    // XR_SECRETS_ENV_COMPAT (default on for 1.0, off in 2.0). The durable
-    // backend write always happens; only the process.env mirror is gated.
+    // Phase 8 — ambient hydration is gated (default OFF). Durable write
+    // always happens; process.env is mirrored only when compat is on.
     hydrateProviderEnv(envName, value);
     this.tryIntel()?.invalidateCatalog();
     return backend;

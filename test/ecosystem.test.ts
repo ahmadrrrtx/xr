@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../src/state/workspace-store.ts";
 import { McpClient, wrapMcpTool } from "../src/mcp/client.ts";
+import { mintGrant, _resetGrantRegistry } from "../src/capabilities/grant.ts";
 import { parseSchedule, isDue, describe } from "../src/automation/cron.ts";
 import { sendWebhook } from "../src/automation/webhook.ts";
 import type { ToolContext } from "../src/core/types.ts";
@@ -48,17 +49,21 @@ test("McpClient lists and calls tools", async () => {
 });
 
 test("wrapped MCP tool is approval-gated (denied = no call)", async () => {
+  _resetGrantRegistry();
   const f = mcpFetch(() => ({ content: [{ text: "should not happen" }] }));
   const client = new McpClient({ id: "db", url: "http://x" }, f);
   const tool = wrapMcpTool(client, "db", { name: "query", description: "sql" });
   expect(tool.name).toBe("mcp.db.query");
   expect(tool.requiresApproval).toBe(true);
-  const r = await tool.run({ q: "x" }, ctx({ approve: async () => false }));
+  const args = { q: "x" };
+  const grant = mintGrant({ capabilityId: "mcp.db.query", args });
+  const r = await tool.run(args, ctx({ approve: async () => false, grant }));
   expect(r.ok).toBe(false);
   expect(r.output).toContain("denied");
 });
 
 test("wrapped MCP tool dry-run does not call out", async () => {
+  _resetGrantRegistry();
   let called = false;
   const f = mcpFetch(() => {
     called = true;
@@ -66,9 +71,21 @@ test("wrapped MCP tool dry-run does not call out", async () => {
   });
   const client = new McpClient({ id: "db", url: "http://x" }, f);
   const tool = wrapMcpTool(client, "db", { name: "query", description: "sql" });
-  const r = await tool.run({ q: "x" }, ctx({ dryRun: true }));
+  const args = { q: "x" };
+  const grant = mintGrant({ capabilityId: "mcp.db.query", args });
+  const r = await tool.run(args, ctx({ dryRun: true, grant }));
   expect(r.output).toContain("[dry-run]");
   expect(called).toBe(false);
+});
+
+test("wrapped MCP tool without a grant is blocked", async () => {
+  _resetGrantRegistry();
+  const f = mcpFetch(() => ({ content: [{ text: "no" }] }));
+  const client = new McpClient({ id: "db", url: "http://x" }, f);
+  const tool = wrapMcpTool(client, "db", { name: "query", description: "sql" });
+  const r = await tool.run({ q: "x" }, ctx());
+  expect(r.ok).toBe(false);
+  expect(r.output).toContain("grant missing");
 });
 
 // ---- cron parsing ----

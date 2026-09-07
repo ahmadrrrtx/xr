@@ -13,6 +13,7 @@ import type { Message, ModelTurn, Provider, Tool, ChatOptions, ProviderStreamChu
 import { guardedRequest } from "../request-guard.ts";
 import { normalizeProviderError } from "../errors.ts";
 import { repairToTurn } from "../../reliability/repair.ts";
+import { secretBrokerSync } from "../../security/secret-broker.ts";
 
 interface MistralOptions {
   model?: string;
@@ -22,8 +23,11 @@ interface MistralOptions {
 export class MistralProvider implements Provider {
   id = "mistral";
   label = "Mistral AI";
-  private apiKey: string;
+  private apiKeyEnv: string;
   private model: string;
+  private get apiKey(): string {
+    return secretBrokerSync(this.apiKeyEnv) ?? "";
+  }
 
   get modelId(): string {
     return this.model;
@@ -47,8 +51,7 @@ export class MistralProvider implements Provider {
   };
 
   constructor(opts: MistralOptions = {}) {
-    const envKey = opts.apiKeyEnv ?? "MISTRAL_API_KEY";
-    this.apiKey = process.env[envKey] ?? "";
+    this.apiKeyEnv = opts.apiKeyEnv ?? "MISTRAL_API_KEY";
     this.model = opts.model ?? "mistral-small-latest";
   }
 

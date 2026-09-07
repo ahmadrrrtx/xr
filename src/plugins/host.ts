@@ -25,7 +25,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSy
 import type { Store } from "../state/workspace-store.ts";
 import type { XRConfig } from "../config/config.ts";
 import { hostAllowed } from "../tools/egress.ts";
-import { getSecret } from "../security/secrets.ts";
+import { secretBrokerSync } from "../security/secret-broker.ts";
 import { MemoryStore, projectScopeFromCwd } from "../context/memory/store.ts";
 import { admitContextWrite } from "../context/poison.ts";
 import { BudgetManager } from "../cost/manager.ts";
@@ -453,7 +453,7 @@ export function buildHost(granted: PermissionScope[], deps: HostDeps): PluginHos
         if (!clean) throw new Error("invalid secret name");
         audit("secrets.get", { name: clean });
         try {
-          return getSecret(clean) || undefined;
+          return secretBrokerSync(clean) || undefined;
         } catch {
           // src/security/secrets.ts enforces a stricter name policy
           // (^[A-Z][A-Z0-9_]{1,80}$) than the host sanitizer allows through.

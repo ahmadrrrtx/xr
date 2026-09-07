@@ -19,6 +19,7 @@ import type {
   CapabilityPermission,
 } from "./types.ts";
 import { mapLegacyScopes } from "./compatibility.ts";
+import { mintGrant } from "./grant.ts";
 
 export interface PolicyContext {
   registry: ToolRegistryService;
@@ -248,7 +249,14 @@ function evaluatePolicyCore(
   // If tool requires approval, decision says requiresApproval true, but allowed true (approval will be asked at execution time)
   trace.push(`approval: requiresApproval=${requiresApproval} → ${requiresApproval ? "will request" : "no approval needed"}`);
 
-  // All checks passed
+  // All checks passed — mint a single-use args-bound grant (Phase 8).
+  const grant = mintGrant({
+    capabilityId: request.capabilityId,
+    args: request.arguments ?? {},
+    runId: request.runId,
+    taskId: request.runId,
+    scope: request.scope,
+  });
   return {
     allowed: true,
     requiresApproval,
@@ -258,6 +266,7 @@ function evaluatePolicyCore(
     lifecycle,
     cacheable: true,
     policyTrace: trace,
+    grant,
   };
 }
 

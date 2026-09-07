@@ -98,7 +98,8 @@ export class OpenAICompatProvider implements Provider {
   label: string;
   protected baseUrl: string;
   protected model: string;
-  protected apiKey?: string;
+  protected apiKeyEnv?: string;
+  protected apiKeyExplicit?: string;
   protected extraHeaders: Record<string, string>;
   protected profile: ModelProfile;
   /** Declared transport capabilities (resolver-owned). */
@@ -109,14 +110,20 @@ export class OpenAICompatProvider implements Provider {
     this.label = opts.label;
     this.baseUrl = opts.baseUrl.replace(/\/$/, "");
     this.model = opts.model;
-    // Phase 2 · F-24 — the key comes through the broker seam: explicit
-    // override wins, then env (compat-gated), then the durable backend.
-    this.apiKey =
-      opts.apiKey ??
-      (opts.apiKeyEnv ? secretBrokerSync(opts.apiKeyEnv) : undefined);
+    // Phase 8 — do NOT cache the raw key on the instance. Explicit override
+    // (tests) is stored; otherwise headers() resolves lazily via the broker
+    // on every request so a rotated/revoked key is picked up and the value
+    // never lives as a long-lived field.
+    this.apiKeyExplicit = opts.apiKey;
+    this.apiKeyEnv = opts.apiKeyEnv;
     this.extraHeaders = opts.extraHeaders ?? {};
     this.profile = profileFor(opts.id, opts.model);
     this.capabilities = opts.capabilities;
+  }
+
+  /** Lazy per-request key. Compat-gated env, then durable backend. */
+  protected get apiKey(): string | undefined {
+    return this.apiKeyExplicit ?? (this.apiKeyEnv ? secretBrokerSync(this.apiKeyEnv) : undefined);
   }
 
   get modelId(): string {
