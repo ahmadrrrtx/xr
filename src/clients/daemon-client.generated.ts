@@ -231,6 +231,26 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/budget/set", body);
   }
 
+  /** List governed triggers and the global pause-all kill switch. */
+  async triggersList(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/triggers");
+  }
+
+  /** Create a governed trigger (requires consentRef + budget). */
+  async triggersCreate(body: z.infer<typeof S.TriggerCreateRequest>): Promise<z.infer<typeof S.OkResponse>> {
+    return await this.call("POST", "/api/v1/triggers", body);
+  }
+
+  /** Pause or resume ALL triggers (kill switch). In-flight fires are not cancelled. */
+  async triggersPause(body: z.infer<typeof S.TriggerPauseRequest>): Promise<z.infer<typeof S.OkResponse>> {
+    return await this.call("POST", "/api/v1/triggers/pause", body);
+  }
+
+  /** Inspect one trigger by id. */
+  async triggersGet(id: string): Promise<Record<string, unknown>> {
+    return await this.call("GET", `/api/v1/triggers/${encodeURIComponent(id)}`);
+  }
+
   /** Shield security-service status. */
   async shieldStatus(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/shield/status");

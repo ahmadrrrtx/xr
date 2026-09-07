@@ -16,6 +16,7 @@ import { getSecret, getSecretSyncCached, listFileSecrets } from "../security/sec
 import { envSecretCompatEnabled, hydrateProviderEnv, secretBrokerSync } from "../security/secret-broker.ts";
 import { PRESETS } from "../providers/presets.ts";
 import { migrate20to21 } from "./migrate-21.ts";
+import { migrate21to22, phase9ConfigShape } from "./migrate-22.ts";
 import {
   getCachedConfig,
   setCachedConfig,
@@ -25,7 +26,7 @@ import {
   cacheMeta,
 } from "./cache.ts";
 
-export const CONFIG_VERSION = 21; // Phase 8 — plugin signing + typed-confirm approvals
+export const CONFIG_VERSION = 22; // Phase 9 — governed triggers + channel polish
 // Phase 04 — health vs request timeout separation
 export const DEFAULT_HEALTH_TIMEOUT_MS = 2500;
 export const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
@@ -322,6 +323,7 @@ const ConfigSchema = z.object({
       }).optional(),
       lastUsedAt: z.string().optional(),
     })
+    .passthrough()
     .default({}),
   // v0.9 / Stage 6 — durable memory system (long-term preferences, project
   // context, facts). Local-first and EXPLICIT by default: XR only stores what
@@ -665,23 +667,8 @@ const ConfigSchema = z.object({
   envOverrides: z.record(z.string()).default({}),
   /** Kill-switch for automation/CI: ignore every envOverrides mapping. */
   envOverridesLocked: z.boolean().default(false),
-  /**
-   * Phase 4 (Evidence Integrity, F-08) — signed-audit configuration.
-   *
-   * The Ed25519 head signature needs NO configuration: every install is keyed
-   * automatically on first boot (private key in the OS keychain / encrypted
-   * file fallback). This section only configures the OPTIONAL remote anchor:
-   *
-   *   - `anchor.enabled` defaults to FALSE — no network traffic ever leaves the
-   *     host without explicit opt-in.
-   *   - `anchor.sink` is an HTTPS PUT endpoint, an `s3://`-style URL, or a
-   *     `file://` path. HTTP(S) sinks MUST be operator-allow-listed: the push
-   *     goes through the same egress gate (`guardedFetch`) as every other
-   *     outbound request, and an un-allow-listed anchor is audited + skipped
-   *     (fail-SAFE — the run continues; local verification never depends on it).
-   *   - The anchor is purely additive: offline-first is preserved; local
-   *     `xr audit verify --crypto` works with no anchor configured.
-   */
+  // Phase 9 fields (triggers / telegram) live in migrate-22 so this file does not grow.
+  /** Phase 4 — signed-audit + optional egress-gated remote anchor (default off). */
   audit: z
     .object({
       signEvery: z.number().int().min(1).max(100_000).default(256),
@@ -698,7 +685,7 @@ const ConfigSchema = z.object({
         .default({}),
     })
     .default({}),
-});
+}).extend(phase9ConfigShape);
 
 export type XRConfig = z.infer<typeof ConfigSchema>;
 /** Exposed for tests and tooling that need schema-validated config fixtures. */
@@ -1072,6 +1059,8 @@ export const MIGRATIONS: Record<number, (raw: any) => any> = {
   },
   // 20 -> 21: Phase 8 — plugin signed-allowlist + headless typed-confirm.
   20: migrate20to21,
+  // 21 -> 22: Phase 9 — governed triggers + Telegram limits + voice v2 flags.
+  21: migrate21to22,
 };
 
 function migrate(raw: any): any {

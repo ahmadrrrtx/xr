@@ -61,6 +61,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/agent.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/api/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/architecture/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/automation/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/baseline/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/capabilities/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/config/` | @ahmadrrrtx | default (@ahmadrrrtx) |

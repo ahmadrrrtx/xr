@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Phase 9 — Channel & Proactivity Maturation
+
+- **Governed trigger table** (`cron` | `event` | `watch`) on the unified store
+  (schema v11). Create requires explicit `consentRef` + a budget declaration.
+  Every fire is an `executeOnSurface` envelope on `surface: "scheduler"` with
+  per-trigger budget, approval mode, quiet hours, and an audit trail
+  (`trigger.created|fired|error`, `triggers.paused|resumed`). Fire history
+  lives in the audit chain.
+- **pause-all kill switch** (`xr triggers pause-all`, `POST /api/triggers/pause`,
+  Telegram `/pause-all`): stops **new** fires; in-flight runs keep A-19 cancel.
+  Visible on `xr triggers` and `GET /api/triggers`.
+- **Telegram:** per-user token-bucket rate limits and per-chat Governor budgets
+  (`config.telegram.rateLimit` / `chatBudgets`).
+- **Voice v2** behind default-off flags: streaming STT, server VAD, sentence
+  TTS, barge-in cancels the run, spoken status via `onStreamEvent`.
+- Config **21 → 22** (`triggers`, `telegram`, voice v2 flags).
+
 ### Phase 7 — Memory policy layer (F-21)
 
 - **retrieval ACL:** `MemoryStore.recall*` take an optional `principal`

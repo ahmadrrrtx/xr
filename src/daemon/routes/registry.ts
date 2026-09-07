@@ -10,6 +10,7 @@
 import { agentsRoutes } from "./agents.routes.ts";
 import { approvalRoutes } from "./approvals.routes.ts";
 import { budgetRoutes } from "./budget.routes.ts";
+import { triggerRoutes } from "./triggers.routes.ts";
 import { chatRoutes } from "./chat.routes.ts";
 import { capabilityRoutes } from "./capabilities.routes.ts";
 import { controlRoutes } from "./control.routes.ts";
@@ -43,6 +44,7 @@ export function listBaseRoutes(): DaemonRoute[] {
     ...chatRoutes(),
     ...agentsRoutes(),
     ...budgetRoutes(),
+    ...triggerRoutes(),
     ...shieldRoutes(),
     ...trustRoutes(),
     ...capabilityRoutes(),

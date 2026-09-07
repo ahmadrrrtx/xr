@@ -160,6 +160,23 @@ export const ChatStreamRequest = z.looseObject({
     .describe("Trailing conversation history (last ≤10 turns are used)."),
 });
 
+export const TriggerCreateRequest = z.looseObject({
+  kind: z.enum(["cron", "event", "watch"]),
+  spec: z.looseObject({}),
+  taskTemplate: z.string().min(1),
+  budget: z.looseObject({ maxUsd: z.number().optional(), maxTokens: z.number().optional() }),
+  consentRef: z.string().min(1),
+  approvalMode: z.enum(["inherit", "require"]).optional(),
+  quietHours: z.looseObject({ start: z.string(), end: z.string() }).optional(),
+  id: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+
+export const TriggerPauseRequest = z.looseObject({
+  pauseAll: z.boolean().optional(),
+  actor: z.string().optional(),
+});
+
 export const BudgetSetRequest = z.looseObject({
   perTaskUsd: z.number().nonnegative().optional(),
   monthlyCap: z.number().nonnegative().optional(),

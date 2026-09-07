@@ -463,6 +463,21 @@ export const CATALOG: CatalogEntry[] = [
     related: ["run", "status", "providers"],
     topics: ["budget", "cost", "intelligence"],
   },
+  {
+    name: "triggers",
+    description: "governed trigger table — scheduled work through the one spine",
+    usage: "xr triggers [list|create|pause-all|resume-all|enable|disable|delete]",
+    group: "intelligence",
+    glyph: "activity",
+    aliases: ["trigger", "cron"],
+    needsKernel: true,
+    examples: [
+      { cmd: "xr triggers", description: "list triggers + pause-all status" },
+      { cmd: "xr triggers pause-all", description: "kill switch: stop new fires" },
+    ],
+    related: ["budget", "audit", "status"],
+    topics: ["triggers", "schedule", "proactivity"],
+  },
 
   // ── Extensions ────────────────────────────────────────────────────────────
   {

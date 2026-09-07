@@ -17,6 +17,7 @@ import type { WorkspaceStore } from "../state/workspace-store.ts";
 export const HEADLESS_SURFACES: ReadonlySet<string> = new Set([
   "daemon",
   "schedule",
+  "scheduler",
   "cron",
   "webhook",
   "api",

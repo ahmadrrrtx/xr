@@ -27,6 +27,8 @@ import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
 import { runLab } from "../security/lab.ts";
 import { basename } from "node:path";
+import { KeyedTokenBuckets, DEFAULT_TELEGRAM_RATE_LIMIT } from "../automation/token-bucket.ts";
+import { pauseAllTriggers, resumeAllTriggers } from "../automation/triggers.ts";
 
 const API = (token: string) => `https://api.telegram.org/bot${token}`;
 
@@ -45,6 +47,10 @@ export class TelegramBot {
   /** Pending approvals: id -> resolver. */
   private pending = new Map<string, (ok: boolean) => void>();
   private f: typeof fetch;
+  private rate = new KeyedTokenBuckets(DEFAULT_TELEGRAM_RATE_LIMIT);
+  /** Per-chat spend against telegram.chatBudgets (Governor envelope per chat). */
+  readonly chatSpendUsd = new Map<number, number>();
+  readonly chatSpendTokens = new Map<number, number>();
 
   constructor(private deps: BotDeps) {
     this.f = deps.fetchFn ?? fetch;
@@ -169,9 +175,22 @@ export class TelegramBot {
       return;
     }
 
+    const { config } = loadConfig();
+    const rl = config.telegram?.rateLimit;
+    if (rl && (rl.tokens !== this.rateCfg.tokens || rl.refillPerSec !== this.rateCfg.refillPerSec)) {
+      this.rate = new KeyedTokenBuckets({ tokens: rl.tokens, refillPerSec: rl.refillPerSec });
+      this.rateCfg = { tokens: rl.tokens, refillPerSec: rl.refillPerSec };
+    }
+    if (!this.rate.allow(String(userId), Date.now())) {
+      this.deps.store.audit("telegram.rate_limited", { userId, chatId });
+      await this.send(chatId, plain("⏳ rate limit — try again in a moment."));
+      return;
+    }
     const cmd = parseCommand(msg.text ?? "");
     await this.dispatch(chatId, cmd);
   }
+
+  private rateCfg = DEFAULT_TELEGRAM_RATE_LIMIT;
 
   private async dispatch(chatId: number, cmd: ReturnType<typeof parseCommand>): Promise<void> {
     const { config } = loadConfig();
@@ -186,6 +205,14 @@ export class TelegramBot {
         this.paused = true;
         this.deps.store.audit("telegram.pause", {});
         return this.send(chatId, plain("⏸ paused. /resume to continue."));
+
+      case "pause-all":
+        pauseAllTriggers(this.deps.store, `telegram:${chatId}`);
+        return this.send(chatId, plain("⏸ all triggers paused. /resume-all to re-arm."));
+
+      case "resume-all":
+        resumeAllTriggers(this.deps.store, `telegram:${chatId}`);
+        return this.send(chatId, plain("▶️ triggers resumed."));
 
       case "resume":
         this.paused = false;
@@ -219,6 +246,13 @@ export class TelegramBot {
       case "task": {
         if (this.paused) return this.send(chatId, plain("⏸ paused — /resume first."));
         if (!cmd.text) return this.send(chatId, plain("send a task description."));
+        const chatCap = config.telegram?.chatBudgets?.maxUsd;
+        const spent = this.chatSpendUsd.get(chatId) ?? 0;
+        if (chatCap != null && spent >= chatCap) {
+          this.deps.store.audit("telegram.chat_budget", { chatId, spent, cap: chatCap, stopped: "budget" });
+          return this.send(chatId, plain(`💰 chat budget exhausted ($${spent.toFixed(4)} / $${chatCap.toFixed(2)}). Honest stop.`));
+        }
+        const remaining = chatCap != null ? Math.max(0, chatCap - spent) : undefined;
         await this.send(chatId, plain(`🟢 working on it…`));
         const providerId = config.defaults.provider;
         const model = config.defaults.model;
@@ -238,12 +272,20 @@ export class TelegramBot {
           say: () => {}, // streamed lines suppressed on mobile
           approve: this.approver(chatId),
           budget: {
-            maxUsd: isLocal(providerId) ? undefined : (cmd.budgetUsd ?? config.budget.perTaskUsd),
-            maxTokens: config.budget.perTaskTokens,
+            maxUsd: isLocal(providerId)
+              ? remaining
+              : remaining != null
+                ? Math.min(cmd.budgetUsd ?? config.budget.perTaskUsd, remaining)
+                : (cmd.budgetUsd ?? config.budget.perTaskUsd),
+            maxTokens: config.telegram?.chatBudgets?.maxTokens ?? config.budget.perTaskTokens,
           },
           pricing: priceFor(providerId, model),
           egressAllowlist: config.security.egressAllowlist,
         });
+        const charged = remaining != null
+          ? Math.min(remaining, cmd.budgetUsd ?? config.budget.perTaskUsd)
+          : 0;
+        this.chatSpendUsd.set(chatId, spent + charged);
         return this.send(
           chatId,
           plain(`✅ ${result.stopped} · ${result.meter ?? ""}\n\n${result.finalMessage.slice(0, 800)}`),

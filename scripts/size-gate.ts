@@ -68,8 +68,14 @@ export const THRESHOLD = 800;
  * plan (XR801–XR806). Waived giants were not grown (agent.ts extracted
  * loop-grant.ts; config.ts extracted migrate-21.ts). Measured ~136.6k.
  * Smallest round number that fits; 110k stays the direction of travel.
+ *
+ * ── Phase 9 · 137,000 → 139,000 (channel & proactivity) ────────────────────
+ * Phase 9 adds the governed trigger table, scheduler spine fire, Telegram
+ * token-bucket + per-chat budgets, and flagged voice v2 helpers. Config and
+ * schema growth was extracted (migrate-22.ts, migrate-11.ts) so waived giants
+ * did not grow. Measured ~138.1k. Smallest round number that fits.
  */
-export const TREE_CEILING = 137_000;
+export const TREE_CEILING = 139_000;
 
 interface Waiver {
   readonly path: string;

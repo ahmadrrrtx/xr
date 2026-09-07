@@ -23,12 +23,14 @@ const LEGACY_V15 = {
 
 describe("config migration 15 → 20 (raw chain)", () => {
   test("CONFIG_VERSION is current", () => {
-    expect(CONFIG_VERSION).toBe(21);
+    expect(CONFIG_VERSION).toBe(22);
   });
 
   test("a v15 config gains the environment block with safe defaults", () => {
     const raw = migrateRawConfig(structuredClone(LEGACY_V15)) as Record<string, any>;
     expect(raw.version).toBe(CONFIG_VERSION);
+    expect(raw.triggers.pauseAll).toBe(false);
+    expect(raw.telegram.rateLimit.tokens).toBe(10);
     const env = raw.environment;
     expect(env.enabled).toBe(true);
     expect(env.modalities).toEqual({
