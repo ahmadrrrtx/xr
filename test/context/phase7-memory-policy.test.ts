@@ -17,7 +17,7 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { Database } from "bun:sqlite";
 import { Store } from "../../src/state/workspace-store.ts";
 import { currentSchemaVersion, LATEST_SCHEMA_VERSION } from "../../src/state/migrations.ts";
@@ -636,7 +636,11 @@ describe("Phase 7 · architecture: memory fields never become permissions", () =
     ]);
     const offenders: string[] = [];
     for (const f of walk(join(ROOT, "src"))) {
-      const rel = f.slice(ROOT.length + 1);
+      // Normalise to forward slashes so the allow-list comparison is
+      // platform-independent: on Windows `join` produces backslash paths
+      // (src\context\memory\acl.ts) which never matched the forward-slash
+      // `allowed` entries, turning every allowed file into an offender.
+      const rel = f.slice(ROOT.length + 1).split(sep).join("/");
       if (allowed.has(rel)) continue;
       const text = readFileSync(f, "utf8");
       if (/agent_visibility|agentVisibility|confidence_score|confidenceScore/.test(text)) offenders.push(rel);

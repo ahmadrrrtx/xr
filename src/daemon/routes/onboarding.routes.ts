@@ -20,7 +20,7 @@ import { loadConfig, saveConfig, getProviderEnvStatus } from "../../config/confi
 import { PRESETS } from "../../providers/factory.ts";
 import { checkProviderHealthCached, invalidateProviderHealthCache } from "../../providers/health.ts";
 import { detectAllRuntimes } from "../../local/runtimes.ts";
-import { setSecretAsync, clearSecretMemo, getSecretSyncCached } from "../../security/secrets.ts";
+import { setSecretAsync, getSecretSyncCached } from "../../security/secrets.ts";
 import { checkInternetCached } from "../state/cache.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
@@ -116,7 +116,13 @@ export function onboardingRoutes(): DaemonRoute[] {
           if (key.length > 2048) return json({ error: "apiKey is unreasonably long" }, 400);
 
           const backend = await setSecretAsync(envName, key);
-          clearSecretMemo();
+          // No clearSecretMemo() here: setSecretAsync sets the memo to the latest
+          // written value on EVERY backend (keychain/secret-service/dpapi AND
+          // file), so there is no stale memo to clear — and a blanket clear would
+          // discard the just-stored value on OS backends, which are not readable
+          // through the sync hot-path used by onboarding.status below. This is what
+          // kept `cloud.configured` at 0 right after a successful key save on
+          // macOS (cross-platform onboarding contract).
           // Phase 01 — a stored key must invalidate the health cache (and the
           // catalog fingerprint, which includes key presence) so the advisory
           // probe and the next status/list call are FRESH — never a stale
