@@ -1,0 +1,68 @@
+# =============================================================================
+# XR Phase 10 · Step 2 — guard canonicalization fuzz (weekly CI)
+#
+# Fuzzes the crown-jewel security surface (`src/security/guard.ts`
+# canonicalisation: fullyDecode / canonicalPath / isSecretPath / normalizeHost /
+# checkAction, plus the connection-time SSRF parser in private-ip.ts). The
+# corpus + deterministic-PRNG harness (`scripts/fuzz-canonic.ts`) needs no native
+# libfuzzer build, so it runs entirely in CI and a red run is reproducible from
+# the reported seed.
+#
+# Gate (Phase 10 acceptance criterion 2): ZERO crashes on the canonicalisation
+# corpus after 2 CONSECUTIVE CLEAN WEEKS. Every scheduled run publishes a report
+# artifact; the readiness gate reads the last 8 weekly reports and requires 0
+# findings on the most recent run and no crash in the prior consecutive week.
+# A finding is a red job (fix + re-run clean before the gate passes).
+#
+# A maintainer may later swap in an AFL++/native harness over the extracted core;
+# the corpus approach is explicitly sufficient for 1.x (Part 2 decision).
+# =============================================================================
+name: Fuzz Guard Canonicalization
+
+on:
+  schedule:
+    - cron: "7 4 * * 1" # 04:07 UTC every Monday
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-guard:
+    name: Guard canonicalization fuzz (weekly)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      # 3 deterministic seeds × 200k iterations each (~60s total) per weekly run.
+      - name: Fuzz guard canonicalization (seed 7)
+        run: bun run fuzz:canonic --iterations 200000 --seed 7 --json "$RUNNER_TEMP/fuzz-seed7.json"
+
+      - name: Fuzz guard canonicalization (seed 1)
+        run: bun run fuzz:canonic --iterations 200000 --seed 1 --json "$RUNNER_TEMP/fuzz-seed1.json"
+
+      - name: Fuzz guard canonicalization (seed 42)
+        run: bun run fuzz:canonic --iterations 200000 --seed 42 --json "$RUNNER_TEMP/fuzz-seed42.json"
+
+      - name: Run the canonicalization bypass regression suite
+        # The companion invariant: re-encoding a secret path must never dodge the
+        # deterministic block. A regression test is how a fuzz finding is triaged.
+        run: bun test test/security/canonical-bypass.test.ts
+
+      - name: Upload fuzz reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-guard-reports
+          path: |
+            ${{ runner.temp }}/fuzz-seed*.json
+          retention-days: 90
+          if-no-files-found: ignore

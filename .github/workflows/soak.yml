@@ -1,0 +1,74 @@
+# =============================================================================
+# XR Phase 10 · Step 3 — 24h soak (nightly for the certification window)
+#
+# Every audit noted the absence of soak/load evidence. This runs the real CLI as
+# a pool of concurrent task runs against the deterministic in-tree stub provider
+# (no network, no keys) for 24h, sampling memory/CPU/DB-size and publishing a
+# per-operation-cost baseline. Leak detection = TREND across nights, not a single
+# threshold: the nightly report's bytes-per-task and peak worker RSS are compared
+# against the prior nights' baselines.
+#
+# Acceptance criterion 3 requires 2 consecutive WEEKS clean. Because a single
+# workflow run cannot span the window, the maintainer runs this nightly for the
+# certification window and the readiness gate consumes the accumulated artifacts
+# (per-night JSON + the git-committed baseline snapshot).
+#
+# Local / dispatch validation: use workflow_dispatch with inputs.minutes to run a
+# short bounded soak (e.g. 2 minutes) to prove the harness on a runner.
+# =============================================================================
+name: Soak
+
+on:
+  schedule:
+    - cron: "17 5 * * *" # 05:17 UTC daily (24h soak: runs to ~05:15 next day)
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Bounded soak duration in minutes (dispatch smoke only)"
+        required: false
+        default: "1440"
+      concurrency:
+        description: "Concurrent task processes"
+        required: false
+        default: "4"
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    name: 24h soak (concurrent tasks vs stub provider)
+    runs-on: ubuntu-latest
+    timeout-minutes: 1500 # 25h ceiling for the 24h run
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun (packageManager-pinned)
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run soak
+        env:
+          # dispatch smoke overrides the default full 24h window
+          SOAK_MIN: ${{ github.event.inputs.minutes || '1440' }}
+          SOAK_CONCURRENCY: ${{ github.event.inputs.concurrency || '4' }}
+        run: |
+          DATE=$(date -u +%Y%m%dT%H%M%SZ)
+          bun run soak \
+            --minutes "$SOAK_MIN" \
+            --concurrency "$SOAK_CONCURRENCY" \
+            --interval 600 \
+            --json "soak-$DATE.json" \
+            --markdown "soak-$DATE.md"
+
+      - name: Upload soak report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-report
+          path: soak-*.json
+          retention-days: 90
+          if-no-files-found: ignore

@@ -1,0 +1,19 @@
+{
+  "id": "anthropic",
+  "label": "Anthropic Claude",
+  "kind": "hosted",
+  "tier": "premium",
+  "transport": "openai-compat",
+  "capabilities": {
+    "chat": true,
+    "streaming": true,
+    "toolUse": true,
+    "nativeToolCalls": true,
+    "jsonMode": true,
+    "vision": true
+  },
+  "usageReporting": "provider-reported with estimated fallback (F-13)",
+  "keyEnv": "ANTHROPIC_API_KEY",
+  "authType": "apiKey",
+  "note": "VCR-style capability contract fixture, generated from the provider catalog so it cannot drift. Offline contract tests validate declarations against the in-tree stub; live confirmation is provider-canaries when a key is configured."
+}
