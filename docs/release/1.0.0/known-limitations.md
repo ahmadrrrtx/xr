@@ -138,7 +138,7 @@ path** on every push/PR
 
 ### The website is descriptive, not transactional
 No contact form, sales pipeline or lead capture — deliberately. Contact happens through GitHub
-issues (beta_feedback / false_claim templates).
+issues (feedback / false_claim templates).
 
 ### Hosted telemetry does not exist
 The observability plane is local-first (own OTLP collector, local `/metrics`, local trace viewer).

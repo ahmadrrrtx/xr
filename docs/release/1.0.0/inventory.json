@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-07T11:07:30.740Z",
+  "generatedAt": "2026-09-08T15:12:24.206Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -52,7 +52,7 @@
   },
   "counts": {
     "sourceFiles": 592,
-    "testFiles": 315,
+    "testFiles": 317,
     "cliCommands": 43,
     "daemonRoutes": 127,
     "providers": 26,
@@ -82,10 +82,6 @@
       "bytes": 1797
     },
     {
-      "path": "0001-fix-test-perf-daemon-routes-fallback-chat-is-now-det.patch",
-      "bytes": 17259
-    },
-    {
       "path": "CHANGELOG.md",
       "bytes": 83569
     },
@@ -99,7 +95,7 @@
     },
     {
       "path": "CONTRIBUTING.md",
-      "bytes": 12845
+      "bytes": 12918
     },
     {
       "path": "Dockerfile",
@@ -110,12 +106,20 @@
       "bytes": 1071
     },
     {
+      "path": "README-es.md",
+      "bytes": 18401
+    },
+    {
+      "path": "README-ur.md",
+      "bytes": 20584
+    },
+    {
       "path": "README.md",
-      "bytes": 36600
+      "bytes": 38823
     },
     {
       "path": "SECURITY.md",
-      "bytes": 17323
+      "bytes": 19380
     },
     {
       "path": "bun.lock",
@@ -139,11 +143,11 @@
     },
     {
       "path": "package.json",
-      "bytes": 5127
+      "bytes": 5282
     },
     {
       "path": "release.manifest.json",
-      "bytes": 10699
+      "bytes": 10694
     },
     {
       "path": "tsconfig.json",
@@ -948,6 +952,7 @@
     "test/plugins/host.test.ts",
     "test/plugins/loader.test.ts",
     "test/polish.test.ts",
+    "test/providers/capability-fixtures.test.ts",
     "test/providers/gateway.test.ts",
     "test/providers/malformed-response.test.ts",
     "test/providers/request-guard.test.ts",
@@ -1001,6 +1006,7 @@
     "test/security/audit-anchor.test.ts",
     "test/security/audit-crypto.test.ts",
     "test/security/audit-signer.test.ts",
+    "test/security/canonical-bypass.test.ts",
     "test/security/egress-proxy.test.ts",
     "test/security/exec-integrity.test.ts",
     "test/security/mcp-allowlist.test.ts",

@@ -6,19 +6,22 @@
 
 **An AI agent runtime you can actually audit.**
 
-*Give it a task. It plans, uses tools, and changes real things on your machine —
-under a policy gate, your approval, a spend ceiling, and a hash-chained log you can verify offline.*
+*Give it a task. It plans, uses tools, and changes real things on your machine — under a policy
+gate, your approval, a spend ceiling, and a hash-chained log you can verify offline.*
 
 [![CI](https://github.com/ahmadrrrtx/xr/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmadrrrtx/xr/actions/workflows/ci.yml)
 [![Cross-platform](https://github.com/ahmadrrrtx/xr/actions/workflows/cross-platform.yml/badge.svg)](https://github.com/ahmadrrrtx/xr/actions/workflows/cross-platform.yml)
-[![npm latest (legacy)](https://img.shields.io/npm/v/@rrrtx/xr/latest?label=npm%20latest%20(legacy)&style=flat-square&color=6b7280&logo=npm)](https://www.npmjs.com/package/@rrrtx/xr)
-[![npm beta](https://img.shields.io/npm/v/@rrrtx/xr/beta?label=npm%20beta&style=flat-square&color=cb3837&logo=npm)](https://www.npmjs.com/package/@rrrtx/xr?activeTab=versions)
+[![Supply chain](https://github.com/ahmadrrrtx/xr/actions/workflows/supply-chain.yml/badge.svg)](https://github.com/ahmadrrrtx/xr/actions/workflows/supply-chain.yml)
+[![npm](https://img.shields.io/npm/v/@rrrtx/xr/latest?label=npm&style=flat-square&color=cb3837&logo=npm)](https://www.npmjs.com/package/@rrrtx/xr)
+[![npm beta](https://img.shields.io/npm/v/@rrrtx/xr/beta?label=npm%20beta&style=flat-square&color=6b7280&logo=npm)](https://www.npmjs.com/package/@rrrtx/xr?activeTab=versions)
 [![License](https://img.shields.io/badge/license-MIT-9a6bff?style=flat-square)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)](tsconfig.json)
 [![Bun](https://img.shields.io/badge/Bun-%E2%89%A51.3-fbf0df?style=flat-square&logo=bun&logoColor=black)](https://bun.sh/)
 [![Platforms](https://img.shields.io/badge/Linux%20·%20macOS%20·%20Windows%20·%20Termux-00d2ff?style=flat-square)](docs/release/SUPPORT_MATRIX.md)
 
-[Quick start](#quick-start) · [What XR is](#what-xr-is--and-what-it-is-not) · [How it works](#how-xr-works) · [Providers](#providers) · [Security](#security--the-trust-plane) · [Docs](#documentation-map) · [Contributing](#contributing)
+📄 **Languages:** [English](README.md) · [اردو (Urdu)](README-ur.md) · [Español](README-es.md) — the English README is the source of truth; translations may lag.
+
+[Quick start](#quick-start) · [What XR is](#what-xr-is--and-what-it-is-not) · [How it works](#how-xr-works) · [Providers](#providers) · [Security](#security--the-trust-plane) · [Supply chain](#supply-chain--signed-provenanced-verified) · [Docs](#documentation-map) · [Contributing](#contributing)
 
 </div>
 
@@ -27,13 +30,7 @@ under a policy gate, your approval, a spend ceiling, and a hash-chained log you 
 
 **Version:** `1.0.0 (Truth)` · **Package:** [`@rrrtx/xr`](https://www.npmjs.com/package/@rrrtx/xr) · **License:** MIT
 
-> **Status: Public Beta.** @rrrtx/xr is honestly labeled beta software: install and use it,
-> expect the documented golden path to work on the validated platforms, and check the
-> [support matrix](docs/release/SUPPORT_MATRIX.md) and
-> [known-limitations register](docs/release/1.0.0/known-limitations.md) before adopting it
-> for anything critical. `v*-beta.*` tags land on the prerelease channel (npm `beta` dist-tag,
-> GitHub prerelease) for early adopters; feedback goes through the
-> [beta loop](docs/release/BETA.md).
+> **Status: Stable.** @rrrtx/xr is on the 1.0.0 production line: `latest` moves only on a stable tag, while pre-releases keep landing on the pre-release channel (npm `beta` dist-tag, GitHub pre-release). Check the [support matrix](docs/release/SUPPORT_MATRIX.md) and the [known-limitations register](docs/release/1.0.0/known-limitations.md) before adopting it for anything critical; feedback goes through the [issue tracker](https://github.com/ahmadrrrtx/xr/issues).
 
 > **Version source of truth:** [`release.manifest.json`](release.manifest.json). Every surface —
 > `src/core/version.ts`, `package.json`, this README, `install.sh`, `install.ps1` and the website —
@@ -80,6 +77,7 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 - **provider-neutral** — 26 presets, 16 hosted (BYOK) + 10 local runtimes, one switch command;
 - **governed** — policy, approvals, budgets and audit are enforced in the execution path, not promised in docs;
 - **extensible** — skills, plugins and MCP servers reachable identically from every surface;
+- **signed at the supply chain** — every release is cosign-signed, SLSA3-provenanced and published to npm with provenance (see [below](#supply-chain--signed-provenanced-verified));
 - **MIT-licensed** and readable end to end.
 
 **XR is not:**
@@ -88,9 +86,9 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 - **not a sandbox** — in-process policy enforcement, not kernel or VM isolation;
 - **not a hosted product** — there is no XR cloud;
 - **not a substitute** for a human reviewing consequential actions;
-- **not finished** — the [known-limitations register](docs/security/KNOWN_LIMITATIONS.md) is a
-  first-class release artifact, and the release docs state precisely what beta means today
-  ([support matrix](docs/release/SUPPORT_MATRIX.md)).
+- **not finished** — the [known-limitations register](docs/release/1.0.0/known-limitations.md) is a
+  first-class release artifact, and the release docs state precisely what the current release
+  supports ([support matrix](docs/release/SUPPORT_MATRIX.md)).
 
 > Every capability claim on this page is backed by evidence recorded in
 > [`release.manifest.json`](release.manifest.json) and re-checked in CI by `bun run claim-lint`,
@@ -105,8 +103,9 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 
 | Channel | Platform | Command |
 |---|---|---|
-| **Binary** (default) | Linux · macOS · Termux · WSL | `curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh \| bash` |
-| **Binary** (default) | Windows PowerShell 5.1 / 7+ | `iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)` |
+| **npm** (stable `latest`) | Linux · macOS · Windows · Termux | `npm i -g @rrrtx/xr` |
+| **Binary** | Linux · macOS · Termux · WSL | `curl -fsSL https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.sh \| bash` |
+| **Binary** | Windows PowerShell 5.1 / 7+ | `iex (irm https://raw.githubusercontent.com/ahmadrrrtx/xr/main/install.ps1)` |
 | **Homebrew** | macOS · Linux | `brew install ahmadrrrtx/tap/xr` |
 | **WinGet** | Windows | `winget install ahmadrrrtx.XR` |
 | **Scoop** | Windows | download `scoop/xr.json` from the release · `scoop install ./xr.json` |
@@ -114,20 +113,9 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 | **Docker** | any | `docker run ghcr.io/ahmadrrrtx/xr:latest` |
 | **From source** | any | `git clone https://github.com/ahmadrrrtx/xr && cd xr && bun install` |
 
-> **⚠ npm `latest` is still the 3.x line.** The badges above are dual on purpose: `latest (legacy)`
-> is `3.1.5` (pre-rebaseline) and `beta` is empty until Phase 3 publishes `1.0.0-beta.1`.
-> `bun add -g @rrrtx/xr` therefore installs the old build. Because `3.1.5` sorts *higher* than
-> `1.0.0`, the first **stable** 1.0.0 publish must re-point `latest` explicitly (`npm dist-tag add
-> @rrrtx/xr@1.0.0 latest`) — a beta must not move that tag. See the
-> [release runbook](docs/release/RELEASING.md), the [version ladder](docs/HISTORY.md), and
-> [known limitations](docs/release/1.0.0/known-limitations.md). Until then use the binary
-> channel or build from source.
-
-Every channel installs the same canonical build. Tagged releases ship cosign keyless signatures
-over `SHA256SUMS`, a CycloneDX SBOM and SLSA3 provenance — verify with
-[`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md). Channel configs are
-**generated** from the release manifest and drift-gated (`bun run channel:check`), so a channel
-cannot fall behind the release it serves. Publication status per channel:
+`npm i -g @rrrtx/xr` installs the stable line (dist-tag `latest`). Pre-releases publish to the
+`beta` dist-tag only and never move `latest`. Every channel installs the same canonical build;
+publication status per channel:
 [`docs/release/SUPPORT_MATRIX.md`](docs/release/SUPPORT_MATRIX.md).
 
 ### 2. First run
@@ -393,7 +381,43 @@ Alongside the boundary, two mechanisms constrain cost and supply chain:
 > a confinement boundary, and not a substitute for reviewing consequential actions. The gaps are
 > written down, not hidden: [`docs/security/KNOWN_LIMITATIONS.md`](docs/security/KNOWN_LIMITATIONS.md).
 
-Reporting a vulnerability: [`SECURITY.md`](SECURITY.md).
+Security architecture, threat model and vulnerability disclosure: [`SECURITY.md`](SECURITY.md).
+
+---
+
+## Supply chain — signed, provenanced, verified
+
+Every tag push runs one pipeline that builds, signs, publishes and self-verifies. No step is
+manual, and no long-lived npm token exists in the release path — npm publishing uses OIDC
+trusted publishing.
+
+```mermaid
+flowchart LR
+    T["git tag v*<br/><small>release.manifest.json<br/>stamps identity on 6 surfaces</small>"] --> B["CI build<br/><small>one canonical build<br/>5 targets + source</small>"]
+    B --> A["Assemble<br/><small>SHA256SUMS · CycloneDX SBOM<br/>.deb · channel manifests</small>"]
+    A --> SIG["cosign keyless sign<br/><small>Rekor + Fulcio<br/>SLSA3 provenance (slsa-framework)</small>"]
+    SIG --> GH["GitHub Release<br/><small>21 signed assets<br/>prerelease flag per semver</small>"]
+    SIG --> NPM["npm publish<br/><small>OIDC trusted publishing<br/>npm provenance attestation</small>"]
+    SIG --> DK["GHCR + Docker Hub<br/><small>cosign-signed images</small>"]
+    GH --> V["Verify (anyone, offline-ish)<br/><small>cosign verify-blob · sigstore check<br/>docs/release/VERIFYING_RELEASES.md</small>"]
+    NPM --> V2["Consumer smoke<br/><small>fresh npm install of the<br/>published artifact · doctor + task</small>"]
+
+    style SIG fill:#1a0f2e,stroke:#9a6bff,color:#f0e6ff
+    style V fill:#0f2e1a,stroke:#51cf66,color:#e6ffe6
+    style V2 fill:#0f2e1a,stroke:#51cf66,color:#e6ffe6
+```
+
+What you get as a user:
+
+- **Binary channels** (GitHub Releases, Homebrew, WinGet, Scoop, `.deb`, Docker): cosign keyless
+  signatures over `SHA256SUMS`, a CycloneDX SBOM and SLSA3 provenance — verify with
+  [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md).
+- **npm**: the `@rrrtx/xr` package is published from the release workflow with npm's **provenance
+  attestation** (visible on the version page), bound to the exact commit of the release tag.
+- **CI hygiene:** dependency installation with `--ignore-scripts`, osv-scanner + `bun audit`,
+  gitleaks secret scan, license scan and SBOM drift gates on every run.
+- **Channels can't lag:** channel configs are **generated** from the release manifest and
+  drift-gated (`bun run channel:check`), and the tag ⇔ npm invariant is checked in CI.
 
 ---
 
@@ -548,14 +572,14 @@ XR's differentiator is that its claims are checked by machines on every PR.
 
 | Gate | What it pins |
 |---|---|
-| `bun test` + parity suite | **2,946 tests** across 297 files (707 enterprise/business tests moved to the satellites with their code, ADR-0028); one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
+| `bun test` + parity suite | **3,241 pass / 19 skip / 0 fail across 317 files** (measured on the Linux lane at `v1.0.0`; 707 enterprise/business tests moved to the satellites with their code, ADR-0028); one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
 | `release:check` + `claim-lint` | version identity stamped everywhere; every public claim has evidence; prohibited/supervised terms fail the build |
 | `baseline:inventory` | source-derived repository inventory regenerated and compared |
-| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a 136,000-LOC ceiling on the whole tree** |
+| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a 139,000-LOC ceiling on the whole tree** |
 | `claim-lint` constitution gate | every `Article N` cited anywhere in `src/`, `test/`, `scripts/`, `.github/` exists in [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md) |
 | `api:schema:check` + `client:check` + `api:compat` | daemon OpenAPI schema, generated client, compatibility |
 | `channel:check` | channel configs match the release manifest |
-| supply chain | osv-scanner + bun audit, gitleaks, license scan, SBOM drift, `--ignore-scripts` hygiene, container scan |
+| supply chain | osv-scanner + bun audit, gitleaks, license scan, SBOM drift, `--ignore-scripts` hygiene, container scan; release artifacts cosign-signed with SLSA3 provenance and npm provenance attestation |
 | Quality Gate | single required aggregation check over all of the above |
 
 The evaluation harness moved to `@rrrtx/xr-enterprise` in Phase 5 ([ADR-0028](docs/adr/0028-satellite-extraction.md)):
@@ -608,7 +632,7 @@ xr/
 ├─ skills/                   65 bundled skill manifests
 ├─ plugins/                  bundled plugins
 ├─ scripts/                  gates, release machinery, parity runner, perf budgets
-├─ test/                     297-file suite mirroring src/ + helpers + fixtures
+├─ test/                     suite mirroring src/ + helpers + fixtures
 ├─ packaging/                homebrew · winget · scoop manifests (generated)
 ├─ docs/                     product, development, release, security, historical
 └─ website/                  docs/marketing site (Next.js; scanned by claim-lint)
@@ -618,7 +642,7 @@ Layering is enforced in CI: the `boundaries` gate + `test/architecture/*` pin al
 directions (surfaces → services → execution/core → state; tools/providers as leaves), and
 `bun run ownership:check` requires every source area to have an owning document. Core imports
 **nothing** from `satellites/` — enforced three ways (dependency-cruiser rule, boundary test,
-isolation test) — and `bun run size-gate` holds the whole tree under a 136,000-LOC ceiling so the
+isolation test) — and `bun run size-gate` holds the whole tree under a 139,000-LOC ceiling so the
 23,376 LOC Phase 5 removed cannot quietly grow back.
 
 ---
@@ -646,8 +670,9 @@ binary/npm/git layouts) and are atomic with an automatic rollback path.
 | [`docs/migration/PHASE-5-SATELLITES.md`](docs/migration/PHASE-5-SATELLITES.md) | Phase 5: `xr shield`→`xr hygiene`, satellites, the re-based deprecation timeline |
 | [`docs/release/RELEASING.md`](docs/release/RELEASING.md) | The release runbook |
 | [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md) | cosign/SBOM/SLSA verification walkthrough |
-| [`docs/release/BETA.md`](docs/release/BETA.md) | Beta loop and feedback channel |
+| [`docs/release/BETA.md`](docs/release/BETA.md) | Pre-release channel and feedback loop |
 | [`docs/`](docs/README.md) | Full documentation index |
+| [`README-ur.md`](README-ur.md) · [`README-es.md`](README-es.md) | This README in [اردو](README-ur.md) and [Español](README-es.md) |
 
 ---
 

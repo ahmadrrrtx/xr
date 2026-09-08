@@ -27,7 +27,7 @@ feedback moves, and when the label changes. The label itself is stamped from
 ## How feedback becomes work (the loop)
 
 1. **Signal in** — Beta feedback issue template
-   (`.github/ISSUE_TEMPLATE/beta_feedback.yml`): channel + OS + what you tried +
+   (`.github/ISSUE_TEMPLATE/feedback.yml`): channel + OS + what you tried +
    effect vs expectation; a false-claim template for anything the docs say
    that isn't true (treated as a **defect class**, not a docs chore).
 2. **Triage (weekly, owner: release eng)** — each issue becomes one of:

@@ -12,7 +12,7 @@
     "repo": "https://github.com/ahmadrrrtx/xr",
     "homepage": "https://xr-gules.vercel.app",
     "npm": "https://www.npmjs.com/package/@rrrtx/xr",
-    "stability": "public-beta"
+    "stability": "stable"
   },
   "stampTargets": [
     {
