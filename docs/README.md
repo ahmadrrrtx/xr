@@ -34,7 +34,8 @@ One navigation map. Three classes of material:
 | UX research | [`ux/`](ux/) |
 | Security | [`security/`](security/) — security model, threat model, known limitations, pentest register, guarantee matrix |
 | Release | [`release/`](release/) — RELEASING, channels, support matrix, verifying releases, per-version notes, [release-candidate notes](release/RELEASE_CANDIDATE_NOTES.md), [launch handoff](release/LAUNCH_HANDOFF.md), [remote-hygiene runbook](release/REMOTE_HYGIENE.md) |
-| Version history | [`HISTORY.md`](HISTORY.md) — 0.2 / 3.x / 4.x / 7.x / 1.x ladder (npm `latest` is still 3.1.5) |
+| Version history | [`HISTORY.md`](HISTORY.md) — 0.2 / 3.x / 4.x / 7.x / 1.x ladder (npm `latest` = 1.0.0 stable; the 3.x line is deprecated) |
+| Root README | [`../README.md`](../README.md) (English) · [`../README-ur.md`](../README-ur.md) (اردو) · [`../README-es.md`](../README-es.md) (Español) — English is the source of truth |
 | Implementation tracker | [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md) |
 
 ## 2. Audits

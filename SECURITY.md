@@ -211,6 +211,37 @@ sandboxing, and environment restriction.
 - ✅ All inputs are validated and sanitized
 - ✅ Child processes run with `shell: false`
 
+### 4. Tamper-Evident, Signed Audit Chain
+
+**Problem**: A local audit log that is merely written down is not evidence — it could be
+rewritten after the fact without anyone noticing.
+
+**Solution**: Every audit event is linked into a SHA-256 hash chain and signed (Ed25519,
+`src/security/audit-signer.ts`). Verification is a single offline command.
+
+- `xr audit verify` re-walks the chain and reports the first tampered link, if any.
+- Signed attack-screen reports (`xr attacks`) use the same signer.
+- Multi-agent checkpoints carry the same chain; a tampered or broken chain **refuses** to resume
+  rather than pretending to be intact.
+
+## Supply Chain Security
+
+XR's releases are signed and provenanced end to end, and no long-lived npm token exists in the
+release path.
+
+| Artifact | Assurance | Where to verify |
+|---|---|---|
+| Binaries (GitHub Releases, Homebrew, WinGet, Scoop, `.deb`) | cosign keyless signatures over `SHA256SUMS` (Rekor + Fulcio) | [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md) |
+| npm package `@rrrtx/xr` | npm provenance attestation, published from the release workflow via OIDC trusted publishing | npm version page (provenance link) |
+| Container images (GHCR) | cosign-signed image signatures | [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md) |
+| Every release | CycloneDX SBOM + SLSA3 provenance (slsa-framework generator) | release assets |
+
+CI hygiene on every run: dependency installation with `--ignore-scripts`, osv-scanner +
+`bun audit`, gitleaks secret scanning, license scanning, SBOM drift gating, and a tag ⇔ npm
+invariant check that fails if a git tag and its npm version ever disagree. Channel
+configurations (Homebrew, WinGet, Scoop) are generated from `release.manifest.json` and
+drift-gated, so a channel cannot lag behind the release it serves.
+
 ## Threat Model
 
 ### Threats Mitigated
@@ -362,6 +393,10 @@ is still worth reporting, it just may be a documentation fix rather than a code 
 
 ## Security Updates
 
+- **2026-09-08**: 1.0.0 stable
+  - npm publishing moved to OIDC trusted publishing with provenance attestations — no npm
+    tokens in the release path
+  - Signed audit chain (Ed25519) live across audit log and multi-agent checkpoints (F-08)
 - **2026-07-15**: Initial security architecture (Phases 1-3 landed)
   - Plugin loading through an in-process `node:vm` realm as defense-in-depth, with
     risk-tiered OS-level isolation as the actual boundary (Phase 4 · T8)
@@ -370,7 +405,6 @@ is still worth reporting, it just may be a documentation fix rather than a code 
 
 - **Future**: Process-based isolation (Docker/MicroVM)
 - **Future**: Network policy engine
-- **Future**: Secret management system
 
 ## References
 

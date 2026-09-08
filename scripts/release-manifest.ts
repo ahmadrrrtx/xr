@@ -271,7 +271,7 @@ export function buildReadmeBlock(id: ReleaseIdentity, skillCount: number): strin
       ? `\n\n> **Status: Public Beta.** ${id.name} is honestly labeled beta software: install and use it,\n> expect the documented golden path to work on the validated platforms, and check the\n> [support matrix](docs/release/SUPPORT_MATRIX.md) and\n> [known-limitations register](docs/release/${id.version}/known-limitations.md) before adopting it\n> for anything critical. \`v*-beta.*\` tags land on the prerelease channel (npm \`beta\` dist-tag,\n> GitHub prerelease) for early adopters; feedback goes through the\n> [beta loop](docs/release/BETA.md).`
       : id.stability === "developer-preview"
         ? `\n\n> **Status: Developer Preview.** APIs and behavior may change without a deprecation cycle.`
-        : "";
+        : `\n\n> **Status: Stable.** ${id.name} is on the 1.0.0 production line: \`latest\` moves only on a stable tag, while pre-releases keep landing on the pre-release channel (npm \`beta\` dist-tag, GitHub pre-release). Check the [support matrix](docs/release/SUPPORT_MATRIX.md) and the [known-limitations register](docs/release/${id.version}/known-limitations.md) before adopting it for anything critical; feedback goes through the [issue tracker](https://github.com/ahmadrrrtx/xr/issues).`;
   return `${README_BEGIN}
 <!-- GENERATED from release.manifest.json — do not edit by hand. Run: bun run release:stamp -->
 

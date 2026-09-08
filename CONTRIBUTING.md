@@ -14,10 +14,10 @@ makes XR report success, that success must correspond to something that actually
 ```bash
 git clone https://github.com/ahmadrrrtx/xr.git
 cd xr
-bun install            # Bun >= 1.3 (version pinned by package.json packageManager)
-bun test               # full suite
-bun run typecheck      # tsc --noEmit
-bun run ci             # what CI runs: typecheck + test + release:check + claim-lint + inventory
+bun install --frozen-lockfile   # Bun >= 1.3 (version pinned by package.json packageManager)
+bun test                        # full suite
+bun run typecheck               # tsc --noEmit
+bun run ci                      # what CI runs: typecheck + test + release:check + claim-lint + inventory + gates
 ```
 
 Run the CLI from source:
@@ -236,11 +236,12 @@ Do **not** open a public issue for a vulnerability. Follow the coordinated discl
 ### Suite environment requirements (Phase 0)
 
 The full suite is honest only in a defined environment: the SAME tests report
-3,427 pass elsewhere and hundreds of environment-sensitive failures in a
-constrained box. Before you trust a count, check the lane + environment it was
-measured in — every CI lane now prints its pass/fail/skip counts in the job
-summary (`.github/workflows/ci.yml`, `test / core`, `test / security`,
-`test / reliability-spawn`, `test / e2e-blackbox`).
+several thousand passes in a clean environment and hundreds of
+environment-sensitive failures in a constrained box. Before you trust a count,
+check the lane + environment it was measured in — every CI lane now prints its
+pass/fail/skip counts in the job summary (`.github/workflows/ci.yml`,
+`test / core`, `test / security`, `test / reliability-spawn`,
+`test / e2e-blackbox`).
 
 | Requirement | Spec | Why / who enforces |
 |---|---|---|
@@ -262,8 +263,7 @@ bash scripts/parity-suite-runner.sh linux  # test / core (per-directory segments
 #                  FIRST with its one-retry quarantine, exactly as in CI
 bun run reliability:test                   # test / reliability-spawn
 # test / e2e-blackbox: the five capture suites + `bun test test/e2e-blackbox/streaming-matrix.test.ts -t "behavior capture"`
-
-# NOTE: the F-02/F-03 KILL PROOFS are RED on HEAD until Phase 1:
+# test / e2e-blackbox-proof: the F-02/F-03 KILL PROOFS (green in CI)
 bun test test/e2e-blackbox/streaming-matrix.test.ts -t "kill proofs"
 ```
 
@@ -284,6 +284,6 @@ quarantine in the CI `test / security` lane, scoped to that file only.
 
 ## Known limitations
 
-Read [`docs/release/7.0.1/known-limitations.md`](docs/release/7.0.1/known-limitations.md) before
+Read [`docs/release/1.0.0/known-limitations.md`](docs/release/1.0.0/known-limitations.md) before
 filing a bug — the honest list of what is not yet real lives there, and keeping it accurate is part
 of every release.

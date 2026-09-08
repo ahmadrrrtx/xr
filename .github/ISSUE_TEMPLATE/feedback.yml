@@ -1,11 +1,12 @@
-name: Public Beta feedback
-description: Installation, channel, golden-path or support-matrix feedback for the XR Public Beta (7.x)
-labels: ["beta-feedback", "triage"]
+name: Feedback
+description: Installation, channel, golden-path or support-matrix feedback for XR (1.x line)
+labels: ["feedback", "triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        XR 7.x is a Public Beta — see docs/release/BETA.md for the loop this feeds.
+        XR is on the 1.0.0 stable line (pre-releases continue on the npm `beta` dist-tag —
+        see docs/release/BETA.md for that loop).
         Anything the docs claim that is not true in your environment is a defect of the
         same severity as a crash; you can also use the dedicated false-claim template.
 
