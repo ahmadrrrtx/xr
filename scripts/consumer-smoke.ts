@@ -26,7 +26,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -190,19 +190,36 @@ function runCli(
   env: NodeJS.ProcessEnv,
   cwd: string,
   timeoutMs = 120_000,
-): { status: number | null; stdout: string; stderr: string } {
-  const res = spawnSync(cmd[0]!, cmd.slice(1), {
-    cwd,
-    env,
-    encoding: "utf8",
-    timeout: timeoutMs,
-    stdio: ["ignore", "pipe", "pipe"],
+): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  // ASYNC by design: the in-process smoke stub (startSmokeStub) shares this
+  // process's event loop. spawnSync blocked that loop for the whole child
+  // lifetime, so the stub could never answer the child CLI's request — a
+  // guaranteed 120s-timeout deadlock in every environment. (Latent until
+  // 2026-09-08: every prior consumer-smoke run was a --skip-if-unpublished
+  // no-op, so the dead path never executed in CI.)
+  return new Promise((resolve) => {
+    const child = spawn(cmd[0]!, cmd.slice(1), { cwd, env });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const finish = (status: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ status, stdout, stderr });
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(null);
+    }, timeoutMs);
+    child.stdout.on("data", (c: Buffer) => (stdout += c.toString("utf8")));
+    child.stderr.on("data", (c: Buffer) => (stderr += c.toString("utf8")));
+    child.on("error", (e: Error) => {
+      stderr += `\n${e.message}`;
+      finish(1);
+    });
+    child.on("close", (code) => finish(code));
   });
-  return {
-    status: res.status,
-    stdout: res.stdout ?? "",
-    stderr: res.stderr ?? "",
-  };
 }
 
 export function looksStale(text: string): boolean {
@@ -259,7 +276,7 @@ export async function runConsumerSmoke(opts: {
     } else {
       const spec = opts.version ? `@rrrtx/xr@${opts.version}` : "@rrrtx/xr@beta";
       writeFileSync(join(work, "package.json"), JSON.stringify({ name: "xr-consumer-smoke", private: true }) + "\n");
-      const inst = runCli(["npm", "install", spec, "--no-fund", "--ignore-scripts"], env, work, 180_000);
+      const inst = await runCli(["npm", "install", spec, "--no-fund", "--ignore-scripts"], env, work, 180_000);
       if (inst.status !== 0) {
         // beta may be unpublished while latest is still 3.x — honest skip when asked
         if (opts.skipIfUnpublished) {
@@ -273,13 +290,13 @@ export async function runConsumerSmoke(opts: {
       cwd = work;
     }
 
-    const ver = runCli([...xrCmd, "--version"], env, cwd, 60_000);
+    const ver = await runCli([...xrCmd, "--version"], env, cwd, 60_000);
     report.version = (ver.stdout + ver.stderr).trim().split("\n")[0] ?? "";
     if (looksStale(ver.stdout + ver.stderr)) {
       return fail(report, `stale 3.x identity in --version: ${report.version}`);
     }
 
-    const doctor = runCli([...xrCmd, "doctor", "--json"], env, cwd, 120_000);
+    const doctor = await runCli([...xrCmd, "doctor", "--json"], env, cwd, 120_000);
     report.doctorExit = doctor.status;
     // doctor may exit 1 when no hosted key is present; the stub is enough to
     // prove the binary boots. Exit 2+ is a usage/crash class.
@@ -290,7 +307,7 @@ export async function runConsumerSmoke(opts: {
       return fail(report, "stale 3.x identity in doctor output");
     }
 
-    const task = runCli(
+    const task = await runCli(
       [...xrCmd, "run", "Say hello", "--provider", "consumer-stub"],
       env,
       cwd,
