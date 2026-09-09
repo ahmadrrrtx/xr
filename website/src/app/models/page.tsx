@@ -19,15 +19,15 @@ export default function ModelsPage() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {models.map((m) => (
-              <div key={m.name} className={cn("card p-6 relative", m.featured && "border-violet-400/30")}>
+              <div key={m.name} className={cn("card p-6 relative", m.featured && "border-cyan-400/30")}>
                 {m.featured && (
-                  <span className="absolute top-4 right-4 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-violet-200 bg-violet-500/15 border border-violet-400/20 rounded-full px-2 py-0.5">
+                  <span className="absolute top-4 right-4 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-cyan-200 bg-cyan-500/15 border border-cyan-400/20 rounded-full px-2 py-0.5">
                     <Sparkles className="h-3 w-3" /> Recommended
                   </span>
                 )}
-                <div className="text-xs uppercase tracking-wider text-zinc-500">{m.provider}</div>
+                <div className="text-xs uppercase tracking-wider text-slate-500">{m.provider}</div>
                 <h3 className="mt-1 text-lg font-semibold text-white">{m.name}</h3>
-                <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{m.description}</p>
+                <p className="mt-2 text-sm text-slate-400 leading-relaxed">{m.description}</p>
                 <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
                   <Chip label="Context" value={m.context} />
                   <Chip label="Speed" value={m.speed} />
@@ -48,7 +48,7 @@ export default function ModelsPage() {
           <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-gradient">
             Bring your own model.
           </h2>
-          <p className="mt-4 text-zinc-400">
+          <p className="mt-4 text-slate-400">
             Self-host Ollama, vLLM, Llama.cpp, or any OpenAI-compatible endpoint. XR&rsquo;s model gateway
             handles routing, caching, and cost controls out of the box.
           </p>
@@ -66,9 +66,9 @@ export default function ModelsPage() {
 
 function Chip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-1.5">
-      <div className="text-[10px] uppercase tracking-wider text-zinc-500">{label}</div>
-      <div className="text-zinc-200 mt-0.5">{value}</div>
+    <div className="rounded-lg border border-slate-800/60 bg-white/[0.02] px-2.5 py-1.5">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="text-slate-200 mt-0.5">{value}</div>
     </div>
   );
 }

@@ -16,7 +16,7 @@ export default function ContactPage() {
         </div>
         <div className="mx-auto max-w-2xl px-6 mt-12 card p-8 text-center">
           <h2 className="text-xl font-semibold text-white">No contact form</h2>
-          <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+          <p className="mt-3 text-sm text-slate-400 leading-relaxed">
             A form that silently discards your message is worse than no form. XR is developed in the
             open, so every conversation happens where you can see it and reference it later.
           </p>
@@ -32,9 +32,9 @@ export default function ContactPage() {
 function ContactCard({ icon: Icon, title, lines, href }: { icon: React.ComponentType<{ className?: string }>; title: string; lines: string[]; href: string }) {
   return (
     <a href={href} target="_blank" rel="noreferrer" className="card p-6 block hover:bg-white/[0.03] transition-colors">
-      <Icon className="h-5 w-5 text-violet-300" />
+      <Icon className="h-5 w-5 text-cyan-400" />
       <div className="mt-3 text-white font-semibold">{title}</div>
-      {lines.map((l) => <div key={l} className="text-sm text-zinc-400 mt-1">{l}</div>)}
+      {lines.map((l) => <div key={l} className="text-sm text-slate-400 mt-1">{l}</div>)}
     </a>
   );
 }

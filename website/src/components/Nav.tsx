@@ -20,9 +20,6 @@ export function Nav() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Note: mobile menu is closed via onClick on each link (see below)
-  // rather than an effect, to avoid cascading renders on route change.
-
   return (
     <header
       className={cn(
@@ -35,7 +32,7 @@ export function Nav() {
           className={cn(
             "flex items-center justify-between rounded-full transition-all duration-300",
             scrolled
-              ? "glass px-3 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.35)]"
+              ? "glass px-3 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.4)]"
               : "px-3 py-2"
           )}
           aria-label="Primary"
@@ -44,7 +41,7 @@ export function Nav() {
             <Link href="/" className="pl-2">
               <XrLogo />
             </Link>
-            <ul className="hidden md:flex items-center gap-1 text-[13.5px] text-zinc-300">
+            <ul className="hidden md:flex items-center gap-1 text-[13.5px] text-slate-300">
               <li
                 className="relative"
                 onMouseEnter={() => setProductsOpen(true)}
@@ -71,11 +68,14 @@ export function Nav() {
                         <Link
                           key={i.href}
                           href={i.href}
-                          onClick={() => { setProductsOpen(false); setOpen(false); }}
+                          onClick={() => {
+                            setProductsOpen(false);
+                            setOpen(false);
+                          }}
                           className="rounded-xl px-3 py-2 hover:bg-white/5 transition-colors"
                         >
                           <div className="text-white text-sm font-medium">{i.title}</div>
-                          <div className="text-zinc-500 text-xs mt-0.5">{i.desc}</div>
+                          <div className="text-slate-500 text-xs mt-0.5">{i.desc}</div>
                         </Link>
                       ))}
                     </div>
@@ -115,7 +115,7 @@ export function Nav() {
           </div>
 
           <button
-            className="md:hidden p-2 rounded-lg text-zinc-200"
+            className="md:hidden p-2 rounded-lg text-slate-200"
             onClick={() => setOpen((o) => !o)}
             aria-label="Toggle menu"
             aria-expanded={open}
@@ -141,13 +141,13 @@ export function Nav() {
                   <Link
                     href={n.href}
                     onClick={() => setOpen(false)}
-                    className="block px-3 py-2.5 rounded-lg hover:bg-white/5 text-zinc-200"
+                    className="block px-3 py-2.5 rounded-lg hover:bg-white/5 text-slate-200"
                   >
                     {n.label}
                   </Link>
                 </li>
               ))}
-              <li className="pt-2 mt-2 border-t border-white/5 flex gap-2 px-1">
+              <li className="pt-2 mt-2 border-t border-slate-700/50 flex gap-2 px-1">
                 <Link href="/docs" className="btn btn-ghost flex-1">
                   Docs
                 </Link>

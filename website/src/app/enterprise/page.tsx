@@ -40,11 +40,11 @@ export default function EnterprisePage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {pillars.map((p) => (
               <div key={p.title} className="card p-6 group">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500/20 to-sky-500/10 border border-white/10">
-                  <p.icon className="h-5 w-5 text-violet-300" />
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-cyan-500/20 to-sky-400/10 border border-slate-700/40">
+                  <p.icon className="h-5 w-5 text-cyan-400" />
                 </div>
                 <h3 className="mt-5 text-base font-semibold text-white">{p.title}</h3>
-                <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{p.desc}</p>
+                <p className="mt-2 text-sm text-slate-400 leading-relaxed">{p.desc}</p>
               </div>
             ))}
           </div>
@@ -53,12 +53,12 @@ export default function EnterprisePage() {
 
       <section className="py-20">
         <div className="mx-auto max-w-7xl px-6">
-          <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 text-center mb-8">
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-500 text-center mb-8">
           Supported deployment targets
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {deploymentTargets.map((l) => (
-              <div key={l} className="card p-5 text-center text-zinc-400 text-sm">
+              <div key={l} className="card p-5 text-center text-slate-400 text-sm">
                 {l}
               </div>
             ))}
@@ -70,15 +70,15 @@ export default function EnterprisePage() {
         <div className="mx-auto max-w-5xl px-6">
           <div className="grid md:grid-cols-2 gap-8 card p-8 md:p-12">
             <div>
-              <Building2 className="h-6 w-6 text-violet-300" />
+              <Building2 className="h-6 w-6 text-cyan-400" />
               <h2 className="mt-4 text-3xl font-semibold tracking-tight text-gradient">Deploy it yourself.</h2>
-              <p className="mt-3 text-zinc-400 text-sm leading-relaxed">
+              <p className="mt-3 text-slate-400 text-sm leading-relaxed">
                 XR is self-hosted and open source. Read the deployment docs, run it, and open an
                 issue if something does not work.
               </p>
             </div>
             <div className="space-y-4">
-              <p className="text-sm text-zinc-400 leading-relaxed">
+              <p className="text-sm text-slate-400 leading-relaxed">
                 There is no sales team and no lead-capture form. XR is MIT-licensed software you can
                 deploy today without talking to anyone.
               </p>

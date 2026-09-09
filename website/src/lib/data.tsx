@@ -1,41 +1,32 @@
+import type { LucideIcon } from "lucide-react";
 import {
-  Code2,
   Terminal,
-  GitBranch,
-  Search,
-  FileCode2,
-  Cloud,
-  Database,
-  Cpu,
-  ShieldCheck,
   Boxes,
+  Cloud,
+  ShieldCheck,
   Zap,
-  Workflow,
-  Lock,
-  LineChart,
-  Palette,
-  Globe,
-  Wrench,
-  BookOpen,
-  Rocket,
+  Brain,
+  MemoryStick,
+  Bot,
+  Plug,
 } from "lucide-react";
 import { site } from "./site";
 
 export const features = [
   {
-    icon: Cpu,
+    icon: Brain,
     title: "Agentic Runtime",
-    desc: "A performant, sandboxed runtime that plans, executes, and iterates — with deterministic replays and full audit trails.",
+    desc: "A performant runtime that plans, executes, and iterates — with deterministic replays and full audit trails.",
   },
   {
     icon: Terminal,
     title: "Native Shell",
-    desc: "XR lives inside your terminal. Native commands, pipes, and a ~36 ms cold start (measured p95). No browser required.",
+    desc: "XR lives inside your terminal. Native commands, pipes, and streaming agents. No browser required.",
   },
   {
-    icon: Code2,
-    title: "Editor Agnostic",
-    desc: "A bundled VS Code extension, and a CLI that runs in any terminal. Your agent, every surface.",
+    icon: Bot,
+    title: "Multi-Agent",
+    desc: "Deploy specialized agents — research, code, content — that collaborate and share memory.",
   },
   {
     icon: Boxes,
@@ -45,7 +36,7 @@ export const features = [
   {
     icon: Cloud,
     title: "Any Model",
-    desc: "Open-weight to frontier — GPT-5, Claude Opus, Gemini, DeepSeek, Qwen, Llama, Groq. Route by cost, latency, or task.",
+    desc: "Open-weight to frontier — GPT-5, Claude, Gemini, DeepSeek, Qwen, Llama. Route by cost, latency, or task.",
   },
   {
     icon: ShieldCheck,
@@ -53,19 +44,19 @@ export const features = [
     desc: "Capability-based security, human-in-the-loop confirmations, signed skills, and a hash-chained audit log.",
   },
   {
-    icon: GitBranch,
-    title: "Reproducible Workflows",
-    desc: "Every run is a replayable trace. Share sessions, diff executions, and roll agents back like code.",
+    icon: MemoryStick,
+    title: "Persistent Memory",
+    desc: "XR remembers context across sessions. Project knowledge, preferences, and history — always available.",
   },
   {
-    icon: Workflow,
+    icon: Plug,
     title: "MCP Native",
-    desc: "An MCP client with a signed, default-deny allowlist. Grant exact commands and network access per server.",
+    desc: "An MCP client with a signed, default-deny allowlist. Connect 100+ tools and services.",
   },
   {
     icon: Zap,
-    title: "Blazing Fast",
-    desc: "TypeScript on Bun. Streaming by default. Local models keep tool calls on your machine.",
+    title: "Fast & Local",
+    desc: "TypeScript on Bun. Streaming by default. Local models keep your data on your machine.",
   },
 ];
 

@@ -39,9 +39,9 @@ export default function DocsPage() {
       <section className="pb-24">
         <div className="mx-auto max-w-7xl px-6">
           <div className="glass rounded-2xl p-4 mb-8 flex flex-col md:flex-row items-stretch gap-3">
-            <div className="flex-1 flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3">
-              <span className="text-zinc-500 text-sm">Search docs…</span>
-              <span className="ml-auto text-[11px] text-zinc-500 border border-white/10 rounded px-1.5 py-0.5 font-mono">⌘K</span>
+            <div className="flex-1 flex items-center gap-2 bg-black/30 border border-slate-700/40 rounded-xl px-3">
+              <span className="text-slate-500 text-sm">Search docs…</span>
+              <span className="ml-auto text-[11px] text-slate-500 border border-slate-700/40 rounded px-1.5 py-0.5 font-mono">⌘K</span>
             </div>
             <Link href="/docs/getting-started" className="btn btn-primary">
               Quickstart <ArrowRight className="h-4 w-4" />
@@ -49,14 +49,14 @@ export default function DocsPage() {
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {sections.map((s) => (
-              <Link key={s.title} href={s.href} className="card p-6 hover:border-violet-400/30 transition-colors">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500/20 to-sky-500/10 border border-white/10">
-                  <s.icon className="h-5 w-5 text-violet-300" />
+              <Link key={s.title} href={s.href} className="card p-6 hover:border-cyan-400/30 transition-colors">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-cyan-500/20 to-sky-400/10 border border-slate-700/40">
+                  <s.icon className="h-5 w-5 text-cyan-400" />
                 </div>
                 <h3 className="mt-5 text-base font-semibold text-white flex items-center gap-1">
-                  {s.title} <ArrowRight className="h-4 w-4 text-zinc-500" />
+                  {s.title} <ArrowRight className="h-4 w-4 text-slate-500" />
                 </h3>
-                <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{s.desc}</p>
+                <p className="mt-2 text-sm text-slate-400 leading-relaxed">{s.desc}</p>
               </Link>
             ))}
           </div>

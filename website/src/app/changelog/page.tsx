@@ -14,21 +14,21 @@ export default function ChangelogPage() {
           <div className="space-y-10">
             {changelog.map((c, idx) => (
               <div key={c.version} className="relative pl-12">
-                <div className="absolute left-0 top-1 h-8 w-8 rounded-full bg-violet-500/15 border border-violet-400/30 flex items-center justify-center">
-                  <span className={`h-2 w-2 rounded-full ${idx === 0 ? "bg-violet-300" : "bg-zinc-500"}`} />
+                <div className="absolute left-0 top-1 h-8 w-8 rounded-full bg-cyan-500/15 border border-cyan-400/30 flex items-center justify-center">
+                  <span className={`h-2 w-2 rounded-full ${idx === 0 ? "bg-cyan-400" : "bg-zinc-500"}`} />
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-white font-semibold">v{c.version}</div>
-                  <div className="text-xs text-zinc-500">{c.date}</div>
+                  <div className="text-xs text-slate-500">{c.date}</div>
                   {idx === 0 && (
-                    <span className="text-[10px] uppercase tracking-wider text-violet-200 bg-violet-500/15 border border-violet-400/20 rounded-full px-2 py-0.5">Latest</span>
+                    <span className="text-[10px] uppercase tracking-wider text-cyan-200 bg-cyan-500/15 border border-cyan-400/20 rounded-full px-2 py-0.5">Latest</span>
                   )}
                 </div>
                 <h2 className="mt-1 text-xl text-white">{c.title}</h2>
-                <ul className="mt-4 space-y-2 text-sm text-zinc-400">
+                <ul className="mt-4 space-y-2 text-sm text-slate-400">
                   {c.highlights.map((h) => (
                     <li key={h} className="flex items-start gap-2">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-violet-400 shrink-0" />
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0" />
                       {h}
                     </li>
                   ))}

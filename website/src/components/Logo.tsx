@@ -13,18 +13,18 @@ export function XrLogo({ className, size = 22 }: { className?: string; size?: nu
       >
         <defs>
           <linearGradient id="xrg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#a892ff" />
-            <stop offset="0.5" stopColor="#ffffff" />
-            <stop offset="1" stopColor="#7cc8ff" />
+            <stop offset="0" stopColor="#38BDF8" />
+            <stop offset="0.5" stopColor="#7DD3FC" />
+            <stop offset="1" stopColor="#0EA5E9" />
           </linearGradient>
         </defs>
-        <rect x="1" y="1" width="30" height="30" rx="8" fill="#0b0b0f" stroke="url(#xrg)" strokeOpacity="0.6" />
+        <rect x="1" y="1" width="30" height="30" rx="8" fill="#0B1120" stroke="url(#xrg)" strokeOpacity="0.7" />
         <path
           d="M9 10 L14 16 L9 22 H11.5 L15.2 17.6 L17.8 22 H23 L18 16 L22.5 10 H20 L16.6 14.4 L14 10 Z"
           fill="url(#xrg)"
         />
       </svg>
-      <span className="text-[15px]">XR</span>
+      <span className="text-[15px] text-slate-100">XR</span>
     </span>
   );
 }

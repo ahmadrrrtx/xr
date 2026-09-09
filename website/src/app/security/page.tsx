@@ -38,11 +38,11 @@ export default function SecurityPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {items.map((i) => (
               <div key={i.title} className="card p-6">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-emerald-500/20 to-sky-500/10 border border-white/10">
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-emerald-500/20 to-sky-400/10 border border-slate-700/40">
                   <i.icon className="h-5 w-5 text-emerald-300" />
                 </div>
                 <h3 className="mt-5 text-base font-semibold text-white">{i.title}</h3>
-                <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{i.desc}</p>
+                <p className="mt-2 text-sm text-slate-400 leading-relaxed">{i.desc}</p>
               </div>
             ))}
           </div>
@@ -55,7 +55,7 @@ export default function SecurityPage() {
             <div className="relative">
               <div className="flex flex-wrap justify-center gap-3">
                 {honestPosture.map((c) => (
-                  <span key={c} className="px-3 py-1.5 rounded-full border border-white/10 text-sm text-zinc-300 bg-white/[0.03]">
+                  <span key={c} className="px-3 py-1.5 rounded-full border border-slate-700/40 text-sm text-slate-300 bg-white/[0.03]">
                     {c}
                   </span>
                 ))}
@@ -63,12 +63,12 @@ export default function SecurityPage() {
               <h2 className="mt-8 text-3xl md:text-4xl font-semibold tracking-tight text-gradient">
                 Read the security model.
               </h2>
-              <p className="mt-4 text-zinc-400 max-w-xl mx-auto">
+              <p className="mt-4 text-slate-400 max-w-xl mx-auto">
                 XR is not certified by any third party and does not claim to be. What it does have is
                 a documented threat model, an in-process policy gate, and a hash-chained audit log —
                 all of which you can read in the repository.
               </p>
-              <p className="mt-3 text-sm text-zinc-500 max-w-xl mx-auto">
+              <p className="mt-3 text-sm text-slate-500 max-w-xl mx-auto">
                 XR enforces in-process policy, not kernel or VM isolation. Treat it as a strong guard
                 rail, not a sandbox boundary.
               </p>

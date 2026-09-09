@@ -14,7 +14,7 @@ export default function AboutPage() {
         subtitle="XR was founded on a simple belief: software should be a collaboration between human intent and machine capability. We&rsquo;re building the runtime that makes that real."
       />
       <section className="pb-16">
-        <div className="mx-auto max-w-3xl px-6 space-y-6 text-zinc-300 leading-relaxed">
+        <div className="mx-auto max-w-3xl px-6 space-y-6 text-slate-300 leading-relaxed">
           <p>
             Today&rsquo;s tools for building software still assume the human does all the typing, all the searching, all the coordination.
             That&rsquo;s changing. XR is the runtime that lets agents plan, execute, and iterate alongside humans &mdash; safely, reproducibly,
@@ -32,7 +32,7 @@ export default function AboutPage() {
             <li><b className="text-white">Open.</b> The runtime is open. Ecosystems thrive on standards.</li>
           </ul>
           <h2 className="text-2xl font-semibold text-white pt-6">Press</h2>
-          <p>For press inquiries, email <a className="text-violet-300 hover:underline" href="mailto:press@xr.dev">press@xr.dev</a>.</p>
+          <p>For press inquiries, email <a className="text-cyan-400 hover:underline" href="mailto:press@xr.dev">press@xr.dev</a>.</p>
           <Link href="/careers" className="btn btn-primary mt-4 inline-flex">
             Join our team <ArrowRight className="h-4 w-4" />
           </Link>

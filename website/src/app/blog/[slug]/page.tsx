@@ -25,20 +25,20 @@ export default async function PostPage({ params }: { params: Promise<{ slug: str
   return (
     <article className="pt-36 pb-24">
       <div className="mx-auto max-w-3xl px-6">
-        <Link href="/blog" className="inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-white">
+        <Link href="/blog" className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white">
           <ArrowLeft className="h-3.5 w-3.5" /> Back to blog
         </Link>
-        <div className="mt-8 text-xs uppercase tracking-widest text-violet-300">{post.tag}</div>
+        <div className="mt-8 text-xs uppercase tracking-widest text-cyan-400">{post.tag}</div>
         <h1 className="mt-3 text-4xl md:text-5xl font-semibold tracking-tight text-gradient leading-[1.1]">
           {post.title}
         </h1>
-        <div className="mt-4 flex items-center gap-4 text-sm text-zinc-500">
+        <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
           <span>{post.author}</span>
           <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {post.date}</span>
           <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {post.readTime}</span>
         </div>
-        <div className="mt-10 max-w-none text-zinc-300 leading-relaxed space-y-5">
-          <p className="text-lg text-zinc-300">{post.excerpt}</p>
+        <div className="mt-10 max-w-none text-slate-300 leading-relaxed space-y-5">
+          <p className="text-lg text-slate-300">{post.excerpt}</p>
           {post.body?.map((paragraph, i) => (
             <p key={i}>{paragraph}</p>
           ))}

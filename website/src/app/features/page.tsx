@@ -45,11 +45,11 @@ export default function FeaturesPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {[...features, ...extraFeatures].map((f) => (
               <div key={f.title} className="card p-6 group">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500/20 to-sky-500/10 border border-white/10 group-hover:border-violet-400/30 transition-colors">
-                  <f.icon className="h-5 w-5 text-violet-300" />
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-cyan-500/10 border border-cyan-500/20 group-hover:bg-cyan-500/15 transition-colors">
+                  <f.icon className="h-5 w-5 text-cyan-400" />
                 </div>
-                <h3 className="mt-5 text-base font-semibold text-white">{f.title}</h3>
-                <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{f.desc}</p>
+                <h3 className="mt-5 text-base font-semibold text-slate-100">{f.title}</h3>
+                <p className="mt-2 text-sm text-slate-400 leading-relaxed">{f.desc}</p>
               </div>
             ))}
           </div>
@@ -79,20 +79,20 @@ export default function FeaturesPage() {
 
       <section className="py-24">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="rounded-3xl border border-white/10 p-10 md:p-16 text-center relative overflow-hidden">
+          <div className="rounded-2xl border border-slate-700/50 bg-slate-800/20 p-10 md:p-16 text-center relative overflow-hidden">
             <div
               aria-hidden
               className="absolute inset-0"
               style={{
                 background:
-                  "radial-gradient(600px 300px at 50% 0%, rgba(124,92,255,0.25), transparent 70%)",
+                  "radial-gradient(600px 300px at 50% 0%, rgba(56,189,248,0.12), transparent 70%)",
               }}
             />
             <div className="relative">
               <h2 className="text-3xl md:text-5xl font-semibold tracking-tight text-gradient">
                 Try XR for yourself.
               </h2>
-              <p className="mt-4 text-zinc-400 max-w-xl mx-auto">
+              <p className="mt-4 text-slate-400 max-w-xl mx-auto">
                 Free for individuals. No credit card. Works locally in under a minute.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -127,15 +127,15 @@ function FeatureBlock({
       <div className="mx-auto max-w-7xl px-6">
         <div className={`grid lg:grid-cols-2 gap-12 items-center ${reverse ? "lg:[&>*:first-child]:order-2" : ""}`}>
           <div>
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500/20 to-sky-500/10 border border-white/10">
-              <Icon className="h-5 w-5 text-violet-300" />
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-cyan-500/10 border border-cyan-500/20">
+              <Icon className="h-5 w-5 text-cyan-400" />
             </div>
             <h2 className="mt-5 text-3xl md:text-4xl font-semibold tracking-tight text-gradient">{title}</h2>
-            <p className="mt-4 text-zinc-400 leading-relaxed">{desc}</p>
+            <p className="mt-4 text-slate-400 leading-relaxed">{desc}</p>
             <ul className="mt-6 space-y-2.5">
               {points.map((p) => (
-                <li key={p} className="flex items-start gap-2 text-sm text-zinc-300">
-                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-violet-400 shrink-0" />
+                <li key={p} className="flex items-start gap-2 text-sm text-slate-300">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0" />
                   {p}
                 </li>
               ))}
@@ -145,12 +145,12 @@ function FeatureBlock({
             <div
               aria-hidden
               className="absolute -top-20 -right-20 h-64 w-64 rounded-full blur-3xl opacity-60"
-              style={{ background: "radial-gradient(closest-side, rgba(124,92,255,0.45), transparent)" }}
+              style={{ background: "radial-gradient(closest-side, rgba(56,189,248,0.25), transparent)" }}
             />
-            <div className="relative font-mono text-xs text-zinc-300 space-y-2 leading-relaxed">
+            <div className="relative font-mono text-xs text-slate-300 space-y-2 leading-relaxed">
               {points.map((p, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <span className="text-violet-300">✓</span> {p}
+                  <span className="text-cyan-400">✓</span> {p}
                 </div>
               ))}
             </div>

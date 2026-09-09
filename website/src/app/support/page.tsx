@@ -21,13 +21,13 @@ export default function SupportPage() {
         <div className="mx-auto max-w-7xl px-6 grid md:grid-cols-2 gap-5">
           {channels.map((c) => (
             <Link key={c.title} href={c.href} className="card p-7 group flex items-start gap-4">
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500/20 to-sky-500/10 border border-white/10 shrink-0">
-                <c.icon className="h-5 w-5 text-violet-300" />
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-cyan-500/20 to-sky-400/10 border border-slate-700/40 shrink-0">
+                <c.icon className="h-5 w-5 text-cyan-400" />
               </div>
               <div className="flex-1">
                 <h3 className="text-white font-semibold">{c.title}</h3>
-                <p className="mt-1 text-sm text-zinc-400">{c.desc}</p>
-                <div className="mt-3 inline-flex items-center gap-1 text-sm text-zinc-300 group-hover:text-white">
+                <p className="mt-1 text-sm text-slate-400">{c.desc}</p>
+                <div className="mt-3 inline-flex items-center gap-1 text-sm text-slate-300 group-hover:text-white">
                   {c.cta} <ArrowRight className="h-4 w-4" />
                 </div>
               </div>

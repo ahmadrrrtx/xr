@@ -46,12 +46,12 @@ export default function CareersPage() {
               >
                 <div className="flex-1">
                   <div className="text-white font-medium">{r.title}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-3">
+                  <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-3">
                     <span>{r.team}</span>
                     <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {r.location}</span>
                   </div>
                 </div>
-                <ArrowRight className="h-4 w-4 text-zinc-500" />
+                <ArrowRight className="h-4 w-4 text-slate-500" />
               </a>
             ))}
           </div>
@@ -59,15 +59,15 @@ export default function CareersPage() {
           <h2 className="text-xl font-semibold text-white mt-16 mb-5">Benefits</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">
             {benefits.map((b) => (
-              <div key={b} className="card p-4 text-sm text-zinc-300 flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-violet-400 shrink-0" /> {b}
+              <div key={b} className="card p-4 text-sm text-slate-300 flex items-center gap-2">
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0" /> {b}
               </div>
             ))}
           </div>
 
           <div className="mt-16 card p-8 text-center">
           <h2 className="text-2xl font-semibold text-white">Don&rsquo;t see your role?</h2>
-          <p className="mt-2 text-zinc-400">We&rsquo;re always interested in meeting exceptional people.</p>
+          <p className="mt-2 text-slate-400">We&rsquo;re always interested in meeting exceptional people.</p>
             <Link href="/contact" className="btn btn-primary mt-5">
               Get in touch <ArrowRight className="h-4 w-4" />
             </Link>

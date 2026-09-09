@@ -8,7 +8,7 @@ export default function TermsPage() {
     <>
       <PageHeader eyebrow="Legal" title="Terms of Service" subtitle="Last updated: July 8, 2026" />
       <section className="pb-24">
-        <article className="mx-auto max-w-3xl px-6 text-zinc-300 leading-relaxed space-y-5">
+        <article className="mx-auto max-w-3xl px-6 text-slate-300 leading-relaxed space-y-5">
           <p>These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of XR websites, products, and services.</p>
           <h2 className="text-xl font-semibold text-white pt-4">Your account</h2>
           <p>You are responsible for safeguarding your account and for any activity under your account. You must be at least 13 years old to use XR.</p>
@@ -21,7 +21,7 @@ export default function TermsPage() {
           <h2 className="text-xl font-semibold text-white pt-4">Disclaimers</h2>
           <p>XR is provided &ldquo;as is&rdquo; without warranties of any kind. AI-generated output can be incorrect; review all code and actions before use in production.</p>
           <h2 className="text-xl font-semibold text-white pt-4">Contact</h2>
-          <p>Questions? Email <a className="text-violet-300 hover:underline" href="mailto:legal@xr.dev">legal@xr.dev</a>.</p>
+          <p>Questions? Email <a className="text-cyan-400 hover:underline" href="mailto:legal@xr.dev">legal@xr.dev</a>.</p>
         </article>
       </section>
     </>

@@ -17,7 +17,7 @@ export function PageHeader({
       <div className="mx-auto max-w-7xl px-6 relative">
         <div className={cn(center ? "text-center max-w-3xl mx-auto" : "max-w-3xl")}>
           {eyebrow && (
-            <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 mb-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-4">
               {eyebrow}
             </div>
           )}
@@ -25,7 +25,7 @@ export function PageHeader({
             {title}
           </h1>
           {subtitle && (
-            <p className="mt-5 text-zinc-400 text-lg leading-relaxed">{subtitle}</p>
+            <p className="mt-5 text-slate-400 text-lg leading-relaxed">{subtitle}</p>
           )}
         </div>
       </div>

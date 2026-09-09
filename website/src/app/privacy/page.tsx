@@ -8,7 +8,7 @@ export default function PrivacyPage() {
     <>
       <PageHeader eyebrow="Legal" title="Privacy Policy" subtitle="Last updated: July 8, 2026" />
       <section className="pb-24">
-        <article className="mx-auto max-w-3xl px-6 text-zinc-300 leading-relaxed space-y-5">
+        <article className="mx-auto max-w-3xl px-6 text-slate-300 leading-relaxed space-y-5">
           <p>This Privacy Policy describes how XR Labs, Inc. (&ldquo;XR&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) collects, uses, and shares information when you use our website, products, and services.</p>
           <h2 className="text-xl font-semibold text-white pt-4">Information we collect</h2>
           <p>We collect information you provide directly &mdash; such as your name, email, and payment information when you sign up. We also collect limited technical data to operate the service: version, platform, and crash reports.</p>
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
           <h2 className="text-xl font-semibold text-white pt-4">Your rights</h2>
           <p>You can access, correct, or delete your data at any time. Contact privacy@xr.dev to exercise these rights.</p>
           <h2 className="text-xl font-semibold text-white pt-4">Contact</h2>
-          <p>Questions? Email <a className="text-violet-300 hover:underline" href="mailto:privacy@xr.dev">privacy@xr.dev</a>.</p>
+          <p>Questions? Email <a className="text-cyan-400 hover:underline" href="mailto:privacy@xr.dev">privacy@xr.dev</a>.</p>
         </article>
       </section>
     </>

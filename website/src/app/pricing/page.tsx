@@ -23,27 +23,27 @@ export default function PricingPage() {
                 key={p.name}
                 className={cn(
                   "card p-7 flex flex-col relative",
-                  p.featured && "border-violet-400/30 shadow-[0_20px_80px_-20px_rgba(124,92,255,0.35)]"
+                  p.featured && "border-cyan-400/30 shadow-[0_20px_80px_-20px_rgba(56,189,248,0.35)]"
                 )}
               >
                 {p.featured && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-wider text-violet-100 bg-violet-500/90 rounded-full px-2.5 py-1 font-medium">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-wider text-violet-100 bg-cyan-500/90 rounded-full px-2.5 py-1 font-medium">
                     Most popular
                   </span>
                 )}
-                <div className="text-sm text-zinc-300 font-medium">{p.name}</div>
+                <div className="text-sm text-slate-300 font-medium">{p.name}</div>
                 <div className="mt-4 flex items-end gap-1">
                   <div className="text-4xl font-semibold text-white tracking-tight">{p.price}</div>
-                  <div className="text-xs text-zinc-500 pb-1.5">/{p.cadence}</div>
+                  <div className="text-xs text-slate-500 pb-1.5">/{p.cadence}</div>
                 </div>
-                <p className="mt-3 text-sm text-zinc-400 leading-relaxed">{p.description}</p>
+                <p className="mt-3 text-sm text-slate-400 leading-relaxed">{p.description}</p>
                 <Link
                   href={p.href}
                   className={cn("btn mt-6 w-full", p.featured ? "btn-primary" : "btn-ghost")}
                 >
                   {p.cta} <ArrowRight className="h-4 w-4" />
                 </Link>
-                <ul className="mt-6 space-y-2.5 text-sm text-zinc-300">
+                <ul className="mt-6 space-y-2.5 text-sm text-slate-300">
                   {p.features.map((f) => (
                     <li key={f} className="flex items-start gap-2">
                       <Check className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" /> {f}
@@ -61,14 +61,14 @@ export default function PricingPage() {
           <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-gradient text-center">
             Frequently asked
           </h2>
-          <div className="mt-10 divide-y divide-white/5 border-y border-white/5">
+          <div className="mt-10 divide-y divide-white/5 border-y border-slate-800/60">
             {faqs.map((f) => (
               <details key={f.q} className="group py-5">
                 <summary className="flex items-center justify-between cursor-pointer list-none">
                   <span className="text-white font-medium">{f.q}</span>
-                  <span className="ml-4 text-zinc-500 transition-transform group-open:rotate-45 text-xl leading-none">+</span>
+                  <span className="ml-4 text-slate-500 transition-transform group-open:rotate-45 text-xl leading-none">+</span>
                 </summary>
-                <p className="mt-3 text-sm text-zinc-400 leading-relaxed">{f.a}</p>
+                <p className="mt-3 text-sm text-slate-400 leading-relaxed">{f.a}</p>
               </details>
             ))}
           </div>

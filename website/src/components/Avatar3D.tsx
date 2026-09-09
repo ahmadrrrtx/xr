@@ -5,10 +5,8 @@ import { motion } from "framer-motion";
 
 /**
  * XR Avatar — pure SVG/GLSL-feel 3D orb.
- * No external three.js dependency (keeps bundle lean / build reliable),
- * but the look is deliberately "floating 3D" with layered gradients,
- * conic highlight, interactive lighting that follows the cursor,
- * and subtle parallax.
+ * Redesigned for XR 4.0: navy background, cyan accent, cleaner look.
+ * Interactive lighting follows the cursor.
  */
 export function Avatar3D() {
   const ref = useRef<HTMLDivElement>(null);
@@ -33,8 +31,8 @@ export function Avatar3D() {
     };
   }, []);
 
-  const rx = pos.y * -14;
-  const ry = pos.x * 14;
+  const rx = pos.y * -12;
+  const ry = pos.x * 12;
 
   return (
     <div
@@ -45,33 +43,28 @@ export function Avatar3D() {
       onMouseUp={() => setPressed(false)}
       onMouseLeave={() => setPressed(false)}
     >
-      {/* Glow halo */}
+      {/* Ambient glow */}
       <motion.div
         aria-hidden
         className="absolute rounded-full pulse-glow"
         style={{
-          width: "78%",
-          height: "78%",
-          filter: "blur(60px)",
+          width: "80%",
+          height: "80%",
+          filter: "blur(70px)",
           background:
-            "radial-gradient(closest-side, rgba(124,92,255,0.55), rgba(56,189,248,0.2) 45%, transparent 70%)",
+            "radial-gradient(closest-side, rgba(56,189,248,0.35), rgba(56,189,248,0.1) 45%, transparent 70%)",
         }}
-        animate={{ scale: pressed ? 0.95 : 1 }}
+        animate={{ scale: pressed ? 0.96 : 1 }}
         transition={{ type: "spring", stiffness: 200, damping: 20 }}
       />
 
-      {/* Orbit rings */}
+      {/* Orbit ring */}
       <motion.div
         aria-hidden
-        className="absolute rounded-full border border-white/10 float-slow"
-        style={{ width: "92%", height: "92%" }}
+        className="absolute rounded-full border border-slate-600/30 float-slow"
+        style={{ width: "90%", height: "90%" }}
         animate={{ rotate: 360 }}
         transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
-      />
-      <motion.div
-        aria-hidden
-        className="absolute rounded-full border border-white/5"
-        style={{ width: "110%", height: "110%", transform: "rotateX(70deg)" }}
       />
 
       {/* The sphere */}
@@ -79,21 +72,21 @@ export function Avatar3D() {
         aria-hidden
         className="relative rounded-full"
         style={{
-          width: "62%",
-          height: "62%",
+          width: "58%",
+          height: "58%",
           transformStyle: "preserve-3d",
-          transform: `rotateX(${rx}deg) rotateY(${ry}deg) scale(${pressed ? 0.96 : 1})`,
+          transform: `rotateX(${rx}deg) rotateY(${ry}deg) scale(${pressed ? 0.97 : 1})`,
           transition: "transform 0.18s ease-out",
         }}
       >
-        {/* Base gradient */}
+        {/* Base gradient — deep navy with cyan highlight */}
         <div
           className="absolute inset-0 rounded-full"
           style={{
             background:
-              "radial-gradient(circle at 30% 28%, rgba(255,255,255,0.9), rgba(180,160,255,0.5) 25%, rgba(60,40,130,0.7) 55%, #0a0a12 85%)",
+              "radial-gradient(circle at 30% 28%, rgba(56,189,248,0.4), rgba(15,23,42,0.9) 40%, #0B1120 80%)",
             boxShadow:
-              "inset -20px -30px 60px rgba(0,0,0,0.6), inset 10px 20px 40px rgba(255,255,255,0.08), 0 40px 80px -20px rgba(124,92,255,0.45)",
+              "inset -16px -24px 48px rgba(0,0,0,0.6), inset 8px 16px 32px rgba(56,189,248,0.08), 0 30px 60px -15px rgba(56,189,248,0.3)",
           }}
         />
         {/* Specular highlight (cursor-follow) */}
@@ -101,16 +94,16 @@ export function Avatar3D() {
           className="absolute rounded-full"
           style={{
             inset: 0,
-            background: `radial-gradient(circle at ${50 + pos.x * 50}% ${50 + pos.y * 50}%, rgba(255,255,255,0.35), transparent 35%)`,
+            background: `radial-gradient(circle at ${50 + pos.x * 50}% ${50 + pos.y * 50}%, rgba(56,189,248,0.3), transparent 30%)`,
             mixBlendMode: "screen",
           }}
         />
-        {/* Conic shimmer */}
+        {/* Conic shimmer — cyan */}
         <div
-          className="absolute inset-0 rounded-full opacity-60"
+          className="absolute inset-0 rounded-full opacity-50"
           style={{
             background:
-              "conic-gradient(from 90deg, transparent 0deg, rgba(255,255,255,0.15) 60deg, transparent 120deg, transparent 240deg, rgba(124,200,255,0.12) 300deg, transparent 360deg)",
+              "conic-gradient(from 90deg, transparent 0deg, rgba(56,189,248,0.15) 60deg, transparent 120deg, transparent 240deg, rgba(96,72,248,0.1) 300deg, transparent 360deg)",
             mixBlendMode: "screen",
           }}
         />
@@ -119,8 +112,8 @@ export function Avatar3D() {
           <span
             className="text-white font-bold tracking-tight"
             style={{
-              fontSize: "clamp(36px,7vw,72px)",
-              textShadow: "0 2px 18px rgba(124,92,255,0.6)",
+              fontSize: "clamp(32px,6vw,64px)",
+              textShadow: "0 2px 24px rgba(56,189,248,0.5)",
               letterSpacing: "-0.04em",
             }}
           >
@@ -131,7 +124,7 @@ export function Avatar3D() {
         <div
           className="absolute inset-0 rounded-full"
           style={{
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
+            boxShadow: "inset 0 0 0 1px rgba(56,189,248,0.1)",
           }}
         />
       </motion.div>
@@ -140,20 +133,20 @@ export function Avatar3D() {
       <motion.div
         aria-hidden
         className="absolute"
-        style={{ width: "92%", height: "92%" }}
+        style={{ width: "90%", height: "90%" }}
         animate={{ rotate: -360 }}
         transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
       >
-        <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 h-2 w-2 rounded-full bg-white shadow-[0_0_20px_4px_rgba(168,146,255,0.7)]" />
+        <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_20px_4px_rgba(56,189,248,0.6)]" />
       </motion.div>
       <motion.div
         aria-hidden
         className="absolute"
-        style={{ width: "110%", height: "110%" }}
+        style={{ width: "106%", height: "106%" }}
         animate={{ rotate: 360 }}
         transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
       >
-        <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 h-1.5 w-1.5 rounded-full bg-sky-300 shadow-[0_0_16px_4px_rgba(56,189,248,0.6)]" />
+        <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 h-1.5 w-1.5 rounded-full bg-slate-400 shadow-[0_0_12px_3px_rgba(148,163,184,0.4)]" />
       </motion.div>
     </div>
   );

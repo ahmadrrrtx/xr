@@ -39,7 +39,7 @@ const quarters = [
 const iconFor = (s: string) =>
   s === "done" ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> :
   s === "active" ? <Loader2 className="h-4 w-4 text-amber-400 animate-spin" /> :
-  <Circle className="h-4 w-4 text-zinc-500" />;
+  <Circle className="h-4 w-4 text-slate-500" />;
 
 export default function RoadmapPage() {
   return (
@@ -51,23 +51,23 @@ export default function RoadmapPage() {
             <div key={q.label} className="card p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-xs uppercase tracking-widest text-zinc-500">{q.label}</div>
+                  <div className="text-xs uppercase tracking-widest text-slate-500">{q.label}</div>
                   <div className="mt-1 text-lg font-semibold text-white">{q.title}</div>
                 </div>
                 <span className={cn(
                   "text-[10px] uppercase tracking-wider px-2 py-1 rounded-full border",
                   q.status === "in-progress"
                     ? "text-amber-200 bg-amber-500/10 border-amber-400/30"
-                    : "text-zinc-400 bg-white/[0.03] border-white/10"
+                    : "text-slate-400 bg-white/[0.03] border-slate-700/40"
                 )}>
                   {q.status === "in-progress" ? "Shipping" : "Planned"}
                 </span>
               </div>
               <ul className="mt-6 space-y-3">
                 {q.items.map((i) => (
-                  <li key={i.t} className="flex items-start gap-2 text-sm text-zinc-300">
+                  <li key={i.t} className="flex items-start gap-2 text-sm text-slate-300">
                     <span className="mt-0.5 shrink-0">{iconFor(i.s)}</span>
-                    <span className={i.s === "done" ? "text-zinc-400 line-through decoration-zinc-600" : ""}>
+                    <span className={i.s === "done" ? "text-slate-400 line-through decoration-zinc-600" : ""}>
                       {i.t}
                     </span>
                   </li>

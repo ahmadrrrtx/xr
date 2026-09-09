@@ -40,7 +40,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0b",
+  themeColor: "#0B1120",
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
@@ -49,7 +49,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
-      <body className="min-h-screen bg-bg antialiased text-text">
+      <body className="min-h-screen bg-[#0B1120] antialiased text-slate-100">
         <div className="mesh-bg" aria-hidden />
         <Nav />
         <main>{children}</main>

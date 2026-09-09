@@ -23,7 +23,7 @@ export default function StatusPage() {
             <div className="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(52,211,153,0.7)] animate-pulse" />
             <div className="flex-1">
               <div className="text-white font-medium">All systems operational</div>
-              <div className="text-xs text-zinc-500">Last checked just now</div>
+              <div className="text-xs text-slate-500">Last checked just now</div>
             </div>
             <div className="text-sm text-emerald-300">99.99% uptime (90d)</div>
           </div>
@@ -32,7 +32,7 @@ export default function StatusPage() {
               <CheckCircle2 className="h-5 w-5 text-emerald-400" />
               <div className="flex-1 text-white">{s.name}</div>
               <div className="text-sm text-emerald-300">{s.status}</div>
-              <div className="text-xs text-zinc-500 w-20 text-right tabular-nums">{s.uptime}</div>
+              <div className="text-xs text-slate-500 w-20 text-right tabular-nums">{s.uptime}</div>
             </div>
           ))}
         </div>

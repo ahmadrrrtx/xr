@@ -33,12 +33,12 @@ export function MarketplaceBrowser() {
       <div className="glass rounded-2xl p-3 md:p-4 flex flex-col gap-3">
         <div className="flex flex-col md:flex-row md:items-center gap-3">
           <div className="relative flex-1">
-            <SearchIcon className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <SearchIcon className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search skills, extensions, tags…"
-              className="w-full bg-black/30 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-violet-400/50 outline-none"
+              className="w-full bg-black/30 border border-slate-700/40 rounded-xl pl-9 pr-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-cyan-400/50 outline-none"
               aria-label="Search"
             />
           </div>
@@ -55,7 +55,7 @@ export function MarketplaceBrowser() {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as "name")}
-              className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-violet-400/50"
+              className="bg-black/30 border border-slate-700/40 rounded-xl px-3 py-2.5 text-sm text-slate-200 outline-none focus:border-cyan-400/50"
               aria-label="Sort"
             >
               <option value="name">Name (A–Z)</option>
@@ -71,7 +71,7 @@ export function MarketplaceBrowser() {
                 "px-3 py-1.5 rounded-full text-xs transition-colors border",
                 cat === c.id
                   ? "bg-white text-black border-white"
-                  : "bg-white/[0.02] text-zinc-300 border-white/10 hover:border-white/20 hover:text-white"
+                  : "bg-white/[0.02] text-slate-300 border-slate-700/40 hover:border-slate-600/50 hover:text-white"
               )}
             >
               {c.label}
@@ -86,7 +86,7 @@ export function MarketplaceBrowser() {
           <ItemCard key={item.id} item={item} onOpen={() => setSelected(item)} />
         ))}
         {filtered.length === 0 && (
-          <div className="col-span-full text-center py-20 text-zinc-500 text-sm">
+          <div className="col-span-full text-center py-20 text-slate-500 text-sm">
             No items match your search.
           </div>
         )}
@@ -107,14 +107,14 @@ function Segmented({
   options: { id: string; label: string }[];
 }) {
   return (
-    <div className="inline-flex p-1 rounded-xl bg-black/30 border border-white/10">
+    <div className="inline-flex p-1 rounded-xl bg-black/30 border border-slate-700/40">
       {options.map((o) => (
         <button
           key={o.id}
           onClick={() => onChange(o.id)}
           className={cn(
             "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-            value === o.id ? "bg-white text-black" : "text-zinc-300 hover:text-white"
+            value === o.id ? "bg-white text-black" : "text-slate-300 hover:text-white"
           )}
         >
           {o.label}
@@ -146,25 +146,25 @@ function ItemCard({ item, onOpen }: { item: MarketplaceItem; onOpen: () => void 
               </span>
             )}
           </div>
-          <div className="text-xs text-zinc-500 truncate">
+          <div className="text-xs text-slate-500 truncate">
             {item.type === "skill" ? "Skill" : "Extension"} · {item.author}
           </div>
         </div>
       </div>
-      <p className="mt-4 text-sm text-zinc-300 line-clamp-2 leading-relaxed">{item.tagline}</p>
+      <p className="mt-4 text-sm text-slate-300 line-clamp-2 leading-relaxed">{item.tagline}</p>
       <div className="mt-4 flex flex-wrap gap-1">
         {item.tags.slice(0, 3).map((t) => (
-          <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/5">
+          <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-slate-400 border border-slate-800/60">
             {t}
           </span>
         ))}
       </div>
-      <div className="mt-5 pt-4 border-t border-white/5 flex items-center gap-4 text-xs text-zinc-400">
+      <div className="mt-5 pt-4 border-t border-slate-800/60 flex items-center gap-4 text-xs text-slate-400">
         {item.downloads > 0 ? (
           <>
             <span className="flex items-center gap-1">
               <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
-              {item.rating} <span className="text-zinc-600">({formatNumber(item.reviews)})</span>
+              {item.rating} <span className="text-slate-600">({formatNumber(item.reviews)})</span>
             </span>
             <span className="flex items-center gap-1">
               <Download className="h-3.5 w-3.5" /> {item.installs}
@@ -175,7 +175,7 @@ function ItemCard({ item, onOpen }: { item: MarketplaceItem; onOpen: () => void 
             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Bundled with XR
           </span>
         )}
-        <span className="ml-auto text-zinc-500">v{item.version}</span>
+        <span className="ml-auto text-slate-500">v{item.version}</span>
       </div>
     </button>
   );
@@ -206,10 +206,10 @@ function ItemModal({ item, onClose }: { item: MarketplaceItem; onClose: () => vo
               <div className="text-xl font-semibold text-white">{item.name}</div>
               {item.verified && <CheckCircle2 className="h-4 w-4 text-sky-400" />}
             </div>
-            <div className="text-xs text-zinc-500 mt-0.5">
+            <div className="text-xs text-slate-500 mt-0.5">
               by {item.author} · {item.type === "skill" ? "Skill" : "Extension"}
             </div>
-            <div className="mt-2 flex items-center gap-4 text-xs text-zinc-400">
+            <div className="mt-2 flex items-center gap-4 text-xs text-slate-400">
               {item.downloads > 0 ? (
                 <>
                   <span className="flex items-center gap-1">
@@ -224,11 +224,11 @@ function ItemModal({ item, onClose }: { item: MarketplaceItem; onClose: () => vo
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Bundled with XR
                 </span>
               )}
-              <span className="text-zinc-500">v{item.version}</span>
+              <span className="text-slate-500">v{item.version}</span>
             </div>
           </div>
         </div>
-        <p className="mt-6 text-zinc-300 leading-relaxed">{item.description}</p>
+        <p className="mt-6 text-slate-300 leading-relaxed">{item.description}</p>
 
         <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
           <Info label="Version" value={item.version} />
@@ -239,15 +239,15 @@ function ItemModal({ item, onClose }: { item: MarketplaceItem; onClose: () => vo
 
         <div className="mt-4 flex flex-wrap gap-1.5">
           {item.tags.map((t) => (
-            <span key={t} className="text-[11px] px-2 py-1 rounded-full bg-white/5 text-zinc-400 border border-white/5">
+            <span key={t} className="text-[11px] px-2 py-1 rounded-full bg-white/5 text-slate-400 border border-slate-800/60">
               {t}
             </span>
           ))}
         </div>
 
-        <div className="mt-6 rounded-xl border border-white/10 bg-black/40 px-4 py-3 flex items-center gap-2 font-mono text-sm">
-          <span className="text-violet-300 select-none">$</span>
-          <code className="flex-1 text-zinc-100 truncate">{item.installCmd}</code>
+        <div className="mt-6 rounded-xl border border-slate-700/40 bg-black/40 px-4 py-3 flex items-center gap-2 font-mono text-sm">
+          <span className="text-cyan-400 select-none">$</span>
+          <code className="flex-1 text-slate-100 truncate">{item.installCmd}</code>
           <CopyButton text={item.installCmd} />
         </div>
 
@@ -267,9 +267,9 @@ function ItemModal({ item, onClose }: { item: MarketplaceItem; onClose: () => vo
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-zinc-500">{label}</div>
-      <div className="text-zinc-200 text-sm mt-0.5">{value}</div>
+    <div className="rounded-lg border border-slate-800/60 bg-white/[0.02] px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="text-slate-200 text-sm mt-0.5">{value}</div>
     </div>
   );
 }
