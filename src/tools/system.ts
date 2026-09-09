@@ -110,6 +110,9 @@ export const shellTool: Tool = {
     }
     const approved = await ctx.approve({
       tool: "shell",
+      // Raw args → interpreted command breakdown in the consent plane +
+      // argsHash binding for durable approvals (F-11/F-26).
+      args: { cmd },
       reason:
         execDecision.decision === "requireApproval" || execDecision.decision === "deny"
           ? `run: ${cmd}\n\n[execution-integrity ${execDecision.mode}] unknown binary hash(es): ${execDecision.reasons.join("; ")}`

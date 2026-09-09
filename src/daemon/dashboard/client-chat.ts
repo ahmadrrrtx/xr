@@ -52,8 +52,10 @@ function normalizeChatState(state) {
     // Phase 12 · Phase G — mode is the ONE piece of run state the browser owns,
     // because the user picks it. It is validated against the real Mode union
     // (src/core/types.ts: "agent" | "plan" | "ask") and now actually SENT with
-    // the request. The default mirrors the server's own default: safe read-only.
-    mode: ["agent", "plan", "ask"].indexOf(state.mode) >= 0 ? state.mode : "ask",
+    // the request. Default "agent": this is an AGENT dashboard — the safe
+    // read-only "ask" default remains one click away, and approvals still gate
+    // every side-effecting tool call in agent mode.
+    mode: ["agent", "plan", "ask"].indexOf(state.mode) >= 0 ? state.mode : "agent",
     // provider / model / workspace are DAEMON state, not browser state. They are
     // hydrated by syncChatRuntime(). Until then they are empty and render as
     // "detecting…" — never as a plausible-looking fake ("Auto"/"Default") that
@@ -257,6 +259,13 @@ function renderComposer() {
   });
   const modeChip = document.getElementById("mode-chip");
   if (modeChip) modeChip.textContent = "Mode: " + chatState.mode;
+  // Phase 2 — segmented mode control: all three modes visible at once, the
+  // active one pressed. No hidden states behind a cycling chip.
+  document.querySelectorAll("#mode-seg .mode-seg-btn").forEach(btn => {
+    const active = btn.dataset.mode === chatState.mode;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
 }
 
 function renderRuntime() {
@@ -318,6 +327,7 @@ function toggleComposerFlag(key){ chatState.toggles[key]=!chatState.toggles[key]
 // option mapping to nothing: the server has no research mode, and the value was
 // never sent at all, so cycling it changed a label and nothing else.
 function cycleChatMode(){ const modes=['ask','plan','agent']; const i=modes.indexOf(chatState.mode); chatState.mode=modes[(i+1)%modes.length]; saveChatState(); renderComposer(); renderRuntime(); }
+function setChatMode(mode){ if(['ask','plan','agent'].indexOf(mode)<0) return; chatState.mode=mode; saveChatState(); renderComposer(); renderRuntime(); }
 /**
  * Phase 12 · Phase G — hydrate the chat header from the daemon.
  *

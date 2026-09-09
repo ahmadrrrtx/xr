@@ -265,7 +265,7 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; }
 .badge-cyan { background: rgba(0, 212, 255, 0.12); color: var(--cyan); border: 1px solid rgba(0,212,255,0.2); }
 .badge-amber { background: rgba(245, 158, 11, 0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
 .badge-red { background: rgba(255, 77, 77, 0.12); color: var(--red); border: 1px solid rgba(255,77,77,0.2); }
-.badge-violet { background: rgba(96, 72, 248, 0.14); color: var(--violet); border: 1px solid rgba(96,72,248,0.24); }
+.badge-violet { background: rgba(96, 72, 248, 0.14); color: #A78BFA; border: 1px solid rgba(96,72,248,0.24); } /* text tint clears AA on dark; brand violet stays on the border */
 .badge-gray { background: var(--surface2); color: var(--textDim); border: 1px solid var(--border); }
 
 /* ── Interactive Buttons ──────────────────────────────────────────────── */

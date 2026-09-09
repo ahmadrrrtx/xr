@@ -79,6 +79,12 @@ export const writeFileTool: Tool = {
 
     const approved = await ctx.approve({
       tool: "write_file",
+      // Phase 2 · F-11/F-26 — pass the RAW args so the consent plane renders a
+      // structured preview (path + unified diff) and the durable store binds
+      // the decision to the argument hash. The preview builder redacts
+      // secret-shaped values itself; the reason string below is the only
+      // model-shaped text and stays explicitly untrusted.
+      args: { path: String(args.path ?? ""), content: newContent },
       reason: trust.requiresApproval
         ? `TRUST-HANDOFF WRITE [${trust.classification}] ${existsSync(p) ? "overwrite" : "create"} ${args.path} — consumed by: ${trust.trustedComponent}. ${trust.reason}`
         : existsSync(p)

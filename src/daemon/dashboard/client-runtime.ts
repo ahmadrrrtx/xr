@@ -306,13 +306,20 @@ onboardingInit();
 
 // ── Interval syncing
 setInterval(() => {
-  const active = document.querySelector(".nav-item.active")?.dataset.panel;
+  // The VISIBLE panel (tab strips mean it may differ from the sidebar
+  // button's default panel) — refresh exactly what is on screen.
+  const active = document.querySelector(".panel.active")?.id?.replace(/^panel-/, "");
   if (active === "dashboard") loadDashboard();
   if (active === "sessions") loadSessionsPanel();
   if (active === "providers") loadProviders();
   if (active === "models") loadModels();
   if (active === "budget") loadBudgetPanel();
+  if (active === "agents") loadAgents();
+  if (active === "automation") loadAutomation();
 }, 20_000);
+// The approvals queue is time-sensitive (TTL expiry): poll faster while the
+// Guardrails view is open, and keep the sidebar badge fresh everywhere.
+setInterval(() => { if (document.getElementById("panel-approvals")?.classList.contains("active")) loadApprovalsPanel(); }, 5_000);
 
 
 // Phase 4 · T5 — build a safely-quoted data-xr-action value for runtime
@@ -338,7 +345,7 @@ function act(fn) {
 // attributes and dispatched here through a STRICT PARSER + ALLOWLIST — never
 // eval, never a dynamic call outside the allowlist. Unknown functions or
 // malformed expressions are ignored (fail closed).
-var XR_ACTIONS = new Set(["answerApproval","approveMemory","capabilityInspect","capabilityQuarantine","chatArchiveActive","chatBranchFromLast","chatExportActive","chatNewChat","chatSelectChat","chatTogglePin","clearMemory","clearNotifications","closePalette","copyText","createWorkspace","cycleChatMode","deleteMemory","doMemSearch","downloadArtifact","editMessage","emergencyStopControl","exportFullData","focusChangeModel","insertHint","inspectMarketplaceSkill","installMarketplaceSkill","killProcess","loadAuditLog","loadBudgetPanel","loadCapabilities","loadMarketplace","loadMcp","loadModels","loadPlugins","loadResearchDetail","loadResearchPanel","loadSessionDetail","loadSessionsPanel","loadWorkspaces","navigateTo","openAttachmentPicker","openPalette","pickInstalledModel","pluginAction","pluginRemove","quarantineFile","refreshAll","registerMcp","removeAttachment","removeMcp","revokeMemory","runSecLab","runShieldScan","saveAllSettings","saveBudgetConfig","saveModelSelection","saveProviderRouting","searchPlugins","sendChatMessage","setMarketFilter","setMarketQuery","setMarketSort","setTimeout","skillAction","switchSettingsPane","switchShieldTab","switchWorkspaceUI","syncMarketplace","testModelSelection","toast","toggleComposerFlag","toggleShieldAdBlock","verifyAuditLedger","toggleSidebar","toggleInspector","quickPrompt","onbGo","onbNext","onbBack","onbPickMode","onbSelectProvider","onbConnectProvider","onbSetLocal","onbSetBudget","onbComplete","onbSkip","loadFiles","filesEnterDir","filesSelect","filesShowDiff","filesCopy","filesAsk"]);
+var XR_ACTIONS = new Set(["answerApproval","approveMemory","capabilityInspect","capabilityQuarantine","chatArchiveActive","chatBranchFromLast","chatExportActive","chatNewChat","chatSelectChat","chatTogglePin","clearMemory","closePalette","copyText","createWorkspace","cycleChatMode","decideApproval","deleteMemory","doMemSearch","downloadArtifact","editMessage","emergencyStopControl","exportFullData","focusChangeModel","insertHint","inspectMarketplaceSkill","installMarketplaceSkill","killProcess","loadAgents","loadApprovalsPanel","loadAuditLog","loadAutomation","loadBudgetPanel","loadCapabilities","loadMarketplace","loadMcp","loadModels","loadPlugins","loadResearchDetail","loadResearchPanel","loadSessionDetail","loadSessionsPanel","loadWorkspaces","navigateTo","openAttachmentPicker","openPalette","pickInstalledModel","pluginAction","pluginRemove","probeMcpHealth","quarantineFile","refreshAll","registerMcp","removeAttachment","removeMcp","enableMcp","disableMcp","revokeMemory","runSecLab","runShieldScan","saveAllSettings","saveBudgetConfig","saveModelSelection","saveProviderRouting","searchPlugins","sendChatMessage","setChatMode","setMarketFilter","setMarketQuery","setMarketSort","setTimeout","skillAction","switchSettingsPane","switchShieldTab","switchWorkspaceUI","syncMarketplace","testModelSelection","toast","toggleComposerFlag","toggleShieldAdBlock","verifyAuditLedger","toggleSidebar","toggleInspector","quickPrompt","onbGo","onbNext","onbBack","onbPickMode","onbSelectProvider","onbConnectProvider","onbSetLocal","onbSetBudget","onbComplete","onbSkip","loadFiles","filesEnterDir","filesSelect","filesShowDiff","filesCopy","filesAsk","createTrigger","toggleTriggersPause"]);
 document.addEventListener('click', function (ev) {
   var el = ev.target && ev.target.closest ? ev.target.closest('[data-xr-action]') : null;
   if (!el) return;
@@ -360,6 +367,30 @@ document.addEventListener('keydown', function (ev) {
   ev.preventDefault();
   if (el.hasAttribute('data-xr-action')) runXrAction(el.getAttribute('data-xr-action'), ev);
   else el.click();
+});
+// ── Area shortcuts: press "g", release, then a key to jump (g h Home, g c
+// Chat, g r Runs, g a Agents, g m Models, g e Extensions, g g Guardrails,
+// g v Memory, g s Settings). Keyboard-first navigation without stealing
+// single keys from inputs — a two-key sequence never fires while typing.
+var XR_G_PENDING = false;
+var XR_G_TARGETS = { h: 'dashboard', c: 'chat', r: 'sessions', a: 'agents', m: 'providers', e: 'skills', g: 'approvals', v: 'memory', s: 'settings' };
+document.addEventListener('keydown', function (ev) {
+  if (ev.metaKey || ev.ctrlKey || ev.altKey) { XR_G_PENDING = false; return; }
+  var t = ev.target;
+  var typing = t && t.tagName && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  if (typing || (ev.key === 'Escape')) { XR_G_PENDING = false; return; }
+  if (XR_G_PENDING) {
+    XR_G_PENDING = false;
+    var dest = XR_G_TARGETS[ev.key.toLowerCase()];
+    if (dest) { ev.preventDefault(); navigateTo(dest); }
+    return;
+  }
+  if (ev.key.toLowerCase() === 'g' && ev.key.length === 1) XR_G_PENDING = true;
+});
+document.addEventListener('keyup', function (ev) {
+  // The "g" chord only stays armed while the key is held→released alone;
+  // a long pause disarms (harmless either way — worst case it re-arms).
+  if (ev.key.toLowerCase() === 'g') setTimeout(function () { XR_G_PENDING = false; }, 1200);
 });
 // Tool timeline accordion: toggles the card open/closed and mirrors state
 // into aria-expanded (fixes the Phase 4 no-op stub — the CSP dispatcher must
@@ -480,7 +511,15 @@ function execSpecial(s) {
   }
   function saveArea(id, open) { var m = loadAreas(); m[id] = open; localStorage.setItem(AREA_KEY, JSON.stringify(m)); }
   function revealAreaFor(panelId) {
-    var item = document.querySelector('.sidebar .nav-item[data-panel="' + panelId + '"]');
+    // Section IA: secondary panels (tabs) have no sidebar button of their
+    // own — reveal the section their AREA button lives in instead.
+    var target = panelId;
+    var section = window.SECTION_OF && window.SECTION_OF[panelId];
+    if (section) {
+      var areaBtn = document.querySelector('.sidebar .nav-item[data-section="' + section + '"]');
+      if (areaBtn) target = areaBtn.getAttribute("data-panel") || panelId;
+    }
+    var item = document.querySelector('.sidebar .nav-item[data-panel="' + target + '"]');
     var sec = item && item.closest ? item.closest(".sidebar-section") : null;
     if (sec) {
       var t = sec.querySelector(":scope > .area-toggle");
@@ -505,7 +544,7 @@ function execSpecial(s) {
     startLabel.setAttribute("aria-expanded", "true");
     startLabel.innerHTML = 'Start here <span class="area-caret" aria-hidden="true">▾</span>';
     start.appendChild(startLabel);
-    ["dashboard", "chat", "models", "settings"].forEach(function (pid) {
+    ["dashboard", "chat", "sessions", "settings"].forEach(function (pid) {
       var src = sidebar.querySelector('.nav-item[data-panel="' + pid + '"]');
       if (!src) return;
       var clone = src.cloneNode(true);

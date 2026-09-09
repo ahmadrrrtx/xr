@@ -87,13 +87,15 @@ describe("RELEASE — no unverified static state claims in the dashboard", () =>
   test("default cards/matrix values are neutral (—), not claims", () => {
     // these are replaced by real data the moment the loaders run; a static
     // "Safe"/"Ready"/"OK"/"0%" before that is a fake state.
-    expect(DASHBOARD_PAGE).toContain('id="d-sec-score">—</div>');
-    expect(DASHBOARD_PAGE).toContain('id="d-shield-health">—</div>');
-    expect(DASHBOARD_PAGE).toContain('id="d-shield-scans">—</div>');
-    expect(DASHBOARD_PAGE).toContain('id="h-val-voice">—</div>');
+    expect(DASHBOARD_PAGE).toContain('id="h-val-shield">—</div>');
+    expect(DASHBOARD_PAGE).toContain('id="h-val-provider">—</div>');
+    expect(DASHBOARD_PAGE).toContain('id="h-val-model">—</div>');
+    expect(DASHBOARD_PAGE).toContain('id="h-val-local">—</div>');
+    expect(DASHBOARD_PAGE).toContain('id="h-val-mcp">—</div>');
+    expect(DASHBOARD_PAGE).toContain('id="d-approvals">—</div>');
     expect(DASHBOARD_PAGE).toContain('id="market-runtime">—</div>');
-    expect(DASHBOARD_PAGE).not.toContain('id="d-shield-health">Safe</div>');
-    expect(DASHBOARD_PAGE).not.toContain('id="h-val-voice">Ready</div>');
+    expect(DASHBOARD_PAGE).not.toContain('id="h-val-shield">Safe</div>');
+    expect(DASHBOARD_PAGE).not.toContain('id="h-val-mcp">Healthy</div>');
   });
 
   test("the voice bento cell is wired to the real config (no static green)", () => {
@@ -102,8 +104,8 @@ describe("RELEASE — no unverified static state claims in the dashboard", () =>
   });
 
   test("the Protection Log derives from the real security report", () => {
-    expect(DASHBOARD_SCRIPT).toContain('s.blocked + "/" + s.total + " blocked · injection lab"');
-    expect(DASHBOARD_SCRIPT).toContain('healthEl.textContent = s.rate >= 1 ? "All blocked" : s.rate >= 0.9 ? "Mostly blocked" : "Gaps"');
+    expect(DASHBOARD_SCRIPT).toContain('s.blocked + "/" + s.total + " injection-lab probes blocked"');
+    expect(DASHBOARD_SCRIPT).toContain('pct >= 90 ? "green" : pct >= 70 ? "amber" : "red"');
   });
 
   test("the marketplace runtime index is real (OK only on registry response)", () => {
@@ -121,16 +123,17 @@ describe("E-3 — official variants curated into assets/brand/", () => {
 });
 
 describe("F-1 — dashboard honesty: no hardcoded success text or fabricated scores", () => {
-  test("'All modules validated' is gone; the EDR card derives from the real report", () => {
+  test("'All modules validated' is gone; the EDR cell derives from the real report", () => {
     expect(DASHBOARD_SCRIPT).not.toContain("All modules validated");
-    expect(DASHBOARD_SCRIPT).toContain('s.blocked + "/" + s.total + " blocked · injection lab"');
-    expect(DASHBOARD_SCRIPT).toContain('"No scans yet — run the security lab"');
+    expect(DASHBOARD_SCRIPT).toContain('s.blocked + "/" + s.total + " injection-lab probes blocked"');
+    expect(DASHBOARD_SCRIPT).toContain('"No scans yet"');
+    expect(DASHBOARD_SCRIPT).toContain('"run the security lab for a real rate"');
   });
 
   test("the security score never fabricates a percentage (the old `|| 96` is gone)", () => {
     expect(DASHBOARD_SCRIPT).not.toContain("|| 96");
     expect(DASHBOARD_SCRIPT).toContain("typeof s.rate === \"number\" ? Math.round(s.rate * 100) : null");
-    expect(DASHBOARD_SCRIPT).toContain('scoreEl.textContent = pct === null ? "—" : pct + "%"');
+    expect(DASHBOARD_SCRIPT).toContain('valEl.textContent = pct === null ? "No scans yet" : pct + "% blocked"');
   });
 });
 

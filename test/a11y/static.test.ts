@@ -40,7 +40,8 @@ describe("T3 static — landmarks & navigation", () => {
   test("every nav item is a native <button> (never a href-less <a>)", () => {
     expect(DASHBOARD_PAGE).not.toMatch(/<a class="nav-item/);
     const buttons = DASHBOARD_PAGE.match(/<button type="button" class="nav-item/g) ?? [];
-    expect(buttons.length).toBe(26);
+    // 9 areas (sidebar); secondary views are in-panel tab strips (.tab-item)
+    expect(buttons.length).toBe(9);
     // Exactly one carries the current-page state at render time.
     expect((DASHBOARD_PAGE.match(/aria-current="page"/g) ?? []).length).toBe(2); // nav button + breadcrumb span
   });
@@ -52,7 +53,7 @@ describe("T3 static — landmarks & navigation", () => {
 
   test("panels are programmatic focus targets (tabindex=-1)", () => {
     const panels = DASHBOARD_PAGE.match(/<div class="panel[^"]*" tabindex="-1" id="panel-/g) ?? [];
-    expect(panels.length).toBe(26);
+    expect(panels.length).toBe(23);
     expect(DASHBOARD_SCRIPT).toContain('panel.focus({ preventScroll: true })');
   });
 });
