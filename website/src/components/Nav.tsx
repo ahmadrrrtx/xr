@@ -39,7 +39,7 @@ export function Nav() {
         >
           <div className="flex items-center gap-8">
             <Link href="/" className="pl-2">
-              <XrLogo />
+              <XrLogo variant="icon" height={32} />
             </Link>
             <ul className="hidden md:flex items-center gap-1 text-[13.5px] text-slate-300">
               <li

@@ -14,11 +14,11 @@ import {
 export function DashboardPreview() {
   return (
     <div
-      className="relative rounded-2xl overflow-hidden border border-slate-700/40 bg-slate-800/20 shadow-[0_40px_100px_-20px_rgba(56,189,248,0.15)]"
+      className="relative rounded-2xl overflow-hidden border border-slate-700/40 bg-slate-800/20 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.5),0_0_0_1px_rgba(56,189,248,0.05)] group hover:border-cyan-500/20 hover:shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6),0_0_0_1px_rgba(56,189,248,0.1),0_0_30px_rgba(56,189,248,0.05)] transition-all duration-500"
       role="img"
       aria-label="XR Dashboard preview"
     >
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/40 bg-slate-900/50">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-700/40 bg-slate-900/60">
         <span className="h-2.5 w-2.5 rounded-full bg-rose-400/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
@@ -32,13 +32,13 @@ export function DashboardPreview() {
       </div>
       <div className="grid grid-cols-12 gap-0 min-h-[340px]">
         {/* Sidebar */}
-        <aside className="col-span-3 border-r border-slate-700/40 p-3 hidden md:block">
+        <aside className="col-span-3 border-r border-slate-700/40 p-3 hidden md:block bg-slate-900/30">
           <SidebarItem icon={Sparkles} label="Agents" active />
           <SidebarItem icon={Cpu} label="Runs" />
           <SidebarItem icon={Bot} label="Skills" badge="214" />
           <SidebarItem icon={Shield} label="Policies" />
           <SidebarItem icon={Activity} label="Telemetry" />
-          <div className="mt-6 rounded-xl p-3 bg-slate-800/40 border border-slate-700/40">
+          <div className="mt-6 rounded-xl p-3 bg-slate-800/40 border border-slate-700/40 group/item hover:border-cyan-500/20 transition-all">
             <div className="text-xs text-cyan-300 font-medium">XR Core 1</div>
             <div className="text-[11px] text-slate-400 mt-1">Active model · 1M ctx</div>
             <div className="mt-2 progress-track">
@@ -59,7 +59,7 @@ export function DashboardPreview() {
               <div className="text-sm text-slate-200 font-medium">Agents</div>
               <div className="text-[11px] text-slate-500">3 running · 12 today</div>
             </div>
-            <button className="text-xs px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-900 font-medium flex items-center gap-1">
+            <button className="text-xs px-3 py-1.5 rounded-lg bg-cyan-500 text-slate-900 font-medium flex items-center gap-1 hover:bg-cyan-400 hover:shadow-[0_0_20px_rgba(56,189,248,0.3)] transition-all">
               <Play className="h-3 w-3 fill-slate-900" /> New run
             </button>
           </div>
@@ -70,7 +70,7 @@ export function DashboardPreview() {
             <Stat label="Success" value="98.7%" delta="+0.4%" />
           </div>
 
-          <div className="rounded-xl border border-slate-700/40 bg-slate-900/50 p-4">
+          <div className="rounded-xl border border-slate-700/40 bg-slate-900/50 p-4 hover:border-cyan-500/15 transition-all">
             <div className="flex items-center justify-between mb-3">
               <div className="text-xs text-slate-300 font-medium flex items-center gap-2">
                 <span className="status-dot processing" />
@@ -87,12 +87,12 @@ export function DashboardPreview() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-slate-700/40 bg-slate-800/20 p-3">
+            <div className="rounded-xl border border-slate-700/40 bg-slate-800/20 p-3 hover:border-amber-500/20 transition-all">
               <div className="text-[11px] text-slate-500 mb-1">Approvals</div>
               <div className="text-lg font-semibold text-slate-100">2</div>
               <div className="text-[11px] text-amber-400 mt-0.5">pending review</div>
             </div>
-            <div className="rounded-xl border border-slate-700/40 bg-slate-800/20 p-3">
+            <div className="rounded-xl border border-slate-700/40 bg-slate-800/20 p-3 hover:border-emerald-500/20 transition-all">
               <div className="text-[11px] text-slate-500 mb-1">Budget used</div>
               <div className="text-lg font-semibold text-slate-100">$4.21</div>
               <div className="text-[11px] text-emerald-400 mt-0.5">of $20.00</div>
@@ -117,8 +117,11 @@ function SidebarItem({
 }) {
   return (
     <div
-      className={`nav-item ${active ? "active" : ""}`}
-      style={{ fontSize: 12, padding: "6px 10px", marginBottom: 2 }}
+      className={`flex items-center gap-2.5 w-full text-[12px] px-2.5 py-1.5 rounded-lg mb-1 transition-all cursor-default ${
+        active
+          ? "bg-cyan-500/12 text-cyan-400"
+          : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+      }`}
     >
       <Icon className={`h-3.5 w-3.5 ${active ? "text-cyan-400" : "text-slate-500"}`} />
       <span>{label}</span>
@@ -133,7 +136,7 @@ function SidebarItem({
 
 function Stat({ label, value, delta }: { label: string; value: string; delta: string }) {
   return (
-    <div className="rounded-xl border border-slate-700/40 bg-slate-800/20 p-3">
+    <div className="rounded-xl border border-slate-700/40 bg-slate-800/20 p-3 hover:border-cyan-500/15 transition-all">
       <div className="text-[11px] text-slate-500">{label}</div>
       <div className="text-lg font-semibold text-slate-100 tabular-nums">{value}</div>
       <div className="text-[11px] text-emerald-400">{delta}</div>

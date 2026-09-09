@@ -1,30 +1,47 @@
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-export function XrLogo({ className, size = 22 }: { className?: string; size?: number }) {
-  return (
-    <span className={cn("inline-flex items-center gap-2 font-semibold tracking-tight", className)} aria-label="XR">
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 32 32"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <defs>
-          <linearGradient id="xrg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stopColor="#38BDF8" />
-            <stop offset="0.5" stopColor="#7DD3FC" />
-            <stop offset="1" stopColor="#0EA5E9" />
-          </linearGradient>
-        </defs>
-        <rect x="1" y="1" width="30" height="30" rx="8" fill="#0B1120" stroke="url(#xrg)" strokeOpacity="0.7" />
-        <path
-          d="M9 10 L14 16 L9 22 H11.5 L15.2 17.6 L17.8 22 H23 L18 16 L22.5 10 H20 L16.6 14.4 L14 10 Z"
-          fill="url(#xrg)"
+/**
+ * XR Logo — uses the official brand asset from the repository.
+ * Two variants: "full" shows the mark + wordmark (nav, footer),
+ * "icon" shows just the symbol (favicon, compact spaces).
+ */
+export function XrLogo({
+  className,
+  variant = "full",
+  height = 28,
+}: {
+  className?: string;
+  variant?: "full" | "icon";
+  height?: number;
+}) {
+  if (variant === "icon") {
+    return (
+      <div className={cn("relative", className)} style={{ width: height, height }}>
+        <Image
+          src="/images/xr-logo.png"
+          alt="XR"
+          fill
+          className="object-contain"
+          style={{ objectPosition: "left center" }}
+          priority
         />
-      </svg>
-      <span className="text-[15px] text-slate-100">XR</span>
-    </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("flex items-center gap-2.5", className)}>
+      <div className="relative shrink-0" style={{ width: height + 4, height: height + 4 }}>
+        <Image
+          src="/images/xr-logo.png"
+          alt="XR"
+          fill
+          className="object-contain"
+          style={{ objectPosition: "left center" }}
+          priority
+        />
+      </div>
+    </div>
   );
 }

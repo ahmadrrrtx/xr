@@ -1,4 +1,3 @@
-import type { LucideIcon } from "lucide-react";
 import {
   Terminal,
   Boxes,

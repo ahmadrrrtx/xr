@@ -21,7 +21,7 @@ import {
   Lock,
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons";
-import { Avatar3D } from "@/components/Avatar3D";
+import { AvatarHero } from "@/components/Avatar";
 import { Terminal } from "@/components/Terminal";
 import { DashboardPreview } from "@/components/DashboardPreview";
 import { features, stats, logos, faqs } from "@/lib/data";
@@ -125,7 +125,7 @@ function Hero() {
 
           {/* Right: Avatar / Visual */}
           <div className="relative h-[380px] lg:h-[460px]">
-            <Avatar3D />
+            <AvatarHero className="w-full h-full" />
           </div>
         </div>
 

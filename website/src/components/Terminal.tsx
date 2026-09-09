@@ -93,7 +93,14 @@ export function Terminal({ className }: { className?: string }) {
   }, [visible]);
 
   return (
-    <div className={cn("terminal", className)} role="img" aria-label="Animated XR terminal demo">
+    <div
+      className={cn(
+        "terminal group hover:border-cyan-500/15 transition-all duration-500 hover:shadow-[0_30px_80px_-20px_rgba(0,0,0,0.7),0_0_0_1px_rgba(56,189,248,0.08)]",
+        className
+      )}
+      role="img"
+      aria-label="Animated XR terminal demo"
+    >
       <div className="terminal-header">
         <span className="terminal-dot" style={{ background: "#ff5f57" }} />
         <span className="terminal-dot" style={{ background: "#febc2e" }} />

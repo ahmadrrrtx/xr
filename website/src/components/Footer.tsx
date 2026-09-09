@@ -9,7 +9,7 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-10">
           <div className="col-span-2">
-            <XrLogo />
+            <XrLogo variant="full" height={24} />
             <p className="mt-4 text-sm text-slate-400 max-w-xs">
               Your AI Operating System. Local-first, provider-neutral, trusted.
             </p>
