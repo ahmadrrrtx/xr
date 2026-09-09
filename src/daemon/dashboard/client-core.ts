@@ -52,22 +52,51 @@ function toast(msg, type = "info") {
 // disclosure, and the palette all derive from this one map (T4: fixed the
 // stale status/security keys; control/shield were unmapped before).
 const NAV_LABELS = {
-  dashboard: "Home", chat: "Chat Sessions", sessions: "Recent Sessions", budget: "Cost & Budget", workspaces: "Workspaces",
-  providers: "Providers (BYOK)", models: "Models (Local AI)", memory: "Durable Memory",
-  research: "Research Runs", plugins: "Sandboxed Plugins", capabilities: "Capability Ecosystem", skills: "Skills Marketplace", voice: "Voice Pipeline",
-  shield: "Shield (Security)", audit: "Audit Log", settings: "Core Settings", about: "About Build",
-  mcp: "MCP Servers", business: "Business OS CRM", control: "Computer Control", files: "Files & Artifacts", downloads: "Downloads Security",
-  devices: "Devices Link", automation: "Scheduled Tasks", integrations: "Webhooks API", notifications: "Alerts Hub"
+  dashboard: "Home", chat: "Chat", sessions: "Runs — Sessions", research: "Runs — Research", automation: "Runs — Automation",
+  agents: "Agents", providers: "Models — Providers", models: "Models — Local Runtimes",
+  skills: "Extensions — Skills", plugins: "Extensions — Plugins", mcp: "Extensions — MCP", capabilities: "Extensions — Capabilities",
+  approvals: "Guardrails — Approvals", budget: "Guardrails — Cost & Budget", audit: "Guardrails — Audit Log",
+  shield: "Guardrails — Shield", control: "Guardrails — Computer Use",
+  memory: "Memory", settings: "Settings", workspaces: "Settings — Workspaces", files: "Settings — Files",
+  voice: "Settings — Voice", about: "Settings — About"
 };
 
+// Section IA: every panel belongs to ONE sidebar area. The sidebar button
+// highlights for the whole section; the per-panel tab strip shows position.
+const SECTION_OF = {
+  dashboard: "home", chat: "chat",
+  sessions: "runs", research: "runs", automation: "runs",
+  agents: "agents",
+  providers: "models", models: "models",
+  skills: "extensions", plugins: "extensions", mcp: "extensions", capabilities: "extensions",
+  approvals: "guardrails", budget: "guardrails", audit: "guardrails", shield: "guardrails", control: "guardrails",
+  memory: "memory",
+  settings: "settings", workspaces: "settings", files: "settings", voice: "settings", about: "settings"
+};
+const SECTION_SHORT = {
+  home: "Home", chat: "Chat", runs: "Runs", agents: "Agents", models: "Models",
+  extensions: "Extensions", guardrails: "Guardrails", memory: "Memory", settings: "Settings"
+};
+// Exposed for the progressive-disclosure wrapper (revealAreaFor) and any
+// late-bound surface that needs the panel → area mapping.
+window.SECTION_OF = SECTION_OF;
+
 function navigateTo(id) {
-  // Toggle nav buttons — visual state AND the accessibility current-page state
+  const section = SECTION_OF[id];
+  // Toggle nav buttons — a section's nav-item is active for EVERY panel in
+  // that section. Visual state AND the accessibility current-page state
   // (aria-current is what a screen reader announces; the class is only paint).
   document.querySelectorAll(".nav-item").forEach(el => {
-    const active = el.dataset.panel === id;
+    const active = section ? el.dataset.section === section : el.dataset.panel === id;
     el.classList.toggle("active", active);
     if (active) el.setAttribute("aria-current", "page");
     else el.removeAttribute("aria-current");
+  });
+  // Sync the in-panel tab strips (proper tab semantics: aria-selected).
+  document.querySelectorAll(".tab-strip .tab-item").forEach(el => {
+    const active = el.dataset.panel === id;
+    el.classList.toggle("active", active);
+    el.setAttribute("aria-selected", active ? "true" : "false");
   });
   // Toggle panels
   document.querySelectorAll(".panel").forEach(el => {
@@ -118,10 +147,20 @@ function navigateTo(id) {
     case "budget": loadBudgetPanel(); break;
     case "files": loadFiles(); break;
     case "settings": loadSettings(); break;
+    case "agents": loadAgents(); break;
+    case "approvals": loadApprovalsPanel(); break;
+    case "automation": loadAutomation(); break;
+    case "about": break; // static build identity — nothing to fetch
+    case "voice": loadVoiceStatus(); break;
   }
 }
 
 document.querySelectorAll(".nav-item").forEach(el => {
+  el.addEventListener("click", () => navigateTo(el.dataset.panel));
+});
+// In-panel tab strips reuse navigateTo — every panel id stays reachable
+// exactly as before (sidebar default + tabs + palette + shortcuts).
+document.querySelectorAll(".tab-strip .tab-item").forEach(el => {
   el.addEventListener("click", () => navigateTo(el.dataset.panel));
 });
 
@@ -142,20 +181,24 @@ function updateBentoSummary() {
 }
 
 // ── Home Dashboard loader
-// Phase 01 — two-stage load: the lightweight cells (overview/cost/control/
-// memory/security) render FIRST so the first meaningful paint never waits for
-// the slowest endpoint; the heavier provider/model cells render from shared
-// daemon-side caches in stage two. No endpoint is fetched twice: the results
-// are passed into the helper functions instead of re-fetching.
+// The rebuilt Home is HONEST BY CONSTRUCTION: every value is bound to an
+// endpoint result, empty states say so, and the "Needs your attention" strip
+// only ever appears when the data says something actually needs a human.
+// Phase 01 — two-stage load: the lightweight cards render FIRST so the first
+// meaningful paint never waits for the slowest endpoint; the heavier
+// provider/model surfaces render from shared daemon caches in stage two. No
+// endpoint is fetched twice: results are passed into helpers, not re-fetched.
 async function loadDashboard() {
   try {
-    const [ov, cost, ctrl, mem, security] = await Promise.allSettled([
+    const [ov, cost, security, approvals, sessions] = await Promise.allSettled([
       api("/api/overview"),
       api("/api/cost"),
-      api("/api/control/status"),
-      api("/api/memory"),
-      api("/api/security")
+      api("/api/security"),
+      api("/api/approvals"),
+      api("/api/sessions")
     ]);
+
+    const attention = []; // {label, detail, panel} — rendered only when real
 
     if (ov.status === "fulfilled") {
       const d = ov.value;
@@ -164,77 +207,139 @@ async function loadDashboard() {
       document.getElementById("d-audit-val").textContent = auditOk ? "Intact" : "ALERT";
       document.getElementById("d-audit-val").className = "card-value " + (auditOk ? "text-green" : "text-red");
       document.getElementById("d-audit-entries").textContent = (d.audit?.count ?? 0) + " entries";
-      document.getElementById("h-val-memory").textContent = (d.memory?.count ?? 0) + " entries";
-      document.getElementById("h-cell-memory").className = d.memory?.enabled ? "matrix-cell-status green" : "matrix-cell-status";
+      document.getElementById("h-val-memory").textContent = d.memory?.enabled ? ((d.memory?.count ?? 0) + " entries") : "Disabled";
+      document.getElementById("d-memory-sub").textContent = d.memory?.enabled ? "entries in the RAG ledger" : "memory is switched off in config";
       document.getElementById("h-val-research").textContent = (d.research?.count ?? 0) + " runs";
-      document.getElementById("h-cell-research").className = (d.research?.count ?? 0) > 0 ? "matrix-cell-status green" : "matrix-cell-status";
-
+      document.getElementById("h-cell-research").className = "matrix-cell-status " + ((d.research?.count ?? 0) > 0 ? "green" : "");
     }
 
     if (cost.status === "fulfilled") {
       const c = cost.value;
       document.getElementById("d-spent").textContent = "$" + (c.totalUsd ?? 0).toFixed(4);
-      document.getElementById("d-tokens").textContent = (c.totalTokens ?? 0).toLocaleString() + " tokens";
+      document.getElementById("d-tokens").textContent = (c.totalTokens ?? 0).toLocaleString() + " tokens processed";
       document.getElementById("chip-budget-label").textContent = "$" + (c.totalUsd ?? 0).toFixed(2);
-    }
-
-    if (ctrl.status === "fulfilled") {
-      const c = ctrl.value;
-      document.getElementById("h-val-computer").textContent = c.enabled ? "Authorized" : "Disabled";
-      document.getElementById("h-cell-computer").className = c.enabled ? "matrix-cell-status green" : "matrix-cell-status";
     }
 
     if (security.status === "fulfilled") {
       const s = security.value;
       const pct = typeof s.rate === "number" ? Math.round(s.rate * 100) : null;
-      const scoreEl = document.getElementById("d-sec-score");
-      if (scoreEl) {
-        scoreEl.textContent = pct === null ? "—" : pct + "%";
-        scoreEl.className = "card-value " + (pct === null ? "" : pct >= 90 ? "text-green" : pct >= 70 ? "text-amber" : "text-red");
-      }
+      const valEl = document.getElementById("h-val-shield");
       const scansEl = document.getElementById("d-shield-scans");
-      if (scansEl) {
-        if (typeof s.total === "number") {
-          scansEl.textContent = s.blocked + "/" + s.total + " blocked · injection lab";
-        } else {
-          scansEl.textContent = "No scans yet — run the security lab";
-        }
+      const cellEl = document.getElementById("h-cell-shield");
+      if (valEl) valEl.textContent = pct === null ? "No scans yet" : pct + "% blocked";
+      if (scansEl) scansEl.textContent = typeof s.total === "number" ? (s.blocked + "/" + s.total + " injection-lab probes blocked") : "run the security lab for a real rate";
+      if (cellEl) cellEl.className = "matrix-cell-status " + (pct === null ? "" : pct >= 90 ? "green" : pct >= 70 ? "amber" : "red");
+    }
+
+    if (approvals.status === "fulfilled") {
+      const pending = approvals.value.pending ?? [];
+      document.getElementById("d-approvals").textContent = String(pending.length);
+      document.getElementById("d-approvals").className = "card-value " + (pending.length ? "text-amber" : "");
+      document.getElementById("d-approvals-sub").textContent = pending.length ? "waiting on your decision" : "nothing waiting — runs proceed";
+      const badge = document.getElementById("nav-approvals-badge");
+      if (badge) {
+        badge.hidden = !pending.length;
+        badge.textContent = String(pending.length);
       }
-      const healthEl = document.getElementById("d-shield-health");
-      if (healthEl) {
-        if (typeof s.total === "number") {
-          healthEl.textContent = s.rate >= 1 ? "All blocked" : s.rate >= 0.9 ? "Mostly blocked" : "Gaps";
-        } else {
-          healthEl.textContent = "—";
-        }
+      if (pending.length) {
+        const oldest = pending.reduce((a, b) => (a.requestedAt ?? Infinity) < (b.requestedAt ?? Infinity) ? a : b, pending[0]);
+        attention.push({
+          label: pending.length + " approval" + (pending.length > 1 ? "s" : "") + " pending",
+          detail: "oldest: " + (oldest.tool ?? "action") + " — " + (oldest.reason ?? "no reason given"),
+          panel: "approvals"
+        });
       }
+    }
+
+    if (sessions.status === "fulfilled") {
+      const rows = sessions.value.sessions ?? [];
+      const broken = rows.filter(s => /fail|interrupt|error/i.test(String(s.status)));
+      const listEl = document.getElementById("home-recent-runs");
+      if (listEl) {
+        listEl.innerHTML = rows.length ? rows.slice(0, 6).map(r => \`
+          <div class="stat-row">
+            <span class="stat-key">\${new Date(r.created_at).toLocaleString()}</span>
+            <span class="stat-val mono truncate xr-s-54">\${escapeHtml(r.title || r.id)}</span>
+            <span class="badge \${r.status === "completed" ? "badge-green" : /fail|interrupt|error/i.test(String(r.status)) ? "badge-red" : "badge-gray"}">\${escapeHtml(r.status)}</span>
+          </div>\`).join("")
+          : '<div class="muted">No runs yet — start one in <button class="btn btn-ghost" data-xr-action="navigateTo(\\'chat\\')">Chat</button>.</div>';
+      }
+      if (broken.length) {
+        attention.push({
+          label: broken.length + " run" + (broken.length > 1 ? "s" : "") + " failed or interrupted",
+          detail: escapeHtml(broken[0].title || broken[0].id),
+          panel: "sessions"
+        });
+      }
+    }
+
+    // Needs-attention strip: rendered ONLY when the data above found something.
+    const attnEl = document.getElementById("home-attention");
+    const attnList = document.getElementById("home-attention-list");
+    if (attnEl && attnList) {
+      attnEl.hidden = !attention.length;
+      attnList.innerHTML = attention.map(a => \`
+        <div class="stat-row">
+          <span class="stat-val">\${a.label}</span>
+          <span class="stat-key truncate">\${a.detail}</span>
+          <button class="btn btn-ghost xr-s-2" data-xr-action="navigateTo('\${a.panel}')">Open</button>
+        </div>\`).join("");
     }
 
     updateBentoSummary();
 
-    // Stage two — provider/model cells (served from shared daemon caches).
-    const [providers, models] = await Promise.allSettled([
+    // Stage two — model card, provider cells, MCP count (served from shared
+    // daemon caches).
+    const [providers, models, mcp] = await Promise.allSettled([
       api("/api/providers"),
-      api("/api/models")
+      api("/api/models"),
+      api("/api/mcp")
     ]);
     if (models.status === "fulfilled") {
       const m = models.value;
       const selected = m.selected ?? {};
-      document.getElementById("h-val-model").textContent = selected.model ?? "qwen2.5:7b";
-      document.getElementById("h-val-local").textContent = m.current?.healthy ? "Running" : "Offline";
-      document.getElementById("h-cell-local").className = m.current?.healthy ? "matrix-cell-status green" : "matrix-cell-status red";
-      document.getElementById("h-val-provider").textContent = selected.runtime ?? "Ollama";
-      document.getElementById("h-val-updates").textContent = m.installed?.length ? (m.installed.length + " model(s)") : "Up to date";
+      document.getElementById("h-val-model").textContent = selected.model ?? "not set";
+      document.getElementById("h-val-local").textContent = m.current?.healthy ? "Reachable" : "Offline";
+      document.getElementById("h-cell-local").className = "matrix-cell-status " + (m.current?.healthy ? "green" : "red");
+      document.getElementById("h-val-provider").textContent = selected.runtime ?? "—";
       document.getElementById("dash-hardware-summary").innerHTML = "<h3>System Specs</h3>" + (m.hardware?.summary || "Local specs detected OK.");
     }
+    if (providers.status === "fulfilled" || models.status === "fulfilled") {
+      const pr = providers.status === "fulfilled" ? providers.value : null;
+      const mo = models.status === "fulfilled" ? models.value : null;
+      const activeId = (pr && pr.primary) ?? (mo && mo.selected && mo.selected.runtime) ?? null;
+      const activeModel = (pr && pr.model) ?? (mo && mo.selected && mo.selected.model) ?? null;
+      const activeRow = pr ? (pr.providers ?? []).find(p => p.id === activeId) : null;
+      const card = document.getElementById("home-model-name");
+      const detail = document.getElementById("home-model-detail");
+      const dot = document.getElementById("home-model-dot");
+      const qs = document.getElementById("home-quickstart");
+      if (card) card.textContent = activeModel ? activeModel : "no model selected";
+      if (detail) {
+        const healthy = activeRow?.healthy;
+        detail.textContent = !activeId ? "add a provider key or start a local runtime"
+          : healthy === false ? activeId + " — unreachable right now"
+          : healthy ? activeId + " — routing normally"
+          : activeId + " — health unknown";
+      }
+      if (dot) dot.className = "dot " + (!activeId ? "warn" : activeRow?.healthy === false ? "err" : activeRow?.healthy ? "ok" : "warn");
+      // Quick start shows ONLY while no route is actually configured.
+      if (qs) qs.hidden = !!(activeId && activeModel);
+    }
+    if (mcp.status === "fulfilled") {
+      const servers = mcp.value.servers ?? [];
+      const enabled = servers.filter(s => s.enabled).length;
+      document.getElementById("h-val-mcp").textContent = servers.length + " · " + enabled;
+      document.getElementById("h-cell-mcp").className = "matrix-cell-status " + (servers.length ? (enabled ? "green" : "amber") : "");
+    }
 
-    // Load recent logs
+    // Load recent logs (audit entries carry created_at, not ts)
     const audit = await api("/api/audit?limit=5");
     const entries = audit.entries ?? [];
     document.getElementById("d-audit-list").innerHTML = entries.length
       ? entries.map(e => \`
           <div class="stat-row">
-            <span class="stat-key">\${new Date(e.ts).toLocaleTimeString()}</span>
+            <span class="stat-key">\${new Date(e.created_at).toLocaleTimeString()}</span>
             <span class="stat-val mono truncate xr-s-54">\${e.event}</span>
             <span class="stat-val mono">\${(e.hash ?? "").slice(0, 8)}</span>
           </div>\`).join("")

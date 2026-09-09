@@ -67,7 +67,7 @@ import {
 // version, so the post-hardening hash changes with the identity. The security
 // invariants the hash pins (no inline script/style/onclick, token never
 // embedded) are asserted separately above.
-const POST_PHASE4_SHA256 = "16778f168d4acf7df8a365a638b95e27363d10208c12fd3b4806547f8af0444b";
+const POST_PHASE4_SHA256 = "0a48a6ce7e86631e0ceec63300fcdbf7d2ec7325206bcc5d0be7135f42c5bb52";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {

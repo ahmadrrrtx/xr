@@ -211,7 +211,7 @@ export class XRDaemonClient {
     return await this.raw("POST", "/api/v1/chat", body);
   }
 
-  /** List built-in agent roles (supervisor, planner, executor). */
+  /** List built-in orchestration roles and live multi-agent workflow runs. */
   async agentsList(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/agents");
   }
@@ -424,6 +424,36 @@ export class XRDaemonClient {
   /** Smoke-test a local runtime+model round-trip. */
   async modelsTest(body: z.infer<typeof S.ModelsTestRequest>): Promise<Record<string, unknown>> {
     return await this.call("POST", "/api/v1/models/test", body);
+  }
+
+  /** List registered MCP servers (live registry, CLI parity). */
+  async mcpList(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mcp");
+  }
+
+  /** Register an MCP server (stdio command or http url). */
+  async mcpAdd(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mcp/add");
+  }
+
+  /** Remove (uninstall) a registered MCP server. */
+  async mcpRemove(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mcp/remove");
+  }
+
+  /** Enable a registered MCP server. */
+  async mcpEnable(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mcp/enable");
+  }
+
+  /** Disable a registered MCP server. */
+  async mcpDisable(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mcp/disable");
+  }
+
+  /** Best-effort health probe across registered MCP servers. */
+  async mcpHealth(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mcp/health");
   }
 
   /** Computer-control subsystem status. */

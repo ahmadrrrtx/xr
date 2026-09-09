@@ -244,32 +244,204 @@ async function pluginRemove(id) {
   }
 }
 
-// ── MCP Servers
+// ── MCP Servers — the SAME registry the xr mcp CLI persists
+// (~/.xr/mcp/registry.json). Before Phase 2 these calls hit endpoints that did
+// not exist and the panel silently showed an empty list forever.
 async function loadMcp() {
   try {
-    const list = await api("/api/mcp").catch(() => []);
-    document.getElementById("mcp-servers-list").innerHTML = list.length ? list.map(s => \`
+    const data = await api("/api/mcp").catch(() => ({ servers: [] }));
+    const servers = data.servers ?? [];
+    document.getElementById("mcp-servers-list").innerHTML = servers.length ? servers.map(s => \`
       <div class="stat-row">
-        <div><strong>\${escapeHtml(s.id)}</strong><br><span class="muted mono">\${escapeHtml(s.cmd)} \${escapeHtml(s.args.join(" "))}</span></div>
-        <button class="btn btn-danger xr-s-60" data-xr-action="\${act('removeMcp', s.id)}">✕</button>
+        <div class="xr-s-106">
+          <strong>\${escapeHtml(s.id)}</strong>
+          <span class="muted mono xr-s-85">\${escapeHtml(s.transport === "stdio" ? ((s.command ?? "?") + " " + (s.args ?? []).join(" ")) : (s.url ?? "?"))}</span>
+        </div>
+        <span class="badge \${s.enabled ? "badge-green" : "badge-gray"}">\${s.enabled ? "enabled" : "disabled"}</span>
+        <div class="xr-s-37">
+          \${s.enabled
+            ? \`<button class="btn btn-ghost xr-s-2" data-xr-action="\${act('disableMcp', s.id)}">Disable</button>\`
+            : \`<button class="btn btn-ghost xr-s-2" data-xr-action="\${act('enableMcp', s.id)}">Enable</button>\`}
+          <button class="btn btn-danger xr-s-2" data-xr-action="\${act('removeMcp', s.id)}">Remove</button>
+        </div>
       </div>
-    \`).join("") : "<div class='muted'>No Model Context Protocol connections registered.</div>";
+    \`).join("") : "<div class='muted'>No MCP servers registered — add one here or with <span class=\\\"mono\\\">xr mcp add</span>.</div>";
   } catch {}
 }
 async function registerMcp() {
   const id = document.getElementById("mcp-create-id")?.value.trim();
+  const url = document.getElementById("mcp-create-url")?.value.trim();
   const cmd = document.getElementById("mcp-create-cmd")?.value.trim();
-  const argsRaw = document.getElementById("mcp-create-args")?.value.trim();
-  if(!id || !cmd) return toast("ID and Command required", "warn");
-  const args = argsRaw ? argsRaw.split(/\\s+/) : [];
+  const enable = !!(document.getElementById("mcp-create-enable")?.checked);
+  if (!id) return toast("Server id is required", "warn");
+  if (!url && !cmd) return toast("Give a command (stdio) or a URL (remote)", "warn");
+  const body = url
+    ? { id, transport: "http", url, enabled: enable }
+    : { id, transport: "stdio", cmd, enabled: enable };
   try {
-    await api("/api/mcp/add", { method:"POST", body: { id, cmd, args } });
-    toast("MCP Server added successfully", "ok");
+    await api("/api/mcp/add", { method: "POST", body });
+    toast("MCP server registered", "ok");
     document.getElementById("mcp-create-id").value = "";
+    document.getElementById("mcp-create-url").value = "";
     document.getElementById("mcp-create-cmd").value = "";
-    document.getElementById("mcp-create-args").value = "";
     loadMcp();
-  } catch(e) { toast(e.message, "err"); }
+  } catch (e) { toast(e.message, "err"); }
+}
+async function enableMcp(id) {
+  try { await api("/api/mcp/enable", { method: "POST", body: { id } }); toast(id + " enabled", "ok"); loadMcp(); } catch (e) { toast(e.message, "err"); }
+}
+async function disableMcp(id) {
+  try { await api("/api/mcp/disable", { method: "POST", body: { id } }); toast(id + " disabled", "ok"); loadMcp(); } catch (e) { toast(e.message, "err"); }
+}
+async function removeMcp(id) {
+  try { await api("/api/mcp/remove", { method: "POST", body: { id } }); toast(id + " removed", "ok"); loadMcp(); } catch (e) { toast(e.message, "err"); }
+}
+async function probeMcpHealth() {
+  const el = document.getElementById("mcp-health-report");
+  if (!el) return;
+  el.innerHTML = "<div class='spinner'></div>";
+  try {
+    const data = await api("/api/mcp/health");
+    const reports = data.reports ?? [];
+    el.innerHTML = reports.length ? reports.map(r => \`
+      <div class="stat-row">
+        <span class="stat-val mono">\${escapeHtml(r.id ?? r.serverId ?? "?")}</span>
+        <span class="badge \${r.ok || r.status === "ok" || r.health === "ok" ? "badge-green" : "badge-red"}">\${escapeHtml(String(r.status ?? r.health ?? (r.ok ? "ok" : "unreachable")))}</span>
+        <span class="stat-key truncate">\${escapeHtml(r.detail ?? r.reason ?? "")}</span>
+      </div>\`).join("") : "<div class='muted'>No registered servers to probe.</div>";
+  } catch (e) {
+    el.innerHTML = "<div class='muted'>Health probe failed: " + escapeHtml(e.message) + "</div>";
+  }
+}
+
+// ── Automation — the live trigger registry (/api/triggers). The old panel
+// was a static "no jobs" card that never contacted the daemon.
+async function loadAutomation() {
+  try {
+    const data = await api("/api/triggers").catch(() => ({ triggers: [] }));
+    const triggers = data.triggers ?? [];
+    document.getElementById("auto-count").textContent = String(triggers.length);
+    document.getElementById("auto-enabled").textContent = String(triggers.filter(t => t.enabled).length);
+    document.getElementById("auto-inflight").textContent = String(data.inflight ?? 0);
+    const pausedEl = document.getElementById("auto-paused");
+    pausedEl.textContent = data.pauseAll ? "Paused" : "Active";
+    pausedEl.className = "card-value " + (data.pauseAll ? "text-amber" : "text-green");
+    const specText = (t) => {
+      const s = t.spec ?? {};
+      if (s.kind === "cron") return "cron " + (s.expr ?? s.nl ?? "?");
+      if (s.kind === "event") return "on " + s.event;
+      if (s.kind === "watch") return "watch " + s.path;
+      return s.kind ?? "?";
+    };
+    document.getElementById("auto-trigger-list").innerHTML = triggers.length ? triggers.map(t => \`
+      <div class="stat-row">
+        <span class="stat-val mono">\${escapeHtml(t.id ?? "?")}</span>
+        <span class="stat-key truncate">\${escapeHtml(specText(t))} — \${escapeHtml(t.taskTemplate ?? "")}</span>
+        <span class="badge \${t.enabled ? "badge-green" : "badge-gray"}">\${t.enabled ? "enabled" : "paused"}</span>
+        <span class="mono muted xr-s-71">\${t.spentUsd ? "$" + Number(t.spentUsd).toFixed(4) : "$0"}</span>
+      </div>\`).join("") : "<div class='muted'>No triggers registered. Create one below or with <span class=\\\"mono\\\">xr cron add</span>.</div>";
+  } catch (e) {
+    const el = document.getElementById("auto-trigger-list");
+    if (el) el.innerHTML = "<div class='muted'>Trigger registry unreachable: " + escapeHtml(e.message) + "</div>";
+  }
+}
+async function createTrigger() {
+  const expr = document.getElementById("auto-new-expr")?.value.trim();
+  const task = document.getElementById("auto-new-task")?.value.trim();
+  const consent = document.getElementById("auto-new-consent")?.value.trim();
+  if (!expr || !task) return toast("Cron expression and task are required", "warn");
+  try {
+    await api("/api/triggers", { method: "POST", body: {
+      kind: "cron", spec: { kind: "cron", expr },
+      taskTemplate: task, budget: {}, consentRef: consent || "daemon:dashboard"
+    } });
+    toast("Trigger created", "ok");
+    document.getElementById("auto-new-expr").value = "";
+    document.getElementById("auto-new-task").value = "";
+    loadAutomation();
+  } catch (e) { toast(e.message, "err"); }
+}
+async function toggleTriggersPause() {
+  try {
+    const cur = await api("/api/triggers");
+    await api("/api/triggers/pause", { method: "POST", body: { pauseAll: !cur.pauseAll, actor: "dashboard" } });
+    toast(!cur.pauseAll ? "All triggers paused" : "Triggers resumed", "ok");
+    loadAutomation();
+  } catch (e) { toast(e.message, "err"); }
+}
+
+// ── Agents — live workflows + honestly-labelled built-in roles
+// (/api/agents). The old route returned three hardcoded "agents" that were
+// really static product roles dressed up as instances.
+async function loadAgents() {
+  try {
+    const data = await api("/api/agents");
+    const wf = data.workflows ?? [];
+    const health = data.health ?? { workflows: {} };
+    document.getElementById("agents-wf-total").textContent = String(health.workflows?.total ?? wf.length);
+    document.getElementById("agents-wf-running").textContent = String(health.workflows?.running ?? 0);
+    const blocked = (health.workflows?.blocked ?? 0) + (health.workflows?.failed ?? 0);
+    document.getElementById("agents-wf-blocked").textContent = String(blocked);
+    document.getElementById("agents-roles-count").textContent = String((data.roles ?? []).length);
+    document.getElementById("agents-wf-list").innerHTML = wf.length ? wf.map(w => \`
+      <div class="stat-row">
+        <span class="stat-val truncate">\${escapeHtml(w.goal ?? w.id ?? "?")}</span>
+        <span class="badge \${w.status === "completed" ? "badge-green" : w.status === "running" ? "badge-cyan" : "badge-amber"}">\${escapeHtml(w.status ?? "?")}</span>
+        <span class="stat-key mono">\${(w.tasks?.completed ?? 0)}/\${(w.tasks?.total ?? 0)} tasks</span>
+        <span class="stat-key">\${new Date(w.updatedAt ?? w.createdAt ?? 0).toLocaleString()}</span>
+      </div>\`).join("") : "<div class='muted'>No multi-agent workflows yet. Start one from the terminal: <span class=\\\"mono\\\">xr agents run \\\"goal\\\"</span>.</div>";
+    document.getElementById("agents-roles-list").innerHTML = (data.roles ?? []).map(r => \`
+      <div class="stat-row">
+        <span class="stat-val"><strong>\${escapeHtml(r.name)}</strong> <span class="badge badge-violet">built-in</span></span>
+        <span class="stat-key truncate">\${escapeHtml(r.purpose ?? "")}</span>
+      </div>\`).join("");
+  } catch (e) {
+    const el = document.getElementById("agents-wf-list");
+    if (el) el.innerHTML = "<div class='muted'>Agent store unreachable: " + escapeHtml(e.message) + "</div>";
+  }
+}
+
+// ── Approvals panel — the durable cross-surface queue (/api/approvals).
+// Decisions POST to the canonical /api/approvals/:id/decision endpoint and
+// release the waiting run, exactly like answering in the terminal.
+async function loadApprovalsPanel() {
+  try {
+    const data = await api("/api/approvals");
+    const pending = data.pending ?? [];
+    const countEl = document.getElementById("approvals-count");
+    if (countEl) {
+      countEl.textContent = pending.length + " pending";
+      countEl.className = "badge " + (pending.length ? "badge-amber" : "badge-green");
+    }
+    const badge = document.getElementById("nav-approvals-badge");
+    if (badge) {
+      badge.hidden = !pending.length;
+      badge.textContent = String(pending.length);
+    }
+    document.getElementById("approvals-list").innerHTML = pending.length ? pending.map(a => \`
+      <div class="approval-card" role="group" aria-label="Approval: \${escapeHtml(a.tool ?? "action")}">
+        <div class="approval-what"><strong>\${escapeHtml(a.tool ?? "action")}</strong> <span class="badge badge-violet">\${escapeHtml(a.surface ?? "agent")}</span></div>
+        <div class="approval-why">\${escapeHtml(a.preview || a.reason || 'This action needs your permission.')}</div>
+        <div class="approval-risk">
+          <span class="badge \${a.riskTier === "destructive" ? "badge-red" : a.riskTier === "sensitive" ? "badge-amber" : "badge-green"}">\${escapeHtml((a.riskTier ?? "standard").toUpperCase())}</span>
+          <span class="approval-risk-reason">requested \${new Date(a.requestedAt ?? 0).toLocaleTimeString()} · expires \${new Date(a.expiresAt ?? 0).toLocaleTimeString()}</span>
+        </div>
+        <div class="approval-btns">
+          <button class="btn btn-primary" data-xr-action="decideApproval('\${a.id}', true)">Allow</button>
+          <button class="btn btn-danger" data-xr-action="decideApproval('\${a.id}', false)">Deny</button>
+        </div>
+      </div>\`).join("") : "<div class='muted'>Nothing is waiting on you. Approvals raised by any surface (CLI, chat, triggers) appear here.</div>";
+  } catch (e) {
+    const el = document.getElementById("approvals-list");
+    if (el) el.innerHTML = "<div class='muted'>Approval store unreachable: " + escapeHtml(e.message) + "</div>";
+  }
+}
+async function decideApproval(id, approved) {
+  try {
+    await api("/api/approvals/" + encodeURIComponent(id) + "/decision", { method: "POST", body: { approved } });
+    toast(approved ? "Action authorized" : "Action blocked", approved ? "ok" : "warn");
+    loadApprovalsPanel();
+  } catch (e) { toast(e.message, "err"); }
 }
 
 `;

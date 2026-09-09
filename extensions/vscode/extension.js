@@ -1,6 +1,6 @@
 // XR VS Code extension (thin wrapper over the local daemon).
 // Shows a live cost meter in the status bar and lets you ask XR about a
-// selection via right-click. All it does is talk to http://127.0.0.1:7842.
+// selection via right-click. All it does is talk to the XR daemon (default http://127.0.0.1:3141 — the `xr serve` default).
 const vscode = require("vscode");
 
 function cfg() {

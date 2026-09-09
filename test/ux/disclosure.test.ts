@@ -34,7 +34,7 @@ describe("T4 static — progressive disclosure", () => {
   });
 
   test("'Start here' assembles the four first-run essentials from REAL nav items (clones)", () => {
-    expect(DASHBOARD_SCRIPT).toContain('["dashboard", "chat", "models", "settings"].forEach');
+    expect(DASHBOARD_SCRIPT).toContain('["dashboard", "chat", "sessions", "settings"].forEach');
     expect(DASHBOARD_SCRIPT).toContain("src.cloneNode(true)");
     // Clones navigate through the REAL dispatcher — no parallel handlers.
     expect(DASHBOARD_SCRIPT).toContain('clone.addEventListener("click", function () { navigateTo(pid); })');

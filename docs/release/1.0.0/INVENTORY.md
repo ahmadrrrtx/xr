@@ -1,15 +1,15 @@
 # XR 1.0.0 Repository Inventory
 
-Generated: 2026-09-08T15:12:24.206Z
+Generated: 2026-09-09T15:07:55.185Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 592 |
+| Source files | 593 |
 | Test files | 317 |
 | CLI commands | 43 |
-| Daemon routes | 127 |
+| Daemon routes | 133 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -134,6 +134,12 @@ Generated: 2026-09-08T15:12:24.206Z
 - GET `/api/files/diff` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
 - GET `/api/files/read` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
 - GET `/api/health` — open (src/daemon/routes/system.routes.ts)
+- GET `/api/mcp` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/add` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/disable` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/enable` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- GET `/api/mcp/health` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/remove` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
 - GET `/api/memory` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
 - DELETE `/api/memory/*` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
 - GET `/api/memory/health` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)

@@ -26,6 +26,7 @@ import { onboardingRoutes } from "./onboarding.routes.ts";
 import { filesRoutes } from "./files.routes.ts";
 import { trustRoutes } from "./trust.routes.ts";
 import { researchRoutes } from "./research.routes.ts";
+import { mcpRoutes } from "./mcp.routes.ts";
 import type { DaemonRoute } from "./router.ts";
 import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
 
@@ -49,6 +50,8 @@ export function listBaseRoutes(): DaemonRoute[] {
     ...trustRoutes(),
     ...capabilityRoutes(),
     ...providersRoutes(),
+    // MCP registry management (dashboard Extensions ⇄ `xr mcp` CLI parity).
+    ...mcpRoutes(),
     ...extensionRoutes(),
     ...controlRoutes(),
     ...environmentRoutes(),

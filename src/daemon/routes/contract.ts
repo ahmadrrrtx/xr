@@ -214,7 +214,7 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     response: ChatStreamEvent,
     sse: true,
   },
-  "agents.list": { summary: "List built-in agent roles (supervisor, planner, executor).", tag: "agents", stability: "stable" },
+  "agents.list": { summary: "List built-in orchestration roles and live multi-agent workflow runs.", tag: "agents", stability: "stable" },
   "agents.workflow.get": {
     summary: "Inspect an agent workflow run by id.",
     tag: "agents",
@@ -222,6 +222,14 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     template: "/api/agents/workflows/{workflow}",
     pathParams: [{ name: "workflow", description: "Workflow/run id." }],
   },
+
+  // ── MCP registry management ───────────────────────────────────────────────
+  "mcp.list": { summary: "List registered MCP servers (live registry, CLI parity).", tag: "extensions", stability: "stable" },
+  "mcp.add": { summary: "Register an MCP server (stdio command or http url).", tag: "extensions", stability: "stable" },
+  "mcp.remove": { summary: "Remove (uninstall) a registered MCP server.", tag: "extensions", stability: "stable" },
+  "mcp.enable": { summary: "Enable a registered MCP server.", tag: "extensions", stability: "stable" },
+  "mcp.disable": { summary: "Disable a registered MCP server.", tag: "extensions", stability: "stable" },
+  "mcp.health": { summary: "Best-effort health probe across registered MCP servers.", tag: "extensions", stability: "experimental" },
 
   // ── budget ────────────────────────────────────────────────────────────────
   "budget.get": { summary: "Budget caps, current usage, and remaining headroom.", tag: "budget", stability: "stable" },

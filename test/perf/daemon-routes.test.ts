@@ -289,7 +289,7 @@ describe("Phase 01 — dashboard client", () => {
     const { DASHBOARD_SCRIPT } = await import("../../src/daemon/dashboard.ts");
     // Stage one = lightweight cells; stage two = provider/model cells.
     expect(DASHBOARD_SCRIPT).toContain('api("/api/overview")');
-    expect(DASHBOARD_SCRIPT).toContain("// Stage two — provider/model cells");
+    expect(DASHBOARD_SCRIPT).toContain("// Stage two — model card, provider cells, MCP count");
     // loadProviderChip reuses the already-fetched payloads.
     expect(DASHBOARD_SCRIPT).toContain("loadProviderChip(ovDone, providersDone)");
     // config is fetched once inside loadDashboard and shared across the

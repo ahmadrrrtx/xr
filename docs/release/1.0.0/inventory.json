@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-08T15:12:24.206Z",
+  "generatedAt": "2026-09-09T15:07:55.185Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -51,10 +51,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 592,
+    "sourceFiles": 593,
     "testFiles": 317,
     "cliCommands": 43,
-    "daemonRoutes": 127,
+    "daemonRoutes": 133,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -83,7 +83,7 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 83569
+      "bytes": 87638
     },
     {
       "path": "CODEOWNERS",
@@ -151,7 +151,7 @@
     },
     {
       "path": "tsconfig.json",
-      "bytes": 594
+      "bytes": 408
     }
   ],
   "sourceFiles": [
@@ -361,6 +361,7 @@
     "src/daemon/routes/extensions.routes.ts",
     "src/daemon/routes/files.routes.ts",
     "src/daemon/routes/index.ts",
+    "src/daemon/routes/mcp.routes.ts",
     "src/daemon/routes/memory.routes.ts",
     "src/daemon/routes/meta.routes.ts",
     "src/daemon/routes/onboarding.routes.ts",
@@ -1982,6 +1983,48 @@
       "method": "GET",
       "path": "/api/health",
       "auth": "open"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.list",
+      "method": "GET",
+      "path": "/api/mcp",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.add",
+      "method": "POST",
+      "path": "/api/mcp/add",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.disable",
+      "method": "POST",
+      "path": "/api/mcp/disable",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.enable",
+      "method": "POST",
+      "path": "/api/mcp/enable",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.health",
+      "method": "GET",
+      "path": "/api/mcp/health",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.remove",
+      "method": "POST",
+      "path": "/api/mcp/remove",
+      "auth": "local bearer token or dashboard query token"
     },
     {
       "file": "src/daemon/routes/memory.routes.ts",

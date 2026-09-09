@@ -5,111 +5,124 @@
  * the composed template literal, so escaping must not be edited here alone.
  */
 
-export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
+export const PAGE_PANELS_A = `      <!-- Panel: Home — honest state of this XR install -->
       <div class="panel" tabindex="-1" id="panel-dashboard">
         <div class="section-header">
           <div>
-            <h1>Overview</h1>
+            <h1>Home</h1>
             <div class="section-sub">XR Operating Console — <span id="dash-project" class="mono">loading…</span></div>
           </div>
           <button class="btn" data-xr-action="refreshAll()">↻ Refresh state</button>
         </div>
 
-        <div class="grid grid-4 xr-s-6">
-          <div class="card card-glow-cyan">
-            <div class="card-header"><span class="card-title">Spent Today</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div>
-            <div class="card-value" id="d-spent">$0.0000</div>
-            <div class="card-sub" id="d-tokens">0 tokens processed</div>
+        <!-- The honest readiness banner injects itself right after this header
+             (client-runtime.ts · Phase 8 T4). It computes real readiness from
+             live endpoints — never a hardcoded "all systems go". -->
+
+        <!-- Active model — the single most important runtime fact, top-left -->
+        <div class="card home-model-card" id="home-model-card" role="group" aria-label="Active model">
+          <div class="card-header">
+            <span class="card-title">Active model</span>
+            <button class="btn btn-ghost xr-s-2" data-xr-action="navigateTo('models'); setTimeout(focusChangeModel, 50);">Change model</button>
           </div>
-          <div class="card card-glow-green">
-            <div class="card-header"><span class="card-title">Security EDR</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span></div>
-            <div class="card-value" id="d-sec-score">—</div>
-            <div class="card-sub">Dojo injection block-rate</div>
-          </div>
-          <div class="card card-glow-green">
-            <div class="card-header"><span class="card-title">Protection Log</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span></div>
-            <div class="card-value" id="d-shield-health">—</div>
-            <div class="card-sub" id="d-shield-scans">—</div>
-          </div>
-          <div class="card">
-            <div class="card-header"><span class="card-title">Immutable Ledger</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div>
-            <div class="card-value" id="d-audit-val">—</div>
-            <div class="card-sub" id="d-audit-entries">checking ledger…</div>
+          <div class="home-model-row">
+            <div class="dot" id="home-model-dot" aria-hidden="true"></div>
+            <div>
+              <div class="card-value" id="home-model-name">detecting…</div>
+              <div class="card-sub" id="home-model-detail">checking the active route…</div>
+            </div>
           </div>
         </div>
 
-        <h2 class="xr-s-7">System Health Bento Matrix</h2>
+        <!-- Needs attention — only shown when something actually needs a human -->
+        <div class="card home-attention" id="home-attention" hidden>
+          <div class="card-header"><span class="card-title">Needs your attention</span></div>
+          <div id="home-attention-list" class="xr-s-14"></div>
+        </div>
+
+        <!-- Real KPIs — every number comes from an endpoint -->
+        <div class="grid grid-4 xr-s-6">
+          <div class="card card-glow-cyan">
+            <div class="card-header"><span class="card-title">Spend (all time)</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span></div>
+            <div class="card-value" id="d-spent">$0.0000</div>
+            <div class="card-sub" id="d-tokens">0 tokens processed</div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Audit chain</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span></div>
+            <div class="card-value" id="d-audit-val">—</div>
+            <div class="card-sub" id="d-audit-entries">checking ledger…</div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Pending approvals</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></span></div>
+            <div class="card-value" id="d-approvals">—</div>
+            <div class="card-sub" id="d-approvals-sub">checking queue…</div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Durable memory</span><span class="card-icon"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span></div>
+            <div class="card-value" id="h-val-memory">—</div>
+            <div class="card-sub" id="d-memory-sub">entries in the RAG ledger</div>
+          </div>
+        </div>
+
+        <h2 class="xr-s-7">Recent runs</h2>
+        <div class="card">
+          <div id="home-recent-runs"><div class="spinner"></div></div>
+        </div>
+
+        <!-- Quick start — the honest path from zero to first run (shown only
+             while no provider is actually configured) -->
+        <div class="card" id="home-quickstart" hidden>
+          <div class="card-header"><span class="card-title">Quick start</span></div>
+          <ol class="xr-s-9 home-quick-ol">
+            <li>Add a provider key or start a local runtime — <button class="btn btn-ghost xr-s-2" data-xr-action="navigateTo('providers')">Open Providers</button></li>
+            <li>Pick the model XR will route to — <button class="btn btn-ghost xr-s-2" data-xr-action="navigateTo('models'); setTimeout(focusChangeModel, 50);">Open Models</button></li>
+            <li>Start your first run — <button class="btn btn-ghost xr-s-2" data-xr-action="navigateTo('chat')">Open Chat</button></li>
+          </ol>
+        </div>
+
+        <!-- Live status strip — real values only; "—" until an endpoint answers -->
+        <h2 class="xr-s-7">Live status</h2>
         <p id="bento-summary" class="xr-sr-only" aria-live="polite">System health: loading…</p>
         <div class="bento-matrix" id="dashboard-health-matrix">
           <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">1. Provider status</span><div class="matrix-cell-status green" id="h-cell-provider"></div></div>
-            <div class="matrix-cell-val" id="h-val-provider">Ollama</div>
-            <div class="matrix-cell-sub">Active Route</div>
+            <div class="matrix-cell-head"><span class="matrix-cell-title">Provider route</span><div class="matrix-cell-status" id="h-cell-provider"></div></div>
+            <div class="matrix-cell-val" id="h-val-provider">—</div>
+            <div class="matrix-cell-sub">Where completions route</div>
           </div>
           <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">2. Active model</span><div class="matrix-cell-status green" id="h-cell-model"></div></div>
-            <div class="matrix-cell-val" id="h-val-model">qwen2.5:7b</div>
-            <div class="matrix-cell-sub">Active model</div>
+            <div class="matrix-cell-head"><span class="matrix-cell-title">Active model</span><div class="matrix-cell-status" id="h-cell-model"></div></div>
+            <div class="matrix-cell-val" id="h-val-model">—</div>
+            <div class="matrix-cell-sub">Selected model</div>
           </div>
           <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">3. Local model status</span><div class="matrix-cell-status green" id="h-cell-local"></div></div>
-            <div class="matrix-cell-val" id="h-val-local">Reachable</div>
-            <div class="matrix-cell-sub">Ollama Availability</div>
+            <div class="matrix-cell-head"><span class="matrix-cell-title">Local runtime</span><div class="matrix-cell-status" id="h-cell-local"></div></div>
+            <div class="matrix-cell-val" id="h-val-local">—</div>
+            <div class="matrix-cell-sub">Ollama availability</div>
           </div>
           <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">4. Voice runtime</span><div class="matrix-cell-status" id="h-cell-voice"></div></div>
-            <div class="matrix-cell-val" id="h-val-voice">—</div>
-            <div class="matrix-cell-sub">Mic Pipeline</div>
+            <div class="matrix-cell-head"><span class="matrix-cell-title">Security lab</span><div class="matrix-cell-status" id="h-cell-shield"></div></div>
+            <div class="matrix-cell-val" id="h-val-shield">—</div>
+            <div class="matrix-cell-sub" id="d-shield-scans">injection-lab block rate</div>
           </div>
           <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">5. Plugin health</span><div class="matrix-cell-status green" id="h-cell-plugin"></div></div>
-            <div class="matrix-cell-val" id="h-val-plugin">0 errors</div>
-            <div class="matrix-cell-sub">Sandboxed Tools</div>
+            <div class="matrix-cell-head"><span class="matrix-cell-title">MCP servers</span><div class="matrix-cell-status" id="h-cell-mcp"></div></div>
+            <div class="matrix-cell-val" id="h-val-mcp">—</div>
+            <div class="matrix-cell-sub">registered · enabled</div>
           </div>
           <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">6. MCP health</span><div class="matrix-cell-status green" id="h-cell-mcp"></div></div>
-            <div class="matrix-cell-val" id="h-val-mcp">Healthy</div>
-            <div class="matrix-cell-sub">Model Context Protocol</div>
-          </div>
-          <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">7. Memory status</span><div class="matrix-cell-status green" id="h-cell-memory"></div></div>
-            <div class="matrix-cell-val" id="h-val-memory">0 nodes</div>
-            <div class="matrix-cell-sub">RAG semantic db</div>
-          </div>
-          <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">8. Shield status</span><div class="matrix-cell-status green" id="h-cell-shield"></div></div>
-            <div class="matrix-cell-val" id="h-val-shield">No anomalies</div>
-            <div class="matrix-cell-sub">Crypto/malware scans</div>
-          </div>
-          <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">9. Computer Use</span><div class="matrix-cell-status green" id="h-cell-computer"></div></div>
-            <div class="matrix-cell-val" id="h-val-computer">Opt-in Ready</div>
-            <div class="matrix-cell-sub">Jarvis permissions</div>
-          </div>
-          <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">10. Background tasks</span><div class="matrix-cell-status green" id="h-cell-tasks"></div></div>
-            <div class="matrix-cell-val" id="h-val-tasks">0 workers</div>
-            <div class="matrix-cell-sub">Active threads</div>
-          </div>
-          <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">11. Research jobs</span><div class="matrix-cell-status green" id="h-cell-research"></div></div>
-            <div class="matrix-cell-val" id="h-val-research">0 queued</div>
-            <div class="matrix-cell-sub">Citation planning</div>
-          </div>
-          <div class="matrix-cell">
-            <div class="matrix-cell-head"><span class="matrix-cell-title">12. Downloads/Updates</span><div class="matrix-cell-status green" id="h-cell-updates"></div></div>
-            <div class="matrix-cell-val" id="h-val-updates">Up to date</div>
-            <div class="matrix-cell-sub">Local package repository</div>
+            <div class="matrix-cell-head"><span class="matrix-cell-title">Research jobs</span><div class="matrix-cell-status" id="h-cell-research"></div></div>
+            <div class="matrix-cell-val" id="h-val-research">—</div>
+            <div class="matrix-cell-sub">citation runs</div>
           </div>
         </div>
 
         <div class="grid grid-2 xr-s-8">
           <div class="card">
-            <div class="card-header"><span class="card-title">Recent Activity Logs</span></div>
+            <div class="card-header"><span class="card-title">Recent activity</span><button class="btn btn-ghost xr-s-2" data-xr-action="navigateTo('audit')">Full audit log</button></div>
             <div id="d-audit-list"><div class="spinner"></div></div>
           </div>
           <div class="card">
-            <div class="card-header"><span class="card-title">Operating Context</span></div>
+            <div class="card-header"><span class="card-title">Operating context</span></div>
             <div id="dash-hardware-summary" class="muted xr-s-9">loading hardware specs...</div>
           </div>
         </div>
@@ -192,7 +205,11 @@ export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
                   <button class="composer-flag-chip research" data-xr-action="toggleComposerFlag('research')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="12" height="12"><path d="M10 2v6L4.5 17.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-3.5L14 8V2"/><path d="M8.5 2h7"/><line x1="7" y1="15" x2="17" y2="15"/></svg> Research</button>
                   <button class="composer-flag-chip shield" data-xr-action="toggleComposerFlag('shield')"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="12" height="12"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Shield</button>
                   <button class="composer-flag-chip computer" data-xr-action="toggleComposerFlag('computer')">⌁ Control</button>
-                  <button class="composer-flag-chip mode" data-xr-action="cycleChatMode()" id="mode-chip">Mode: Ask</button>
+                  <div class="mode-seg" role="group" aria-label="Run mode" id="mode-seg">
+                    <button type="button" class="mode-seg-btn" data-mode="agent" data-xr-action="setChatMode('agent')" aria-pressed="true" title="Agent — full loop with tool use; approvals still gate every side effect">Agent</button>
+                    <button type="button" class="mode-seg-btn" data-mode="plan" data-xr-action="setChatMode('plan')" aria-pressed="false" title="Plan — XR drafts the plan first; you approve before it executes">Plan</button>
+                    <button type="button" class="mode-seg-btn" data-mode="ask" data-xr-action="setChatMode('ask')" aria-pressed="false" title="Ask — read-only answers, no tools">Ask</button>
+                  </div>
                   <span class="composer-tip"><span class="kbd">Esc</span> interrupt · <span class="kbd">/</span> commands</span>
                 </div>
               </div>
@@ -223,8 +240,13 @@ export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
 
       <!-- Panel 3: Recent Sessions -->
       <div class="panel" tabindex="-1" id="panel-sessions">
+        <div class="tab-strip" role="tablist" aria-label="Runs views">
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="sessions">Sessions</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="research">Research</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="automation">Automation</button>
+        </div>
         <div class="section-header">
-          <div><h1>Recent Sessions</h1><div class="section-sub">Chronological task logs and history database</div></div>
+          <div><h1>Runs — Sessions</h1><div class="section-sub">Chronological task logs and history database</div></div>
           <button class="btn" data-xr-action="loadSessionsPanel()">↻ Refresh</button>
         </div>
         <div class="grid grid-4 xr-s-6">
@@ -250,8 +272,15 @@ export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
 
       <!-- Panel 4: Workspaces switcher -->
       <div class="panel" tabindex="-1" id="panel-workspaces">
+        <div class="tab-strip" role="tablist" aria-label="Settings views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="settings">Settings</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="workspaces">Workspaces</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="files">Files</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="voice">Voice</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="about">About</button>
+        </div>
         <div class="section-header">
-          <div><h1>Workspaces Switcher</h1><div class="section-sub">Isolate databases, memory vectors, and project trees</div></div>
+          <div><h1>Settings — Workspaces</h1><div class="section-sub">Isolate databases, memory vectors, and project trees</div></div>
           <button class="btn" data-xr-action="loadWorkspaces()">↻ Refresh</button>
         </div>
         <div class="grid grid-2 xr-s-6">
@@ -277,8 +306,12 @@ export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
 
       <!-- Panel 5: Providers (BYOK) -->
       <div class="panel" tabindex="-1" id="panel-providers">
+        <div class="tab-strip" role="tablist" aria-label="Models views">
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="providers">Providers</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="models">Local Runtimes</button>
+        </div>
         <div class="section-header">
-          <div><h1>Cloud Providers (BYOK)</h1><div class="section-sub">Set primary/fallback routes — never stuck on the default model</div></div>
+          <div><h1>Models — Providers</h1><div class="section-sub">Set primary/fallback routes — never stuck on the default model</div></div>
           <div class="xr-s-17">
             <button class="btn btn-primary" data-xr-action="document.getElementById('prov-set-provider')?.focus()">Change model</button>
             <button class="btn btn-ghost" data-xr-action="navigateTo('models')">Local Models</button>
@@ -318,9 +351,13 @@ export const PAGE_PANELS_A = `      <!-- Panel 1: Overview (Home) -->
 
       <!-- Panel 6: Models (Local AI) -->
       <div class="panel" tabindex="-1" id="panel-models">
+        <div class="tab-strip" role="tablist" aria-label="Models views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="providers">Providers</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="models">Local Runtimes</button>
+        </div>
         <div class="section-header">
           <div>
-            <h1>Models (Local AI)</h1>
+            <h1>Models — Local Runtimes</h1>
             <div class="section-sub">Change model anytime — never stuck on the onboarding default</div>
           </div>
           <div class="xr-s-18">

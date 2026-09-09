@@ -16,7 +16,7 @@
     "configuration": {
       "title": "XR",
       "properties": {
-        "xr.daemonUrl": { "type": "string", "default": "http://127.0.0.1:7842" },
+        "xr.daemonUrl": { "type": "string", "default": "http://127.0.0.1:3141" },
         "xr.token": { "type": "string", "default": "" }
       }
     }

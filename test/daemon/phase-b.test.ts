@@ -11,22 +11,24 @@ import { DASHBOARD_PAGE, DASHBOARD_SCRIPT, DASHBOARD_CSS } from "../../src/daemo
 
 describe("B-2 — information-architecture shell", () => {
   test("sidebar groups use the user-language labels", () => {
-    for (const label of ["Start", "Ask", "Capabilities", "Guard", "System"]) {
+    for (const label of ["Workspace", "Resources", "Trust"]) {
       expect(DASHBOARD_PAGE).toContain(`<div class="sidebar-label">${label}</div>`);
     }
     // the old group names must not appear as rendered labels (comments may
     // still carry the historical section titles)
-    for (const gone of ["Mission Hub", "AI Resources", "Platforms & Tools", "Governance & Trust", "Core Services"]) {
+    for (const gone of ["Mission Hub", "AI Resources", "Platforms & Tools", "Governance & Trust", "Core Services", "Start", "Ask", "Capabilities", "Guard", "System"]) {
       expect(DASHBOARD_PAGE).not.toContain(`<div class="sidebar-label">${gone}</div>`);
     }
   });
 
   test("the default landing view is Chat", () => {
-    expect(DASHBOARD_PAGE).toContain('class="nav-item active" data-panel="chat" aria-current="page"');
+    expect(DASHBOARD_PAGE).toContain('class="nav-item active" data-panel="chat" data-section="chat" aria-current="page"');
     expect(DASHBOARD_PAGE).toContain('id="panel-chat">');
     expect(DASHBOARD_PAGE).toContain('class="panel xr-s-10 active"');
     expect(DASHBOARD_PAGE).not.toContain('class="nav-item active" data-panel="dashboard"');
-    expect(DASHBOARD_PAGE).toContain('id="breadcrumb-active" class="xr-s-4" aria-current="page">Chat Sessions</span>');
+    // The sidebar highlights AREAS; the tab strip carries the in-area view.
+    expect(DASHBOARD_SCRIPT).toContain("SECTION_OF");
+    expect(DASHBOARD_PAGE).toContain('id="breadcrumb-active" class="xr-s-4" aria-current="page">Chat</span>');
   });
 
   test("sidebar collapse and inspector toggle exist and persist", () => {
@@ -75,9 +77,10 @@ describe("B-1 — onboarding overlay (honest, real engines)", () => {
     expect(DASHBOARD_PAGE).toContain('class="onboarding-overlay" id="onboarding-root" hidden');
     expect(DASHBOARD_PAGE).toContain('role="dialog" aria-modal="true" aria-label="Set up XR"');
     expect(DASHBOARD_PAGE).toContain('id="onb-progress" aria-label="Setup steps"');
-    // the 26-panel count must be untouched
+    // the 23-panel count must be untouched (9 sidebar areas; secondary views
+    // are in-panel tab strips that reuse the same panel ids)
     const panels = DASHBOARD_PAGE.match(/<div class="panel[^"]*" tabindex="-1" id="panel-/g) ?? [];
-    expect(panels.length).toBe(26);
+    expect(panels.length).toBe(23);
   });
 
   test("the steps are the real engines, exposed honestly", () => {

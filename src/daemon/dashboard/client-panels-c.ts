@@ -29,7 +29,7 @@ async function loadComputerControl() {
     const rows = hist.rows ?? [];
     document.getElementById("control-history-list").innerHTML = rows.length ? rows.map(r => \`
       <div class="stat-row">
-        <span class="stat-key">\${new Date(r.ts).toLocaleTimeString()}</span>
+        <span class="stat-key">\${new Date(r.created_at).toLocaleTimeString()}</span>
         <span class="stat-val mono">\${escapeHtml(r.event)}</span>
       </div>
     \`).join("") : "<div class='muted'>No recent Computer Use automated jobs.</div>";

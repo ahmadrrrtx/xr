@@ -60,18 +60,18 @@ function canonical(path: string): string {
 /**
  * PRE-EXISTING dashboard call sites with no daemon route — documented, frozen.
  *
- * These were already dead before Phase 02 (verified against the Phase 00
- * baseline commit) and are NOT caused by canonical path propagation. MCP is
- * CLI-only (`src/commands/mcp.ts`); no `/api/mcp*` route has ever existed, and
- * `/api/control/stop` is not part of `control.routes.ts`. Every one of these
- * call sites is wrapped in `try/catch` in the client, so the panels degrade
- * gracefully rather than breaking the dashboard.
+ * Phase 02 · F-2 UPDATE: `GET /api/mcp` and `POST /api/mcp/add` were in this
+ * quarantine (the MCP panel called routes that never existed — the exact
+ * defect this redesign fixed). They are now REAL routes
+ * (`src/daemon/routes/mcp.routes.ts`) and have been removed from the set;
+ * the "still real" guard below deleted them automatically, as designed.
  *
- * Wiring up new endpoints is out of Phase 02 scope (no new API surface). This
- * list is a QUARANTINE, not a licence: the test below asserts it never grows,
- * so any newly-broken dashboard call fails the build.
+ * `/api/control/stop` remains unrouted (not part of control.routes.ts) and
+ * its call site is wrapped in try/catch, so the panel degrades gracefully.
+ * This list is a QUARANTINE, not a licence: the test below asserts it never
+ * grows, so any newly-broken dashboard call fails the build.
  */
-const KNOWN_UNROUTED = new Set(["GET /api/mcp", "POST /api/mcp/add", "POST /api/control/stop"]);
+const KNOWN_UNROUTED = new Set(["POST /api/control/stop"]);
 
 const CALL_SITES = extractCallSites(DASHBOARD_SCRIPT);
 
@@ -111,7 +111,7 @@ describe("dashboard route coverage", () => {
       if (matchRouteId(canonical(path), method, routes) !== "unmatched") stale.push(key);
     }
     expect(stale).toEqual([]);
-    expect(KNOWN_UNROUTED.size).toBe(3);
+    expect(KNOWN_UNROUTED.size).toBe(1);
   });
 
   test("every dashboard call site ALSO works on the legacy mount (compat safety net)", () => {

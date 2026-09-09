@@ -2,6 +2,70 @@
 
 ## Unreleased
 
+### Phase 12 · F-2 — Honesty pass: dashboard redesign + real MCP/agents/automation/approvals surfaces
+
+**Daemon (real data behind every panel):**
+- **MCP routes** (`GET/POST /api/mcp`, `/api/mcp/add|remove|enable|disable`,
+  `GET /api/mcp/health`): the dashboard now manages the SAME registry the
+  `xr mcp` CLI persists (`~/.xr/mcp/registry.json`). Before this, the panel
+  called `/api/mcp` — an endpoint that did not exist — and silently rendered
+  "No MCP connections registered" forever. Add mirrors `xr mcp add` exactly
+  (stdio command split, version/source/trust/capability fields, enable flag).
+- **`GET /api/agents` is honest:** returns `roles` (the three built-in
+  orchestration roles, clearly labelled built-in — never presented as user
+  instances), live `workflows` from the unified store, and `health` counters.
+  The old route returned three hardcoded "agents" with a status string.
+- **Tool approvals carry their real arguments:** `write_file`/`delete_file`/
+  `shell` now pass raw `args` to the approval record, so the dashboard (and
+  any remote surface) shows WHAT will be written/deleted/run — not just a hash.
+- **Audit timestamps fixed:** dashboard rendered `Invalid Date` for every audit
+  row (read `e.ts`; the store returns `created_at`). Both render sites fixed.
+
+**Dashboard (9-area IA, tab strips, honest Home):**
+- Sidebar collapsed from 26 items / 5 groups to **9 areas** (Home, Chat, Runs,
+  Agents, Models, Extensions, Memory, Guardrails, Settings). Secondary views
+  are in-panel **tab strips** that reuse the same panel ids and loaders, so
+  every surface stays reachable (sidebar default + tabs + palette + `g`-key
+  shortcuts + Start-here clones). Progressive disclosure auto-expands the
+  target area.
+- **Guardrails → Approvals (new):** the durable cross-surface queue
+  (`GET /api/approvals`) rendered in the browser for the first time —
+  risk tier, surface, reason/preview, TTL countdown, Allow/Deny through the
+  canonical `POST /api/approvals/:id/decision`. Sidebar badge shows the live
+  pending count; the queue polls every 5 s while open. A decision made in the
+  browser releases a waiting CLI run (and vice versa) — verified end-to-end.
+- **Home rebuilt honest:** active-model hero, "Needs your attention" strip
+  (pending approvals + failed/interrupted runs — rendered only when real),
+  4 real KPIs (spend, audit chain, pending approvals, memory), recent runs
+  from `/api/sessions`, quick-start shown only while no route is configured,
+  and a 6-cell live status strip. The old 12-cell bento hardcoded
+  "MCP HEALTH: Healthy" and mislabelled Computer Use as "Authorized".
+- **Automation wired to `/api/triggers`:** the old panel was a static "no
+  jobs" card; it now lists the live trigger registry (cron/event/watch),
+  shows pause-all/in-flight state, and creates triggers with the same
+  consent gate as the CLI.
+- **Agents panel (new):** live workflow runs (goal, status, task progress)
+  + built-in roles with their real purposes + copyable CLI hints.
+- **Chat composer:** mode is now a visible Agent/Plan/Ask segmented control
+  (default Agent — this is an agent console; approvals still gate every side
+  effect) instead of a hidden cycling chip.
+- Deleted the five fake/dead panels (Business OS CRM with fabricated
+  metrics, Webhooks "Listening", Devices, Downloads, Alerts Hub).
+- ~470 KB removed from every dashboard response: avatar/logo PNG data-URIs
+  replaced with compact SVG marks (brand palette preserved).
+- `g`-then-key area shortcuts (g h Home, g c Chat, g r Runs, …); never fire
+  while typing.
+
+**Tooling/infra:**
+- `bin/xr` rewritten as pure ESM (works under Node 18+ and Bun; actionable
+  install hint instead of a bare stack trace when bun is missing).
+- VS Code extension default daemon URL corrected to the real `xr serve`
+  default (127.0.0.1:3141).
+- Stale `tui2.ts` exclude removed from tsconfig (the file no longer exists).
+- Full audit reports + this redesign's plan preserved under `docs/audits/`
+  (`XR_V3.1F_*.md`).
+- OpenAPI regenerated (127 operations).
+
 ### Phase 9 — Channel & Proactivity Maturation
 
 - **Governed trigger table** (`cron` | `event` | `watch`) on the unified store

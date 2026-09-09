@@ -7,8 +7,13 @@
 
 export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
       <div class="panel" tabindex="-1" id="panel-research">
+        <div class="tab-strip" role="tablist" aria-label="Runs views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="sessions">Sessions</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="research">Research</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="automation">Automation</button>
+        </div>
         <div class="section-header">
-          <div><h1>Research Runs</h1><div class="section-sub">Citation-aware deep search and report synthesis console</div></div>
+          <div><h1>Runs — Research</h1><div class="section-sub">Citation-aware deep search and report synthesis console</div></div>
           <button class="btn" data-xr-action="loadResearchPanel()">↻ Refresh</button>
         </div>
         <div class="grid grid-4 xr-s-6">
@@ -31,8 +36,15 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
 
       <!-- Panel 9: Voice Pipeline -->
       <div class="panel" tabindex="-1" id="panel-voice">
+        <div class="tab-strip" role="tablist" aria-label="Settings views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="settings">Settings</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="workspaces">Workspaces</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="files">Files</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="voice">Voice</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="about">About</button>
+        </div>
         <div class="section-header">
-          <div><h1>Voice Pipeline</h1><div class="section-sub">Wakeword detectors, TTS vocal synthesis, and hardware controls</div></div>
+          <div><h1>Settings — Voice</h1><div class="section-sub">Wakeword detectors, TTS vocal synthesis, and hardware controls</div></div>
         </div>
         <div class="card xr-s-6">
           <div class="xr-s-32">
@@ -62,6 +74,12 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
 
       <!-- Panel 10: Skills Marketplace -->
       <div class="panel" tabindex="-1" id="panel-skills">
+        <div class="tab-strip" role="tablist" aria-label="Extensions views">
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="skills">Skills</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="plugins">Plugins</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="mcp">MCP</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="capabilities">Capabilities</button>
+        </div>
         <div class="mp-hero">
           <div class="mp-hero-grid">
             <div>
@@ -121,8 +139,14 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
 
       <!-- Panel 11: Sandboxed Plugins -->
       <div class="panel" tabindex="-1" id="panel-plugins">
+        <div class="tab-strip" role="tablist" aria-label="Extensions views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="skills">Skills</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="plugins">Plugins</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="mcp">MCP</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="capabilities">Capabilities</button>
+        </div>
         <div class="section-header">
-          <div><h1>Sandboxed Plugins</h1><div class="section-sub">Code integrations with custom permissions limits</div></div>
+          <div><h1>Extensions — Plugins</h1><div class="section-sub">Code integrations with custom permissions limits</div></div>
           <button class="btn" data-xr-action="loadPlugins()">↻ Refresh</button>
         </div>
         <div class="grid grid-3 xr-s-6">
@@ -146,8 +170,14 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
 
       <!-- Panel 12: Capability Ecosystem -->
       <div class="panel" tabindex="-1" id="panel-capabilities">
+        <div class="tab-strip" role="tablist" aria-label="Extensions views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="skills">Skills</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="plugins">Plugins</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="mcp">MCP</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="capabilities">Capabilities</button>
+        </div>
         <div class="section-header">
-          <div><h1>Capability Ecosystem</h1><div class="section-sub">Common descriptors, provenance, permissions, certification, quarantine and rollback</div></div>
+          <div><h1>Extensions — Capabilities</h1><div class="section-sub">Common descriptors, provenance, permissions, certification, quarantine and rollback</div></div>
           <button class="btn" data-xr-action="loadCapabilities()">↻ Refresh</button>
         </div>
         <div class="grid grid-4 xr-s-6">
@@ -170,53 +200,77 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
         </div>
       </div>
 
-      <!-- Panel 13: MCP Servers -->
+      <!-- Panel: MCP — manages the SAME registry the xr mcp CLI uses -->
       <div class="panel" tabindex="-1" id="panel-mcp">
+        <div class="tab-strip" role="tablist" aria-label="Extensions views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="skills">Skills</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="plugins">Plugins</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="mcp">MCP</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="capabilities">Capabilities</button>
+        </div>
+
         <div class="section-header">
-          <div><h1>Model Context Protocol (MCP)</h1><div class="section-sub">Add external server toolkits (Github, Postgres, etc)</div></div>
-          <button class="btn" data-xr-action="loadMcp()">↻ Refresh</button>
+          <div><h1>Extensions — MCP</h1><div class="section-sub">Model Context Protocol — the live registry shared with <span class="mono">xr mcp</span></div></div>
+          <div class="xr-s-37">
+            <button class="btn" data-xr-action="loadMcp()">↻ Refresh</button>
+            <button class="btn btn-ghost" data-xr-action="probeMcpHealth()">Run health probe</button>
+          </div>
         </div>
         <div class="grid grid-2">
           <div class="card">
-            <div class="card-header"><span class="card-title">Register MCP Server</span></div>
+            <div class="card-header"><span class="card-title">Register a server</span></div>
             <div class="xr-s-15">
-              <input id="mcp-create-id" class="input" placeholder="Server ID (e.g. github)" aria-label="MCP server ID" />
-              <input id="mcp-create-cmd" class="input" placeholder="Execution command (e.g. npx)" aria-label="MCP server execution command" />
-              <input id="mcp-create-args" class="input" placeholder="Arguments (e.g. -y @modelcontextprotocol/server-github)" aria-label="MCP server arguments" />
-              <button class="btn btn-primary xr-s-16" data-xr-action="registerMcp()">Add MCP Server</button>
+              <input id="mcp-create-id" class="input" placeholder="Server id (e.g. github)" aria-label="MCP server id" />
+              <input id="mcp-create-url" class="input" placeholder="Remote URL (https://… — for sse/http servers)" aria-label="MCP server URL, optional" />
+              <input id="mcp-create-cmd" class="input" placeholder="Command (stdio, e.g. npx -y @modelcontextprotocol/server-github)" aria-label="MCP server command for stdio transport" />
+              <label class="xr-s-2 check-line"><input type="checkbox" id="mcp-create-enable" checked aria-label="Enable the server immediately after adding" /> Enable immediately</label>
+              <button class="btn btn-primary xr-s-16" data-xr-action="registerMcp()">Add server</button>
+              <p class="muted xr-s-9">Equivalent to <code class="mono">xr mcp add</code>. Give a command for a local stdio server, or a URL for a remote one.</p>
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><span class="card-title">Active MCP Connections</span></div>
-            <div id="mcp-servers-list"><div class="muted">No MCP servers registered. Use the configuration terminal or add a preset command.</div></div>
+            <div class="card-header"><span class="card-title">Registered servers</span></div>
+            <div id="mcp-servers-list"><div class="spinner"></div></div>
           </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Health report</span></div>
+          <div id="mcp-health-report" class="muted">No probe run yet in this session.</div>
         </div>
       </div>
 
-      <!-- Panel 13: Business OS CRM -->
-      <div class="panel" tabindex="-1" id="panel-business">
-        <div class="section-header">
-          <div><h1>Business OS CRM</h1><div class="section-sub">Enterprise metrics automation, CRM assistant logs, and financial flows</div></div>
+      <!-- Panel: Approvals — the durable human-in-the-loop queue -->
+      <div class="panel" tabindex="-1" id="panel-approvals">
+        <div class="tab-strip" role="tablist" aria-label="Guardrails views">
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="approvals">Approvals</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="budget">Budget</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="audit">Audit</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="shield">Shield</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="control">Computer Use</button>
         </div>
-        <div class="grid grid-4 xr-s-6">
-          <div class="card"><div class="card-title">Customer Pipelines</div><div class="card-value">12</div><div class="card-sub">Active CRM accounts</div></div>
-          <div class="card"><div class="card-title">Invoices audited</div><div class="card-value">$4,850</div><div class="card-sub">Automated monthly audit</div></div>
-          <div class="card"><div class="card-title">Workflows triggered</div><div class="card-value">84</div><div class="card-sub">Cron scheduler jobs</div></div>
-          <div class="card"><div class="card-title">Skill integrations</div><div class="card-value text-cyan">Healthy</div><div class="card-sub">CRM Assistant active</div></div>
+
+        <div class="section-header">
+          <div><h1>Guardrails — Approvals</h1><div class="section-sub">Every side-effecting action from ANY surface (CLI, chat, triggers) waits here until a human decides</div></div>
+          <button class="btn" data-xr-action="loadApprovals()">↻ Refresh</button>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Business modules integration</span></div>
-          <p class="muted xr-s-7">
-            Business OS CRM features run inside XR using dedicated Enterprise Skill Packs. Activate the matching skill sets inside the Skills Marketplace to enable.
-          </p>
-          <button class="btn btn-primary" data-xr-action="setMarketQuery('business crm'); navigateTo('skills');">Browse CRM Skill Packs</button>
+          <div class="card-header"><span class="card-title">Pending queue</span><span class="badge badge-gray" id="approvals-count">—</span></div>
+          <div id="approvals-list"><div class="spinner"></div></div>
+          <p class="muted xr-s-9">Approvals expire (TTL) and are durably stored — a restart never loses a decision. Approving here releases the waiting run, exactly like answering in the terminal.</p>
         </div>
       </div>
 
       <!-- Panel 14: Computer Control -->
       <div class="panel" tabindex="-1" id="panel-control">
+        <div class="tab-strip" role="tablist" aria-label="Guardrails views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="approvals">Approvals</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="budget">Budget</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="audit">Audit</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="shield">Shield</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="control">Computer Use</button>
+        </div>
         <div class="section-header">
-          <div><h1>Computer Control</h1><div class="section-sub">Vision and system command automation permissions</div></div>
+          <div><h1>Guardrails — Computer Use</h1><div class="section-sub">Vision and system command automation permissions</div></div>
           <button class="btn btn-danger xr-s-38" data-xr-action="emergencyStopControl()"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="14" height="14"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Emergency Stop</button>
         </div>
         <div class="grid grid-4 xr-s-6">
@@ -239,6 +293,13 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
 
       <!-- Panel 15: Shield (Security) -->
       <div class="panel" tabindex="-1" id="panel-shield">
+        <div class="tab-strip" role="tablist" aria-label="Guardrails views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="approvals">Approvals</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="budget">Budget</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="audit">Audit</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="shield">Shield</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="control">Computer Use</button>
+        </div>
         <div class="section-header">
           <div><h1><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="12" height="12"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> XR Shield — Security & Privacy</h1><div class="section-sub">EDR endpoint checking, processes manager, and Dojo testing lab</div></div>
           <div class="xr-s-17">
@@ -363,8 +424,15 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
 
       <!-- Panel 16: Audit Log -->
       <div class="panel" tabindex="-1" id="panel-audit">
+        <div class="tab-strip" role="tablist" aria-label="Guardrails views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="approvals">Approvals</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="budget">Budget</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="audit">Audit</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="shield">Shield</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="control">Computer Use</button>
+        </div>
         <div class="section-header">
-          <div><h1>Audit Log</h1><div class="section-sub">Tamper-evident append-only ledger with cryptographic hash checks</div></div>
+          <div><h1>Guardrails — Audit Log</h1><div class="section-sub">Tamper-evident append-only ledger with cryptographic hash checks</div></div>
           <div class="xr-s-17">
             <button class="btn btn-primary" data-xr-action="verifyAuditLedger()">Verify Hash integrity</button>
             <button class="btn btn-ghost" data-xr-action="loadAuditLog()">↻ Refresh</button>
@@ -381,8 +449,15 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
 
       <!-- Panel 17: Cost & Budget -->
       <div class="panel" tabindex="-1" id="panel-budget">
+        <div class="tab-strip" role="tablist" aria-label="Guardrails views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="approvals">Approvals</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="budget">Budget</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="audit">Audit</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="shield">Shield</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="control">Computer Use</button>
+        </div>
         <div class="section-header">
-          <div><h1>Cost & Budget Governor</h1><div class="section-sub">Resource spending trackers and pricing limit controls</div></div>
+          <div><h1>Guardrails — Cost &amp; Budget</h1><div class="section-sub">Resource spending trackers and pricing limit controls</div></div>
           <button class="btn" data-xr-action="loadBudgetPanel()">↻ Refresh</button>
         </div>
         <div class="grid grid-4 xr-s-6">
@@ -430,10 +505,17 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
 
       <!-- Panel 18: Files & Artifacts -->
       <div class="panel" tabindex="-1" id="panel-files">
+        <div class="tab-strip" role="tablist" aria-label="Settings views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="settings">Settings</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="workspaces">Workspaces</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="files">Files</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="voice">Voice</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="about">About</button>
+        </div>
         <div class="section-header">
           <div>
-            <h1>Workspace Files</h1>
-            <div class="section-sub">Real file browser for this project — scoped to the workspace root</div>
+            <h1>Settings — Files</h1>
+            <div class="section-sub">Workspace Files — real file browser for this project, scoped to the workspace root</div>
           </div>
           <div class="xr-files-tools">
             <span class="badge badge-amber" title="Experimental: the coding workspace is a read-only browser in this build">experimental</span>
@@ -453,83 +535,80 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
         </div>
       </div>
 
-      <!-- Panel 19: Downloads Security -->
-      <div class="panel" tabindex="-1" id="panel-downloads">
-        <div class="section-header">
-          <div><h1>Downloads Folder Security Scanner</h1><div class="section-sub">Scans local Downloads for malware and alerts on unsafe files</div></div>
-        </div>
-        <div class="card xr-s-6">
-          <div class="card-header"><span class="card-title">Downloads telemetry scan</span></div>
-          <p class="muted xr-s-7">This panel monitors file additions inside the standard Downloads folder and alerts if downloaded scripts contain crypto-miner payloads or suspicious command triggers.</p>
-          <button class="btn btn-primary" data-xr-action="switchShieldTab('downloads'); navigateTo('shield');">Open Shield Downloads scanner</button>
-        </div>
-      </div>
 
-      <!-- Panel 20: Devices Link -->
-      <div class="panel" tabindex="-1" id="panel-devices">
-        <div class="section-header">
-          <div><h1>Devices Sync</h1><div class="section-sub">Synchronize terminal clients, VS Code workspaces, and mobile Termux interfaces</div></div>
-        </div>
-        <div class="grid grid-3">
-          <div class="card">
-            <div class="card-header"><span class="card-title">VS Code Extension</span></div>
-            <p class="xr-s-48">Deploy XR inside editor panes. Share context, models, and local-key configuration with active files.</p>
-            <button class="btn" data-xr-action="toast('VS Code API port listening on 127.0.0.1:3141', 'ok')">Integrate Port</button>
-          </div>
-          <div class="card">
-            <div class="card-header"><span class="card-title">Termux Android Sync</span></div>
-            <p class="xr-s-48">Integrate Termux prompt on Android devices to access models, CRM, and files remotely via Telegram.</p>
-            <button class="btn" data-xr-action="toast('Mobile webhook sync ready', 'ok')">Show instructions</button>
-          </div>
-          <div class="card">
-            <div class="card-header"><span class="card-title">CLI Daemon State</span></div>
-            <p class="xr-s-48">Local background runner checks on cron scheduled tasks, webhooks, and wake phrases.</p>
-            <span class="badge badge-green">Healthy</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- Panel 21: Scheduled Tasks -->
+      <!-- Panel: Automation — real trigger registry (/api/triggers) -->
       <div class="panel" tabindex="-1" id="panel-automation">
+        <div class="tab-strip" role="tablist" aria-label="Runs views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="sessions">Sessions</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="research">Research</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="automation">Automation</button>
+        </div>
+
         <div class="section-header">
-          <div><h1>Scheduled Automation</h1><div class="section-sub">Execute recurring prompts or scripts via local cron scheduling</div></div>
+          <div><h1>Runs — Automation</h1><div class="section-sub">Scheduled, event and file-watch triggers — the live registry behind <span class="mono">xr cron</span></div></div>
+          <div class="xr-s-37">
+            <button class="btn" data-xr-action="loadAutomation()">↻ Refresh</button>
+            <button class="btn btn-ghost" data-xr-action="toggleTriggersPause()">Pause / resume all</button>
+          </div>
+        </div>
+        <div class="grid grid-4 xr-s-6">
+          <div class="card"><div class="card-title">Triggers</div><div class="card-value" id="auto-count">—</div></div>
+          <div class="card"><div class="card-title">Enabled</div><div class="card-value" id="auto-enabled">—</div></div>
+          <div class="card"><div class="card-title">In flight</div><div class="card-value" id="auto-inflight">—</div></div>
+          <div class="card"><div class="card-title">Global state</div><div class="card-value" id="auto-paused">—</div></div>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Cron Automation Tasks</span></div>
-          <div class="stat-row"><div class="stat-key">No scheduled cron automation jobs.</div></div>
-          <div class="xr-s-49">
-            <p class="muted xr-s-27">Register scheduling scripts via terminal commands: <code class="mono text-cyan">xr cron add "0 9 * * *" "xr 'Run daily research summary'"</code></p>
+          <div class="card-header"><span class="card-title">Trigger registry</span></div>
+          <div id="auto-trigger-list"><div class="spinner"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Create a trigger</span></div>
+          <div class="xr-s-15">
+            <input id="auto-new-expr" class="input" placeholder="Cron expression (e.g. 0 9 * * *)" aria-label="Cron expression" />
+            <input id="auto-new-task" class="input" placeholder="Task to run (e.g. Summarize overnight research)" aria-label="Task template" />
+            <input id="auto-new-consent" class="input" placeholder="Consent reference (e.g. cli:user) — required" aria-label="Consent reference" />
+            <button class="btn btn-primary xr-s-16" data-xr-action="createTrigger()">Create trigger</button>
+            <p class="muted xr-s-9">Automation is consent-gated: a trigger only fires with an approval mode and consent reference, exactly like the CLI.</p>
           </div>
         </div>
       </div>
 
-      <!-- Panel 22: Webhooks API -->
-      <div class="panel" tabindex="-1" id="panel-integrations">
+      <!-- Panel: Agents — real workflows + honest built-in roles -->
+      <div class="panel" tabindex="-1" id="panel-agents">
         <div class="section-header">
-          <div><h1>Webhooks API</h1><div class="section-sub">Expose local endpoints to receive events from Github, Slack, etc</div></div>
+          <div><h1>Agents</h1><div class="section-sub">Multi-agent workflows from the live store, and the roles XR ships with</div></div>
+          <button class="btn" data-xr-action="loadAgents()">↻ Refresh</button>
+        </div>
+        <div class="grid grid-4 xr-s-6">
+          <div class="card"><div class="card-title">Workflows</div><div class="card-value" id="agents-wf-total">—</div></div>
+          <div class="card"><div class="card-title">Running</div><div class="card-value text-cyan" id="agents-wf-running">—</div></div>
+          <div class="card"><div class="card-title">Blocked / failed</div><div class="card-value text-amber" id="agents-wf-blocked">—</div></div>
+          <div class="card"><div class="card-title">Built-in roles</div><div class="card-value" id="agents-roles-count">—</div></div>
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Incoming triggers webhooks</span></div>
-          <div class="stat-row"><div class="stat-key">Webhook Server port</div><div class="stat-val text-cyan">127.0.0.1:3141/api/webhook</div></div>
-          <div class="stat-row"><div class="stat-key">Status</div><div class="stat-val text-green">Listening</div></div>
-        </div>
-      </div>
-
-      <!-- Panel 23: Alerts Hub -->
-      <div class="panel" tabindex="-1" id="panel-notifications">
-        <div class="section-header">
-          <div><h1>Alerts Hub</h1><div class="section-sub">System notices, telemetry flags, and safety block indicators</div></div>
-          <button class="btn btn-ghost" data-xr-action="clearNotifications()">Clear list</button>
+          <div class="card-header"><span class="card-title">Workflow runs</span></div>
+          <div id="agents-wf-list" class="xr-s-14"><div class="spinner"></div></div>
         </div>
         <div class="card">
-          <div id="alerts-list"><div class="muted">No unread alerts. Active console is safe.</div></div>
+          <div class="card-header"><span class="card-title">Built-in roles</span></div>
+          <p class="muted xr-s-9">These are the orchestration roles XR ships — not user-created agents. Live multi-agent work appears above as workflow runs.</p>
+          <div id="agents-roles-list" class="xr-s-14"><div class="spinner"></div></div>
+          <p class="muted xr-s-9">Drive them from the terminal: <code class="mono text-cyan">xr agents run "&lt;goal&gt;"</code> · <code class="mono text-cyan">xr agents status</code></p>
         </div>
       </div>
 
       <!-- Panel 24: Core Settings -->
       <div class="panel" tabindex="-1" id="panel-settings">
+        <div class="tab-strip" role="tablist" aria-label="Settings views">
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="settings">Settings</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="workspaces">Workspaces</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="files">Files</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="voice">Voice</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="about">About</button>
+        </div>
         <div class="section-header">
-          <div><h1>Core Settings</h1><div class="section-sub">Configure XR kernel preferences, budget caps, and egress rules</div></div>
+          <div><h1>Settings</h1><div class="section-sub">Configure XR kernel preferences, budget caps, and egress rules</div></div>
           <div class="xr-s-17">
             <input id="settings-search" class="input xr-s-50" placeholder="Search settings..." data-xr-keyup="filterSettings()" aria-label="Search settings" />
             <button class="btn btn-primary" data-xr-action="saveAllSettings()">Save Configuration</button>
@@ -665,8 +744,15 @@ export const PAGE_PANELS_B = `      <!-- Panel 8: Research Runs -->
 
       <!-- Panel 25: About Build -->
       <div class="panel" tabindex="-1" id="panel-about">
+        <div class="tab-strip" role="tablist" aria-label="Settings views">
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="settings">Settings</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="workspaces">Workspaces</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="files">Files</button>
+        <button type="button" class="tab-item" role="tab" aria-selected="false" data-panel="voice">Voice</button>
+        <button type="button" class="tab-item active" role="tab" aria-selected="true" data-panel="about">About</button>
+        </div>
         <div class="section-header">
-          <div><h1>About XR Control Center</h1><div class="section-sub">System build identity metadata</div></div>
+          <div><h1>Settings — About</h1><div class="section-sub">System build identity metadata</div></div>
         </div>
         <div class="card xr-s-6">
           <div class="xr-s-52">

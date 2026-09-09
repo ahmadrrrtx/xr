@@ -3,7 +3,7 @@
  *
  * A REAL headless Chromium loads the REAL daemon (no mocks), then:
  *   · runs axe-core (tags wcag2a/wcag2aa/wcag21aa/wcag22aa) over the sign-in
- *     page, the dashboard shell, and EVERY one of the 26 panels — any single
+ *     page, the dashboard shell, and EVERY one of the 23 panels — any single
  *     violation fails the suite;
  *   · drives REAL keyboard input through the core flows (skip link, panel
  *     navigation, command-palette trap/return, aria-current sync).
@@ -178,7 +178,7 @@ describe.skipIf(!HAS_CHROMIUM)("T3 live — sign-in page (axe-core, WCAG 2.2 tag
     const page = await newPage();
     await signedInDashboard(page);
     expect(page.url()).toBe(`${base}/`);
-    expect(await page.locator("h1").first().textContent()).toContain("Overview");
+    expect(await page.locator("h1").first().textContent()).toContain("Home");
     await page.close();
   }, 60_000);
 });
@@ -192,16 +192,16 @@ describe.skipIf(!HAS_CHROMIUM)("T3 live — dashboard axe sweep (every panel)", 
     await page.close();
   }, 60_000);
 
-  test("zero axe violations across ALL 26 panels", async () => {
+  test("zero axe violations across ALL 23 panels", async () => {
     const page = await newPage();
     await signedInDashboard(page);
     await page.evaluate(axeSrc);
-    const panels = await page.$$eval("button.nav-item", (els) =>
-      els.map((e) => (e as any).dataset.panel ?? ""),
+    // Enumerate the real panels (the sidebar now navigates 9 AREAS; the
+    // remaining views are in-panel tab strips that target the same ids).
+    const panels = await page.$$eval(".panel[id]", (els) =>
+      els.map((e) => (e.id ?? "").replace(/^panel-/, "")),
     );
-    // T4: the "Start here" area duplicates 4 essentials as clones — panels
-    // stay exactly 26 unique, buttons may number more.
-    expect(new Set(panels).size).toBe(26);
+    expect(new Set(panels).size).toBe(23);
     const failures: Record<string, Violation[]> = {};
     for (const panel of new Set(panels)) {
       await gotoPanel(page, panel);
@@ -250,11 +250,12 @@ describe.skipIf(!HAS_CHROMIUM)("T3 live — keyboard operation (real key events)
   test("Enter on a nav button switches panel and moves focus into it", async () => {
     const page = await newPage();
     await signedInDashboard(page);
-    // "Models" is cloned into the always-visible Start-here area.
-    await page.locator('[data-area="start-here"] button.nav-item[data-panel="models"]').focus();
+    // The sidebar navigates AREAS now; progressive disclosure keeps "Start
+    // here" expanded with clones of the essentials (Runs → sessions panel).
+    await page.locator('[data-area="start-here"] button.nav-item[data-panel="sessions"]').focus();
     await page.keyboard.press("Enter");
-    expect(await page.evaluate(() => document.querySelector(".panel.active")?.id)).toBe("panel-models");
-    expect(await page.evaluate(() => document.activeElement?.id)).toBe("panel-models");
+    expect(await page.evaluate(() => document.querySelector(".panel.active")?.id)).toBe("panel-sessions");
+    expect(await page.evaluate(() => document.activeElement?.id)).toBe("panel-sessions");
     await page.close();
   }, 60_000);
 

@@ -21,7 +21,14 @@ import { fileURLToPath } from "node:url";
 
 function assetDataUri(name: string): string {
   try {
-    const file = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", name);
+    // Prefer the compact SVG marks: the old PNG data-URIs shipped ~470 KB of
+    // base64 on EVERY dashboard response (avatar 195 KB + logo 156 KB, ×1.33
+    // base64 inflation). The SVG marks render identically at every size the
+    // dashboard uses and cost under 1 KB.
+    const base = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets");
+    const svg = join(base, name.replace(/\.png$/, ".svg"));
+    if (existsSync(svg)) return `data:image/svg+xml;base64,${readFileSync(svg).toString("base64")}`;
+    const file = join(base, name);
     if (!existsSync(file)) return "";
     return `data:image/png;base64,${readFileSync(file).toString("base64")}`;
   } catch {

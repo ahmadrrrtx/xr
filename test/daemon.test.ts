@@ -193,7 +193,7 @@ test("dashboard html does NOT embed the token and loads same-origin assets only"
   expect(html).not.toContain(TOKEN);
   // Stable dashboard copy (rendered statically, not via JS).
   expect(html).toContain("Control Center");
-  expect(html).toContain("Security EDR");
+  expect(html).toContain("Security lab");
   expect(html).toContain("Audit Log");
   // Phase 4 · T5 — same-origin external assets under strict CSP. NO
   // third-party origins, no inline scripts.
@@ -208,9 +208,10 @@ test("dashboard html does NOT embed the token and loads same-origin assets only"
 test("agents endpoint returns the built-in workforce and workflow counters", async () => {
   const h = makeHandler(store, TOKEN);
   const j: any = await (await h(req("/api/agents"))).json();
-  expect(Array.isArray(j.agents)).toBe(true);
-  expect(j.agents.some((a: any) => a.id === "supervisor")).toBe(true);
-  expect(j).toHaveProperty("workflows");
+  expect(Array.isArray(j.roles)).toBe(true);
+  expect(j.roles.some((a: any) => a.id === "supervisor")).toBe(true);
+  expect(Array.isArray(j.workflows)).toBe(true);
+  expect(j).toHaveProperty("health");
 });
 
 test("agents workflow detail endpoint returns a persisted workflow", async () => {
@@ -307,4 +308,55 @@ test("dashboard html includes the durable memory viewer (markup; script is exter
   // Phase 4 · T5 — the client application is an external asset under strict
   // CSP; the API wiring lives in /assets/dashboard.js, not inline HTML.
   expect(html).toContain('/assets/dashboard.js');
+});
+
+test("MCP routes: add (stdio, CLI-parity split), list, enable/disable, remove", async () => {
+  const h = makeHandler(store, TOKEN);
+  const post = (path: string, body: unknown) =>
+    h(new Request(`http://127.0.0.1:7842${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify(body),
+    }));
+
+  // Empty registry is an empty list — never a fake "healthy" default.
+  const empty: any = await (await h(req("/api/mcp"))).json();
+  expect(empty.servers).toEqual([]);
+
+  // stdio add: command string with args splits exactly like `xr mcp add`.
+  const add: any = await (await post("/api/mcp/add", {
+    id: "fs",
+    name: "Filesystem",
+    transport: "stdio",
+    cmd: "npx -y @modelcontextprotocol/server-filesystem /tmp",
+    enabled: true,
+  })).json();
+  expect(add.ok).toBe(true);
+  const listed: any = await (await h(req("/api/mcp"))).json();
+  expect(listed.servers).toHaveLength(1);
+  expect(listed.servers[0].command).toBe("npx");
+  expect(listed.servers[0].args).toEqual(["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]);
+  expect(listed.servers[0].enabled).toBe(true);
+
+  // http add requires a url.
+  const badHttp: any = await (await post("/api/mcp/add", { id: "noUrl", transport: "http" })).json();
+  expect(badHttp.error).toBeTruthy();
+
+  // disable → enable round-trip.
+  await post("/api/mcp/disable", { id: "fs" });
+  const off: any = await (await h(req("/api/mcp"))).json();
+  expect(off.servers[0].enabled).toBe(false);
+  await post("/api/mcp/enable", { id: "fs" });
+  const on: any = await (await h(req("/api/mcp"))).json();
+  expect(on.servers[0].enabled).toBe(true);
+
+  // remove cleans the registry.
+  const rm: any = await (await post("/api/mcp/remove", { id: "fs" })).json();
+  expect(rm.ok).toBe(true);
+  const gone: any = await (await h(req("/api/mcp"))).json();
+  expect(gone.servers).toEqual([]);
+
+  // Unknown-id operations fail honestly.
+  const ghost: any = await (await post("/api/mcp/remove", { id: "ghost" })).json();
+  expect(ghost.error).toBeTruthy();
 });

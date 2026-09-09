@@ -130,6 +130,55 @@ export const STYLE_UI = `/* ── Chat Session Workspace (Liquid Layout) ──
 .inspector-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 8px; }
 .inspector-detail { font-size: 11px; color: var(--textDim); line-height: 1.5; }
 
+/* ── Chat composer: mode segmented control ────────────────────────────── */
+.mode-seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.mode-seg-btn {
+  padding: 5px 12px; font-size: 11px; font-weight: 600; color: var(--muted); background: none;
+  border: none; border-right: 1px solid var(--border); cursor: pointer; font-family: var(--font-sans);
+}
+.mode-seg-btn:last-child { border-right: none; }
+.mode-seg-btn:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.mode-seg-btn.active { color: var(--cyan); background: rgba(0, 212, 255, 0.08); }
+.mode-seg-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
+/* ── In-panel tab strips (section secondary views) ──────────────────────
+   The sidebar navigates AREAS; these tabs navigate the panels inside an
+   area. They reuse navigateTo + panel ids, so loaders and focus management
+   behave exactly like sidebar navigation. */
+.tab-strip {
+  display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
+  border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 16px;
+}
+.tab-item {
+  padding: 5px 12px; border-radius: var(--radius); cursor: pointer; font-size: 12px;
+  color: var(--textDim); transition: 0.1s; border: 1px solid transparent; text-align: left;
+  background: none; font-family: var(--font-sans);
+}
+.tab-item:hover { background: rgba(255,255,255,0.03); color: var(--text); }
+.tab-item.active { background: rgba(0, 212, 255, 0.08); color: var(--cyan); border-color: rgba(0, 212, 255, 0.25); font-weight: 600; }
+.tab-item:focus-visible, .tab-item:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+/* Sidebar pending-approvals badge */
+.nav-badge {
+  margin-left: auto; min-width: 18px; padding: 1px 6px; border-radius: 999px;
+  background: var(--amber, #F59E0B); color: #0A0A0F; font-size: 10px; font-weight: 800;
+  text-align: center;
+}
+
+/* ── Home: active-model hero + needs-attention strip ─────────────────── */
+.home-model-card { border-left: 3px solid var(--cyan); }
+.home-model-row { display: flex; align-items: center; gap: 12px; }
+.home-model-row .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+.home-model-row .dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(0,255,136,0.5); }
+.home-model-row .dot.err { background: var(--red); }
+.home-model-row .dot.warn { background: var(--amber); }
+.home-attention { border-left: 3px solid var(--amber); }
+.home-attention[hidden] { display: none; }
+
+/* ── Home: active-model hero + needs-attention strip ─────────────────── */
+.home-quick-ol { margin: 0; padding-left: 1.25rem; line-height: 2; }
+.check-line { display: flex; gap: .5rem; align-items: center; }
+
 /* ── Settings Category Navigation ────────────────────────────────────── */
 .settings-wrap { display: grid; grid-template-columns: 180px minmax(0,1fr); gap: 20px; }
 @media(max-width: 768px) { .settings-wrap { grid-template-columns: 1fr; } }
