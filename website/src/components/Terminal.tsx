@@ -9,12 +9,12 @@ function useTypingLineRef() {
 }
 
 const LINES: Array<{ prompt?: string; text: string; kind?: "out" | "ok" | "info" | "dim"; delay?: number }> = [
-  { prompt: "$", text: "npm i -g @xr/agent" },
+  { prompt: "$", text: "npm i -g @rrrtx/xr" },
   { text: "added 1 package in 2.1s", kind: "dim" },
   { prompt: "$", text: "xr", delay: 300 },
-  { text: "XR 3.1.6 (Baseline Integrity) — ready.", kind: "ok" },
-  { text: "→ Connecting to model: XR Core 1", kind: "info" },
-  { text: "→ Skills loaded: 214", kind: "info" },
+  { text: "XR 1.0.0 (Truth) — ready.", kind: "ok" },
+  { text: "→ Connecting to model: Phi-3 Mini (local)", kind: "info" },
+  { text: `→ Skills loaded: ${65}`, kind: "info" },
   { prompt: "λ", text: "refactor src/auth —target ts" },
   { text: "◐ Parsing codebase (412 files)", kind: "dim" },
   { text: "✓ Planned 8 transforms", kind: "ok" },

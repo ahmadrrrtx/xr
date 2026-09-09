@@ -9,8 +9,8 @@ export default function MarketplacePage() {
     <>
       <PageHeader
         eyebrow="Marketplace"
-        title="Skills and extensions for everything."
-        subtitle="Browse the bundled skills, plugins and MCP servers. Install with one command. Build your own in minutes."
+        title="Authentic skills and extensions."
+        subtitle="Every item here is a real XR skill or plugin bundled in the repository — manifest-declared, permission-scoped, and labeled honestly. No fake popularity metrics: trust is earned, not tallied."
       />
       <section className="pb-24">
         <div className="mx-auto max-w-7xl px-6">

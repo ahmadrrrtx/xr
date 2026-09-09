@@ -185,13 +185,28 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; }
 @media (max-width: 1200px) { .grid-4, .grid-6, .grid-12 { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 768px) { .grid-2, .grid-3, .grid-4, .grid-6, .grid-12 { grid-template-columns: 1fr; } }
 
-/* ── Bento Cards ─────────────────────────────────────────────────────── */
+/* ── Bento Cards ───────────────────────────────────────────────────────
+   Premium hover: a gentle lift, softened layered shadow, and a cyan-kissed
+   border. Keep the resting state quiet so the shell stays calm and fast. */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 16px;
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition:
+    border-color 0.22s cubic-bezier(0.4,0,0.2,1),
+    box-shadow 0.22s cubic-bezier(0.4,0,0.2,1),
+    transform 0.22s cubic-bezier(0.4,0,0.2,1),
+    background 0.22s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 212, 255, 0.28);
+  background: var(--surface2);
+  box-shadow:
+    0 12px 28px -10px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 212, 255, 0.06),
+    0 0 22px -6px rgba(0, 212, 255, 0.22);
 }
 .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .card-title { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
@@ -220,9 +235,13 @@ code, pre, .mono { font-family: var(--font-mono); font-size: 12px; }
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: border-color 0.1s;
+  transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
 }
-.matrix-cell:hover { border-color: var(--border2); }
+.matrix-cell:hover {
+  border-color: var(--cyan);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px -10px rgba(0, 0, 0, 0.5), 0 0 18px -6px rgba(0, 212, 255, 0.2);
+}
 .matrix-cell-head { display: flex; align-items: center; justify-content: space-between; }
 .matrix-cell-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--textDim); }
 .matrix-cell-status { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }

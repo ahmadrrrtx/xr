@@ -21,7 +21,7 @@ const quarters = [
     items: [
       { t: "Multi-agent orchestration GA", s: "planned" },
       { t: "Team workspaces v1", s: "planned" },
-      { t: "XR Core 1.5 (reasoning)", s: "planned" },
+      { t: "Extended local-model quantization support", s: "planned" },
       { t: "Mobile companion app", s: "planned" },
     ],
   },

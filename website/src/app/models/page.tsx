@@ -19,9 +19,10 @@ export default function ModelsPage() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {models.map((m) => (
-              <div key={m.name} className={cn("card p-6 relative", m.featured && "border-violet-400/30")}>
+              <div key={m.name} className={cn("card p-6 relative", m.featured && "border-indigo-400/30")}>
+                <span className="card-glow" aria-hidden />
                 {m.featured && (
-                  <span className="absolute top-4 right-4 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-violet-200 bg-violet-500/15 border border-violet-400/20 rounded-full px-2 py-0.5">
+                  <span className="absolute top-4 right-4 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-indigo-200 bg-indigo-500/15 border border-indigo-400/20 rounded-full px-2 py-0.5">
                     <Sparkles className="h-3 w-3" /> Recommended
                   </span>
                 )}

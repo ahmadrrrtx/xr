@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { site } from "@/lib/site";
 import { XrLogo } from "@/components/Logo";
-import { GithubIcon, TwitterIcon } from "@/components/icons";
+import { GithubIcon } from "@/components/icons";
 
 export function Footer() {
   return (
@@ -9,9 +9,9 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-6 py-16">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-10">
           <div className="col-span-2">
-            <XrLogo />
+            <XrLogo size={30} stacked />
             <p className="mt-4 text-sm text-zinc-400 max-w-xs">
-              The agentic runtime for software. Built for developers, designed for teams.
+              The AI agent you can actually trust. Local-first, BYOK, governed — one system, every surface.
             </p>
             <div className="mt-5 flex items-center gap-3 text-zinc-400">
               <a
@@ -24,17 +24,17 @@ export function Footer() {
                 <GithubIcon className="h-4 w-4" />
               </a>
               <a
-                href="https://twitter.com/"
+                href={site.github}
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Twitter / X"
+                aria-label="NPM package"
                 className="p-2 rounded-lg hover:text-white hover:bg-white/5 transition-colors"
               >
-                <TwitterIcon className="h-4 w-4" />
+                <span className="text-[13px] font-mono">npm</span>
               </a>
             </div>
             <div className="mt-6 text-xs text-zinc-500">
-              © {new Date().getFullYear()} XR Labs, Inc. All rights reserved.
+              © {new Date().getFullYear()} XR. MIT-licensed.
             </div>
           </div>
 

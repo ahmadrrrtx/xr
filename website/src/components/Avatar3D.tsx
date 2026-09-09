@@ -1,18 +1,26 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 
 /**
- * XR Avatar — pure SVG/GLSL-feel 3D orb.
- * No external three.js dependency (keeps bundle lean / build reliable),
- * but the look is deliberately "floating 3D" with layered gradients,
- * conic highlight, interactive lighting that follows the cursor,
- * and subtle parallax.
+ * XR Avatar — official brand visual.
+ *
+ * Uses the repository's official avatar image (assets/brand/avatar-front.png)
+ * presented as a floating, glowing "agent presence" — a soft light halo, a
+ * tilt-on-cursor parallax, and a subtle entrance. No fake 3D orb or invented
+ * identity: this is the official XR avatar, framed to feel premium and calm.
  */
 export function Avatar3D() {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const mx = useMotionValue(0.5);
+  const my = useMotionValue(0.5);
+  const sx = useSpring(mx, { stiffness: 120, damping: 24 });
+  const sy = useSpring(my, { stiffness: 120, damping: 24 });
+
+  const rotateY = useTransform(sx, [0, 1], [-8, 8]);
+  const rotateX = useTransform(sy, [0, 1], [8, -8]);
+
   const [pressed, setPressed] = useState(false);
 
   useEffect(() => {
@@ -20,140 +28,101 @@ export function Avatar3D() {
     if (!el) return;
     const handle = (e: MouseEvent) => {
       const r = el.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width - 0.5;
-      const y = (e.clientY - r.top) / r.height - 0.5;
-      setPos({ x, y });
+      mx.set((e.clientX - r.left) / r.width);
+      my.set((e.clientY - r.top) / r.height);
     };
-    const leave = () => setPos({ x: 0, y: 0 });
+    const leave = () => {
+      mx.set(0.5);
+      my.set(0.5);
+    };
     window.addEventListener("mousemove", handle);
     el.addEventListener("mouseleave", leave);
     return () => {
       window.removeEventListener("mousemove", handle);
       el.removeEventListener("mouseleave", leave);
     };
-  }, []);
-
-  const rx = pos.y * -14;
-  const ry = pos.x * 14;
+  }, [mx, my]);
 
   return (
-    <div
-      ref={ref}
-      className="relative flex items-center justify-center select-none"
-      style={{ width: "100%", height: "100%", perspective: 1000 }}
-      onMouseDown={() => setPressed(true)}
-      onMouseUp={() => setPressed(false)}
-      onMouseLeave={() => setPressed(false)}
-    >
-      {/* Glow halo */}
+    <div className="relative flex items-center justify-center select-none" style={{ perspective: 1000 }}>
+      {/* Halo glow */}
       <motion.div
         aria-hidden
-        className="absolute rounded-full pulse-glow"
+        className="absolute rounded-full"
         style={{
-          width: "78%",
-          height: "78%",
-          filter: "blur(60px)",
+          width: "84%",
+          height: "84%",
+          filter: "blur(70px)",
           background:
-            "radial-gradient(closest-side, rgba(124,92,255,0.55), rgba(56,189,248,0.2) 45%, transparent 70%)",
+            "radial-gradient(closest-side, rgba(40,180,255,0.5), rgba(84,111,255,0.22) 45%, transparent 72%)",
         }}
-        animate={{ scale: pressed ? 0.95 : 1 }}
-        transition={{ type: "spring", stiffness: 200, damping: 20 }}
+        animate={{ scale: pressed ? 0.95 : 1, opacity: [0.75, 0.95, 0.75] }}
+        transition={{ scale: { type: "spring", stiffness: 180, damping: 20 }, opacity: { duration: 6, repeat: Infinity } }}
       />
 
-      {/* Orbit rings */}
+      {/* Orbiting accent dot */}
       <motion.div
         aria-hidden
-        className="absolute rounded-full border border-white/10 float-slow"
-        style={{ width: "92%", height: "92%" }}
+        className="absolute rounded-full"
+        style={{ width: "96%", height: "96%" }}
         animate={{ rotate: 360 }}
-        transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
-      />
-      <motion.div
-        aria-hidden
-        className="absolute rounded-full border border-white/5"
-        style={{ width: "110%", height: "110%", transform: "rotateX(70deg)" }}
-      />
+        transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
+      >
+        <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 h-2 w-2 rounded-full bg-cyan shadow-[0_0_18px_4px_rgba(40,226,255,0.6)]" />
+      </motion.div>
 
-      {/* The sphere */}
+      {/* The official avatar */}
       <motion.div
-        aria-hidden
-        className="relative rounded-full"
+        className="relative w-full max-w-[520px]"
         style={{
-          width: "62%",
-          height: "62%",
+          rotateX,
+          rotateY,
           transformStyle: "preserve-3d",
-          transform: `rotateX(${rx}deg) rotateY(${ry}deg) scale(${pressed ? 0.96 : 1})`,
-          transition: "transform 0.18s ease-out",
+          scale: pressed ? 0.985 : 1,
         }}
+        transition={{ type: "spring", stiffness: 160, damping: 22 }}
       >
-        {/* Base gradient */}
         <div
-          className="absolute inset-0 rounded-full"
+          className="relative overflow-hidden rounded-[28px]"
           style={{
-            background:
-              "radial-gradient(circle at 30% 28%, rgba(255,255,255,0.9), rgba(180,160,255,0.5) 25%, rgba(60,40,130,0.7) 55%, #0a0a12 85%)",
             boxShadow:
-              "inset -20px -30px 60px rgba(0,0,0,0.6), inset 10px 20px 40px rgba(255,255,255,0.08), 0 40px 80px -20px rgba(124,92,255,0.45)",
+              "0 40px 120px -30px rgba(40,180,255,0.5), 0 14px 60px -14px rgba(84,111,255,0.4), inset 0 1px 0 rgba(255,255,255,0.08)",
+            border: "1px solid rgba(255,255,255,0.08)",
           }}
-        />
-        {/* Specular highlight (cursor-follow) */}
-        <div
-          className="absolute rounded-full"
-          style={{
-            inset: 0,
-            background: `radial-gradient(circle at ${50 + pos.x * 50}% ${50 + pos.y * 50}%, rgba(255,255,255,0.35), transparent 35%)`,
-            mixBlendMode: "screen",
-          }}
-        />
-        {/* Conic shimmer */}
-        <div
-          className="absolute inset-0 rounded-full opacity-60"
-          style={{
-            background:
-              "conic-gradient(from 90deg, transparent 0deg, rgba(255,255,255,0.15) 60deg, transparent 120deg, transparent 240deg, rgba(124,200,255,0.12) 300deg, transparent 360deg)",
-            mixBlendMode: "screen",
-          }}
-        />
-        {/* XR mark */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span
-            className="text-white font-bold tracking-tight"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/avatar-front.png"
+            alt="XR — the trusted AI agent"
+            className="block w-full h-auto object-cover"
+            draggable={false}
+            onMouseDown={() => setPressed(true)}
+            onMouseUp={() => setPressed(false)}
+            onMouseLeave={() => setPressed(false)}
+            loading="eager"
+          />
+          <div
+            className="absolute inset-0 pointer-events-none"
             style={{
-              fontSize: "clamp(36px,7vw,72px)",
-              textShadow: "0 2px 18px rgba(124,92,255,0.6)",
-              letterSpacing: "-0.04em",
+              background:
+                "linear-gradient(180deg, rgba(5,6,10,0) 55%, rgba(5,6,10,0.55) 100%)",
             }}
-          >
-            XR
-          </span>
+          />
         </div>
-        {/* Soft rim */}
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
-          }}
-        />
-      </motion.div>
 
-      {/* Orbiting dots */}
-      <motion.div
-        aria-hidden
-        className="absolute"
-        style={{ width: "92%", height: "92%" }}
-        animate={{ rotate: -360 }}
-        transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-      >
-        <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 h-2 w-2 rounded-full bg-white shadow-[0_0_20px_4px_rgba(168,146,255,0.7)]" />
-      </motion.div>
-      <motion.div
-        aria-hidden
-        className="absolute"
-        style={{ width: "110%", height: "110%" }}
-        animate={{ rotate: 360 }}
-        transition={{ duration: 28, repeat: Infinity, ease: "linear" }}
-      >
-        <span className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1 h-1.5 w-1.5 rounded-full bg-sky-300 shadow-[0_0_16px_4px_rgba(56,189,248,0.6)]" />
+        {/* Floating caption chip */}
+        <motion.div
+          className="absolute -bottom-4 left-1/2 -translate-x-1/2 glass rounded-2xl px-4 py-2.5 flex items-center gap-2.5"
+          style={{ boxShadow: "0 18px 50px -16px rgba(0,0,0,0.7)" }}
+          animate={{ y: [0, -6, 0] }}
+          transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+        >
+          <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_2px_rgba(52,211,153,0.7)]" />
+          <div className="text-left">
+            <div className="text-[12.5px] font-semibold text-white leading-none">XR is online</div>
+            <div className="text-[10.5px] text-zinc-400 mt-0.5">Local-first · BYOK · Sandboxed</div>
+          </div>
+        </motion.div>
       </motion.div>
     </div>
   );

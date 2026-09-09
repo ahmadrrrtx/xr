@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, Search as SearchIcon, Star, ExternalLink, CheckCircle2 } from "lucide-react";
+import { Download, Search as SearchIcon, ExternalLink, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { marketplaceCategories, marketplaceItems, type MarketplaceItem } from "@/lib/data";
-import { cn, formatNumber } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { CopyButton } from "./CopyButton";
+import { XrMark } from "./Logo";
 
 type Tab = "all" | "skill" | "extension";
 
@@ -31,6 +32,11 @@ export function MarketplaceBrowser() {
     <div>
       {/* Toolbar */}
       <div className="glass rounded-2xl p-3 md:p-4 flex flex-col gap-3">
+        <div className="flex items-center gap-2.5 text-xs text-zinc-400 mb-1">
+          <XrMark size={16} />
+          <span className="font-semibold text-zinc-200">XR Official marketplace</span>
+          <span className="text-zinc-600">— real bundled skills & extensions, labelled honestly</span>
+        </div>
         <div className="flex flex-col md:flex-row md:items-center gap-3">
           <div className="relative flex-1">
             <SearchIcon className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
@@ -130,6 +136,7 @@ function ItemCard({ item, onOpen }: { item: MarketplaceItem; onOpen: () => void 
       onClick={onOpen}
       className="card p-5 text-left flex flex-col group"
     >
+      <span className="card-glow" aria-hidden />
       <div className="flex items-start gap-3">
         <div
           className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 shadow-lg"
@@ -159,22 +166,10 @@ function ItemCard({ item, onOpen }: { item: MarketplaceItem; onOpen: () => void 
           </span>
         ))}
       </div>
-      <div className="mt-5 pt-4 border-t border-white/5 flex items-center gap-4 text-xs text-zinc-400">
-        {item.downloads > 0 ? (
-          <>
-            <span className="flex items-center gap-1">
-              <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
-              {item.rating} <span className="text-zinc-600">({formatNumber(item.reviews)})</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <Download className="h-3.5 w-3.5" /> {item.installs}
-            </span>
-          </>
-        ) : (
-          <span className="flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Bundled with XR
-          </span>
-        )}
+      <div className="mt-5 pt-4 border-t border-white/5 flex items-center gap-3 text-xs text-zinc-400">
+        <span className="flex items-center gap-1.5">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> {item.compatibility}
+        </span>
         <span className="ml-auto text-zinc-500">v{item.version}</span>
       </div>
     </button>
@@ -210,20 +205,9 @@ function ItemModal({ item, onClose }: { item: MarketplaceItem; onClose: () => vo
               by {item.author} · {item.type === "skill" ? "Skill" : "Extension"}
             </div>
             <div className="mt-2 flex items-center gap-4 text-xs text-zinc-400">
-              {item.downloads > 0 ? (
-                <>
-                  <span className="flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" /> {item.rating} ({formatNumber(item.reviews)} reviews)
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Download className="h-3.5 w-3.5" /> {item.installs} installs
-                  </span>
-                </>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Bundled with XR
-                </span>
-              )}
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> {item.compatibility}
+              </span>
               <span className="text-zinc-500">v{item.version}</span>
             </div>
           </div>

@@ -98,16 +98,9 @@ export {
   type ItemType,
 } from "./marketplace.generated";
 
+// No in-house model exists — XR is provider-neutral/BYOK. The models listed
+// here are the ones XR ships routing presets for (src/providers/presets.ts).
 export const models = [
-  {
-    name: "XR Core 1",
-    provider: "XR",
-    tag: "Flagship",
-    context: "1M tokens",
-    speed: "Fastest",
-    description: "Our in-house agentic model, tuned for tool use and long-horizon tasks.",
-    featured: true,
-  },
   {
     name: "Claude Opus 4.5",
     provider: "Anthropic",
