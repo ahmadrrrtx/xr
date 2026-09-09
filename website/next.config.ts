@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Website is a subproject of the monorepo root; anchor Turbopack to it so
+  // the multiple lockfiles don't confuse workspace-root inference.
+  turbopack: { root: import.meta.dirname },
 };
 
 export default nextConfig;

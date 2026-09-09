@@ -37,7 +37,7 @@ export default function SecurityPage() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {items.map((i) => (
-              <div key={i.title} className="card p-6">
+              <div key={i.title} className="card card-hover p-6">
                 <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-emerald-500/20 to-sky-500/10 border border-white/10">
                   <i.icon className="h-5 w-5 text-emerald-300" />
                 </div>

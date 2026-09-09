@@ -1,10 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Download, Search as SearchIcon, Star, ExternalLink, CheckCircle2 } from "lucide-react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Search as SearchIcon,
+  ExternalLink,
+  ArrowRight,
+  CheckCircle2,
+  X,
+} from "lucide-react";
 import { marketplaceCategories, marketplaceItems, type MarketplaceItem } from "@/lib/data";
-import { cn, formatNumber } from "@/lib/utils";
+import { site } from "@/lib/site";
+import { cn } from "@/lib/utils";
 import { CopyButton } from "./CopyButton";
 
 type Tab = "all" | "skill" | "extension";
@@ -13,81 +19,131 @@ export function MarketplaceBrowser() {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [tab, setTab] = useState<Tab>("all");
-  const [sort, setSort] = useState<"name">("name");
   const [selected, setSelected] = useState<MarketplaceItem | null>(null);
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const i of marketplaceItems) c[i.type] = (c[i.type] ?? 0) + 1;
+    return c;
+  }, []);
 
   const filtered = useMemo(() => {
     let items = marketplaceItems.filter((i) => {
       if (tab !== "all" && i.type !== tab) return false;
       if (cat !== "all" && i.category !== cat) return false;
-      if (q && !`${i.name} ${i.tagline} ${i.description} ${i.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase())) return false;
+      if (
+        q &&
+        !`${i.name} ${i.tagline} ${i.description} ${i.tags.join(" ")}`
+          .toLowerCase()
+          .includes(q.toLowerCase())
+      )
+        return false;
       return true;
     });
-    if (sort === "name") items = [...items].sort((a, b) => a.name.localeCompare(b.name));
     return items;
-  }, [q, cat, tab, sort]);
+  }, [q, cat, tab]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
     <div>
       {/* Toolbar */}
-      <div className="glass rounded-2xl p-3 md:p-4 flex flex-col gap-3">
-        <div className="flex flex-col md:flex-row md:items-center gap-3">
+      <div className="glass rounded-2xl p-3 shadow-[var(--shadow-card)] md:p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="relative flex-1">
-            <SearchIcon className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search skills, extensions, tags…"
-              className="w-full bg-black/30 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-violet-400/50 outline-none"
-              aria-label="Search"
+              placeholder="Search skills, plugins, tags…"
+              className="w-full rounded-xl border border-white/10 bg-black/30 py-2.5 pl-9 pr-3 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-500 focus:border-cyan-400/50 focus:shadow-[0_0_0_3px_rgba(0,212,255,0.08)]"
+              aria-label="Search the marketplace"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Segmented
-              value={tab}
-              onChange={(v) => setTab(v as Tab)}
-              options={[
-                { id: "all", label: "All" },
-                { id: "skill", label: "Skills" },
-                { id: "extension", label: "Extensions" },
-              ]}
-            />
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as "name")}
-              className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-zinc-200 outline-none focus:border-violet-400/50"
-              aria-label="Sort"
-            >
-              <option value="name">Name (A–Z)</option>
-            </select>
-          </div>
+          <Segmented
+            value={tab}
+            onChange={(v) => {
+              setTab(v as Tab);
+              setCat("all");
+            }}
+            options={[
+              { id: "all", label: `All (${marketplaceItems.length})` },
+              { id: "skill", label: `Skills (${counts.skill ?? 0})` },
+              { id: "extension", label: `Plugins (${counts.extension ?? 0})` },
+            ]}
+          />
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {marketplaceCategories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setCat(c.id)}
-              className={cn(
-                "px-3 py-1.5 rounded-full text-xs transition-colors border",
-                cat === c.id
-                  ? "bg-white text-black border-white"
-                  : "bg-white/[0.02] text-zinc-300 border-white/10 hover:border-white/20 hover:text-white"
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {marketplaceCategories.map((c) => {
+            const n = c.id === "all" ? filtered.length : undefined;
+            return (
+              <button
+                key={c.id}
+                onClick={() => setCat(c.id)}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs transition-all",
+                  cat === c.id
+                    ? "border-cyan-400/40 bg-cyan-400/10 font-medium text-cyan-200 shadow-[0_0_16px_-4px_rgba(0,212,255,0.5)]"
+                    : "border-white/10 bg-white/[0.02] text-zinc-400 hover:border-white/25 hover:text-zinc-100"
+                )}
+              >
+                {c.label}
+                {c.id !== "all" && (
+                  <span className="ml-1.5 text-[10px] text-zinc-500">
+                    {marketplaceItems.filter((i) => i.category === c.id).length}
+                  </span>
+                )}
+                {c.id === "all" && n !== undefined && (
+                  <span className="ml-1.5 text-[10px] text-zinc-500">{n}</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
+      {/* Meta line */}
+      <div className="mt-6 flex items-center justify-between text-xs text-zinc-500">
+        <span>
+          Generated from the real bundled inventory —{" "}
+          <a
+            href={`${site.github}/tree/main/skills`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-cyan-300 hover:underline"
+          >
+            skills/
+          </a>{" "}
+          and{" "}
+          <a
+            href={`${site.github}/tree/main/plugins`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-cyan-300 hover:underline"
+          >
+            plugins/
+          </a>{" "}
+          in the repository.
+        </span>
+        <span className="hidden sm:block">
+          {filtered.length} item{filtered.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
       {/* Grid */}
-      <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((item) => (
           <ItemCard key={item.id} item={item} onOpen={() => setSelected(item)} />
         ))}
         {filtered.length === 0 && (
-          <div className="col-span-full text-center py-20 text-zinc-500 text-sm">
-            No items match your search.
+          <div className="col-span-full rounded-2xl border border-dashed border-white/10 py-20 text-center text-sm text-zinc-500">
+            No items match your search — try clearing filters.
           </div>
         )}
       </div>
@@ -107,14 +163,16 @@ function Segmented({
   options: { id: string; label: string }[];
 }) {
   return (
-    <div className="inline-flex p-1 rounded-xl bg-black/30 border border-white/10">
+    <div className="inline-flex self-start rounded-xl border border-white/10 bg-black/30 p-1 md:self-auto">
       {options.map((o) => (
         <button
           key={o.id}
           onClick={() => onChange(o.id)}
           className={cn(
-            "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-            value === o.id ? "bg-white text-black" : "text-zinc-300 hover:text-white"
+            "rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
+            value === o.id
+              ? "bg-white text-black shadow-[0_4px_14px_-4px_rgba(255,255,255,0.4)]"
+              : "text-zinc-400 hover:text-white"
           )}
         >
           {o.label}
@@ -124,142 +182,166 @@ function Segmented({
   );
 }
 
+const TYPE_LABEL: Record<string, string> = { skill: "Bundled skill", extension: "Reference plugin" };
+
 function ItemCard({ item, onOpen }: { item: MarketplaceItem; onOpen: () => void }) {
   return (
     <button
       onClick={onOpen}
-      className="card p-5 text-left flex flex-col group"
+      className="card card-hover group flex flex-col p-5 text-left"
+      aria-label={`Open details for ${item.name}`}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3.5">
         <div
-          className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 shadow-lg"
+          className="h-12 w-12 shrink-0 rounded-xl shadow-[0_8px_20px_-8px_rgba(0,0,0,0.7)] ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-105"
           style={{ background: item.iconBg }}
         >
-          <item.icon className="h-5 w-5 text-white" />
+          <div className="flex h-full w-full items-center justify-center">
+            <item.icon className="h-5 w-5 text-white drop-shadow" />
+          </div>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <div className="text-white font-semibold text-[15px] truncate">{item.name}</div>
+            <div className="truncate text-[15px] font-semibold text-white">{item.name}</div>
             {item.verified && (
-              <span title="Verified" aria-label="Verified">
-                <CheckCircle2 className="h-3.5 w-3.5 text-sky-400 shrink-0" />
+              <span title="Official — ships with XR" aria-label="Official">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
               </span>
             )}
           </div>
-          <div className="text-xs text-zinc-500 truncate">
-            {item.type === "skill" ? "Skill" : "Extension"} · {item.author}
+          <div className="mt-0.5 text-xs text-zinc-500">
+            {TYPE_LABEL[item.type]} · {item.author}
           </div>
         </div>
       </div>
-      <p className="mt-4 text-sm text-zinc-300 line-clamp-2 leading-relaxed">{item.tagline}</p>
+      <p className="mt-4 line-clamp-2 text-sm leading-relaxed text-zinc-300">{item.tagline}</p>
       <div className="mt-4 flex flex-wrap gap-1">
         {item.tags.slice(0, 3).map((t) => (
-          <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-zinc-400 border border-white/5">
+          <span
+            key={t}
+            className="rounded-full border border-white/6 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-400"
+          >
             {t}
           </span>
         ))}
-      </div>
-      <div className="mt-5 pt-4 border-t border-white/5 flex items-center gap-4 text-xs text-zinc-400">
-        {item.downloads > 0 ? (
-          <>
-            <span className="flex items-center gap-1">
-              <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
-              {item.rating} <span className="text-zinc-600">({formatNumber(item.reviews)})</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <Download className="h-3.5 w-3.5" /> {item.installs}
-            </span>
-          </>
-        ) : (
-          <span className="flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Bundled with XR
+        {item.tags.length === 0 && (
+          <span className="rounded-full border border-white/6 bg-white/[0.03] px-2 py-0.5 text-[10px] text-zinc-500">
+            {item.category}
           </span>
         )}
-        <span className="ml-auto text-zinc-500">v{item.version}</span>
+      </div>
+      <div className="mt-5 flex items-center gap-3 border-t border-white/5 pt-4 text-xs text-zinc-400">
+        <span className="flex items-center gap-1 text-emerald-300">
+          <CheckCircle2 className="h-3.5 w-3.5" /> Bundled with XR
+        </span>
+        <span className="text-zinc-600">v{item.version}</span>
+        <span className="ml-auto font-mono text-zinc-500 transition-transform duration-300 group-hover:translate-x-0.5 group-hover:text-cyan-300">
+          details
+        </span>
       </div>
     </button>
   );
 }
 
 function ItemModal({ item, onClose }: { item: MarketplaceItem; onClose: () => void }) {
+  const sourcePath = item.type === "skill" ? `skills/${item.id}` : `plugins/${item.id}`;
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
+      aria-label={`${item.name} details`}
       onClick={onClose}
     >
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-hidden />
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto glass rounded-2xl p-6 md:p-8 shadow-2xl"
+        className="relative max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[#0d1117] p-6 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9),0_0_0_1px_rgba(255,255,255,0.04)] md:p-8"
       >
         <div className="flex items-start gap-4">
           <div
-            className="h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 shadow-xl"
+            className="h-14 w-14 shrink-0 rounded-2xl shadow-lg ring-1 ring-white/10"
             style={{ background: item.iconBg }}
           >
-            <item.icon className="h-6 w-6 text-white" />
+            <div className="flex h-full w-full items-center justify-center">
+              <item.icon className="h-6 w-6 text-white" />
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <div className="text-xl font-semibold text-white">{item.name}</div>
-              {item.verified && <CheckCircle2 className="h-4 w-4 text-sky-400" />}
+              {item.verified && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
             </div>
-            <div className="text-xs text-zinc-500 mt-0.5">
-              by {item.author} · {item.type === "skill" ? "Skill" : "Extension"}
+            <div className="mt-0.5 text-xs text-zinc-500">
+              {TYPE_LABEL[item.type]} by {item.author}
             </div>
-            <div className="mt-2 flex items-center gap-4 text-xs text-zinc-400">
-              {item.downloads > 0 ? (
-                <>
-                  <span className="flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" /> {item.rating} ({formatNumber(item.reviews)} reviews)
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Download className="h-3.5 w-3.5" /> {item.installs} installs
-                  </span>
-                </>
-              ) : (
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Bundled with XR
-                </span>
-              )}
-              <span className="text-zinc-500">v{item.version}</span>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                Bundled with XR
+              </span>
+              <span className="font-mono text-[11px] text-zinc-500">v{item.version}</span>
             </div>
           </div>
+          <button
+            onClick={onClose}
+            aria-label="Close details"
+            className="rounded-lg border border-white/10 bg-white/[0.03] p-1.5 text-zinc-400 transition-colors hover:border-white/25 hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        <p className="mt-6 text-zinc-300 leading-relaxed">{item.description}</p>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
-          <Info label="Version" value={item.version} />
-          <Info label="Compatibility" value={item.compatibility} />
-          <Info label="Updated" value={item.updated} />
+        <p className="mt-6 leading-relaxed text-zinc-300">{item.description}</p>
+
+        <div className="mt-6 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <Info label="Type" value={TYPE_LABEL[item.type]} />
           <Info label="Category" value={item.category} />
+          <Info label="Author" value={item.author} />
+          <Info label="Version" value={item.version} />
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {item.tags.map((t) => (
-            <span key={t} className="text-[11px] px-2 py-1 rounded-full bg-white/5 text-zinc-400 border border-white/5">
-              {t}
-            </span>
-          ))}
-        </div>
+        {item.tags.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {item.tags.map((t) => (
+              <span
+                key={t}
+                className="rounded-full border border-white/6 bg-white/[0.03] px-2 py-1 text-[11px] text-zinc-400"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
 
-        <div className="mt-6 rounded-xl border border-white/10 bg-black/40 px-4 py-3 flex items-center gap-2 font-mono text-sm">
-          <span className="text-violet-300 select-none">$</span>
-          <code className="flex-1 text-zinc-100 truncate">{item.installCmd}</code>
-          <CopyButton text={item.installCmd} />
+        <div className="mt-6 rounded-xl border border-white/8 bg-black/40 px-4 py-3">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            {item.type === "skill" ? "Inspect in your terminal" : "Explore with the CLI"}
+          </div>
+          <div className="mt-1.5 flex items-center gap-2 font-mono text-sm">
+            <span className="select-none text-cyan-300">$</span>
+            <code className="min-w-0 flex-1 truncate text-zinc-100">{item.installCmd}</code>
+            <CopyButton text={item.installCmd} />
+          </div>
         </div>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          <button className="btn btn-primary">
-            <Download className="h-4 w-4" /> Install
+          <a
+            href={`${site.github}/tree/main/${sourcePath}`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-primary"
+          >
+            <ExternalLink className="h-4 w-4" /> Source on GitHub
+          </a>
+          <button onClick={onClose} className="btn btn-ghost ml-auto">
+            Close
           </button>
-          <Link href="/docs" className="btn btn-ghost">
-            <ExternalLink className="h-4 w-4" /> Documentation
-          </Link>
-          <button onClick={onClose} className="btn btn-ghost ml-auto">Close</button>
         </div>
+        <p className="mt-4 flex items-center gap-1.5 text-[11px] text-zinc-500">
+          <ArrowRight className="h-3 w-3 rotate-90 text-cyan-400/70" />
+          Skills ship with XR — nothing here downloads at install time, and nothing is enabled
+          until you say so.
+        </p>
       </div>
     </div>
   );
@@ -267,9 +349,11 @@ function ItemModal({ item, onClose }: { item: MarketplaceItem; onClose: () => vo
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+    <div className="rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
       <div className="text-[10px] uppercase tracking-wider text-zinc-500">{label}</div>
-      <div className="text-zinc-200 text-sm mt-0.5">{value}</div>
+      <div className="mt-0.5 truncate text-sm text-zinc-200" title={value}>
+        {value}
+      </div>
     </div>
   );
 }

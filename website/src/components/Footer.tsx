@@ -1,61 +1,63 @@
 import Link from "next/link";
 import { site } from "@/lib/site";
 import { XrLogo } from "@/components/Logo";
-import { GithubIcon, TwitterIcon } from "@/components/icons";
+import { GithubIcon } from "@/components/icons";
 
 export function Footer() {
   return (
     <footer className="relative mt-32 border-t border-white/5">
       <div className="mx-auto max-w-7xl px-6 py-16">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-10">
+        <div className="grid grid-cols-2 gap-10 md:grid-cols-6">
           <div className="col-span-2">
             <XrLogo />
-            <p className="mt-4 text-sm text-zinc-400 max-w-xs">
-              The agentic runtime for software. Built for developers, designed for teams.
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-zinc-400">
+              An AI agent runtime you can actually audit. Local-first, MIT-licensed, provider-neutral.
             </p>
-            <div className="mt-5 flex items-center gap-3 text-zinc-400">
+            <div className="mt-5 flex items-center gap-2 text-zinc-400">
               <a
                 href={site.github}
                 target="_blank"
                 rel="noreferrer"
                 aria-label="GitHub"
-                className="p-2 rounded-lg hover:text-white hover:bg-white/5 transition-colors"
+                className="rounded-lg p-2 transition-all hover:bg-white/5 hover:text-white hover:shadow-[0_0_16px_-4px_rgba(0,212,255,0.4)]"
               >
                 <GithubIcon className="h-4 w-4" />
               </a>
               <a
-                href="https://twitter.com/"
+                href="https://github.com/ahmadrrrtx/xr"
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Twitter / X"
-                className="p-2 rounded-lg hover:text-white hover:bg-white/5 transition-colors"
+                aria-label="Repository"
+                className="rounded-lg px-2 py-1.5 font-mono text-[11px] text-zinc-500 transition-all hover:bg-white/5 hover:text-cyan-300"
               >
-                <TwitterIcon className="h-4 w-4" />
+                github.com/ahmadrrrtx/xr
               </a>
             </div>
-            <div className="mt-6 text-xs text-zinc-500">
-              © {new Date().getFullYear()} XR Labs, Inc. All rights reserved.
+            <div className="mt-6 text-xs leading-relaxed text-zinc-500">
+              © {new Date().getFullYear()} Muhammad Ahmad & XR contributors.
+              <br />
+              MIT License · no company, no cloud, no telemetry.
             </div>
           </div>
 
           <FooterCol title="Product" links={site.footer.product} />
           <FooterCol title="Resources" links={site.footer.resources} />
-          <FooterCol title="Company" links={site.footer.company} />
+          <FooterCol title="Project" links={site.footer.company} />
           <FooterCol title="Legal" links={site.footer.legal} />
         </div>
 
-        <div className="mt-14 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs text-zinc-500">
+        <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t border-white/5 pt-8 text-xs text-zinc-500 md:flex-row md:items-center">
           <div className="flex items-center gap-2">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.7)]" />
-            All systems normal
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 pulse-dot" />
+            Self-hosted software — the only status that matters is yours (xr doctor)
           </div>
-          <div>
-            <Link href="/status" className="hover:text-zinc-200 transition-colors">
+          <div className="flex items-center gap-3">
+            <Link href="/status" className="transition-colors hover:text-zinc-200">
               Status
             </Link>
-            <span className="mx-2 text-zinc-700">•</span>
-            <Link href="/changelog" className="hover:text-zinc-200 transition-colors">
-              v{site.version}
+            <span className="text-zinc-700">•</span>
+            <Link href="/changelog" className="transition-colors hover:text-zinc-200">
+              v{site.version} ({site.codename})
             </Link>
           </div>
         </div>
@@ -73,18 +75,24 @@ function FooterCol({
 }) {
   return (
     <div>
-      <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-4">
-        {title}
-      </h4>
+      <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-300">{title}</h4>
       <ul className="space-y-2.5 text-sm">
         {links.map((l) => (
-          <li key={l.href}>
-            <Link
-              href={l.href}
-              className="text-zinc-400 hover:text-white transition-colors"
-            >
-              {l.label}
-            </Link>
+          <li key={l.href + l.label}>
+            {l.href.startsWith("http") ? (
+              <a
+                href={l.href}
+                target="_blank"
+                rel="noreferrer"
+                className="text-zinc-400 transition-colors hover:text-cyan-300"
+              >
+                {l.label}
+              </a>
+            ) : (
+              <Link href={l.href} className="text-zinc-400 transition-colors hover:text-cyan-300">
+                {l.label}
+              </Link>
+            )}
           </li>
         ))}
       </ul>

@@ -20,7 +20,7 @@ const ROUTES = [
   "/about",
   "/contact",
   "/status",
-  "/careers",
+  "/community",
   "/privacy",
   "/terms",
 ];

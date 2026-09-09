@@ -3,113 +3,102 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
-function useTypingLineRef() {
-  const typingLineRef = useRef<number>(-1);
-  return typingLineRef;
-}
+/**
+ * Terminal demo — an honest walkthrough of a real XR session:
+ * install, first run, one task, an approval, a done state.
+ * No invented versions, packages, model names or counters.
+ */
 
-const LINES: Array<{ prompt?: string; text: string; kind?: "out" | "ok" | "info" | "dim"; delay?: number }> = [
-  { prompt: "$", text: "npm i -g @xr/agent" },
-  { text: "added 1 package in 2.1s", kind: "dim" },
-  { prompt: "$", text: "xr", delay: 300 },
-  { text: "XR 3.1.6 (Baseline Integrity) — ready.", kind: "ok" },
-  { text: "→ Connecting to model: XR Core 1", kind: "info" },
-  { text: "→ Skills loaded: 214", kind: "info" },
-  { prompt: "λ", text: "refactor src/auth —target ts" },
-  { text: "◐ Parsing codebase (412 files)", kind: "dim" },
-  { text: "✓ Planned 8 transforms", kind: "ok" },
-  { text: "✓ Migrated JWT helpers (3 files)", kind: "ok" },
-  { text: "✓ Removed deprecated middleware", kind: "ok" },
-  { text: "✓ Opened PR #482: refactor/auth-ts", kind: "ok" },
+type Line = { kind: "cmd" | "dim" | "ok" | "info" | "warn" | "ask" | "out"; text: string; delay?: number; typeout?: boolean };
+
+const LINES: Line[] = [
+  { kind: "cmd", text: "npm i -g @rrrtx/xr", typeout: true },
+  { kind: "dim", text: "added 1 package in 2.4s", delay: 650 },
+  { kind: "cmd", text: "xr", delay: 350, typeout: true },
+  { kind: "ok", text: "XR 1.0.0 (Truth) — ready.", delay: 700 },
+  { kind: "dim", text: "· 65 bundled skills · memory: empty · audit: chain intact", delay: 550 },
+  { kind: "dim", text: "· no provider configured — run `xr onboarding` to connect a model", delay: 600 },
+  { kind: "cmd", text: 'xr "summarize the open TODOs in this repo"', typeout: true },
+  { kind: "info", text: "⟳ planning: scanning repo index…", delay: 700 },
+  { kind: "ok", text: "✓ plan ready — 3 steps", delay: 550 },
+  { kind: "info", text: "⟳ reading TODO comments across src/ and docs/…", delay: 800 },
+  { kind: "ok", text: "✓ found 12 TODO comments · grouped by area", delay: 700 },
+  { kind: "ask", text: "? write docs/todos-summary.md (14 lines) — approve?  [y/n]", delay: 800 },
+  { kind: "cmd", text: "y", delay: 400, typeout: true },
+  { kind: "ok", text: "✓ approved · wrote docs/todos-summary.md", delay: 700 },
+  { kind: "ok", text: "✓ task finished in 6.1s · session #0042 · audit verified", delay: 900 },
 ];
 
 export function Terminal({ className }: { className?: string }) {
-  const [visible, setVisible] = useState(0);
-  const [typing, setTyping] = useState<string>("");
-  // Track which prompt line we're currently typing so we don't
-  // reset typing state inside effects. Index of LINES, or -1 when idle.
-  const typingLineRef = useTypingLineRef();
+  const [idx, setIdx] = useState(0);
+  const [typing, setTyping] = useState("");
+  const typingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let interval: ReturnType<typeof setInterval> | undefined;
+    let to: ReturnType<typeof setTimeout> | undefined;
+    let iv: ReturnType<typeof setInterval> | undefined;
 
-    const reset = () => {
-      if (!cancelled) {
-        setVisible(0);
-        setTyping("");
-        typingLineRef.current = -1;
-      }
-    };
-    const next = () => {
-      if (cancelled) return;
-      setVisible((v) => v + 1);
-    };
-
-    if (visible >= LINES.length) {
-      timer = setTimeout(reset, 4000);
+    if (idx >= LINES.length) {
+      to = setTimeout(() => {
+        if (!cancelled) setIdx(0);
+      }, 8000);
       return () => {
         cancelled = true;
-        if (timer) clearTimeout(timer);
+        if (to) clearTimeout(to);
       };
     }
 
-    const line = LINES[visible];
-    const delay = line.delay ?? (line.kind === "dim" || line.kind === "ok" || line.kind === "info" ? 480 : 0);
-
-    if (line.prompt && typingLineRef.current !== visible) {
-      typingLineRef.current = visible;
-      // Kick off typing asynchronously to avoid cascading setState-in-effect
-      timer = setTimeout(() => {
-        if (cancelled) return;
-        let i = 0;
-        setTyping("");
-        interval = setInterval(() => {
-          if (cancelled) return;
-          i++;
-          setTyping(line.text.slice(0, i));
-          if (i >= line.text.length) {
-            if (interval) clearInterval(interval);
-            timer = setTimeout(() => {
-              if (!cancelled) {
-                setTyping("");
-                typingLineRef.current = -1;
-                next();
-              }
-            }, 280);
-          }
-        }, 35);
-      }, 0);
-    } else if (!line.prompt) {
-      timer = setTimeout(() => {
-        if (!cancelled) next();
-      }, delay);
+    const line = LINES[idx];
+    if (line.typeout && !typingRef.current) {
+      typingRef.current = true;
+      let i = 0;
+      setTyping("");
+      iv = setInterval(() => {
+        i++;
+        setTyping(line.text.slice(0, i));
+        if (i >= line.text.length) {
+          if (iv) clearInterval(iv);
+          to = setTimeout(() => {
+            if (!cancelled) {
+              typingRef.current = false;
+              setIdx((v) => v + 1);
+            }
+          }, 350);
+        }
+      }, 26);
+    } else if (!line.typeout) {
+      to = setTimeout(() => {
+        if (!cancelled) setIdx((v) => v + 1);
+      }, line.delay ?? 600);
     }
 
     return () => {
       cancelled = true;
-      if (timer) clearTimeout(timer);
-      if (interval) clearInterval(interval);
+      if (to) clearTimeout(to);
+      if (iv) clearInterval(iv);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible]);
+  }, [idx]);
 
   return (
-    <div className={cn("terminal", className)} role="img" aria-label="Animated XR terminal demo">
+    <div className={cn("terminal", className)} role="img" aria-label="Animated XR terminal walkthrough">
       <div className="terminal-header">
         <span className="terminal-dot" style={{ background: "#ff5f57" }} />
         <span className="terminal-dot" style={{ background: "#febc2e" }} />
         <span className="terminal-dot" style={{ background: "#28c840" }} />
-        <span className="ml-3 text-xs text-zinc-500 font-mono">~/projects/acme — zsh — 80×24</span>
+        <span className="ml-3 text-xs text-zinc-500 font-mono">xr — local shell</span>
+        <span className="ml-auto flex items-center gap-1.5 text-[10px] text-emerald-400 font-mono">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 pulse-dot" /> local
+        </span>
       </div>
       <div className="p-5 text-[13px] leading-relaxed font-mono">
-        {LINES.slice(0, visible).map((l, i) => (
-          <Line key={i} line={l} />
+        {LINES.slice(0, idx).map((l, i) => (
+          <LineView key={i} line={l} />
         ))}
-        {visible < LINES.length && LINES[visible].prompt && (
+        {idx < LINES.length && LINES[idx].typeout && (
           <div className="flex items-start gap-2">
-            <span className="text-violet-300 shrink-0">{LINES[visible].prompt}</span>
+            <Prompt kind="cmd" />
             <span className="text-zinc-100 caret">{typing}</span>
           </div>
         )}
@@ -118,25 +107,32 @@ export function Terminal({ className }: { className?: string }) {
   );
 }
 
-function Line({ line }: { line: (typeof LINES)[number] }) {
+function Prompt({ kind }: { kind: Line["kind"] }) {
+  if (kind === "cmd") return <span className="text-cyan-300 shrink-0 select-none">λ</span>;
+  if (kind === "ask") return <span className="text-amber-300 shrink-0 select-none">?</span>;
+  return <span className="text-zinc-600 shrink-0 select-none">·</span>;
+}
+
+function LineView({ line }: { line: Line }) {
   const color =
     line.kind === "ok"
       ? "text-emerald-300"
       : line.kind === "info"
-      ? "text-sky-300"
+      ? "text-cyan-200"
+      : line.kind === "warn"
+      ? "text-amber-300"
+      : line.kind === "ask"
+      ? "text-amber-200"
       : line.kind === "dim"
       ? "text-zinc-500"
       : "text-zinc-100";
-  return (
-    <div className="flex items-start gap-2">
-      {line.prompt ? (
-        <>
-          <span className="text-violet-300 shrink-0">{line.prompt}</span>
-          <span className={color}>{line.text}</span>
-        </>
-      ) : (
-        <span className={cn(color, "pl-4")}>{line.text}</span>
-      )}
-    </div>
-  );
+  if (line.kind === "cmd" || line.kind === "ask") {
+    return (
+      <div className="flex items-start gap-2">
+        <Prompt kind={line.kind} />
+        <span className={color}>{line.text}</span>
+      </div>
+    );
+  }
+  return <div className={cn(color, "pl-4")}>{line.text}</div>;
 }

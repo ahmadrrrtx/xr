@@ -18,7 +18,7 @@ export default function BlogPage() {
       <section className="pb-24">
         <div className="mx-auto max-w-7xl px-6">
           <Link href={`/blog/${featured.slug}`} className="card p-8 md:p-12 block group relative overflow-hidden">
-            <div aria-hidden className="absolute inset-0 opacity-60" style={{ background: "radial-gradient(600px 240px at 0% 0%, rgba(124,92,255,0.2), transparent 70%)" }} />
+            <div aria-hidden className="absolute inset-0 opacity-60" style={{ background: "radial-gradient(600px 240px at 0% 0%, rgba(96,72,248,0.2), transparent 70%)" }} />
             <div className="relative">
               <span className="text-[10px] uppercase tracking-wider text-violet-300 bg-violet-500/15 border border-violet-400/20 rounded-full px-2 py-0.5">Featured · {featured.tag}</span>
               <h2 className="mt-4 text-2xl md:text-4xl font-semibold tracking-tight text-gradient">{featured.title}</h2>

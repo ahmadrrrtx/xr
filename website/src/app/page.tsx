@@ -1,16 +1,26 @@
 import Link from "next/link";
 import { Metadata } from "next";
-import { ArrowRight, Star, Check, Terminal as TermIcon, BookOpen, Package, Cpu, ShieldCheck, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Terminal as TermIcon,
+  BookOpen,
+  Package,
+  ShieldCheck,
+  Cpu,
+  Play,
+} from "lucide-react";
 import { GithubIcon } from "@/components/icons";
-import { Avatar3D } from "@/components/Avatar3D";
+import { AvatarShowcase } from "@/components/AvatarShowcase";
 import { Terminal } from "@/components/Terminal";
 import { DashboardPreview } from "@/components/DashboardPreview";
 import { features, stats, logos, faqs } from "@/lib/data";
 import { site } from "@/lib/site";
 import { InstallCmd } from "@/components/InstallCmd";
+import { XrMark } from "@/components/Logo";
 
 export const metadata: Metadata = {
-  title: "XR — The Agentic Runtime for Software",
+  title: "XR — An AI agent runtime you can actually audit",
   description: site.description,
 };
 
@@ -33,32 +43,33 @@ export default function Home() {
 
 function Hero() {
   return (
-    <section className="relative pt-36 pb-24 md:pt-44 md:pb-32 overflow-hidden">
+    <section className="relative overflow-hidden pb-20 pt-36 md:pb-28 md:pt-44">
       <div className="absolute inset-0 grid-bg" aria-hidden />
-      <div className="mx-auto max-w-7xl px-6 relative">
-        <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-12 lg:gap-16 items-center">
+      <div className="relative mx-auto max-w-7xl px-6">
+        <div className="grid items-center gap-14 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
           <div>
             <Link
               href="/changelog"
-              className="inline-flex items-center gap-2 text-xs text-zinc-300 glass px-3 py-1.5 rounded-full hover:border-white/20 transition-colors"
+              className="glass inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs text-zinc-300 transition-all hover:border-cyan-400/40 hover:shadow-[0_0_24px_-6px_rgba(0,212,255,0.4)]"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-              XR {site.version} ({site.codename}) is now available
-              <ArrowRight className="h-3 w-3 text-zinc-400" />
+              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 pulse-dot" />
+              XR {site.version} ({site.codename}) is available
+              <ArrowRight className="arrow-nudge h-3 w-3 text-zinc-400" />
             </Link>
-            <h1 className="mt-6 text-[44px] sm:text-6xl lg:text-[76px] leading-[1.02] font-semibold tracking-tight text-gradient">
-              The agentic runtime<br />
-              <span className="text-gradient-violet">for building software.</span>
+            <h1 className="mt-6 text-[42px] font-semibold leading-[1.03] tracking-tight sm:text-6xl lg:text-[72px]">
+              <span className="text-gradient">An AI agent runtime</span>
+              <br />
+              <span className="text-gradient-brand">you can actually audit.</span>
             </h1>
-            <p className="mt-6 text-lg text-zinc-400 max-w-xl leading-relaxed">
-              XR turns your terminal into an AI-native working environment. Plan, execute,
-              and ship — with bundled skills, your choice of model, and a policy gate in
-              front of every consequential action.
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-zinc-400">
+              Give XR a task. It plans, uses tools, and changes real things on your machine —
+              under an approval gate, your budget ceiling, and a hash-chained audit log you can
+              verify offline.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link href="/downloads" className="btn btn-primary">
-                Download XR <ArrowRight className="h-4 w-4" />
+                Download XR <ArrowRight className="arrow-nudge h-4 w-4" />
               </Link>
               <Link href="/docs" className="btn btn-ghost">
                 <BookOpen className="h-4 w-4" /> Read the docs
@@ -68,33 +79,39 @@ function Hero() {
               </a>
             </div>
 
-            <div className="mt-7 flex flex-wrap items-center gap-6 text-xs text-zinc-500">
-              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> MIT-licensed core</span>
-              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> Local-first</span>
-              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5 text-emerald-400" /> BYOK — no keys leave your machine</span>
+            <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-zinc-500">
+              <span className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-emerald-400" /> MIT-licensed core
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-emerald-400" /> Local-first — no telemetry
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-emerald-400" /> BYOK — keys never leave your machine
+              </span>
             </div>
 
-            <div className="mt-10">
+            <div className="mt-9">
               <InstallCmd />
             </div>
           </div>
 
-          <div className="relative h-[420px] lg:h-[520px]">
-            <Avatar3D />
+          <div className="relative h-[380px] sm:h-[460px] lg:h-[540px]">
+            <AvatarShowcase />
           </div>
         </div>
 
-        {/* Terminal + Dashboard previews */}
-        <div className="mt-20 grid lg:grid-cols-5 gap-6">
+        {/* Shell + Control Center previews */}
+        <div className="mt-20 grid gap-6 lg:grid-cols-5">
           <div className="lg:col-span-2">
-            <div className="flex items-center gap-2 mb-3 text-xs text-zinc-400">
-              <TermIcon className="h-3.5 w-3.5" /> Live Shell
+            <div className="mb-3 flex items-center gap-2 text-xs text-zinc-400">
+              <TermIcon className="h-3.5 w-3.5 text-cyan-400" /> The terminal — <code className="font-mono text-zinc-300">xr</code>
             </div>
             <Terminal />
           </div>
           <div className="lg:col-span-3">
-            <div className="flex items-center gap-2 mb-3 text-xs text-zinc-400">
-              <Cpu className="h-3.5 w-3.5" /> Runtime Dashboard
+            <div className="mb-3 flex items-center gap-2 text-xs text-zinc-400">
+              <Cpu className="h-3.5 w-3.5 text-violet-400" /> The Control Center — <code className="font-mono text-zinc-300">xr serve</code>
             </div>
             <DashboardPreview />
           </div>
@@ -106,24 +123,24 @@ function Hero() {
 
 function Logos() {
   return (
-    <section className="py-14 border-y border-white/5 bg-white/[0.01]">
+    <section className="border-y border-white/5 bg-white/[0.01] py-14">
       <div className="mx-auto max-w-7xl px-6">
-        <p className="text-center text-xs uppercase tracking-[0.2em] text-zinc-500 mb-8">
-          Works with the providers and runtimes you already use
+        <p className="mb-8 text-center text-xs uppercase tracking-[0.2em] text-zinc-500">
+          One runtime · every model you already use
         </p>
         <div className="relative overflow-hidden">
           <div className="marquee-track flex gap-14 whitespace-nowrap will-change-transform">
             {[...logos, ...logos].map((l, i) => (
               <span
                 key={i}
-                className="text-xl md:text-2xl text-zinc-500 hover:text-zinc-200 transition-colors font-medium tracking-tight"
+                className="text-xl font-medium tracking-tight text-zinc-500 transition-colors hover:text-cyan-300 md:text-2xl"
               >
                 {l}
               </span>
             ))}
           </div>
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#0a0a0b] to-transparent" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[#0a0a0b] to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#0a0a0f] to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-[#0a0a0f] to-transparent" />
         </div>
       </div>
     </section>
@@ -134,13 +151,14 @@ function Stats() {
   return (
     <section className="py-20">
       <div className="mx-auto max-w-7xl px-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
           {stats.map((s) => (
-            <div key={s.label} className="card p-6">
-              <div className="text-3xl md:text-4xl font-semibold tracking-tight text-white tabular-nums">
+            <div key={s.label} className="card card-hover p-6">
+              <div className="text-3xl font-semibold tracking-tight text-white tabular-nums md:text-4xl">
                 {s.value}
               </div>
-              <div className="mt-1.5 text-sm text-zinc-400">{s.label}</div>
+              <div className="mt-1.5 text-sm text-zinc-300">{s.label}</div>
+              <div className="mt-1 text-xs leading-relaxed text-zinc-500">{s.note}</div>
             </div>
           ))}
         </div>
@@ -150,19 +168,16 @@ function Stats() {
 }
 
 /**
- * "What XR is / is not" — required public honesty surface (Phase 0 · T3).
- *
- * Constitution P2 ("What XR is not") and Article XIX ("honest scope language")
- * require the public surface to state boundaries as prominently as capabilities.
- * This section is deliberately placed above the feature marketing.
+ * "What XR is / is not" — the public honesty surface. Stated as plainly as
+ * the features, and deliberately placed above the marketing.
  */
 function WhatXrIsAndIsNot() {
   const is = [
     "A local-first CLI agent runtime you self-host",
-    "Provider-neutral — cloud APIs or fully local models",
-    "Governed: policy gate, approval prompts, spend ceilings, audit log",
-    "Extensible through skills, plugins and MCP servers",
-    "MIT-licensed and readable end to end",
+    "Provider-neutral — 26 presets: cloud APIs or fully local models",
+    "Governed: approval prompts, spend ceilings, deterministic policy gate, audit log",
+    "Extensible through 65 bundled skills, plugins and MCP servers",
+    "MIT-licensed and readable end to end — 3,191 tests across 240 files",
   ];
   const isNot = [
     "Not certified against SOC 2, ISO 27001 or HIPAA — no third-party audit exists",
@@ -179,27 +194,33 @@ function WhatXrIsAndIsNot() {
           title="What XR is — and what it is not."
           subtitle="Every capability claim on this site is backed by evidence in the repository. Here are the boundaries, stated as plainly as the features."
         />
-        <div className="mt-12 grid md:grid-cols-2 gap-5">
-          <div className="card p-7">
-            <h3 className="text-white font-semibold flex items-center gap-2">
-              <Check className="h-4 w-4 text-emerald-400" /> What XR is
+        <div className="mt-12 grid gap-5 md:grid-cols-2">
+          <div className="card card-hover p-7">
+            <h3 className="flex items-center gap-2 font-semibold text-white">
+              <span className="icon-tile h-7 w-7">
+                <Check className="h-4 w-4 text-emerald-400" />
+              </span>
+              What XR is
             </h3>
-            <ul className="mt-4 space-y-3 text-sm text-zinc-300">
+            <ul className="mt-5 space-y-3 text-sm text-zinc-300">
               {is.map((t) => (
-                <li key={t} className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" /> {t}
+                <li key={t} className="flex items-start gap-2.5">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" /> {t}
                 </li>
               ))}
             </ul>
           </div>
-          <div className="card p-7">
-            <h3 className="text-white font-semibold flex items-center gap-2">
-              <span className="text-rose-400 font-bold leading-none">—</span> What XR is not
+          <div className="card card-hover p-7">
+            <h3 className="flex items-center gap-2 font-semibold text-white">
+              <span className="icon-tile h-7 w-7">
+                <span className="text-rose-400 font-bold leading-none">—</span>
+              </span>
+              What XR is not
             </h3>
-            <ul className="mt-4 space-y-3 text-sm text-zinc-400">
+            <ul className="mt-5 space-y-3 text-sm text-zinc-400">
               {isNot.map((t) => (
-                <li key={t} className="flex items-start gap-2">
-                  <span className="text-rose-400/80 mt-0.5 shrink-0">—</span> {t}
+                <li key={t} className="flex items-start gap-2.5">
+                  <span className="mt-0.5 shrink-0 text-rose-400/80">—</span> {t}
                 </li>
               ))}
             </ul>
@@ -217,49 +238,58 @@ function Showcase() {
         <SectionHeader
           eyebrow="The runtime"
           title="One runtime. Every surface."
-          subtitle="From the terminal you live in to the editor you ship from — XR is a coherent system, not a Frankenstein of plugins."
+          subtitle="The terminal you live in, a local web Control Center, and an optional Telegram channel — one governed engine underneath."
         />
-        <div className="mt-14 grid lg:grid-cols-3 gap-6">
+        <div className="mt-14 grid gap-6 lg:grid-cols-3">
           <LargeCard
             icon={TermIcon}
             title="Shell-native"
-            desc="A real terminal. Real pipes. Real tools. Streaming agents that respond like a teammate."
+            desc="A real terminal with a full-screen TUI. Type a task, watch it plan and act, approve what matters."
+            href="/features"
+            cta="Explore the shell"
           >
-            <Terminal className="mt-6" />
+            <Terminal className="mt-6 !rounded-xl" />
           </LargeCard>
           <LargeCard
             icon={Package}
-            title="Marketplace"
-            desc="Manifest-declared skills plus plugins and MCP servers. Install what you need; nothing is enabled by default."
+            title="Extend with skills"
+            desc="65 bundled, manifest-declared skills plus plugins and MCP servers. Nothing loads until you enable it."
+            href="/marketplace"
+            cta="Browse the marketplace"
           >
             <div className="mt-6 space-y-2">
-              {["pr-reviewer", "deep-research", "smart-refactor", "live-preview"].map((n) => (
-                <div key={n} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5 text-sm">
+              {["code_auditor", "deep_research", "refactor_clean", "security_audit"].map((n) => (
+                <div
+                  key={n}
+                  className="flex items-center justify-between rounded-xl border border-white/6 bg-white/[0.02] px-3 py-2.5 text-sm transition-colors hover:border-cyan-400/25 hover:bg-white/[0.04]"
+                >
                   <span className="font-mono text-zinc-200">{n}</span>
-                  <span className="text-xs text-zinc-500 flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> verified
+                  <span className="flex items-center gap-1 text-xs text-zinc-500">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> bundled
                   </span>
                 </div>
               ))}
-              <Link href="/marketplace" className="inline-flex items-center gap-1 text-sm text-zinc-300 hover:text-white mt-2">
-                Browse marketplace <ArrowRight className="h-3.5 w-3.5" />
+              <Link href="/marketplace" className="mt-2 inline-flex items-center gap-1 text-sm text-zinc-300 transition-colors hover:text-cyan-300">
+                Browse all skills <ArrowRight className="arrow-nudge h-3.5 w-3.5" />
               </Link>
             </div>
           </LargeCard>
           <LargeCard
             icon={ShieldCheck}
             title="Secure by default"
-            desc="Capability-based security, human-in-the-loop confirmations, signed skills, and end-to-end audit."
+            desc="Approval gate on consequential actions, per-task spend ceilings, and a hash-chained audit log."
+            href="/security"
+            cta="Read the security model"
           >
             <ul className="mt-6 space-y-3 text-sm text-zinc-300">
               {[
-                "Approval gate on consequential actions",
-                "Per-task spend ceilings",
+                "Approval prompts before consequential actions",
+                "Per-task spend ceilings, checked during the loop",
                 "Deterministic egress + secret-path policy",
-                "Tamper-evident local audit log",
+                "Tamper-evident local audit — `xr audit verify`",
               ].map((t) => (
                 <li key={t} className="flex items-start gap-2">
-                  <Check className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" /> {t}
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" /> {t}
                 </li>
               ))}
             </ul>
@@ -276,18 +306,20 @@ function Features() {
       <div className="mx-auto max-w-7xl px-6">
         <SectionHeader
           eyebrow="Features"
-          title="Built for how developers actually work."
-          subtitle="XR is a unified system — not a wrapper around a chatbot. Every part is designed to be composed, extended, and trusted."
+          title="Built for work, not chat."
+          subtitle="A unified system — agent runtime, skills, model presets, memory and a trust plane — designed to be composed, extended and trusted."
         />
-        <div className="mt-14 grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {features.map((f) => (
-            <div key={f.title} className="card p-6 group">
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500/20 to-sky-500/10 border border-white/10 group-hover:border-violet-400/30 transition-colors">
-                <f.icon className="h-5 w-5 text-violet-300" />
+            <Link key={f.title} href="/features" className="card card-hover p-6 group block">
+              <div className="icon-tile h-11 w-11 rounded-xl">
+                <f.icon className="h-5 w-5 text-cyan-300" />
               </div>
-              <h3 className="mt-5 text-base font-semibold text-white">{f.title}</h3>
-              <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{f.desc}</p>
-            </div>
+              <h3 className="mt-5 flex items-center gap-1.5 text-base font-semibold text-white">
+                {f.title}
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-400">{f.desc}</p>
+            </Link>
           ))}
         </div>
       </div>
@@ -302,19 +334,19 @@ function Architecture() {
         <SectionHeader
           eyebrow="Architecture"
           title="Designed like a modern kernel."
-          subtitle="XR is TypeScript on Bun: a typed composition kernel, a skill layer, and a model router — with a policy gate between intent and action."
+          subtitle="TypeScript on Bun: a composition kernel, a skill layer, a provider gateway and a policy gate between intent and action."
         />
-        <div className="mt-14 rounded-3xl border border-white/10 p-2 bg-gradient-to-b from-white/[0.04] to-transparent">
-          <div className="rounded-2xl bg-[#0c0c0f] p-8 md:p-12">
-            <StackLayer name="Apps" desc="CLI · Editor extensions · Dashboard · API" tone="from-violet-500/20 to-transparent" />
+        <div className="mt-14 rounded-3xl border border-white/8 p-2 bg-gradient-to-b from-white/[0.04] to-transparent shadow-[var(--shadow-card)]">
+          <div className="rounded-2xl bg-[#0b0e14] p-8 md:p-12">
+            <StackLayer name="Surfaces" desc="Terminal shell · TUI · Control Center (local web) · Telegram · API" tone="from-cyan-500/10 to-transparent" />
             <StackConnector />
-            <StackLayer name="Skill Layer" desc="Manifest-governed, composable units of work" tone="from-sky-500/20 to-transparent" />
+            <StackLayer name="Skill layer" desc="65 bundled skills — manifest-declared, permission-scoped" tone="from-cyan-500/8 to-transparent" />
             <StackConnector />
-            <StackLayer name="Agent Runtime" desc="Planner · Executor · Memory · Replay · Audit" tone="from-emerald-500/15 to-transparent" />
+            <StackLayer name="Agent runtime" desc="Plan / ask / agent · tools · memory · runs & sessions · audit" tone="from-violet-500/12 to-transparent" />
             <StackConnector />
-            <StackLayer name="Model Gateway" desc="XR Core · Claude · GPT · Gemini · Open-weight · Local" tone="from-amber-500/15 to-transparent" />
+            <StackLayer name="Model gateway" desc="10 local runtimes · 16 hosted APIs (BYOK) · explainable routing · fallbacks" tone="from-violet-500/10 to-transparent" />
             <StackConnector />
-            <StackLayer name="Security Gate" desc="Policy · Approval · Budget · Audit (in-process)" tone="from-rose-500/15 to-transparent" last />
+            <StackLayer name="Trust plane" desc="Approvals · spend ceilings · policy gate · hash-chained audit" tone="from-emerald-500/8 to-transparent" last />
           </div>
         </div>
       </div>
@@ -326,6 +358,7 @@ function StackLayer({
   name,
   desc,
   tone,
+  last,
 }: {
   name: string;
   desc: string;
@@ -333,41 +366,48 @@ function StackLayer({
   last?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border border-white/10 bg-gradient-to-r ${tone} px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2`}>
-      <div className="text-white font-medium">{name}</div>
+    <div
+      className={`flex flex-col gap-2 rounded-xl border border-white/10 bg-gradient-to-r ${tone} px-5 py-4 transition-colors md:flex-row md:items-center md:justify-between hover:border-white/20`}
+    >
+      <div className="flex items-center gap-2 font-medium text-white">
+        <XrMark size={14} />
+        {name}
+      </div>
       <div className="text-sm text-zinc-400">{desc}</div>
     </div>
   );
 }
 function StackConnector() {
-  return <div className="h-5 w-px mx-auto bg-white/10" />;
+  return <div className="mx-auto h-5 w-px bg-white/10" />;
 }
 
 function Workflow() {
   const steps = [
-    { n: "01", title: "Install", desc: "One command. Works on macOS, Linux, and Windows (WSL)." },
-    { n: "02", title: "Add skills", desc: "Enable a bundled skill, install a plugin, or connect an MCP server." },
-    { n: "03", title: "Pick a model", desc: "Use any major model, route by task, or run open-weight locally." },
-    { n: "04", title: "Ship", desc: "Stream replays, share sessions, and deploy straight from XR." },
+    { n: "01", title: "Install", desc: "npm, a native binary or Docker — macOS, Linux, Windows.", href: "/downloads" },
+    { n: "02", title: "Connect a model", desc: "Local runtime or your own key — `xr onboarding` walks you through it.", href: "/models" },
+    { n: "03", title: "Give it a task", desc: "xr \"…\" plans, asks when it matters, and reports what it did.", href: "/docs" },
+    { n: "04", title: "Verify the trail", desc: "Every run is inspectable; the audit chain is verifiable offline.", href: "/security" },
   ];
   return (
     <section className="py-24">
       <div className="mx-auto max-w-7xl px-6">
         <SectionHeader
           eyebrow="Get started"
-          title="From zero to shipping in minutes."
-          subtitle="No containers. No API gymnastics. A real runtime you can use today."
+          title="From zero to your first task in minutes."
+          subtitle="No containers required, no hosted account, no credit card."
         />
-        <div className="mt-14 grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {steps.map((s, i) => (
-            <div key={s.n} className="card p-6 relative">
-              <div className="text-xs font-mono text-zinc-500">{s.n}</div>
-              <div className="mt-3 text-white font-semibold">{s.title}</div>
-              <div className="mt-2 text-sm text-zinc-400">{s.desc}</div>
-              {i < steps.length - 1 && (
-                <div className="hidden lg:block absolute top-1/2 -right-3 w-6 h-px bg-white/10" />
-              )}
-            </div>
+            <Link key={s.n} href={s.href} className="card card-hover relative block p-6">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-mono text-zinc-500">{s.n}</div>
+                {i < steps.length - 1 && (
+                  <ArrowRight className="arrow-nudge hidden h-4 w-4 text-zinc-600 lg:block" />
+                )}
+              </div>
+              <div className="mt-3 font-semibold text-white">{s.title}</div>
+              <div className="mt-2 text-sm leading-relaxed text-zinc-400">{s.desc}</div>
+            </Link>
           ))}
         </div>
       </div>
@@ -379,28 +419,30 @@ function CTA() {
   return (
     <section className="py-24">
       <div className="mx-auto max-w-6xl px-6">
-        <div className="relative overflow-hidden rounded-3xl border border-white/10 p-10 md:p-16 text-center">
+        <div className="relative overflow-hidden rounded-3xl border border-white/8 p-10 text-center shadow-[var(--shadow-card)] md:p-16">
           <div
             aria-hidden
             className="absolute inset-0"
             style={{
               background:
-                "radial-gradient(600px 300px at 50% 0%, rgba(124,92,255,0.25), transparent 70%)",
+                "radial-gradient(640px 320px at 50% 0%, rgba(0,212,255,0.14), transparent 70%), radial-gradient(500px 260px at 80% 100%, rgba(96,72,248,0.14), transparent 70%)",
             }}
           />
           <div className="relative">
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight text-gradient">
-              Start building with XR today.
+            <XrMark size={40} className="mx-auto drop-shadow-[0_0_20px_rgba(0,212,255,0.5)]" />
+            <h2 className="mt-6 text-4xl font-semibold tracking-tight text-gradient md:text-5xl">
+              Run XR on your machine today.
             </h2>
-            <p className="mt-4 text-zinc-400 max-w-xl mx-auto">
-              Free for individuals. Pro for builders who ship. Enterprise for teams that need control.
+            <p className="mx-auto mt-4 max-w-xl text-zinc-400">
+              Free, MIT-licensed and local-first. There is no hosted product, no paid tier and no
+              telemetry — just the runtime, on your hardware.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link href="/downloads" className="btn btn-primary">
-                <Zap className="h-4 w-4" /> Download XR
+                <Play className="h-4 w-4" /> Get started
               </Link>
               <Link href="/pricing" className="btn btn-ghost">
-                See pricing
+                See what's included
               </Link>
             </div>
           </div>
@@ -414,19 +456,15 @@ function FAQ() {
   return (
     <section className="py-24">
       <div className="mx-auto max-w-3xl px-6">
-        <SectionHeader
-          eyebrow="FAQ"
-          title="Answers to common questions."
-          centered
-        />
+        <SectionHeader eyebrow="FAQ" title="Answers to common questions." centered />
         <div className="mt-10 divide-y divide-white/5 border-y border-white/5">
           {faqs.map((f) => (
             <details key={f.q} className="group py-5">
-              <summary className="flex items-center justify-between cursor-pointer list-none">
-                <span className="text-white font-medium">{f.q}</span>
-                <span className="ml-4 text-zinc-500 transition-transform group-open:rotate-45 text-xl leading-none">+</span>
+              <summary className="flex cursor-pointer list-none items-center justify-between">
+                <span className="font-medium text-white">{f.q}</span>
+                <span className="ml-4 text-xl leading-none text-zinc-500 transition-transform group-open:rotate-45">+</span>
               </summary>
-              <p className="mt-3 text-sm text-zinc-400 leading-relaxed">{f.a}</p>
+              <p className="mt-3 text-sm leading-relaxed text-zinc-400">{f.a}</p>
             </details>
           ))}
         </div>
@@ -447,12 +485,10 @@ function SectionHeader({
   centered?: boolean;
 }) {
   return (
-    <div className={centered ? "text-center max-w-2xl mx-auto" : "max-w-2xl"}>
+    <div className={centered ? "mx-auto max-w-2xl text-center" : "max-w-2xl"}>
       <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">{eyebrow}</div>
-      <h2 className="mt-3 text-3xl md:text-5xl font-semibold tracking-tight text-gradient">
-        {title}
-      </h2>
-      {subtitle && <p className="mt-4 text-zinc-400 leading-relaxed">{subtitle}</p>}
+      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-gradient md:text-5xl">{title}</h2>
+      {subtitle && <p className="mt-4 leading-relaxed text-zinc-400">{subtitle}</p>}
     </div>
   );
 }
@@ -462,20 +498,27 @@ function LargeCard({
   title,
   desc,
   children,
+  href,
+  cta,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   desc: string;
   children?: React.ReactNode;
+  href: string;
+  cta: string;
 }) {
   return (
-    <div className="card p-6 md:p-7 flex flex-col">
+    <Link href={href} className="card card-hover group flex flex-col p-6 md:p-7">
       <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-violet-300" />
-        <h3 className="text-white font-semibold">{title}</h3>
+        <Icon className="h-4 w-4 text-cyan-400" />
+        <h3 className="font-semibold text-white">{title}</h3>
       </div>
-      <p className="mt-2 text-sm text-zinc-400 leading-relaxed">{desc}</p>
+      <p className="mt-2 text-sm leading-relaxed text-zinc-400">{desc}</p>
       <div className="flex-1">{children}</div>
-    </div>
+      <div className="mt-5 inline-flex items-center gap-1 text-sm font-medium text-zinc-300 transition-colors group-hover:text-cyan-300">
+        {cta} <ArrowRight className="arrow-nudge h-3.5 w-3.5" />
+      </div>
+    </Link>
   );
 }

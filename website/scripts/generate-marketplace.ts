@@ -92,14 +92,14 @@ const ICON_BY_CATEGORY: Record<string, string> = {
 };
 
 const GRADIENTS: readonly string[] = [
-  "linear-gradient(135deg,#7c5cff,#3b82f6)",
-  "linear-gradient(135deg,#22d3ee,#6366f1)",
-  "linear-gradient(135deg,#10b981,#06b6d4)",
-  "linear-gradient(135deg,#8b5cf6,#ec4899)",
-  "linear-gradient(135deg,#f472b6,#f59e0b)",
-  "linear-gradient(135deg,#14b8a6,#6366f1)",
-  "linear-gradient(135deg,#ef4444,#f97316)",
-  "linear-gradient(135deg,#ec4899,#a855f7)",
+  "linear-gradient(135deg,#00d4ff,#6048f8)",
+  "linear-gradient(135deg,#6048f8,#00d4ff)",
+  "linear-gradient(135deg,#00d4ff,#009fbf)",
+  "linear-gradient(135deg,#6048f8,#4534b3)",
+  "linear-gradient(135deg,#00ff88,#00d4ff)",
+  "linear-gradient(135deg,#9888fa,#543fda)",
+  "linear-gradient(135deg,#009fbf,#6048f8)",
+  "linear-gradient(135deg,#00ff88,#6048f8)",
 ];
 
 function humanize(id: string): string {
@@ -242,7 +242,7 @@ function loadItems(): Item[] {
         iconBg: GRADIENTS[items.length % GRADIENTS.length]!,
         installs: "Bundled",
         updated: "Ships with XR",
-        installCmd: `xr skills install-local ${dir}`,
+        installCmd: `xr plugins list`,
         tags: [],
       });
     }

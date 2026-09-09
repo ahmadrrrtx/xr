@@ -3,29 +3,44 @@ import { ImageResponse } from "next/og";
 export const size = { width: 32, height: 32 };
 export const contentType = "image/png";
 
+/** Favicon — official XR avatar mark (assets/avatar.svg geometry). */
 export default function Icon() {
   return new ImageResponse(
     (
       <div
         style={{
-          width: 32,
-          height: 32,
-          borderRadius: 8,
+          width: "100%",
+          height: "100%",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "linear-gradient(135deg, #1a1230 0%, #0b0b0f 60%, #0e1a2a 100%)",
-          border: "1px solid rgba(168,146,255,0.6)",
-          color: "#ffffff",
-          fontSize: 16,
-          fontWeight: 700,
-          fontFamily: "sans-serif",
-          letterSpacing: "-0.05em",
-          backgroundImage:
-            "radial-gradient(circle at 30% 30%, rgba(168,146,255,0.6), transparent 50%)",
+          position: "relative",
         }}
       >
-        X
+        {/* Tile */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: 7,
+            background: "#0A0A0F",
+            border: "1.5px solid rgba(0,212,255,0.9)",
+            boxShadow: "0 0 18px rgba(0,212,255,0.35)",
+          }}
+        />
+        {/* X mark strokes */}
+        <svg width="22" height="22" viewBox="0 0 96 96" fill="none">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#00D4FF" />
+              <stop offset="1" stopColor="#6048F8" />
+            </linearGradient>
+          </defs>
+          <path d="M30 30 L48 52 L66 30" fill="none" stroke="#00D4FF" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M30 66 L43 50" fill="none" stroke="#6048F8" strokeWidth="7" strokeLinecap="round" />
+          <path d="M66 66 L53 50" fill="none" stroke="#6048F8" strokeWidth="7" strokeLinecap="round" />
+          <circle cx="48" cy="59" r="4.5" fill="#00FF88" />
+        </svg>
       </div>
     ),
     { ...size }

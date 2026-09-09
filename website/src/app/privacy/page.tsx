@@ -1,27 +1,58 @@
 import { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
+import { ShieldCheck, Database, FileCode2 } from "lucide-react";
+import { site } from "@/lib/site";
 
-export const metadata: Metadata = { title: "Privacy Policy" };
+export const metadata: Metadata = { title: "Privacy" };
 
 export default function PrivacyPage() {
   return (
     <>
-      <PageHeader eyebrow="Legal" title="Privacy Policy" subtitle="Last updated: July 8, 2026" />
+      <PageHeader eyebrow="Legal" title="Privacy" subtitle="Short version: there is nothing to collect." />
       <section className="pb-24">
-        <article className="mx-auto max-w-3xl px-6 text-zinc-300 leading-relaxed space-y-5">
-          <p>This Privacy Policy describes how XR Labs, Inc. (&ldquo;XR&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) collects, uses, and shares information when you use our website, products, and services.</p>
-          <h2 className="text-xl font-semibold text-white pt-4">Information we collect</h2>
-          <p>We collect information you provide directly &mdash; such as your name, email, and payment information when you sign up. We also collect limited technical data to operate the service: version, platform, and crash reports.</p>
-          <h2 className="text-xl font-semibold text-white pt-4">How we use information</h2>
-          <p>To provide, maintain, and improve XR; to process payments; to send product updates; to detect abuse and security incidents; and to comply with legal obligations.</p>
-          <h2 className="text-xl font-semibold text-white pt-4">Your code and content</h2>
-          <p>Your code, prompts, and session content are not used to train our models or third-party models unless you explicitly opt in. Enterprise customers can enforce data residency and zero-retention policies.</p>
-          <h2 className="text-xl font-semibold text-white pt-4">Sharing</h2>
-          <p>We do not sell personal information. We share data with vendors that help us operate (hosting, billing, support) under strict contractual obligations.</p>
-          <h2 className="text-xl font-semibold text-white pt-4">Your rights</h2>
-          <p>You can access, correct, or delete your data at any time. Contact privacy@xr.dev to exercise these rights.</p>
-          <h2 className="text-xl font-semibold text-white pt-4">Contact</h2>
-          <p>Questions? Email <a className="text-violet-300 hover:underline" href="mailto:privacy@xr.dev">privacy@xr.dev</a>.</p>
+        <article className="mx-auto max-w-3xl space-y-5 px-6 leading-relaxed text-zinc-300">
+          <div className="card card-hover flex items-start gap-4 p-6">
+            <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-emerald-400" />
+            <p className="text-sm">
+              XR is self-hosted, MIT-licensed software. <b className="text-white">This website sets no
+              cookies, runs no analytics and collects no personal information.</b> The product you
+              download has zero telemetry endpoints — the only network calls it makes are to model
+              providers you configured yourself.
+            </p>
+          </div>
+          <h2 className="pt-4 text-xl font-semibold text-white">Your data</h2>
+          <p>
+            Your prompts, sessions, memory, skills and audit log live in one SQLite database on
+            your machine, under your state directory. Nothing is uploaded, synchronized or
+            shared. You can export everything (<code className="font-mono text-cyan-300">xr context export</code>) or
+            delete it (<code className="font-mono text-cyan-300">xr context prune</code>).
+          </p>
+          <h2 className="pt-4 text-xl font-semibold text-white">API keys</h2>
+          <p>
+            Provider keys are read from your environment and never logged. The audit log records
+            <em> that</em> a call was made, not the key or the content of the request.
+          </p>
+          <h2 className="pt-4 text-xl font-semibold text-white">Model providers</h2>
+          <p>
+            If you connect a hosted provider (OpenAI, Anthropic, Gemini…), your prompts travel to
+            that provider under <em>their</em> privacy policy — that is what BYOK means. To avoid
+            third parties entirely, run one of the 10 local runtimes; XR works fully offline.
+          </p>
+          <h2 className="pt-4 text-xl font-semibold text-white">This website</h2>
+          <p>
+            The status page fetches public data from the npm registry and the GitHub API. No
+            visitor data is stored anywhere by XR.
+          </p>
+          <div className="flex items-start gap-4 rounded-xl border border-white/8 bg-white/[0.02] p-5 text-sm">
+            <FileCode2 className="mt-0.5 h-5 w-5 shrink-0 text-cyan-300" />
+            <p className="text-zinc-400">
+              Verify every claim above: the code is public at{" "}
+              <a className="text-cyan-300 hover:underline" href={site.github} target="_blank" rel="noreferrer">
+                github.com/ahmadrrrtx/xr
+              </a>
+              , and the docs describe the data model in detail.
+            </p>
+          </div>
         </article>
       </section>
     </>

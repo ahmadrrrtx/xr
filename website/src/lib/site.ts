@@ -1,21 +1,20 @@
 /**
  * XR Website — Single Source of Truth for marketing identity.
  *
- * This file must stay in sync with src/core/version.ts and package.json.
- * Run `bun run scripts/set-version.ts` to stamp version, repo, npm, homepage.
+ * Must stay in sync with src/core/version.ts and package.json
+ * (release.manifest.json stamps all of them; version: 1.0.0 "Truth").
  *
  * Real project identity:
  *   GitHub: https://github.com/ahmadrrrtx/xr
  *   NPM: @rrrtx/xr  https://www.npmjs.com/package/@rrrtx/xr
  *   Homepage: https://xr-gules.vercel.app
- *   Version: 1.0.0 (Truth) — from release.manifest.json (rebaselined from 7.1.0)
  */
 
 export const site = {
   name: "XR",
-  tagline: "The AI Agent You Can Actually Trust — BYOK, local-first, secure",
+  tagline: "An AI agent runtime you can actually audit",
   description:
-    "XR is an open-source, local-first AI agent runtime — BYOK, secure, with a Unified Execution Fabric, persistent memory, research, voice, plugins, MCP, multi-agent runtime, and workflow automation. Built on Bun + TypeScript + SQLite.",
+    "XR is an open-source, local-first AI agent runtime. BYOK or local models, approvals and spend caps before every consequential action, a tamper-evident audit log, and skills, plugins, MCP, memory, research, voice and Telegram channels — all on your machine. Built on Bun + TypeScript + SQLite.",
   url: "https://xr-gules.vercel.app",
   twitter: "@ahmadrrrtx",
   github: "https://github.com/ahmadrrrtx/xr",
@@ -26,6 +25,10 @@ export const site = {
   displayVersion: "1.0.0 (Truth)",
   /** Bundled skills, mechanically counted from skills/ at stamp time. */
   skillCount: 65,
+  /** Provider presets shipped in src/providers/presets.ts (10 local + 16 hosted). */
+  providerCount: 26,
+  localRuntimes: 10,
+  hostedProviders: 16,
   nav: [
     { label: "Features", href: "/features" },
     { label: "Marketplace", href: "/marketplace" },
@@ -40,7 +43,7 @@ export const site = {
       { label: "Features", href: "/features" },
       { label: "Marketplace", href: "/marketplace" },
       { label: "Skills", href: "/marketplace?tab=skills" },
-      { label: "Extensions", href: "/marketplace?tab=extensions" },
+      { label: "Plugins", href: "/marketplace?tab=plugins" },
       { label: "Models", href: "/models" },
       { label: "Downloads", href: "/downloads" },
       { label: "Changelog", href: "/changelog" },
@@ -57,11 +60,10 @@ export const site = {
     ],
     company: [
       { label: "About", href: "/about" },
-      { label: "Careers", href: "/careers" },
+      { label: "Contribute", href: "/community" },
       { label: "Enterprise", href: "/enterprise" },
       { label: "Security", href: "/security" },
-      { label: "Press", href: "/about#press" },
-      { label: "Partners", href: "/enterprise#partners" },
+      { label: "Repository", href: "https://github.com/ahmadrrrtx/xr" },
     ],
     legal: [
       { label: "Privacy", href: "/privacy" },

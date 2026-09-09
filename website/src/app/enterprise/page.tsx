@@ -39,7 +39,7 @@ export default function EnterprisePage() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {pillars.map((p) => (
-              <div key={p.title} className="card p-6 group">
+              <div key={p.title} className="card card-hover p-6 group">
                 <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-to-br from-violet-500/20 to-sky-500/10 border border-white/10">
                   <p.icon className="h-5 w-5 text-violet-300" />
                 </div>
