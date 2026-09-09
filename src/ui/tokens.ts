@@ -14,31 +14,25 @@
 // ── Color: Core palette ───────────────────────────────────────────────────────
 
 export const COLOR = {
-  bg:        "#0A0A0F",
-  bg2:       "#0D1117",
-  surface:   "#111827",
-  surface2:  "#1A2234",
-  border:    "#1F2937",
-  border2:   "#2D3748",
-  text:      "#F9FAFB",
-  textDim:   "#9CA3AF",
-  // Phase 8 · T3 raised muted to #7A8FB0 (≥5:1 on every surface, WCAG 1.4.3);
-  // 2026-08 UX Phase A aligns the shared token to that verified value so the
-  // dashboard and TUI render identical neutrals (single source of truth).
-  muted:     "#7A8FB0",
+  bg:        "#0B1120",
+  bg2:       "#0F172A",
+  surface:   "#1E293B",
+  surface2:  "#334155",
+  border:    "#1E293B",
+  border2:   "#334155",
+  text:      "#F1F5F9",
+  textDim:   "#94A3B8",
+  muted:     "#64748B",
 
-  primary:   "#00D4FF",
-  cyan:      "#00D4FF",
-  // Official brand indigo (pixel-verified from Colour palate of xr logo.png:
-  // #6048F8). Replaces the legacy Tailwind-purple #A855F7 (F-3). The old
-  // purple remains only as a legacy chart color (data2).
+  primary:   "#38BDF8",
+  cyan:      "#38BDF8",
   violet:    "#6048F8",
-  success:   "#00FF88",
-  green:     "#00FF88",
+  success:   "#22C55E",
+  green:     "#22C55E",
   warning:   "#F59E0B",
   amber:     "#F59E0B",
-  error:     "#FF4D4D",
-  red:       "#FF4D4D",
+  error:     "#EF4444",
+  red:       "#EF4444",
 
   // Extended data colors (charts only)
   data1: "#00D4FF",
@@ -58,25 +52,24 @@ export type ColorToken = keyof typeof COLOR;
 // ── RGB tuples (for ANSI truecolor) ───────────────────────────────────────────
 
 export const RGB = {
-  primary:  [0, 212, 255] as const,
-  cyan:     [0, 212, 255] as const,
-  // Official brand indigo (COLOR.violet #6048F8) — truecolor ANSI for the TUI.
+  primary:  [56, 189, 248] as const,
+  cyan:     [56, 189, 248] as const,
   violet:   [96, 72, 248] as const,
-  success:  [0, 255, 136] as const,
-  green:    [0, 255, 136] as const,
+  success:  [34, 197, 94] as const,
+  green:    [34, 197, 94] as const,
   warning:  [245, 158, 11] as const,
   amber:    [245, 158, 11] as const,
-  error:    [255, 77, 77] as const,
-  red:      [255, 77, 77] as const,
-  text:     [249, 250, 251] as const,
-  textDim:  [156, 163, 175] as const,
-  muted:    [107, 114, 128] as const,
-  border:   [31, 41, 55] as const,
-  border2:  [45, 55, 72] as const,
-  bg:       [10, 10, 15] as const,
-  bg2:      [13, 17, 23] as const,
-  surface:  [17, 24, 39] as const,
-  surface2: [26, 34, 52] as const,
+  error:    [239, 68, 68] as const,
+  red:      [239, 68, 68] as const,
+  text:     [241, 245, 249] as const,
+  textDim:  [148, 163, 184] as const,
+  muted:    [100, 116, 139] as const,
+  border:   [30, 41, 59] as const,
+  border2:  [51, 65, 85] as const,
+  bg:       [11, 17, 32] as const,
+  bg2:      [15, 23, 42] as const,
+  surface:  [30, 41, 59] as const,
+  surface2: [51, 65, 85] as const,
   onPrimary:[0, 16, 24] as const,
 } as const;
 
@@ -202,7 +195,7 @@ export const DENSITY = {
 
 export const BRAND_META = {
   name: "XR",
-  tagline: "The AI Agent You Can Actually Trust",
+  tagline: "Your AI Operating System",
   productLine: "AI Operating System",
   logoPath: "assets/logo.png",
   avatarPath: "assets/avatar.png",
