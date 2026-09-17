@@ -52,6 +52,13 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed]);
 
+  /** Transcript entries for transport-level facts: an HTTP-level rejection
+   *  (e.g. 503 provider offline) emits NO stream events, so the attempt and
+   *  the failure are noted here — the inspector records what actually happened. */
+  function note(type: string, detail: string) {
+    setEvs((v) => [...v.slice(-499), { t: Date.now(), type, detail }]);
+  }
+
   function record(e: StreamEvent) {
     const detail = JSON.stringify(e).slice(0, 180);
     setEvs((v) => [...v.slice(-499), { t: Date.now(), type: e.type ?? "event", detail }]);
@@ -79,6 +86,7 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
     setInput(""); setErr(null); setRunning(true); setStatus("starting");
     setMsgs((m) => [...m, { role: "user", text: task }, { role: "xr", text: "" }]);
     setTools([]); setEvs([]); setPlan([]);
+    note("chat", `POST /chat mode=${mode}${model ? ` model=${model}` : ""} · "${task.slice(0, 80)}"`);
     const ac = new AbortController();
     abort.current = ac;
     try {
@@ -113,7 +121,11 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
         }
       }, ac.signal);
     } catch (ex) {
-      if (!ac.signal.aborted) setErr(ex instanceof Error ? ex.message : String(ex));
+      if (!ac.signal.aborted) {
+        const m = ex instanceof Error ? ex.message : String(ex);
+        setErr(m);
+        note("error", `stream failed before any event: ${m.slice(0, 160)}`);
+      }
     } finally {
       setRunning(false);
       setStatus(null);
