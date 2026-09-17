@@ -75,7 +75,7 @@ export type StreamEvent =
   | { type: string; [k: string]: unknown };
 
 export async function chatStream(
-  body: { message: string; mode?: "agent" | "ask" | "plan"; sessionId?: string },
+  body: { message: string; mode?: "agent" | "ask" | "plan"; sessionId?: string; model?: string },
   onEvent: (e: StreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -172,6 +172,13 @@ export interface SessionSummary {
   [k: string]: unknown;
 }
 export interface Approval { id: string; action?: string; reason?: string; risk?: string; status?: string; [k: string]: unknown; }
+/** Phase 6: workflow summaries straight from GET /agents (engine WorkflowRepo). */
+export interface WorkflowSummary {
+  id: string; kind?: string; goal?: string; status?: string; reviewState?: string; approvalState?: string;
+  createdAt?: string; updatedAt?: string;
+  tasks?: { total?: number; completed?: number; failed?: number; blocked?: number; awaitingReview?: number };
+  [k: string]: unknown;
+}
 export interface FileEntry { name: string; rel: string; type: "file" | "dir"; size: number; git?: string | null; isText?: boolean; }
 export interface FilesRoot { entries?: FileEntry[]; branch?: string | null; dirty?: boolean; [k: string]: unknown; }
 export interface MemoryEntry { id: string; text?: string; content?: string; category?: string; scope?: string; [k: string]: unknown; }
@@ -242,6 +249,10 @@ export const api = {
   /** Grant exactly these permission scopes (engine filters invalid ones; full replace). */
   pluginPermissions: (id: string, permissions: string[]) =>
     req<Record<string, unknown>>(`/plugins/${encodeURIComponent(id)}/permissions`, { method: "POST", body: JSON.stringify({ permissions }) }),
+
+  /* ---------- phase 6 · team-run board (multi-agent workflows, engine-owned) ---------- */
+  agents: () => req<{ roles?: Record<string, unknown>[]; workflows?: WorkflowSummary[]; health?: Record<string, unknown> }>("/agents"),
+  workflow: (id: string) => req<Record<string, unknown>>(`/agents/workflows/${encodeURIComponent(id)}`),
 };
 
 export function asList<T>(v: T[] | { [k: string]: unknown } | undefined, ...keys: string[]): T[] {

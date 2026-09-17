@@ -9,6 +9,7 @@ import { Runs } from "./screens/Runs";
 import { api, EngineDown } from "./api/client";
 import { XrLogo } from "./components/Brand";
 import "./styles/tokens.css";
+import "./styles/phase6.css";
 
 function Stub({ title, phase }: { title: string; phase: string }) {
   return (
@@ -54,19 +55,19 @@ function App() {
   }
 
   return (
-    <AppShell area={area} onArea={(a) => { setArea(a); if (a !== "runs") setRunId(null); }} workspace="default" engineVersion={engine}>
+    <AppShell area={area} onArea={(a) => { setArea(a); if (a !== "runs") setRunId(null); }} engineVersion={engine}>
       {area === "home" && (
         <Home
           onOpenRun={(id) => { setRunId(id); setArea("runs"); }}
           onGoWork={(t) => { setWorkSeed(t); setArea("work"); }}
+          onReview={() => setArea("work")}
         />
       )}
       {area === "work" && <Work seed={workSeed} onConsumed={() => setWorkSeed(null)} />}
       {area === "workspace" && <Workspace onAskXr={(p) => { setWorkSeed(p); setArea("work"); }} />}
-      {area === "agents" && <Stub title="Agents — team-run board" phase="Phase 3" />}
-      {area === "library" && <Library />}
+      {(area === "agents" || area === "runs") && <Runs openId={runId} onOpen={setRunId} />}
+      {area === "library" && <Library onRun={(p) => { setWorkSeed(p); setArea("work"); }} />}
       {area === "trust" && <Stub title="Trust Center — approvals, modes, audit, budgets, network, shield" phase="Phase 4" />}
-      {area === "runs" && <Runs openId={runId} onOpen={setRunId} />}
       {area === "settings" && <Stub title="Settings — general, models, local, automations, voice, privacy, advanced" phase="Phase 2–4" />}
     </AppShell>
   );

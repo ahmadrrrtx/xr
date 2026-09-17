@@ -1,61 +1,102 @@
 import { useEffect, useRef, useState } from "react";
-import { api, asList, chatStream, type Approval, type MemoryEntry, type StreamEvent } from "../api/client";
+import { api, asList, chatStream, type Approval, type ProviderInfo, type StreamEvent } from "../api/client";
 import { XrAvatar } from "../components/Brand";
 
 interface Msg { role: "user" | "xr"; text: string; }
-interface ToolRow { id: string; tool: string; args?: unknown; ok?: boolean; result?: string; error?: string; done: boolean; }
+interface ToolRow { id: string; tool: string; args?: unknown; ok?: boolean; result?: string; error?: string; done: boolean; startMs: number; endMs?: number; }
+interface EvRow { t: number; type: string; detail: string; }
 
+type InspTab = "transcript" | "plan" | "files" | "tools" | "cost";
+
+const FILE_TOOLS = /file|read|write|edit|patch|fs|glob|grep/i;
+
+/** Work (phase 6, mock 03): chat column + Run Inspector. All data engine-streamed — nothing invented. */
 export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: () => void }) {
   const [input, setInput] = useState("");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [tools, setTools] = useState<ToolRow[]>([]);
+  const [evs, setEvs] = useState<EvRow[]>([]);
+  const [plan, setPlan] = useState<EvRow[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [memory, setMemory] = useState<MemoryEntry[]>([]);
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [mode, setMode] = useState<"agent" | "ask" | "plan">("agent");
+  const [model, setModel] = useState("");
+  const [attach, setAttach] = useState<string | null>(null);
+  const [attachBody, setAttachBody] = useState<string | null>(null);
   const [cost, setCost] = useState<Record<string, unknown> | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [tab, setTab] = useState<InspTab>("tools");
   const abort = useRef<AbortController | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const t = setInterval(() => {
       api.approvals().then((v) => setApprovals(asList<Approval>(v, "pending", "approvals"))).catch(() => {});
       api.cost().then(setCost).catch(() => {});
     }, 2500);
-    api.memory().then((v) => setMemory(asList<MemoryEntry>(v, "entries", "memories").slice(0, 4))).catch(() => {});
+    api.providers().then((p) => {
+      const list = asList<ProviderInfo>(p, "providers", "items");
+      setProviders(list);
+      const first = list.find((x) => x.available !== false);
+      if (first) setModel(first.models?.[0] ?? first.id);
+    }).catch(() => {});
     return () => clearInterval(t);
   }, []);
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [msgs, tools, status]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [msgs, tools, status, approvals]);
 
   useEffect(() => {
     if (seed) { send(seed); onConsumed(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed]);
 
-  async function send(text: string) {
-    const task = text.trim();
+  function record(e: StreamEvent) {
+    const detail = JSON.stringify(e).slice(0, 180);
+    setEvs((v) => [...v.slice(-499), { t: Date.now(), type: e.type ?? "event", detail }]);
+    if (e.type === "status") {
+      const st = e as unknown as { status?: string; message?: string };
+      setPlan((v) => [...v, { t: Date.now(), type: String(st.status ?? "status"), detail: String(st.message ?? "") }]);
+    }
+  }
+
+  function onPickFile(f: File | undefined) {
+    if (!f) return;
+    setAttach(f.name);
+    const r = new FileReader();
+    r.onload = () => setAttachBody(typeof r.result === "string" ? r.result.slice(0, 4000) : null);
+    r.onerror = () => setAttachBody(null);
+    r.readAsText(f.slice(0, 8192));
+  }
+
+  async function send(raw: string) {
+    let task = raw.trim();
     if (!task || running) return;
+    if (attachBody) task = `${task}\n\n[attached ${attach} — first 4KB]\n\`\`\`\n${attachBody}\n\`\`\``;
+    else if (attach) task = `${task}\n\n[references file: ${attach}]`;
+    setAttach(null); setAttachBody(null);
     setInput(""); setErr(null); setRunning(true); setStatus("starting");
     setMsgs((m) => [...m, { role: "user", text: task }, { role: "xr", text: "" }]);
-    setTools([]);
+    setTools([]); setEvs([]); setPlan([]);
     const ac = new AbortController();
     abort.current = ac;
     try {
-      await chatStream({ message: task, mode: "agent" }, (e: StreamEvent) => {
+      await chatStream({ message: task, mode, ...(model ? { model } : {}) }, (e: StreamEvent) => {
+        record(e);
         switch (e.type) {
           case "token":
             setMsgs((m) => { const c = [...m]; const last = c[c.length - 1]; c[c.length - 1] = { ...last, text: last.text + (e.text ?? "") }; return c; });
             break;
           case "tool_call": {
             const tc = e as unknown as { id: string; tool: string; args?: unknown };
-            setTools((t) => [...t, { id: tc.id, tool: tc.tool, args: tc.args, done: false }]);
+            setTools((t) => [...t, { id: tc.id, tool: tc.tool, args: tc.args, done: false, startMs: Date.now() }]);
             setStatus(`using ${tc.tool}`);
             break;
           }
           case "tool_result": {
             const tr = e as unknown as { id: string; ok?: boolean; result?: string; error?: string };
-            setTools((t) => t.map((r) => (r.id === tr.id ? { ...r, ok: tr.ok, result: tr.result, error: tr.error, done: true } : r)));
+            setTools((t) => t.map((r) => (r.id === tr.id ? { ...r, ok: tr.ok, result: tr.result, error: tr.error, done: true, endMs: Date.now() } : r)));
             break;
           }
           case "status": {
@@ -72,7 +113,7 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
         }
       }, ac.signal);
     } catch (ex) {
-      setErr(ex instanceof Error ? ex.message : String(ex));
+      if (!ac.signal.aborted) setErr(ex instanceof Error ? ex.message : String(ex));
     } finally {
       setRunning(false);
       setStatus(null);
@@ -80,10 +121,14 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
     }
   }
 
+  const args1 = (a: unknown) =>
+    typeof a === "object" && a ? Object.values(a as Record<string, unknown>).slice(0, 2).map(String).join(" ").slice(0, 64) : "";
+  const dur = (r: ToolRow) => (r.endMs ? `${((r.endMs - r.startMs) / 1000).toFixed(1)}s` : "…");
+
   return (
-    <div className="work">
-      <div className="work-main">
-        <div className="transcript" aria-live="polite">
+    <div className="work2">
+      <div className="chat-col">
+        <div className="transcript2" aria-live="polite">
           {msgs.length === 0 && (
             <div className="empty">
               <XrAvatar size={44} />
@@ -92,38 +137,56 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
           )}
           {msgs.map((m, i) =>
             m.role === "user" ? (
-              <div key={i} className="msg user mono">{m.text}</div>
+              <div key={i} className="row-user">
+                <div className="bubble user mono">{m.text}</div>
+                <span className="ava user" aria-hidden="true">Y</span>
+              </div>
             ) : (
-              <div key={i} className="msg xr">
-                <XrAvatar size={24} />
-                <div className="bubble">{m.text || (running && i === msgs.length - 1 ? <span className="faint">…</span> : "")}</div>
+              <div key={i} className="row-xr">
+                <XrAvatar size={26} />
+                <div className="bubble xr">
+                  {m.text || (running && i === msgs.length - 1 ? "" : <span className="faint">(empty reply)</span>)}
+                </div>
               </div>
             ),
           )}
 
           {tools.length > 0 && (
-            <div className="timeline" aria-label="Tool timeline">
+            <div className="toolrows" aria-label="Tool calls">
               {tools.map((t) => (
-                <div key={t.id} className="trow">
-                  <span className={`dot ${t.done ? (t.ok ? "green" : "red") : "cyan"}`} />
-                  <span className="mono">{t.tool}</span>
-                  <span className="faint mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {typeof t.args === "object" && t.args ? Object.values(t.args as Record<string, unknown>).slice(0, 2).join(" ").slice(0, 60) : ""}
-                  </span>
-                  {!t.done && <span className="faint">running…</span>}
+                <div key={t.id} className="toolrow">
+                  <span className={`cdot ${t.done ? (t.ok ? "g" : "r") : "c"}`} aria-hidden="true" />
+                  <span className="mono tool">{t.tool}</span>
+                  <span className="mono faint args">{args1(t.args)}</span>
+                  <span className="spacer" />
+                  <span className="mono dur faint">{dur(t)}</span>
+                  {t.done && (t.ok
+                    ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3ddc84" strokeWidth="2.4" aria-label="succeeded"><path d="M4 12l5 5L20 6" /></svg>
+                    : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" strokeWidth="2.4" aria-label="failed"><path d="M6 6l12 12M18 6L6 18" /></svg>)}
                 </div>
               ))}
             </div>
           )}
 
+          {running && status && (
+            <div className="thinking" role="status">
+              <span className="tdots" aria-hidden="true"><i /><i /><i /></span> {status}
+            </div>
+          )}
+
           {approvals.map((a) => (
-            <div key={a.id} className="approval-inline" role="alertdialog" aria-label="Approval request">
-              <div className="t">XR needs your approval</div>
-              <div className="mono" style={{ fontSize: 12 }}>{String(a.action ?? JSON.stringify(a).slice(0, 140))}</div>
-              {a.reason && <div className="faint" style={{ fontSize: 12 }}>{String(a.reason)}</div>}
-              <div className="row">
-                <button className="btn danger" onClick={() => api.decide(a.id, false).then(() => setApprovals((p) => p.filter((x) => x.id !== a.id)))}>Deny</button>
-                <button className="btn primary" onClick={() => api.decide(a.id, true).then(() => setApprovals((p) => p.filter((x) => x.id !== a.id)))}>Allow once</button>
+            <div key={a.id} className="appr-card" role="alertdialog" aria-label="Approval request">
+              <div className="appr-h">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 16.5v.5" />
+                </svg>
+                XR wants to run:
+              </div>
+              <div className="appr-action mono">{String(a.action ?? JSON.stringify(a).slice(0, 160))}</div>
+              {a.reason && <div className="appr-reason faint">{String(a.reason)}</div>}
+              <div className="appr-row">
+                <button className="btn small" onClick={() => api.decide(a.id, false).then(() => setApprovals((p) => p.filter((x) => x.id !== a.id)))}>Deny</button>
+                <button className="btn small primary" onClick={() => api.decide(a.id, true).then(() => setApprovals((p) => p.filter((x) => x.id !== a.id)))}>Allow once</button>
               </div>
             </div>
           ))}
@@ -132,48 +195,97 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
           <div ref={endRef} />
         </div>
 
-        <form className="composer" onSubmit={(e) => { e.preventDefault(); send(input); }}>
+        <form className="composer2" onSubmit={(e) => { e.preventDefault(); send(input); }}>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={running ? "XR is working… (⌘. to stop)" : "Continue the task…"}
+            placeholder={running ? "XR is working… (stop button to abort)" : "Continue the task…"}
             aria-label="Message XR"
+            rows={2}
           />
-          <div className="row">
-            <span className="pill" title="Autonomy mode (named modes land Phase 4)">◈ Balanced</span>
-            <span className="pill mono" title="Model Center lives in Library → Models">⚙ engine default</span>
+          <div className="cbar">
+            <input ref={fileRef} type="file" hidden onChange={(e) => onPickFile(e.target.files?.[0])} />
+            <button type="button" className="pill" onClick={() => fileRef.current?.click()} title="Attach a text file (read locally, first 4KB)">
+              + Attach{attach ? ` · ${attach}` : ""}
+            </button>
+            <label className="pill select" title="Autonomy mode">
+              Mode
+              <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)} aria-label="Mode">
+                <option value="agent">Agent</option>
+                <option value="ask">Ask</option>
+                <option value="plan">Plan</option>
+              </select>
+            </label>
+            <label className="pill select" title="Model preference — engine may route per policy">
+              Model
+              <select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Model">
+                {providers.length === 0 && <option value="">engine default</option>}
+                {providers.map((p) =>
+                  (p.models?.length ? p.models : [p.id]).map((m) => <option key={`${p.id}/${m}`} value={m}>{p.id} · {m}</option>),
+                )}
+              </select>
+            </label>
+            <span className="spacer" />
             {running ? (
-              <button type="button" className="send stop" aria-label="Stop XR" onClick={() => abort.current?.abort()}>■</button>
+              <button type="button" className="send stop" aria-label="Stop XR" onClick={() => abort.current?.abort()}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+              </button>
             ) : (
-              <button className="send" type="submit" aria-label="Send">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20v-6l8-2-8-2V4l19 8z" /></svg>
+              <button className="send" type="submit" aria-label="Send" disabled={!input.trim() && !attach}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M5 12h13M12 5l7 7-7 7" /></svg>
               </button>
             )}
           </div>
         </form>
-        <div className="statusline mono faint">{status ?? ""}</div>
       </div>
 
-      <aside className="work-rail">
-        <div className="rail-card">
-          <div className="rail-h">Spend</div>
-          <div className="mono" style={{ fontSize: 13 }}>
-            {typeof cost?.usd === "number" ? `$${(cost.usd as number).toFixed(4)}` : typeof cost?.totalUsd === "number" ? `$${(cost.totalUsd as number).toFixed(4)}` : "$0.0000"}
-          </div>
-          <div className="faint" style={{ fontSize: 11 }}>budget enforced engine-side</div>
+      <aside className="inspector" aria-label="Run Inspector">
+        <div className="insp-head">
+          <span className="insp-title">Run Inspector</span>
+          {running && <i className="sdot run" title="run in progress" />}
         </div>
-        <div className="rail-card">
-          <div className="rail-h">Memory peek</div>
-          {memory.length === 0 && <div className="faint" style={{ fontSize: 12 }}>nothing stored yet</div>}
-          {memory.map((m) => (
-            <div key={m.id} className="mem" title={m.scope ?? m.category}>
-              · {String(m.text ?? m.content ?? m.id).slice(0, 90)}
-            </div>
+        <div className="insp-tabs" role="tablist">
+          {(["transcript", "plan", "files", "tools", "cost"] as InspTab[]).map((t) => (
+            <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "itab on" : "itab"} onClick={() => setTab(t)}>
+              {t[0].toUpperCase() + t.slice(1)}
+            </button>
           ))}
         </div>
-        <div className="rail-card">
-          <div className="rail-h">Approvals</div>
-          <div className="faint" style={{ fontSize: 12 }}>{approvals.length} pending</div>
+        <div className="insp-body mono">
+          {tab === "transcript" && (
+            evs.length === 0 ? <p className="faint">No events yet this run.</p> :
+            evs.map((e, i) => <div key={i} className="ev"><b className="faint">{new Date(e.t).toLocaleTimeString()}</b> <span className="evtype">{e.type}</span> {e.detail}</div>)
+          )}
+          {tab === "plan" && (
+            plan.length === 0 ? <p className="faint">Engine status events will appear here as the run progresses.</p> :
+            plan.map((p, i) => <div key={i} className="ev"><b className="faint">{new Date(p.t).toLocaleTimeString()}</b> <span className="evtype">{p.type}</span> {p.detail}</div>)
+          )}
+          {tab === "files" && (
+            tools.filter((t) => FILE_TOOLS.test(t.tool)).length === 0 ? <p className="faint">No file-related tool calls this run.</p> :
+            tools.filter((t) => FILE_TOOLS.test(t.tool)).map((t) => (
+              <div key={t.id} className="ev">
+                <span className="evtype">{t.tool}</span> {args1(t.args)}
+                {t.result && <pre className="ev-pre">{t.result.slice(0, 400)}</pre>}
+              </div>
+            ))
+          )}
+          {tab === "tools" && (
+            tools.length === 0 ? <p className="faint">No tool calls this run.</p> :
+            tools.map((t) => (
+              <div key={t.id} className="ev">
+                <span className={`cdot ${t.done ? (t.ok ? "g" : "r") : "c"}`} aria-hidden="true" />
+                <span className="evtype">{t.tool}</span> {args1(t.args)} <b className="faint">{dur(t)}</b>
+                {t.error && <pre className="ev-pre err">{String(t.error).slice(0, 300)}</pre>}
+              </div>
+            ))
+          )}
+          {tab === "cost" && (
+            <div className="costcard">
+              <div className="cost-big">{typeof cost?.usd === "number" ? `$${(cost.usd as number).toFixed(4)}` : typeof cost?.totalUsd === "number" ? `$${(cost.totalUsd as number).toFixed(4)}` : "—"}</div>
+              <div className="faint">engine-reported spend (budget enforced engine-side)</div>
+              {cost && <pre className="ev-pre">{JSON.stringify(cost, null, 1).slice(0, 600)}</pre>}
+            </div>
+          )}
         </div>
       </aside>
     </div>
