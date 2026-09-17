@@ -16,12 +16,12 @@ function StatusDot({ ok, warn }: { ok?: boolean; warn?: boolean }) {
   return <span className={`dot ${ok ? "green" : warn ? "amber" : "red"}`} />;
 }
 
-/** Defensive label for engine report entries (objects with name/tool/id or plain strings). */
+/** Defensive label for engine report entries (objects with name/tool/id/scope or plain strings). */
 function entryLabel(v: unknown): string {
   if (typeof v === "string") return v;
   if (v && typeof v === "object") {
     const o = v as Record<string, unknown>;
-    const name = o.name ?? o.tool ?? o.id ?? o.kind;
+    const name = o.name ?? o.tool ?? o.id ?? o.kind ?? o.scope;
     if (name !== undefined) {
       const why = o.reason ?? o.description ?? o.detail;
       return why ? `${String(name)} — ${String(why).slice(0, 120)}` : String(name);
@@ -29,6 +29,17 @@ function entryLabel(v: unknown): string {
     return JSON.stringify(v).slice(0, 140);
   }
   return String(v);
+}
+
+/** Short chip label for card footers (permission objects show their scope only). */
+function permShort(v: unknown): string {
+  if (typeof v === "string") return v.slice(0, 22);
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const s = o.scope ?? o.name ?? o.tool ?? o.id ?? o.kind;
+    if (s !== undefined) return String(s).slice(0, 22);
+  }
+  return JSON.stringify(v).slice(0, 22);
 }
 
 function ReportList({ title, items, tone }: { title: string; items: unknown[]; tone?: "bad" | "warn" }) {
@@ -298,7 +309,9 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
       {s.description && <div className="sc-desc">{String(s.description).slice(0, 120)}</div>}
       <div className="sc-foot mono faint">
         {Array.isArray(s.permissions) && s.permissions.length > 0
-          ? s.permissions.slice(0, 2).map((p) => <span key={String(p)} className="chip tiny">{entryLabel(p)}</span>)
+          ? s.permissions.slice(0, 2).map((p) => (
+            <span key={JSON.stringify(p)} className="chip tiny" title={entryLabel(p)}>{permShort(p)}</span>
+          ))
           : <span className="chip tiny">no declared permissions</span>}
         {market && s.installed ? <span className="chip green tiny">installed</span> : null}
         {market && s.updateAvailable ? <span className="chip amber tiny">update</span> : null}
