@@ -79,7 +79,7 @@ jobs:
           bun-version: 1.4.2
       - name: Install engine dependencies
         run: bun install --frozen-lockfile
-      - name: Compile engine sidecar (single source: scripts/compile-sidecar.ts)
+      - name: Compile engine sidecar (single source — scripts/compile-sidecar.ts)
         run: bun run scripts/compile-sidecar.ts
       - name: Smoke-test the sidecar (real boot + health probe)
         run: bash scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu

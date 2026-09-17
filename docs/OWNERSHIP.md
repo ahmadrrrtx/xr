@@ -142,6 +142,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/channel-manifest.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/ci-capability-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/claim-lint.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/compile-sidecar.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/consumer-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/dashboard-csp-convert.py` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/e2e-artifact.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -177,6 +178,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/repo-intelligence-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sbom.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/size-gate.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/smoke-sidecar.sh` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/soak.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sums.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/sus.ts` | @ahmadrrrtx | explicit entry |
