@@ -22,15 +22,18 @@ export function AppShell({
   area,
   onArea,
   engineVersion,
+  onSearch,
   children,
 }: {
   area: Area;
   onArea: (a: Area) => void;
   engineVersion: string | null;
+  onSearch: (q: string) => void;
   children: ReactNode;
 }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [up, setUp] = useState(true);
+  const [q, setQ] = useState("");
 
   useEffect(() => {
     let live = true;
@@ -65,6 +68,21 @@ export function AppShell({
         <span className="appname">XR Desktop</span>
         <span className="tb-sep" />
         <span className="crumb mono faint">{NAV.find((n) => n.id === area)?.label ?? ""}</span>
+        <form
+          className="gsearch"
+          role="search"
+          onSubmit={(e) => { e.preventDefault(); if (q.trim()) onSearch(q.trim()); }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search skills, files, runs…"
+            aria-label="Global search"
+          />
+        </form>
         <span className="mono faint tb-right">engine {engineVersion ?? "—"}</span>
       </header>
       <nav className="rail" aria-label="Primary">
