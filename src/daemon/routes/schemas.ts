@@ -135,6 +135,7 @@ export const FilesReadResponse = z.looseObject({
   size: z.number(),
   truncated: z.boolean().describe("True when the file was capped at the read limit."),
   isText: z.boolean(),
+  mtimeMs: z.number().optional().describe("Disk mtime at read time — pass back as files.write baseMtimeMs for the staleness guard."),
 });
 
 export const FilesDiffRequest = z.looseObject({
@@ -146,6 +147,43 @@ export const FilesDiffResponse = z.looseObject({
   diff: z.string().describe("Real `git diff -- <path>` output; empty for untracked files."),
   ok: z.boolean(),
   tracked: z.boolean(),
+});
+
+// ── Phase 2B · workspace write + terminal (experimental) ─────────────────────
+
+export const FilesWriteRequest = z.looseObject({
+  path: z.string().max(2000).describe("Path relative to the project root (must be inside)."),
+  content: z.string().describe("Full new file content (UTF-8 text only, ≤ 1 MB)."),
+  baseMtimeMs: z.number().optional()
+    .describe("mtimeMs the editor loaded; a mismatch returns 409 instead of clobbering."),
+});
+
+export const FilesWriteResponse = z.looseObject({
+  applied: z.boolean().describe("True only after a human approved AND the bytes hit disk."),
+  approvalId: z.string().optional(),
+  path: z.string().optional(),
+  bytes: z.number().optional(),
+  mtimeMs: z.number().optional(),
+  decision: z.string().nullish().describe("denied | timed_out when applied=false"),
+});
+
+export const TerminalRunRequest = z.looseObject({
+  cmd: z.string().min(1).max(8000).describe("One command line; runs via the platform shell inside the project root."),
+  timeoutMs: z.number().positive().max(600_000).optional().describe("Kill after this long (default 120000, max 600000)."),
+});
+
+export const TerminalRunEvent = z.looseObject({
+  event_id: z.number().int().positive().optional().describe("Monotonic per-stream sequence (same framing as chat SSE)."),
+  type: z.enum(["status", "output", "exit"]).optional().describe("Event discriminator."),
+  status: z.string().optional().describe("approval_required | denied | timed_out | blocked | error."),
+  approvalId: z.string().optional().describe("Durable approval id while status=approval_required."),
+  stream: z.enum(["stdout", "stderr"]).optional().describe("Which pipe an output chunk came from."),
+  text: z.string().optional().describe("Output chunk text (UTF-8, may split lines)."),
+  code: z.number().nullish().describe("Process exit code (type=exit)."),
+  timedOut: z.boolean().optional().describe("True when the run was killed by its timeout."),
+  truncated: z.boolean().optional().describe("True when output exceeded the 256 KB cap."),
+  ms: z.number().optional().describe("Wall time of the execution phase."),
+  error: z.string().optional(),
 });
 
 

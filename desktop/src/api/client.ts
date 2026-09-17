@@ -70,6 +70,57 @@ export async function chatStream(
   }
 }
 
+/* ---------- phase 2B · terminal stream (engine vocabulary, src/daemon/routes/terminal.routes.ts) ---------- */
+export type TerminalEvent =
+  | { type: "status"; status: string; approvalId?: string; cmd?: string; riskTier?: string; ttlMs?: number; decision?: string | null; error?: string }
+  | { type: "output"; stream: "stdout" | "stderr"; text: string }
+  | { type: "exit"; code: number | null; timedOut?: boolean; truncated?: boolean; ms?: number }
+  | { type: string; [k: string]: unknown };
+
+/** POST /terminal/run — SSE: approval_required → output chunks → exit. Policy + approval live in the engine. */
+export async function terminalRun(
+  body: { cmd: string; timeoutMs?: number },
+  onEvent: (e: TerminalEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/terminal/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch {
+    throw new EngineDown("engine unreachable");
+  }
+  if (!res.ok || !res.body) {
+    // 403 = policy-blocked before consent; surface the engine's reason verbatim.
+    let msg = `${res.status} terminal/run`;
+    try { const j = (await res.json()) as { error?: string }; if (j.error) msg = j.error; } catch { /* non-JSON */ }
+    throw new Error(msg);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of chunk.split("\n")) {
+        if (!line.startsWith("data: ")) continue;
+        const payload = line.slice(6);
+        if (payload === "[DONE]") { onEvent({ type: "done" }); continue; }
+        try { onEvent(JSON.parse(payload) as TerminalEvent); } catch { /* keepalive */ }
+      }
+    }
+  }
+}
+
 /* ---------- entities ---------- */
 export interface SessionSummary {
   id: string; title?: string; prompt?: string; mode?: string; status?: string;
@@ -92,8 +143,18 @@ export const api = {
   decide: (id: string, approved: boolean) =>
     req<unknown>(`/approvals/${encodeURIComponent(id)}/decision`, { method: "POST", body: JSON.stringify({ approved }) }),
   files: (path = "") => req<FilesRoot>(`/files?path=${encodeURIComponent(path)}`),
-  fileRead: (path: string) => req<{ content?: string; text?: string; binary?: boolean }>(`/files/read?path=${encodeURIComponent(path)}`),
+  fileRead: (path: string) => req<{ content?: string; text?: string; binary?: boolean; mtimeMs?: number }>(`/files/read?path=${encodeURIComponent(path)}`),
   fileDiff: (path: string) => req<Record<string, unknown>>(`/files/diff?path=${encodeURIComponent(path)}`),
+  /**
+   * Phase 2B — save the editor buffer. The engine raises a durable approval
+   * and this promise stays pending until a human decides; poll api.approvals()
+   * meanwhile to render the decision card. applied=true only after bytes hit disk.
+   */
+  filesWrite: (path: string, content: string, baseMtimeMs?: number) =>
+    req<{ applied: boolean; approvalId?: string; decision?: string | null; bytes?: number; mtimeMs?: number; stale?: boolean }>(
+      "/files/write",
+      { method: "POST", body: JSON.stringify({ path, content, ...(baseMtimeMs !== undefined ? { baseMtimeMs } : {}) }) },
+    ),
   memory: () => req<MemoryEntry[] | { entries: MemoryEntry[] }>("/memory"),
   providers: () => req<ProviderInfo[] | { providers: ProviderInfo[]; active?: string }>("/providers"),
   models: () => req<Record<string, unknown>>("/models"),

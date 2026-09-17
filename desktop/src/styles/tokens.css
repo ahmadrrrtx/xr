@@ -200,3 +200,19 @@ pre.raw {
 .chip { display: inline-flex; margin-left: 8px; padding: 1px 8px; border: 1px solid var(--xr-border-strong); border-radius: 999px; font-size: 10.5px; color: var(--xr-text-muted); font-family: var(--xr-font-mono); }
 .chip.green { border-color: rgba(0,255,136,.4); color: var(--xr-green); }
 .card.prov .row { display: flex; gap: 8px; }
+
+/* ── Phase 2B · editor save + terminal drawer ─────────────────────────────── */
+.btn.btn-accent { background: var(--xr-cyan); border-color: var(--xr-cyan); color: #041018; font-weight: 600; }
+.btn.btn-ok { background: rgba(0,255,136,.12); border-color: var(--xr-green); color: var(--xr-green); }
+.btn.btn-bad { background: transparent; border-color: var(--xr-red); color: var(--xr-red); }
+.btn:disabled { opacity: .45; cursor: default; }
+.row-gap { display: inline-flex; gap: 8px; align-items: center; }
+.approval-mini { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 8px 12px; margin: 0 0 6px; border: 1px solid var(--xr-border-strong); border-left: 3px solid var(--xr-cyan); border-radius: var(--xr-radius-sm); background: var(--xr-surface-2); font-size: 12px; }
+.approval-mini.errline { border-left-color: var(--xr-red); }
+.term { display: flex; flex-direction: column; border-top: 1px solid var(--xr-border); background: #05080d; max-height: 42vh; }
+.term-out { flex: 1 1 auto; overflow: auto; margin: 0; padding: 8px 12px; font-family: var(--xr-font-mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; min-height: 96px; max-height: 28vh; }
+.term-err { color: var(--xr-red); }
+.term-sys { color: var(--xr-text-muted); font-style: italic; }
+.term-in { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--xr-border); }
+.term-in input { flex: 1 1 auto; background: var(--xr-surface-1); border: 1px solid var(--xr-border-strong); border-radius: var(--xr-radius-sm); color: var(--xr-text); padding: 7px 10px; font-size: 12.5px; font-family: var(--xr-font-mono); }
+.term-in input:focus { outline: none; border-color: var(--xr-cyan); }

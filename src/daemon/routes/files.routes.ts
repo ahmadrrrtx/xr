@@ -18,11 +18,14 @@
  * the same directory the CLI already works in.
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, isAbsolute, join, resolve, sep } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { route, type DaemonRoute } from "./router.ts";
+import { getApprovalStore } from "../../control/approval-store.ts";
+import { buildStructuredPreview } from "../../control/preview.ts";
 
 const READ_LIMIT = 512 * 1024;
+const WRITE_LIMIT = 1024 * 1024;
 const ENTRY_CAP = 600;
 const HEAVY_DIRS = new Set([".git", "node_modules", "dist", "out", "build", "target", ".venv", ".next", "__pycache__", ".cache", ".npm", ".arena", ".svelte-kit"]);
 
@@ -37,7 +40,7 @@ interface FileEntry {
 }
 
 /** Resolve a user-supplied relative path strictly inside root. Returns null on escape. */
-function insideRoot(root: string, relPath: string): string | null {
+export function insideRoot(root: string, relPath: string): string | null {
   if (isAbsolute(relPath)) return null;
   const target = resolve(root, relPath);
   if (target !== root && !target.startsWith(root + sep)) return null;
@@ -180,7 +183,7 @@ export function filesRoutes(): DaemonRoute[] {
           if (!isText) return json({ error: "binary file — preview is text-only" }, 415);
           const truncated = buf.length > READ_LIMIT;
           const content = buf.subarray(0, READ_LIMIT).toString("utf8");
-          return json({ path: rel, content, size: st.size, truncated, isText });
+          return json({ path: rel, content, size: st.size, truncated, isText, mtimeMs: st.mtimeMs });
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }
@@ -206,6 +209,73 @@ export function filesRoutes(): DaemonRoute[] {
           const trackedRes = await runCommand("git", ["ls-files", "--error-unmatch", rel], { cwd: root, timeoutMs: 5000 });
           const tracked = trackedRes.ok;
           return json({ path: rel, diff, ok: res.ok, tracked });
+        } catch (e) {
+          return json({ error: (e as Error).message }, 400);
+        }
+      },
+    }),
+    route({
+      id: "files.write",
+      path: "/api/files/write",
+      method: "POST",
+      handle: async ({ req, json, state, config }) => {
+        try {
+          const root = resolve(process.cwd());
+          const body = (await req.json().catch(() => ({}))) as {
+            path?: string;
+            content?: string;
+            baseMtimeMs?: number;
+          };
+          const rel = typeof body?.path === "string" ? body.path : "";
+          if (!rel) return json({ error: "expected { path, content }" }, 400);
+          if (typeof body.content !== "string") return json({ error: "content must be a string" }, 400);
+          const target = insideRoot(root, rel);
+          if (!target) return json({ error: "path escapes the project root" }, 400);
+          const bytes = Buffer.byteLength(body.content, "utf8");
+          if (bytes > WRITE_LIMIT) return json({ error: "content exceeds the 1 MB write limit" }, 413);
+
+          // Staleness guard (honest concurrency): if the caller declares the
+          // mtime it loaded and disk moved on since, refuse BEFORE raising an
+          // approval — a human must never approve a blind clobber.
+          let existed = false;
+          try {
+            const st = statSync(target);
+            if (st.isDirectory()) return json({ error: "path is a directory" }, 400);
+            existed = true;
+            if (typeof body.baseMtimeMs === "number" && Math.abs(st.mtimeMs - body.baseMtimeMs) > 2) {
+              return json({ error: "file changed on disk since it was loaded", stale: true, mtimeMs: st.mtimeMs }, 409);
+            }
+          } catch {
+            /* absent — created on approval */
+          }
+
+          // ── Phase 2B · approval gate (D-01): a save NEVER touches disk without
+          // an explicit human decision through the durable, cross-process
+          // approval store — same consent plane as the write_file tool ──
+          const approvalsCfg = config?.approvals;
+          const approvalStore = getApprovalStore(state.store, {
+            defaultTtlMs: approvalsCfg?.defaultTtlMs,
+            perSurface: approvalsCfg?.perSurface,
+          });
+          const reason = `${existed ? "overwrite" : "create"} ${rel} (${bytes} bytes) — desktop editor save`;
+          const handle = approvalStore.request({
+            tool: "write_file",
+            args: { path: rel, content: body.content },
+            reason,
+            preview: buildStructuredPreview({ tool: "write_file", args: { path: rel, content: body.content }, reason, cwd: root, riskTier: "medium" }),
+            riskTier: "medium",
+            surface: "daemon-files",
+          });
+          const outcome = await handle.outcome;
+          if (!outcome.approved) {
+            state.store.audit("files.write.denied", { path: rel, decision: outcome.decision });
+            return json({ applied: false, approvalId: handle.id, decision: outcome.decision });
+          }
+          mkdirSync(dirname(target), { recursive: true });
+          writeFileSync(target, body.content, "utf8");
+          const st = statSync(target);
+          state.store.audit("files.write.applied", { path: rel, bytes, mtimeMs: st.mtimeMs });
+          return json({ applied: true, approvalId: handle.id, path: rel, bytes, mtimeMs: st.mtimeMs });
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }
