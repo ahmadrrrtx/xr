@@ -74,8 +74,19 @@ export const THRESHOLD = 800;
  * token-bucket + per-chat budgets, and flagged voice v2 helpers. Config and
  * schema growth was extracted (migrate-22.ts, migrate-11.ts) so waived giants
  * did not grow. Measured ~138.1k. Smallest round number that fits.
+ *
+ * ── Desktop Phase 2B · 139,000 → 139,500 (files.write + terminal.run) ──────
+ * Phase 2B adds the two daemon routes the desktop rebuild plan deferred:
+ * the approval-gated editor save (files.write, in files.routes.ts) and the
+ * policy-checked, consent-gated, SSE-streamed command runner (terminal.run,
+ * terminal.routes.ts — 194 lines). Both are consent-plane surfaces: they
+ * compose the existing approval store, structured previews, guard policy and
+ * audit chain, and cannot live in a satellite without splitting the security
+ * boundary the routes exist to enforce. No waived giant grew (files.routes.ts
+ * 215 → 285, both far under threshold). Measured 139,162. Smallest round
+ * number that fits; 110k stays the direction of travel.
  */
-export const TREE_CEILING = 139_000;
+export const TREE_CEILING = 139_500;
 
 interface Waiver {
   readonly path: string;
