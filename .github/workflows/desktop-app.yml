@@ -7,10 +7,16 @@
 #
 #   1. shell-check  — cargo check + clippy (-D warnings) against the real
 #                     WebKit2GTK 4.1 headers (Linux reference runner).
-#   2. bundle       — full `tauri build` per OS: deb/rpm/AppImage (Linux),
-#                     dmg/app (macOS arm64), msi (Windows). Artifacts are
-#                     uploaded; a run is green only if bundles exist
-#                     (if-no-files-found: error — no silent empty success).
+#   2. sidecar      — the XR engine compiled standalone (bun build --compile,
+#                     scripts/compile-sidecar.ts = ONE computation source for
+#                     CI and local dev) and SMOKE-TESTED for real: --version,
+#                     then `serve --port 39417` + authenticated-loop health
+#                     probe. A bundle never ships an engine that didn't boot.
+#   3. bundle       — full `tauri build` per OS (externalBin sidecar included):
+#                     deb/rpm/AppImage (Linux), dmg/app (macOS arm64), msi
+#                     (Windows). Artifacts are uploaded; a run is green only
+#                     if bundles exist (if-no-files-found: error — no silent
+#                     empty success).
 #
 # Icons are generated from the OFFICIAL avatar render (D-05: format
 # conversion only, every pixel from the owner-supplied original — no
@@ -67,6 +73,16 @@ jobs:
         run: cargo check --manifest-path desktop/src-tauri/Cargo.toml --all-targets
       - name: cargo clippy (-D warnings)
         run: cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install engine dependencies
+        run: bun install --frozen-lockfile
+      - name: Compile engine sidecar (single source: scripts/compile-sidecar.ts)
+        run: bun run scripts/compile-sidecar.ts
+      - name: Smoke-test the sidecar (real boot + health probe)
+        run: bash scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu
 
   bundle:
     name: ${{ matrix.osName }} — tauri bundle
@@ -77,9 +93,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { osName: "Linux", runsOn: ubuntu-22.04 }
-          - { osName: "macOS (arm64)", runsOn: macos-latest }
-          - { osName: "Windows", runsOn: windows-latest }
+          - { osName: "Linux", runsOn: ubuntu-22.04, triple: x86_64-unknown-linux-gnu }
+          - { osName: "macOS (arm64)", runsOn: macos-latest, triple: aarch64-apple-darwin }
+          - { osName: "Windows", runsOn: windows-latest, triple: x86_64-pc-windows-msvc }
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,6 +120,15 @@ jobs:
       - name: Install frontend dependencies
         working-directory: desktop
         run: bun install --frozen-lockfile
+      - name: Install engine dependencies
+        run: bun install --frozen-lockfile
+      - name: Compile engine sidecar (externalBin for this triple)
+        env:
+          SIDECAR_TRIPLE: ${{ matrix.triple }}
+        run: bun run scripts/compile-sidecar.ts
+      - name: Smoke-test the sidecar (real boot + health probe)
+        shell: bash
+        run: bash scripts/smoke-sidecar.sh ${{ matrix.triple }}
       - name: Build bundles (tauri-action)
         uses: tauri-apps/tauri-action@v0
         env:
