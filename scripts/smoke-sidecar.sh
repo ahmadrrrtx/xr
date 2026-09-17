@@ -28,7 +28,7 @@ echo "[smoke] --version"
 
 echo "[smoke] booting serve on :$PORT (isolated XR_HOME)"
 SMOKE_HOME="$(mktemp -d)"
-XR_HOME="$SMOKE_HOME" "$BIN" serve --port "$PORT" > "$SMOKE_HOME/serve.log" 2>&1 &
+NO_COLOR=1 XR_HOME="$SMOKE_HOME" "$BIN" serve --port "$PORT" > "$SMOKE_HOME/serve.log" 2>&1 &
 PID=$!
 
 cleanup() {
@@ -52,4 +52,7 @@ if [ -z "$ok" ]; then
 fi
 
 echo "[smoke] health OK — token handshake banner present:"
-grep -q "Token: " "$SMOKE_HOME/serve.log" && echo "[smoke] PASS" || { echo "[smoke] FAIL: no token banner"; exit 1; }
+# Strip ANSI (Windows Bun may emit color codes even redirected) before matching.
+sed 's/\x1b\[[0-9;]*m//g' "$SMOKE_HOME/serve.log" | grep -q "Token: " \
+  && echo "[smoke] PASS" \
+  || { echo "[smoke] FAIL: no token banner — log:"; cat "$SMOKE_HOME/serve.log" || true; exit 1; }
