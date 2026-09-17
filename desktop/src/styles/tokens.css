@@ -224,3 +224,18 @@ pre.raw {
 .mcp-add { display: flex; gap: 8px; align-items: center; margin-top: 14px; padding: 10px 12px; border: 1px dashed var(--xr-border-strong); border-radius: var(--xr-radius-sm); }
 .mcp-add input { flex: 1 1 auto; background: var(--xr-surface-1); border: 1px solid var(--xr-border-strong); border-radius: var(--xr-radius-sm); color: var(--xr-text); padding: 7px 10px; font-size: 12.5px; font-family: var(--xr-font-mono); }
 .mcp-add select { background: var(--xr-surface-1); border: 1px solid var(--xr-border-strong); border-radius: var(--xr-radius-sm); color: var(--xr-text); padding: 7px 8px; font-size: 12.5px; font-family: var(--xr-font-mono); }
+
+/* ── Phase 4 · library depth (inspect / marketplace / grants) ────────────── */
+.seg { display: inline-flex; border: 1px solid var(--xr-border-strong); border-radius: var(--xr-radius-sm); overflow: hidden; }
+.seg button { background: var(--xr-surface-1); color: var(--xr-text-muted); border: 0; padding: 7px 14px; font-size: 12px; cursor: pointer; font-family: var(--xr-font-mono); }
+.seg button.on { background: var(--xr-cyan); color: #041018; font-weight: 600; }
+.market-meta { font-size: 11.5px; margin: -4px 0 10px; }
+.inspect { margin-top: 10px; padding: 10px 12px; border: 1px dashed var(--xr-border-strong); border-radius: var(--xr-radius-sm); background: var(--xr-surface-1); }
+.inspect-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.report-list { margin-bottom: 8px; }
+.report-list ul { margin: 4px 0 0; padding-left: 18px; font-size: 11.5px; }
+.report-list.warn .mono:first-child { color: var(--xr-amber); }
+.report-list.bad .mono:first-child { color: var(--xr-red); }
+.grants { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--xr-border); }
+.grants > .mono.faint { font-size: 11px; margin-bottom: 6px; }
+.grant { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 3px 0; cursor: pointer; }

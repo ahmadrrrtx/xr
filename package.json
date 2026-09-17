@@ -75,7 +75,8 @@
     "unit-tier": "bun run scripts/unit-tier.ts",
     "baseline:phase00": "bun run scripts/phase00/capture-baseline.ts",
     "baseline:phase00:validate": "bun run scripts/phase00/validate-baseline.ts",
-    "baseline:phase00:quick": "XR_BASELINE_QUICK=1 bun run scripts/phase00/capture-baseline.ts"
+    "baseline:phase00:quick": "XR_BASELINE_QUICK=1 bun run scripts/phase00/capture-baseline.ts",
+    "sidecar:compile": "bun run scripts/compile-sidecar.ts"
   },
   "repository": {
     "type": "git",

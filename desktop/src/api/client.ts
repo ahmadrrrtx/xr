@@ -2,17 +2,59 @@
  * Typed client for the XR engine daemon API (/api/v1).
  * The shell NEVER computes risk/policy/budget — it renders engine truth and forwards decisions.
  * (Boundary law: docs/xr-rebuild/XR_SECURITY_AUDIT.md SEC-07)
+ *
+ * Transport resolution (Phase 4 · D-02):
+ *   · packaged Tauri app → absolute http://127.0.0.1:<ephemeral port> with the
+ *     sidecar's bearer token, obtained via the `engine_link` invoke (the Rust
+ *     shell parses port+token from the daemon's own startup banner);
+ *   · browser dev (vite) → relative /api/v1 through the dev proxy, which
+ *     injects XR_DEV_TOKEN. Same code, honest fallback.
  */
-const BASE = "/api/v1";
+
+type TauriInternals = { invoke?: (cmd: string, args?: unknown) => Promise<unknown> };
+interface EngineLink { reachable?: boolean; spawned?: boolean; port?: number | null; token?: string | null; reason?: string | null }
 
 export class EngineDown extends Error {}
 
+let linkPromise: Promise<{ base: string; token: string | null }> | null = null;
+
+function endpoint(): Promise<{ base: string; token: string | null }> {
+  if (!linkPromise) {
+    linkPromise = (async () => {
+      const internals = (window as unknown as { __TAURI_INTERNALS__?: TauriInternals }).__TAURI_INTERNALS__;
+      if (internals?.invoke) {
+        // Poll until the sidecar handshake lands (~1–3 s cold start), bounded.
+        for (let i = 0; i < 40; i++) {
+          try {
+            const link = (await internals.invoke("engine_link")) as EngineLink;
+            if (link?.reachable && link.port && link.token) {
+              return { base: `http://127.0.0.1:${link.port}/api/v1`, token: link.token };
+            }
+            // Dev build or spawn failure → honest fallback to relative paths.
+            if (link && link.spawned === false && link.reason) break;
+          } catch {
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
+      return { base: "/api/v1", token: null };
+    })();
+  }
+  return linkPromise;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const { base, token } = await endpoint();
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, {
+    res = await fetch(`${base}${path}`, {
       ...init,
-      headers: { Accept: "application/json", ...(init?.body ? { "Content-Type": "application/json" } : {}) },
+      headers: {
+        Accept: "application/json",
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     });
   } catch {
     throw new EngineDown("engine unreachable");
@@ -37,11 +79,12 @@ export async function chatStream(
   onEvent: (e: StreamEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
+  const { base, token } = await endpoint();
   let res: Response;
   try {
-    res = await fetch(`${BASE}/chat`, {
+    res = await fetch(`${base}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ ...body, stream: true }),
       signal,
     });
@@ -83,11 +126,12 @@ export async function terminalRun(
   onEvent: (e: TerminalEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
+  const { base, token } = await endpoint();
   let res: Response;
   try {
-    res = await fetch(`${BASE}/terminal/run`, {
+    res = await fetch(`${base}/terminal/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(body),
       signal,
     });
@@ -137,6 +181,9 @@ export interface ProviderInfo { id: string; name?: string; local?: boolean; keyl
 export interface SkillInfo { id: string; name?: string; version?: string; description?: string; kind?: string; enabled?: boolean; installed?: boolean; health?: string; verification?: string; permissions?: unknown[]; categories?: string[]; tags?: string[]; [k: string]: unknown; }
 export interface McpServer { id: string; name?: string; version?: string; transport?: string; command?: string | null; url?: string | null; enabled?: boolean; health?: string; trust?: string; lifecycleState?: string; tools?: boolean; [k: string]: unknown; }
 export interface PluginInfo { id: string; name?: string; version?: string; type?: string; description?: string; enabled?: boolean; status?: string; loaded?: boolean; detail?: string; permissions?: unknown[]; grantedPermissions?: unknown[]; trustLevel?: string; health?: string; [k: string]: unknown; }
+export interface SkillPermissionsReport { skillId?: string; safe?: unknown[]; dangerous?: unknown[]; missingApproval?: unknown[]; [k: string]: unknown; }
+export interface SkillDependencyReport { skillId?: string; ok?: boolean; requiredMissing?: unknown[]; optionalMissing?: unknown[]; statuses?: unknown[]; [k: string]: unknown; }
+export interface SkillInspect { skill?: SkillInfo; permissions?: SkillPermissionsReport | null; dependencies?: SkillDependencyReport | null; }
 
 export const api = {
   health: () => req<Record<string, unknown>>("/health"),
@@ -184,6 +231,17 @@ export const api = {
   plugins: () => req<{ summary?: Record<string, unknown>; plugins?: PluginInfo[] }>("/plugins"),
   pluginSet: (id: string, enabled: boolean) =>
     req<Record<string, unknown>>(`/plugins/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`, { method: "POST" }),
+
+  /* ---------- phase 4 · library depth (inspect / marketplace / grants) ---------- */
+  skillInspect: (id: string) => req<SkillInspect>(`/skills/${encodeURIComponent(id)}/inspect`),
+  skillsMarketplace: (q?: string) =>
+    req<Record<string, unknown>>(`/skills/marketplace${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  skillsMarketplaceSync: () => req<Record<string, unknown>>("/skills/marketplace/sync", { method: "POST" }),
+  skillInstall: (id: string, registryId?: string) =>
+    req<Record<string, unknown>>("/skills/marketplace/install", { method: "POST", body: JSON.stringify({ id, ...(registryId ? { registryId } : {}) }) }),
+  /** Grant exactly these permission scopes (engine filters invalid ones; full replace). */
+  pluginPermissions: (id: string, permissions: string[]) =>
+    req<Record<string, unknown>>(`/plugins/${encodeURIComponent(id)}/permissions`, { method: "POST", body: JSON.stringify({ permissions }) }),
 };
 
 export function asList<T>(v: T[] | { [k: string]: unknown } | undefined, ...keys: string[]): T[] {

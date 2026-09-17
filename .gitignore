@@ -57,3 +57,4 @@ docs/ux/sus-results.local.jsonl
 # Tauri build artifacts (desktop)
 desktop/src-tauri/target/
 desktop/src-tauri/gen/schemas/
+desktop/src-tauri/binaries/
