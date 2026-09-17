@@ -53,3 +53,7 @@ xr-audit-*.md
 test/perf/.seed/
 # Phase 8 · T4: raw SUS responses are local-only (study aggregate lives in docs/ux/SUS.md)
 docs/ux/sus-results.local.jsonl
+
+# Tauri build artifacts (desktop)
+desktop/src-tauri/target/
+desktop/src-tauri/gen/schemas/

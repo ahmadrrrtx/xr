@@ -55,6 +55,14 @@ pub fn run() {
                 ],
             )?;
             let _tray = TrayIconBuilder::new()
+                // Bundled icon set (generated from the official avatar render,
+                // D-05 format conversion) — required on Linux, consistent tray
+                // identity everywhere.
+                .icon(
+                    app.default_window_icon()
+                        .expect("bundle icon must be present")
+                        .clone(),
+                )
                 .tooltip("XR — the AI agent you can actually trust")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
