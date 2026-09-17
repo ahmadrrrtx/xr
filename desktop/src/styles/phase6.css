@@ -370,3 +370,9 @@
   .cat-rail { flex-direction: row; flex-wrap: wrap; position: static; }
   .detail-panel { position: static; max-height: none; }
 }
+
+/* Phase 6 · titlebar global search (mocks 01/02) */
+.gsearch { display: flex; align-items: center; gap: 7px; margin-left: auto; width: min(320px, 36vw); background: var(--xr-surface-2); border: 1px solid var(--xr-border); border-radius: 8px; padding: 5px 11px; color: var(--xr-text-faint); }
+.gsearch:focus-within { border-color: var(--xr-cyan); }
+.gsearch input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--xr-text); font-size: 12px; }
+.titlebar .tb-right { margin-left: 12px; }

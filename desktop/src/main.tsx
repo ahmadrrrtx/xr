@@ -27,6 +27,7 @@ function App() {
   const [area, setArea] = useState<Area>("home");
   const [runId, setRunId] = useState<string | null>(null);
   const [workSeed, setWorkSeed] = useState<string | null>(null);
+  const [libQuery, setLibQuery] = useState<string | null>(null);
   const [engine, setEngine] = useState<string | null>(null);
   const [down, setDown] = useState(false);
 
@@ -55,7 +56,12 @@ function App() {
   }
 
   return (
-    <AppShell area={area} onArea={(a) => { setArea(a); if (a !== "runs") setRunId(null); }} engineVersion={engine}>
+    <AppShell
+      area={area}
+      onArea={(a) => { setArea(a); if (a !== "runs") setRunId(null); }}
+      engineVersion={engine}
+      onSearch={(q) => { setLibQuery(q); setArea("library"); }}
+    >
       {area === "home" && (
         <Home
           onOpenRun={(id) => { setRunId(id); setArea("runs"); }}
@@ -66,7 +72,13 @@ function App() {
       {area === "work" && <Work seed={workSeed} onConsumed={() => setWorkSeed(null)} />}
       {area === "workspace" && <Workspace onAskXr={(p) => { setWorkSeed(p); setArea("work"); }} />}
       {(area === "agents" || area === "runs") && <Runs openId={runId} onOpen={setRunId} />}
-      {area === "library" && <Library onRun={(p) => { setWorkSeed(p); setArea("work"); }} />}
+      {area === "library" && (
+        <Library
+          onRun={(p) => { setWorkSeed(p); setArea("work"); }}
+          initialQuery={libQuery}
+          onQueryConsumed={() => setLibQuery(null)}
+        />
+      )}
       {area === "trust" && <Stub title="Trust Center — approvals, modes, audit, budgets, network, shield" phase="Phase 4" />}
       {area === "settings" && <Stub title="Settings — general, models, local, automations, voice, privacy, advanced" phase="Phase 2–4" />}
     </AppShell>

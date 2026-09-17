@@ -59,8 +59,8 @@ function catIcon(name: string): ReactNode {
   return CAT_ICONS[key] ?? CAT_ICONS.all;
 }
 
-export function Library({ onRun }: { onRun?: (prompt: string) => void }) {
-  const [tab, setTab] = useState<Tab>("Models");
+export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (prompt: string) => void; initialQuery?: string | null; onQueryConsumed?: () => void }) {
+  const [tab, setTab] = useState<Tab>("Skills");
   const [note, setNote] = useState<string | null>(null);
   // Phase 6 · mock 07: category rail + selection detail panel
   const [cat, setCat] = useState<string>("all");
@@ -96,6 +96,17 @@ export function Library({ onRun }: { onRun?: (prompt: string) => void }) {
       .then((v) => { setSkills(v.skills ?? []); setSkillsHealth((v.health as Record<string, unknown>) ?? null); })
       .catch((e) => { setSkills([]); setNote(`skills: ${e}`); });
   }, []);
+
+  // Global titlebar search lands here: Skills tab · installed view · engine-side query.
+  useEffect(() => {
+    if (!initialQuery) return;
+    setTab("Skills");
+    setSkillMode("installed");
+    setSkillQ(initialQuery);
+    loadSkills(initialQuery);
+    onQueryConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
 
   const loadMarket = useCallback((q?: string) => {
     setMarketLoading(true);
