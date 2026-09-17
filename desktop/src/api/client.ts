@@ -133,6 +133,11 @@ export interface FilesRoot { entries?: FileEntry[]; branch?: string | null; dirt
 export interface MemoryEntry { id: string; text?: string; content?: string; category?: string; scope?: string; [k: string]: unknown; }
 export interface ProviderInfo { id: string; name?: string; local?: boolean; keyless?: boolean; available?: boolean; models?: string[]; capabilities?: string[]; [k: string]: unknown; }
 
+/* ---------- phase 3 · library entities (engine-owned truth) ---------- */
+export interface SkillInfo { id: string; name?: string; version?: string; description?: string; kind?: string; enabled?: boolean; installed?: boolean; health?: string; verification?: string; permissions?: unknown[]; categories?: string[]; tags?: string[]; [k: string]: unknown; }
+export interface McpServer { id: string; name?: string; version?: string; transport?: string; command?: string | null; url?: string | null; enabled?: boolean; health?: string; trust?: string; lifecycleState?: string; tools?: boolean; [k: string]: unknown; }
+export interface PluginInfo { id: string; name?: string; version?: string; type?: string; description?: string; enabled?: boolean; status?: string; loaded?: boolean; detail?: string; permissions?: unknown[]; grantedPermissions?: unknown[]; trustLevel?: string; health?: string; [k: string]: unknown; }
+
 export const api = {
   health: () => req<Record<string, unknown>>("/health"),
   overview: () => req<Record<string, unknown>>("/overview"),
@@ -163,6 +168,22 @@ export const api = {
   modelsTest: (runtime: string, model: string) =>
     req<Record<string, unknown>>("/models/test", { method: "POST", body: JSON.stringify({ runtime, model }) }),
   cost: () => req<Record<string, unknown>>("/cost"),
+
+  /* ---------- phase 3 · library (skills / MCP / plugins) ---------- */
+  skills: (q?: string) =>
+    req<{ health?: Record<string, unknown>; skills?: SkillInfo[] }>(`/skills${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  skillSet: (id: string, enabled: boolean) =>
+    req<{ ok?: boolean }>(`/skills/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`, { method: "POST" }),
+  mcpServers: () => req<{ servers?: McpServer[] }>("/mcp"),
+  mcpHealth: () => req<{ reports?: unknown[] }>("/mcp/health"),
+  mcpAdd: (body: { id: string; transport: string; command?: string; args?: string[]; url?: string }) =>
+    req<Record<string, unknown>>("/mcp/add", { method: "POST", body: JSON.stringify(body) }),
+  mcpRemove: (id: string) => req<Record<string, unknown>>("/mcp/remove", { method: "POST", body: JSON.stringify({ id }) }),
+  mcpSet: (id: string, enabled: boolean) =>
+    req<Record<string, unknown>>(`/mcp/${enabled ? "enable" : "disable"}`, { method: "POST", body: JSON.stringify({ id }) }),
+  plugins: () => req<{ summary?: Record<string, unknown>; plugins?: PluginInfo[] }>("/plugins"),
+  pluginSet: (id: string, enabled: boolean) =>
+    req<Record<string, unknown>>(`/plugins/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`, { method: "POST" }),
 };
 
 export function asList<T>(v: T[] | { [k: string]: unknown } | undefined, ...keys: string[]): T[] {

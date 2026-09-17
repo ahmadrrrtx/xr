@@ -216,3 +216,11 @@ pre.raw {
 .term-in { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--xr-border); }
 .term-in input { flex: 1 1 auto; background: var(--xr-surface-1); border: 1px solid var(--xr-border-strong); border-radius: var(--xr-radius-sm); color: var(--xr-text); padding: 7px 10px; font-size: 12.5px; font-family: var(--xr-font-mono); }
 .term-in input:focus { outline: none; border-color: var(--xr-cyan); }
+
+/* ── Phase 3 · library surfaces (skills / MCP / plugins) ─────────────────── */
+.lib-bar { display: flex; gap: 10px; align-items: center; margin: 0 0 12px; }
+.lib-bar input { flex: 1 1 auto; max-width: 420px; background: var(--xr-surface-1); border: 1px solid var(--xr-border-strong); border-radius: var(--xr-radius-sm); color: var(--xr-text); padding: 7px 10px; font-size: 12.5px; font-family: var(--xr-font-mono); }
+.lib-bar input:focus { outline: none; border-color: var(--xr-cyan); }
+.mcp-add { display: flex; gap: 8px; align-items: center; margin-top: 14px; padding: 10px 12px; border: 1px dashed var(--xr-border-strong); border-radius: var(--xr-radius-sm); }
+.mcp-add input { flex: 1 1 auto; background: var(--xr-surface-1); border: 1px solid var(--xr-border-strong); border-radius: var(--xr-radius-sm); color: var(--xr-text); padding: 7px 10px; font-size: 12.5px; font-family: var(--xr-font-mono); }
+.mcp-add select { background: var(--xr-surface-1); border: 1px solid var(--xr-border-strong); border-radius: var(--xr-radius-sm); color: var(--xr-text); padding: 7px 8px; font-size: 12.5px; font-family: var(--xr-font-mono); }
