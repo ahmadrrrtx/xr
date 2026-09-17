@@ -17,7 +17,7 @@ Library→Skills = discoverable capability library: search (fuzzy+tags), categor
 - Category rails from manifest categories; "skills for this task" suggestions engine-side (search-index [OBSERVED]) shown as pin chips in composer (progressive, never auto-run).
 - Autolearn [OBSERVED] surfaced as "XR suggests saving this as a skill" (user-confirm draft flow), never silent.
 
-## 4. Proposed new skills (research-backed gaps; PROPOSED, implement only post-approval)
+## 4. New skills (APPROVED 2026-09-17, D-03 — PLANNED for P3)
 1. `release_notes_writer` (changelog→notes; complements generate_readme/pr_description).
 2. `dependency_upgrader` (safe upgrade runs w/ diff+tests; complements db_migrate/devops).
 3. `a11y_reviewer` (WCAG review; complements ui/ux designers; matches own a11y gates).

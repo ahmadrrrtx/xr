@@ -1,6 +1,6 @@
 # XR Desktop Rebuild Blueprint — Index
 
-> Status: **BLUEPRINT COMPLETE — AWAITING HUMAN APPROVAL. NO IMPLEMENTATION PERFORMED.**
+> Status: **APPROVED 2026-09-17** (see [XR_DECISION_RECORD.md](XR_DECISION_RECORD.md)) — implementation unlocked per phase gates; Phase 1 in progress.
 > Evidence date: 2026-09-17 · repo `main` 7ba2dc8 (v1.0.0 "Truth") · runtime exercised (CLI/TUI/daemon/dashboard/tests) · npm artifact audited · competitive research cited.
 > Reading order: audits → research → architecture → experience → plans → master plan → concepts.
 
