@@ -1,0 +1,128 @@
+# =============================================================================
+# XR Desktop (Phase 4 · D-02) — Tauri v2 packaging matrix.
+#
+# "First-class on Windows + macOS + Linux" means BUNDLED, not "imports
+# compile". This lane proves the shell builds real installers on all three
+# OS families from one source:
+#
+#   1. shell-check  — cargo check + clippy (-D warnings) against the real
+#                     WebKit2GTK 4.1 headers (Linux reference runner).
+#   2. bundle       — full `tauri build` per OS: deb/rpm/AppImage (Linux),
+#                     dmg/app (macOS arm64), msi (Windows). Artifacts are
+#                     uploaded; a run is green only if bundles exist
+#                     (if-no-files-found: error — no silent empty success).
+#
+# Icons are generated from the OFFICIAL avatar render (D-05: format
+# conversion only, every pixel from the owner-supplied original — no
+# derived geometry), committed at desktop/src-tauri/icons.
+#
+# Unsigned builds: code-signing/notarization keys are owner secrets and are
+# deliberately NOT referenced here; artifacts are honest "CI builds".
+# =============================================================================
+name: Desktop App (Tauri packaging)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-app.yml"
+  push:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - ".github/workflows/desktop-app.yml"
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  shell-check:
+    name: Rust shell — cargo check + clippy (Linux reference)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Linux system dependencies (WebKit2GTK 4.1 + tray)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: cargo check (all targets)
+        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml --all-targets
+      - name: cargo clippy (-D warnings)
+        run: cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  bundle:
+    name: ${{ matrix.osName }} — tauri bundle
+    needs: shell-check
+    runs-on: ${{ matrix.runsOn }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { osName: "Linux", runsOn: ubuntu-22.04 }
+          - { osName: "macOS (arm64)", runsOn: macos-latest }
+          - { osName: "Windows", runsOn: windows-latest }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          # desktop/bun.lock is lockfileVersion 2 (written by bun 1.4.x) —
+          # older bun fails with "Unknown lockfile version" on --frozen-lockfile.
+          bun-version: 1.4.2
+      - name: Install Linux system dependencies (WebKit2GTK 4.1 + tray)
+        if: matrix.runsOn == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Install frontend dependencies
+        working-directory: desktop
+        run: bun install --frozen-lockfile
+      - name: Build bundles (tauri-action)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          args: --verbose
+      - name: List produced bundles
+        shell: bash
+        run: find desktop/src-tauri/target/release/bundle -maxdepth 3 -type f | sort
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr-desktop-${{ matrix.runsOn }}
+          if-no-files-found: error
+          path: |
+            desktop/src-tauri/target/release/bundle/deb/*.deb
+            desktop/src-tauri/target/release/bundle/rpm/*.rpm
+            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
+            desktop/src-tauri/target/release/bundle/msi/*.msi
