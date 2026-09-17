@@ -2,8 +2,12 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AppShell, type Area } from "./components/AppShell";
 import { Home } from "./screens/Home";
+import { Work } from "./screens/Work";
+import { Workspace } from "./screens/Workspace";
+import { Library } from "./screens/Library";
 import { Runs } from "./screens/Runs";
 import { api, EngineDown } from "./api/client";
+import { XrLogo } from "./components/Brand";
 import "./styles/tokens.css";
 
 function Stub({ title, phase }: { title: string; phase: string }) {
@@ -21,6 +25,7 @@ function Stub({ title, phase }: { title: string; phase: string }) {
 function App() {
   const [area, setArea] = useState<Area>("home");
   const [runId, setRunId] = useState<string | null>(null);
+  const [workSeed, setWorkSeed] = useState<string | null>(null);
   const [engine, setEngine] = useState<string | null>(null);
   const [down, setDown] = useState(false);
 
@@ -39,10 +44,7 @@ function App() {
   if (down) {
     return (
       <div className="splash">
-        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" opacity="0.5">
-          <path d="M10 10 L24 27 L38 10" stroke="#6c6c7a" strokeWidth="4.5" strokeLinecap="round" />
-          <path d="M10 38 L20 26M38 38 L28 26" stroke="#6c6c7a" strokeWidth="4.5" strokeLinecap="round" />
-        </svg>
+        <XrLogo height={96} radius={10} dim />
         <div>XR engine is starting…</div>
         <div className="faint" style={{ fontSize: 12 }}>
           desktop attaches to the local daemon (<span className="mono">xr serve</span>); work resumes from checkpoints automatically
@@ -56,13 +58,13 @@ function App() {
       {area === "home" && (
         <Home
           onOpenRun={(id) => { setRunId(id); setArea("runs"); }}
-          onGoWork={() => setArea("work")}
+          onGoWork={(t) => { setWorkSeed(t); setArea("work"); }}
         />
       )}
-      {area === "work" && <Stub title="Work — conversation + execution" phase="Phase 2" />}
-      {area === "workspace" && <Stub title="Workspace — editor, terminal, git, agent sidecar" phase="Phase 2" />}
+      {area === "work" && <Work seed={workSeed} onConsumed={() => setWorkSeed(null)} />}
+      {area === "workspace" && <Workspace onAskXr={(p) => { setWorkSeed(p); setArea("work"); }} />}
       {area === "agents" && <Stub title="Agents — team-run board" phase="Phase 3" />}
-      {area === "library" && <Stub title="Library — skills, MCP, plugins, integrations, models" phase="Phase 3" />}
+      {area === "library" && <Library />}
       {area === "trust" && <Stub title="Trust Center — approvals, modes, audit, budgets, network, shield" phase="Phase 4" />}
       {area === "runs" && <Runs openId={runId} onOpen={setRunId} />}
       {area === "settings" && <Stub title="Settings — general, models, local, automations, voice, privacy, advanced" phase="Phase 2–4" />}

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Mark } from "./Mark";
+import { XrLogo, XrAvatar } from "./Brand";
 
 export type Area = "home" | "work" | "workspace" | "agents" | "library" | "trust" | "runs" | "settings";
 
@@ -31,7 +31,7 @@ export function AppShell({
   return (
     <div className="shell">
       <header className="titlebar">
-        <Mark size={20} />
+        <XrLogo height={24} radius={5} />
         <span className="crumb">
           XR <span className="faint">›</span> <b>{workspace}</b> <span className="faint">›</span> {label}
         </span>
@@ -54,8 +54,8 @@ export function AppShell({
           </button>
         ))}
         <div className="spacer" />
-        <span title="XR presence (idle)" aria-label="XR presence idle" style={{ color: "var(--xr-text-faint)" }}>
-          <Mark size={18} mono />
+        <span title="XR presence (idle)" aria-label="XR presence idle">
+          <XrAvatar size={26} />
         </span>
       </nav>
       <main className="main">{children}</main>
