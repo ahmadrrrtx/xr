@@ -1,11 +1,44 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, asList, type McpServer, type PluginInfo, type ProviderInfo, type SkillInfo } from "../api/client";
+import {
+  api,
+  asList,
+  type McpServer,
+  type PluginInfo,
+  type ProviderInfo,
+  type SkillInfo,
+  type SkillInspect,
+} from "../api/client";
 
 const TABS = ["Skills", "MCP", "Plugins", "Models"] as const;
 type Tab = (typeof TABS)[number];
 
 function StatusDot({ ok, warn }: { ok?: boolean; warn?: boolean }) {
   return <span className={`dot ${ok ? "green" : warn ? "amber" : "red"}`} />;
+}
+
+/** Defensive label for engine report entries (objects with name/tool/id or plain strings). */
+function entryLabel(v: unknown): string {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const name = o.name ?? o.tool ?? o.id ?? o.kind;
+    if (name !== undefined) {
+      const why = o.reason ?? o.description ?? o.detail;
+      return why ? `${String(name)} — ${String(why).slice(0, 120)}` : String(name);
+    }
+    return JSON.stringify(v).slice(0, 140);
+  }
+  return String(v);
+}
+
+function ReportList({ title, items, tone }: { title: string; items: unknown[]; tone?: "bad" | "warn" }) {
+  if (!items || items.length === 0) return null;
+  return (
+    <div className={`report-list ${tone ?? ""}`}>
+      <div className="mono faint">{title} ({items.length})</div>
+      <ul>{items.slice(0, 12).map((v, i) => <li key={i} className="mono">{entryLabel(v)}</li>)}</ul>
+    </div>
+  );
 }
 
 export function Library() {
@@ -16,23 +49,39 @@ export function Library() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [active, setActive] = useState<string | null>(null);
 
-  // Skills
+  // Skills — installed
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [skillsHealth, setSkillsHealth] = useState<Record<string, unknown> | null>(null);
   const [skillQ, setSkillQ] = useState("");
+  // Skills — inspect detail
+  const [inspect, setInspect] = useState<{ id: string; data: SkillInspect | null; loading: boolean } | null>(null);
+  // Skills — marketplace
+  const [skillMode, setSkillMode] = useState<"installed" | "market">("installed");
+  const [market, setMarket] = useState<Record<string, unknown> | null>(null);
+  const [marketQ, setMarketQ] = useState("");
+  const [marketLoading, setMarketLoading] = useState(false);
 
   // MCP
   const [servers, setServers] = useState<McpServer[]>([]);
   const [mcpForm, setMcpForm] = useState({ id: "", transport: "stdio", command: "", url: "" });
 
-  // Plugins
+  // Plugins (+ permission grants editor)
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [pluginsSummary, setPluginsSummary] = useState<Record<string, unknown> | null>(null);
+  const [grants, setGrants] = useState<Record<string, string[]>>({});
 
   const loadSkills = useCallback((q?: string) => {
     api.skills(q || undefined)
       .then((v) => { setSkills(v.skills ?? []); setSkillsHealth((v.health as Record<string, unknown>) ?? null); })
       .catch((e) => { setSkills([]); setNote(`skills: ${e}`); });
+  }, []);
+
+  const loadMarket = useCallback((q?: string) => {
+    setMarketLoading(true);
+    api.skillsMarketplace(q || undefined)
+      .then((v) => setMarket(v))
+      .catch((e) => { setMarket(null); setNote(`marketplace: ${e}`); })
+      .finally(() => setMarketLoading(false));
   }, []);
 
   const loadMcp = useCallback(() => {
@@ -41,7 +90,11 @@ export function Library() {
 
   const loadPlugins = useCallback(() => {
     api.plugins()
-      .then((v) => { setPlugins(v.plugins ?? []); setPluginsSummary((v.summary as Record<string, unknown>) ?? null); })
+      .then((v) => {
+        setPlugins(v.plugins ?? []);
+        setPluginsSummary((v.summary as Record<string, unknown>) ?? null);
+        setGrants(Object.fromEntries((v.plugins ?? []).map((p) => [p.id, (p.grantedPermissions ?? []).map(String)])));
+      })
       .catch((e) => { setPlugins([]); setNote(`plugins: ${e}`); });
   }, []);
 
@@ -52,17 +105,38 @@ export function Library() {
         setProviders(asList<ProviderInfo>(v, "providers"));
         setActive(typeof (v as { active?: string }).active === "string" ? (v as { active: string }).active : null);
       }).catch(() => setProviders([]));
-    } else if (tab === "Skills") loadSkills();
-    else if (tab === "MCP") loadMcp();
+    } else if (tab === "Skills") {
+      loadSkills();
+      if (skillMode === "market") loadMarket();
+    } else if (tab === "MCP") loadMcp();
     else if (tab === "Plugins") loadPlugins();
-  }, [tab, loadSkills, loadMcp, loadPlugins]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, skillMode]);
 
   // Skills search is server-side (same unified index the CLI uses); debounce lightly.
   useEffect(() => {
-    if (tab !== "Skills") return;
+    if (tab !== "Skills" || skillMode !== "installed") return;
     const t = setTimeout(() => loadSkills(skillQ.trim()), 250);
     return () => clearTimeout(t);
-  }, [skillQ, tab, loadSkills]);
+  }, [skillQ, tab, skillMode, loadSkills]);
+
+  useEffect(() => {
+    if (tab !== "Skills" || skillMode !== "market") return;
+    const t = setTimeout(() => loadMarket(marketQ.trim()), 350);
+    return () => clearTimeout(t);
+  }, [marketQ, tab, skillMode, loadMarket]);
+
+  const openInspect = (id: string) => {
+    setInspect({ id, data: null, loading: true });
+    api.skillInspect(id)
+      .then((data) => setInspect({ id, data, loading: false }))
+      .catch((e) => { setInspect(null); setNote(`inspect ${id}: ${e}`); });
+  };
+
+  const marketSkills = asList<SkillInfo>((market?.skills as SkillInfo[]) ?? [], "skills");
+  const marketStats = (market?.stats ?? null) as Record<string, unknown> | null;
+  const registries = asList<Record<string, unknown>>((market?.registries as Record<string, unknown>[]) ?? [], "registries");
+  const updates = asList<Record<string, unknown>>((market?.updates as Record<string, unknown>[]) ?? [], "updates");
 
   return (
     <div className="lib">
@@ -110,45 +184,159 @@ export function Library() {
       {tab === "Skills" && (
         <>
           <div className="lib-bar">
-            <input
-              className="mono"
-              placeholder="search skills (server-side unified index)"
-              value={skillQ}
-              onChange={(e) => setSkillQ(e.target.value)}
-            />
-            <span className="faint mono" style={{ whiteSpace: "nowrap" }}>
-              {skills.length} shown{skillsHealth && typeof skillsHealth.loaded === "number" ? ` · ${String(skillsHealth.loaded)} loaded` : ""}
-            </span>
+            <div className="seg" role="group" aria-label="Skills source">
+              <button className={skillMode === "installed" ? "on" : ""} onClick={() => setSkillMode("installed")}>Installed</button>
+              <button className={skillMode === "market" ? "on" : ""} onClick={() => setSkillMode("market")}>Marketplace</button>
+            </div>
+            {skillMode === "installed" ? (
+              <>
+                <input
+                  className="mono"
+                  placeholder="search skills (server-side unified index)"
+                  value={skillQ}
+                  onChange={(e) => setSkillQ(e.target.value)}
+                />
+                <span className="faint mono" style={{ whiteSpace: "nowrap" }}>
+                  {skills.length} shown{skillsHealth && typeof skillsHealth.total === "number" ? ` · ${String(skillsHealth.total)} in registry` : ""}
+                </span>
+              </>
+            ) : (
+              <>
+                <input
+                  className="mono"
+                  placeholder="search registries (online; empty = no registry configured / offline)"
+                  value={marketQ}
+                  onChange={(e) => setMarketQ(e.target.value)}
+                />
+                <button
+                  className="btn"
+                  onClick={() => api.skillsMarketplaceSync().then((r) => { setNote(`sync: ${JSON.stringify(r).slice(0, 200)}`); loadMarket(marketQ.trim()); }).catch((e) => setNote(`sync: ${e}`))}
+                >
+                  Sync registries
+                </button>
+              </>
+            )}
           </div>
-          <div className="cards">
-            {skills.map((s) => (
-              <div key={s.id} className="card prov">
-                <div className="t">
-                  <StatusDot ok={s.enabled && s.health !== "broken"} warn={!s.enabled} />
-                  {" "}{s.name ?? s.id}
-                  {s.enabled ? <span className="chip green">enabled</span> : <span className="chip">disabled</span>}
-                  {s.verification && s.verification !== "unknown" && <span className="chip">{String(s.verification)}</span>}
+
+          {skillMode === "market" && market && (
+            <div className="market-meta mono faint">
+              {marketStats ? `installed ${String(marketStats.installed ?? 0)} · verified ${String(marketStats.verified ?? 0)} · updates ${String(marketStats.updates ?? 0)}` : ""}
+              {registries.length > 0
+                ? ` · registries: ${registries.map((r) => String(r.id ?? r.name ?? "?")).join(", ")}`
+                : " · no registries configured (online search unavailable — honest empty)"}
+            </div>
+          )}
+
+          {skillMode === "installed" && (
+            <div className="cards">
+              {skills.map((s) => (
+                <div key={s.id} className="card prov">
+                  <div className="t">
+                    <StatusDot ok={s.enabled && s.health !== "broken"} warn={!s.enabled} />
+                    {" "}{s.name ?? s.id}
+                    {s.enabled ? <span className="chip green">enabled</span> : <span className="chip">disabled</span>}
+                    {s.verification && s.verification !== "unknown" && <span className="chip">{String(s.verification)}</span>}
+                  </div>
+                  <div className="meta mono faint">
+                    {s.id} · v{String(s.version ?? "?")} · {String(s.kind ?? "skill")}
+                    {Array.isArray(s.categories) && s.categories.length > 0 ? ` · ${s.categories.slice(0, 2).join(", ")}` : ""}
+                  </div>
+                  {s.description && <div className="meta" style={{ fontSize: 12 }}>{String(s.description).slice(0, 160)}</div>}
+                  <div className="row" style={{ marginTop: 8 }}>
+                    <button
+                      className="btn"
+                      onClick={() => api.skillSet(s.id, !s.enabled).then(() => loadSkills(skillQ.trim())).catch((e) => setNote(`${s.id}: ${e}`))}
+                    >
+                      {s.enabled ? "Disable" : "Enable"}
+                    </button>
+                    <button className="btn" onClick={() => openInspect(s.id)}>Inspect</button>
+                  </div>
+                  {inspect?.id === s.id && (
+                    <div className="inspect">
+                      {inspect.loading && <div className="faint mono">loading engine report…</div>}
+                      {inspect.data && (
+                        <>
+                          <div className="mono faint" style={{ marginBottom: 6 }}>
+                            engine inspect report — permissions & dependencies are computed engine-side, never here
+                          </div>
+                          <div className="inspect-cols">
+                            <div>
+                              <ReportList title="permissions · safe" items={inspect.data.permissions?.safe ?? []} />
+                              <ReportList title="permissions · dangerous (approval-gated)" items={inspect.data.permissions?.dangerous ?? []} tone="warn" />
+                              <ReportList title="permissions · MISSING approval gate" items={inspect.data.permissions?.missingApproval ?? []} tone="bad" />
+                              {(inspect.data.permissions?.safe ?? []).length === 0 &&
+                                (inspect.data.permissions?.dangerous ?? []).length === 0 &&
+                                (inspect.data.permissions?.missingApproval ?? []).length === 0 &&
+                                <div className="faint mono">no permissions declared</div>}
+                            </div>
+                            <div>
+                              <div className="mono faint">
+                                dependencies: {inspect.data.dependencies?.ok ? <span className="chip green">ok</span> : <span className="chip">issues</span>}
+                              </div>
+                              <ReportList title="required missing" items={inspect.data.dependencies?.requiredMissing ?? []} tone="bad" />
+                              <ReportList title="optional missing" items={inspect.data.dependencies?.optionalMissing ?? []} tone="warn" />
+                              <ReportList title="statuses" items={inspect.data.dependencies?.statuses ?? []} />
+                              <div className="mono faint" style={{ marginTop: 6 }}>
+                                commands {Array.isArray(inspect.data.skill?.commands) ? (inspect.data.skill!.commands as unknown[]).length : 0} ·
+                                workflows {Array.isArray(inspect.data.skill?.workflows) ? (inspect.data.skill!.workflows as unknown[]).length : 0} ·
+                                voice intents {Array.isArray(inspect.data.skill?.voiceIntents) ? (inspect.data.skill!.voiceIntents as unknown[]).length : 0}
+                              </div>
+                              {Array.isArray(inspect.data.skill?.warnings) && (inspect.data.skill!.warnings as unknown[]).length > 0 && (
+                                <ReportList title="warnings" items={inspect.data.skill!.warnings as unknown[]} tone="warn" />
+                              )}
+                            </div>
+                          </div>
+                          <button className="btn" style={{ marginTop: 8 }} onClick={() => setInspect(null)}>Close</button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="meta mono faint">
-                  {s.id} · v{String(s.version ?? "?")} · {String(s.kind ?? "skill")}
-                  {Array.isArray(s.categories) && s.categories.length > 0 ? ` · ${s.categories.slice(0, 2).join(", ")}` : ""}
+              ))}
+              {skills.length === 0 && <div className="empty">No skills match — the bundled library loads from the engine's skill registry.</div>}
+            </div>
+          )}
+
+          {skillMode === "market" && (
+            <div className="cards">
+              {marketLoading && <div className="empty">querying registries…</div>}
+              {!marketLoading && marketSkills.map((s) => (
+                <div key={s.id} className="card prov">
+                  <div className="t">
+                    {s.name ?? s.id}
+                    {s.installed ? <span className="chip green">installed</span> : null}
+                    {s.updateAvailable ? <span className="chip">update available</span> : null}
+                    {s.verification && s.verification !== "unknown" && <span className="chip">{String(s.verification)}</span>}
+                  </div>
+                  <div className="meta mono faint">
+                    {s.id} · v{String(s.version ?? "?")}
+                    {s.publisher ? ` · ${String(s.publisher)}` : ""}
+                    {typeof s.downloads === "number" ? ` · ${String(s.downloads)} downloads` : ""}
+                    {s.source ? ` · ${String(s.source)}` : ""}
+                  </div>
+                  {s.description && <div className="meta" style={{ fontSize: 12 }}>{String(s.description).slice(0, 200)}</div>}
+                  {!s.installed && (
+                    <div className="row" style={{ marginTop: 8 }}>
+                      <button
+                        className="btn btn-accent"
+                        onClick={() => api.skillInstall(s.id, s.source ? String(s.source) : undefined)
+                          .then((r) => { setNote(`install ${s.id}: ${JSON.stringify(r).slice(0, 200)}`); loadSkills(); loadMarket(marketQ.trim()); })
+                          .catch((e) => setNote(`install ${s.id}: ${e}`))}
+                      >
+                        Install
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {s.description && <div className="meta" style={{ fontSize: 12 }}>{String(s.description).slice(0, 160)}</div>}
-                {Array.isArray(s.permissions) && s.permissions.length > 0 && (
-                  <div className="meta mono faint" style={{ fontSize: 11 }}>perms: {s.permissions.slice(0, 5).map((p) => String(typeof p === "object" && p ? (p as { name?: string }).name ?? JSON.stringify(p) : p)).join(", ")}</div>
-                )}
-                <div className="row" style={{ marginTop: 8 }}>
-                  <button
-                    className="btn"
-                    onClick={() => api.skillSet(s.id, !s.enabled).then(() => loadSkills(skillQ.trim())).catch((e) => setNote(`${s.id}: ${e}`))}
-                  >
-                    {s.enabled ? "Disable" : "Enable"}
-                  </button>
+              ))}
+              {!marketLoading && marketSkills.length === 0 && (
+                <div className="empty">
+                  Nothing online — registries are unreachable or none are configured. This is reported honestly, never faked.
+                  {updates.length > 0 ? ` (${updates.length} pending updates from the last successful sync.)` : ""}
                 </div>
-              </div>
-            ))}
-            {skills.length === 0 && <div className="empty">No skills match — the bundled library loads from the engine's skill registry.</div>}
-          </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -225,37 +413,70 @@ export function Library() {
       {tab === "Plugins" && (
         <>
           <p className="faint" style={{ fontSize: 12, marginTop: 0 }}>
-            Installed plugins — engine-owned sandbox status, permissions vs granted permissions, trust level.
+            Installed plugins — engine-owned sandbox status, permission grants, trust level.
             Installation is CLI-first (signed allowlist); this surface manages what is already installed.
             {pluginsSummary ? ` · summary: ${JSON.stringify(pluginsSummary).slice(0, 200)}` : ""}
           </p>
           <div className="cards">
-            {plugins.map((p) => (
-              <div key={p.id} className="card prov">
-                <div className="t">
-                  <StatusDot ok={p.enabled && p.loaded} warn={!p.enabled} />
-                  {" "}{p.name ?? p.id}
-                  {p.enabled ? <span className="chip green">enabled</span> : <span className="chip">disabled</span>}
-                  {p.status && <span className="chip">{String(p.status)}</span>}
+            {plugins.map((p) => {
+              const declared = (p.permissions ?? []).map(String);
+              const granted = grants[p.id] ?? (p.grantedPermissions ?? []).map(String);
+              const grantsDirty = JSON.stringify([...granted].sort()) !== JSON.stringify([...(p.grantedPermissions ?? []).map(String)].sort());
+              return (
+                <div key={p.id} className="card prov">
+                  <div className="t">
+                    <StatusDot ok={p.enabled && p.loaded} warn={!p.enabled} />
+                    {" "}{p.name ?? p.id}
+                    {p.enabled ? <span className="chip green">enabled</span> : <span className="chip">disabled</span>}
+                    {p.status && <span className="chip">{String(p.status)}</span>}
+                  </div>
+                  <div className="meta mono faint">
+                    {p.id} · v{String(p.version ?? "?")} · {String(p.type ?? "plugin")} · trust: {String(p.trustLevel ?? "unknown")}
+                  </div>
+                  {p.description && <div className="meta" style={{ fontSize: 12 }}>{String(p.description).slice(0, 160)}</div>}
+                  {p.detail && <div className="meta mono faint" style={{ fontSize: 11 }}>{String(p.detail).slice(0, 160)}</div>}
+                  {declared.length > 0 && (
+                    <div className="grants">
+                      <div className="mono faint">permission grants (engine enforces; invalid scopes are filtered server-side)</div>
+                      {declared.map((perm) => (
+                        <label key={perm} className="mono grant">
+                          <input
+                            type="checkbox"
+                            checked={granted.includes(perm)}
+                            onChange={(e) =>
+                              setGrants((g) => ({
+                                ...g,
+                                [p.id]: e.target.checked ? [...(g[p.id] ?? []), perm] : (g[p.id] ?? []).filter((x) => x !== perm),
+                              }))
+                            }
+                          />
+                          {perm}
+                        </label>
+                      ))}
+                      {grantsDirty && (
+                        <button
+                          className="btn btn-accent"
+                          style={{ marginTop: 6 }}
+                          onClick={() => api.pluginPermissions(p.id, granted)
+                            .then((r) => { setNote(`grants ${p.id}: ${JSON.stringify(r).slice(0, 200)}`); loadPlugins(); })
+                            .catch((e) => setNote(`grants ${p.id}: ${e}`))}
+                        >
+                          Save grants
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <div className="row" style={{ marginTop: 8 }}>
+                    <button
+                      className="btn"
+                      onClick={() => api.pluginSet(p.id, !p.enabled).then(() => loadPlugins()).catch((e) => setNote(`${p.id}: ${e}`))}
+                    >
+                      {p.enabled ? "Disable" : "Enable"}
+                    </button>
+                  </div>
                 </div>
-                <div className="meta mono faint">
-                  {p.id} · v{String(p.version ?? "?")} · {String(p.type ?? "plugin")} · trust: {String(p.trustLevel ?? "unknown")}
-                </div>
-                {p.description && <div className="meta" style={{ fontSize: 12 }}>{String(p.description).slice(0, 160)}</div>}
-                {p.detail && <div className="meta mono faint" style={{ fontSize: 11 }}>{String(p.detail).slice(0, 160)}</div>}
-                <div className="meta mono faint" style={{ fontSize: 11 }}>
-                  perms: {(p.permissions ?? []).length} declared · {(p.grantedPermissions ?? []).length} granted
-                </div>
-                <div className="row" style={{ marginTop: 8 }}>
-                  <button
-                    className="btn"
-                    onClick={() => api.pluginSet(p.id, !p.enabled).then(() => loadPlugins()).catch((e) => setNote(`${p.id}: ${e}`))}
-                  >
-                    {p.enabled ? "Disable" : "Enable"}
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {plugins.length === 0 && <div className="empty">No plugins installed — install via the CLI (signed allowlist enforced engine-side).</div>}
           </div>
         </>

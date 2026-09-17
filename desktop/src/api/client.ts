@@ -181,6 +181,9 @@ export interface ProviderInfo { id: string; name?: string; local?: boolean; keyl
 export interface SkillInfo { id: string; name?: string; version?: string; description?: string; kind?: string; enabled?: boolean; installed?: boolean; health?: string; verification?: string; permissions?: unknown[]; categories?: string[]; tags?: string[]; [k: string]: unknown; }
 export interface McpServer { id: string; name?: string; version?: string; transport?: string; command?: string | null; url?: string | null; enabled?: boolean; health?: string; trust?: string; lifecycleState?: string; tools?: boolean; [k: string]: unknown; }
 export interface PluginInfo { id: string; name?: string; version?: string; type?: string; description?: string; enabled?: boolean; status?: string; loaded?: boolean; detail?: string; permissions?: unknown[]; grantedPermissions?: unknown[]; trustLevel?: string; health?: string; [k: string]: unknown; }
+export interface SkillPermissionsReport { skillId?: string; safe?: unknown[]; dangerous?: unknown[]; missingApproval?: unknown[]; [k: string]: unknown; }
+export interface SkillDependencyReport { skillId?: string; ok?: boolean; requiredMissing?: unknown[]; optionalMissing?: unknown[]; statuses?: unknown[]; [k: string]: unknown; }
+export interface SkillInspect { skill?: SkillInfo; permissions?: SkillPermissionsReport | null; dependencies?: SkillDependencyReport | null; }
 
 export const api = {
   health: () => req<Record<string, unknown>>("/health"),
@@ -229,6 +232,16 @@ export const api = {
   pluginSet: (id: string, enabled: boolean) =>
     req<Record<string, unknown>>(`/plugins/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`, { method: "POST" }),
 
+  /* ---------- phase 4 · library depth (inspect / marketplace / grants) ---------- */
+  skillInspect: (id: string) => req<SkillInspect>(`/skills/${encodeURIComponent(id)}/inspect`),
+  skillsMarketplace: (q?: string) =>
+    req<Record<string, unknown>>(`/skills/marketplace${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  skillsMarketplaceSync: () => req<Record<string, unknown>>("/skills/marketplace/sync", { method: "POST" }),
+  skillInstall: (id: string, registryId?: string) =>
+    req<Record<string, unknown>>("/skills/marketplace/install", { method: "POST", body: JSON.stringify({ id, ...(registryId ? { registryId } : {}) }) }),
+  /** Grant exactly these permission scopes (engine filters invalid ones; full replace). */
+  pluginPermissions: (id: string, permissions: string[]) =>
+    req<Record<string, unknown>>(`/plugins/${encodeURIComponent(id)}/permissions`, { method: "POST", body: JSON.stringify({ permissions }) }),
 };
 
 export function asList<T>(v: T[] | { [k: string]: unknown } | undefined, ...keys: string[]): T[] {
