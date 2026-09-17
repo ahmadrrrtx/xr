@@ -51,6 +51,10 @@ import {
   FilesReadResponse,
   FilesDiffRequest,
   FilesDiffResponse,
+  FilesWriteRequest,
+  FilesWriteResponse,
+  TerminalRunRequest,
+  TerminalRunEvent,
   ResearchOperationRequest,
   ResearchJobResponse,
   ResearchJobsListResponse,
@@ -565,6 +569,23 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     stability: "experimental",
     request: FilesDiffRequest,
     response: FilesDiffResponse,
+  },
+
+  // ── Phase 2B · editor save + workspace terminal (experimental surface) ───
+  "files.write": {
+    summary: "Save a text file inside the project root — human-approval-gated, scope-enforced, staleness-guarded, hash-chain audited.",
+    tag: "workspace",
+    stability: "experimental",
+    request: FilesWriteRequest,
+    response: FilesWriteResponse,
+  },
+  "terminal.run": {
+    summary: "Run ONE shell command in the project root — deterministic policy check, durable approval, output streamed as SSE (line-based command runner, NOT a PTY).",
+    tag: "workspace",
+    stability: "experimental",
+    request: TerminalRunRequest,
+    response: TerminalRunEvent,
+    sse: true,
   },
 
   // ── Phase B · onboarding (first-run GUI flow; experimental surface) ──────

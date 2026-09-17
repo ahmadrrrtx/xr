@@ -6546,6 +6546,10 @@
                     },
                     "isText": {
                       "type": "boolean"
+                    },
+                    "mtimeMs": {
+                      "description": "Disk mtime at read time — pass back as files.write baseMtimeMs for the staleness guard.",
+                      "type": "number"
                     }
                   },
                   "required": [
@@ -6554,6 +6558,159 @@
                     "size",
                     "truncated",
                     "isText"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/files/write": {
+      "post": {
+        "operationId": "files.write",
+        "summary": "Save a text file inside the project root — human-approval-gated, scope-enforced, staleness-guarded, hash-chain audited.",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "description": "Path relative to the project root (must be inside).",
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "content": {
+                    "description": "Full new file content (UTF-8 text only, ≤ 1 MB).",
+                    "type": "string"
+                  },
+                  "baseMtimeMs": {
+                    "description": "mtimeMs the editor loaded; a mismatch returns 409 instead of clobbering.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "path",
+                  "content"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "applied": {
+                      "description": "True only after a human approved AND the bytes hit disk.",
+                      "type": "boolean"
+                    },
+                    "approvalId": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "bytes": {
+                      "type": "number"
+                    },
+                    "mtimeMs": {
+                      "type": "number"
+                    },
+                    "decision": {
+                      "description": "denied | timed_out when applied=false",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "applied"
                   ],
                   "additionalProperties": {}
                 }
@@ -13050,6 +13207,188 @@
           }
         ],
         "x-xr-any-method": true
+      }
+    },
+    "/api/v1/terminal/run": {
+      "post": {
+        "operationId": "terminal.run",
+        "summary": "Run ONE shell command in the project root — deterministic policy check, durable approval, output streamed as SSE (line-based command runner, NOT a PTY).",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cmd": {
+                    "description": "One command line; runs via the platform shell inside the project root.",
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8000
+                  },
+                  "timeoutMs": {
+                    "description": "Kill after this long (default 120000, max 600000).",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 600000
+                  }
+                },
+                "required": [
+                  "cmd"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-Sent Events stream (data: <json> lines, [DONE] terminator).",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "event_id": {
+                      "description": "Monotonic per-stream sequence (same framing as chat SSE).",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "type": {
+                      "description": "Event discriminator.",
+                      "type": "string",
+                      "enum": [
+                        "status",
+                        "output",
+                        "exit"
+                      ]
+                    },
+                    "status": {
+                      "description": "approval_required | denied | timed_out | blocked | error.",
+                      "type": "string"
+                    },
+                    "approvalId": {
+                      "description": "Durable approval id while status=approval_required.",
+                      "type": "string"
+                    },
+                    "stream": {
+                      "description": "Which pipe an output chunk came from.",
+                      "type": "string",
+                      "enum": [
+                        "stdout",
+                        "stderr"
+                      ]
+                    },
+                    "text": {
+                      "description": "Output chunk text (UTF-8, may split lines).",
+                      "type": "string"
+                    },
+                    "code": {
+                      "description": "Process exit code (type=exit).",
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "timedOut": {
+                      "description": "True when the run was killed by its timeout.",
+                      "type": "boolean"
+                    },
+                    "truncated": {
+                      "description": "True when output exceeded the 256 KB cap.",
+                      "type": "boolean"
+                    },
+                    "ms": {
+                      "description": "Wall time of the execution phase.",
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
       }
     },
     "/api/v1/traces/recent": {

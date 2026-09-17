@@ -206,6 +206,16 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/files/diff", body);
   }
 
+  /** Save a text file inside the project root — human-approval-gated, scope-enforced, staleness-guarded, hash-chain audited. */
+  async filesWrite(body: z.infer<typeof S.FilesWriteRequest>): Promise<z.infer<typeof S.FilesWriteResponse>> {
+    return await this.call("POST", "/api/v1/files/write", body);
+  }
+
+  /** Run ONE shell command in the project root — deterministic policy check, durable approval, output streamed as SSE (line-based command runner, NOT a PTY). (SSE stream — returns the raw Response). */
+  async terminalRun(body: z.infer<typeof S.TerminalRunRequest>): Promise<Response> {
+    return await this.raw("POST", "/api/v1/terminal/run", body);
+  }
+
   /** One-shot chat completion streamed as Server-Sent Events. (SSE stream — returns the raw Response). */
   async chatStreamPost(body: z.infer<typeof S.ChatStreamRequest>): Promise<Response> {
     return await this.raw("POST", "/api/v1/chat", body);
