@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, asList, type Approval, type SessionSummary } from "../api/client";
-import { Mark } from "../components/Mark";
+import { XrLogo } from "../components/Brand";
 
 export function Home({ onOpenRun, onGoWork }: { onOpenRun: (id: string) => void; onGoWork: (task: string) => void }) {
   const [task, setTask] = useState("");
@@ -27,9 +27,7 @@ export function Home({ onOpenRun, onGoWork }: { onOpenRun: (id: string) => void;
   return (
     <div className="home">
       <div className="hero">
-        <Mark size={54} />
-        <div style={{ fontWeight: 700, letterSpacing: "0.08em", fontSize: 18 }}>XR</div>
-        <div className="tagline">THE AI AGENT YOU CAN ACTUALLY TRUST</div>
+        <XrLogo height={132} radius={10} />
       </div>
 
       <form

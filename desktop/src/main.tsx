@@ -4,6 +4,7 @@ import { AppShell, type Area } from "./components/AppShell";
 import { Home } from "./screens/Home";
 import { Runs } from "./screens/Runs";
 import { api, EngineDown } from "./api/client";
+import { XrLogo } from "./components/Brand";
 import "./styles/tokens.css";
 
 function Stub({ title, phase }: { title: string; phase: string }) {
@@ -39,10 +40,7 @@ function App() {
   if (down) {
     return (
       <div className="splash">
-        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" opacity="0.5">
-          <path d="M10 10 L24 27 L38 10" stroke="#6c6c7a" strokeWidth="4.5" strokeLinecap="round" />
-          <path d="M10 38 L20 26M38 38 L28 26" stroke="#6c6c7a" strokeWidth="4.5" strokeLinecap="round" />
-        </svg>
+        <XrLogo height={96} radius={10} dim />
         <div>XR engine is starting…</div>
         <div className="faint" style={{ fontSize: 12 }}>
           desktop attaches to the local daemon (<span className="mono">xr serve</span>); work resumes from checkpoints automatically
