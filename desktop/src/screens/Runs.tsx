@@ -338,11 +338,87 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
               <button key={t} role="tab" aria-selected={t === tab} onClick={() => setTab(t)}>{t}</button>
             ))}
           </div>
-          <pre className="raw">{JSON.stringify(pick(detail, tab), null, 2) ?? "—"}</pre>
+          <SessionAnatomy detail={detail} tab={tab} />
         </aside>
       )}
     </div>
   );
+}
+
+interface SessionStep {
+  id?: string; idx?: number; phase?: string; tool?: string | null; detail?: string; created_at?: number;
+  parsedDetail?: { message?: string; toolCalls?: { tool?: string; args?: unknown; ok?: boolean; result?: string; error?: string }[] };
+}
+interface SessionAudit { id?: number; event?: string; detail?: string; hash?: string; created_at?: number; }
+
+function auditJson(a: SessionAudit): Record<string, unknown> | null {
+  if (!a.detail) return null;
+  try { return JSON.parse(a.detail) as Record<string, unknown>; } catch { return null; }
+}
+
+/** Structured run anatomy from the engine session record (steps + hash-chained audit).
+ *  Tabs without engine data keep the honest raw-JSON/note fallback. */
+function SessionAnatomy({ detail, tab }: { detail: Record<string, unknown> | null; tab: string }) {
+  const steps: SessionStep[] = Array.isArray(detail?.steps) ? (detail!.steps as SessionStep[]) : [];
+  const audit: SessionAudit[] = Array.isArray(detail?.audit) ? (detail!.audit as SessionAudit[]) : [];
+  const clock = (ts?: number) => (ts ? new Date(ts).toLocaleTimeString([], { hour12: false }) : "—");
+
+  if (tab === "Transcript") {
+    if (steps.length === 0) return <pre className="raw">{JSON.stringify(pick(detail, tab), null, 2)}</pre>;
+    const tip = audit.length ? audit[audit.length - 1].hash?.slice(0, 8) : null;
+    return (
+      <div className="tl-box" style={{ maxHeight: 380 }}>
+        <div className="tl tl-info">chain tip {tip ?? "—"} · {audit.length} audit event{audit.length === 1 ? "" : "s"}</div>
+        {steps.map((s) => (
+          <div key={s.id ?? s.idx} className={`tl ${/error|fail/.test(s.phase ?? "") ? "tl-err" : s.phase === "tool" ? "tl-tool" : "tl-info"}`}>
+            <span className="faint">{clock(s.created_at)}</span> [{String(s.phase ?? "step").toUpperCase()}]{" "}
+            {s.parsedDetail?.message ?? String(s.detail ?? "").slice(0, 160)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (tab === "Tools") {
+    const calls = steps.flatMap((s) => (s.parsedDetail?.toolCalls ?? []).map((c) => ({ ...c, phase: s.phase, ts: s.created_at })));
+    if (calls.length === 0) return <p className="faint" style={{ fontSize: 11.5 }}>No tool calls recorded in this session&apos;s steps.</p>;
+    return (
+      <div className="tl-box" style={{ maxHeight: 380 }}>
+        {calls.map((c, i) => (
+          <div key={i} className={`tl ${c.ok === false ? "tl-err" : "tl-ok"}`}>
+            <span className="faint">{clock(c.ts)}</span> {c.ok === false ? "✗" : "✓"} {c.tool ?? "tool"}{" "}
+            <span className="faint">{JSON.stringify(c.args ?? {}).slice(0, 90)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (tab === "Cost") {
+    const rows = audit.map((a) => ({ ev: a.event, snap: (auditJson(a)?.snapshot ?? null) as Record<string, unknown> | null, ts: a.created_at }))
+      .filter((r) => r.snap && typeof r.snap.usd === "number");
+    if (rows.length === 0) return <p className="faint" style={{ fontSize: 11.5 }}>No cost snapshots in the audit chain yet.</p>;
+    return (
+      <div className="tl-box" style={{ maxHeight: 380 }}>
+        {rows.map((r, i) => (
+          <div key={i} className="tl tl-info">
+            <span className="faint">{clock(r.ts)}</span> {r.ev} · in {String(r.snap!.inTokens)} / out {String(r.snap!.outTokens)} tok · ${String(r.snap!.usd)}
+          </div>
+        ))}
+        <div className="tl tl-info faint">engine audit chain is the ledger of record</div>
+      </div>
+    );
+  }
+  if (tab === "Approvals") {
+    const rows = audit.filter((a) => /approv|consent|decision/.test(a.event ?? ""));
+    if (rows.length === 0) return <p className="faint" style={{ fontSize: 11.5 }}>No approval events in this session&apos;s audit chain.</p>;
+    return (
+      <div className="tl-box" style={{ maxHeight: 380 }}>
+        {rows.map((a, i) => (
+          <div key={i} className="tl tl-wait"><span className="faint">{clock(a.created_at)}</span> {a.event} · {String(a.detail ?? "").slice(0, 120)}</div>
+        ))}
+      </div>
+    );
+  }
+  return <pre className="raw">{JSON.stringify(pick(detail, tab), null, 2) ?? "—"}</pre>;
 }
 
 function pick(d: Record<string, unknown> | null, tab: string): unknown {
