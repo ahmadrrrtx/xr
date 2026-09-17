@@ -85,6 +85,10 @@ jobs:
         uses: actions/checkout@v4
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          # desktop/bun.lock is lockfileVersion 2 (written by bun 1.4.x) —
+          # older bun fails with "Unknown lockfile version" on --frozen-lockfile.
+          bun-version: 1.4.2
       - name: Install Linux system dependencies (WebKit2GTK 4.1 + tray)
         if: matrix.runsOn == 'ubuntu-22.04'
         run: |
