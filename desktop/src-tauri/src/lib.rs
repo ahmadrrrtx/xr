@@ -132,13 +132,13 @@ fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
     let port: Option<u16> = *state.port.lock().unwrap();
     let token: Option<String> = state.token.lock().unwrap().clone();
     let note: Option<String> = state.note.lock().unwrap().clone();
-    if let (Some(port), Some(token)) = (port, token) {
+    if let (Some(port), Some(linked_token)) = (port, token.clone()) {
         if tcp_reachable(port) {
             return serde_json::json!({
                 "reachable": true,
                 "spawned": true,
                 "port": port,
-                "token": token,
+                "token": linked_token,
                 "externalDaemonOn3141": tcp_reachable(3141),
             });
         }
