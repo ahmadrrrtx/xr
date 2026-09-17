@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, asList, type SessionSummary, type WorkflowDetail, type WorkflowSummary, type WorkflowTaskV } from "../api/client";
 
 const TABS = ["Transcript", "Plan", "Files", "Tools", "Approvals", "Cost", "Artifacts"] as const;
@@ -94,8 +94,10 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
     api.session(openId).then(setDetail).catch(() => setDetail({ error: "run unavailable" }));
   }, [openId]);
 
-  const tasks = wfDetail?.tasks ?? [];
-  const levels = taskLevels(tasks);
+  // Stable identity: `?? []` inline would recreate the array every render,
+  // churning redraw/useLayoutEffect into a setEdges render loop.
+  const tasks = useMemo(() => wfDetail?.tasks ?? [], [wfDetail]);
+  const levels = useMemo(() => taskLevels(tasks), [tasks]);
   const byId = new Map(tasks.map((t) => [t.taskId, t]));
   const partFor = (taskId: string) => wfDetail?.partitions?.find((p) => p.childId === taskId);
   const wf = workflows.find((w) => w.id === wfSel) ?? null;
@@ -133,7 +135,9 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
         });
       }
     }
-    setEdges(next);
+    setEdges((prev) =>
+      prev.length === next.length && prev.every((e, i) => e.x1 === next[i].x1 && e.y1 === next[i].y1 && e.x2 === next[i].x2 && e.y2 === next[i].y2) ? prev : next,
+    );
   }, [tasks]);
   useLayoutEffect(() => { redraw(); }, [redraw, wfDetail]);
   useEffect(() => {
