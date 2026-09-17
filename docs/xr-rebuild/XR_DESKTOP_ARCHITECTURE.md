@@ -33,7 +33,7 @@
 
 ## 3. Decision
 
-**[RECOMMENDED] Tauri v2 shell ("XR Desktop") + existing Bun daemon as sidecar engine.**
+**[RECOMMENDED→APPROVED (D-02, 2026-09-17)] Tauri v2 shell ("XR Desktop") + existing Bun daemon as sidecar engine.** Hard requirement from approval: first-class support on **Windows, macOS and Linux** — CI matrix and native feature parity (tray/notifications/updater/deep links) are P1/P4 gates on all three OSes.
 Rationale: R2/R3 favor Tauri decisively; R4 means the shell is a *client*, so Electron's Node main-process advantage is irrelevant; R7 mitigated by choosing CodeMirror 6 (webkit-safe) over Monaco for the integrated editor, with Monaco optional later; R6 satisfied by Tauri sidecar API launching `xr` compiled binary (or `bun run src/index.ts serve` in dev); R8 by tauri-updater + XR's existing rollback-guard semantics.
 **Fallback trigger:** if Phase-2 editor fidelity tests fail on WebKit/WebView2 beyond mitigation, isolate editor pane in a bundled Chromium frame (single-surface Electron-style escape hatch) or switch shell to Electron — decision gate at Phase 2 DoD. [RECOMMENDED]
 
