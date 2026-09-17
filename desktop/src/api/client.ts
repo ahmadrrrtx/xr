@@ -179,6 +179,32 @@ export interface WorkflowSummary {
   tasks?: { total?: number; completed?: number; failed?: number; blocked?: number; awaitingReview?: number };
   [k: string]: unknown;
 }
+/**
+ * Phase 6: full workflow record (GET /agents/workflows/{id}).
+ * Mirrors src/agents/types.ts WorkflowRecord — taskId/dependencies drive the DAG,
+ * partitions carry engine-issued budgets, auditTrail is the per-task transcript.
+ */
+export interface WorkflowAuditEventV { ts?: number; kind?: string; message?: string; [k: string]: unknown; }
+export interface WorkflowTaskV {
+  taskId: string; agentId?: string; role?: string; name?: string; description?: string;
+  parentTaskId?: string; dependencies?: string[]; status?: string;
+  startedAt?: number; endedAt?: number; retryCount?: number; errors?: string[];
+  outputs?: { summary?: string }; auditTrail?: WorkflowAuditEventV[]; blockedReason?: string;
+  [k: string]: unknown;
+}
+export interface WorkflowPartition {
+  partitionId?: string; childId?: string; agentId?: string | null;
+  capUsd?: number; capTokens?: number; consumedUsd?: number; consumedTokens?: number; status?: string;
+}
+export interface WorkflowDetail {
+  workflowId?: string; kind?: string; goal?: string; status?: string;
+  reviewState?: string; approvalState?: string; cancellationState?: unknown;
+  planSummary?: string; rootTaskIds?: string[]; tasks?: WorkflowTaskV[];
+  partitions?: WorkflowPartition[]; currentAgentId?: string;
+  createdAt?: number; updatedAt?: number; startedAt?: number; endedAt?: number;
+  finalOutput?: { summary?: string }; errors?: string[];
+  [k: string]: unknown;
+}
 export interface FileEntry { name: string; rel: string; type: "file" | "dir"; size: number; git?: string | null; isText?: boolean; }
 export interface FilesRoot { entries?: FileEntry[]; branch?: string | null; dirty?: boolean; [k: string]: unknown; }
 export interface MemoryEntry { id: string; text?: string; content?: string; category?: string; scope?: string; [k: string]: unknown; }
@@ -252,7 +278,7 @@ export const api = {
 
   /* ---------- phase 6 · team-run board (multi-agent workflows, engine-owned) ---------- */
   agents: () => req<{ roles?: Record<string, unknown>[]; workflows?: WorkflowSummary[]; health?: Record<string, unknown> }>("/agents"),
-  workflow: (id: string) => req<Record<string, unknown>>(`/agents/workflows/${encodeURIComponent(id)}`),
+  workflow: (id: string) => req<WorkflowDetail>(`/agents/workflows/${encodeURIComponent(id)}`),
 };
 
 export function asList<T>(v: T[] | { [k: string]: unknown } | undefined, ...keys: string[]): T[] {
