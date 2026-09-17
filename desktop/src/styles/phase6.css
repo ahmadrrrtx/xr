@@ -380,3 +380,11 @@
 /* Phase 6 · permission chips must never stretch cards (scope-only label, ellipsis) */
 .sc-foot .chip { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-foot { flex-wrap: wrap; row-gap: 5px; }
+
+/* Phase 6 · universal search popover (skills via engine index + live runs) */
+.gsearch-wrap { position: relative; margin-left: auto; width: min(320px, 36vw); }
+.gsearch-wrap .gsearch { margin-left: 0; width: 100%; }
+.gpop { position: absolute; top: calc(100% + 6px); right: 0; width: min(420px, 90vw); background: var(--xr-surface-1); border: 1px solid var(--xr-border-strong); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, .5); z-index: 60; overflow: hidden; }
+.gpop-h { padding: 7px 12px 4px; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--xr-text-faint); }
+.gpop-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; color: var(--xr-text); padding: 8px 12px; font-size: 12.5px; cursor: pointer; }
+.gpop-item:hover { background: var(--xr-surface-2); }

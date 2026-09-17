@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { XrLogo, XrAvatar } from "./Brand";
-import { api, asList, type ProviderInfo } from "../api/client";
+import { api, asList, type ProviderInfo, type SessionSummary, type SkillInfo } from "../api/client";
 
 export type Area = "home" | "work" | "workspace" | "agents" | "library" | "trust" | "runs" | "settings";
 
@@ -23,17 +23,49 @@ export function AppShell({
   onArea,
   engineVersion,
   onSearch,
+  onOpenRun,
   children,
 }: {
   area: Area;
   onArea: (a: Area) => void;
   engineVersion: string | null;
   onSearch: (q: string) => void;
+  onOpenRun: (id: string) => void;
   children: ReactNode;
 }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [up, setUp] = useState(true);
   const [q, setQ] = useState("");
+  const [pop, setPop] = useState<{ skills: SkillInfo[]; runs: SessionSummary[] } | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // Debounced universal search: skills via the engine index, runs via live sessions.
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) { setPop(null); return; }
+    let live = true;
+    const t = setTimeout(() => {
+      Promise.allSettled([api.skills(term), api.sessions()]).then(([s, r]) => {
+        if (!live) return;
+        const skills = (s.status === "fulfilled" ? (s.value.skills ?? []) : []).slice(0, 5);
+        const all = r.status === "fulfilled" ? asList<SessionSummary>(r.value, "sessions") : [];
+        const low = term.toLowerCase();
+        const runs = all.filter((x) => `${x.title ?? ""} ${x.prompt ?? ""}`.toLowerCase().includes(low)).slice(0, 5);
+        setPop({ skills, runs });
+      });
+    }, 300);
+    return () => { live = false; clearTimeout(t); };
+  }, [q]);
+
+  // ⌘K / Ctrl+K focuses the global search.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchRef.current?.focus(); }
+      if (e.key === "Escape") setPop(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -68,21 +100,40 @@ export function AppShell({
         <span className="appname">XR Desktop</span>
         <span className="tb-sep" />
         <span className="crumb mono faint">{NAV.find((n) => n.id === area)?.label ?? ""}</span>
-        <form
-          className="gsearch"
-          role="search"
-          onSubmit={(e) => { e.preventDefault(); if (q.trim()) onSearch(q.trim()); }}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search skills, files, runs…"
-            aria-label="Global search"
-          />
-        </form>
+        <div className="gsearch-wrap">
+          <form
+            className="gsearch"
+            role="search"
+            onSubmit={(e) => { e.preventDefault(); if (q.trim()) { onSearch(q.trim()); setPop(null); } }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+            </svg>
+            <input
+              ref={searchRef}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search skills, runs… (⌘K)"
+              aria-label="Global search"
+            />
+          </form>
+          {pop && (pop.skills.length > 0 || pop.runs.length > 0) && (
+            <div className="gpop" role="listbox" aria-label="Search results">
+              {pop.skills.length > 0 && <div className="gpop-h">Skills · engine index</div>}
+              {pop.skills.map((s) => (
+                <button key={s.id} className="gpop-item" role="option" aria-selected={false} onClick={() => { onSearch(s.name ?? s.id); setPop(null); setQ(""); }}>
+                  <span className="chip tiny">skill</span> {s.name ?? s.id}
+                </button>
+              ))}
+              {pop.runs.length > 0 && <div className="gpop-h">Runs · live sessions</div>}
+              {pop.runs.map((r) => (
+                <button key={r.id} className="gpop-item" role="option" aria-selected={false} onClick={() => { onOpenRun(r.id); setPop(null); setQ(""); }}>
+                  <span className="chip tiny">run</span> {r.title || r.prompt?.slice(0, 48) || r.id}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <span className="mono faint tb-right">engine {engineVersion ?? "—"}</span>
       </header>
       <nav className="rail" aria-label="Primary">

@@ -61,6 +61,7 @@ function App() {
       onArea={(a) => { setArea(a); if (a !== "runs") setRunId(null); }}
       engineVersion={engine}
       onSearch={(q) => { setLibQuery(q); setArea("library"); }}
+      onOpenRun={(id) => { setRunId(id); setArea("runs"); }}
     >
       {area === "home" && (
         <Home
