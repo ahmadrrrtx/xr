@@ -1,0 +1,73 @@
+import { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { AppShell, type Area } from "./components/AppShell";
+import { Home } from "./screens/Home";
+import { Runs } from "./screens/Runs";
+import { api, EngineDown } from "./api/client";
+import "./styles/tokens.css";
+
+function Stub({ title, phase }: { title: string; phase: string }) {
+  return (
+    <div className="stub">
+      <h2>{title}</h2>
+      <p>
+        Lands in {phase} per the master plan
+        (<span className="mono">docs/xr-rebuild/XR_MASTER_IMPLEMENTATION_PLAN.md</span>).
+      </p>
+    </div>
+  );
+}
+
+function App() {
+  const [area, setArea] = useState<Area>("home");
+  const [runId, setRunId] = useState<string | null>(null);
+  const [engine, setEngine] = useState<string | null>(null);
+  const [down, setDown] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    const probe = () =>
+      api
+        .health()
+        .then((h) => { if (live) { const v = (h.version as { version?: string } | undefined)?.version ?? (typeof h.version === "string" ? h.version : "ok"); setEngine(v); setDown(false); } })
+        .catch((e) => { if (live) { setDown(e instanceof EngineDown); setEngine(null); } });
+    probe();
+    const t = setInterval(probe, 4000);
+    return () => { live = false; clearInterval(t); };
+  }, []);
+
+  if (down) {
+    return (
+      <div className="splash">
+        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" opacity="0.5">
+          <path d="M10 10 L24 27 L38 10" stroke="#6c6c7a" strokeWidth="4.5" strokeLinecap="round" />
+          <path d="M10 38 L20 26M38 38 L28 26" stroke="#6c6c7a" strokeWidth="4.5" strokeLinecap="round" />
+        </svg>
+        <div>XR engine is starting…</div>
+        <div className="faint" style={{ fontSize: 12 }}>
+          desktop attaches to the local daemon (<span className="mono">xr serve</span>); work resumes from checkpoints automatically
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <AppShell area={area} onArea={(a) => { setArea(a); if (a !== "runs") setRunId(null); }} workspace="default" engineVersion={engine}>
+      {area === "home" && (
+        <Home
+          onOpenRun={(id) => { setRunId(id); setArea("runs"); }}
+          onGoWork={() => setArea("work")}
+        />
+      )}
+      {area === "work" && <Stub title="Work — conversation + execution" phase="Phase 2" />}
+      {area === "workspace" && <Stub title="Workspace — editor, terminal, git, agent sidecar" phase="Phase 2" />}
+      {area === "agents" && <Stub title="Agents — team-run board" phase="Phase 3" />}
+      {area === "library" && <Stub title="Library — skills, MCP, plugins, integrations, models" phase="Phase 3" />}
+      {area === "trust" && <Stub title="Trust Center — approvals, modes, audit, budgets, network, shield" phase="Phase 4" />}
+      {area === "runs" && <Runs openId={runId} onOpen={setRunId} />}
+      {area === "settings" && <Stub title="Settings — general, models, local, automations, voice, privacy, advanced" phase="Phase 2–4" />}
+    </AppShell>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(<App />);
