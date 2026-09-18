@@ -53,6 +53,8 @@ import {
   FilesDiffResponse,
   FilesWriteRequest,
   FilesWriteResponse,
+  GitStageRequest,
+  GitCommitRequest,
   TerminalRunRequest,
   TerminalRunEvent,
   ResearchOperationRequest,
@@ -611,6 +613,28 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     stability: "experimental",
     request: FilesDiffRequest,
     response: FilesDiffResponse,
+  },
+  "git.status": {
+    summary: "Workspace git branch + porcelain status (argv-only git, root-scoped).",
+    tag: "workspace",
+    stability: "experimental",
+  },
+  "git.log": {
+    summary: "Recent commits for the workspace (bounded, argv-only).",
+    tag: "workspace",
+    stability: "experimental",
+  },
+  "git.stage": {
+    summary: "Stage paths with `git add` — runs only after a durable human approval (riskTier medium).",
+    tag: "workspace",
+    stability: "experimental",
+    request: GitStageRequest,
+  },
+  "git.commit": {
+    summary: "Commit staged work — runs only after a durable human approval (riskTier high).",
+    tag: "workspace",
+    stability: "experimental",
+    request: GitCommitRequest,
   },
 
   // ── Phase 2B · editor save + workspace terminal (experimental surface) ───

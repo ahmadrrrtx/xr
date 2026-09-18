@@ -51,6 +51,13 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   const [save, setSave] = useState<SaveState>({ phase: "idle" });
   const [pendingApproval, setPendingApproval] = useState<Approval | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
+  /* Phase 2 · Git panel — engine-computed status/log; stage/commit are
+     approval-gated engine verbs (they block until a human decides). */
+  const [git, setGit] = useState<{ branch: string | null; entries: { code: string; path: string }[] } | null>(null);
+  const [gitLog, setGitLog] = useState<{ hash: string; date?: string; subject?: string }[]>([]);
+  const [commitMsg, setCommitMsg] = useState("");
+  const [gitNote, setGitNote] = useState<string | null>(null);
+  const [gitBusy, setGitBusy] = useState(false);
   const [agentNote, setAgentNote] = useState("idle — open a file or ask XR");
 
   const host = useRef<HTMLDivElement>(null);
@@ -231,6 +238,48 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
     }
   }, [terms, patchTerm, refreshTree]);
 
+  const loadGit = useCallback(() => {
+    api.gitStatus().then((s) => setGit({ branch: s.branch ?? null, entries: s.entries ?? [] })).catch(() => setGit(null));
+    api.gitLog(8).then((l) => setGitLog(l.commits ?? [])).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    loadGit();
+    const t = setInterval(loadGit, 8000);
+    return () => clearInterval(t);
+  }, [loadGit]);
+
+  async function stageAll() {
+    const paths = (git?.entries ?? []).map((e) => e.path);
+    if (paths.length === 0) { setGitNote("nothing to stage — clean tree"); return; }
+    setGitBusy(true); setGitNote("stage requested — approve it in Trust → Approvals (or the toast)…");
+    try {
+      const r = await api.gitStage(paths);
+      setGitNote(r.applied ? (r.ok ? `staged ${paths.length} path(s)` : `git failed: ${r.error ?? "unknown"}`) : `not staged (${r.decision ?? "denied"})`);
+      loadGit();
+    } catch (e) {
+      setGitNote(`engine rejected: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setGitBusy(false);
+    }
+  }
+
+  async function commit() {
+    const msg = commitMsg.trim();
+    if (!msg) return;
+    setGitBusy(true); setGitNote("commit requested — approve it in Trust → Approvals…");
+    try {
+      const r = await api.gitCommit(msg);
+      if (r.applied && r.ok) { setCommitMsg(""); setGitNote(`committed: ${msg.slice(0, 60)}`); }
+      else if (r.applied) setGitNote(`git failed: ${r.error ?? "unknown"}`);
+      else setGitNote(`not committed (${r.decision ?? "denied"})`);
+      loadGit();
+    } catch (e) {
+      setGitNote(`engine rejected: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setGitBusy(false);
+    }
+  }
+
   const at = terms.find((t) => t.id === termTab) ?? terms[0];
 
   const renderTree = (entries: FileEntry[], depth: number, keyPrefix: string) =>
@@ -382,6 +431,38 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
         <div className="ar-card diffcard">
           <div className="ar-h">Workspace diff (engine-computed)</div>
           <pre className="raw">{diff ?? "select a file to see its diff"}</pre>
+        </div>
+
+        <div className="ar-card gitcard" role="group" aria-label="Git">
+          <div className="ar-h">
+            Git · {git?.branch ?? "—"}
+            <button className="chipbtn" style={{ marginLeft: "auto" }} onClick={loadGit} aria-label="Refresh git">refresh</button>
+          </div>
+          <div className="git-entries">
+            {(git?.entries ?? []).length === 0 && <div className="faint ar-tip">clean working tree</div>}
+            {(git?.entries ?? []).slice(0, 10).map((e) => (
+              <button key={e.path} className="git-row" onClick={() => void openFile(e.path)} title={`${e.code} — open in editor`}>
+                <span className={`git-code ${e.code.startsWith("??") ? "u" : e.code.includes("D") ? "d" : "m"}`}>{e.code}</span>
+                <span className="mono git-path">{e.path}</span>
+              </button>
+            ))}
+            {(git?.entries ?? []).length > 10 && <div className="faint ar-tip">+ {(git?.entries ?? []).length - 10} more</div>}
+          </div>
+          <div className="git-log">
+            {gitLog.slice(0, 5).map((c) => (
+              <div key={c.hash} className="git-log-row mono" title={c.subject}>
+                <span className="faint">{c.hash}</span> {c.subject}
+              </div>
+            ))}
+          </div>
+          <form className="git-commit" onSubmit={(e) => { e.preventDefault(); void commit(); }}>
+            <input value={commitMsg} onChange={(e) => setCommitMsg(e.target.value)} placeholder="commit message…" aria-label="Commit message" />
+            <span className="row-gap">
+              <button type="button" className="chipbtn" disabled={gitBusy} onClick={() => void stageAll()}>Stage all</button>
+              <button type="submit" className="chipbtn" disabled={gitBusy || !commitMsg.trim()}>Commit</button>
+            </span>
+          </form>
+          {gitNote && <div className="faint ar-tip mono">{gitNote}</div>}
         </div>
 
         <div className="ar-card">

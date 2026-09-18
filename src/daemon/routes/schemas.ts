@@ -419,3 +419,11 @@ export const ResearchJobsListResponse = z.looseObject({
   jobs: z.array(z.looseObject({ id: z.string(), kind: z.string(), state: z.string() })),
   count: z.number().int(),
 });
+
+export const GitStageRequest = z.looseObject({
+  paths: z.union([z.string(), z.array(z.string()).max(50)]).describe("Path(s) relative to the project root; each must be inside it."),
+});
+
+export const GitCommitRequest = z.looseObject({
+  message: z.string().min(1).max(2000).describe("Commit message; executed only after durable human approval."),
+});

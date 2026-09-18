@@ -54,7 +54,7 @@ export function Palette({
 
   const actions = useMemo<Item[]>(() => {
     const nav: Array<[Area, string]> = [
-      ["home", "Go to Home"], ["work", "Go to Work (chat)"], ["workspace", "Go to Workspace (editor)"],
+      ["home", "Go to Home"], ["projects", "Go to Projects"], ["work", "Go to Work (chat)"], ["workspace", "Go to Workspace (editor)"],
       ["agents", "Go to Multi-agent"], ["runs", "Go to Team runs"], ["library", "Go to Library"],
       ["trust", "Go to Trust Center"], ["voice", "Open Voice mode"], ["settings", "Go to Settings"],
     ];

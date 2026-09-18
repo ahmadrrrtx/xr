@@ -339,6 +339,21 @@ export const api = {
       { method: "POST", body: JSON.stringify({ path, content, ...(baseMtimeMs !== undefined ? { baseMtimeMs } : {}) }) },
     ),
   memory: () => req<MemoryEntry[] | { entries: MemoryEntry[] }>("/memory"),
+
+  /* ---------- phase 2 · git + projects (engine-owned) ---------- */
+  gitStatus: () =>
+    req<{ ok?: boolean; repo?: boolean; branch?: string | null; entries?: { code: string; path: string }[]; error?: string }>("/git/status"),
+  gitLog: (limit = 15) =>
+    req<{ ok?: boolean; commits?: { hash: string; date?: string; author?: string; subject?: string }[] }>(`/git/log?limit=${limit}`),
+  /** Approval-gated engine-side; blocks until a human decides (same plane as files.write). */
+  gitStage: (paths: string[]) =>
+    req<{ applied?: boolean; ok?: boolean; decision?: string | null; error?: string | null }>("/git/stage", { method: "POST", body: JSON.stringify({ paths }) }),
+  gitCommit: (message: string) =>
+    req<{ applied?: boolean; ok?: boolean; decision?: string | null; error?: string | null }>("/git/commit", { method: "POST", body: JSON.stringify({ message }) }),
+  workspacesCreate: (id: string, name?: string) =>
+    req<{ ok?: boolean; workspace?: { id?: string; name?: string; rootDir?: string }; error?: string }>("/workspaces/create", {
+      method: "POST", body: JSON.stringify({ id, ...(name ? { name } : {}) }),
+    }),
   providers: () => req<ProviderInfo[] | { providers: ProviderInfo[]; active?: string }>("/providers"),
   models: () => req<Record<string, unknown>>("/models"),
   providersSet: (provider: string, model?: string) =>

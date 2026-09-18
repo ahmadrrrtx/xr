@@ -1,16 +1,20 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { AppShell, type Area } from "./components/AppShell";
-import { Home } from "./screens/Home";
-import { Work } from "./screens/Work";
-import { Workspace } from "./screens/Workspace";
-import { Library } from "./screens/Library";
-import { Runs } from "./screens/Runs";
-import { Teams } from "./screens/Teams";
-import { Trust } from "./screens/Trust";
-import { Settings } from "./screens/Settings";
-import { Voice } from "./screens/Voice";
 import { Onboarding } from "./screens/Onboarding";
+
+/* Phase 2 · route-level code splitting: each screen (and its heavy deps, e.g.
+   CodeMirror in Workspace) lands in its own chunk; the shell stays tiny. */
+const Home = lazy(() => import("./screens/Home").then((m) => ({ default: m.Home })));
+const Work = lazy(() => import("./screens/Work").then((m) => ({ default: m.Work })));
+const Workspace = lazy(() => import("./screens/Workspace").then((m) => ({ default: m.Workspace })));
+const Library = lazy(() => import("./screens/Library").then((m) => ({ default: m.Library })));
+const Runs = lazy(() => import("./screens/Runs").then((m) => ({ default: m.Runs })));
+const Teams = lazy(() => import("./screens/Teams").then((m) => ({ default: m.Teams })));
+const Trust = lazy(() => import("./screens/Trust").then((m) => ({ default: m.Trust })));
+const Settings = lazy(() => import("./screens/Settings").then((m) => ({ default: m.Settings })));
+const Voice = lazy(() => import("./screens/Voice").then((m) => ({ default: m.Voice })));
+const Projects = lazy(() => import("./screens/Projects").then((m) => ({ default: m.Projects })));
 import { VoiceProvider, useVoice } from "./voice/session";
 import { DockedVoice } from "./voice/DockedVoice";
 import { ToastBus, pushToast } from "./components/ToastBus";
@@ -47,6 +51,8 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
       onVoiceOpen={() => go("voice")}
       onPalette={() => setPalette(true)}
     >
+      <Suspense fallback={<div className="lazy-fb mono" role="status">loading…</div>}>
+      {area === "projects" && <Projects onOpenWorkspace={() => go("workspace")} />}
       {area === "home" && (
         <Home
           onOpenRun={(id) => { setRunId(id); setArea("runs"); }}
@@ -69,6 +75,7 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
       {area === "settings" && <Settings onOnboard={onOnboard} />}
       {area === "voice" && <Voice onDock={() => go(preVoice)} />}
       {voice.state !== "idle" && area !== "voice" && <DockedVoice onExpand={() => go("voice")} />}
+      </Suspense>
       <Palette
         open={palette}
         onClose={() => setPalette(false)}

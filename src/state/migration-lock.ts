@@ -20,6 +20,9 @@ export class MigrationLockError extends Error {}
 const MIGRATION_LOCK_STALE_MS = 20_000;
 const MIGRATION_LOCK_WAIT_MS = 45_000;
 
+/** Nesting depth per dbPath for THIS process (see re-entrancy note in withMigrationLock). */
+const heldByThisProcess = new Map<string, number>();
+
 function sleepSync(ms: number): void {
   // Sync sleep: migration runs happen during store OPEN (constructor), where
   // the call sites are synchronous.
@@ -57,6 +60,20 @@ function evictIfDeadHolder(lockPath: string): boolean {
 }
 
 export function withMigrationLock<T>(dbPath: string, fn: () => T): T {
+  // Per-process re-entrancy: the constructor holds the lock around the legacy
+  // DDL block AND runMigrationsUp() (which locks again). Same-process nesting
+  // is safe by construction — our own writes already serialize on the gate —
+  // and without this the nested acquire would wait on our own lockfile until
+  // the 45 s deadline (self-deadlock).
+  const held = heldByThisProcess.get(dbPath) ?? 0;
+  if (held > 0) {
+    heldByThisProcess.set(dbPath, held + 1);
+    try {
+      return fn();
+    } finally {
+      heldByThisProcess.set(dbPath, held);
+    }
+  }
 
   const lockPath = `${dbPath}.migrate.lock`;
   const deadline = Date.now() + MIGRATION_LOCK_WAIT_MS;
@@ -90,9 +107,11 @@ export function withMigrationLock<T>(dbPath: string, fn: () => T): T {
       sleepSync(25);
     }
   }
+  heldByThisProcess.set(dbPath, 1);
   try {
     return fn();
   } finally {
+    heldByThisProcess.delete(dbPath);
     try {
       closeSync(fd);
     } catch {
