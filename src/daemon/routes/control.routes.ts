@@ -8,6 +8,8 @@ import { planningService } from "../../services/planning-service.ts";
 import { browserStatus } from "../../control/browser.ts";
 import { buildProvider } from "../../providers/factory.ts";
 import { listRemembered, forgetPlan, clearAllMemory } from "../../control/memory.ts";
+import { getTrustMode } from "../../control/trust-mode.ts";
+import { TriggerService } from "../../automation/triggers.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
 export function controlRoutes(): DaemonRoute[] {
@@ -27,6 +29,38 @@ export function controlRoutes(): DaemonRoute[] {
           capabilities: caps,
           browser: browserStatus(),
           pending: approvals.listRecords().length,
+        });
+      },
+    }),
+    route({
+      // Phase 4 · Control Cockpit consolidation: ONE engine-composed pane for
+      // control status + pending approvals + standing permissions + triggers
+      // (+ the active trust mode). The shell never composes policy itself.
+      id: "control.cockpit",
+      path: "/api/control/cockpit",
+      method: "GET",
+      handle: async ({ json, state, config }) => {
+        const kill = isDisabled();
+        const { detectCapabilitiesAsync } = await import("../../control/adapter.ts");
+        const caps = await detectCapabilitiesAsync();
+        bindApprovals(state.store);
+        const svc = new TriggerService(state.store);
+        const pending = approvals.listRecords();
+        return json({
+          mode: getTrustMode(),
+          control: {
+            enabled: !kill.disabled,
+            disabledReason: kill.reason ?? null,
+            capabilities: caps,
+            browser: browserStatus(),
+          },
+          pending,
+          permissions: listPermissions(),
+          triggers: {
+            pauseAll: Boolean(config.triggers?.pauseAll) || svc.isPausedAll(),
+            inflight: svc.inflightCount(),
+            triggers: svc.list(),
+          },
         });
       },
     }),

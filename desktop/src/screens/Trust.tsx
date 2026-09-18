@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
-  api, asList, type Approval, type AuditEntry, type BudgetState, type ControlStatus,
+  api, asList, type Approval, type CockpitState, type AuditEntry, type BudgetState, type ControlStatus,
   type ShieldStatus, type TrustClassification, type TrustStatus, type TriggersState,
 } from "../api/client";
 
-const TABS = ["Approvals", "Modes", "Audit", "Budgets", "Network", "Permissions", "Shield"] as const;
+const TABS = ["Cockpit", "Approvals", "Modes", "Audit", "Budgets", "Network", "Permissions", "Shield"] as const;
 type Tab = (typeof TABS)[number];
 
 const NAV_ICON: Record<Tab, ReactNode> = {
+  Cockpit: <path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5" />,
   Approvals: <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4" />,
   Modes: <path d="M8 8l-4 4 4 4M16 8l4 4-4 4" />,
   Audit: <path d="M8 4h8v16H8zM11 9h2M11 13h2" />,
@@ -43,11 +44,13 @@ function scopeForTool(tool?: string): string | null {
  * (SEC-07). Scoped grants ride the REAL persisted permission store.
  */
 export function Trust() {
-  const [tab, setTab] = useState<Tab>("Approvals");
+  const [tab, setTab] = useState<Tab>("Cockpit");
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [controlPend, setControlPend] = useState<Approval[]>([]);
   const [contextPend, setContextPend] = useState<Record<string, unknown>[]>([]);
   const [trust, setTrust] = useState<TrustStatus | null>(null);
+  const trustMode = String((trust as { mode?: string } | null)?.mode ?? "balanced");
+  const [cockpit, setCockpit] = useState<CockpitState | null>(null);
   const [control, setControl] = useState<ControlStatus | null>(null);
   const [ctxPolicy, setCtxPolicy] = useState<Record<string, unknown> | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
@@ -74,6 +77,7 @@ export function Trust() {
     api.budget().then(setBudget).catch(() => setBudget(null));
   }, []);
   const loadTab = useCallback((t: Tab) => {
+    if (t === "Cockpit") { api.controlCockpit().then(setCockpit).catch(() => setCockpit(null)); loadQueue(); }
     if (t === "Approvals") loadQueue();
     if (t === "Modes") {
       api.trust().then(setTrust).catch(() => setTrust(null));
@@ -187,6 +191,56 @@ export function Trust() {
       <div className="tc2-main">
         {note && <div className="appr2" style={{ marginBottom: 12 }}><div className="cmd">{note}</div><button className="chipbtn" onClick={() => setNote(null)}>dismiss</button></div>}
 
+                {tab === "Cockpit" && (
+          <>
+            <div className="section-h">
+              <h2>Control Cockpit</h2>
+              <span className={`mode-badge m-${cockpit?.mode ?? "balanced"}`}>{String(cockpit?.mode ?? "balanced").toUpperCase()}</span>
+            </div>
+            {!cockpit && <p className="faint" style={{ fontSize: 12 }}>Loading cockpit… (single GET /control/cockpit)</p>}
+            {cockpit && (
+              <div className="ck-grid">
+                <section className="tc-card">
+                  <div className="rail-h">Control status</div>
+                  <p style={{ fontSize: 12 }}>
+                    <span className={cockpit.control.enabled ? "tl-ok" : "tl-err"}>
+                      {cockpit.control.enabled ? "● enabled" : "● disabled"}
+                    </span>
+                    {cockpit.control.disabledReason ? <span className="faint"> — {cockpit.control.disabledReason}</span> : null}
+                  </p>
+                  <p className="faint" style={{ fontSize: 11 }}>
+                    trust mode: <b>{cockpit.mode}</b> — enforced by the capabilities policy gate
+                  </p>
+                </section>
+                <section className="tc-card">
+                  <div className="rail-h">Pending approvals ({cockpit.pending.length})</div>
+                  {cockpit.pending.length === 0 && <p className="faint" style={{ fontSize: 12 }}>Queue empty — nothing waiting on you.</p>}
+                  {cockpit.pending.slice(0, 4).map((r) => (
+                    <div key={r.id ?? r.tool} className="stepchip">
+                      <b>{r.tool ?? "action"}</b>
+                      <div className="faint" style={{ marginTop: 3 }}>{String(r.reason ?? r.summary ?? "").slice(0, 160)}</div>
+                    </div>
+                  ))}
+                  {cockpit.pending.length > 4 && <p className="faint" style={{ fontSize: 11 }}>+ {cockpit.pending.length - 4} more — see Approvals tab</p>}
+                </section>
+                <section className="tc-card">
+                  <div className="rail-h">Standing permissions ({cockpit.permissions.length})</div>
+                  {cockpit.permissions.length === 0 && <p className="faint" style={{ fontSize: 12 }}>No standing grants — every action asks.</p>}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {cockpit.permissions.map((sc) => <span key={sc} className="stepchip" style={{ margin: 0 }}>{sc}</span>)}
+                  </div>
+                </section>
+                <section className="tc-card">
+                  <div className="rail-h">Triggers</div>
+                  <p style={{ fontSize: 12 }}>
+                    {cockpit.triggers.pauseAll ? <span className="tl-err">paused (all)</span> : <span className="tl-ok">armed</span>}
+                    {" · "}{cockpit.triggers.triggers.length} configured · {cockpit.triggers.inflight} in-flight
+                  </p>
+                </section>
+              </div>
+            )}
+          </>
+        )}
         {tab === "Approvals" && (
           <>
             <div className="section-h"><h2>Approval Sheet</h2></div>
@@ -225,17 +279,25 @@ export function Trust() {
                 { id: "balanced", t: "Balanced", d: "Approvals for risky actions only. Optimal workflow." },
                 { id: "autonomous", t: "Autonomous", d: "AI agent makes most decisions. Fast, but highest risk." },
               ].map((m) => (
-                <div key={m.id} className="mode-card" aria-disabled="true">
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`mode-card${trustMode === m.id ? " on" : ""}`}
+                  aria-pressed={trustMode === m.id}
+                  onClick={() => api.trustModeSet(m.id).then(() => { setNote(`trust mode → ${m.id}`); loadTab("Modes"); }).catch((e) => setNote(`trust mode: ${e}`))}
+                >
                   <b>{m.t}</b>
-                  <span className="mode-radio" aria-hidden="true" />
+                  <span className={`mode-radio${trustMode === m.id ? " on" : ""}`} aria-hidden="true" />
                   <p>{m.d}</p>
-                </div>
+                </button>
               ))}
             </div>
             <p className="faint" style={{ fontSize: 11 }}>
-              Mode switching is NOT implemented engine-side yet — the effective posture is per-action approvals
-              (the default). These presets are displayed, never faked as active; the switch ships with the
-              control-cockpit consolidation.
+              The mode is persisted engine-side (~/.xr/trust-mode.json) and enforced at the capabilities policy
+              gate on every decision: <b>careful</b> widens approvals to dangerous-declared permissions and
+              mid-or-higher risk tiers; <b>balanced</b> keeps tool-declared approvals; <b>autonomous</b> relaxes
+              everything except the hard gate — high/critical risk tiers and dangerous permissions are never
+              auto-approved. Mode changes are written to the audit log.
             </p>
             <div className="tc-grid" style={{ marginTop: 14 }}>
               <section className="tc-card">

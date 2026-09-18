@@ -107,10 +107,13 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 141_000; // Phase 4 · 140,500 → 141,000 (2026-09-18):
-// team-run control plane (agents-view.ts composer + create/control/view/SSE
-// routes + pauseWorkflow + test/agents/), measured 140,503. See rationale
-// block above; 110k stays the direction of travel.
+export const TREE_CEILING = 142_500; // Phase 4 · 141,000 → 142,500 (2026-09-18):
+// BLUEPRINT-STATUS backlog batch: steer/review routes + reviewTask,
+// trust-mode module + policy-gate wiring, control-cockpit route,
+// agents/templates gallery route, voice semantic endpointing
+// (endpointing.ts + session/v2 integration), generated-client growth.
+// Measured 140,980. See rationale block above; 110k stays the direction
+// of travel.
 
 interface Waiver {
   readonly path: string;

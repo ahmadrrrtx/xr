@@ -246,6 +246,45 @@ export class MultiAgentService implements LifecycleHook {
     return record;
   }
 
+  /**
+   * Phase 4 · team-run approve/steer plane — human review decision for a task
+   * parked in `awaiting_review` (ledger: awaiting_approval). Approve completes
+   * the task and unblocks dependents through dependencyApproved(); reject
+   * blocks it with a visible reason. Audited + event-emitted like every other
+   * transition; the shell only forwards the decision (SEC-07).
+   */
+  reviewTask(workflowId: string, taskId: string, approved: boolean, comment?: string): WorkflowRecord {
+    const record = this.requireWorkflow(workflowId);
+    const task = record.tasks.find((t) => t.taskId === taskId);
+    if (!task) throw new Error(`unknown task ${taskId}`);
+    if (task.status !== "awaiting_review" && !(task.status === "completed" && task.reviewState === "pending")) {
+      throw new Error(`task ${taskId} is '${task.status}/${task.reviewState}', nothing to review`);
+    }
+    task.reviewState = approved ? "approved" : "changes_requested";
+    if (approved) {
+      task.status = "completed";
+      task.endedAt = task.endedAt ?? Date.now();
+      task.blockedReason = undefined;
+    } else {
+      task.status = "blocked";
+      task.blockedReason = (comment ?? "review changes requested").slice(0, 300);
+    }
+    task.updatedAt = Date.now();
+    record.updatedAt = task.updatedAt;
+    this.refreshReadyTasks(record);
+    this.recomputeWorkflowStatus(record);
+    this.persist(record, approved ? "review.approved" : "review.changes_requested", {
+      workflowId,
+      taskId,
+      channel: "desktop",
+      comment: comment ?? null,
+    });
+    this.emitTaskEvent(approved ? CoreEvents.AgentTaskCompleted : CoreEvents.AgentTaskBlocked, task, record, {
+      review: approved ? "approved" : "changes_requested",
+    });
+    return record;
+  }
+
   async delegateTask(workflowId: string, agentId: string, instruction: string): Promise<WorkflowRecord> {
     if (!hasAgent(agentId)) {
       throw new Error(`Unknown agent: ${agentId}`);

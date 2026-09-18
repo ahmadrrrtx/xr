@@ -46,7 +46,7 @@ describe("voice session transport", () => {
     session.start();
     expect(session.state).toBe("listening");
     for (let i = 0; i < 6; i++) session.feedAudio(sineChunk(300, 100)); // 600 ms speech
-    for (let i = 0; i < 10; i++) session.feedAudio(silence(100)); // 1 s silence tail
+    for (let i = 0; i < 15; i++) session.feedAudio(silence(100)); // 1.5 s tail (covers the semantic probe grace)
     await new Promise((r) => setTimeout(r, 400));
     expect(states).toContain("thinking");
     expect(session.state).toBe("listening");

@@ -3,6 +3,7 @@
 import { WorkflowRepo } from "../../state/repos/workflow-repo.ts";
 import { route, sseResponse, type DaemonRoute, type DaemonState } from "./router.ts";
 import { composeTeamView } from "./agents-view.ts";
+import { planningService } from "../../services/planning-service.ts";
 import { Tokens } from "../../core/tokens.ts";
 import type { MultiAgentService } from "../../services/multi-agent-service.ts";
 import { CoreEvents } from "../../core/event-bus.ts";
@@ -95,6 +96,15 @@ export function agentsRoutes(): DaemonRoute[] {
       },
     }),
     route({
+      // Phase 4 · Skill template gallery: the deterministic planner templates,
+      // composed engine-side per WorkflowKind (roles/steps come from a real
+      // compileWorkflowPlan probe — never a hand-written display list).
+      id: "agents.templates",
+      path: "/api/agents/templates",
+      method: "GET",
+      handle: ({ json }) => json({ templates: planningService.templates() }),
+    }),
+    route({
       id: "agents.workflow.create",
       path: "/api/agents/workflows",
       method: "POST",
@@ -158,6 +168,57 @@ export function agentsRoutes(): DaemonRoute[] {
             return json({ workflow: composeTeamView(svc.stopWorkflow(id)) });
           }
           return json({ error: `unknown action '${action}'` }, 400);
+        } catch (err) {
+          return json({ error: String((err as Error)?.message ?? err) }, 409);
+        }
+      },
+    }),
+    route({
+      // Phase 4 · steer: inject a delegated instruction into a live run through
+      // the canonical delegateTask path (audited handoff), never a shell hack.
+      id: "agents.workflow.steer",
+      prefix: "/api/agents/workflows/",
+      method: "POST",
+      handle: async ({ json, req, path, state }) => {
+        if (!path.endsWith("/steer")) return json({ error: "Not found" }, 404);
+        const id = path.slice("/api/agents/workflows/".length, -"/steer".length);
+        const svc = await multiAgent(state);
+        if (!svc) return json({ error: "kernel unavailable" }, 503);
+        const body = (await req.json().catch(() => null)) as { instruction?: unknown; taskId?: unknown } | null;
+        const instruction = String(body?.instruction ?? "").trim();
+        if (!instruction) return json({ error: "instruction is required" }, 400);
+        const record = svc.getWorkflow(id);
+        if (!record) return json({ error: "Workflow not found" }, 404);
+        const view = composeTeamView(record);
+        if (!view.affordances.steer) return json({ error: `cannot steer a '${record.status}' workflow` }, 409);
+        const taskId = typeof body?.taskId === "string" ? body.taskId : null;
+        const target = taskId ? record.tasks.find((t) => t.taskId === taskId) : null;
+        if (taskId && !target) return json({ error: `unknown task ${taskId}` }, 404);
+        const agentId = target?.agentId ?? record.currentAgentId ?? record.tasks.find((t) => t.status === "running")?.agentId ?? "supervisor";
+        try {
+          const updated = await svc.delegateTask(id, agentId, instruction);
+          return json({ workflow: composeTeamView(updated) });
+        } catch (err) {
+          return json({ error: String((err as Error)?.message ?? err) }, 409);
+        }
+      },
+    }),
+    route({
+      // Phase 4 · approve: human review decision for awaiting_review tasks.
+      id: "agents.workflow.review",
+      prefix: "/api/agents/workflows/",
+      method: "POST",
+      handle: async ({ json, req, path, state }) => {
+        if (!path.endsWith("/review")) return json({ error: "Not found" }, 404);
+        const id = path.slice("/api/agents/workflows/".length, -"/review".length);
+        const svc = await multiAgent(state);
+        if (!svc) return json({ error: "kernel unavailable" }, 503);
+        const body = (await req.json().catch(() => null)) as { taskId?: unknown; approved?: unknown; comment?: unknown } | null;
+        const taskId = String(body?.taskId ?? "");
+        if (typeof body?.approved !== "boolean") return json({ error: "approved must be a boolean" }, 400);
+        try {
+          const updated = svc.reviewTask(id, taskId, body.approved, typeof body?.comment === "string" ? body.comment : undefined);
+          return json({ workflow: composeTeamView(updated) });
         } catch (err) {
           return json({ error: String((err as Error)?.message ?? err) }, 409);
         }

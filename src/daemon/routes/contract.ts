@@ -229,6 +229,16 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     tag: "agents",
     stability: "experimental",
   },
+  "agents.workflow.steer": {
+    summary: "Steer a live run: delegate an instruction to a worker (audited handoff).",
+    tag: "agents",
+    stability: "experimental",
+  },
+  "agents.workflow.review": {
+    summary: "Human review decision for an awaiting_review task (approve completes, reject blocks).",
+    tag: "agents",
+    stability: "experimental",
+  },
   "agents.events": {
     summary: "SSE downlink for task lifecycle events (started/ready/blocked/completed/failed/note).",
     tag: "agents",
@@ -255,6 +265,8 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   "mcp.unpin": { summary: "SEC-01 drop a server's pin (legacy per-call approvals resume).", tag: "extensions", stability: "experimental" },
 
   // ── voice (Phase 4 offline pipeline surface) ──────────────────────────────
+  "agents.templates": { summary: "Deterministic planner templates per workflow kind (gallery source).", tag: "agents", stability: "experimental" },
+  "trust.mode": { summary: "Set the trust mode (careful|balanced|autonomous); the policy gate enforces it.", tag: "trust", stability: "experimental" },
   "voice.status": { summary: "Voice session state + offline STT/TTS backend probes.", tag: "voice", stability: "experimental" },
   "voice.session": { summary: "Start/stop the live voice session (mic uplink armed).", tag: "voice", stability: "experimental" },
   "voice.audio": { summary: "Upload pcm16-le 16 kHz mic chunks; engine endpointing + VAD.", tag: "voice", stability: "experimental" },
@@ -413,6 +425,7 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   },
 
   // ── control (computer-use) ────────────────────────────────────────────────
+  "control.cockpit": { summary: "Single composed pane: control status + pending + permissions + triggers + mode.", tag: "control", stability: "experimental" },
   "control.status": { summary: "Computer-control subsystem status.", tag: "control", stability: "experimental" },
   "control.events": { summary: "Recent control events (?limit=, ≤200).", tag: "control", stability: "experimental" },
   "control.pending": { summary: "Pending control authorizations (approval queue).", tag: "control", stability: "stable" },
