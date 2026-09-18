@@ -36,6 +36,7 @@ import {
   openDatabase,
 } from "./write-gate.ts";
 import { runMigrationsUp } from "./migrations.ts";
+import { withMigrationLock } from "./migration-lock.ts";
 import {
   checkpointMessage,
   generateAuditIdentity,
@@ -254,8 +255,17 @@ export class WorkspaceStore {
     // serialized + transactional by construction (T3).
     this.db = gateConnection(shared.db, shared.gate);
     WorkspaceStore._lastOpened = this;
-    this.migrate();
-    runMigrationsUp(this);
+    // Phase 2 hardening (CI regression 2026-09-18: 16-process fresh-DB stress
+    // lost one write): the legacy DDL block ran OUTSIDE the cross-process
+    // migration lock, so two fresh openers could execute schema DDL
+    // concurrently and a writer hit SQLITE_LOCKED — a message the busy-retry
+    // did not cover — and threw instantly. Serialize ALL schema work under the
+    // one lock (re-entrant per process, so the nested runMigrationsUp lock is
+    // a no-op), and widen the retry classifier in write-gate.ts.
+    withMigrationLock(this.dbPath, () => {
+      this.migrate();
+      runMigrationsUp(this);
+    });
     // Phase 2 · F-12 — startup recovery: uncommitted reservations older than
     // the TTL are released before anything can consume the caps again. A
     // crashed process can therefore never leave permanent headroom consumed.

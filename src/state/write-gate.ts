@@ -74,8 +74,19 @@ function syncSleep(ms: number): void {
 }
 
 function isBusy(e: unknown): boolean {
+  // SQLITE_LOCKED ("database table is locked") is the sibling contention
+  // signal: it surfaces when a writer races schema DDL (e.g. two fresh openers
+  // running migrations concurrently before the 2026-09-18 lock fix). It is
+  // equally transient and equally safe to ROLLBACK + replay, so classify it as
+  // retryable; constraint/logic errors still throw immediately.
   const m = String((e as Error)?.message ?? e);
-  return m.includes("database is locked") || m.includes("SQLITE_BUSY") || m.includes("busy");
+  return (
+    m.includes("database is locked") ||
+    m.includes("SQLITE_BUSY") ||
+    m.includes("SQLITE_LOCKED") ||
+    m.includes("table is locked") ||
+    m.includes("busy")
+  );
 }
 
 function killSelf(point: string): never {

@@ -73,3 +73,7 @@ in the workstation; summary mirrored here). Every line below is engine-backed.
 | Run changed-files review | **SHIPPED** | Runs → Files tab derives touched paths from the run's OWN tool-call records; per-path live engine `git diff`; honest fallback when no data |
 | Code splitting | **SHIPPED** | route-level `React.lazy`; main chunk 1.02 MB → 263.6 kB; CodeMirror isolated in Workspace chunk |
 | Gates | green | desktop tsc, vite build, root tsc, api:schema/client/compat (153 ops), boundaries (609 modules), ownership, claim-lint |
+
+### CI follow-up (same push cycle, 2026-09-19)
+- **reliability-spawn root cause:** the legacy DDL block ran outside the cross-process migration lock; concurrent fresh openers surfaced `SQLITE_LOCKED`, which the busy-retry classifier did not cover → one lost write at 16-process stress. Fix: legacy `migrate()` now serialized under `withMigrationLock` (per-process re-entrant), and `isBusy()` classifies `SQLITE_LOCKED`/`table is locked` as retryable. 5/5 under CPU starvation locally; reliability 66/66.
+- **size-gate waivers:** regenerated client (809→829, four git ops) and workspace-store (+10) re-waived with owner/reason/review per the register's contract.
