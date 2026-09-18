@@ -6,6 +6,7 @@ import { Work } from "./screens/Work";
 import { Workspace } from "./screens/Workspace";
 import { Library } from "./screens/Library";
 import { Runs } from "./screens/Runs";
+import { Trust } from "./screens/Trust";
 import { api, EngineDown } from "./api/client";
 import { XrLogo } from "./components/Brand";
 import "./styles/tokens.css";
@@ -80,7 +81,7 @@ function App() {
           onQueryConsumed={() => setLibQuery(null)}
         />
       )}
-      {area === "trust" && <Stub title="Trust Center — approvals, modes, audit, budgets, network, shield" phase="Phase 4" />}
+      {area === "trust" && <Trust />}
       {area === "settings" && <Stub title="Settings — general, models, local, automations, voice, privacy, advanced" phase="Phase 2–4" />}
     </AppShell>
   );

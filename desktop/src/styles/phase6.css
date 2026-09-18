@@ -388,3 +388,9 @@
 .gpop-h { padding: 7px 12px 4px; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--xr-text-faint); }
 .gpop-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; color: var(--xr-text); padding: 8px 12px; font-size: 12.5px; cursor: pointer; }
 .gpop-item:hover { background: var(--xr-surface-2); }
+
+/* Phase 4 · Trust Center cards */
+.tc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; align-items: start; }
+.tc-card { background: var(--xr-surface-1); border: 1px solid var(--xr-border); border-radius: var(--xr-radius-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.tc-card .rail-h { margin-bottom: 2px; }
+.tc-card .appr2 { width: 100%; }

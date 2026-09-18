@@ -205,6 +205,37 @@ export interface WorkflowDetail {
   finalOutput?: { summary?: string }; errors?: string[];
   [k: string]: unknown;
 }
+/**
+ * Phase 4 · Trust Center contracts — mirror the daemon's trust/budget/audit/
+ * shield/control/triggers routes. The shell renders these and forwards
+ * decisions; it never computes risk, policy or budget itself (SEC-07).
+ */
+export interface TrustBackend { id?: string; placement?: string; available?: boolean; describe?: string; }
+export interface TrustStatus { enabled?: boolean; ready?: boolean; reason?: string; backends?: TrustBackend[]; [k: string]: unknown; }
+export interface TrustClassification {
+  classification?: {
+    tier?: string; reasons?: string[]; requiredApprovalLevel?: string; requiredCredentialMode?: string;
+    network?: unknown; resources?: unknown;
+  };
+  decision?: unknown;
+  error?: string;
+}
+export interface BudgetState {
+  config?: { perTaskUsd?: number; perTaskTokens?: number };
+  persisted?: { monthly_cap?: number; daily_cap?: number | null; warnings_enabled?: boolean; auto_fallback?: boolean };
+  usage?: { totalUsd?: number; totalTokens?: number; dayUsd?: number; monthUsd?: number };
+  byModel?: unknown[];
+  [k: string]: unknown;
+}
+export interface AuditEntry { id?: number; session_id?: string | null; event?: string; detail?: string; hash?: string; created_at?: number; }
+export interface ShieldStatus {
+  state?: { quarantined?: unknown[]; whitelisted?: unknown[]; history?: { timestamp?: number; type?: string; threatsCount?: number; scanMode?: string }[]; adBlockEnabled?: boolean; telemetryDisabled?: boolean };
+  score?: { score?: number; checks?: { name?: string; ok?: boolean; detail?: string }[] };
+  [k: string]: unknown;
+}
+export interface ControlStatus { enabled?: boolean; disabledReason?: string | null; capabilities?: Record<string, unknown>; [k: string]: unknown; }
+export interface TriggersState { pauseAll?: boolean; inflight?: number; triggers?: unknown[]; [k: string]: unknown; }
+
 export interface FileEntry { name: string; rel: string; type: "file" | "dir"; size: number; git?: string | null; isText?: boolean; }
 export interface FilesRoot { entries?: FileEntry[]; branch?: string | null; dirty?: boolean; [k: string]: unknown; }
 export interface MemoryEntry { id: string; text?: string; content?: string; category?: string; scope?: string; [k: string]: unknown; }
@@ -279,6 +310,30 @@ export const api = {
   /* ---------- phase 6 · team-run board (multi-agent workflows, engine-owned) ---------- */
   agents: () => req<{ roles?: Record<string, unknown>[]; workflows?: WorkflowSummary[]; health?: Record<string, unknown> }>("/agents"),
   workflow: (id: string) => req<WorkflowDetail>(`/agents/workflows/${encodeURIComponent(id)}`),
+
+  /* ---------- phase 4 · Trust Center (engine-owned truth; shell renders + forwards) ---------- */
+  trust: () => req<TrustStatus>("/trust"),
+  trustClassify: (cmd: string) =>
+    req<TrustClassification>("/trust/classify", { method: "POST", body: JSON.stringify({ cmd }) }),
+  budget: () => req<BudgetState>("/budget"),
+  budgetSet: (patch: Record<string, unknown>) =>
+    req<Record<string, unknown>>("/budget/set", { method: "POST", body: JSON.stringify(patch) }),
+  audit: () => req<{ entries?: AuditEntry[] }>("/audit"),
+  securityBench: () => req<Record<string, unknown>>("/security"),
+  shieldStatus: () => req<ShieldStatus>("/shield/status"),
+  shieldScan: () => req<Record<string, unknown>>("/shield/scan", { method: "POST", body: JSON.stringify({}) }),
+  controlStatus: () => req<ControlStatus>("/control/status"),
+  controlPending: () => req<{ pending?: Approval[] }>("/control/pending"),
+  controlApprove: (id: string, approved: boolean) =>
+    req<{ ok?: boolean }>("/control/approve", { method: "POST", body: JSON.stringify({ id, approved }) }),
+  controlPermissions: () => req<Record<string, unknown>>("/control/permissions"),
+  triggers: () => req<TriggersState>("/triggers"),
+  triggersPause: (pauseAll: boolean) =>
+    req<{ ok?: boolean; pauseAll?: boolean }>("/triggers/pause", { method: "POST", body: JSON.stringify({ pauseAll, actor: "desktop" }) }),
+  environmentPolicy: () => req<Record<string, unknown>>("/environment/policy"),
+  contextPolicy: () => req<Record<string, unknown>>("/context/policy"),
+  contextPending: () => req<Record<string, unknown>>("/context/pending"),
+  contextRevoke: (id: string) => req<Record<string, unknown>>(`/context/revoke/${encodeURIComponent(id)}`, { method: "POST" }),
 };
 
 export function asList<T>(v: T[] | { [k: string]: unknown } | undefined, ...keys: string[]): T[] {
