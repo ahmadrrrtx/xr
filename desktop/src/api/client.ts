@@ -342,6 +342,18 @@ export const api = {
   config: () => req<Record<string, unknown>>("/config"),
   metrics: () => req<Record<string, unknown>>("/metrics"),
   shieldPrivacy: () => req<ShieldStatus>("/shield/privacy"),
+  mcpPins: () => req<{ servers: Record<string, { pinnedAt?: number; by?: string; tools?: Record<string, unknown> }> }>("/mcp/pins"),
+  mcpPin: (serverId: string, actor?: string) =>
+    req<Record<string, unknown>>("/mcp/pin", { method: "POST", body: JSON.stringify({ serverId, actor }) }),
+  mcpUnpin: (serverId: string) =>
+    req<Record<string, unknown>>("/mcp/unpin", { method: "POST", body: JSON.stringify({ serverId }) }),
+  mcpPinDiff: (serverId: string) =>
+    req<{ serverId: string; drift: { status: string; changed: { tool: string; before: string; after: string }[]; added: string[]; removed: string[] } }>(
+      `/mcp/pins/diff/${encodeURIComponent(serverId)}`,
+    ),
+  skillsPins: () => req<{ pins: Record<string, boolean> }>("/skills/pins"),
+  skillsPin: (id: string, pinned: boolean) =>
+    req<Record<string, unknown>>("/skills/pin", { method: "POST", body: JSON.stringify({ id, pinned }) }),
   environmentCapabilities: () => req<Record<string, unknown>>("/environment/capabilities"),
   environmentStatus: () => req<Record<string, unknown>>("/environment/status"),
 };

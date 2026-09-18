@@ -85,8 +85,18 @@ export const THRESHOLD = 800;
  * boundary the routes exist to enforce. No waived giant grew (files.routes.ts
  * 215 → 285, both far under threshold). Measured 139,162. Smallest round
  * number that fits; 110k stays the direction of travel.
+ *
+ * ── Phase 4 · 139,500 → 140,000 (MCP pinning / SEC-01) ─────────────────────
+ * Phase 4 adds the rug-pull defense the 2026 MCP supply-chain guidance
+ * demands: src/mcp/pins.ts (pin store + pure gate), the drift re-approval
+ * branch in the tool wrapper, four governed routes, and the skills-pin
+ * surface (SEC-02). This is consent-plane code: it composes the existing
+ * approval store and audit chain and cannot live in a satellite without
+ * splitting the MCP authority boundary it extends. No waived giant grew
+ * (mcp/client.ts +30, manager.ts +6). Measured 139,574. Smallest round
+ * number that fits; 110k stays the direction of travel.
  */
-export const TREE_CEILING = 139_500;
+export const TREE_CEILING = 140_000;
 
 interface Waiver {
   readonly path: string;

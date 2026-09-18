@@ -27,6 +27,7 @@ import {
 import { secretBrokerSync } from "../security/secret-broker.ts";
 import { bindGrant } from "../capabilities/grant.ts";
 import { McpAllowlist, type IsolationGrant } from "./allowlist.ts";
+import { evaluatePinGate, McpPinStore } from "./pins.ts";
 
 // ── Environment Allow-list ───────────────────────────────────────────────────
 
@@ -640,6 +641,29 @@ export function wrapMcpTool(client: McpClient, serverId: string, def: McpToolDef
       if (!bound.ok) {
         ctx.audit(`grant.${bound.code}`, { server: serverId, tool: def.name, reason: bound.reason });
         return { ok: false, output: `blocked: grant ${bound.code}: ${bound.reason}` };
+      }
+      // SEC-01 rug-pull gate: a PINNED server whose tool contract changed
+      // (description poisoning, widened schema, new tool) must not silently
+      // proceed — the drift itself is what demands a fresh, informed
+      // approval, and granting it re-pins the new contract.
+      const pinGate = evaluatePinGate(new McpPinStore(), serverId, def);
+      if (pinGate.action === "reapprove" && pinGate.drift) {
+        const d = pinGate.drift;
+        const summary = [
+          ...d.changed.map((c) => `CHANGED ${c.tool}: "${c.before.slice(0, 90)}" → "${c.after.slice(0, 90)}"`),
+          ...d.added.map((a) => `ADDED ${a}`),
+        ].join(" ; ").slice(0, 400);
+        const reapproved = await ctx.approve({
+          tool: fullName,
+          reason: `MCP contract DRIFT on "${serverId}" since pin (possible rug-pull). Approving re-pins the new contract.`,
+          preview: summary,
+        });
+        if (!reapproved) {
+          ctx.audit("mcp.pin.drift.denied", { server: serverId, tool: def.name });
+          return { ok: false, output: "blocked: pinned MCP contract changed and re-approval was denied" };
+        }
+        new McpPinStore().repinTool(serverId, def, `approval:${Date.now()}`);
+        ctx.audit("mcp.pin.repin", { server: serverId, tool: def.name });
       }
       const approved = await ctx.approve({
         tool: fullName,

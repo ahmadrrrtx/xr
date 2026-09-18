@@ -50,6 +50,17 @@ export async function handleSkillsApi(req: Request, url: URL, path: string): Pro
     return json({ health: service.runtimeHealth(), skills: rows.map(publicRecord) });
   }
 
+  if (path === "/api/skills/pins" && req.method === "GET") {
+    return json({ pins: service.pinStates() });
+  }
+
+  if (path === "/api/skills/pin" && req.method === "POST") {
+    const body = (await req.json().catch(() => ({}))) as { id?: string; pinned?: boolean };
+    if (!body.id) return json({ error: "expected { id, pinned }" }, 400);
+    const ok = service.pinSkill(body.id, Boolean(body.pinned));
+    return json({ ok, id: body.id, pinned: Boolean(body.pinned) }, ok ? 200 : 404);
+  }
+
   if (path === "/api/skills/health" && req.method === "GET") {
     return json(service.runtimeHealth());
   }

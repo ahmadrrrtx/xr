@@ -102,10 +102,13 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
   const [pluginsSummary, setPluginsSummary] = useState<Record<string, unknown> | null>(null);
   const [grants, setGrants] = useState<Record<string, string[]>>({});
 
+  const [skillPins, setSkillPins] = useState<Record<string, boolean>>({});
+  const [mcpPins, setMcpPins] = useState<Record<string, unknown>>({});
   const loadSkills = useCallback((q?: string) => {
     api.skills(q || undefined)
       .then((v) => { setSkills(v.skills ?? []); setSkillsHealth((v.health as Record<string, unknown>) ?? null); })
       .catch((e) => { setSkills([]); setNote(`skills: ${e}`); });
+    api.skillsPins().then((v) => setSkillPins(v.pins ?? {})).catch(() => setSkillPins({}));
   }, []);
 
   // Global titlebar search lands here: Skills tab · installed view · engine-side query.
@@ -129,6 +132,7 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
 
   const loadMcp = useCallback(() => {
     api.mcpServers().then((v) => setServers(v.servers ?? [])).catch((e) => { setServers([]); setNote(`mcp: ${e}`); });
+    api.mcpPins().then((v) => setMcpPins(v.servers ?? {})).catch(() => setMcpPins({}));
   }, []);
 
   const loadPlugins = useCallback(() => {
@@ -290,6 +294,19 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
         {s.verification === "official" && <span className="chip green tiny">official</span>}
         <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
           <StatusDot ok={(s.enabled ?? true) && s.health !== "broken"} warn={s.enabled === false} />
+          {!market && (
+            <span
+              className={skillPins[String(s.id)] ? "chip green tiny" : "chip tiny"}
+              title={skillPins[String(s.id)] ? "Pinned — contract locked (SEC-02). Click to unpin." : "Pin skill contract (SEC-02)"}
+              style={{ cursor: "pointer" }}
+              onClick={(e) => {
+                e.stopPropagation();
+                api.skillsPin(String(s.id), !skillPins[String(s.id)]).then(() => loadSkills(skillQ.trim())).catch((ev) => setNote(`${s.id}: ${ev}`));
+              }}
+            >
+              {skillPins[String(s.id)] ? "pinned" : "pin"}
+            </span>
+          )}
           {!market && (
             <span
               className="toggle mini"
@@ -468,6 +485,7 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
                   {" "}{s.name ?? s.id}
                   {s.enabled ? <span className="chip green">enabled</span> : <span className="chip">disabled</span>}
                   {s.trust && <span className="chip">trust: {String(s.trust)}</span>}
+                  {mcpPins[String(s.id)] ? <span className="chip green">contract pinned</span> : null}
                 </div>
                 <div className="meta mono faint">
                   {String(s.transport ?? "?")} · {s.command ? `${String(s.command)} ${(Array.isArray(s.args) ? (s.args as unknown[]).map(String) : []).join(" ")}`.trim() : String(s.url ?? "")} · {String(s.lifecycleState ?? "installed")}
@@ -485,6 +503,28 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
                   >
                     Probe health
                   </button>
+                  <button
+                    className="btn"
+                    onClick={() =>
+                      (mcpPins[String(s.id)] ? api.mcpUnpin(String(s.id)) : api.mcpPin(String(s.id), "desktop"))
+                        .then(() => loadMcp())
+                        .catch((e) => setNote(`${s.id}: ${e}`))
+                    }
+                  >
+                    {mcpPins[String(s.id)] ? "Unpin contract" : "Pin contract"}
+                  </button>
+                  {mcpPins[String(s.id)] ? (
+                    <button
+                      className="btn"
+                      onClick={() =>
+                        api.mcpPinDiff(String(s.id))
+                          .then((r) => setNote(`drift(${s.id}): ${r.drift.status}${r.drift.changed.length ? ` — changed: ${r.drift.changed.map((c) => c.tool).join(", ")}` : ""}${r.drift.added.length ? ` — added: ${r.drift.added.join(", ")}` : ""}`))
+                          .catch((e) => setNote(`diff: ${e}`))
+                      }
+                    >
+                      Check drift
+                    </button>
+                  ) : null}
                   <button
                     className="btn btn-bad"
                     onClick={() => { if (confirm(`Remove MCP server ${s.id}?`)) api.mcpRemove(s.id).then(() => loadMcp()).catch((e) => setNote(`${s.id}: ${e}`)); }}

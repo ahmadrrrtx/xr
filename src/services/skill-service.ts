@@ -15,6 +15,11 @@ export class SkillService implements LifecycleHook {
 
   // XR 2.1A unified runtime API.
   listUnified() { return this.runtime.list(); }
+  /** SEC-02 — pin/unpin an installed skill (updates survive reinstall checks). */
+  pinSkill(id: string, pinned: boolean): boolean { return this.marketplace.pin(id, pinned); }
+  pinStates(): Record<string, boolean> {
+    return Object.fromEntries(this.store.listInstallations().map((i) => [i.id, Boolean((i as { pinned?: boolean }).pinned)]));
+  }
   inspectUnified(id: string) { return this.runtime.inspect(id); }
   searchUnified(query: string, limit?: number) { return this.runtime.search(query, limit); }
   resolve(task: string, limit?: number) { return this.runtime.resolve(task, limit); }

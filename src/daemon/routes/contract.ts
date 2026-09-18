@@ -234,6 +234,10 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   "mcp.enable": { summary: "Enable a registered MCP server.", tag: "extensions", stability: "stable" },
   "mcp.disable": { summary: "Disable a registered MCP server.", tag: "extensions", stability: "stable" },
   "mcp.health": { summary: "Best-effort health probe across registered MCP servers.", tag: "extensions", stability: "experimental" },
+  "mcp.pins": { summary: "SEC-01 pin snapshot: pinned MCP tool-contract hashes per server.", tag: "extensions", stability: "experimental" },
+  "mcp.pins.diff": { summary: "SEC-01 live drift report: pinned contract vs what the server advertises now.", tag: "extensions", stability: "experimental" },
+  "mcp.pin": { summary: "SEC-01 pin a server's current tool contracts (hash snapshot).", tag: "extensions", stability: "experimental" },
+  "mcp.unpin": { summary: "SEC-01 drop a server's pin (legacy per-call approvals resume).", tag: "extensions", stability: "experimental" },
 
   // ── budget ────────────────────────────────────────────────────────────────
   "budget.get": { summary: "Budget caps, current usage, and remaining headroom.", tag: "budget", stability: "stable" },
