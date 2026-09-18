@@ -3,8 +3,7 @@
 import { WorkflowRepo } from "../../state/repos/workflow-repo.ts";
 import { route, sseResponse, type DaemonRoute, type DaemonState } from "./router.ts";
 import { composeTeamView } from "./agents-view.ts";
-import { compileWorkflowPlan } from "../../agents/planner.ts";
-import type { WorkflowKind } from "../../agents/types.ts";
+import { planningService } from "../../services/planning-service.ts";
 import { Tokens } from "../../core/tokens.ts";
 import type { MultiAgentService } from "../../services/multi-agent-service.ts";
 import { CoreEvents } from "../../core/event-bus.ts";
@@ -103,30 +102,7 @@ export function agentsRoutes(): DaemonRoute[] {
       id: "agents.templates",
       path: "/api/agents/templates",
       method: "GET",
-      handle: ({ json }) => {
-        const KINDS: WorkflowKind[] = ["general", "research", "build", "refactor", "security", "automation", "business"];
-        const SAMPLE: Record<WorkflowKind, string> = {
-          general: "Summarize this repository and propose three improvements",
-          research: "Research the current state of offline speech-to-text models",
-          build: "Implement a rate-limited retry helper with tests",
-          refactor: "Refactor the auth middleware into small pure functions",
-          security: "Audit dependencies and file permissions for vulnerabilities",
-          automation: "Open the browser and fill the weekly status form",
-          business: "Draft a proposal outline for the onboarding revamp",
-        };
-        const templates = KINDS.map((kind) => {
-          const rec = compileWorkflowPlan({ goal: `${kind} template probe`, cwd: ".", kind });
-          return {
-            kind,
-            name: kind.charAt(0).toUpperCase() + kind.slice(1),
-            summary: rec.planSummary,
-            roles: [...new Set(rec.tasks.map((t) => t.role))],
-            steps: rec.tasks.length,
-            sampleGoal: SAMPLE[kind],
-          };
-        });
-        return json({ templates });
-      },
+      handle: ({ json }) => json({ templates: planningService.templates() }),
     }),
     route({
       id: "agents.workflow.create",

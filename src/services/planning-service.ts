@@ -37,6 +37,7 @@ import type { Store } from "../state/workspace-store.ts";
 import { ActionSchema, type Plan as ControlPlan } from "../control/types.ts";
 import { planActions, type PlanSource } from "../control/planner.ts";
 import { compileWorkflowPlan, templateRoleSetFor } from "../agents/planner.ts";
+import type { WorkflowKind } from "../agents/types.ts";
 import { getAgentByRole } from "../agents/registry.ts";
 import type { WorkflowPlanRequest, WorkflowRecord, WorkflowTask, AgentRole } from "../agents/types.ts";
 import { loadConfig } from "../config/config.ts";
@@ -462,6 +463,45 @@ export class PlanningService {
     return request.kind === "workflow"
       ? this.planWorkflow(request.input)
       : await this.planControl(request.input);
+  }
+
+  /**
+   * Phase 4 · Skill template gallery source. Composes each WorkflowKind's
+   * deterministic template THROUGH the service's own planWorkflow authority
+   * (the architecture test forbids route-layer compileWorkflowPlan calls).
+   * Roles/steps/summary come from the real compiled record — never a
+   * hand-written display list.
+   */
+  templates(): Array<{
+    kind: WorkflowKind;
+    name: string;
+    summary: string;
+    roles: string[];
+    steps: number;
+    sampleGoal: string;
+  }> {
+    const KINDS: WorkflowKind[] = ["general", "research", "build", "refactor", "security", "automation", "business"];
+    const SAMPLE: Record<WorkflowKind, string> = {
+      general: "Summarize this repository and propose three improvements",
+      research: "Research the current state of offline speech-to-text models",
+      build: "Implement a rate-limited retry helper with tests",
+      refactor: "Refactor the auth middleware into small pure functions",
+      security: "Audit dependencies and file permissions for vulnerabilities",
+      automation: "Open the browser and fill the weekly status form",
+      business: "Draft a proposal outline for the onboarding revamp",
+    };
+    return KINDS.map((kind) => {
+      const result = this.planWorkflow({ goal: `${kind} template probe`, cwd: ".", kind });
+      const rec = result.plan as WorkflowRecord;
+      return {
+        kind,
+        name: kind.charAt(0).toUpperCase() + kind.slice(1),
+        summary: rec.planSummary,
+        roles: [...new Set(rec.tasks.map((t) => String(t.role)))],
+        steps: rec.tasks.length,
+        sampleGoal: SAMPLE[kind],
+      };
+    });
   }
 }
 
