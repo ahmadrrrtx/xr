@@ -25,6 +25,7 @@ import { shieldRoutes } from "./shield.routes.ts";
 import { systemRoutes } from "./system.routes.ts";
 import { onboardingRoutes } from "./onboarding.routes.ts";
 import { filesRoutes } from "./files.routes.ts";
+import { gitRoutes } from "./git.routes.ts";
 import { terminalRoutes } from "./terminal.routes.ts";
 import { trustRoutes } from "./trust.routes.ts";
 import { researchRoutes } from "./research.routes.ts";
@@ -45,6 +46,8 @@ export function listBaseRoutes(): DaemonRoute[] {
     ...voiceRoutes(),
     ...onboardingRoutes(),
     ...filesRoutes(),
+    // Phase 2 — workspace git (status/log read verbs; stage/commit approval-gated).
+    ...gitRoutes(),
     // Phase 2B · T-1 — workspace terminal (command runner, SSE). Mounted
     // right after the files routes it complements on the Workspace surface.
     ...terminalRoutes(),

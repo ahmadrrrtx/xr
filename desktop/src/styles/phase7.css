@@ -147,3 +147,45 @@
 @keyframes p7-fade { from { opacity: 0; } }
 @keyframes p7-pop { from { opacity: 0; transform: translateY(-6px) scale(.985); } }
 @keyframes p7-slide { from { opacity: 0; transform: translateX(14px); } }
+
+/* ---- phase 2 · projects ---- */
+.proj { padding: 18px 22px; }
+.proj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; max-width: 1080px; }
+.proj-card {
+  display: flex; flex-direction: column; gap: 8px; padding: 14px;
+  background: var(--xr-surface-1); border: 1px solid var(--xr-border);
+  border-radius: var(--xr-radius-md);
+}
+.proj-card.on { border-color: var(--xr-cyan); box-shadow: 0 0 0 1px var(--xr-cyan-glow); }
+.proj-card.new { border-style: dashed; }
+.proj-top { display: flex; align-items: center; gap: 8px; }
+.proj-root { font-size: 11px; word-break: break-all; }
+.proj-stats { font-size: 11px; }
+.proj-actions { display: flex; gap: 6px; }
+.ob-lab { margin-bottom: 2px; }
+
+/* ---- phase 2 · git panel ---- */
+.gitcard .ar-h { display: flex; align-items: center; gap: 8px; }
+.git-entries { display: flex; flex-direction: column; gap: 2px; max-height: 150px; overflow: auto; }
+.git-row {
+  display: flex; gap: 8px; align-items: baseline; background: none; border: 0;
+  color: var(--xr-text-muted); font-size: 11.5px; padding: 2px 4px; cursor: pointer;
+  border-radius: 4px; text-align: left;
+}
+.git-row:hover { background: var(--xr-surface-2); color: var(--xr-text); }
+.git-code { font-family: var(--xr-font-mono); font-size: 10px; width: 22px; flex: none; color: var(--xr-amber); }
+.git-code.u { color: var(--xr-cyan); }
+.git-code.d { color: var(--xr-red); }
+.git-path { word-break: break-all; }
+.git-log { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+.git-log-row { font-size: 10.5px; color: var(--xr-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.git-commit { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.git-commit input {
+  background: var(--xr-surface-2); border: 1px solid var(--xr-border); color: var(--xr-text);
+  border-radius: var(--xr-radius-sm); padding: 6px 8px; font: 400 11.5px/1 var(--xr-font-mono); outline: none;
+}
+.git-commit input:focus { border-color: var(--xr-cyan); }
+.git-commit .row-gap { display: flex; gap: 6px; }
+
+/* ---- lazy screen fallback ---- */
+.lazy-fb { padding: 40px; text-align: center; color: var(--xr-text-faint); font-size: 12px; }

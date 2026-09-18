@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { XrLogo, XrAvatar } from "./Brand";
 import { api, asList, type ProviderInfo, type SessionSummary, type SkillInfo } from "../api/client";
 
-export type Area = "home" | "work" | "workspace" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
+export type Area = "home" | "projects" | "work" | "workspace" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
 
 /* Phase 6 · mock-accurate icon rail. Left: work areas. Bottom: settings + presence. */
 const NAV: { id: Area; label: string; icon: ReactNode }[] = [
   { id: "home", label: "Home", icon: <path d="M4 10.5 12 4l8 6.5V20h-5v-6h-6v6H4z" /> },
+  { id: "projects", label: "Projects", icon: <path d="M3 6h6l2 2h10v4H3zM3 14h18v5H3z" /> },
   { id: "work", label: "Work (chat)", icon: <path d="M4 5h16v10H9l-5 4z" /> },
   { id: "workspace", label: "Workspace (files)", icon: <path d="M3 6h6l2 2h10v11H3zM10 12v4M8 14h4" /> },
   { id: "agents", label: "Multi-agent", icon: <path d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20a6 6 0 0 1 12 0M17 6a3 3 0 0 1 0 6M18 20a5.5 5.5 0 0 0-2-4M16 11h5M18.5 8.5V13.5" /> },

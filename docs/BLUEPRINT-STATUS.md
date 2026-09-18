@@ -63,3 +63,13 @@ in the workstation; summary mirrored here). Every line below is engine-backed.
 | Missing button grammar | **SHIPPED** | `.chipbtn`/`.ghostbtn` defined (were used unstyled) |
 | a11y | partial | `prefers-reduced-motion` honored for phase-7 motion; full sweep stays P3 |
 | Windows hang (KNOWN_LIMITATIONS #21) | narrowed + guarded | D4a probe isolates `approvalInsert`/`audit` synchronous writes with on-disk markers (next win32 run names write-path vs timer-setup); new timer-hygiene regression pins zero leaked pollers/timers on every OS (11/11 pass Linux). Root-cause fix lands when the win32 marker run returns — protocol unchanged |
+
+## Phase 2 (2026-09-19) — core work experience (this push)
+
+| Item | State | Evidence |
+|---|---|---|
+| Projects screen | **SHIPPED** | engine-managed workspaces over `GET /workspaces`, `POST /workspaces/create|switch`; per-workspace run activity from live sessions; shell never invents roots |
+| Git panel (Workspace) | **SHIPPED** | NEW engine routes `GET /git/status|log` (argv-only, root-scoped) + `POST /git/stage|commit` riding the SAME durable approval store as files.write (medium/high tiers, audited); traversal probe `../../etc/passwd` → 400; empty commit message → schema 400 |
+| Run changed-files review | **SHIPPED** | Runs → Files tab derives touched paths from the run's OWN tool-call records; per-path live engine `git diff`; honest fallback when no data |
+| Code splitting | **SHIPPED** | route-level `React.lazy`; main chunk 1.02 MB → 263.6 kB; CodeMirror isolated in Workspace chunk |
+| Gates | green | desktop tsc, vite build, root tsc, api:schema/client/compat (153 ops), boundaries (609 modules), ownership, claim-lint |

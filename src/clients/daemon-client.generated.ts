@@ -246,6 +246,26 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/files/write", body);
   }
 
+  /** Workspace git branch + porcelain status (argv-only git, root-scoped). */
+  async gitStatus(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/git/status");
+  }
+
+  /** Recent commits for the workspace (bounded, argv-only). */
+  async gitLog(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/git/log");
+  }
+
+  /** Stage paths with `git add` — runs only after a durable human approval (riskTier medium). */
+  async gitStage(body: z.infer<typeof S.GitStageRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/git/stage", body);
+  }
+
+  /** Commit staged work — runs only after a durable human approval (riskTier high). */
+  async gitCommit(body: z.infer<typeof S.GitCommitRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/git/commit", body);
+  }
+
   /** Run ONE shell command in the project root — deterministic policy check, durable approval, output streamed as SSE (line-based command runner, NOT a PTY). (SSE stream — returns the raw Response). */
   async terminalRun(body: z.infer<typeof S.TerminalRunRequest>): Promise<Response> {
     return await this.raw("POST", "/api/v1/terminal/run", body);

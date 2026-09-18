@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, asList, type SessionSummary, type WorkflowDetail, type WorkflowSummary, type WorkflowTaskV } from "../api/client";
 
 const TABS = ["Transcript", "Plan", "Files", "Tools", "Approvals", "Cost", "Artifacts"] as const;
@@ -358,6 +358,42 @@ function auditJson(a: SessionAudit): Record<string, unknown> | null {
 
 /** Structured run anatomy from the engine session record (steps + hash-chained audit).
  *  Tabs without engine data keep the honest raw-JSON/note fallback. */
+/** Phase 2 · changed-files review: rows come from the run's own tool calls;
+ *  the diff per path is the engine's live `git diff` (honest: current tree). */
+function FilesTab({ rows, fallback }: {
+  rows: { path: string; ok?: boolean; tool?: string; ts?: number }[];
+  fallback: () => ReactNode;
+}) {
+  const [sel, setSel] = useState<string | null>(null);
+  const [diffText, setDiffText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  function showDiff(p: string) {
+    setSel(p); setLoading(true); setDiffText(null);
+    api.fileDiff(p)
+      .then((d) => setDiffText(String((d as { diff?: string }).diff ?? "") || "(no diff — file untracked or clean now)"))
+      .catch((e) => setDiffText(`engine: ${e instanceof Error ? e.message : String(e)}`))
+      .finally(() => setLoading(false));
+  }
+
+  if (rows.length === 0) return <>{fallback()}</>;
+  return (
+    <div className="tl-box" style={{ maxHeight: 380 }}>
+      {rows.map((r) => (
+        <div key={r.path} className={`tl ${r.ok === false ? "tl-err" : "tl-ok"}`}>
+          <span className="faint">{r.ok === false ? "✗" : "✓"}</span>{" "}
+          <span className="mono">{r.path}</span>
+          <span className="faint"> · {r.tool}</span>
+          <button className="chipbtn" style={{ marginLeft: 8 }} onClick={() => showDiff(r.path)}>diff</button>
+        </div>
+      ))}
+      {sel && (
+        <pre className="raw" style={{ marginTop: 8 }}>{loading ? "asking the engine…" : `${sel}\n${diffText ?? ""}`}</pre>
+      )}
+    </div>
+  );
+}
+
 function SessionAnatomy({ detail, tab }: { detail: Record<string, unknown> | null; tab: string }) {
   const steps: SessionStep[] = Array.isArray(detail?.steps) ? (detail!.steps as SessionStep[]) : [];
   const audit: SessionAudit[] = Array.isArray(detail?.audit) ? (detail!.audit as SessionAudit[]) : [];
@@ -405,6 +441,20 @@ function SessionAnatomy({ detail, tab }: { detail: Record<string, unknown> | nul
         ))}
         <div className="tl tl-info faint">engine audit chain is the ledger of record</div>
       </div>
+    );
+  }
+  if (tab === "Files") {
+    // Phase 2 · changed files = paths the run's OWN tool calls touched
+    // (engine step records — never invented), each with a live engine diff.
+    const touched = steps.flatMap((s) =>
+      (s.parsedDetail?.toolCalls ?? [])
+        .filter((c) => /write|edit|patch|file/i.test(String(c.tool ?? "")) && typeof (c.args as { path?: unknown } | undefined)?.path === "string")
+        .map((c) => ({ path: String((c.args as { path: string }).path), ok: c.ok, tool: c.tool, ts: s.created_at })),
+    );
+    const seen = new Set<string>();
+    const rows = touched.filter((t) => (seen.has(t.path) ? false : (seen.add(t.path), true)));
+    return (
+      <FilesTab rows={rows} fallback={() => <pre className="raw">{JSON.stringify(pick(detail, "Files"), null, 2)}</pre>} />
     );
   }
   if (tab === "Approvals") {
