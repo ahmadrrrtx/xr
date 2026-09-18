@@ -466,6 +466,26 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/mcp/health");
   }
 
+  /** SEC-01 pin snapshot: pinned MCP tool-contract hashes per server. */
+  async mcpPins(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mcp/pins");
+  }
+
+  /** SEC-01 live drift report: pinned contract vs what the server advertises now. */
+  async mcpPinsDiff(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/mcp/pins/diff/");
+  }
+
+  /** SEC-01 pin a server's current tool contracts (hash snapshot). */
+  async mcpPin(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mcp/pin");
+  }
+
+  /** SEC-01 drop a server's pin (legacy per-call approvals resume). */
+  async mcpUnpin(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/mcp/unpin");
+  }
+
   /** Computer-control subsystem status. */
   async controlStatus(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/control/status");

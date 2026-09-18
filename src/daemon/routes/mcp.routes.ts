@@ -17,6 +17,7 @@
 
 import { route, type DaemonRoute } from "./router.ts";
 import { McpManager } from "../../mcp/manager.ts";
+import { McpPinStore } from "../../mcp/pins.ts";
 import type { McpServerConfigInput } from "../../mcp/types.ts";
 
 /** Build the CLI-parity registry input from a simple dashboard payload. */
@@ -155,6 +156,50 @@ export function mcpRoutes(): DaemonRoute[] {
         // endpoint (the list view never blocks on it).
         const reports = await mgr.healthCheck();
         return json({ reports });
+      },
+    }),
+    route({
+      id: "mcp.pins",
+      path: "/api/mcp/pins",
+      method: "GET",
+      handle: ({ json }) => json({ servers: new McpPinStore().load().servers }),
+    }),
+    route({
+      // SEC-01: live drift report — compares the pinned contract snapshot
+      // against what the server advertises RIGHT NOW.
+      id: "mcp.pins.diff",
+      prefix: "/api/mcp/pins/diff/",
+      method: "GET",
+      handle: async ({ json, path, state }) => {
+        const serverId = decodeURIComponent(path.slice("/api/mcp/pins/diff/".length));
+        const mgr = new McpManager(state.store);
+        const info = await mgr.inspect(serverId);
+        if (!info.ok) return json({ error: info.error ?? "inspect failed" }, 404);
+        return json({ serverId, drift: new McpPinStore().diff(serverId, info.tools) });
+      },
+    }),
+    route({
+      id: "mcp.pin",
+      path: "/api/mcp/pin",
+      method: "POST",
+      handle: async ({ req, json, state }) => {
+        const body = (await req.json().catch(() => ({}))) as { serverId?: string; actor?: string };
+        if (!body.serverId) return json({ error: "expected { serverId }" }, 400);
+        const mgr = new McpManager(state.store);
+        const info = await mgr.inspect(body.serverId);
+        if (!info.ok) return json({ error: info.error ?? "inspect failed" }, 404);
+        const entry = new McpPinStore().pin(body.serverId, info.tools, body.actor ?? "operator");
+        return json({ ok: true, serverId: body.serverId, pinnedTools: Object.keys(entry.tools).length, pinnedAt: entry.pinnedAt });
+      },
+    }),
+    route({
+      id: "mcp.unpin",
+      path: "/api/mcp/unpin",
+      method: "POST",
+      handle: async ({ req, json }) => {
+        const body = (await req.json().catch(() => ({}))) as { serverId?: string };
+        if (!body.serverId) return json({ error: "expected { serverId }" }, 400);
+        return json({ ok: new McpPinStore().unpin(body.serverId) });
       },
     }),
   ];

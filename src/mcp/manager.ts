@@ -206,7 +206,16 @@ export class McpManager {
       };
 
       this.registry.setHealth(id, "healthy", `${tools.length} tools`);
-      this.registry.patch(id, { tools, resources, prompts, declaredCapabilities: caps });
+      // caps is the wire capabilities OBJECT ({tools:{},...}); the registry
+      // schema stores boolean capability flags. Writing the object verbatim
+      // made every subsequent registry load drop the entry as invalid —
+      // inspected servers silently vanished from governance. Map to booleans.
+      this.registry.patch(id, {
+        tools,
+        resources,
+        prompts,
+        declaredCapabilities: { tools: Boolean(caps?.tools), resources: Boolean(caps?.resources), prompts: Boolean(caps?.prompts) },
+      });
 
       return {
         ok: true,
