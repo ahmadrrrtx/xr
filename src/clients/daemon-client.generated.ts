@@ -266,6 +266,21 @@ export class XRDaemonClient {
     return await this.call("GET", `/api/v1/agents/workflows/${encodeURIComponent(workflow)}`);
   }
 
+  /** Plan (dryRun) or plan+run a team workflow; execution is detached, record is authoritative. */
+  async agentsWorkflowCreate(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/agents/workflows");
+  }
+
+  /** Team-run control verbs: pause (drains current wave), resume, cancel — engine-guarded. */
+  async agentsWorkflowControl(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/agents/workflows/");
+  }
+
+  /** SSE downlink for task lifecycle events (started/ready/blocked/completed/failed/note). */
+  async agentsEvents(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/agents/events");
+  }
+
   /** Budget caps, current usage, and remaining headroom. */
   async budgetGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/budget");

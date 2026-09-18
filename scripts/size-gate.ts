@@ -107,7 +107,10 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 140_500;
+export const TREE_CEILING = 141_000; // Phase 4 · 140,500 → 141,000 (2026-09-18):
+// team-run control plane (agents-view.ts composer + create/control/view/SSE
+// routes + pauseWorkflow + test/agents/), measured 140,503. See rationale
+// block above; 110k stays the direction of travel.
 
 interface Waiver {
   readonly path: string;

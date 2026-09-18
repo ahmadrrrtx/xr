@@ -59,6 +59,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/a11y/` | @ahmadrrrtx | explicit entry |
 | `test/agent-cancel.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/agent.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/agents/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/api/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/architecture/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/automation/` | @ahmadrrrtx | default (@ahmadrrrtx) |

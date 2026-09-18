@@ -6,6 +6,7 @@ import { Work } from "./screens/Work";
 import { Workspace } from "./screens/Workspace";
 import { Library } from "./screens/Library";
 import { Runs } from "./screens/Runs";
+import { Teams } from "./screens/Teams";
 import { Trust } from "./screens/Trust";
 import { Settings } from "./screens/Settings";
 import { Voice } from "./screens/Voice";
@@ -49,7 +50,8 @@ function AppInner({ engine }: { engine: string | null }) {
       )}
       {area === "work" && <Work seed={workSeed} onConsumed={() => setWorkSeed(null)} />}
       {area === "workspace" && <Workspace onAskXr={(p) => { setWorkSeed(p); setArea("work"); }} />}
-      {(area === "agents" || area === "runs") && <Runs openId={runId} onOpen={setRunId} />}
+      {area === "agents" && <Teams />}
+      {area === "runs" && <Runs openId={runId} onOpen={setRunId} />}
       {area === "library" && (
         <Library
           onRun={(p) => { setWorkSeed(p); setArea("work"); }}
