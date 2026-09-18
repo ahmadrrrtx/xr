@@ -100,6 +100,40 @@ if (IS_WIN32_PROBE) {
     expect(true).toBe(true);
   });
 
+  test("D4a: raw durable writes (approvalInsert + audit) with markers", async () => {
+    // Phase 1 (2026-09-19): D4 proved the wedge lives between `constructed`
+    // and `requested`, i.e. inside request() — whose only synchronous work is
+    // approvalInsert + audit (timers/pollers come after and are unref'd).
+    // D4a replays exactly those two writes with their own markers so the next
+    // win32 run distinguishes "the SQLite write path wedges" (d4a-start but no
+    // d4a-post-insert) from "timer/poller setup wedges" (d4a done, d4 dies).
+    dbgMarker("d4a", "start");
+    const t = mkdtempSync(join(tmpdir(), "xr-d4a-"));
+    dbgMarker("d4a", "tmpdir");
+    const store = new Store(join(t, "d.db"));
+    dbgMarker("d4a", "store-open");
+    store.approvalInsert({
+      id: "ap_diagd4a",
+      taskId: null,
+      runId: null,
+      sessionId: null,
+      tool: "shell",
+      argsHash: "sha256:none",
+      reason: "diag d4a",
+      previewJson: "null",
+      riskTier: "unknown",
+      surface: "cli",
+      requestedAt: Date.now(),
+      ttlMs: 100,
+    });
+    dbgMarker("d4a", "post-insert");
+    store.audit("approval.requested", { approvalId: "ap_diagd4a", diag: "d4a" });
+    dbgMarker("d4a", "post-audit");
+    store.close();
+    dbgMarker("d4a", "end");
+    expect(true).toBe(true);
+  });
+
   test("D4: full in-process request → TTL → outcome → dispose", async () => {
     // 2026-09-18: finer-grained markers — runs 35370921092/35369450664 showed
     // d4-start written but never d4-requested, so the hang lives between module
@@ -160,6 +194,28 @@ if (IS_WIN32_PROBE) {
       expect(events).toContain("approval.requested");
       expect(events).toContain("approval.timed_out");
       approvals.dispose(); // zero live timers at test end (see header note)
+      store.close();
+    });
+
+    test("timer hygiene: settle + dispose leave zero live pollers/timers (win32 hang guard)", async () => {
+      // Phase 1 regression: the win32 hang lives inside request()'s synchronous
+      // write/timer setup (D4 probes). This pins the cleanup contract on every
+      // OS: every settled request must drop its poller + TTL timer, and dispose
+      // must drain the rest — a leaked interval is exactly the class of defect
+      // that wedges a test process at exit.
+      const { ApprovalStore } = await loadApprovalStore();
+      const store = new Store(join(tmp, "h.db"));
+      const approvals = new ApprovalStore(store, { defaultTtlMs: 120 });
+      const internals = approvals as unknown as { pollers: Map<string, unknown>; timers: Map<string, unknown> };
+      const h1 = approvals.request({ tool: "shell", reason: "hygiene", surface: "cli", ttlMs: 120 });
+      const h2 = approvals.request({ tool: "shell", reason: "hygiene2", surface: "cli", ttlMs: 120 });
+      expect(internals.pollers.size).toBe(2);
+      expect(internals.timers.size).toBe(2);
+      await h1.outcome;
+      await h2.outcome;
+      expect(internals.pollers.size).toBe(0);
+      expect(internals.timers.size).toBe(0);
+      approvals.dispose();
       store.close();
     });
 

@@ -91,7 +91,14 @@ export async function chatStream(
   } catch {
     throw new EngineDown("engine unreachable");
   }
-  if (!res.ok || !res.body) throw new Error(`${res.status} chat`);
+  if (!res.ok || !res.body) {
+    // HTTP-level rejection (e.g. 503 provider offline): the engine answers with
+    // a JSON {"error": …} body carrying the honest reason — surface it verbatim
+    // instead of a bare status code (Phase 1 · BUG-1).
+    let msg = `${res.status} chat`;
+    try { const j = (await res.json()) as { error?: string }; if (j.error) msg = j.error; } catch { /* non-JSON */ }
+    throw new Error(msg);
+  }
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
@@ -432,7 +439,19 @@ export const api = {
   /* ---------- phase 4 · Settings surfaces ---------- */
   workspaces: () => req<{ active?: string; workspaces?: { id?: string; name?: string; rootDir?: string }[] }>("/workspaces"),
   workspacesSwitch: (id: string) => req<Record<string, unknown>>("/workspaces/switch", { method: "POST", body: JSON.stringify({ id }) }),
-  onboardingStatus: () => req<Record<string, unknown>>("/onboarding/status"),
+  onboardingStatus: () =>
+    req<{
+      needsSetup?: boolean; reasons?: string[]; internet?: unknown;
+      cloud?: { configured?: number; ready?: number; count?: number };
+      local?: { runtime?: string; healthy?: boolean; running?: boolean; installed?: number };
+      config?: { provider?: string; model?: string; memory?: boolean; voice?: boolean; approval?: boolean };
+    }>("/onboarding/status"),
+  /** Phase 1 — first-run connect: key goes straight to the engine secret store. */
+  onboardingProvider: (body: { providerId: string; apiKey?: string; model?: string; probe?: boolean }) =>
+    req<{ ok?: boolean; provider?: string; model?: string; secretBackend?: string; health?: { ok: boolean; detail: string | null; latencyMs: number | null }; error?: string }>(
+      "/onboarding/provider", { method: "POST", body: JSON.stringify(body) },
+    ),
+  onboardingComplete: () => req<{ ok?: boolean }>("/onboarding/complete", { method: "POST", body: "{}" }),
   config: () => req<Record<string, unknown>>("/config"),
   metrics: () => req<Record<string, unknown>>("/metrics"),
   shieldPrivacy: () => req<ShieldStatus>("/shield/privacy"),

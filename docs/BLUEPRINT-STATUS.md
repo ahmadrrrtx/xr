@@ -47,3 +47,19 @@ Nothing here is aspirational — surfaces without engine routes are labelled ABS
 
 - Headless UI 15/15 PASS (Library: tabs/cards/rail/badges/provenance/Run/health; Trust: subnav/chain/burn/modes/honesty/grant+revoke round-trip). Shots: `shots/l-1-library.png`, `shots/t-1-approvals.png`, `shots/t-2-permissions.png`.
 - Live daemon round-trips: grant 400 bad scope / 200 valid / revoke 200.
+
+## Phase 1 (2026-09-19) — foundation, shell truth & onboarding (this push)
+
+OBSERVED-first delivery per the Phase-0 forensic audit (`xr-deliverables/00-FORENSIC-AUDIT.md`
+in the workstation; summary mirrored here). Every line below is engine-backed.
+
+| Item | State | Evidence |
+|---|---|---|
+| BUG-1 chat error truth | **SHIPPED** | `chatStream` now surfaces the engine's JSON `error` body verbatim (was bare `502 chat`); Work error line gains Retry/Dismiss over the real last task |
+| BUG-2 actionable splash | **SHIPPED** | engine-down splash says "unreachable" (not "starting"), shows `xr serve` hint + Retry now |
+| Onboarding flow | **SHIPPED** | 8-step first-run over `/onboarding/status|provider|complete`, `/providers/set`, `/workspaces/switch`, `/trust/mode`, `/chat` (test); keys POST straight to the engine secret store and are dropped from renderer state; re-runnable from Settings + palette |
+| Command palette | **SHIPPED** | ⌘K/Ctrl+K overlay: navigation verbs, new task, voice, re-run onboarding + live engine search (skills index, sessions); ↑↓/↵/esc |
+| Toast bus | **SHIPPED** | change-detection over real `/approvals` + `/sessions` (new pending approvals, run completed/failed/stopped); local `xr-toast` event for shell actions; never invents events |
+| Missing button grammar | **SHIPPED** | `.chipbtn`/`.ghostbtn` defined (were used unstyled) |
+| a11y | partial | `prefers-reduced-motion` honored for phase-7 motion; full sweep stays P3 |
+| Windows hang (KNOWN_LIMITATIONS #21) | narrowed + guarded | D4a probe isolates `approvalInsert`/`audit` synchronous writes with on-disk markers (next win32 run names write-path vs timer-setup); new timer-hygiene regression pins zero leaked pollers/timers on every OS (11/11 pass Linux). Root-cause fix lands when the win32 marker run returns — protocol unchanged |
