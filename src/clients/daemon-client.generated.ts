@@ -581,6 +581,11 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/control/permissions");
   }
 
+  /** Grant a standing computer-use permission scope (persisted, audited, gate-enforced). */
+  async controlPermissionsGrant(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/control/permissions/grant");
+  }
+
   /** Environment manager status. */
   async environmentStatus(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/environment/status");

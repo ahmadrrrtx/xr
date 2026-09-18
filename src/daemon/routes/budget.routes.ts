@@ -36,6 +36,16 @@ export function budgetRoutes(): DaemonRoute[] {
             dayUsd: store.getSpendForPeriod(startOfDay.getTime()),
             monthUsd: store.getSpendForPeriod(startOfMonth.getTime()),
           },
+          // Phase 4 · Trust Center burn bar: the ENGINE computes the percentage
+          // (SEC-07 — the shell never derives budget math for display).
+          burn: {
+            monthUsd: store.getSpendForPeriod(startOfMonth.getTime()),
+            monthlyCap: (persisted?.monthly_cap ?? 0) || 0,
+            burnPct:
+              ((persisted?.monthly_cap ?? 0) || 0) > 0
+                ? Math.min(100, Math.round((100 * store.getSpendForPeriod(startOfMonth.getTime())) / ((persisted?.monthly_cap ?? 0) || 1)))
+                : null,
+          },
           byModel: cost.byModel,
           byProvider: store.providerCostSummary(),
           recent: cost.recent,

@@ -9,7 +9,7 @@ import {
   type SkillInspect,
 } from "../api/client";
 
-const TABS = ["Skills", "MCP", "Plugins", "Models"] as const;
+const TABS = ["Skills", "MCP", "Plugins", "Integrations"] as const;
 type Tab = (typeof TABS)[number];
 
 function StatusDot({ ok, warn }: { ok?: boolean; warn?: boolean }) {
@@ -147,7 +147,7 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
 
   useEffect(() => {
     setNote(null);
-    if (tab === "Models") {
+    if (tab === "Integrations") {
       api.providers().then((v) => {
         setProviders(asList<ProviderInfo>(v, "providers"));
         setActive(typeof (v as { active?: string }).active === "string" ? (v as { active: string }).active : null);
@@ -236,6 +236,21 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
         {ins && (
           <div className="dp-sec">
             <div className="dp-h">Prompts & capabilities</div>
+            <div className="dp-prompts">
+              {(Array.isArray(ins.skill?.commands) ? (ins.skill!.commands as Array<Record<string, unknown>>).slice(0, 6) : []).map((c, i) => (
+                <button
+                  key={i}
+                  className="dp-prompt mono"
+                  title="Seed a Work task with this skill command"
+                  onClick={() => onRun?.(`Use the "${sel.name ?? sel.id}" skill: ${String(c.name ?? c.id ?? `command ${i + 1}`)} — `)}
+                >
+                  {String(c.description ?? c.name ?? c.id ?? `command ${i + 1}`).slice(0, 90)}
+                </button>
+              ))}
+              {(Array.isArray(ins.skill?.commands) ? (ins.skill!.commands as unknown[]).length : 0) === 0 && (
+                <span className="faint mono" style={{ fontSize: 11 }}>no declared commands — the agent invokes this skill via retrieval</span>
+              )}
+            </div>
             <div className="dp-kv mono">
               <span>commands</span><b>{Array.isArray(ins.skill?.commands) ? (ins.skill!.commands as unknown[]).length : 0}</b>
               <span>workflows</span><b>{Array.isArray(ins.skill?.workflows) ? (ins.skill!.workflows as unknown[]).length : 0}</b>
@@ -325,6 +340,7 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
       </div>
       {s.description && <div className="sc-desc">{String(s.description).slice(0, 120)}</div>}
       <div className="sc-foot mono faint">
+        <span className="sc-health"><StatusDot ok={(s.enabled ?? true) && s.health !== "broken"} warn={s.enabled === false} /> health</span>
         {Array.isArray(s.permissions) && s.permissions.length > 0
           ? s.permissions.slice(0, 2).map((p) => (
             <span key={JSON.stringify(p)} className="chip tiny" title={entryLabel(p)}>{permShort(p)}</span>
@@ -345,10 +361,11 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
       </div>
       {note && <div className="errline mono" style={{ borderColor: "var(--xr-border)", marginBottom: 10 }}>{note}</div>}
 
-      {tab === "Models" && (
+      {tab === "Integrations" && (
         <>
           <p className="faint" style={{ fontSize: 12, marginTop: 0 }}>
-            Model Center — connect providers, test models, set primary. Keys go to the OS keyring (engine-side only).
+            Integrations — model providers (keys go to the OS keyring, engine-side only). Providers are the
+            engine's upstream integrations; everything else in the Library is skills / MCP / plugins.
           </p>
           <div className="cards">
             {providers.map((p) => (

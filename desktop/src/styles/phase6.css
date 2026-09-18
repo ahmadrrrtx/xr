@@ -473,3 +473,57 @@
 .ma-form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 .ma-form .inp { background: var(--xr-surface-2); border: 1px solid var(--xr-border); color: var(--xr-text); border-radius: 8px; padding: 9px 12px; font-size: 12px; }
 .ma-dry { display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--xr-text-muted); }
+
+/* ── Phase 4 · Trust Center mockup 08 layout ────────────────────────────── */
+.tc2 { display: grid; grid-template-columns: 200px minmax(0, 1fr) 250px; gap: 16px; padding: 16px 18px 40px; }
+.tc2-nav { display: flex; flex-direction: column; gap: 4px; background: var(--xr-surface-1); border: 1px solid var(--xr-border); border-radius: 12px; padding: 14px 10px; height: fit-content; position: sticky; top: 14px; }
+.tc2-brand { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 6px 0 12px; border-bottom: 1px solid var(--xr-border); margin-bottom: 8px; color: var(--xr-text); font-size: 12.5px; }
+.tc2-n { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 9px; border: none; background: transparent; color: var(--xr-text-muted); font-size: 12.5px; cursor: pointer; text-align: left; }
+.tc2-n:hover { background: var(--xr-surface-2); color: var(--xr-text); }
+.tc2-n.on { background: var(--xr-surface-3); color: var(--xr-text); box-shadow: inset 0 0 0 1px var(--xr-border-strong); }
+.tc2-badge { margin-left: auto; background: var(--xr-amber); color: #111; border-radius: 99px; font-size: 10px; font-weight: 700; padding: 1px 7px; }
+.tc2-main { min-width: 0; }
+.tc2-rail { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 14px; height: fit-content; }
+.tc2-rail .tc-card { margin: 0; }
+.chain-badge { border-radius: 9px; padding: 7px 10px; font-size: 11.5px; font-weight: 650; text-align: center; }
+.chain-badge.ok { background: rgb(34 197 94 / 0.14); color: var(--xr-green); box-shadow: inset 0 0 0 1px rgb(34 197 94 / 0.4); }
+.chain-badge.bad { background: rgb(239 68 68 / 0.14); color: var(--xr-red); box-shadow: inset 0 0 0 1px rgb(239 68 68 / 0.4); }
+.chain-chips { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.chain-chip { background: var(--xr-surface-3); border: 1px solid var(--xr-border); border-radius: 8px; padding: 6px 9px; font-size: 10.5px; color: var(--xr-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.burn-row { display: flex; align-items: center; gap: 9px; }
+.burn-bar { flex: 1; height: 8px; border-radius: 99px; background: var(--xr-surface-3); overflow: hidden; }
+.burn-bar > i { display: block; height: 100%; background: linear-gradient(90deg, #059669, var(--xr-green)); border-radius: 99px; transition: width 0.4s var(--xr-ease); }
+.appr-sheet { background: linear-gradient(160deg, var(--xr-surface-2), var(--xr-surface-1)); border: 1px solid var(--xr-border-strong); border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 14px 34px rgb(0 0 0 / 0.35); }
+.as-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.as-wants { font-size: 13.5px; color: var(--xr-text); }
+.as-wants code { background: var(--xr-surface-3); border: 1px solid var(--xr-border); border-radius: 7px; padding: 2px 8px; font-size: 12px; color: var(--xr-text); }
+.as-risk { border-radius: 8px; padding: 4px 10px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.as-risk.med { background: rgb(245 158 11 / 0.16); color: var(--xr-amber); box-shadow: inset 0 0 0 1px rgb(245 158 11 / 0.45); }
+.as-risk.hi { background: rgb(239 68 68 / 0.16); color: var(--xr-red); box-shadow: inset 0 0 0 1px rgb(239 68 68 / 0.45); }
+.as-why { font-size: 12px; color: var(--xr-text-muted); }
+.as-sec-t { font-size: 10px; color: var(--xr-text-faint); margin-bottom: 4px; }
+.as-diff { margin: 0; background: #0b0f14; border: 1px solid var(--xr-border); border-radius: 9px; padding: 9px 11px; font-size: 11px; line-height: 1.5; overflow-x: auto; color: var(--xr-text-muted); }
+.as-diff .add { color: #86efac; background: rgb(34 197 94 / 0.12); display: inline-block; width: 100%; }
+.as-diff .del { color: #fca5a5; background: rgb(239 68 68 / 0.12); display: inline-block; width: 100%; }
+.as-text { font-size: 11.5px; color: var(--xr-text-muted); background: var(--xr-surface-3); border-radius: 9px; padding: 8px 10px; }
+.as-aff { font-size: 11.5px; color: var(--xr-text-muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.as-prov { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--xr-text-faint); border-top: 1px dashed var(--xr-border); padding-top: 9px; }
+.as-prov-ic { color: var(--xr-text-muted); }
+.as-acts { display: flex; gap: 10px; flex-wrap: wrap; }
+.as-deny { background: #dc2626; color: #fff; border: none; border-radius: 9px; padding: 9px 22px; font-size: 12.5px; font-weight: 650; cursor: pointer; }
+.as-deny:hover { background: #b91c1c; }
+.as-once { background: var(--xr-surface-3); color: var(--xr-text); border: 1px solid var(--xr-border-strong); border-radius: 9px; padding: 9px 18px; font-size: 12.5px; cursor: pointer; }
+.as-scope { background: transparent; color: var(--xr-cyan); border: 1px solid var(--xr-cyan); border-radius: 9px; padding: 9px 16px; font-size: 12.5px; cursor: pointer; }
+.as-scope:hover { background: rgb(34 211 238 / 0.1); }
+.mode-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.mode-card { position: relative; background: var(--xr-surface-1); border: 1px solid var(--xr-border); border-radius: 12px; padding: 14px 16px; opacity: 0.85; }
+.mode-card b { font-size: 13px; color: var(--xr-text); }
+.mode-card p { margin: 7px 0 0; font-size: 11.5px; color: var(--xr-text-muted); }
+.mode-radio { position: absolute; top: 12px; right: 12px; width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--xr-border-strong); }
+.chip-x { background: none; border: none; color: inherit; cursor: pointer; font-size: 12px; padding: 0 0 0 4px; }
+/* Library card footer health label + prompt chips (mockup 07) */
+.sc-health { display: inline-flex; align-items: center; gap: 5px; margin-right: 4px; }
+.dp-prompts { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.dp-prompt { text-align: left; background: var(--xr-surface-3); border: 1px solid var(--xr-border); color: var(--xr-text-muted); border-radius: 9px; padding: 8px 10px; font-size: 11px; cursor: pointer; }
+.dp-prompt:hover { border-color: var(--xr-cyan); color: var(--xr-text); }
+@media (max-width: 1100px) { .tc2 { grid-template-columns: 170px minmax(0, 1fr); } .tc2-rail { display: none; } }

@@ -171,7 +171,14 @@ export interface SessionSummary {
   cwd?: string; workspace?: string; model?: string; provider?: string; costUsd?: number;
   [k: string]: unknown;
 }
-export interface Approval { id: string; action?: string; reason?: string; risk?: string; status?: string; [k: string]: unknown; }
+export interface ApprovalPreviewSection { title?: string; body?: string; kind?: "code" | "text" | "table"; truncated?: boolean; }
+export interface ApprovalPreview { kind?: string; tool?: string; riskTier?: string; untrustedReason?: string; sections?: ApprovalPreviewSection[]; }
+export interface Approval {
+  id: string; action?: string; reason?: string; risk?: string; status?: string;
+  tool?: string; surface?: string; runId?: string; sessionId?: string; taskId?: string;
+  requestedAt?: number; ttlMs?: number; preview?: ApprovalPreview | null;
+  [k: string]: unknown;
+}
 /** Phase 6: workflow summaries straight from GET /agents (engine WorkflowRepo). */
 export interface WorkflowSummary {
   id: string; kind?: string; goal?: string; status?: string; reviewState?: string; approvalState?: string;
@@ -376,6 +383,12 @@ export const api = {
   controlApprove: (id: string, approved: boolean) =>
     req<{ ok?: boolean }>("/control/approve", { method: "POST", body: JSON.stringify({ id, approved }) }),
   controlPermissions: () => req<Record<string, unknown>>("/control/permissions"),
+  /** Phase 4 · standing computer-use scope grant/revoke (persisted + audited engine-side). */
+  permissionsGrant: (scope: string, revoke = false) =>
+    req<{ ok?: boolean; granted?: string[] }>("/control/permissions/grant", {
+      method: "POST",
+      body: JSON.stringify({ scope, revoke }),
+    }),
   triggers: () => req<TriggersState>("/triggers"),
   triggersPause: (pauseAll: boolean) =>
     req<{ ok?: boolean; pauseAll?: boolean }>("/triggers/pause", { method: "POST", body: JSON.stringify({ pauseAll, actor: "desktop" }) }),

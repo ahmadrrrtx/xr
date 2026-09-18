@@ -1,7 +1,8 @@
 /** XR Daemon — computer-control and plan-memory routes. */
 
 import { approvals, bindApprovals } from "../../control/approvals.ts";
-import { listPermissions } from "../../control/permissions.ts";
+import { listPermissions, grantPermission, revokePermission } from "../../control/permissions.ts";
+import type { PermissionScope } from "../../control/types.ts";
 import { isDisabled } from "../../control/service.ts";
 import { planningService } from "../../services/planning-service.ts";
 import { browserStatus } from "../../control/browser.ts";
@@ -134,6 +135,22 @@ export function controlRoutes(): DaemonRoute[] {
       path: "/api/control/permissions",
       method: "GET",
       handle: ({ json }) => json({ granted: listPermissions() }),
+    }),
+    route({
+      // Phase 4 · Trust Center "Always allow (scope…)": a REAL standing grant,
+      // persisted engine-side and enforced by the computer-use gate. Audited.
+      id: "control.permissions.grant",
+      path: "/api/control/permissions/grant",
+      method: "POST",
+      handle: async ({ req, json, state }) => {
+        const body = (await req.json().catch(() => null)) as { scope?: unknown; revoke?: unknown } | null;
+        const scope = String(body?.scope ?? "");
+        const VALID: PermissionScope[] = ["desktop", "browser", "files_read", "files_write", "system", "clipboard", "vision_cloud"];
+        if (!VALID.includes(scope as PermissionScope)) return json({ error: `unknown scope '${scope.slice(0, 40)}'` }, 400);
+        const ok = body?.revoke === true ? revokePermission(scope as PermissionScope) : grantPermission(scope as PermissionScope);
+        state.store.audit(body?.revoke === true ? "control.permissions.revoke" : "control.permissions.grant", { scope, ok });
+        return json({ ok, granted: listPermissions() });
+      },
     }),
   ];
 }
