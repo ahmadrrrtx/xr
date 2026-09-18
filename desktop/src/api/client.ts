@@ -185,7 +185,7 @@ export interface AgentTemplate {
 /** Phase 4 · Control Cockpit — composed engine-side; shell only renders it. */
 export interface CockpitState {
   mode: string;
-  control: { enabled: boolean; disabledReason: string | null; capabilities?: unknown; browser?: unknown };
+  control: { enabled: boolean; disabledReason: string | null; capabilities?: unknown; browser?: unknown; paused?: { paused: boolean; since: number | null; reason: string | null } };
   pending: Approval[];
   permissions: string[];
   triggers: { pauseAll: boolean; inflight: number; triggers: unknown[] };
@@ -392,10 +392,26 @@ export const api = {
     }),
   providers: () => req<ProviderInfo[] | { providers: ProviderInfo[]; active?: string }>("/providers"),
   models: () => req<Record<string, unknown>>("/models"),
-  providersSet: (provider: string, model?: string) =>
-    req<unknown>("/providers/set", { method: "POST", body: JSON.stringify({ provider, model: model ?? null }) }),
+  providersSet: (provider: string, model?: string, fallback?: { provider: string; model?: string }) =>
+    req<{ ok?: boolean; provider?: string; model?: string; fallbackProvider?: string | null; fallbackModel?: string | null }>("/providers/set", {
+      method: "POST",
+      body: JSON.stringify({ provider, model: model ?? null, ...(fallback ? { fallbackProvider: fallback.provider, fallbackModel: fallback.model } : {}) }),
+    }),
   modelsTest: (runtime: string, model: string) =>
     req<Record<string, unknown>>("/models/test", { method: "POST", body: JSON.stringify({ runtime, model }) }),
+  /** Phase 4 · Model Center: pick local runtime/model/routing (engine persists + audits). */
+  modelsSelect: (runtime: string, model: string, routing?: "local-only" | "hybrid" | "cloud-first") =>
+    req<Record<string, unknown>>("/models/select", { method: "POST", body: JSON.stringify({ runtime, model, ...(routing ? { routing } : {}) }) }),
+  providersCapabilities: (id?: string) =>
+    req<Record<string, unknown>>(`/providers/capabilities${id ? `?id=${encodeURIComponent(id)}` : ""}`),
+  providersFallback: () => req<{ allowed?: boolean; explanation?: string; steps?: unknown[] }>("/providers/fallback"),
+  /** Phase 4 · Control Room verbs: durable pause/resume/stop, engine-enforced per action. */
+  controlPause: (body: { paused?: boolean; stop?: boolean }) =>
+    req<{ ok?: boolean; paused?: { paused: boolean; since: number | null; reason: string | null }; denied?: number }>("/control/pause", {
+      method: "POST", body: JSON.stringify(body),
+    }),
+  controlEvents: (limit = 80) =>
+    req<{ events: Array<{ id?: number; event?: string; detail?: string; created_at?: number }> }>(`/control/events?limit=${limit}`),
   cost: () => req<Record<string, unknown>>("/cost"),
 
   /* ---------- phase 3 · library (skills / MCP / plugins) ---------- */

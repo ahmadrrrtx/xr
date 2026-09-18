@@ -9,6 +9,7 @@ import { browserStatus } from "../../control/browser.ts";
 import { buildProvider } from "../../providers/factory.ts";
 import { listRemembered, forgetPlan, clearAllMemory } from "../../control/memory.ts";
 import { getTrustMode } from "../../control/trust-mode.ts";
+import { getControlPause, setControlPause } from "../../control/pause.ts";
 import { TriggerService } from "../../automation/triggers.ts";
 import { route, type DaemonRoute } from "./router.ts";
 
@@ -29,6 +30,7 @@ export function controlRoutes(): DaemonRoute[] {
           capabilities: caps,
           browser: browserStatus(),
           pending: approvals.listRecords().length,
+          paused: getControlPause(),
         });
       },
     }),
@@ -53,6 +55,7 @@ export function controlRoutes(): DaemonRoute[] {
             disabledReason: kill.reason ?? null,
             capabilities: caps,
             browser: browserStatus(),
+            paused: getControlPause(),
           },
           pending,
           permissions: listPermissions(),
@@ -169,6 +172,29 @@ export function controlRoutes(): DaemonRoute[] {
       path: "/api/control/permissions",
       method: "GET",
       handle: ({ json }) => json({ granted: listPermissions() }),
+    }),
+    route({
+      // Phase 4 · Control Room verbs — ONE engine-owned durable pause flag
+      // (honored per-action by the service facade). stop = pause + deny every
+      // pending approval through the same durable store; nothing bypasses the gate.
+      id: "control.pause",
+      path: "/api/control/pause",
+      method: "POST",
+      handle: async ({ req, json, state }) => {
+        const body = (await req.json().catch(() => null)) as { paused?: unknown; stop?: unknown } | null;
+        bindApprovals(state.store);
+        if (body?.stop === true) {
+          const pending = approvals.listRecords();
+          let denied = 0;
+          for (const r of pending) if (approvals.answer(r.id, false)) denied++;
+          const paused = setControlPause(true, "stopped from Control Room");
+          state.store.audit("control.stop", { paused: true, denied });
+          return json({ ok: true, paused, denied });
+        }
+        const paused = setControlPause(body?.paused !== false, undefined);
+        state.store.audit(paused.paused ? "control.pause.set" : "control.resume", { paused: paused.paused });
+        return json({ ok: true, paused });
+      },
     }),
     route({
       // Phase 4 · Trust Center "Always allow (scope…)": a REAL standing grant,

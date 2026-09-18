@@ -626,6 +626,11 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/control/permissions");
   }
 
+  /** Pause/resume/stop computer control (durable, honored per-action by the gate; stop also denies all pending approvals). */
+  async controlPause(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/control/pause");
+  }
+
   /** Grant a standing computer-use permission scope (persisted, audited, gate-enforced). */
   async controlPermissionsGrant(): Promise<Record<string, unknown>> {
     return await this.call("POST", "/api/v1/control/permissions/grant");
