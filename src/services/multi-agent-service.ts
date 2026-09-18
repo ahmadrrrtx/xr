@@ -523,8 +523,11 @@ export class MultiAgentService implements LifecycleHook {
       if ((record.status as WorkflowStatus) === "failed" || (record.status as WorkflowStatus) === "blocked") {
         return record;
       }
-      // Phase 4 · pause drains here: the wave above finished, no new wave starts.
-      if ((record.status as WorkflowStatus) === "paused") {
+      // Phase 4 · USER pause drains here: the wave above finished, no new wave
+      // starts. cancellationState 'requested' also recomputes to 'paused' (the
+      // cancel drain, A-19) — that path must fall through to finalization, so
+      // only a pause with an ACTIVE cancellation state returns early.
+      if ((record.status as WorkflowStatus) === "paused" && (record.cancellationState as string) !== "requested") {
         this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "paused" });
         return record;
       }
