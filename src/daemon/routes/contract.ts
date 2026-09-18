@@ -454,6 +454,7 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   },
   "control.history.legacy": { summary: "Control history (legacy alias of events).", tag: "control", stability: "experimental" },
   "control.permissions.legacy": { summary: "Control permissions (legacy alias).", tag: "control", stability: "experimental" },
+  "control.permissions.grant": { summary: "Grant a standing computer-use permission scope (persisted, audited, gate-enforced).", tag: "control", stability: "experimental" },
 
   // ── environment (isolated execution surfaces) ─────────────────────────────
   "environment.status": { summary: "Environment manager status.", tag: "environment", stability: "experimental" },
