@@ -101,11 +101,19 @@ if (IS_WIN32_PROBE) {
   });
 
   test("D4: full in-process request → TTL → outcome → dispose", async () => {
+    // 2026-09-18: finer-grained markers — runs 35370921092/35369450664 showed
+    // d4-start written but never d4-requested, so the hang lives between module
+    // cache and the insert. These markers name the exact call on the next
+    // win32 run (they survive the exit-124 kill; stdout does not).
     dbgMarker("d4", "start");
     const { ApprovalStore } = await loadApprovalStore();
+    dbgMarker("d4", "module");
     const t = mkdtempSync(join(tmpdir(), "xr-d4-"));
+    dbgMarker("d4", "tmpdir");
     const store = new Store(join(t, "d.db"));
+    dbgMarker("d4", "store-open");
     const approvals = new ApprovalStore(store, { defaultTtlMs: 100 });
+    dbgMarker("d4", "constructed");
     const h = approvals.request({ tool: "shell", reason: "diag", surface: "cli", ttlMs: 100 });
     dbgMarker("d4", "requested");
     const o = await h.outcome;

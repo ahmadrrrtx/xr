@@ -98,11 +98,19 @@ jobs:
         # marker names the hang. Remove this step with the probe branch.
         run: |
           found=0
-          for f in "$TEMP"/xr-dbg-*.txt; do
-            [ -e "$f" ] || continue
-            found=1
-            echo "=== $f ==="
-            cat "$f"
+          # 2026-09-18: the old single "$TEMP" glob missed the markers on the
+          # Windows runner (node os.tmpdir() ≠ git-bash $TEMP there). Ask the
+          # SAME runtime the tests use for its temp dir, then fall back to
+          # every env candidate.
+          NODE_TMP=$(bun -p "require('node:os').tmpdir()" 2>/dev/null || true)
+          for dir in "$NODE_TMP" "$TEMP" "$TMP" "$TMPDIR" /c/Windows/Temp; do
+            [ -n "$dir" ] || continue
+            for f in "$dir"/xr-dbg-*.txt; do
+              [ -e "$f" ] || continue
+              found=1
+              echo "=== $f ==="
+              cat "$f"
+            done
           done
           if [ "$found" -eq 0 ]; then
             echo "no markers written — the probe file never started (import/runner level)"
