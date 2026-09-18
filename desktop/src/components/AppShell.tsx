@@ -41,6 +41,10 @@ export function AppShell({
 }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [up, setUp] = useState(true);
+  const [voiceCap, setVoiceCap] = useState<boolean>(false);
+  useEffect(() => {
+    api.voiceStatus().then((v) => setVoiceCap(Boolean((v?.stt as { available?: boolean } | undefined)?.available || (v?.tts as { available?: boolean } | undefined)?.available))).catch(() => setVoiceCap(false));
+  }, []);
   const [q, setQ] = useState("");
   const [pop, setPop] = useState<{ skills: SkillInfo[]; runs: SessionSummary[] } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -152,23 +156,28 @@ export function AppShell({
       </nav>
       <main className="main">{children}</main>
       <footer className="statusbar" aria-label="Status">
-        <span className={up ? "sb-item ok" : "sb-item bad"}>
-          <i className="dot" aria-hidden="true" /> Engine {up ? "connected" : "offline"}
+        <span className={up ? "sb-item ok" : "sb-item bad"} title={up ? "Engine connected" : "Engine offline"}>
+          Engine <i className="dot" aria-hidden="true" />
         </span>
         <span className="sb-sep" aria-hidden="true" />
-        <span className="sb-item" title="Active provider (engine-reported)">
+        <span className="sb-item sb-prov" title="Active provider (engine-reported)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <rect x="5" y="5" width="14" height="14" rx="3" /><path d="M9.5 9.5h5v5h-5z" />
+          </svg>
           {active?.id ?? "no provider"}{active?.local ? " · local" : ""}
         </span>
         <span className="sb-spacer" />
         <span
           className={voiceState && voiceState !== "idle" ? "sb-item ok" : "sb-item off"}
-          title={voiceState && voiceState !== "idle" ? `Voice session ${voiceState} — click to open` : "Voice idle — click to open (offline on-device pipeline)"}
+          title={voiceState && voiceState !== "idle" ? `Voice session ${voiceState} — click to open` : `Voice idle — click to open (offline on-device pipeline ${voiceCap ? "available" : "unavailable"})`}
           onClick={onVoiceOpen}
           role="button"
           style={{ cursor: "pointer" }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 3v12M8 11a4 4 0 0 0 8 0M5 21h14" /></svg>
-          VOICE {(voiceState ?? "idle").toUpperCase()}
+          <span className="sb-voice-cap">
+            {voiceState && voiceState !== "idle" ? `VOICE ${voiceState.toUpperCase()}` : "OFFLINE VOICE"}
+          </span>
         </span>
         <span className="sb-sep" aria-hidden="true" />
         <span className="sb-item mono">{engineVersion ?? "v—"}</span>

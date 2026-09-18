@@ -21,6 +21,7 @@
  * on the event stream; saying confirm/cancel decides them through the SAME
  * durable approval store every other surface uses (channel "voice").
  */
+import { looksIncomplete, SILENCE_TAIL_EXTENDED_MS } from "../../voice/endpointing.ts";
 import { route, sseResponse, type DaemonRoute } from "./router.ts";
 import { VoicePipeline } from "../../voice/pipeline.ts";
 import { SpeechToText, sttFromSettings } from "../../voice/stt.ts";
@@ -62,7 +63,11 @@ export function pcm16ToWav(pcm: Uint8Array, sampleRate = 16000): Uint8Array {
 
 const SPEECH_RMS = 0.02;      // ~-34 dBFS — tuned for laptop mics, not studios
 const MIN_SPEECH_MS = 250;    // utterance floor (rejects clicks)
-const SILENCE_TAIL_MS = 700;  // endpointing tail after last speech frame
+const SILENCE_TAIL_MS = 700;  // acoustic endpointing tail (stage 1)
+// Stage 2 (semantic): provisional-transcript probe fires this far into the
+// tail; the verdict may extend the tail once to maxSilenceMs. Fail-open.
+const SEM_PROBE_AT_MS = 450;
+const SEM_PROBE_GRACE_MS = 350;
 
 export class VoiceSession {
   state: VoiceSessionState = "idle";
@@ -70,6 +75,7 @@ export class VoiceSession {
   private buf: number[] = [];
   private speechMs = 0;
   private silenceMs = 0;
+  private semantic: { startedAt: number; verdict?: "incomplete" | "complete" } | null = null;
   private busy = false;
   private speakDeadline = 0;
   private lastSayText = "";
@@ -180,17 +186,60 @@ export class VoiceSession {
     for (let i = 0; i < pcm.length; i++) this.buf.push(pcm[i]);
     if (rms > SPEECH_RMS) {
       this.speechMs += frameMs;
+      if (this.silenceMs > 0) this.semantic = null; // speech resumed → stale probe
       this.silenceMs = 0;
     } else {
       this.silenceMs += frameMs;
     }
-    if (this.speechMs >= MIN_SPEECH_MS && this.silenceMs >= SILENCE_TAIL_MS) {
+    const semEnabled = this.settings.endpointing?.semantic !== false;
+    if (semEnabled && !this.semantic && this.speechMs >= MIN_SPEECH_MS && this.silenceMs >= SEM_PROBE_AT_MS) {
+      this.probeSemantic();
+    }
+    const extended = this.semantic?.verdict === "incomplete";
+    const baseTail = Number(this.settings.endpointing?.minSilenceMs) > 0
+      ? Math.max(SILENCE_TAIL_MS, Number(this.settings.endpointing?.minSilenceMs))
+      : SILENCE_TAIL_MS;
+    const tail = extended
+      ? Math.max(baseTail, Number(this.settings.endpointing?.maxSilenceMs) || SILENCE_TAIL_EXTENDED_MS)
+      : baseTail;
+    const probing = semEnabled && this.semantic?.verdict === undefined;
+    const probeTimedOut = probing === true && Date.now() - (this.semantic?.startedAt ?? Date.now()) > SEM_PROBE_GRACE_MS + 250;
+    const grace = probing === true && !probeTimedOut ? SEM_PROBE_GRACE_MS : 0;
+    if (this.speechMs >= MIN_SPEECH_MS && (this.silenceMs >= tail + grace || (this.silenceMs >= tail && probeTimedOut))) {
       const utterance = new Uint8Array(this.buf);
       this.buf = [];
       this.speechMs = 0;
       this.silenceMs = 0;
+      this.semantic = null;
       void this.process(utterance);
     }
+  }
+
+  /**
+   * Stage-2 semantic probe: transcribe the buffer SO FAR (provisional) and
+   * classify it. "incomplete" extends the silence tail once; anything else
+   * (including errors — fail-open) keeps the acoustic tail.
+   */
+  private probeSemantic(): void {
+    this.semantic = { startedAt: Date.now() };
+    const snapshot = new Uint8Array(this.buf);
+    let wav: Uint8Array;
+    try {
+      wav = pcm16ToWav(snapshot);
+    } catch {
+      if (this.semantic) this.semantic.verdict = "complete";
+      return;
+    }
+    void this.stt
+      .transcribe(wav)
+      .then((r) => {
+        if (!this.semantic) return;
+        const v = looksIncomplete(String(r?.text ?? ""));
+        this.semantic.verdict = v.incomplete ? "incomplete" : "complete";
+      })
+      .catch(() => {
+        if (this.semantic) this.semantic.verdict = "complete";
+      });
   }
 
   private async process(pcm: Uint8Array): Promise<void> {

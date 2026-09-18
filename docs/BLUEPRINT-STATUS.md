@@ -28,16 +28,16 @@ Nothing here is aspirational — surfaces without engine routes are labelled ABS
 - `GET /api/budget` → `burn {monthUsd, monthlyCap, burnPct}` — engine computes
   the percentage (SEC-07: shell never derives budget math).
 
-## NOT implemented (backlog, honest labels)
+## Backlog status (updated 2026-09-18, msg-14 batch)
 
 | Item | State | Note |
 |---|---|---|
-| Multi-agent steer / approve-in-page | ABSENT engine-side | No engine route exists; page shows review/approval STATE only (real store). Never faked. Next: control-cockpit consolidation. |
-| Trust-mode switch (Careful/Balanced/Autonomous) | ABSENT engine-side | Presets displayed with an explicit honesty note; effective posture = per-action approvals. Ships with control-cockpit consolidation. |
-| Control cockpit consolidation | BACKLOG P4 | Single pane for control/status+pending+permissions+triggers. |
-| Native (Tauri) matrix parity | BACKLOG P4 | Web shell is first-class; native shells remain reference builds. |
-| Skill template gallery | ABSENT engine-side | Marketplace shows bundled + configured registries only; empty registries reported honestly. |
-| Voice: semantic end-of-turn classifier | BACKLOG | VAD endpointing + barge-in shipped; partial-utterance classifier not. |
+| Multi-agent steer / approve-in-page | **SHIPPED** | `POST /api/agents/workflows/{id}/steer` (engine `delegateTask`, audited handoff; allowed on running/paused/awaiting_review/blocked, else 409) and `POST /api/agents/workflows/{id}/review` (engine `reviewTask`: approve → completed + dependents unblocked via `dependencyApproved`; request-changes → blocked + `changes_requested` + blockedReason). Teams page renders both panels from engine affordances — never faked. |
+| Trust-mode switch (Careful/Balanced/Autonomous) | **SHIPPED** | `POST /api/trust/mode` persists to `~/.xr/trust-mode.json` (audited); `src/control/trust-mode.ts` `approvalForMode()` is read by the capabilities policy gate on EVERY decision (`policyTrace` records it). careful widens approvals (dangerous perms + mid/high tiers); balanced = tool-declared; autonomous relaxes base flags but NEVER high/critical tiers or dangerous perms. Mode cards in Trust → Modes are live. |
+| Control cockpit consolidation | **SHIPPED** | `GET /api/control/cockpit` composes control status + pending approvals + standing permissions + triggers + active mode in ONE engine call; Trust screen gains a Cockpit tab that only renders it (SEC-07 preserved). |
+| Native (Tauri) matrix parity | BACKLOG P4 | Web shell is first-class; native shells remain reference builds (sandbox cannot validate native toolchains — honest backlog, not silently dropped). |
+| Skill template gallery | **SHIPPED** | `GET /api/agents/templates` — the deterministic planner templates composed from a real `compileWorkflowPlan` probe per `WorkflowKind` (roles/steps/summary, engine-owned sample goals). Library → Skills → Templates renders the gallery; "Run sample" creates a real workflow run. |
+| Voice: semantic end-of-turn classifier | **SHIPPED** | Two-stage endpointing: acoustic tail (`minSilenceMs`) + semantic stage (`src/voice/endpointing.ts` `looksIncomplete` — trailing conjunction/preposition/filler/comma extends the tail once to `maxSilenceMs`; terminal punctuation processes immediately; fail-open). `VoiceSession` probes a provisional transcript mid-tail; `ServerVad` accepts `setPartial()`. `settings.endpointing.semantic` (default true) toggles the stage. 9 unit tests pin the classifier + tails. |
 
 ## Known flakes (CI, unrelated to product code)
 

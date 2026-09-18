@@ -111,11 +111,11 @@ describe("team-run view composer", () => {
   });
 
   test("control affordances: pause only while running, cancel never on terminal states", () => {
-    expect(controlAffordances("running")).toEqual({ pause: true, resume: false, cancel: true });
-    expect(controlAffordances("paused")).toEqual({ pause: false, resume: true, cancel: true });
-    expect(controlAffordances("completed")).toEqual({ pause: false, resume: false, cancel: false });
-    expect(controlAffordances("cancelled")).toEqual({ pause: false, resume: true, cancel: false });
-    expect(controlAffordances("failed")).toEqual({ pause: false, resume: true, cancel: false });
+    expect(controlAffordances("running")).toEqual({ pause: true, resume: false, cancel: true, steer: true });
+    expect(controlAffordances("paused")).toEqual({ pause: false, resume: true, cancel: true, steer: true });
+    expect(controlAffordances("completed")).toEqual({ pause: false, resume: false, cancel: false, steer: false });
+    expect(controlAffordances("cancelled")).toEqual({ pause: false, resume: true, cancel: false, steer: false });
+    expect(controlAffordances("failed")).toEqual({ pause: false, resume: true, cancel: false, steer: false });
     expect(composeTeamView(record({ status: "completed" })).affordances.cancel).toBe(false);
   });
 
@@ -124,5 +124,18 @@ describe("team-run view composer", () => {
     rec.tasks[1].outputs = { summary: "done", artifacts: [{ path: "src/api/x.ts", description: "Git Commit: Feat/x" }] };
     const v = composeTeamView(rec);
     expect(v.nodes.find((n) => n.taskId === "b")?.artifacts).toEqual([{ path: "src/api/x.ts", description: "Git Commit: Feat/x" }]);
+  });
+
+  test("awaitingReview flag marks exactly the tasks a human decision can move", () => {
+    const rec = record();
+    rec.tasks[2].status = "awaiting_review";
+    rec.tasks[3].status = "completed";
+    rec.tasks[3].reviewState = "pending";
+    const v = composeTeamView(rec);
+    const flag = new Map(v.nodes.map((n) => [n.taskId, n.awaitingReview]));
+    expect(flag.get("c")).toBe(true);
+    expect(flag.get("d")).toBe(true);
+    expect(flag.get("a")).toBe(false);
+    expect(flag.get("b")).toBe(false);
   });
 });

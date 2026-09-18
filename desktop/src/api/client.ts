@@ -171,6 +171,18 @@ export interface SessionSummary {
   cwd?: string; workspace?: string; model?: string; provider?: string; costUsd?: number;
   [k: string]: unknown;
 }
+/** Phase 4 · planner template (GET /agents/templates). */
+export interface AgentTemplate {
+  kind: string; name: string; summary: string; roles: string[]; steps: number; sampleGoal: string;
+}
+/** Phase 4 · Control Cockpit — composed engine-side; shell only renders it. */
+export interface CockpitState {
+  mode: string;
+  control: { enabled: boolean; disabledReason: string | null; capabilities?: unknown; browser?: unknown };
+  pending: Approval[];
+  permissions: string[];
+  triggers: { pauseAll: boolean; inflight: number; triggers: unknown[] };
+}
 export interface ApprovalPreviewSection { title?: string; body?: string; kind?: "code" | "text" | "table"; truncated?: boolean; }
 export interface ApprovalPreview { kind?: string; tool?: string; riskTier?: string; untrustedReason?: string; sections?: ApprovalPreviewSection[]; }
 export interface Approval {
@@ -223,7 +235,7 @@ export interface TeamView {
   costUsd: number;
   costCapUsd: number;
   tokens: number;
-  affordances: { pause: boolean; resume: boolean; cancel: boolean };
+  affordances: { pause: boolean; resume: boolean; cancel: boolean; steer: boolean };
   nodes: Array<{
     taskId: string;
     name: string;
@@ -239,6 +251,7 @@ export interface TeamView {
     artifacts: Array<{ path: string; description?: string }>;
     startedAt: number | null;
     endedAt: number | null;
+    awaitingReview: boolean;
   }>;
   edges: Array<{ from: string; to: string }>;
 }
@@ -361,6 +374,21 @@ export const api = {
   workflowView: (id: string) => req<{ workflow: TeamView }>(`/agents/workflows/${encodeURIComponent(id)}/view`),
   workflowCreate: (body: Record<string, unknown>) =>
     req<{ workflow: TeamView }>("/agents/workflows", { method: "POST", body: JSON.stringify(body) }),
+  /** Phase 4 · trust-mode switch (persisted + enforced by the capabilities policy gate). */
+  trustModeSet: (mode: string) =>
+    req<{ ok: boolean; mode: string }>("/trust/mode", { method: "POST", body: JSON.stringify({ mode }) }),
+  /** Phase 4 · steer a live run (engine delegateTask + audited handoff). */
+  workflowSteer: (id: string, instruction: string, taskId?: string | null) =>
+    req<{ workflow: TeamView }>(`/agents/workflows/${encodeURIComponent(id)}/steer`, {
+      method: "POST",
+      body: JSON.stringify({ instruction, taskId: taskId ?? undefined }),
+    }),
+  /** Phase 4 · human review decision for an awaiting_review task. */
+  workflowReview: (id: string, taskId: string, approved: boolean, comment?: string) =>
+    req<{ workflow: TeamView }>(`/agents/workflows/${encodeURIComponent(id)}/review`, {
+      method: "POST",
+      body: JSON.stringify({ taskId, approved, comment: comment ?? undefined }),
+    }),
   workflowControl: (id: string, action: "pause" | "resume" | "cancel") =>
     req<{ workflow: TeamView }>(`/agents/workflows/${encodeURIComponent(id)}/control`, {
       method: "POST",
@@ -378,6 +406,10 @@ export const api = {
   securityBench: () => req<Record<string, unknown>>("/security"),
   shieldStatus: () => req<ShieldStatus>("/shield/status"),
   shieldScan: () => req<Record<string, unknown>>("/shield/scan", { method: "POST", body: JSON.stringify({}) }),
+  /** Phase 4 · Control Cockpit: one engine-composed pane (status+pending+permissions+triggers+mode). */
+  /** Phase 4 · Skill template gallery (deterministic planner templates, engine-composed). */
+  agentTemplates: () => req<{ templates: AgentTemplate[] }>("/agents/templates"),
+  controlCockpit: () => req<CockpitState>("/control/cockpit"),
   controlStatus: () => req<ControlStatus>("/control/status"),
   controlPending: () => req<{ pending?: Approval[] }>("/control/pending"),
   controlApprove: (id: string, approved: boolean) =>

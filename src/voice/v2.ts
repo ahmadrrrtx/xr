@@ -10,6 +10,7 @@
 import type { ChatStreamEvent } from "../core/types.ts";
 import { runStatusLabel, isRunStatus } from "../core/ux-status.ts";
 import { analyzeVad, type TurnDetectionResult } from "./audio.ts";
+import { looksIncomplete, SILENCE_TAIL_EXTENDED_MS } from "./endpointing.ts";
 
 export interface SttPartial {
   text: string;
@@ -41,8 +42,15 @@ export class ServerVad {
   private speechMs = 0;
   private silenceMs = 0;
   private last: TurnDetectionResult | null = null;
+  private partial = "";
 
   constructor(private readonly threshold = 0.012) {}
+
+  /** Phase 4 · semantic stage: feed the latest STT partial; a mid-thought
+   * partial extends the silence tail once (acoustic 650ms → extended). */
+  setPartial(text: string): void {
+    this.partial = String(text ?? "");
+  }
 
   push(frame: Uint8Array, frameMs = 30): { speech: boolean; turnComplete: boolean; analysis: TurnDetectionResult } {
     const analysis = analyzeVad(frame, { threshold: this.threshold, frameMs });
@@ -53,7 +61,8 @@ export class ServerVad {
     } else {
       this.silenceMs += frameMs;
     }
-    const turnComplete = this.speechMs >= 180 && this.silenceMs >= 650;
+    const tail = looksIncomplete(this.partial).incomplete ? SILENCE_TAIL_EXTENDED_MS : 650;
+    const turnComplete = this.speechMs >= 180 && this.silenceMs >= tail;
     return { speech: analysis.hasSpeech || this.speechMs > 0, turnComplete, analysis };
   }
 
@@ -61,6 +70,7 @@ export class ServerVad {
     this.speechMs = 0;
     this.silenceMs = 0;
     this.last = null;
+    this.partial = "";
   }
 }
 

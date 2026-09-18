@@ -77,6 +77,10 @@ export interface VoiceSettings {
     speechPaddingMs: number;
     maxUtteranceMs: number;
     energyThreshold: number;
+    /** Phase 4 · semantic end-of-turn: provisional-transcript classifier
+     * extends the silence tail (minSilenceMs → maxSilenceMs) when the
+     * utterance looks mid-thought. Default true. */
+    semantic?: boolean;
   };
   deviceMetadata: Record<string, unknown>;
   lastTestResult?: VoiceTestResult;
@@ -128,6 +132,7 @@ export function defaultVoiceSettings(): VoiceSettings {
       speechPaddingMs: 250,
       maxUtteranceMs: 15000,
       energyThreshold: 0.012,
+      semantic: true,
     },
     deviceMetadata: {},
   };

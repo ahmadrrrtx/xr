@@ -89,6 +89,8 @@ export function Teams() {
   const [budget, setBudget] = useState("");
   const [dryRun, setDryRun] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [steerText, setSteerText] = useState("");
+  const [reviewComment, setReviewComment] = useState("");
   const reloadRef = useRef<() => void>(() => undefined);
 
   const loadList = useCallback(async () => {
@@ -190,6 +192,40 @@ export function Teams() {
       setActiveId(d.workflow.workflowId);
       setGoal("");
       void loadList();
+    } catch (e) {
+      setNotice(String((e as Error)?.message ?? e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const steer = async () => {
+    if (!activeId || !steerText.trim()) return;
+    setBusy("steer");
+    setNotice(null);
+    try {
+      const d = await api.workflowSteer(activeId, steerText.trim(), selected);
+      setView(d.workflow);
+      setSteerText("");
+      void loadList();
+      void loadActive();
+    } catch (e) {
+      setNotice(String((e as Error)?.message ?? e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const review = async (approved: boolean) => {
+    if (!activeId || !selected) return;
+    setBusy(approved ? "approve" : "reject");
+    setNotice(null);
+    try {
+      const d = await api.workflowReview(activeId, selected, approved, reviewComment.trim() || undefined);
+      setView(d.workflow);
+      setReviewComment("");
+      void loadList();
+      void loadActive();
     } catch (e) {
       setNotice(String((e as Error)?.message ?? e));
     } finally {
@@ -318,6 +354,24 @@ export function Teams() {
                 {selTask?.blockedReason && <div className="ma-line tl-err">blocked: {selTask.blockedReason}</div>}
                 {selTask?.outputs?.summary && <div className="ma-line tl-ok">summary: {selTask.outputs.summary}</div>}
                 {(selTask?.auditTrail ?? []).length === 0 && <div className="ma-line faint">no events yet for this task</div>}
+              </div>
+              {selNode?.awaitingReview && (
+                <div className="ma-review">
+                  <div className="rail-h">Review decision (engine-enforced)</div>
+                  <input className="inp mono" placeholder="comment (required context for rejects)" value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} />
+                  <div className="ma-review-btns">
+                    <button className="btn" disabled={busy !== null} onClick={() => void review(true)}>Approve</button>
+                    <button className="btn ghost danger" disabled={busy !== null} onClick={() => void review(false)}>Request changes</button>
+                  </div>
+                </div>
+              )}
+              <div className="ma-steer">
+                <div className="rail-h">Steer {selNode ? `· ${selNode.name}` : ""}</div>
+                <textarea className="inp mono" rows={2} placeholder="Inject an instruction into the live run (delegates a task, audited)" value={steerText} onChange={(e) => setSteerText(e.target.value)} />
+                <button className="btn" disabled={busy !== null || !steerText.trim() || !(view?.affordances.steer)} onClick={() => void steer()}>
+                  {busy === "steer" ? "…" : "Steer run"}
+                </button>
+                {view && !view.affordances.steer && <span className="faint mono" style={{ fontSize: 10 }}>run is {view.status} — steer unavailable</span>}
               </div>
               <div className="ma-chips">
                 {(selTask?.outputs?.artifacts ?? []).slice(0, 8).map((a, i) => (

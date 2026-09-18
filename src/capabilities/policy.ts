@@ -18,6 +18,7 @@ import type {
   CapabilityLifecycleState,
   CapabilityPermission,
 } from "./types.ts";
+import { getTrustMode, approvalForMode } from "../control/trust-mode.ts";
 import { mapLegacyScopes } from "./compatibility.ts";
 import { mintGrant } from "./grant.ts";
 
@@ -131,7 +132,18 @@ function evaluatePolicyCore(
   const permissions: CapabilityPermission[] = meta.permissions ?? [];
   const riskTier = meta.riskTier ?? "unknown";
   const scope = meta.scope ?? "shared";
-  const requiresApproval = entry.tool.requiresApproval ?? false;
+  // Phase 4 · Trust Modes: the engine-owned approval posture modulates the
+  // base tool flag. careful widens (dangerous perms / mid+ tiers), autonomous
+  // relaxes to the hard gate only (high/critical tiers + dangerous perms).
+  // The mode decision is traced like every other policy step.
+  const trustMode = getTrustMode();
+  const requiresApproval = approvalForMode(
+    trustMode,
+    entry.tool.requiresApproval ?? false,
+    (meta.permissions ?? []).some((pp: { dangerous?: boolean }) => pp.dangerous === true),
+    String(meta.riskTier ?? "unknown"),
+  );
+  trace.push(`trust-mode: ${trustMode} → requiresApproval=${requiresApproval}`);
 
   // 2. Trust evaluation
   if (trust.level === "quarantined") {

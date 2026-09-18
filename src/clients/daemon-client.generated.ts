@@ -266,6 +266,11 @@ export class XRDaemonClient {
     return await this.call("GET", `/api/v1/agents/workflows/${encodeURIComponent(workflow)}`);
   }
 
+  /** Deterministic planner templates per workflow kind (gallery source). */
+  async agentsTemplates(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/agents/templates");
+  }
+
   /** Plan (dryRun) or plan+run a team workflow; execution is detached, record is authoritative. */
   async agentsWorkflowCreate(): Promise<Record<string, unknown>> {
     return await this.call("POST", "/api/v1/agents/workflows");
@@ -273,6 +278,16 @@ export class XRDaemonClient {
 
   /** Team-run control verbs: pause (drains current wave), resume, cancel — engine-guarded. */
   async agentsWorkflowControl(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/agents/workflows/");
+  }
+
+  /** Steer a live run: delegate an instruction to a worker (audited handoff). */
+  async agentsWorkflowSteer(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/agents/workflows/");
+  }
+
+  /** Human review decision for an awaiting_review task (approve completes, reject blocks). */
+  async agentsWorkflowReview(): Promise<Record<string, unknown>> {
     return await this.call("POST", "/api/v1/agents/workflows/");
   }
 
@@ -369,6 +384,11 @@ export class XRDaemonClient {
   /** Trust & isolation service status (available backends, policy). */
   async trustGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/trust");
+  }
+
+  /** Set the trust mode (careful|balanced|autonomous); the policy gate enforces it. */
+  async trustMode(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/trust/mode");
   }
 
   /** Classify an action's risk tier and resolve its isolation placement. */
@@ -539,6 +559,11 @@ export class XRDaemonClient {
   /** Computer-control subsystem status. */
   async controlStatus(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/control/status");
+  }
+
+  /** Single composed pane: control status + pending + permissions + triggers + mode. */
+  async controlCockpit(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/control/cockpit");
   }
 
   /** Recent control events (?limit=, ≤200). */

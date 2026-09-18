@@ -7,6 +7,7 @@
  *   POST /api/trust/classify  — classify an action and show the placement
  *                               decision (accepts a TrustRequest or {cmd,cwd})
  */
+import { getTrustMode, setTrustMode, isTrustMode } from "../../control/trust-mode.ts";
 import { route, type DaemonRoute } from "./router.ts";
 import { shellTrustSpec } from "../../runtime/trust/tool-support.ts";
 import type { TrustRequest } from "../../runtime/trust/types.ts";
@@ -18,9 +19,23 @@ export function trustRoutes(): DaemonRoute[] {
       path: "/api/trust",
       method: "GET",
       handle: async ({ json, state }) => {
-        if (!state.trust) return json({ enabled: false, reason: "trust service not wired" });
+        if (!state.trust) return json({ enabled: false, mode: getTrustMode(), reason: "trust service not wired" });
         await state.trust.ensureReady();
-        return json({ enabled: true, ...state.trust.health() });
+        return json({ enabled: true, mode: getTrustMode(), ...state.trust.health() });
+      },
+    }),
+    route({
+      // Phase 4 · Trust Modes switch: persisted, audited, and READ by the
+      // capabilities policy gate at decision time (real behaviour).
+      id: "trust.mode",
+      path: "/api/trust/mode",
+      method: "POST",
+      handle: async ({ req, json, state }) => {
+        const body = (await req.json().catch(() => null)) as { mode?: unknown } | null;
+        if (!isTrustMode(body?.mode)) return json({ error: "mode must be careful | balanced | autonomous" }, 400);
+        const ok = setTrustMode(body.mode);
+        state.store.audit("trust.mode.set", { mode: body.mode, ok });
+        return json({ ok, mode: getTrustMode() });
       },
     }),
     route({

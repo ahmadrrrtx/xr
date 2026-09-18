@@ -21,6 +21,8 @@ export interface TeamNodeView {
   artifacts: Array<{ path: string; description?: string }>;
   startedAt: number | null;
   endedAt: number | null;
+  /** True while a human review decision can move this task (approve/reject). */
+  awaitingReview: boolean;
 }
 
 export interface TeamView {
@@ -41,7 +43,7 @@ export interface TeamView {
   costUsd: number;
   costCapUsd: number;
   tokens: number;
-  affordances: { pause: boolean; resume: boolean; cancel: boolean };
+  affordances: { pause: boolean; resume: boolean; cancel: boolean; steer: boolean };
   nodes: TeamNodeView[];
   edges: Array<{ from: string; to: string }>;
 }
@@ -50,8 +52,9 @@ const round4 = (n: number): number => Math.round(n * 10000) / 10000;
 
 /** Which control verbs a run in `status` accepts — single source of truth for
  *  both the route guards and the page's button disabled-states. */
-export function controlAffordances(status: WorkflowStatus): { pause: boolean; resume: boolean; cancel: boolean } {
+export function controlAffordances(status: WorkflowStatus): { pause: boolean; resume: boolean; cancel: boolean; steer: boolean } {
   return {
+    steer: status === "running" || status === "paused" || status === "awaiting_review" || status === "blocked",
     pause: status === "running",
     resume: status === "paused" || status === "blocked" || status === "failed" || status === "cancelled" || status === "awaiting_review",
     cancel: status === "running" || status === "paused" || status === "planned" || status === "awaiting_review" || status === "blocked",
@@ -108,6 +111,7 @@ export function composeTeamView(record: WorkflowRecord): TeamView {
       artifacts: t.outputs?.artifacts ?? [],
       startedAt: t.startedAt ?? null,
       endedAt: t.endedAt ?? null,
+      awaitingReview: t.status === "awaiting_review" || (t.status === "completed" && t.reviewState === "pending"),
     };
   });
   const edges = record.tasks.flatMap((t) => t.dependencies.filter((d) => record.tasks.some((x) => x.taskId === d)).map((d) => ({ from: d, to: t.taskId })));

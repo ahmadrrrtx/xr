@@ -64,31 +64,17 @@ export function Home({
 
   return (
     <div className="home">
-      {approvals.length > 0 && (
-        <div className="appr-banner" role="status">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 16.5v.5" />
-          </svg>
-          <span>
-            <b>{approvals.length} pending approval{approvals.length > 1 ? "s" : ""}</b>
-            <span className="faint"> — {approvals[0].action ?? approvals[0].reason ?? "action"} awaiting your decision</span>
-          </span>
-          <button className="btn small" onClick={onReview}>Review</button>
-        </div>
-      )}
-
       <div className="hero">
         <div className="hero-glow" aria-hidden="true" />
-        <XrLogo height={72} radius={14} />
-        <div className="hero-name">XR Desktop</div>
-        <div className="hero-sub faint">Your AI operating system — agents, skills, and workflows in one workspace.</div>
+        <XrLogo height={112} radius={20} />
+        <div className="hero-sub faint">The AI Agent You Can Actually Trust</div>
       </div>
 
       <div className="composer-card">
         <textarea
           className="composer-input"
           rows={2}
-          placeholder="Ask XR anything…  (Shift+Enter for newline)"
+          placeholder="What do you want XR to do?"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
@@ -114,8 +100,8 @@ export function Home({
           </label>
           <span className="spacer" />
           <button className="send" onClick={submit} disabled={!text.trim()} aria-label="Send to Work">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M5 12h13M12 5l7 7-7 7" />
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M3.4 11.2 20.6 3.3c.6-.3 1.2.3.9.9l-7.9 17.2c-.3.7-1.3.6-1.5-.1l-1.9-6.6a.8.8 0 0 0-.55-.55l-6.6-1.9c-.7-.2-.8-1.2-.1-1.5z" />
             </svg>
           </button>
         </div>
@@ -127,18 +113,37 @@ export function Home({
         <div className="cw-grid">
           {sessions.map((s) => (
             <button key={s.id} className="cw-card" onClick={() => onOpenRun(s.id)} title={`Open ${s.id}`}>
-              <div className="cw-top">
-                <span className="chip">{s.mode ?? "agent"}</span>
-                <i className={`sdot ${statusDot(s.status)}`} aria-label={s.status ?? "unknown"} title={s.status ?? "unknown"} />
-              </div>
               <div className="cw-title">{s.title || s.prompt?.slice(0, 60) || s.id}</div>
-              <div className="cw-meta faint mono">
-                {s.provider ?? "—"} · {typeof s.costUsd === "number" ? `$${s.costUsd.toFixed(4)}` : "no cost data"}
+              <div className="cw-top">
+                <span className="chip cw-cat">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                    <path d="M4 8h16v12H4zM9 8V5h6v3" />
+                  </svg>
+                  {String(s.mode ?? "agent").toUpperCase()}
+                </span>
+              </div>
+              <div className="cw-foot">
+                <span className={`cw-state ${statusDot(s.status)}`}>
+                  <i className={`sdot ${statusDot(s.status)}`} aria-label={s.status ?? "unknown"} />
+                  {statusDot(s.status) === "ok" ? "Green" : statusDot(s.status) === "bad" ? "Red" : statusDot(s.status) === "run" ? "Yellow" : "Idle"}
+                </span>
+                <span className="cw-cost mono">{`$${(typeof s.costUsd === "number" ? s.costUsd : 0).toFixed(2)}`}</span>
               </div>
             </button>
           ))}
         </div>
       </section>
+
+      {approvals.length > 0 && (
+        <div className="appr-banner" role="status">
+          <span className="ab-pill">{approvals.length} Pending Approval{approvals.length > 1 ? "s" : ""}</span>
+          <div className="ab-line">
+            {String(approvals[0].tool ?? approvals[0].action ?? approvals[0].reason ?? "An agent action")}
+            {" "}and {approvals.length > 1 ? `${approvals.length - 1} more` : "the latest"} request{approvals.length > 1 ? "s" : ""} need review
+          </div>
+          <button className="btn small" onClick={onReview}>Review</button>
+        </div>
+      )}
     </div>
   );
 }

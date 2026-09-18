@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   api,
   asList,
+  type AgentTemplate,
   type McpServer,
   type PluginInfo,
   type ProviderInfo,
@@ -88,7 +89,8 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
   // Skills — inspect detail
   const [inspect, setInspect] = useState<{ id: string; data: SkillInspect | null; loading: boolean } | null>(null);
   // Skills — marketplace
-  const [skillMode, setSkillMode] = useState<"installed" | "market">("installed");
+  const [skillMode, setSkillMode] = useState<"installed" | "market" | "templates">("installed");
+  const [templates, setTemplates] = useState<AgentTemplate[]>([]);
   const [market, setMarket] = useState<Record<string, unknown> | null>(null);
   const [marketQ, setMarketQ] = useState("");
   const [marketLoading, setMarketLoading] = useState(false);
@@ -155,6 +157,9 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
     } else if (tab === "Skills") {
       loadSkills();
       if (skillMode === "market") loadMarket();
+      if (skillMode === "templates") {
+        api.agentTemplates().then((r) => setTemplates(r.templates ?? [])).catch((e) => setNote(`templates: ${e}`));
+      }
     } else if (tab === "MCP") loadMcp();
     else if (tab === "Plugins") loadPlugins();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -402,8 +407,13 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
             <div className="seg" role="group" aria-label="Skills source">
               <button className={skillMode === "installed" ? "on" : ""} onClick={() => setSkillMode("installed")}>Installed</button>
               <button className={skillMode === "market" ? "on" : ""} onClick={() => setSkillMode("market")}>Marketplace</button>
+              <button className={skillMode === "templates" ? "on" : ""} onClick={() => setSkillMode("templates")}>Templates</button>
             </div>
-            {skillMode === "installed" ? (
+            {skillMode === "templates" ? (
+              <span className="faint mono" style={{ whiteSpace: "nowrap" }}>
+                {templates.length} planner templates · engine-composed (GET /agents/templates)
+              </span>
+            ) : skillMode === "installed" ? (
               <>
                 <input
                   className="mono"
@@ -467,6 +477,35 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
                 )}
               </div>
               {renderDetail()}
+            </div>
+          )}
+
+          {skillMode === "templates" && (
+            <div className="tpl-grid">
+              {templates.map((t) => (
+                <section key={t.kind} className="tpl-card">
+                  <div className="tpl-head">
+                    <b>{t.name}</b>
+                    <span className="tpl-steps mono">{t.steps} steps</span>
+                  </div>
+                  <p className="tpl-sum">{t.summary}</p>
+                  <div className="tpl-roles">
+                    {t.roles.map((r) => <span key={r} className="tpl-role mono">{r}</span>)}
+                  </div>
+                  <div className="tpl-goal mono">{t.sampleGoal}</div>
+                  <div className="tpl-actions">
+                    <button
+                      className="btn"
+                      onClick={() => api.workflowCreate({ goal: t.sampleGoal, kind: t.kind })
+                        .then((r) => setNote(`started ${r.workflow.workflowId} — see Teams`))
+                        .catch((e) => setNote(`template run: ${e}`))}
+                    >
+                      Run sample
+                    </button>
+                  </div>
+                </section>
+              ))}
+              {templates.length === 0 && <div className="empty">No templates loaded.</div>}
             </div>
           )}
 
