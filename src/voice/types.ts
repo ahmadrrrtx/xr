@@ -7,8 +7,8 @@
  */
 
 export type VoiceMode = "off" | "push-to-talk" | "wake-word" | "always-listen";
-export type VoiceSttBackend = "auto" | "http" | "groq" | "openai" | "whisper-cli" | "whispercpp" | "disabled";
-export type VoiceTtsBackend = "auto" | "http" | "piper" | "kokoro-cli" | "system" | "say" | "espeak" | "powershell" | "disabled";
+export type VoiceSttBackend = "auto" | "sherpa" | "http" | "groq" | "openai" | "whisper-cli" | "whispercpp" | "disabled";
+export type VoiceTtsBackend = "auto" | "sherpa" | "http" | "piper" | "kokoro-cli" | "system" | "say" | "espeak" | "powershell" | "disabled";
 export type VoiceVadBackend = "energy" | "silero-external" | "none";
 export type VoiceWakeBackend = "text" | "openwakeword-external" | "none";
 export type VoiceInterruptionPolicy = "barge-in" | "finish-sentence" | "disabled";

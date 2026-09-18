@@ -9,6 +9,7 @@
 
 import { agentsRoutes } from "./agents.routes.ts";
 import { approvalRoutes } from "./approvals.routes.ts";
+import { voiceRoutes } from "./voice.routes.ts";
 import { budgetRoutes } from "./budget.routes.ts";
 import { triggerRoutes } from "./triggers.routes.ts";
 import { chatRoutes } from "./chat.routes.ts";
@@ -41,6 +42,7 @@ export function listBaseRoutes(): DaemonRoute[] {
     // Phase 2 · F-11 — durable approval endpoints (before control routes so
     // /api/approvals/* resolves before the control prefix routes).
     ...approvalRoutes(),
+    ...voiceRoutes(),
     ...onboardingRoutes(),
     ...filesRoutes(),
     // Phase 2B · T-1 — workspace terminal (command runner, SSE). Mounted

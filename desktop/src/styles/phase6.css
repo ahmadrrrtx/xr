@@ -394,3 +394,33 @@
 .tc-card { background: var(--xr-surface-1); border: 1px solid var(--xr-border); border-radius: var(--xr-radius-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
 .tc-card .rail-h { margin-bottom: 2px; }
 .tc-card .appr2 { width: 100%; }
+
+/* ── Phase 4 · Voice mode (mockup 09) ─────────────────────────────────────── */
+.vc-root { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(6, 9, 12, 0.86); backdrop-filter: blur(14px); }
+.vc-dock-btn { position: absolute; top: 18px; right: 22px; width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--xr-border); background: var(--xr-surface-2); color: var(--xr-text-muted); display: grid; place-items: center; cursor: pointer; }
+.vc-dock-btn:hover { color: var(--xr-text); border-color: var(--xr-cyan); }
+.vc-ring { width: 300px; height: 300px; border-radius: 50%; padding: 10px; background: conic-gradient(from 210deg, #3a4148, #14181c 30%, #4a525a 55%, #101418 80%, #3a4148); box-shadow: 0 0 60px 12px rgba(72, 222, 240, 0.35), 0 0 140px 40px rgba(72, 222, 240, 0.12); transition: box-shadow .4s; }
+.vc-ring.speaking { box-shadow: 0 0 80px 18px rgba(72, 222, 240, 0.55), 0 0 180px 60px rgba(72, 222, 240, 0.2); }
+.vc-ring.listening { box-shadow: 0 0 70px 16px rgba(72, 222, 240, 0.45), 0 0 160px 50px rgba(72, 222, 240, 0.16); }
+.vc-ring.idle { box-shadow: 0 0 30px 6px rgba(120, 130, 140, 0.25); }
+.vc-ring-inner { width: 100%; height: 100%; border-radius: 50%; background: radial-gradient(circle at 50% 35%, #10202a, #05080b 70%); display: grid; place-items: center; overflow: hidden; }
+.vc-avatar { width: 78%; height: 78%; object-fit: contain; filter: drop-shadow(0 0 24px rgba(72, 222, 240, 0.45)); }
+.vc-wave { max-width: 62vw; }
+.vc-title { font-size: 30px; font-weight: 300; letter-spacing: .4px; color: var(--xr-text); }
+.vc-hint { font-size: 12.5px; color: var(--xr-text-faint); }
+.vc-transcript { max-width: 640px; text-align: center; font-size: 12px; color: var(--xr-text-muted); background: rgba(255,255,255,.04); border: 1px solid var(--xr-border); border-radius: 10px; padding: 8px 14px; }
+.vc-approval { font-size: 12.5px; color: #ffd479; background: rgba(255, 212, 121, .08); border: 1px solid rgba(255, 212, 121, .35); border-radius: 10px; padding: 8px 14px; }
+.vc-pills { display: flex; gap: 8px; margin-top: 4px; }
+.vc-pill { font-size: 11.5px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--xr-border); background: var(--xr-surface-2); color: var(--xr-text-faint); }
+.vc-pill.on { background: var(--xr-cyan); border-color: var(--xr-cyan); color: #04262b; font-weight: 600; }
+.vc-bar { display: flex; gap: 12px; align-items: center; margin-top: 18px; }
+.vc-mic { width: 220px; height: 52px; border-radius: 999px; border: 1px solid #5a636c; background: linear-gradient(180deg, #b9c1c9, #6c757e 45%, #4a525a); color: #10161b; display: grid; place-items: center; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 6px 18px rgba(0,0,0,.5); }
+.vc-mic:hover { filter: brightness(1.08); }
+.vc-mute { width: 44px; height: 44px; border-radius: 50%; border: 1px solid #5a636c; background: linear-gradient(180deg, #2b3238, #171c21); color: var(--xr-text-muted); display: grid; place-items: center; cursor: pointer; }
+.vc-mute.on { border-color: #ff5d74; color: #ff5d74; }
+/* docked orb */
+.vd-orb { position: fixed; right: 22px; bottom: 52px; z-index: 70; width: 74px; height: 74px; border-radius: 50%; border: none; background: transparent; cursor: pointer; display: grid; place-items: center; }
+.vd-glow { position: absolute; inset: -6px; border-radius: 50%; background: radial-gradient(circle, rgba(72,222,240,.55), rgba(72,222,240,0) 70%); }
+.vd-orb.idle .vd-glow { background: radial-gradient(circle, rgba(120,130,140,.35), rgba(120,130,140,0) 70%); }
+.vd-avatar { width: 62px; height: 62px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(72,222,240,.8); box-shadow: 0 4px 18px rgba(0,0,0,.6); background: #06090c; }
+.vd-mute { position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px; border-radius: 50%; background: #ff5d74; }
