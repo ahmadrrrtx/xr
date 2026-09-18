@@ -219,6 +219,21 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     sse: true,
   },
   "agents.list": { summary: "List built-in orchestration roles and live multi-agent workflow runs.", tag: "agents", stability: "stable" },
+  "agents.workflow.create": {
+    summary: "Plan (dryRun) or plan+run a team workflow; execution is detached, record is authoritative.",
+    tag: "agents",
+    stability: "experimental",
+  },
+  "agents.workflow.control": {
+    summary: "Team-run control verbs: pause (drains current wave), resume, cancel — engine-guarded.",
+    tag: "agents",
+    stability: "experimental",
+  },
+  "agents.events": {
+    summary: "SSE downlink for task lifecycle events (started/ready/blocked/completed/failed/note).",
+    tag: "agents",
+    stability: "experimental",
+  },
   "agents.workflow.get": {
     summary: "Inspect an agent workflow run by id.",
     tag: "agents",

@@ -121,7 +121,10 @@ export function createAgentExecutor(opts: { surface?: SurfaceId } = {}): AgentEx
       appPromise = (async () => {
         const { XRApp } = await import("../core/app.ts"); // static literal — compile-safe
         const app = new XRApp();
-        const profile = providerClosure(["agent"]);
+        // Phase 4 · team-run control plane: the daemon kernel also boots the
+        // multi-agents provider so /api/agents/* routes resolve the CANONICAL
+        // MultiAgentService instead of re-implementing orchestration (SEC-07).
+        const profile = providerClosure(["agent", "multi-agents"]);
         await app.bootstrap({ profile });
         await app.start();
         appValue = app;

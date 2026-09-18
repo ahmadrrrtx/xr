@@ -223,6 +223,29 @@ export class MultiAgentService implements LifecycleHook {
     return record;
   }
 
+  /**
+   * Phase 4 · team-run control plane — pause a RUNNING workflow between worker
+   * waves. In-flight workers are NOT aborted (killing a worker mid-step would
+   * corrupt its ledger partition and audit trail); the execution loop observes
+   * the paused status at its next tick and returns, leaving the run resumable
+   * through resumeWorkflow(). stopWorkflow() remains the hard-cancel path.
+   */
+  pauseWorkflow(workflowId: string): WorkflowRecord {
+    const record = this.requireWorkflow(workflowId);
+    if (record.status !== "running") {
+      throw new Error(`workflow ${workflowId} is '${record.status}', only a running workflow can pause`);
+    }
+    record.status = "paused";
+    record.updatedAt = Date.now();
+    const live = this.workflowRuns.get(workflowId);
+    if (live) {
+      live.record.status = "paused";
+      live.record.updatedAt = record.updatedAt;
+    }
+    this.persist(record, "workflow.updated", { workflowId, action: "pause" });
+    return record;
+  }
+
   async delegateTask(workflowId: string, agentId: string, instruction: string): Promise<WorkflowRecord> {
     if (!hasAgent(agentId)) {
       throw new Error(`Unknown agent: ${agentId}`);
@@ -498,6 +521,14 @@ export class MultiAgentService implements LifecycleHook {
       this.recomputeWorkflowStatus(record);
       this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "tick" });
       if ((record.status as WorkflowStatus) === "failed" || (record.status as WorkflowStatus) === "blocked") {
+        return record;
+      }
+      // Phase 4 · USER pause drains here: the wave above finished, no new wave
+      // starts. cancellationState 'requested' also recomputes to 'paused' (the
+      // cancel drain, A-19) — that path must fall through to finalization, so
+      // only a pause with an ACTIVE cancellation state returns early.
+      if ((record.status as WorkflowStatus) === "paused" && (record.cancellationState as string) !== "requested") {
+        this.persist(record, "workflow.updated", { workflowId: record.workflowId, action: "paused" });
         return record;
       }
     }

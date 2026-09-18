@@ -134,6 +134,14 @@
       "reason": "Phase 0 (reconciliation execution plan) mandates additive non-interactive `xr providers add --id --label --base-url --model [--key-env] [--header] --yes` flags in this module: the flag parser, strict validators (id/base-url/header), --yes unattended path, and usage text; all additive, no behavior change to the interactive path.",
       "plan": "Split the additive flag surface into src/commands/providers-add-flags.ts (parser + validators + add-by-flags command), leaving providers.ts as the router - scheduled with the Phase 1 providers hardening.",
       "review": "2026-10-31"
+    },
+    {
+      "path": "src/services/multi-agent-service.ts",
+      "lines": 824,
+      "owner": "multi-agents",
+      "reason": "The supervisor runtime: planning hand-off, ledger-funded worker execution loop, review inference, cancellation/resume and (Phase 4) pauseWorkflow between worker waves. Phase 4 added +26 lines (pause verb + the loop's pause drain check) on top of the Phase-6 funding/identity/verifier work; the service is the single authority that holds LIVE run handles (workflowRuns map), so pause/resume/cancel must live next to the loop they interrupt \u2014 extracting them earlier would split the execution authority boundary. CI repair (2026-09-18): +3 lines \u2014 the pause drain check in the execution loop must comment + guard that a USER pause (cancellationState 'active') returns early while the A-19 CANCEL drain (cancellationState 'requested', which also recomputes to status 'paused') falls through to finalization; without the guard the cancel test observed 'paused' instead of 'cancelled'.",
+      "plan": "Extract the execution-loop tick (wave selection + dependency refresh + status recompute) into src/services/multi-agent-loop.ts and the control verbs (pause/resume/stop) into src/services/multi-agent-control.ts, leaving this file as composition + task execution. Scheduled with the Phase-4 control-cockpit consolidation, which consumes the same verbs.",
+      "review": "2027-03-31"
     }
   ]
 }

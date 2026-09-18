@@ -189,13 +189,53 @@ export interface WorkflowTaskV {
   taskId: string; agentId?: string; role?: string; name?: string; description?: string;
   parentTaskId?: string; dependencies?: string[]; status?: string;
   startedAt?: number; endedAt?: number; retryCount?: number; errors?: string[];
-  outputs?: { summary?: string }; auditTrail?: WorkflowAuditEventV[]; blockedReason?: string;
+  outputs?: { summary?: string; artifacts?: Array<{ path: string; description?: string }> };
+  auditTrail?: WorkflowAuditEventV[]; blockedReason?: string;
   [k: string]: unknown;
 }
 export interface WorkflowPartition {
   partitionId?: string; childId?: string; agentId?: string | null;
   capUsd?: number; capTokens?: number; consumedUsd?: number; consumedTokens?: number; status?: string;
 }
+/** Phase 4 · mirrors src/daemon/routes/agents-view.ts TeamView (engine-computed). */
+export interface TeamView {
+  workflowId: string;
+  kind: string;
+  goal: string;
+  status: string;
+  reviewState: string;
+  approvalState: string;
+  createdAt: number;
+  startedAt: number | null;
+  endedAt: number | null;
+  updatedAt: number;
+  progressPct: number;
+  tasksTotal: number;
+  tasksCompleted: number;
+  tasksFailed: number;
+  costUsd: number;
+  costCapUsd: number;
+  tokens: number;
+  affordances: { pause: boolean; resume: boolean; cancel: boolean };
+  nodes: Array<{
+    taskId: string;
+    name: string;
+    role: string;
+    agentId: string;
+    phase: string | null;
+    status: string;
+    reviewState: string;
+    approvalState: string;
+    blockedReason: string | null;
+    tier: number;
+    budget: { capUsd: number; consumedUsd: number; capTokens: number; consumedTokens: number };
+    artifacts: Array<{ path: string; description?: string }>;
+    startedAt: number | null;
+    endedAt: number | null;
+  }>;
+  edges: Array<{ from: string; to: string }>;
+}
+
 export interface WorkflowDetail {
   workflowId?: string; kind?: string; goal?: string; status?: string;
   reviewState?: string; approvalState?: string; cancellationState?: unknown;
@@ -310,6 +350,15 @@ export const api = {
   /* ---------- phase 6 · team-run board (multi-agent workflows, engine-owned) ---------- */
   agents: () => req<{ roles?: Record<string, unknown>[]; workflows?: WorkflowSummary[]; health?: Record<string, unknown> }>("/agents"),
   workflow: (id: string) => req<WorkflowDetail>(`/agents/workflows/${encodeURIComponent(id)}`),
+  /** Phase 4 · engine-composed team-run snapshot (progress/cost/nodes/edges/affordances). */
+  workflowView: (id: string) => req<{ workflow: TeamView }>(`/agents/workflows/${encodeURIComponent(id)}/view`),
+  workflowCreate: (body: Record<string, unknown>) =>
+    req<{ workflow: TeamView }>("/agents/workflows", { method: "POST", body: JSON.stringify(body) }),
+  workflowControl: (id: string, action: "pause" | "resume" | "cancel") =>
+    req<{ workflow: TeamView }>(`/agents/workflows/${encodeURIComponent(id)}/control`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
 
   /* ---------- phase 4 · Trust Center (engine-owned truth; shell renders + forwards) ---------- */
   trust: () => req<TrustStatus>("/trust"),
