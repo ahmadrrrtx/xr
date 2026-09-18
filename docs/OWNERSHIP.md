@@ -131,6 +131,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/ux-status.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/ux/` | @ahmadrrrtx | explicit entry |
 | `test/voice.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/voice/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/workflow/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/api-compat.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/baseline-inventory.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

@@ -13,6 +13,7 @@ import type { VoiceSettings, VoiceSttBackend } from "./types.ts";
 import { commandExists, runCommand } from "../util/process.ts";
 import { mkdtempPath, readText, removePath, writeBytes } from "../util/fs-async.ts";
 import { voiceIoLimit } from "../util/concurrency.ts";
+import { loadNativeVoice } from "./native.ts";
 
 export interface SttOptions {
   backend?: VoiceSttBackend | "local";
@@ -31,6 +32,11 @@ export interface SttResult {
   backend: string;
   language?: string;
   confidence?: number;
+}
+
+function sherpaSttAvailable(): boolean {
+  const native = loadNativeVoice();
+  return Boolean(native.ok && native.handles && !native.handles.sttDetail.startsWith("offline STT models missing"));
 }
 
 function normalizeBackend(b?: VoiceSttBackend | "local"): VoiceSttBackend {
@@ -116,6 +122,11 @@ export class SpeechToText {
       if (selected.backend === "http" || selected.backend === "groq" || selected.backend === "openai") {
         return this.transcribeHttp(selected.backend, audio, mime);
       }
+      if (selected.backend === "sherpa") {
+        const native = loadNativeVoice();
+        const r = native.handles?.recognize(audio);
+        return { ok: Boolean(r?.text), text: r?.text ?? "", backend: "sherpa", detail: r?.detail ?? native.handles?.sttDetail };
+      }
       if (selected.backend === "whisper-cli") return this.transcribeWhisperCli(audio);
       if (selected.backend === "whispercpp") return this.transcribeWhisperCpp(audio);
       return { ok: false, text: "", backend: selected.backend, detail: "STT disabled" };
@@ -133,6 +144,10 @@ export class SpeechToText {
       selected = { backend: this.backend === "auto" ? "http" : this.backend, available: true, detail: "test fetch injected" };
     } else if (this.backend === "disabled") {
       selected = { backend: "disabled", available: false, detail: "STT disabled" };
+    } else if (this.backend === "sherpa") {
+      const native = loadNativeVoice();
+      const ok = Boolean(native.ok && native.handles && !native.handles.sttDetail.startsWith("offline STT models missing"));
+      selected = { backend: "sherpa", available: ok, detail: ok ? (native.handles?.sttDetail ?? "sherpa-onnx offline") : native.detail };
     } else if (this.backend === "whisper-cli") {
       const ok = await commandExists("whisper");
       selected = { backend: "whisper-cli", available: ok, detail: ok ? "whisper CLI found" : "Install openai-whisper CLI" };
@@ -148,6 +163,8 @@ export class SpeechToText {
       }
     } else if (this.backend === "http") {
       selected = { backend: "http", available: true, detail: `HTTP STT at ${this.baseUrl}` };
+    } else if (sherpaSttAvailable()) {
+      selected = { backend: "sherpa", available: true, detail: loadNativeVoice().handles?.sttDetail ?? "sherpa-onnx offline" };
     } else if (await commandExists("whisper")) {
       selected = { backend: "whisper-cli", available: true, detail: "whisper CLI found" };
     } else {

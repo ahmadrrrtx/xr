@@ -351,6 +351,12 @@ export const api = {
     req<{ serverId: string; drift: { status: string; changed: { tool: string; before: string; after: string }[]; added: string[]; removed: string[] } }>(
       `/mcp/pins/diff/${encodeURIComponent(serverId)}`,
     ),
+  voiceStatus: () => req<Record<string, unknown>>("/voice/status"),
+  voiceSession: (action: "start" | "stop") => req<Record<string, unknown>>("/voice/session", { method: "POST", body: JSON.stringify({ action }) }),
+  voiceAudio: (pcm: string) => req<Record<string, unknown>>("/voice/audio", { method: "POST", body: JSON.stringify({ pcm }) }),
+  voiceBargeIn: () => req<Record<string, unknown>>("/voice/barge-in", { method: "POST", body: "{}" }),
+  voicePlayed: () => req<Record<string, unknown>>("/voice/played", { method: "POST", body: "{}" }),
+  voiceSay: (text: string) => req<Record<string, unknown>>("/voice/say", { method: "POST", body: JSON.stringify({ text }) }),
   skillsPins: () => req<{ pins: Record<string, boolean> }>("/skills/pins"),
   skillsPin: (id: string, pinned: boolean) =>
     req<Record<string, unknown>>("/skills/pin", { method: "POST", body: JSON.stringify({ id, pinned }) }),

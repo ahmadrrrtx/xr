@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { VoiceSettings, VoiceTtsBackend } from "./types.ts";
 import { commandExists, runCommand, spawnAndWait } from "../util/process.ts";
+import { loadNativeVoice } from "./native.ts";
 import { mkdtempPath, readBytes, removePath } from "../util/fs-async.ts";
 import { voiceIoLimit } from "../util/concurrency.ts";
 
@@ -30,7 +31,7 @@ export interface TtsResult {
   ok: boolean;
   audio: Uint8Array | null;
   spokenText: string;
-  engine: "http" | "piper" | "kokoro-cli" | "system" | "say" | "espeak" | "powershell" | "none";
+  engine: "http" | "piper" | "kokoro-cli" | "system" | "say" | "espeak" | "powershell" | "sherpa" | "none";
   detail?: string;
 }
 
@@ -100,6 +101,12 @@ export class TextToSpeech {
       if (!selected.available) return { ok: false, audio: null, spokenText, engine: "none", detail: selected.detail };
 
       if (selected.engine === "http") return this.speakHttp(spokenText);
+      if (selected.engine === "sherpa") {
+        const native = loadNativeVoice();
+        const out = native.handles?.speak(spokenText) ?? null;
+        if (!out) return { ok: false, audio: null, spokenText, engine: "none", detail: native.handles?.ttsDetail ?? "offline TTS unavailable" };
+        return { ok: true, audio: out.wav, spokenText, engine: "sherpa", sampleRate: out.sampleRate };
+      }
       if (selected.engine === "piper") return this.speakPiper(spokenText);
       if (selected.engine === "kokoro-cli") return this.speakKokoroCli(spokenText);
       if (selected.engine === "say" || selected.engine === "espeak" || selected.engine === "powershell" || selected.engine === "system") {
@@ -122,6 +129,12 @@ export class TextToSpeech {
       selected = { engine: this.engine === "auto" ? "http" : this.engine, available: true, detail: "test fetch injected" };
     } else if (this.engine === "http") {
       selected = { engine: "http", available: true, detail: `HTTP TTS at ${this.baseUrl}` };
+    } else if (this.engine === "sherpa") {
+      const native = loadNativeVoice();
+      const ok = Boolean(native.ok && native.handles && native.handles.ttsDetail.startsWith("sherpa-onnx piper"));
+      selected = { engine: "sherpa", available: ok, detail: ok ? (native.handles?.ttsDetail ?? "sherpa-onnx piper offline") : native.detail };
+    } else if (this.engine === "auto" && loadNativeVoice().ok && loadNativeVoice().handles?.ttsDetail.startsWith("sherpa-onnx piper")) {
+      selected = { engine: "sherpa", available: true, detail: loadNativeVoice().handles?.ttsDetail ?? "sherpa-onnx piper offline" };
     } else if (this.engine === "piper") {
       const ok = await commandExists("piper");
       selected = { engine: "piper", available: ok, detail: ok ? "piper found" : "Install piper" };

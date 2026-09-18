@@ -176,6 +176,41 @@ export class XRDaemonClient {
     return await this.call("POST", `/api/v1/approvals/${encodeURIComponent(approvalId)}/decision`, body);
   }
 
+  /** Voice session state + offline STT/TTS backend probes. */
+  async voiceStatus(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/voice/status");
+  }
+
+  /** Start/stop the live voice session (mic uplink armed). */
+  async voiceSession(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/session");
+  }
+
+  /** Upload pcm16-le 16 kHz mic chunks; engine endpointing + VAD. */
+  async voiceAudio(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/audio");
+  }
+
+  /** SSE downlink: state/final transcript/tts audio/barge-in/approvals. */
+  async voiceEvents(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/voice/events");
+  }
+
+  /** Barge-in: cancel current TTS (and flagged run), return to listening. */
+  async voiceBarge(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/barge-in");
+  }
+
+  /** Shell reports TTS playback finished; session returns to listening. */
+  async voicePlayed(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/played");
+  }
+
+  /** Make the assistant speak a line through the offline TTS pipeline. */
+  async voiceSay(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/say");
+  }
+
   /** First-run status: does this install need setup, and why. */
   async onboardingStatus(): Promise<z.infer<typeof S.OnboardingStatusResponse>> {
     return await this.call("GET", "/api/v1/onboarding/status");

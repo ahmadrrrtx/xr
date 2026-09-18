@@ -95,8 +95,19 @@ export const THRESHOLD = 800;
  * splitting the MCP authority boundary it extends. No waived giant grew
  * (mcp/client.ts +30, manager.ts +6). Measured 139,574. Smallest round
  * number that fits; 110k stays the direction of travel.
+ *
+ * ── Phase 4 · 140,000 → 140,500 (offline voice pipeline surface) ───────────
+ * Phase 4 voice adds the daemon transport the injected pipeline was missing
+ * (voice.routes.ts: session state machine, endpointing, SSE downlink,
+ * approvals-in-voice) plus native.ts, the fail-closed loader for the optional
+ * on-device sherpa-onnx STT/Piper TTS bindings, and the sherpa branches in
+ * stt.ts/tts.ts. This is consent-plane transport: it composes the existing
+ * pipeline, VAD and approval store and cannot live in a satellite without
+ * splitting the audio authority boundary. No waived giant grew (stt.ts +24,
+ * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
+ * the direction of travel.
  */
-export const TREE_CEILING = 140_000;
+export const TREE_CEILING = 140_500;
 
 interface Waiver {
   readonly path: string;

@@ -19,10 +19,10 @@ export function Settings() {
   const [config, setConfig] = useState<Record<string, unknown> | null>(null);
   const [envCaps, setEnvCaps] = useState<Record<string, unknown> | null>(null);
   const [envStatus, setEnvStatus] = useState<Record<string, unknown> | null>(null);
-  const [envPolicy, setEnvPolicy] = useState<Record<string, unknown> | null>(null);
   const [triggers, setTriggers] = useState<TriggersState | null>(null);
   const [privacy, setPrivacy] = useState<ShieldStatus | null>(null);
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
+  const [voice, setVoice] = useState<Record<string, unknown> | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   const load = useCallback((t: Tab) => {
@@ -38,10 +38,11 @@ export function Settings() {
     if (t === "Local") {
       api.environmentCapabilities().then(setEnvCaps).catch(() => setEnvCaps(null));
       api.environmentStatus().then(setEnvStatus).catch(() => setEnvStatus(null));
-      api.environmentPolicy().then(setEnvPolicy).catch(() => setEnvPolicy(null));
     }
     if (t === "Automations") api.triggers().then(setTriggers).catch(() => setTriggers(null));
-    if (t === "Voice") api.environmentPolicy().then(setEnvPolicy).catch(() => setEnvPolicy(null));
+    if (t === "Voice") {
+      api.voiceStatus().then(setVoice).catch(() => setVoice(null));
+    }
     if (t === "Privacy") api.shieldPrivacy().then(setPrivacy).catch(() => setPrivacy(null));
     if (t === "Advanced") {
       api.config().then(setConfig).catch(() => setConfig(null));
@@ -156,18 +157,24 @@ export function Settings() {
       )}
 
       {tab === "Voice" && (
-        <section className="tc-card" style={{ maxWidth: 640 }}>
-          <div className="rail-h">Voice pipeline</div>
+        <section className="tc-card" style={{ maxWidth: 720 }}>
+          <div className="rail-h">Voice pipeline (GET /voice/status) — offline, on-device</div>
           <div className="kv2">
-            <span className="k">modality policy</span>
-            <span className={((envPolicy?.environment as Record<string, unknown> | undefined)?.modalities as Record<string, unknown> | undefined)?.voice ? "tl-ok" : "tl-err"}>
-              {String((((envPolicy?.environment as Record<string, unknown> | undefined)?.modalities as Record<string, unknown> | undefined)?.voice) ?? false)}
+            <span className="k">session</span><span className={voice?.state === "idle" ? "" : "tl-ok"}>{String(voice?.state ?? "—")}</span>
+            <span className="k">stt</span>
+            <span className={(voice?.stt as Record<string, unknown> | undefined)?.available ? "tl-ok" : "tl-wait"}>
+              {String((voice?.stt as Record<string, unknown> | undefined)?.backend ?? "—")} · {String((voice?.stt as Record<string, unknown> | undefined)?.detail ?? "unavailable")}
             </span>
-            <span className="k">build state</span><span className="tl-wait">not in this build</span>
+            <span className="k">tts</span>
+            <span className={(voice?.tts as Record<string, unknown> | undefined)?.available ? "tl-ok" : "tl-wait"}>
+              {String((voice?.tts as Record<string, unknown> | undefined)?.engine ?? "—")} · {String((voice?.tts as Record<string, unknown> | undefined)?.detail ?? "unavailable")}
+            </span>
+            <span className="k">native</span><span className="mono">{String((voice?.native as Record<string, unknown> | undefined)?.detail ?? "—")}</span>
           </div>
           <p className="faint" style={{ fontSize: 12 }}>
-            The engine exposes voice approval + STT/TTS primitives, but the desktop overlay (PTT, barge-in,
-            approvals-in-voice) ships with the Phase-4 backend wave. The status bar reports VOICE OFFLINE honestly.
+            Voice mode lives on the rail (mic icon): full-screen avatar overlay with push-to-talk, barge-in,
+            approvals-in-voice and a docked mini-avatar that keeps controlling XR while you work. STT/TTS run
+            locally (sherpa-onnx zipformer + Piper); whisper CLI / espeak are fallbacks; cloud is opt-in only.
           </p>
         </section>
       )}

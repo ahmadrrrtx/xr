@@ -239,6 +239,15 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   "mcp.pin": { summary: "SEC-01 pin a server's current tool contracts (hash snapshot).", tag: "extensions", stability: "experimental" },
   "mcp.unpin": { summary: "SEC-01 drop a server's pin (legacy per-call approvals resume).", tag: "extensions", stability: "experimental" },
 
+  // ── voice (Phase 4 offline pipeline surface) ──────────────────────────────
+  "voice.status": { summary: "Voice session state + offline STT/TTS backend probes.", tag: "voice", stability: "experimental" },
+  "voice.session": { summary: "Start/stop the live voice session (mic uplink armed).", tag: "voice", stability: "experimental" },
+  "voice.audio": { summary: "Upload pcm16-le 16 kHz mic chunks; engine endpointing + VAD.", tag: "voice", stability: "experimental" },
+  "voice.events": { summary: "SSE downlink: state/final transcript/tts audio/barge-in/approvals.", tag: "voice", stability: "experimental" },
+  "voice.barge": { summary: "Barge-in: cancel current TTS (and flagged run), return to listening.", tag: "voice", stability: "experimental" },
+  "voice.played": { summary: "Shell reports TTS playback finished; session returns to listening.", tag: "voice", stability: "experimental" },
+  "voice.say": { summary: "Make the assistant speak a line through the offline TTS pipeline.", tag: "voice", stability: "experimental" },
+
   // ── budget ────────────────────────────────────────────────────────────────
   "budget.get": { summary: "Budget caps, current usage, and remaining headroom.", tag: "budget", stability: "stable" },
   "budget.set": {
