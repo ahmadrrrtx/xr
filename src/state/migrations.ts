@@ -17,6 +17,7 @@
  *     migration (it simply no longer has the tables/columns).
  */
 
+import { withMigrationLock } from "./migration-lock.ts";
 import type { WorkspaceStore } from "./workspace-store.ts";
 import { MIGRATION_10 } from "./migrate-10.ts";
 import { MIGRATION_11 } from "./migrate-11.ts";
@@ -729,13 +730,18 @@ export function currentSchemaVersion(store: WorkspaceStore): number {
 
 /**
  * Apply pending migrations up to `target` (default: latest). Idempotent AND
- * race-safe across processes: the applied-check runs INSIDE the serialized
+ * race-safe across processes: the whole run holds an exclusive cross-process
+ * lock (see withMigrationLock), the applied-check runs INSIDE the serialized
  * write transaction (`BEGIN IMMEDIATE` serializes writers), and the
  * bookkeeping insert is `INSERT OR IGNORE`, so two processes racing to apply
  * migration N on a fresh database cannot produce a UNIQUE violation (the
  * loser's transaction sees the winner's committed row and no-ops).
  */
 export function runMigrationsUp(store: WorkspaceStore, target: number = LATEST_SCHEMA_VERSION): string[] {
+  return withMigrationLock(store.dbPath, () => runMigrationsUpLocked(store, target));
+}
+
+function runMigrationsUpLocked(store: WorkspaceStore, target: number): string[] {
   ensureMigrationTable(store);
   const ran: string[] = [];
   for (const m of [...MIGRATIONS].sort((a, b) => a.version - b.version)) {
@@ -765,6 +771,10 @@ export function runMigrationsUp(store: WorkspaceStore, target: number = LATEST_S
  * transaction and the reversal DDL is idempotent (DROP TABLE IF EXISTS).
  */
 export function runMigrationsDown(store: WorkspaceStore, target: number = 0): string[] {
+  return withMigrationLock(store.dbPath, () => runMigrationsDownLocked(store, target));
+}
+
+function runMigrationsDownLocked(store: WorkspaceStore, target: number): string[] {
   ensureMigrationTable(store);
   const reverted: string[] = [];
   for (let v = LATEST_SCHEMA_VERSION; v > target; v--) {
