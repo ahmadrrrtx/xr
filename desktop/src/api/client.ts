@@ -334,6 +334,16 @@ export const api = {
   contextPolicy: () => req<Record<string, unknown>>("/context/policy"),
   contextPending: () => req<Record<string, unknown>>("/context/pending"),
   contextRevoke: (id: string) => req<Record<string, unknown>>(`/context/revoke/${encodeURIComponent(id)}`, { method: "POST" }),
+
+  /* ---------- phase 4 · Settings surfaces ---------- */
+  workspaces: () => req<{ active?: string; workspaces?: { id?: string; name?: string; rootDir?: string }[] }>("/workspaces"),
+  workspacesSwitch: (id: string) => req<Record<string, unknown>>("/workspaces/switch", { method: "POST", body: JSON.stringify({ id }) }),
+  onboardingStatus: () => req<Record<string, unknown>>("/onboarding/status"),
+  config: () => req<Record<string, unknown>>("/config"),
+  metrics: () => req<Record<string, unknown>>("/metrics"),
+  shieldPrivacy: () => req<ShieldStatus>("/shield/privacy"),
+  environmentCapabilities: () => req<Record<string, unknown>>("/environment/capabilities"),
+  environmentStatus: () => req<Record<string, unknown>>("/environment/status"),
 };
 
 export function asList<T>(v: T[] | { [k: string]: unknown } | undefined, ...keys: string[]): T[] {

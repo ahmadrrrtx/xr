@@ -7,22 +7,11 @@ import { Workspace } from "./screens/Workspace";
 import { Library } from "./screens/Library";
 import { Runs } from "./screens/Runs";
 import { Trust } from "./screens/Trust";
+import { Settings } from "./screens/Settings";
 import { api, EngineDown } from "./api/client";
 import { XrLogo } from "./components/Brand";
 import "./styles/tokens.css";
 import "./styles/phase6.css";
-
-function Stub({ title, phase }: { title: string; phase: string }) {
-  return (
-    <div className="stub">
-      <h2>{title}</h2>
-      <p>
-        Lands in {phase} per the master plan
-        (<span className="mono">docs/xr-rebuild/XR_MASTER_IMPLEMENTATION_PLAN.md</span>).
-      </p>
-    </div>
-  );
-}
 
 function App() {
   const [area, setArea] = useState<Area>("home");
@@ -82,7 +71,7 @@ function App() {
         />
       )}
       {area === "trust" && <Trust />}
-      {area === "settings" && <Stub title="Settings — general, models, local, automations, voice, privacy, advanced" phase="Phase 2–4" />}
+      {area === "settings" && <Settings />}
     </AppShell>
   );
 }
