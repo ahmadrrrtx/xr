@@ -15,6 +15,8 @@ const Trust = lazy(() => import("./screens/Trust").then((m) => ({ default: m.Tru
 const Settings = lazy(() => import("./screens/Settings").then((m) => ({ default: m.Settings })));
 const Voice = lazy(() => import("./screens/Voice").then((m) => ({ default: m.Voice })));
 const Projects = lazy(() => import("./screens/Projects").then((m) => ({ default: m.Projects })));
+const Memory = lazy(() => import("./screens/Memory").then((m) => ({ default: m.Memory })));
+const Research = lazy(() => import("./screens/Research").then((m) => ({ default: m.Research })));
 import { VoiceProvider, useVoice } from "./voice/session";
 import { DockedVoice } from "./voice/DockedVoice";
 import { ToastBus, pushToast } from "./components/ToastBus";
@@ -24,6 +26,7 @@ import { XrLogo } from "./components/Brand";
 import "./styles/tokens.css";
 import "./styles/phase6.css";
 import "./styles/phase7.css";
+import "./styles/phase8.css";
 
 function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () => void }) {
   const voice = useVoice();
@@ -53,6 +56,8 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
     >
       <Suspense fallback={<div className="lazy-fb mono" role="status">loading…</div>}>
       {area === "projects" && <Projects onOpenWorkspace={() => go("workspace")} />}
+      {area === "memory" && <Memory />}
+      {area === "research" && <Research />}
       {area === "home" && (
         <Home
           onOpenRun={(id) => { setRunId(id); setArea("runs"); }}

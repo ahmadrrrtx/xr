@@ -1,0 +1,181 @@
+/* ============================================================
+   Phase 3 · Memory + Research workspaces (phase8.css)
+   Engine-honest surfaces: these classes only lay out data the
+   daemon already returns — no decorative fake states.
+   ============================================================ */
+
+/* ---- Memory screen ---- */
+.mem-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 22px 28px;
+  max-width: 980px;
+}
+
+.mem-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mem-bar .gsearch { flex: 0 1 460px; }
+
+.mem-empty {
+  border: 1px dashed var(--xr-border, rgba(255, 255, 255, 0.14));
+  border-radius: 12px;
+  padding: 22px 20px;
+  font-size: 13px;
+  color: var(--xr-text, inherit);
+}
+
+.mem-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mem-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "content forget"
+    "meta    forget";
+  column-gap: 12px;
+  align-items: center;
+  border: 1px solid var(--xr-border, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--xr-surface-1, rgba(255, 255, 255, 0.03));
+}
+.mem-row .mem-content { grid-area: content; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.mem-row .mem-meta { grid-area: meta; font-size: 11px; margin-top: 4px; line-height: 1.5; }
+.mem-row .chipbtn { grid-area: forget; align-self: start; }
+
+/* ---- Research workspace ---- */
+.rs {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 14px;
+  padding: 0 16px 20px;
+  height: 100%;
+  min-height: 0;
+}
+
+.rs-left {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--xr-border, rgba(255, 255, 255, 0.08));
+  padding-right: 8px;
+}
+
+.rs-compose {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 8px;
+}
+.rs-compose input {
+  flex: 1;
+  min-width: 0;
+  background: var(--xr-surface-2, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--xr-border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  color: var(--xr-text, inherit);
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+.rs-compose input:focus { outline: 1px solid var(--xr-violet); }
+
+.rs-jobs {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 8px 8px 14px;
+  min-height: 0;
+}
+
+.rs-job {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--xr-text, inherit);
+  padding: 7px 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rs-job:hover { background: var(--xr-surface-2, rgba(255, 255, 255, 0.04)); }
+.rs-job.on {
+  border-color: var(--xr-violet, rgba(139, 92, 246, 0.55));
+  background: var(--xr-surface-2, rgba(139, 92, 246, 0.08));
+}
+.rs-job-q {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rs-main {
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 14px;
+  padding-right: 6px;
+}
+
+.rs-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.rs-head b { overflow-wrap: anywhere; }
+
+.rs-answer {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+  line-height: 1.65;
+  font-family: inherit;
+  border-left: 2px solid var(--xr-violet, rgba(139, 92, 246, 0.6));
+  padding: 4px 0 4px 12px;
+}
+
+.rs-sources {
+  border-top: 1px solid var(--xr-border, rgba(255, 255, 255, 0.08));
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.rs-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+.rs-source-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .rs { grid-template-columns: 1fr; }
+  .rs-left { border-right: 0; border-bottom: 1px solid var(--xr-border, rgba(255, 255, 255, 0.08)); padding-right: 0; }
+  .rs-jobs { max-height: 220px; padding-right: 0; }
+}

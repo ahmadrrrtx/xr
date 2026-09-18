@@ -77,3 +77,15 @@ in the workstation; summary mirrored here). Every line below is engine-backed.
 ### CI follow-up (same push cycle, 2026-09-19)
 - **reliability-spawn root cause:** the legacy DDL block ran outside the cross-process migration lock; concurrent fresh openers surfaced `SQLITE_LOCKED`, which the busy-retry classifier did not cover → one lost write at 16-process stress. Fix: legacy `migrate()` now serialized under `withMigrationLock` (per-process re-entrant), and `isBusy()` classifies `SQLITE_LOCKED`/`table is locked` as retryable. 5/5 under CPU starvation locally; reliability 66/66.
 - **size-gate waivers:** regenerated client (809→829, four git ops) and workspace-store (+10) re-waived with owner/reason/review per the register's contract.
+
+## Phase 3 · Memory + Research + capability clarity (2026-09-19)
+
+| Item | State | Evidence |
+|---|---|---|
+| Memory screen | **SHIPPED** | `GET /memory` entries with content/category/scope/source/tags/importance/expiry + engine health; search via `GET /memory/search`; forget via `DELETE /memory/{id}` and confirm-gated forget-all (`DELETE /memory/all`) — all engine-audited; shell never synthesizes memories (empty state says so) |
+| Research workspace | **SHIPPED** | job list/detail over `GET /research/jobs[/{id}]` (3 s poll), start via `POST /research/search`, cancel via `POST /research/jobs/{id}/cancel`; answer/sources/citations and the engine's OWN error string rendered verbatim — no simulated progress |
+| Skills provenance | **SHIPPED** | bundled vs `virtual pack` chips from the engine's `source` field on both card and detail |
+| Plugin install CTA | **SHIPPED** | Plugins tab lists the real `GET /plugins/catalog` with honest CLI-first copy (`xr plugins install <id>`, signed allowlist, approval-gated) — no fake in-app install button |
+| Automations surface | **SHIPPED** | Library → Automations tab over the real trigger scheduler (`GET /triggers`, `POST /triggers/pause-all`); reflects actual pauseAll/inflight/triggers |
+| Nav + palette | **SHIPPED** | Research and Memory in sidebar NAV and ⌘K palette; lazy-loaded routes |
+| Gates | green | desktop tsc + vite build; full `bun run ci` (typecheck, tests, api-compat 153 ops, boundaries 609 modules, size-gate, ownership 181 areas, marketplace); unit-tier 267 tests/1314 ms; reliability 66/66; phase suites 69/69 |
