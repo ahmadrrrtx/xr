@@ -10,7 +10,7 @@ type Tab = (typeof TABS)[number];
  * writers forward to engine routes (/providers/set, /workspaces/switch,
  * /triggers/pause). No policy is computed in the shell (SEC-07).
  */
-export function Settings() {
+export function Settings({ onOnboard }: { onOnboard?: () => void }) {
   const [tab, setTab] = useState<Tab>("General");
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
   const [ws, setWs] = useState<{ active?: string; workspaces?: { id?: string; name?: string; rootDir?: string }[] } | null>(null);
@@ -93,6 +93,9 @@ export function Settings() {
               <span className="k">needs setup</span><span className={onb?.needsSetup ? "tl-wait" : "tl-ok"}>{String(onb?.needsSetup ?? "—")}</span>
             </div>
             {((onb?.reasons ?? []) as string[]).map((r, i) => <div key={i} className="tl tl-wait">· {r}</div>)}
+            <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+              {onOnboard && <button className="chipbtn" onClick={onOnboard}>Re-run onboarding</button>}
+            </div>
           </section>
         </div>
       )}

@@ -29,6 +29,7 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<InspTab>("tools");
   const abort = useRef<AbortController | null>(null);
+  const lastTask = useRef<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -83,6 +84,7 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
     if (attachBody) task = `${task}\n\n[attached ${attach} — first 4KB]\n\`\`\`\n${attachBody}\n\`\`\``;
     else if (attach) task = `${task}\n\n[references file: ${attach}]`;
     setAttach(null); setAttachBody(null);
+    lastTask.current = task;
     setInput(""); setErr(null); setRunning(true); setStatus("starting");
     setMsgs((m) => [...m, { role: "user", text: task }, { role: "xr", text: "" }]);
     setTools([]); setEvs([]); setPlan([]);
@@ -203,7 +205,17 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
             </div>
           ))}
 
-          {err && <div className="errline mono">error: {err}</div>}
+          {err && (
+            <div className="errline mono">
+              <span className="err-text">error: {err}</span>
+              <span className="err-actions">
+                {lastTask.current && (
+                  <button className="chipbtn" onClick={() => { void send(lastTask.current ?? ""); }}>Retry</button>
+                )}
+                <button className="chipbtn" onClick={() => setErr(null)}>Dismiss</button>
+              </span>
+            </div>
+          )}
           <div ref={endRef} />
         </div>
 

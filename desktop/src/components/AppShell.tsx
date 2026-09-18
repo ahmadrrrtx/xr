@@ -28,6 +28,7 @@ export function AppShell({
   onOpenRun,
   voiceState,
   onVoiceOpen,
+  onPalette,
   children,
 }: {
   area: Area;
@@ -37,6 +38,8 @@ export function AppShell({
   onOpenRun: (id: string) => void;
   voiceState?: string;
   onVoiceOpen?: () => void;
+  /** Phase 1 · ⌘K opens the command palette. */
+  onPalette?: () => void;
   children: ReactNode;
 }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -70,7 +73,7 @@ export function AppShell({
   // ⌘K / Ctrl+K focuses the global search.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); searchRef.current?.focus(); }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); onPalette?.(); }
       if (e.key === "Escape") setPop(null);
     };
     window.addEventListener("keydown", onKey);
@@ -123,7 +126,7 @@ export function AppShell({
               ref={searchRef}
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search skills, runs… (⌘K)"
+              placeholder="Search skills, runs… · ⌘K palette"
               aria-label="Global search"
             />
           </form>
