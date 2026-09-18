@@ -306,6 +306,16 @@ export interface TriggersState { pauseAll?: boolean; inflight?: number; triggers
 export interface FileEntry { name: string; rel: string; type: "file" | "dir"; size: number; git?: string | null; isText?: boolean; }
 export interface FilesRoot { entries?: FileEntry[]; branch?: string | null; dirty?: boolean; [k: string]: unknown; }
 export interface MemoryEntry { id: string; text?: string; content?: string; category?: string; scope?: string; [k: string]: unknown; }
+/** Phase 3 · mirrors the engine's ResearchJob envelope (src/research/jobs.ts). */
+export interface ResearchJobV {
+  id: string; kind?: string; state?: string; provider?: string;
+  sources?: Array<{ url?: string; title?: string; trust?: string; [k: string]: unknown }>;
+  citations?: Array<Record<string, unknown>>;
+  result?: { answer?: string; text?: string; report?: string; [k: string]: unknown } | null;
+  error?: string | null; createdAt?: number; updatedAt?: number;
+  request?: { query?: string; intent?: string; [k: string]: unknown };
+  [k: string]: unknown;
+}
 export interface ProviderInfo { id: string; name?: string; local?: boolean; keyless?: boolean; available?: boolean; models?: string[]; capabilities?: string[]; [k: string]: unknown; }
 
 /* ---------- phase 3 · library entities (engine-owned truth) ---------- */
@@ -339,6 +349,32 @@ export const api = {
       { method: "POST", body: JSON.stringify({ path, content, ...(baseMtimeMs !== undefined ? { baseMtimeMs } : {}) }) },
     ),
   memory: () => req<MemoryEntry[] | { entries: MemoryEntry[] }>("/memory"),
+
+  /* ---------- phase 3 · memory depth, research, plugin catalog ---------- */
+  memoryFull: () =>
+    req<{
+      enabled?: boolean; count?: number; stats?: unknown[]; health?: Record<string, unknown>;
+      entries?: Array<{
+        id: string; category?: string; content?: string; scope?: string; source?: string;
+        tags?: string[]; importance?: number; expiresAt?: number | null; updatedAt?: number;
+      }>;
+    }>("/memory"),
+  memorySearch: (q: string) =>
+    req<{ query?: string; results?: Array<{ id: string; category?: string; content?: string; scope?: string; tags?: string[]; importance?: number }> }>(
+      `/memory/search?q=${encodeURIComponent(q)}`,
+    ),
+  memoryDelete: (id: string) => req<{ ok?: boolean; removed?: number }>(`/memory/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  memoryClear: () => req<{ ok?: boolean; removed?: number }>("/memory/all", { method: "DELETE" }),
+  researchSearch: (query: string) =>
+    req<{ job?: ResearchJobV }>("/research/search", { method: "POST", body: JSON.stringify({ query }) }),
+  researchJobs: () => req<{ jobs?: ResearchJobV[]; count?: number }>("/research/jobs"),
+  researchJob: (id: string) => req<{ job?: ResearchJobV }>(`/research/jobs/${encodeURIComponent(id)}`),
+  researchCancel: (id: string) =>
+    req<{ ok?: boolean; error?: string }>(`/research/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST", body: "{}" }),
+  pluginsCatalog: (q?: string) =>
+    req<{ plugins?: Array<{ id?: string; name?: string; version?: string; description?: string; [k: string]: unknown }> }>(
+      `/plugins/catalog${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+    ),
 
   /* ---------- phase 2 · git + projects (engine-owned) ---------- */
   gitStatus: () =>

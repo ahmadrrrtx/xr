@@ -10,7 +10,7 @@ import {
   type SkillInspect,
 } from "../api/client";
 
-const TABS = ["Skills", "MCP", "Plugins", "Integrations"] as const;
+const TABS = ["Skills", "MCP", "Plugins", "Automations", "Integrations"] as const;
 type Tab = (typeof TABS)[number];
 
 function StatusDot({ ok, warn }: { ok?: boolean; warn?: boolean }) {
@@ -102,6 +102,9 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
   // Plugins (+ permission grants editor)
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [pluginsSummary, setPluginsSummary] = useState<Record<string, unknown> | null>(null);
+  /* Phase 3 · Automations (engine scheduler) + bundled plugin catalog CTA. */
+  const [trigs, setTrigs] = useState<{ pauseAll?: boolean; inflight?: number; triggers?: unknown[] } | null>(null);
+  const [catalog, setCatalog] = useState<Array<{ id?: string; name?: string; version?: string; description?: string }>>([]);
   const [grants, setGrants] = useState<Record<string, string[]>>({});
 
   const [skillPins, setSkillPins] = useState<Record<string, boolean>>({});
@@ -161,7 +164,12 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
         api.agentTemplates().then((r) => setTemplates(r.templates ?? [])).catch((e) => setNote(`templates: ${e}`));
       }
     } else if (tab === "MCP") loadMcp();
-    else if (tab === "Plugins") loadPlugins();
+    else if (tab === "Plugins") {
+      loadPlugins();
+      api.pluginsCatalog().then((c) => setCatalog(Array.isArray(c.plugins) ? c.plugins : [])).catch(() => setCatalog([]));
+    } else if (tab === "Automations") {
+      api.triggers().then(setTrigs).catch(() => setTrigs(null));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, skillMode]);
 
@@ -312,6 +320,10 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
         <span className="sc-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">{catIcon(String((s.categories ?? [])[0] ?? "all"))}</svg></span>
         <span className="sc-name">{s.name ?? s.id}</span>
         {s.verification === "official" && <span className="chip green tiny">official</span>}
+        {/* Phase 3 · provenance clarity: bundled skills ship with XR; virtual
+            packs are engine-composed role/research bundles. */}
+        {(s as { source?: string }).source === "virtual" && <span className="chip tiny" style={{ color: "var(--xr-violet)" }}>virtual pack</span>}
+        {(s as { source?: string }).source === "bundled" && <span className="chip tiny">bundled</span>}
         <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
           <StatusDot ok={(s.enabled ?? true) && s.health !== "broken"} warn={s.enabled === false} />
           {!market && (
@@ -627,6 +639,20 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
             Installation is CLI-first (signed allowlist); this surface manages what is already installed.
             {pluginsSummary ? ` · summary: ${JSON.stringify(pluginsSummary).slice(0, 200)}` : ""}
           </p>
+          {catalog.length > 0 && (
+            <div className="card prov" style={{ margin: "0 0 10px" }}>
+              <div className="t">Bundled sample plugins — not installed</div>
+              <div className="meta faint" style={{ fontSize: 12 }}>
+                Installation stays CLI-first and approval-gated (signed allowlist, engine-enforced). From your terminal:
+              </div>
+              {catalog.map((c) => (
+                <div key={String(c.id)} className="meta mono" style={{ fontSize: 11.5, marginTop: 6 }}>
+                  xr plugins install {String(c.id)}
+                  <span className="faint"> — {String(c.description ?? "").slice(0, 100)}</span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="cards">
             {plugins.map((p) => {
               const declared = (p.permissions ?? []).map(String);
@@ -690,6 +716,34 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
             {plugins.length === 0 && <div className="empty">No plugins installed — install via the CLI (signed allowlist enforced engine-side).</div>}
           </div>
         </>
+      )}
+      {tab === "Automations" && (
+        <div className="cards">
+          <div className="card prov">
+            <div className="t">Triggers — engine scheduler</div>
+            <div className="meta mono faint">
+              pauseAll: {String(trigs?.pauseAll ?? false)} · inflight: {String(trigs?.inflight ?? 0)}
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <button
+                className="chipbtn"
+                onClick={() => api.triggersPause(!(trigs?.pauseAll ?? false)).then(() => api.triggers().then(setTrigs)).catch((e) => setNote(`pause: ${e}`))}
+              >
+                {trigs?.pauseAll ? "resume all automations" : "pause all automations"}
+              </button>
+            </div>
+            <div className="meta faint" style={{ fontSize: 11.5, marginTop: 6 }}>
+              Automations run engine-side on their own schedule; this surface reflects the real scheduler state — nothing here is simulated.
+            </div>
+          </div>
+          {((trigs?.triggers ?? []) as Array<Record<string, unknown>>).map((t, i) => (
+            <div key={i} className="card prov">
+              <div className="t">{String(t.name ?? t.id ?? `trigger ${i}`)}</div>
+              <div className="meta mono faint">{JSON.stringify(t).slice(0, 200)}</div>
+            </div>
+          ))}
+          {(trigs?.triggers ?? []).length === 0 && <div className="empty">No triggers configured — automations you create (CLI or agent) surface here.</div>}
+        </div>
       )}
     </div>
   );
