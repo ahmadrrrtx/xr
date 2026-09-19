@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useVoice, type VoiceState } from "../voice/session";
-import avatarUrl from "../assets/xr-avatar.png";
+import { AVATAR_SRC, poseForVoiceState } from "../components/Brand";
 /**
  * Avatar state system (design system §avatar states).
  *
@@ -12,8 +12,6 @@ import avatarUrl from "../assets/xr-avatar.png";
  *   profile profile → tool / approval                 (an action is in flight)
  * No state is fabricated here: an unknown state falls back to the front view.
  */
-import avatarSideUrl from "../assets/xr-avatar-side.webp";
-import avatarSide2Url from "../assets/xr-avatar-side-2.webp";
 
 /** Phase 4 · the full avatar state machine, engine-reported end to end. */
 const PILLS: VoiceState[] = [
@@ -105,12 +103,9 @@ export function Voice({ onDock }: { onDock: () => void }) {
   }, [voice]);
 
   const speaking = state === "speaking";
-  const avatarSrc =
-    state === "thinking" || state === "planning" || state === "working"
-      ? avatarSideUrl
-      : state === "tool" || state === "approval"
-        ? avatarSide2Url
-        : avatarUrl;
+  /* Pose map lives in Brand.tsx: side = XR is working, side-alt = XR is
+     acting, front = presence / waiting on the user's decision. */
+  const avatarSrc = AVATAR_SRC[poseForVoiceState(state)];
 
   return (
     <div className="vc-root" role="region" aria-label="Voice mode">

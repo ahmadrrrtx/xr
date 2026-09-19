@@ -1,0 +1,179 @@
+{
+  "// why": "D-05: brand geometry ships ONLY as the official renders (and pixel-identical format/size conversions of them). Every brand image in the product is listed here with its hash; scripts/desktop-brand-check.ts fails CI on any unlisted, changed, or vector brand file. Regenerate with --write after adding an official render.",
+  "files": [
+    {
+      "file": "assets/avatar.png",
+      "sha256": "bd33746637a66a9190ca3b38604900ba8520e8048632bf8dceb5429b7982680d",
+      "source": "official avatar render (front)",
+      "role": "npm package brand / README"
+    },
+    {
+      "file": "assets/brand/avatar-front.png",
+      "sha256": "a1534892128e9015fb375d519cb9bf70430ca2da2c7930bfcf6dad8a8190bea7",
+      "source": "owner-committed avatar render, front (commit 2827629)",
+      "role": "website + docs"
+    },
+    {
+      "file": "assets/brand/avatar-hero.png",
+      "sha256": "67c198931b93783bc5f89cce71b156b1d1fa9f8450563293a6d23356f2bd1d66",
+      "source": "owner-committed avatar render, full-body winged (commit 2827629)",
+      "role": "website + docs"
+    },
+    {
+      "file": "assets/brand/palette-reference.png",
+      "sha256": "f1af3f1e1302e0a7ca306d9f929974481916502bba32b05d44941fe0b9c9a421",
+      "source": "owner-committed palette reference (commit 2827629)",
+      "role": "design reference only — never placed in UI"
+    },
+    {
+      "file": "assets/logo.png",
+      "sha256": "08cf03ad0d8ffd8acb48f797cb84f07cc26f96244d3e0bbf43d34198769a3f67",
+      "source": "official logo render",
+      "role": "npm package brand / README"
+    },
+    {
+      "file": "desktop/src-tauri/icons/128x128.png",
+      "sha256": "fea3f8319cdfff5796a8587e48baeddd2e751d54909cfe312075e910f0394aa6",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/128x128@2x.png",
+      "sha256": "beb5d992927da862e932d52746fb632bb6f8ab755db9affb5cd47f6f71a01e79",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/32x32.png",
+      "sha256": "31e62c59775d22e69c1f600761ea5bd210073904e46901016b2c0130d6cee7c4",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/64x64.png",
+      "sha256": "4f6f22e00b54d13ceb4b2f1363a03c9729cd532a0c7b8f6d31185073df11368e",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/Square107x107Logo.png",
+      "sha256": "06915e4b5cb360827a99655a744af0575e34b128c011ad76a6bf412dababaf9e",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/Square142x142Logo.png",
+      "sha256": "416c0205adee079d52a5ce17186acc3099d1f74a29e0ca7b08789ae5ad03b53c",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/Square150x150Logo.png",
+      "sha256": "66c893cacd6fabbfdd66739e84bc1badafe6f4732a2bd91d4be9b5399db94e8a",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/Square284x284Logo.png",
+      "sha256": "21e48a738479f5d2462d2d04fcc5f7d8168641843532e9054c4ce33fab47a671",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/Square30x30Logo.png",
+      "sha256": "83370f05c332ea54f30b4cf0e425f77208eba6d74d5db614dc971c417aaadcc5",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/Square310x310Logo.png",
+      "sha256": "0caa8b3b95a19153886498892a0e208679b8a0cba0bc6eb61999944232438fc4",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/Square44x44Logo.png",
+      "sha256": "79a5e08d0897d0bbcad6e9ad8500b7c17e159d9d355796d00b428107992c3841",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/Square71x71Logo.png",
+      "sha256": "265b323cd5b77efc8ef08ded89d3863b70566943feb81758e441d35400f9a67f",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/Square89x89Logo.png",
+      "sha256": "4193c319ee142c1c2135928a7fd6a26bfade36e7337aa0bf2ec7483a90341798",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/StoreLogo.png",
+      "sha256": "9267a4d42c225aa6c3ffa2af6cde986eb62b64e39a331dbf5b37ad8e716119e4",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/icon.icns",
+      "sha256": "e0991d5393ecf6a636d3bf7f10b2bece5c780a69c326371907154e638359bd9f",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/icon.ico",
+      "sha256": "9ff8120a37509d968f9fa816d76d6fc3716b4ffd09d9c8a8c7288b17a9feab92",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src-tauri/icons/icon.png",
+      "sha256": "3b12ce34ecf4b96e20d507906a5390f97a277dc7457b2c5c93d96f0317f8e528",
+      "source": "official avatar render, icon-size conversion",
+      "role": "OS app icon / installer"
+    },
+    {
+      "file": "desktop/src/assets/xr-avatar-128.png",
+      "sha256": "bc8217e85652ded1c2ecf284f24b3c0d3bfc72f94eca79bf9ad88d65487a345c",
+      "source": "official avatar render (front), resized",
+      "role": "docked voice orb, chips"
+    },
+    {
+      "file": "desktop/src/assets/xr-avatar-256.png",
+      "sha256": "c2afd48ba43755ebfbbb121250678aab5cf5e67d800701b7286e07e993e61a65",
+      "source": "official avatar render (front), resized",
+      "role": "docked voice orb, chips"
+    },
+    {
+      "file": "desktop/src/assets/xr-avatar-side-2.webp",
+      "sha256": "7695441a6222472334168e2e4efd0bd6bd8d8b3a805f5d185746511c688c182e",
+      "source": "official avatar side-profile render 2, webp",
+      "role": "voice pose: side-alt (acting)"
+    },
+    {
+      "file": "desktop/src/assets/xr-avatar-side.webp",
+      "sha256": "06abe6cbfa9bf35b4484715bea6b41f424b66c04e9913ce4607758e00c08e817",
+      "source": "official avatar side-profile render, webp",
+      "role": "voice pose: side (working)"
+    },
+    {
+      "file": "desktop/src/assets/xr-avatar.png",
+      "sha256": "83cdcc41800d07771702af9fde5de2c2637fa0e511aad458425684cfa3a1f566",
+      "source": "official avatar render (front)",
+      "role": "presence / identity, voice front pose"
+    },
+    {
+      "file": "desktop/src/assets/xr-hero.webp",
+      "sha256": "d741715d74241c28dcf1521002e58db0a5860e85d23112bda7220ef648ab373a",
+      "source": "official superiority hero render, webp",
+      "role": "onboarding hero (cinema zone)"
+    },
+    {
+      "file": "desktop/src/assets/xr-logo.png",
+      "sha256": "981952132c4bdb821965ddf2f3865569cc967a6c55efc7ff604cd2c7c7eb623e",
+      "source": "official logo render",
+      "role": "titlebar, boot splash, onboarding"
+    }
+  ]
+}

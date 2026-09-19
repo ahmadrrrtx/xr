@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import heroUrl from "../assets/xr-hero.webp";
+import { HERO_SRC } from "../components/Brand";
 import { api, asList, chatStream, type ProviderInfo } from "../api/client";
 import { XrLogo } from "../components/Brand";
 import { pushToast } from "../components/ToastBus";
@@ -112,7 +112,7 @@ export function Onboarding({ onDone, onSkip }: { onDone: () => void; onSkip: () 
                 to 1200px and encoded as WebP: 59 KB instead of 2.1 MB for a
                 slot that is never wider than ~700 CSS px. All three target
                 webviews (WebView2, WKWebView, WebKitGTK) decode WebP. */}
-            <img className="ob-banner" src={heroUrl} alt="" aria-hidden="true" />
+            <img className="ob-banner" src={HERO_SRC} alt="" aria-hidden="true" />
             <XrLogo height={96} radius={16} />
             <h1 className="ob-title">XR</h1>
             <p className="ob-tag">The AI Agent You Can Actually Trust</p>

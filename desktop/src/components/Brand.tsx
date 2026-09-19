@@ -1,13 +1,57 @@
 import logoUrl from "../assets/xr-logo.png";
 import avatarUrl from "../assets/xr-avatar.png";
+import avatarSideUrl from "../assets/xr-avatar-side.webp";
+import avatarSide2Url from "../assets/xr-avatar-side-2.webp";
+import heroUrl from "../assets/xr-hero.webp";
+import type { VoiceState } from "../voice/session";
 
 /**
- * OFFICIAL XR BRAND ASSETS — used EXACTLY as provided (decision D-05, amended 2026-09-17):
- * the official logo render and official avatar render are the single source of truth.
- * No derived/re-drawn geometry anywhere in the product; these images are placed as-is.
- *   · logo   (dark ground)  → titlebar, splash, hero, onboarding
- *   · avatar (light ground) → presence chips / message identity (circular portrait, like a profile photo)
+ * OFFICIAL XR BRAND ASSETS — used EXACTLY as provided (decision D-05, amended
+ * 2026-09-17; asset registry in src/assets/README.md, enforced by
+ * scripts/desktop-brand-check.ts).
+ *
+ * The official renders are the single source of truth. No derived or re-drawn
+ * geometry anywhere in the product: these images are placed as-is, and the
+ * only permitted derivations are format/size conversions of the same pixels.
+ *
+ *   logo    (dark ground)   titlebar, boot splash, onboarding, hero
+ *   avatar  front           presence / identity: chips, message author, idle
+ *           side            "XR is working" — listening, thinking, planning
+ *           side-alt        "XR is acting" — tool use, approval pending
+ *
+ * The pose map is a PRODUCT rule (09-DESIGN-RETHINK-v3 §Avatar poses): front
+ * for presence and decisions the user makes, side profiles for states where
+ * XR is busy on the user's behalf. Callers pass the pose; they never import
+ * the files directly, so the registry stays the one place that knows them.
  */
+export type AvatarPose = "front" | "side" | "side-alt";
+
+export const AVATAR_SRC: Record<AvatarPose, string> = {
+  front: avatarUrl,
+  side: avatarSideUrl,
+  "side-alt": avatarSide2Url,
+};
+
+/** The "superiority" hero render — cinema-zone surfaces only (onboarding, update complete). */
+export const HERO_SRC = heroUrl;
+
+/**
+ * The ONE mapping from what XR is doing to how it faces the user. Both the
+ * full Voice surface and the docked orb read it, so they can never disagree.
+ */
+export function poseForVoiceState(state: VoiceState): AvatarPose {
+  if (state === "thinking" || state === "planning" || state === "working") return "side";
+  if (state === "tool" || state === "approval") return "side-alt";
+  return "front";
+}
+
+/** Object position that keeps the face in frame for a circular crop, per pose. */
+const AVATAR_FOCUS: Record<AvatarPose, string> = {
+  front: "50% 32%",
+  side: "50% 40%",
+  "side-alt": "50% 40%",
+};
+
 export function XrLogo({ height = 26, radius = 6, dim = false }: { height?: number; radius?: number; dim?: boolean }) {
   return (
     <img
@@ -19,19 +63,28 @@ export function XrLogo({ height = 26, radius = 6, dim = false }: { height?: numb
   );
 }
 
-export function XrAvatar({ size = 28, ring = true }: { size?: number; ring?: boolean }) {
+export function XrAvatar({
+  size = 28,
+  ring = true,
+  pose = "front",
+}: {
+  size?: number;
+  ring?: boolean;
+  pose?: AvatarPose;
+}) {
   return (
     <img
-      src={avatarUrl}
+      src={AVATAR_SRC[pose]}
       alt="XR"
+      data-pose={pose}
       style={{
         width: size,
         height: size,
         borderRadius: "50%",
         objectFit: "cover",
-        objectPosition: "50% 32%",
+        objectPosition: AVATAR_FOCUS[pose],
         border: ring ? "1px solid var(--xr-border-strong)" : "none",
-        background: "#f7f9fa",
+        background: pose === "front" ? "#f7f9fa" : "var(--xr-surface-sunken)",
         display: "block",
         flex: "none",
         userSelect: "none",
