@@ -212,7 +212,12 @@ impl JobObject {
 /// Returns `Ok(None)` when another instance already holds the name — the caller
 /// decides the user-facing behaviour (focus the existing window, or exit
 /// quietly) rather than this module guessing.
-pub struct InstanceGuard(OwnedHandle);
+pub struct InstanceGuard {
+    /// Never read — held only so the mutex is released when the guard drops
+    /// (RAII). The underscore is the language's own idiom for exactly that,
+    /// instead of an `allow(dead_code)` the -D warnings build would otherwise need.
+    _handle: OwnedHandle,
+}
 
 impl InstanceGuard {
     pub fn acquire(name: &str) -> io::Result<Option<Self>> {
@@ -232,19 +237,107 @@ impl InstanceGuard {
         if io::Error::last_os_error().raw_os_error() == Some(ERROR_ALREADY_EXISTS) {
             return Ok(None);
         }
-        Ok(Some(InstanceGuard(handle)))
+        Ok(Some(InstanceGuard { _handle: handle }))
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VERIFICATION NOTE (honest scope)
+// VERIFICATION (runtime, on a real Windows kernel)
 // ─────────────────────────────────────────────────────────────────────────────
-// This module is compiled standalone for the Windows target:
-//
-//   rustc --target x86_64-pc-windows-gnu --crate-type lib --emit=metadata win.rs
-//
-// That proves the FFI signatures, struct layouts and cfg-gating build for
-// Windows. It does NOT prove runtime behaviour: the job-object assignment and
-// the mutex path must still be exercised on a real Windows machine (the
-// cross-platform CI lane is where that belongs). Until then, W-1/W-2/W-3 are
-// implemented and compile-verified, not runtime-verified.
+// The FFI signatures and struct layouts are compile-checked for the Windows
+// target standalone (`rustc --target x86_64-pc-windows-gnu --emit=metadata`),
+// and the tests below run on `windows-latest` in the Desktop App workflow
+// (`shell-test-windows`). They exercise the two behaviours the shell relies on
+// — a job whose last handle closes kills its member processes, and a named
+// mutex admits one holder per name — against the real kernel, with a control
+// case so a passing kill test cannot be the child simply exiting on its own.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::process::{Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    /// A child that would outlive the test on its own. `ping -n 60` sleeps for
+    /// ~59 s and exists on every Windows install; `cmd /C` in front of it
+    /// mirrors the real shape (a process that itself has a child), so the
+    /// kill-on-close has to reach the whole tree, not just the direct child.
+    fn long_lived_child() -> Child {
+        Command::new("cmd")
+            .args(["/C", "ping -n 60 127.0.0.1 > nul"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn cmd /C ping")
+    }
+
+    fn exited_within(child: &mut Child, budget: Duration) -> bool {
+        let start = Instant::now();
+        while start.elapsed() < budget {
+            if matches!(child.try_wait(), Ok(Some(_))) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        false
+    }
+
+    #[test]
+    fn w2_closing_the_last_job_handle_kills_the_assigned_child() {
+        let job = JobObject::new_kill_on_close().expect("CreateJobObjectW + limit info");
+        let mut child = long_lived_child();
+        job.assign(&child).expect("AssignProcessToJobObject");
+        assert!(
+            matches!(child.try_wait(), Ok(None)),
+            "the child must be alive right after assignment"
+        );
+
+        // The shell crashing IS its handles closing — this is the crash case.
+        drop(job);
+
+        let died = exited_within(&mut child, Duration::from_secs(5));
+        if !died {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        assert!(died, "KILL_ON_JOB_CLOSE must terminate the child when the job handle closes");
+    }
+
+    #[test]
+    fn w2_control_an_unassigned_child_is_untouched_by_a_job_closing() {
+        // Without this control the test above could pass for the wrong reason
+        // (a child that exits on its own). Same child, same job, no assignment.
+        let job = JobObject::new_kill_on_close().expect("CreateJobObjectW + limit info");
+        let mut child = long_lived_child();
+        drop(job);
+        std::thread::sleep(Duration::from_millis(750));
+        let still_running = matches!(child.try_wait(), Ok(None));
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(still_running, "a process outside the job must not be affected by the job closing");
+    }
+
+    #[test]
+    fn w3_a_named_mutex_admits_exactly_one_holder_per_name() {
+        let name = format!("xr-desktop-test-{}-{:?}", std::process::id(), std::thread::current().id());
+        let first = InstanceGuard::acquire(&name)
+            .expect("CreateMutexW")
+            .expect("the first acquire must hold the name");
+        assert!(
+            InstanceGuard::acquire(&name).expect("CreateMutexW").is_none(),
+            "a second acquire of the same name must report it as taken"
+        );
+        drop(first);
+        assert!(
+            InstanceGuard::acquire(&name).expect("CreateMutexW").is_some(),
+            "once the holder drops, the name must be free again"
+        );
+    }
+
+    #[test]
+    fn w3_different_names_do_not_collide() {
+        let a = InstanceGuard::acquire(&format!("xr-desktop-test-a-{}", std::process::id())).expect("CreateMutexW");
+        let b = InstanceGuard::acquire(&format!("xr-desktop-test-b-{}", std::process::id())).expect("CreateMutexW");
+        assert!(a.is_some() && b.is_some());
+    }
+}

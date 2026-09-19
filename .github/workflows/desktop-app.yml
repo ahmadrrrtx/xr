@@ -5,18 +5,21 @@
 # compile". This lane proves the shell builds real installers on all three
 # OS families from one source:
 #
-#   1. shell-check  — cargo check + clippy (-D warnings) against the real
-#                     WebKit2GTK 4.1 headers (Linux reference runner).
+#   1. shell-check  — cargo check + clippy (-D warnings) + cargo test against
+#                     the real WebKit2GTK 4.1 headers (Linux reference runner).
+#   1b. shell-test-windows — cargo test on windows-latest: the #[cfg(windows)]
+#                     code (W-1/W-2/W-3) compiled AND its runtime tests run
+#                     against a real kernel. Linux never compiles that code.
 #   2. sidecar      — the XR engine compiled standalone (bun build --compile,
 #                     scripts/compile-sidecar.ts = ONE computation source for
 #                     CI and local dev) and SMOKE-TESTED for real: --version,
 #                     then `serve --port 39417` + authenticated-loop health
 #                     probe. A bundle never ships an engine that didn't boot.
 #   3. bundle       — full `tauri build` per OS (externalBin sidecar included):
-#                     deb/rpm/AppImage (Linux), dmg/app (macOS arm64), msi
-#                     (Windows). Artifacts are uploaded; a run is green only
-#                     if bundles exist (if-no-files-found: error — no silent
-#                     empty success).
+#                     deb/rpm/AppImage (Linux), dmg/app (macOS arm64), msi +
+#                     nsis per-user (Windows, both asserted). Artifacts are
+#                     uploaded; a run is green only if bundles exist
+#                     (if-no-files-found: error — no silent empty success).
 #
 # Icons are generated from the OFFICIAL avatar render (D-05: format
 # conversion only, every pixel from the owner-supplied original — no
@@ -85,12 +88,59 @@ jobs:
         run: cargo check --manifest-path desktop/src-tauri/Cargo.toml --all-targets
       - name: cargo clippy (-D warnings)
         run: cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+      # `cargo check --all-targets` only type-checks the unit tests; until this
+      # step existed, engine_state.rs's tests (banner parsing, bounded stderr
+      # tail, probe-cache expiry) had never actually RUN in CI.
+      - name: cargo test (shell unit tests)
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
+
+  # ── Windows runtime proof ────────────────────────────────────────────────────
+  # Everything under `#[cfg(windows)]` (W-1 CREATE_NO_WINDOW, W-2 job-object
+  # containment, W-3 named-mutex single instance) is invisible to the Linux
+  # reference job above: it is not compiled there at all. This job compiles it
+  # AND runs win.rs's tests against a real Windows kernel — a job whose last
+  # handle closes must kill its member process tree (with a control case), and
+  # a named mutex must admit exactly one holder. Until this job was green the
+  # honest status of W-1/W-2/W-3 was "implemented, not runtime-verified".
+  shell-test-windows:
+    name: Rust shell — cargo test on Windows (W-1/W-2/W-3 runtime proof)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Install engine dependencies
+        run: bun install --frozen-lockfile
+      # Same precondition as the Linux job: tauri-build validates externalBin.
+      - name: Compile engine sidecar (x86_64-pc-windows-msvc)
+        env:
+          SIDECAR_TRIPLE: x86_64-pc-windows-msvc
+        run: bun run scripts/compile-sidecar.ts
+      - name: Smoke-test the sidecar (real boot + health probe)
+        shell: bash
+        run: bash scripts/smoke-sidecar.sh x86_64-pc-windows-msvc
+      - name: cargo test (win.rs runtime tests + shell unit tests)
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
 
   bundle:
     name: ${{ matrix.osName }} — tauri bundle
-    needs: shell-check
+    needs: [shell-check, shell-test-windows]
     runs-on: ${{ matrix.runsOn }}
     timeout-minutes: 90
+    permissions:
+      contents: write # attach installers to the release on tag runs (read-only elsewhere in effect)
     strategy:
       fail-fast: false
       matrix:
@@ -144,6 +194,23 @@ jobs:
       - name: List produced bundles
         shell: bash
         run: find desktop/src-tauri/target/release/bundle -maxdepth 3 -type f | sort
+      # Windows ships TWO flavours on purpose (03-WINDOWS-ROOT-CAUSE, W-4):
+      #   msi   — per-machine, what existing installs already have (kept so an
+      #           MSI-installed user keeps the MSI upgrade path)
+      #   nsis  — per-user (installMode: currentUser): no UAC prompt, the path
+      #           the updater and winget `Scope: user` expect. This assertion
+      #           makes a silently-missing flavour a red run, not a surprise at
+      #           release time.
+      - name: Assert both Windows installer flavours exist (msi + nsis per-user)
+        if: matrix.runsOn == 'windows-latest'
+        shell: bash
+        run: |
+          set -e
+          msi=$(find desktop/src-tauri/target/release/bundle/msi -name '*.msi' | wc -l)
+          nsis=$(find desktop/src-tauri/target/release/bundle/nsis -name '*-setup.exe' | wc -l)
+          echo "msi=${msi} nsis=${nsis}"
+          test "$msi" -ge 1 || { echo "::error::no .msi produced"; exit 1; }
+          test "$nsis" -ge 1 || { echo "::error::no NSIS *-setup.exe produced"; exit 1; }
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -156,6 +223,10 @@ jobs:
             desktop/src-tauri/target/release/bundle/dmg/*.dmg
             desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
             desktop/src-tauri/target/release/bundle/msi/*.msi
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+      # Tauri v2 updater artifacts (`createUpdaterArtifacts: true`): the
+      # installer IS the payload, with a detached .sig next to it. The payloads
+      # travel with the sigs so the manifest job can refuse an orphan .sig.
       - name: Upload updater signature artifacts (present only when provisioned)
         if: github.ref_type == 'tag'
         uses: actions/upload-artifact@v4
@@ -163,11 +234,36 @@ jobs:
           name: xr-updater-sigs-${{ matrix.runsOn }}
           if-no-files-found: ignore
           path: |
-            desktop/src-tauri/target/release/bundle/appimage/*.tar.gz
-            desktop/src-tauri/target/release/bundle/appimage/*.tar.gz.sig
+            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            desktop/src-tauri/target/release/bundle/appimage/*.AppImage.sig
+            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
             desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
-            desktop/src-tauri/target/release/bundle/msi/*.msi.zip
-            desktop/src-tauri/target/release/bundle/msi/*.msi.zip.sig
+            desktop/src-tauri/target/release/bundle/msi/*.msi
+            desktop/src-tauri/target/release/bundle/msi/*.msi.sig
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
+      # Until this step existed the installers were WORKFLOW artifacts only —
+      # nothing ever attached them to the GitHub release, so every URL
+      # latest.json pointed at was a 404 by construction. GitHub renames the
+      # assets on upload (spaces → periods); make-updater-manifest.ts mirrors that.
+      - name: Attach installers (+ .sig when provisioned) to the GitHub release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          fail_on_unmatched_files: false
+          files: |
+            desktop/src-tauri/target/release/bundle/deb/*.deb
+            desktop/src-tauri/target/release/bundle/rpm/*.rpm
+            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            desktop/src-tauri/target/release/bundle/appimage/*.AppImage.sig
+            desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
+            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
+            desktop/src-tauri/target/release/bundle/msi/*.msi
+            desktop/src-tauri/target/release/bundle/msi/*.msi.sig
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
 
   # ── Phase 5 · signed-updater manifest (guarded: needs the operator secret) ──
   updater-manifest:
