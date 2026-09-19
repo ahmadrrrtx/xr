@@ -216,6 +216,60 @@ so the old "unref for test hygiene" bought nothing.
 The Cross-Platform diagnostics step was also rewritten: its previous form piped an unbounded
 `bun test` into `tail` and itself hung for 29 minutes after the suite step timed out.
 
+### 5c. The win32 `EBUSY` class — a zombie connection in the product, not a test quirk
+
+With the hang gone, the Windows parity job on the merge commit (run 35469011949, job
+105966453349) ran the whole suite in 7.5 minutes and left twelve failures, all of one shape:
+`rmSync(tmp)` right after `store.close()` → `EBUSY: resource busy or locked`. This was
+reproduced on Linux by reading `/proc/self/fd` after `close()` in the failing test
+(`test/services/agent-service.test.ts`, happy path): `xr.db`, `xr.db-wal`, `xr.db-shm` were
+still open, and a strict `db.close(true)` threw `database is locked`.
+
+Cause, measured against bun 1.3.14 in isolation:
+
+| Distinct `db.query()` strings before `close()` | strict close | fds still open |
+|---|---|---|
+| 20 | ok | 0 |
+| 21 | `database is locked` (SQLITE_BUSY) | 3 (db, -wal, -shm) |
+| 40 | `database is locked` | 3 |
+| 40 + `clearQueryCache()` | `database is locked` | 3 |
+| 40 + `finalize()` on every statement | ok | 0 |
+
+`Database.query()` caches at most **20** statements and finalizes only those when the database
+closes; every statement past the cache is returned un-cached and never finalized. `sqlite3_close`
+refuses while any statement is live, Bun's default `close()` (`sqlite3_close_v2`) reports success
+anyway, and the connection lives on as a zombie until the garbage collector finalizes the
+orphans. The store runs far more than twenty distinct queries in any real session, so
+`WorkspaceStore.close()` had **never** released the file after real traffic. POSIX hides it
+(an open file can be unlinked); Windows reports it as `EBUSY` on the next delete or rename —
+workspace removal, backup `restoreFrom()` (whose comment already said "Windows may hold handles
+briefly"), and test cleanup.
+
+Fix (product, trusted layer): the write gate now **owns** every statement on the connection —
+`prepare()` and `query()` both compile through one bounded LRU keyed by SQL (512 entries;
+eviction finalizes) — and finalizes all of them before the connection closes;
+`WorkspaceStore.close()` uses the strict `close(true)` and, if it still fails, records
+`WorkspaceStore.lastCloseError` and emits a `XR_STORE_ZOMBIE_CLOSE` warning instead of
+swallowing it. Two designs were measured and rejected on the way: the previous strong
+`Set` of `prepare()` statements (124 call sites prepare per call, so a daemon's set grew
+without bound) and `WeakRef` tracking (JSC clears the ref at mark time but finalizes the
+statement at sweep time — under the full suite's GC pressure 19 closes still failed, none in
+isolation). `test/state/close-releases-file.test.ts` pins the contract: 40 distinct
+queries → close → zero open fds under the store directory (Linux, via `/proc/self/fd`), zero live
+statements, and the directory removable at once (the assertion Windows was failing).
+Pre-fix the test fails on exactly the three open handles.
+
+Two of the twelve were test defects and are fixed as such: `signed-audit-migration` reassigned
+a store without closing the first (refcount never reached zero), and the parity manifest test
+walked the test tree once per included file (~300 full walks, 5.4 s on the Windows runner —
+past the 5 s budget; now one walk into a `Set`).
+
+Not done here, recorded honestly: a Linux-side sweep with an `afterEach` fd probe shows 65 test
+files that remove their temp dir without ever closing their store and swallow the error
+(`try { rmSync } catch {}`) — `test/context` alone accumulates ~370 open handles per process.
+That hides the same defect class on Windows (the runner's temp fills instead of the test
+failing) and is queued as test hygiene for Phase 2; it does not affect the product fix above.
+
 Still **not** runtime-verified anywhere: the no-console-flash observation itself (W-1), the
 install → launch → taskkill → engine-dead sequence as one scripted run on the Windows runner
 (the pieces are proven separately), and the NSIS n→n+1 upgrade with data intact.

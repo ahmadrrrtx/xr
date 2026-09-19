@@ -126,6 +126,11 @@ describe("Phase 4 · migration 7 + keying on an existing database", () => {
       expect(tables.some((t) => t.name === "audit_anchors")).toBe(false);
       raw.close();
 
+      // A real restart closes the first process's connection before the next
+      // opener arrives. (Reassigning without close() kept the shared
+      // connection's refcount at 1 — invisible on POSIX, EBUSY on Windows.)
+      store.close();
+
       // Re-applying forward works and the chain still verifies.
       store = new WorkspaceStore("t", dbPath);
       expect(currentSchemaVersion(store)).toBe(LATEST_SCHEMA_VERSION); // forward re-applies 7 (and above)

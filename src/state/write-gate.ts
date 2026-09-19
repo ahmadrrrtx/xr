@@ -187,42 +187,147 @@ export class WriteGate {
   }
 
   /**
-   * Bun quirk (observed in Phase 1): a statement created with `db.prepare()`
-   * keeps the underlying file open even after `db.close()` unless it is
-   * finalized first. Track prepared statements here and finalize them on
-   * close/restore so the file lock is genuinely released.
+   * ───────────────────────────────────────────────────────────────────────────
+   * STATEMENT OWNERSHIP — why the gate compiles and caches every statement
+   * ───────────────────────────────────────────────────────────────────────────
+   * `sqlite3_close()` refuses (SQLITE_BUSY, "database is locked") while any
+   * prepared statement on the connection is un-finalized, and Bun then leaves
+   * the connection as a zombie: `db.close()` returns, but the file, its -wal
+   * and its -shm stay OPEN until the garbage collector happens to finalize
+   * the statements. On POSIX that is invisible (an open file can still be
+   * deleted). On Windows it is `EBUSY` on every delete/rename that follows a
+   * close — workspace removal, backup restore, test cleanup — which is how
+   * this surfaced: twelve Windows parity failures on `rmSync` after
+   * `store.close()`.
+   *
+   * Measured (bun 1.3.14, /proc/self/fd after `db.close()`):
+   *   · 20 distinct `db.query()` strings → clean close, 0 open fds;
+   *   · 21 or more                       → BUSY, 3 fds open (db, -wal, -shm).
+   * `Database.query()` caches at most 20 statements and finalizes only those
+   * on close; every statement beyond the cache is handed back un-cached AND
+   * never finalized. `db.prepare()` never caches or finalizes anything. The
+   * store runs far more than 20 distinct queries per session, so a real
+   * connection could never close cleanly.
+   *
+   * Two designs were rejected before this one:
+   *   · a strong Set of every issued statement (the previous code, for
+   *     `prepare()` only): 124 call sites `prepare()` per call, so the set —
+   *     and the native statements — grew without bound in a long-running
+   *     daemon;
+   *   · WeakRefs: JSC clears a WeakRef at mark time but runs the statement's
+   *     destructor at sweep time, so under GC pressure `finalizeAll()` skipped
+   *     statements that were still live in SQLite — close failed again,
+   *     nondeterministically (observed in the full suite, not in isolation).
+   *
+   * So the gate OWNS the statements: one compiled statement per SQL string,
+   * in a bounded LRU (`prepare()` and `query()` share it — every call site in
+   * src/ uses the statement immediately and never keeps it, and Bun's own
+   * `query()` already hands the same object to every caller). Eviction and
+   * close finalize deterministically; nothing depends on the collector.
    */
-  private readonly prepared = new Set<Statement>();
-  trackPrepared(stmt: Statement): void {
-    this.prepared.add(stmt);
-  }
-  /** Finalize every tracked prepared statement (call before db.close()). */
-  finalizeAll(): void {
-    for (const stmt of this.prepared) {
+  static readonly STATEMENT_CACHE_MAX = 512;
+  /** SQL → compiled statement; Map insertion order doubles as LRU order. */
+  private readonly statements = new Map<string, Statement>();
+  /** `prepare(sql, ...bindArgs)` binds at compile time and is not shareable. */
+  private readonly unshared = new Set<Statement>();
+
+  /** Compile (or reuse) the statement for `sql` on this connection. */
+  statement(sql: string, ...bindArgs: unknown[]): Statement {
+    if (bindArgs.length > 0) {
+      const stmt = (this.raw as unknown as { prepare(s: string, ...a: unknown[]): Statement }).prepare(sql, ...bindArgs);
+      this.unshared.add(stmt);
+      return stmt;
+    }
+    const hit = this.statements.get(sql);
+    if (hit) {
+      this.statements.delete(sql); // refresh LRU position
+      this.statements.set(sql, hit);
+      return hit;
+    }
+    const stmt = this.raw.prepare(sql);
+    this.statements.set(sql, stmt);
+    if (this.statements.size > WriteGate.STATEMENT_CACHE_MAX) {
+      const oldest = this.statements.keys().next().value as string;
+      const evicted = this.statements.get(oldest);
+      this.statements.delete(oldest);
       try {
-        stmt.finalize();
+        evicted?.finalize();
       } catch {
         /* already finalized */
       }
     }
-    this.prepared.clear();
+    return stmt;
+  }
+
+  /** Statements currently compiled on this connection (test seam for the close contract). */
+  get liveStatementCount(): number {
+    return this.statements.size + this.unshared.size;
   }
 
   /**
-   * Drop cached prepared statements WITHOUT closing the connection, so DDL that
-   * changes the live schema (e.g. a reversible migration down that drops a
-   * column) is not shadowed by a previously-compiled statement holding the old
-   * column layout. Statements are lazily re-prepared on next use.
+   * Finalize every statement this connection owns and drop Bun's own query
+   * cache (the few `rawDb.query()` sites). Call before `db.close()` — this is
+   * what makes the close real (file handles released) instead of a zombie.
    */
-  resetPrepared(): void {
-    for (const stmt of this.prepared) {
+  finalizeAll(): void {
+    for (const stmt of this.statements.values()) {
       try {
         stmt.finalize();
       } catch {
         /* already finalized */
       }
     }
-    this.prepared.clear();
+    this.statements.clear();
+    for (const stmt of this.unshared) {
+      try {
+        stmt.finalize();
+      } catch {
+        /* already finalized */
+      }
+    }
+    this.unshared.clear();
+    try {
+      (this.raw as unknown as { clearQueryCache?: () => void }).clearQueryCache?.();
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  /**
+   * Close the underlying connection for real: finalize everything the gate
+   * owns, checkpoint the WAL, then the STRICT `close(true)` (`sqlite3_close`,
+   * which reports SQLITE_BUSY instead of leaving a zombie like the default
+   * `sqlite3_close_v2`). Returns null on success, else the failure message —
+   * after falling back to the deferred close so the process can still exit.
+   */
+  closeConnection(): string | null {
+    this.finalizeAll();
+    try {
+      this.raw.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+    } catch {
+      /* best-effort */
+    }
+    try {
+      this.raw.close(true);
+      return null;
+    } catch (e) {
+      try {
+        this.raw.close();
+      } catch {
+        /* best-effort */
+      }
+      return e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  /**
+   * Drop every compiled statement WITHOUT closing the connection, so DDL that
+   * changes the live schema (e.g. a reversible migration down that drops a
+   * column) is not shadowed by a previously-compiled statement holding the old
+   * column layout. Statements are lazily re-compiled on next use.
+   */
+  resetPrepared(): void {
+    this.finalizeAll();
   }
 
   /**
@@ -334,14 +439,9 @@ export function gateConnection(db: Database, gate: WriteGate): Database {
   return new Proxy(db, {
     get(target, prop, receiver) {
       if (prop === "query" || prop === "prepare") {
-        return (sql: string, ...rest: unknown[]) => {
-          // Method call on `target` keeps the `this` binding.
-          const stmt = (prop === "prepare"
-            ? (target as unknown as { prepare(s: string, ...a: unknown[]): Statement }).prepare(sql, ...rest)
-            : (target as unknown as { query(s: string, ...a: unknown[]): Statement }).query(sql, ...rest));
-          if (prop === "prepare") gate.trackPrepared(stmt);
-          return gateStatement(stmt, gate, sql);
-        };
+        // Both compile through the gate-owned statement cache — see
+        // WriteGate.statement() for why the gate must own every statement.
+        return (sql: string, ...rest: unknown[]) => gateStatement(gate.statement(sql, ...rest), gate, sql);
       }
       if (prop === "exec") {
         return (sql: string) => gate.exec(sql);
