@@ -95,8 +95,15 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
         onArea={go}
         onNewTask={() => go("work")}
         onVoice={() => go("voice")}
+        onVoiceSession={() => go("voice")}
         onOnboard={onOnboard}
         onRunSkill={(id, name) => { setWorkSeed(`Use the "${id}" skill (${name}): `); go("work"); }}
+        onTheme={(t) => { localStorage.setItem("xr-theme", t); window.location.reload(); }}
+        onDensity={(d) => { localStorage.setItem("xr-density", d); window.location.reload(); }}
+        onToggleNotifications={() => { const v = localStorage.getItem("xr-notifications") !== "1"; localStorage.setItem("xr-notifications", v ? "1" : "0"); return v; }}
+        notificationsEnabled={() => localStorage.getItem("xr-notifications") === "1"}
+        onCheatSheet={() => window.dispatchEvent(new CustomEvent("xr:shortcuts"))}
+        onRefresh={() => window.location.reload()}
       />
       <ToastBus />
     </AppShell>

@@ -59,6 +59,8 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   const [agentNote, setAgentNote] = useState("idle — open a file or ask XR");
   const [loadingTree, setLoadingTree] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [newFileName, setNewFileName] = useState("");
+  const [showNewFile, setShowNewFile] = useState(false);
 
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -71,6 +73,8 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   const [termTab, setTermTab] = useState(1);
   const termSeq = useRef(2);
   const termOut = useRef<HTMLPreElement>(null);
+  const [termHistory, setTermHistory] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("xr-term-history") || "[]"); } catch { return []; } });
+  const historyIdx = useRef(-1);
 
   useEffect(() => {
     api.files("").then((r) => { setTree(r.entries ?? []); setBranch(r.branch ?? null); }).catch(() => setTree([])).finally(() => setLoadingTree(false));
@@ -79,6 +83,7 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
     const t = terms.find((x) => x.id === termTab);
     if (t && termOut.current) termOut.current.scrollTop = termOut.current.scrollHeight;
   }, [terms, termTab]);
+  useEffect(() => { try { localStorage.setItem("xr-term-history", JSON.stringify(termHistory.slice(-100))); } catch {} }, [termHistory]);
 
   const refreshTree = useCallback(() => {
     api.files("").then((r) => { setTree(r.entries ?? []); setBranch(r.branch ?? null); }).catch(() => undefined);
@@ -199,6 +204,8 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
     const tab = terms.find((t) => t.id === id);
     const cmd = tab?.cmd.trim();
     if (!tab || !cmd || tab.busy) return;
+    setTermHistory((h) => [...h.filter((x) => x !== cmd), cmd].slice(-100));
+    historyIdx.current = -1;
     patchTerm(id, () => ({ busy: true, approval: null, cmd: "", lines: [...tab.lines, { kind: "sys", text: `$ ${cmd}` }] }));
     const push = (l: TermLine) => patchTerm(id, (t) => ({ lines: [...t.lines, l] }));
     try {
@@ -288,9 +295,30 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 280px", gap: "var(--xr-space-2)", height: "100%", minHeight: 0, padding: "var(--xr-space-2)" }}>
-      {/* explorer */}
+      {/* explorer — Phase 2 CRUD */}
       <div style={{ display: "flex", flexDirection: "column", background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", overflow: "hidden", minHeight: 0 }}>
-        <div style={{ padding: "8px 10px", fontFamily: "var(--xr-font-mono)", fontSize: 11, color: "var(--xr-text-2)", borderBottom: "1px solid var(--xr-border)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{branch ? `⎇ ${branch}` : "files"}</div>
+        <div style={{ padding: "8px 10px", fontFamily: "var(--xr-font-mono)", fontSize: 11, color: "var(--xr-text-2)", borderBottom: "1px solid var(--xr-border)", textTransform: "uppercase", letterSpacing: "0.04em", display: "flex", gap: 6, alignItems: "center" }}>
+          <span>{branch ? `⎇ ${branch}` : "files"}</span>
+          <span style={{ flex: 1 }} />
+          <button title="New file (approval-gated)" onClick={() => setShowNewFile((v) => !v)} style={{ padding: "2px 6px", borderRadius: 4, border: "1px solid var(--xr-border)", background: "var(--xr-surface-2)", fontSize: 10, cursor: "pointer" }}>+ File</button>
+          <button title="Refresh tree" onClick={refreshTree} style={{ padding: "2px 6px", borderRadius: 4, border: "1px solid var(--xr-border)", background: "var(--xr-surface-2)", fontSize: 10, cursor: "pointer" }}>↻</button>
+        </div>
+        {showNewFile && (
+          <div style={{ padding: 8, display: "flex", gap: 6, borderBottom: "1px solid var(--xr-border)", background: "var(--xr-surface-2)" }}>
+            <input value={newFileName} onChange={(e) => setNewFileName(e.target.value)} placeholder="path/to/new.ts (engine validates traversal)" aria-label="New file path" style={{ flex: 1, padding: "4px 8px", borderRadius: 4, border: "1px solid var(--xr-border)", background: "var(--xr-surface-1)", fontFamily: "var(--xr-font-mono)", fontSize: 11 }} />
+            <button
+              onClick={async () => {
+                const rel = newFileName.trim(); if (!rel) return;
+                try {
+                  const r = await api.filesWrite(rel, "", undefined);
+                  if (r.applied) { setNewFileName(""); setShowNewFile(false); refreshTree(); void openFile(rel); }
+                  else setErr(`not created (${r.decision ?? "denied"})`);
+                } catch (e) { setErr(String(e)); }
+              }}
+              style={{ padding: "4px 8px", borderRadius: 4, background: "var(--xr-accent)", color: "white", border: "none", fontSize: 11, cursor: "pointer" }}
+            >Create</button>
+          </div>
+        )}
         <div style={{ flex: 1, overflow: "auto", padding: "4px 0" }}>
           {loadingTree ? <div style={{ padding: 12, display: "grid", gap: 8 }}>{Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ height: 18, background: "var(--xr-surface-2)", borderRadius: 4 }} />)}</div> : renderTree(tree, 0, "")}
           {!loadingTree && tree.length === 0 && <div style={{ fontSize: 12, padding: 8, color: "var(--xr-text-3)" }}>open a workspace (engine root) — honest empty, no fake files</div>}
@@ -359,7 +387,27 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
           </pre>
           <form onSubmit={(e) => { e.preventDefault(); void runTerminal(at.id); }} style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", borderTop: "1px solid var(--xr-border)" }}>
             <span style={{ fontFamily: "var(--xr-font-mono)", fontSize: 12, color: "var(--xr-text-3)" }}>$</span>
-            <input value={at?.cmd ?? ""} onChange={(e) => patchTerm(at.id, () => ({ cmd: e.target.value }))} placeholder={at?.busy ? "running…" : "git status"} disabled={at?.busy} autoFocus style={{ flex: 1, background: "var(--xr-surface-2)", border: "1px solid var(--xr-border)", borderRadius: 6, padding: "6px 8px", fontFamily: "var(--xr-font-mono)", fontSize: 12, color: "var(--xr-text-1)" }} />
+            <input
+              value={at?.cmd ?? ""}
+              onChange={(e) => patchTerm(at.id, () => ({ cmd: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  const nextIdx = historyIdx.current === -1 ? termHistory.length - 1 : Math.max(0, historyIdx.current - 1);
+                  if (termHistory[nextIdx]) { patchTerm(at.id, () => ({ cmd: termHistory[nextIdx] })); historyIdx.current = nextIdx; }
+                } else if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  if (historyIdx.current === -1) return;
+                  const nextIdx = historyIdx.current + 1;
+                  if (nextIdx >= termHistory.length) { patchTerm(at.id, () => ({ cmd: "" })); historyIdx.current = -1; }
+                  else { patchTerm(at.id, () => ({ cmd: termHistory[nextIdx] })); historyIdx.current = nextIdx; }
+                }
+              }}
+              placeholder={at?.busy ? "running…" : "git status · ↑↓ history · 100 saved"}
+              disabled={at?.busy}
+              autoFocus
+              style={{ flex: 1, background: "var(--xr-surface-2)", border: "1px solid var(--xr-border)", borderRadius: 6, padding: "6px 8px", fontFamily: "var(--xr-font-mono)", fontSize: 12, color: "var(--xr-text-1)" }}
+            />
             <button type="submit" disabled={!at || at.busy || !at.cmd.trim()} style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "var(--xr-accent)", color: "white", cursor: "pointer", opacity: !at || at.busy || !at.cmd.trim() ? 0.5 : 1 }}>Run</button>
             <button type="button" onClick={() => patchTerm(at.id, () => ({ lines: [] }))} disabled={at?.busy} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--xr-border)", background: "var(--xr-surface-1)", cursor: "pointer" }}>Clear</button>
           </form>
