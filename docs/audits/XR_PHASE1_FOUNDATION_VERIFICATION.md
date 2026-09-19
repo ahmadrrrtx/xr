@@ -28,7 +28,8 @@ running the thing — no result is copied from a previous report.
 
 | Check | Command | Result |
 |---|---|---|
-| Root suite | `bun test` | **3321 pass / 0 fail / 12 skip** (259 s) |
+| Root suite (core) | `XR_A11Y_SKIP_BROWSER=1 bun test` | **3338 tests across 329 files · 0 fail** (153.5 s, exit 0) |
+| Live browser a11y half | `bun test test/a11y/browser-axe.test.ts` | **13 pass / 0 fail** (125 s) — run as its own job, which is how CI is structured |
 | Root types | `bun run typecheck` | exit 0 |
 | Desktop types | `npm run typecheck` (desktop) | exit 0 |
 | Claim governance | `bun run claim-lint` | ✓ 10 evidenced claims, all Articles exist |
@@ -92,6 +93,24 @@ observation fanned out to every consumer, a hidden window stops polling entirely
 key backs off (bounded ×4) instead of hammering a dead engine. Six unit tests pin those
 properties, including "a failed fetch is reported as a failure, never as stale success".
 
+**Measured on the running app, not just asserted:** with the built app open and idle
+(`desktop/test/probe-poll-rate.mjs`, 65 s window, counting what the ENGINE logged):
+
+```
+observed 64 engine request(s) in 65.0s  →  59.1 requests/minute
+  health.get        17   (15.7/min)   ← 4 s cadence
+  approvals.list    13   (12.0/min)   ← 5 s cadence
+  sessions.list     13   (12.0/min)
+  control.pending   13   (12.0/min)
+  agents.list        6    (5.5/min)   ← 10 s cadence
+  providers.list     2    (1.8/min)   ← 30 s cadence
+```
+
+Every key appears at its own cadence exactly once per cycle. Before the hub,
+`pending`, `providers`, `sessions` and `approvals` each appeared twice per cycle
+at two different intervals — that is the inconsistency this closed, and it is now
+a measurement rather than a claim.
+
 **Latent layout defect found by the lane during this re-run.** In the offline state the docked
 voice orb reported 80 px of scroll width inside a 74 px box: the halo used `inset:-6px`, which is a
 *layout* fact because the dock is `position:fixed` and therefore the containing block. It is now a
@@ -113,6 +132,31 @@ the distinction was verified rather than assumed:
 * the client calls `/git/status` and **POSTs** `/trust/mode` (the 404s were `GET`s of the parent paths).
 
 ---
+
+## 4b. Environment caveats observed while producing this evidence
+
+Two things about the host are worth recording, because both can silently turn a
+green result into a false one:
+
+* **A missing full-Chromium build hid 13 live a11y tests.** Only
+  `chromium-headless-shell` was installed, so `test/a11y/browser-axe.test.ts`
+  skipped its browser half (`chromium.executablePath()` points at the full
+  build) and the suite reported `0 fail` while the dashboard's 23-panel axe
+  sweep, real-keyboard navigation and the sign-in page were never executed.
+  After installing the full build those 13 tests **pass**; they are now part of
+  the evidence rather than an invisible gap.
+* **The whole suite cannot fit in this sandbox's 1.9 GB in one process** once
+  that browser half is enabled: two consecutive full runs were OOM-killed
+  (`exit 137`, no test failures). The repo already anticipates this — the file's
+  own header says the browser half runs "only in the dedicated CI `a11y` job" —
+  so the core run uses `XR_A11Y_SKIP_BROWSER=1` and the browser half is run and
+  reported separately.
+* **Latency budgets are host-sensitive.** In an oversubscribed full run (load
+  average 13 on 2 cores) four wall-clock budget assertions failed (retrieval
+  p95 100 ms, routing-selection p95 20 ms measured at 213 ms). Re-run alone on a
+  quiet machine the same three files are **21 pass / 0 fail in 5.4 s**, and none
+  of them is touched by this branch. They are reported here rather than quietly
+  retried, because "it passed on the second attempt" is not evidence.
 
 ## 5. What is NOT verified here
 
