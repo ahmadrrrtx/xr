@@ -216,7 +216,7 @@ pub fn run() {
     let engine_setup = Arc::clone(&engine);
     let builder = tauri::Builder::default()
         .manage(Arc::clone(&engine))
-        .plugin(tauri_plugin_notification::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
