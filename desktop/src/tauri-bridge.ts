@@ -73,6 +73,14 @@ export interface EngineLinkSnapshot {
   reason: string | null;
   /** W-2: set when the sidecar runs WITHOUT job-object containment (Windows). */
   containment: string | null;
+  /**
+   * SEC-12: the crash-containment mechanism actually in force for the sidecar
+   * — `job-object` (Windows), `pdeathsig+parent-watch` (Linux), `parent-watch`
+   * (macOS), `none` (Windows, job unavailable; `containment` says why), or
+   * null when this shell spawned no sidecar. A fact from the shell, never a
+   * renderer guess.
+   */
+  containmentMode: string | null;
   /** W-5: the sidecar's last stderr lines — the engine's own explanation. */
   stderr: string[];
   externalDaemonOn3141: boolean;
@@ -93,6 +101,7 @@ export async function engineLinkSnapshot(): Promise<EngineLinkSnapshot | null> {
       port?: number | null;
       reason?: string | null;
       containment?: string | null;
+      containmentMode?: string | null;
       stderr?: string[];
       externalDaemonOn3141?: boolean;
     };
@@ -102,12 +111,13 @@ export async function engineLinkSnapshot(): Promise<EngineLinkSnapshot | null> {
       port: typeof link?.port === "number" ? link.port : null,
       reason: link?.reason ?? null,
       containment: link?.containment ?? null,
+      containmentMode: typeof link?.containmentMode === "string" ? link.containmentMode : null,
       stderr: Array.isArray(link?.stderr) ? link.stderr.filter((l): l is string => typeof l === "string") : [],
       externalDaemonOn3141: link?.externalDaemonOn3141 === true,
     };
   } catch (e) {
     return {
-      reachable: false, spawned: false, port: null, reason: null, containment: null, stderr: [], externalDaemonOn3141: false,
+      reachable: false, spawned: false, port: null, reason: null, containment: null, containmentMode: null, stderr: [], externalDaemonOn3141: false,
       error: `engine_link failed: ${e instanceof Error ? e.message : String(e)}`,
     };
   }

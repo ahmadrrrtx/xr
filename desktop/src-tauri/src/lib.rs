@@ -35,9 +35,21 @@
 //!   W-6  reachability probes are cached for 1.5 s, so a down engine no longer
 //!        freezes the webview IPC handler for ~1.2 s per poll.
 //!
+//! SEC-12 · the engine never outlives the shell, on every OS
+//! ─────────────────────────────────────────────────────────────────────────────
+//!   Windows  Job Object, KILL_ON_JOB_CLOSE (W-2)            — kernel-enforced
+//!   Linux    PR_SET_PDEATHSIG armed between fork and exec  — kernel-enforced
+//!   macOS    engine-side parent watch only                 — 1 s poll
+//!   all      `--parent-pid <shell pid>` is passed everywhere as defence in
+//!            depth; clean quits send SIGTERM first (Unix) so the engine runs
+//!            its own stop path instead of being killed mid-write.
+//!   `engine_link` reports the mode in force as `containmentMode`, and a
+//!   Windows job failure as a `containment` warning — never silently.
+//!
 //! Parsing and caching live in `engine_state.rs` (pure std, unit-tested);
-//! the Win32 calls live in `win.rs` (hand-written FFI, compile-verified for
-//! `x86_64-pc-windows-gnu`). See docs/audits/XR_PHASE1_FOUNDATION_VERIFICATION.md
+//! the Win32 calls live in `win.rs` (hand-written FFI, runtime-tested on the
+//! Windows runner); the Unix calls live in `unix.rs` (libc, runtime-tested
+//! on the Linux reference). See docs/audits/XR_PHASE1_FOUNDATION_VERIFICATION.md
 //! for what is runtime-verified and what is not.
 
 use std::io::{BufRead, BufReader};
@@ -50,6 +62,9 @@ mod engine_state;
 /// module header for why the `windows` crate is not used).
 #[cfg(windows)]
 mod win;
+/// SEC-12 · Linux parent-death signal + graceful SIGTERM shutdown (libc).
+#[cfg(unix)]
+mod unix;
 
 use engine_state::{parse_banner_line, Banner, ProbeCache, StderrTail};
 
@@ -138,6 +153,11 @@ fn spawn_sidecar(state: &Arc<EngineState>) {
     cmd.arg("serve")
         .arg("--port")
         .arg("0")
+        // SEC-12 — the engine watches THIS process and stops itself when it
+        // is gone (src/daemon/parent-watch.ts). On macOS this is the only
+        // crash-path guarantee; elsewhere it backs the kernel mechanism.
+        .arg("--parent-pid")
+        .arg(std::process::id().to_string())
         .stdout(Stdio::piped())
         // W-5 — the engine explains its refusals on stderr. Discarding it
         // (`Stdio::null()`) left the shell able to say only "unreachable",
@@ -151,6 +171,11 @@ fn spawn_sidecar(state: &Arc<EngineState>) {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
+    // SEC-12 — Linux: the kernel SIGKILLs the engine when the thread that
+    // spawned it exits. This function runs on the main thread (Tauri `setup`),
+    // which lives exactly as long as the shell — see unix.rs invariant 1.
+    #[cfg(target_os = "linux")]
+    unix::arm_parent_death_signal(&mut cmd);
 
     match cmd.spawn() {
         Ok(mut child) => {
@@ -220,6 +245,26 @@ fn spawn_sidecar(state: &Arc<EngineState>) {
     }
 }
 
+/// SEC-12 — which crash-containment mechanism is actually in force for the
+/// sidecar. A fact for the Trust surface, never a guess:
+///   `job-object`              Windows, job assigned (kernel-enforced)
+///   `none`                    Windows, job unavailable — `containment` says why
+///   `pdeathsig+parent-watch`  Linux (kernel-enforced + engine poll)
+///   `parent-watch`            macOS and other Unix (engine poll only)
+///   `null`                    no sidecar was spawned by this shell
+fn containment_mode(state: &EngineState) -> Option<&'static str> {
+    if state.child.lock().unwrap().is_none() {
+        return None;
+    }
+    #[cfg(windows)]
+    let mode = if state.job.lock().unwrap().is_some() { "job-object" } else { "none" };
+    #[cfg(target_os = "linux")]
+    let mode = "pdeathsig+parent-watch";
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let mode = "parent-watch";
+    Some(mode)
+}
+
 /// Instant snapshot — the frontend polls this.
 ///
 /// W-6: every reachability answer comes from the short-lived cache, so this
@@ -232,6 +277,7 @@ fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
     let token: Option<String> = state.token.lock().unwrap().clone();
     let note: Option<String> = state.note.lock().unwrap().clone();
     let containment: Option<String> = state.containment.lock().unwrap().clone();
+    let mode = containment_mode(state.inner());
     let stderr: Vec<String> = state
         .stderr_tail
         .lock()
@@ -246,6 +292,7 @@ fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
                 "port": port,
                 "token": linked_token,
                 "containment": containment,
+                "containmentMode": mode,
                 "stderr": stderr,
                 "externalDaemonOn3141": probe_reachable(state.inner(), 3141),
             });
@@ -258,6 +305,7 @@ fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
         "hasToken": token.is_some(),
         "reason": note,
         "containment": containment,
+        "containmentMode": mode,
         "stderr": stderr,
         "externalDaemonOn3141": probe_reachable(state.inner(), 3141),
     })
@@ -434,8 +482,18 @@ pub fn run() {
                 engine.job.lock().unwrap().take();
             }
             if let Some(mut child) = engine.child.lock().unwrap().take() {
-                let _ = child.kill();
-                let _ = child.wait();
+                // SEC-12 — Unix: SIGTERM first, so the engine runs its own
+                // stop path (server close, trigger loop, observability
+                // flush); SIGKILL only if it has not left after the grace.
+                #[cfg(unix)]
+                {
+                    unix::terminate_gracefully(&mut child, Duration::from_millis(1500));
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
             }
         }
     });

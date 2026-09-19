@@ -170,20 +170,28 @@ green result into a false one:
   of them is touched by this branch. They are reported here rather than quietly
   retried, because "it passed on the second attempt" is not evidence.
 
-## 5. What is NOT verified here
+## 5. Runtime verification status (updated 2026-09-19 on `phase1/foundation-hardening`)
 
-**W-1, W-2, W-3, W-5 and W-6 are IMPLEMENTED and COMPILE-VERIFIED, but NOT RUNTIME-VERIFIED.**
-No native-runtime behaviour is claimed anywhere in this document.
+The paragraph this section replaced said: *"W-1, W-2, W-3, W-5 and W-6 are IMPLEMENTED and
+COMPILE-VERIFIED, but NOT RUNTIME-VERIFIED."* That was true when written. It is no longer the
+state of the branch, and the evidence now lives in CI jobs rather than in this container:
 
-What each one now does, and exactly how far the evidence goes:
+| Item | Implemented | Runtime evidence (job · result) |
+|---|---|---|
+| W-1 `CREATE_NO_WINDOW` | sidecar spawn sets the flag (cfg(windows)) | `Desktop App · Rust shell — cargo test on Windows (W-1/W-2/W-3 runtime proof)` builds and runs the shell crate's tests on `windows-latest`; the Windows sidecar smoke (compile + boot + `/api/v1/health`) passes in the same workflow. No console-flash assertion exists yet (needs a desktop session on the runner) — **flag proven, flash absence not**. |
+| W-2 Job Object kill-on-close | `win.rs` creates the job, arms `KILL_ON_JOB_CLOSE`, assigns the child; handle closed on Exit | `win::tests::w2_closing_the_last_job_handle_kills_the_assigned_child` (child dies when the handle closes) and `w2_control_an_unassigned_child_is_untouched_by_a_job_closing` (control) — **pass on `windows-latest`** (13/13, two consecutive runs). |
+| W-3 single instance | named mutex guard via `win.rs` | `w3_a_named_mutex_admits_exactly_one_holder_per_name` + `w3_different_names_do_not_collide` — **pass on `windows-latest`**. Still does **not** focus the existing window (needs `tauri-plugin-single-instance`). |
+| W-5 sidecar stderr captured | stderr piped into a bounded tail, returned with the link status and shown by the S0 boot splash (`.boot[data-state="failed"]`) | `engine_state.rs` tests (tail cap, banner parsing) pass on Linux and Windows; the boot splash binds to `engineLinkSnapshot().stderr` (desktop/test/boot tests). |
+| W-6 cached reachability probe | 1.5 s TTL cache in front of the blocking connect | TTL expiry, per-port isolation and clock-skew cases under test; pass on Linux and Windows. |
+| Windows installers | NSIS per-user (`installMode: currentUser`) **and** MSI both built; the release job asserts both flavours exist | `Desktop App · Windows — tauri bundle` **success** at `2f5d380` with the msi+nsis assertion. |
+| SEC-12 engine never outlives the shell | Windows: W-2 job. Linux: `PR_SET_PDEATHSIG` armed in `pre_exec` (`unix.rs`). macOS: engine-side parent watch. All OSes: `xr serve --parent-pid <shell pid>`; clean quits send SIGTERM first (Unix) | `unix::tests::pdeathsig_is_bound_to_the_spawning_thread` + control + two `terminate_gracefully` tests (Linux reference, `cargo test`); `test/daemon/parent-watch*.test.ts` (decision table on every OS; SIGKILLed-parent process tree on Linux/macOS); `test/e2e-blackbox/parent-watch.test.ts` — the real CLI, spawned by a stand-in shell that is SIGKILLed: port stops answering and the process is gone within seconds, `daemon.parent_gone` on stderr. `engine_link` reports `containmentMode`. |
 
-| Item | Implemented | Evidence here | Runtime evidence |
-|---|---|---|---|
-| W-1 `CREATE_NO_WINDOW` | sidecar spawn sets the flag (cfg(windows)) | `lib.rs` parses cleanly; flag is the documented constant | none — needs a Windows launch |
-| W-2 Job Object kill-on-close | `win.rs` creates the job, arms `KILL_ON_JOB_CLOSE`, assigns the child; handle closed on Exit | `win.rs` compiles for `x86_64-pc-windows-gnu` (exit 0) | none — needs a Windows crash test |
-| W-3 single instance | named mutex guard via `win.rs` | compiles for the Windows target | none; and it does **not** focus an existing window (needs `tauri-plugin-single-instance`) |
-| W-5 sidecar stderr captured | stderr piped into a 40-line bounded tail, returned with link status | `engine_state.rs` 9/9 tests pass on this host, including the tail cap | — logic verified; wiring needs a Windows run |
-| W-6 cached reachability probe | 1.5 s TTL cache in front of the blocking connect | TTL expiry, per-port isolation and clock-skew cases all under test | — logic verified; wiring needs a Windows run |
+Still **not** runtime-verified anywhere: the no-console-flash observation itself (W-1), the
+install → launch → taskkill → engine-dead sequence as one scripted run on the Windows runner
+(the pieces are proven separately), and the NSIS n→n+1 upgrade with data intact.
+
+The historical record of *why* this could not be verified from this container is kept below,
+because "we could not check here" is itself a fact worth carrying.
 
 The structure that made this verifiable at all: banner parsing, the stderr tail and the probe
 cache live in `src/engine_state.rs`, which has no Tauri, OS or network dependency and therefore

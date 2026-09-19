@@ -41,6 +41,18 @@ function parseServePort(args: string[]): number | undefined {
 }
 
 async function runServeCommand(args: string[]): Promise<void> {
+  // SEC-12 — `--parent-pid <pid>`: the desktop shell passes its own pid so the
+  // engine stops itself when the shell is gone. Parsed BEFORE the daemon
+  // boots: a malformed value is a usage error, never a watch that silently
+  // fails to arm. parent-watch.ts is dependency-free (no kernel load).
+  const { parseParentPid, startParentWatch } = await import("../daemon/parent-watch.ts"); // static literal — compile-safe
+  let parentPid: number | undefined;
+  try {
+    parentPid = parseParentPid(args);
+  } catch (err) {
+    throw usageError(err instanceof Error ? err.message : String(err), "Usage: xr serve [--port <n>] [--parent-pid <pid>]");
+  }
+
   const { serve } = await import("../daemon/server.ts"); // static literal — compile-safe
   const port = parseServePort(args);
   const handle = await serve({ port: Number.isFinite(port) ? port : undefined });
@@ -55,6 +67,26 @@ async function runServeCommand(args: string[]): Promise<void> {
     };
     process.on("SIGINT", stop);
     process.on("SIGTERM", stop);
+    if (parentPid !== undefined) {
+      startParentWatch(parentPid, () => {
+        // One structured line on stderr: the shell's W-5 tail (if any) and
+        // the operator's terminal both learn WHY the engine went away.
+        console.error(
+          JSON.stringify({
+            ts: new Date().toISOString(),
+            level: "info",
+            event: "daemon.parent_gone",
+            parentPid,
+            action: "graceful stop",
+          }),
+        );
+        stop();
+        // Graceful first; bounded always. If something keeps the loop alive
+        // after stop(), leave anyway — an orphaned engine is the failure this
+        // watch exists to prevent. unref'd, so a clean drain still wins.
+        setTimeout(() => process.exit(0), 2000).unref();
+      });
+    }
   });
 }
 
