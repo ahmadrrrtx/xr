@@ -820,3 +820,17 @@
   word-break: break-word;
 }
 .boot-help { margin: 0; font-size: var(--xr-t-small); line-height: 1.6; color: var(--xr-text-muted); }
+
+/* Approval TTL countdown — the engine's default-deny deadline made visible.
+   Digits change without transition (a fact, not motion); only the colour
+   eases as urgency rises. */
+.appr-ttl {
+  font-size: var(--xr-t-cap);
+  font-variant-numeric: tabular-nums;
+  color: var(--xr-text-muted);
+  transition: color var(--xr-d-fast) var(--xr-ease-out);
+}
+.appr-ttl[data-urgency="soon"] { color: var(--xr-amber); }
+.appr-ttl[data-urgency="critical"] { color: var(--xr-red); font-weight: 600; }
+.appr-ttl[data-urgency="expired"] { color: var(--xr-red); }
+.appr-h .appr-ttl { margin-left: auto; }

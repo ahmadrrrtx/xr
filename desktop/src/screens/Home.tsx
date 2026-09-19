@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { asList, type Approval, type ProviderInfo, type SessionSummary } from "../api/client";
+import { ApprovalCountdown } from "../components/ApprovalCountdown";
 import { XrLogo } from "../components/Brand";
 import { poll } from "../poll";
 
@@ -152,6 +153,8 @@ export function Home({
           <div className="ab-line">
             {String(approvals[0].tool ?? approvals[0].action ?? approvals[0].reason ?? "An agent action")}
             {" "}and {approvals.length > 1 ? `${approvals.length - 1} more` : "the latest"} request{approvals.length > 1 ? "s" : ""} need review
+            {" · "}
+            <ApprovalCountdown deadline={approvals[0]} />
           </div>
           <button className="btn small" onClick={onReview}>Review</button>
         </div>

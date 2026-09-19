@@ -4,7 +4,7 @@ import { api, asList, type ProviderInfo, type SessionSummary, type SkillInfo } f
 import { notify } from "../notify";
 import { StatusDot, providerLabel, type DotState } from "./StatusDot";
 import { notificationsEnabled } from "../prefs";
-import { engineLinkReason } from "../tauri-bridge";
+import { engineLinkReason, engineLinkSnapshot } from "../tauri-bridge";
 import { poll } from "../poll";
 
 export type Area = "home" | "projects" | "work" | "workspace" | "research" | "memory" | "models" | "control" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
@@ -103,6 +103,10 @@ export function AppShell({
   const [primaryId, setPrimaryId] = useState<string | null>(null);
   const [up, setUp] = useState(true);
   const [linkReason, setLinkReason] = useState<string | null>(null);
+  /* W-2 · the Rust shell reports when the sidecar runs WITHOUT job-object
+     containment (it then dies only on a clean shutdown, not on a crash). A
+     fact worth a visible warning, not a log line nobody reads. */
+  const [containment, setContainment] = useState<string | null>(null);
   const [pending, setPending] = useState(0);
 
   /* Phase 5 · opt-in OS notifications: approval due + run done.
@@ -198,6 +202,7 @@ export function AppShell({
         if (o.ok) {
           setUp(true);
           setLinkReason(null);
+          void engineLinkSnapshot().then((l) => setContainment(l?.containment ?? null));
         } else {
           setUp(false);
           // Surface WHY, instead of a bare red dot (audit D-10).
@@ -306,6 +311,11 @@ export function AppShell({
         >
           Engine <StatusDot state={up ? "ok" : "danger"} /> {up ? "" : "offline"}
         </span>
+        {containment && (
+          <span className="sb-item warn sb-contain" title={containment} role="status">
+            <StatusDot state="warn" /> sidecar uncontained
+          </span>
+        )}
         <span className="sb-sep" aria-hidden="true" />
         {/* Honest provider state (audit D-07): grey when unknown, amber when
             configured-but-unreachable, red when the key is missing. */}
