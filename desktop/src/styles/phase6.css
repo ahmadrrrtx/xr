@@ -424,7 +424,13 @@
 .vc-mute.on { border-color: #ff5d74; color: #ff5d74; }
 /* docked orb */
 .vd-orb { position: fixed; right: 22px; bottom: 52px; z-index: 70; width: 74px; height: 74px; border-radius: 50%; border: none; background: transparent; cursor: pointer; display: grid; place-items: center; }
-.vd-glow { position: absolute; inset: -6px; border-radius: 50%; background: radial-gradient(circle, rgba(72,222,240,.55), rgba(72,222,240,0) 70%); }
+/* Phase 1 · the halo bleeds OUTSIDE the orb by design, but `inset:-6px` made it
+   a LAYOUT fact: the dock is `position:fixed` (so it is the containing block for
+   this absolutely positioned child) and the 6px bleed showed up as 80px of
+   scrollWidth in a 74px box — a phantom overflow that the renderer lane flagged,
+   and that got worse when the orb rendered in its offline state. A blur is
+   paint-only: the same halo, no overflow, so the measurement stays honest. */
+.vd-glow { position: absolute; inset: 0; border-radius: 50%; filter: blur(5px); background: radial-gradient(circle, rgba(72,222,240,.55), rgba(72,222,240,0) 70%); }
 .vd-orb.idle .vd-glow { background: radial-gradient(circle, rgba(120,130,140,.35), rgba(120,130,140,0) 70%); }
 .vd-avatar { width: 62px; height: 62px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(72,222,240,.8); box-shadow: 0 4px 18px rgba(0,0,0,.6); background: #06090c; }
 .vd-mute { position: absolute; right: 2px; bottom: 2px; width: 14px; height: 14px; border-radius: 50%; background: #ff5d74; }
