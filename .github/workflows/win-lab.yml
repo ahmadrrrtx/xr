@@ -1,0 +1,167 @@
+# =============================================================================
+# XR · Windows lab — manual diagnostics for the win32 parity lane.
+#
+# Purpose: name the exact point at which a test file wedges on a real Windows
+# kernel, with markers that SURVIVE the kill (per-file stdout is lost when the
+# segment watchdog terminates bun on win32). Nothing here runs on push; it is
+# `workflow_dispatch` only and produces evidence, never a green tick.
+#
+# Each experiment is wall-clock bounded and reports: exit code, elapsed
+# seconds, the marker file (START/END per test + a 2 s heartbeat that proves
+# whether the event loop is alive or the main thread is frozen), the tail of
+# the process output, and any bun.exe left behind.
+# =============================================================================
+name: Windows lab (manual diagnostics)
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Test file to dissect"
+        required: false
+        default: "test/phase2/approvals-durable.test.ts"
+      per_test_timeout_ms:
+        description: "bun test --timeout"
+        required: false
+        default: "20000"
+      wall_seconds:
+        description: "Hard wall-clock cap per experiment (seconds)"
+        required: false
+        default: "300"
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    name: Windows — dissect ${{ inputs.file }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Lab harness (markers preload + runner)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/lab" lab
+          cat > lab/markers.ts <<'EOF'
+          // Marker preload: durable evidence that survives a kill.
+          import { afterAll, afterEach, beforeAll, beforeEach } from "bun:test";
+          import { appendFileSync } from "node:fs";
+          const f = process.env.XR_LAB_MARKERS ?? "";
+          const t0 = Date.now();
+          let n = 0;
+          const mark = (s: string) => {
+            if (!f) return;
+            appendFileSync(f, `+${((Date.now() - t0) / 1000).toFixed(2)}s ${s}\n`);
+          };
+          mark(`preload pid=${process.pid} bun=${Bun.version} tmpdir=${require("node:os").tmpdir()}`);
+          beforeAll(() => mark("beforeAll"));
+          beforeEach(() => { n++; mark(`START #${n}`); });
+          afterEach(() => mark(`END   #${n}`));
+          afterAll(() => mark("afterAll"));
+          const hb = setInterval(() => mark("heartbeat (event loop alive)"), 2000);
+          (hb as unknown as { unref?: () => void }).unref?.();
+          EOF
+          cat > lab/run.sh <<'EOF'
+          #!/usr/bin/env bash
+          # run.sh <label> <wall-seconds> <command...>
+          label="$1"; wall="$2"; shift 2
+          out="$RUNNER_TEMP/lab/$label.out"; markers="$RUNNER_TEMP/lab/$label.markers"
+          : > "$markers"
+          echo "::group::[$label] $*"
+          start=$(date +%s)
+          XR_LAB_MARKERS="$markers" timeout --signal=TERM --kill-after=10s "${wall}s" "$@" >"$out" 2>&1
+          code=$?
+          end=$(date +%s)
+          echo "exit=$code elapsed=$((end-start))s (124 = wall-clock cap hit)"
+          echo "--- markers ($markers) ---"
+          cat "$markers" 2>/dev/null | tail -n 60
+          echo "--- output tail ---"
+          tail -n 80 "$out" 2>/dev/null
+          echo "--- bun processes still alive ---"
+          tasklist.exe //FI "IMAGENAME eq bun.exe" 2>/dev/null | tail -n +3 || true
+          taskkill.exe //F //IM bun.exe //T >/dev/null 2>&1 || true
+          echo "::endgroup::"
+          EOF
+          chmod +x lab/run.sh
+          echo "bun=$(bun --version)"
+          echo "TEMP=$TEMP  RUNNER_TEMP=$RUNNER_TEMP"
+          bun -e 'console.log("os.tmpdir()=", require("node:os").tmpdir())'
+
+      - name: E1 · whole file with markers + heartbeat
+        shell: bash
+        continue-on-error: true
+        run: bash lab/run.sh e1-whole-file "${{ inputs.wall_seconds }}" bun test "${{ inputs.file }}" --preload ./lab/markers.ts --timeout "${{ inputs.per_test_timeout_ms }}"
+
+      - name: E2 · first test only (-t TTL default-deny)
+        shell: bash
+        continue-on-error: true
+        run: bash lab/run.sh e2-first-test 120 bun test "${{ inputs.file }}" --preload ./lab/markers.ts --timeout "${{ inputs.per_test_timeout_ms }}" -t "TTL default-deny"
+
+      - name: E3 · in-process approval round trip (no bun test harness)
+        shell: bash
+        continue-on-error: true
+        run: |
+          cat > lab/roundtrip.ts <<'EOF'
+          import { appendFileSync } from "node:fs";
+          import { mkdtempSync } from "node:fs";
+          import { tmpdir } from "node:os";
+          import { join } from "node:path";
+          const f = process.env.XR_LAB_MARKERS ?? "";
+          const t0 = Date.now();
+          const mark = (s: string) => f && appendFileSync(f, `+${((Date.now() - t0) / 1000).toFixed(2)}s ${s}\n`);
+          mark("start");
+          const { Store } = await import("../src/state/workspace-store.ts");
+          mark("Store imported");
+          const { ApprovalStore } = await import("../src/control/approval-store.ts");
+          mark("ApprovalStore imported");
+          const dir = mkdtempSync(join(tmpdir(), "xr-lab-"));
+          const store = new Store(join(dir, "t.db"));
+          mark("Store opened");
+          const approvals = new ApprovalStore(store, { defaultTtlMs: 150 });
+          mark("ApprovalStore constructed");
+          const h = approvals.request({ tool: "shell", reason: "lab", args: { command: "x" }, surface: "cli", ttlMs: 150 });
+          mark("request() returned id=" + h.id);
+          const o = await h.outcome;
+          mark("outcome " + JSON.stringify(o));
+          approvals.dispose();
+          mark("disposed");
+          store.close();
+          mark("closed — exiting naturally (no process.exit)");
+          EOF
+          bash lab/run.sh e3-roundtrip 90 bun run lab/roundtrip.ts
+
+      - name: E4 · fixture raise-approval.ts alone (exits after request)
+        shell: bash
+        continue-on-error: true
+        run: bash lab/run.sh e4-raise-approval 90 bun run test/phase2/fixtures/raise-approval.ts "$RUNNER_TEMP/lab/k.db" 60000
+
+      - name: E5 · fixture raise-and-wait.ts alone (ttl 2000 → default-deny → exit)
+        shell: bash
+        continue-on-error: true
+        run: bash lab/run.sh e5-raise-and-wait 90 bun run test/phase2/fixtures/raise-and-wait.ts "$RUNNER_TEMP/lab/c.db" 2000
+
+      - name: E6 · migration-lock contract file
+        shell: bash
+        continue-on-error: true
+        run: bash lab/run.sh e6-migration-lock 120 bun test test/state/migration-lock-self-deadlock.test.ts --preload ./lab/markers.ts --timeout "${{ inputs.per_test_timeout_ms }}"
+
+      - name: Leftover lockfiles
+        shell: bash
+        continue-on-error: true
+        run: |
+          for d in "$TEMP" "$RUNNER_TEMP" "$HOME/.xr"; do
+            [ -d "$d" ] || continue
+            find "$d" -maxdepth 4 \( -name '*.migrate.lock' -o -name '*.db' \) -newer lab/run.sh 2>/dev/null | head -n 40
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: win-lab-evidence
+          path: ${{ runner.temp }}/lab/
+          if-no-files-found: ignore
