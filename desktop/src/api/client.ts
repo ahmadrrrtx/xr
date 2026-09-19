@@ -285,6 +285,87 @@ export async function terminalRun(
   }
 }
 
+/* ---------- phase 2 · PTY sessions (engine vocabulary, src/daemon/pty-sessions.ts) ---------- */
+export type PtyEvent =
+  | { type: "status"; status: "approval_required"; approvalId: string; shell?: string; cwd?: string; riskTier?: string; ttlMs?: number }
+  | { type: "status"; status: "open"; sessionId: string; pid?: number; shell?: string; cwd?: string; cols?: number; rows?: number }
+  | { type: "status"; status: "denied" | "timed_out"; decision?: string | null }
+  | { type: "status"; status: "output_dropped"; bytes: number }
+  | { type: "status"; status: "error"; error?: string }
+  | { type: "output"; data: string }
+  | { type: "exit"; code: number | null; signal?: string | null }
+  | { type: "done" };
+
+/** Shared SSE pump for the engine's `data:` framing (chat/terminal/pty). */
+async function pumpSse<T>(res: Response, onEvent: (e: T | { type: "done" }) => void): Promise<void> {
+  const reader = res.body!.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buf.indexOf("\n\n")) >= 0) {
+      const chunk = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of chunk.split("\n")) {
+        if (!line.startsWith("data: ")) continue;
+        const payload = line.slice(6);
+        if (payload === "[DONE]") { onEvent({ type: "done" }); continue; }
+        try { onEvent(JSON.parse(payload) as T); } catch { /* keepalive */ }
+      }
+    }
+  }
+}
+
+/**
+ * POST /terminal/pty — open a REAL interactive shell (engine-owned PTY).
+ * ONE approval per session; then output streams until exit. Aborting the
+ * signal is how a closed tab ends the shell (the engine kills it on
+ * disconnect) — there is no client-side kill path that the engine does not own.
+ */
+export async function ptyOpen(
+  body: { cwd?: string; cols?: number; rows?: number },
+  onEvent: (e: PtyEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const { base, token } = await endpoint();
+  let res: Response;
+  try {
+    res = await fetch(`${base}/terminal/pty`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...devHeaders() },
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch {
+    throw new EngineDown("engine unreachable");
+  }
+  if (!res.ok || !res.body) {
+    let msg = `${res.status} terminal/pty`;
+    try { const j = (await res.json()) as { error?: string }; if (j.error) msg = j.error; } catch { /* non-JSON */ }
+    throw new Error(msg);
+  }
+  await pumpSse<PtyEvent>(res, onEvent);
+}
+export const pty = {
+  input: (sessionId: string, data: string) =>
+    req<{ ok: boolean; bytes: number }>(`/terminal/pty/${encodeURIComponent(sessionId)}/input`, { method: "POST", body: JSON.stringify({ data }) }),
+  resize: (sessionId: string, cols: number, rows: number) =>
+    req<{ ok: boolean; cols: number; rows: number }>(`/terminal/pty/${encodeURIComponent(sessionId)}/resize`, { method: "POST", body: JSON.stringify({ cols, rows }) }),
+  close: (sessionId: string) =>
+    req<{ ok: boolean; exit: { code: number | null; signal: string | null } | null }>(`/terminal/pty/${encodeURIComponent(sessionId)}`, { method: "DELETE" }),
+};
+
+/* ---------- phase 2 · hunks (engine vocabulary, src/daemon/hunks.ts) ---------- */
+export interface DiffHunk {
+  id: string; index: number; header: string;
+  oldStart: number; oldLines: number; newStart: number; newLines: number;
+  added: number; removed: number; lines: string[];
+}
+export interface FileDiff { path: string; diff: string; ok: boolean; tracked: boolean; hunks?: DiffHunk[] }
+
 /* ---------- entities ---------- */
 export interface SessionSummary {
   id: string; title?: string; prompt?: string; mode?: string; status?: string;
@@ -450,7 +531,22 @@ export const api = {
     req<unknown>(`/approvals/${encodeURIComponent(id)}/decision`, { method: "POST", body: JSON.stringify({ approved }) }),
   files: (path = "") => req<FilesRoot>(`/files?path=${encodeURIComponent(path)}`),
   fileRead: (path: string) => req<{ content?: string; text?: string; binary?: boolean; mtimeMs?: number }>(`/files/read?path=${encodeURIComponent(path)}`),
-  fileDiff: (path: string) => req<Record<string, unknown>>(`/files/diff?path=${encodeURIComponent(path)}`),
+  fileDiff: (path: string) => req<FileDiff>(`/files/diff?path=${encodeURIComponent(path)}`),
+  /**
+   * Phase 2 · G-06 — reverse-apply chosen hunks (engine runs `git apply -R`
+   * after a human approval whose preview shows exactly those hunks). Pending
+   * until the decision; applied=true only after git succeeded.
+   */
+  hunksRevert: (path: string, hunkIds: string[], baseMtimeMs?: number) =>
+    req<{ applied: boolean; approvalId?: string; decision?: string | null; reverted?: number; hunks?: DiffHunk[]; diff?: string; mtimeMs?: number; stale?: boolean; error?: string }>(
+      "/files/hunks/revert",
+      { method: "POST", body: JSON.stringify({ path, hunkIds, ...(baseMtimeMs !== undefined ? { baseMtimeMs } : {}) }) },
+    ),
+  /** Phase 2 · G-08 — per-workspace UI state the renderer owns; the engine keeps it durable. */
+  uiState: (keys?: string[]) =>
+    req<{ workspaceId: string; entries: Array<{ key: string; value: unknown; updatedAt: number }> }>(`/state/ui${keys?.length ? `?keys=${encodeURIComponent(keys.join(","))}` : ""}`),
+  uiStatePatch: (patch: Record<string, unknown>) =>
+    req<{ workspaceId: string; written: string[]; deleted: string[]; updatedAt: number }>("/state/ui", { method: "PUT", body: JSON.stringify({ patch }) }),
   /**
    * Phase 2B — save the editor buffer. The engine raises a durable approval
    * and this promise stays pending until a human decides; poll api.approvals()

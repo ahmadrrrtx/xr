@@ -1,0 +1,25 @@
+/* XR · Phase 2 (core workspace) — PTY pane + hunk review.
+   Motion law: nothing here transitions on keyboard input; the only eased
+   property is the status foot's colour. No transition: all; no scale(0). */
+
+/* ── PTY pane ─────────────────────────────────────────────────────────── */
+.pty { display: flex; flex-direction: column; min-height: 180px; height: 34vh; border-top: 1px solid var(--xr-border); background: var(--xr-surface-1); }
+.pty-host { flex: 1 1 auto; min-height: 120px; padding: 6px 8px 0; }
+.pty-host .xterm { height: 100%; }
+.pty-host .xterm-viewport { background: transparent !important; }
+.pty-status { padding: 8px 12px; }
+.pty-foot { display: flex; gap: 8px; align-items: center; padding: 4px 12px 6px; font-size: 11px; border-top: 1px solid var(--xr-border); color: var(--xr-text-faint); transition: color 160ms var(--xr-ease-out, ease-out); }
+.pty[data-phase="open"] .pty-foot { color: var(--xr-text-muted); }
+.pty[data-phase="exited"] .pty-foot, .pty[data-phase="denied"] .pty-foot, .pty[data-phase="error"] .pty-foot { color: var(--xr-red); }
+@media (prefers-reduced-motion: reduce) { .pty-foot { transition: none; } }
+
+/* ── Hunk review ──────────────────────────────────────────────────────── */
+.hunks { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow: auto; }
+.hunk { border: 1px solid var(--xr-border); border-radius: var(--xr-radius-sm); background: var(--xr-surface-1); }
+.hunk[data-pending] { border-color: var(--xr-cyan); }
+.hunk-head { display: flex; gap: 8px; align-items: center; padding: 6px 8px; font-size: 11.5px; border-bottom: 1px solid var(--xr-border); }
+.hunk-head .hunk-range { color: var(--xr-text-muted); }
+.hunk-head .chipbtn { margin-left: auto; }
+.hunk-body { margin: 0; padding: 6px 8px; font-size: 11.5px; line-height: 1.45; max-height: 220px; overflow: auto; white-space: pre; }
+.hunk-body .dl-add { color: var(--xr-green); background: rgba(0, 255, 136, .06); display: inline-block; width: 100%; }
+.hunk-body .dl-rem { color: var(--xr-red); background: rgba(255, 84, 112, .06); display: inline-block; width: 100%; }

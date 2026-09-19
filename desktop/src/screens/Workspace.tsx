@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, basicSetup } from "codemirror";
 import { keymap } from "@codemirror/view";
@@ -8,8 +8,12 @@ import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
-import { api, terminalRun, type Approval, type FileEntry, type TerminalEvent } from "../api/client";
+import { api, terminalRun, type Approval, type FileDiff, type FileEntry, type TerminalEvent } from "../api/client";
 import { XrAvatar } from "../components/Brand";
+import { HunkReview } from "../components/HunkReview";
+
+// xterm rides in its own chunk: the Workspace pays for it only when a shell opens.
+const PtyTerminal = lazy(() => import("../components/PtyTerminal").then((m) => ({ default: m.PtyTerminal })));
 
 function langFor(name: string) {
   if (/\.tsx?$/.test(name)) return javascript({ typescript: true, jsx: true });
@@ -28,7 +32,7 @@ type SaveState =
   | { phase: "error"; msg: string };
 
 type TermLine = { kind: "out" | "err" | "sys"; text: string };
-interface TermTab { id: number; name: string; lines: TermLine[]; cmd: string; busy: boolean; approval: Approval | null; }
+interface TermTab { id: number; name: string; kind: "runner" | "pty"; lines: TermLine[]; cmd: string; busy: boolean; approval: Approval | null; exited?: string; }
 interface Tab { rel: string; name: string; dirty: boolean; }
 
 /** Naive honest line diff counts (common prefix/suffix trim) — for the +/− chips only. The engine remains the source of truth for real diffs. */
@@ -50,7 +54,7 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   const [delta, setDelta] = useState<{ added: number; removed: number }>({ added: 0, removed: 0 });
   const [save, setSave] = useState<SaveState>({ phase: "idle" });
   const [pendingApproval, setPendingApproval] = useState<Approval | null>(null);
-  const [diff, setDiff] = useState<string | null>(null);
+  const [diff, setDiff] = useState<FileDiff | null>(null);
   /* Phase 2 · Git panel — engine-computed status/log; stage/commit are
      approval-gated engine verbs (they block until a human decides). */
   const [git, setGit] = useState<{ branch: string | null; entries: { code: string; path: string }[] } | null>(null);
@@ -68,7 +72,7 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   activeRef.current = active;
 
   // Terminal tabs (line-based command runner; honest, not a PTY)
-  const [terms, setTerms] = useState<TermTab[]>([{ id: 1, name: "terminal 1", lines: [], cmd: "", busy: false, approval: null }]);
+  const [terms, setTerms] = useState<TermTab[]>([{ id: 1, name: "runner 1", kind: "runner", lines: [], cmd: "", busy: false, approval: null }]);
   const [termTab, setTermTab] = useState(1);
   const termSeq = useRef(2);
   const termOut = useRef<HTMLPreElement>(null);
@@ -139,8 +143,22 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
     view.current.setState(st);
     setTabs((ts) => (ts.some((t) => t.rel === rel) ? ts : [...ts, { rel, name: rel.split("/").pop() ?? rel, dirty: false }]));
     setDelta({ added: 0, removed: 0 });
-    api.fileDiff(rel).then((d) => setDiff(JSON.stringify(d, null, 2))).catch(() => setDiff(null));
+    api.fileDiff(rel).then(setDiff).catch(() => setDiff(null));
   }, [makeState, syncDirty]);
+
+  /** After the engine changed the file (hunk revert): the buffer must show the disk, not a stale edit. */
+  const reloadFromDisk = useCallback(async (rel: string, mtimeMs?: number) => {
+    const r = await api.fileRead(rel).catch(() => null);
+    if (!r || r.binary) return;
+    const text = String(r.content ?? r.text ?? "");
+    bases.current.set(rel, { text, mtime: mtimeMs ?? (r as { mtimeMs?: number }).mtimeMs });
+    const st = makeState(text, rel);
+    states.current.set(rel, st);
+    if (activeRef.current === rel && view.current) view.current.setState(st);
+    setTabs((ts) => ts.map((t) => (t.rel === rel ? { ...t, dirty: false } : t)));
+    setDelta({ added: 0, removed: 0 });
+    refreshTree();
+  }, [makeState]);
 
   const closeTab = useCallback((rel: string) => {
     states.current.delete(rel); bases.current.delete(rel);
@@ -183,7 +201,7 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
         setDelta({ added: 0, removed: 0 });
         setTabs((ts) => ts.map((t) => (t.rel === rel ? { ...t, dirty: false } : t)));
         refreshTree();
-        api.fileDiff(rel).then((d) => setDiff(JSON.stringify(d, null, 2))).catch(() => setDiff(null));
+        api.fileDiff(rel).then(setDiff).catch(() => setDiff(null));
       } else {
         setSave({ phase: "error", msg: r.decision === "timed_out" ? "approval timed out (fail-closed)" : "save denied" });
         setAgentNote("save denied by decision");
@@ -362,18 +380,43 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
             ))}
             <button
               className="ttab add"
-              title="New terminal tab"
+              title="New shell — a real terminal (engine PTY); one approval per session"
               onClick={() => {
                 const id = termSeq.current++;
-                setTerms((ts) => [...ts, { id, name: `terminal ${id}`, lines: [], cmd: "", busy: false, approval: null }]);
+                setTerms((ts) => [...ts, { id, name: `shell ${id}`, kind: "pty", lines: [], cmd: "", busy: false, approval: null }]);
                 setTermTab(id);
               }}
-            >+</button>
-            <span className="chip restricted" title="Commands run approval-gated through the engine — not an interactive PTY">
-              restricted process
+            >+ shell</button>
+            <button
+              className="ttab add"
+              title="New command runner — one approval per command, output streamed"
+              onClick={() => {
+                const id = termSeq.current++;
+                setTerms((ts) => [...ts, { id, name: `runner ${id}`, kind: "runner", lines: [], cmd: "", busy: false, approval: null }]);
+                setTermTab(id);
+              }}
+            >+ runner</button>
+            {terms.length > 1 && at && (
+              <button
+                className="ttab add"
+                title="Close this tab (a shell is killed by the engine on disconnect)"
+                aria-label="Close terminal tab"
+                onClick={() => {
+                  setTerms((ts) => ts.filter((t) => t.id !== at.id));
+                  setTermTab((cur) => (cur === at.id ? (terms.find((t) => t.id !== at.id)?.id ?? 1) : cur));
+                }}
+              >×</button>
+            )}
+            <span className="chip restricted" title={at?.kind === "pty" ? "Interactive shell: one approval opens it; keystrokes are not policy-inspected" : "Commands run approval-gated through the engine — not an interactive PTY"}>
+              {at?.kind === "pty" ? "interactive shell · session-approved" : "command runner · per-command approval"}
             </span>
           </div>
-          {at?.approval && (
+          {at?.kind === "pty" && (
+            <Suspense fallback={<div className="pty-status faint mono">loading terminal…</div>}>
+              <PtyTerminal key={at.id} onExit={(x) => patchTerm(at.id, () => ({ exited: x.signal ? x.signal : `code ${x.code ?? "?"}` }))} />
+            </Suspense>
+          )}
+          {at?.kind === "runner" && at?.approval && (
             <div className="approval-mini">
               <span className="mono">run: {String(at.approval.reason ?? "").replace(/^run:\s*/, "").slice(0, 120)}</span>
               <span className="row-gap">
@@ -383,6 +426,7 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
               </span>
             </div>
           )}
+          {at?.kind === "runner" && (<>
           <pre className="term-out raw" ref={termOut}>
             {at && at.lines.length === 0
               ? "type a command below — every run goes through the engine's policy check and your approval.\n"
@@ -403,6 +447,7 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
             <button className="btn btn-accent" type="submit" disabled={!at || at.busy || !at.cmd.trim()}>Run</button>
             <button className="btn" type="button" onClick={() => patchTerm(at.id, () => ({ lines: [] }))} disabled={at?.busy}>Clear</button>
           </form>
+          </>)}
         </div>
       </div>
 
@@ -429,8 +474,19 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
         )}
 
         <div className="ar-card diffcard">
-          <div className="ar-h">Workspace diff (engine-computed)</div>
-          <pre className="raw">{diff ?? "select a file to see its diff"}</pre>
+          <div className="ar-h">
+            Working-tree diff (engine-computed)
+            {diff?.hunks?.length ? <span className="chip" style={{ marginLeft: "auto" }}>{diff.hunks.length} hunk{diff.hunks.length === 1 ? "" : "s"}</span> : null}
+          </div>
+          <HunkReview
+            path={active}
+            diff={diff}
+            baseMtimeMs={active ? bases.current.get(active)?.mtime : undefined}
+            onChanged={(next) => {
+              setDiff((d) => (d ? { ...d, hunks: next.hunks, diff: next.diff } : d));
+              if (active) void reloadFromDisk(active, next.mtimeMs);
+            }}
+          />
         </div>
 
         <div className="ar-card gitcard" role="group" aria-label="Git">
