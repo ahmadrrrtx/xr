@@ -20,8 +20,12 @@
   --xr-radius-sm: 6px;
   --xr-radius-md: 10px;
   --xr-radius-lg: 14px;
-  --xr-font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --xr-font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  /* Type identity (v3): bundled in src/assets/fonts — no network, no Inter.
+     display = Space Grotesk, body = IBM Plex Sans, code = JetBrains Mono;
+     the OS stacks behind them are metric-close fallbacks for other scripts. */
+  --xr-font-display: "Space Grotesk", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --xr-font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --xr-font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --xr-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 

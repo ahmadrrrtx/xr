@@ -39,7 +39,13 @@
   --xr-d-fast: 120ms;
   --xr-d-base: 180ms;
   --xr-d-slow: 260ms;
-  --xr-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* v3 motion law (09-DESIGN-RETHINK-v3 §Motion): ease-out for things that
+     ENTER or respond, in-out for things that MOVE on screen, the drawer curve
+     for sheets. ease-in never; linear only for constant motion (spinners,
+     hold-to-confirm fills). */
+  --xr-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --xr-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --xr-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 
   /* Surfaces the audit found hardcoded (#05080d terminals, diff gutters). */
   --xr-surface-sunken: #05080d;
@@ -712,3 +718,105 @@
 .vd-avatar {
   background: var(--xr-surface-sunken);
 }
+
+/* ==========================================================================
+   v3 · TYPE ROLES + PRESS LAW  (09-DESIGN-RETHINK-v3)
+   --------------------------------------------------------------------------
+   Display type is reserved for the few places a headline carries the brand:
+   the Home greeting, onboarding, the voice state title, the boot splash mark.
+   Everything you read stays in the body face; everything the engine says
+   (ids, paths, timings) stays mono. No component may set a font by name.
+   ========================================================================== */
+.t-display,
+.hero-name,
+.ob-title,
+.ob-main h2,
+.vc-title {
+  font-family: var(--xr-font-display);
+}
+
+/* Press feedback is the one animation EVERY pressable gets (frequency law:
+   it answers "did that register?" at ≤120 ms, transform only, no layout).
+   Keyboard activation is not animated — the rule only fires on pointer
+   presses, and hover-capable devices only. The command palette is exempt on
+   purpose: at 100+ uses a day even 120 ms is friction (frequency law). */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .btn,
+  .rail button,
+  .seg button,
+  button.chip {
+    transition: transform var(--xr-d-fast) var(--xr-ease-out), background var(--xr-d-fast) var(--xr-ease-out),
+      color var(--xr-d-fast) var(--xr-ease-out), border-color var(--xr-d-fast) var(--xr-ease-out);
+  }
+  .btn:active:not(:disabled),
+  .rail button:active:not(:disabled),
+  .seg button:active:not(:disabled),
+  button.chip:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+
+/* ==========================================================================
+   v3 · S0 BOOT SPLASH  (terminal-splash reference → live surface)
+   --------------------------------------------------------------------------
+   Flat dark ground, the official mark, the engine's facts in mono. No glass,
+   no gradient, no progress bar (there is nothing to measure progress against —
+   the facts land when they land). Lines fade in over one fast tick; a failed
+   line turns red and brings the stderr tail with it (W-5).
+   ========================================================================== */
+.boot {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--xr-s-4);
+  padding: var(--xr-s-6);
+  background: var(--xr-bg);
+  color: var(--xr-text-muted);
+  text-align: left;
+}
+.boot-mark { margin-bottom: var(--xr-s-2); }
+.boot-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: var(--xr-t-small);
+  min-width: 34ch;
+}
+.boot-line {
+  display: grid;
+  grid-template-columns: 15ch 7ch minmax(0, 1fr);
+  gap: var(--xr-s-3);
+  align-items: baseline;
+  opacity: 0.55;
+  transition: opacity var(--xr-d-fast) var(--xr-ease-out), color var(--xr-d-fast) var(--xr-ease-out);
+}
+.boot-line[data-state="ok"] { opacity: 1; }
+.boot-line[data-state="fail"] { opacity: 1; color: var(--xr-red); }
+.boot-label { color: var(--xr-text-faint); }
+.boot-line[data-state="ok"] .boot-label,
+.boot-line[data-state="fail"] .boot-label { color: inherit; }
+.boot-timing { text-align: right; font-variant-numeric: tabular-nums; }
+.boot-detail { color: var(--xr-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boot-line[data-state="pending"] .boot-detail { color: var(--xr-text-faint); }
+.boot-line[data-state="fail"] .boot-detail { color: var(--xr-red); white-space: normal; }
+.boot-fail { display: grid; gap: var(--xr-s-3); max-width: 62ch; justify-items: start; }
+.boot-stderr {
+  margin: 0;
+  padding: var(--xr-s-3);
+  width: 100%;
+  max-height: 160px;
+  overflow: auto;
+  background: var(--xr-surface-sunken);
+  border: 1px solid var(--xr-border);
+  border-radius: var(--xr-radius-sm);
+  font-size: var(--xr-t-cap);
+  line-height: 1.55;
+  color: var(--xr-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.boot-help { margin: 0; font-size: var(--xr-t-small); line-height: 1.6; color: var(--xr-text-muted); }

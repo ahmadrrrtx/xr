@@ -31,7 +31,7 @@ const server = await preview({
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1380, height: 900 } });
 await page.goto(`http://127.0.0.1:${PORT}/`, { waitUntil: "domcontentloaded" });
-await page.waitForSelector('.rail, .ob, .splash[data-state="offline"]', { timeout: 30_000 });
+await page.waitForSelector('.rail, .ob, .boot[data-state="failed"]', { timeout: 30_000 });
 if (await page.$(".ob")) {
   await page.getByRole("button", { name: /skip for now/i }).click();
   await page.waitForTimeout(1500);

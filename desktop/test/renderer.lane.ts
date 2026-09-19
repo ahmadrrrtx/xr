@@ -143,23 +143,24 @@ async function openShell(): Promise<Page> {
   (page as unknown as { __errors: string[] }).__errors = errors;
 
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
-  // Wait for a TERMINAL state. `[data-state="checking"]` is deliberately
-  // excluded: it is the pre-flight probe that holds the shell back until the
-  // first-run question is answered, and matching it here would send the lane
-  // looking for a rail that is still a beat away.
+  // Wait for a TERMINAL state. The S0 boot splash in its `booting` state is
+  // deliberately excluded: it holds the shell back until the engine has
+  // answered link/health/first-run (src/boot.ts), and matching it here would
+  // send the lane looking for a rail that is still a beat away.
   try {
-    await page.waitForSelector('.rail, .ob, .splash[data-state="offline"]', { timeout: 25_000 });
+    await page.waitForSelector('.rail, .ob, .boot[data-state="failed"]', { timeout: 25_000 });
   } catch {
     throw new Error(`the app rendered nothing recognisable after 25s\n${await describeDom(page)}`);
   }
 
-  // NOTE: `.splash` is used by two different states. Only `[data-state=offline]`
-  // is a failure; `[data-state=checking]` is the first-run probe that now
-  // deliberately holds the shell back (see the D-09 note in main.tsx).
-  if (await page.$('.splash[data-state="offline"]')) {
+  // Only a FAILED boot is a lane failure; the splash's own lines say why —
+  // surface them verbatim instead of guessing.
+  if (await page.$('.boot[data-state="failed"]')) {
+    const lines = await page.$$eval(".boot-line", (els) => els.map((e) => (e as HTMLElement).innerText.replace(/\s+/g, " ").trim()));
     throw new Error(
-      "engine unreachable — the shell is showing its offline splash. Start the daemon first:\n" +
-        "  XR_DAEMON_TOKEN=<token> bun run src/index.ts serve --port 3141",
+      "engine unreachable — the shell is showing its boot failure. Start the daemon first:\n" +
+        "  XR_DAEMON_TOKEN=<token> bun run src/index.ts serve --port 3141\n" +
+        lines.map((l) => `  ${l}`).join("\n"),
     );
   }
   // The first-run gate is engine-owned: with a valid token and no provider
@@ -187,7 +188,7 @@ async function describeDom(page: Page): Promise<string> {
   const state = await page.evaluate(() => ({
     rootChildren: Array.from(document.getElementById("root")?.children ?? []).map((c) => c.className || c.tagName),
     ob: !!document.querySelector(".ob"),
-    splash: !!document.querySelector(".splash"),
+    splash: document.querySelector(".boot")?.getAttribute("data-state") ?? false,
     rail: !!document.querySelector(".rail"),
     text: (document.body.innerText || "").replace(/\s+/g, " ").slice(0, 200),
   })).catch(() => null);

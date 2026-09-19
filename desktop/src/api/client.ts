@@ -14,6 +14,19 @@
 type TauriInternals = { invoke?: (cmd: string, args?: unknown) => Promise<unknown> };
 interface EngineLink { reachable?: boolean; spawned?: boolean; port?: number | null; token?: string | null; reason?: string | null }
 
+/**
+ * What the boot splash may say about the link — the SAME resolution the API
+ * client uses, exposed as facts (never the token). `via` tells the truth about
+ * the host: a paired sidecar in the packaged app, or the dev proxy in a browser.
+ */
+export interface EngineEndpointFacts {
+  via: "sidecar" | "dev-proxy";
+  port: number | null;
+  /** Rust shell's reason when the packaged app fell back (dev build, spawn failure). */
+  reason: string | null;
+}
+let endpointFacts: EngineEndpointFacts | null = null;
+
 export class EngineDown extends Error {}
 
 let linkPromise: Promise<{ base: string; token: string | null }> | null = null;
@@ -104,26 +117,43 @@ function endpoint(): Promise<{ base: string; token: string | null }> {
   if (!linkPromise) {
     linkPromise = (async () => {
       const internals = (window as unknown as { __TAURI_INTERNALS__?: TauriInternals }).__TAURI_INTERNALS__;
+      let fallbackReason: string | null = null;
       if (internals?.invoke) {
         // Poll until the sidecar handshake lands (~1–3 s cold start), bounded.
         for (let i = 0; i < 40; i++) {
           try {
             const link = (await internals.invoke("engine_link")) as EngineLink;
             if (link?.reachable && link.port && link.token) {
+              endpointFacts = { via: "sidecar", port: link.port, reason: null };
               return { base: `http://127.0.0.1:${link.port}/api/v1`, token: link.token };
             }
             // Dev build or spawn failure → honest fallback to relative paths.
-            if (link && link.spawned === false && link.reason) break;
-          } catch {
+            if (link && link.spawned === false && link.reason) {
+              fallbackReason = link.reason;
+              break;
+            }
+          } catch (e) {
+            fallbackReason = `engine_link failed: ${e instanceof Error ? e.message : String(e)}`;
             break;
           }
           await new Promise((r) => setTimeout(r, 500));
         }
+        if (!fallbackReason) fallbackReason = "the sidecar did not pair within 20 s";
       }
+      endpointFacts = { via: "dev-proxy", port: null, reason: fallbackReason };
       return { base: "/api/v1", token: null };
     })();
   }
   return linkPromise;
+}
+
+/**
+ * Boot-splash hook: resolves when the endpoint decision is made (same promise
+ * the first request awaits — no second handshake), with the facts and no token.
+ */
+export async function engineEndpointFacts(): Promise<EngineEndpointFacts> {
+  await endpoint();
+  return endpointFacts ?? { via: "dev-proxy", port: null, reason: null };
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {

@@ -24,9 +24,11 @@ import { DockedVoice } from "./voice/DockedVoice";
 import { ToastBus, pushToast } from "./components/ToastBus";
 import { Palette } from "./components/Palette";
 import { CheatSheet } from "./components/CheatSheet";
-import { api, EngineDown } from "./api/client";
+import { api, EngineDown, engineEndpointFacts } from "./api/client";
 import { poll } from "./poll";
-import { XrLogo } from "./components/Brand";
+import { BootSplash } from "./components/BootSplash";
+import { engineLinkSnapshot } from "./tauri-bridge";
+import { INITIAL_FACTS, SPLASH_GRACE_MS, allOk, anyFailed, settle, shouldShowSplash, type BootFact } from "./boot";
 import {
   getDensity,
   getTheme,
@@ -41,6 +43,7 @@ import {
 import { requestNotificationPermission } from "./notify";
 import type { Command } from "./commands/registry";
 import { staticCommands, type RegistryDeps } from "./commands/registry";
+import "./styles/fonts.css"; /* bundled type identity — first, so tokens can name the families */
 import "./styles/tokens.css";
 import "./styles/phase6.css";
 import "./styles/phase7.css";
@@ -200,55 +203,130 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
 
 type Onb = "unknown" | "show" | "hidden";
 
+/**
+ * S0 · boot. Three facts gate the shell, and the splash shows exactly those
+ * three (src/boot.ts):
+ *   link    the endpoint decision the API client makes (sidecar port or dev proxy)
+ *   health  the first answer from the shared poll hub
+ *   setup   the engine's own first-run verdict (/onboarding/status)
+ * The shell mounts the instant all three are ok. If that happens inside the
+ * grace window the splash is never painted (HIG: a splash must not feel like
+ * a delay). A failure paints it immediately, with the engine's reason and —
+ * when the sidecar wrote one — its stderr tail (W-5).
+ */
 function App() {
   const [engine, setEngine] = useState<string | null>(null);
   const [down, setDown] = useState(false);
   const [onb, setOnb] = useState<Onb>("unknown");
   const [retryN, setRetryN] = useState(0);
+  const [facts, setFacts] = useState<BootFact[]>(INITIAL_FACTS);
+  const [bootedAt, setBootedAt] = useState(() => performance.now());
+  const [graceOver, setGraceOver] = useState(false);
+  const since = useCallback(() => performance.now() - bootedAt, [bootedAt]);
 
+  /* The grace window: nothing is painted before it ends unless a fact fails. */
   useEffect(() => {
-    /* Phase 1 · the link probe is a SUBSCRIBER of the shared poll hub, not its
-       own timer. It used to be a fourth independent interval asking the same
-       daemon the same question on a different schedule (see src/poll.ts). */
+    setGraceOver(false);
+    const t = window.setTimeout(() => setGraceOver(true), SPLASH_GRACE_MS);
+    return () => window.clearTimeout(t);
+  }, [bootedAt]);
+
+  /* Fact 1 · link — the same endpoint promise the first request awaits. */
+  useEffect(() => {
+    let live = true;
+    void engineEndpointFacts().then(async (f) => {
+      if (!live) return;
+      if (f.via === "sidecar") {
+        setFacts((cur) => settle(cur, "link", { state: "ok", atMs: since(), detail: `sidecar :${f.port}` }));
+        return;
+      }
+      /* Dev proxy is a legitimate host in a browser; inside the packaged app it
+         means the sidecar did not pair — say so, with the shell's reason. */
+      const shell = await engineLinkSnapshot();
+      if (!live) return;
+      if (!shell) {
+        setFacts((cur) => settle(cur, "link", { state: "ok", atMs: since(), detail: "dev proxy → local daemon" }));
+      } else {
+        setFacts((cur) =>
+          settle(cur, "link", {
+            state: "fail",
+            atMs: since(),
+            detail: shell.error ?? shell.reason ?? f.reason ?? "the sidecar did not pair",
+            stderr: shell.stderr,
+          }),
+        );
+      }
+    });
+    return () => { live = false; };
+  }, [retryN, since]);
+
+  /* Fact 2 · health — a SUBSCRIBER of the shared poll hub, not its own timer
+     (see src/poll.ts). The very first observation also settles the boot fact. */
+  useEffect(() => {
+    poll.refresh(["health"]); // do not wait for the scheduler's first tick to learn the engine is there
     const off = poll.subscribe(["health"], (o) => {
       if (o.ok) {
         const h = o.value as Record<string, unknown>;
         const v = (h.version as { version?: string } | undefined)?.version ?? (typeof h.version === "string" ? h.version : "ok");
         setEngine(v);
         setDown(false);
+        setFacts((cur) => (cur.find((f) => f.key === "health")?.state === "ok" ? cur : settle(cur, "health", { state: "ok", atMs: since(), detail: `engine ${v}` })));
       } else {
-        setDown(o.error instanceof EngineDown);
+        const isDown = o.error instanceof EngineDown;
+        setDown(isDown);
         setEngine(null);
+        setFacts((cur) =>
+          settle(cur, "health", {
+            state: "fail",
+            atMs: since(),
+            detail: o.error instanceof Error ? o.error.message : "engine unreachable",
+          }),
+        );
       }
     });
     return off;
-  }, [retryN]);
+  }, [retryN, since]);
 
-  // First-run gate: ask the ENGINE whether setup is needed (honest, re-runnable).
+  /* Fact 3 · setup — ask the ENGINE whether first-run setup is needed (honest, re-runnable). */
   useEffect(() => {
     if (down || onb !== "unknown") return;
     let live = true;
     api.onboardingStatus()
-      .then((s) => { if (live && s.needsSetup) setOnb("show"); else if (live) setOnb("hidden"); })
-      .catch(() => { if (live) setOnb("hidden"); });
+      .then((s) => {
+        if (!live) return;
+        setOnb(s.needsSetup ? "show" : "hidden");
+        setFacts((cur) => settle(cur, "setup", { state: "ok", atMs: since(), detail: s.needsSetup ? "first run → setup" : "configured" }));
+      })
+      .catch((e: unknown) => {
+        if (!live) return;
+        if (e instanceof EngineDown) {
+          setFacts((cur) => settle(cur, "setup", { state: "fail", atMs: since(), detail: e.message }));
+          return;
+        }
+        /* Any other answer means the engine is up but the route misbehaved —
+           the shell can still run; the setup gate simply does not open. */
+        setOnb("hidden");
+        setFacts((cur) => settle(cur, "setup", { state: "ok", atMs: since(), detail: "status unavailable — continuing" }));
+      });
     return () => { live = false; };
-  }, [down, onb, engine]);
+  }, [down, onb, engine, since]);
 
-  if (down) {
-    return (
-      <div className="splash" data-state="offline" role="alert">
-        <XrLogo height={96} radius={10} dim />
-        <div>XR engine is unreachable</div>
-        <div className="faint" style={{ fontSize: 12, maxWidth: "46ch", lineHeight: 1.6 }}>
-          The desktop attaches to the local daemon. Start it with{" "}
-          <span className="mono">xr serve</span> (or wait for the packaged sidecar), then retry —
-          interrupted work resumes from checkpoints automatically.
-        </div>
-        <div className="splash-actions">
-          <button className="btn" onClick={() => setRetryN((n) => n + 1)}>Retry now</button>
-        </div>
-      </div>
-    );
+  const retry = useCallback(() => {
+    setFacts(INITIAL_FACTS);
+    setOnb("unknown");
+    setDown(false);
+    setBootedAt(performance.now());
+    setRetryN((n) => n + 1);
+  }, []);
+
+  if (!allOk(facts)) {
+    /* Phase 1 · the shell must not mount until the first-run question is
+       ANSWERED (an unconfigured install used to flash a live workstation for a
+       beat before the gate replaced it under the user's cursor). Inside the
+       grace window we paint nothing — the window background is the splash. */
+    return shouldShowSplash(facts, graceOver ? SPLASH_GRACE_MS : since())
+      ? <BootSplash facts={facts} failed={anyFailed(facts)} onRetry={retry} />
+      : null;
   }
 
   if (onb === "show") {
@@ -257,23 +335,6 @@ function App() {
         onDone={() => { setOnb("hidden"); pushToast("ok", "Welcome to XR", "setup complete — audited by the engine"); }}
         onSkip={() => setOnb("hidden")}
       />
-    );
-  }
-
-  /* Phase 1 · the shell must not mount until the first-run question is
-     ANSWERED. It used to render here while `/onboarding/status` was still in
-     flight, so an unconfigured install flashed a fully interactive
-     workstation for a beat and then had the gate replace it under the user's
-     cursor — a click or shortcut landing in that window hit a control that was
-     about to be unmounted, and the renderer lane reproduced it as a click that
-     retried against a detached node forever. Waiting costs one probe; guessing
-     costs the user's trust in every control on screen. */
-  if (onb === "unknown") {
-    return (
-      <div className="splash" data-state="checking" role="status" aria-live="polite">
-        <XrLogo height={72} radius={9} dim />
-        <div className="faint" style={{ fontSize: 12 }}>checking setup…</div>
-      </div>
     );
   }
 
