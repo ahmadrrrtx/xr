@@ -264,6 +264,19 @@ a store without closing the first (refcount never reached zero), and the parity 
 walked the test tree once per included file (~300 full walks, 5.4 s on the Windows runner —
 past the 5 s budget; now one walk into a `Set`).
 
+With the close fix on the Windows lane (`55c6f21`): the first run (job 105975559890) failed one
+`envelope` hook at 7.8 s on a runner where *every* test — including ones that never touch the
+store — ran 20–30× slower than an hour earlier (75 ms → 2272 ms for the same SBOM posture
+test); the re-run (job 105977660468) ran every segment at the previous speed or faster and left
+exactly **one** failure: CF-1 open churn (8 processes × open→write→close) — one opener's
+exclusive create of `xr.db.migrate.lock` died with `EPERM`. That is Windows "delete pending":
+the holder had unlinked the lockfile while another opener's probe still had a handle on it, so
+the create sees ACCESS_DENIED instead of EEXIST. `withMigrationLock` now retries
+EPERM/EACCES/EBUSY on win32 inside a 2 s window (a genuine permission fault still surfaces as
+the original error), and the parity runner takes `XR_TEST_TIMEOUT_MS` so the Windows lane's
+per-test/hook budget is 20 s instead of 5 s — a hang detector sized for that runner's measured
+variance, with true hangs still bounded by the 420 s segment watchdog and the diagnostics step.
+
 Not done here, recorded honestly: a Linux-side sweep with an `afterEach` fd probe shows 65 test
 files that remove their temp dir without ever closing their store and swallow the error
 (`try { rmSync } catch {}`) — `test/context` alone accumulates ~370 open handles per process.

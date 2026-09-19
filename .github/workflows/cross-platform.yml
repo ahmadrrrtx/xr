@@ -87,6 +87,11 @@ jobs:
           # test/e2e-blackbox/ is excluded here (see header): the spawn-heavy
           # black-box suites are owned by the dedicated lanes in ci.yml, and
           # the kill proofs are RED on HEAD until Phase 1.
+          # Windows: per-test/hook budget 20 s instead of bun's 5 s. Hosted
+          # Windows runners are erratic (same test: 75 ms in one run, 2272 ms
+          # in the next); the budget is a hang detector, and hangs are still
+          # bounded by the runner's 420 s segment watchdog + the step below.
+          if [ "${{ matrix.bunOs }}" = "win32" ]; then export XR_TEST_TIMEOUT_MS=20000; fi
           bash scripts/parity-suite-runner.sh ${{ matrix.bunOs }} --exclude '^test/e2e-blackbox/'
       - name: "Hang diagnostics (win32) — name the wedged test"
         if: runner.os == 'Windows' && failure()

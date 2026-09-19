@@ -87,17 +87,31 @@ trap 'rm -rf "$LOGDIR"' EXIT
 # on Git-Bash/Windows. XR_SEG_TIMEOUT overrides for slow CI runners.
 SEG_TIMEOUT="${XR_SEG_TIMEOUT:-420}"
 
+# Per-TEST (and per-hook) budget handed to `bun test --timeout`. Unset = bun's
+# default (5000 ms). The per-test timeout is a HANG detector, not a perf gate
+# (perf budgets live in test/perf with their own PASS/FAIL). Hosted Windows
+# runners are erratic enough that the same test measured 75 ms in one run and
+# 2272 ms in the next (Cross-Platform jobs 105966453349 vs 105975559890, one
+# hour apart; a beforeEach/afterEach hook then blew the 5 s budget) — so the
+# Windows lane sets XR_TEST_TIMEOUT_MS=20000 in cross-platform.yml. A true
+# hang is still caught: by this per-test budget, then by the SEG_TIMEOUT
+# watchdog below, then by the bounded hang diagnostics step.
+TEST_TIMEOUT_ARG=""
+if [ -n "${XR_TEST_TIMEOUT_MS:-}" ]; then
+  TEST_TIMEOUT_ARG="--timeout ${XR_TEST_TIMEOUT_MS}"
+fi
+
 run_bun_test() {
   # run_bun_test <file-list-arg-string> <out-file>  → exit code of bun test
   local files="$1" out="$2"
   if command -v timeout >/dev/null 2>&1; then
     # shellcheck disable=SC2086
-    timeout --signal=TERM --kill-after=15s "${SEG_TIMEOUT}s" bun test $files >"$out" 2>&1
+    timeout --signal=TERM --kill-after=15s "${SEG_TIMEOUT}s" bun test $TEST_TIMEOUT_ARG $files >"$out" 2>&1
     return $?
   fi
   # Portable fallback (Git-Bash on Windows has no `timeout`).
   # shellcheck disable=SC2086
-  bun test $files >"$out" 2>&1 &
+  bun test $TEST_TIMEOUT_ARG $files >"$out" 2>&1 &
   local pid=$!
   (
     sleep "$SEG_TIMEOUT"
