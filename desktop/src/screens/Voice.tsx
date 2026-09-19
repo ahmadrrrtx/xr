@@ -159,9 +159,6 @@ export function Voice({ onDock }: { onDock: () => void }) {
             <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
           </svg>
         </button>
-        <span className="vc-esc-hint" aria-hidden="true">
-          <kbd>Esc</kbd> back to work · voice keeps running
-        </span>
         {/* D-01 · the exit is now visible. The rail is live (voice is a route)
             and Esc returns you to where you were, so the affordance states it
             instead of leaving the user to find a 34px corner button. */}
