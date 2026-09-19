@@ -13,7 +13,13 @@
 # =============================================================================
 name: Windows lab (manual diagnostics)
 
+# A branch-only workflow cannot be dispatched through the API until it exists
+# on the default branch, so it ALSO runs when this file itself changes — bump
+# the run counter below to trigger a lab run from a feature branch.
+# lab run: 1
 on:
+  push:
+    paths: [".github/workflows/win-lab.yml"]
   workflow_dispatch:
     inputs:
       file:
@@ -34,7 +40,7 @@ permissions:
 
 jobs:
   lab:
-    name: Windows — dissect ${{ inputs.file }}
+    name: Windows — dissect ${{ inputs.file || 'test/phase2/approvals-durable.test.ts' }}
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -95,12 +101,12 @@ jobs:
       - name: E1 · whole file with markers + heartbeat
         shell: bash
         continue-on-error: true
-        run: bash lab/run.sh e1-whole-file "${{ inputs.wall_seconds }}" bun test "${{ inputs.file }}" --preload ./lab/markers.ts --timeout "${{ inputs.per_test_timeout_ms }}"
+        run: bash lab/run.sh e1-whole-file "${{ inputs.wall_seconds || '300' }}" bun test "${{ inputs.file || 'test/phase2/approvals-durable.test.ts' }}" --preload ./lab/markers.ts --timeout "${{ inputs.per_test_timeout_ms || '20000' }}"
 
       - name: E2 · first test only (-t TTL default-deny)
         shell: bash
         continue-on-error: true
-        run: bash lab/run.sh e2-first-test 120 bun test "${{ inputs.file }}" --preload ./lab/markers.ts --timeout "${{ inputs.per_test_timeout_ms }}" -t "TTL default-deny"
+        run: bash lab/run.sh e2-first-test 120 bun test "${{ inputs.file || 'test/phase2/approvals-durable.test.ts' }}" --preload ./lab/markers.ts --timeout "${{ inputs.per_test_timeout_ms || '20000' }}" -t "TTL default-deny"
 
       - name: E3 · in-process approval round trip (no bun test harness)
         shell: bash
@@ -148,7 +154,7 @@ jobs:
       - name: E6 · migration-lock contract file
         shell: bash
         continue-on-error: true
-        run: bash lab/run.sh e6-migration-lock 120 bun test test/state/migration-lock-self-deadlock.test.ts --preload ./lab/markers.ts --timeout "${{ inputs.per_test_timeout_ms }}"
+        run: bash lab/run.sh e6-migration-lock 120 bun test test/state/migration-lock-self-deadlock.test.ts --preload ./lab/markers.ts --timeout "${{ inputs.per_test_timeout_ms || '20000' }}"
 
       - name: Leftover lockfiles
         shell: bash
