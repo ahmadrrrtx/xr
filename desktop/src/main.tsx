@@ -25,6 +25,7 @@ import { ToastBus, pushToast } from "./components/ToastBus";
 import { Palette } from "./components/Palette";
 import { CheatSheet } from "./components/CheatSheet";
 import { api, EngineDown } from "./api/client";
+import { poll } from "./poll";
 import { XrLogo } from "./components/Brand";
 import {
   getDensity,
@@ -112,7 +113,11 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
     onToggleNotifications,
     notificationsEnabled,
     onCheatSheet: () => setCheat(true),
-    onRefresh: () => forceChrome((n) => n + 1),
+    /* Phase 1 · the refresh command now asks the hub for an immediate fetch of
+       the shared shell state (links, providers, approvals, sessions) instead of
+       only remounting the chrome; the remount still re-runs each screen's own
+       mount-time read. */
+    onRefresh: () => { poll.refresh(); forceChrome((n) => n + 1); },
   };
 
   /* Commands for the cheat-sheet (static set is enough — the sheet lists
@@ -133,7 +138,7 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
       voiceState={voice.state}
       onVoiceOpen={() => go("voice")}
       onCheatSheet={() => setCheat(true)}
-      onRefresh={() => forceChrome((n) => n + 1)}
+      onRefresh={() => { poll.refresh(); forceChrome((n) => n + 1); }}
       onOpenPalette={() => setPalette(true)}
     >
       {/* Screen-reader region — audit found liveRegions: 0, so streaming and
@@ -202,19 +207,21 @@ function App() {
   const [retryN, setRetryN] = useState(0);
 
   useEffect(() => {
-    let live = true;
-    const probe = () =>
-      api
-        .health()
-        .then((h) => {
-          if (!live) return;
-          const v = (h.version as { version?: string } | undefined)?.version ?? (typeof h.version === "string" ? h.version : "ok");
-          setEngine(v); setDown(false);
-        })
-        .catch((e) => { if (live) { setDown(e instanceof EngineDown); setEngine(null); } });
-    probe();
-    const t = setInterval(probe, 4000);
-    return () => { live = false; clearInterval(t); };
+    /* Phase 1 · the link probe is a SUBSCRIBER of the shared poll hub, not its
+       own timer. It used to be a fourth independent interval asking the same
+       daemon the same question on a different schedule (see src/poll.ts). */
+    const off = poll.subscribe(["health"], (o) => {
+      if (o.ok) {
+        const h = o.value as Record<string, unknown>;
+        const v = (h.version as { version?: string } | undefined)?.version ?? (typeof h.version === "string" ? h.version : "ok");
+        setEngine(v);
+        setDown(false);
+      } else {
+        setDown(o.error instanceof EngineDown);
+        setEngine(null);
+      }
+    });
+    return off;
   }, [retryN]);
 
   // First-run gate: ask the ENGINE whether setup is needed (honest, re-runnable).

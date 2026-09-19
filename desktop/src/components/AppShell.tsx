@@ -5,6 +5,7 @@ import { notify } from "../notify";
 import { StatusDot, providerLabel, type DotState } from "./StatusDot";
 import { notificationsEnabled } from "../prefs";
 import { engineLinkReason } from "../tauri-bridge";
+import { poll } from "../poll";
 
 export type Area = "home" | "projects" | "work" | "workspace" | "research" | "memory" | "models" | "control" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
 
@@ -104,33 +105,40 @@ export function AppShell({
   const [linkReason, setLinkReason] = useState<string | null>(null);
   const [pending, setPending] = useState(0);
 
-  /* Phase 5 · opt-in OS notifications: approval due + run done, engine-polled.
-   * Phase 1 · the gate now reads the shared preference (prefs.ts) so Settings,
-   * the palette command and this poller cannot disagree. */
+  /* Phase 5 · opt-in OS notifications: approval due + run done.
+   * Phase 1 · this is now a SUBSCRIBER of the shared poll hub. It previously
+   * owned a 10 s interval that fetched `pending` a second time, so two
+   * components wrote the same state from two different observations — the
+   * statusbar could disagree with the notification that had just fired. */
   useEffect(() => {
     let prevPending = -1;
     const seenRuns = new Map<string, string>();
-    const t = setInterval(() => {
-      if (!notificationsEnabled()) return;
-      api.controlPending().then((r) => {
-        const n = (r.pending ?? []).length;
-        if (prevPending >= 0 && n > prevPending) void notify("XR — approval due", `${n} request(s) waiting in the Trust Center`);
+    const off = poll.subscribe(["pending", "agents"], (o) => {
+      if (o.key === "pending") {
+        if (!o.ok) return;
+        const n = ((o.value as { pending?: unknown[] }).pending ?? []).length;
+        // The count is always recorded (the statusbar needs engine truth even
+        // when notifications are off); only the OS notification is gated.
+        if (prevPending >= 0 && n > prevPending && notificationsEnabled()) {
+          void notify("XR — approval due", `${n} request(s) waiting in the Trust Center`);
+        }
         prevPending = n;
         setPending(n);
-      }).catch(() => undefined);
-      api.agents().then((a) => {
-        for (const w of a.workflows ?? []) {
-          const id = String((w as { id?: unknown }).id ?? "");
-          const st = String((w as { state?: unknown; status?: unknown }).state ?? (w as { status?: unknown }).status ?? "");
-          const prev = seenRuns.get(id);
-          if (prev && prev !== st && /completed|failed|done/.test(st)) {
-            void notify(`XR — run ${st}`, String((w as { goal?: unknown; name?: unknown }).goal ?? (w as { name?: unknown }).name ?? id).slice(0, 80));
-          }
-          if (id) seenRuns.set(id, st);
+        return;
+      }
+      if (!o.ok) return;
+      const workflows = (o.value as { workflows?: unknown[] }).workflows ?? [];
+      for (const w of workflows) {
+        const id = String((w as { id?: unknown }).id ?? "");
+        const st = String((w as { state?: unknown; status?: unknown }).state ?? (w as { status?: unknown }).status ?? "");
+        const prev = seenRuns.get(id);
+        if (prev && prev !== st && /completed|failed|done/.test(st) && notificationsEnabled()) {
+          void notify(`XR — run ${st}`, String((w as { goal?: unknown; name?: unknown }).goal ?? (w as { name?: unknown }).name ?? id).slice(0, 80));
         }
-      }).catch(() => undefined);
-    }, 10_000);
-    return () => clearInterval(t);
+        if (id) seenRuns.set(id, st);
+      }
+    });
+    return off;
   }, []);
 
   const [voiceCap, setVoiceCap] = useState<boolean>(false);
@@ -180,31 +188,30 @@ export function AppShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [onCheatSheet, onOpenPalette]);
 
-  /* Poll engine truth. Phase 1 · also reads the engine's OWN primary provider
-   * (AppShell previously rendered the first array entry, which could be a
-   * provider the engine is not routing to) and the sidecar link reason. */
+  /* Engine truth: the link dot, the provider the ENGINE is routing to (not
+   * the first array entry — audit D-10), and the WHY when the link is down.
+   * Phase 1 · one subscription to the shared hub replaces this component's own
+   * 5 s interval. */
   useEffect(() => {
-    let live = true;
-    const poll = () => {
-      api.health()
-        .then(() => { if (live) { setUp(true); setLinkReason(null); } })
-        .catch(() => {
-          if (!live) return;
+    const off = poll.subscribe(["health", "providers"], (o) => {
+      if (o.key === "health") {
+        if (o.ok) {
+          setUp(true);
+          setLinkReason(null);
+        } else {
           setUp(false);
           // Surface WHY, instead of a bare red dot (audit D-10).
-          void engineLinkReason().then((r) => { if (live) setLinkReason(r); });
-        });
-      api.providers().then((p) => {
-        if (!live) return;
-        setProviders(asList<ProviderInfo>(p, "providers", "items"));
-        const prim = (p as { primary?: unknown }).primary;
-        setPrimaryId(typeof prim === "string" ? prim : null);
-      }).catch(() => {});
-      api.controlPending().then((r) => { if (live) setPending((r.pending ?? []).length); }).catch(() => {});
-    };
-    poll();
-    const t = setInterval(poll, 5000);
-    return () => { live = false; clearInterval(t); };
+          void engineLinkReason().then(setLinkReason);
+        }
+        return;
+      }
+      if (!o.ok) return;
+      const p = o.value as Record<string, unknown>;
+      setProviders(asList<ProviderInfo>(p, "providers", "items"));
+      const prim = p.primary;
+      setPrimaryId(typeof prim === "string" ? prim : null);
+    });
+    return off;
   }, []);
 
   /* The engine's primary provider, falling back to any LOCAL provider that is
