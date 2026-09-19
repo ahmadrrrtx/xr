@@ -399,7 +399,7 @@ pub fn run() {
         // workspace files. The plugin must be the FIRST one registered so the
         // hand-off happens before anything else initialises.
         .plugin(tauri_plugin_single_instance::init(focus_existing_window))
-        .plugin(tauri_plugin_notification::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
