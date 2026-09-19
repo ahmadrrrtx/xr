@@ -271,9 +271,34 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/git/commit", body);
   }
 
-  /** Run ONE shell command in the project root — deterministic policy check, durable approval, output streamed as SSE (line-based command runner, NOT a PTY). (SSE stream — returns the raw Response). */
+  /** Run ONE shell command in the project root — deterministic policy check, durable approval, output streamed as SSE (line-based command runner, NOT a PTY; see terminal.pty.open for the real one). (SSE stream — returns the raw Response). */
   async terminalRun(body: z.infer<typeof S.TerminalRunRequest>): Promise<Response> {
     return await this.raw("POST", "/api/v1/terminal/run", body);
+  }
+
+  /** Live terminal sessions owned by this daemon and the per-daemon cap. */
+  async terminalPtyList(): Promise<z.infer<typeof S.TerminalPtyListResponse>> {
+    return await this.call("GET", "/api/v1/terminal/pty");
+  }
+
+  /** Open a REAL interactive terminal (pseudo-terminal: openpty / ConPTY) in the project root — ONE durable high-tier approval per session (keystrokes are not policy-inspected, and the preview says so), cwd scope-enforced, output streamed as SSE, shell killed on disconnect. (SSE stream — returns the raw Response). */
+  async terminalPtyOpen(body: z.infer<typeof S.TerminalPtyOpenRequest>): Promise<Response> {
+    return await this.raw("POST", "/api/v1/terminal/pty", body);
+  }
+
+  /** Write keystrokes to an open terminal session (≤ 64 KB per message). */
+  async terminalPtyInput(sessionId: string, body: z.infer<typeof S.TerminalPtyInputRequest>): Promise<z.infer<typeof S.TerminalPtyInputResponse>> {
+    return await this.call("POST", `/api/v1/terminal/pty/${encodeURIComponent(sessionId)}/input`, body);
+  }
+
+  /** Resize an open terminal session (the child sees the new size). */
+  async terminalPtyResize(sessionId: string, body: z.infer<typeof S.TerminalPtyResizeRequest>): Promise<z.infer<typeof S.TerminalPtyResizeResponse>> {
+    return await this.call("POST", `/api/v1/terminal/pty/${encodeURIComponent(sessionId)}/resize`, body);
+  }
+
+  /** End a terminal session the way a closing window does: SIGHUP, then SIGKILL after a 2 s grace (Windows: close console + terminate). */
+  async terminalPtyClose(sessionId: string): Promise<z.infer<typeof S.TerminalPtyCloseResponse>> {
+    return await this.call("DELETE", `/api/v1/terminal/pty/${encodeURIComponent(sessionId)}`);
   }
 
   /** One-shot chat completion streamed as Server-Sent Events. (SSE stream — returns the raw Response). */

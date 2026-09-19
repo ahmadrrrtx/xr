@@ -60,6 +60,14 @@ export interface RouteOptions {
   id: string;
   path?: string;
   prefix?: string;
+  /**
+   * Exact shape for parameterised paths (e.g. /^\/api\/terminal\/pty\/[^/]+\/input$/).
+   * Two routes may share a prefix; the contract layer validates the request
+   * body against the FIRST matching route, so shape-level matching is what
+   * keeps `…/{id}/input` and `…/{id}/resize` from validating each other's
+   * bodies. Combine with `prefix` (the label) or use alone.
+   */
+  pattern?: RegExp;
   method?: string | string[];
   handle: DaemonRouteHandler;
 }
@@ -80,6 +88,7 @@ export function route(options: RouteOptions): DaemonRoute {
       if (methods && !methods.has(ctx.method)) return false;
       if (options.path && ctx.path !== options.path) return false;
       if (options.prefix && !ctx.path.startsWith(options.prefix)) return false;
+      if (options.pattern && !options.pattern.test(ctx.path)) return false;
       return true;
     },
     handle: options.handle,
@@ -89,6 +98,7 @@ export function route(options: RouteOptions): DaemonRoute {
       if (methods && !methods.has(method.toUpperCase())) return false;
       if (options.path && path !== options.path) return false;
       if (options.prefix && !path.startsWith(options.prefix)) return false;
+      if (options.pattern && !options.pattern.test(path)) return false;
       return true;
     },
   };

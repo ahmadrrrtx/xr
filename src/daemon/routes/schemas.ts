@@ -186,6 +186,78 @@ export const TerminalRunEvent = z.looseObject({
   error: z.string().optional(),
 });
 
+// ── Phase 2 · G-05 — engine-owned PTY sessions (experimental) ───────────────
+
+export const TerminalPtyOpenRequest = z.looseObject({
+  cwd: z.string().max(2000).optional().describe("Working directory relative to the project root (default: the root). Must stay inside it."),
+  cols: z.number().int().min(2).max(500).optional().describe("Initial columns (default 80)."),
+  rows: z.number().int().min(1).max(300).optional().describe("Initial rows (default 24)."),
+});
+
+export const TerminalPtyEvent = z.looseObject({
+  event_id: z.number().int().positive().optional().describe("Monotonic per-stream sequence (same framing as chat SSE)."),
+  type: z.enum(["status", "output", "exit"]).optional().describe("Event discriminator."),
+  status: z.string().optional().describe("approval_required | open | denied | timed_out | output_dropped | error."),
+  approvalId: z.string().optional().describe("Durable approval id while status=approval_required (ONE per session, not per keystroke)."),
+  sessionId: z.string().optional().describe("Session id once status=open — use it for input/resize/close."),
+  pid: z.number().optional(),
+  shell: z.string().optional().describe("The interactive shell that was spawned (platform default)."),
+  cwd: z.string().optional(),
+  cols: z.number().optional(),
+  rows: z.number().optional(),
+  ttlMs: z.number().optional(),
+  riskTier: z.string().optional(),
+  data: z.string().optional().describe("Terminal output (UTF-8 text incl. VT escape sequences) when type=output."),
+  bytes: z.number().optional().describe("Bytes dropped so far when status=output_dropped (client fell behind the 4 MB high-water mark)."),
+  code: z.number().nullish().describe("Process exit code (type=exit)."),
+  signal: z.string().nullish().describe("Terminating signal, e.g. SIGHUP after a close (type=exit)."),
+  decision: z.string().nullish(),
+  error: z.string().optional(),
+});
+
+export const TerminalPtyInputRequest = z.looseObject({
+  data: z.string().max(65_536).describe("Keystrokes/paste to write to the terminal. ≤ 64 KB per message."),
+});
+
+export const TerminalPtyInputResponse = z.looseObject({
+  ok: z.boolean(),
+  bytes: z.number().describe("Bytes written."),
+});
+
+export const TerminalPtyResizeRequest = z.looseObject({
+  cols: z.number().int().min(2).max(500).describe("New columns."),
+  rows: z.number().int().min(1).max(300).describe("New rows."),
+});
+
+export const TerminalPtyResizeResponse = z.looseObject({
+  ok: z.boolean(),
+  cols: z.number().describe("Applied columns (clamped to 2..500)."),
+  rows: z.number().describe("Applied rows (clamped to 1..300)."),
+});
+
+export const TerminalPtySessionSummary = z.looseObject({
+  id: z.string(),
+  pid: z.number(),
+  cwd: z.string(),
+  shell: z.string(),
+  cols: z.number(),
+  rows: z.number(),
+  startedAt: z.number(),
+  alive: z.boolean(),
+  exit: z.looseObject({ code: z.number().nullable(), signal: z.string().nullable() }).nullable(),
+  droppedBytes: z.number(),
+});
+
+export const TerminalPtyListResponse = z.looseObject({
+  sessions: z.array(TerminalPtySessionSummary),
+  cap: z.number().describe("Per-daemon session cap."),
+});
+
+export const TerminalPtyCloseResponse = z.looseObject({
+  ok: z.boolean(),
+  exit: z.looseObject({ code: z.number().nullable(), signal: z.string().nullable() }).nullable(),
+});
+
 
 
 const chatRole = z.enum(["system", "user", "assistant", "tool"]);
