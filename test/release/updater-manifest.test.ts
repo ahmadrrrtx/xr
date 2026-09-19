@@ -14,6 +14,8 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildManifest, releaseAssetName } from "../../scripts/make-updater-manifest.ts";
+import { UPDATER_ENDPOINT, applyUpdaterConfig } from "../../scripts/generate-updater-keys.ts";
+import { readFileSync } from "node:fs";
 
 type Manifest = { version: string; platforms: Record<string, { signature: string; url: string }> };
 
@@ -103,6 +105,37 @@ describe("updater manifest dry-run", () => {
   test("release asset naming mirrors GitHub's normalisation (spaces → periods)", () => {
     expect(releaseAssetName("XR Desktop_1.0.0_x64_en-US.msi")).toBe("XR.Desktop_1.0.0_x64_en-US.msi");
     expect(releaseAssetName("xr-desktop_1.0.0_amd64.AppImage")).toBe("xr-desktop_1.0.0_amd64.AppImage");
+  });
+
+  test("the committed tauri.conf.json is INERT until provisioned (no half-configured updater)", () => {
+    const conf = JSON.parse(readFileSync(new URL("../../desktop/src-tauri/tauri.conf.json", import.meta.url), "utf8")) as {
+      bundle: Record<string, unknown>;
+      plugins?: Record<string, unknown>;
+    };
+    // createUpdaterArtifacts without plugins.updater makes `tauri build` refuse
+    // to run; plugins.updater without a real pubkey makes every check fail.
+    // Either half alone is a broken pipeline, so both arrive together via --apply.
+    expect(conf.bundle.createUpdaterArtifacts).toBeUndefined();
+    expect(conf.plugins?.updater).toBeUndefined();
+    expect(conf.bundle.targets).toContain("nsis");
+    expect(conf.bundle.targets).toContain("msi");
+    expect((conf.bundle.windows as { nsis: { installMode: string } }).nsis.installMode).toBe("currentUser");
+  });
+
+  test("--apply provisions the whole pipeline in one step (pubkey + endpoint + createUpdaterArtifacts)", () => {
+    const before = { productName: "XR Desktop", bundle: { active: true, targets: ["msi", "nsis"] }, plugins: { other: { keep: 1 } } };
+    const after = applyUpdaterConfig(before, "PUBKEY_BASE64") as typeof before & {
+      bundle: { createUpdaterArtifacts: boolean };
+      plugins: { updater: { endpoints: string[]; pubkey: string; windows: { installMode: string }; active?: unknown } };
+    };
+    expect(after.bundle.createUpdaterArtifacts).toBe(true);
+    expect(after.plugins.updater.pubkey).toBe("PUBKEY_BASE64");
+    expect(after.plugins.updater.endpoints).toEqual([UPDATER_ENDPOINT]);
+    expect(after.plugins.updater.windows.installMode).toBe("passive");
+    expect(after.plugins.updater.active).toBeUndefined(); // v1 flag; v2 has no such key
+    expect(after.plugins.other).toEqual({ keep: 1 }); // nothing else touched
+    expect(after.bundle.targets).toEqual(["msi", "nsis"]);
+    expect((before.bundle as Record<string, unknown>).createUpdaterArtifacts).toBeUndefined(); // pure
   });
 
   test("keygen script emits a raw-32-byte ed25519 pubkey (tauri format)", async () => {

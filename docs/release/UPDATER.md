@@ -17,18 +17,23 @@ violation, so the pair is created once by the operator:
 
 1. `bun run scripts/generate-updater-keys.ts --apply`
    - prints the PRIVATE key (PKCS#8 PEM) to stdout — **never written anywhere**
-   - patches the pubkey + endpoint (`…/releases/latest/download/latest.json`)
-     into `desktop/src-tauri/tauri.conf.json`
+   - patches `plugins.updater` (pubkey + endpoint
+     `…/releases/latest/download/latest.json`) AND `bundle.createUpdaterArtifacts:
+     true` into `desktop/src-tauri/tauri.conf.json` — one step, because either
+     half alone is a broken pipeline (see below)
 2. Commit the `tauri.conf.json` change.
 3. Store the printed private key as the repo secret `TAURI_UPDATER_KEY`
    (Settings → Secrets → Actions). Delete the terminal scrollback.
 
 ## What CI then does, automatically
 
-- `tauri.conf.json` sets `bundle.createUpdaterArtifacts: true`. Without it
-  Tauri v2 produces **no** updater artifacts and **no** signatures even when
-  the key is present (that was the state before Phase 1: the pipeline could
-  never have shipped an update, provisioned or not).
+- Until provisioned, `tauri.conf.json` is deliberately **inert**: no
+  `plugins.updater`, no `bundle.createUpdaterArtifacts`. Tauri v2 needs both
+  together — `createUpdaterArtifacts` without the plugin block makes `tauri
+  build` refuse to start ("plugins > updater doesn't exist"), and the plugin
+  block without a real pubkey makes every check fail. `--apply` sets both.
+  (Before Phase 1 the runbook set only the plugin block, so even a provisioned
+  build would have produced **no** updater artifacts and **no** signatures.)
 - `desktop-app.yml` bundle job passes `TAURI_SIGNING_PRIVATE_KEY` to
   `tauri build`. Tauri v2 shapes: the installer **is** the updater payload —
   `*.AppImage` + `.sig`, `*.app.tar.gz` + `.sig`, `*-setup.exe` + `.sig`,

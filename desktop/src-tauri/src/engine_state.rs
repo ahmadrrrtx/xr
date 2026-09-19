@@ -164,15 +164,17 @@ mod tests {
         assert_eq!(parse_banner_line("no address here"), None);
     }
 
+    /// A token-SHAPED specimen (48 hex chars, like the daemon prints) built at
+    /// runtime so no literal in the tree looks like a credential to a secret
+    /// scanner — and so nobody can mistake it for one either.
+    fn specimen_token() -> String {
+        "0123456789abcdef".repeat(3)
+    }
+
     #[test]
     fn token_is_only_accepted_when_it_looks_like_one() {
-        let real = "  Token: 14fed849ad8dc3eb0dc0dd75f60d0c43299923d57266e1df";
-        assert_eq!(
-            parse_banner_line(real),
-            Some(Banner::Token(
-                "14fed849ad8dc3eb0dc0dd75f60d0c43299923d57266e1df".into()
-            ))
-        );
+        let real = format!("  Token: {}", specimen_token());
+        assert_eq!(parse_banner_line(&real), Some(Banner::Token(specimen_token())));
         assert_eq!(parse_banner_line("  Token: short"), None);
         assert_eq!(
             parse_banner_line("  Token: zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"),
@@ -206,13 +208,8 @@ mod tests {
         // strict parse yields the token and declines to guess a port from a
         // tail that is not a bare number — the conservative half of the pair,
         // since a wrong port is worse than a missing one.
-        let line = "  ✓ Listening on  http://127.0.0.1:52341  Token: 14fed849ad8dc3eb0dc0dd75f60d0c43299923d57266e1df";
-        assert_eq!(
-            parse_banner_line(line),
-            Some(Banner::Token(
-                "14fed849ad8dc3eb0dc0dd75f60d0c43299923d57266e1df".into()
-            ))
-        );
+        let line = format!("  ✓ Listening on  http://127.0.0.1:52341  Token: {}", specimen_token());
+        assert_eq!(parse_banner_line(&line), Some(Banner::Token(specimen_token())));
     }
 
     #[test]

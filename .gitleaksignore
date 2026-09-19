@@ -29,3 +29,11 @@ test/state/workspace-store.test.ts:generic-api-key:178
 # redactor is PROVEN to strip (same intent as the observability entries above).
 test/phase2/preview.test.ts:curl-auth-header:129
 test/phase2/preview.test.ts:aws-access-token:143
+# Phase 1 desktop shell — banner-parser fixtures in the Rust sidecar module
+# (desktop/src-tauri/src/engine_state.rs, commit efa01de) held a literal
+# 48-hex "Token:" specimen so the parser could be proven to accept the
+# daemon's real banner shape. The current tree builds the specimen at runtime
+# ("0123456789abcdef".repeat(3)); these entries cover the historical commit
+# only, which a first-parent history scan still visits.
+efa01dea3e63897a91ea6f710e3fe81cfdfe874c:desktop/src-tauri/src/engine_state.rs:generic-api-key:175
+efa01dea3e63897a91ea6f710e3fe81cfdfe874c:desktop/src-tauri/src/engine_state.rs:generic-api-key:215
