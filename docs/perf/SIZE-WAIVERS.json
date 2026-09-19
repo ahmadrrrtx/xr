@@ -25,9 +25,9 @@
   "waivers": [
     {
       "path": "src/state/workspace-store.ts",
-      "lines": 2549,
+      "lines": 2550,
       "owner": "state",
-      "reason": "Monolithic store under split plan; +10 lines 2026-09-19 for the Phase-2 hardening that serializes the legacy DDL block under the cross-process migration lock (CI lost-write regression fix).",
+      "reason": "Monolithic store under split plan; +10 lines 2026-09-19 for the Phase-2 hardening that serializes the legacy DDL block under the cross-process migration lock (CI lost-write regression fix). Phase 1 (2026-09-19): +1 line \u2014 import of canonicalDbKey. The store's connection-registry key and the migration-lock key must be the SAME canonical identity or two spellings of one DB file (drive case, separators, 8.3 names \u2014 routine on Windows) produce two connections, two WriteGates and a lock that cannot recognise its own holder; that divergence was the win32 exit-124 self-deadlock. Fix is import-only; no logic was added here.",
       "plan": "Extract the per-domain table DDL into schema modules the store composes, leaving connection + WriteGate ownership intact. The signed-audit write side can move to a state/audit-signed.ts mixin operating over the gate once the DDL extraction lands. Deferred to the Phase-5 scope shrink.",
       "review": "2026-09-19"
     },

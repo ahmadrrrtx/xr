@@ -22,8 +22,9 @@
  *     growth; a checkpoint runs on close.
  */
 import { Database } from "bun:sqlite";
+import { canonicalDbKey } from "../util/paths.ts";
 import { createHash, randomUUID } from "node:crypto";
-import { join, dirname, resolve } from "node:path";
+import { join, dirname } from "node:path";
 import { existsSync, mkdirSync, copyFileSync, readFileSync, rmSync } from "node:fs";
 import { XR_HOME } from "../config/config.ts";
 // XR 4.5 — context schema. `context/repository.ts` imports only `context/types.ts`
@@ -236,7 +237,7 @@ export class WorkspaceStore {
     const parent = dirname(path);
     if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
     this.openedPath = path;
-    this.sharedKey = resolve(path);
+    this.sharedKey = canonicalDbKey(path); // registry key + lockfile key: ONE identity
 
     // Phase 1 (T2): enforce max-1 read-write connection per DB file per
     // process. A second open of the same file shares the existing connection
@@ -262,7 +263,7 @@ export class WorkspaceStore {
     // did not cover — and threw instantly. Serialize ALL schema work under the
     // one lock (re-entrant per process, so the nested runMigrationsUp lock is
     // a no-op), and widen the retry classifier in write-gate.ts.
-    withMigrationLock(this.dbPath, () => {
+    withMigrationLock(this.sharedKey, () => {
       this.migrate();
       runMigrationsUp(this);
     });
