@@ -20,6 +20,33 @@ import { generateKeyPairSync } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+export const UPDATER_ENDPOINT = "https://github.com/ahmadrrrtx/xr/releases/latest/download/latest.json";
+
+/**
+ * Provisioning flips the WHOLE updater pipeline on in one step:
+ *   · plugins.updater      — pubkey + endpoint the shell verifies against
+ *   · bundle.createUpdaterArtifacts — without it Tauri v2 emits no updater
+ *     payloads and no .sig files even with the key present; and WITH it but
+ *     without plugins.updater `tauri build` refuses to start ("plugins >
+ *     updater doesn't exist"). The two are one decision, so they are set
+ *     together and tested together (test/release/updater-manifest.test.ts).
+ * Tauri v2 config only (no v1 `active` flag).
+ */
+export function applyUpdaterConfig(conf: Record<string, unknown>, pubkey: string): Record<string, unknown> {
+  const out = structuredClone(conf);
+  const plugins = (out.plugins ?? {}) as Record<string, unknown>;
+  plugins.updater = {
+    endpoints: [UPDATER_ENDPOINT],
+    pubkey,
+    windows: { installMode: "passive" },
+  };
+  out.plugins = plugins;
+  const bundle = (out.bundle ?? {}) as Record<string, unknown>;
+  bundle.createUpdaterArtifacts = true;
+  out.bundle = bundle;
+  return out;
+}
+
 const SPKI_ED25519_PREFIX = "302a300506032b6570032100"; // 12-byte DER header before the raw key
 
 function main() {
@@ -41,19 +68,11 @@ function main() {
   if (process.argv.includes("--apply")) {
     const confPath = join(import.meta.dir, "..", "desktop", "src-tauri", "tauri.conf.json");
     const conf = JSON.parse(readFileSync(confPath, "utf8")) as Record<string, unknown>;
-    const plugins = (conf.plugins ?? {}) as Record<string, unknown>;
-    plugins.updater = {
-      active: true,
-      endpoints: ["https://github.com/ahmadrrrtx/xr/releases/latest/download/latest.json"],
-      pubkey,
-      windows: { installMode: "passive" },
-    };
-    conf.plugins = plugins;
-    writeFileSync(confPath, JSON.stringify(conf, null, 2) + "\n", "utf8");
-    console.log(`\napplied pubkey to ${confPath} — commit this file; store the PRIVATE key as the repo secret.`);
+    writeFileSync(confPath, JSON.stringify(applyUpdaterConfig(conf, pubkey), null, 2) + "\n", "utf8");
+    console.log(`\napplied pubkey + createUpdaterArtifacts to ${confPath} — commit this file; store the PRIVATE key as the repo secret.`);
   } else {
     console.log("\n(re-run with --apply to patch the pubkey into tauri.conf.json)");
   }
 }
 
-main();
+if (import.meta.main) main();

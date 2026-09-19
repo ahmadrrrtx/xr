@@ -1,0 +1,45 @@
+# osv-scanner policy for the Tauri shell's Cargo.lock (Supply Chain workflow).
+#
+# Every entry is a TRANSITIVE dependency of the Tauri 2 Linux stack (gtk-rs
+# 0.18) or of tauri-utils, with no fix reachable from this crate: the fixed
+# versions live in gtk-rs 0.20, which Tauri 2 does not build against, and
+# the unic-* / proc-macro-error advisories are "unmaintained" notices, not
+# exploitable defects. Each ignore names its evidence and EXPIRES, so it is
+# re-argued rather than forgotten (same rule as claim-lint's evidence+expiry).
+#
+# Re-check on every Tauri bump:  /tmp/osv-scanner -r --format table desktop/src-tauri
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+ignoreUntil = 2026-12-31
+reason = "(alias GHSA-wrw7-89jp-8q8g) glib 0.18.5 `VariantStrIter` unsound impls (fixed in glib 0.20). Pulled by gtk 0.18 <- tauri 2 on Linux; XR never touches VariantStrIter. Fix requires Tauri moving to gtk-rs 0.20 — track tauri-apps/tauri, re-evaluate at expiry."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+ignoreUntil = 2026-12-31
+reason = "proc-macro-error is unmaintained (compile-time proc-macro only, no runtime code). Pulled by glib-macros/gtk3-macros 0.18 <- tauri 2 on Linux."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0075"
+ignoreUntil = 2026-12-31
+reason = "unic-char-range unmaintained notice. Pulled by urlpattern 0.3 <- tauri-utils 2.9; no maintained replacement upstream yet."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0080"
+ignoreUntil = 2026-12-31
+reason = "unic-common unmaintained notice. Same chain as RUSTSEC-2025-0075."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0081"
+ignoreUntil = 2026-12-31
+reason = "unic-char-property unmaintained notice. Same chain as RUSTSEC-2025-0075."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0098"
+ignoreUntil = 2026-12-31
+reason = "unic-ucd-version unmaintained notice. Same chain as RUSTSEC-2025-0075."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2025-0100"
+ignoreUntil = 2026-12-31
+reason = "unic-ucd-ident unmaintained notice. Same chain as RUSTSEC-2025-0075."

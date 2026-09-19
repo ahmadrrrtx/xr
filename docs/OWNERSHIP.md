@@ -75,6 +75,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/cost.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/desktop/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/e2e-blackbox/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/ecosystem.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/environment/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -147,6 +148,9 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/compile-sidecar.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/consumer-smoke.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/dashboard-csp-convert.py` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/desktop-brand-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/desktop-fonts-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/desktop-sink-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/e2e-artifact.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/first-task-survey.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/fuzz-canonic.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

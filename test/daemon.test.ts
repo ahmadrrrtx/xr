@@ -111,6 +111,19 @@ test("Phase 4 T5 — strict CSP: no unsafe-inline, external dashboard assets", a
     headers: { cookie: `xr_session=${TOKEN}` },
   }));
   expect(css.status).toBe(200);
+  // D-05 · brand images are external official renders: exact package bytes,
+  // image/png, cacheable for a day (they carry no session state).
+  const { readFileSync } = await import("node:fs");
+  for (const [route, file] of [
+    ["/assets/brand/logo.png", "assets/brand/logo-320.png"],
+    ["/assets/brand/avatar.png", "assets/brand/avatar-256.png"],
+  ] as const) {
+    const img = await h(new Request(`http://127.0.0.1:7842${route}`, { headers: { cookie: `xr_session=${TOKEN}` } }));
+    expect(img.status).toBe(200);
+    expect(img.headers.get("content-type")).toBe("image/png");
+    expect(img.headers.get("cache-control")).toContain("max-age=86400");
+    expect(Buffer.from(await img.arrayBuffer()).equals(readFileSync(file))).toBe(true);
+  }
 });
 
 test("Phase 4 T5 — cross-origin mutating request is refused (CSRF/Origin guard)", async () => {

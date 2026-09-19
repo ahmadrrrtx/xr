@@ -8,30 +8,63 @@
  *            is resolvable within TTL, else default-denied — never stuck
  *   [Cross]  process A raises + waits; process B decides; A resolves
  *
- * WINDOWS HANG (2026-09-07, active diagnostic): this file died on the
- * Windows full-parity lane with zero output and zero test failures (exit
- * 124, "dies alone") in every run since it arrived — runs 34152171256,
- * 34156612385, jobs 101865773607, 101873414375. Three fix attempts
- * (child-stdout watchdogs, win32 skipIf on the spawn describes, dispose()
- * for zero live timers at file end) did not change the signature — the
- * hang predates all of them, and per-file output is buffered and lost
- * when the process is killed, so no test result is ever visible.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WINDOWS HANG — ROOT CAUSE FOUND AND FIXED (Phase 1, 2026-09-19)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * History: this file died on the Windows full-parity lane with zero output and
+ * zero test failures (exit 124) on every run since it arrived — runs
+ * 34152171256, 34156612385, jobs 101865773607, 101873414375 — and was filed in
+ * docs/PRODUCTION_READINESS.md as "Windows approvals flake (tracked)".
  *
- * Therefore on win32 this file currently runs a STAGED PROBE suite
- * (D1–D5, below) instead of the real one. Each probe writes on-disk
- * markers (xr-dbg-*.txt in the OS temp dir) that survive the exit-124
- * kill; the workflow step "Hang diagnostics (win32)" in
- * .github/workflows/cross-platform.yml dumps them into the log on
- * failure. The first stage with a START but no END marker names the
- * culprit. Once the Windows lane is green: delete the probe branch,
- * restore the real suite on win32, and remove the workflow step.
+ * It was not a flake, and it was not Bun. Rejecting that label produced the
+ * mechanism, which is a synchronous SELF-DEADLOCK reachable only through
+ * non-canonical path spelling:
  *
- * `approval-store.ts` is loaded via a lazy dynamic import (not static)
- * so the probes can isolate the module load itself — static imports run
- * before any test or marker can execute.
+ *   1. The store constructor takes the cross-process migration lock around all
+ *      schema work and nests runMigrationsUp() inside it. Both keys came from
+ *      the same string, so the nested acquire hit the per-process re-entrancy
+ *      map and returned immediately — the comment claimed this was structural
+ *      ("re-entrant per process, so the nested runMigrationsUp lock is a
+ *      no-op"). It was true only for byte-identical spellings.
+ *   2. `sharedKey` is canonicalized (`resolve(path)`) while the lock used
+ *      `openedPath` raw. The re-entrancy map and the connection registry were
+ *      therefore keyed on two different normalizations of one file.
+ *   3. The lockfile is `O_CREAT|O_EXCL`, and on a case-insensitive filesystem
+ *      two spellings of one path ARE one lockfile — so the second acquire got
+ *      EEXIST, missed the re-entrancy map, and `evictIfDeadHolder` refuses to
+ *      evict a holder whose pid is our own. There is no way out of that state
+ *      by waiting, because the holder is this thread.
+ *   4. The wait is `Atomics.wait` on the MAIN thread: the process stops
+ *      executing entirely. No output, no failure, killed at the lane timeout.
+ *      The own-pid lockfile survives the kill, which is why subsequent runs
+ *      failed the same way and why it read as random.
+ * Spelling divergence is routine on Windows (drive-letter case, separators,
+ * 8.3 short names, \\?\ long-path prefixes, and — already documented in
+ * .github/workflows/cross-platform.yml — os.tmpdir() disagreeing with git-bash
+ * $TEMP on the runner) and effectively impossible on Linux. That is the whole
+ * explanation for "win32 only, 100% reproducible, looks random".
  *
- * The real suite below runs on Linux and macOS (both green on every
- * recent commit). Registered: docs/security/KNOWN_LIMITATIONS.md (#21).
+ * FIX (Phase 1), three parts, all in the trusted runtime layer:
+ *   · src/util/paths.ts — `canonicalDbKey()`: resolve → realpathSync.native
+ *     (8.3 short names, symlinks, drive case) → lowercase on win32 only.
+ *   · WorkspaceStore keys BOTH the connection registry and the migration lock
+ *     on that one identity, and `withMigrationLock` canonicalizes its own key
+ *     at the entry point so a call site cannot get it wrong.
+ *   · `withMigrationLock` detects an own-pid holder under an unrecognized key
+ *     and THROWS immediately. Waiting is provably pointless there, so any
+ *     future spelling divergence is a fast, named error instead of a freeze.
+ *
+ * The staged probe suite that used to occupy win32 is GONE: it existed only
+ * because per-file output was buffered and lost on the kill. That masking is
+ * already solved — Bun's per-test timeout reports the hanging test by NAME
+ * (the mechanism above surfaced exactly that way during this fix), so the real
+ * suite now runs on every platform and a regression names itself.
+ *
+ * Verified: test/state/migration-lock-self-deadlock.test.ts pins the identity
+ * contract and the containment. On the pre-fix code that file takes 40 s and
+ * hangs; with the fix it is 10 ms / 10 pass. Windows EXECUTION of this file
+ * still has to be confirmed by the cross-platform lane — this sandbox is Linux
+ * and cannot run win32.
  */
 
 import { describe, test, expect, beforeEach } from "bun:test";
@@ -48,116 +81,6 @@ async function loadApprovalStore(): Promise<typeof import("../../src/control/app
   return approvalStoreMod;
 }
 
-const IS_WIN32_PROBE = process.platform === "win32";
-
-/** Diagnostic marker: survives the exit-124 kill (stdout does not). */
-function dbgMarker(stage: string, phase: string): void {
-  try {
-    writeFileSync(
-      join(tmpdir(), `xr-dbg-${stage}-${phase}.txt`),
-      `${stage}/${phase} ${new Date().toISOString()} pid ${process.pid}\n`,
-    );
-  } catch {
-    /* diagnostic only — must never fail a test */
-  }
-}
-
-if (IS_WIN32_PROBE) {
-  // -------------------------------------------------------------------------
-  // Windows hang diagnostic probes (TEMPORARY — see header). Order matters:
-  // each stage isolates one suspect; a stage with START but no END marker is
-  // where the process wedges.
-  // -------------------------------------------------------------------------
-  test("D1: bare file executes in a fresh bun test process", () => {
-    dbgMarker("d1", "start");
-    expect(1).toBe(1);
-    dbgMarker("d1", "end");
-  });
-
-  test("D2: workspace-store — Store open → audit → close", async () => {
-    dbgMarker("d2", "start");
-    const t = mkdtempSync(join(tmpdir(), "xr-d2-"));
-    const store = new Store(join(t, "d.db"));
-    dbgMarker("d2", "opened");
-    store.audit("diag.d2", { stage: "d2" });
-    store.close();
-    dbgMarker("d2", "end");
-    expect(true).toBe(true);
-  });
-
-  test("D3: approval-store module loads (dynamic import)", async () => {
-    dbgMarker("d3", "start");
-    const m = await loadApprovalStore();
-    dbgMarker("d3", "loaded");
-    expect(typeof m.ApprovalStore).toBe("function");
-    dbgMarker("d3", "end");
-  });
-
-  test("D5: bare 150ms setTimeout resolves", async () => {
-    dbgMarker("d5", "start");
-    await new Promise((r) => setTimeout(r, 150));
-    dbgMarker("d5", "end");
-    expect(true).toBe(true);
-  });
-
-  test("D4a: raw durable writes (approvalInsert + audit) with markers", async () => {
-    // Phase 1 (2026-09-19): D4 proved the wedge lives between `constructed`
-    // and `requested`, i.e. inside request() — whose only synchronous work is
-    // approvalInsert + audit (timers/pollers come after and are unref'd).
-    // D4a replays exactly those two writes with their own markers so the next
-    // win32 run distinguishes "the SQLite write path wedges" (d4a-start but no
-    // d4a-post-insert) from "timer/poller setup wedges" (d4a done, d4 dies).
-    dbgMarker("d4a", "start");
-    const t = mkdtempSync(join(tmpdir(), "xr-d4a-"));
-    dbgMarker("d4a", "tmpdir");
-    const store = new Store(join(t, "d.db"));
-    dbgMarker("d4a", "store-open");
-    store.approvalInsert({
-      id: "ap_diagd4a",
-      taskId: null,
-      runId: null,
-      sessionId: null,
-      tool: "shell",
-      argsHash: "sha256:none",
-      reason: "diag d4a",
-      previewJson: "null",
-      riskTier: "unknown",
-      surface: "cli",
-      requestedAt: Date.now(),
-      ttlMs: 100,
-    });
-    dbgMarker("d4a", "post-insert");
-    store.audit("approval.requested", { approvalId: "ap_diagd4a", diag: "d4a" });
-    dbgMarker("d4a", "post-audit");
-    store.close();
-    dbgMarker("d4a", "end");
-    expect(true).toBe(true);
-  });
-
-  test("D4: full in-process request → TTL → outcome → dispose", async () => {
-    // 2026-09-18: finer-grained markers — runs 35370921092/35369450664 showed
-    // d4-start written but never d4-requested, so the hang lives between module
-    // cache and the insert. These markers name the exact call on the next
-    // win32 run (they survive the exit-124 kill; stdout does not).
-    dbgMarker("d4", "start");
-    const { ApprovalStore } = await loadApprovalStore();
-    dbgMarker("d4", "module");
-    const t = mkdtempSync(join(tmpdir(), "xr-d4-"));
-    dbgMarker("d4", "tmpdir");
-    const store = new Store(join(t, "d.db"));
-    dbgMarker("d4", "store-open");
-    const approvals = new ApprovalStore(store, { defaultTtlMs: 100 });
-    dbgMarker("d4", "constructed");
-    const h = approvals.request({ tool: "shell", reason: "diag", surface: "cli", ttlMs: 100 });
-    dbgMarker("d4", "requested");
-    const o = await h.outcome;
-    dbgMarker("d4", "outcome");
-    approvals.dispose();
-    store.close();
-    dbgMarker("d4", "end");
-    expect(o.timedOut).toBe(true);
-  });
-} else {
   // -------------------------------------------------------------------------
   // Real suite (Linux + macOS). On win32 the probes above run instead —
   // see header + KNOWN_LIMITATIONS #21.
@@ -503,4 +426,3 @@ if (IS_WIN32_PROBE) {
       expect(outcome.decidedBy?.channel).toBe("daemon");
     }, 45_000);
   });
-}

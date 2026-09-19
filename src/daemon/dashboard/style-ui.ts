@@ -346,6 +346,57 @@ export const STYLE_UI = `/* ── Chat Session Workspace (Liquid Layout) ──
 .mp-chip:hover, .mp-tab:hover { border-color: var(--cyan); color: var(--text); }
 .mp-chip.active, .mp-tab.active { background: rgba(0, 212, 255, 0.12); color: var(--cyan); border-color: var(--cyan); font-weight: 700; }
 
+/* ── Skills (marketplace) layout — restored. ──────────────────────────────
+   75d2b04 dropped the whole \`.mp-*\` block but kept the markup, so the panel
+   rendered as bare text: a 1000×21 px \`role=button\` row per category with no
+   spacing — a real WCAG 2.5.8 (target-size) failure the live axe sweep
+   catches whenever the catalog loads before the scan. Token-based, no
+   gradients/glow (D-05 brand rules): a card shell, ≥32 px category targets,
+   a card grid, and the inspector. */
+.mp-hero { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; background: var(--surface); margin-bottom: 16px; }
+.mp-hero-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; }
+.mp-kicker { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border: 1px solid var(--border-strong); border-radius: 999px; color: var(--cyan); font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.mp-title { font-size: 26px; line-height: 1.1; letter-spacing: -.02em; margin: 12px 0 8px; font-weight: 800; }
+.mp-title span { color: var(--cyan); }
+.mp-sub { color: var(--textDim); max-width: 720px; font-size: 13px; line-height: 1.6; }
+.mp-search-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.mp-search { flex: 1; min-width: 240px; background: var(--surface2); border: 1px solid var(--border-strong); color: var(--text); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; }
+.mp-search:focus { border-color: var(--cyan); outline: none; box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.12); }
+.mp-filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.mp-brand-orb { display: flex; align-items: center; gap: 12px; }
+.mp-orbit { display: none; }
+.mp-logo-img { height: 44px; width: auto; border-radius: 6px; }
+.mp-avatar-img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; object-position: 50% 32%; }
+.mp-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+@media (max-width: 1200px) { .mp-shell { grid-template-columns: 220px minmax(0, 1fr); } .mp-inspector { grid-column: 1 / -1; } }
+@media (max-width: 860px) { .mp-hero-grid, .mp-shell { grid-template-columns: 1fr; } .mp-inspector { grid-column: auto; } }
+.mp-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+.mp-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--textDim); font-weight: 700; margin-bottom: 8px; }
+.mp-cat { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; /* WCAG 2.5.8 ≥ 24 px */ padding: 4px 10px; border-radius: var(--radius); color: var(--textDim); cursor: pointer; font-size: 12px; }
+.mp-cat + .mp-cat { margin-top: 2px; }
+.mp-cat:hover, .mp-cat.active { background: rgba(0, 212, 255, 0.08); color: var(--cyan); }
+.mp-cat b { font-weight: 600; display: inline-flex; align-items: center; gap: 6px; text-transform: capitalize; }
+.mp-cat b svg { fill: none; stroke: currentColor; stroke-width: 2; }
+.mp-cat span { font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.mp-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.mp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.mp-skill-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; cursor: pointer; transition: border-color .12s; }
+.mp-skill-card:hover { border-color: var(--border-strong); }
+.mp-skill-card.selected { border-color: var(--cyan); }
+.mp-skill-top { display: flex; gap: 10px; align-items: flex-start; }
+.mp-skill-icon { width: 40px; height: 40px; flex: none; border-radius: var(--radius); display: flex; align-items: center; justify-content: center; background: var(--surface2); border: 1px solid var(--border); font-weight: 800; color: var(--cyan); font-family: var(--font-mono); font-size: 12px; }
+.mp-skill-name { font-weight: 700; letter-spacing: -.01em; }
+.mp-skill-id { font-size: 10px; color: var(--muted); font-family: var(--font-mono); }
+.mp-desc { font-size: 12px; color: var(--textDim); line-height: 1.55; margin: 10px 0; }
+.mp-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.mp-panel-empty { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 12px; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
+.mp-inspector h3 { font-size: 16px; line-height: 1.2; margin-bottom: 2px; }
+.mp-inspector-sub { font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-bottom: 10px; }
+.mp-perm { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.mp-perm:last-child { border-bottom: none; }
+.mp-perm-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.mp-perm p { font-size: 11px; color: var(--muted); line-height: 1.45; margin-top: 3px; }
+
 /* ── Phase 8 · T3 — Accessibility layer (WCAG 2.2 AA) ────────────────── */
 /* One visible ≥3:1 indicator for every interactive element; placed AFTER
    every \`outline: none\` reset so it always wins for keyboard users. */

@@ -355,7 +355,14 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
           )}
         </span>
       </div>
-      {s.description && <div className="sc-desc">{String(s.description).slice(0, 120)}</div>}
+      {/* Phase 1 · was `.slice(0, 120)` in JS, which truncated mid-word with no
+          ellipsis and made the text unrecoverable (the DOM held only the stump —
+          no title, no expand). Clamping belongs in CSS so the full string stays
+          in the document: `.sc-desc` is a fixed 2-line box with a real ellipsis,
+          and the title attribute carries the whole description. */}
+      {s.description && (
+        <div className="sc-desc" title={String(s.description)}>{String(s.description)}</div>
+      )}
       <div className="sc-foot mono faint">
         <span className="sc-health"><StatusDot ok={(s.enabled ?? true) && s.health !== "broken"} warn={s.enabled === false} /> health</span>
         {Array.isArray(s.permissions) && s.permissions.length > 0

@@ -3,6 +3,8 @@ import {
   api, asList, type Approval, type CockpitState, type AuditEntry, type BudgetState, type ControlStatus,
   type ShieldStatus, type TrustClassification, type TrustStatus, type TriggersState,
 } from "../api/client";
+import { poll } from "../poll";
+import { ApprovalCountdown } from "../components/ApprovalCountdown";
 
 const TABS = ["Cockpit", "Approvals", "Modes", "Audit", "Budgets", "Network", "Permissions", "Shield"] as const;
 type Tab = (typeof TABS)[number];
@@ -94,11 +96,27 @@ export function Trust() {
   const [cls, setCls] = useState<TrustClassification | null>(null);
   const [scanning, setScanning] = useState(false);
 
+  /**
+   * Phase 1 · the approvals queue and the control-pending list come from the
+   * shared poll hub (src/poll.ts) — the Trust Center and the status bar must not
+   * be two independent observations of the same queue. What stays here is what
+   * the hub does not own: this tab's own context/permission reads, which are
+   * fetched when the tab is shown rather than on a timer.
+   */
   const loadQueue = useCallback(() => {
-    api.approvals().then((v) => setApprovals(asList<Approval>(v, "pending", "approvals"))).catch(() => {});
-    api.controlPending().then((v) => setControlPend(v.pending ?? [])).catch(() => {});
     api.contextPending().then((v) => setContextPend(asList<Record<string, unknown>>(v, "pending", "items"))).catch(() => {});
     api.controlPermissions().then((v) => setControlPerms(((v?.granted ?? []) as unknown[]).map(String))).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const off = poll.subscribe(["approvals", "pending"], (o) => {
+      if (o.key === "approvals") {
+        if (o.ok) setApprovals(asList<Approval>(o.value, "pending", "approvals"));
+        return;
+      }
+      if (o.ok) setControlPend(o.value.pending ?? []);
+    });
+    return off;
   }, []);
   const loadRail = useCallback(() => {
     api.audit().then((v) => { setAudit(v.entries ?? []); setChain((v as { chain?: Record<string, unknown> }).chain ?? null); }).catch(() => {});
@@ -180,7 +198,7 @@ export function Trust() {
         <div className="as-prov">
           <span className="as-prov-ic" aria-hidden="true">◍</span>{" "}
           {String(a.surface ?? "interactive")} · {a.runId ? `run ${String(a.runId).slice(0, 10)}` : a.sessionId ? `session ${String(a.sessionId).slice(0, 10)}` : "interactive session"}
-          {a.taskId ? ` · task ${String(a.taskId).slice(0, 10)}` : ""} · ttl {Math.round(Number(a.ttlMs ?? 0) / 1000)}s
+          {a.taskId ? ` · task ${String(a.taskId).slice(0, 10)}` : ""} · <ApprovalCountdown deadline={a} />
         </div>
         <div className="as-acts">
           <button className="as-deny" onClick={() => decide(a.id, false)}>Deny</button>

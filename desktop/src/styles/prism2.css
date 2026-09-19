@@ -1,0 +1,836 @@
+/**
+ * XR Prism II — Phase 1 foundation layer.
+ *
+ * Additive over `tokens.css` (Prism v1). Nothing here renames or removes a v1
+ * token, so no existing screen breaks: this file declares the missing scales
+ * and the LAYER CONTRACT, then fixes the defects the Phase 0 audit found.
+ *
+ * Audit references: docs/xr-deliverables/PHASE1-FOUNDATION-HARDENING.md
+ *   D-01 voice trapped navigation      → §2 layer law + §6 voice surface
+ *   D-05 no theme / density / OS theme → §3 theme, §4 density
+ *   D-07 dishonest provider status     → §7 status bar
+ *   a11y focus ring inconsistency      → §5 focus
+ */
+
+/* ==========================================================================
+   1. SPACING · TYPE · MOTION · ELEVATION  (audit D-05 / design system §3,4,7)
+   ========================================================================== */
+:root {
+  /* 8px base with a 4px half-step. No other gap values exist in new code. */
+  --xr-s-1: 4px;
+  --xr-s-2: 8px;
+  --xr-s-3: 12px;
+  --xr-s-4: 16px;
+  --xr-s-6: 24px;
+  --xr-s-8: 32px;
+  --xr-s-12: 48px;
+  --xr-s-16: 64px;
+
+  /* Type scale (sizes only; v1 keeps the font stacks). */
+  --xr-t-display: 30px;
+  --xr-t-h: 17px;
+  --xr-t-sh: 14px;
+  --xr-t-body: 13.5px;
+  --xr-t-small: 12px;
+  --xr-t-cap: 11px;
+  --xr-t-over: 10px;
+
+  /* Motion: every animation must answer "what changed?". */
+  --xr-d-fast: 120ms;
+  --xr-d-base: 180ms;
+  --xr-d-slow: 260ms;
+  /* v3 motion law (09-DESIGN-RETHINK-v3 §Motion): ease-out for things that
+     ENTER or respond, in-out for things that MOVE on screen, the drawer curve
+     for sheets. ease-in never; linear only for constant motion (spinners,
+     hold-to-confirm fills). */
+  --xr-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --xr-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --xr-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Surfaces the audit found hardcoded (#05080d terminals, diff gutters). */
+  --xr-surface-sunken: #05080d;
+  --xr-glass: color-mix(in srgb, var(--xr-surface-3) 82%, transparent);
+  --xr-blur: 14px; /* the ONLY blur value in the product */
+
+  /* Paired softs so tints are never hand-mixed per component. */
+  --xr-ok-soft: rgba(0, 255, 136, 0.1);
+  --xr-warn-soft: rgba(255, 180, 84, 0.1);
+  --xr-danger-soft: rgba(255, 84, 112, 0.1);
+  --xr-info-soft: rgba(0, 212, 255, 0.12);
+  --xr-agent-soft: rgba(96, 72, 248, 0.12);
+  --xr-unknown: #6c6c7a; /* "engine has not told us" — NOT the same as ok */
+
+  /* --- CONTRAST FIX (Phase 1, axe-verified) -------------------------------
+     The audit's a11y pass reported 151 colour-contrast violations in the
+     Library alone, 29 in Settings. Both came from tokens that only LOOK fine:
+       --xr-text-faint #6c6c7a  → 3.54:1 on surface-2   (AA needs 4.5:1)
+     Faint text is used for nearly every secondary label in the product, so one
+     wrong value failed anonymously all over the UI. Measured worst case is the
+     lightest surface (#1a1a24) — the ratios below are against THAT, not against
+     the ideal background:
+       #8a8a99 → 5.81:1 on bg, 5.07:1 on surface-3            ✓ AA
+     The agent accent had the same problem when used as TEXT (violet #6048f8 is
+     3.11:1 on surface-3), so the accent now has a text-grade variant. The fill
+     colour stays as it was — this is an additional token, not a repaint. */
+  --xr-text-faint: #8a8a99;
+  --xr-agent-text: #8b7bff; /* 6.00:1 on bg, 5.24:1 on surface-3 */
+
+  /* Ink for text sitting ON an accent fill. Four rules across the phase CSS
+     hardcoded a near-black (#041018 / #04121a / #04262b) that was only correct
+     while the accent stayed bright. In the light theme the accent darkens for
+     AA contrast, and dark-ink-on-dark-cyan measured 3.41:1 — the exact
+     violation axe reported on the segmented controls. One token, two values:
+       dark  → #041018 on #00d4ff = 11.2:1
+       light → #ffffff on #006f99 =  5.6:1 */
+  --xr-on-accent: #041018;
+
+  /* Semantic aliases. The phase CSS names surfaces by ROLE (panel, line,
+     hover, inset, accent) while tokens.css names them by STEP. Both are
+     legitimate; without the alias the role names resolve to nothing and
+     panels silently render flat. Values come from the palette above, so this
+     stays an additive token diff — no re-pick, no new colour. */
+  --xr-panel: var(--xr-surface-2);
+  --xr-line: var(--xr-border);
+  --xr-text-dim: var(--xr-text-muted);
+  --xr-hover: var(--xr-surface-3);
+  --xr-inset: var(--xr-surface-sunken);
+  --xr-accent: var(--xr-cyan);
+
+  /* Elevation E1/E2/E3 (design system §4). Meaning, not decoration:
+       E1 = raised inside a pane (cards, rows that can be grabbed)
+       E2 = floating above content (menus, popovers, docked chips)
+       E3 = modal / blocking dialog
+     Each is a shadow PLUS a hairline, because shadow alone is invisible on
+     dark surfaces and a hairline alone reads as a border. */
+  --xr-e1: 0 1px 2px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.025);
+  --xr-e2: 0 6px 18px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --xr-e3: 0 18px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+/* ==========================================================================
+   2. LAYER CONTRACT  — the structural fix for D-01
+   --------------------------------------------------------------------------
+   D-01 root cause: `.vc-root { position: fixed; inset: 0; z-index: 60 }` was
+   rendered INSIDE <main>, so it covered the nav rail and trapped the user.
+
+   The law that makes that unrepresentable:
+     Full-surface experiences (Voice, artifacts) are ROUTES that occupy the
+     `main` grid area. Nothing may claim the window with position:fixed.
+     Only toasts and blocking security prompts may sit above chrome, and both
+     must remain dismissible + keyboard-escapable at all times.
+   ========================================================================== */
+:root {
+  --xr-z-base: 0;   /* content inside the content grid */
+  --xr-z-sticky: 10; /* sticky headers inside a pane */
+  --xr-z-pane: 20;  /* floating pane controls (resize grips) */
+  --xr-z-menu: 30;  /* E2 popovers, context menus */
+  --xr-z-scrim: 40; /* modal scrim — covers CONTENT, never chrome */
+  --xr-z-modal: 50; /* E3 modals + command palette */
+  --xr-z-toast: 60; /* toasts sit above modals */
+  --xr-z-crit: 70;  /* blocking security prompts */
+}
+
+/* ==========================================================================
+   3. THEME  (audit D-05 — index.html hardcoded color-scheme: dark)
+   --------------------------------------------------------------------------
+   `[data-theme]` wins; `system` defers to the OS via the media query.
+   Light is a re-pick, not an inversion (design system §5.2).
+   ========================================================================== */
+[data-theme="light"] {
+  --xr-bg: #f7f7fa;
+  --xr-surface-1: #ffffff;
+  --xr-surface-2: #ffffff;
+  --xr-surface-3: #ffffff;
+  --xr-surface-sunken: #f1f1f5;
+  --xr-border: #e4e4ea;
+  --xr-border-strong: #cfcfd8;
+  --xr-text: #14141d;
+  --xr-text-muted: #5a5a68;
+  /* Light had the mirror-image problem — #8a8a98 is 3.40:1 on white. */
+  --xr-text-faint: #6b6b79; /* 4.90:1 on bg, 4.66:1 on sunken */
+  --xr-unknown: #6b6b79;
+  --xr-agent-text: #4b34d6;
+  --xr-on-accent: #ffffff;
+
+  /* Accents darken for AA contrast on light surfaces.
+     Re-checked with real ratios (axe found these failing as TEXT):
+       #0a8f57 was 4.13:1 and #a8631a was 4.40:1 on white — both under AA. */
+  --xr-cyan: #006f99;   /* 5.26:1 on bg */
+  --xr-violet: #4b34d6; /* 7.11:1 */
+  --xr-green: #0a7a4a;  /* 5.04:1 */
+  --xr-amber: #8f5413;  /* 5.70:1 */
+  --xr-red: #c8264a;    /* 5.13:1 */
+
+  --xr-ok-soft: rgba(10, 143, 87, 0.1);
+  --xr-warn-soft: rgba(168, 99, 26, 0.1);
+  --xr-danger-soft: rgba(200, 38, 74, 0.1);
+  --xr-info-soft: rgba(0, 119, 163, 0.1);
+  --xr-agent-soft: rgba(75, 52, 214, 0.1);
+
+  /* Glows become no-ops in light: decoration must not carry meaning. */
+  --xr-cyan-glow: rgba(0, 119, 163, 0.08);
+  --xr-violet-glow: rgba(75, 52, 214, 0.08);
+  --xr-green-glow: rgba(10, 143, 87, 0.08);
+
+  /* Elevation in light: shadows carry the depth (already AA on white), the
+     hairline tightens to a real border because white-on-white has no edge. */
+  --xr-e1: 0 1px 2px rgba(16, 16, 29, 0.08), 0 0 0 1px rgba(16, 16, 29, 0.06);
+  --xr-e2: 0 6px 18px rgba(16, 16, 29, 0.12), 0 0 0 1px rgba(16, 16, 29, 0.07);
+  --xr-e3: 0 18px 48px rgba(16, 16, 29, 0.18), 0 0 0 1px rgba(16, 16, 29, 0.08);
+}
+/* No `@media (prefers-color-scheme: light)` copy of the palette lives here on
+   purpose. `prefs.applyTheme()` (and the pre-paint script in index.html) resolve
+   "system" to a concrete value before paint, so the light palette exists in
+   exactly ONE place above. The previous two-copy arrangement drifted: a
+   contrast fix was applied to one copy and not the other, and axe then reported
+   a different number of violations per theme. */
+
+/* ==========================================================================
+   4. DENSITY  (audit D-05 / design system §6)
+   --------------------------------------------------------------------------
+   Compact/Spacious change SPACING AND CONTROL HEIGHTS, never font size —
+   shrinking type is what makes "compact" unusable on HiDPI.
+   ========================================================================== */
+[data-density="compact"] {
+  --xr-s-3: 8px;
+  --xr-s-4: 12px;
+  --xr-s-6: 16px;
+  --xr-s-8: 24px;
+  --xr-s-12: 32px;
+  --xr-s-16: 48px;
+  --xr-rail-btn: 34px;
+  --xr-row-h: 28px;
+  --xr-titlebar-h: 36px;
+  --xr-statusbar-h: 24px;
+  --xr-card-pad: 10px 12px;
+}
+[data-density="comfortable"],
+:root:not([data-density]) {
+  --xr-rail-btn: 40px;
+  --xr-row-h: 34px;
+  --xr-titlebar-h: 42px;
+  --xr-statusbar-h: 26px;
+  --xr-card-pad: 12px 14px;
+}
+[data-density="spacious"] {
+  --xr-s-3: 16px;
+  --xr-s-4: 20px;
+  --xr-s-6: 32px;
+  --xr-s-8: 40px;
+  --xr-s-12: 56px;
+  --xr-s-16: 72px;
+  --xr-rail-btn: 46px;
+  --xr-row-h: 42px;
+  --xr-titlebar-h: 46px;
+  --xr-statusbar-h: 30px;
+  --xr-card-pad: 16px 20px;
+}
+
+/* Shell geometry now reads the density tokens. */
+.shell {
+  grid-template-rows: var(--xr-titlebar-h) 1fr var(--xr-statusbar-h);
+}
+.rbtn {
+  width: var(--xr-rail-btn);
+  height: var(--xr-rail-btn);
+}
+
+/* ==========================================================================
+   5. FOCUS  (audit: browser-default ring varies across Chromium/WebKit/WebView2)
+   --------------------------------------------------------------------------
+   One ring, everywhere, so focus looks identical in a browser and packaged.
+   ========================================================================== */
+:focus-visible {
+  outline: 2px solid var(--xr-cyan);
+  outline-offset: 2px;
+  border-radius: var(--xr-radius-sm);
+}
+/* The rail already signals selection; the ring must still be visible on it. */
+.rail button:focus-visible {
+  outline-offset: -1px;
+}
+
+/* ==========================================================================
+   6. VOICE SURFACE  (audit D-01 — THE critical fix)
+   --------------------------------------------------------------------------
+   Before: position:fixed; inset:0; z-index:60 → covered rail/titlebar/statusbar
+           and the user could not navigate away except via one 34px corner button.
+   After:  a route occupying the `main` grid area. Chrome stays live and
+           tabbable by construction. Esc also exits (wired in main.tsx).
+   ========================================================================== */
+.vc-root {
+  position: relative;
+  inset: auto;
+  z-index: var(--xr-z-base);
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+  padding: var(--xr-s-6) var(--xr-s-6) var(--xr-s-8);
+  /* Opacity/blur no longer needed to hide chrome — there IS no chrome under it. */
+  background: transparent;
+  backdrop-filter: none;
+  gap: var(--xr-s-3);
+  justify-content: center;
+  align-content: center;
+}
+/* The dock button is now a "promote to window" affordance, not an escape hatch. */
+.vc-dock-btn {
+  position: absolute;
+  top: var(--xr-s-4);
+  right: var(--xr-s-4);
+  z-index: var(--xr-z-pane);
+}
+/* Honest escape hint — the audit found no discoverable way out. */
+.vc-esc-hint {
+  font-size: var(--xr-t-cap);
+  color: var(--xr-text-faint);
+  letter-spacing: 0.04em;
+}
+.vc-esc-hint kbd {
+  font-family: var(--xr-font-mono);
+  font-size: var(--xr-t-cap);
+  border: 1px solid var(--xr-border-strong);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--xr-text-muted);
+}
+
+/* ==========================================================================
+   7. STATUS BAR HONESTY  (audit D-07)
+   --------------------------------------------------------------------------
+   Provider health was invisible: the bar showed "Engine ● ollama" in green
+   while /providers reported healthy:false. `unknown` is now a first-class
+   state and is deliberately NOT green.
+   ========================================================================== */
+.dot.unknown {
+  background: var(--xr-unknown);
+  box-shadow: none;
+}
+.sb-item.unknown {
+  color: var(--xr-text-faint);
+}
+.sb-item.warn {
+  color: var(--xr-amber);
+}
+.sb-prov-detail {
+  color: var(--xr-text-faint);
+  font-size: var(--xr-t-cap);
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   8. LIBRARY GRID CONTAINMENT  (audit D-04)
+   --------------------------------------------------------------------------
+   Two real defects: a 536px grid inside a 1384px container (2 columns), and
+   pin/toggle controls overflowing the card by 34px.
+   ========================================================================== */
+.scard-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  width: 100%;
+}
+.card,
+.scard {
+  min-width: 0; /* let the grid actually constrain children */
+}
+.sc-desc {
+  /* JS `slice(0,120)` cut mid-word with no ellipsis; clamp in CSS instead. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sc-top {
+  min-width: 0;
+}
+.sc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-foot {
+  flex-wrap: wrap;
+  row-gap: var(--xr-s-1);
+}
+
+/* ==========================================================================
+   9. REDUCED MOTION  (global — components cannot opt out)
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --xr-d-fast: 1ms;
+    --xr-d-base: 1ms;
+    --xr-d-slow: 1ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   10. SCREEN-READER REGIONS
+   --------------------------------------------------------------------------
+   The audit found liveRegions: 0 — streaming chat and task status were
+   invisible to assistive tech.
+   ========================================================================== */
+.xr-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ==========================================================================
+   11. COMMAND PALETTE + SHORTCUT CHEAT-SHEET
+   --------------------------------------------------------------------------
+   The palette now renders from commands/registry.ts; the cheat-sheet is a new
+   surface (?). Both are routes-of-last-resort: they must sit above every other
+   layer (--xr-z-modal is 50, --xr-z-crit 70) but never trap the user.
+   ========================================================================== */
+
+/* --- palette ------------------------------------------------------------- */
+.pal-veil {
+  position: fixed;
+  inset: 0;
+  z-index: var(--xr-z-modal);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  background: color-mix(in srgb, var(--xr-bg) 62%, transparent);
+  backdrop-filter: blur(6px);
+}
+
+.pal {
+  width: min(680px, calc(100vw - var(--xr-s-8)));
+  max-height: 62vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--xr-panel);
+  border: 1px solid var(--xr-line);
+  border-radius: 14px;
+  box-shadow: var(--xr-e3);
+  overflow: hidden;
+}
+
+.pal-h {
+  display: flex;
+  align-items: center;
+  gap: var(--xr-s-2);
+  padding: var(--xr-s-3) var(--xr-s-4);
+  border-bottom: 1px solid var(--xr-line);
+  color: var(--xr-text-faint);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pal-input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--xr-text);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.pal-input::placeholder { color: var(--xr-text-faint); }
+
+.pal-list {
+  overflow-y: auto;
+  padding: var(--xr-s-2) 0 var(--xr-s-3);
+}
+
+/* The hint line double-duties as the "no matches" message, so it never
+   disappears mid-typing (audit: the old palette silently blanked). */
+.pal-empty {
+  padding: var(--xr-s-4);
+  text-align: center;
+  font-size: 13px;
+}
+
+/* --- cheat-sheet (? / Cmd+/) --------------------------------------------- */
+.cheat {
+  width: min(860px, calc(100vw - var(--xr-s-8)));
+  max-height: 74vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--xr-panel);
+  border: 1px solid var(--xr-line);
+  border-radius: 14px;
+  box-shadow: var(--xr-e3);
+  overflow: hidden;
+}
+
+.cheat-body {
+  overflow-y: auto;
+  padding: var(--xr-s-4) var(--xr-s-3);
+  columns: 2;
+  column-gap: var(--xr-s-6);
+}
+@media (max-width: 720px) { .cheat-body { columns: 1; } }
+
+.cheat-group {
+  break-inside: avoid;
+  margin-bottom: var(--xr-s-5);
+}
+
+.cheat-h {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--xr-accent);
+  margin-bottom: var(--xr-s-2);
+}
+
+.cheat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--xr-s-4);
+  padding: var(--xr-s-1) var(--xr-s-2);
+  border-radius: 6px;
+}
+.cheat-row:hover { background: var(--xr-hover); }
+
+.cheat-label {
+  font-size: 13px;
+  color: var(--xr-text);
+}
+
+.cheat-kbd {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--xr-text-dim);
+  background: var(--xr-inset);
+  border: 1px solid var(--xr-line);
+  border-radius: 5px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.cheat-hint {
+  padding: 0 var(--xr-s-2) var(--xr-s-3);
+  font-size: 12px;
+}
+
+.cheat-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--xr-s-4);
+  padding: var(--xr-s-2) var(--xr-s-4);
+  border-top: 1px solid var(--xr-line);
+  font-size: 12px;
+}
+
+.cheat-foot-note { color: var(--xr-text-faint); }
+
+/* ==========================================================================
+   12. SEGMENTED CONTROL  (used by Settings → Appearance)
+   --------------------------------------------------------------------------
+   A radio group, not three independent toggles: the choice is exclusive and
+   must announce itself as such (role=radiogroup/radio + aria-checked), or a
+   screen reader reads "dark button, light button, system button" with no
+   sense of which one is in force.
+   ========================================================================== */
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  background: var(--xr-inset);
+  border: 1px solid var(--xr-line);
+  border-radius: var(--xr-radius-sm);
+}
+
+.segbtn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--xr-text-dim);
+  font: inherit;
+  font-size: var(--xr-t-small);
+  padding: var(--xr-s-1) var(--xr-s-3);
+  cursor: pointer;
+  transition: background var(--xr-d-fast) var(--xr-ease-out), color var(--xr-d-fast) var(--xr-ease-out);
+}
+.segbtn:hover { color: var(--xr-text); }
+.segbtn.on {
+  background: var(--xr-panel);
+  border-color: var(--xr-line);
+  color: var(--xr-text);
+  box-shadow: var(--xr-e1);
+}
+
+/* --------------------------------------------------------------------------
+   Library · skill card description (D-04)
+   The string used to be truncated in JS at 120 characters, so the document
+   itself lost the tail. Clamp visually instead: the full text stays in the
+   DOM (selectable, searchable, available to a screen reader) while the card
+   keeps a fixed two-line rhythm so the grid does not jump between rows.
+   -------------------------------------------------------------------------- */
+.sc-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-height: calc(2 * 1.45em);
+  font-size: var(--xr-t-small);
+  line-height: 1.45;
+  color: var(--xr-text-dim);
+}
+
+/* --------------------------------------------------------------------------
+   Library · containment (D-04)
+   The grid measured 536 px inside a 1384 px pane and a child overflowed by
+   34 px: the card track had no max width and `min-width: 0` was missing, so
+   one long unbroken token (a repo URL, a permission path) could push a card
+   past its column. Contain the track, then let every text node break.
+   -------------------------------------------------------------------------- */
+.lib-grid,
+.lib .cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--xr-s-3);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.lib-grid > *,
+.lib .cards > * {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Runs · the row is a real <button> now (D-03). Reset the UA appearance but
+   keep the grid layout, and make focus visible like everywhere else.
+   -------------------------------------------------------------------------- */
+.runrow {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--xr-text);
+  appearance: none;
+}
+.runrow-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0; /* lets the title clamp instead of stretching the grid track */
+}
+.runrow-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The run inspector is a pane overlay: it sits above content, below menus,
+   and never above chrome (layer contract §2). */
+.drawer {
+  z-index: var(--xr-z-menu);
+  box-shadow: var(--xr-e3);
+}
+
+/* --------------------------------------------------------------------------
+   Real controls replacing role="button" imitations (D-03).
+   UA button chrome is reset, but NOT the semantics: these keep native focus,
+   Space/Enter activation and the platform's accessibility tree entry.
+   -------------------------------------------------------------------------- */
+.sb-btn,
+.node {
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  margin: 0;
+}
+.sb-btn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.node {
+  /* position/size come from the graph layout, but the border must not be
+     re-drawn by the UA as an inset 3D edge. */
+  border: 1px solid var(--xr-line);
+  cursor: pointer;
+}
+
+
+/* --------------------------------------------------------------------------
+   Chips must not be able to widen their container (D-04).
+   The audit measured 34 px of child overflow on the Library; after the JS
+   truncation was removed the remaining offenders were `.chip` spans whose
+   content is `white-space: nowrap` by design. A chip is a LABEL, not a
+   paragraph: it should ellipsise rather than push the layout, and its row
+   should wrap when there is no room.
+   -------------------------------------------------------------------------- */
+.chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.chip-row,
+.sc-foot,
+.sc-perms,
+.lib-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--xr-s-1);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   Onboarding hero banner (official brand asset, decoded at 1200px)
+   -------------------------------------------------------------------------- */
+.ob-banner {
+  display: block;
+  width: min(100%, 700px);
+  height: auto;
+  border-radius: var(--xr-radius-md);
+  margin-bottom: var(--xr-s-4);
+}
+
+/* The docked voice orb uses the sized avatar copy rather than the 259 KB
+   original the shell used to ship for a 62 px circle (audit A-3). */
+.vd-avatar {
+  background: var(--xr-surface-sunken);
+}
+
+/* ==========================================================================
+   v3 · TYPE ROLES + PRESS LAW  (09-DESIGN-RETHINK-v3)
+   --------------------------------------------------------------------------
+   Display type is reserved for the few places a headline carries the brand:
+   the Home greeting, onboarding, the voice state title, the boot splash mark.
+   Everything you read stays in the body face; everything the engine says
+   (ids, paths, timings) stays mono. No component may set a font by name.
+   ========================================================================== */
+.t-display,
+.hero-name,
+.ob-title,
+.ob-main h2,
+.vc-title {
+  font-family: var(--xr-font-display);
+}
+
+/* Press feedback is the one animation EVERY pressable gets (frequency law:
+   it answers "did that register?" at ≤120 ms, transform only, no layout).
+   Keyboard activation is not animated — the rule only fires on pointer
+   presses, and hover-capable devices only. The command palette is exempt on
+   purpose: at 100+ uses a day even 120 ms is friction (frequency law). */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .btn,
+  .rail button,
+  .seg button,
+  button.chip {
+    transition: transform var(--xr-d-fast) var(--xr-ease-out), background var(--xr-d-fast) var(--xr-ease-out),
+      color var(--xr-d-fast) var(--xr-ease-out), border-color var(--xr-d-fast) var(--xr-ease-out);
+  }
+  .btn:active:not(:disabled),
+  .rail button:active:not(:disabled),
+  .seg button:active:not(:disabled),
+  button.chip:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+
+/* ==========================================================================
+   v3 · S0 BOOT SPLASH  (terminal-splash reference → live surface)
+   --------------------------------------------------------------------------
+   Flat dark ground, the official mark, the engine's facts in mono. No glass,
+   no gradient, no progress bar (there is nothing to measure progress against —
+   the facts land when they land). Lines fade in over one fast tick; a failed
+   line turns red and brings the stderr tail with it (W-5).
+   ========================================================================== */
+.boot {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--xr-s-4);
+  padding: var(--xr-s-6);
+  background: var(--xr-bg);
+  color: var(--xr-text-muted);
+  text-align: left;
+}
+.boot-mark { margin-bottom: var(--xr-s-2); }
+.boot-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: var(--xr-t-small);
+  min-width: 34ch;
+}
+.boot-line {
+  display: grid;
+  grid-template-columns: 15ch 7ch minmax(0, 1fr);
+  gap: var(--xr-s-3);
+  align-items: baseline;
+  opacity: 0.55;
+  transition: opacity var(--xr-d-fast) var(--xr-ease-out), color var(--xr-d-fast) var(--xr-ease-out);
+}
+.boot-line[data-state="ok"] { opacity: 1; }
+.boot-line[data-state="fail"] { opacity: 1; color: var(--xr-red); }
+.boot-label { color: var(--xr-text-faint); }
+.boot-line[data-state="ok"] .boot-label,
+.boot-line[data-state="fail"] .boot-label { color: inherit; }
+.boot-timing { text-align: right; font-variant-numeric: tabular-nums; }
+.boot-detail { color: var(--xr-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boot-line[data-state="pending"] .boot-detail { color: var(--xr-text-faint); }
+.boot-line[data-state="fail"] .boot-detail { color: var(--xr-red); white-space: normal; }
+.boot-fail { display: grid; gap: var(--xr-s-3); max-width: 62ch; justify-items: start; }
+.boot-stderr {
+  margin: 0;
+  padding: var(--xr-s-3);
+  width: 100%;
+  max-height: 160px;
+  overflow: auto;
+  background: var(--xr-surface-sunken);
+  border: 1px solid var(--xr-border);
+  border-radius: var(--xr-radius-sm);
+  font-size: var(--xr-t-cap);
+  line-height: 1.55;
+  color: var(--xr-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.boot-help { margin: 0; font-size: var(--xr-t-small); line-height: 1.6; color: var(--xr-text-muted); }
+
+/* Approval TTL countdown — the engine's default-deny deadline made visible.
+   Digits change without transition (a fact, not motion); only the colour
+   eases as urgency rises. */
+.appr-ttl {
+  font-size: var(--xr-t-cap);
+  font-variant-numeric: tabular-nums;
+  color: var(--xr-text-muted);
+  transition: color var(--xr-d-fast) var(--xr-ease-out);
+}
+.appr-ttl[data-urgency="soon"] { color: var(--xr-amber); }
+.appr-ttl[data-urgency="critical"] { color: var(--xr-red); font-weight: 600; }
+.appr-ttl[data-urgency="expired"] { color: var(--xr-red); }
+.appr-h .appr-ttl { margin-left: auto; }

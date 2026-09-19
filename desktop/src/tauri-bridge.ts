@@ -56,3 +56,79 @@ export async function nativeCheckUpdate(): Promise<{ available?: boolean; versio
     return { error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+/**
+ * Phase 1 · audit D-10 — surface WHY the engine link is absent.
+ *
+ * The Rust shell already computes a human reason (`spawned:false` + `reason`,
+ * e.g. "sidecar binary not found (dev build)", "spawn failed: …", "sidecar
+ * exited (stdout closed)"), but the renderer consumed it only to break out of
+ * the handshake loop and then discarded it — so a user saw a red dot with no
+ * explanation. Returns null outside the packaged app or when the link is fine.
+ */
+export interface EngineLinkSnapshot {
+  reachable: boolean;
+  spawned: boolean;
+  port: number | null;
+  reason: string | null;
+  /** W-2: set when the sidecar runs WITHOUT job-object containment (Windows). */
+  containment: string | null;
+  /**
+   * SEC-12: the crash-containment mechanism actually in force for the sidecar
+   * — `job-object` (Windows), `pdeathsig+parent-watch` (Linux), `parent-watch`
+   * (macOS), `none` (Windows, job unavailable; `containment` says why), or
+   * null when this shell spawned no sidecar. A fact from the shell, never a
+   * renderer guess.
+   */
+  containmentMode: string | null;
+  /** W-5: the sidecar's last stderr lines — the engine's own explanation. */
+  stderr: string[];
+  externalDaemonOn3141: boolean;
+  /** Present when the command itself could not be invoked. */
+  error?: string;
+}
+
+/**
+ * The Rust shell's `engine_link` answer as facts (never the token). Null in a
+ * plain browser, where there is no shell to ask.
+ */
+export async function engineLinkSnapshot(): Promise<EngineLinkSnapshot | null> {
+  if (!isTauri()) return null;
+  try {
+    const link = (await window.__TAURI_INTERNALS__!.invoke!("engine_link")) as {
+      reachable?: boolean;
+      spawned?: boolean;
+      port?: number | null;
+      reason?: string | null;
+      containment?: string | null;
+      containmentMode?: string | null;
+      stderr?: string[];
+      externalDaemonOn3141?: boolean;
+    };
+    return {
+      reachable: link?.reachable === true,
+      spawned: link?.spawned === true,
+      port: typeof link?.port === "number" ? link.port : null,
+      reason: link?.reason ?? null,
+      containment: link?.containment ?? null,
+      containmentMode: typeof link?.containmentMode === "string" ? link.containmentMode : null,
+      stderr: Array.isArray(link?.stderr) ? link.stderr.filter((l): l is string => typeof l === "string") : [],
+      externalDaemonOn3141: link?.externalDaemonOn3141 === true,
+    };
+  } catch (e) {
+    return {
+      reachable: false, spawned: false, port: null, reason: null, containment: null, containmentMode: null, stderr: [], externalDaemonOn3141: false,
+      error: `engine_link failed: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+}
+
+export async function engineLinkReason(): Promise<string | null> {
+  const link = await engineLinkSnapshot();
+  if (!link) return "browser dev mode — the shell talks to the daemon through the dev proxy";
+  if (link.error) return link.error;
+  if (link.reachable) return null;
+  if (link.reason) return link.reason;
+  if (link.externalDaemonOn3141) return "a daemon is running on 3141 but the sidecar did not pair";
+  return "the sidecar has not reported a port yet — it may still be starting";
+}

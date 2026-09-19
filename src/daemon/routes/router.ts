@@ -173,6 +173,22 @@ export function assetResponse(body: string, contentType: string): Response {
   });
 }
 
+/**
+ * Static binary asset (brand images). Unlike the script/stylesheet these bytes
+ * carry no session state and change only with a release, so the browser may
+ * keep them for a day instead of re-downloading ~140 KB on every page.
+ */
+export function binaryAssetResponse(body: Uint8Array | null, contentType: string): Response {
+  if (!body) return new Response("not found", { status: 404, headers: { "cache-control": "no-store" } });
+  return new Response(body, {
+    headers: {
+      "content-type": contentType,
+      "cache-control": "private, max-age=86400",
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
 export function sseResponse(stream: ReadableStream): Response {
   return new Response(stream, {
     headers: {

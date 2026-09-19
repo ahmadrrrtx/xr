@@ -58,3 +58,11 @@ docs/ux/sus-results.local.jsonl
 desktop/src-tauri/target/
 desktop/src-tauri/gen/schemas/
 desktop/src-tauri/binaries/
+
+# Vite's dependency cache (regenerated; never committed)
+.vite/
+
+# The desktop app pins its dependency graph with bun.lock — a package-lock.json
+# produced by a local `npm install` is an artifact of that machine, not a source
+# of truth, and two lockfiles in one package drift.
+desktop/package-lock.json

@@ -9,10 +9,10 @@ import { runLab } from "../../security/lab.ts";
 import { fingerprint } from "../../context/memory/rag.ts";
 import { IsolatedMemoryStore } from "../../context/isolated-store.ts";
 import { inspectMemoryEngine } from "../../context/engine.ts";
-import { dashboardHtml, dashboardCssAsset, dashboardScriptAsset } from "../dashboard.ts";
+import { BRAND_ASSET_ROUTES, brandAssetBytes, dashboardHtml, dashboardCssAsset, dashboardScriptAsset } from "../dashboard.ts";
 import { AUTH_PAGE_SCRIPT } from "../auth-page.ts";
 import { gitSummaryCached } from "../state/cache.ts";
-import { assetResponse, route, type DaemonRoute } from "./router.ts";
+import { assetResponse, route, type DaemonRoute, binaryAssetResponse } from "./router.ts";
 
 async function gitSummary(cwd: string): Promise<{ branch: string; dirty: boolean }> {
   // Phase 01 — cached 5 s so dashboard polling never re-runs git per request.
@@ -61,6 +61,20 @@ export function systemRoutes(): DaemonRoute[] {
       path: "/assets/dashboard.js",
       method: "GET",
       handle: () => assetResponse(dashboardScriptAsset(), "application/javascript; charset=utf-8"),
+    }),
+    // D-05 · official brand renders as external, cacheable assets (never data
+    // URIs, never re-drawn SVG marks) — see dashboard.ts BRAND_ASSET_ROUTES.
+    route({
+      id: "brand.logo.get",
+      path: BRAND_ASSET_ROUTES.logo,
+      method: "GET",
+      handle: () => binaryAssetResponse(brandAssetBytes("logo"), "image/png"),
+    }),
+    route({
+      id: "brand.avatar.get",
+      path: BRAND_ASSET_ROUTES.avatar,
+      method: "GET",
+      handle: () => binaryAssetResponse(brandAssetBytes("avatar"), "image/png"),
     }),
     // Phase 8 · T3 — the sign-in page's behaviour script. Reachable WITHOUT
     // authentication (server.ts exempts this exact path): the page needs it

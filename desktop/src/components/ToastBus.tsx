@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { api, asList, type Approval, type SessionSummary } from "../api/client";
+import { asList, type Approval, type SessionSummary } from "../api/client";
+import { poll } from "../poll";
 
 export interface Toast { id: number; kind: "ok" | "warn" | "bad" | "info"; title: string; body?: string }
 let nextId = 1;
@@ -33,11 +34,10 @@ export function ToastBus() {
     };
     window.addEventListener("xr-toast", onLocal);
 
-    let live = true;
-    const poll = () => {
-      api.approvals().then((v) => {
-        if (!live) return;
-        const pending = asList<Approval>(v, "pending", "approvals");
+    const off = poll.subscribe(["approvals", "sessions"], (o) => {
+      if (o.key === "approvals") {
+        if (!o.ok) return;
+        const pending = asList<Approval>(o.value, "pending", "approvals");
         if (seenAppr.current === null) { seenAppr.current = new Set(pending.map((p) => p.id)); return; }
         for (const p of pending) {
           if (!seenAppr.current.has(p.id)) {
@@ -45,10 +45,11 @@ export function ToastBus() {
             push("warn", "Approval needed", String(p.tool ?? p.action ?? p.reason ?? "agent action").slice(0, 90));
           }
         }
-      }).catch(() => {});
-      api.sessions().then((v) => {
-        if (!live) return;
-        const sessions = asList<SessionSummary>(v, "sessions", "items");
+        return;
+      }
+      // sessions
+      if (o.ok) {
+        const sessions = asList<SessionSummary>(o.value, "sessions", "items");
         if (seenSess.current === null) { seenSess.current = new Map(sessions.map((s) => [s.id, String(s.status ?? "?")])); return; }
         for (const s of sessions) {
           const prev = seenSess.current.get(s.id);
@@ -63,11 +64,9 @@ export function ToastBus() {
             seenSess.current.set(s.id, now);
           }
         }
-      }).catch(() => {});
-    };
-    poll();
-    const t = setInterval(poll, 3000);
-    return () => { live = false; clearInterval(t); window.removeEventListener("xr-toast", onLocal); };
+      }
+    });
+    return () => { off(); window.removeEventListener("xr-toast", onLocal); };
   }, []);
 
   if (toasts.length === 0) return null;

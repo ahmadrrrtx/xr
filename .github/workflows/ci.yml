@@ -3,7 +3,7 @@
 #
 # Every pull request targeting `main` runs the full quality battery:
 #
-#   1. typecheck     — bunx tsc --noEmit        (static type safety)
+#   1. typecheck     — bun run typecheck         (root program + desktop test program)
 #   2. test          — sharded into four lanes (core / security /
 #                      reliability-spawn / e2e-blackbox) with per-lane
 #                      timeouts, an one-retry quarantine for the known-flaky
@@ -85,8 +85,12 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Typecheck
-        run: bunx tsc --noEmit
+      # `bun run typecheck` is the single authority: the root program (engine,
+      # no DOM lib) AND desktop/tsconfig.test.json (renderer tests under the
+      # desktop's own lib). Running only `tsc --noEmit` here would silently skip
+      # the renderer tests — or, before the split, fail on `window`/`document`.
+      - name: Typecheck (root program + desktop test program)
+        run: bun run typecheck
 
   # ── 2. Identity + claim invariants: one source of truth for both ───────────
   # Phase 0 · T1/T2. The previous job checked only 3 of 6 surfaces, which is why

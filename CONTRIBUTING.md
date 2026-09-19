@@ -192,11 +192,14 @@ bun run ci
 
 That runs, in order:
 
-1. `typecheck` — `tsc --noEmit`, zero errors
+1. `typecheck` — the root program **and** `desktop/tsconfig.test.json`, zero errors
 2. `test` — the full suite, zero failures
 3. `release:check` — all six surfaces stamped from the manifest
 4. `claim-lint` — no unsupported public claim
-5. `baseline:inventory` — source-derived inventory regenerates
+5. `desktop:sink-lint` / `desktop:fonts-check` — no raw HTML sinks in the
+   renderer; type ships inside the package (no remote fonts, provenance pinned)
+6. `baseline:inventory` — source-derived inventory regenerates
+7. …and the architecture, API-contract, size and ownership gates (see `package.json` → `ci`)
 
 Additionally:
 
@@ -215,6 +218,35 @@ Additionally:
 - Reference the issue you are closing.
 - One logical change per PR. A refactor and a behaviour change belong in separate PRs.
 - Fill in the PR template, including the honesty checklist.
+
+### Desktop UI changes: the Before | After | Why table
+
+Any PR that adds or changes **motion, timing, or a pressable's feedback** in
+`desktop/src` carries this table in its description (the design law it applies
+is `docs/design/MOTION.md`; the review question is always "what changed on
+screen, and what does the animation tell the user that a cut would not?"):
+
+| Before | After | Why |
+|---|---|---|
+| e.g. sheet slid in over 400 ms ease-in-out | 250 ms `--xr-ease-drawer`, exit 180 ms | it opens ~20×/day; the slow-in read as lag; asymmetric so the exit gets out of the way |
+
+Rules the table must respect (the reviewer checks them, CI checks the ones it can):
+
+- **Frequency decides motion.** The command palette and keyboard-driven
+  navigation get **no** animation. Hover ≤ 120 ms, opacity only. Sheets and
+  menus 150–300 ms. Delight is reserved for rare moments (first run, the
+  post-update screen).
+- **Never animate a keyboard action.** Pointer presses get `scale(0.97)`;
+  Enter does not.
+- **Curves are tokens** (`--xr-ease-out`, `--xr-ease-in-out`, `--xr-ease-drawer`).
+  `ease-in` is never used; `linear` only for constant motion (spinners,
+  hold-to-confirm fills).
+- **Transform and opacity only.** No animating layout properties, no blur
+  above the one `--xr-blur` token, nothing enters from `scale(0)`.
+- **Reduced motion is global** (`prefers-reduced-motion` collapses every
+  duration) — a component may not opt out.
+- **Every line on a status surface is a real fact.** No decorative progress,
+  no invented boot steps, no placeholder timings (see `desktop/src/boot.ts`).
 
 ---
 

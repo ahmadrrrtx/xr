@@ -37,6 +37,12 @@
     "excludeOn": ["win32"],
     "since": "phase-0",
     "reason": "Phase 0 black-box lane spawns the real CLI and asserts POSIX signal contracts (cancel.test.ts: SIGINT mid-flight must exit 130 with signal SIGINT; hygiene: SIGKILL reaping semantics); Node on win32 cannot deliver SIGINT (TerminateProcess only) so the contract is untestable there by construction. Linux-verified (ci.yml ubuntu lane is the reference); darwin runs POSIX signals identically so the cross-platform lane covers it. Same class as the crash-injection.test.ts exclusion."
+  },
+  {
+    "pattern": "test/daemon/parent-watch-mechanism.test.ts",
+    "excludeOn": ["win32"],
+    "since": "2026-09-19",
+    "reason": "SEC-12 process-tree proof stages a SIGKILLed parent whose child must notice on its own. On Windows the crash guarantee is the Job Object (W-2, proven by cargo test on the Windows runner), and libuv's per-process job kills a spawned grandchild together with its parent before any in-process watch can observe it, so the scenario cannot be staged there. The decision/probe/flag/loop tests in parent-watch.test.ts run on win32."
   }
 ]
 }

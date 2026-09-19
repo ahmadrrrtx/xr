@@ -22,8 +22,8 @@
     "start": "bun run src/index.ts",
     "dev": "bun run --watch src/index.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "ci": "bun run typecheck && bun test && bun run release:check && bun run channel:check && bun run claim-lint && bun run platform:parity:check && bun run changelog:check && bun run baseline:inventory && bun run ci-capability-gate && bun run api:schema:check && bun run client:check && bun run api:compat && bun run boundaries && bun run size-gate && bun run hot-path-lint && bun run ownership:check && bun run website:marketplace:check",
+    "typecheck": "tsc --noEmit && tsc -p desktop/tsconfig.test.json",
+    "ci": "bun run typecheck && bun test && bun run release:check && bun run channel:check && bun run claim-lint && bun run desktop:sink-lint && bun run desktop:fonts-check && bun run desktop:brand-check && bun run platform:parity:check && bun run changelog:check && bun run baseline:inventory && bun run ci-capability-gate && bun run api:schema:check && bun run client:check && bun run api:compat && bun run boundaries && bun run size-gate && bun run hot-path-lint && bun run ownership:check && bun run website:marketplace:check",
     "website:marketplace:generate": "bun run website/scripts/generate-marketplace.ts",
     "website:marketplace:check": "bun run website/scripts/generate-marketplace.ts --check",
     "ownership:generate": "bun run scripts/ownership-map.ts",
@@ -76,7 +76,10 @@
     "baseline:phase00": "bun run scripts/phase00/capture-baseline.ts",
     "baseline:phase00:validate": "bun run scripts/phase00/validate-baseline.ts",
     "baseline:phase00:quick": "XR_BASELINE_QUICK=1 bun run scripts/phase00/capture-baseline.ts",
-    "sidecar:compile": "bun run scripts/compile-sidecar.ts"
+    "sidecar:compile": "bun run scripts/compile-sidecar.ts",
+    "desktop:sink-lint": "bun run scripts/desktop-sink-lint.ts",
+    "desktop:fonts-check": "bun run scripts/desktop-fonts-check.ts",
+    "desktop:brand-check": "bun run scripts/desktop-brand-check.ts"
   },
   "repository": {
     "type": "git",

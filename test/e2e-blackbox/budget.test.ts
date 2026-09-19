@@ -29,6 +29,14 @@ import {
   assertStubClosed,
 } from "./helpers.ts";
 
+/**
+ * Per-test budget for tests that spawn the REAL CLI. A cold boot on a loaded
+ * hosted runner can exceed Bun's 5 s default by itself; when that default
+ * fires first, Bun kills the child and the assertion sees `code: null`
+ * (SIGKILL) — a phantom failure. The helpers keep the real ceilings.
+ */
+const T = 60_000;
+
 let stub: StubOpenAIHandle;
 
 beforeAll(async () => {
@@ -66,7 +74,7 @@ describe("budget enforcement over the real CLI", () => {
     } finally {
       removeHome(home);
     }
-  });
+  }, T);
 
   test("human raise path: same home, raised ceiling → the task completes (exit 0, session.done)", async () => {
     const home = freshHome();
@@ -98,5 +106,5 @@ describe("budget enforcement over the real CLI", () => {
     } finally {
       removeHome(home);
     }
-  });
+  }, T);
 });

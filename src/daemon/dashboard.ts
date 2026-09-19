@@ -19,21 +19,40 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-function assetDataUri(name: string): string {
-  try {
-    // Prefer the compact SVG marks: the old PNG data-URIs shipped ~470 KB of
-    // base64 on EVERY dashboard response (avatar 195 KB + logo 156 KB, ×1.33
-    // base64 inflation). The SVG marks render identically at every size the
-    // dashboard uses and cost under 1 KB.
-    const base = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets");
-    const svg = join(base, name.replace(/\.png$/, ".svg"));
-    if (existsSync(svg)) return `data:image/svg+xml;base64,${readFileSync(svg).toString("base64")}`;
-    const file = join(base, name);
-    if (!existsSync(file)) return "";
-    return `data:image/png;base64,${readFileSync(file).toString("base64")}`;
-  } catch {
-    return "";
+/**
+ * Brand images are EXTERNAL assets, like the stylesheet and the client script
+ * (Phase 4 · T5 CSP pattern), never data URIs:
+ *   · the old PNG data-URIs put ~470 KB of base64 into EVERY dashboard
+ *     response (avatar 195 KB + logo 156 KB, ×1.33);
+ *   · the "compact SVG marks" that replaced them were re-drawn geometry that
+ *     diverged from the official logo (audit BUG-002) — decision D-05 retires
+ *     every such mark.
+ * The files served are pixel-only size conversions of the official renders
+ * (assets/brand/, registered in desktop/src/assets/REGISTRY.json).
+ */
+export const BRAND_ASSET_ROUTES = {
+  logo: "/assets/brand/logo.png",
+  avatar: "/assets/brand/avatar.png",
+} as const;
+
+const BRAND_FILES: Record<keyof typeof BRAND_ASSET_ROUTES, string> = {
+  logo: "logo-320.png",
+  avatar: "avatar-256.png",
+};
+const brandCache = new Map<string, Uint8Array | null>();
+
+/** The bytes of a brand asset, read once; null when the package is missing it. */
+export function brandAssetBytes(which: keyof typeof BRAND_ASSET_ROUTES): Uint8Array | null {
+  const file = BRAND_FILES[which];
+  if (!brandCache.has(file)) {
+    try {
+      const path = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", "brand", file);
+      brandCache.set(file, existsSync(path) ? new Uint8Array(readFileSync(path)) : null);
+    } catch {
+      brandCache.set(file, null);
+    }
   }
+  return brandCache.get(file) ?? null;
 }
 
 export function dashboardHtml(token: string): string {
@@ -44,8 +63,8 @@ export function dashboardHtml(token: string): string {
     .replaceAll("__XR_PKG_NAME__", PKG.name)
     .replaceAll("__XR_REPO__", PKG.repo)
     .replaceAll("__XR_HOMEPAGE__", PKG.homepage)
-    .replaceAll("__XR_LOGO__", assetDataUri("logo.png"))
-    .replaceAll("__XR_AVATAR__", assetDataUri("avatar.png"));
+    .replaceAll("__XR_LOGO__", BRAND_ASSET_ROUTES.logo)
+    .replaceAll("__XR_AVATAR__", BRAND_ASSET_ROUTES.avatar);
 }
 
 import { DASHBOARD_PAGE as PAGE } from "./dashboard/markup.ts";

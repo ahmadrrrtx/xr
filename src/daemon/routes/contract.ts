@@ -115,6 +115,8 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   "dashboard.alias.get": { summary: "Dashboard HTML surface (alias).", tag: "surface", stability: "stable", surface: true },
   "dashboard.css.get": { summary: "Dashboard stylesheet asset.", tag: "surface", stability: "stable", surface: true },
   "dashboard.js.get": { summary: "Dashboard client application asset.", tag: "surface", stability: "stable", surface: true },
+  "brand.logo.get": { summary: "Official XR logo render (external brand asset, D-05).", tag: "surface", stability: "stable", surface: true },
+  "brand.avatar.get": { summary: "Official XR avatar render (external brand asset, D-05).", tag: "surface", stability: "stable", surface: true },
   "chat.page.get": { summary: "Chat-focused dashboard page.", tag: "surface", stability: "stable", surface: true },
   "auth.js.get": { summary: "Sign-in page behaviour asset (open path for the pre-auth page).", tag: "surface", stability: "stable", surface: true },
   "overview.get": {

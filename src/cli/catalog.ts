@@ -97,7 +97,7 @@ export const CATALOG: CatalogEntry[] = [
   {
     name: "serve",
     description: "start Control Center (local web dashboard + chat)",
-    usage: "xr serve [--port <n>]",
+    usage: "xr serve [--port <n>] [--parent-pid <pid>]",
     group: "start",
     glyph: "dashboard",
     needsKernel: false,

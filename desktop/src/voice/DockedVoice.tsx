@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useVoice } from "./session";
-import avatarUrl from "../assets/xr-avatar.png";
+import { AVATAR_SRC, poseForVoiceState } from "../components/Brand";
 
 /**
  * Docked voice avatar: when the user navigates away from the Voice page the
@@ -22,7 +22,7 @@ export function DockedVoice({ onExpand }: { onExpand: () => void }) {
       aria-label={`Voice ${voice.state} — click to open`}
     >
       <span className="vd-glow" style={{ opacity: 0.35 + Math.min(1, level * 2) * 0.65 }} aria-hidden="true" />
-      <img src={avatarUrl} alt="" className="vd-avatar" />
+      <img src={AVATAR_SRC[poseForVoiceState(voice.state)]} alt="" className="vd-avatar" data-pose={poseForVoiceState(voice.state)} />
       {voice.muted && <span className="vd-mute" aria-hidden="true" />}
     </button>
   );

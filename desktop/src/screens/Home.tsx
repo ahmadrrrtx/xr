@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { api, asList, type Approval, type ProviderInfo, type SessionSummary } from "../api/client";
+import { asList, type Approval, type ProviderInfo, type SessionSummary } from "../api/client";
+import { ApprovalCountdown } from "../components/ApprovalCountdown";
 import { XrLogo } from "../components/Brand";
+import { poll } from "../poll";
 
 /**
  * Home (phase 6, mock 02): brand hero, universal composer, "Continue work" cards
@@ -25,19 +27,30 @@ export function Home({
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const poll = () => {
-      api.sessions().then((s) => setSessions(asList<SessionSummary>(s, "sessions", "items").slice(0, 4))).catch(() => {});
-      api.approvals().then((v) => setApprovals(asList<Approval>(v, "pending", "approvals"))).catch(() => {});
-    };
-    api.providers().then((p) => {
-      const list = asList<ProviderInfo>(p, "providers", "items");
+    /* Phase 1 · subscribers of the shared poll hub (src/poll.ts). Home used to
+     * fetch sessions and approvals on its own 4 s timer while the toast bus
+     * fetched the same two on a 3 s timer — two unsynchronised views of the
+     * same run list. The model default is still seeded exactly once. */
+    let seededModel = false;
+    const off = poll.subscribe(["sessions", "approvals", "providers"], (o) => {
+      if (o.key === "sessions") {
+        if (o.ok) setSessions(asList<SessionSummary>(o.value, "sessions", "items").slice(0, 4));
+        return;
+      }
+      if (o.key === "approvals") {
+        if (o.ok) setApprovals(asList<Approval>(o.value, "pending", "approvals"));
+        return;
+      }
+      if (!o.ok || seededModel) return;
+      const list = asList<ProviderInfo>(o.value, "providers", "items");
       setProviders(list);
       const first = list.find((x) => x.available !== false);
-      if (first) setModel(first.models?.[0] ?? first.id);
-    }).catch(() => {});
-    poll();
-    const t = setInterval(poll, 4000);
-    return () => clearInterval(t);
+      if (first) {
+        seededModel = true;
+        setModel(first.models?.[0] ?? first.id);
+      }
+    });
+    return off;
   }, []);
 
   function onPickFile(f: File | undefined) {
@@ -140,6 +153,8 @@ export function Home({
           <div className="ab-line">
             {String(approvals[0].tool ?? approvals[0].action ?? approvals[0].reason ?? "An agent action")}
             {" "}and {approvals.length > 1 ? `${approvals.length - 1} more` : "the latest"} request{approvals.length > 1 ? "s" : ""} need review
+            {" · "}
+            <ApprovalCountdown deadline={approvals[0]} />
           </div>
           <button className="btn small" onClick={onReview}>Review</button>
         </div>

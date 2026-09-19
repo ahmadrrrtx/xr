@@ -17,28 +17,58 @@ violation, so the pair is created once by the operator:
 
 1. `bun run scripts/generate-updater-keys.ts --apply`
    - prints the PRIVATE key (PKCS#8 PEM) to stdout — **never written anywhere**
-   - patches the pubkey + endpoint (`…/releases/latest/download/latest.json`)
-     into `desktop/src-tauri/tauri.conf.json`
+   - patches `plugins.updater` (pubkey + endpoint
+     `…/releases/latest/download/latest.json`) AND `bundle.createUpdaterArtifacts:
+     true` into `desktop/src-tauri/tauri.conf.json` — one step, because either
+     half alone is a broken pipeline (see below)
 2. Commit the `tauri.conf.json` change.
 3. Store the printed private key as the repo secret `TAURI_UPDATER_KEY`
    (Settings → Secrets → Actions). Delete the terminal scrollback.
 
 ## What CI then does, automatically
 
+- Until provisioned, `tauri.conf.json` is deliberately **inert**: no
+  `plugins.updater`, no `bundle.createUpdaterArtifacts`. Tauri v2 needs both
+  together — `createUpdaterArtifacts` without the plugin block makes `tauri
+  build` refuse to start ("plugins > updater doesn't exist"), and the plugin
+  block without a real pubkey makes every check fail. `--apply` sets both.
+  (Before Phase 1 the runbook set only the plugin block, so even a provisioned
+  build would have produced **no** updater artifacts and **no** signatures.)
 - `desktop-app.yml` bundle job passes `TAURI_SIGNING_PRIVATE_KEY` to
-  `tauri build`; signed updater artifacts (`*.tar.gz` + `.sig`, `*.msi.zip` +
-  `.sig`) are uploaded alongside installers. Empty secret ⇒ no `.sig` files,
-  by tauri's own behavior.
+  `tauri build`. Tauri v2 shapes: the installer **is** the updater payload —
+  `*.AppImage` + `.sig`, `*.app.tar.gz` + `.sig`, `*-setup.exe` + `.sig`,
+  `*.msi` + `.sig`. No pubkey configured ⇒ no `.sig` files (tauri skips
+  signing). Pubkey configured but secret missing ⇒ `tauri build` **fails**,
+  loudly — a provisioned updater is never shipped unsigned.
+- On tag runs the bundle job attaches every installer (and `.sig`) to the
+  GitHub release. GitHub renames assets on upload (spaces → periods), and
+  `scripts/make-updater-manifest.ts` writes URLs the same way.
 - `updater-manifest` job (tag pushes only) downloads the sig artifacts and
   runs `scripts/make-updater-manifest.ts`; zero platforms ⇒ publish skipped
   with a warning (honest). Otherwise `latest.json` is attached to the release.
 - The shell's `check_update` command + Settings "check" button then work
   end-to-end; installs are passive-mode on Windows, standard elsewhere.
 
+## Windows: two installer flavours, one rule
+
+Windows ships **both** an MSI (WiX, per-machine — what every existing install
+has) and an NSIS `-setup.exe` (`installMode: currentUser` — per-user, no UAC
+prompt; the flavour new installs, the updater and winget `Scope: user` want).
+An update must hand a user the flavour they already have, or they end up with
+two copies in *Apps*. `tauri-plugin-updater` ≥ 2.10 (we lock 2.11) asks for
+`windows-x86_64-nsis` / `windows-x86_64-msi` first and falls back to the
+generic `windows-x86_64`; the manifest therefore lists both specific keys and
+points the generic key at the **MSI** while one exists (older clients that only
+read the generic key are MSI installs). The bundle job asserts both flavours
+were produced so a silently-missing one is a red run, not a release-day
+surprise. Coexistence: MSI-installed users stay on the MSI path; NSIS is for new
+installs. Both are pinned by `test/release/updater-manifest.test.ts`.
+
 ## Verification without the secret (what CI proves today)
 
-- `cargo check` + `clippy -D warnings` compile the updater wiring on every PR
-  (`desktop-app.yml` shell-check job).
+- `cargo check` + `clippy -D warnings` + `cargo test` compile and unit-test the
+  shell on every PR (`desktop-app.yml` shell-check job); `shell-test-windows`
+  runs the `#[cfg(windows)]` code's tests on a real Windows kernel.
 - `test/release/updater-manifest.test.ts` dry-runs the manifest assembler:
   platform-key mapping, repo asset URLs, and the empty-manifest honesty rule.
 - `scripts/generate-updater-keys.ts` format is pinned by the same test

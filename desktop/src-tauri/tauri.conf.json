@@ -32,10 +32,17 @@
       "app",
       "dmg",
       "msi",
+      "nsis",
       "appimage",
       "deb",
       "rpm"
     ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English"]
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

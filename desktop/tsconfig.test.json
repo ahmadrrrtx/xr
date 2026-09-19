@@ -1,0 +1,10 @@
+{
+  "// why": "test/desktop/** exercises renderer code (window/document). The ROOT tsconfig deliberately has no DOM lib — engine code must never reach browser globals — so desktop tests are type-checked here, under the desktop project's own lib + bun's test types. `bun test` still discovers them from test/ (parity authority).",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun-types"],
+    "allowImportingTsExtensions": true,
+    "noUnusedLocals": true
+  },
+  "include": ["../test/desktop/**/*.ts"]
+}

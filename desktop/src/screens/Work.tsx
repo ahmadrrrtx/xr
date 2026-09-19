@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, asList, chatStream, type Approval, type ProviderInfo, type StreamEvent } from "../api/client";
+import { ApprovalCountdown } from "../components/ApprovalCountdown";
 import { XrAvatar } from "../components/Brand";
 
 interface Msg { role: "user" | "xr"; text: string; }
@@ -195,6 +196,7 @@ export function Work({ seed, onConsumed }: { seed: string | null; onConsumed: ()
                   <circle cx="12" cy="12" r="9" /><path d="M12 7v6M12 16.5v.5" />
                 </svg>
                 XR wants to run:
+                <ApprovalCountdown deadline={a} />
               </div>
               <div className="appr-action mono">{String(a.action ?? JSON.stringify(a).slice(0, 160))}</div>
               {a.reason && <div className="appr-reason faint">{String(a.reason)}</div>}
