@@ -3,6 +3,7 @@ import {
   api, asList, type Approval, type CockpitState, type AuditEntry, type BudgetState, type ControlStatus,
   type ShieldStatus, type TrustClassification, type TrustStatus, type TriggersState,
 } from "../api/client";
+import { poll } from "../poll";
 
 const TABS = ["Cockpit", "Approvals", "Modes", "Audit", "Budgets", "Network", "Permissions", "Shield"] as const;
 type Tab = (typeof TABS)[number];
@@ -94,11 +95,27 @@ export function Trust() {
   const [cls, setCls] = useState<TrustClassification | null>(null);
   const [scanning, setScanning] = useState(false);
 
+  /**
+   * Phase 1 · the approvals queue and the control-pending list come from the
+   * shared poll hub (src/poll.ts) — the Trust Center and the status bar must not
+   * be two independent observations of the same queue. What stays here is what
+   * the hub does not own: this tab's own context/permission reads, which are
+   * fetched when the tab is shown rather than on a timer.
+   */
   const loadQueue = useCallback(() => {
-    api.approvals().then((v) => setApprovals(asList<Approval>(v, "pending", "approvals"))).catch(() => {});
-    api.controlPending().then((v) => setControlPend(v.pending ?? [])).catch(() => {});
     api.contextPending().then((v) => setContextPend(asList<Record<string, unknown>>(v, "pending", "items"))).catch(() => {});
     api.controlPermissions().then((v) => setControlPerms(((v?.granted ?? []) as unknown[]).map(String))).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const off = poll.subscribe(["approvals", "pending"], (o) => {
+      if (o.key === "approvals") {
+        if (o.ok) setApprovals(asList<Approval>(o.value, "pending", "approvals"));
+        return;
+      }
+      if (o.ok) setControlPend(o.value.pending ?? []);
+    });
+    return off;
   }, []);
   const loadRail = useCallback(() => {
     api.audit().then((v) => { setAudit(v.entries ?? []); setChain((v as { chain?: Record<string, unknown> }).chain ?? null); }).catch(() => {});

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { poll } from "../poll";
 import { api, asList, type SessionSummary, type WorkflowDetail, type WorkflowSummary, type WorkflowTaskV } from "../api/client";
 
 const TABS = ["Transcript", "Plan", "Files", "Tools", "Approvals", "Cost", "Artifacts"] as const;
@@ -67,16 +68,23 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
   const nodeRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
 
   useEffect(() => {
-    const poll = () => {
-      api.agents().then((a) => {
-        setWorkflows(a.workflows ?? []);
-        setRoles((a.roles ?? []) as { id?: string; name?: string; purpose?: string }[]);
-      }).catch(() => {});
-      api.sessions().then((v) => setSessions(asList<SessionSummary>(v, "sessions"))).catch(() => setSessions([]));
-    };
-    poll();
-    const t = setInterval(poll, 5000);
-    return () => clearInterval(t);
+    /* Phase 1 · this screen used to poll `agents` and `sessions` on its own 5 s
+       timer, so the run list and the status bar could disagree about the same
+       moment. It is now a subscriber of the shared hub (src/poll.ts) and sees
+       the same observation every other consumer sees. The selected run's own
+       detail poll below is unchanged — that endpoint is per-workflow and is not
+       something the hub can share. */
+    const off = poll.subscribe(["agents", "sessions"], (o) => {
+      if (o.key === "agents") {
+        if (!o.ok) return;
+        setWorkflows(o.value.workflows ?? []);
+        setRoles((o.value.roles ?? []) as { id?: string; name?: string; purpose?: string }[]);
+        return;
+      }
+      if (o.ok) setSessions(asList<SessionSummary>(o.value, "sessions"));
+      else setSessions([]);
+    });
+    return off;
   }, []);
 
   // Live-refresh the selected workflow while it may still be moving.
