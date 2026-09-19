@@ -91,3 +91,37 @@ describe("WorkspaceStore.close() releases the file", () => {
     }
   });
 });
+
+describe("restoreFrom() requires exclusive ownership", () => {
+  test("a shared connection refuses the restore and leaves both instances usable; alone it restores", () => {
+    const dir = mkdtempSync(join(tmpdir(), "xr-restore-"));
+    const dbPath = join(dir, "xr.db");
+    const a = new WorkspaceStore("restore-test", dbPath);
+    const b = new WorkspaceStore("restore-test", dbPath);
+    try {
+      a.audit("restore.test", { n: 1 });
+      const snap = a.createBackup(join(dir, "snap.db"));
+      expect(snap.ok).toBe(true);
+      a.audit("restore.test", { n: 2 }); // diverge from the snapshot
+      const refused = a.restoreFrom(snap.path);
+      expect(refused.ok).toBe(false);
+      expect(refused.error).toMatch(/exclusive ownership.*1 other instance/);
+      // Nothing was copied over the live database: both instances still see the divergence.
+      const n = (r: { detail: string }) => (JSON.parse(r.detail) as { n?: number }).n;
+      expect(b.recentAudit(10).some((r) => r.event === "restore.test" && n(r) === 2)).toBe(true);
+      b.close();
+      const restored = a.restoreFrom(snap.path);
+      expect(restored.ok).toBe(true);
+      expect(restored.chainValid).toBe(true);
+      expect(a.recentAudit(10).some((r) => n(r) === 2)).toBe(false); // back to the snapshot
+      expect(WorkspaceStore.lastCloseError).toBeNull();
+    } finally {
+      try {
+        a.close();
+      } catch {
+        /* closed */
+      }
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
