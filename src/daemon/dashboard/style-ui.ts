@@ -344,6 +344,9 @@ export const STYLE_UI = `/* ── Chat Session Workspace (Liquid Layout) ──
   transition: background 0.1s, color 0.1s, border-color 0.1s;
 }
 .mp-chip:hover, .mp-tab:hover { border-color: var(--cyan); color: var(--text); }
+.mp-brand-orb { display: flex; align-items: center; gap: 12px; }
+.mp-logo-img { height: 44px; width: auto; border-radius: 6px; }
+.mp-avatar-img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; object-position: 50% 32%; }
 .mp-chip.active, .mp-tab.active { background: rgba(0, 212, 255, 0.12); color: var(--cyan); border-color: var(--cyan); font-weight: 700; }
 
 /* ── Phase 8 · T3 — Accessibility layer (WCAG 2.2 AA) ────────────────── */

@@ -67,7 +67,12 @@ import {
 // version, so the post-hardening hash changes with the identity. The security
 // invariants the hash pins (no inline script/style/onclick, token never
 // embedded) are asserted separately above.
-const POST_PHASE4_SHA256 = "0a48a6ce7e86631e0ceec63300fcdbf7d2ec7325206bcc5d0be7135f42c5bb52";
+// Re-pinned for D-05 (Phase 1): brand images are EXTERNAL assets
+// (/assets/brand/logo.png, /assets/brand/avatar.png — official renders) instead
+// of inline data URIs of re-drawn SVG marks; the document is ~100 KB and
+// carries zero data:image URIs (asserted below, so the size can never creep
+// back through an inlined image).
+const POST_PHASE4_SHA256 = "50b8adfc69834adc5cbac64de2b54c20146e282db869722534e649605fa4aa85";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {
@@ -102,6 +107,14 @@ describe("T7 — dashboard split preserves behaviour exactly (Phase 4 hardened o
     ]) {
       expect(html).not.toContain(placeholder);
     }
+  });
+
+  test("brand images are external official renders — never data URIs (D-05, and the 1.3 MB-per-response trap)", () => {
+    const html = dashboardHtml("t");
+    expect(html).not.toContain("data:image");
+    expect(html).toContain('src="/assets/brand/logo.png"');
+    expect(html).toContain('src="/assets/brand/avatar.png"');
+    expect(html.length).toBeLessThan(200_000);
   });
 
   test("the document is well-formed: external assets, no inline blocks", () => {

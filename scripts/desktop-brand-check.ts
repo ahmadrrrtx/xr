@@ -102,6 +102,8 @@ const KNOWN_SOURCES: Array<[RegExp, string, string]> = [
   [/^assets\/avatar\.png$/, "official avatar render (front)", "npm package brand / README"],
   [/^assets\/brand\/avatar-front\.png$/, "owner-committed avatar render, front (commit 2827629)", "website + docs"],
   [/^assets\/brand\/avatar-hero\.png$/, "owner-committed avatar render, full-body winged (commit 2827629)", "website + docs"],
+  [/^assets\/brand\/logo-320\.png$/, "official logo render, LANCZOS resize to 320px (pixel-only)", "daemon dashboard /assets/brand/logo.png"],
+  [/^assets\/brand\/avatar-256\.png$/, "official avatar render (front), LANCZOS resize to 256px (pixel-only)", "daemon dashboard /assets/brand/avatar.png"],
   [/^assets\/brand\/palette-reference\.png$/, "owner-committed palette reference (commit 2827629)", "design reference only — never placed in UI"],
   [/^desktop\/src\/assets\/xr-logo\.png$/, "official logo render", "titlebar, boot splash, onboarding"],
   [/^desktop\/src\/assets\/xr-avatar\.png$/, "official avatar render (front)", "presence / identity, voice front pose"],

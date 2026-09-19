@@ -8,6 +8,12 @@
       "role": "npm package brand / README"
     },
     {
+      "file": "assets/brand/avatar-256.png",
+      "sha256": "1dba16b29f293eccabbacdc82a0f1836b0d2faa759540e10696c2a7236b6c8b2",
+      "source": "official avatar render (front), LANCZOS resize to 256px (pixel-only)",
+      "role": "daemon dashboard /assets/brand/avatar.png"
+    },
+    {
       "file": "assets/brand/avatar-front.png",
       "sha256": "a1534892128e9015fb375d519cb9bf70430ca2da2c7930bfcf6dad8a8190bea7",
       "source": "owner-committed avatar render, front (commit 2827629)",
@@ -18,6 +24,12 @@
       "sha256": "67c198931b93783bc5f89cce71b156b1d1fa9f8450563293a6d23356f2bd1d66",
       "source": "owner-committed avatar render, full-body winged (commit 2827629)",
       "role": "website + docs"
+    },
+    {
+      "file": "assets/brand/logo-320.png",
+      "sha256": "02cab37eed885028aeae168dbca076c23aa61f4b5813071415cc89bf72498a12",
+      "source": "official logo render, LANCZOS resize to 320px (pixel-only)",
+      "role": "daemon dashboard /assets/brand/logo.png"
     },
     {
       "file": "assets/brand/palette-reference.png",
