@@ -28,8 +28,11 @@
 //!   W-2  the sidecar is assigned to a Job Object armed with
 //!        KILL_ON_JOB_CLOSE, so it cannot outlive the shell even if the shell
 //!        crashes (previously an engine survived a shell crash, invisible);
-//!   W-3  a named-mutex single-instance guard stops a second shell from
-//!        spawning a second engine against the same workspace;
+//!   W-3  one shell per session: `tauri-plugin-single-instance` (registered
+//!        first) hands a second launch's argv to the running shell, which
+//!        raises and focuses its window; the second process exits. Previously
+//!        a hand-written named mutex only made the second launch exit
+//!        silently — and let it spawn nothing, but also focus nothing;
 //!   W-5  the sidecar's stderr is captured into a bounded tail and reported
 //!        with the link status, so failures explain themselves;
 //!   W-6  reachability probes are cached for 1.5 s, so a down engine no longer
@@ -349,13 +352,18 @@ fn autostart_status(app: tauri::AppHandle) -> Result<bool, String> {
 #[tauri::command]
 async fn check_update(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    // Two different truths, told apart for Settings → Updates (SEC-10):
+    //   · `app.updater()` fails only when the build carries no endpoints /
+    //     pubkey — the operator has not run the provisioning ceremony;
+    //   · `check()` fails when a provisioned build cannot reach or verify
+    //     its manifest — a network or signature problem, not a config gap.
+    let updater = app
+        .updater()
+        .map_err(|e| format!("updater not provisioned in this build ({e}) — see docs/release/UPDATER.md"))?;
     match updater.check().await {
         Ok(Some(update)) => Ok(serde_json::json!({ "available": true, "version": update.version })),
         Ok(None) => Ok(serde_json::json!({ "available": false })),
-        Err(e) => Err(format!(
-            "updater not provisioned or check failed: {e} (see docs/release/UPDATER.md)"
-        )),
+        Err(e) => Err(format!("update check failed: {e}")),
     }
 }
 
@@ -371,39 +379,26 @@ fn engine_status(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
     })
 }
 
-/// Held for the life of the process so the named mutex stays owned.
-#[cfg(windows)]
-static INSTANCE_GUARD: std::sync::OnceLock<win::InstanceGuard> = std::sync::OnceLock::new();
+/// W-3 · a second launch reached the running shell: bring its window forward.
+/// The second process exits inside the plugin right after this callback.
+fn focus_existing_window(app: &tauri::AppHandle, _argv: Vec<String>, _cwd: String) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
 
 pub fn run() {
-    // W-3 · one shell per session. A second launch would spawn a SECOND engine
-    // sidecar, so two daemons would quietly compete for the same workspace
-    // files. Windows' own primitive for this is a named mutex, which is what
-    // `win::InstanceGuard` wraps.
-    //
-    // Honest scope: this stops the duplicate-daemon damage; it does NOT focus
-    // the window that is already open, because cross-instance hand-off needs
-    // IPC (tauri-plugin-single-instance, still outstanding). `XR_ALLOW_MULTI=1`
-    // opts out for development.
-    #[cfg(windows)]
-    {
-        if std::env::var("XR_ALLOW_MULTI").as_deref() != Ok("1") {
-            match win::InstanceGuard::acquire("xr-desktop-single-instance") {
-                Ok(Some(guard)) => {
-                    let _ = INSTANCE_GUARD.set(guard);
-                }
-                Ok(None) => return,
-                Err(e) => {
-                    eprintln!("[xr] single-instance guard unavailable ({e}); continuing without it")
-                }
-            }
-        }
-    }
-
     let engine = Arc::new(EngineState::default());
     let engine_setup = Arc::clone(&engine);
     let builder = tauri::Builder::default()
         .manage(Arc::clone(&engine))
+        // W-3 · one shell per session. A second launch would spawn a SECOND
+        // engine sidecar, so two daemons would quietly compete for the same
+        // workspace files. The plugin must be the FIRST one registered so the
+        // hand-off happens before anything else initialises.
+        .plugin(tauri_plugin_single_instance::init(focus_existing_window))
         .plugin(tauri_plugin_notification::Builder::new().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
