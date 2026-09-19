@@ -14,7 +14,16 @@
  * The hub takes its clock, so these are deterministic — no sleeps, no flakes.
  */
 import { describe, expect, test } from "bun:test";
-import { Poller, type PollKey, type Timers } from "../../desktop/src/poll.ts";
+import { Poller, type PollKey, type PollLoaders, type Timers } from "../../desktop/src/poll.ts";
+
+/**
+ * Test doubles resolve to whatever the test wants to observe (a call counter, a
+ * string, `null`), not to engine payloads — the ONE cast lives here so every
+ * test stays typed against the hub's real constructor signature.
+ */
+function fakeLoaders(map: Record<PollKey, () => Promise<unknown>>): PollLoaders {
+  return map as unknown as PollLoaders;
+}
 
 /** A hand-cranked clock: `advance` runs exactly the timers that are due. */
 function fakeClock() {
@@ -68,14 +77,14 @@ function countingLoaders() {
   };
   return {
     calls,
-    loaders: {
+    loaders: fakeLoaders({
       health: make("health"),
       providers: make("providers"),
       pending: make("pending"),
       approvals: make("approvals"),
       sessions: make("sessions"),
       agents: make("agents"),
-    } as Record<PollKey, () => Promise<unknown>>,
+    }),
   };
 }
 
@@ -145,14 +154,14 @@ describe("poll hub · one scheduler for the whole shell", () => {
     const clock = fakeClock();
     const outcomes: string[] = [];
     const poll = new Poller(
-      {
+      fakeLoaders({
         health: () => Promise.resolve("ok"),
         providers: () => Promise.resolve(null),
         pending: () => Promise.reject(new Error("engine down")),
         approvals: () => Promise.resolve(null),
         sessions: () => Promise.resolve(null),
         agents: () => Promise.resolve(null),
-      },
+      }),
       CADENCE,
       clock,
     );
@@ -168,7 +177,7 @@ describe("poll hub · one scheduler for the whole shell", () => {
     let mode: "fail" | "ok" = "fail";
     const calls: number[] = [];
     const poll = new Poller(
-      {
+      fakeLoaders({
         health: () => {
           calls.push(clock.now());
           return mode === "fail" ? Promise.reject(new Error("down")) : Promise.resolve("up");
@@ -178,7 +187,7 @@ describe("poll hub · one scheduler for the whole shell", () => {
         approvals: () => Promise.resolve(null),
         sessions: () => Promise.resolve(null),
         agents: () => Promise.resolve(null),
-      },
+      }),
       CADENCE, // health cadence 1 s
       clock,
     );
@@ -229,5 +238,39 @@ describe("poll hub · one scheduler for the whole shell", () => {
     poll.refreshStale();
     await flush();
     expect(calls.get("health")).toBe(1);
+  });
+
+  test("a hidden window does not poll; wake() refreshes only what went stale", async () => {
+    const { loaders, calls } = countingLoaders();
+    const clock = fakeClock();
+    let hidden = false;
+    const poll = new Poller(loaders, CADENCE, clock, () => hidden);
+    poll.subscribe(["health", "providers"], () => {});
+
+    clock.advance(1_000);
+    await flush();
+    expect(calls.get("health")).toBe(1);
+    expect(calls.get("providers")).toBe(1);
+
+    // Minimised: ticks keep the scheduler alive but issue NO requests — a
+    // desktop app must not hammer its own daemon while nobody can see it.
+    hidden = true;
+    clock.advance(30_000);
+    await flush();
+    expect(calls.get("health")).toBe(1);
+    expect(calls.get("providers")).toBe(1);
+
+    // Back in view: everything older than its cadence is refreshed at once,
+    // instead of waiting for the next scheduler tick.
+    hidden = false;
+    poll.wake();
+    await flush();
+    expect(calls.get("health")).toBe(2);
+    expect(calls.get("providers")).toBe(2);
+
+    // …and a wake() right after a fresh fetch is not an excuse to fetch again.
+    poll.wake();
+    await flush();
+    expect(calls.get("health")).toBe(2);
   });
 });

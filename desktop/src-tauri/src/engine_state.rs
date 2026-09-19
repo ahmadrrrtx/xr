@@ -83,18 +83,12 @@ impl StderrTail {
         }
     }
 
-    /// The newest `n` lines, oldest first.
+    /// The newest `n` lines, oldest first. This and `push` are the whole
+    /// surface: the shell only ever appends and reads the tail, and the lib is
+    /// built with `-D warnings`, so anything else here is dead code by definition.
     pub fn last(&self, n: usize) -> Vec<String> {
         let start = self.lines.len().saturating_sub(n);
         self.lines[start..].to_vec()
-    }
-
-    pub fn len(&self) -> usize {
-        self.lines.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.lines.is_empty()
     }
 }
 
@@ -227,11 +221,11 @@ mod tests {
         for i in 1..=5 {
             tail.push(format!("line {i}"));
         }
-        assert_eq!(tail.len(), 3, "the buffer must not grow past its cap");
         assert_eq!(tail.last(3), vec!["line 3", "line 4", "line 5"]);
         assert_eq!(tail.last(2), vec!["line 4", "line 5"]);
+        // Asking for more than the cap proves the buffer never grew past it.
         assert_eq!(tail.last(99), vec!["line 3", "line 4", "line 5"]);
-        assert!(StderrTail::new(10).is_empty());
+        assert!(StderrTail::new(10).last(1).is_empty());
         // A cap of 0 is meaningless; it is clamped to 1 rather than thrashing.
         let mut one = StderrTail::new(0);
         one.push("a".into());
@@ -270,7 +264,7 @@ mod tests {
         for i in 0..(STDERR_TAIL_LINES + 5) {
             tail.push(format!("{i}"));
         }
-        assert_eq!(tail.len(), STDERR_TAIL_LINES);
+        assert_eq!(tail.last(usize::MAX).len(), STDERR_TAIL_LINES);
         assert_eq!(tail.last(1)[0], format!("{}", STDERR_TAIL_LINES + 4));
 
         let cache = ProbeCache::default();

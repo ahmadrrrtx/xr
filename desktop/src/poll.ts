@@ -82,7 +82,10 @@ export const CADENCES: Record<PollKey, number> = {
   providers: 30_000, // provider/model health changes on the scale of minutes
 };
 
-const LOADERS: { [K in PollKey]: () => Promise<PollPayloads[K]> } = {
+/** One loader per key, each returning that key's engine payload type. */
+export type PollLoaders = { [K in PollKey]: () => Promise<PollPayloads[K]> };
+
+const LOADERS: PollLoaders = {
   health: () => api.health(),
   providers: () => api.providers(),
   pending: () => api.controlPending(),
@@ -112,6 +115,13 @@ export interface Timers {
   now(): number;
 }
 
+/**
+ * Whether the window is currently hidden. Injected (like the clock) so the
+ * "hidden windows do not poll" rule is testable without a DOM, and so the hub
+ * itself never touches `document` — the wiring at the bottom of this file does.
+ */
+export type Visibility = () => boolean;
+
 const REAL_TIMERS: Timers = {
   setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms),
   clearTimeout: (h) => globalThis.clearTimeout(h as ReturnType<typeof setTimeout>),
@@ -130,9 +140,10 @@ export class Poller {
   public fetches = 0;
 
   constructor(
-    private readonly loaders: { [K in PollKey]: () => Promise<PollPayloads[K]> } = LOADERS,
+    private readonly loaders: PollLoaders = LOADERS,
     private readonly cadences: Record<PollKey, number> = CADENCES,
     private readonly timers: Timers = REAL_TIMERS,
+    private readonly hidden: Visibility = isHidden,
   ) {}
 
   /** Subscribe to keys. The callback fires only for results the hub fetched. */
@@ -198,7 +209,7 @@ export class Poller {
       this.handle = null;
       // A hidden window has nothing to render; skip the work entirely and
       // re-check when it comes back (see wake()).
-      if (!isHidden()) this.refreshStale();
+      if (!this.hidden()) this.refreshStale();
       if (this.subs.size > 0) this.handle = this.timers.setTimeout(tick, TICK_MS);
     };
     this.handle = this.timers.setTimeout(tick, TICK_MS);
