@@ -71,14 +71,14 @@ test("providers add --yes: unattended add writes the same config shape as intera
   // zod defaults applied at save: capabilities must be a complete record
   // (this is the same record the interactive path produces).
   expect(ours!.capabilities).toMatchObject({ chat: true, streaming: false, toolUse: false });
-});
+}, T);
 
 test("providers add --yes with missing flags: exit 2 (usage), no prompt, no hang", async () => {
   const r = await runCli(["providers", "add", "--id", ID, "--yes"], { timeoutMs: 30_000 });
   expectNoTimedOut(r);
   expectExit(r, 2);
   expect(r.stderr + r.stdout).toContain("--base-url");
-});
+}, T);
 
 test("providers add --yes rejects invalid base URLs (validation never weakened)", async () => {
   const r = await runCli([
@@ -95,7 +95,7 @@ test("providers add --yes rejects invalid base URLs (validation never weakened)"
   expectNoTimedOut(r);
   expectExit(r, 2);
   expect(r.stderr + r.stdout).toContain("--base-url");
-});
+}, T);
 
 test("providers list shows the custom provider in a FRESH process", async () => {
   // Seed config via the real add path, then list in a new process.

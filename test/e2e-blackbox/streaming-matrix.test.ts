@@ -46,6 +46,14 @@ import {
   assertStubClosed,
 } from "./helpers.ts";
 
+/**
+ * Per-test budget for tests that spawn the REAL CLI. A cold boot on a loaded
+ * hosted runner can exceed Bun's 5 s default by itself; when that default
+ * fires first, Bun kills the child and the assertion sees `code: null`
+ * (SIGKILL) — a phantom failure. The helpers keep the real ceilings.
+ */
+const T = 60_000;
+
 const PROVIDER_ID = "matrix-stub";
 const FAST_TIMEOUT = 90_000;
 
@@ -203,7 +211,7 @@ function runCaptureBlock(streaming: boolean, label: string): void {
         // declaration — a provider declaring streaming:false is never sent
         // stream:true, and one declaring streaming:true is streamed.
         expect(o.streamFields[0]).toBe(streaming);
-      });
+      }, T);
     }
   });
 }
@@ -221,7 +229,7 @@ describe("scenario matrix determinism: every scenario serves (self-test)", () =>
       await assertStubClosed(stub, "determinism check");
     }
     expect(Array.from(new Set(STUB_SCENARIOS)).length).toBe(STUB_SCENARIOS.length);
-  });
+  }, T);
 });
 
 // ── 2. Kill proofs: RED on HEAD until Phase 1 ──────────────────────────────
@@ -237,14 +245,14 @@ describe("F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1)", () => {
     expect(o.result.stdout).toContain("Hello from stub");
     expect(o.result.code).toBe(0);
     expect(o.sessionAudit).toContain("session.done");
-  });
+  }, T);
 
   test("empty content over a stream request can never produce exit 0 with zero model content", async () => {
     const o = await runScenario("empty-body", true);
     expect(o.result.code).not.toBe(0);
     expect(o.sessionAudit).not.toContain("session.done");
     expect(o.result.stdout).not.toContain("(no response)");
-  });
+  }, T);
 
   test("a provider declaring capabilities.streaming:false never receives stream:true", async () => {
     const o = await runScenario("sse-ok", false);
@@ -254,7 +262,7 @@ describe("F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1)", () => {
     for (const f of o.streamFields) {
       expect(f).toBe(false);
     }
-  });
+  }, T);
 
   test("a non-SSE body answered to a streaming:false provider is a content-consumed success (never a fake one)", async () => {
     // With streaming honored (F-03), a streaming:false provider is asked with a
@@ -264,7 +272,7 @@ describe("F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1)", () => {
     expect(o.result.stdout).not.toContain("(no response)");
     expect(o.result.stdout).toContain("Hello from stub");
     expect(o.sessionAudit).toContain("session.done");
-  });
+  }, T);
 
   // NO_COLOR honesty: with --no-color (env NO_COLOR=1, forced by the harness)
   // the run path must emit ZERO ANSI escape codes. On HEAD the agent status
@@ -276,5 +284,5 @@ describe("F-02/F-03 + no-color kill proofs (RED on HEAD until Phase 1)", () => {
     const o = await runScenario("sse-ok", true);
     expect(o.result.stdout).not.toMatch(/\x1b\[/);
     expect(o.result.stderr).not.toMatch(/\x1b\[/);
-  });
+  }, T);
 });

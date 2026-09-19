@@ -24,6 +24,18 @@ import {
   freshHome,
 } from "./helpers.ts";
 
+/**
+ * Per-test budget. Both tests spawn the REAL CLI: a cold boot on a loaded
+ * hosted runner (kernel + audit auto-keying + provider resolution) can take
+ * longer than Bun's 5 s default all by itself, and this file waits for the
+ * request to reach the stub and then for a graceful exit. Without an explicit
+ * budget the runner's timeout fired first and KILLED the child ("killed 1
+ * dangling process") — so the assertion saw `code: null` (SIGKILL) and the
+ * lane reported a signal-handling bug that does not exist. Same policy as
+ * run-lifecycle.test.ts; the real ceilings stay in the helper calls.
+ */
+const T = 60_000;
+
 let stub: StubOpenAIHandle;
 
 beforeAll(async () => {
@@ -66,7 +78,7 @@ describe("xr run against a hanging provider", () => {
     } finally {
       removeHome(home);
     }
-  });
+  }, T);
 
   test("a second SIGINT force-exits (POSIX 130) instead of hanging forever", async () => {
     const home = freshHome();
@@ -87,5 +99,5 @@ describe("xr run against a hanging provider", () => {
     } finally {
       removeHome(home);
     }
-  });
+  }, T);
 });

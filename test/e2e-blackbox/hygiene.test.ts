@@ -22,13 +22,21 @@ import {
   freshHome,
 } from "./helpers.ts";
 
+/**
+ * Per-test budget for tests that spawn the REAL CLI. A cold boot on a loaded
+ * hosted runner can exceed Bun's 5 s default by itself; when that default
+ * fires first, Bun kills the child and the assertion sees `code: null`
+ * (SIGKILL) — a phantom failure. The helpers keep the real ceilings.
+ */
+const T = 60_000;
+
 describe("harness hygiene (M-07)", () => {
   test("stub close releases its port immediately (zero leaked listeners)", async () => {
     const stub = await startStubOpenAI({ scenario: "sse-ok" });
     expect(await isPortFree(stub.port)).toBe(false);
     await assertStubClosed(stub);
     expect(await isPortFree(stub.port)).toBe(true);
-  });
+  }, T);
 
   test("stub close with a HANGING in-flight socket does not leak either", async () => {
     const stub = await startStubOpenAI({ scenario: "hanging" });
@@ -43,7 +51,7 @@ describe("harness hygiene (M-07)", () => {
     await new Promise((r) => setTimeout(r, 100));
     await assertStubClosed(stub);
     expect(await isPortFree(stub.port)).toBe(true);
-  });
+  }, T);
 
   test("a terminated CLI child leaves no tracked process behind", async () => {
     const before = liveChildCount();
@@ -53,7 +61,7 @@ describe("harness hygiene (M-07)", () => {
     expect(r.code).toBe(0);
     expect(liveChildCount()).toBe(before);
     removeHome(spawned.home);
-  });
+  }, T);
 
   test("SIGKILLed children are reaped by the registry (defensive cleanup)", async () => {
     const spawned = spawnCli(["serve", "--help"], { timeoutMs: 30_000 });
@@ -64,5 +72,5 @@ describe("harness hygiene (M-07)", () => {
     expect(r.signal).toBe("SIGKILL");
     expect(liveChildCount()).toBe(0);
     removeHome(spawned.home);
-  });
+  }, T);
 });
