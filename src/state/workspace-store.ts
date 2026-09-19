@@ -2467,15 +2467,10 @@ export class WorkspaceStore {
       shared.refs -= 1;
       if (shared.refs <= 0) {
         WorkspaceStore.shared.delete(this.sharedKey);
-        // The gate owns the statements and therefore the close; a close that
-        // leaves the file open (zombie) is reported, never swallowed.
+        // The gate owns the statements and the close; a zombie close is reported, never swallowed.
         const failure = this.gate.closeConnection();
         WorkspaceStore.lastCloseError = failure;
-        if (failure) {
-          process.emitWarning(`WorkspaceStore.close(${this.sharedKey}) did not release the file: ${failure}`, {
-            code: "XR_STORE_ZOMBIE_CLOSE",
-          });
-        }
+        if (failure) process.emitWarning(`WorkspaceStore.close(${this.sharedKey}) did not release the file: ${failure}`, { code: "XR_STORE_ZOMBIE_CLOSE" });
       }
     }
     if (WorkspaceStore._lastOpened === this) {
@@ -2485,6 +2480,11 @@ export class WorkspaceStore {
 
   /** Last strict-close failure message (zombie connection), or null. */
   static lastCloseError: string | null = null;
+
+  /** Harness seam (see store-hygiene.ts): the live connection registry. Not for product paths. */
+  static sharedRegistry(): Map<string, SharedConnection> {
+    return WorkspaceStore.shared;
+  }
 
   /** Number of open read-write connections (per-file, per process). */
   static connectionCount(): number {

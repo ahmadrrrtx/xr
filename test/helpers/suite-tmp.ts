@@ -78,7 +78,30 @@ if (KEEP) {
       // the next run's start-up sweep reclaims it.
     }
   };
-  afterAll(cleanup); // honored when the harness runs preload-registered hooks
+  /**
+   * Store hygiene report (Phase 2): a WorkspaceStore connection still open
+   * when the run ends is a test that never closed its store. POSIX hides it;
+   * on Windows it is EBUSY for every delete that follows. Close them (so the
+   * root above is removable) and SAY how many there were — the number is the
+   * backlog, not a pass/fail, until the sweep brings it to zero.
+   */
+  const reportOpenStores = async (): Promise<void> => {
+    try {
+      const { closeAllStores } = await import("../../src/state/store-hygiene.ts");
+      const { open, closed, failures } = closeAllStores();
+      if (open === 0) return;
+      console.warn(
+        `[suite-tmp] ${open} WorkspaceStore connection(s) were still open at exit (tests that never close their store); ` +
+          `closed ${closed}${failures.length ? `, ${failures.length} did not release their file: ${failures.slice(0, 3).join("; ")}` : ""}`,
+      );
+    } catch {
+      /* the store module may not be loadable in exotic harness contexts */
+    }
+  };
+  afterAll(async () => {
+    await reportOpenStores();
+    cleanup();
+  }); // preload afterAll fires once, at the end of the run (measured on bun 1.3.14)
   process.on("exit", cleanup); // fires on plain `bun run` paths, not under `bun test`
   process.on("SIGINT", () => {
     cleanup();
