@@ -64,7 +64,7 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Transcript");
   const dagRef = useRef<HTMLDivElement>(null);
-  const nodeRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  const nodeRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
 
   useEffect(() => {
     const poll = () => {
@@ -145,6 +145,21 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
     return () => window.removeEventListener("resize", redraw);
   }, [redraw]);
 
+  /* Phase 1 · the run inspector is a pane (not a full surface), so it may
+     overlay content — but it must never be a room with no door. Esc closes it,
+     same as every other dismissible layer in the product. */
+  useEffect(() => {
+    if (!openId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation(); // keep the global handler from also firing
+        onOpen(null);
+      }
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
+  }, [openId, onOpen]);
+
   return (
     <div className="runs2">
       <div className="section-h"><h2>Team runs</h2><span className="faint" style={{ fontSize: 12 }}>multi-agent workflows — engine-owned state, live</span></div>
@@ -200,14 +215,18 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
                         const part = partFor(t.taskId);
                         const dur = t.startedAt ? (t.endedAt ?? Date.now()) - t.startedAt : null;
                         return (
-                          <div
+                          /* D-03 · real control (was <div role="button">): the
+                             task graph is the primary navigation surface on this
+                             screen, so its nodes must be focusable buttons with
+                             platform Space/Enter activation, not divs that
+                             imitate one. */
+                          <button
                             key={t.taskId}
                             ref={(el) => { nodeRefs.current.set(t.taskId, el); }}
+                            type="button"
                             className={`node ring-${ringFor(t.status)}${selTask === t.taskId ? " sel" : ""}`}
-                            role="button"
-                            tabIndex={0}
+                            aria-pressed={selTask === t.taskId}
                             onClick={() => setSelTask(t.taskId)}
-                            onKeyDown={(e) => { if (e.key === "Enter") setSelTask(t.taskId); }}
                           >
                             <div className="node-h">
                               <i className="ring" aria-hidden="true" />
@@ -222,7 +241,7 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
                               </div>
                             )}
                             {(t.errors?.length ?? 0) > 0 && <div className="mono" style={{ color: "var(--xr-red)", fontSize: 10.5 }}>{t.errors!.length} error{t.errors!.length === 1 ? "" : "s"}</div>}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -308,19 +327,43 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
       <div className="section-h" style={{ marginTop: 18 }}><h2>Runs</h2><span className="faint" style={{ fontSize: 12 }}>history as product data — full anatomy per run</span></div>
       {sessions.length === 0 && <div className="empty">No runs yet. Tasks you start in Work appear here with full anatomy.</div>}
       {sessions.map((s) => (
-        <div key={s.id} className="runrow" role="button" tabIndex={0} onClick={() => onOpen(s.id)} onKeyDown={(e) => e.key === "Enter" && onOpen(s.id)}>
-          <span className={`dot ${s.status === "failed" ? "red" : s.status === "running" ? "cyan" : "green"}`} />
-          <div>
-            <div className="title">{s.title || s.prompt?.slice(0, 80) || s.id}</div>
-            <div className="sub mono">{s.id} · {s.workspace ?? s.cwd ?? "default"}</div>
-          </div>
+        /* Phase 1 · D-03. This was a <div role="button" tabIndex={0}>: it looked
+           clickable (cursor:pointer) but was not a control — no Space
+           activation, no button semantics, no form association, and the audit
+           measured ZERO real buttons/links on this screen. It is now a real
+           <button>, so Enter/Space/focus/AT all come from the platform. */
+        <button
+          key={s.id}
+          type="button"
+          className="runrow"
+          aria-expanded={openId === s.id}
+          onClick={() => onOpen(s.id)}
+        >
+          {/* Status is a colour + a word: colour alone never carries meaning. */}
+          <span className={`dot ${s.status === "failed" ? "red" : s.status === "running" ? "cyan" : "green"}`} aria-hidden="true" />
+          <span className="runrow-main">
+            {/* Truncation moved to CSS (was `slice(0, 80)`), so the full prompt
+                stays in the document for search, copy and assistive tech. */}
+            <span className="title runrow-title" title={s.title || s.prompt || s.id}>
+              {s.title || s.prompt || s.id}
+            </span>
+            <span className="sub mono">{s.id} · {s.workspace ?? s.cwd ?? "default"}</span>
+          </span>
           <span className="sub mono">{s.mode ?? "agent"}</span>
-          <span className="sub mono">{typeof s.costUsd === "number" ? `$${s.costUsd.toFixed(4)}` : "—"}</span>
-        </div>
+          <span className="sub mono" title="reported by the engine — never estimated in the shell">
+            {typeof s.costUsd === "number" ? `$${s.costUsd.toFixed(4)}` : "cost unknown"}
+          </span>
+          <span className="xr-sr-only">{s.status ?? "status unknown"}</span>
+        </button>
       ))}
 
       {openId && (
-        <aside className="drawer" aria-label="Run inspector">
+        <aside
+          className="drawer"
+          role="dialog"
+          aria-modal="false"
+          aria-label={`Run inspector — ${openId}`}
+        >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <h3>{String(detail?.title ?? (detail?.prompt as string)?.slice(0, 60) ?? openId)}</h3>
             <button className="pill" style={{ marginLeft: "auto" }} onClick={() => onOpen(null)}>Close ⎋</button>
