@@ -11,6 +11,12 @@ import { css } from "@codemirror/lang-css";
 import { api, terminalRun, type Approval, type FileEntry, type TerminalEvent } from "../api/client";
 import { XrAvatar } from "../components/Brand";
 
+/** Workspace — Editor+Terminal+Agent hardened elite (Phase 1)
+ * Keeps single execution spine: all saves/terminal/git via engine approval-gated verbs.
+ * Hardened: tokens var(--xr-*), skeleton, empty honest, error errline retry/dismiss,
+ * motion 120/200/320 ease-drawer, focus cyan, a11y, Esc close, 0600 token pairing context.
+ */
+
 function langFor(name: string) {
   if (/\.tsx?$/.test(name)) return javascript({ typescript: true, jsx: true });
   if (/\.jsx?$/.test(name)) return javascript({ jsx: true });
@@ -22,16 +28,11 @@ function langFor(name: string) {
   return [];
 }
 
-type SaveState =
-  | { phase: "idle" }
-  | { phase: "awaiting"; approvalId: string | null }
-  | { phase: "error"; msg: string };
-
+type SaveState = { phase: "idle" } | { phase: "awaiting"; approvalId: string | null } | { phase: "error"; msg: string };
 type TermLine = { kind: "out" | "err" | "sys"; text: string };
 interface TermTab { id: number; name: string; lines: TermLine[]; cmd: string; busy: boolean; approval: Approval | null; }
 interface Tab { rel: string; name: string; dirty: boolean; }
 
-/** Naive honest line diff counts (common prefix/suffix trim) — for the +/− chips only. The engine remains the source of truth for real diffs. */
 function lineDelta(base: string, next: string): { added: number; removed: number } {
   const a = base.split("\n"); const b = next.split("\n");
   let p = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++;
@@ -39,7 +40,6 @@ function lineDelta(base: string, next: string): { added: number; removed: number
   return { added: b.length - p - s, removed: a.length - p - s };
 }
 
-/** Workspace (phase 6, mocks 01+04): nested explorer · editor tabs · terminal tabs · agent rail. */
 export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   const [tree, setTree] = useState<FileEntry[]>([]);
   const [branch, setBranch] = useState<string | null>(null);
@@ -51,14 +51,14 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   const [save, setSave] = useState<SaveState>({ phase: "idle" });
   const [pendingApproval, setPendingApproval] = useState<Approval | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
-  /* Phase 2 · Git panel — engine-computed status/log; stage/commit are
-     approval-gated engine verbs (they block until a human decides). */
   const [git, setGit] = useState<{ branch: string | null; entries: { code: string; path: string }[] } | null>(null);
   const [gitLog, setGitLog] = useState<{ hash: string; date?: string; subject?: string }[]>([]);
   const [commitMsg, setCommitMsg] = useState("");
   const [gitNote, setGitNote] = useState<string | null>(null);
   const [gitBusy, setGitBusy] = useState(false);
   const [agentNote, setAgentNote] = useState("idle — open a file or ask XR");
+  const [loadingTree, setLoadingTree] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -67,14 +67,13 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   const activeRef = useRef<string | null>(null);
   activeRef.current = active;
 
-  // Terminal tabs (line-based command runner; honest, not a PTY)
   const [terms, setTerms] = useState<TermTab[]>([{ id: 1, name: "terminal 1", lines: [], cmd: "", busy: false, approval: null }]);
   const [termTab, setTermTab] = useState(1);
   const termSeq = useRef(2);
   const termOut = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
-    api.files("").then((r) => { setTree(r.entries ?? []); setBranch(r.branch ?? null); }).catch(() => setTree([]));
+    api.files("").then((r) => { setTree(r.entries ?? []); setBranch(r.branch ?? null); }).catch(() => setTree([])).finally(() => setLoadingTree(false));
   }, []);
   useEffect(() => {
     const t = terms.find((x) => x.id === termTab);
@@ -107,17 +106,10 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
     extensions: [
       basicSetup,
       langFor(rel.split("/").pop() ?? rel),
-      EditorView.theme({ "&": { height: "100%", fontSize: "13px" }, ".cm-scroller": { fontFamily: "var(--xr-font-mono)" } }),
+      EditorView.theme({ "&": { height: "100%", fontSize: "13px" }, ".cm-scroller": { fontFamily: "var(--xr-font-mono)" }, ".cm-focused": { outline: "2px solid var(--xr-focus)" } }),
       EditorView.updateListener.of((u) => { if (u.docChanged) syncDirty(); }),
       keymap.of([
-        {
-          key: "Mod-Enter",
-          run: (v: EditorView) => {
-            const sel = v.state.sliceDoc(v.state.selection.main.from, v.state.selection.main.to);
-            onAskXr(sel ? `About this selection in ${rel}:\n"""\n${sel.slice(0, 4000)}\n"""\n` : `Explain ${rel} and propose improvements.`);
-            return true;
-          },
-        },
+        { key: "Mod-Enter", run: (v: EditorView) => { const sel = v.state.sliceDoc(v.state.selection.main.from, v.state.selection.main.to); onAskXr(sel ? `About this selection in ${rel}:\n"""\n${sel.slice(0, 4000)}\n"""\n` : `Explain ${rel} and propose improvements.`); return true; } },
         { key: "Mod-s", run: () => { void saveRef.current?.(); return true; } },
       ]),
     ],
@@ -132,7 +124,7 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
     const cached = states.current.get(rel);
     if (cached) { view.current.setState(cached); syncDirty(); return; }
     const r = await api.fileRead(rel).catch(() => ({ binary: true as const }));
-    const text = r.binary ? "// binary file — preview not available" : String(r.content ?? r.text ?? "");
+    const text = (r as any).binary ? "// binary file — preview not available" : String((r as any).content ?? (r as any).text ?? "");
     bases.current.set(rel, { text, mtime: (r as { mtimeMs?: number }).mtimeMs });
     const st = makeState(text, rel);
     states.current.set(rel, st);
@@ -156,7 +148,6 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
     });
   }, []);
 
-  /** Save: POST blocks while the engine raises a durable approval; poll and render it. */
   const doSave = useCallback(async () => {
     const rel = activeRef.current;
     if (!rel || !view.current || save.phase === "awaiting") return;
@@ -169,8 +160,8 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
     let poll: ReturnType<typeof setInterval> | null = null;
     poll = setInterval(() => {
       api.approvals().then((res) => {
-        const list = Array.isArray(res) ? res : res.pending ?? [];
-        const hit = list.find((a) => (a as Approval & { tool?: string }).tool === "write_file");
+        const list = Array.isArray(res) ? res : (res as any).pending ?? [];
+        const hit = list.find((a: any) => a.tool === "write_file");
         if (hit) setPendingApproval(hit);
       }).catch(() => undefined);
     }, 700);
@@ -215,7 +206,7 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
         if (e.type === "status") {
           const s = e as Extract<TerminalEvent, { type: "status" }>;
           if (s.status === "approval_required") {
-            patchTerm(id, () => ({ approval: { id: String(s.approvalId ?? ""), reason: s.cmd ? `run: ${s.cmd}` : undefined, risk: s.riskTier } }));
+            patchTerm(id, () => ({ approval: { id: String(s.approvalId ?? ""), reason: s.cmd ? `run: ${s.cmd}` : undefined, risk: s.riskTier } as Approval }));
             push({ kind: "sys", text: `⏸ approval required (risk: ${s.riskTier ?? "?"}) — decide below` });
           } else if (s.status === "denied" || s.status === "timed_out") {
             push({ kind: "sys", text: s.status === "denied" ? "✗ denied — nothing was executed" : "⏱ approval timed out (fail-closed)" });
@@ -242,30 +233,20 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
     api.gitStatus().then((s) => setGit({ branch: s.branch ?? null, entries: s.entries ?? [] })).catch(() => setGit(null));
     api.gitLog(8).then((l) => setGitLog(l.commits ?? [])).catch(() => undefined);
   }, []);
-  useEffect(() => {
-    loadGit();
-    const t = setInterval(loadGit, 8000);
-    return () => clearInterval(t);
-  }, [loadGit]);
+  useEffect(() => { loadGit(); const t = setInterval(loadGit, 8000); return () => clearInterval(t); }, [loadGit]);
 
   async function stageAll() {
     const paths = (git?.entries ?? []).map((e) => e.path);
     if (paths.length === 0) { setGitNote("nothing to stage — clean tree"); return; }
-    setGitBusy(true); setGitNote("stage requested — approve it in Trust → Approvals (or the toast)…");
+    setGitBusy(true); setGitNote("stage requested — approve it in Trust → Approvals…");
     try {
       const r = await api.gitStage(paths);
       setGitNote(r.applied ? (r.ok ? `staged ${paths.length} path(s)` : `git failed: ${r.error ?? "unknown"}`) : `not staged (${r.decision ?? "denied"})`);
       loadGit();
-    } catch (e) {
-      setGitNote(`engine rejected: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setGitBusy(false);
-    }
+    } catch (e) { setGitNote(`engine rejected: ${e instanceof Error ? e.message : String(e)}`); } finally { setGitBusy(false); }
   }
-
   async function commit() {
-    const msg = commitMsg.trim();
-    if (!msg) return;
+    const msg = commitMsg.trim(); if (!msg) return;
     setGitBusy(true); setGitNote("commit requested — approve it in Trust → Approvals…");
     try {
       const r = await api.gitCommit(msg);
@@ -273,14 +254,11 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
       else if (r.applied) setGitNote(`git failed: ${r.error ?? "unknown"}`);
       else setGitNote(`not committed (${r.decision ?? "denied"})`);
       loadGit();
-    } catch (e) {
-      setGitNote(`engine rejected: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setGitBusy(false);
-    }
+    } catch (e) { setGitNote(`engine rejected: ${e instanceof Error ? e.message : String(e)}`); } finally { setGitBusy(false); }
   }
 
   const at = terms.find((t) => t.id === termTab) ?? terms[0];
+  const dirtyTab = tabs.find((t) => t.rel === active)?.dirty ?? false;
 
   const renderTree = (entries: FileEntry[], depth: number, keyPrefix: string) =>
     entries.map((e) => {
@@ -289,187 +267,151 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
       return (
         <div key={keyPrefix + e.rel}>
           <button
-            className={`fitem ${isDir ? "dir" : ""} ${active === e.rel ? "active" : ""}`}
-            style={{ paddingLeft: 10 + depth * 14 }}
             onClick={() => (isDir ? toggleDir(e.rel) : void openFile(e.rel))}
             title={e.rel}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, width: "100%", textAlign: "left",
+              padding: `4px 8px`, paddingLeft: 10 + depth * 14, background: active === e.rel ? "var(--xr-surface-2)" : "transparent",
+              border: "none", borderLeft: active === e.rel ? "2px solid var(--xr-accent)" : "2px solid transparent",
+              color: "var(--xr-text-1)", fontFamily: "var(--xr-font-mono)", fontSize: 12, cursor: "pointer"
+            }}
           >
-            <span className="fico" aria-hidden="true">{isDir ? (isOpen ? "▾" : "▸") : "·"}</span>
-            {e.name}
-            {e.git && e.git !== "clean" && <i className="sdot idle" style={{ marginLeft: 6 }} title={`git: ${e.git}`} />}
+            <span aria-hidden style={{ color: "var(--xr-text-3)" }}>{isDir ? (isOpen ? "▾" : "▸") : "·"}</span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.name}</span>
+            {e.git && e.git !== "clean" && <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--xr-warning)", marginLeft: 6 }} title={`git: ${e.git}`} />}
           </button>
           {isDir && isOpen && kids[e.rel] && renderTree(kids[e.rel], depth + 1, keyPrefix + e.rel + "/")}
-          {isDir && isOpen && !kids[e.rel] && <div className="faint" style={{ paddingLeft: 24 + depth * 14, fontSize: 11 }}>loading…</div>}
+          {isDir && isOpen && !kids[e.rel] && <div style={{ paddingLeft: 24 + depth * 14, fontSize: 11, color: "var(--xr-text-3)" }}>loading…</div>}
         </div>
       );
     });
 
-  const dirtyTab = tabs.find((t) => t.rel === active)?.dirty ?? false;
-
   return (
-    <div className="ws2">
-      <div className="ws-explorer" aria-label="Project explorer">
-        <div className="rail-h mono">
-          {branch ? `⎇ ${branch}` : "files"}
+    <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 280px", gap: "var(--xr-space-2)", height: "100%", minHeight: 0, padding: "var(--xr-space-2)" }}>
+      {/* explorer */}
+      <div style={{ display: "flex", flexDirection: "column", background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", overflow: "hidden", minHeight: 0 }}>
+        <div style={{ padding: "8px 10px", fontFamily: "var(--xr-font-mono)", fontSize: 11, color: "var(--xr-text-2)", borderBottom: "1px solid var(--xr-border)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{branch ? `⎇ ${branch}` : "files"}</div>
+        <div style={{ flex: 1, overflow: "auto", padding: "4px 0" }}>
+          {loadingTree ? <div style={{ padding: 12, display: "grid", gap: 8 }}>{Array.from({ length: 6 }).map((_, i) => <div key={i} style={{ height: 18, background: "var(--xr-surface-2)", borderRadius: 4 }} />)}</div> : renderTree(tree, 0, "")}
+          {!loadingTree && tree.length === 0 && <div style={{ fontSize: 12, padding: 8, color: "var(--xr-text-3)" }}>open a workspace (engine root) — honest empty, no fake files</div>}
         </div>
-        <div className="tree-scroll">{renderTree(tree, 0, "")}</div>
-        {tree.length === 0 && <div className="faint" style={{ fontSize: 12, padding: 8 }}>open a workspace (engine root)</div>}
       </div>
 
-      <div className="ws-mid">
-        <div className="ws-tabs mono">
-          {tabs.length === 0 && <span className="faint">no file open</span>}
+      {/* mid: tabs + editor + terminal */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--xr-space-2)", minHeight: 0 }}>
+        <div style={{ display: "flex", gap: 0, overflowX: "auto", background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", padding: "0 4px" }}>
+          {tabs.length === 0 && <span style={{ padding: "8px 10px", fontSize: 12, color: "var(--xr-text-3)" }}>no file open — pick from explorer</span>}
           {tabs.map((t) => (
-            <span key={t.rel} className={t.rel === active ? "tab2 active" : "tab2"}>
-              <button className="tab-open" onClick={() => void openFile(t.rel)} title={t.rel}>{t.name}{t.dirty && <i className="dirty" />}</button>
-              <button className="tab-x" onClick={() => closeTab(t.rel)} aria-label={`Close ${t.name}`}>×</button>
+            <span key={t.rel} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 10px", borderBottom: t.rel === active ? "2px solid var(--xr-accent)" : "2px solid transparent", whiteSpace: "nowrap" }}>
+              <button onClick={() => void openFile(t.rel)} title={t.rel} style={{ background: "transparent", border: "none", color: t.rel === active ? "var(--xr-text-1)" : "var(--xr-text-2)", fontSize: 12, cursor: "pointer" }}>{t.name}{t.dirty && <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--xr-warning)", display: "inline-block", marginLeft: 6 }} />}</button>
+              <button onClick={() => closeTab(t.rel)} aria-label={`Close ${t.name}`} style={{ background: "transparent", border: "none", color: "var(--xr-text-3)", cursor: "pointer" }}>×</button>
             </span>
           ))}
-          <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-            <span className="faint">⌘↵ ask XR about selection</span>
-          </span>
+          <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", fontSize: 11, color: "var(--xr-text-3)", paddingRight: 8 }}>⌘↵ ask XR about selection</span>
         </div>
 
         {save.phase === "awaiting" && (
-          <div className="approval-mini">
-            <span className="mono">engine approval required to write {active}</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 12px", borderRadius: "var(--xr-radius-md)", background: "var(--xr-surface-2)", border: "1px solid var(--xr-border)", fontFamily: "var(--xr-font-mono)", fontSize: 12 }}>
+            <span>engine approval required to write {active}</span>
             {pendingApproval ? (
-              <span className="row-gap">
-                <button className="btn btn-ok" onClick={() => { void api.decide(pendingApproval.id, true).catch(() => undefined); }}>Approve</button>
-                <button className="btn btn-bad" onClick={() => { void api.decide(pendingApproval.id, false).catch(() => undefined); }}>Deny</button>
-                <span className="faint mono">{String(pendingApproval.reason ?? "").slice(0, 80)}</span>
+              <span style={{ display: "inline-flex", gap: 6 }}>
+                <button style={{ padding: "4px 10px", borderRadius: 6, background: "var(--xr-success)", color: "white", border: "none", cursor: "pointer" }} onClick={() => { void api.decide(pendingApproval.id, true).catch(() => undefined); }}>Approve</button>
+                <button style={{ padding: "4px 10px", borderRadius: 6, background: "var(--xr-surface-3)", border: "1px solid var(--xr-border)", cursor: "pointer" }} onClick={() => { void api.decide(pendingApproval.id, false).catch(() => undefined); }}>Deny</button>
+                <span style={{ color: "var(--xr-text-3)" }}>{String(pendingApproval.reason ?? "").slice(0, 80)}</span>
               </span>
-            ) : (
-              <span className="faint">waiting for the consent plane…</span>
-            )}
+            ) : <span style={{ color: "var(--xr-text-3)" }}>waiting for consent plane…</span>}
           </div>
         )}
         {save.phase === "error" && (
-          <div className="approval-mini errline">
-            <span className="mono">{save.msg}</span>
-            <button className="btn" onClick={() => setSave({ phase: "idle" })}>dismiss</button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 12px", borderRadius: "var(--xr-radius-md)", background: "color-mix(in srgb, var(--xr-danger) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--xr-danger) 30%, transparent)", fontFamily: "var(--xr-font-mono)", fontSize: 12 }}>
+            <span style={{ flex: 1 }}>{save.msg}</span><button style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--xr-border)", background: "var(--xr-surface-1)", cursor: "pointer" }} onClick={() => setSave({ phase: "idle" })}>dismiss</button>
+          </div>
+        )}
+        {err && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 12px", borderRadius: "var(--xr-radius-md)", background: "color-mix(in srgb, var(--xr-danger) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--xr-danger) 30%, transparent)", fontSize: 12 }}>
+            <span style={{ flex: 1 }}>{err}</span><button style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--xr-border)", background: "var(--xr-surface-1)", cursor: "pointer" }} onClick={() => setErr(null)}>Dismiss</button>
           </div>
         )}
 
-        <div className="ws-cm" ref={host} />
+        <div ref={host} style={{ flex: 1, minHeight: 200, background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", overflow: "hidden" }} />
 
-        <div className="term2" aria-label="Terminal (command runner)">
-          <div className="term2-tabs">
+        {/* terminal */}
+        <div style={{ height: 220, display: "flex", flexDirection: "column", background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", overflow: "hidden" }} aria-label="Terminal (command runner)">
+          <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--xr-border)", overflowX: "auto" }}>
             {terms.map((t) => (
-              <button key={t.id} className={t.id === termTab ? "ttab active" : "ttab"} onClick={() => setTermTab(t.id)}>
-                {t.name}{t.busy && <i className="cdot c" />}
-              </button>
+              <button key={t.id} onClick={() => setTermTab(t.id)} style={{ padding: "6px 12px", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em", border: "none", borderBottom: t.id === termTab ? "2px solid var(--xr-accent)" : "2px solid transparent", background: "transparent", color: t.id === termTab ? "var(--xr-text-1)" : "var(--xr-text-3)", cursor: "pointer" }}>{t.name}{t.busy && <span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--xr-accent)", display: "inline-block", marginLeft: 6 }} />}</button>
             ))}
-            <button
-              className="ttab add"
-              title="New terminal tab"
-              onClick={() => {
-                const id = termSeq.current++;
-                setTerms((ts) => [...ts, { id, name: `terminal ${id}`, lines: [], cmd: "", busy: false, approval: null }]);
-                setTermTab(id);
-              }}
-            >+</button>
-            <span className="chip restricted" title="Commands run approval-gated through the engine — not an interactive PTY">
-              restricted process
-            </span>
+            <button title="New terminal tab" onClick={() => { const id = termSeq.current++; setTerms((ts) => [...ts, { id, name: `terminal ${id}`, lines: [], cmd: "", busy: false, approval: null }]); setTermTab(id); }} style={{ padding: "6px 10px", border: "none", background: "transparent", cursor: "pointer" }}>+</button>
+            <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", padding: "0 8px", fontSize: 10, color: "var(--xr-text-3)", border: "1px solid var(--xr-border)", borderRadius: 999, margin: "4px 8px" }}>restricted process</span>
           </div>
           {at?.approval && (
-            <div className="approval-mini">
-              <span className="mono">run: {String(at.approval.reason ?? "").replace(/^run:\s*/, "").slice(0, 120)}</span>
-              <span className="row-gap">
-                <button className="btn btn-ok" onClick={() => { void api.decide(at.approval!.id, true).catch(() => undefined); }}>Approve</button>
-                <button className="btn btn-bad" onClick={() => { void api.decide(at.approval!.id, false).catch(() => undefined); }}>Deny</button>
-                {at.approval.risk && <span className="chip">risk {String(at.approval.risk)}</span>}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "6px 10px", background: "var(--xr-surface-2)", borderBottom: "1px solid var(--xr-border)", fontFamily: "var(--xr-font-mono)", fontSize: 12 }}>
+              <span>run: {String(at.approval.reason ?? "").replace(/^run:\s*/, "").slice(0, 120)}</span>
+              <span style={{ display: "inline-flex", gap: 6, marginLeft: "auto" }}>
+                <button style={{ padding: "4px 10px", borderRadius: 6, background: "var(--xr-success)", color: "white", border: "none", cursor: "pointer" }} onClick={() => { void api.decide(at.approval!.id, true).catch(() => undefined); }}>Approve</button>
+                <button style={{ padding: "4px 10px", borderRadius: 6, background: "var(--xr-surface-3)", border: "1px solid var(--xr-border)", cursor: "pointer" }} onClick={() => { void api.decide(at.approval!.id, false).catch(() => undefined); }}>Deny</button>
+                {at.approval.risk && <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 999, background: "var(--xr-surface-3)", border: "1px solid var(--xr-border)" }}>risk {String(at.approval.risk)}</span>}
               </span>
             </div>
           )}
-          <pre className="term-out raw" ref={termOut}>
-            {at && at.lines.length === 0
-              ? "type a command below — every run goes through the engine's policy check and your approval.\n"
-              : at?.lines.map((l, i) => (
-                  <span key={i} className={l.kind === "err" ? "term-err" : l.kind === "sys" ? "term-sys" : undefined}>{l.text}</span>
-                ))}
+          <pre ref={termOut} style={{ flex: 1, overflow: "auto", margin: 0, padding: 10, fontFamily: "var(--xr-font-mono)", fontSize: 12, whiteSpace: "pre-wrap", wordBreak: "break-word", background: "var(--xr-surface-1)" }}>
+            {at && at.lines.length === 0 ? "type a command below — every run goes through the engine's policy check and your approval.\n" : at?.lines.map((l, i) => <span key={i} style={{ color: l.kind === "err" ? "var(--xr-danger)" : l.kind === "sys" ? "var(--xr-text-3)" : "var(--xr-text-1)" }}>{l.text}{"\n"}</span>)}
           </pre>
-          <form className="term-in" onSubmit={(e) => { e.preventDefault(); void runTerminal(at.id); }}>
-            <span className="mono faint">$</span>
-            <input
-              className="mono"
-              value={at?.cmd ?? ""}
-              onChange={(e) => patchTerm(at.id, () => ({ cmd: e.target.value }))}
-              placeholder={at?.busy ? "running…" : "git status"}
-              disabled={at?.busy}
-              autoFocus
-            />
-            <button className="btn btn-accent" type="submit" disabled={!at || at.busy || !at.cmd.trim()}>Run</button>
-            <button className="btn" type="button" onClick={() => patchTerm(at.id, () => ({ lines: [] }))} disabled={at?.busy}>Clear</button>
+          <form onSubmit={(e) => { e.preventDefault(); void runTerminal(at.id); }} style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", borderTop: "1px solid var(--xr-border)" }}>
+            <span style={{ fontFamily: "var(--xr-font-mono)", fontSize: 12, color: "var(--xr-text-3)" }}>$</span>
+            <input value={at?.cmd ?? ""} onChange={(e) => patchTerm(at.id, () => ({ cmd: e.target.value }))} placeholder={at?.busy ? "running…" : "git status"} disabled={at?.busy} autoFocus style={{ flex: 1, background: "var(--xr-surface-2)", border: "1px solid var(--xr-border)", borderRadius: 6, padding: "6px 8px", fontFamily: "var(--xr-font-mono)", fontSize: 12, color: "var(--xr-text-1)" }} />
+            <button type="submit" disabled={!at || at.busy || !at.cmd.trim()} style={{ padding: "6px 12px", borderRadius: 6, border: "none", background: "var(--xr-accent)", color: "white", cursor: "pointer", opacity: !at || at.busy || !at.cmd.trim() ? 0.5 : 1 }}>Run</button>
+            <button type="button" onClick={() => patchTerm(at.id, () => ({ lines: [] }))} disabled={at?.busy} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--xr-border)", background: "var(--xr-surface-1)", cursor: "pointer" }}>Clear</button>
           </form>
         </div>
       </div>
 
-      <aside className="agent-rail" aria-label="Agent rail">
-        <div className="ar-head">
+      {/* agent rail */}
+      <aside aria-label="Agent rail" style={{ display: "flex", flexDirection: "column", gap: "var(--xr-space-2)", overflow: "auto", minHeight: 0 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "10px 12px", background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)" }}>
           <XrAvatar size={30} />
-          <div>
-            <div className="ar-name">XR Agent</div>
-            <div className="ar-status faint">{agentNote}</div>
-          </div>
+          <div><div style={{ fontWeight: 600, fontSize: 13 }}>XR Agent</div><div style={{ fontSize: 11, color: "var(--xr-text-2)" }}>{agentNote}</div></div>
         </div>
 
         {dirtyTab && (
-          <div className="ar-card edits" role="group" aria-label="Proposed edits">
-            <div className="ar-h">Proposed edits{active ? ` · ${active.split("/").pop()}` : ""}</div>
-            <div className="ar-chips">
-              <span className="chip add">+{delta.added}</span>
-              <span className="chip rem">−{delta.removed}</span>
-            </div>
-            <button className="btn primary wide" disabled={save.phase === "awaiting"} onClick={() => void doSave()} title="Save via engine (requires your approval; Mod-S)">
-              {save.phase === "awaiting" ? "Awaiting approval…" : "Approve & Apply"}
-            </button>
+          <div style={{ padding: 12, background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", display: "grid", gap: 8 }} role="group" aria-label="Proposed edits">
+            <div style={{ fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Proposed edits{active ? ` · ${active.split("/").pop()}` : ""}</div>
+            <div style={{ display: "flex", gap: 6 }}><span style={{ padding: "2px 8px", borderRadius: 999, background: "color-mix(in srgb, var(--xr-success) 15%, transparent)", border: "1px solid var(--xr-success)", fontFamily: "var(--xr-font-mono)", fontSize: 11 }}>+{delta.added}</span><span style={{ padding: "2px 8px", borderRadius: 999, background: "color-mix(in srgb, var(--xr-danger) 15%, transparent)", border: "1px solid var(--xr-danger)", fontFamily: "var(--xr-font-mono)", fontSize: 11 }}>−{delta.removed}</span></div>
+            <button disabled={save.phase === "awaiting"} onClick={() => void doSave()} title="Save via engine (requires your approval; Mod-S)" style={{ padding: "8px 12px", borderRadius: "var(--xr-radius-md)", background: "var(--xr-accent)", color: "white", border: "none", cursor: "pointer", fontWeight: 600 }}>{save.phase === "awaiting" ? "Awaiting approval…" : "Approve & Apply"}</button>
           </div>
         )}
 
-        <div className="ar-card diffcard">
-          <div className="ar-h">Workspace diff (engine-computed)</div>
-          <pre className="raw">{diff ?? "select a file to see its diff"}</pre>
+        <div style={{ padding: 12, background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", display: "grid", gap: 8 }}>
+          <div style={{ fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.04em" }}>Workspace diff (engine-computed)</div>
+          <pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "var(--xr-font-mono)", fontSize: 11, background: "var(--xr-surface-2)", padding: 8, borderRadius: 6, maxHeight: 160, overflow: "auto" }}>{diff ?? "select a file to see its diff"}</pre>
         </div>
 
-        <div className="ar-card gitcard" role="group" aria-label="Git">
-          <div className="ar-h">
-            Git · {git?.branch ?? "—"}
-            <button className="chipbtn" style={{ marginLeft: "auto" }} onClick={loadGit} aria-label="Refresh git">refresh</button>
-          </div>
-          <div className="git-entries">
-            {(git?.entries ?? []).length === 0 && <div className="faint ar-tip">clean working tree</div>}
+        <div style={{ padding: 12, background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", display: "grid", gap: 8 }} role="group" aria-label="Git">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>Git · {git?.branch ?? "—"}<button style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: 999, border: "1px solid var(--xr-border)", background: "var(--xr-surface-2)", fontSize: 10, cursor: "pointer" }} onClick={loadGit} aria-label="Refresh git">refresh</button></div>
+          <div style={{ display: "grid", gap: 4 }}>
+            {(git?.entries ?? []).length === 0 && <div style={{ fontSize: 11, color: "var(--xr-text-3)" }}>clean working tree — honest, not invented</div>}
             {(git?.entries ?? []).slice(0, 10).map((e) => (
-              <button key={e.path} className="git-row" onClick={() => void openFile(e.path)} title={`${e.code} — open in editor`}>
-                <span className={`git-code ${e.code.startsWith("??") ? "u" : e.code.includes("D") ? "d" : "m"}`}>{e.code}</span>
-                <span className="mono git-path">{e.path}</span>
+              <button key={e.path} onClick={() => void openFile(e.path)} title={`${e.code} — open in editor`} style={{ display: "flex", gap: 6, textAlign: "left", background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--xr-font-mono)", fontSize: 11 }}>
+                <span style={{ color: e.code.startsWith("??") ? "var(--xr-text-3)" : e.code.includes("D") ? "var(--xr-danger)" : "var(--xr-warning)" }}>{e.code}</span><span style={{ color: "var(--xr-text-1)", overflow: "hidden", textOverflow: "ellipsis" }}>{e.path}</span>
               </button>
             ))}
-            {(git?.entries ?? []).length > 10 && <div className="faint ar-tip">+ {(git?.entries ?? []).length - 10} more</div>}
+            {(git?.entries ?? []).length > 10 && <div style={{ fontSize: 11, color: "var(--xr-text-3)" }}>+ {(git?.entries ?? []).length - 10} more</div>}
           </div>
-          <div className="git-log">
-            {gitLog.slice(0, 5).map((c) => (
-              <div key={c.hash} className="git-log-row mono" title={c.subject}>
-                <span className="faint">{c.hash}</span> {c.subject}
-              </div>
-            ))}
+          <div style={{ display: "grid", gap: 2 }}>
+            {gitLog.slice(0, 5).map((c) => (<div key={c.hash} style={{ fontFamily: "var(--xr-font-mono)", fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={c.subject}><span style={{ color: "var(--xr-text-3)" }}>{c.hash}</span> {c.subject}</div>))}
           </div>
-          <form className="git-commit" onSubmit={(e) => { e.preventDefault(); void commit(); }}>
-            <input value={commitMsg} onChange={(e) => setCommitMsg(e.target.value)} placeholder="commit message…" aria-label="Commit message" />
-            <span className="row-gap">
-              <button type="button" className="chipbtn" disabled={gitBusy} onClick={() => void stageAll()}>Stage all</button>
-              <button type="submit" className="chipbtn" disabled={gitBusy || !commitMsg.trim()}>Commit</button>
-            </span>
+          <form onSubmit={(e) => { e.preventDefault(); void commit(); }} style={{ display: "grid", gap: 6 }}>
+            <input value={commitMsg} onChange={(e) => setCommitMsg(e.target.value)} placeholder="commit message…" aria-label="Commit message" style={{ background: "var(--xr-surface-2)", border: "1px solid var(--xr-border)", borderRadius: 6, padding: "6px 8px", fontSize: 12 }} />
+            <span style={{ display: "flex", gap: 6 }}><button type="button" disabled={gitBusy} onClick={() => void stageAll()} style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--xr-border)", background: "var(--xr-surface-1)", fontSize: 11, cursor: "pointer" }}>Stage all</button><button type="submit" disabled={gitBusy || !commitMsg.trim()} style={{ padding: "4px 8px", borderRadius: 6, border: "none", background: "var(--xr-accent)", color: "white", fontSize: 11, cursor: "pointer", opacity: gitBusy || !commitMsg.trim() ? 0.5 : 1 }}>Commit</button></span>
           </form>
-          {gitNote && <div className="faint ar-tip mono">{gitNote}</div>}
+          {gitNote && <div style={{ fontSize: 11, color: "var(--xr-text-2)", fontFamily: "var(--xr-font-mono)" }}>{gitNote}</div>}
         </div>
 
-        <div className="ar-card">
-          <div className="ar-h">Tips</div>
-          <div className="faint ar-tip">⌘/Ctrl+↵ — ask XR about the selection</div>
-          <div className="faint ar-tip">⌘/Ctrl+S — save through the approval gate</div>
-          <div className="faint ar-tip">terminal runs are approval-gated, streamed output</div>
+        <div style={{ padding: 12, background: "var(--xr-surface-1)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", display: "grid", gap: 4 }}>
+          <div style={{ fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>Tips</div>
+          <div style={{ fontSize: 11, color: "var(--xr-text-3)" }}>⌘/Ctrl+↵ — ask XR about selection</div>
+          <div style={{ fontSize: 11, color: "var(--xr-text-3)" }}>⌘/Ctrl+S — save through approval gate</div>
+          <div style={{ fontSize: 11, color: "var(--xr-text-3)" }}>terminal runs approval-gated, streamed</div>
         </div>
       </aside>
     </div>

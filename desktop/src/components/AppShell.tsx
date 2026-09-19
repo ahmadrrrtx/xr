@@ -1,15 +1,12 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { XrLogo, XrAvatar } from "./Brand";
 import { api, asList, type ProviderInfo, type SessionSummary, type SkillInfo } from "../api/client";
-import { notify } from "../notify";
-import { StatusDot, providerLabel, type DotState } from "./StatusDot";
-import { notificationsEnabled } from "../prefs";
-import { engineLinkReason, engineLinkSnapshot } from "../tauri-bridge";
-import { poll } from "../poll";
+import { notify, notificationsEnabled } from "../notify";
+import { applyTheme, applyDensity, type Theme, type Density } from "../styles/tokens";
 
 export type Area = "home" | "projects" | "work" | "workspace" | "research" | "memory" | "models" | "control" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
 
-/* Phase 6 · mock-accurate icon rail. Left: work areas. Bottom: settings + presence. */
+/* Phase 1 hardened · mock-accurate icon rail with design system v1 tokens.json source */
 const NAV: { id: Area; label: string; icon: ReactNode }[] = [
   { id: "home", label: "Home", icon: <path d="M4 10.5 12 4l8 6.5V20h-5v-6h-6v6H4z" /> },
   { id: "projects", label: "Projects", icon: <path d="M3 6h6l2 2h10v4H3zM3 14h18v5H3z" /> },
@@ -30,40 +27,48 @@ const BOTTOM: { id: Area; label: string; icon: ReactNode }[] = [
   { id: "settings", label: "Settings", icon: <path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM4.5 12l-1.8 1 1 1.8-.5 2 2 .5 1 1.8 1.8-1 2 .5.5-2 1.8-1-1-1.8.5-2-2-.5-1-1.8-1.8 1-2-.5-.5 2-1.8 1zM21.3 13l-1.8-1 .5-2-2-.5-1-1.8" /> },
 ];
 
-/**
- * Rail destination button.
- *
- * Phase 1 · this used to be declared INSIDE AppShell's body. A component
- * defined during render is a NEW type on every render, so React unmounted and
- * remounted all 17 rail buttons on each status poll (every 4 s). The visible
- * effects: keyboard focus was silently destroyed while a user was on the rail,
- * and any click that straddled a re-render landed on a detached node — which
- * is how the renderer lane caught it ("element was detached from the DOM,
- * retrying", indefinitely). Hoisting it is the fix: stable type, stable DOM.
- */
-const NavBtn = memo(function NavBtn({
-  n,
-  active,
-  onArea,
-}: {
-  n: { id: Area; label: string; icon: ReactNode };
-  active: boolean;
-  onArea: (a: Area) => void;
-}) {
-  return (
-    <button
-      className={active ? "rbtn on" : "rbtn"}
-      title={n.label}
-      aria-label={n.label}
-      aria-current={active ? "page" : undefined}
-      onClick={() => onArea(n.id)}
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        {n.icon}
-      </svg>
-    </button>
-  );
-});
+function useWindowBounds() {
+  useEffect(() => {
+    // Phase 1 · window state persistence (size/position/monitor) where safe
+    const save = () => {
+      try {
+        const bounds = { w: window.innerWidth, h: window.innerHeight, x: window.screenX, y: window.screenY };
+        localStorage.setItem("xr-window-bounds", JSON.stringify(bounds));
+      } catch { /* ignore */ }
+    };
+    window.addEventListener("resize", save);
+    window.addEventListener("beforeunload", save);
+    return () => {
+      window.removeEventListener("resize", save);
+      window.removeEventListener("beforeunload", save);
+    };
+  }, []);
+}
+
+function useThemeSync() {
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("xr-theme") as Theme) || "dark");
+  const [density, setDensity] = useState<Density>(() => (localStorage.getItem("xr-density") as Density) || "comfortable");
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    applyDensity(density);
+  }, [density]);
+
+  useEffect(() => {
+    // OS theme sync when theme is system
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      if ((localStorage.getItem("xr-theme") as Theme) === "system") applyTheme("system");
+    };
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  return { theme, setTheme, density, setDensity };
+}
 
 export function AppShell({
   area,
@@ -73,9 +78,7 @@ export function AppShell({
   onOpenRun,
   voiceState,
   onVoiceOpen,
-  onCheatSheet,
-  onRefresh,
-  onOpenPalette,
+  onPalette,
   children,
 }: {
   area: Area;
@@ -85,75 +88,49 @@ export function AppShell({
   onOpenRun: (id: string) => void;
   voiceState?: string;
   onVoiceOpen?: () => void;
-  /** Phase 1 · ⌘K opens the palette; `?` opens the generated cheat-sheet. */
-  onCheatSheet?: () => void;
-  /**
-   * Phase 1 · the palette opener. ⌘K used to call preventDefault() and then do
-   * nothing — the shortcut was swallowed and the palette was unreachable from
-   * the UI entirely (the renderer lane's Ctrl+K test failed against a running
-   * app). This prop is required so a missing wiring fails the build, not the
-   * user.
-   */
-  onOpenPalette: () => void;
-  /** Re-read engine truth (used by the palette "Refresh engine data" command). */
-  onRefresh?: () => void;
+  onPalette?: () => void;
   children: ReactNode;
 }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [primaryId, setPrimaryId] = useState<string | null>(null);
   const [up, setUp] = useState(true);
-  const [linkReason, setLinkReason] = useState<string | null>(null);
-  /* W-2 · the Rust shell reports when the sidecar runs WITHOUT job-object
-     containment (it then dies only on a clean shutdown, not on a crash). A
-     fact worth a visible warning, not a log line nobody reads. */
-  const [containment, setContainment] = useState<string | null>(null);
-  const [pending, setPending] = useState(0);
-
-  /* Phase 5 · opt-in OS notifications: approval due + run done.
-   * Phase 1 · this is now a SUBSCRIBER of the shared poll hub. It previously
-   * owned a 10 s interval that fetched `pending` a second time, so two
-   * components wrote the same state from two different observations — the
-   * statusbar could disagree with the notification that had just fired. */
-  useEffect(() => {
-    let prevPending = -1;
-    const seenRuns = new Map<string, string>();
-    const off = poll.subscribe(["pending", "agents"], (o) => {
-      if (o.key === "pending") {
-        if (!o.ok) return;
-        const n = ((o.value as { pending?: unknown[] }).pending ?? []).length;
-        // The count is always recorded (the statusbar needs engine truth even
-        // when notifications are off); only the OS notification is gated.
-        if (prevPending >= 0 && n > prevPending && notificationsEnabled()) {
-          void notify("XR — approval due", `${n} request(s) waiting in the Trust Center`);
-        }
-        prevPending = n;
-        setPending(n);
-        return;
-      }
-      if (!o.ok) return;
-      const workflows = (o.value as { workflows?: unknown[] }).workflows ?? [];
-      for (const w of workflows) {
-        const id = String((w as { id?: unknown }).id ?? "");
-        const st = String((w as { state?: unknown; status?: unknown }).state ?? (w as { status?: unknown }).status ?? "");
-        const prev = seenRuns.get(id);
-        if (prev && prev !== st && /completed|failed|done/.test(st) && notificationsEnabled()) {
-          void notify(`XR — run ${st}`, String((w as { goal?: unknown; name?: unknown }).goal ?? (w as { name?: unknown }).name ?? id).slice(0, 80));
-        }
-        if (id) seenRuns.set(id, st);
-      }
-    });
-    return off;
-  }, []);
-
   const [voiceCap, setVoiceCap] = useState<boolean>(false);
-  useEffect(() => {
-    api.voiceStatus().then((v) => setVoiceCap(Boolean((v?.stt as { available?: boolean } | undefined)?.available || (v?.tts as { available?: boolean } | undefined)?.available))).catch(() => setVoiceCap(false));
-  }, []);
   const [q, setQ] = useState("");
   const [pop, setPop] = useState<{ skills: SkillInfo[]; runs: SessionSummary[] } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const { theme, setTheme, density, setDensity } = useThemeSync();
+  useWindowBounds();
 
-  // Debounced universal search: skills via the engine index, runs via live sessions.
+  /* Phase 5 · opt-in OS notifications: approval due + run done, engine-polled. Display-only. */
+  useEffect(() => {
+    let prevPending = -1;
+    const seenRuns = new Map<string, string>();
+    const t = setInterval(() => {
+      if (!notificationsEnabled()) return;
+      api.controlPending().then((r) => {
+        const n = (r.pending ?? []).length;
+        if (prevPending >= 0 && n > prevPending) void notify("XR — approval due", `${n} request(s) waiting in the Trust Center`);
+        prevPending = n;
+      }).catch(() => undefined);
+      api.agents().then((a) => {
+        for (const w of a.workflows ?? []) {
+          const id = String((w as { id?: unknown }).id ?? "");
+          const st = String((w as { state?: unknown; status?: unknown }).state ?? (w as { status?: unknown }).status ?? "");
+          const prev = seenRuns.get(id);
+          if (prev && prev !== st && /completed|failed|done/.test(st)) {
+            void notify(`XR — run ${st}`, String((w as { goal?: unknown; name?: unknown }).goal ?? (w as { name?: unknown }).name ?? id).slice(0, 80));
+          }
+          if (id) seenRuns.set(id, st);
+        }
+      }).catch(() => undefined);
+    }, 10_000);
+    return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    api.voiceStatus().then((v) => setVoiceCap(Boolean((v?.stt as { available?: boolean } | undefined)?.available || (v?.tts as { available?: boolean } | undefined)?.available))).catch(() => setVoiceCap(false));
+  }, []);
+
+  // Debounced universal search: skills via engine index, runs via live sessions.
   useEffect(() => {
     const term = q.trim();
     if (term.length < 2) { setPop(null); return; }
@@ -171,70 +148,61 @@ export function AppShell({
     return () => { live = false; clearTimeout(t); };
   }, [q]);
 
-  /* ⌘K palette · `?` cheat-sheet · Esc closes the search popover. */
+  // Keyboard: ⌘K / Ctrl+K palette, Escape close pop, ? cheat sheet
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); onPalette?.(); }
+      if (e.key === "?" && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
-        onOpenPalette();
-        return;
-      }
-      // `?` is Shift+/ — never steal it while the user is typing.
-      if (!typing && (e.key === "?" || (e.key === "/" && e.shiftKey))) {
-        e.preventDefault();
-        onCheatSheet?.();
+        // Dispatch custom event for cheat sheet
+        window.dispatchEvent(new CustomEvent("xr:shortcuts"));
       }
       if (e.key === "Escape") setPop(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCheatSheet, onOpenPalette]);
+  }, [onPalette]);
 
-  /* Engine truth: the link dot, the provider the ENGINE is routing to (not
-   * the first array entry — audit D-10), and the WHY when the link is down.
-   * Phase 1 · one subscription to the shared hub replaces this component's own
-   * 5 s interval. */
   useEffect(() => {
-    const off = poll.subscribe(["health", "providers"], (o) => {
-      if (o.key === "health") {
-        if (o.ok) {
-          setUp(true);
-          setLinkReason(null);
-          void engineLinkSnapshot().then((l) => setContainment(l?.containment ?? null));
-        } else {
-          setUp(false);
-          // Surface WHY, instead of a bare red dot (audit D-10).
-          void engineLinkReason().then(setLinkReason);
-        }
-        return;
-      }
-      if (!o.ok) return;
-      const p = o.value as Record<string, unknown>;
-      setProviders(asList<ProviderInfo>(p, "providers", "items"));
-      const prim = p.primary;
-      setPrimaryId(typeof prim === "string" ? prim : null);
-    });
-    return off;
+    let live = true;
+    const poll = () => {
+      api.health().then(() => { if (live) setUp(true); }).catch(() => { if (live) setUp(false); });
+      api.providers().then((p) => { if (live) setProviders(asList<ProviderInfo>(p, "providers", "items")); }).catch(() => {});
+    };
+    poll();
+    const t = setInterval(poll, 5000);
+    return () => { live = false; clearInterval(t); };
   }, []);
 
-  /* The engine's primary provider, falling back to any LOCAL provider that is
-   * actually healthy, then nothing — never an arbitrary first entry. */
-  const primary =
-    (primaryId ? providers.find((p) => p.id === primaryId) : undefined) ??
-    providers.find((p) => p.kind === "local" && p.healthy === true);
-  const prov = providerLabel(primary as Parameters<typeof providerLabel>[0]);
-  const engineState: DotState = up ? (prov.state === "unknown" ? "ok" : prov.state) : "danger";
+  const active = providers.find((p) => p.available !== false);
+  const NavBtn = ({ n }: { n: { id: Area; label: string; icon: ReactNode } }) => (
+    <button
+      className={n.id === area ? "rbtn on" : "rbtn"}
+      title={n.label}
+      aria-label={n.label}
+      aria-current={n.id === area ? "page" : undefined}
+      onClick={() => onArea(n.id)}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        {n.icon}
+      </svg>
+    </button>
+  );
+
+  // Tauri window controls — display-only, invoke via __TAURI_INTERNALS__ if present
+  const tauriInternals = (window as unknown as { __TAURI_INTERNALS__?: { invoke?: (cmd: string, args?: unknown) => Promise<unknown> } }).__TAURI_INTERNALS__;
+  const tauriControls = tauriInternals;
 
   return (
-    <div className="shell">
-      <header className="titlebar">
-        <XrLogo height={22} radius={5} />
-        <span className="appname">XR Desktop</span>
-        <span className="tb-sep" />
-        <span className="crumb mono faint">{NAV.find((n) => n.id === area)?.label ?? (area === "settings" ? "Settings" : "")}</span>
-        <div className="gsearch-wrap">
+    <div className="shell" data-theme={theme} data-density={density}>
+      <header className="titlebar" data-tauri-drag-region={tauriControls ? true : undefined}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }} data-tauri-drag-region={tauriControls ? true : undefined}>
+          <XrLogo height={22} radius={5} />
+          <span className="appname">XR Desktop</span>
+          <span className="tb-sep" />
+          <span className="crumb mono faint">{NAV.find((n) => n.id === area)?.label ?? ""}</span>
+        </div>
+        <div className="gsearch-wrap" style={{ flex: 1, maxWidth: 480, margin: "0 12px" }}>
           <form
             className="gsearch"
             role="search"
@@ -247,7 +215,7 @@ export function AppShell({
               ref={searchRef}
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search skills, runs… · ⌘K palette"
+              placeholder="Search skills, runs… · ⌘K palette · ? shortcuts"
               aria-label="Global search"
             />
           </form>
@@ -268,95 +236,86 @@ export function AppShell({
             </div>
           )}
         </div>
-        {/* The palette must be discoverable without knowing the shortcut —
-            a command surface that only exists behind ⌘K is a hidden feature. */}
-        <button
-          className="tb-icon tb-pal"
-          onClick={onOpenPalette}
-          title="Command palette (Ctrl/⌘ K)"
-          aria-label="Command palette"
-          aria-keyshortcuts="Control+K Meta+K"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-            <path d="M4 7h16M4 12h10M4 17h7" />
-          </svg>
-        </button>
-        <button
-          className="tb-icon"
-          onClick={onCheatSheet}
-          title="Keyboard shortcuts (?)"
-          aria-label="Keyboard shortcuts"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-            <rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
-          </svg>
-        </button>
-        <span className="mono faint tb-right" title={linkReason ?? `engine ${engineVersion ?? "—"}`}>
-          engine {engineVersion ?? "—"}
-        </span>
+        <span className="mono faint tb-right">engine {engineVersion ?? "—"}</span>
+        <div className="window-controls" style={{ display: "flex", gap: 4, marginLeft: 8 }}>
+          <select
+            aria-label="Theme"
+            value={theme}
+            onChange={(e) => setTheme(e.target.value as Theme)}
+            className="mono"
+            style={{ background: "var(--xr-surface-2)", border: "1px solid var(--xr-border-strong)", borderRadius: 6, color: "var(--xr-text-muted)", padding: "2px 6px", fontSize: 11 }}
+          >
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="system">System</option>
+            <option value="high-contrast">High Contrast</option>
+          </select>
+          <select
+            aria-label="Density"
+            value={density}
+            onChange={(e) => setDensity(e.target.value as Density)}
+            className="mono"
+            style={{ background: "var(--xr-surface-2)", border: "1px solid var(--xr-border-strong)", borderRadius: 6, color: "var(--xr-text-muted)", padding: "2px 6px", fontSize: 11 }}
+          >
+            <option value="compact">Compact</option>
+            <option value="comfortable">Comfortable</option>
+            <option value="spacious">Spacious</option>
+          </select>
+        </div>
+        {tauriControls && (
+          <div className="window-controls" style={{ display: "flex", gap: 2, marginLeft: 8 }}>
+            <button className="wc-btn" aria-label="Minimize" onClick={() =>  (tauriControls?.invoke as any)?.("plugin:window|minimize")}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14" /></svg>
+            </button>
+            <button className="wc-btn" aria-label="Maximize" onClick={() =>  (tauriControls?.invoke as any)?.("plugin:window|maximize")}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /></svg>
+            </button>
+            <button className="wc-btn close" aria-label="Close" onClick={() =>  (tauriControls?.invoke as any)?.("plugin:window|close")}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        )}
       </header>
       <nav className="rail" aria-label="Primary">
-        {NAV.map((n) => <NavBtn key={n.id} n={n} active={n.id === area} onArea={onArea} />)}
+        {NAV.map((n) => <NavBtn key={n.id} n={n} />)}
         <div className="spacer" />
-        {BOTTOM.map((n) => <NavBtn key={n.id} n={n} active={n.id === area} onArea={onArea} />)}
-        <span className="rail-presence" title="XR presence" aria-label="XR presence">
+        {BOTTOM.map((n) => <NavBtn key={n.id} n={n} />)}
+        <span className="rail-presence" title="XR presence — Waking up / Ready / Working / Approval / Success / Error / Offline" aria-label="XR presence">
           <XrAvatar size={26} />
+          <span className="presence-pulse" aria-hidden="true" style={{ marginTop: 6 }} />
         </span>
       </nav>
-      <main className="main">{children}</main>
+      <main className="main" id="main" tabIndex={-1}>
+        {children}
+      </main>
       <footer className="statusbar" aria-label="Status">
-        <span
-          className={up ? (engineState === "ok" ? "sb-item ok" : `sb-item ${engineState}`) : "sb-item bad"}
-          title={up ? "Engine connected" : linkReason ?? "Engine offline — start it with `xr serve`"}
-        >
-          Engine <StatusDot state={up ? "ok" : "danger"} /> {up ? "" : "offline"}
+        <span className={up ? "sb-item ok" : "sb-item bad"} title={up ? "Engine connected — honest, re-runnable, audited by engine" : "Engine offline — start xr serve or wait for packaged sidecar, interrupted work resumes from checkpoints"}>
+          Engine <i className="dot" aria-hidden="true" />
         </span>
-        {containment && (
-          <span className="sb-item warn sb-contain" title={containment} role="status">
-            <StatusDot state="warn" /> sidecar uncontained
-          </span>
-        )}
         <span className="sb-sep" aria-hidden="true" />
-        {/* Honest provider state (audit D-07): grey when unknown, amber when
-            configured-but-unreachable, red when the key is missing. */}
-        <span className={`sb-item sb-prov ${prov.state === "ok" ? "ok" : prov.state}`} title={prov.detail}>
+        <span className="sb-item sb-prov" title="Active provider (engine-reported, never computed in shell — SEC-07)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
             <rect x="5" y="5" width="14" height="14" rx="3" /><path d="M9.5 9.5h5v5h-5z" />
           </svg>
-          <StatusDot state={prov.state} />
-          {prov.text}
+          {active?.id ?? "no provider"}{active?.local ? " · local" : ""} · {theme} · {density}
         </span>
-        {prov.state !== "ok" && prov.state !== "unknown" && (
-          <>
-            <span className="sb-sep" aria-hidden="true" />
-            <span className="sb-prov-detail" title={prov.detail}>{prov.detail}</span>
-          </>
-        )}
         <span className="sb-spacer" />
-        {pending > 0 && (
-          <>
-            <button className="sb-item sb-approvals" onClick={() => onArea("trust")} title={`${pending} request(s) waiting for you`}>
-              <StatusDot state="warn" /> {pending} approval{pending === 1 ? "" : "s"}
-            </button>
-            <span className="sb-sep" aria-hidden="true" />
-          </>
-        )}
-        {/* D-03 · was <span role="button" tabIndex={0}> with hand-rolled key
-            handling. A button element gives the same interaction with correct
-            semantics, and the status text below stays readable to AT. */}
-        <button
-          type="button"
-          className={voiceState && voiceState !== "idle" ? "sb-item ok sb-btn" : "sb-item off sb-btn"}
-          title={voiceState && voiceState !== "idle" ? `Voice session ${voiceState} — open voice mode` : `Voice idle — open voice mode (offline on-device pipeline ${voiceCap ? "available" : "unavailable"})`}
+        <span
+          className={voiceState && voiceState !== "idle" ? "sb-item ok" : "sb-item off"}
+          title={voiceState && voiceState !== "idle" ? `Voice session ${voiceState} — click to open` : `Voice idle — click to open (offline on-device pipeline ${voiceCap ? "available" : "unavailable"})`}
           onClick={onVoiceOpen}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onVoiceOpen?.(); } }}
+          style={{ cursor: "pointer" }}
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 3v12M8 11a4 4 0 0 0 8 0M5 21h14" /></svg>
           <span className="sb-voice-cap">
             {voiceState && voiceState !== "idle" ? `VOICE ${voiceState.toUpperCase()}` : "OFFLINE VOICE"}
           </span>
-        </button>
+        </span>
         <span className="sb-sep" aria-hidden="true" />
-        <span className="sb-item mono">{engineVersion ?? "v—"}</span>
+        <span className="sb-item mono" title="Engine version — audited by engine truth">{engineVersion ?? "v—"}</span>
       </footer>
     </div>
   );

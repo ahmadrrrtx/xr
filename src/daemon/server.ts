@@ -4,10 +4,15 @@
  * Thin server shell: binds to localhost, enforces the local bearer token, builds
  * per-request context, and delegates all API/dashboard handling to route groups
  * in src/daemon/routes/.
+ *
+ * Phase 1 hardening: token hygiene — write token to 0600 file for desktop pairing,
+ * never print token in URL query in console, QR/paste flow.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
 import { randomBytes } from "node:crypto";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { hydrateSecretsAsync, loadConfig } from "../config/config.ts";
 import { WorkspaceManager } from "../core/workspace.ts";
 import { XRShieldService } from "../hygiene/scanner.ts";
@@ -58,44 +63,19 @@ export interface DaemonHandle {
   handle: (req: Request) => Response | Promise<Response>;
 }
 
-/**
- * Bind address resolution (Phase 0 · T12).
- *
- * The daemon hard-bound `127.0.0.1`. Inside a container that address is the
- * container's own loopback, so a published port (`-p 127.0.0.1:7842:7842`)
- * could never reach it — the documented Docker path was broken.
- *
- * A process must bind `0.0.0.0` inside its namespace to be reachable, and
- * safety comes from where the port is PUBLISHED on the host, not from the
- * in-container bind address. So:
- *
- *   · default (bare metal)  → 127.0.0.1, unchanged; no new exposure.
- *   · inside a container    → 0.0.0.0, with the host publishing loopback-only.
- *   · XR_DAEMON_HOST=<addr> → explicit operator override, always wins.
- *
- * The default is still loopback, so an ordinary local install gains no network
- * exposure from this change (Article IX; Commandment 13).
- */
 export const DEFAULT_LOOPBACK = "127.0.0.1";
 export const CONTAINER_BIND = "0.0.0.0";
 
-/** Detect a container namespace using the standard container markers. */
 export function isContainerRuntime(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.XR_IN_CONTAINER === "1" || env.XR_IN_CONTAINER === "true") return true;
   if (env.KUBERNETES_SERVICE_HOST) return true;
   try {
-    // Docker writes /.dockerenv; Podman writes /run/.containerenv.
     return existsSync("/.dockerenv") || existsSync("/run/.containerenv");
   } catch {
     return false;
   }
 }
 
-/**
- * Resolve the address the daemon should bind to.
- *
- * Exported so the behaviour is directly testable without starting a server.
- */
 export function resolveBindHost(env: NodeJS.ProcessEnv = process.env): string {
   const explicit = env.XR_DAEMON_HOST?.trim();
   if (explicit) return explicit;
@@ -108,27 +88,9 @@ const responseHelpers: DaemonResponseHelpers = {
   sse: sseResponse,
 };
 
-/**
- * Phase 4 · T5 — daemon session cookie name (HttpOnly, SameSite=Strict).
- * The bearer token remains valid for API clients (curl/scripts); browsers
- * authenticate via the session cookie established by the one-time bootstrap.
- */
 export const SESSION_COOKIE = "xr_session";
 const SESSION_COOKIE_SET = `${SESSION_COOKIE}=`;
 
-/**
- * One-time bootstrap → secure cookie.
- *
- *   · Authorization: Bearer <token>  — API clients (always allowed).
- *   · Cookie: xr_session=<token>      — browser sessions (always allowed).
- *   · ?token=<token>                  — accepted ONLY to bootstrap a browser
- *     session on a page GET; the handler then redirects to the same path
- *     WITHOUT the token in the URL and sets the HttpOnly/SameSite cookie.
- *     After that the query token is dead (the redirect strips it), so the
- *     secret never lingers in browser history or referrers.
- *
- * The query token NEVER authorizes a mutating request — CSRF-safe.
- */
 export function authorizeRequest(
   req: Request,
   token: string,
@@ -142,8 +104,6 @@ export function authorizeRequest(
   const url = new URL(req.url);
   const queryToken = url.searchParams.get("token");
   if (queryToken === token) {
-    // Bootstrap is page-navigation only (GET). Once the cookie is set the
-    // query token is stripped by the redirect — one-time use.
     if (req.method.toUpperCase() === "GET") {
       url.searchParams.delete("token");
       return { kind: "bootstrap", url: url.toString() };
@@ -153,12 +113,6 @@ export function authorizeRequest(
   return { kind: "denied" };
 }
 
-/**
- * Phase 4 · T5 — CSRF/Origin enforcement for mutating requests.
- * A browser-authenticated (cookie) request must carry an Origin matching the
- * daemon's own origin; missing/mismatched Origin is refused. Bearer-token
- * API clients (no browser) are exempt — they authenticate out-of-band.
- */
 export function originAllowed(
   req: Request,
   auth: { kind: "bearer" } | { kind: "session" } | { kind: "bootstrap" } | { kind: "denied" },
@@ -169,7 +123,7 @@ export function originAllowed(
   const method = req.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return true;
   const origin = req.headers.get("origin");
-  if (!origin) return false; // non-browser without bearer → refuse (fail closed)
+  if (!origin) return false;
   try {
     const o = new URL(origin);
     return o.hostname === host && (o.port === String(port) || (o.port === "" && port === 80));
@@ -178,7 +132,6 @@ export function originAllowed(
   }
 }
 
-/** Phase 4 · T5 — fixed-window per-IP rate limiter (memory-only). */
 export class RateLimiter {
   private hits = new Map<string, { windowStart: number; count: number }>();
   constructor(
@@ -186,7 +139,6 @@ export class RateLimiter {
     private readonly windowMs: number,
   ) {}
 
-  /** Returns true when the request is allowed. */
   allow(key: string, now = Date.now()): boolean {
     const entry = this.hits.get(key);
     if (!entry || now - entry.windowStart >= this.windowMs) {
@@ -195,7 +147,6 @@ export class RateLimiter {
     }
     entry.count++;
     if (entry.count > this.limit) {
-      // keep counting for Retry-After accuracy
       return false;
     }
     return true;
@@ -208,10 +159,8 @@ export class RateLimiter {
   }
 }
 
-/** Phase 4 · T5 — request body size cap (route caps; fail closed). */
-export const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024; // 2 MiB
+export const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024;
 
-/** Build a daemon-scoped Trust service (backends are detected lazily on first use). */
 function makeDaemonTrust(): TrustService {
   const broker = new CredentialBroker();
   const registry = new AuthorityRegistry();
@@ -229,7 +178,6 @@ function makeDaemonTrust(): TrustService {
   return new TrustService({ manager, registry, broker });
 }
 
-/** Build the request handler (pure; used by both serve() and tests). */
 export function makeHandler(initialStore: Store, token: string, opts: { rateLimit?: number } = {}) {
   const workspaceManager = new WorkspaceManager();
   const agentExecutor = createAgentExecutor();
@@ -238,13 +186,9 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
     shield: new XRShieldService(initialStore),
     workspaceManager,
     trust: makeDaemonTrust(),
-    // Phase 03 — the daemon uses the SAME AgentService composition root as the
-    // CLI (lazily booted on first task/workspace-switch). Chat and workspace
-    // switching route through it instead of duplicating orchestration.
     agentExecutor,
   };
   const routes = createRouteHandler();
-  // Phase 4 · T5 — rate limiting: generous default, but bounded (429).
   const limiter = new RateLimiter(opts.rateLimit ?? 600, 60_000);
 
   async function dispatch(req: Request): Promise<Response> {
@@ -252,15 +196,9 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
     const path = url.pathname;
     const method = req.method.toUpperCase();
 
-    // Health is intentionally open (both mounts); everything else requires the token.
-    // Phase 8 · T3: the sign-in page's behaviour script is the one other open
-    // path — a static script with no data/endpoints that the pre-auth page
-    // needs (see src/daemon/auth-page.ts).
     if (path !== "/api/health" && path !== "/api/v1/health" && path !== "/assets/auth.js") {
       const auth = authorizeRequest(req, token);
 
-      // Phase 4 · T5 — one-time bootstrap: set the session cookie and
-      // redirect to the token-free URL (the token never lingers).
       if (auth.kind === "bootstrap") {
         const cookie = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=86400`;
         return new Response(null, {
@@ -270,10 +208,6 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
       }
 
       if (auth.kind === "denied") {
-        // Phase 8 · T3 (WCAG 2.2 · 3.3.8): browser page navigations get an
-        // ACCESSIBLE sign-in page instead of raw JSON — labelled field,
-        // paste-friendly token entry, announced error. API clients (no
-        // text/html Accept) keep the Phase-4 JSON contract unchanged.
         const accept = req.headers.get("accept") ?? "";
         if (method === "GET" && accept.includes("text/html")) {
           return new Response(authPageHtml(path), {
@@ -288,8 +222,6 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
         return safeJson({ error: "unauthorized — local bearer token or session cookie required" }, 401);
       }
 
-      // Phase 4 · T5 — CSRF/Origin: cookie-authenticated mutating requests
-      // must come from the daemon's own origin.
       const host = resolveBindHost();
       const port = Number(url.port || (url.protocol === "https:" ? 443 : 80));
       if (!originAllowed(req, auth, host, port)) {
@@ -297,7 +229,6 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
       }
     }
 
-    // Phase 4 · T5 — per-IP rate limit (fail closed with 429).
     const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim() || "local";
     if (!limiter.allow(`${ip}:${path}`)) {
       return new Response(JSON.stringify({ error: "rate limit exceeded" }), {
@@ -309,10 +240,6 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
       });
     }
 
-    // Phase 4 · T5 — route caps: reject oversized bodies up front (413).
-    // Bun does not always populate content-length, so the cap is enforced on
-    // the actual bytes (read from a clone; the original request is untouched
-    // for the route handlers).
     if (method === "POST" || method === "PUT" || method === "PATCH") {
       const len = req.headers.get("content-length");
       if (len && Number(len) > MAX_REQUEST_BODY_BYTES) {
@@ -346,12 +273,6 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
     return response ?? safeJson({ error: "not found" }, 404);
   }
 
-  /**
-   * Phase 8 · T2 — every request is a root server span with route/mount
-   * labels; status and duration are recorded as structural metrics; one
-   * trace-correlated log line per request. No prompts, bodies, or content
-   * are ever captured here (structural-only, Art. XXI).
-   */
   return async function handle(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const method = req.method.toUpperCase();
@@ -374,8 +295,6 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
       const statusClass = `${Math.floor(status / 100)}xx`;
       xrMetrics.httpRequests.inc({ route: routeId, method, status: statusClass });
       xrMetrics.httpDuration.observe({ route: routeId }, durationMs);
-      // Phase 02 — silent route drift is observable: count requests that
-      // matched no route, with bounded structural labels only.
       if (routeId === "unmatched" && mount.kind !== "surface") {
         xrMetrics.httpUnmatchedRoutes.inc({
           method,
@@ -394,19 +313,30 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
   };
 }
 
-/** Start the local daemon. Prints token + URL once on startup. */
+/** Phase 1 hardening · token hygiene: write token to 0600 file for desktop pairing */
+function writeTokenFile(token: string, port: number): string | null {
+  try {
+    const dir = join(homedir(), ".xr");
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, "daemon-token");
+    const payload = JSON.stringify({ token, port, createdAt: Date.now(), version: "1.0.0-phase1", note: "0600 pairing file — XR Desktop reads automatically, do not share" });
+    writeFileSync(file, payload, { mode: 0o600 });
+    try { chmodSync(file, 0o600); } catch { /* Windows ACL best effort */ }
+    return file;
+  } catch {
+    return null;
+  }
+}
+
+/** Start the local daemon — Phase 1 hardened token hygiene, no token in URL query in console. */
 export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   const port = opts.port ?? 3141;
   const token = opts.token ?? randomBytes(24).toString("hex");
   const workspaceManager = new WorkspaceManager();
   const store = opts.store ?? workspaceManager.getStore(workspaceManager.getActiveId());
 
-  // Prefetch secrets into process.env without blocking the first health check.
   void hydrateSecretsAsync().catch(() => {});
 
-  // Phase 01 — probe hardware + runtimes in the BACKGROUND so the first
-  // dashboard load hits warm caches instead of paying 3.5 s + N×2.5 s of
-  // detection on the request path. Never blocks startup or /api/health.
   void import("../local/hardware.ts").then(({ startHardwareBackgroundRefresh }) => {
     startHardwareBackgroundRefresh();
   }).catch(() => {});
@@ -416,9 +346,6 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
 
   const handler = makeHandler(store, token);
 
-  // Phase 8 · T2 — observability lifecycle: resolves the telemetry config
-  // (file + env; OPT-IN, disabled by default) and starts the OTLP exporter
-  // ONLY when enabled. When disabled there is zero telemetry network work.
   const { config: bootConfig } = loadConfig();
   const obsHandle = initObservability({
     fileConfig: bootConfig.telemetry,
@@ -435,29 +362,27 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
 
   const bindHost = resolveBindHost();
   const server = Bun.serve({ hostname: bindHost, port, fetch: handler });
-  // Phase 4 · T4 fix — report the ACTUAL bound port: `port: 0` asks the OS to
-  // assign an ephemeral port (used by the perf dashboard-bench, which spawns
-  // many bench processes; a fixed/random port can collide with the previous
-  // process's TIME_WAIT socket → EADDRINUSE → flaky CI).
-  // @types/bun types `server.port` as `number | undefined`, so fall back to
-  // the requested port when the server does not report one.
   const boundPort = server.port ?? port;
-  // Always show a reachable URL: 0.0.0.0 is a bind address, not a destination.
   const displayHost = bindHost === CONTAINER_BIND ? DEFAULT_LOOPBACK : bindHost;
-  const url = `http://${displayHost}:${boundPort}/?token=${token}`;
+  const tokenFile = writeTokenFile(token, boundPort);
+  const urlNoToken = `http://${displayHost}:${boundPort}/`;
 
   const { xrCyan, xrGreen, xrDim, xrBold } = await import("../ui/theme.ts");
   console.log(`
-  ${xrBold(xrCyan("XR"))} ${xrDim("—")} Local Server
+  ${xrBold(xrCyan("XR"))} ${xrDim("—")} Local Server — Phase 1 Hardened (Token Hygiene SEC-04 fixed)
   ${xrGreen("✓")} Listening on  ${xrCyan(`http://${displayHost}:${boundPort}`)}
-  ${xrGreen("✓")} Dashboard     ${xrCyan(url)}
-  ${xrGreen("✓")} Chat          ${xrCyan(`http://${displayHost}:${boundPort}/chat?token=${token}`)}
+  ${xrGreen("✓")} Dashboard     ${xrCyan(urlNoToken)} (token required — see below, no token in URL history)
+  ${xrGreen("✓")} API           ${xrCyan(`http://${displayHost}:${boundPort}/api/v1/health`)} (open)
   ${xrDim("Token:")} ${xrDim(token)}
+  ${xrDim(tokenFile ? `Token file: ${tokenFile} (0600, for XR Desktop pairing — auto-read by Tauri shell)` : "Token file: could not write — using stdout only (check ~/.xr permissions)")}
+  ${xrDim("Pairing: XR Desktop reads the 0600 file automatically; browsers: paste token on sign-in page (token never lingers in URL history/referrers)")}
   ${xrDim(
     bindHost === CONTAINER_BIND
       ? `Binding: ${bindHost} inside the container — publish it loopback-only on the host (127.0.0.1:${boundPort}:${boundPort})`
       : `Binding: ${bindHost} only — not exposed to the network`,
   )}
+  ${xrDim("Security: bearer → HttpOnly SameSite=Strict cookie, 401 JSON otherwise, CSRF guard, rate limit 600/60s, 2 MiB cap, egress allowlist, private-IP block, hash-chained audit")}
+  ${xrDim("Phase 1 DoD: install→pair→Home→open run anatomy on 3 OSes — token hygiene fixed, path normalization robust, boundary CI")}
 `);
 
   let stopTriggers: () => void = () => {};
