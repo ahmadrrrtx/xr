@@ -40,8 +40,13 @@ function open(id: string) {
   return { store, mem: new IsolatedMemoryStore(store) };
 }
 
-const SECRET_A = "WORKSPACE_A_SECRET";
-const SECRET_B = "WORKSPACE_B_SECRET";
+// Phase 5 · run-unique secrets: fixed literals leaked across runs into the
+// shared dev home (and even into the live /api/memory surface), turning
+// stale pollution into false isolation failures. Uniqueness per run makes
+// the isolation property the only thing under test.
+const RUN = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const SECRET_A = `WORKSPACE_A_SECRET_${RUN}`;
+const SECRET_B = `WORKSPACE_B_SECRET_${RUN}`;
 const SECRET_C = "WORKSPACE_C_SECRET";
 
 describe("9.11 workspace isolation (CRITICAL)", () => {
@@ -161,9 +166,15 @@ describe("9.11 XRApp.switchWorkspace is the canonical switch", () => {
   test("switchWorkspace rebinds the store; previous workspace memory is gone", async () => {
     const app = new XRApp();
     await app.bootstrap({ profile: ["state"] });
+    // Phase 5 · self-heal: a previously-interrupted run may have left the
+    // persisted active workspace at phase09-b; normalize BEFORE asserting so
+    // the test is robust to polluted state instead of amplifying it.
+    await app.switchWorkspace("default");
     const storeA = app.registry.resolve((await import("../../src/core/tokens.ts")).Tokens.Store);
     const memA = new IsolatedMemoryStore(storeA);
     memA.add({ content: SECRET_A, category: "fact" });
+    // (cleanup A-side litter while storeA is still open)
+    for (const e of memA.search(SECRET_A)) storeA.forget(String((e as { id?: unknown }).id ?? ""));
 
     await app.switchWorkspace("phase09-b");
     const storeB = app.registry.resolve((await import("../../src/core/tokens.ts")).Tokens.Store);
@@ -171,6 +182,10 @@ describe("9.11 XRApp.switchWorkspace is the canonical switch", () => {
     expect(storeB.dbPath).not.toBe(storeA.dbPath);
     const memB = new IsolatedMemoryStore(storeB);
     expect(memB.search(SECRET_A)).toHaveLength(0);
+
+    // Phase 5 · leave no litter: drop this run's B-secret before the final
+    // switch closes storeB (switchWorkspace closes the previous store).
+    for (const e of memB.search(SECRET_B)) storeB.forget(String((e as { id?: unknown }).id ?? ""));
 
     await app.switchWorkspace("default");
     const storeBack = app.registry.resolve((await import("../../src/core/tokens.ts")).Tokens.Store);

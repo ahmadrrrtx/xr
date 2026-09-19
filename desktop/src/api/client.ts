@@ -410,6 +410,9 @@ export const api = {
     req<{ ok?: boolean; paused?: { paused: boolean; since: number | null; reason: string | null }; denied?: number }>("/control/pause", {
       method: "POST", body: JSON.stringify(body),
     }),
+  /** Phase 5 · signed audit bundle (hash-chained + sha256-signed, verifier included). */
+  auditExport: () =>
+    req<{ markdown?: string; sha256?: string; chain?: { valid?: boolean }; count?: number }>("/audit/export"),
   controlEvents: (limit = 80) =>
     req<{ events: Array<{ id?: number; event?: string; detail?: string; created_at?: number }> }>(`/control/events?limit=${limit}`),
   cost: () => req<Record<string, unknown>>("/cost"),

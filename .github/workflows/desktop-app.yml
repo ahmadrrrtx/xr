@@ -135,6 +135,9 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Phase 5 · signed updater artifacts. Empty secret ⇒ tauri build
+          # emits no .sig files ⇒ the manifest job publishes nothing (honest).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_KEY }}
         with:
           projectPath: desktop
           args: --verbose
@@ -153,3 +156,53 @@ jobs:
             desktop/src-tauri/target/release/bundle/dmg/*.dmg
             desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
             desktop/src-tauri/target/release/bundle/msi/*.msi
+      - name: Upload updater signature artifacts (present only when provisioned)
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr-updater-sigs-${{ matrix.runsOn }}
+          if-no-files-found: ignore
+          path: |
+            desktop/src-tauri/target/release/bundle/appimage/*.tar.gz
+            desktop/src-tauri/target/release/bundle/appimage/*.tar.gz.sig
+            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
+            desktop/src-tauri/target/release/bundle/msi/*.msi.zip
+            desktop/src-tauri/target/release/bundle/msi/*.msi.zip.sig
+
+  # ── Phase 5 · signed-updater manifest (guarded: needs the operator secret) ──
+  updater-manifest:
+    name: Assemble + publish latest.json (only when updater keys provisioned)
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    needs: [bundle]
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Download signed updater artifacts
+        id: dl
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: xr-updater-sigs-*
+          path: updater-artifacts
+          merge-multiple: true
+      - name: Assemble latest.json
+        run: |
+          bun run scripts/make-updater-manifest.ts \
+            --dir updater-artifacts --version "${GITHUB_REF_NAME#v}" --tag "$GITHUB_REF_NAME" \
+            --notes "Release $GITHUB_REF_NAME — see CHANGELOG.md" --out latest.json
+          test -f latest.json
+          if [ "$(python3 -c 'import json;print(len(json.load(open("latest.json"))["platforms"]))')" = "0" ]; then
+            echo "::warning::no signed updater artifacts — skipping publish (updater not provisioned)"
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+      - name: Publish latest.json to the release
+        if: env.SKIP != '1'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: latest.json

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, asList, type ProviderInfo, type ShieldStatus, type TriggersState } from "../api/client";
+import { notificationsEnabled, setNotificationsEnabled, requestNotificationPermission, notificationChannel } from "../notify";
+import { isTauri, nativeAutostartStatus, nativeSetAutostart, nativeCheckUpdate } from "../tauri-bridge";
 
 const TABS = ["General", "Models", "Local", "Automations", "Voice", "Privacy", "Advanced"] as const;
 type Tab = (typeof TABS)[number];
@@ -24,6 +26,15 @@ export function Settings({ onOnboard }: { onOnboard?: () => void }) {
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [voice, setVoice] = useState<Record<string, unknown> | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /* Phase 5 · native matrix opt-ins (honest about host capabilities). */
+  const [notifOn, setNotifOn] = useState(notificationsEnabled());
+  const [notifChannel, setNotifChannel] = useState<string>("…");
+  const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<string | null>(null);
+  useEffect(() => {
+    void notificationChannel().then(setNotifChannel);
+    void nativeAutostartStatus().then(setAutostart);
+  }, []);
 
   const load = useCallback((t: Tab) => {
     if (t === "General") {
@@ -74,6 +85,40 @@ export function Settings({ onOnboard }: { onOnboard?: () => void }) {
               <span className="k">engine</span><span className="mono">{version ?? "—"}</span>
               <span className="k">daemon</span><span className="tl-ok">connected</span>
               <span className="k">shell</span><span>XR Desktop · phase 6 chrome</span>
+            </div>
+          </section>
+          <section className="tc-card">
+            <div className="rail-h">Phase 5 · OS integration (opt-in)</div>
+            <div className="kv2">
+              <span className="k">notifications</span>
+              <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  className={`chipbtn ${notifOn ? "green" : ""}`}
+                  onClick={() => {
+                    const next = !notifOn;
+                    if (next) void requestNotificationPermission().then(() => void notificationChannel().then(setNotifChannel));
+                    setNotificationsEnabled(next); setNotifOn(next);
+                    setNote(next ? "notifications on — approval due / run done (opt-in honored)" : "notifications off");
+                  }}
+                >{notifOn ? "on" : "off"}</button>
+                <span className="faint">channel: {notifChannel}{isTauri() ? " (packaged app → OS notifications)" : " (browser Notification API)"}</span>
+              </span>
+              <span className="k">autostart</span>
+              <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {autostart === null ? (
+                  <span className="faint">available only in the packaged app (Tauri autostart plugin)</span>
+                ) : (
+                  <button
+                    className={`chipbtn ${autostart ? "green" : ""}`}
+                    onClick={() => void nativeSetAutostart(!autostart).then((v) => { if (v !== null) { setAutostart(v); setNote(`autostart ${v ? "enabled" : "disabled"} (opt-in)`); } })}
+                  >{autostart ? "enabled" : "disabled"}</button>
+                )}
+              </span>
+              <span className="k">updates</span>
+              <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button className="chipbtn" onClick={() => void nativeCheckUpdate().then((r) => setUpdateInfo(r.error ? `updater: ${r.error}` : r.available ? `update available: ${r.version}` : "up to date"))}>check</button>
+                <span className="faint">{updateInfo ?? "signed updater — inactive until operator provisions keys (docs/release/UPDATER.md)"}</span>
+              </span>
             </div>
           </section>
           <section className="tc-card">

@@ -131,6 +131,11 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/audit");
   }
 
+  /** Export the signed, hash-chained audit bundle (same report as `xr audit export`). */
+  async auditExport(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/audit/export");
+  }
+
   /** Security posture summary (shield + trust + supply chain). */
   async securityGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/security");
