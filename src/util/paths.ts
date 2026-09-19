@@ -37,7 +37,7 @@
  */
 
 import { realpathSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 const IS_WINDOWS = process.platform === "win32";
 
@@ -48,23 +48,48 @@ const IS_WINDOWS = process.platform === "win32";
  * Steps, in order:
  *   1. `resolve()`  → absolute, separators normalized, `..` collapsed.
  *   2. `realpath`   → resolve symlinks, 8.3 short names, and (on Windows) the
- *                     canonical case of each component. Best-effort: a path that
- *                     does not exist yet (fresh DB) keeps the resolve() result.
+ *                     canonical case of each component. A path that does not
+ *                     exist yet (fresh DB) is resolved through its NEAREST
+ *                     EXISTING ANCESTOR, then the missing tail is re-appended.
  *   3. lowercase on win32 only, because NTFS is case-insensitive by default so
  *      `C:\Data\xr.db` and `c:\data\XR.DB` are the SAME file.
  *
  * On POSIX no case folding happens: `/data/Xr.db` and `/data/xr.db` are two
  * different files and must stay two different keys.
+ *
+ * Why step 2 must not simply give up on a missing file: the key is computed
+ * BEFORE the store creates the file and AGAIN by every later opener. If the
+ * directory sits behind a symlink — macOS's `tmpdir()` is `/var/folders/…` →
+ * `/private/var/folders/…`, and $XDG/AppData layouts are routinely
+ * symlinked — a plain `resolve()` fallback yields the unresolved spelling
+ * first and the resolved one second: two keys, two read-write connections,
+ * one file. That is exactly the max-1-writer invariant this key exists to
+ * hold (caught by test/reliability/single-writer.test.ts on macOS).
  */
 export function canonicalPathKey(p: string): string {
-  let out = resolve(p);
-  try {
-    out = realpathSync.native(out);
-  } catch {
-    /* Not created yet (first run, fresh temp dir) — resolve() stands, and the
-       deterministic parent resolution is enough to make two spellings agree. */
-  }
+  const out = realpathThroughExistingAncestor(resolve(p));
   return IS_WINDOWS ? out.toLowerCase() : out;
+}
+
+/**
+ * `realpath` for a path whose tail may not exist yet: walk up to the nearest
+ * component that does, resolve THAT, and re-append the missing components
+ * verbatim. Deterministic for every opener, before and after the file exists.
+ */
+function realpathThroughExistingAncestor(abs: string): string {
+  const missing: string[] = [];
+  let cur = abs;
+  for (;;) {
+    try {
+      const real = realpathSync.native(cur);
+      return missing.length === 0 ? real : join(real, ...missing.reverse());
+    } catch {
+      const parent = dirname(cur);
+      if (parent === cur) return abs; // nothing on the way up exists (not a real filesystem)
+      missing.push(basename(cur));
+      cur = parent;
+    }
+  }
 }
 
 /**

@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, readdirSync, mkdirSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readdirSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { canonicalPathKey, canonicalDbKey, sameFileIdentity, normalizeRelativePath } from "../../src/util/paths.ts";
@@ -57,6 +57,33 @@ describe("canonicalPathKey — one identity per file", () => {
     const missing = join(tmpdir(), "xr-not-created-yet-xyz", "xr.db");
     const alias = join(tmpdir(), "xr-not-created-yet-xyz", ".", "sub", "..", "xr.db");
     expect(canonicalPathKey(missing)).toBe(canonicalPathKey(alias));
+  });
+
+  test("a file behind a symlinked directory has ONE key before and after it is created", () => {
+    // macOS: tmpdir() is /var/folders/… → /private/var/folders/…. The store
+    // computes the key before creating xr.db; a second opener computes it
+    // after. Those two computations MUST agree or the max-1-writer registry
+    // opens a second read-write connection to the same file.
+    const real = tmp();
+    const link = `${real}-link`;
+    try {
+      try {
+        symlinkSync(real, link, "dir");
+      } catch {
+        return; // no symlink privilege on this runner (Windows without dev mode) — nothing to prove here
+      }
+      const viaLink = join(link, "nested", "xr.db");
+      const before = canonicalPathKey(viaLink);
+      mkdirSync(join(real, "nested"));
+      writeFileSync(join(real, "nested", "xr.db"), "");
+      const after = canonicalPathKey(viaLink);
+      expect(before).toBe(after);
+      // …and it is the same identity as the un-linked spelling.
+      expect(after).toBe(canonicalPathKey(join(real, "nested", "xr.db")));
+    } finally {
+      rmSync(link, { force: true });
+      rmSync(real, { recursive: true, force: true });
+    }
   });
 });
 
