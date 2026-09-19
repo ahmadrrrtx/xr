@@ -37,6 +37,16 @@ if (await page.$(".ob")) {
   await page.waitForTimeout(1500);
 }
 await page.waitForSelector(".rail", { timeout: 20_000 });
+
+// Optional tour: sit on a screen that used to own its own poller, so the
+// measurement covers the duplicate fetches rather than only the shell.
+//   PROBE_TOUR=runs bun run desktop/test/probe-poll-rate.mjs 40
+const tour = process.env.PROBE_TOUR ?? "";
+if (tour) {
+  await page.getByRole("button", { name: /Team runs|Runs/i }).first().click();
+  await page.waitForTimeout(1500);
+  console.log(`  (tour: sitting on '${tour}' for the whole window)`);
+}
 await page.waitForTimeout(3000); // let the first fan-out settle
 
 const mark = logSize();
