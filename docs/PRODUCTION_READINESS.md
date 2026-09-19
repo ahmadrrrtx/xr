@@ -93,3 +93,40 @@ committed, reproducible artifact.
 - `scripts/fuzz-canonic.ts` (no-crash + invariant fuzz, deterministic-seed)
 - `scripts/soak.ts` (soak baseline + leak-trend harness)
 - `scripts/provider-matrix.ts` (published capability matrix, catalog-truth)
+
+---
+
+## Phase 5 addendum (2026-09-19) — quality-gate adjectives, evidenced
+
+The master plan's DoD names eleven adjectives; each row below cites the
+artifact that evidences it THIS release. Rows that cannot be evidenced in
+this sandbox say so and point at the owning lane (honesty exception).
+
+| # | Adjective | Evidence | Honest bound |
+|---|---|---|---|
+| 1 | **Trustworthy** | approvals durable + default-deny (`test/control/*`), trust modes gate-enforced, standing grants audited; claim-lint green | external pentest PENDING (see §1) |
+| 2 | **Auditable** | hash-chained + Ed25519-signed audit; NEW `GET /api/audit/export` signed bundle verified in-shell (WebCrypto) + `xr audit export` CLI; anchor push optional | — |
+| 3 | **Safe** | computer-control pause/stop honored per-action BEFORE permissions (`src/control/pause.ts`); payments/high tiers always-ask; egress allowlist; fuzz-guard weekly | native OS hardening = reference builds |
+| 4 | **Reliable** | reliability tier 66/66; SIGKILL mid-write WAL drill (`test/reliability/crash-injection.test.ts`); migration lock re-entrant; golden-path restart-recovery green | Windows approvals flake tracked (known-flakes list) |
+| 5 | **Recoverable** | golden-path uninstall/restart semantics (data kept, launcher removed); kill-9 chain intact; write-gate SQLITE_LOCKED retry | — |
+| 6 | **Fast** | `perf:gate` PASSED this phase (version 24 ms warm vs 150 budget; dashboard 3.9 ms vs 1000; retrieval 27 ms vs 250); main chunk 264 kB; route-level lazy routes | real-browser first paint not measurable headless here — labelled PENDING |
+| 7 | **Accessible** | `test/a11y/*` (axe browser suite in CI, contrast, static); new screens ship aria labels/roles (Model Center/Control Room/Memory/Research) | palette focus-trap only in browser lane |
+| 8 | **Honest** | claim-lint CF-1 gate; every screen renders engine data only; empty/error states state their cause; BLUEPRINT-STATUS observed-first | — |
+| 9 | **Local-first** | voice STT/TTS offline; local runtimes probed live; cloud only via explicit BYOK (secret store) | — |
+| 10 | **Governable** | budgets engine-computed; triggers pausable; automations surfaced; control cockpit single call | — |
+| 11 | **Releasable** | release.yml: cosign keyless + SLSA provenance + SHA256SUMS; NEW updater wiring (plugin + manifest job, inert until operator keys — `docs/release/UPDATER.md`); updater dry-run test | code-sign/notarization keys = owner secrets (documented) |
+
+## Phase 5 QA matrix (fresh install → work → resume), per OS
+
+| OS | Lane | Evidence this release | Label |
+|---|---|---|---|
+| Linux | `ci.yml` ubuntu + `desktop-app.yml` bundle (deb/rpm/AppImage) + sidecar smoke (real boot + health probe) | green on PR CI | EXERCISED |
+| macOS | `desktop-app.yml` bundle (dmg/app, arm64) + cross-platform.yml | green on PR CI | EXERCISED (CI runners) |
+| Windows | `desktop-app.yml` msi + cross-platform.yml parity | green except known approvals/reliability flakes (tracked) | EXERCISED w/ known flakes |
+| Native updater E2E (all OS) | requires operator secrets | `docs/release/UPDATER.md` | **BACKLOG — provision-gated, honest** |
+| Tray/notification/autostart UX (all OS) | CI compiles (cargo check/clippy -D warnings); runtime UX needs packaged app | shell-check green | **BACKLOG — reference builds** |
+
+Satellites (`satellites/`) are documented as OPTIONAL enterprise add-ons:
+they are excluded from the npm publish surface and from the golden path; the
+engine runs fully without them (see `docs/PLUGINS.md` + README wording).
+npm/CLI/TUI parity: `bun run platform:parity:check` green in `bun run ci`.

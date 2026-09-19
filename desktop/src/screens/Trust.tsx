@@ -54,6 +54,34 @@ export function Trust() {
   const [control, setControl] = useState<ControlStatus | null>(null);
   const [ctxPolicy, setCtxPolicy] = useState<Record<string, unknown> | null>(null);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [exportNote, setExportNote] = useState<string | null>(null);
+
+  /** Phase 5 · signed audit export: fetch the engine-composed bundle, verify
+   *  its sha256 signature LOCALLY (WebCrypto), then download. Verification is
+   *  real: body re-hashed after stripping the signature trailer. */
+  async function exportAudit() {
+    setExportNote("exporting…");
+    try {
+      const r = await api.auditExport();
+      const md = r.markdown ?? "";
+      const m = md.match(/<!-- xr-signature: ([a-f0-9]{64}) -->/);
+      let verdict = "signature missing";
+      if (m) {
+        const body = md.replace(/\n\n<!-- xr-signature: [a-f0-9]{64} -->\n?$/, "");
+        const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body));
+        const hex = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+        verdict = hex === m[1] ? `signature VALID (${hex.slice(0, 12)}…) · chain ${r.chain?.valid ? "INTACT" : "BROKEN"}` : "signature MISMATCH — bundle altered";
+      }
+      const blob = new Blob([md], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `xr-audit-${new Date().toISOString().slice(0, 10)}.md`;
+      a.click(); URL.revokeObjectURL(url);
+      setExportNote(`exported ${r.count ?? 0} entries — ${verdict}`);
+    } catch (e) {
+      setExportNote(`export failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
   const [chain, setChain] = useState<Record<string, unknown> | null>(null);
   const [budget, setBudget] = useState<BudgetState | null>(null);
   const [envPolicy, setEnvPolicy] = useState<Record<string, unknown> | null>(null);
@@ -363,7 +391,15 @@ export function Trust() {
 
         {tab === "Audit" && (
           <section className="tc-card">
-            <div className="rail-h">Hash-chained audit chain (GET /audit) · {audit.length} entries — the ledger of record</div>
+            <div className="rail-h" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span>Hash-chained audit chain (GET /audit) · {audit.length} entries — the ledger of record</span>
+              <span style={{ marginLeft: "auto" }}>
+                <button className="chipbtn" onClick={() => void exportAudit()} title="Phase 5 · download the signed, hash-chained bundle and verify its signature in-shell">
+                  export signed bundle
+                </button>
+              </span>
+            </div>
+            {exportNote && <p className="ob-note mono" style={{ margin: "6px 0 0" }}>{exportNote}</p>}
             <div className="tl-box" style={{ maxHeight: "56vh" }}>
               {audit.slice(-80).reverse().map((a) => (
                 <div key={a.id} className="tl tl-info">

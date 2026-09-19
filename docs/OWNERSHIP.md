@@ -154,11 +154,13 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/gen-seccomp.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/generate-client.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/generate-openapi.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/generate-updater-keys.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/golden-path.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/guarantee-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/hot-path-lint.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/license-check.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/make-preview.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `scripts/make-updater-manifest.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/measure-baseline.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/measure-trust-perf.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/memory-recall-bench.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

@@ -153,6 +153,54 @@ fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
     })
 }
 
+/// Phase 5 · OS notification (approval due / run done) — real OS primitive,
+/// invoked only from the shell when the user has opted in (Settings).
+#[tauri::command]
+fn notify_os(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
+}
+
+/// Phase 5 · opt-in autostart. Disabled by default; the toggle lives in
+/// Settings and maps 1:1 onto the plugin's enable/disable.
+#[tauri::command]
+fn set_autostart(app: tauri::AppHandle, enable: bool) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let l = app.autolaunch();
+    if enable {
+        l.enable().map_err(|e| e.to_string())?;
+    } else {
+        l.disable().map_err(|e| e.to_string())?;
+    }
+    l.is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn autostart_status(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// Phase 5 · signed updater. Honest by construction: errors until the
+/// operator provisions endpoints + pubkey (scripts/generate-updater-keys.ts).
+#[tauri::command]
+async fn check_update(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    match updater.check().await {
+        Ok(Some(update)) => Ok(serde_json::json!({ "available": true, "version": update.version })),
+        Ok(None) => Ok(serde_json::json!({ "available": false })),
+        Err(e) => Err(format!(
+            "updater not provisioned or check failed: {e} (see docs/release/UPDATER.md)"
+        )),
+    }
+}
+
 #[tauri::command]
 fn engine_status(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
     let port: Option<u16> = *state.port.lock().unwrap();
@@ -168,7 +216,17 @@ pub fn run() {
     let engine_setup = Arc::clone(&engine);
     let builder = tauri::Builder::default()
         .manage(Arc::clone(&engine))
-        .invoke_handler(tauri::generate_handler![engine_status, engine_link])
+        .plugin(tauri_plugin_notification::Builder::new().build())
+        .plugin(tauri_plugin_autostart::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![
+            engine_status,
+            engine_link,
+            notify_os,
+            set_autostart,
+            autostart_status,
+            check_update
+        ])
         .setup(move |app| {
             // Ephemeral-port sidecar: always spawn our own engine when the
             // binary is present; it can never collide with a daemon an

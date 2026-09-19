@@ -1,5 +1,6 @@
 /** XR Daemon — system, dashboard, overview, audit, sessions, research, config routes. */
 
+import { buildAuditReport } from "../../export/report.ts";
 import { basename } from "node:path";
 import { CORE_VERSION, DISPLAY_VERSION, PKG, versionInfo } from "../../core/version.ts";
 import { configCacheStats, isMemoryEnabled } from "../../config/config.ts";
@@ -121,6 +122,21 @@ export function systemRoutes(): DaemonRoute[] {
       handle: ({ json, url, state }) => {
         const limit = Math.min(200, Number(url.searchParams.get("limit") ?? 50));
         return json({ entries: state.store.recentAudit(limit), chain: state.store.verifyChain() });
+      },
+    }),
+    route({
+      // Phase 5 · audit export (signed bundle): the SAME signed report the
+      // CLI produces (hash-chained entries + sha256 signature + verifier),
+      // composed live from the store. The shell downloads + verifies it; it
+      // never computes integrity itself.
+      id: "audit.export",
+      path: "/api/audit/export",
+      method: "GET",
+      handle: ({ json, state }) => {
+        const entries = state.store.recentAudit(10_000);
+        const chain = state.store.verifyChain();
+        const report = buildAuditReport({ project: "xr", chainValid: chain.valid, entries });
+        return json({ markdown: report.markdown, sha256: report.sha256, chain, count: entries.length });
       },
     }),
     route({

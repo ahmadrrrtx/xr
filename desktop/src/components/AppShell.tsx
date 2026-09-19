@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { XrLogo, XrAvatar } from "./Brand";
 import { api, asList, type ProviderInfo, type SessionSummary, type SkillInfo } from "../api/client";
+import { notify, notificationsEnabled } from "../notify";
 
 export type Area = "home" | "projects" | "work" | "workspace" | "research" | "memory" | "models" | "control" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
 
@@ -48,6 +49,33 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
+
+  /* Phase 5 · opt-in OS notifications: approval due + run done, engine-polled.
+   * The shell only reacts to engine-reported transitions; it never invents them. */
+  useEffect(() => {
+    let prevPending = -1;
+    const seenRuns = new Map<string, string>();
+    const t = setInterval(() => {
+      if (!notificationsEnabled()) return;
+      api.controlPending().then((r) => {
+        const n = (r.pending ?? []).length;
+        if (prevPending >= 0 && n > prevPending) void notify("XR — approval due", `${n} request(s) waiting in the Trust Center`);
+        prevPending = n;
+      }).catch(() => undefined);
+      api.agents().then((a) => {
+        for (const w of a.workflows ?? []) {
+          const id = String((w as { id?: unknown }).id ?? "");
+          const st = String((w as { state?: unknown; status?: unknown }).state ?? (w as { status?: unknown }).status ?? "");
+          const prev = seenRuns.get(id);
+          if (prev && prev !== st && /completed|failed|done/.test(st)) {
+            void notify(`XR — run ${st}`, String((w as { goal?: unknown; name?: unknown }).goal ?? (w as { name?: unknown }).name ?? id).slice(0, 80));
+          }
+          if (id) seenRuns.set(id, st);
+        }
+      }).catch(() => undefined);
+    }, 10_000);
+    return () => clearInterval(t);
+  }, []);
   const [up, setUp] = useState(true);
   const [voiceCap, setVoiceCap] = useState<boolean>(false);
   useEffect(() => {

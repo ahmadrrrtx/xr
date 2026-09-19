@@ -16,6 +16,12 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
+# Phase 5 · native matrix (reference builds; validated by CI cargo check/clippy):
+# OS notifications, opt-in autostart, and the signed updater (inert until the
+# operator provisions endpoints + pubkey — see docs/release/UPDATER.md).
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

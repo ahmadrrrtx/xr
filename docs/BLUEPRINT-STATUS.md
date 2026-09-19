@@ -100,3 +100,19 @@ in the workstation; summary mirrored here). Every line below is engine-backed.
 | Voice polish | **SHIPPED** | engine voice state machine extended: `planning`/`tool` (from the real execution envelope via pipeline `onPhase`) and `success`; shell avatar machine adds `approval`/`error`/`offline` overlays from engine events/SSE; full 12-state pill set, ring/orb glows for every state (no redraws) |
 | Tests (DoD) | green | `test/control/pause-stop.test.ts` (pause skips+audits runAction, resume re-opens, stop denies pending durably) · `test/voice/session-states.test.ts` (extended vocabulary emission, barge-in-while-speaking → tts_stop + listening, onPhase wiring) · failover already covered by `test/intelligence/failover-cpr.test.ts` |
 | Gates | green | desktop tsc + vite build; full `bun run ci` (3314 tests, api-compat 154 ops, boundaries, size-gate, ownership, claim-lint, marketplace); unit-tier 1295 ms; reliability 66/66; phase suites 69/69 |
+
+## Phase 5 · production hardening (2026-09-19)
+
+| Item | State | Evidence |
+|---|---|---|
+| Updater wiring | **SHIPPED (inert until provisioned)** | `tauri-plugin-updater` registered + `check_update` command (honest error unprovisioned); `scripts/generate-updater-keys.ts` (raw-32B ed25519 pubkey → conf, private key stdout-only); `scripts/make-updater-manifest.ts` + guarded `updater-manifest` CI job (tag-only, skips on zero signatures); bundle job passes optional `TAURI_UPDATER_KEY`; runbook `docs/release/UPDATER.md`; dry-run test `test/release/updater-manifest.test.ts` |
+| Autostart + OS notifications | **SHIPPED (opt-in)** | `tauri-plugin-autostart`/`-notification` + commands; Settings toggles (autostart only in packaged app — stated honestly); web host falls back to Notification API when permitted; AppShell 10 s engine-polled notifier (approval due / run done) fires only when opted in |
+| Audit export (signed bundle) | **SHIPPED** | `GET /api/audit/export` composes the SAME signed report as `xr audit export` (hash chain + sha256 sig + verifier); Trust → Audit "export signed bundle" downloads + verifies in-shell via WebCrypto |
+| Cold-start perf | **MEASURED** | `perf:gate` PASSED (version 24 ms warm / budget 150; dashboard 3.9 ms; retrieval 27 ms); route-level lazy since Phase 2 (main chunk 264 kB) |
+| kill-9 recovery drill | **GREEN** | pre-existing SIGKILL mid-write WAL drill (`test/reliability/crash-injection.test.ts`) + golden-path restart/uninstall semantics re-run green this phase |
+| golden-path | **GREEN** | install → answer → audit chain → restart recovery → uninstall: 18 checks, chainValid true |
+| Satellites optional + parity | **DOCUMENTED/CHECKED** | satellites labelled OPTIONAL enterprise in PRODUCTION_READINESS; `platform:parity:check` green in ci |
+| a11y final | **GREEN in CI lanes** | `test/a11y/*` (axe/contrast/static); new screens carry roles/labels |
+| QA matrix 3-OS | **PUBLISHED** | PRODUCTION_READINESS Phase-5 addendum: per-OS EXERCISED rows + honest BACKLOG labels for provision-gated native UX |
+| 11 adjectives | **EVIDENCED** | PRODUCTION_READINESS addendum table, every row artifact-cited, bounds stated |
+| Final re-audit | **PUBLISHED** | `xr-deliverables/03-FINAL-RE-AUDIT-REPORT.md` — 27 sections, observed-first, bounds stated per section |
