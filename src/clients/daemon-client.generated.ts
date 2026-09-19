@@ -246,6 +246,11 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/files/diff", body);
   }
 
+  /** Hunk-level REJECT over the engine's own diff: reverse-apply the chosen hunks of a file's working-tree diff via git, after ONE human approval whose preview shows exactly those hunks. Stale ids and changed files are refused (409), never guessed. */
+  async filesHunksRevert(body: z.infer<typeof S.FilesHunksRevertRequest>): Promise<z.infer<typeof S.FilesHunksRevertResponse>> {
+    return await this.call("POST", "/api/v1/files/hunks/revert", body);
+  }
+
   /** Save a text file inside the project root — human-approval-gated, scope-enforced, staleness-guarded, hash-chain audited. */
   async filesWrite(body: z.infer<typeof S.FilesWriteRequest>): Promise<z.infer<typeof S.FilesWriteResponse>> {
     return await this.call("POST", "/api/v1/files/write", body);
@@ -299,6 +304,16 @@ export class XRDaemonClient {
   /** End a terminal session the way a closing window does: SIGHUP, then SIGKILL after a 2 s grace (Windows: close console + terminate). */
   async terminalPtyClose(sessionId: string): Promise<z.infer<typeof S.TerminalPtyCloseResponse>> {
     return await this.call("DELETE", `/api/v1/terminal/pty/${encodeURIComponent(sessionId)}`);
+  }
+
+  /** Desktop UI state for this workspace (layout, tabs, drafts, last area) — opaque JSON the renderer owns, kept durable by the engine. */
+  async stateUiGet(body: z.infer<typeof S.UiStateGetQuery>): Promise<z.infer<typeof S.UiStateGetResponse>> {
+    return await this.call("GET", "/api/v1/state/ui", body);
+  }
+
+  /** Upsert/delete desktop UI-state keys (null deletes). Budgeted: ≤ 256 KB per value, ≤ 256 keys per workspace, key shape enforced; all-or-nothing. */
+  async stateUiPatch(body: z.infer<typeof S.UiStatePatchRequest>): Promise<z.infer<typeof S.UiStatePatchResponse>> {
+    return await this.call("PUT", "/api/v1/state/ui", body);
   }
 
   /** One-shot chat completion streamed as Server-Sent Events. (SSE stream — returns the raw Response). */

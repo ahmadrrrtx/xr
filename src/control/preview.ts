@@ -231,6 +231,20 @@ export function buildStructuredPreview(req: {
     const target = path ? resolve(req.cwd, path) : null;
     const sections: PreviewSection[] = [];
     sections.push({ title: "path", body: target ?? (path ?? "(no path in args)"), kind: "text" });
+    // Phase 2 · G-06: a patch-shaped write (hunk revert/apply) previews the
+    // exact unified diff that will be applied — the human sees the hunks,
+    // not a whole-file rewrite that hides which lines actually move.
+    const patch = typeof args.patch === "string" ? args.patch : null;
+    if (patch !== null) {
+      const clamped = clampSection(patch, MAX_DIFF_LINES, MAX_DIFF_CHARS);
+      sections.push({
+        title: args.reverse === true ? "hunks to REVERT (unified diff, applied in reverse)" : "patch to apply (unified diff)",
+        body: clamped.body,
+        kind: "code",
+        truncated: clamped.truncated,
+      });
+      return { kind: "diff", ...base, sections };
+    }
     if (content === null) {
       sections.push({ title: "content", body: "(no content field — args redacted)", kind: "text" });
     } else if (target && existsSync(target)) {

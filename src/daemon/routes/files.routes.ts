@@ -18,11 +18,13 @@
  * the same directory the CLI already works in.
  */
 
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { route, type DaemonRoute } from "./router.ts";
 import { getApprovalStore } from "../../control/approval-store.ts";
 import { buildStructuredPreview } from "../../control/preview.ts";
+import { buildHunkPatch, hunkSummary, parseUnifiedDiff } from "../hunks.ts";
 
 const READ_LIMIT = 512 * 1024;
 const WRITE_LIMIT = 1024 * 1024;
@@ -208,7 +210,103 @@ export function filesRoutes(): DaemonRoute[] {
           // Untracked files have no diff: detect via ls-files
           const trackedRes = await runCommand("git", ["ls-files", "--error-unmatch", rel], { cwd: root, timeoutMs: 5000 });
           const tracked = trackedRes.ok;
-          return json({ path: rel, diff, ok: res.ok, tracked });
+          // Phase 2 · G-06: the same diff, addressed hunk by hunk (stable ids).
+          const hunks = parseUnifiedDiff(diff).hunks.map(hunkSummary);
+          return json({ path: rel, diff, ok: res.ok, tracked, hunks });
+        } catch (e) {
+          return json({ error: (e as Error).message }, 400);
+        }
+      },
+    }),
+    route({
+      id: "files.hunks.revert",
+      path: "/api/files/hunks/revert",
+      method: "POST",
+      handle: async ({ req, json, state, config }) => {
+        // Phase 2 · G-06 — hunk-level REJECT over the engine's own diff.
+        // "Keep this change, throw that one away" without a whole-file
+        // rewrite: the chosen hunks are reverse-applied by git itself
+        // (`git apply -R` of a subset patch), after ONE human approval whose
+        // preview shows exactly those hunks. Accept is a no-op by design
+        // (the working tree already has the change); staging is git.stage.
+        try {
+          const root = resolve(process.cwd());
+          const body = (await req.json().catch(() => ({}))) as { path?: string; hunkIds?: unknown; baseMtimeMs?: number };
+          const rel = typeof body?.path === "string" ? body.path : "";
+          const ids = Array.isArray(body?.hunkIds) ? body.hunkIds.filter((x): x is string => typeof x === "string") : [];
+          if (!rel || ids.length === 0) return json({ error: "expected { path, hunkIds: string[] }" }, 400);
+          const target = insideRoot(root, rel);
+          if (!target) return json({ error: "path escapes the project root" }, 400);
+          let st;
+          try {
+            st = statSync(target);
+          } catch {
+            return json({ error: "no such file" }, 404);
+          }
+          if (!st.isFile()) return json({ error: "not a file" }, 400);
+          if (typeof body.baseMtimeMs === "number" && Math.abs(st.mtimeMs - body.baseMtimeMs) > 2) {
+            return json({ error: "file changed on disk since it was loaded", stale: true, mtimeMs: st.mtimeMs }, 409);
+          }
+
+          const { runCommand } = await import("../../util/process.ts");
+          const current = await runCommand("git", ["diff", "--", rel], { cwd: root, timeoutMs: 10_000, maxBuffer: 2 * 1024 * 1024 });
+          if (!current.ok) return json({ error: `git diff failed: ${current.stderr.trim() || "not a git repository?"}` }, 400);
+          const parsed = parseUnifiedDiff(current.stdout);
+          const byId = new Map(parsed.hunks.map((h) => [h.id, h] as const));
+          const missing = ids.filter((id) => !byId.has(id));
+          if (missing.length) {
+            // A stale id means the file changed under the reviewer — refuse, never guess.
+            return json({ error: "hunk no longer present (the file changed since the diff was loaded)", missing, hunks: parsed.hunks.map(hunkSummary) }, 409);
+          }
+          const selected = [...new Set(ids)].map((id) => byId.get(id)!);
+          const patch = buildHunkPatch(parsed, selected);
+          const added = selected.reduce((n, h) => n + h.added, 0);
+          const removed = selected.reduce((n, h) => n + h.removed, 0);
+
+          const approvalsCfg = config?.approvals;
+          const approvalStore = getApprovalStore(state.store, {
+            defaultTtlMs: approvalsCfg?.defaultTtlMs,
+            perSurface: approvalsCfg?.perSurface,
+          });
+          const reason = `revert ${selected.length} of ${parsed.hunks.length} hunk${parsed.hunks.length === 1 ? "" : "s"} in ${rel} (undo +${added}/−${removed} lines) — desktop editor hunk review`;
+          const handle = approvalStore.request({
+            tool: "patch",
+            args: { path: rel, patch, reverse: true, hunkIds: selected.map((h) => h.id) },
+            reason,
+            preview: buildStructuredPreview({ tool: "patch", args: { path: rel, patch, reverse: true }, reason, cwd: root, riskTier: "medium" }),
+            riskTier: "medium",
+            surface: "daemon-files",
+          });
+          state.store.audit("files.hunks.requested", { path: rel, hunkIds: selected.map((h) => h.id), approvalId: handle.id });
+          const outcome = await handle.outcome;
+          if (!outcome.approved) {
+            state.store.audit("files.hunks.denied", { path: rel, decision: outcome.decision });
+            return json({ applied: false, approvalId: handle.id, decision: outcome.decision });
+          }
+
+          // Re-check right before applying: the reviewer approved THESE bytes.
+          const st2 = statSync(target);
+          if (Math.abs(st2.mtimeMs - st.mtimeMs) > 2) {
+            state.store.audit("files.hunks.stale", { path: rel });
+            return json({ applied: false, approvalId: handle.id, error: "file changed on disk while the approval was pending", stale: true, mtimeMs: st2.mtimeMs }, 409);
+          }
+          const scratch = mkdtempSync(join(tmpdir(), "xr-hunk-"));
+          try {
+            const patchPath = join(scratch, "revert.patch");
+            writeFileSync(patchPath, patch, "utf8");
+            const applied = await runCommand("git", ["apply", "-R", "--whitespace=nowarn", patchPath], { cwd: root, timeoutMs: 10_000 });
+            if (!applied.ok) {
+              state.store.audit("files.hunks.error", { path: rel, error: applied.stderr.trim() });
+              return json({ applied: false, approvalId: handle.id, error: `git apply -R failed: ${applied.stderr.trim()}` }, 409);
+            }
+          } finally {
+            rmSync(scratch, { recursive: true, force: true });
+          }
+          const after = await runCommand("git", ["diff", "--", rel], { cwd: root, timeoutMs: 10_000, maxBuffer: 2 * 1024 * 1024 });
+          const remaining = parseUnifiedDiff(after.ok ? after.stdout : "").hunks.map(hunkSummary);
+          const st3 = statSync(target);
+          state.store.audit("files.hunks.reverted", { path: rel, hunkIds: selected.map((h) => h.id), added, removed, remaining: remaining.length });
+          return json({ applied: true, approvalId: handle.id, path: rel, reverted: selected.length, added, removed, mtimeMs: st3.mtimeMs, hunks: remaining, diff: after.ok ? after.stdout : "" });
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }
