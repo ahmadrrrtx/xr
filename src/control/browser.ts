@@ -29,24 +29,11 @@ function fail(m: string): ActionResult {
 
 // ── Availability check ───────────────────────────────────────────────────────
 
-export function browserAvailable() {
-  try {
-    // Bun ESM doesn't have require.resolve, try both
-    // @ts-ignore
-    if (typeof require !== "undefined" && require.resolve) {
-      // @ts-ignore
-      require.resolve("playwright");
-      return { available: true };
-    }
-  } catch {}
-  try {
-    // fallback: check if playwright can be imported (best-effort)
-    // If this throws, we assume not installed
-    return { available: true };
-  } catch {
-    return { available: false, reason: "playwright not installed – run: xr control browser install" };
-  }
-}
+// Availability probe lives in its own module: it is a capability claim and
+// must stay honest (package AND a real Chromium build), and the check is
+// deliberately per-call — see src/control/browser-availability.ts.
+import { browserAvailable } from "./browser-availability.ts";
+export { browserAvailable };
 
 // ── Secure launch args ───────────────────────────────────────────────────────
 

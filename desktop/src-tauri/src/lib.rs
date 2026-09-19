@@ -20,11 +20,38 @@
 //! Dev mode (`tauri dev`): no sidecar binary exists next to the debug exe, so
 //! spawn honestly reports "not found" and the frontend falls back to relative
 //! /api/v1 paths served by the vite proxy (which injects XR_DEV_TOKEN).
+//!
+//! Phase 1 · Windows-native hardening (W-1/W-2/W-3/W-5/W-6)
+//! ─────────────────────────────────────────────────────────────────────────────
+//!   W-1  the sidecar is spawned with CREATE_NO_WINDOW, so a console window no
+//!        longer flashes on every launch of the desktop app;
+//!   W-2  the sidecar is assigned to a Job Object armed with
+//!        KILL_ON_JOB_CLOSE, so it cannot outlive the shell even if the shell
+//!        crashes (previously an engine survived a shell crash, invisible);
+//!   W-3  a named-mutex single-instance guard stops a second shell from
+//!        spawning a second engine against the same workspace;
+//!   W-5  the sidecar's stderr is captured into a bounded tail and reported
+//!        with the link status, so failures explain themselves;
+//!   W-6  reachability probes are cached for 1.5 s, so a down engine no longer
+//!        freezes the webview IPC handler for ~1.2 s per poll.
+//!
+//! Parsing and caching live in `engine_state.rs` (pure std, unit-tested);
+//! the Win32 calls live in `win.rs` (hand-written FFI, compile-verified for
+//! `x86_64-pc-windows-gnu`). See docs/audits/XR_PHASE1_FOUNDATION_VERIFICATION.md
+//! for what is runtime-verified and what is not.
 
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+mod engine_state;
+/// W-1/W-2/W-3 · Windows-native process containment (hand-written FFI; see the
+/// module header for why the `windows` crate is not used).
+#[cfg(windows)]
+mod win;
+
+use engine_state::{parse_banner_line, Banner, ProbeCache, StderrTail};
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -40,6 +67,15 @@ struct EngineState {
     child: Mutex<Option<Child>>,
     /// Honest reason when no sidecar link exists (dev builds, spawn errors).
     note: Mutex<Option<String>>,
+    /// W-5 — the tail of the sidecar's stderr, so a failure can explain itself.
+    stderr_tail: Mutex<StderrTail>,
+    /// W-6 — short-lived cache for the reachability probe.
+    probe_cache: Mutex<ProbeCache>,
+    /// W-2 — non-None when the sidecar is running WITHOUT job containment.
+    containment: Mutex<Option<String>>,
+    /// W-2 — job object holding the sidecar; closing it kills the engine.
+    #[cfg(windows)]
+    job: Mutex<Option<win::JobObject>>,
 }
 
 fn target_triple() -> &'static str {
@@ -66,6 +102,24 @@ fn sidecar_path() -> Option<std::path::PathBuf> {
     None
 }
 
+/// Reachability with a short-lived cache (W-6).
+///
+/// `tcp_reachable` blocks up to 400 ms, and `engine_link` asks about up to three
+/// ports per call. Uncached, a down engine froze the webview's IPC handler for
+/// over a second on the very screen whose job is to say the engine is down.
+fn probe_reachable(state: &EngineState, port: u16) -> bool {
+    if let Ok(cache) = state.probe_cache.lock() {
+        if let Some(ok) = cache.get(port) {
+            return ok;
+        }
+    }
+    let ok = tcp_reachable(port);
+    if let Ok(mut cache) = state.probe_cache.lock() {
+        cache.put(port, ok);
+    }
+    ok
+}
+
 fn tcp_reachable(port: u16) -> bool {
     if let Ok(addr) = format!("127.0.0.1:{port}").parse() {
         std::net::TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok()
@@ -76,47 +130,87 @@ fn tcp_reachable(port: u16) -> bool {
 
 fn spawn_sidecar(state: &Arc<EngineState>) {
     let Some(bin) = sidecar_path() else {
-        *state.note.lock().unwrap() = Some(
-            "sidecar binary not found (dev build — frontend uses the vite proxy)".into(),
-        );
+        *state.note.lock().unwrap() =
+            Some("sidecar binary not found (dev build — frontend uses the vite proxy)".into());
         return;
     };
-    match Command::new(&bin)
-        .arg("serve")
+    let mut cmd = Command::new(&bin);
+    cmd.arg("serve")
         .arg("--port")
         .arg("0")
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
+        // W-5 — the engine explains its refusals on stderr. Discarding it
+        // (`Stdio::null()`) left the shell able to say only "unreachable",
+        // with the actual reason thrown away.
+        .stderr(Stdio::piped());
+    // W-1 — the engine is a console application. Without CREATE_NO_WINDOW a
+    // console window flashes on every launch of the desktop app.
+    #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    match cmd.spawn() {
         Ok(mut child) => {
             let stdout = child.stdout.take();
+
+            // W-5 — keep the tail of stderr so `engine_link` can report WHY.
+            if let Some(err) = child.stderr.take() {
+                let st = Arc::clone(state);
+                std::thread::spawn(move || {
+                    for line in BufReader::new(err).lines() {
+                        let Ok(line) = line else { break };
+                        if let Ok(mut tail) = st.stderr_tail.lock() {
+                            tail.push(line);
+                        }
+                    }
+                });
+            }
+
+            // W-2 — contain the sidecar in a job so it dies with this process
+            // even if the shell crashes. Failure is recorded, not hidden: an
+            // uncontained sidecar can outlive a crashed shell.
+            #[cfg(windows)]
+            {
+                match win::JobObject::new_kill_on_close() {
+                    Ok(job) => match job.assign(&child) {
+                        Ok(()) => {
+                            *state.job.lock().unwrap() = Some(job);
+                        }
+                        Err(e) => {
+                            *state.containment.lock().unwrap() = Some(format!(
+                                "sidecar started WITHOUT job containment ({e}) — it dies only on a clean shutdown"
+                            ));
+                        }
+                    },
+                    Err(e) => {
+                        *state.containment.lock().unwrap() = Some(format!(
+                            "no job object available ({e}) — sidecar dies only on a clean shutdown"
+                        ));
+                    }
+                }
+            }
+
             *state.child.lock().unwrap() = Some(child);
             let st = Arc::clone(state);
             std::thread::spawn(move || {
                 let Some(out) = stdout else { return };
                 for line in BufReader::new(out).lines() {
                     let Ok(line) = line else { break };
-                    // "Listening on  http://127.0.0.1:<port>" — the real bound
-                    // port. Dashboard/Chat banner lines carry "?token=…"
-                    // suffixes and fail the strict u16 parse — by design.
-                    if let Some(idx) = line.find("http://127.0.0.1:") {
-                        let tail = &line[idx + "http://127.0.0.1:".len()..];
-                        if let Ok(port) = tail.trim().parse::<u16>() {
-                            *st.port.lock().unwrap() = Some(port);
-                        }
-                    }
-                    if let Some(idx) = line.find("Token: ") {
-                        let token = line[idx + "Token: ".len()..].trim().to_string();
-                        if token.len() >= 32 && token.chars().all(|c| c.is_ascii_hexdigit()) {
-                            *st.token.lock().unwrap() = Some(token);
-                        }
+                    // Parsing lives in engine_state.rs, where it is unit-tested
+                    // — including the case that a provider's log line naming a
+                    // different local port must NOT be mistaken for our port.
+                    match parse_banner_line(&line) {
+                        Some(Banner::Port(port)) => *st.port.lock().unwrap() = Some(port),
+                        Some(Banner::Token(token)) => *st.token.lock().unwrap() = Some(token),
+                        None => {}
                     }
                 }
                 // stdout closed = daemon exited; mark the link stale honestly.
                 if st.port.lock().unwrap().is_some() {
-                    *st.note.lock().unwrap() =
-                        Some("sidecar exited (stdout closed)".into());
+                    *st.note.lock().unwrap() = Some("sidecar exited (stdout closed)".into());
                 }
             });
         }
@@ -126,20 +220,34 @@ fn spawn_sidecar(state: &Arc<EngineState>) {
     }
 }
 
-/// Instant snapshot — the frontend polls this (no blocking commands).
+/// Instant snapshot — the frontend polls this.
+///
+/// W-6: every reachability answer comes from the short-lived cache, so this
+/// cannot block the webview for 400 ms per port per call. W-5: the sidecar's
+/// last stderr lines travel with the answer, so "unreachable" arrives with the
+/// engine's own explanation instead of a bare failure.
 #[tauri::command]
 fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
     let port: Option<u16> = *state.port.lock().unwrap();
     let token: Option<String> = state.token.lock().unwrap().clone();
     let note: Option<String> = state.note.lock().unwrap().clone();
+    let containment: Option<String> = state.containment.lock().unwrap().clone();
+    let stderr: Vec<String> = state
+        .stderr_tail
+        .lock()
+        .map(|t| t.last(5))
+        .unwrap_or_default();
+
     if let (Some(port), Some(linked_token)) = (port, token.clone()) {
-        if tcp_reachable(port) {
+        if probe_reachable(state.inner(), port) {
             return serde_json::json!({
                 "reachable": true,
                 "spawned": true,
                 "port": port,
                 "token": linked_token,
-                "externalDaemonOn3141": tcp_reachable(3141),
+                "containment": containment,
+                "stderr": stderr,
+                "externalDaemonOn3141": probe_reachable(state.inner(), 3141),
             });
         }
     }
@@ -149,7 +257,9 @@ fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
         "port": port,
         "hasToken": token.is_some(),
         "reason": note,
-        "externalDaemonOn3141": tcp_reachable(3141),
+        "containment": containment,
+        "stderr": stderr,
+        "externalDaemonOn3141": probe_reachable(state.inner(), 3141),
     })
 }
 
@@ -205,13 +315,43 @@ async fn check_update(app: tauri::AppHandle) -> Result<serde_json::Value, String
 fn engine_status(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
     let port: Option<u16> = *state.port.lock().unwrap();
     let token: Option<String> = state.token.lock().unwrap().clone();
+    let reachable = port.is_some_and(|p| probe_reachable(state.inner(), p))
+        || probe_reachable(state.inner(), 3141);
     serde_json::json!({
-        "reachable": port.is_some_and(tcp_reachable) || tcp_reachable(3141),
+        "reachable": reachable,
         "paired": token.is_some(),
     })
 }
 
+/// Held for the life of the process so the named mutex stays owned.
+#[cfg(windows)]
+static INSTANCE_GUARD: std::sync::OnceLock<win::InstanceGuard> = std::sync::OnceLock::new();
+
 pub fn run() {
+    // W-3 · one shell per session. A second launch would spawn a SECOND engine
+    // sidecar, so two daemons would quietly compete for the same workspace
+    // files. Windows' own primitive for this is a named mutex, which is what
+    // `win::InstanceGuard` wraps.
+    //
+    // Honest scope: this stops the duplicate-daemon damage; it does NOT focus
+    // the window that is already open, because cross-instance hand-off needs
+    // IPC (tauri-plugin-single-instance, still outstanding). `XR_ALLOW_MULTI=1`
+    // opts out for development.
+    #[cfg(windows)]
+    {
+        if std::env::var("XR_ALLOW_MULTI").as_deref() != Ok("1") {
+            match win::InstanceGuard::acquire("xr-desktop-single-instance") {
+                Ok(Some(guard)) => {
+                    let _ = INSTANCE_GUARD.set(guard);
+                }
+                Ok(None) => return,
+                Err(e) => {
+                    eprintln!("[xr] single-instance guard unavailable ({e}); continuing without it")
+                }
+            }
+        }
+    }
+
     let engine = Arc::new(EngineState::default());
     let engine_setup = Arc::clone(&engine);
     let builder = tauri::Builder::default()
@@ -245,7 +385,13 @@ pub fn run() {
                         true,
                         None::<&str>,
                     )?,
-                    &MenuItem::with_id(app.handle(), "quit", "Quit XR Desktop", true, None::<&str>)?,
+                    &MenuItem::with_id(
+                        app.handle(),
+                        "quit",
+                        "Quit XR Desktop",
+                        true,
+                        None::<&str>,
+                    )?,
                 ],
             )?;
             let _tray = TrayIconBuilder::new()
@@ -276,7 +422,17 @@ pub fn run() {
         .expect("error while building XR Desktop");
     app.run(move |_app_handle, event| {
         // Never orphan the engine: the sidecar dies with the shell.
+        //
+        // W-2 · closing the job first is what makes this true even for a
+        // sidecar that is not the direct child we spawned (JOB_OBJECT_LIMIT_
+        // KILL_ON_JOB_CLOSE takes the whole tree). The explicit kill below
+        // stays as the non-Windows path and as a belt-and-braces for the
+        // direct child.
         if let tauri::RunEvent::Exit = event {
+            #[cfg(windows)]
+            {
+                engine.job.lock().unwrap().take();
+            }
             if let Some(mut child) = engine.child.lock().unwrap().take() {
                 let _ = child.kill();
                 let _ = child.wait();

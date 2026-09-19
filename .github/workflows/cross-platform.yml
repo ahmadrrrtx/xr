@@ -88,33 +88,37 @@ jobs:
           # black-box suites are owned by the dedicated lanes in ci.yml, and
           # the kill proofs are RED on HEAD until Phase 1.
           bash scripts/parity-suite-runner.sh ${{ matrix.bunOs }} --exclude '^test/e2e-blackbox/'
-      - name: "Hang diagnostics (win32) — dump approvals-durable stage markers"
+      - name: "Hang diagnostics (win32) — name the wedged test"
         if: runner.os == 'Windows' && failure()
         shell: bash
-        # TEMPORARY (2026-09-07): the win32 probe branch of
-        # test/phase2/approvals-durable.test.ts writes xr-dbg-*.txt stage
-        # markers to the OS temp dir. They survive the exit-124 kill (stdout
-        # is buffered per file and lost). A stage with START but no END
-        # marker names the hang. Remove this step with the probe branch.
+        # Phase 1 (2026-09-19) replaced the old stage-marker probe. The win32
+        # hang is root-caused (see the header of test/phase2/approvals-durable.
+        # test.ts): non-canonical path spelling made the migration lock miss
+        # its own re-entrancy entry and spin on Atomics.wait — a frozen main
+        # thread, which is why per-file stdout was buffered and lost on the
+        # exit-124 kill. The probe existed only to survive that masking.
+        #
+        # With the fix, re-entrancy is keyed on one canonical identity
+        # (src/util/paths.ts) and an own-pid holder under an unrecognized key
+        # THROWS instead of waiting. Bun's per-test timeout now reports a
+        # hanging test BY NAME, so a regression diagnoses itself: rerun the
+        # suspect files alone with a short timeout and print the tail.
+        continue-on-error: true
         run: |
-          found=0
-          # 2026-09-18: the old single "$TEMP" glob missed the markers on the
-          # Windows runner (node os.tmpdir() ≠ git-bash $TEMP there). Ask the
-          # SAME runtime the tests use for its temp dir, then fall back to
-          # every env candidate.
-          NODE_TMP=$(bun -p "require('node:os').tmpdir()" 2>/dev/null || true)
-          for dir in "$NODE_TMP" "$TEMP" "$TMP" "$TMPDIR" /c/Windows/Temp; do
-            [ -n "$dir" ] || continue
-            for f in "$dir"/xr-dbg-*.txt; do
-              [ -e "$f" ] || continue
-              found=1
-              echo "=== $f ==="
-              cat "$f"
-            done
+          echo "::group::approvals-durable alone (30s/test timeout)"
+          bun test test/phase2/approvals-durable.test.ts --timeout 30000 2>&1 | tail -40 || true
+          echo "::endgroup::"
+          echo "::group::path-identity contract"
+          bun test test/state/migration-lock-self-deadlock.test.ts --timeout 30000 2>&1 | tail -30 || true
+          echo "::endgroup::"
+          echo "::group::leftover migration locks in XR_HOME"
+          # An own-pid lockfile surviving a kill is the signature of the old
+          # deadlock. List any that remain so the state is never invisible.
+          for d in "$XR_HOME" "$HOME/.xr" "$TEMP"; do
+            [ -n "$d" ] && [ -d "$d" ] || continue
+            find "$d" -maxdepth 3 -name '*.migrate.lock' -printf '%p  %s bytes\n' 2>/dev/null || true
           done
-          if [ "$found" -eq 0 ]; then
-            echo "no markers written — the probe file never started (import/runner level)"
-          fi
+          echo "::endgroup::"
       - name: Golden path (hermetic)
         shell: bash
         timeout-minutes: 10

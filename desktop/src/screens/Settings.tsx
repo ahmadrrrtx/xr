@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, asList, type ProviderInfo, type ShieldStatus, type TriggersState } from "../api/client";
 import { notificationsEnabled, setNotificationsEnabled, requestNotificationPermission, notificationChannel } from "../notify";
+import {
+  getDensity,
+  getTheme,
+  isLightActive,
+  setDensity,
+  setTheme,
+  type Density,
+  type ThemePref,
+} from "../prefs";
 import { isTauri, nativeAutostartStatus, nativeSetAutostart, nativeCheckUpdate } from "../tauri-bridge";
 
 const TABS = ["General", "Models", "Local", "Automations", "Voice", "Privacy", "Advanced"] as const;
@@ -26,6 +35,10 @@ export function Settings({ onOnboard }: { onOnboard?: () => void }) {
   const [metrics, setMetrics] = useState<Record<string, unknown> | null>(null);
   const [voice, setVoice] = useState<Record<string, unknown> | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /* Phase 1 · appearance prefs (prefs.ts owns them; this is a view). */
+  const [themeChoice, setThemeChoice] = useState<ThemePref>(getTheme());
+  const [density, setDensityChoice] = useState<Density>(getDensity());
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   /* Phase 5 · native matrix opt-ins (honest about host capabilities). */
   const [notifOn, setNotifOn] = useState(notificationsEnabled());
   const [notifChannel, setNotifChannel] = useState<string>("…");
@@ -34,6 +47,13 @@ export function Settings({ onOnboard }: { onOnboard?: () => void }) {
   useEffect(() => {
     void notificationChannel().then(setNotifChannel);
     void nativeAutostartStatus().then(setAutostart);
+    // Report the OS motion preference rather than assuming: a user who set
+    // "reduce motion" system-wide must see that XR honored it.
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setPrefersReducedMotion(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
   }, []);
 
   const load = useCallback((t: Tab) => {
@@ -85,6 +105,45 @@ export function Settings({ onOnboard }: { onOnboard?: () => void }) {
               <span className="k">engine</span><span className="mono">{version ?? "—"}</span>
               <span className="k">daemon</span><span className="tl-ok">connected</span>
               <span className="k">shell</span><span>XR Desktop · phase 6 chrome</span>
+            </div>
+          </section>
+          {/* Phase 1 · D-05 — appearance. The tokens, the media query and the
+              pre-paint script all existed, but NOTHING in the product let a
+              user choose: theme and density were unreachable without editing
+              localStorage by hand. These controls write through prefs.ts (the
+              single source of truth) so <html> attributes, color-scheme and
+              every screen update together. */}
+          <section className="tc-card">
+            <div className="rail-h">Appearance</div>
+            <div className="kv2">
+              <span className="k">theme</span>
+              <span className="seg" role="radiogroup" aria-label="Theme">
+                {(["dark", "light", "system"] as const).map((t) => (
+                  <button
+                    key={t}
+                    role="radio"
+                    aria-checked={themeChoice === t}
+                    className={`segbtn ${themeChoice === t ? "on" : ""}`}
+                    onClick={() => { setTheme(t); setThemeChoice(t); setNote(`theme: ${t}${t === "system" ? ` (following OS → ${isLightActive() ? "light" : "dark"})` : ""}`); }}
+                  >{t}</button>
+                ))}
+              </span>
+              <span className="k">density</span>
+              <span className="seg" role="radiogroup" aria-label="Interface density">
+                {(["comfortable", "compact"] as const).map((d) => (
+                  <button
+                    key={d}
+                    role="radio"
+                    aria-checked={density === d}
+                    className={`segbtn ${density === d ? "on" : ""}`}
+                    onClick={() => { setDensity(d); setDensityChoice(d); setNote(`density: ${d} — spacing only, type size is unchanged for legibility`); }}
+                  >{d}</button>
+                ))}
+              </span>
+              <span className="k">motion</span>
+              <span className="faint">
+                {prefersReducedMotion ? "reduced — following the OS setting" : "full — reduced-motion is honored automatically when the OS asks for it"}
+              </span>
             </div>
           </section>
           <section className="tc-card">

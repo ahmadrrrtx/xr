@@ -18,6 +18,88 @@ export class EngineDown extends Error {}
 
 let linkPromise: Promise<{ base: string; token: string | null }> | null = null;
 
+/**
+ * Phase 1 · SEC-DEV-01 — dev-session header.
+ *
+ * When the dev server is exposed beyond loopback (XR_DEV_EXPOSE=1) the proxy
+ * refuses to attach the operator's engine token until the caller has paired by
+ * presenting the code printed to the dev process's terminal. The resulting
+ * session token is kept in localStorage and sent as `x-xr-dev-session`.
+ *
+ * In the default loopback dev setup and in the packaged app this is a no-op:
+ * the proxy injects the token (dev) or the sidecar link supplies it (packaged).
+ */
+const DEV_SESSION_KEY = "xr.dev.session";
+
+export function devSession(): string | null {
+  try {
+    return window.localStorage.getItem(DEV_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setDevSession(v: string | null): void {
+  try {
+    if (v) window.localStorage.setItem(DEV_SESSION_KEY, v);
+    else window.localStorage.removeItem(DEV_SESSION_KEY);
+  } catch {
+    /* storage disabled — pairing simply will not persist */
+  }
+}
+
+/** Honour `#pair=<code>` in the URL once, then clean the fragment. */
+export async function pairFromUrl(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  const m = /(?:^|[#&])pair=([A-Za-z0-9]+)/.exec(window.location.hash);
+  if (!m) return false;
+  const ok = await pairDev(m[1]);
+  try {
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+  } catch {
+    /* non-fatal */
+  }
+  return ok;
+}
+
+/**
+ * Exchange a pairing code for a dev session token. The code is only ever
+ * printed in the terminal running the dev server, so this can only succeed for
+ * someone with local access to the machine.
+ */
+export async function pairDev(code: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/__xr/pair?code=${encodeURIComponent(code)}`);
+    if (!res.ok) return false;
+    const j = (await res.json()) as { session?: string | null };
+    if (j.session) {
+      setDevSession(j.session);
+      linkPromise = null; // re-resolve the endpoint with the new credential
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** True when the dev proxy reports that pairing is required and we are unpaired. */
+export async function isUnpairedExposedDev(): Promise<boolean> {
+  try {
+    const res = await fetch("/__xr/pair");
+    if (!res.ok) return false;
+    const j = (await res.json()) as { mode?: string; paired?: boolean };
+    return j.mode === "pairing" && j.paired === false;
+  } catch {
+    return false;
+  }
+}
+
+function devHeaders(): Record<string, string> {
+  const s = devSession();
+  return s ? { "x-xr-dev-session": s } : {};
+}
+
 function endpoint(): Promise<{ base: string; token: string | null }> {
   if (!linkPromise) {
     linkPromise = (async () => {
@@ -54,6 +136,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
         Accept: "application/json",
         ...(init?.body ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...devHeaders(),
       },
     });
   } catch {
@@ -84,7 +167,7 @@ export async function chatStream(
   try {
     res = await fetch(`${base}/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...devHeaders() },
       body: JSON.stringify({ ...body, stream: true }),
       signal,
     });
@@ -138,7 +221,7 @@ export async function terminalRun(
   try {
     res = await fetch(`${base}/terminal/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...devHeaders() },
       body: JSON.stringify(body),
       signal,
     });

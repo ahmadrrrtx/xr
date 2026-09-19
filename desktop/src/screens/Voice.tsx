@@ -1,6 +1,19 @@
 import { useEffect, useRef } from "react";
 import { useVoice, type VoiceState } from "../voice/session";
 import avatarUrl from "../assets/xr-avatar.png";
+/**
+ * Avatar state system (design system §avatar states).
+ *
+ * The engine already reports the voice state; the avatar's ORIENTATION is the
+ * visual encoding of it, using the official profile renders the brand ships
+ * rather than an invented animation:
+ *   facing you      → idle / listening / speaking / interrupted / done
+ *   turned away     → thinking / planning / working   (the agent is busy)
+ *   profile profile → tool / approval                 (an action is in flight)
+ * No state is fabricated here: an unknown state falls back to the front view.
+ */
+import avatarSideUrl from "../assets/xr-avatar-side.webp";
+import avatarSide2Url from "../assets/xr-avatar-side-2.webp";
 
 /** Phase 4 · the full avatar state machine, engine-reported end to end. */
 const PILLS: VoiceState[] = [
@@ -92,16 +105,26 @@ export function Voice({ onDock }: { onDock: () => void }) {
   }, [voice]);
 
   const speaking = state === "speaking";
+  const avatarSrc =
+    state === "thinking" || state === "planning" || state === "working"
+      ? avatarSideUrl
+      : state === "tool" || state === "approval"
+        ? avatarSide2Url
+        : avatarUrl;
 
   return (
     <div className="vc-root" role="region" aria-label="Voice mode">
-      <button className="vc-dock-btn" onClick={onDock} title="Dock the avatar — voice keeps running while you work" aria-label="Dock voice avatar">
+      {/* D-01 · Voice is a ROUTE now (prism2.css), so the nav rail stays live
+          and this button returns you to wherever you were. Esc does the same
+          and is announced below — previously the only way out was this 34px
+          corner button, and Esc did nothing. */}
+      <button className="vc-dock-btn" onClick={onDock} title="Back to work — voice keeps running" aria-label="Leave voice mode, voice keeps running">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
       </button>
 
       <div className={`vc-ring ${state}`} >
         <div className="vc-ring-inner">
-          <img src={avatarUrl} alt="XR avatar" className="vc-avatar" />
+          <img src={avatarSrc} alt="XR avatar" className="vc-avatar" />
         </div>
       </div>
 
@@ -136,6 +159,12 @@ export function Voice({ onDock }: { onDock: () => void }) {
             <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
           </svg>
         </button>
+        {/* D-01 · the exit is now visible. The rail is live (voice is a route)
+            and Esc returns you to where you were, so the affordance states it
+            instead of leaving the user to find a 34px corner button. */}
+        <span className="vc-esc-hint">
+          <kbd>Esc</kbd> back to work — voice keeps running
+        </span>
         <button className={`vc-mute ${voice.muted ? "on" : ""}`} onClick={voice.toggleMute} aria-label={voice.muted ? "Unmute microphone" : "Mute microphone"}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
             <rect x="9" y="3" width="6" height="11" rx="3" />
