@@ -106,6 +106,18 @@ observed 64 engine request(s) in 65.0s  →  59.1 requests/minute
   providers.list     2    (1.8/min)   ← 30 s cadence
 ```
 
+**Before/after, measured on the running app** (`PROBE_TOUR=runs`, 40 s window, same probe, the
+previous commit checked out for the "before"):
+
+| Sitting on **Runs** | requests/min | `sessions` | `agents` |
+|---|---|---|---|
+| before — Runs owned its own 5 s poller | **82.5** | 24/min | 18/min |
+| after — Runs is a hub subscriber | **58.5** | 12/min | 6/min |
+
+−29% total, the duplicated endpoints halve, and sitting on Runs now costs **zero** extra requests
+over idling on Home — which is the property that matters: a screen no longer re-fetches what the
+hub already owns.
+
 Every key appears at its own cadence exactly once per cycle. Before the hub,
 `pending`, `providers`, `sessions` and `approvals` each appeared twice per cycle
 at two different intervals — that is the inconsistency this closed, and it is now
@@ -160,12 +172,27 @@ green result into a false one:
 
 ## 5. What is NOT verified here
 
-* **The Tauri/Rust shell was not compiled.** This environment has no Rust toolchain on a stable
-  basis (it is dropped between sessions) and lacks the GTK/WebKit system libraries a host build
-  needs. **W-1 (`CREATE_NO_WINDOW`), W-2 (Job Object / process-group kill), W-3
-  (single-instance), W-5 (capture sidecar stderr) and W-6 (cache the `engine_link` reachability
-  probe) are therefore still OPEN.** No native-runtime behaviour is claimed anywhere in this
-  document.
+**W-1 (`CREATE_NO_WINDOW`), W-2 (Job Object / process-group kill), W-3 (single-instance), W-5
+(capture sidecar stderr) and W-6 (cache the `engine_link` reachability probe) are all still OPEN.**
+No native-runtime behaviour is claimed anywhere in this document.
+
+The Windows shell was *attempted* three times, and the attempt is recorded because "we could not
+check" is itself a fact worth carrying:
+
+| Attempt | Toolchain | Outcome |
+|---|---|---|
+| `--target x86_64-pc-windows-msvc` | Rust 1.98.1, all crates fetched | `ring v0.17.14` build script fails: *"GNU compiler is not supported for this target"* / *failed to find tool `lib.exe`* — the MSVC linker does not exist on Linux, and `cc-rs` refuses a GNU compiler for an MSVC target. **Environmental, not a code finding.** |
+| `--target x86_64-pc-windows-gnu` | mingw-w64 + nasm installed | `rustc` compiling `windows v0.61.3` was **SIGKILLed (signal 9)** — the OOM killer. 58 crates in before it died. |
+| same, retried with `CARGO_BUILD_JOBS=1 CARGO_PROFILE_DEV_DEBUG=0 -C debuginfo=0 -C strip=debuginfo` | — | **SIGKILLed again on the same crate.** The generated Win32 surface needs more than this sandbox's 1.9 GB for a single rustc process, and the machine has no swap. |
+
+So the cross-check is blocked by the *environment* at two different points, and no amount of
+retrying changes that. What IS committed from this work is `desktop/src-tauri/Cargo.lock` (531
+packages) — the resolution needed for a reproducible build — and the finding that a Linux host
+check also cannot run here, because `gdk-3.0`/`webkit2gtk` development packages are unavailable
+from this image's package mirrors (the download 404s).
+
+A Windows `cargo check` therefore still has to happen on a real Windows runner (the CI lane) or a
+machine with more memory. Until then, treat W-1…W-6 as specification, not as shipped behaviour.
 * **Windows and macOS lane results are unchanged** by this branch; the cross-platform CI lane owns
   them, and the win32 regression is only *proven* once that lane runs green.
 * **The dev-proxy pairing banner** prints a hardcoded `:5173` in its pair-URL hint even when the
