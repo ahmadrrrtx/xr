@@ -33,7 +33,7 @@ import { loadNativeVoice } from "../../voice/native.ts";
 import { getApprovalStore } from "../../control/approval-store.ts";
 import type { Store } from "../../state/workspace-store.ts";
 
-export type VoiceSessionState = "idle" | "listening" | "thinking" | "working" | "speaking" | "interrupted";
+export type VoiceSessionState = "idle" | "listening" | "thinking" | "planning" | "working" | "tool" | "speaking" | "interrupted" | "success";
 
 export interface VoiceEvent {
   type: "state" | "final" | "tts" | "tts_stop" | "approval" | "status" | "error";
@@ -94,6 +94,9 @@ export class VoiceSession {
       store: this.store,
       stt: this.stt,
       tts: this.tts,
+      // Phase 4 · avatar state machine: the engine reports planning/tool
+      // phases from the real execution envelope; the shell only renders them.
+      onPhase: (p) => this.setState(p),
       play: (audio) => {
         // The SHELL plays audio; the pipeline only needs stop semantics for
         // barge-in, which arrives as /api/voice/barge-in → tts_stop event.
@@ -277,7 +280,11 @@ export class VoiceSession {
       if (!out.handled && !out.reply) {
         await this.pipeline.say("I didn't catch a command in that.");
       }
-      if (this.state !== "speaking") this.setState("listening");
+      if (out.handled && this.state !== "speaking") {
+        this.setState("success");
+        setTimeout(() => { if (this.state === "success") this.setState("listening"); }, 1800);
+      }
+      if (this.state !== "speaking" && this.state !== "success") this.setState("listening");
     } catch (e) {
       this.emit({ type: "error", detail: String((e as Error)?.message ?? e).slice(0, 200) });
       this.setState("listening");

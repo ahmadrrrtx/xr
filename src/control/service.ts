@@ -14,6 +14,7 @@ import { auditPlanned, auditExecuted, auditDenied, auditDisabled } from "./audit
 import { approvals, bindApprovals } from "./approvals.ts";
 import { rememberPlan } from "./memory.ts";
 import { checkPermissionForAction } from "./permissions.ts";
+import { isControlPaused } from "./pause.ts";
 
 export function isDisabled(): { disabled: boolean; reason?: string } {
   if (process.env.XR_CONTROL_FORCE_TEST === "1") {
@@ -137,6 +138,19 @@ export async function runAction(
   // dashboard decide ONE durable record (cross-process capable, TTL
   // default-deny), never an in-memory promise.
   bindApprovals(store);
+  // Phase 4 · Control Room — durable pause is honored on EVERY action,
+  // exactly like the kill switch; paused actions are audited and skipped.
+  const pause = isControlPaused();
+  if (pause.paused) {
+    const result: ActionResult = { ok: false, skipped: true, message: `computer control is paused (${pause.reason ?? "Control Room"})` };
+    const safe = ActionSchema.safeParse(raw);
+    if (safe.success) store.audit("control.action_paused", { action: safe.data.type });
+    return {
+      action: safe.success ? safe.data : ({ type: "focus", name: "(paused)" } as Action),
+      risk: { level: "safe", reason: "paused", reversible: true },
+      result,
+    };
+  }
   const kill = isDisabled();
   if (kill.disabled) {
     const result: ActionResult = { ok: false, skipped: true, message: `computer control is disabled (${kill.reason})` };

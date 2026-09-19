@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { XrLogo, XrAvatar } from "./Brand";
 import { api, asList, type ProviderInfo, type SessionSummary, type SkillInfo } from "../api/client";
 
-export type Area = "home" | "projects" | "work" | "workspace" | "research" | "memory" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
+export type Area = "home" | "projects" | "work" | "workspace" | "research" | "memory" | "models" | "control" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
 
 /* Phase 6 · mock-accurate icon rail. Left: work areas. Bottom: settings + presence. */
 const NAV: { id: Area; label: string; icon: ReactNode }[] = [
@@ -12,6 +12,8 @@ const NAV: { id: Area; label: string; icon: ReactNode }[] = [
   { id: "workspace", label: "Workspace (files)", icon: <path d="M3 6h6l2 2h10v11H3zM10 12v4M8 14h4" /> },
   { id: "research", label: "Research", icon: <path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zM15 15l5 5M10 7v6M7 10h6" /> },
   { id: "memory", label: "Memory", icon: <path d="M12 4a4 4 0 0 0-4 4c-2 0-3 2-3 3.5S6.5 15 8 15c0 2.5 2 4 4 4s4-1.5 4-4c1.5 0 3-2 3-3.5S18 8 16 8a4 4 0 0 0-4-4zM12 8v11" /> },
+  { id: "models", label: "Model Center", icon: <path d="M12 3l8 4.5-8 4.5-8-4.5zM4 12.5l8 4.5 8-4.5M4 17l8 4.5 8-4.5" /> },
+  { id: "control", label: "Control Room", icon: <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" /> },
   { id: "agents", label: "Multi-agent", icon: <path d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20a6 6 0 0 1 12 0M17 6a3 3 0 0 1 0 6M18 20a5.5 5.5 0 0 0-2-4M16 11h5M18.5 8.5V13.5" /> },
   { id: "runs", label: "Team runs", icon: <path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20a6 6 0 0 1 12 0M16 6a3 3 0 0 1 0 6M17 20a5.5 5.5 0 0 0-2-4" /> },
   { id: "library", label: "Library", icon: <path d="M6 4h3v16H6zM11 4h3v16h-3zM16.5 5.2l2.9.8-3.6 13.6-2.9-.8z" /> },

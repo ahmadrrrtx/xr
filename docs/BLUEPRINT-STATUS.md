@@ -89,3 +89,14 @@ in the workstation; summary mirrored here). Every line below is engine-backed.
 | Automations surface | **SHIPPED** | Library → Automations tab over the real trigger scheduler (`GET /triggers`, `POST /triggers/pause-all`); reflects actual pauseAll/inflight/triggers |
 | Nav + palette | **SHIPPED** | Research and Memory in sidebar NAV and ⌘K palette; lazy-loaded routes |
 | Gates | green | desktop tsc + vite build; full `bun run ci` (typecheck, tests, api-compat 153 ops, boundaries 609 modules, size-gate, ownership 181 areas, marketplace); unit-tier 267 tests/1314 ms; reliability 66/66; phase suites 69/69 |
+
+## Phase 4 · Model Center + Control Room + voice state polish (2026-09-19)
+
+| Item | State | Evidence |
+|---|---|---|
+| Model Center | **SHIPPED** | engine-owned: `GET /models` (runtime detection + hardware), `POST /models/test` live probe w/ latency chip, `POST /models/select`, `GET /providers` (+`/capabilities?id=`), default+fallback pair via `POST /providers/set`; ONE unambiguous active hero (LOCAL → CLOUD FALLBACK); BYOK keys written ONLY through `/onboarding/provider` (engine secret store; shell never retains); honest amber banner when no local runtime runs |
+| Control Room | **SHIPPED** | live feed from `/control/events` audit (action/why/risk chips), pending approvals w/ Approve/Deny over the durable store, standing-grants manager over `/control/permissions/grant`, trust-mode chip from cockpit |
+| Control verbs (NEW engine) | **SHIPPED** | `src/control/pause.ts` durable pause (env-overridable path, audited) honored per-action in `runAction` BEFORE permissions/execution; `POST /control/pause {paused}` + `{stop:true}` (= pause + deny ALL pending through the same durable store); cockpit/status expose `paused`; contract metadata + regenerated openapi/client (829→835, waiver updated) |
+| Voice polish | **SHIPPED** | engine voice state machine extended: `planning`/`tool` (from the real execution envelope via pipeline `onPhase`) and `success`; shell avatar machine adds `approval`/`error`/`offline` overlays from engine events/SSE; full 12-state pill set, ring/orb glows for every state (no redraws) |
+| Tests (DoD) | green | `test/control/pause-stop.test.ts` (pause skips+audits runAction, resume re-opens, stop denies pending durably) · `test/voice/session-states.test.ts` (extended vocabulary emission, barge-in-while-speaking → tts_stop + listening, onPhase wiring) · failover already covered by `test/intelligence/failover-cpr.test.ts` |
+| Gates | green | desktop tsc + vite build; full `bun run ci` (3314 tests, api-compat 154 ops, boundaries, size-gate, ownership, claim-lint, marketplace); unit-tier 1295 ms; reliability 66/66; phase suites 69/69 |

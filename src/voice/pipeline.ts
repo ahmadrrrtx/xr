@@ -28,6 +28,8 @@ export interface VoiceDeps {
   requireWake?: boolean;
   settings?: VoiceSettings;
   onText?: (entry: { role: "user" | "assistant" | "system"; text: string }) => void;
+  /** Phase 4 · avatar state machine: planning before the run, tool on each tool_call. */
+  onPhase?: (phase: "planning" | "tool") => void;
 }
 
 export class VoicePipeline {
@@ -162,6 +164,7 @@ export class VoicePipeline {
      * (Phase 0 · T8 had bridged only its tool set).
      */
     this.runAbort = new AbortController();
+    this.deps.onPhase?.("planning");
     const { splitSentences, spokenStatusLine } = await import("./v2.ts");
     const result = await executeOnSurface({
       task: command,
@@ -175,6 +178,7 @@ export class VoicePipeline {
       approve: this.voiceApprover(),
       signal: this.runAbort.signal,
       onStreamEvent: (ev) => {
+        if (ev.type === "tool_call") this.deps.onPhase?.("tool");
         if (!this.settings.spokenStatus) return;
         const line = spokenStatusLine(ev);
         if (line) {

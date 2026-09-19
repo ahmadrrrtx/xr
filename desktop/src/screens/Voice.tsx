@@ -2,24 +2,40 @@ import { useEffect, useRef } from "react";
 import { useVoice, type VoiceState } from "../voice/session";
 import avatarUrl from "../assets/xr-avatar.png";
 
-const PILLS: VoiceState[] = ["idle", "listening", "thinking", "working", "speaking"];
+/** Phase 4 · the full avatar state machine, engine-reported end to end. */
+const PILLS: VoiceState[] = [
+  "idle", "listening", "thinking", "planning", "working", "tool",
+  "approval", "speaking", "success", "interrupted", "error", "offline",
+];
 
 const STATE_TITLE: Record<VoiceState, string> = {
   idle: "Voice is off",
   listening: "Listening…",
   thinking: "Thinking…",
+  planning: "Planning…",
   working: "Working…",
+  tool: "Using a tool…",
+  approval: "Approval needed",
   speaking: "Speaking…",
   interrupted: "Interrupted — listening again",
+  success: "Done ✓",
+  error: "Voice error",
+  offline: "Engine unreachable",
 };
 
 const STATE_HINT: Record<VoiceState, string> = {
   idle: "press Space or tap the mic to start · everything runs offline on this machine",
   listening: "press Space to stop · just speak to interrupt",
   thinking: "your words are being transcribed on-device",
+  planning: "the engine is composing a plan for your command",
   working: "the engine is acting on your command",
+  tool: "a governed tool call is in flight — same approvals as always",
+  approval: "say confirm or cancel — the durable store decides, not the shell",
   speaking: "just speak to barge in · say confirm or cancel for approvals",
   interrupted: "press Space to stop · just speak to interrupt",
+  success: "command completed — listening again in a moment",
+  error: "the engine reported a voice error — see the line below; session stays honest",
+  offline: "the daemon event stream is down — voice cannot run until it returns",
 };
 
 /** Mirrored bar waveform, drawn from live mic or TTS analyser levels. */

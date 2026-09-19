@@ -17,6 +17,8 @@ const Voice = lazy(() => import("./screens/Voice").then((m) => ({ default: m.Voi
 const Projects = lazy(() => import("./screens/Projects").then((m) => ({ default: m.Projects })));
 const Memory = lazy(() => import("./screens/Memory").then((m) => ({ default: m.Memory })));
 const Research = lazy(() => import("./screens/Research").then((m) => ({ default: m.Research })));
+const ModelCenter = lazy(() => import("./screens/ModelCenter").then((m) => ({ default: m.ModelCenter })));
+const ControlRoom = lazy(() => import("./screens/ControlRoom").then((m) => ({ default: m.ControlRoom })));
 import { VoiceProvider, useVoice } from "./voice/session";
 import { DockedVoice } from "./voice/DockedVoice";
 import { ToastBus, pushToast } from "./components/ToastBus";
@@ -27,6 +29,7 @@ import "./styles/tokens.css";
 import "./styles/phase6.css";
 import "./styles/phase7.css";
 import "./styles/phase8.css";
+import "./styles/phase9.css";
 
 function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () => void }) {
   const voice = useVoice();
@@ -58,6 +61,8 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
       {area === "projects" && <Projects onOpenWorkspace={() => go("workspace")} />}
       {area === "memory" && <Memory />}
       {area === "research" && <Research />}
+      {area === "models" && <ModelCenter />}
+      {area === "control" && <ControlRoom />}
       {area === "home" && (
         <Home
           onOpenRun={(id) => { setRunId(id); setArea("runs"); }}

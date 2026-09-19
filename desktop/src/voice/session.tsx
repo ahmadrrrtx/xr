@@ -1,7 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../api/client";
 
-export type VoiceState = "idle" | "listening" | "thinking" | "working" | "speaking" | "interrupted";
+/** Phase 4 · full avatar state machine. Engine-reported: idle…success
+ * (voice.routes VoiceSessionState); shell-derived overlays: approval
+ * (engine approval event), error (engine error event), offline (SSE down). */
+export type VoiceState =
+  | "idle" | "listening" | "thinking" | "planning" | "working" | "tool"
+  | "speaking" | "interrupted" | "success" | "approval" | "error" | "offline";
 
 export interface VoiceContextValue {
   state: VoiceState;
@@ -64,16 +69,16 @@ export function VoiceProvider({ children }: { children: ReactNode }) {
         const e = JSON.parse(ev.data) as {
           type: string; state?: VoiceState; text?: string; wav?: string; id?: string; tool?: string; reason?: string; detail?: string;
         };
-        if (e.type === "state" && e.state) setState(e.state);
+        if (e.type === "state" && e.state) { setApproval(null); setError(null); setState(e.state); }
         if (e.type === "final" && e.text) setTranscript(e.text);
         if (e.type === "status" && e.text) setLastReply(e.text);
-        if (e.type === "approval") setApproval({ id: e.id ?? "", tool: e.tool, reason: e.reason });
-        if (e.type === "error") setError(e.detail ?? "voice error");
+        if (e.type === "approval") { setApproval({ id: e.id ?? "", tool: e.tool, reason: e.reason }); setState("approval"); }
+        if (e.type === "error") { setError(e.detail ?? "voice error"); setState("error"); }
         if (e.type === "tts_stop") stopSpeak();
         if (e.type === "tts" && e.wav) void playWav(e.wav);
       } catch { /* ignore malformed */ }
     };
-    es.onerror = () => setError("voice event stream disconnected");
+    es.onerror = () => { setError("voice event stream disconnected"); setState("offline"); };
     return () => { es.close(); esRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
