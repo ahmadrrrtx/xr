@@ -13,8 +13,8 @@ running the thing — no result is copied from a previous report.
 | # | DoD item | Result | Evidence |
 |---|---|---|---|
 | 1 | Voice reaches every area; Esc exits Voice | **PASS** | renderer lane ×3: `D-01` route-not-overlay (rail stays usable), `D-01` Escape exits and the session survives, `D-01` visible exit affordance |
-| 2 | Win32 store constructs correctly under all path spellings | **PASS (unit + falsification)** | `test/state/migration-lock-self-deadlock.test.ts` 10 pass; pre-fix a self-hold cost **20 008 ms**, post-fix the same condition **throws in < 1 ms** |
-| 3 | `approvals-durable` real suite restored on win32 and green | **PASS** | probe branch deleted; suite 11 pass @ 1 238 ms; CI step now reruns the suspects instead of scraping marker files |
+| 2 | Win32 store constructs correctly under all path spellings | **PASS (unit + falsification)** | `test/state/migration-lock-self-deadlock.test.ts` 11 pass; pre-fix a self-hold cost **20 008 ms**, post-fix the same condition **throws in < 1 ms**. Honesty note: this deadlock was real, but it was **not** the cause of the win32 hang (row 3). |
+| 3 | `approvals-durable` real suite restored on win32 and green | **CORRECTED 2026-09-19 — see §5b** | The earlier "PASS" here was a Linux run of the file; the Windows parity lane had been cancelled by every subsequent push and never confirmed it. When it finally ran (run 35464595934) the file still died at exit 124 with zero output. The Windows lab (run 35467925776) then named the true mechanism — an approval wait whose only wake-ups were unref'd timers, which Bun on win32 never services once nothing ref'd remains — fixed in `src/control/approval-store.ts`. Proof is the Windows parity lane on the fix commit (§5b). |
 | 4 | Unauth `GET /api/v1/audit` via the dev proxy → 401 | **PASS** | live: unauth `/audit`, `/providers`, `/control/pending` → 401 (was 200); wrong pairing code → 403; correct code → session; paired → 200; engine token appears **0×** in served HTML |
 | 5 | Provider health honest in the status bar | **PASS** | lane: status-bar text is non-empty and free of `undefined`/`NaN`; `unknown` is a distinct state and the offline state names the reason |
 | 6 | Palette finds `mcp` / `ollama` / files / settings | **PASS** | lane: synonym query resolves (no dead query); cheat sheet renders the same registry |
@@ -185,6 +185,36 @@ state of the branch, and the evidence now lives in CI jobs rather than in this c
 | W-6 cached reachability probe | 1.5 s TTL cache in front of the blocking connect | TTL expiry, per-port isolation and clock-skew cases under test; pass on Linux and Windows. |
 | Windows installers | NSIS per-user (`installMode: currentUser`) **and** MSI both built; the release job asserts both flavours exist | `Desktop App · Windows — tauri bundle` **success** at `2f5d380` with the msi+nsis assertion. |
 | SEC-12 engine never outlives the shell | Windows: W-2 job. Linux: `PR_SET_PDEATHSIG` armed in `pre_exec` (`unix.rs`). macOS: engine-side parent watch. All OSes: `xr serve --parent-pid <shell pid>`; clean quits send SIGTERM first (Unix) | `unix::tests::pdeathsig_is_bound_to_the_spawning_thread` + control + two `terminate_gracefully` tests (Linux reference, `cargo test`); `test/daemon/parent-watch*.test.ts` (decision table on every OS; SIGKILLed-parent process tree on Linux/macOS); `test/e2e-blackbox/parent-watch.test.ts` — the real CLI, spawned by a stand-in shell that is SIGKILLed: port stops answering and the process is gone within seconds, `daemon.parent_gone` on stderr. `engine_link` reports `containmentMode`. |
+
+### 5b. The win32 parity hang — what the lab measured
+
+The `approvals-durable` hang collected three explanations over its life ("flake", leaked
+pollers, migration-lock self-deadlock) and code for each, none of which was checked against a
+Windows kernel — a killed bun loses its stdout on win32, and every Cross-Platform run on this
+branch was cancelled by the next push. `.github/workflows/win-lab.yml` (manual, run
+35467925776) wrote kill-surviving markers from a `--preload` and settled it in one run:
+
+| Experiment (windows-latest, bun 1.3.14) | Result |
+|---|---|
+| whole file, 300 s cap, `--timeout 20000` | markers: `preload → beforeAll → START #1`, then nothing; the preload's 2 s heartbeat **never ticked once**; exit 124 |
+| first test only (`-t "TTL default-deny"`) | identical |
+| plain `bun run` script: open Store → `request()` → `await outcome` | `request()` returned at +0.11 s; the await never settled in 90 s |
+| `fixtures/raise-approval.ts` alone | exit 0 immediately (it `process.exit`s) |
+| `fixtures/raise-and-wait.ts` alone, ttl 2000 | **exit 0 in 2 s** — the one process that also owned a **ref'd** timer (its guard) |
+| `migration-lock-self-deadlock.test.ts` alone | 10 pass · 1 fail — `rmSync` on a directory symlink → `EFAULT` (Bun on win32); test cleanup fixed with `rmdir` |
+
+Mechanism: `ApprovalStore.request()`/`waitFor()` unref'd **both** the TTL timer and the poller —
+the promise's only wake-up sources. Bun on win32 does not service unref'd timers once no ref'd
+handle remains while a pending await keeps the process alive; bun test's per-test timeout is the
+same kind of timer, which is why it never reported the test by name. Bun on Linux/macOS runs
+unref'd timers regardless — the whole reason this read as "Windows only". Fix: the TTL timer is
+ref'd (a process waiting on a human is legitimately alive; the wait is bounded by construction)
+and settlement clears both handles; the poller stays unref'd. `bun test` exits at the end of a
+run regardless of live timers (measured locally: a ref'd 60 s timer left behind → exit in 38 ms),
+so the old "unref for test hygiene" bought nothing.
+
+The Cross-Platform diagnostics step was also rewritten: its previous form piped an unbounded
+`bun test` into `tail` and itself hung for 29 minutes after the suite step timed out.
 
 Still **not** runtime-verified anywhere: the no-console-flash observation itself (W-1), the
 install → launch → taskkill → engine-dead sequence as one scripted run on the Windows runner

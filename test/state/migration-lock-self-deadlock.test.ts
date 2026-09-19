@@ -12,11 +12,29 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, readdirSync, mkdirSync, symlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readdirSync, mkdirSync, symlinkSync, unlinkSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { canonicalPathKey, canonicalDbKey, sameFileIdentity, normalizeRelativePath } from "../../src/util/paths.ts";
 import { withMigrationLock, MigrationLockError } from "../../src/state/migration-lock.ts";
+
+/**
+ * Remove a DIRECTORY symlink without following it. POSIX: `unlink` is the
+ * call. Windows: a directory symlink is a directory entry — `unlink` reports
+ * EPERM and Bun's `rmSync(link, { force: true })` fails with EFAULT
+ * (windows-latest, bun 1.3.14) — so `rmdir` on the link itself is the call.
+ */
+function removeDirLink(link: string): void {
+  try {
+    unlinkSync(link);
+  } catch {
+    try {
+      rmdirSync(link);
+    } catch {
+      /* already gone */
+    }
+  }
+}
 
 function tmp(): string {
   return mkdtempSync(join(tmpdir(), "xr-lockreg-"));
@@ -81,7 +99,7 @@ describe("canonicalPathKey — one identity per file", () => {
       // …and it is the same identity as the un-linked spelling.
       expect(after).toBe(canonicalPathKey(join(real, "nested", "xr.db")));
     } finally {
-      rmSync(link, { force: true });
+      removeDirLink(link);
       rmSync(real, { recursive: true, force: true });
     }
   });
