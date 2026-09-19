@@ -206,7 +206,12 @@ describe("files.diff + files.hunks.revert — git is the applier, the human is t
     const after = readFileSync(join(projectDir, "notes.txt"), "utf8");
     expect(after).toContain("line 3 EDITED-A"); // kept
     expect(after).not.toContain("EDITED-B"); // reverted
-    expect(after.split("\n")[24]).toBe("line 25"); // restored byte-for-byte
+    // Restored line-for-line. Byte-for-byte on POSIX; on the Windows runner
+    // git's core.autocrlf=true writes CRLF when it re-materialises the file
+    // (the same conversion `git checkout -p` applies there) — git's contract,
+    // not ours to override, so the comparison is EOL-agnostic. Measured:
+    // Cross-Platform Windows job 105986895650 received "line 25\r".
+    expect(after.split(/\r?\n/)[24]).toBe("line 25");
     expect(body.hunks).toHaveLength(1);
     expect(body.hunks[0]!.id).toBe(hunkA!.id); // sibling id survived the revert
     expect(store.recentAudit(50).map((r) => r.event)).toContain("files.hunks.reverted");
