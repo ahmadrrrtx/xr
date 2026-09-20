@@ -55,7 +55,7 @@ jobs:
           RUN="${{ github.event.workflow_run.id || github.event.inputs.run_id }}"
           echo "run=$RUN" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
 
       - name: Install engine deps (probe script runtime)
         run: bun install --frozen-lockfile --ignore-scripts
