@@ -5,6 +5,7 @@
  * Never use execSync / spawnSync / Bun.spawnSync on request handlers.
  */
 import { spawn as nodeSpawn } from "node:child_process";
+import { controlAddress, sendControl } from "./child-channel.ts";
 
 export interface RunCommandOptions {
   cwd?: string;
@@ -23,6 +24,14 @@ export interface RunCommandOptions {
    * success). An already-aborted signal fails fast without spawning.
    */
   signal?: AbortSignal;
+  /**
+   * Phase 4 · SEC-06 — also deliver cancellation over the child control
+   * channel (named pipe on win32, unix socket elsewhere) with a bounded
+   * timeout, alongside the OS kill. XR-aware children (`XR_CONTROL_CHILD=1`)
+   * abort cooperatively; for arbitrary commands the OS kill remains the
+   * backstop. Fail-closed: an unanswered pipe never blocks the kill path.
+   */
+  controlChannel?: boolean;
 }
 
 export interface RunCommandResult {
@@ -124,6 +133,11 @@ async function runWithBun(
   // Phase 06 — caller cancellation reaches the child process.
   const onAbort = (): void => {
     cancelled = true;
+    // Phase 4 · SEC-06 — pipe-delivered cancel (bounded, fail-closed) in
+    // parallel with the OS kill; never awaited, never blocking.
+    if (opts.controlChannel && typeof (proc as { pid?: number }).pid === "number") {
+      void sendControl(controlAddress((proc as { pid?: number }).pid), { type: "cancel", reason: "aborted" }, 400);
+    }
     try {
       proc.kill();
     } catch {
@@ -246,6 +260,11 @@ function runWithNode(
     let cancelled = false;
     const onAbort = (): void => {
       cancelled = true;
+      // Phase 4 · SEC-06 — pipe-delivered cancel (bounded, fail-closed) in
+      // parallel with SIGTERM; on win32 the pipe is the cooperative path.
+      if (opts.controlChannel && typeof child.pid === "number") {
+        void sendControl(controlAddress(child.pid), { type: "cancel", reason: "aborted" }, 400);
+      }
       try {
         child.kill("SIGTERM");
       } catch {

@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, asList, type SessionSummary } from "../api/client";
+import { api, asList, type ProviderInfo, type SessionSummary } from "../api/client";
 import type { Area } from "./AppShell";
 import {
   buildCommands,
@@ -100,7 +100,9 @@ export function Palette(props: PaletteProps) {
     }
     let live = true;
     const t = setTimeout(() => {
-      Promise.allSettled([api.skills(term), api.sessions()]).then(([s, r]) => {
+      /* Phase 3 · omni search: skills, runs, models, MCP servers and
+         workspaces — all live engine reads, folded into one registry. */
+      Promise.allSettled([api.skills(term), api.sessions(), api.providers(), api.mcpServers(), api.workspaces()]).then(([s, r, p, m, w]) => {
         if (!live) return;
         const sk = s.status === "fulfilled" ? (s.value.skills ?? []) : [];
         const all = r.status === "fulfilled" ? asList<SessionSummary>(r.value, "sessions") : [];
@@ -108,9 +110,27 @@ export function Palette(props: PaletteProps) {
         const rs = all
           .filter((x) => `${x.title ?? ""} ${x.prompt ?? ""}`.toLowerCase().includes(low))
           .slice(0, 4);
+        const provs = p.status === "fulfilled" ? asList<ProviderInfo>(p.value, "providers", "items") : [];
+        const models = provs
+          .flatMap((pr) => {
+            // some engines list per-provider catalogs; others only a default —
+            // both are real switches, both belong in the omni results.
+            const list = pr.models?.length ? pr.models : typeof pr.defaultModel === "string" ? [pr.defaultModel] : [];
+            return list.map((mo) => ({ provider: pr.id, model: mo, local: pr.local }));
+          })
+          .filter((mo) => `${mo.provider} ${mo.model}`.toLowerCase().includes(low))
+          .slice(0, 5);
+        const mcps = m.status === "fulfilled"
+          ? ((m.value as { servers?: Array<{ id: string; name?: string; health?: string }> }).servers ?? [])
+            .filter((sv) => `${sv.id} ${sv.name ?? ""}`.toLowerCase().includes(low)).slice(0, 5)
+          : [];
+        const wss = w.status === "fulfilled"
+          ? ((w.value as { workspaces?: Array<{ id?: string; name?: string }> }).workspaces ?? [])
+            .filter((ws) => `${ws.id ?? ""} ${ws.name ?? ""}`.toLowerCase().includes(low)).slice(0, 4)
+          : [];
         // Engine hits are folded into the registry, not stored separately —
         // one list, one ordering, one source of truth for what Enter runs.
-        void buildCommands(deps, { skills: sk.slice(0, 6), runs: rs }).then(setRegistry);
+        void buildCommands(deps, { skills: sk.slice(0, 6), runs: rs, models, mcp: mcps, workspaces: wss }).then(setRegistry);
       });
     }, 200);
     return () => { live = false; clearTimeout(t); };

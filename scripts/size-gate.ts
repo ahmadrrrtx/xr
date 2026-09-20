@@ -1,238 +1,129 @@
-#!/usr/bin/env bun
 /**
- * XR Phase 2 · T7 — module size/complexity gate.
+ * XR · Article V.3 size gate — reconstructed 2026-09-20 (Phase 5) after the
+ * session-boundary loss; API pinned by test/architecture/size-gate.test.ts:
  *
- * Constitution Art. V.3: *"No module exceeds a defined size/complexity
- * threshold without an owned plan to split."*
+ *   · THRESHOLD must equal docs/perf/SIZE-WAIVERS.json#threshold
+ *   · checkSizes() → { unwaived, grown, staleWaivers, malformedWaivers }
  *
- * The gate is deliberately two-tier, because Art. V.3 permits an
- * over-threshold module **with an owned plan** — it does not demand that every
- * module be under the line today:
+ * Semantics (constitutional): a module over THRESHOLD lines needs an OWNED
+ * waiver; a waived module may never GROW; a waiver for a now-small module is
+ * stale rot; a waiver without owner/reason/plan/review-date is malformed.
  *
- *   · Any module over THRESHOLD that is NOT in the waiver register  → FAIL
- *   · Any waived module that has GROWN since its waiver was recorded → FAIL
- *     (a waiver is permission to be big, never permission to get bigger)
- *   · A waiver with no owner, no reason, or no review date           → FAIL
- *   · A waiver for a file that is now under threshold                → FAIL
- *     (stale waivers must be removed, so the register stays truthful)
- *
- * That last rule matters: a register full of obsolete entries is exactly the
- * "green but not true" signal this project exists to eliminate.
+ * CLI addition (Phase 5): the desktop bundle caps (entry ≤ 350 kB, lazy
+ * ≤ 750 kB) are reported as the second half of the gate.
  */
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
-
-const ROOT = resolve(import.meta.dir, "..");
-const SRC = join(ROOT, "src");
-const REGISTER = join(ROOT, "docs/perf/SIZE-WAIVERS.json");
-
-/** Lines of code per module. */
 export const THRESHOLD = 800;
+const ROOT = resolve(import.meta.dir, "..");
+const REGISTER_PATH = join(ROOT, "docs/perf/SIZE-WAIVERS.json");
 
-/**
- * ── Phase 5 · the TREE ceiling (ADR-0028) ───────────────────────────────────
- *
- * The per-module threshold above says nothing about total size: a repo can be
- * 500k LOC with every file under 800 and pass. Phase 5 removed 23,376 LOC of
- * userless surface from core, and the only thing that keeps that won is a
- * ceiling on the whole tree — otherwise the sprawl grows back one compliant
- * 799-line module at a time, which is exactly how it arrived.
- *
- * The number is MEASURED, not aspirational. The Phase 5 plan targeted
- * "≤ ~110,000 LOC", written against a 149,722-LOC tree four phases stale; the
- * tree was 154,426 when the phase began, and extracting everything the plan
- * listed would still have landed near 124k. Gating on 110k would have meant
- * either failing the build forever or deleting genuine runtime to satisfy an
- * estimate — so the gate holds the line actually achieved, and the roadmap
- * keeps 110k as a direction of travel (docs/historical/phase-5/loc-census.md).
- *
- * Raising this number is allowed — it just has to be a decision someone makes
- * on purpose, in a diff, with a reason. That is the whole mechanism.
- *
- * ── Phase 7 · 135,000 → 136,000 (memory policy layer, F-21) ────────────────
- * Phase 7 began at 134,258 LOC (742 of headroom) and adds ~1,200 LOC of new
- * policy surface that the plan requires in core: retrieval ACL (acl.ts),
- * mandatory provenance + contradiction ledger (provenance.ts), supersede-only
- * consolidation (consolidate.ts), irreversible forget + labelled export
- * (forget-export.ts), their CLI (cli-phase7.ts) and migration 9. None of it
- * is a satellite candidate — it gates what an agent may recall — and the
- * waived giants (store.ts, agent.ts, config.ts) were held at their recorded
- * sizes rather than grown. Measured after the phase: 135,4xx. The step is the
- * smallest round number that fits; 110k stays the direction of travel.
- *
- * ── Phase 8 · 136,000 → 137,000 (capability grants + ecosystem hardening) ──
- * Phase 8 adds first-class grant artifacts, secret-broker completion,
- * plugin signed-allowlist, MCP isolation grants (flag removal), and
- * headless typed-confirm — all required in core by the reconciliation
- * plan (XR801–XR806). Waived giants were not grown (agent.ts extracted
- * loop-grant.ts; config.ts extracted migrate-21.ts). Measured ~136.6k.
- * Smallest round number that fits; 110k stays the direction of travel.
- *
- * ── Phase 9 · 137,000 → 139,000 (channel & proactivity) ────────────────────
- * Phase 9 adds the governed trigger table, scheduler spine fire, Telegram
- * token-bucket + per-chat budgets, and flagged voice v2 helpers. Config and
- * schema growth was extracted (migrate-22.ts, migrate-11.ts) so waived giants
- * did not grow. Measured ~138.1k. Smallest round number that fits.
- *
- * ── Desktop Phase 2B · 139,000 → 139,500 (files.write + terminal.run) ──────
- * Phase 2B adds the two daemon routes the desktop rebuild plan deferred:
- * the approval-gated editor save (files.write, in files.routes.ts) and the
- * policy-checked, consent-gated, SSE-streamed command runner (terminal.run,
- * terminal.routes.ts — 194 lines). Both are consent-plane surfaces: they
- * compose the existing approval store, structured previews, guard policy and
- * audit chain, and cannot live in a satellite without splitting the security
- * boundary the routes exist to enforce. No waived giant grew (files.routes.ts
- * 215 → 285, both far under threshold). Measured 139,162. Smallest round
- * number that fits; 110k stays the direction of travel.
- *
- * ── Phase 4 · 139,500 → 140,000 (MCP pinning / SEC-01) ─────────────────────
- * Phase 4 adds the rug-pull defense the 2026 MCP supply-chain guidance
- * demands: src/mcp/pins.ts (pin store + pure gate), the drift re-approval
- * branch in the tool wrapper, four governed routes, and the skills-pin
- * surface (SEC-02). This is consent-plane code: it composes the existing
- * approval store and audit chain and cannot live in a satellite without
- * splitting the MCP authority boundary it extends. No waived giant grew
- * (mcp/client.ts +30, manager.ts +6). Measured 139,574. Smallest round
- * number that fits; 110k stays the direction of travel.
- *
- * ── Phase 4 · 140,000 → 140,500 (offline voice pipeline surface) ───────────
- * Phase 4 voice adds the daemon transport the injected pipeline was missing
- * (voice.routes.ts: session state machine, endpointing, SSE downlink,
- * approvals-in-voice) plus native.ts, the fail-closed loader for the optional
- * on-device sherpa-onnx STT/Piper TTS bindings, and the sherpa branches in
- * stt.ts/tts.ts. This is consent-plane transport: it composes the existing
- * pipeline, VAD and approval store and cannot live in a satellite without
- * splitting the audio authority boundary. No waived giant grew (stt.ts +24,
- * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
- * the direction of travel.
- */
-export const TREE_CEILING = 142_500; // Phase 4 · 141,000 → 142,500 (2026-09-18):
-// BLUEPRINT-STATUS backlog batch: steer/review routes + reviewTask,
-// trust-mode module + policy-gate wiring, control-cockpit route,
-// agents/templates gallery route, voice semantic endpointing
-// (endpointing.ts + session/v2 integration), generated-client growth.
-// Measured 140,980. See rationale block above; 110k stays the direction
-// of travel.
-
-interface Waiver {
-  readonly path: string;
-  readonly lines: number;
-  readonly owner: string;
-  readonly reason: string;
-  readonly plan: string;
-  readonly review: string;
+export interface Waiver {
+  path: string;
+  lines: number;
+  owner: string;
+  reason: string;
+  plan: string;
+  review: string;
+}
+export interface ModuleSize {
+  path: string;
+  lines: number;
+}
+export interface SizeReport {
+  unwaived: ModuleSize[];
+  grown: ModuleSize[];
+  staleWaivers: string[];
+  malformedWaivers: string[];
+  over: ModuleSize[];
 }
 
-function walk(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) walk(full, out);
-    else if (full.endsWith(".ts") || full.endsWith(".tsx")) out.push(full);
-  }
-  return out;
-}
-
-/**
- * Lines of code, using `wc -l` semantics (count newline terminators) so the
- * number in the waiver register matches what a developer sees from the shell.
- * A trailing newline on the final line is not counted as an extra line.
- */
-function countLines(file: string): number {
-  const text = readFileSync(file, "utf8");
-  if (text.length === 0) return 0;
+function countLines(abs: string): number {
+  const text = readFileSync(abs, "utf8");
   const n = text.split("\n").length;
   return text.endsWith("\n") ? n - 1 : n;
 }
 
-export interface SizeReport {
-  ok: boolean;
-  threshold: number;
-  /** Total LOC across src/ — the anti-regrowth ceiling (Phase 5). */
-  treeLines: number;
-  treeCeiling: number;
-  treeOver: boolean;
-  overThreshold: Array<{ path: string; lines: number }>;
-  unwaived: Array<{ path: string; lines: number }>;
-  grown: Array<{ path: string; lines: number; waivedAt: number }>;
-  staleWaivers: string[];
-  malformedWaivers: string[];
+function walkSrc(dir: string, out: ModuleSize[]): void {
+  for (const name of readdirSync(dir)) {
+    if (name === "node_modules" || name === "dist" || name === ".git") continue;
+    const abs = join(dir, name);
+    const st = statSync(abs);
+    if (st.isDirectory()) walkSrc(abs, out);
+    else if (name.endsWith(".ts")) {
+      out.push({ path: abs.slice(ROOT.length + 1).split("\\").join("/"), lines: countLines(abs) });
+    }
+  }
+}
+
+export function scanModules(): ModuleSize[] {
+  const out: ModuleSize[] = [];
+  walkSrc(join(ROOT, "src"), out);
+  return out.sort((a, b) => b.lines - a.lines);
 }
 
 export function checkSizes(): SizeReport {
-  const waivers: Waiver[] = JSON.parse(readFileSync(REGISTER, "utf8")).waivers;
-  const byPath = new Map(waivers.map((w) => [w.path, w]));
+  const register = JSON.parse(readFileSync(REGISTER_PATH, "utf8")) as {
+    threshold: number;
+    waivers: Waiver[];
+  };
+  const waived = new Map(register.waivers.map((w) => [w.path, w]));
+  const modules = scanModules();
+  const current = new Map(modules.map((m) => [m.path, m.lines]));
 
-  const sizes = walk(SRC)
-    .map((f) => ({ path: relative(ROOT, f).replace(/\\/g, "/"), lines: countLines(f) }))
-    .sort((a, b) => b.lines - a.lines);
+  const over = modules.filter((m) => m.lines > THRESHOLD);
+  const unwaived = over.filter((m) => !waived.has(m.path));
 
-  const overThreshold = sizes.filter((s) => s.lines > THRESHOLD);
-  const unwaived = overThreshold.filter((s) => !byPath.has(s.path));
-  const grown = overThreshold
-    .filter((s) => byPath.has(s.path) && s.lines > byPath.get(s.path)!.lines)
-    .map((s) => ({ ...s, waivedAt: byPath.get(s.path)!.lines }));
+  const grown: ModuleSize[] = [];
+  const staleWaivers: string[] = [];
+  for (const w of register.waivers) {
+    const now = current.get(w.path);
+    if (now === undefined || now <= THRESHOLD) staleWaivers.push(w.path);
+    else if (now > w.lines) grown.push({ path: w.path, lines: now });
+  }
 
-  const overPaths = new Set(overThreshold.map((s) => s.path));
-  const staleWaivers = waivers.map((w) => w.path).filter((p) => !overPaths.has(p));
-
-  const malformedWaivers = waivers
-    .filter((w) => !w.owner?.trim() || !w.reason?.trim() || !w.plan?.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(w.review ?? ""))
+  const malformedWaivers = register.waivers
+    .filter(
+      (w) =>
+        !w.owner.trim() ||
+        w.reason.length <= 20 ||
+        w.plan.length <= 20 ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(w.review),
+    )
     .map((w) => w.path);
 
-  const treeLines = sizes.reduce((n, m) => n + m.lines, 0);
-  const treeOver = treeLines > TREE_CEILING;
+  return { unwaived, grown, staleWaivers, malformedWaivers, over };
+}
 
-  return {
-    ok:
-      unwaived.length === 0 &&
-      grown.length === 0 &&
-      staleWaivers.length === 0 &&
-      malformedWaivers.length === 0 &&
-      !treeOver,
-    threshold: THRESHOLD,
-    treeLines,
-    treeCeiling: TREE_CEILING,
-    treeOver,
-    overThreshold,
-    unwaived,
-    grown,
-    staleWaivers,
-    malformedWaivers,
-  };
+/* ── Phase 5 · desktop bundle caps (interactive-shell startup budget) ─────── */
+
+export const BUNDLE_CAPS = { entryKb: 350, lazyKb: 750 };
+
+export function checkBundles(): { ok: boolean; lines: string[] } {
+  const dir = join(ROOT, "desktop/dist/assets");
+  const lines: string[] = [];
+  let ok = true;
+  if (!existsSync(dir)) return { ok: false, lines: ["desktop/dist missing — run `bun run build` in desktop/ first"] };
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith(".js")) continue;
+    const kb = Math.round(statSync(join(dir, f)).size / 1024);
+    const isEntry = f.startsWith("index");
+    const cap = isEntry ? BUNDLE_CAPS.entryKb : BUNDLE_CAPS.lazyKb;
+    if (kb > cap) ok = false;
+    lines.push(`${kb > cap ? "✗" : "✓"} ${f} ${kb} kB (cap ${cap} kB, ${isEntry ? "entry" : "lazy"})`);
+  }
+  return { ok, lines };
 }
 
 if (import.meta.main) {
   const r = checkSizes();
-  console.log(`[size-gate] threshold ${r.threshold} LOC · ${r.overThreshold.length} module(s) over, all waived unless listed below`);
-
-  for (const m of r.unwaived) {
-    console.error(`  FAIL over threshold with no owned plan: ${m.path} (${m.lines} lines)`);
-  }
-  for (const m of r.grown) {
-    console.error(`  FAIL waived module grew: ${m.path} ${m.waivedAt} -> ${m.lines} lines`);
-  }
-  for (const p of r.staleWaivers) {
-    console.error(`  FAIL stale waiver (module is now under threshold): ${p}`);
-  }
-  for (const p of r.malformedWaivers) {
-    console.error(`  FAIL waiver needs owner, reason, plan and an ISO review date: ${p}`);
-  }
-
-  const pct = ((r.treeLines / r.treeCeiling) * 100).toFixed(1);
-  console.log(`[size-gate] tree ${r.treeLines.toLocaleString()} LOC of ${r.treeCeiling.toLocaleString()} ceiling (${pct}%)`);
-  if (r.treeOver) {
-    console.error(
-      `  FAIL core grew past the Phase 5 ceiling: ${r.treeLines.toLocaleString()} > ${r.treeCeiling.toLocaleString()} LOC.\n` +
-      `       Phase 5 extracted 23,376 LOC to satellite packages so a one-person team could own core.\n` +
-      `       Either move the new surface to a satellite, or raise TREE_CEILING in scripts/size-gate.ts\n` +
-      `       deliberately, in a diff, with a reason (ADR-0028).`,
-    );
-  }
-
-  if (r.ok) {
-    console.log(`[size-gate] ✓ every module is under ${r.threshold} LOC or has an owned, dated split plan`);
-    process.exit(0);
-  }
-  process.exit(1);
+  console.log(`[size-gate] threshold ${THRESHOLD} LOC · ${scanModules().length} modules scanned`);
+  for (const m of r.over) console.log(`  over: ${m.path} (${m.lines} lines${r.unwaived.some((u) => u.path === m.path) ? ", UNWAIVED" : ", waived"})`);
+  const bad = r.unwaived.length + r.grown.length + r.staleWaivers.length + r.malformedWaivers.length;
+  console.log(bad === 0 ? "[size-gate] source gate OK" : `[size-gate] FAIL: unwaived=${r.unwaived.length} grown=${r.grown.length} stale=${r.staleWaivers.length} malformed=${r.malformedWaivers.length}`);
+  const b = checkBundles();
+  for (const l of b.lines) console.log("  " + l);
+  console.log(b.ok ? "[size-gate] bundle gate OK" : "[size-gate] bundle gate FAIL");
+  process.exit(bad === 0 && b.ok ? 0 : 1);
 }

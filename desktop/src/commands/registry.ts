@@ -18,6 +18,7 @@
  */
 
 import type { Area } from "../components/AppShell";
+import { api } from "../api/client";
 
 export type CommandGroup =
   | "Actions"
@@ -218,6 +219,12 @@ export async function buildCommands(
   sources: {
     skills?: Array<{ id: string; name?: string }>;
     runs?: Array<{ id: string; title?: string; prompt?: string }>;
+    /* Phase 3 · omni palette — models, MCP servers and workspaces are
+       searchable too. Every entry performs a REAL engine action
+       (providers/set, workspaces/switch) or a real navigation. */
+    models?: Array<{ provider: string; model: string; local?: boolean }>;
+    mcp?: Array<{ id: string; name?: string; health?: string }>;
+    workspaces?: Array<{ id?: string; name?: string }>;
   } = {},
 ): Promise<Command[]> {
   const cmds = staticCommands(deps);
@@ -242,6 +249,40 @@ export async function buildCommands(
       hint: "open run",
       keywords: ["run", "session", "history", String(r.id)],
       run: () => deps.onArea("runs"),
+    });
+  }
+
+  for (const m of sources.models ?? []) {
+    cmds.push({
+      id: `model.${m.provider}/${m.model}`,
+      group: "Models & Providers",
+      label: `${m.provider} · ${m.model}`,
+      hint: m.local ? "route engine to local provider" : "route engine to provider",
+      keywords: ["model", "provider", "route", m.provider, m.local ? "local" : "cloud"],
+      run: () => { void api.providersSet(m.provider).catch(() => undefined); deps.onRefresh?.(); },
+    });
+  }
+
+  for (const s of sources.mcp ?? []) {
+    cmds.push({
+      id: `mcp.${s.id}`,
+      group: "MCP",
+      label: s.name ?? s.id,
+      hint: `open in Library · ${s.health ?? "unknown"}`,
+      keywords: ["mcp", "server", "tool", String(s.id)],
+      run: () => deps.onArea("library"),
+    });
+  }
+
+  for (const w of sources.workspaces ?? []) {
+    if (!w.id) continue;
+    cmds.push({
+      id: `ws.${w.id}`,
+      group: "Workspace",
+      label: `Switch workspace: ${w.name ?? w.id}`,
+      hint: "engine workspaces/switch",
+      keywords: ["workspace", "project", "switch", String(w.id)],
+      run: () => { void api.workspacesSwitch(String(w.id)).catch(() => undefined); deps.onRefresh?.(); },
     });
   }
 

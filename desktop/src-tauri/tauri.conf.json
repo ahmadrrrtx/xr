@@ -40,7 +40,9 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["English"]
+        "languages": [
+          "English"
+        ]
       }
     },
     "icon": [
@@ -55,5 +57,14 @@
     "externalBin": [
       "binaries/xr-engine"
     ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "xr"
+        ]
+      }
+    }
   }
 }

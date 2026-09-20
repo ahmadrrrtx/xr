@@ -429,6 +429,17 @@ export const STYLE_UI = `/* ── Chat Session Workspace (Liquid Layout) ──
 }
 .skip-link:focus-visible { top: 12px; outline-color: var(--text); }
 
+/* Phase 5 · SEC-09 — surface-level disclosure banner (headless-first + EU AI
+   Act Art. 50). Class-based so the strict CSP (no inline styles) holds. */
+.xr-banner {
+  display: flex; gap: 18px; flex-wrap: wrap; justify-content: space-between;
+  padding: 8px 16px; font: 12px/1.5 var(--font-mono);
+  color: var(--muted); background: var(--bg2); border-bottom: 1px solid var(--border);
+}
+.xr-banner b { font-weight: 600; }
+.xr-banner-head { color: var(--cyan); }
+.xr-banner-disc { color: var(--amber); }
+
 [role="button"] { cursor: pointer; } /* JS pseudo-buttons keep the pointer affordance */
 
 .content :focus { scroll-margin-block: 16px; } /* focus never obscured (WCAG 2.4.11) */

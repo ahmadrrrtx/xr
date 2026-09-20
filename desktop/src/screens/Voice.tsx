@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useVoice, type VoiceState } from "../voice/session";
 import { AVATAR_SRC, poseForVoiceState } from "../components/Brand";
 /**
@@ -85,9 +85,32 @@ function Waveform({ active, source }: { active: boolean; source: "mic" | "out" }
   return <canvas ref={ref} width={560} height={90} className="vc-wave" aria-hidden="true" />;
 }
 
-export function Voice({ onDock }: { onDock: () => void }) {
+export function Voice({ onDock, onDecide }: { onDock: () => void; onDecide?: () => void }) {
   const voice = useVoice();
   const { state } = voice;
+  /* Phase 4 · PTT as a DESIGNED control: hold-to-talk. If the session is
+     idle, pressing starts it and releasing stops it; while a session is
+     already live the hold is a mute-release (mic unmutes for the hold). */
+  const [held, setHeld] = useState(false);
+  const startedByHold = useRef(false);
+  const pttDown = () => {
+    setHeld(true);
+    if (state === "idle") {
+      startedByHold.current = true;
+      void voice.start();
+    } else if (voice.muted) {
+      voice.toggleMute();
+    }
+  };
+  const pttUp = () => {
+    setHeld(false);
+    if (startedByHold.current) {
+      startedByHold.current = false;
+      voice.stop();
+    } else if (state !== "idle" && !voice.muted) {
+      voice.toggleMute();
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -132,8 +155,20 @@ export function Voice({ onDock }: { onDock: () => void }) {
         <div className="vc-transcript mono" aria-live="polite">“{voice.transcript}”</div>
       )}
       {voice.approval && (
+        /* Phase 4 · approval-interrupt bar: the voice flow pauses, the work
+           does not — decide here or by voice; the engine enforces either. */
         <div className="vc-approval" role="alert">
           approval pending: <b>{voice.approval.tool ?? voice.approval.id}</b> — say <b>confirm</b> or <b>cancel</b>
+          <span className="vc-approval-actions">
+            <button className="chipbtn" onClick={voice.bargeIn} title="Stop the spoken reply and listen now">
+              barge in
+            </button>
+            {onDecide && (
+              <button className="chipbtn green" onClick={onDecide} title="Open the decision surface — work keeps running">
+                decide now
+              </button>
+            )}
+          </span>
         </div>
       )}
 
@@ -157,6 +192,20 @@ export function Voice({ onDock }: { onDock: () => void }) {
         {/* D-01 · the exit is now visible. The rail is live (voice is a route)
             and Esc returns you to where you were, so the affordance states it
             instead of leaving the user to find a 34px corner button. */}
+        {/* Phase 4 · PTT as a designed control — hold to talk, release to
+            hand the mic back. Real session/mute actions underneath. */}
+        <button
+          className={`vc-ptt ${held ? "held" : ""}`}
+          onPointerDown={pttDown}
+          onPointerUp={pttUp}
+          onPointerLeave={() => { if (held) pttUp(); }}
+          onKeyDown={(e) => { if (e.key === "Enter" && !held) pttDown(); }}
+          onKeyUp={(e) => { if (e.key === "Enter" && held) pttUp(); }}
+          aria-label="Push to talk — hold"
+          title="Hold to talk"
+        >
+          PT
+        </button>
         <span className="vc-esc-hint">
           <kbd>Esc</kbd> back to work — voice keeps running
         </span>

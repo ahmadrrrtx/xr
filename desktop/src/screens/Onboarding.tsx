@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { HERO_SRC } from "../components/Brand";
 import { api, asList, chatStream, type ProviderInfo } from "../api/client";
-import { XrLogo } from "../components/Brand";
+import { HERO_SRC, XrAvatar, XrLogo } from "../components/Brand";
 import { pushToast } from "../components/ToastBus";
+import { getTheme, setTheme, type Theme } from "../prefs";
+import { t } from "../i18n";
 
 type Status = Awaited<ReturnType<typeof api.onboardingStatus>>;
 
@@ -16,6 +17,8 @@ const STEPS = ["Meet XR", "Capabilities", "Local or Cloud", "Connect Model", "Wo
  */
 export function Onboarding({ onDone, onSkip }: { onDone: () => void; onSkip: () => void }) {
   const [step, setStep] = useState(0);
+  /* Phase 2 · F-1 — first-run appearance choice, persisted via prefs. */
+  const [theme, setThemePref] = useState<Theme>(() => getTheme());
   const [status, setStatus] = useState<Status | null>(null);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [route, setRoute] = useState<"local" | "cloud">("local");
@@ -108,18 +111,38 @@ export function Onboarding({ onDone, onSkip }: { onDone: () => void; onSkip: () 
       <main className="ob-main">
         {step === 0 && (
           <div className="ob-hero">
-            {/* Official brand asset (uploads/xr-superior-hero-3.png), resized
-                to 1200px and encoded as WebP: 59 KB instead of 2.1 MB for a
-                slot that is never wider than ~700 CSS px. All three target
-                webviews (WebView2, WKWebView, WebKitGTK) decode WebP. */}
-            <img className="ob-banner" src={HERO_SRC} alt="" aria-hidden="true" />
-            <XrLogo height={96} radius={16} />
+            {/* Phase 2 · F-2 — official assets ONLY, placed calm.
+                The previous hero banner (xr-hero.webp) is a cinematic
+                "standing over defeated competitors" mashup; as a first-run
+                surface it read unprofessional and off-brand. Per D-05 the
+                official renders remain the source of truth — this is a
+                PLACEMENT decision: logo lockup + avatar presence on a dark
+                tile with a soft aura. The hero render stays in the brand
+                registry for cinema-zone surfaces (update-complete). */}
+            <div className="ob-hero-tile" aria-hidden="true">
+              <XrAvatar size={72} ring={false} />
+            </div>
+            <XrLogo height={88} radius={14} />
             <h1 className="ob-title">XR</h1>
             <p className="ob-tag">The AI Agent You Can Actually Trust</p>
             <p className="faint ob-copy">
               XR is a local-first AI workstation: it codes, researches and acts on your computer —
               and every sensitive action waits for your approval. This setup takes about two minutes.
             </p>
+            <div className="ob-appear" role="radiogroup" aria-label="Appearance">
+              <span className="ob-appear-l faint">Appearance</span>
+              {(["dark", "light", "system"] as Theme[]).map((t) => (
+                <button
+                  key={t}
+                  role="radio"
+                  aria-checked={theme === t}
+                  className={theme === t ? "ob-card on small" : "ob-card small"}
+                  onClick={() => { setTheme(t); setThemePref(t); }}
+                >
+                  {t === "dark" ? "Dark" : t === "light" ? "Light" : "Match system"}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -255,17 +278,20 @@ export function Onboarding({ onDone, onSkip }: { onDone: () => void; onSkip: () 
 
         {step === 7 && (
           <div className="ob-hero">
+            {/* Phase 3 · cinema zone: the official superiority hero lands at
+                the PAYOFF step, never on first paint (F-2 placement law). */}
+            <img className="ob-banner" src={HERO_SRC} alt="" aria-hidden="true" />
             <h1 className="ob-title" style={{ fontSize: 30 }}>You're set.</h1>
             <p className="faint">XR remembers this setup. Everything is re-runnable from Settings or ⌘K.</p>
-            <button className="btn big" onClick={() => { api.onboardingComplete().catch(() => {}); onDone(); }}>Enter XR</button>
+            <button className="btn big" onClick={() => { api.onboardingComplete().catch(() => {}); onDone(); }}>{t("Enter XR")}</button>
           </div>
         )}
 
         <div className="ob-foot">
-          <button className="ghostbtn" onClick={onSkip}>Skip for now</button>
+          <button className="ghostbtn" onClick={onSkip}>{t("Skip for now")}</button>
           <span className="spacer" />
-          {step > 0 && step < 7 && <button className="ghostbtn" onClick={back}>Back</button>}
-          {step < 7 && <button className="btn" onClick={next}>Continue</button>}
+          {step > 0 && step < 7 && <button className="ghostbtn" onClick={back}>{t("Back")}</button>}
+          {step < 7 && <button className="btn" onClick={next}>{t("Continue")}</button>}
         </div>
       </main>
     </div>

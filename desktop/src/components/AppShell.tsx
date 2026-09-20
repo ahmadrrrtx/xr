@@ -1,33 +1,44 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { getLocale, subscribeLocale, t } from "../i18n";
 import { XrLogo, XrAvatar } from "./Brand";
+import { Icon, type IconName } from "./icons";
+import { AREA_LABELS } from "../commands/registry";
 import { api, asList, type ProviderInfo, type SessionSummary, type SkillInfo } from "../api/client";
 import { notify } from "../notify";
 import { StatusDot, providerLabel, type DotState } from "./StatusDot";
 import { notificationsEnabled } from "../prefs";
-import { engineLinkReason, engineLinkSnapshot } from "../tauri-bridge";
+import { engineLinkReason, engineLinkSnapshot, nativeNotifyApproval } from "../tauri-bridge";
 import { poll } from "../poll";
 
 export type Area = "home" | "projects" | "work" | "workspace" | "research" | "memory" | "models" | "control" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
 
-/* Phase 6 · mock-accurate icon rail. Left: work areas. Bottom: settings + presence. */
-const NAV: { id: Area; label: string; icon: ReactNode }[] = [
-  { id: "home", label: "Home", icon: <path d="M4 10.5 12 4l8 6.5V20h-5v-6h-6v6H4z" /> },
-  { id: "projects", label: "Projects", icon: <path d="M3 6h6l2 2h10v4H3zM3 14h18v5H3z" /> },
-  { id: "work", label: "Work (chat)", icon: <path d="M4 5h16v10H9l-5 4z" /> },
-  { id: "workspace", label: "Workspace (files)", icon: <path d="M3 6h6l2 2h10v11H3zM10 12v4M8 14h4" /> },
-  { id: "research", label: "Research", icon: <path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zM15 15l5 5M10 7v6M7 10h6" /> },
-  { id: "memory", label: "Memory", icon: <path d="M12 4a4 4 0 0 0-4 4c-2 0-3 2-3 3.5S6.5 15 8 15c0 2.5 2 4 4 4s4-1.5 4-4c1.5 0 3-2 3-3.5S18 8 16 8a4 4 0 0 0-4-4zM12 8v11" /> },
-  { id: "models", label: "Model Center", icon: <path d="M12 3l8 4.5-8 4.5-8-4.5zM4 12.5l8 4.5 8-4.5M4 17l8 4.5 8-4.5" /> },
-  { id: "control", label: "Control Room", icon: <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" /> },
-  { id: "agents", label: "Multi-agent", icon: <path d="M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 20a6 6 0 0 1 12 0M17 6a3 3 0 0 1 0 6M18 20a5.5 5.5 0 0 0-2-4M16 11h5M18.5 8.5V13.5" /> },
-  { id: "runs", label: "Team runs", icon: <path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20a6 6 0 0 1 12 0M16 6a3 3 0 0 1 0 6M17 20a5.5 5.5 0 0 0-2-4" /> },
-  { id: "library", label: "Library", icon: <path d="M6 4h3v16H6zM11 4h3v16h-3zM16.5 5.2l2.9.8-3.6 13.6-2.9-.8z" /> },
-  { id: "trust", label: "Trust Center", icon: <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4" /> },
-  { id: "voice", label: "Voice mode", icon: <path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3" /> },
+/* Phase 2 · F-6 — consolidated rail.
+ *
+ * BEFORE: 13 rail areas + settings. The IA (docs/xr-rebuild §1) names five
+ * work areas plus secondary surfaces; research/models/memory/control were
+ * rail peers of Work itself, fragmenting the mental model.
+ *
+ * AFTER: seven rail destinations. The folded surfaces stay fully reachable:
+ *   · Research  → Library tab + palette
+ *   · Models    → Library → Integrations + palette
+ *   · Memory    → Work inspector tab + palette
+ *   · Control   → Trust Center cockpit + palette
+ *   · Projects  → palette + workspace switcher
+ *   · Voice     → presence (statusbar + presence orb), not a nav area
+ * The palette's AREA_LABELS keeps every one of them one ⌘K away.
+ * Icons come from the v1 icon module (F-5): one grid, one stroke weight. */
+const NAV: { id: Area; label: string; icon: IconName }[] = [
+  { id: "home", label: "Home", icon: "home" },
+  { id: "work", label: "Work (chat)", icon: "work" },
+  { id: "workspace", label: "Workspace (files)", icon: "workspace" },
+  { id: "agents", label: "Multi-agent", icon: "agents" },
+  { id: "library", label: "Library", icon: "library" },
+  { id: "runs", label: "Team runs", icon: "runs" },
+  { id: "trust", label: "Trust Center", icon: "trust" },
 ];
 
-const BOTTOM: { id: Area; label: string; icon: ReactNode }[] = [
-  { id: "settings", label: "Settings", icon: <path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM4.5 12l-1.8 1 1 1.8-.5 2 2 .5 1 1.8 1.8-1 2 .5.5-2 1.8-1-1-1.8.5-2-2-.5-1-1.8-1.8 1-2-.5-.5 2-1.8 1zM21.3 13l-1.8-1 .5-2-2-.5-1-1.8" /> },
+const BOTTOM: { id: Area; label: string; icon: IconName }[] = [
+  { id: "settings", label: "Settings", icon: "settings" },
 ];
 
 /**
@@ -45,22 +56,24 @@ const NavBtn = memo(function NavBtn({
   n,
   active,
   onArea,
+  locale,
 }: {
-  n: { id: Area; label: string; icon: ReactNode };
+  n: { id: Area; label: string; icon: IconName };
   active: boolean;
   onArea: (a: Area) => void;
+  /* Phase 5 · i18n: locale in props so the memo re-renders on switch. */
+  locale: string;
 }) {
+  const label = t(n.label);
   return (
     <button
       className={active ? "rbtn on" : "rbtn"}
-      title={n.label}
-      aria-label={n.label}
+      title={label}
+      aria-label={label}
       aria-current={active ? "page" : undefined}
       onClick={() => onArea(n.id)}
     >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        {n.icon}
-      </svg>
+      <Icon name={n.icon} size={20} />
     </button>
   );
 });
@@ -107,6 +120,8 @@ export function AppShell({
      containment (it then dies only on a clean shutdown, not on a crash). A
      fact worth a visible warning, not a log line nobody reads. */
   const [containment, setContainment] = useState<string | null>(null);
+  /* Phase 5 · i18n — chrome strings re-render on locale switch. */
+  const locale = useSyncExternalStore(subscribeLocale, getLocale);
   const [pending, setPending] = useState(0);
 
   /* Phase 5 · opt-in OS notifications: approval due + run done.
@@ -120,11 +135,19 @@ export function AppShell({
     const off = poll.subscribe(["pending", "agents"], (o) => {
       if (o.key === "pending") {
         if (!o.ok) return;
-        const n = ((o.value as { pending?: unknown[] }).pending ?? []).length;
+        const list = (o.value as { pending?: Array<{ id?: string; tool?: string }> }).pending ?? [];
+        const n = list.length;
         // The count is always recorded (the statusbar needs engine truth even
         // when notifications are off); only the OS notification is gated.
         if (prevPending >= 0 && n > prevPending && notificationsEnabled()) {
-          void notify("XR — approval due", `${n} request(s) waiting in the Trust Center`);
+          const first = list[list.length - 1];
+          // Phase 4 · actionable OS notification; the decision goes through
+          // the same engine route as the Trust Center buttons.
+          void nativeNotifyApproval(first?.id ?? "", first?.tool ?? "action", (aid, approved) => {
+            void api.decide(aid, approved).catch(() => undefined);
+          }).then((ok) => {
+            if (!ok) void notify("XR — approval due", `${n} request(s) waiting in the Trust Center`);
+          });
         }
         prevPending = n;
         setPending(n);
@@ -196,8 +219,18 @@ export function AppShell({
    * the first array entry — audit D-10), and the WHY when the link is down.
    * Phase 1 · one subscription to the shared hub replaces this component's own
    * 5 s interval. */
+  /* Phase 3 · F-11 — spend visibility. The meter renders ONLY engine-reported
+     numbers; clicking it opens the Trust Center budgets (real navigation). */
+  const [budget, setBudget] = useState<{ month: number; cap: number } | null>(null);
   useEffect(() => {
-    const off = poll.subscribe(["health", "providers"], (o) => {
+    const off = poll.subscribe(["health", "providers", "budget"], (o) => {
+      if (o.key === "budget") {
+        if (!o.ok) { setBudget(null); return; }
+        const u = o.value.usage;
+        const cap = Number(o.value.persisted?.monthly_cap ?? 0);
+        setBudget({ month: Number(u?.monthUsd ?? 0), cap: Number.isFinite(cap) ? cap : 0 });
+        return;
+      }
       if (o.key === "health") {
         if (o.ok) {
           setUp(true);
@@ -231,9 +264,10 @@ export function AppShell({
     <div className="shell">
       <header className="titlebar">
         <XrLogo height={22} radius={5} />
-        <span className="appname">XR Desktop</span>
+        {/* Phase 5 · a11y: the page needs a real level-one heading. */}
+        <h1 className="appname">XR Desktop</h1>
         <span className="tb-sep" />
-        <span className="crumb mono faint">{NAV.find((n) => n.id === area)?.label ?? (area === "settings" ? "Settings" : "")}</span>
+        <span className="crumb mono faint">{AREA_LABELS.find(([id]) => id === area)?.[1] ?? ""}</span>
         <div className="gsearch-wrap">
           <form
             className="gsearch"
@@ -296,12 +330,20 @@ export function AppShell({
         </span>
       </header>
       <nav className="rail" aria-label="Primary">
-        {NAV.map((n) => <NavBtn key={n.id} n={n} active={n.id === area} onArea={onArea} />)}
+        {NAV.map((n) => <NavBtn key={n.id} n={n} active={n.id === area} onArea={onArea} locale={locale} />)}
         <div className="spacer" />
-        {BOTTOM.map((n) => <NavBtn key={n.id} n={n} active={n.id === area} onArea={onArea} />)}
-        <span className="rail-presence" title="XR presence" aria-label="XR presence">
+        {BOTTOM.map((n) => <NavBtn key={n.id} n={n} active={n.id === area} onArea={onArea} locale={locale} />)}
+        {/* Phase 2 · presence, not navigation (IA §1): the avatar orb is XR's
+            presence; the mic opens voice mode. */}
+        <button
+          className="rail-presence"
+          title={`${t("Voice mode")} — XR presence`}
+          aria-label={t("Voice mode")}
+          onClick={() => onVoiceOpen?.()}
+        >
           <XrAvatar size={26} />
-        </span>
+          <span className="rail-mic" aria-hidden="true"><Icon name="mic" size={11} /></span>
+        </button>
       </nav>
       <main className="main">{children}</main>
       <footer className="statusbar" aria-label="Status">
@@ -309,7 +351,7 @@ export function AppShell({
           className={up ? (engineState === "ok" ? "sb-item ok" : `sb-item ${engineState}`) : "sb-item bad"}
           title={up ? "Engine connected" : linkReason ?? "Engine offline — start it with `xr serve`"}
         >
-          Engine <StatusDot state={up ? "ok" : "danger"} /> {up ? "" : "offline"}
+          {t("Engine")} <StatusDot state={up ? "ok" : "danger"} /> {up ? "" : "offline"}
         </span>
         {containment && (
           <span className="sb-item warn sb-contain" title={containment} role="status">
@@ -333,10 +375,22 @@ export function AppShell({
           </>
         )}
         <span className="sb-spacer" />
+        {budget !== null && (budget.month > 0 || budget.cap > 0) && (
+          <>
+            <button
+              className="sb-item sb-budget mono"
+              title={`engine-reported spend this month: $${budget.month.toFixed(4)}${budget.cap > 0 ? ` · cap $${budget.cap}` : " · no cap set"} — enforced engine-side; open Trust Center`}
+              onClick={() => onArea("trust")}
+            >
+              ${budget.month.toFixed(2)}{budget.cap > 0 ? ` / $${budget.cap}` : " · no cap"}
+            </button>
+            <span className="sb-sep" aria-hidden="true" />
+          </>
+        )}
         {pending > 0 && (
           <>
             <button className="sb-item sb-approvals" onClick={() => onArea("trust")} title={`${pending} request(s) waiting for you`}>
-              <StatusDot state="warn" /> {pending} approval{pending === 1 ? "" : "s"}
+              <StatusDot state="warn" /> {pending} {t("approvals")}
             </button>
             <span className="sb-sep" aria-hidden="true" />
           </>
@@ -352,7 +406,7 @@ export function AppShell({
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 3v12M8 11a4 4 0 0 0 8 0M5 21h14" /></svg>
           <span className="sb-voice-cap">
-            {voiceState && voiceState !== "idle" ? `VOICE ${voiceState.toUpperCase()}` : "OFFLINE VOICE"}
+            {voiceState && voiceState !== "idle" ? `VOICE ${voiceState.toUpperCase()}` : t("OFFLINE VOICE")}
           </span>
         </button>
         <span className="sb-sep" aria-hidden="true" />

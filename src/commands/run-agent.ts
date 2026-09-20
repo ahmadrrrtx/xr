@@ -20,6 +20,7 @@ import {
   colors as C,
 } from "../cli/output.ts";
 import { usageError } from "../cli/errors.ts";
+import { serveControlChannel } from "../util/child-channel.ts";
 import { EXIT } from "../cli/flags.ts";
 
 export class RunAgentCommand implements Command {
@@ -103,6 +104,18 @@ export class RunAgentCommand implements Command {
      * The listener is scoped to this execute() call and always removed.
      */
     const runController = new AbortController();
+    // Phase 4 · SEC-06 — engine-spawned children (XR_CONTROL_CHILD=1) honor
+    // pipe-delivered cancellation: named pipe on win32, unix socket elsewhere,
+    // same code path, bounded timeouts, fail-closed. Parity with A-19 Ctrl+C.
+    if (process.env.XR_CONTROL_CHILD === "1") {
+      serveControlChannel((m) => {
+        if (m.type === "cancel" && !runController.signal.aborted) {
+          runController.abort();
+          warn("control channel: cancel received — stopping at the next checkpoint");
+        }
+        return { ok: true };
+      });
+    }
     let forceExitArmed = false;
     const onSigint = (): void => {
       if (forceExitArmed) process.exit(EXIT.INTERRUPT);

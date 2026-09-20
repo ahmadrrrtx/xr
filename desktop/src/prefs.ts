@@ -37,9 +37,24 @@ function write(key: string, value: string): void {
   }
 }
 
+/**
+ * Phase 2 · F-1 — first-run default is DARK.
+ *
+ * The brand renders (logo, avatar) are dark-ground art; on a light OS the
+ * first impression washed them out (audit F-1). Dark is the brand ground, so
+ * an install with no expressed preference starts dark. The onboarding
+ * "Appearance" choice and Settings can move it to light or system at any
+ * time, and the choice is then persisted and respected forever after.
+ */
 export function getTheme(): Theme {
   const v = read(THEME_KEY);
-  return v === "dark" || v === "light" || v === "system" ? v : "system";
+  return v === "dark" || v === "light" || v === "system" ? v : "dark";
+}
+
+/** True until the user has expressed a theme choice (onboarding/Settings). */
+export function hasThemeChoice(): boolean {
+  const v = read(THEME_KEY);
+  return v === "dark" || v === "light" || v === "system";
 }
 
 export function setTheme(t: Theme): void {

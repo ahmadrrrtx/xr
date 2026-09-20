@@ -72,7 +72,9 @@ import {
 // of inline data URIs of re-drawn SVG marks; the document is ~100 KB and
 // carries zero data:image URIs (asserted below, so the size can never creep
 // back through an inlined image).
-const POST_PHASE4_SHA256 = "50b8adfc69834adc5cbac64de2b54c20146e282db869722534e649605fa4aa85";
+// Phase 5 re-pin: SEC-09 disclosure banner (class-based, CSP-clean) joined the
+// composition — identity intentionally changed, invariants unchanged.
+const POST_PHASE4_SHA256 = "79ccf88e3ac5ed17a3e1a90f49274c6e0bc0bbf80c660dfe5f61736741ad1eed";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {
