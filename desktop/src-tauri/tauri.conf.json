@@ -43,6 +43,10 @@
         "languages": [
           "English"
         ]
+      },
+      "webviewInstallMode": {
+        "type": "offlineInstaller",
+        "silent": true
       }
     },
     "icon": [
