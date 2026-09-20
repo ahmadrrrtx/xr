@@ -213,6 +213,27 @@ jobs:
           echo "msi=${msi} nsis=${nsis}"
           test "$msi" -ge 1 || { echo "::error::no .msi produced"; exit 1; }
           test "$nsis" -ge 1 || { echo "::error::no NSIS *-setup.exe produced"; exit 1; }
+      # Portable, no-install flavour: exe + engine sidecar side by side
+      # (sidecar_path() resolves the triple-suffixed name next to the exe).
+      # For users whose machines refuse installers — and for first-launch
+      # forensics without touching the installed app.
+      - name: Assemble portable (no-install) zip for Windows
+        if: matrix.runsOn == 'windows-latest'
+        shell: bash
+        run: |
+          set -e
+          mkdir -p desktop/src-tauri/target/release/bundle/portable/xr-portable
+          cp "desktop/src-tauri/target/release/XR Desktop.exe" desktop/src-tauri/target/release/bundle/portable/xr-portable/
+          cp desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe desktop/src-tauri/target/release/bundle/portable/xr-portable/
+          (cd desktop/src-tauri/target/release/bundle/portable && tar -a -c -f ../xr-portable-win.zip xr-portable)
+          ls -la desktop/src-tauri/target/release/bundle/xr-portable-win.zip
+      - name: Upload portable artifact
+        if: matrix.runsOn == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr-portable-windows-latest
+          if-no-files-found: error
+          path: desktop/src-tauri/target/release/bundle/xr-portable-win.zip
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
