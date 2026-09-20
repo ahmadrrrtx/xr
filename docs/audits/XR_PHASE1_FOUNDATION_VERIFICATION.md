@@ -13,8 +13,8 @@ running the thing — no result is copied from a previous report.
 | # | DoD item | Result | Evidence |
 |---|---|---|---|
 | 1 | Voice reaches every area; Esc exits Voice | **PASS** | renderer lane ×3: `D-01` route-not-overlay (rail stays usable), `D-01` Escape exits and the session survives, `D-01` visible exit affordance |
-| 2 | Win32 store constructs correctly under all path spellings | **PASS (unit + falsification)** | `test/state/migration-lock-self-deadlock.test.ts` 10 pass; pre-fix a self-hold cost **20 008 ms**, post-fix the same condition **throws in < 1 ms** |
-| 3 | `approvals-durable` real suite restored on win32 and green | **PASS** | probe branch deleted; suite 11 pass @ 1 238 ms; CI step now reruns the suspects instead of scraping marker files |
+| 2 | Win32 store constructs correctly under all path spellings | **PASS (unit + falsification)** | `test/state/migration-lock-self-deadlock.test.ts` 11 pass; pre-fix a self-hold cost **20 008 ms**, post-fix the same condition **throws in < 1 ms**. Honesty note: this deadlock was real, but it was **not** the cause of the win32 hang (row 3). |
+| 3 | `approvals-durable` real suite restored on win32 and green | **CORRECTED 2026-09-19 — see §5b** | The earlier "PASS" here was a Linux run of the file; the Windows parity lane had been cancelled by every subsequent push and never confirmed it. When it finally ran (run 35464595934) the file still died at exit 124 with zero output. The Windows lab (run 35467925776) then named the true mechanism — an approval wait whose only wake-ups were unref'd timers, which Bun on win32 never services once nothing ref'd remains — fixed in `src/control/approval-store.ts`. Proof is the Windows parity lane on the fix commit (§5b). |
 | 4 | Unauth `GET /api/v1/audit` via the dev proxy → 401 | **PASS** | live: unauth `/audit`, `/providers`, `/control/pending` → 401 (was 200); wrong pairing code → 403; correct code → session; paired → 200; engine token appears **0×** in served HTML |
 | 5 | Provider health honest in the status bar | **PASS** | lane: status-bar text is non-empty and free of `undefined`/`NaN`; `unknown` is a distinct state and the offline state names the reason |
 | 6 | Palette finds `mcp` / `ollama` / files / settings | **PASS** | lane: synonym query resolves (no dead query); cheat sheet renders the same registry |
@@ -178,13 +178,110 @@ state of the branch, and the evidence now lives in CI jobs rather than in this c
 
 | Item | Implemented | Runtime evidence (job · result) |
 |---|---|---|
-| W-1 `CREATE_NO_WINDOW` | sidecar spawn sets the flag (cfg(windows)) | `Desktop App · Rust shell — cargo test on Windows (W-1/W-2/W-3 runtime proof)` builds and runs the shell crate's tests on `windows-latest`; the Windows sidecar smoke (compile + boot + `/api/v1/health`) passes in the same workflow. No console-flash assertion exists yet (needs a desktop session on the runner) — **flag proven, flash absence not**. |
+| W-1 `CREATE_NO_WINDOW` | sidecar spawn sets the flag (cfg(windows)) | `Desktop App · Rust shell — cargo test on Windows (W-1/W-2 runtime proof)` builds and runs the shell crate's tests on `windows-latest`; the Windows sidecar smoke (compile + boot + `/api/v1/health`) passes in the same workflow. No console-flash assertion exists yet (needs a desktop session on the runner) — **flag proven, flash absence not**. |
 | W-2 Job Object kill-on-close | `win.rs` creates the job, arms `KILL_ON_JOB_CLOSE`, assigns the child; handle closed on Exit | `win::tests::w2_closing_the_last_job_handle_kills_the_assigned_child` (child dies when the handle closes) and `w2_control_an_unassigned_child_is_untouched_by_a_job_closing` (control) — **pass on `windows-latest`** (13/13, two consecutive runs). |
-| W-3 single instance | named mutex guard via `win.rs` | `w3_a_named_mutex_admits_exactly_one_holder_per_name` + `w3_different_names_do_not_collide` — **pass on `windows-latest`**. Still does **not** focus the existing window (needs `tauri-plugin-single-instance`). |
+| W-3 single instance | `tauri-plugin-single-instance` registered first; a second launch hands its argv to the running shell, which unminimizes/shows/focuses `main`, and the second process exits. The hand-written named-mutex guard (which could only exit silently) and its `w3_*` tests were retired with it. | Compile-verified for Windows/Linux/macOS by the three `tauri bundle` jobs. The focus hand-off itself is **not** runtime-tested (needs an interactive desktop session on the runner). |
 | W-5 sidecar stderr captured | stderr piped into a bounded tail, returned with the link status and shown by the S0 boot splash (`.boot[data-state="failed"]`) | `engine_state.rs` tests (tail cap, banner parsing) pass on Linux and Windows; the boot splash binds to `engineLinkSnapshot().stderr` (desktop/test/boot tests). |
 | W-6 cached reachability probe | 1.5 s TTL cache in front of the blocking connect | TTL expiry, per-port isolation and clock-skew cases under test; pass on Linux and Windows. |
 | Windows installers | NSIS per-user (`installMode: currentUser`) **and** MSI both built; the release job asserts both flavours exist | `Desktop App · Windows — tauri bundle` **success** at `2f5d380` with the msi+nsis assertion. |
 | SEC-12 engine never outlives the shell | Windows: W-2 job. Linux: `PR_SET_PDEATHSIG` armed in `pre_exec` (`unix.rs`). macOS: engine-side parent watch. All OSes: `xr serve --parent-pid <shell pid>`; clean quits send SIGTERM first (Unix) | `unix::tests::pdeathsig_is_bound_to_the_spawning_thread` + control + two `terminate_gracefully` tests (Linux reference, `cargo test`); `test/daemon/parent-watch*.test.ts` (decision table on every OS; SIGKILLed-parent process tree on Linux/macOS); `test/e2e-blackbox/parent-watch.test.ts` — the real CLI, spawned by a stand-in shell that is SIGKILLed: port stops answering and the process is gone within seconds, `daemon.parent_gone` on stderr. `engine_link` reports `containmentMode`. |
+
+### 5b. The win32 parity hang — what the lab measured
+
+The `approvals-durable` hang collected three explanations over its life ("flake", leaked
+pollers, migration-lock self-deadlock) and code for each, none of which was checked against a
+Windows kernel — a killed bun loses its stdout on win32, and every Cross-Platform run on this
+branch was cancelled by the next push. `.github/workflows/win-lab.yml` (manual, run
+35467925776) wrote kill-surviving markers from a `--preload` and settled it in one run:
+
+| Experiment (windows-latest, bun 1.3.14) | Result |
+|---|---|
+| whole file, 300 s cap, `--timeout 20000` | markers: `preload → beforeAll → START #1`, then nothing; the preload's 2 s heartbeat **never ticked once**; exit 124 |
+| first test only (`-t "TTL default-deny"`) | identical |
+| plain `bun run` script: open Store → `request()` → `await outcome` | `request()` returned at +0.11 s; the await never settled in 90 s |
+| `fixtures/raise-approval.ts` alone | exit 0 immediately (it `process.exit`s) |
+| `fixtures/raise-and-wait.ts` alone, ttl 2000 | **exit 0 in 2 s** — the one process that also owned a **ref'd** timer (its guard) |
+| `migration-lock-self-deadlock.test.ts` alone | 10 pass · 1 fail — `rmSync` on a directory symlink → `EFAULT` (Bun on win32); test cleanup fixed with `rmdir` |
+
+Mechanism: `ApprovalStore.request()`/`waitFor()` unref'd **both** the TTL timer and the poller —
+the promise's only wake-up sources. Bun on win32 does not service unref'd timers once no ref'd
+handle remains while a pending await keeps the process alive; bun test's per-test timeout is the
+same kind of timer, which is why it never reported the test by name. Bun on Linux/macOS runs
+unref'd timers regardless — the whole reason this read as "Windows only". Fix: the TTL timer is
+ref'd (a process waiting on a human is legitimately alive; the wait is bounded by construction)
+and settlement clears both handles; the poller stays unref'd. `bun test` exits at the end of a
+run regardless of live timers (measured locally: a ref'd 60 s timer left behind → exit in 38 ms),
+so the old "unref for test hygiene" bought nothing.
+
+The Cross-Platform diagnostics step was also rewritten: its previous form piped an unbounded
+`bun test` into `tail` and itself hung for 29 minutes after the suite step timed out.
+
+### 5c. The win32 `EBUSY` class — a zombie connection in the product, not a test quirk
+
+With the hang gone, the Windows parity job on the merge commit (run 35469011949, job
+105966453349) ran the whole suite in 7.5 minutes and left twelve failures, all of one shape:
+`rmSync(tmp)` right after `store.close()` → `EBUSY: resource busy or locked`. This was
+reproduced on Linux by reading `/proc/self/fd` after `close()` in the failing test
+(`test/services/agent-service.test.ts`, happy path): `xr.db`, `xr.db-wal`, `xr.db-shm` were
+still open, and a strict `db.close(true)` threw `database is locked`.
+
+Cause, measured against bun 1.3.14 in isolation:
+
+| Distinct `db.query()` strings before `close()` | strict close | fds still open |
+|---|---|---|
+| 20 | ok | 0 |
+| 21 | `database is locked` (SQLITE_BUSY) | 3 (db, -wal, -shm) |
+| 40 | `database is locked` | 3 |
+| 40 + `clearQueryCache()` | `database is locked` | 3 |
+| 40 + `finalize()` on every statement | ok | 0 |
+
+`Database.query()` caches at most **20** statements and finalizes only those when the database
+closes; every statement past the cache is returned un-cached and never finalized. `sqlite3_close`
+refuses while any statement is live, Bun's default `close()` (`sqlite3_close_v2`) reports success
+anyway, and the connection lives on as a zombie until the garbage collector finalizes the
+orphans. The store runs far more than twenty distinct queries in any real session, so
+`WorkspaceStore.close()` had **never** released the file after real traffic. POSIX hides it
+(an open file can be unlinked); Windows reports it as `EBUSY` on the next delete or rename —
+workspace removal, backup `restoreFrom()` (whose comment already said "Windows may hold handles
+briefly"), and test cleanup.
+
+Fix (product, trusted layer): the write gate now **owns** every statement on the connection —
+`prepare()` and `query()` both compile through one bounded LRU keyed by SQL (512 entries;
+eviction finalizes) — and finalizes all of them before the connection closes;
+`WorkspaceStore.close()` uses the strict `close(true)` and, if it still fails, records
+`WorkspaceStore.lastCloseError` and emits a `XR_STORE_ZOMBIE_CLOSE` warning instead of
+swallowing it. Two designs were measured and rejected on the way: the previous strong
+`Set` of `prepare()` statements (124 call sites prepare per call, so a daemon's set grew
+without bound) and `WeakRef` tracking (JSC clears the ref at mark time but finalizes the
+statement at sweep time — under the full suite's GC pressure 19 closes still failed, none in
+isolation). `test/state/close-releases-file.test.ts` pins the contract: 40 distinct
+queries → close → zero open fds under the store directory (Linux, via `/proc/self/fd`), zero live
+statements, and the directory removable at once (the assertion Windows was failing).
+Pre-fix the test fails on exactly the three open handles.
+
+Two of the twelve were test defects and are fixed as such: `signed-audit-migration` reassigned
+a store without closing the first (refcount never reached zero), and the parity manifest test
+walked the test tree once per included file (~300 full walks, 5.4 s on the Windows runner —
+past the 5 s budget; now one walk into a `Set`).
+
+With the close fix on the Windows lane (`55c6f21`): the first run (job 105975559890) failed one
+`envelope` hook at 7.8 s on a runner where *every* test — including ones that never touch the
+store — ran 20–30× slower than an hour earlier (75 ms → 2272 ms for the same SBOM posture
+test); the re-run (job 105977660468) ran every segment at the previous speed or faster and left
+exactly **one** failure: CF-1 open churn (8 processes × open→write→close) — one opener's
+exclusive create of `xr.db.migrate.lock` died with `EPERM`. That is Windows "delete pending":
+the holder had unlinked the lockfile while another opener's probe still had a handle on it, so
+the create sees ACCESS_DENIED instead of EEXIST. `withMigrationLock` now retries
+EPERM/EACCES/EBUSY on win32 inside a 2 s window (a genuine permission fault still surfaces as
+the original error), and the parity runner takes `XR_TEST_TIMEOUT_MS` so the Windows lane's
+per-test/hook budget is 20 s instead of 5 s — a hang detector sized for that runner's measured
+variance, with true hangs still bounded by the 420 s segment watchdog and the diagnostics step.
+
+Not done here, recorded honestly: a Linux-side sweep with an `afterEach` fd probe shows 65 test
+files that remove their temp dir without ever closing their store and swallow the error
+(`try { rmSync } catch {}`) — `test/context` alone accumulates ~370 open handles per process.
+That hides the same defect class on Windows (the runner's temp fills instead of the test
+failing) and is queued as test hygiene for Phase 2; it does not affect the product fix above.
 
 Still **not** runtime-verified anywhere: the no-console-flash observation itself (W-1), the
 install → launch → taskkill → engine-dead sequence as one scripted run on the Windows runner

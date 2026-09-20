@@ -1,14 +1,17 @@
 /**
- * XR — canonical path identity (Phase 1 · the Windows root-cause fix).
+ * XR — canonical path identity (Phase 1).
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * WHY THIS FILE EXISTS
  * ─────────────────────────────────────────────────────────────────────────────
- * The Windows hang historically tracked as a "known approvals flake" /
- * "win32 hang #21" / `test/phase2/approvals-durable.test.ts` exit 124 was NOT a
- * flake, not Bun, and not Defender. It was a synchronous SELF-DEADLOCK in the
- * store constructor, caused by two different path normalizations for the same
- * database file:
+ * Investigating the Windows hang of `test/phase2/approvals-durable.test.ts`
+ * (exit 124, zero output) surfaced a synchronous SELF-DEADLOCK in the store
+ * constructor, caused by two different path normalizations for the same
+ * database file. HONESTY NOTE (2026-09-19): this deadlock is real and is fixed
+ * here, but it was NOT the cause of that hang — the Windows lab later showed
+ * the file freezes AFTER the store opens, inside an approval wait whose only
+ * wake-ups were unref'd timers (see src/control/approval-store.ts). The
+ * identity bug below is fixed on its own merits.
  *
  *     this.openedPath = path;            // raw      → keyed the MIGRATION LOCK
  *     this.sharedKey  = resolve(path);   // canonical → keyed the CONNECTION registry
@@ -23,8 +26,7 @@
  * That divergence is routine on Windows (drive-letter case, separator style,
  * 8.3 short names, \\?\ long-path prefixes, and — already documented in this
  * repo's own CI workflow — `os.tmpdir()` disagreeing with git-bash `$TEMP` on
- * the Windows runner) and effectively impossible on Linux, which is exactly why
- * it reproduced only on win32 and looked probabilistic.
+ * the Windows runner) and effectively impossible on Linux.
  *
  * The fix is identity, not tolerance: derive ONE canonical key per file and use
  * it for every lock and every registry.

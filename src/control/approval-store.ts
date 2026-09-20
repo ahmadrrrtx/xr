@@ -154,13 +154,49 @@ export function getApprovalStore(
  * Test seam: drop the instance cache (XR_HOME switches in tests).
  *
  * MUST NOT dispose other concurrent bun tests' stores — bun runs files in
- * parallel and they share this module Map. Leftover timers are `unref()`'d
- * and catch closed-db errors; that is the safety net, not a global dispose.
+ * parallel and they share this module Map. A test that raises an approval
+ * owns its timers and must `dispose()` them (the TTL timer is deliberately
+ * ref'd — see `request()`); leftover pollers are unref'd and catch closed-db
+ * errors. That is the safety net, not a global dispose.
  */
 export function resetApprovalStores(): void {
   instances.clear();
 }
 
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * WHY THE TTL TIMER IS REF'D AND ONLY THE POLLER IS UNREF'D
+ * ─────────────────────────────────────────────────────────────────────────────
+ * A pending approval is a promise whose settlement depends on exactly two
+ * wake-ups: the TTL timer (default-deny) and the cross-process poller. Both
+ * used to be `unref()`'d, "so a leftover timer cannot keep a bun test process
+ * alive". That made the promise's ONLY wake-up sources unref'd, and on
+ * Windows that is a freeze, not a hygiene nicety:
+ *
+ *   · Bun on win32 does not service unref'd timers once no ref'd handle
+ *     remains in the loop, while a pending top-level await / test promise
+ *     still keeps the process alive. `await handle.outcome` therefore never
+ *     resolves — and neither does bun test's own per-test timeout, which is
+ *     the same kind of timer. The process sits idle until something outside
+ *     kills it (the parity lane's exit 124 with zero output).
+ *   · Bun on Linux/macOS happens to run unref'd timers anyway, which is why
+ *     the same code passed there and read as "a Windows flake" for months.
+ *   · Under Node semantics an unref'd-only wait would EXIT the process before
+ *     the TTL fired — a CLI silently quitting mid-approval. Wrong on every
+ *     platform, merely differently.
+ *
+ * Measured on windows-latest (Windows lab, 2026-09-19): a plain
+ * `bun run` script that raises a request and awaits the outcome froze after
+ * `request()` returned; the same fixture with ONE ref'd timer alive
+ * (raise-and-wait.ts's guard) settled its TTL default-deny in 2 s.
+ *
+ * So: the TTL timer is ref'd — a process waiting on a human is legitimately
+ * alive, and the wait is bounded by construction (TTL). Settling clears both
+ * handles, so nothing outlives the decision. The poller stays unref'd: it is
+ * auxiliary (the TTL timer keeps the loop turning, so it fires), and it must
+ * never be the reason a process stays up. Tests that raise requests own the
+ * timers and `dispose()` them.
+ */
 function unrefHandle(h: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>): void {
   const maybe = h as { unref?: () => void };
   if (typeof maybe.unref === "function") maybe.unref();
@@ -281,9 +317,9 @@ export class ApprovalStore {
     this.waiters.set(id, settle);
 
     // TTL default-deny, enforced locally by every process that raised the
-    // request (the DB-side sweep in expirePending covers the rest).
-    // `unref()` so a leftover timer cannot keep a bun test process alive
-    // after the store is closed; try/catch + isClosed is the closed-db net.
+    // request (the DB-side sweep in expirePending covers the rest). REF'D on
+    // purpose — see the note above `unrefHandle`; try/catch + isClosed is the
+    // closed-db net.
     const timer = setTimeout(() => {
       try {
         this.expire(id, ttlMs);
@@ -304,11 +340,10 @@ export class ApprovalStore {
         });
       }
     }, ttlMs);
-    unrefHandle(timer);
     this.timers.set(id, timer);
 
     // Cross-process bridge: poll the durable row so a daemon (or another
-    // process) decision resolves this process's waiter.
+    // process) decision resolves this process's waiter. Unref'd: auxiliary.
     const poller = setInterval(() => {
       try {
         if (!this.storeAlive()) return;
@@ -452,28 +487,37 @@ export class ApprovalStore {
     if (row.decision !== null) return Promise.resolve(this.outcomeOf(row));
 
     const handle = new Promise<ApprovalOutcome>((resolve) => {
-      this.waiters.set(id, resolve);
+      // Every exit runs through one settle: clears BOTH handles, so a TTL
+      // default-deny cannot leave its poller ticking behind it.
+      let settled = false;
+      const settle = (o: ApprovalOutcome): void => {
+        if (settled) return;
+        settled = true;
+        this.cleanup(id);
+        resolve(o);
+      };
+      this.waiters.set(id, settle);
       const deadline = row!.requested_at + row!.ttl_ms;
+      // Ref'd on purpose — see the note above `unrefHandle`.
       const timer = setTimeout(() => {
         try {
           this.expire(id);
           const finalRow = this.safeGet(id);
-          resolve(finalRow && finalRow.decision !== null
+          settle(finalRow && finalRow.decision !== null
             ? this.outcomeOf(finalRow)
             : { approved: false, timedOut: true, decision: "timed_out", decidedBy: { channel: "ttl" } });
         } catch {
-          resolve({ approved: false, timedOut: true, decision: "timed_out", decidedBy: { channel: "ttl" } });
+          settle({ approved: false, timedOut: true, decision: "timed_out", decidedBy: { channel: "ttl" } });
         }
       }, Math.max(0, deadline - Date.now()));
-      unrefHandle(timer);
       this.timers.set(id, timer);
       const poller = setInterval(() => {
         try {
           if (!this.storeAlive()) return;
           const current = this.store.approvalGet(id);
           if (!current || current.decision === null) return;
-          this.recordDecision(id);
-          resolve(this.outcomeOf(current));
+          this.recordDecision(id); // settles via the waiter (cleanup included)
+          settle(this.outcomeOf(current));
         } catch {
           /* TTL timer still guarantees settlement */
         }

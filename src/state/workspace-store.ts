@@ -2464,20 +2464,14 @@ export class WorkspaceStore {
       shared.refs -= 1;
       if (shared.refs <= 0) {
         WorkspaceStore.shared.delete(this.sharedKey);
-        try {
-          this.gate.finalizeAll(); // bun: prepared statements hold the file lock otherwise
-        } catch {
-          /* best-effort */
-        }
-        try {
-          this.gate.rawDb.exec("PRAGMA wal_checkpoint(TRUNCATE);");
-        } catch {
-          /* best-effort */
-        }
-        try {
-          shared.db.close();
-        } catch {
-          /* best-effort */
+        // The gate owns the statements and therefore the close; a close that
+        // leaves the file open (zombie) is reported, never swallowed.
+        const failure = this.gate.closeConnection();
+        WorkspaceStore.lastCloseError = failure;
+        if (failure) {
+          process.emitWarning(`WorkspaceStore.close(${this.sharedKey}) did not release the file: ${failure}`, {
+            code: "XR_STORE_ZOMBIE_CLOSE",
+          });
         }
       }
     }
@@ -2485,6 +2479,9 @@ export class WorkspaceStore {
       WorkspaceStore._lastOpened = null;
     }
   }
+
+  /** Last strict-close failure message (zombie connection), or null. */
+  static lastCloseError: string | null = null;
 
   /** Number of open read-write connections (per-file, per process). */
   static connectionCount(): number {

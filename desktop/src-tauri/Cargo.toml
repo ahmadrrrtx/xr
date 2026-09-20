@@ -22,6 +22,10 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-updater = "2"
+# W-3 · one shell per session WITH focus-existing: a second launch hands its
+# argv to the running shell (named mutex + WM_COPYDATA on Windows, D-Bus on
+# Linux) and exits. Registered first in lib.rs.
+tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

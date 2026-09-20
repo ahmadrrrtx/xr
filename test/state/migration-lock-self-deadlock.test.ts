@@ -12,11 +12,29 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync, readdirSync, mkdirSync, symlinkSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readdirSync, mkdirSync, symlinkSync, unlinkSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { canonicalPathKey, canonicalDbKey, sameFileIdentity, normalizeRelativePath } from "../../src/util/paths.ts";
-import { withMigrationLock, MigrationLockError } from "../../src/state/migration-lock.ts";
+import { withMigrationLock, MigrationLockError, isTransientLockCreateError } from "../../src/state/migration-lock.ts";
+
+/**
+ * Remove a DIRECTORY symlink without following it. POSIX: `unlink` is the
+ * call. Windows: a directory symlink is a directory entry — `unlink` reports
+ * EPERM and Bun's `rmSync(link, { force: true })` fails with EFAULT
+ * (windows-latest, bun 1.3.14) — so `rmdir` on the link itself is the call.
+ */
+function removeDirLink(link: string): void {
+  try {
+    unlinkSync(link);
+  } catch {
+    try {
+      rmdirSync(link);
+    } catch {
+      /* already gone */
+    }
+  }
+}
 
 function tmp(): string {
   return mkdtempSync(join(tmpdir(), "xr-lockreg-"));
@@ -81,7 +99,7 @@ describe("canonicalPathKey — one identity per file", () => {
       // …and it is the same identity as the un-linked spelling.
       expect(after).toBe(canonicalPathKey(join(real, "nested", "xr.db")));
     } finally {
-      rmSync(link, { force: true });
+      removeDirLink(link);
       rmSync(real, { recursive: true, force: true });
     }
   });
@@ -164,6 +182,27 @@ describe("withMigrationLock — re-entrancy is keyed on identity, not spelling",
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("withMigrationLock — Windows delete-pending is a retry, not a failure", () => {
+  // Job 105977660468 (CF-1 open churn, 8 processes): one opener's O_EXCL
+  // create hit `EPERM … xr.db.migrate.lock` because the holder had unlinked
+  // the file while another opener's probe still had it open (delete pending).
+  test("win32 classifies EPERM/EACCES/EBUSY on the exclusive create as transient", () => {
+    expect(isTransientLockCreateError("EPERM", "win32")).toBe(true);
+    expect(isTransientLockCreateError("EACCES", "win32")).toBe(true);
+    expect(isTransientLockCreateError("EBUSY", "win32")).toBe(true);
+  });
+  test("everything else is a real fault: EEXIST is the normal contention path, ENOENT/EROFS are errors", () => {
+    expect(isTransientLockCreateError("EEXIST", "win32")).toBe(false);
+    expect(isTransientLockCreateError("ENOENT", "win32")).toBe(false);
+    expect(isTransientLockCreateError("EROFS", "win32")).toBe(false);
+    expect(isTransientLockCreateError(undefined, "win32")).toBe(false);
+  });
+  test("POSIX never reinterprets a permission error (no delete-pending state exists there)", () => {
+    expect(isTransientLockCreateError("EPERM", "linux")).toBe(false);
+    expect(isTransientLockCreateError("EACCES", "darwin")).toBe(false);
   });
 });
 
