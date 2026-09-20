@@ -39,6 +39,7 @@ produced from this environment, it says so.
 
 ## 4. Not runtime-proven here (be explicit)
 
-- ConPTY behaviour on Windows: asserted by `terminal-pty.test.ts` on the Windows parity lane (echo + resize round trip; the POSIX-only `stty size` assertion is skipped there). Until that job is green on this PR, ConPTY is "implemented, not proven".
+- ~~ConPTY behaviour on Windows~~ — **proven**: Cross-Platform Windows parity job 105988175290 (PR #128, `abc9c87`) ran `terminal-pty.test.ts` against real `cmd.exe` under ConPTY: all six route tests pass (denial spawns nothing; approved session echoes input and applies resize; disconnect kills the shell; credentials absent in the child; cap = 429). The POSIX-only `stty size` assertion is skipped there by design. The first Windows run on this PR (job 105986895650) also passed every PTY test; its single failure was a test EOL assumption in the hunk test (git's `core.autocrlf` on the runner), fixed as such.
+- Lane status on the PR head `abc9c87`: CI ✓ · Channel Install ✓ · Supply Chain ✓ · Cross-Platform Linux ✓ macOS ✓ **Windows ✓** · Desktop App (cargo test Windows, clippy, Linux/macOS/Windows bundles) ✓. The Architecture job caught the core tree ceiling (143,430 > 142,500) on the first run — raised to 144,000 in `scripts/size-gate.ts` with the reason, per ADR-0028.
 - xterm rendering inside WebKitGTK / WebView2 (the renderer lane runs Chromium): the pane uses the DOM renderer (no WebGL addon) precisely to keep the parity risk low; a Tauri-session check is still owed.
 - Reduced-motion end to end in the new pane: the only transition is the foot colour and it is disabled under `prefers-reduced-motion`; not measured in a real OS setting.
