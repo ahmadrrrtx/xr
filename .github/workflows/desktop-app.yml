@@ -225,7 +225,7 @@ jobs:
           mkdir -p desktop/src-tauri/target/release/bundle/portable/xr-portable
           cp "desktop/src-tauri/target/release/xr-desktop.exe" desktop/src-tauri/target/release/bundle/portable/xr-portable/
           cp desktop/src-tauri/binaries/xr-engine-x86_64-pc-windows-msvc.exe desktop/src-tauri/target/release/bundle/portable/xr-portable/
-          (cd desktop/src-tauri/target/release/bundle/portable && tar -a -c -f ../xr-portable-win.zip xr-portable)
+          (cd desktop/src-tauri/target/release/bundle/portable && zip -r -q ../xr-portable-win.zip xr-portable)
           ls -la desktop/src-tauri/target/release/bundle/xr-portable-win.zip
       - name: Upload portable artifact
         if: matrix.runsOn == 'windows-latest'
