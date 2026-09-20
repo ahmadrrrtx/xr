@@ -49,6 +49,7 @@ import "./styles/phase6.css";
 import "./styles/phase7.css";
 import "./styles/phase8.css";
 import "./styles/phase9.css";
+import "./styles/phase10.css"; /* Phase 2 · PTY pane + hunk review */
 /* Prism II foundation — must load last so the layer/space/type scales and the
    corrected voice-surface geometry win over the phase CSS. */
 import "./styles/prism2.css";

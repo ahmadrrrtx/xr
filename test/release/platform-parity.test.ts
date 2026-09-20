@@ -28,9 +28,12 @@ describe("Phase 9 · T4 — platform parity computation", () => {
     for (const e of suite.excluded) {
       expect(e.reason.length).toBeGreaterThan(20);
     }
-    // Every excluded entry names a real file and leaves the suite intact.
+    // Every included entry names a real file. Walk the tree ONCE: calling
+    // listTestFiles() per file made this O(n²) directory walks — 5.4 s on
+    // the Windows runner, past the default per-test budget.
+    const all = new Set(listTestFiles());
     for (const f of suite.included) {
-      expect(listTestFiles()).toContain(f);
+      expect(all.has(f)).toBe(true);
     }
   });
 

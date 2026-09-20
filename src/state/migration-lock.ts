@@ -49,6 +49,24 @@ const MIGRATION_LOCK_STALE_MS = 20_000;
 const MIGRATION_LOCK_SLOW_WARN_MS = 2_000;
 const MIGRATION_LOCK_WAIT_MS = 45_000;
 
+/**
+ * Windows "delete pending": when the holder (or an evictor) has unlinked the
+ * lockfile while any other handle is still open on it — an opener's
+ * `readFileSync` probe is enough — the file stays visible in a delete-pending
+ * state until that handle closes, and an exclusive create against it fails
+ * with ACCESS_DENIED (surfaced as EPERM/EACCES, sometimes EBUSY), not EEXIST.
+ * Measured on the Cross-Platform Windows lane (job 105977660468, CF-1 open
+ * churn: 8 processes × open→write→close): one opener died with
+ * `EPERM: operation not permitted, open '…\xr.db.migrate.lock'`. The state
+ * lasts microseconds to milliseconds, so it is retried like EEXIST — but only
+ * inside a short window, so a genuine permission problem (read-only
+ * directory) still surfaces as the original error instead of a 45 s timeout.
+ */
+const TRANSIENT_CREATE_WINDOW_MS = 2_000;
+export function isTransientLockCreateError(code: string | undefined, platform: NodeJS.Platform = process.platform): boolean {
+  return platform === "win32" && (code === "EPERM" || code === "EACCES" || code === "EBUSY");
+}
+
 /** Nesting depth per dbPath for THIS process (see re-entrancy note in withMigrationLock). */
 const heldByThisProcess = new Map<string, number>();
 
@@ -137,6 +155,7 @@ export function withMigrationLock<T>(dbPath: string, fn: () => T): T {
   const deadline = Date.now() + MIGRATION_LOCK_WAIT_MS;
   let fd = -1;
   let warnedSlow = false;
+  let transientSince = 0;
   for (;;) {
     try {
       fd = openSync(lockPath, O_CREAT | O_EXCL | O_WRONLY);
@@ -144,7 +163,14 @@ export function withMigrationLock<T>(dbPath: string, fn: () => T): T {
       break;
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
-      if (code !== "EEXIST") throw e;
+      if (code !== "EEXIST") {
+        if (!isTransientLockCreateError(code)) throw e;
+        transientSince ||= Date.now();
+        if (Date.now() - transientSince > TRANSIENT_CREATE_WINDOW_MS) throw e; // not a race: a real permission fault
+        sleepSync(25);
+        continue;
+      }
+      transientSince = 0;
       // Self-hold under a different spelling: fail loud and fast rather than
       // freezing the thread for the whole deadline (see header).
       if (heldByThisProcessPid(lockPath)) {

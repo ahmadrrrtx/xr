@@ -8,8 +8,10 @@
 #   1. shell-check  — cargo check + clippy (-D warnings) + cargo test against
 #                     the real WebKit2GTK 4.1 headers (Linux reference runner).
 #   1b. shell-test-windows — cargo test on windows-latest: the #[cfg(windows)]
-#                     code (W-1/W-2/W-3) compiled AND its runtime tests run
+#                     code (W-1/W-2) compiled AND its runtime tests run
 #                     against a real kernel. Linux never compiles that code.
+#                     (W-3 single instance is tauri-plugin-single-instance
+#                     since b027ad4; the hand-written mutex and its test went.)
 #   2. sidecar      — the XR engine compiled standalone (bun build --compile,
 #                     scripts/compile-sidecar.ts = ONE computation source for
 #                     CI and local dev) and SMOKE-TESTED for real: --version,
@@ -99,11 +101,11 @@ jobs:
   # containment, W-3 named-mutex single instance) is invisible to the Linux
   # reference job above: it is not compiled there at all. This job compiles it
   # AND runs win.rs's tests against a real Windows kernel — a job whose last
-  # handle closes must kill its member process tree (with a control case), and
-  # a named mutex must admit exactly one holder. Until this job was green the
-  # honest status of W-1/W-2/W-3 was "implemented, not runtime-verified".
+  # handle closes must kill its member process tree (with a control case).
+  # Until this job was green the honest status of W-1/W-2 was "implemented,
+  # not runtime-verified".
   shell-test-windows:
-    name: Rust shell — cargo test on Windows (W-1/W-2/W-3 runtime proof)
+    name: Rust shell — cargo test on Windows (W-1/W-2 runtime proof)
     runs-on: windows-latest
     timeout-minutes: 45
     steps:

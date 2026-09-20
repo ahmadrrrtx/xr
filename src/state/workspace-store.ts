@@ -2429,16 +2429,18 @@ export class WorkspaceStore {
     const path = this.openedPath;
     const workspaceId = this.workspaceId;
     const key = this.sharedKey;
+    // Restore replaces the file under the connection: refuse while another
+    // instance shares it (the copy would land on a LIVE WAL db) and when the
+    // close did not release the file (zombie guard) — re-open untouched, report.
+    const others = (WorkspaceStore.shared.get(key)?.refs ?? 1) - 1;
+    if (others > 0) return { ok: false, chainValid: false, error: `restore requires exclusive ownership of the store: ${others} other instance(s) share this connection — close them first` };
     this.close();
-    for (const sidecar of [`${path}-wal`, `${path}-shm`]) {
-      try {
-        rmSync(sidecar, { force: true });
-      } catch {
-        /* best-effort (Windows may hold handles briefly) */
-      }
+    const closeError = WorkspaceStore.lastCloseError;
+    if (!closeError) {
+      for (const sidecar of [`${path}-wal`, `${path}-shm`]) rmSync(sidecar, { force: true });
+      copyFileSync(srcPath, path);
     }
-    copyFileSync(srcPath, path);
-    // Re-open this instance against the restored file.
+    // Re-open this instance (against the restored file, or the untouched one).
     const shared = WorkspaceStore.shared.get(key);
     if (!shared) {
       const db = openDatabase(path);
@@ -2452,6 +2454,7 @@ export class WorkspaceStore {
     this.db = gateConnection(WorkspaceStore.shared.get(key)!.db, this.gate);
     this.migrate();
     runMigrationsUp(this);
+    if (closeError) return { ok: false, chainValid: false, error: `store did not release its file before restore: ${closeError}` };
     const chain = this.verifyChain();
     return { ok: true, chainValid: chain.valid };
   }
@@ -2464,26 +2467,23 @@ export class WorkspaceStore {
       shared.refs -= 1;
       if (shared.refs <= 0) {
         WorkspaceStore.shared.delete(this.sharedKey);
-        try {
-          this.gate.finalizeAll(); // bun: prepared statements hold the file lock otherwise
-        } catch {
-          /* best-effort */
-        }
-        try {
-          this.gate.rawDb.exec("PRAGMA wal_checkpoint(TRUNCATE);");
-        } catch {
-          /* best-effort */
-        }
-        try {
-          shared.db.close();
-        } catch {
-          /* best-effort */
-        }
+        // The gate owns the statements and the close; a zombie close is reported, never swallowed.
+        const failure = this.gate.closeConnection();
+        WorkspaceStore.lastCloseError = failure;
+        if (failure) process.emitWarning(`WorkspaceStore.close(${this.sharedKey}) did not release the file: ${failure}`, { code: "XR_STORE_ZOMBIE_CLOSE" });
       }
     }
     if (WorkspaceStore._lastOpened === this) {
       WorkspaceStore._lastOpened = null;
     }
+  }
+
+  /** Last strict-close failure message (zombie connection), or null. */
+  static lastCloseError: string | null = null;
+
+  /** Harness seam (see store-hygiene.ts): the live connection registry. Not for product paths. */
+  static sharedRegistry(): Map<string, SharedConnection> {
+    return WorkspaceStore.shared;
   }
 
   /** Number of open read-write connections (per-file, per process). */

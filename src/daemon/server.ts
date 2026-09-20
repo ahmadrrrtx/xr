@@ -474,6 +474,15 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     token,
     stop: () => {
       stopTriggers();
+      // Phase 2 · G-05: every interactive shell this daemon owns gets the
+      // closing-window treatment (SIGHUP → SIGKILL) — the engine going away
+      // must never leave user shells orphaned. Lazy import keeps the
+      // minimal-server contexts (tests) free of the PTY module.
+      void import("./pty-sessions.ts")
+        .then((m) => m.getPtyRegistry().closeAll())
+        .catch(() => {
+          /* best-effort on shutdown */
+        });
       server.stop();
       void shutdownObservability();
     },

@@ -12,7 +12,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { RULES, lintSinks } from "../../scripts/desktop-sink-lint.ts";
 
 function fixtureTree(files: Record<string, string>): string {
@@ -48,7 +48,7 @@ describe("desktop sink lint · the gate actually fires", () => {
     const { violations, scanned } = lintSinks(dir);
 
     expect(scanned).toBe(9);
-    expect(violations.map((v) => `${v.file.split("/").pop()}:${v.rule}`).sort()).toEqual(
+    expect(violations.map((v) => `${basename(v.file)}:${v.rule}`).sort()).toEqual(
       [
         "eval.ts:EVAL",
         "fn.ts:EVAL",
@@ -70,8 +70,8 @@ describe("desktop sink lint · the gate actually fires", () => {
       "silent.ts": "el.innerHTML = userInput;\n",
     });
     const { violations, allowed } = lintSinks(dir);
-    expect(allowed.map((a) => a.file.split("/").pop())).toEqual(["allowed.ts"]);
-    expect(violations.map((v) => v.file.split("/").pop())).toEqual(["silent.ts"]);
+    expect(allowed.map((a) => basename(a.file))).toEqual(["allowed.ts"]);
+    expect(violations.map((v) => basename(v.file))).toEqual(["silent.ts"]);
   });
 
   test("a commented-out sink is not a violation (comments are not code)", () => {

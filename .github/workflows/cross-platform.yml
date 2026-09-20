@@ -87,33 +87,61 @@ jobs:
           # test/e2e-blackbox/ is excluded here (see header): the spawn-heavy
           # black-box suites are owned by the dedicated lanes in ci.yml, and
           # the kill proofs are RED on HEAD until Phase 1.
+          # Windows: per-test/hook budget 20 s instead of bun's 5 s. Hosted
+          # Windows runners are erratic (same test: 75 ms in one run, 2272 ms
+          # in the next); the budget is a hang detector, and hangs are still
+          # bounded by the runner's 420 s segment watchdog + the step below.
+          if [ "${{ matrix.bunOs }}" = "win32" ]; then export XR_TEST_TIMEOUT_MS=20000; fi
           bash scripts/parity-suite-runner.sh ${{ matrix.bunOs }} --exclude '^test/e2e-blackbox/'
       - name: "Hang diagnostics (win32) — name the wedged test"
         if: runner.os == 'Windows' && failure()
         shell: bash
-        # Phase 1 (2026-09-19) replaced the old stage-marker probe. The win32
-        # hang is root-caused (see the header of test/phase2/approvals-durable.
-        # test.ts): non-canonical path spelling made the migration lock miss
-        # its own re-entrancy entry and spin on Atomics.wait — a frozen main
-        # thread, which is why per-file stdout was buffered and lost on the
-        # exit-124 kill. The probe existed only to survive that masking.
+        # If the suite step failed on win32, rerun the two historically
+        # wedge-prone files alone with a preload that writes kill-surviving
+        # markers (START/END per test + a 2 s heartbeat) — the same harness as
+        # .github/workflows/win-lab.yml. A killed bun loses its stdout on
+        # win32; the markers do not. Every command is wall-clock bounded:
+        # the previous version of this step piped an unbounded `bun test`
+        # into `tail` and itself hung for the remaining 29 minutes of the job.
         #
-        # With the fix, re-entrancy is keyed on one canonical identity
-        # (src/util/paths.ts) and an own-pid holder under an unrecognized key
-        # THROWS instead of waiting. Bun's per-test timeout now reports a
-        # hanging test BY NAME, so a regression diagnoses itself: rerun the
-        # suspect files alone with a short timeout and print the tail.
+        # Root cause of the original hang (2026-09-19, lab run 35467925776):
+        # an approval wait whose only wake-ups were unref'd timers — Bun on
+        # win32 does not service those once nothing ref'd remains, and the
+        # per-test timeout is the same kind of timer. Fixed in
+        # src/control/approval-store.ts (TTL timer ref'd).
         continue-on-error: true
+        timeout-minutes: 8
         run: |
-          echo "::group::approvals-durable alone (30s/test timeout)"
-          bun test test/phase2/approvals-durable.test.ts --timeout 30000 2>&1 | tail -40 || true
-          echo "::endgroup::"
-          echo "::group::path-identity contract"
-          bun test test/state/migration-lock-self-deadlock.test.ts --timeout 30000 2>&1 | tail -30 || true
-          echo "::endgroup::"
-          echo "::group::leftover migration locks in XR_HOME"
-          # An own-pid lockfile surviving a kill is the signature of the old
-          # deadlock. List any that remain so the state is never invisible.
+          mkdir -p "$RUNNER_TEMP/diag"
+          cat > "$RUNNER_TEMP/diag/markers.ts" <<'EOF'
+          import { afterAll, afterEach, beforeAll, beforeEach } from "bun:test";
+          import { appendFileSync } from "node:fs";
+          const f = process.env.XR_DIAG_MARKERS ?? "";
+          const t0 = Date.now();
+          let n = 0;
+          const mark = (s: string) => f && appendFileSync(f, `+${((Date.now() - t0) / 1000).toFixed(2)}s ${s}\n`);
+          mark(`preload pid=${process.pid}`);
+          beforeAll(() => mark("beforeAll"));
+          beforeEach(() => { n++; mark(`START #${n}`); });
+          afterEach(() => mark(`END   #${n}`));
+          afterAll(() => mark("afterAll"));
+          const hb = setInterval(() => mark("heartbeat"), 2000);
+          (hb as unknown as { unref?: () => void }).unref?.();
+          EOF
+          for f in test/phase2/approvals-durable.test.ts test/state/migration-lock-self-deadlock.test.ts; do
+            m="$RUNNER_TEMP/diag/$(basename "$f").markers"; : > "$m"
+            echo "::group::$f alone (120 s wall clock, 20 s/test)"
+            XR_DIAG_MARKERS="$m" timeout --signal=TERM --kill-after=10s 120s \
+              bun test "$f" --preload "$RUNNER_TEMP/diag/markers.ts" --timeout 20000 > "$RUNNER_TEMP/diag/out.txt" 2>&1
+            echo "exit=$? (124 = still wedged)"
+            echo "--- markers (a START without END names the wedged test; no heartbeat = loop never ran) ---"
+            tail -n 40 "$m"
+            echo "--- output tail ---"
+            tail -n 40 "$RUNNER_TEMP/diag/out.txt"
+            echo "::endgroup::"
+            taskkill.exe //F //IM bun.exe //T >/dev/null 2>&1 || true
+          done
+          echo "::group::leftover migration locks"
           for d in "$XR_HOME" "$HOME/.xr" "$TEMP"; do
             [ -n "$d" ] && [ -d "$d" ] || continue
             find "$d" -maxdepth 3 -name '*.migrate.lock' -printf '%p  %s bytes\n' 2>/dev/null || true

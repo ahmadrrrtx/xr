@@ -1,4 +1,4 @@
-//! Windows-native process containment for the engine sidecar (Phase 1 · W-1/W-2/W-3).
+//! Windows-native process containment for the engine sidecar (Phase 1 · W-1/W-2).
 //!
 //! ─────────────────────────────────────────────────────────────────────────────
 //! WHY THIS IS HAND-WRITTEN FFI AND NOT THE `windows` CRATE
@@ -14,7 +14,7 @@
 //! more than one that cannot: this file is verified standalone against
 //! `x86_64-pc-windows-gnu` (see the note at the bottom).
 //!
-//! The surface kept here is five documented kernel32 entry points, each with
+//! The surface kept here is four documented kernel32 entry points, each with
 //! its struct layout written out explicitly, because an incorrect `repr(C)`
 //! layout for `SetInformationJobObject` would be a silent memory-corruption
 //! bug rather than a compile error.
@@ -26,12 +26,14 @@
 //!                             code only killed the child on a clean
 //!                             `RunEvent::Exit`, so a shell crash orphaned a
 //!                             listening daemon the user could not see).
-//!   · W-3  `InstanceGuard`  — a named mutex gives Windows' own answer to
-//!                             "one shell per session"; `Child::kill` cannot,
-//!                             because two shells would each own a different
-//!                             child.
 //!   · W-1  (in lib.rs)      — CREATE_NO_WINDOW, so spawning the console
 //!                             application does not flash a console window.
+//!   · W-3  (in lib.rs)      — "one shell per session" WITH focus-existing is
+//!                             `tauri-plugin-single-instance` (named mutex +
+//!                             WM_COPYDATA on Windows). The hand-written
+//!                             named-mutex guard that lived here could only
+//!                             exit the second launch silently, so it was
+//!                             retired in favour of the plugin.
 
 #![allow(non_snake_case)] // Win32 names are kept verbatim so the docs map 1:1.
 
@@ -39,8 +41,7 @@ use std::io;
 use std::os::windows::io::AsRawHandle;
 use std::process::Child;
 
-use std::ffi::{c_void, OsStr};
-use std::os::windows::ffi::OsStrExt;
+use std::ffi::c_void;
 
 /// HANDLE. Stored as `isize` rather than a pointer so the types that hold it
 /// (`Arc<EngineState>`, shared across the stdout/stderr reader threads) stay
@@ -51,8 +52,6 @@ type Handle = isize;
 const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: i32 = 9;
 /// "Kill every process still in the job when the last handle to it closes."
 const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x0000_2000;
-/// `CreateMutexW` sets this when the named object already existed.
-const ERROR_ALREADY_EXISTS: i32 = 183;
 
 #[repr(C)]
 struct JobObjectBasicLimitInformation {
@@ -97,11 +96,6 @@ extern "system" {
         cbJobObjectInformationLength: u32,
     ) -> i32;
     fn AssignProcessToJobObject(hJob: *mut c_void, hProcess: *mut c_void) -> i32;
-    fn CreateMutexW(
-        lpMutexAttributes: *mut c_void,
-        bInitialOwner: i32,
-        lpName: *const u16,
-    ) -> *mut c_void;
     fn CloseHandle(hObject: *mut c_void) -> i32;
 }
 
@@ -207,50 +201,16 @@ impl JobObject {
     }
 }
 
-/// One-shell-per-session guard built on a named mutex.
-///
-/// Returns `Ok(None)` when another instance already holds the name — the caller
-/// decides the user-facing behaviour (focus the existing window, or exit
-/// quietly) rather than this module guessing.
-pub struct InstanceGuard {
-    /// Never read — held only so the mutex is released when the guard drops
-    /// (RAII). The underscore is the language's own idiom for exactly that,
-    /// instead of an `allow(dead_code)` the -D warnings build would otherwise need.
-    _handle: OwnedHandle,
-}
-
-impl InstanceGuard {
-    pub fn acquire(name: &str) -> io::Result<Option<Self>> {
-        let wide: Vec<u16> = OsStr::new(name)
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect();
-        // Safety: a NUL-terminated wide string and no attributes.
-        let raw = unsafe { CreateMutexW(std::ptr::null_mut(), 0, wide.as_ptr()) };
-        let handle = OwnedHandle(raw as Handle);
-        if !handle.is_valid() {
-            return Err(io::Error::last_os_error());
-        }
-        // CreateMutexW succeeds even when the name exists; GetLastError is the
-        // only way to tell. `last_os_error` is read *immediately* for that
-        // reason — any intervening call would clobber it.
-        if io::Error::last_os_error().raw_os_error() == Some(ERROR_ALREADY_EXISTS) {
-            return Ok(None);
-        }
-        Ok(Some(InstanceGuard { _handle: handle }))
-    }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // VERIFICATION (runtime, on a real Windows kernel)
 // ─────────────────────────────────────────────────────────────────────────────
 // The FFI signatures and struct layouts are compile-checked for the Windows
 // target standalone (`rustc --target x86_64-pc-windows-gnu --emit=metadata`),
 // and the tests below run on `windows-latest` in the Desktop App workflow
-// (`shell-test-windows`). They exercise the two behaviours the shell relies on
-// — a job whose last handle closes kills its member processes, and a named
-// mutex admits one holder per name — against the real kernel, with a control
-// case so a passing kill test cannot be the child simply exiting on its own.
+// (`shell-test-windows`). They exercise the behaviour the shell relies on — a
+// job whose last handle closes kills its member processes — against the real
+// kernel, with a control case so a passing kill test cannot be the child
+// simply exiting on its own.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,29 +275,5 @@ mod tests {
         let _ = child.kill();
         let _ = child.wait();
         assert!(still_running, "a process outside the job must not be affected by the job closing");
-    }
-
-    #[test]
-    fn w3_a_named_mutex_admits_exactly_one_holder_per_name() {
-        let name = format!("xr-desktop-test-{}-{:?}", std::process::id(), std::thread::current().id());
-        let first = InstanceGuard::acquire(&name)
-            .expect("CreateMutexW")
-            .expect("the first acquire must hold the name");
-        assert!(
-            InstanceGuard::acquire(&name).expect("CreateMutexW").is_none(),
-            "a second acquire of the same name must report it as taken"
-        );
-        drop(first);
-        assert!(
-            InstanceGuard::acquire(&name).expect("CreateMutexW").is_some(),
-            "once the holder drops, the name must be free again"
-        );
-    }
-
-    #[test]
-    fn w3_different_names_do_not_collide() {
-        let a = InstanceGuard::acquire(&format!("xr-desktop-test-a-{}", std::process::id())).expect("CreateMutexW");
-        let b = InstanceGuard::acquire(&format!("xr-desktop-test-b-{}", std::process::id())).expect("CreateMutexW");
-        assert!(a.is_some() && b.is_some());
     }
 }

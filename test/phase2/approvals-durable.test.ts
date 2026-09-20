@@ -9,62 +9,47 @@
  *   [Cross]  process A raises + waits; process B decides; A resolves
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * WINDOWS HANG — ROOT CAUSE FOUND AND FIXED (Phase 1, 2026-09-19)
+ * WINDOWS HANG — WHAT IT ACTUALLY WAS (measured 2026-09-19)
  * ─────────────────────────────────────────────────────────────────────────────
  * History: this file died on the Windows full-parity lane with zero output and
- * zero test failures (exit 124) on every run since it arrived — runs
- * 34152171256, 34156612385, jobs 101865773607, 101873414375 — and was filed in
- * docs/PRODUCTION_READINESS.md as "Windows approvals flake (tracked)".
+ * zero test failures (exit 124) on every run since it arrived, and collected
+ * three successive explanations — "flake", leaked pollers "keeping the
+ * process from exiting", and a migration-lock self-deadlock on non-canonical
+ * paths. Each produced code (watchdogs, unref'd timers, canonical path keys);
+ * none was checked against a Windows kernel, because a killed bun loses its
+ * stdout on win32 and every Cross-Platform run on the branch was cancelled by
+ * the next push before it could answer.
  *
- * It was not a flake, and it was not Bun. Rejecting that label produced the
- * mechanism, which is a synchronous SELF-DEADLOCK reachable only through
- * non-canonical path spelling:
+ * The Windows lab (.github/workflows/win-lab.yml, run 35467925776) wrote
+ * kill-surviving markers from a preload and answered in one run:
  *
- *   1. The store constructor takes the cross-process migration lock around all
- *      schema work and nests runMigrationsUp() inside it. Both keys came from
- *      the same string, so the nested acquire hit the per-process re-entrancy
- *      map and returned immediately — the comment claimed this was structural
- *      ("re-entrant per process, so the nested runMigrationsUp lock is a
- *      no-op"). It was true only for byte-identical spellings.
- *   2. `sharedKey` is canonicalized (`resolve(path)`) while the lock used
- *      `openedPath` raw. The re-entrancy map and the connection registry were
- *      therefore keyed on two different normalizations of one file.
- *   3. The lockfile is `O_CREAT|O_EXCL`, and on a case-insensitive filesystem
- *      two spellings of one path ARE one lockfile — so the second acquire got
- *      EEXIST, missed the re-entrancy map, and `evictIfDeadHolder` refuses to
- *      evict a holder whose pid is our own. There is no way out of that state
- *      by waiting, because the holder is this thread.
- *   4. The wait is `Atomics.wait` on the MAIN thread: the process stops
- *      executing entirely. No output, no failure, killed at the lane timeout.
- *      The own-pid lockfile survives the kill, which is why subsequent runs
- *      failed the same way and why it read as random.
- * Spelling divergence is routine on Windows (drive-letter case, separators,
- * 8.3 short names, \\?\ long-path prefixes, and — already documented in
- * .github/workflows/cross-platform.yml — os.tmpdir() disagreeing with git-bash
- * $TEMP on the runner) and effectively impossible on Linux. That is the whole
- * explanation for "win32 only, 100% reproducible, looks random".
+ *   · whole file:  preload → beforeAll → START #1 → nothing for 300 s, and a
+ *     2 s heartbeat interval from the preload never ticked once;
+ *   · first test only (-t "TTL default-deny"): identical;
+ *   · a plain `bun run` script (no test runner): Store opened, request()
+ *     returned at +0.11 s, `await handle.outcome` never settled in 90 s;
+ *   · fixtures/raise-and-wait.ts with ttl 2000 alone: exit 0 in 2 s — the
+ *     one process that also owned a REF'D timer (its guard).
  *
- * FIX (Phase 1), three parts, all in the trusted runtime layer:
- *   · src/util/paths.ts — `canonicalDbKey()`: resolve → realpathSync.native
- *     (8.3 short names, symlinks, drive case) → lowercase on win32 only.
- *   · WorkspaceStore keys BOTH the connection registry and the migration lock
- *     on that one identity, and `withMigrationLock` canonicalizes its own key
- *     at the entry point so a call site cannot get it wrong.
- *   · `withMigrationLock` detects an own-pid holder under an unrecognized key
- *     and THROWS immediately. Waiting is provably pointless there, so any
- *     future spelling divergence is a fast, named error instead of a freeze.
+ * Mechanism: `ApprovalStore.request()` unref'd BOTH the TTL timer and the
+ * poller — the promise's only wake-up sources. Bun on win32 does not service
+ * unref'd timers once no ref'd handle remains, while the pending await keeps
+ * the process alive; the per-test timeout is the same kind of timer, so it
+ * never fired either. Bun on Linux/macOS runs unref'd timers regardless,
+ * which is the entire reason this read as "Windows only". The migration-lock
+ * self-deadlock was real and stays fixed (src/util/paths.ts); it simply was
+ * not this.
  *
- * The staged probe suite that used to occupy win32 is GONE: it existed only
- * because per-file output was buffered and lost on the kill. That masking is
- * already solved — Bun's per-test timeout reports the hanging test by NAME
- * (the mechanism above surfaced exactly that way during this fix), so the real
- * suite now runs on every platform and a regression names itself.
+ * FIX (src/control/approval-store.ts): the TTL timer is ref'd — a process
+ * waiting on a human is legitimately alive, and the wait is bounded by
+ * construction — and settlement clears both handles. The poller stays
+ * unref'd (auxiliary). `bun test` exits when the run ends regardless of live
+ * timers (measured), so the old "unref for test hygiene" bought nothing; the
+ * tests below still `dispose()` because owning your timers is correct.
  *
- * Verified: test/state/migration-lock-self-deadlock.test.ts pins the identity
- * contract and the containment. On the pre-fix code that file takes 40 s and
- * hangs; with the fix it is 10 ms / 10 pass. Windows EXECUTION of this file
- * still has to be confirmed by the cross-platform lane — this sandbox is Linux
- * and cannot run win32.
+ * Verification: this file on the Windows parity lane — the only proof that
+ * counts. The child-lifetime watchdogs below are kept as bounded guards, but
+ * their comments no longer claim to explain the hang.
  */
 
 import { describe, test, expect, beforeEach } from "bun:test";
@@ -81,10 +66,6 @@ async function loadApprovalStore(): Promise<typeof import("../../src/control/app
   return approvalStoreMod;
 }
 
-  // -------------------------------------------------------------------------
-  // Real suite (Linux + macOS). On win32 the probes above run instead —
-  // see header + KNOWN_LIMITATIONS #21.
-  // -------------------------------------------------------------------------
   let tmp: string;
   beforeEach(async () => {
     tmp = mkdtempSync(join(tmpdir(), "xr-p2-ap-"));
@@ -121,11 +102,10 @@ async function loadApprovalStore(): Promise<typeof import("../../src/control/app
     });
 
     test("timer hygiene: settle + dispose leave zero live pollers/timers (win32 hang guard)", async () => {
-      // Phase 1 regression: the win32 hang lives inside request()'s synchronous
-      // write/timer setup (D4 probes). This pins the cleanup contract on every
-      // OS: every settled request must drop its poller + TTL timer, and dispose
-      // must drain the rest — a leaked interval is exactly the class of defect
-      // that wedges a test process at exit.
+      // The cleanup contract on every OS: every settled request must drop its
+      // poller + TTL timer, and dispose must drain the rest. (The TTL timer is
+      // ref'd by design — see the header — so a leaked one would hold a real
+      // process open until TTL; settlement must therefore always clear it.)
       const { ApprovalStore } = await loadApprovalStore();
       const store = new Store(join(tmp, "h.db"));
       const approvals = new ApprovalStore(store, { defaultTtlMs: 120 });
@@ -239,8 +219,7 @@ async function loadApprovalStore(): Promise<typeof import("../../src/control/app
       expect(approvals.listPending().length).toBe(2);
       approvals.decide(a.id, true, { channel: "cli" });
       expect(approvals.listPending().map((r) => r.id)).toEqual([b.id]);
-      // `b` is still pending: its poller + TTL timer are LIVE. On Windows this
-      // left the bun test process unable to exit (exit-124 class, 2026-09-07).
+      // `b` is still pending: its poller + TTL timer are LIVE — own them.
       approvals.dispose();
       store.close();
     });
@@ -248,13 +227,10 @@ async function loadApprovalStore(): Promise<typeof import("../../src/control/app
 
   describe("kill -9 mid-approval (real process death)", () => {
     /**
-     * Windows hang guard (same failure class as the cross-process test below):
-     * `new Response(proc.stdout).text()` only settles when the child CLOSES
-     * its stdout; on Windows a pipe lingering past process.exit (or a wedged
-     * child) hangs the await forever — Bun's per-test timeout cannot
-     * interrupt a pending stream await, so this file rides to the runner cap
-     * and dies as exit 124 naming no assertion. Bound the child's lifetime
-     * independently so a wedge fails fast with a readable error.
+     * Bounded child lifetime: `new Response(proc.stdout).text()` only settles
+     * when the child CLOSES its stdout, so a wedged child would turn into a
+     * silent wait. The watchdog is a ref'd timer, which also keeps the wait
+     * observable on win32 (see the header). Not the hang's cause — a guard.
      */
     async function readChildStdoutWithWatchdog(proc: Bun.Subprocess, ms: number): Promise<string> {
       const watchdog = setTimeout(() => {
@@ -368,14 +344,9 @@ async function loadApprovalStore(): Promise<typeof import("../../src/control/app
       });
 
       // Consume the child's stdout once: the id JSON line first, decide, then
-      // the outcome JSON line at the end.
-      // Windows hang guard: `for await (… of proc.stdout)` only ends when the
-      // child closes its stdout. If the child wedges, the iterator never settles,
-      // and Bun's per-test timeout cannot interrupt a pending await — the whole
-      // segment rides to the 420s runner cap and dies as exit 124 ("crash
-      // class"), naming no assertion. That is exactly how this file took down the
-      // Windows lane. Bound the child's lifetime independently so a wedge fails
-      // this test in seconds with a readable message.
+      // the outcome JSON line at the end. `for await (… of proc.stdout)` only
+      // ends when the child closes its stdout, so bound the child's lifetime
+      // independently (a guard, not the hang's cause — see the header).
       const watchdog = setTimeout(() => {
         try {
           proc.kill();
