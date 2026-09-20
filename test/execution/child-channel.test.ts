@@ -39,7 +39,7 @@ describe("SEC-06 child control channel", () => {
     expect(reply.ok).toBe(true);
     expect(seen.length).toBe(1);
     expect(seen[0].type).toBe("cancel");
-    child.close();
+    await child.close();
   });
 
   test("approval-decision messages flow with payloads", async () => {
@@ -47,7 +47,7 @@ describe("SEC-06 child control channel", () => {
     await new Promise((r) => setTimeout(r, 50));
     const reply = await sendControl(child.address, { type: "approval-decision", id: "a1", approved: false }, 1500);
     expect(reply.ok).toBe(true);
-    child.close();
+    await child.close();
   });
 
   test("unanswered request fails CLOSED to a denial (timeout)", async () => {
@@ -56,7 +56,7 @@ describe("SEC-06 child control channel", () => {
     const reply = await sendControl(child.address, { type: "cancel" }, 250);
     expect(reply.ok).toBe(false);
     expect(reply.reason).toBe("timeout");
-    child.close();
+    await child.close();
   });
 
   test("dead address is a denial, not an exception", async () => {

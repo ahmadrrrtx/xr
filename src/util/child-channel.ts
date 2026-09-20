@@ -49,7 +49,9 @@ export interface ControlServer {
   address: string;
   /** Fire one message at a connected child; fail-closed on timeout/error. */
   request(msg: ControlMessage, timeoutMs?: number): Promise<ControlReply>;
-  close(): void;
+  /** Resolves once the listener is fully released (Windows pipes need this
+      before the same pid can serve again — e.g. sequential test serves). */
+  close(): Promise<void>;
 }
 
 const DEFAULT_TIMEOUT_MS = 2500;
@@ -102,7 +104,10 @@ export function sendControl(
 /** Engine side: serve the channel and be able to push messages to children. */
 export function serveControlChannel(handler: Handler): ControlServer {
   const address = controlAddress();
+  const socks = new Set<net.Socket>();
   const server = net.createServer((sock) => {
+    socks.add(sock);
+    sock.on("close", () => socks.delete(sock));
     forEachLine(sock, (line) => {
       let msg: ControlMessage;
       try {
@@ -122,13 +127,18 @@ export function serveControlChannel(handler: Handler): ControlServer {
   const request = (msg: ControlMessage, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<ControlReply> =>
     sendControl(address, msg, timeoutMs);
 
-  const close = () => {
-    server.close();
-    if (!isWin32) {
-      // unix socket file is ours to clean up; pipes vanish with the process.
-      try { rmSync(address, { force: true }); } catch { /* already gone */ }
-    }
-  };
+  const close = (): Promise<void> =>
+    new Promise((resolve) => {
+      for (const s of socks) s.destroy();
+      socks.clear();
+      server.close(() => {
+        if (!isWin32) {
+          // unix socket file is ours to clean up; pipes vanish with the process.
+          try { rmSync(address, { force: true }); } catch { /* already gone */ }
+        }
+        resolve();
+      });
+    });
 
   return { address, request, close };
 }
