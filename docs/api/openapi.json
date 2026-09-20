@@ -7133,6 +7133,79 @@
                     },
                     "tracked": {
                       "type": "boolean"
+                    },
+                    "hunks": {
+                      "description": "The same diff addressed hunk by hunk (Phase 2 · G-06).",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Content-addressed hunk id (sha256 of old-side start + body, 12 hex). Stable while the hunk's content is; changes when it changes.",
+                            "type": "string"
+                          },
+                          "index": {
+                            "description": "0-based position in the file's diff.",
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "header": {
+                            "description": "The `@@ -a,b +c,d @@ …` line as git printed it.",
+                            "type": "string"
+                          },
+                          "oldStart": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "oldLines": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "newStart": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "newLines": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "added": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "removed": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "lines": {
+                            "description": "Body lines with their leading ' ', '+', '-' or '\\' marker.",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "index",
+                          "header",
+                          "oldStart",
+                          "oldLines",
+                          "newStart",
+                          "newLines",
+                          "added",
+                          "removed",
+                          "lines"
+                        ],
+                        "additionalProperties": {}
+                      }
                     }
                   },
                   "required": [
@@ -7140,6 +7213,262 @@
                     "diff",
                     "ok",
                     "tracked"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/files/hunks/revert": {
+      "post": {
+        "operationId": "files.hunks.revert",
+        "summary": "Hunk-level REJECT over the engine's own diff: reverse-apply the chosen hunks of a file's working-tree diff via git, after ONE human approval whose preview shows exactly those hunks. Stale ids and changed files are refused (409), never guessed.",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "description": "Path relative to the project root (must be inside).",
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "hunkIds": {
+                    "description": "Hunk ids from files.diff to REVERT (reverse-apply). Unknown/stale ids → 409.",
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "baseMtimeMs": {
+                    "description": "mtimeMs the editor loaded; a mismatch returns 409 instead of reverting under a changed file.",
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "path",
+                  "hunkIds"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "applied": {
+                      "description": "True only after a human approved AND git reverse-applied the hunks.",
+                      "type": "boolean"
+                    },
+                    "approvalId": {
+                      "type": "string"
+                    },
+                    "decision": {
+                      "description": "denied | timed_out when applied=false",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "reverted": {
+                      "type": "number"
+                    },
+                    "added": {
+                      "description": "Added lines undone.",
+                      "type": "number"
+                    },
+                    "removed": {
+                      "description": "Removed lines restored.",
+                      "type": "number"
+                    },
+                    "mtimeMs": {
+                      "type": "number"
+                    },
+                    "hunks": {
+                      "description": "Hunks still present after the revert.",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "description": "Content-addressed hunk id (sha256 of old-side start + body, 12 hex). Stable while the hunk's content is; changes when it changes.",
+                            "type": "string"
+                          },
+                          "index": {
+                            "description": "0-based position in the file's diff.",
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "header": {
+                            "description": "The `@@ -a,b +c,d @@ …` line as git printed it.",
+                            "type": "string"
+                          },
+                          "oldStart": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "oldLines": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "newStart": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "newLines": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "added": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "removed": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "lines": {
+                            "description": "Body lines with their leading ' ', '+', '-' or '\\' marker.",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "index",
+                          "header",
+                          "oldStart",
+                          "oldLines",
+                          "newStart",
+                          "newLines",
+                          "added",
+                          "removed",
+                          "lines"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "diff": {
+                      "type": "string"
+                    },
+                    "stale": {
+                      "type": "boolean"
+                    },
+                    "missing": {
+                      "description": "Ids that no longer match a hunk (409).",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "applied"
                   ],
                   "additionalProperties": {}
                 }
@@ -14705,10 +15034,1123 @@
         "x-xr-any-method": true
       }
     },
+    "/api/v1/state/ui": {
+      "get": {
+        "operationId": "state.ui.get",
+        "summary": "Desktop UI state for this workspace (layout, tabs, drafts, last area) — opaque JSON the renderer owns, kept durable by the engine.",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "keys": {
+                    "description": "Comma-separated keys; omit for all entries of the workspace.",
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workspaceId": {
+                      "type": "string"
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "description": "^[a-z][a-z0-9._-]{0,63}$",
+                            "type": "string"
+                          },
+                          "value": {
+                            "description": "Opaque JSON the renderer owns."
+                          },
+                          "updatedAt": {
+                            "description": "ms since epoch, engine clock.",
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "value",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    }
+                  },
+                  "required": [
+                    "workspaceId",
+                    "entries"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "state.ui.patch",
+        "summary": "Upsert/delete desktop UI-state keys (null deletes). Budgeted: ≤ 256 KB per value, ≤ 256 keys per workspace, key shape enforced; all-or-nothing.",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "patch": {
+                    "description": "key → value (JSON, ≤ 256 KB) or null to delete. All-or-nothing: an invalid key rejects the whole patch.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "patch"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "workspaceId": {
+                      "type": "string"
+                    },
+                    "written": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "deleted": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "updatedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "workspaceId",
+                    "written",
+                    "deleted",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/terminal/pty": {
+      "get": {
+        "operationId": "terminal.pty.list",
+        "summary": "Live terminal sessions owned by this daemon and the per-daemon cap.",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "pid": {
+                            "type": "number"
+                          },
+                          "cwd": {
+                            "type": "string"
+                          },
+                          "shell": {
+                            "type": "string"
+                          },
+                          "cols": {
+                            "type": "number"
+                          },
+                          "rows": {
+                            "type": "number"
+                          },
+                          "startedAt": {
+                            "type": "number"
+                          },
+                          "alive": {
+                            "type": "boolean"
+                          },
+                          "exit": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "anyOf": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "signal": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "signal"
+                                ],
+                                "additionalProperties": {}
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "droppedBytes": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "pid",
+                          "cwd",
+                          "shell",
+                          "cols",
+                          "rows",
+                          "startedAt",
+                          "alive",
+                          "exit",
+                          "droppedBytes"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    },
+                    "cap": {
+                      "description": "Per-daemon session cap.",
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "sessions",
+                    "cap"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "terminal.pty.open",
+        "summary": "Open a REAL interactive terminal (pseudo-terminal: openpty / ConPTY) in the project root — ONE durable high-tier approval per session (keystrokes are not policy-inspected, and the preview says so), cwd scope-enforced, output streamed as SSE, shell killed on disconnect.",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cwd": {
+                    "description": "Working directory relative to the project root (default: the root). Must stay inside it.",
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "cols": {
+                    "description": "Initial columns (default 80).",
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 500
+                  },
+                  "rows": {
+                    "description": "Initial rows (default 24).",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 300
+                  }
+                },
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Server-Sent Events stream (data: <json> lines, [DONE] terminator).",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "event_id": {
+                      "description": "Monotonic per-stream sequence (same framing as chat SSE).",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "type": {
+                      "description": "Event discriminator.",
+                      "type": "string",
+                      "enum": [
+                        "status",
+                        "output",
+                        "exit"
+                      ]
+                    },
+                    "status": {
+                      "description": "approval_required | open | denied | timed_out | output_dropped | error.",
+                      "type": "string"
+                    },
+                    "approvalId": {
+                      "description": "Durable approval id while status=approval_required (ONE per session, not per keystroke).",
+                      "type": "string"
+                    },
+                    "sessionId": {
+                      "description": "Session id once status=open — use it for input/resize/close.",
+                      "type": "string"
+                    },
+                    "pid": {
+                      "type": "number"
+                    },
+                    "shell": {
+                      "description": "The interactive shell that was spawned (platform default).",
+                      "type": "string"
+                    },
+                    "cwd": {
+                      "type": "string"
+                    },
+                    "cols": {
+                      "type": "number"
+                    },
+                    "rows": {
+                      "type": "number"
+                    },
+                    "ttlMs": {
+                      "type": "number"
+                    },
+                    "riskTier": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "description": "Terminal output (UTF-8 text incl. VT escape sequences) when type=output.",
+                      "type": "string"
+                    },
+                    "bytes": {
+                      "description": "Bytes dropped so far when status=output_dropped (client fell behind the 4 MB high-water mark).",
+                      "type": "number"
+                    },
+                    "code": {
+                      "description": "Process exit code (type=exit).",
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "signal": {
+                      "description": "Terminating signal, e.g. SIGHUP after a close (type=exit).",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "decision": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/terminal/pty/{sessionId}": {
+      "delete": {
+        "operationId": "terminal.pty.close",
+        "summary": "End a terminal session the way a closing window does: SIGHUP, then SIGKILL after a 2 s grace (Windows: close console + terminate).",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Session id from the open stream's status=open event."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "exit": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            },
+                            "signal": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "signal"
+                          ],
+                          "additionalProperties": {}
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "exit"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/terminal/pty/{sessionId}/input": {
+      "post": {
+        "operationId": "terminal.pty.input",
+        "summary": "Write keystrokes to an open terminal session (≤ 64 KB per message).",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Session id from the open stream's status=open event."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "data": {
+                    "description": "Keystrokes/paste to write to the terminal. ≤ 64 KB per message.",
+                    "type": "string",
+                    "maxLength": 65536
+                  }
+                },
+                "required": [
+                  "data"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "bytes": {
+                      "description": "Bytes written.",
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "bytes"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/terminal/pty/{sessionId}/resize": {
+      "post": {
+        "operationId": "terminal.pty.resize",
+        "summary": "Resize an open terminal session (the child sees the new size).",
+        "tags": [
+          "workspace"
+        ],
+        "x-xr-stability": "experimental",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Session id from the open stream's status=open event."
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "cols": {
+                    "description": "New columns.",
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 500
+                  },
+                  "rows": {
+                    "description": "New rows.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 300
+                  }
+                },
+                "required": [
+                  "cols",
+                  "rows"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "cols": {
+                      "description": "Applied columns (clamped to 2..500).",
+                      "type": "number"
+                    },
+                    "rows": {
+                      "description": "Applied rows (clamped to 1..300).",
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "cols",
+                    "rows"
+                  ],
+                  "additionalProperties": {}
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — the body failed schema validation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — bearer token or session cookie required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden — cross-origin request refused (CSRF guard).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload too large (2 MiB cap).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/terminal/run": {
       "post": {
         "operationId": "terminal.run",
-        "summary": "Run ONE shell command in the project root — deterministic policy check, durable approval, output streamed as SSE (line-based command runner, NOT a PTY).",
+        "summary": "Run ONE shell command in the project root — deterministic policy check, durable approval, output streamed as SSE (line-based command runner, NOT a PTY; see terminal.pty.open for the real one).",
         "tags": [
           "workspace"
         ],

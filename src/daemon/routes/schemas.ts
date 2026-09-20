@@ -142,11 +142,75 @@ export const FilesDiffRequest = z.looseObject({
   path: z.string().max(2000).describe("Path relative to the project root (must be inside)."),
 });
 
+export const DiffHunkSummary = z.looseObject({
+  id: z.string().describe("Content-addressed hunk id (sha256 of old-side start + body, 12 hex). Stable while the hunk's content is; changes when it changes."),
+  index: z.number().int().describe("0-based position in the file's diff."),
+  header: z.string().describe("The `@@ -a,b +c,d @@ …` line as git printed it."),
+  oldStart: z.number().int(),
+  oldLines: z.number().int(),
+  newStart: z.number().int(),
+  newLines: z.number().int(),
+  added: z.number().int(),
+  removed: z.number().int(),
+  lines: z.array(z.string()).describe("Body lines with their leading ' ', '+', '-' or '\\' marker."),
+});
+
 export const FilesDiffResponse = z.looseObject({
   path: z.string(),
   diff: z.string().describe("Real `git diff -- <path>` output; empty for untracked files."),
   ok: z.boolean(),
   tracked: z.boolean(),
+  hunks: z.array(DiffHunkSummary).optional().describe("The same diff addressed hunk by hunk (Phase 2 · G-06)."),
+});
+
+// ── Phase 2 · G-08 — desktop UI state (experimental) ─────────────────────────
+
+export const UiStateEntry = z.looseObject({
+  key: z.string().describe("^[a-z][a-z0-9._-]{0,63}$"),
+  value: z.unknown().describe("Opaque JSON the renderer owns."),
+  updatedAt: z.number().describe("ms since epoch, engine clock."),
+});
+
+export const UiStateGetQuery = z.looseObject({
+  keys: z.string().optional().describe("Comma-separated keys; omit for all entries of the workspace."),
+});
+
+export const UiStateGetResponse = z.looseObject({
+  workspaceId: z.string(),
+  entries: z.array(UiStateEntry),
+});
+
+export const UiStatePatchRequest = z.looseObject({
+  patch: z.record(z.string(), z.unknown()).describe("key → value (JSON, ≤ 256 KB) or null to delete. All-or-nothing: an invalid key rejects the whole patch."),
+});
+
+export const UiStatePatchResponse = z.looseObject({
+  workspaceId: z.string(),
+  written: z.array(z.string()),
+  deleted: z.array(z.string()),
+  updatedAt: z.number(),
+});
+
+export const FilesHunksRevertRequest = z.looseObject({
+  path: z.string().max(2000).describe("Path relative to the project root (must be inside)."),
+  hunkIds: z.array(z.string().min(1)).min(1).max(500).describe("Hunk ids from files.diff to REVERT (reverse-apply). Unknown/stale ids → 409."),
+  baseMtimeMs: z.number().optional().describe("mtimeMs the editor loaded; a mismatch returns 409 instead of reverting under a changed file."),
+});
+
+export const FilesHunksRevertResponse = z.looseObject({
+  applied: z.boolean().describe("True only after a human approved AND git reverse-applied the hunks."),
+  approvalId: z.string().optional(),
+  decision: z.string().nullish().describe("denied | timed_out when applied=false"),
+  path: z.string().optional(),
+  reverted: z.number().optional(),
+  added: z.number().optional().describe("Added lines undone."),
+  removed: z.number().optional().describe("Removed lines restored."),
+  mtimeMs: z.number().optional(),
+  hunks: z.array(DiffHunkSummary).optional().describe("Hunks still present after the revert."),
+  diff: z.string().optional(),
+  stale: z.boolean().optional(),
+  missing: z.array(z.string()).optional().describe("Ids that no longer match a hunk (409)."),
+  error: z.string().optional(),
 });
 
 // ── Phase 2B · workspace write + terminal (experimental) ─────────────────────
@@ -184,6 +248,78 @@ export const TerminalRunEvent = z.looseObject({
   truncated: z.boolean().optional().describe("True when output exceeded the 256 KB cap."),
   ms: z.number().optional().describe("Wall time of the execution phase."),
   error: z.string().optional(),
+});
+
+// ── Phase 2 · G-05 — engine-owned PTY sessions (experimental) ───────────────
+
+export const TerminalPtyOpenRequest = z.looseObject({
+  cwd: z.string().max(2000).optional().describe("Working directory relative to the project root (default: the root). Must stay inside it."),
+  cols: z.number().int().min(2).max(500).optional().describe("Initial columns (default 80)."),
+  rows: z.number().int().min(1).max(300).optional().describe("Initial rows (default 24)."),
+});
+
+export const TerminalPtyEvent = z.looseObject({
+  event_id: z.number().int().positive().optional().describe("Monotonic per-stream sequence (same framing as chat SSE)."),
+  type: z.enum(["status", "output", "exit"]).optional().describe("Event discriminator."),
+  status: z.string().optional().describe("approval_required | open | denied | timed_out | output_dropped | error."),
+  approvalId: z.string().optional().describe("Durable approval id while status=approval_required (ONE per session, not per keystroke)."),
+  sessionId: z.string().optional().describe("Session id once status=open — use it for input/resize/close."),
+  pid: z.number().optional(),
+  shell: z.string().optional().describe("The interactive shell that was spawned (platform default)."),
+  cwd: z.string().optional(),
+  cols: z.number().optional(),
+  rows: z.number().optional(),
+  ttlMs: z.number().optional(),
+  riskTier: z.string().optional(),
+  data: z.string().optional().describe("Terminal output (UTF-8 text incl. VT escape sequences) when type=output."),
+  bytes: z.number().optional().describe("Bytes dropped so far when status=output_dropped (client fell behind the 4 MB high-water mark)."),
+  code: z.number().nullish().describe("Process exit code (type=exit)."),
+  signal: z.string().nullish().describe("Terminating signal, e.g. SIGHUP after a close (type=exit)."),
+  decision: z.string().nullish(),
+  error: z.string().optional(),
+});
+
+export const TerminalPtyInputRequest = z.looseObject({
+  data: z.string().max(65_536).describe("Keystrokes/paste to write to the terminal. ≤ 64 KB per message."),
+});
+
+export const TerminalPtyInputResponse = z.looseObject({
+  ok: z.boolean(),
+  bytes: z.number().describe("Bytes written."),
+});
+
+export const TerminalPtyResizeRequest = z.looseObject({
+  cols: z.number().int().min(2).max(500).describe("New columns."),
+  rows: z.number().int().min(1).max(300).describe("New rows."),
+});
+
+export const TerminalPtyResizeResponse = z.looseObject({
+  ok: z.boolean(),
+  cols: z.number().describe("Applied columns (clamped to 2..500)."),
+  rows: z.number().describe("Applied rows (clamped to 1..300)."),
+});
+
+export const TerminalPtySessionSummary = z.looseObject({
+  id: z.string(),
+  pid: z.number(),
+  cwd: z.string(),
+  shell: z.string(),
+  cols: z.number(),
+  rows: z.number(),
+  startedAt: z.number(),
+  alive: z.boolean(),
+  exit: z.looseObject({ code: z.number().nullable(), signal: z.string().nullable() }).nullable(),
+  droppedBytes: z.number(),
+});
+
+export const TerminalPtyListResponse = z.looseObject({
+  sessions: z.array(TerminalPtySessionSummary),
+  cap: z.number().describe("Per-daemon session cap."),
+});
+
+export const TerminalPtyCloseResponse = z.looseObject({
+  ok: z.boolean(),
+  exit: z.looseObject({ code: z.number().nullable(), signal: z.string().nullable() }).nullable(),
 });
 
 

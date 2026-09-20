@@ -4,14 +4,25 @@
  * POST /api/terminal/run — run ONE shell command in the project root and
  * stream its output over SSE. This powers the XR Desktop workspace terminal.
  *
- * HONEST CAPABILITY STATEMENT (no fake PTY):
- *   This is a line-based command runner, NOT an interactive PTY. There is no
- *   tty allocation, so full-screen interactive programs (vim, htop, less)
- *   will not behave interactively — they run non-attached and their raw
- *   output is streamed as text. A real PTY needs a native module
- *   (node-pty/ConPTY) and is deliberately deferred until it can be built
- *   first-class on all three OSes (D-02). The UI labels this surface
- *   "Terminal (command runner)" — never "PTY".
+ * HONEST CAPABILITY STATEMENT:
+ *   /api/terminal/run is a line-based command runner, NOT an interactive PTY:
+ *   no tty is allocated, so full-screen programs run non-attached and their
+ *   raw output is streamed as text. It stays for one-shot, per-command
+ *   approvals (the approvals demos and the agent's own shell tool).
+ *
+ *   /api/terminal/pty (Phase 2 · G-05) IS a real pseudo-terminal, engine-owned,
+ *   through `Bun.spawn({ terminal })` — openpty on Linux/macOS, ConPTY on
+ *   Windows, no native addon (the old note that a PTY "needs node-pty" was
+ *   true for bun < 1.3 and is not true any more). Consent is per SESSION, not
+ *   per keystroke: opening a shell raises ONE durable high-tier approval whose
+ *   preview says plainly that keystrokes typed into it are executed by the
+ *   shell directly and are not policy-inspected. Everything else the engine
+ *   can enforce, it enforces: cwd inside the project root, session cap,
+ *   input cap, output high-water mark with REPORTED drops, kill on client
+ *   disconnect and on daemon exit, XR credentials stripped from the shell's
+ *   environment. Wire: POST /pty (SSE), POST /pty/:id/input, POST
+ *   /pty/:id/resize, DELETE /pty/:id, GET /pty. Session logic lives in
+ *   src/daemon/pty-sessions.ts.
  *
  * Security posture (same law as the shell tool, src/tools/system.ts):
  *   · deterministic policy FIRST — checkAction() blocks dangerous commands
@@ -35,10 +46,13 @@
  */
 
 import { resolve } from "node:path";
+import { statSync } from "node:fs";
 import { route, type DaemonRoute } from "./router.ts";
 import { getApprovalStore } from "../../control/approval-store.ts";
 import { buildStructuredPreview } from "../../control/preview.ts";
 import { checkAction } from "../../security/guard.ts";
+import { insideRoot } from "./files.routes.ts";
+import { clampSize, defaultShell, getPtyRegistry, PTY_OUTPUT_HIGH_WATER_BYTES, type PtySession } from "../pty-sessions.ts";
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
@@ -188,6 +202,241 @@ export function terminalRoutes(): DaemonRoute[] {
           },
         });
         return sse(stream);
+      },
+    }),
+    ...ptyRoutes(),
+  ];
+}
+
+const PTY_PREFIX = "/api/terminal/pty/";
+
+/** `/api/terminal/pty/<id>/<action>` → { id, action } (action may be ""). */
+function parsePtyPath(path: string): { id: string; action: string } | null {
+  if (!path.startsWith(PTY_PREFIX)) return null;
+  const rest = path.slice(PTY_PREFIX.length);
+  const [id = "", action = ""] = rest.split("/");
+  if (!id) return null;
+  return { id: decodeURIComponent(id), action };
+}
+
+function ptyRoutes(): DaemonRoute[] {
+  return [
+    route({
+      id: "terminal.pty.list",
+      path: "/api/terminal/pty",
+      method: "GET",
+      handle: ({ json }) => json({ sessions: getPtyRegistry().list(), cap: getPtyRegistry().maxSessions }),
+    }),
+    route({
+      id: "terminal.pty.open",
+      path: "/api/terminal/pty",
+      method: "POST",
+      handle: async ({ req, json, sse, state, config }) => {
+        const root = resolve(process.cwd());
+        let body: { cwd?: string; cols?: number; rows?: number };
+        try {
+          body = (await req.json().catch(() => ({}))) as typeof body;
+        } catch {
+          return json({ error: "expected JSON body" }, 400);
+        }
+        const relCwd = typeof body?.cwd === "string" && body.cwd.trim() ? body.cwd.trim() : ".";
+        const cwd = insideRoot(root, relCwd);
+        if (!cwd) return json({ error: "cwd escapes the project root" }, 400);
+        try {
+          if (!statSync(cwd).isDirectory()) return json({ error: "cwd is not a directory" }, 400);
+        } catch {
+          return json({ error: "cwd does not exist" }, 400);
+        }
+        const size = clampSize(body?.cols, body?.rows);
+        const registry = getPtyRegistry();
+        if (registry.size >= registry.maxSessions) {
+          return json({ error: `terminal session cap reached (${registry.maxSessions}); close one first`, cap: registry.maxSessions }, 429);
+        }
+        const [shell] = defaultShell();
+
+        // ── 1. Deterministic policy gate (engine-owned; runs before consent) ──
+        const decision = checkAction({ tool: "shell", args: { cmd: shell } }, { egressAllowlist: [], requireApproval: ["shell"] });
+        if (!decision.allowed) {
+          state.store.audit("terminal.pty.blocked", { shell, cwd: relCwd, reason: decision.reason });
+          return json({ error: `blocked: ${decision.reason}`, blocked: true }, 403);
+        }
+
+        // ── 2. Consent plane: ONE durable approval per session, preview tells the truth ──
+        const approvalsCfg = config?.approvals;
+        const approvalStore = getApprovalStore(state.store, {
+          defaultTtlMs: approvalsCfg?.defaultTtlMs,
+          perSurface: approvalsCfg?.perSurface,
+        });
+        const reason =
+          `open an interactive terminal (${shell}) in ${relCwd === "." ? "the project root" : relCwd} — ` +
+          "everything typed into it runs as you, directly in the shell; XR's policy gate does not see those keystrokes";
+        const handle = approvalStore.request({
+          tool: "shell",
+          args: { cmd: shell, cwd: relCwd, interactive: true },
+          reason,
+          preview: buildStructuredPreview({ tool: "shell", args: { cmd: `${shell} (interactive session)`, cwd: relCwd }, reason, cwd: root, riskTier: "high" }),
+          riskTier: "high",
+          surface: "daemon-terminal",
+        });
+        state.store.audit("terminal.pty.requested", { shell, cwd: relCwd, approvalId: handle.id, cols: size.cols, rows: size.rows });
+
+        // ── 3. Stream: approval outcome → spawn → live output → exit ──
+        let sessionId: string | null = null;
+        let closed = false; // shared with cancel(): a departed client must never be enqueued to
+        const stream = new ReadableStream(
+          {
+            async start(controller) {
+              const enc = new TextEncoder();
+              let seq = 0;
+              const send = (data: object) => {
+                if (closed) return;
+                seq += 1;
+                try {
+                  controller.enqueue(enc.encode(`data: ${JSON.stringify({ ...data, event_id: seq })}\n\n`));
+                } catch {
+                  closed = true; // the consumer is gone; the session is torn down by cancel()
+                }
+              };
+              const close = () => {
+                if (closed) return;
+                closed = true;
+                try {
+                  controller.enqueue(enc.encode("data: [DONE]\n\n"));
+                  controller.close();
+                } catch {
+                  /* already closed by the client */
+                }
+              };
+              try {
+                send({ type: "status", status: "approval_required", approvalId: handle.id, shell, cwd: relCwd, riskTier: handle.record.riskTier, ttlMs: handle.record.ttlMs });
+                const outcome = await handle.outcome;
+                if (!outcome.approved) {
+                  send({ type: "status", status: outcome.timedOut ? "timed_out" : "denied", decision: outcome.decision });
+                  state.store.audit("terminal.pty.denied", { shell, cwd: relCwd, decision: outcome.decision });
+                  close();
+                  return;
+                }
+                let session: PtySession | undefined;
+                try {
+                  session = registry.open({
+                    cwd,
+                    cols: size.cols,
+                    rows: size.rows,
+                    onData: (text) => {
+                      // Backpressure is measured in bytes the client has not drained.
+                      const desired = controller.desiredSize ?? 0;
+                      if (desired <= 0 && session) {
+                        // Stream buffer full: count as pending so the session starts dropping and REPORTS it.
+                        session.pendingBytes = PTY_OUTPUT_HIGH_WATER_BYTES + 1;
+                      }
+                      send({ type: "output", data: text });
+                      session?.consumed(Buffer.byteLength(text, "utf8"));
+                    },
+                    onDropped: (bytes) => send({ type: "status", status: "output_dropped", bytes }),
+                    onExit: (exit) => {
+                      send({ type: "exit", code: exit.code, signal: exit.signal });
+                      try {
+                        state.store.audit("terminal.pty.exited", { sessionId, shell, cwd: relCwd, code: exit.code, signal: exit.signal });
+                      } catch {
+                        /* audit sink may be absent */
+                      }
+                      close();
+                    },
+                  });
+                } catch (e) {
+                  send({ type: "status", status: "error", error: `spawn failed: ${String(e)}` });
+                  state.store.audit("terminal.pty.error", { shell, cwd: relCwd, error: String(e) });
+                  close();
+                  return;
+                }
+                sessionId = session.id;
+                state.store.audit("terminal.pty.opened", { sessionId, pid: session.pid, shell, cwd: relCwd, cols: session.cols, rows: session.rows });
+                send({ type: "status", status: "open", sessionId: session.id, pid: session.pid, shell, cwd: relCwd, cols: session.cols, rows: session.rows });
+              } catch (e) {
+                send({ type: "status", status: "error", error: String(e) });
+                try {
+                  state.store.audit("terminal.pty.error", { shell, cwd: relCwd, error: String(e) });
+                } catch {
+                  /* audit sink may be absent */
+                }
+                close();
+              }
+            },
+            cancel() {
+              // Client went away (tab closed, app quit, network drop): the shell
+              // gets the closing-window treatment. No orphaned shells.
+              closed = true;
+              if (sessionId) {
+                const id = sessionId;
+                void getPtyRegistry()
+                  .close(id)
+                  .then((exit) => {
+                    try {
+                      state.store.audit("terminal.pty.killed", { sessionId: id, by: "disconnect", exit });
+                    } catch {
+                      /* audit sink may be absent */
+                    }
+                  });
+              }
+            },
+          },
+          new ByteLengthQueuingStrategy({ highWaterMark: PTY_OUTPUT_HIGH_WATER_BYTES }),
+        );
+        return sse(stream);
+      },
+    }),
+    route({
+      id: "terminal.pty.input",
+      prefix: PTY_PREFIX,
+      pattern: /^\/api\/terminal\/pty\/[^/]+\/input$/,
+      method: "POST",
+      handle: async ({ req, json, path }) => {
+        const parsed = parsePtyPath(path);
+        if (!parsed) return json({ error: "expected /api/terminal/pty/<id>/input" }, 400);
+        const session = getPtyRegistry().get(parsed.id);
+        if (!session) return json({ error: "no such terminal session" }, 404);
+        const body = (await req.json().catch(() => ({}))) as { data?: unknown };
+        if (typeof body.data !== "string") return json({ error: "expected { data: string }" }, 400);
+        if (!session.alive) return json({ error: "session has exited", exit: session.exit }, 409);
+        try {
+          session.write(body.data);
+        } catch (e) {
+          const msg = (e as Error).message;
+          return json({ error: msg }, msg.includes("exceeds") ? 413 : 409);
+        }
+        return json({ ok: true, bytes: Buffer.byteLength(body.data, "utf8") });
+      },
+    }),
+    route({
+      id: "terminal.pty.resize",
+      prefix: PTY_PREFIX,
+      pattern: /^\/api\/terminal\/pty\/[^/]+\/resize$/,
+      method: "POST",
+      handle: async ({ req, json, path }) => {
+        const parsed = parsePtyPath(path);
+        if (!parsed) return json({ error: "expected /api/terminal/pty/<id>/resize" }, 400);
+        const session = getPtyRegistry().get(parsed.id);
+        if (!session) return json({ error: "no such terminal session" }, 404);
+        const body = (await req.json().catch(() => ({}))) as { cols?: unknown; rows?: unknown };
+        if (!session.alive) return json({ error: "session has exited", exit: session.exit }, 409);
+        const size = session.resize(Number(body.cols), Number(body.rows));
+        return json({ ok: true, ...size });
+      },
+    }),
+    route({
+      id: "terminal.pty.close",
+      prefix: PTY_PREFIX,
+      pattern: /^\/api\/terminal\/pty\/[^/]+$/,
+      method: "DELETE",
+      handle: async ({ json, path, state }) => {
+        const parsed = parsePtyPath(path);
+        if (!parsed) return json({ error: "expected DELETE /api/terminal/pty/<id>" }, 400);
+        const registry = getPtyRegistry();
+        const session = registry.get(parsed.id);
+        if (!session) return json({ error: "no such terminal session" }, 404);
+        const exit = await registry.close(parsed.id);
+        state.store.audit("terminal.pty.killed", { sessionId: parsed.id, by: "request", exit });
+        return json({ ok: true, exit });
       },
     }),
   ];

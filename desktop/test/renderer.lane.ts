@@ -39,7 +39,8 @@
  * one manifest keeps the lane's browser deterministic.
  */
 
-import { readFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { build, preview, type PreviewServer } from "vite";
@@ -536,6 +537,108 @@ check("a11y: live regions exist for streaming/voice state (audit found 0)", asyn
     assert(live > 0, "no aria-live region anywhere in the shell");
   } finally {
     await page.close();
+  }
+});
+
+/* -------------------------------------------------------------------------
+   Phase 2 · G-05 — the PTY pane is a real terminal bound to the engine
+   ------------------------------------------------------------------------- */
+check("G-05: '+ shell' opens a REAL engine PTY — approval first, then keystrokes round-trip through the shell", async () => {
+  const page = await openShell();
+  try {
+    await goTo(page, /Workspace/i);
+    await page.getByRole("button", { name: /^\+ shell$/ }).click();
+    // Nothing is spawned before the human decides — the engine's approval banner is the first state.
+    await page.waitForSelector('.pty[data-phase="approval"]', { timeout: 15_000 });
+    const banner = await page.$eval(".pty .approval-mini", (el) => (el as HTMLElement).innerText);
+    assert(/not policy-inspected/.test(banner), `approval banner must state the trust model plainly; got: ${banner}`);
+    await page.getByRole("button", { name: /^Approve$/ }).click();
+    await page.waitForSelector('.pty[data-phase="open"]', { timeout: 15_000 });
+    const foot = await page.$eval(".pty-foot", (el) => (el as HTMLElement).innerText);
+    assert(/pid \d+/.test(foot), `foot must show the engine's pid; got: ${foot}`);
+    // Keystrokes → engine → shell → output → xterm. The marker is split so the
+    // echo of the typed command cannot satisfy the assertion.
+    await page.click(".pty-host .xterm");
+    await page.keyboard.type("printf 'lane-%s\\n' ok");
+    await page.keyboard.press("Enter");
+    const deadline = Date.now() + 15_000;
+    let seen = "";
+    while (Date.now() < deadline) {
+      seen = await page.$eval(".pty-host", (el) => (el as HTMLElement).innerText);
+      if (/lane-ok/.test(seen)) break;
+      await page.waitForTimeout(150);
+    }
+    assert(/lane-ok/.test(seen), `shell output never reached the pane; buffer: ${seen.slice(-300)}`);
+    // The engine's own session list agrees a shell is open.
+    const live = await page.evaluate(async () => {
+      const r = await fetch("/api/v1/terminal/pty");
+      return (await r.json()) as { sessions: unknown[] };
+    });
+    assert(live.sessions.length >= 1, "engine lists no live PTY session while the pane is open");
+    // Closing the tab ends the shell — engine truth, not a UI state.
+    await page.getByRole("button", { name: /Close terminal tab/ }).click();
+    const gone = Date.now() + 10_000;
+    let after = live;
+    while (Date.now() < gone) {
+      after = await page.evaluate(async () => (await (await fetch("/api/v1/terminal/pty")).json()) as { sessions: unknown[] });
+      if (after.sessions.length === 0) break;
+      await page.waitForTimeout(150);
+    }
+    eq(after.sessions.length, 0, "the engine must have killed the shell when the pane closed");
+  } finally {
+    await page.close();
+  }
+});
+
+/* -------------------------------------------------------------------------
+   Phase 2 · G-06 — hunk review: select → diff → reject a hunk → approve → applied
+   ------------------------------------------------------------------------- */
+check("G-06: rejecting a hunk in the diff card reverts exactly that hunk through the engine after approval", async () => {
+  const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+  const readmePath = `${repoRoot}README.md`;
+  const clean = execFileSync("git", ["status", "--porcelain", "--", "README.md"], { cwd: repoRoot }).toString().trim();
+  skipUnless(clean === "", "README.md has local modifications — the lane will not touch a dirty file");
+  const marker = `lane-hunk-marker-${Date.now()}`;
+  appendFileSync(readmePath, `\n${marker}\n`, "utf8");
+  const page = await openShell();
+  try {
+    await goTo(page, /Workspace/i);
+    await page.waitForSelector('button[title="README.md"]', { timeout: 15_000 }); // the engine's file tree
+    await page.click('button[title="README.md"]');
+    // The engine's diff, hunk by hunk — the marker is in the only hunk.
+    await page.waitForSelector(".hunk", { timeout: 15_000 });
+    const body = await page.$eval(".hunk-body", (el) => (el as HTMLElement).innerText);
+    assert(body.includes(`+${marker}`), `the hunk must show the engine's diff of the change; got: ${body.slice(0, 200)}`);
+    await page.getByRole("button", { name: /^Reject$/ }).first().click();
+    await page.waitForSelector('.hunk[data-pending]', { timeout: 5_000 });
+    // Nothing is reverted before the human decides.
+    assert(readFileSync(readmePath, "utf8").includes(marker), "the file changed before any approval — the gate is not real");
+    // Decide through the engine (the same durable approval Trust → Approvals shows).
+    const approved = await page.evaluate(async () => {
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
+        const list = (await (await fetch("/api/v1/approvals")).json()) as { pending: Array<{ id: string; tool: string; preview?: { sections: Array<{ body: string }> } }> };
+        const hit = list.pending.find((p) => p.tool === "patch");
+        if (hit) {
+          const shown = (hit.preview?.sections ?? []).map((x) => x.body).join("\n");
+          await fetch(`/api/v1/approvals/${encodeURIComponent(hit.id)}/decision`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ approved: true }) });
+          return { shown };
+        }
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return null;
+    });
+    assert(approved, "no 'patch' approval appeared in the engine's durable queue");
+    assert(approved.shown.includes(marker), "the approval preview must show the hunk being reverted");
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline && readFileSync(readmePath, "utf8").includes(marker)) await page.waitForTimeout(150);
+    assert(!readFileSync(readmePath, "utf8").includes(marker), "git did not reverse-apply the hunk after approval");
+    // The card reflects the engine's new truth: nothing left to review.
+    await page.waitForFunction(() => /no working-tree changes/.test((document.querySelector(".diffcard") as HTMLElement | null)?.innerText ?? ""), null, { timeout: 10_000 });
+    eq(execFileSync("git", ["status", "--porcelain", "--", "README.md"], { cwd: repoRoot }).toString().trim(), "", "README.md must be byte-identical to HEAD again");
+  } finally {
+    await page.close();
+    if (readFileSync(readmePath, "utf8").includes(marker)) execFileSync("git", ["checkout", "--", "README.md"], { cwd: repoRoot });
   }
 });
 

@@ -107,13 +107,20 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 142_500; // Phase 4 · 141,000 → 142,500 (2026-09-18):
-// BLUEPRINT-STATUS backlog batch: steer/review routes + reviewTask,
-// trust-mode module + policy-gate wiring, control-cockpit route,
-// agents/templates gallery route, voice semantic endpointing
-// (endpointing.ts + session/v2 integration), generated-client growth.
-// Measured 140,980. See rationale block above; 110k stays the direction
-// of travel.
+export const TREE_CEILING = 144_000; // Phase 2 (core workspace) · 142,500 → 144,000 (2026-09-20):
+// engine-owned PTY sessions (pty-sessions.ts + terminal.routes.ts: a real
+// terminal, consent per session), hunk-level review (hunks.ts +
+// files.routes.ts + a patch-shaped approval preview), desktop UI state
+// (migration 12 + ui-state.ts + routes), router `pattern`, generated-client
+// growth. All of it composes the approval store and the write gate — the
+// consent plane — and cannot live in a satellite without splitting that
+// boundary. Measured 143,430 (+1,365 net over Phase 1's 169f496). Smallest
+// round number that fits; 110k stays the direction of travel.
+// Phase 4 · 141,000 → 142,500 (2026-09-18): BLUEPRINT-STATUS backlog batch:
+// steer/review routes + reviewTask, trust-mode module + policy-gate wiring,
+// control-cockpit route, agents/templates gallery route, voice semantic
+// endpointing (endpointing.ts + session/v2 integration), generated-client
+// growth. Measured 140,980.
 
 interface Waiver {
   readonly path: string;
