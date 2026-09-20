@@ -551,7 +551,9 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     response: ContextUndoOutcome,
   },
 
-  // ── business (Business OS extension; default-excluded) ────────────────────
+  // ── business (Business OS extension; SEC-05 — gated identically to the
+  //    registry: OFF by default, XR_BUSINESS_ROUTES=on re-enables) ──────────
+  ...(process.env.XR_BUSINESS_ROUTES === "on" ? {
   "business.status.get": { summary: "Business OS extension status (?orgId=&workspaceId=).", tag: "business", stability: "experimental" },
   "business.journeys.list": { summary: "List business journeys.", tag: "business", stability: "experimental" },
   "business.journeys.start": {
@@ -610,6 +612,7 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     template: "/api/business/privacy/{subject}",
     pathParams: [{ name: "subject", description: "Subject (org/workspace/id)." }],
   },
+  } : {}),
 
   // ── Phase G · workspace files (experimental surface) ────────────────────
   "files.list": {

@@ -65,6 +65,7 @@ const CADENCE: Record<PollKey, number> = {
   approvals: 1_000,
   sessions: 1_000,
   agents: 2_000,
+  budget: 5_000,
 };
 
 /** A loader per key that counts calls and resolves to the call number. */
@@ -84,6 +85,7 @@ function countingLoaders() {
       approvals: make("approvals"),
       sessions: make("sessions"),
       agents: make("agents"),
+      budget: make("budget"),
     }),
   };
 }
@@ -161,6 +163,7 @@ describe("poll hub · one scheduler for the whole shell", () => {
         approvals: () => Promise.resolve(null),
         sessions: () => Promise.resolve(null),
         agents: () => Promise.resolve(null),
+        budget: () => Promise.resolve(null),
       }),
       CADENCE,
       clock,
@@ -187,6 +190,7 @@ describe("poll hub · one scheduler for the whole shell", () => {
         approvals: () => Promise.resolve(null),
         sessions: () => Promise.resolve(null),
         agents: () => Promise.resolve(null),
+        budget: () => Promise.resolve(null),
       }),
       CADENCE, // health cadence 1 s
       clock,

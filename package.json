@@ -110,7 +110,7 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "axe-core": "^4.12.1",
+    "axe-core": "^4.13.0",
     "dependency-cruiser": "^17.0.0",
     "typescript": "^5.5.0"
   },

@@ -94,6 +94,36 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
     return () => window.removeEventListener("keydown", onKey);
   }, [area, preVoice, palette, cheat, go]);
 
+  /* Phase 4 · native entry points: tray actions and xr:// deep links become
+     real navigation. Outside the packaged app nothing is registered and this
+     effect is a no-op — the web shell never pretends at OS integration. */
+  useEffect(() => {
+    const T = (window as unknown as {
+      __TAURI__?: { event?: { listen?: (e: string, cb: (ev: { payload?: unknown }) => void) => Promise<() => void> } };
+    }).__TAURI__;
+    if (!T?.event?.listen) return;
+    const offs: Array<() => void> = [];
+    const AREAS: Area[] = ["home", "work", "trust", "voice", "runs", "library", "settings"];
+    void T.event
+      .listen("xr-tray-action", (ev) => {
+        const id = String(ev.payload ?? "");
+        if (id === "new_task") go("work");
+        if (id === "approvals") go("trust");
+      })
+      .then((off) => offs.push(off))
+      .catch(() => undefined);
+    void T.event
+      .listen("deep-link", (ev) => {
+        const urls = (ev.payload as { urls?: string[] } | undefined)?.urls ?? [];
+        const m = /^xr:\/\/([a-z]+)/.exec(urls[0] ?? "");
+        const target = m?.[1] as Area | undefined;
+        if (target && AREAS.includes(target)) go(target);
+      })
+      .then((off) => offs.push(off))
+      .catch(() => undefined);
+    return () => offs.forEach((o) => o());
+  }, [go]);
+
   const onToggleNotifications = useCallback(async () => {
     const next = !notificationsEnabled();
     if (next && (await requestNotificationPermission()) !== "granted") {
@@ -176,7 +206,7 @@ function AppInner({ engine, onOnboard }: { engine: string | null; onOnboard: () 
       )}
       {area === "trust" && <Trust />}
       {area === "settings" && <Settings onOnboard={onOnboard} />}
-      {area === "voice" && <Voice onDock={() => go(preVoice)} />}
+      {area === "voice" && <Voice onDock={() => go(preVoice)} onDecide={() => go("trust")} />}
       {/* D-01 · the docked chip is only for BACKGROUND voice. Previously it
           rendered alongside the full surface, giving two competing controls. */}
       {voice.state !== "idle" && area !== "voice" && <DockedVoice onExpand={() => go("voice")} />}

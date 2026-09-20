@@ -20,7 +20,7 @@
  * "green but not true" signal this project exists to eliminate.
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -242,4 +242,26 @@ if (import.meta.main) {
     process.exit(0);
   }
   process.exit(1);
+}
+
+/* ── elite-workstation Phase 5 · desktop bundle caps (additive) ─────────────
+   Interactive-shell startup budget: entry ≤ 350 kB, lazy chunks ≤ 750 kB.
+   Skips when desktop/dist is absent (CI's architecture job doesn't build the
+   desktop; desktop-app.yml does for real). */
+export const BUNDLE_CAPS = { entryKb: 350, lazyKb: 750 };
+
+export function checkBundles(): { ok: boolean; lines: string[] } {
+  const dir = join(ROOT, "desktop/dist/assets");
+  const lines: string[] = [];
+  let ok = true;
+  if (!existsSync(dir)) return { ok: true, lines: ["desktop/dist absent — bundle caps skipped here; enforced where the desktop builds"] };
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith(".js")) continue;
+    const kb = Math.round(statSync(join(dir, f)).size / 1024);
+    const isEntry = f.startsWith("index");
+    const cap = isEntry ? BUNDLE_CAPS.entryKb : BUNDLE_CAPS.lazyKb;
+    if (kb > cap) ok = false;
+    lines.push(`${kb > cap ? "✗" : "✓"} ${f} ${kb} kB (cap ${cap} kB, ${isEntry ? "entry" : "lazy"})`);
+  }
+  return { ok, lines };
 }

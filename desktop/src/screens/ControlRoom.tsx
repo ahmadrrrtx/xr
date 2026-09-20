@@ -81,6 +81,9 @@ export function ControlRoom() {
   }
   const newest = sorted.length > 0 ? (sorted[sorted.length - 1]?.created_at ?? 0) : 0;
   const active = enabled && !paused && (now - newest < ACTIVE_WINDOW_MS || pending.length > 0);
+  /* Phase 4 · acting-indicator: an engine event inside the last 5 s means the
+     agent is mid-action; derived from the audited event feed, never guessed. */
+  const acting = enabled && !paused && sorted.length > 0 && now - newest < 5000;
   const elapsed = sessionStart ? Math.max(0, Math.floor((now - sessionStart) / 1000)) : 0;
   const mmss = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
@@ -138,7 +141,11 @@ export function ControlRoom() {
         </div>
       ) : active ? (
         <div className="cr-banner amber">
-          <span>XR is controlling your computer — session {mmss}</span>
+          <span>
+            XR is controlling your computer — session {mmss}
+            {/* Phase 4 · acting-indicator: engine event recency, not a guess. */}
+            {acting && <span className="cr-acting" role="status">● acting</span>}
+          </span>
           <span className="spacer" />
           <button className="chipbtn" onClick={() => void verb({ paused: true })}>‖ Pause</button>
           <button className="chipbtn red" onClick={() => void verb({ stop: true })}>■ Stop</button>
@@ -148,6 +155,8 @@ export function ControlRoom() {
           no active control session — the engine gate allows actions only through approvals + standing grants
           <span className="spacer" />
           <button className="chipbtn" onClick={() => void verb({ paused: true })}>‖ Pause (pre-arm)</button>
+          {/* Phase 4 · STOP is ALWAYS visible — it denies anything pending. */}
+          <button className="chipbtn red" title="Stop is always available — denies pending approvals, blocks new control actions" onClick={() => void verb({ stop: true })}>■ Stop</button>
         </div>
       )}
 

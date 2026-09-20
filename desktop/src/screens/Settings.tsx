@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { LOCALES, getLocale, setLocale, subscribeLocale } from "../i18n";
 import { api, asList, type ProviderInfo, type ShieldStatus, type TriggersState } from "../api/client";
 import { notificationsEnabled, setNotificationsEnabled, requestNotificationPermission, notificationChannel } from "../notify";
 import {
@@ -11,6 +12,7 @@ import {
   type ThemePref,
 } from "../prefs";
 import { isTauri, nativeAutostartStatus, nativeSetAutostart, nativeCheckUpdate } from "../tauri-bridge";
+import { README_HERO_SRC } from "../components/Brand";
 
 const TABS = ["General", "Models", "Local", "Automations", "Voice", "Privacy", "Advanced"] as const;
 type Tab = (typeof TABS)[number];
@@ -38,6 +40,8 @@ export function Settings({ onOnboard }: { onOnboard?: () => void }) {
   /* Phase 1 · appearance prefs (prefs.ts owns them; this is a view). */
   const [themeChoice, setThemeChoice] = useState<ThemePref>(getTheme());
   const [density, setDensityChoice] = useState<Density>(getDensity());
+  /* Phase 5 · i18n locale picker state. */
+  const locale = useSyncExternalStore(subscribeLocale, getLocale);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   /* Phase 5 · native matrix opt-ins (honest about host capabilities). */
   const [notifOn, setNotifOn] = useState(notificationsEnabled());
@@ -99,6 +103,16 @@ export function Settings({ onOnboard }: { onOnboard?: () => void }) {
 
       {tab === "General" && (
         <div className="tc-grid">
+          {/* Phase 3 · About — the official readme hero (winged avatar +
+              lockup) on the identity surface, exactly as provided. */}
+          <section className="tc-card about-card">
+            <img className="about-hero" src={README_HERO_SRC} alt="XR — The AI Agent You Can Actually Trust" />
+            <div className="kv2">
+              <span className="k">product</span><span>XR Desktop — a local-first AI workstation</span>
+              <span className="k">engine</span><span className="mono">{version ?? "—"}</span>
+              <span className="k">license</span><span>MIT · no telemetry · BYOK</span>
+            </div>
+          </section>
           <section className="tc-card">
             <div className="rail-h">System</div>
             <div className="kv2">
@@ -143,6 +157,19 @@ export function Settings({ onOnboard }: { onOnboard?: () => void }) {
               <span className="k">motion</span>
               <span className="faint">
                 {prefersReducedMotion ? "reduced — following the OS setting" : "full — reduced-motion is honored automatically when the OS asks for it"}
+              </span>
+              {/* Phase 5 · i18n — en/es/ur core-chrome catalog, persisted. */}
+              <span className="k">language</span>
+              <span className="seg" role="radiogroup" aria-label="Interface language">
+                {LOCALES.map((l) => (
+                  <button
+                    key={l.id}
+                    role="radio"
+                    aria-checked={locale === l.id}
+                    className={`segbtn ${locale === l.id ? "on" : ""}`}
+                    onClick={() => { setLocale(l.id); setNote(`language: ${l.id} — core chrome translated; domain screens remain English (recorded limitation)`); }}
+                  >{l.label}</button>
+                ))}
               </span>
             </div>
           </section>

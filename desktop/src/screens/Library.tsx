@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { ContextMenu, type CtxState } from "../components/ContextMenu";
+import { pushToast } from "../components/ToastBus";
+import { Research } from "./Research";
 import {
   api,
   asList,
@@ -10,7 +13,10 @@ import {
   type SkillInspect,
 } from "../api/client";
 
-const TABS = ["Skills", "MCP", "Plugins", "Automations", "Integrations"] as const;
+/* Phase 2 · F-6 — Research folds into the Library as a tab (IA §3: detail
+   surfaces are tabs, never new rail nodes). Model Center lives under
+   Integrations (providers are the engine's upstream integrations). */
+const TABS = ["Skills", "MCP", "Plugins", "Automations", "Integrations", "Research"] as const;
 type Tab = (typeof TABS)[number];
 
 function StatusDot({ ok, warn }: { ok?: boolean; warn?: boolean }) {
@@ -109,6 +115,11 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
 
   const [skillPins, setSkillPins] = useState<Record<string, boolean>>({});
   const [mcpPins, setMcpPins] = useState<Record<string, unknown>>({});
+  /* Phase 3 · inline drift card (SEC-01): exactly what changed vs the pinned
+     contract, engine-computed; the shell never diffs on its own. */
+  const [drift, setDrift] = useState<Record<string, { status: string; changed: { tool: string; before: string; after: string }[]; added: string[]; removed: string[] }>>({});
+  /* Phase 3 · contextual menu for skill objects. */
+  const [ctx, setCtx] = useState<CtxState | null>(null);
   const loadSkills = useCallback((q?: string) => {
     api.skills(q || undefined)
       .then((v) => { setSkills(v.skills ?? []); setSkillsHealth((v.health as Record<string, unknown>) ?? null); })
@@ -314,6 +325,19 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
       key={s.id}
       className={sel?.id === s.id ? "scard on" : "scard"}
       onClick={() => { setSel(s); if (!market) openInspect(s.id); else setInspect(null); }}
+      onContextMenu={(ev) => {
+        ev.preventDefault();
+        setCtx({
+          x: ev.clientX,
+          y: ev.clientY,
+          items: [
+            { label: "Open detail sheet", run: () => { setSel(s); if (!market) openInspect(s.id); } },
+            ...(!market && s.enabled ? [{ label: "Run in Work", run: () => onRun?.(`Use the "${s.name ?? s.id}" skill to `) }] : []),
+            ...(!market ? [{ label: s.enabled ? "Disable" : "Enable", run: () => { void api.skillSet(s.id, !s.enabled).then(() => loadSkills(skillQ.trim())).catch((e) => setNote(`${s.id}: ${e}`)); } }] : []),
+            { label: "Copy skill id", run: () => { void navigator.clipboard?.writeText(s.id).catch(() => undefined); } },
+          ],
+        });
+      }}
       aria-pressed={sel?.id === s.id}
     >
       <div className="sc-top">
@@ -322,7 +346,8 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
         {s.verification === "official" && <span className="chip green tiny">official</span>}
         {/* Phase 3 · provenance clarity: bundled skills ship with XR; virtual
             packs are engine-composed role/research bundles. */}
-        {(s as { source?: string }).source === "virtual" && <span className="chip tiny" style={{ color: "var(--xr-violet)" }}>virtual pack</span>}
+        {/* Phase 5 · a11y: AA contrast in both themes for the tiny chip. */}
+        {(s as { source?: string }).source === "virtual" && <span className="chip tiny virtual">virtual pack</span>}
         {(s as { source?: string }).source === "bundled" && <span className="chip tiny">bundled</span>}
         <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
           <StatusDot ok={(s.enabled ?? true) && s.health !== "broken"} warn={s.enabled === false} />
@@ -333,7 +358,18 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
               style={{ cursor: "pointer" }}
               onClick={(e) => {
                 e.stopPropagation();
-                api.skillsPin(String(s.id), !skillPins[String(s.id)]).then(() => loadSkills(skillQ.trim())).catch((ev) => setNote(`${s.id}: ${ev}`));
+                /* Phase 5 · undo-toast: pin/unpin is reversible — the toast
+                   carries the real inverse action (engine round-trip). */
+                const was = !!skillPins[String(s.id)];
+                api.skillsPin(String(s.id), !was)
+                  .then(() => {
+                    loadSkills(skillQ.trim());
+                    pushToast(was ? "info" : "ok", was ? `Unpinned ${s.id}` : `Pinned ${s.id}`, was ? "contract unlocked" : "contract locked (SEC-02)", {
+                      label: "Undo",
+                      run: () => { api.skillsPin(String(s.id), was).then(() => loadSkills(skillQ.trim())).catch(() => undefined); },
+                    });
+                  })
+                  .catch((ev) => setNote(`${s.id}: ${ev}`));
               }}
             >
               {skillPins[String(s.id)] ? "pinned" : "pin"}
@@ -384,6 +420,8 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
         ))}
       </div>
       {note && <div className="errline mono" style={{ borderColor: "var(--xr-border)", marginBottom: 10 }}>{note}</div>}
+
+      {tab === "Research" && <Research />}
 
       {tab === "Integrations" && (
         <>
@@ -580,11 +618,19 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
                   </button>
                   <button
                     className="btn"
-                    onClick={() =>
-                      (mcpPins[String(s.id)] ? api.mcpUnpin(String(s.id)) : api.mcpPin(String(s.id), "desktop"))
-                        .then(() => loadMcp())
-                        .catch((e) => setNote(`${s.id}: ${e}`))
-                    }
+                    onClick={() => {
+                      /* Phase 5 · undo-toast on MCP contract pin/unpin too. */
+                      const was = !!mcpPins[String(s.id)];
+                      (was ? api.mcpUnpin(String(s.id)) : api.mcpPin(String(s.id), "desktop"))
+                        .then(() => {
+                          loadMcp();
+                          pushToast(was ? "info" : "ok", was ? `Unpinned ${s.id}` : `Pinned ${s.id}`, was ? "MCP contract unlocked" : "MCP contract locked (SEC-01)", {
+                            label: "Undo",
+                            run: () => { (was ? api.mcpPin(String(s.id), "desktop") : api.mcpUnpin(String(s.id))).then(() => loadMcp()).catch(() => undefined); },
+                          });
+                        })
+                        .catch((e) => setNote(`${s.id}: ${e}`));
+                    }}
                   >
                     {mcpPins[String(s.id)] ? "Unpin contract" : "Pin contract"}
                   </button>
@@ -593,7 +639,7 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
                       className="btn"
                       onClick={() =>
                         api.mcpPinDiff(String(s.id))
-                          .then((r) => setNote(`drift(${s.id}): ${r.drift.status}${r.drift.changed.length ? ` — changed: ${r.drift.changed.map((c) => c.tool).join(", ")}` : ""}${r.drift.added.length ? ` — added: ${r.drift.added.join(", ")}` : ""}`))
+                          .then((r) => setDrift((d) => ({ ...d, [String(s.id)]: r.drift })))
                           .catch((e) => setNote(`diff: ${e}`))
                       }
                     >
@@ -607,6 +653,26 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
                     Remove
                   </button>
                 </div>
+                {drift[String(s.id)] && (
+                  <div className={drift[String(s.id)].status === "clean" ? "drift-card clean" : "drift-card warn"}>
+                    <div className="ar-h">contract drift · {drift[String(s.id)].status}</div>
+                    {drift[String(s.id)].status === "clean" && (
+                      <div className="faint">tool descriptions match the pinned contract.</div>
+                    )}
+                    {drift[String(s.id)].changed.map((c) => (
+                      <div key={c.tool} className="drift-row">
+                        <span className="mono">{c.tool}</span>
+                        <pre className="raw rem">− {c.before.slice(0, 160)}</pre>
+                        <pre className="raw add">+ {c.after.slice(0, 160)}</pre>
+                      </div>
+                    ))}
+                    {drift[String(s.id)].added.map((t) => <div key={t} className="drift-row add">+ tool added: {t}</div>)}
+                    {drift[String(s.id)].removed.map((t) => <div key={t} className="drift-row rem">− tool removed: {t}</div>)}
+                    {drift[String(s.id)].status !== "clean" && (
+                      <div className="faint">the engine requires re-approval before drifted tools can run.</div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {servers.length === 0 && <div className="empty">No MCP servers registered.</div>}
@@ -752,6 +818,8 @@ export function Library({ onRun, initialQuery, onQueryConsumed }: { onRun?: (pro
           {(trigs?.triggers ?? []).length === 0 && <div className="empty">No triggers configured — automations you create (CLI or agent) surface here.</div>}
         </div>
       )}
+
+      {ctx && <ContextMenu state={ctx} onClose={() => setCtx(null)} />}
     </div>
   );
 }

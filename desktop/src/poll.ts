@@ -57,7 +57,7 @@ import {
   type WorkflowSummary,
 } from "./api/client";
 
-export type PollKey = "health" | "providers" | "pending" | "approvals" | "sessions" | "agents";
+export type PollKey = "health" | "providers" | "pending" | "approvals" | "sessions" | "agents" | "budget";
 
 /**
  * What each key resolves to — the engine's own response types, so a subscriber
@@ -70,6 +70,12 @@ export interface PollPayloads {
   approvals: Approval[] | { pending: Approval[]; approvals?: Approval[] };
   sessions: SessionSummary[] | { sessions: SessionSummary[] };
   agents: { roles?: Record<string, unknown>[]; workflows?: WorkflowSummary[]; health?: Record<string, unknown> };
+  /* Phase 3 · F-11 — spend visibility in the statusbar (engine-reported). */
+  budget: {
+    usage?: { totalUsd?: number; dayUsd?: number; monthUsd?: number };
+    persisted?: { monthly_cap?: number };
+    [k: string]: unknown;
+  };
 }
 
 /** Per-key cadence. Ordered by how fast the fact moves, not by convenience. */
@@ -80,6 +86,7 @@ export const CADENCES: Record<PollKey, number> = {
   sessions: 5_000,
   agents: 10_000, // run transitions (toast bus)
   providers: 30_000, // provider/model health changes on the scale of minutes
+  budget: 30_000, // spend moves at tool-call speed; the meter is a glance, not a ticker
 };
 
 /** One loader per key, each returning that key's engine payload type. */
@@ -92,6 +99,7 @@ const LOADERS: PollLoaders = {
   approvals: () => api.approvals(),
   sessions: () => api.sessions(),
   agents: () => api.agents(),
+  budget: () => api.budget(),
 };
 
 /** Failures are not retried at full rate; this bounds the multiplier. */

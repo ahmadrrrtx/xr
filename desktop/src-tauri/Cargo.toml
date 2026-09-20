@@ -21,6 +21,7 @@ tauri = { version = "2", features = ["tray-icon"] }
 # operator provisions endpoints + pubkey — see docs/release/UPDATER.md).
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
+tauri-plugin-deep-link = "2"
 tauri-plugin-updater = "2"
 # W-3 · one shell per session WITH focus-existing: a second launch hands its
 # argv to the running shell (named mutex + WM_COPYDATA on Windows, D-Bus on

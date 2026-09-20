@@ -2,12 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { asList, type Approval, type SessionSummary } from "../api/client";
 import { poll } from "../poll";
 
-export interface Toast { id: number; kind: "ok" | "warn" | "bad" | "info"; title: string; body?: string }
+export interface Toast {
+  id: number;
+  kind: "ok" | "warn" | "bad" | "info";
+  title: string;
+  body?: string;
+  /* Phase 5 · undo/undo-toast: reversible UI ops (pin/unpin …) attach a real
+     inverse action; the button runs it and dismisses the toast. */
+  action?: { label: string; run: () => void };
+}
 let nextId = 1;
 
 /** Local code (onboarding, palette…) can push toasts without prop-drilling. */
-export function pushToast(kind: Toast["kind"], title: string, body?: string): void {
-  window.dispatchEvent(new CustomEvent("xr-toast", { detail: { kind, title, body } }));
+export function pushToast(
+  kind: Toast["kind"],
+  title: string,
+  body?: string,
+  action?: Toast["action"],
+): void {
+  window.dispatchEvent(new CustomEvent("xr-toast", { detail: { kind, title, body, action } }));
 }
 
 /**
@@ -21,16 +34,16 @@ export function ToastBus() {
   const seenAppr = useRef<Set<string> | null>(null);
   const seenSess = useRef<Map<string, string> | null>(null);
 
-  const push = (kind: Toast["kind"], title: string, body?: string) => {
+  const push = (kind: Toast["kind"], title: string, body?: string, action?: Toast["action"]) => {
     const id = nextId++;
-    setToasts((t) => [...t.slice(-4), { id, kind, title, body }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 6500);
+    setToasts((t) => [...t.slice(-4), { id, kind, title, body, action }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), action ? 8000 : 6500);
   };
 
   useEffect(() => {
     const onLocal = (e: Event) => {
       const d = (e as CustomEvent<Partial<Toast>>).detail ?? {};
-      push((d.kind as Toast["kind"]) ?? "info", String(d.title ?? ""), d.body);
+      push((d.kind as Toast["kind"]) ?? "info", String(d.title ?? ""), d.body, d.action);
     };
     window.addEventListener("xr-toast", onLocal);
 
@@ -79,6 +92,17 @@ export function ToastBus() {
             <div className="toast-title">{t.title}</div>
             {t.body && <div className="toast-body">{t.body}</div>}
           </div>
+          {t.action && (
+            <button
+              className="toast-undo"
+              onClick={() => {
+                t.action?.run();
+                setToasts((x) => x.filter((y) => y.id !== t.id));
+              }}
+            >
+              {t.action.label}
+            </button>
+          )}
           <button className="toast-x" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}>×</button>
         </div>
       ))}

@@ -30,6 +30,49 @@ export async function nativeNotify(title: string, body: string): Promise<boolean
   }
 }
 
+/**
+ * Phase 4 · notification ACTIONS for approvals (Confirm / Deny straight from
+ * the OS notification). Plugin-JS route, only under the packaged app; the
+ * decision still lands in the engine's durable store via /approvals/:id/decision.
+ */
+let approvalActionsRegistered = false;
+export async function nativeNotifyApproval(
+  id: string,
+  tool: string,
+  onDecision: (id: string, approved: boolean) => void,
+): Promise<boolean> {
+  if (!isTauri()) return false;
+  try {
+    const mod = await import("@tauri-apps/plugin-notification");
+    if (!approvalActionsRegistered) {
+      await mod.registerActionTypes([
+        {
+          id: "xr-approval",
+          actions: [
+            { id: "confirm", title: "Confirm" },
+            { id: "deny", title: "Deny" },
+          ],
+        },
+      ]);
+      void mod.onAction((n) => {
+        const act = (n as { actionId?: string }).actionId;
+        const nid = (n as { extra?: Record<string, string> }).extra?.approvalId ?? "";
+        if ((act === "confirm" || act === "deny") && nid) onDecision(nid, act === "confirm");
+      });
+      approvalActionsRegistered = true;
+    }
+    await mod.sendNotification({
+      title: "XR — approval due",
+      body: `${tool} is waiting for your decision`,
+      actionTypeId: "xr-approval",
+      extra: { approvalId: id },
+    } as Parameters<typeof mod.sendNotification>[0]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function nativeAutostartStatus(): Promise<boolean | null> {
   if (!isTauri()) return null;
   try {

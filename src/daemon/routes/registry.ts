@@ -69,7 +69,10 @@ export function listBaseRoutes(): DaemonRoute[] {
     ...environmentRoutes(),
     ...memoryRoutes(),
     ...contextRoutes(),
-    ...businessRoutes(),
+    // SEC-05 — business routes are post-satellite residue: OFF by default so
+    // the trusted surface matches the documented product. Operators re-enable
+    // explicitly with XR_BUSINESS_ROUTES=on until the migration finishes.
+    ...(process.env.XR_BUSINESS_ROUTES === "on" ? businessRoutes() : []),
   ];
 }
 

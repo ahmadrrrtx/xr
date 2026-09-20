@@ -313,7 +313,10 @@ export function Teams() {
                 return (
                   <button
                     key={n.taskId}
-                    className={`ma-node ${selected === n.taskId ? "sel" : ""}`}
+                    /* Phase 3 · failure halo: a failed task glows red from
+                       across the room — status is never colour-only (the ring,
+                       the word and the halo all agree). */
+                    className={`ma-node ${selected === n.taskId ? "sel" : ""} ${ring === "r" ? "halo-fail" : ""} ${n.awaitingReview ? "halo-wait" : ""}`}
                     style={{ left: p.x, top: p.y, width: NODE_W, height: NODE_H }}
                     onClick={() => setSelected(n.taskId)}
                     aria-label={`${n.name} (${n.status})`}

@@ -14,6 +14,12 @@
       "role": "daemon dashboard /assets/brand/avatar.png"
     },
     {
+      "file": "assets/brand/avatar-front-original.png",
+      "sha256": "83cdcc41800d07771702af9fde5de2c2637fa0e511aad458425684cfa3a1f566",
+      "source": "official render (document in desktop/src/assets/README.md)",
+      "role": "unassigned"
+    },
+    {
       "file": "assets/brand/avatar-front.png",
       "sha256": "a1534892128e9015fb375d519cb9bf70430ca2da2c7930bfcf6dad8a8190bea7",
       "source": "owner-committed avatar render, front (commit 2827629)",
@@ -26,6 +32,18 @@
       "role": "website + docs"
     },
     {
+      "file": "assets/brand/avatar-side-original.png",
+      "sha256": "fba55d4de8d1e111b1432946c40778339fdeae129f484c7f90ac4228fae85319",
+      "source": "official render (document in desktop/src/assets/README.md)",
+      "role": "unassigned"
+    },
+    {
+      "file": "assets/brand/avatar-side2-original.png",
+      "sha256": "38bd0875527d0334ac228d886b014855894b151ec600ac8ff90a21b98796aef2",
+      "source": "official render (document in desktop/src/assets/README.md)",
+      "role": "unassigned"
+    },
+    {
       "file": "assets/brand/logo-320.png",
       "sha256": "02cab37eed885028aeae168dbca076c23aa61f4b5813071415cc89bf72498a12",
       "source": "official logo render, LANCZOS resize to 320px (pixel-only)",
@@ -36,6 +54,18 @@
       "sha256": "f1af3f1e1302e0a7ca306d9f929974481916502bba32b05d44941fe0b9c9a421",
       "source": "owner-committed palette reference (commit 2827629)",
       "role": "design reference only — never placed in UI"
+    },
+    {
+      "file": "assets/brand/readme-hero-original.png",
+      "sha256": "57bc3e58d95002d8c7b9519f47320fc657215a3acd34e972e7908f416a20d12c",
+      "source": "official render (document in desktop/src/assets/README.md)",
+      "role": "unassigned"
+    },
+    {
+      "file": "assets/brand/superior-hero-original.png",
+      "sha256": "cdd45e5e70e92a75f921646d868b6387c871f839d2ef5d46a11f64271a0d2932",
+      "source": "official render (document in desktop/src/assets/README.md)",
+      "role": "unassigned"
     },
     {
       "file": "assets/logo.png",
@@ -186,6 +216,18 @@
       "sha256": "981952132c4bdb821965ddf2f3865569cc967a6c55efc7ff604cd2c7c7eb623e",
       "source": "official logo render",
       "role": "titlebar, boot splash, onboarding"
+    },
+    {
+      "file": "desktop/src/assets/xr-readme-hero.png",
+      "sha256": "57bc3e58d95002d8c7b9519f47320fc657215a3acd34e972e7908f416a20d12c",
+      "source": "official render (document in desktop/src/assets/README.md)",
+      "role": "unassigned"
+    },
+    {
+      "file": "desktop/src/assets/xr-terminal-splash.png",
+      "sha256": "aadec6625f1c8c4904861b4f021255b93c372ffa588e157baf326f2638ebd531",
+      "source": "official render (document in desktop/src/assets/README.md)",
+      "role": "unassigned"
     }
   ]
 }

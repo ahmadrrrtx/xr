@@ -834,3 +834,245 @@
 .appr-ttl[data-urgency="critical"] { color: var(--xr-red); font-weight: 600; }
 .appr-ttl[data-urgency="expired"] { color: var(--xr-red); }
 .appr-h .appr-ttl { margin-left: auto; }
+
+/* ==========================================================================
+   PHASE 2 — ELITE WORKSTATION PASS (audit F-1…F-9, approved 2026-09-20)
+   ========================================================================== */
+
+/* --- F-6 · spatial workspace: variable-driven grid + real splitters ------- */
+.ws2 {
+  grid-template-columns: var(--ws-ex, 230px) 6px 1fr 6px var(--ws-ar, 280px);
+}
+.ws-mid { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.term2 { height: var(--ws-term, 220px); }
+.vsplit, .hsplit {
+  background: transparent;
+  transition: background 120ms var(--xr-ease-out);
+  flex: none;
+  touch-action: none;
+}
+.vsplit { cursor: col-resize; margin: 0 -3px; z-index: 2; }
+.hsplit { cursor: row-resize; height: 6px; margin: -3px 0; z-index: 2; }
+.vsplit:hover, .vsplit:active { background: var(--xr-cyan-glow); }
+.hsplit:hover, .hsplit:active { background: var(--xr-cyan-glow); }
+@media (hover: hover) and (pointer: fine) {
+  .vsplit:active { background: rgba(0, 212, 255, 0.22); }
+  .hsplit:active { background: rgba(0, 212, 255, 0.22); }
+}
+/* small windows keep collapsing exactly as before */
+@media (max-width: 900px) {
+  .ws2 { grid-template-columns: 1fr; }
+  .ws-explorer, .agent-rail, .vsplit { display: none; }
+}
+
+/* --- F-6 · rail presence (voice is presence, not navigation) -------------- */
+.rail-presence {
+  position: relative;
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  background: transparent; border: 1px solid transparent;
+  border-radius: var(--xr-radius-md);
+  cursor: pointer; padding: 0;
+  transition: background 120ms var(--xr-ease-out), transform 120ms var(--xr-ease-out);
+}
+.rail-presence:hover { background: var(--xr-surface-2); }
+.rail-presence:active { transform: scale(0.97); }
+.rail-mic {
+  position: absolute; right: 4px; bottom: 4px;
+  width: 16px; height: 16px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--xr-surface-3); color: var(--xr-cyan);
+  border: 1px solid var(--xr-border-strong);
+}
+
+/* --- F-2/F-1 · onboarding hero: official assets only, calm composition ---- */
+.ob-hero-tile {
+  width: 128px; height: 128px; border-radius: 20px;
+  display: grid; place-items: center;
+  background:
+    radial-gradient(60% 60% at 50% 42%, var(--xr-cyan-glow), transparent 70%),
+    var(--xr-surface-sunken);
+  border: 1px solid var(--xr-border);
+  box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.05), 0 18px 50px rgba(0, 0, 0, 0.5);
+  margin-bottom: var(--xr-s-4);
+}
+.ob-hero-tile img { width: 92px; height: 92px; }
+.ob-appear {
+  display: flex; align-items: center; gap: var(--xr-s-2);
+  margin-top: var(--xr-s-6);
+}
+.ob-appear-l { font-size: var(--xr-t-small); margin-right: var(--xr-s-1); }
+.ob-card.small { padding: 8px 14px; font-size: var(--xr-t-small); }
+.ob-card { transition: background 120ms var(--xr-ease-out), border-color 120ms var(--xr-ease-out), transform 120ms var(--xr-ease-out); }
+.ob-card:active { transform: scale(0.97); }
+
+/* --- Work · drop zone (viewport level) ------------------------------------ */
+.dropzone {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--xr-bg) 72%, transparent);
+  backdrop-filter: blur(var(--xr-blur));
+  pointer-events: none;
+}
+.dropzone-card {
+  padding: var(--xr-s-6) var(--xr-s-8);
+  border: 1.5px dashed var(--xr-cyan);
+  border-radius: var(--xr-radius-lg);
+  background: var(--xr-glass);
+  display: flex; flex-direction: column; gap: var(--xr-s-2);
+  align-items: center; text-align: center;
+  animation: dz-in 160ms var(--xr-ease-out);
+}
+@keyframes dz-in { from { opacity: 0; transform: scale(0.96); } }
+@media (prefers-reduced-motion: reduce) { .dropzone-card { animation: none; } }
+
+/* --- F-7 · inspector tabs: eight tabs wrap instead of overflowing --------- */
+.insp-tabs { flex-wrap: wrap; row-gap: 2px; }
+.itab { font-size: var(--xr-t-cap); padding: 4px 7px; }
+
+/* --- F-4 · home polish ----------------------------------------------------- */
+/* light mode: replace the muddy heavy shadow with layered, designed depth */
+[data-theme="light"] .composer {
+  box-shadow:
+    0 0 0 1px var(--xr-border),
+    0 1px 2px rgba(20, 20, 30, 0.06),
+    0 8px 24px rgba(20, 20, 30, 0.08);
+}
+[data-theme="light"] .hero .tagline,
+[data-theme="light"] .ob-tag { color: var(--xr-text-muted); }
+/* dark mode hero aura: paint-only radial, no layout cost */
+.hero { position: relative; }
+.hero::before {
+  content: ""; position: absolute; inset: -40px -120px auto; height: 220px;
+  background: radial-gradient(50% 60% at 50% 45%, var(--xr-cyan-glow), transparent 70%);
+  pointer-events: none;
+}
+[data-theme="light"] .hero::before {
+  background: radial-gradient(50% 60% at 50% 45%, rgba(0, 119, 168, 0.10), transparent 70%);
+}
+
+/* --- motion law · press feedback on primary pills/buttons (Emil §buttons) -- */
+.pill:active, .chipbtn:active, .btn:active, .send:active { transform: scale(0.97); }
+.pill, .chipbtn, .btn, .send { transition: transform 120ms var(--xr-ease-out), background 120ms var(--xr-ease-out), border-color 120ms var(--xr-ease-out), color 120ms var(--xr-ease-out); }
+
+/* --- Phase 3 · official asset placements ---------------------------------- */
+.term-motd { display: block; text-align: center; color: var(--xr-text-faint); }
+.term-splash {
+  display: block; width: min(430px, 82%); height: auto;
+  margin: 10px auto 12px; border-radius: var(--xr-radius-md);
+  border: 1px solid var(--xr-border); opacity: 0.92;
+}
+.about-hero {
+  display: block; width: 100%; max-width: 560px; height: auto;
+  border-radius: var(--xr-radius-md); border: 1px solid var(--xr-border);
+  margin-bottom: var(--xr-s-3);
+}
+.about-card { grid-column: 1 / -1; max-width: 640px; }
+
+/* --- Phase 3 · MCP drift card (SEC-01 legibility) -------------------------- */
+.drift-card {
+  margin-top: var(--xr-s-2);
+  border: 1px solid var(--xr-border);
+  border-left: 3px solid var(--xr-amber);
+  border-radius: var(--xr-radius-sm);
+  background: var(--xr-warn-soft);
+  padding: var(--xr-s-2) var(--xr-s-3);
+  display: flex; flex-direction: column; gap: var(--xr-s-1);
+}
+.drift-card.clean { border-left-color: var(--xr-green); background: var(--xr-ok-soft); }
+.drift-row.add { color: var(--xr-green); }
+.drift-row.rem { color: var(--xr-red); }
+.drift-row .raw.add { color: var(--xr-green); }
+.drift-row .raw.rem { color: var(--xr-red); }
+.drift-row .raw { margin: 2px 0; white-space: pre-wrap; }
+
+/* --- Phase 3 · statusbar budget meter ------------------------------------- */
+.sb-budget { cursor: pointer; }
+.sb-budget:hover { color: var(--xr-text); }
+
+/* --- Phase 3 · context menus ---------------------------------------------- */
+.ctx-menu {
+  position: fixed; z-index: 120; min-width: 190px;
+  background: var(--xr-surface-2);
+  border: 1px solid var(--xr-border-strong);
+  border-radius: var(--xr-radius-md);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  padding: 4px; display: flex; flex-direction: column; gap: 2px;
+  animation: ctx-in 140ms var(--xr-ease-out);
+  transform-origin: var(--ctx-origin, top left);
+}
+@keyframes ctx-in { from { opacity: 0; transform: scale(0.96); } }
+@media (prefers-reduced-motion: reduce) { .ctx-menu { animation: none; } }
+.ctx-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border: 0; border-radius: var(--xr-radius-sm);
+  background: transparent; color: var(--xr-text);
+  font: inherit; font-size: var(--xr-t-small); text-align: left; cursor: pointer;
+  transition: background 100ms var(--xr-ease-out);
+}
+.ctx-item:hover { background: var(--xr-surface-3); }
+.ctx-item:active { transform: scale(0.98); }
+.ctx-item.danger { color: var(--xr-red); }
+
+/* --- Phase 3 · Agents board v2 — failure / review halos ------------------- */
+.ma-node.halo-fail {
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.55), 0 0 22px rgba(248, 113, 113, 0.30);
+  animation: halo-fail-pulse 1.6s var(--xr-ease-out) infinite;
+}
+@keyframes halo-fail-pulse {
+  50% { box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.35), 0 0 10px rgba(248, 113, 113, 0.16); }
+}
+.ma-node.halo-wait {
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.50), 0 0 18px rgba(251, 191, 36, 0.22);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ma-node.halo-fail { animation: none; }
+}
+
+/* --- Phase 4 · voice trust-feel ------------------------------------------- */
+.vc-ptt {
+  width: 54px; height: 54px; border-radius: 50%;
+  border: 1px solid var(--xr-border-strong);
+  background: radial-gradient(circle at 50% 35%, var(--xr-surface-3), var(--xr-surface-1));
+  color: var(--xr-text-muted); font: 700 13px/1 var(--xr-mono);
+  cursor: grab; user-select: none; touch-action: none;
+  transition: transform 120ms var(--xr-ease-out), box-shadow 120ms var(--xr-ease-out), color 120ms;
+}
+.vc-ptt:hover { color: var(--xr-cyan); }
+.vc-ptt.held {
+  transform: scale(0.92);
+  color: var(--xr-cyan);
+  box-shadow: 0 0 0 2px rgba(94, 225, 240, 0.45), 0 0 26px rgba(94, 225, 240, 0.35);
+}
+.vc-approval-actions { display: inline-flex; gap: 8px; margin-left: 10px; }
+/* eye/glow treatment over the OFFICIAL render — filters, never redrawn */
+.vc-ring.approval .vc-avatar { filter: drop-shadow(0 0 24px rgba(255, 180, 84, 0.55)) brightness(1.06); }
+.vc-ring.error .vc-avatar { filter: drop-shadow(0 0 24px rgba(255, 84, 112, 0.55)) saturate(0.85); }
+.vc-ring.success .vc-avatar { filter: drop-shadow(0 0 24px rgba(0, 255, 136, 0.5)); }
+.vc-ring.thinking .vc-avatar, .vc-ring.planning .vc-avatar, .vc-ring.working .vc-avatar, .vc-ring.tool .vc-avatar {
+  filter: drop-shadow(0 0 24px rgba(139, 92, 246, 0.5));
+}
+
+/* --- Phase 4 · control cockpit acting indicator --------------------------- */
+.cr-acting {
+  margin-left: 10px; color: var(--xr-cyan);
+  animation: cr-acting-pulse 1.2s var(--xr-ease-out) infinite;
+}
+@keyframes cr-acting-pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .cr-acting { animation: none; } }
+
+/* --- Phase 5 · a11y sweep fixes -------------------------------------------- */
+h1.appname { margin: 0; font-size: inherit; font-weight: 600; }
+.chip.virtual { color: var(--xr-violet-text, #a89bff); }
+[data-theme="light"] .chip.virtual { color: #5238e8; }
+:root { --xr-violet-text: #a89bff; }
+[data-theme="light"] { --xr-violet-text: #5238e8; }
+
+/* Phase 5 · undo/undo-toast action button */
+.toast-undo {
+  margin-left: auto; border: 1px solid var(--xr-border, #2a2a3a); background: transparent;
+  color: var(--xr-cyan, #00d4ff); font: 600 11px/1 inherit; padding: 6px 10px; border-radius: 8px;
+  cursor: pointer; transition: background 120ms ease-out, color 120ms ease-out;
+}
+.toast-undo:hover { background: rgba(0, 212, 255, 0.08); }
+.toast-undo:active { transform: scale(0.97); }

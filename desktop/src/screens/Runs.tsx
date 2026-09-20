@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { poll } from "../poll";
 import { api, asList, type SessionSummary, type WorkflowDetail, type WorkflowSummary, type WorkflowTaskV } from "../api/client";
+import { ContextMenu, type CtxState } from "../components/ContextMenu";
 
 const TABS = ["Transcript", "Plan", "Files", "Tools", "Approvals", "Cost", "Artifacts"] as const;
 
@@ -52,6 +53,37 @@ interface Edge { x1: number; y1: number; x2: number; y2: number; }
 const fmtDur = (ms: number) => (ms >= 60_000 ? `${Math.round(ms / 60_000)}m` : ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
 const fmtClock = (ts?: number) => (ts ? new Date(ts).toLocaleTimeString([], { hour12: false }) : "—");
 
+/* Phase 3 · export — the bytes are always the engine's own record, never a
+   shell-side reinterpretation. .md is a readable projection of the same. */
+function dl(name: string, mime: string, body: string) {
+  const url = URL.createObjectURL(new Blob([body], { type: mime }));
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function mdFor(id: string, d: Record<string, unknown>): string {
+  const lines = [
+    `# ${String(d.title ?? (d.prompt as string)?.slice(0, 80) ?? id)}`,
+    "",
+    `- run: \`${id}\``,
+    `- status: ${String(d.status ?? "—")}`,
+    `- mode: ${String(d.mode ?? "—")}`,
+    `- model: ${String(d.model ?? d.provider ?? "—")}`,
+    `- cost: ${typeof d.costUsd === "number" ? `$${(d.costUsd as number).toFixed(4)}` : "—"}`,
+    "",
+  ];
+  const steps = (d.steps ?? d.transcript ?? d.events) as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(steps)) {
+    lines.push("## Transcript", "");
+    for (const s of steps) lines.push(`- **${String(s.phase ?? s.kind ?? s.tool ?? "step")}** — ${String(s.detail ?? s.message ?? "").slice(0, 200)}`);
+  }
+  // Phase 5 · SEC-09 — exported agent artifacts carry the Art. 50 disclosure.
+  lines.push("", "---", "_AI-generated content — exported by XR, an AI agent (EU AI Act Art. 50 disclosure)._");
+  return lines.join("\n");
+}
+const exportMd = (id: string, d: Record<string, unknown>) => dl(`xr-run-${id}.md`, "text/markdown", mdFor(id, d));
+const exportJson = (id: string, d: Record<string, unknown>) => dl(`xr-run-${id}.json`, "application/json", JSON.stringify(d, null, 2));
+
 /** Runs (phase 6, mock 05): team-run board — leveled DAG with dependency edges,
  *  engine-issued partition budgets, per-task auditTrail transcript — plus session history. */
 export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: string | null) => void }) {
@@ -63,6 +95,8 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
   const [edges, setEdges] = useState<Edge[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
+  /* Phase 3 · contextual actions per run row (real reads + exports only). */
+  const [ctx, setCtx] = useState<CtxState | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number]>("Transcript");
   const dagRef = useRef<HTMLDivElement>(null);
   const nodeRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
@@ -346,6 +380,26 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
           className="runrow"
           aria-expanded={openId === s.id}
           onClick={() => onOpen(s.id)}
+          onContextMenu={(ev) => {
+            ev.preventDefault();
+            const id = s.id;
+            setCtx({
+              x: ev.clientX,
+              y: ev.clientY,
+              items: [
+                { label: "Open inspector", run: () => onOpen(id) },
+                {
+                  label: "Export as Markdown",
+                  run: () => { void api.session(id).then((d) => exportMd(id, d)).catch(() => undefined); },
+                },
+                {
+                  label: "Export as JSON",
+                  run: () => { void api.session(id).then((d) => exportJson(id, d)).catch(() => undefined); },
+                },
+                { label: "Copy run id", run: () => { void navigator.clipboard?.writeText(id).catch(() => undefined); } },
+              ],
+            });
+          }}
         >
           {/* Status is a colour + a word: colour alone never carries meaning. */}
           <span className={`dot ${s.status === "failed" ? "red" : s.status === "running" ? "cyan" : "green"}`} aria-hidden="true" />
@@ -374,7 +428,23 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
         >
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <h3>{String(detail?.title ?? (detail?.prompt as string)?.slice(0, 60) ?? openId)}</h3>
-            <button className="pill" style={{ marginLeft: "auto" }} onClick={() => onOpen(null)}>Close ⎋</button>
+            {/* Phase 3 · export — engine record, verbatim. */}
+            <button
+              className="pill"
+              style={{ marginLeft: "auto" }}
+              title="Export run as Markdown"
+              onClick={() => exportMd(openId ?? "run", detail ?? {})}
+            >
+              export .md
+            </button>
+            <button
+              className="pill"
+              title="Export run as JSON (engine record verbatim)"
+              onClick={() => exportJson(openId ?? "run", detail ?? { id: openId })}
+            >
+              .json
+            </button>
+            <button className="pill" onClick={() => onOpen(null)}>Close ⎋</button>
           </div>
           <div className="kv mono">
             <span className="k">run id</span><span>{openId}</span>
@@ -392,6 +462,8 @@ export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: s
           <SessionAnatomy detail={detail} tab={tab} />
         </aside>
       )}
+
+      {ctx && <ContextMenu state={ctx} onClose={() => setCtx(null)} />}
     </div>
   );
 }

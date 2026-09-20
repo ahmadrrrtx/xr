@@ -3,6 +3,8 @@ import avatarUrl from "../assets/xr-avatar.png";
 import avatarSideUrl from "../assets/xr-avatar-side.webp";
 import avatarSide2Url from "../assets/xr-avatar-side-2.webp";
 import heroUrl from "../assets/xr-hero.webp";
+import terminalSplashUrl from "../assets/xr-terminal-splash.png";
+import readmeHeroUrl from "../assets/xr-readme-hero.png";
 import type { VoiceState } from "../voice/session";
 
 /**
@@ -32,8 +34,18 @@ export const AVATAR_SRC: Record<AvatarPose, string> = {
   "side-alt": avatarSide2Url,
 };
 
-/** The "superiority" hero render — cinema-zone surfaces only (onboarding, update complete). */
+/** The "superiority" hero render — cinema-zone surfaces only (onboarding
+ *  Ready step, update complete). NEVER the first screen: first impressions
+ *  stay calm (Phase 2 · F-2). */
 export const HERO_SRC = heroUrl;
+
+/** Official terminal splash render (mark + boot lines). The Workspace
+ *  terminal shows it as its MOTD before the first command — a splash,
+ *  exactly as the asset was made for. */
+export const TERMINAL_SPLASH_SRC = terminalSplashUrl;
+
+/** Official readme hero (winged avatar + lockup). About / identity surfaces. */
+export const README_HERO_SRC = readmeHeroUrl;
 
 /**
  * The ONE mapping from what XR is doing to how it faces the user. Both the

@@ -1,0 +1,89 @@
+# Phase 5 · real-device matrix — the GA gate the master plan demands.
+#
+# GitHub-hosted runners ARE the real devices here (Windows Server, macOS,
+# Ubuntu). Each lane downloads the bundles the `bundle` job of the Desktop App
+# workflow produced for that OS, then scripts/real-device-matrix.ts performs:
+#   installed  — silent install + app boot + sidecar liveness on :3141
+#   upgraded   — base install → current install on top → XR_HOME state intact
+# When a previous-release bundle set is attached to the release, pass it via
+# repo variable RDM_PREV_URL to make the upgraded lane a REAL version bump;
+# without it the lane runs mechanics-only and says so in its output.
+#
+# This workflow can never go green by accident: every assertion in the probe
+# script is a measured fact (exit codes, TCP/HTTP answers, directory contents).
+
+name: Real-Device Matrix
+
+on:
+  workflow_run:
+    workflows: ["Desktop App (Tauri packaging)"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Desktop App run id whose artifacts to install"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read # download artifacts from the triggering run
+
+concurrency:
+  group: rdm-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  matrix:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-22.04, os: linux }
+          - { runner: macos-latest, os: macos }
+          - { runner: windows-latest, os: windows }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve source run
+        id: src
+        shell: bash
+        run: |
+          RUN="${{ github.event.workflow_run.id || github.event.inputs.run_id }}"
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-bun@v2
+
+      - name: Install engine deps (probe script runtime)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Linux display server for the installed lane
+        if: matrix.os == 'linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y xvfb
+
+      - name: Download this OS's bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: xr-desktop-${{ matrix.runner }}
+          path: rdm-bundles
+          run-id: ${{ steps.src.outputs.run }}
+
+      - name: Optional previous-release bundles (real upgrade when present)
+        if: vars.RDM_PREV_URL != ''
+        shell: bash
+        run: |
+          mkdir -p rdm-prev && cd rdm-prev
+          curl -sL "${{ vars.RDM_PREV_URL }}/xr-desktop-${{ matrix.runner }}.zip" -o prev.zip
+          unzip -q prev.zip && rm prev.zip
+
+      - name: Run the real-device probe (installed + upgraded)
+        shell: bash
+        run: |
+          if [ -d rdm-prev ] && [ -n "$(ls -A rdm-prev 2>/dev/null)" ]; then
+            bun run scripts/real-device-matrix.ts --bundles rdm-bundles --prev rdm-prev
+          else
+            bun run scripts/real-device-matrix.ts --bundles rdm-bundles
+          fi

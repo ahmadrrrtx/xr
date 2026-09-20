@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, basicSetup } from "codemirror";
 import { keymap } from "@codemirror/view";
@@ -9,7 +9,8 @@ import { markdown } from "@codemirror/lang-markdown";
 import { html } from "@codemirror/lang-html";
 import { css } from "@codemirror/lang-css";
 import { api, terminalRun, type Approval, type FileDiff, type FileEntry, type TerminalEvent } from "../api/client";
-import { XrAvatar } from "../components/Brand";
+import { TERMINAL_SPLASH_SRC, XrAvatar } from "../components/Brand";
+import { ContextMenu, type CtxState } from "../components/ContextMenu";
 import { HunkReview } from "../components/HunkReview";
 
 // xterm rides in its own chunk: the Workspace pays for it only when a shell opens.
@@ -43,8 +44,46 @@ function lineDelta(base: string, next: string): { added: number; removed: number
   return { added: b.length - p - s, removed: a.length - p - s };
 }
 
+/* Phase 2 · spatial workspace — persisted, draggable splitters.
+ * Sizes live in CSS variables on the root so media queries can still win on
+ * small windows (an inline grid-template would have overridden them). */
+function readSize(key: string, fallback: number, min: number, max: number): number {
+  try {
+    const n = Number(window.localStorage.getItem(key));
+    return Number.isFinite(n) && n > 0 ? Math.min(max, Math.max(min, n)) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeSize(key: string, v: number): void {
+  try { window.localStorage.setItem(key, String(v)); } catch { /* ignore */ }
+}
+
 /** Workspace (phase 6, mocks 01+04): nested explorer · editor tabs · terminal tabs · agent rail. */
 export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
+  const [exW, setExW] = useState(() => readSize("xr.ws.explorer", 230, 170, 420));
+  const [arW, setArW] = useState(() => readSize("xr.ws.agent", 280, 220, 460));
+  const [termH, setTermH] = useState(() => readSize("xr.ws.term", 220, 120, 480));
+
+  const startDrag = (kind: "ex" | "ar" | "term") => (e: { clientX: number; clientY: number; preventDefault(): void }) => {
+    e.preventDefault();
+    const sx = e.clientX, sy = e.clientY;
+    const sEx = exW, sAr = arW, sTerm = termH;
+    let cur = kind === "ex" ? sEx : kind === "ar" ? sAr : sTerm;
+    const move = (ev: PointerEvent) => {
+      if (kind === "ex") cur = Math.min(420, Math.max(170, sEx + ev.clientX - sx));
+      else if (kind === "ar") cur = Math.min(460, Math.max(220, sAr - (ev.clientX - sx)));
+      else cur = Math.min(480, Math.max(120, sTerm - (ev.clientY - sy)));
+      if (kind === "ex") setExW(cur); else if (kind === "ar") setArW(cur); else setTermH(cur);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      writeSize(kind === "ex" ? "xr.ws.explorer" : kind === "ar" ? "xr.ws.agent" : "xr.ws.term", cur);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const [tree, setTree] = useState<FileEntry[]>([]);
   const [branch, setBranch] = useState<string | null>(null);
   const [kids, setKids] = useState<Record<string, FileEntry[]>>({});
@@ -63,6 +102,8 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   const [gitNote, setGitNote] = useState<string | null>(null);
   const [gitBusy, setGitBusy] = useState(false);
   const [agentNote, setAgentNote] = useState("idle — open a file or ask XR");
+  /* Phase 3 · contextual menu for file objects (real actions only). */
+  const [ctx, setCtx] = useState<CtxState | null>(null);
 
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -310,6 +351,20 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
             className={`fitem ${isDir ? "dir" : ""} ${active === e.rel ? "active" : ""}`}
             style={{ paddingLeft: 10 + depth * 14 }}
             onClick={() => (isDir ? toggleDir(e.rel) : void openFile(e.rel))}
+            onContextMenu={(ev) => {
+              if (isDir) return;
+              ev.preventDefault();
+              const rel = e.rel;
+              setCtx({
+                x: ev.clientX,
+                y: ev.clientY,
+                items: [
+                  { label: "Open", run: () => void openFile(rel) },
+                  { label: "Ask XR about this file", run: () => onAskXr(`Explain ${rel} and propose improvements.`) },
+                  { label: "Copy path", run: () => { void navigator.clipboard?.writeText(rel).catch(() => undefined); } },
+                ],
+              });
+            }}
             title={e.rel}
           >
             <span className="fico" aria-hidden="true">{isDir ? (isOpen ? "▾" : "▸") : "·"}</span>
@@ -325,7 +380,10 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
   const dirtyTab = tabs.find((t) => t.rel === active)?.dirty ?? false;
 
   return (
-    <div className="ws2">
+    <div
+      className="ws2"
+      style={{ "--ws-ex": `${exW}px`, "--ws-ar": `${arW}px`, "--ws-term": `${termH}px` } as CSSProperties}
+    >
       <div className="ws-explorer" aria-label="Project explorer">
         <div className="rail-h mono">
           {branch ? `⎇ ${branch}` : "files"}
@@ -333,6 +391,8 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
         <div className="tree-scroll">{renderTree(tree, 0, "")}</div>
         {tree.length === 0 && <div className="faint" style={{ fontSize: 12, padding: 8 }}>open a workspace (engine root)</div>}
       </div>
+
+      <div className="vsplit" role="separator" aria-orientation="vertical" aria-label="Resize explorer" onPointerDown={startDrag("ex")} />
 
       <div className="ws-mid">
         <div className="ws-tabs mono">
@@ -370,6 +430,8 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
         )}
 
         <div className="ws-cm" ref={host} />
+
+        <div className="hsplit" role="separator" aria-orientation="horizontal" aria-label="Resize terminal" onPointerDown={startDrag("term")} />
 
         <div className="term2" aria-label="Terminal (command runner)">
           <div className="term2-tabs">
@@ -429,7 +491,12 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
           {at?.kind === "runner" && (<>
           <pre className="term-out raw" ref={termOut}>
             {at && at.lines.length === 0
-              ? "type a command below — every run goes through the engine's policy check and your approval.\n"
+              ? (
+                <span className="term-motd">
+                  <img className="term-splash" src={TERMINAL_SPLASH_SRC} alt="" aria-hidden="true" />
+                  type a command below — every run goes through the engine's policy check and your approval.{"\n"}
+                </span>
+              )
               : at?.lines.map((l, i) => (
                   <span key={i} className={l.kind === "err" ? "term-err" : l.kind === "sys" ? "term-sys" : undefined}>{l.text}</span>
                 ))}
@@ -450,6 +517,8 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
           </>)}
         </div>
       </div>
+
+      <div className="vsplit" role="separator" aria-orientation="vertical" aria-label="Resize agent rail" onPointerDown={startDrag("ar")} />
 
       <aside className="agent-rail" aria-label="Agent rail">
         <div className="ar-head">
@@ -525,9 +594,12 @@ export function Workspace({ onAskXr }: { onAskXr: (prompt: string) => void }) {
           <div className="ar-h">Tips</div>
           <div className="faint ar-tip">⌘/Ctrl+↵ — ask XR about the selection</div>
           <div className="faint ar-tip">⌘/Ctrl+S — save through the approval gate</div>
+          <div className="faint ar-tip">right-click a file — context actions</div>
           <div className="faint ar-tip">terminal runs are approval-gated, streamed output</div>
         </div>
       </aside>
+
+      {ctx && <ContextMenu state={ctx} onClose={() => setCtx(null)} />}
     </div>
   );
 }

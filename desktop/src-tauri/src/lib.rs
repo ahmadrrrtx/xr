@@ -401,6 +401,8 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(focus_existing_window))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::Builder::new().build())
+        // Phase 4 · xr:// deep links (open a task / trust / voice from the OS).
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             engine_status,
@@ -450,6 +452,16 @@ pub fn run() {
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "quit" => app.exit(0),
+                    // Phase 4 · tray ACTIONS reach the shell: the webview
+                    // navigates (New task → Work, Pending approvals → Trust),
+                    // so every tray verb is a real, visible product action.
+                    id @ ("new_task" | "approvals") => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.set_focus();
+                            use tauri::Emitter;
+                            let _ = w.emit("xr-tray-action", id);
+                        }
+                    }
                     _ => {
                         if let Some(w) = app.get_webview_window("main") {
                             let _ = w.set_focus();
@@ -457,6 +469,17 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // Phase 4 · register the xr:// scheme(s) declared in tauri.conf.json
+            // (plugins.deep-link). Dev builds register per-user; packaged
+            // builds rely on the bundled URL-type registration.
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(e) = app.deep_link().register_all() {
+                    eprintln!("deep-link register: {e}");
+                }
+            }
             Ok(())
         });
 
