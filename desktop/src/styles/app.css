@@ -358,6 +358,19 @@
 .xr-terminal-body .cursor { display: inline-block; width: 7px; height: 14px; background: var(--xr-primary); vertical-align: middle; animation: xr-blink 1s step-end infinite; margin-left: 2px; }
 @keyframes xr-blink { 50% { opacity: 0; } }
 
+/* Settings About card — constrain the official readme hero */
+.about-card { grid-column: 1 / -1; max-width: 640px; overflow: hidden; padding: 0 !important; gap: 0; background: var(--xr-surface); border: 1px solid var(--xr-border); border-radius: var(--xr-radius-md); display: flex; flex-direction: column; }
+.about-card .about-hero { display: block; width: 100%; height: auto; margin: 0; border: 0; border-bottom: 1px solid var(--xr-border); border-radius: 0; max-height: 340px; object-fit: cover; object-position: center top; }
+.about-card .kv2 { padding: 14px 16px; }
+
+/* Settings tabs + tc-grid basic layout */
+.tc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; align-items: start; }
+.tc-card { background: var(--xr-surface); border: 1px solid var(--xr-border); border-radius: var(--xr-radius-md); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+.tc-card .rail-h { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--xr-muted); margin-bottom: 2px; }
+.kv2 { display: grid; grid-template-columns: 100px 1fr; gap: 4px 14px; font-size: 12.5px; }
+.kv2 .k { color: var(--xr-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 2px; }
+.tl-ok { color: var(--xr-success); font-weight: 600; }
+
 /* XR Chat panel (pinned right) */
 .xr-chat {
   background: var(--xr-bg-2); border-left: 1px solid var(--xr-border);
