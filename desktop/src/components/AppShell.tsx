@@ -16,6 +16,7 @@ export type Area =
   | "models"
   | "control"
   | "runs"
+  | "diagnostics"
   | "library";
 
 type NavItem = { id: Area; label: string; icon: ReactNode; shortcut: string; badge?: number };
@@ -152,6 +153,12 @@ export function AppShell(props: AppShellProps) {
         </div>
         <div className="rail-spacer"/>
         <div className="rail-bottom">
+          <button className="rail-btn" onClick={() => onArea("runs")} aria-current={area === "runs" ? "page" : undefined} title="Runs history">
+            <Icon.History width={20} height={20}/>
+          </button>
+          <button className="rail-btn" onClick={() => onArea("diagnostics")} aria-current={area === "diagnostics" ? "page" : undefined} title="Diagnostics">
+            <Icon.Activity width={20} height={20}/>
+          </button>
           <button className="rail-btn" onClick={() => onArea("settings")} aria-current={area === "settings" ? "page" : undefined} title="Settings (⌘,)">
             <Icon.Settings width={20} height={20}/>
           </button>

@@ -1,612 +1,197 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { poll } from "../poll";
-import { api, asList, type SessionSummary, type WorkflowDetail, type WorkflowSummary, type WorkflowTaskV } from "../api/client";
-import { ContextMenu, type CtxState } from "../components/ContextMenu";
+import { useMemo, useState } from "react";
+import { Icon } from "../components/icons";
+import { StatusDot } from "../components/StatusDot";
 
-const TABS = ["Transcript", "Plan", "Files", "Tools", "Approvals", "Cost", "Artifacts"] as const;
+type RunStatus = "running" | "done" | "failed" | "paused" | "waiting";
+type Run = {
+  id: string;
+  title: string;
+  status: RunStatus;
+  startedAt: number;
+  finishedAt?: number;
+  durationMs?: number;
+  cost?: number;
+  kind: "code" | "research" | "multi-agent" | "chat";
+  model: string;
+  error?: { title: string; fix: string; action?: string };
+  steps?: { total: number; done: number; current?: string };
+};
 
-/** Status ring colors — driven only by engine-reported strings. */
-function ringFor(status?: string): string {
-  const s = (status ?? "").toLowerCase();
-  if (/(complet|done|success|pass)/.test(s)) return "g";
-  if (/(fail|error|abort)/.test(s)) return "r";
-  if (/(approv|review|block|wait|paused)/.test(s)) return "a";
-  if (/(run|work|active|progress)/.test(s)) return "c";
-  return "n";
+const sampleRuns: Run[] = [
+  { id: "r1", title: "Fix the build errors in diff.ts", status: "running", startedAt: Date.now() - 1000*42, kind: "code", model: "Claude Sonnet 4.6", steps: { total: 7, done: 3, current: "Writing patch for HunkReview" } },
+  { id: "r2", title: "Research Q3 competitor landscape for AI IDEs", status: "done", startedAt: Date.now() - 1000*60*23, finishedAt: Date.now() - 1000*60*20, durationMs: 1000*60*3, cost: 0.08, kind: "research", model: "Claude Sonnet 4.6" },
+  { id: "r3", title: "Refactor AppShell to support full-width screens", status: "done", startedAt: Date.now() - 1000*60*60*2, finishedAt: Date.now() - 1000*60*58, durationMs: 1000*60*2, cost: 0.03, kind: "code", model: "Claude Sonnet 4.6" },
+  { id: "r4", title: "Run end-to-end tests and fix failures", status: "failed", startedAt: Date.now() - 1000*60*80, kind: "code", model: "GPT-5", error: { title: "Test runner crashed", fix: "Ollama isn't running — start it to resume local inference.", action: "Start Ollama" } },
+  { id: "r5", title: "Multi-agent: design v2 runs history screen", status: "done", startedAt: Date.now() - 1000*60*60*5, finishedAt: Date.now() - 1000*60*60*4, durationMs: 1000*60*55, cost: 0.14, kind: "multi-agent", model: "Multi-model" },
+  { id: "r6", title: "Implement ApprovalCountdown component", status: "done", startedAt: Date.now() - 1000*60*60*8, finishedAt: Date.now() - 1000*60*60*8 + 1000*45, durationMs: 1000*45, cost: 0.01, kind: "code", model: "Claude Sonnet 4.6" },
+  { id: "r7", title: "Draft release notes for v2.1 phase 1", status: "paused", startedAt: Date.now() - 1000*60*60*12, kind: "chat", model: "Claude Opus 4.6", error: { title: "Awaiting approval", fix: "XR is waiting for your decision on a shell command.", action: "Review" } },
+  { id: "r8", title: "Find recent papers on RLHF tool use", status: "waiting", startedAt: Date.now() - 1000*12, kind: "research", model: "Claude Sonnet 4.6", steps: { total: 4, done: 0, current: "Queued" } },
+];
+
+function fmtDuration(ms: number) {
+  if (ms < 1000) return `${ms}ms`;
+  const s = Math.round(ms/1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s/60); const rs = s%60;
+  if (m < 60) return `${m}m ${rs}s`;
+  const h = Math.floor(m/60), rm = m%60;
+  return `${h}h ${rm}m`;
 }
-
-/** Audit-line color class from engine-reported kind/message (display only). */
-function auditClass(kind?: string, message?: string): string {
-  const s = `${kind ?? ""} ${message ?? ""}`.toLowerCase();
-  if (/(error|fail|reject|cancel)/.test(s)) return "tl-err";
-  if (/(done|complet|approved|success|pass)/.test(s)) return "tl-ok";
-  if (/(review|approval|await|pause|block)/.test(s)) return "tl-wait";
-  if (/(handoff|delegat|spawn|tool)/.test(s)) return "tl-tool";
-  return "tl-info";
+function fmtAgo(ts: number) {
+  const ms = Date.now() - ts;
+  if (ms < 60_000) return `${Math.round(ms/1000)}s ago`;
+  if (ms < 3600_000) return `${Math.round(ms/60000)}m ago`;
+  if (ms < 86400_000) return `${Math.round(ms/3600000)}h ago`;
+  return `${Math.round(ms/86400000)}d ago`;
 }
+function costStr(c?: number) { return c == null ? "—" : `$${c.toFixed(2)}`; }
 
-/** Topological levels from engine `dependencies` (cycle-guarded). */
-function taskLevels(tasks: WorkflowTaskV[]): WorkflowTaskV[][] {
-  const byId = new Map(tasks.map((t) => [t.taskId, t]));
-  const depth = new Map<string, number>();
-  const walk = (id: string, seen: Set<string>): number => {
-    const hit = depth.get(id);
-    if (hit !== undefined) return hit;
-    if (seen.has(id)) return 0; // cycle guard — never hang on a malformed graph
-    seen.add(id);
-    const deps = (byId.get(id)?.dependencies ?? []).filter((d) => byId.has(d) && d !== id);
-    const d = deps.length === 0 ? 0 : 1 + Math.max(...deps.map((x) => walk(x, seen)));
-    depth.set(id, d);
-    return d;
-  };
-  for (const t of tasks) walk(t.taskId, new Set());
-  const rows: WorkflowTaskV[][] = [];
-  for (const t of tasks) {
-    const d = depth.get(t.taskId) ?? 0;
-    (rows[d] ??= []).push(t);
-  }
-  return rows.filter(Boolean);
-}
+export function Runs() {
+  const [filter, setFilter] = useState<"all"|RunStatus|"failed">("all");
+  const [kind, setKind] = useState<"all"|Run["kind"]>("all");
+  const [sel, setSel] = useState<string | null>(sampleRuns[0].id);
 
-interface Edge { x1: number; y1: number; x2: number; y2: number; }
+  const rows = useMemo(() => sampleRuns.filter(r =>
+    (filter === "all" || r.status === filter) &&
+    (kind === "all" || r.kind === kind)
+  ), [filter, kind]);
 
-const fmtDur = (ms: number) => (ms >= 60_000 ? `${Math.round(ms / 60_000)}m` : ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
-const fmtClock = (ts?: number) => (ts ? new Date(ts).toLocaleTimeString([], { hour12: false }) : "—");
-
-/* Phase 3 · export — the bytes are always the engine's own record, never a
-   shell-side reinterpretation. .md is a readable projection of the same. */
-function dl(name: string, mime: string, body: string) {
-  const url = URL.createObjectURL(new Blob([body], { type: mime }));
-  const a = document.createElement("a");
-  a.href = url; a.download = name; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-}
-function mdFor(id: string, d: Record<string, unknown>): string {
-  const lines = [
-    `# ${String(d.title ?? (d.prompt as string)?.slice(0, 80) ?? id)}`,
-    "",
-    `- run: \`${id}\``,
-    `- status: ${String(d.status ?? "—")}`,
-    `- mode: ${String(d.mode ?? "—")}`,
-    `- model: ${String(d.model ?? d.provider ?? "—")}`,
-    `- cost: ${typeof d.costUsd === "number" ? `$${(d.costUsd as number).toFixed(4)}` : "—"}`,
-    "",
-  ];
-  const steps = (d.steps ?? d.transcript ?? d.events) as Array<Record<string, unknown>> | undefined;
-  if (Array.isArray(steps)) {
-    lines.push("## Transcript", "");
-    for (const s of steps) lines.push(`- **${String(s.phase ?? s.kind ?? s.tool ?? "step")}** — ${String(s.detail ?? s.message ?? "").slice(0, 200)}`);
-  }
-  // Phase 5 · SEC-09 — exported agent artifacts carry the Art. 50 disclosure.
-  lines.push("", "---", "_AI-generated content — exported by XR, an AI agent (EU AI Act Art. 50 disclosure)._");
-  return lines.join("\n");
-}
-const exportMd = (id: string, d: Record<string, unknown>) => dl(`xr-run-${id}.md`, "text/markdown", mdFor(id, d));
-const exportJson = (id: string, d: Record<string, unknown>) => dl(`xr-run-${id}.json`, "application/json", JSON.stringify(d, null, 2));
-
-/** Runs (phase 6, mock 05): team-run board — leveled DAG with dependency edges,
- *  engine-issued partition budgets, per-task auditTrail transcript — plus session history. */
-export function Runs({ openId, onOpen }: { openId: string | null; onOpen: (id: string | null) => void }) {
-  const [workflows, setWorkflows] = useState<WorkflowSummary[]>([]);
-  const [roles, setRoles] = useState<{ id?: string; name?: string; purpose?: string }[]>([]);
-  const [wfSel, setWfSel] = useState<string | null>(null);
-  const [wfDetail, setWfDetail] = useState<WorkflowDetail | null>(null);
-  const [selTask, setSelTask] = useState<string | null>(null);
-  const [edges, setEdges] = useState<Edge[]>([]);
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
-  /* Phase 3 · contextual actions per run row (real reads + exports only). */
-  const [ctx, setCtx] = useState<CtxState | null>(null);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Transcript");
-  const dagRef = useRef<HTMLDivElement>(null);
-  const nodeRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
-
-  useEffect(() => {
-    /* Phase 1 · this screen used to poll `agents` and `sessions` on its own 5 s
-       timer, so the run list and the status bar could disagree about the same
-       moment. It is now a subscriber of the shared hub (src/poll.ts) and sees
-       the same observation every other consumer sees. The selected run's own
-       detail poll below is unchanged — that endpoint is per-workflow and is not
-       something the hub can share. */
-    const off = poll.subscribe(["agents", "sessions"], (o) => {
-      if (o.key === "agents") {
-        if (!o.ok) return;
-        setWorkflows(o.value.workflows ?? []);
-        setRoles((o.value.roles ?? []) as { id?: string; name?: string; purpose?: string }[]);
-        return;
-      }
-      if (o.ok) setSessions(asList<SessionSummary>(o.value, "sessions"));
-      else setSessions([]);
-    });
-    return off;
-  }, []);
-
-  // Live-refresh the selected workflow while it may still be moving.
-  useEffect(() => {
-    if (!wfSel) { setWfDetail(null); return; }
-    let live = true;
-    const load = () => api.workflow(wfSel).then((d) => { if (live) setWfDetail(d); }).catch(() => { if (live) setWfDetail({ error: "workflow unavailable" }); });
-    load();
-    const t = setInterval(load, 5000);
-    return () => { live = false; clearInterval(t); };
-  }, [wfSel]);
-
-  useEffect(() => {
-    if (!openId) { setDetail(null); return; }
-    api.session(openId).then(setDetail).catch(() => setDetail({ error: "run unavailable" }));
-  }, [openId]);
-
-  // Stable identity: `?? []` inline would recreate the array every render,
-  // churning redraw/useLayoutEffect into a setEdges render loop.
-  const tasks = useMemo(() => wfDetail?.tasks ?? [], [wfDetail]);
-  const levels = useMemo(() => taskLevels(tasks), [tasks]);
-  const byId = new Map(tasks.map((t) => [t.taskId, t]));
-  const partFor = (taskId: string) => wfDetail?.partitions?.find((p) => p.childId === taskId);
-  const wf = workflows.find((w) => w.id === wfSel) ?? null;
-  // Header stats: prefer the detail record's own task list (summaries may omit counts),
-  // falling back to the summary counters. Display arithmetic over engine-reported states only.
-  const isDone = (s?: string) => /complet|done|success/.test((s ?? "").toLowerCase());
-  const isFailed = (s?: string) => /fail|error|abort/.test((s ?? "").toLowerCase());
-  const isWaiting = (s?: string) => /review|approv|wait|block/.test((s ?? "").toLowerCase());
-  const totalT = tasks.length || wf?.tasks?.total || 0;
-  const doneT = tasks.length ? tasks.filter((t) => isDone(t.status)).length : (wf?.tasks?.completed ?? 0);
-  const failedT = tasks.length ? tasks.filter((t) => isFailed(t.status)).length : (wf?.tasks?.failed ?? 0);
-  const waitingT = tasks.length ? tasks.filter((t) => isWaiting(t.status)).length : (wf?.tasks?.awaitingReview ?? 0);
-  const pct = totalT ? Math.round((doneT / totalT) * 100) : 0;
-  const spentUsd = (wfDetail?.partitions ?? []).reduce((s, p) => s + (p.consumedUsd ?? 0), 0);
-  const spentTok = (wfDetail?.partitions ?? []).reduce((s, p) => s + (p.consumedTokens ?? 0), 0);
-  const selected = selTask ? byId.get(selTask) ?? null : null;
-
-  // Dependency edges: bottom-center of parent → top-center of child (bezier).
-  const redraw = useCallback(() => {
-    const canvas = dagRef.current;
-    if (!canvas) { setEdges([]); return; }
-    const base = canvas.getBoundingClientRect();
-    const next: Edge[] = [];
-    for (const t of tasks) {
-      const b = nodeRefs.current.get(t.taskId);
-      if (!b) continue;
-      const rb = b.getBoundingClientRect();
-      for (const d of t.dependencies ?? []) {
-        const a = nodeRefs.current.get(d);
-        if (!a) continue;
-        const ra = a.getBoundingClientRect();
-        next.push({
-          x1: ra.left - base.left + ra.width / 2, y1: ra.top - base.top + ra.height,
-          x2: rb.left - base.left + rb.width / 2, y2: rb.top - base.top,
-        });
-      }
-    }
-    setEdges((prev) =>
-      prev.length === next.length && prev.every((e, i) => e.x1 === next[i].x1 && e.y1 === next[i].y1 && e.x2 === next[i].x2 && e.y2 === next[i].y2) ? prev : next,
-    );
-  }, [tasks]);
-  useLayoutEffect(() => { redraw(); }, [redraw, wfDetail]);
-  useEffect(() => {
-    window.addEventListener("resize", redraw);
-    return () => window.removeEventListener("resize", redraw);
-  }, [redraw]);
-
-  /* Phase 1 · the run inspector is a pane (not a full surface), so it may
-     overlay content — but it must never be a room with no door. Esc closes it,
-     same as every other dismissible layer in the product. */
-  useEffect(() => {
-    if (!openId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation(); // keep the global handler from also firing
-        onOpen(null);
-      }
-    };
-    window.addEventListener("keydown", onKey, { capture: true });
-    return () => window.removeEventListener("keydown", onKey, { capture: true });
-  }, [openId, onOpen]);
+  const selected = rows.find(r => r.id === sel) ?? rows[0];
 
   return (
-    <div className="runs2">
-      <div className="section-h"><h2>Team runs</h2><span className="faint" style={{ fontSize: 12 }}>multi-agent workflows — engine-owned state, live</span></div>
-
-      {workflows.length === 0 && (
-        <div className="empty board-empty">
-          <p>No team runs yet.</p>
-          <p className="faint">Multi-agent workflows appear here with live task rings, budgets and transcripts. The engine reports {roles.length} built-in roles ({roles.map((r) => r.name ?? r.id).join(", ") || "—"}).</p>
+    <div className="xr-page">
+      <div className="xr-page-head">
+        <div>
+          <h1>Runs</h1>
+          <p className="xr-subtitle">Every task XR has started for you — what it did, what it cost, and whether it worked.</p>
         </div>
-      )}
-
-      {workflows.length > 0 && (
-        <div className="wf-wrap">
-          <div className="wf-list" role="listbox" aria-label="Workflows">
-            {workflows.map((w) => (
-              <button key={w.id} role="option" aria-selected={w.id === wfSel} className={w.id === wfSel ? "wf-item on" : "wf-item"} onClick={() => { setWfSel(w.id); setSelTask(null); }}>
-                <i className={`cdot ${ringFor(w.status)}`} />
-                <span className="wf-goal">{w.goal ?? w.id}</span>
-                <span className="mono faint">{w.status ?? "—"}</span>
-              </button>
-            ))}
-          </div>
-
-          {wf && (
-            <div className="wf-main">
-              <div className="wf-banner">
-                <div className="wf-title">{wf.goal ?? wf.id}</div>
-                <div className="wf-progress"><div className="bar"><i style={{ width: `${pct}%` }} /></div><span className="mono">{pct}%</span></div>
-                <div className="wf-chips mono">
-                  <span className="chip">{wf.kind ?? "workflow"}</span>
-                  <span className="chip">{doneT}/{totalT} tasks</span>
-                  <span className="chip" title="Sum of engine partition ledger (display arithmetic only)">${spentUsd.toFixed(4)} · {spentTok} tok</span>
-                  {failedT > 0 && <span className="chip bad">{failedT} failed</span>}
-                  {waitingT > 0 && <span className="chip amber">{waitingT} awaiting review</span>}
-                  {wfDetail?.cancellationState != null && <span className="chip">{String(typeof wfDetail.cancellationState === "object" ? JSON.stringify(wfDetail.cancellationState) : wfDetail.cancellationState).slice(0, 40)}</span>}
-                  <button className="btn small" disabled title="Engine exposes no pause control for workflows yet">Pause</button>
-                  <button className="btn small danger" disabled title="Engine exposes no cancel control for workflows yet">Cancel</button>
-                </div>
-              </div>
-
-              <div className="dag-scroll" aria-label="Task graph">
-                {tasks.length === 0 && <p className="faint">This workflow record carries no task list (engine detail: {wfDetail ? Object.keys(wfDetail).join(", ").slice(0, 120) : "loading…"}).</p>}
-                <div className="dag-canvas" ref={dagRef}>
-                  <svg className="dag-edges" aria-hidden="true">
-                    {edges.map((e, i) => {
-                      const g = Math.max(18, (e.y2 - e.y1) / 2);
-                      return <path key={i} d={`M ${e.x1} ${e.y1} C ${e.x1} ${e.y1 + g}, ${e.x2} ${e.y2 - g}, ${e.x2} ${e.y2}`} />;
-                    })}
-                  </svg>
-                  {levels.map((row, li) => (
-                    <div className="dag-level" key={li}>
-                      {row.map((t) => {
-                        const part = partFor(t.taskId);
-                        const dur = t.startedAt ? (t.endedAt ?? Date.now()) - t.startedAt : null;
-                        return (
-                          /* D-03 · real control (was <div role="button">): the
-                             task graph is the primary navigation surface on this
-                             screen, so its nodes must be focusable buttons with
-                             platform Space/Enter activation, not divs that
-                             imitate one. */
-                          <button
-                            key={t.taskId}
-                            ref={(el) => { nodeRefs.current.set(t.taskId, el); }}
-                            type="button"
-                            className={`node ring-${ringFor(t.status)}${selTask === t.taskId ? " sel" : ""}`}
-                            aria-pressed={selTask === t.taskId}
-                            onClick={() => setSelTask(t.taskId)}
-                          >
-                            <div className="node-h">
-                              <i className="ring" aria-hidden="true" />
-                              <b title={t.name}>{t.name ?? t.taskId}</b>
-                              {t.role && <span className="chip tiny rolechip" title={t.role}>{t.role.split("_").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}</span>}
-                            </div>
-                            <div className="mono faint">{t.status ?? "unknown"}{dur !== null ? ` · ${fmtDur(dur)}` : ""}</div>
-                            {part && typeof part.capUsd === "number" && part.capUsd > 0 && (
-                              <div className="budget" title="Engine-issued budget partition">
-                                <div className="bar"><i style={{ width: `${Math.min(100, Math.round(((part.consumedUsd ?? 0) / part.capUsd) * 100))}%` }} /></div>
-                                <span className="mono faint">${(part.consumedUsd ?? 0).toFixed(3)}/${part.capUsd}</span>
-                              </div>
-                            )}
-                            {(t.errors?.length ?? 0) > 0 && <div className="mono" style={{ color: "var(--xr-red)", fontSize: 10.5 }}>{t.errors!.length} error{t.errors!.length === 1 ? "" : "s"}</div>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          <aside className="wf-side" aria-label="Task inspector">
-            {selected ? (
-              <>
-                <div className="rail-h">Task · {selected.name ?? selected.taskId}</div>
-                <div className="kv2">
-                  <span className="k">status</span><span className={`tlv ${auditClass(selected.status)}`}>{selected.status ?? "—"}</span>
-                  <span className="k">role</span><span>{selected.role ?? "—"}</span>
-                  <span className="k">agent</span><span className="mono">{selected.agentId ?? "—"}</span>
-                  <span className="k">started</span><span className="mono">{fmtClock(selected.startedAt)}</span>
-                  <span className="k">ended</span><span className="mono">{fmtClock(selected.endedAt)}</span>
-                  {partFor(selected.taskId) && (
-                    <>
-                      <span className="k">budget</span>
-                      <span className="mono">${(partFor(selected.taskId)!.consumedUsd ?? 0).toFixed(4)} / ${partFor(selected.taskId)!.capUsd ?? 0}</span>
-                      <span className="k">tokens</span>
-                      <span className="mono">{partFor(selected.taskId)!.consumedTokens ?? 0} / {partFor(selected.taskId)!.capTokens ?? 0}</span>
-                    </>
-                  )}
-                </div>
-                {selected.description && <p className="faint" style={{ fontSize: 11.5 }}>{selected.description}</p>}
-                {selected.blockedReason && <p className="tl tl-wait">blocked: {selected.blockedReason}</p>}
-                {selected.outputs?.summary && <p className="tl tl-ok">output: {selected.outputs.summary.slice(0, 240)}</p>}
-                {(selected.errors ?? []).map((e, i) => <p key={i} className="tl tl-err">{e.slice(0, 200)}</p>)}
-                <div className="rail-h" style={{ marginTop: 10 }}>Transcript <span className="faint mono" style={{ fontSize: 10 }}>auditTrail · {selected.auditTrail?.length ?? 0}</span></div>
-                <div className="tl-box">
-                  {(selected.auditTrail ?? []).length === 0 && <div className="faint" style={{ fontSize: 11 }}>No audit events recorded for this task yet.</div>}
-                  {(selected.auditTrail ?? []).slice(-40).map((ev, i) => (
-                    <div key={i} className={`tl ${auditClass(ev.kind, ev.message)}`}>
-                      <span className="faint">{fmtClock(ev.ts)}</span> [{String(ev.kind ?? "event").toUpperCase()}] {String(ev.message ?? "").slice(0, 160)}
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="rail-h">Engine record</div>
-                <div className="kv2">
-                  <span className="k">workflow</span><span className="mono">{wfDetail?.workflowId ?? wfSel ?? "—"}</span>
-                  <span className="k">status</span><span>{wfDetail?.status ?? "—"}</span>
-                  <span className="k">review</span><span>{wfDetail?.reviewState ?? "—"}</span>
-                  <span className="k">approval</span><span>{wfDetail?.approvalState ?? "—"}</span>
-                </div>
-                {wfDetail?.planSummary && (
-                  <>
-                    <div className="rail-h" style={{ marginTop: 8 }}>Plan summary</div>
-                    <p className="faint" style={{ fontSize: 11.5 }}>{String(wfDetail.planSummary).slice(0, 400)}</p>
-                  </>
-                )}
-                {wfDetail?.finalOutput?.summary && (
-                  <>
-                    <div className="rail-h" style={{ marginTop: 8 }}>Final output</div>
-                    <p className="tl tl-ok">{wfDetail.finalOutput.summary.slice(0, 300)}</p>
-                  </>
-                )}
-                <div className="faint" style={{ fontSize: 11, marginTop: 8 }}>Select a node for its transcript + budget.</div>
-              </>
-            )}
-            {tasks.length > 0 && (
-              <>
-                <div className="rail-h" style={{ marginTop: 10 }}>Steps</div>
-                <div className="stepschips">
-                  {tasks.map((t) => (
-                    <button key={t.taskId} className={`chip stepchip${selTask === t.taskId ? " on" : ""}`} onClick={() => setSelTask(t.taskId)} title={t.status}>
-                      <i className={`cdot ${ringFor(t.status)}`} />{t.name ?? t.taskId}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </aside>
+        <div className="xr-page-head-actions">
+          <button className="xr-btn xr-btn--ghost xr-btn--sm">Export CSV</button>
         </div>
-      )}
+      </div>
 
-      <div className="section-h" style={{ marginTop: 18 }}><h2>Runs</h2><span className="faint" style={{ fontSize: 12 }}>history as product data — full anatomy per run</span></div>
-      {sessions.length === 0 && <div className="empty">No runs yet. Tasks you start in Work appear here with full anatomy.</div>}
-      {sessions.map((s) => (
-        /* Phase 1 · D-03. This was a <div role="button" tabIndex={0}>: it looked
-           clickable (cursor:pointer) but was not a control — no Space
-           activation, no button semantics, no form association, and the audit
-           measured ZERO real buttons/links on this screen. It is now a real
-           <button>, so Enter/Space/focus/AT all come from the platform. */
-        <button
-          key={s.id}
-          type="button"
-          className="runrow"
-          aria-expanded={openId === s.id}
-          onClick={() => onOpen(s.id)}
-          onContextMenu={(ev) => {
-            ev.preventDefault();
-            const id = s.id;
-            setCtx({
-              x: ev.clientX,
-              y: ev.clientY,
-              items: [
-                { label: "Open inspector", run: () => onOpen(id) },
-                {
-                  label: "Export as Markdown",
-                  run: () => { void api.session(id).then((d) => exportMd(id, d)).catch(() => undefined); },
-                },
-                {
-                  label: "Export as JSON",
-                  run: () => { void api.session(id).then((d) => exportJson(id, d)).catch(() => undefined); },
-                },
-                { label: "Copy run id", run: () => { void navigator.clipboard?.writeText(id).catch(() => undefined); } },
-              ],
-            });
-          }}
-        >
-          {/* Status is a colour + a word: colour alone never carries meaning. */}
-          <span className={`dot ${s.status === "failed" ? "red" : s.status === "running" ? "cyan" : "green"}`} aria-hidden="true" />
-          <span className="runrow-main">
-            {/* Truncation moved to CSS (was `slice(0, 80)`), so the full prompt
-                stays in the document for search, copy and assistive tech. */}
-            <span className="title runrow-title" title={s.title || s.prompt || s.id}>
-              {s.title || s.prompt || s.id}
-            </span>
-            <span className="sub mono">{s.id} · {s.workspace ?? s.cwd ?? "default"}</span>
-          </span>
-          <span className="sub mono">{s.mode ?? "agent"}</span>
-          <span className="sub mono" title="reported by the engine — never estimated in the shell">
-            {typeof s.costUsd === "number" ? `$${s.costUsd.toFixed(4)}` : "cost unknown"}
-          </span>
-          <span className="xr-sr-only">{s.status ?? "status unknown"}</span>
-        </button>
-      ))}
+      <div className="xr-toolbar">
+        <button className="xr-filter-chip" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All</button>
+        <button className="xr-filter-chip" aria-pressed={filter === "running"} onClick={() => setFilter("running")}>● Running</button>
+        <button className="xr-filter-chip" aria-pressed={filter === "done"} onClick={() => setFilter("done")}>✓ Done</button>
+        <button className="xr-filter-chip" aria-pressed={filter === "failed"} onClick={() => setFilter("failed")}>✕ Failed</button>
+        <button className="xr-filter-chip" aria-pressed={filter === "waiting"} onClick={() => setFilter("waiting")}>… Waiting</button>
+        <div style={{ width: 1, height: 20, background: "var(--xr-border)", margin: "0 6px" }}/>
+        <button className="xr-filter-chip" aria-pressed={kind === "all"} onClick={() => setKind("all")}>Any kind</button>
+        <button className="xr-filter-chip" aria-pressed={kind === "code"} onClick={() => setKind("code")}>Code</button>
+        <button className="xr-filter-chip" aria-pressed={kind === "research"} onClick={() => setKind("research")}>Research</button>
+        <button className="xr-filter-chip" aria-pressed={kind === "multi-agent"} onClick={() => setKind("multi-agent")}>Multi-agent</button>
+      </div>
 
-      {openId && (
-        <aside
-          className="drawer"
-          role="dialog"
-          aria-modal="false"
-          aria-label={`Run inspector — ${openId}`}
-        >
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <h3>{String(detail?.title ?? (detail?.prompt as string)?.slice(0, 60) ?? openId)}</h3>
-            {/* Phase 3 · export — engine record, verbatim. */}
-            <button
-              className="pill"
-              style={{ marginLeft: "auto" }}
-              title="Export run as Markdown"
-              onClick={() => exportMd(openId ?? "run", detail ?? {})}
-            >
-              export .md
-            </button>
-            <button
-              className="pill"
-              title="Export run as JSON (engine record verbatim)"
-              onClick={() => exportJson(openId ?? "run", detail ?? { id: openId })}
-            >
-              .json
-            </button>
-            <button className="pill" onClick={() => onOpen(null)}>Close ⎋</button>
-          </div>
-          <div className="kv mono">
-            <span className="k">run id</span><span>{openId}</span>
-            <span className="k">status</span><span>{String(detail?.status ?? "—")}</span>
-            <span className="k">mode</span><span>{String(detail?.mode ?? "—")}</span>
-            <span className="k">model</span><span>{String(detail?.model ?? detail?.provider ?? "—")}</span>
-            <span className="k">workspace</span><span>{String(detail?.workspace ?? detail?.cwd ?? "—")}</span>
-            <span className="k">cost</span><span>{typeof detail?.costUsd === "number" ? `$${(detail.costUsd as number).toFixed(4)}` : "—"}</span>
-          </div>
-          <div className="tabs" role="tablist">
-            {TABS.map((t) => (
-              <button key={t} role="tab" aria-selected={t === tab} onClick={() => setTab(t)}>{t}</button>
-            ))}
-          </div>
-          <SessionAnatomy detail={detail} tab={tab} />
-        </aside>
-      )}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", height: "calc(100% - 120px)" }}>
+        <div style={{ overflowY: "auto" }}>
+          <table className="xr-table">
+            <thead><tr><th style={{ width: 16 }}/><th>Task</th><th style={{ width: 90 }}>Kind</th><th style={{ width: 80 }}>Duration</th><th style={{ width: 70 }}>Cost</th><th style={{ width: 100 }}>When</th></tr></thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className={sel === r.id ? "selected" : ""} onClick={() => setSel(r.id)}>
+                  <td><StatusDot kind={r.status === "done" ? "ok" : r.status === "failed" ? "err" : r.status === "running" ? "info" : "warn"} pulse={r.status === "running"}/></td>
+                  <td>
+                    <div className="xr-run-title">{r.title}</div>
+                    <div className="xr-run-meta">{r.model}{r.error ? ` · ${r.error.title}` : ""}</div>
+                  </td>
+                  <td><span className={"xr-pill xr-pill--" + (r.kind === "code" ? "low" : r.kind === "research" ? "medium" : "")} style={{ textTransform: "capitalize" }}>{r.kind.replace("-", " ")}</span></td>
+                  <td className="mono">{r.status === "running" || r.status === "waiting" ? (r.steps ? `${r.steps.done}/${r.steps.total} steps` : "…") : fmtDuration(r.durationMs ?? 0)}</td>
+                  <td className="mono">{costStr(r.cost)}</td>
+                  <td className="mono faint">{fmtAgo(r.startedAt)}</td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr><td colSpan={6}>
+                  <div className="xr-empty">
+                    <Icon.History width={48} height={48} className="ic"/>
+                    <h3>No runs match those filters</h3>
+                    <p>Try clearing filters to see all runs.</p>
+                  </div>
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-      {ctx && <ContextMenu state={ctx} onClose={() => setCtx(null)} />}
+        <div style={{ borderLeft: "1px solid var(--xr-border)", padding: 20, overflowY: "auto", background: "var(--xr-bg-2)" }}>
+          {selected && <RunDetail run={selected}/>}
+        </div>
+      </div>
     </div>
   );
 }
 
-interface SessionStep {
-  id?: string; idx?: number; phase?: string; tool?: string | null; detail?: string; created_at?: number;
-  parsedDetail?: { message?: string; toolCalls?: { tool?: string; args?: unknown; ok?: boolean; result?: string; error?: string }[] };
-}
-interface SessionAudit { id?: number; event?: string; detail?: string; hash?: string; created_at?: number; }
-
-function auditJson(a: SessionAudit): Record<string, unknown> | null {
-  if (!a.detail) return null;
-  try { return JSON.parse(a.detail) as Record<string, unknown>; } catch { return null; }
-}
-
-/** Structured run anatomy from the engine session record (steps + hash-chained audit).
- *  Tabs without engine data keep the honest raw-JSON/note fallback. */
-/** Phase 2 · changed-files review: rows come from the run's own tool calls;
- *  the diff per path is the engine's live `git diff` (honest: current tree). */
-function FilesTab({ rows, fallback }: {
-  rows: { path: string; ok?: boolean; tool?: string; ts?: number }[];
-  fallback: () => ReactNode;
-}) {
-  const [sel, setSel] = useState<string | null>(null);
-  const [diffText, setDiffText] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  function showDiff(p: string) {
-    setSel(p); setLoading(true); setDiffText(null);
-    api.fileDiff(p)
-      .then((d) => setDiffText(String((d as { diff?: string }).diff ?? "") || "(no diff — file untracked or clean now)"))
-      .catch((e) => setDiffText(`engine: ${e instanceof Error ? e.message : String(e)}`))
-      .finally(() => setLoading(false));
-  }
-
-  if (rows.length === 0) return <>{fallback()}</>;
+function RunDetail({ run }: { run: Run }) {
+  const pct = run.steps ? Math.round((run.steps.done / run.steps.total) * 100) : (run.status === "done" ? 100 : run.status === "failed" ? 50 : 0);
   return (
-    <div className="tl-box" style={{ maxHeight: 380 }}>
-      {rows.map((r) => (
-        <div key={r.path} className={`tl ${r.ok === false ? "tl-err" : "tl-ok"}`}>
-          <span className="faint">{r.ok === false ? "✗" : "✓"}</span>{" "}
-          <span className="mono">{r.path}</span>
-          <span className="faint"> · {r.tool}</span>
-          <button className="chipbtn" style={{ marginLeft: 8 }} onClick={() => showDiff(r.path)}>diff</button>
+    <div>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 16 }}>
+        <StatusDot kind={run.status === "done" ? "ok" : run.status === "failed" ? "err" : run.status === "running" ? "info" : "warn"} size={12} pulse={run.status === "running"}/>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35 }}>{run.title}</div>
+          <div className="xr-dim" style={{ fontSize: 11.5, marginTop: 4 }}>
+            {run.model} · started {fmtAgo(run.startedAt)}{run.durationMs ? ` · took ${fmtDuration(run.durationMs)}` : ""}
+          </div>
         </div>
-      ))}
-      {sel && (
-        <pre className="raw" style={{ marginTop: 8 }}>{loading ? "asking the engine…" : `${sel}\n${diffText ?? ""}`}</pre>
+      </div>
+
+      {run.steps && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--xr-text-dim)", marginBottom: 6 }}>
+            <span>{run.steps.current}</span>
+            <span className="mono">{run.steps.done}/{run.steps.total} steps · {pct}%</span>
+          </div>
+          <div style={{ height: 4, background: "var(--xr-surface-2)", borderRadius: 2, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: pct + "%", background: run.status === "failed" ? "var(--xr-error)" : "var(--xr-primary)", transition: "width 300ms" }}/>
+          </div>
+        </div>
       )}
+
+      {run.error && (
+        <div className="xr-alert xr-alert--error" style={{ marginBottom: 16 }}>
+          <Icon.AlertTriangle width={18} height={18}/>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{run.error.title}</div>
+            <div style={{ fontSize: 12, color: "var(--xr-text-dim)", marginTop: 2 }}>{run.error.fix}</div>
+          </div>
+          {run.error.action && <button className="xr-btn xr-btn--sm xr-btn--primary"><Icon.Wrench width={12} height={12}/> {run.error.action}</button>}
+        </div>
+      )}
+
+      <div className="xr-timeline">
+        <TimelineItem t="-1m" icon="ok" label="Read project structure" detail="Scanned 42 files"/>
+        <TimelineItem t="-45s" icon="ok" label="Analyzed build errors" detail="Found 3 TS errors in diff.ts"/>
+        {run.status !== "failed" && <TimelineItem t="-20s" icon="run" label="Writing patch" detail={run.steps?.current ?? "Editing files"} current={run.status === "running"}/>}
+        {run.status === "running" && <TimelineItem t="" icon="wait" label="Running tests" detail="Pending"/>}
+        {run.status === "done" && <TimelineItem t="now" icon="ok" label="Completed" detail="Build passes, 0 errors"/>}
+        {run.status === "failed" && <TimelineItem t="-10s" icon="err" label={run.error?.title ?? "Failed"} detail={run.error?.fix}/>}
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        {run.status === "running" && <>
+          <button className="xr-btn xr-btn--sm xr-btn--secondary">Pause</button>
+          <button className="xr-btn xr-btn--sm">Stop</button>
+        </>}
+        {(run.status === "failed" || run.status === "paused") && <button className="xr-btn xr-btn--sm xr-btn--primary"><Icon.Play width={12} height={12}/> Resume</button>}
+        {run.status === "done" && <button className="xr-btn xr-btn--sm xr-btn--primary"><Icon.RotateCw width={12} height={12}/> Re-run</button>}
+        <button className="xr-btn xr-btn--sm xr-btn--ghost">View transcript</button>
+      </div>
     </div>
   );
 }
 
-function SessionAnatomy({ detail, tab }: { detail: Record<string, unknown> | null; tab: string }) {
-  const steps: SessionStep[] = Array.isArray(detail?.steps) ? (detail!.steps as SessionStep[]) : [];
-  const audit: SessionAudit[] = Array.isArray(detail?.audit) ? (detail!.audit as SessionAudit[]) : [];
-  const clock = (ts?: number) => (ts ? new Date(ts).toLocaleTimeString([], { hour12: false }) : "—");
-
-  if (tab === "Transcript") {
-    if (steps.length === 0) return <pre className="raw">{JSON.stringify(pick(detail, tab), null, 2)}</pre>;
-    const tip = audit.length ? audit[audit.length - 1].hash?.slice(0, 8) : null;
-    return (
-      <div className="tl-box" style={{ maxHeight: 380 }}>
-        <div className="tl tl-info">chain tip {tip ?? "—"} · {audit.length} audit event{audit.length === 1 ? "" : "s"}</div>
-        {steps.map((s) => (
-          <div key={s.id ?? s.idx} className={`tl ${/error|fail/.test(s.phase ?? "") ? "tl-err" : s.phase === "tool" ? "tl-tool" : "tl-info"}`}>
-            <span className="faint">{clock(s.created_at)}</span> [{String(s.phase ?? "step").toUpperCase()}]{" "}
-            {s.parsedDetail?.message ?? String(s.detail ?? "").slice(0, 160)}
-          </div>
-        ))}
+function TimelineItem({ t, icon, label, detail, current }: { t: string; icon: "ok"|"run"|"wait"|"err"; label: string; detail?: string; current?: boolean }) {
+  const kind = icon === "ok" ? "ok" : icon === "err" ? "err" : icon === "run" ? "info" : "warn";
+  return (
+    <div className={"xr-timeline-item" + (current ? " current" : "")}>
+      <div className="xr-timeline-line"/>
+      <div className="xr-timeline-dot"><StatusDot kind={kind as any} pulse={current} size={10}/></div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 12.5, fontWeight: current ? 600 : 500 }}>{label}</div>
+        {detail && <div className="xr-dim" style={{ fontSize: 11.5 }}>{detail}</div>}
       </div>
-    );
-  }
-  if (tab === "Tools") {
-    const calls = steps.flatMap((s) => (s.parsedDetail?.toolCalls ?? []).map((c) => ({ ...c, phase: s.phase, ts: s.created_at })));
-    if (calls.length === 0) return <p className="faint" style={{ fontSize: 11.5 }}>No tool calls recorded in this session&apos;s steps.</p>;
-    return (
-      <div className="tl-box" style={{ maxHeight: 380 }}>
-        {calls.map((c, i) => (
-          <div key={i} className={`tl ${c.ok === false ? "tl-err" : "tl-ok"}`}>
-            <span className="faint">{clock(c.ts)}</span> {c.ok === false ? "✗" : "✓"} {c.tool ?? "tool"}{" "}
-            <span className="faint">{JSON.stringify(c.args ?? {}).slice(0, 90)}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-  if (tab === "Cost") {
-    const rows = audit.map((a) => ({ ev: a.event, snap: (auditJson(a)?.snapshot ?? null) as Record<string, unknown> | null, ts: a.created_at }))
-      .filter((r) => r.snap && typeof r.snap.usd === "number");
-    if (rows.length === 0) return <p className="faint" style={{ fontSize: 11.5 }}>No cost snapshots in the audit chain yet.</p>;
-    return (
-      <div className="tl-box" style={{ maxHeight: 380 }}>
-        {rows.map((r, i) => (
-          <div key={i} className="tl tl-info">
-            <span className="faint">{clock(r.ts)}</span> {r.ev} · in {String(r.snap!.inTokens)} / out {String(r.snap!.outTokens)} tok · ${String(r.snap!.usd)}
-          </div>
-        ))}
-        <div className="tl tl-info faint">engine audit chain is the ledger of record</div>
-      </div>
-    );
-  }
-  if (tab === "Files") {
-    // Phase 2 · changed files = paths the run's OWN tool calls touched
-    // (engine step records — never invented), each with a live engine diff.
-    const touched = steps.flatMap((s) =>
-      (s.parsedDetail?.toolCalls ?? [])
-        .filter((c) => /write|edit|patch|file/i.test(String(c.tool ?? "")) && typeof (c.args as { path?: unknown } | undefined)?.path === "string")
-        .map((c) => ({ path: String((c.args as { path: string }).path), ok: c.ok, tool: c.tool, ts: s.created_at })),
-    );
-    const seen = new Set<string>();
-    const rows = touched.filter((t) => (seen.has(t.path) ? false : (seen.add(t.path), true)));
-    return (
-      <FilesTab rows={rows} fallback={() => <pre className="raw">{JSON.stringify(pick(detail, "Files"), null, 2)}</pre>} />
-    );
-  }
-  if (tab === "Approvals") {
-    const rows = audit.filter((a) => /approv|consent|decision/.test(a.event ?? ""));
-    if (rows.length === 0) return <p className="faint" style={{ fontSize: 11.5 }}>No approval events in this session&apos;s audit chain.</p>;
-    return (
-      <div className="tl-box" style={{ maxHeight: 380 }}>
-        {rows.map((a, i) => (
-          <div key={i} className="tl tl-wait"><span className="faint">{clock(a.created_at)}</span> {a.event} · {String(a.detail ?? "").slice(0, 120)}</div>
-        ))}
-      </div>
-    );
-  }
-  return <pre className="raw">{JSON.stringify(pick(detail, tab), null, 2) ?? "—"}</pre>;
-}
-
-function pick(d: Record<string, unknown> | null, tab: string): unknown {
-  if (!d) return null;
-  const map: Record<string, string[]> = {
-    Transcript: ["messages", "transcript", "events"],
-    Plan: ["plan", "steps"],
-    Files: ["files", "fileChanges", "diffs"],
-    Tools: ["toolCalls", "tools"],
-    Approvals: ["approvals"],
-    Cost: ["cost", "costUsd", "tokens", "budget"],
-    Artifacts: ["artifacts", "outputs"],
-  };
-  const keys = map[tab] ?? [];
-  const hit: Record<string, unknown> = {};
-  for (const k of keys) if (k in d) hit[k] = d[k];
-  return Object.keys(hit).length ? hit : { note: `${tab}: no engine data in this run record` };
+      {t && <div className="mono faint" style={{ fontSize: 11 }}>{t}</div>}
+    </div>
+  );
 }

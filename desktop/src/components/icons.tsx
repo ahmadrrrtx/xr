@@ -190,6 +190,30 @@ export const Icon = {
   Loader: (p: IP) => (
     <svg {...base(p)}><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
   ),
+  Dashboard: (p: IP) => (
+    <svg {...base(p)}><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+  ),
+  History: (p: IP) => (
+    <svg {...base(p)}><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+  ),
+  Cpu: (p: IP) => (
+    <svg {...base(p)}><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
+  ),
+  RotateCw: (p: IP) => (
+    <svg {...base(p)}><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+  ),
+  StopCircle: (p: IP) => (
+    <svg {...base(p)}><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor"/></svg>
+  ),
+  Copy: (p: IP) => (
+    <svg {...base(p)}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+  ),
+  Wrench: (p: IP) => (
+    <svg {...base(p)}><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.5-2.5z"/></svg>
+  ),
+  Plug: (p: IP) => (
+    <svg {...base(p)}><path d="M9 2v6M15 2v6"/><path d="M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v4"/></svg>
+  ),
 };
 
 export type IconName = keyof typeof Icon;

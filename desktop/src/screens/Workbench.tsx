@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/icons";
+import { CodeEditor } from "../components/Editor";
+import { DiffViewer } from "../components/DiffViewer";
 
 /* File tree data — demo for Phase 1. Will wire to real project tree via API later. */
 type Node = { name: string; type: "file" | "dir"; children?: Node[]; ext?: string; status?: "M" | "A" | "D"; open?: boolean };
@@ -270,7 +272,15 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
         )}
 
         <div className="xr-editor-pane">
-          <CodeView content={activeTab?.content ?? ""} ext={activeTab?.ext}/>
+          {activeTab ? (
+            <CodeEditor value={activeTab.content ?? ""} ext={activeTab?.ext} onChange={(v) => {
+              setTabs(cur => cur.map(t => t.id === activeTab.id ? { ...t, content: v, dirty: true } : t));
+            }}/>
+          ) : (
+            <div className="xr-editor-placeholder">
+              <div>Open a file from the explorer to start editing.<br/><span className="xr-dim">Or tell XR what to do in the chat panel.</span></div>
+            </div>
+          )}
         </div>
 
         {/* Terminal */}
@@ -536,74 +546,74 @@ function PlanPanel({ onStart }: { onStart: () => void }) {
   );
 }
 
-/* Diffs tab */
+/* Diffs tab — per-hunk review powered by DiffViewer */
 function DiffsPanel() {
+  const [file, setFile] = useState(0);
+  const files = [
+    {
+      path: "src/core/agent.ts",
+      hunks: [
+        {
+          id: "h1",
+          context: "-57,7 +57,11",
+          removed: ["  async execute(task: string): Promise<Result> {", "    const plan = await this.planner.construct(task);", "    for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {"],
+          added: ["  async execute(task: string): Promise<Result> {", "    const plan = await this.planner.construct(task);", "    // XR proposes: exponential backoff with jitter", "    for (let attempt = 0; attempt < this.config.maxRetries; attempt++) {", "      const backoff = Math.min(1000 * 2 ** attempt, 30000);", "      const jitter = backoff * 0.2 * Math.random();"],
+        },
+        {
+          id: "h2",
+          context: "-66,7 +70,7",
+          removed: ["      } catch (err) {", "        await sleep(1000);", "      }"],
+          added: ["      } catch (err) {", "        await sleep(backoff + jitter);", "      }"],
+        },
+      ],
+    },
+    {
+      path: "src/utils/sleep.ts",
+      hunks: [
+        {
+          id: "h3",
+          context: "+1,0",
+          removed: [],
+          added: [
+            "export async function sleep(ms: number, signal?: AbortSignal) {",
+            "  return new Promise((resolve, reject) => {",
+            "    const t = setTimeout(resolve, ms);",
+            "    signal?.addEventListener('abort', () => {",
+            "      clearTimeout(t);",
+            "      reject(new Error('Cancelled'));",
+            "    });",
+            "  });",
+            "}",
+          ],
+        },
+      ],
+    },
+  ];
+  const cur = files[file];
+
   return (
-    <div className="xr-diffs">
-      <div style={{ fontSize: 12, color: "var(--xr-text-dim)", marginBottom: 12 }}>
-        XR modified <b style={{ color: "var(--xr-text)" }}>2 files</b>. Review per hunk; accept ✓ or reject ✕.
+    <div className="xr-diffs" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--xr-border)", fontSize: 12, display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ color: "var(--xr-text-dim)" }}>XR modified <b style={{ color: "var(--xr-text)" }}>{files.length} files</b></span>
+        <span className="xr-pill xr-pill--low">review per hunk</span>
+        <div style={{ flex: 1 }}/>
+        <select className="xr-input" style={{ width: "auto", padding: "4px 8px", fontSize: 12 }} value={file} onChange={e => setFile(Number(e.target.value))}>
+          {files.map((f, i) => <option key={i} value={i}>{f.path}</option>)}
+        </select>
       </div>
-      <div className="xr-diff-file">
-        <div className="xr-diff-file-header">
-          <Icon.File width={13} height={13} style={{ color: "#3178C6" }}/>
-          <span>src/core/agent.ts</span>
-          <div className="stats">
-            <span className="add">+8</span>
-            <span className="del">-2</span>
-          </div>
-        </div>
-        <div className="xr-hunk">
-          <div className="hunk-actions">
-            <button className="accept" title="Accept hunk">✓</button>
-            <button className="reject" title="Reject hunk">✕</button>
-          </div>
-          <div className="hunk-code">
-            <span className="ctx-line">  async execute(task: string): Promise&lt;Result&gt; {"{"}</span>
-            <span className="ctx-line">    const plan = await this.planner.construct(task);</span>
-            <span className="del-line">-   for (let attempt = 0; attempt &lt; this.config.maxRetries; attempt++) {"{"}</span>
-            <span className="add-line">+   // XR proposes: exponential backoff with jitter</span>
-            <span className="add-line">+   for (let attempt = 0; attempt &lt; this.config.maxRetries; attempt++) {"{"}</span>
-            <span className="add-line">+     const backoff = Math.min(1000 * 2 ** attempt, 30000);</span>
-            <span className="add-line">+     const jitter = backoff * 0.2 * Math.random();</span>
-            <span className="ctx-line">      try {"{"}</span>
-            <span className="ctx-line">        return await this.runner.run(plan, task);</span>
-            <span className="ctx-line">      {"}"} catch (err) {"{"}</span>
-            <span className="del-line">-       await sleep(1000);</span>
-            <span className="add-line">+       await sleep(backoff + jitter);</span>
-            <span className="ctx-line">      {"}"}</span>
-          </div>
+      <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, overflow: "hidden" }}>
+          <DiffViewer
+            path={cur.path}
+            hunks={cur.hunks}
+            onReject={(id) => console.log("reject", id)}
+            onAcceptAll={() => console.log("accept all", cur.path)}
+          />
         </div>
       </div>
-      <div className="xr-diff-file">
-        <div className="xr-diff-file-header">
-          <Icon.File width={13} height={13} style={{ color: "#3178C6" }}/>
-          <span>src/utils/retry.ts <span className="xr-pill xr-pill--green" style={{ marginLeft: 6 }}>new file</span></span>
-          <div className="stats">
-            <span className="add">+14</span>
-            <span className="del">-0</span>
-          </div>
-        </div>
-        <div className="xr-hunk">
-          <div className="hunk-actions">
-            <button className="accept">✓</button>
-            <button className="reject">✕</button>
-          </div>
-          <div className="hunk-code">
-            <span className="add-line">+ export async function sleep(ms: number, signal?: AbortSignal) {"{"}</span>
-            <span className="add-line">+   return new Promise((resolve, reject) =&gt; {"{"}</span>
-            <span className="add-line">+     const t = setTimeout(resolve, ms);</span>
-            <span className="add-line">+     signal?.addEventListener("abort", () =&gt; {"{"}</span>
-            <span className="add-line">+       clearTimeout(t);</span>
-            <span className="add-line">+       reject(new Error("Cancelled"));</span>
-            <span className="add-line">+     {"}"});</span>
-            <span className="add-line">+   {"};"}</span>
-            <span className="add-line">+ {"}"}</span>
-          </div>
-        </div>
-      </div>
-      <div className="xr-diff-actions">
-        <button className="xr-btn xr-btn--primary xr-btn--sm">Accept all</button>
-        <button className="xr-btn xr-btn--secondary xr-btn--sm">Reject all</button>
+      <div style={{ padding: "10px 14px", borderTop: "1px solid var(--xr-border)", display: "flex", gap: 8 }}>
+        <button className="xr-btn xr-btn--primary xr-btn--sm"><Icon.Check width={12} height={12}/> Accept all & save</button>
+        <button className="xr-btn xr-btn--secondary xr-btn--sm"><Icon.GitBranch width={12} height={12}/> Commit</button>
         <button className="xr-btn xr-btn--ghost xr-btn--sm" style={{ marginLeft: "auto" }}>Edit manually</button>
       </div>
     </div>

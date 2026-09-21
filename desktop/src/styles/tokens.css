@@ -136,3 +136,45 @@ code, pre, .mono { font-family: var(--xr-font-mono); }
 
 /* Lazy fallback */
 .lazy-fb { padding: 24px; color: var(--xr-muted); font-size: 12px; }
+
+/* ========== VOID MINIMAL — ultra-low-contrast dark, no chrome glows, no gradients, quiet ========== */
+:root[data-theme="void"] {
+  --xr-bg: #0A0A0B;
+  --xr-bg-2: #0F0F10;
+  --xr-surface: #131314;
+  --xr-surface-2: #18181A;
+  --xr-surface-3: #1E1E21;
+  --xr-border: #222224;
+  --xr-border-2: #2A2A2D;
+  --xr-text: #C8C9CC;
+  --xr-text-dim: #8A8C92;
+  --xr-dim: #5C5E65;
+  --xr-muted: #3E3F45;
+  --xr-primary: #9CA0A8;
+  --xr-primary-2: #7E838C;
+  --xr-on-primary: #0A0A0B;
+  --xr-secondary: #8A8C92;
+  --xr-success: #7CA887;
+  --xr-warning: #C5A978;
+  --xr-error: #B46A70;
+  --xr-glass: rgba(20,20,22,0.7);
+  --xr-glass-strong: rgba(16,16,18,0.9);
+  --xr-shadow-sm: 0 1px 2px rgba(0,0,0,0.25);
+  --xr-shadow-md: 0 4px 14px rgba(0,0,0,0.35);
+  --xr-shadow-lg: 0 16px 48px rgba(0,0,0,0.55);
+  --xr-gradient-brand: none;
+  --xr-gradient-hero: none;
+  --xr-gradient-cyan-glow: none;
+  --xr-skyline-stroke: #222224;
+  --xr-dot-glow: none;
+}
+:root[data-theme="void"] .xr-titlebar { background: var(--xr-bg); border-bottom: 1px solid var(--xr-border); }
+:root[data-theme="void"] .xr-rail { background: var(--xr-bg); border-right: 1px solid var(--xr-border); }
+:root[data-theme="void"] .xr-statusbar { background: var(--xr-bg-2); color: var(--xr-text-dim); border-top: 1px solid var(--xr-border); --xr-status-dot-success: #7CA887; --xr-status-dot-warning: #C5A978; --xr-status-dot-error: #B46A70; --xr-status-dot-info: #9CA0A8; }
+:root[data-theme="void"] .xr-btn--primary { background: var(--xr-text); color: var(--xr-bg); border-color: var(--xr-text); }
+:root[data-theme="void"] .xr-btn--primary:hover { background: #E4E5E8; }
+:root[data-theme="void"] .xr-nav-rail [aria-current="page"] { background: transparent; color: var(--xr-text); border-left: 2px solid var(--xr-text); }
+:root[data-theme="void"] .xr-tab[aria-selected="true"] { color: var(--xr-text); border-bottom-color: var(--xr-text); }
+:root[data-theme="void"] .xr-status-dot { box-shadow: none; }
+:root[data-theme="void"] .xr-home-hero { background: none; border-bottom: 1px solid var(--xr-border); }
+:root[data-theme="void"] .xr-home-hero .brand-orb { filter: grayscale(0.6) contrast(0.9); opacity: 0.7; }

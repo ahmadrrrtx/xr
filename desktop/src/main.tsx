@@ -9,6 +9,13 @@ import { CheatSheet } from "./components/CheatSheet";
 import { Home } from "./screens/Home";
 const Workbench = lazy(() => import("./screens/Workbench").then(m => ({ default: m.Workbench })));
 const Placeholder = lazy(() => import("./screens/Placeholder").then(m => ({ default: m.Placeholder })));
+const Trust = lazy(() => import("./screens/Trust").then(m => ({ default: m.Trust })));
+const Runs = lazy(() => import("./screens/Runs").then(m => ({ default: m.Runs })));
+const Research = lazy(() => import("./screens/Research").then(m => ({ default: m.Research })));
+const Agents = lazy(() => import("./screens/Agents").then(m => ({ default: m.Agents })));
+const Diagnostics = lazy(() => import("./screens/Diagnostics").then(m => ({ default: m.Diagnostics })));
+const ModelCenter = lazy(() => import("./screens/ModelCenter").then(m => ({ default: m.ModelCenter })));
+import { Settings } from "./screens/Settings";
 
 import "./styles/fonts.css";
 import "./styles/tokens.css";
@@ -104,15 +111,16 @@ function App() {
         )}
         {area === "builder" && <Placeholder title="Builder" subtitle="Live preview + code split — ships in Phase 2 (screen 03b)." comingSoon/>}
         {area === "projects" && <Placeholder title="Projects" subtitle="Recent projects / open folder. Browse below in Phase 1 final polish." comingSoon/>}
-        {area === "research" && <Placeholder title="Research" subtitle="Sources, notes, citations, findings. Coming Phase 2." comingSoon/>}
-        {area === "agents" && <Placeholder title="Agents" subtitle="Team runs, skills, MCP, plugins. Coming Phase 3." comingSoon/>}
-        {area === "trust" && <Placeholder title="Trust Center" subtitle="Overview · Approvals · Policy · Budget · Audit · Network · Advanced. Coming Phase 2." comingSoon/>}
+        {area === "research" && <Research/>}
+        {area === "agents" && <Agents/>}
+        {area === "trust" && <Trust/>}
         {area === "voice" && <Placeholder title="Voice" subtitle="Push-to-talk voice mode. Coming Phase 3." comingSoon/>}
-        {area === "settings" && <Placeholder title="Settings" subtitle="General, Appearance, Models, Workspace, Agents, Trust… Coming Phase 3." comingSoon/>}
+        {area === "settings" && <Settings/>}
         {area === "memory" && <Placeholder title="Memory" subtitle="What XR remembers. Coming Phase 3." comingSoon/>}
-        {area === "models" && <Placeholder title="Models & Providers" subtitle="26 providers — coming Phase 2." comingSoon/>}
+        {area === "models" && <ModelCenter/>}
         {area === "control" && <Placeholder title="Computer Control" subtitle="Coming Phase 3." comingSoon/>}
-        {area === "runs" && <Placeholder title="Runs" subtitle="History and run detail. Coming Phase 2." comingSoon/>}
+        {area === "runs" && <Runs/>}
+        {area === "diagnostics" && <Diagnostics/>}
         {area === "library" && <Placeholder title="Skills Library" subtitle="65 skills. Coming Phase 3." comingSoon/>}
       </Suspense>
 
