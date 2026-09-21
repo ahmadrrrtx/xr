@@ -46,6 +46,30 @@ function fmtAgo(ts: number) {
 }
 function costStr(c?: number) { return c == null ? "—" : `$${c.toFixed(2)}`; }
 
+function exportRun(r: Run | undefined, fmt: "md" | "json") {
+  if (!r) return;
+  const md = `# Run: ${r.title}
+
+- **ID**: ${r.id}
+- **Status**: ${r.status}
+- **Kind**: ${r.kind}
+- **Model**: ${r.model}
+- **Started**: ${new Date(r.startedAt).toISOString()}
+- **Duration**: ${r.durationMs ? fmtDuration(r.durationMs) : "—"}
+- **Cost**: ${costStr(r.cost)}
+
+## Summary
+${r.steps?.current ?? (r.error ? r.error.title : "Completed.")}
+${r.error ? `\n## Error\n**${r.error.title}**\n\n${r.error.fix}\n` : ""}
+`;
+  const body = fmt === "md" ? md : JSON.stringify(r, null, 2);
+  const blob = new Blob([body], { type: fmt === "md" ? "text/markdown" : "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `${r.id}.${fmt}`; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+
 export function Runs() {
   const [filter, setFilter] = useState<"all"|RunStatus|"failed">("all");
   const [kind, setKind] = useState<"all"|Run["kind"]>("all");
@@ -66,7 +90,8 @@ export function Runs() {
           <p className="xr-subtitle">Every task XR has started for you — what it did, what it cost, and whether it worked.</p>
         </div>
         <div className="xr-page-head-actions">
-          <button className="xr-btn xr-btn--ghost xr-btn--sm">Export CSV</button>
+          <button className="xr-btn xr-btn--ghost xr-btn--sm" onClick={() => exportRun(selected, "json")}><Icon.Download width={12} height={12}/> Export .json</button>
+          <button className="xr-btn xr-btn--primary xr-btn--sm" onClick={() => exportRun(selected, "md")}><Icon.Download width={12} height={12}/> Export summary .md</button>
         </div>
       </div>
 

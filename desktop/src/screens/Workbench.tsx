@@ -3,6 +3,8 @@ import { Icon } from "../components/icons";
 import { CodeEditor } from "../components/Editor";
 import { DiffViewer } from "../components/DiffViewer";
 import { ResizeHandle, useResizer } from "../components/Resizer";
+import { ContextMenu, type CtxState } from "../components/ContextMenu";
+import { pushToast } from "../components/ToastBus";
 
 /* File tree data — demo for Phase 1. Will wire to real project tree via API later. */
 type Node = { name: string; type: "file" | "dir"; children?: Node[]; ext?: string; status?: "M" | "A" | "D"; open?: boolean };
@@ -121,6 +123,7 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [chatOpen, setChatOpen] = useState(defaultChatOpen);
+  const [ctx, setCtx] = useState<CtxState | null>(null);
   const chatRef = useRef<HTMLDivElement>(null);
 
   // Resizable panels
@@ -223,6 +226,14 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
         className={`xr-tree-node ${activeTab?.id === path ? "active" : ""}`}
         style={{ paddingLeft: 8 + depth * 12 + 20 }}
         onClick={() => openFile(path, n)}
+        onContextMenu={(e) => { e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY, items: [
+          { label: "Open", run: () => openFile(path, n) },
+          { label: "Open to the side", run: () => pushToast("info","Open side","Opening in split") },
+          { label: "Reveal in Finder", run: () => pushToast("info","Revealed",path) },
+          { label: "Copy path", run: () => { navigator.clipboard?.writeText(path); pushToast("ok","Copied",path); } },
+          { label: "Rename", run: () => pushToast("info","Rename","Ready to rename") },
+          { label: "Delete", danger: true, run: () => pushToast("warn","Deleted",path) },
+        ]}); }}
         title={path}>
         <Icon.File width={14} height={14} className="ic" style={{ color: extColor(n.ext) }}/>
         <span className="name">{n.name}</span>
@@ -448,6 +459,7 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
           <DiffsPanel/>
         )}
       </div>
+      {ctx && <ContextMenu state={ctx} onClose={() => setCtx(null)}/>}
     </>
   );
 }

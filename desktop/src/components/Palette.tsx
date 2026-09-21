@@ -8,7 +8,7 @@ type Item = {
   label: string;
   hint?: string;
   kbd?: string;
-  group: "Go to" | "Actions" | "Skills";
+  group: "Go to" | "Actions" | "Skills" | "Models" | "MCP" | "Files";
   icon?: React.ReactNode;
   action: () => void;
 };
@@ -28,6 +28,11 @@ export function Palette({ onClose, onArea }: { onClose: () => void; onArea: (a: 
       { id: "agents", label: "Go to Agents", kbd: "⌘6", group: "Go to", icon: <Icon.Bot width={14} height={14}/>, action: () => onArea("agents") },
       { id: "trust", label: "Go to Trust Center", kbd: "⌘7", group: "Go to", icon: <Icon.Shield width={14} height={14}/>, action: () => onArea("trust") },
       { id: "voice", label: "Go to Voice", kbd: "⌘8", group: "Go to", icon: <Icon.Mic width={14} height={14}/>, action: () => onArea("voice") },
+      { id: "runs", label: "Go to Runs", group: "Go to", icon: <Icon.History width={14} height={14}/>, action: () => onArea("runs") },
+      { id: "library", label: "Go to Library", group: "Go to", icon: <Icon.Layers width={14} height={14}/>, action: () => onArea("library") },
+      { id: "models", label: "Go to Model Center", group: "Go to", icon: <Icon.Cpu width={14} height={14}/>, action: () => onArea("models") },
+      { id: "memory", label: "Go to Memory", group: "Go to", icon: <Icon.Bookmark width={14} height={14}/>, action: () => onArea("memory") },
+      { id: "diag", label: "Go to Diagnostics", group: "Go to", icon: <Icon.AlertTriangle width={14} height={14}/>, action: () => onArea("diagnostics") },
       { id: "settings", label: "Go to Settings", kbd: "⌘,", group: "Go to", icon: <Icon.Settings width={14} height={14}/>, action: () => onArea("settings") },
     ];
     const actions: Item[] = [
@@ -44,11 +49,33 @@ export function Palette({ onClose, onArea }: { onClose: () => void; onArea: (a: 
       { id: "toggle-terminal", label: "Toggle terminal", kbd: "⌘J", group: "Actions", icon: <Icon.Terminal width={14} height={14}/>, action: () => pushToast("info", "Terminal", "toggled") },
     ];
     const skills: Item[] = [
-      { id: "s-code", label: "Skill: Edit code", group: "Skills", icon: <Icon.Code width={14} height={14}/>, action: () => { onArea("workbench"); } },
-      { id: "s-research", label: "Skill: Academic research", group: "Skills", icon: <Icon.Book width={14} height={14}/>, action: () => { onArea("research"); } },
-      { id: "s-build", label: "Skill: Build website", group: "Skills", icon: <Icon.Bolt width={14} height={14}/>, action: () => { onArea("builder"); } },
+      { id: "s-code", label: "Skill: Write code", hint: "Code", group: "Skills", icon: <Icon.Bolt width={14} height={14}/>, action: () => { onArea("workbench"); pushToast("ok","Skill selected","Write code"); } },
+      { id: "s-research", label: "Skill: Deep research", hint: "Research", group: "Skills", icon: <Icon.Book width={14} height={14}/>, action: () => onArea("research") },
+      { id: "s-web", label: "Skill: Web search + summarize", hint: "Web", group: "Skills", icon: <Icon.Search width={14} height={14}/>, action: () => { onArea("workbench"); pushToast("ok","Skill selected","Web search"); } },
+      { id: "s-fix", label: "Skill: Fix errors", hint: "Code", group: "Skills", icon: <Icon.Wrench width={14} height={14}/>, action: () => { onArea("workbench"); pushToast("ok","Skill selected","Fix errors"); } },
+      { id: "s-tests", label: "Skill: Write tests", hint: "Code", group: "Skills", icon: <Icon.Check width={14} height={14}/>, action: () => { onArea("workbench"); pushToast("ok","Skill selected","Write tests"); } },
+      { id: "s-review", label: "Skill: Review PR", hint: "Code", group: "Skills", icon: <Icon.GitBranch width={14} height={14}/>, action: () => { onArea("workbench"); pushToast("ok","Skill selected","Review PR"); } },
     ];
-    const all = [...nav, ...actions, ...skills];
+    const models: Item[] = [
+      { id: "m-opus", label: "Switch model: Claude Opus 4.6", hint: "cloud · reasoning", group: "Models", icon: <Icon.Cpu width={14} height={14}/>, action: () => pushToast("ok","Model switched","Claude Opus 4.6") },
+      { id: "m-sonnet", label: "Switch model: Claude Sonnet 4.6", hint: "cloud · balanced", group: "Models", icon: <Icon.Cpu width={14} height={14}/>, action: () => pushToast("ok","Model switched","Claude Sonnet 4.6") },
+      { id: "m-gpt5", label: "Switch model: GPT-5", hint: "cloud · default", group: "Models", icon: <Icon.Cpu width={14} height={14}/>, action: () => pushToast("ok","Model switched","GPT-5") },
+      { id: "m-o3", label: "Switch model: O3-Mini", hint: "cloud · fast", group: "Models", icon: <Icon.Cpu width={14} height={14}/>, action: () => pushToast("ok","Model switched","O3-Mini") },
+      { id: "m-llama", label: "Switch model: Llama 4 70B (local)", hint: "local · Ollama", group: "Models", icon: <Icon.Cpu width={14} height={14}/>, action: () => pushToast("ok","Model switched","Llama 4 70B") },
+    ];
+    const mcp: Item[] = [
+      { id: "mcp-github", label: "MCP: github · 24 tools", hint: "connected", group: "MCP", icon: <Icon.GitBranch width={14} height={14}/>, action: () => onArea("library") },
+      { id: "mcp-fs", label: "MCP: filesystem · 6 tools", hint: "connected", group: "MCP", icon: <Icon.Folder width={14} height={14}/>, action: () => onArea("library") },
+      { id: "mcp-pg", label: "MCP: postgres · drift", hint: "needs review", group: "MCP", icon: <Icon.Database width={14} height={14}/>, action: () => onArea("library") },
+      { id: "mcp-connect", label: "Connect new MCP server…", group: "MCP", icon: <Icon.Plus width={14} height={14}/>, action: () => onArea("library") },
+    ];
+    const files: Item[] = [
+      { id: "f-app", label: "Open AppShell.tsx", hint: "src/components", group: "Files", icon: <Icon.File width={14} height={14}/>, action: () => onArea("workbench") },
+      { id: "f-wb", label: "Open Workbench.tsx", hint: "src/screens", group: "Files", icon: <Icon.File width={14} height={14}/>, action: () => onArea("workbench") },
+      { id: "f-css", label: "Open app.css", hint: "src/styles", group: "Files", icon: <Icon.File width={14} height={14}/>, action: () => onArea("workbench") },
+      { id: "f-lib", label: "Open Library.tsx", hint: "src/screens", group: "Files", icon: <Icon.File width={14} height={14}/>, action: () => onArea("library") },
+    ];
+    const all = [...nav, ...actions, ...skills, ...models, ...mcp, ...files];
     if (!q.trim()) return all;
     const t = q.toLowerCase();
     return all.filter(i => i.label.toLowerCase().includes(t) || i.id.toLowerCase().includes(t));

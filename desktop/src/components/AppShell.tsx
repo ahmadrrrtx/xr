@@ -152,6 +152,12 @@ export function AppShell(props: AppShellProps) {
         </div>
         <div className="rail-spacer"/>
         <div className="rail-bottom">
+          <button className="rail-btn" onClick={() => onArea("library")} aria-current={area === "library" ? "page" : undefined} title="Library (Skills / MCP / Plugins)">
+            <Icon.Layers width={20} height={20}/>
+          </button>
+          <button className="rail-btn" onClick={() => onArea("memory")} aria-current={area === "memory" ? "page" : undefined} title="Memory">
+            <Icon.Bookmark width={20} height={20}/>
+          </button>
           <button className="rail-btn" onClick={() => onArea("runs")} aria-current={area === "runs" ? "page" : undefined} title="Runs history">
             <Icon.History width={20} height={20}/>
           </button>
@@ -190,6 +196,13 @@ export function AppShell(props: AppShellProps) {
           <span className="item"><Icon.Mic width={12} height={12}/> Voice: {voiceState}</span>
         )}
         <span className="right">
+          <span className="item xr-sb-budget" title="Today's spend / monthly cap (click to open Trust Center)" onClick={() => onArea("trust")} style={{ cursor: "pointer" }}>
+            <Icon.Wallet width={11} height={11}/>
+            <span className="mono" style={{ fontSize: 11 }}>$0.42</span>
+            <span style={{ opacity: 0.55 }}>/</span>
+            <span className="mono" style={{ fontSize: 11, opacity: 0.75 }}>$25</span>
+            <span className="xr-sb-budget-bar"><span style={{ width: "1.7%" }}/></span>
+          </span>
           <span className="item"><span style={{ opacity: 0.7 }}>UTF-8</span></span>
           <span className="item"><span style={{ opacity: 0.7 }}>LF</span></span>
           <span className="item"><span style={{ opacity: 0.7 }}>TypeScript</span></span>
