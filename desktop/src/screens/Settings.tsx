@@ -132,14 +132,14 @@ export function Settings({ onOnboard }: { onOnboard?: () => void }) {
             <div className="kv2">
               <span className="k">theme</span>
               <span className="seg" role="radiogroup" aria-label="Theme">
-                {(["dark", "light", "system"] as const).map((t) => (
+                {(["dark", "light", "void", "system"] as const).map((t) => (
                   <button
                     key={t}
                     role="radio"
                     aria-checked={themeChoice === t}
                     className={`segbtn ${themeChoice === t ? "on" : ""}`}
                     onClick={() => { setTheme(t); setThemeChoice(t); setNote(`theme: ${t}${t === "system" ? ` (following OS → ${isLightActive() ? "light" : "dark"})` : ""}`); }}
-                  >{t}</button>
+                  >{t === "void" ? "void (minimal)" : t}</button>
                 ))}
               </span>
               <span className="k">density</span>

@@ -1,274 +1,83 @@
-import { useCallback, useEffect, useState } from "react";
-import { api } from "../api/client";
+import { useState } from "react";
+import { Icon } from "../components/icons";
+import { StatusDot } from "../components/StatusDot";
 
-/* Phase 4 · Model Center — ONE unambiguous view of local runtimes (live
- * probe), cloud BYOK connect, default+fallback pair, capability table.
- * Every number/state below is engine-reported (/models, /providers,
- * /providers/capabilities); keys are written ONLY through the engine's
- * onboarding provider route (secret store) and never touch shell state.
- */
-
-type Runtime = {
-  id: string; providerId?: string; label?: string; installed?: boolean;
-  running?: boolean; healthy?: boolean; models?: string[]; detail?: string;
-};
-type ProviderRow = {
-  id: string; label?: string; kind?: string; tier?: string; hasKey?: boolean;
-  authOk?: boolean; healthy?: boolean; latencyMs?: number | null;
-  capabilities?: Record<string, unknown>; defaultModel?: string;
-};
-type ProvidersView = {
-  primary?: string; model?: string; fallback?: string | null; fallbackModel?: string | null;
-  providers?: ProviderRow[];
-};
-type ModelsView = {
-  selected?: { runtime?: string; model?: string; routing?: string; enabled?: boolean };
-  current?: Runtime | null;
-  hardware?: { summary?: string };
-  runtimes?: Runtime[];
-};
-type CapsView = {
-  capabilities?: Record<string, boolean>;
-  knownModels?: string[];
-  credential?: { required?: boolean; available?: boolean };
-  health?: { ok?: boolean; latencyMs?: number | null; authOk?: boolean } | null;
-};
-
-const CLOUD_IDS = ["openai", "anthropic", "openrouter", "groq", "gemini", "mistral"];
-
-function Check({ ok }: { ok?: boolean }) {
-  return ok ? (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--xr-green)" strokeWidth="2.4" aria-label="yes"><path d="M4 12.5l5 5L20 7" /></svg>
-  ) : (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--xr-red)" strokeWidth="2.4" aria-label="no"><path d="M6 6l12 12M18 6L6 18" /></svg>
-  );
-}
+const MODELS = [
+  { provider: "Anthropic", name: "Claude Opus 4.6", ctx: "2M", speed: "Slow", quality: "Best", cost: "$$$$", status: "ok", default: false },
+  { provider: "Anthropic", name: "Claude Sonnet 4.6", ctx: "2M", speed: "Fast", quality: "Great", cost: "$$", status: "ok", default: true },
+  { provider: "Anthropic", name: "Claude Haiku 4.6", ctx: "200k", speed: "Very fast", quality: "Good", cost: "$", status: "ok", default: false },
+  { provider: "OpenAI", name: "GPT-5", ctx: "256k", speed: "Medium", quality: "Great", cost: "$$$", status: "ok", default: false },
+  { provider: "OpenAI", name: "GPT-5 mini", ctx: "128k", speed: "Very fast", quality: "Good", cost: "$", status: "ok", default: false },
+  { provider: "Google", name: "Gemini 2.5 Pro", ctx: "1M", speed: "Fast", quality: "Great", cost: "$", status: "ok", default: false },
+  { provider: "xAI", name: "Grok 4", ctx: "256k", speed: "Medium", quality: "Great", cost: "$$", status: "warn", default: false },
+  { provider: "Ollama", name: "Llama 3.3 70B", ctx: "128k", speed: "Slow", quality: "Good", cost: "free", status: "err", default: false },
+  { provider: "Ollama", name: "Qwen 2.5-Coder 32B", ctx: "128k", speed: "Medium", quality: "Good", cost: "free", status: "err", default: false },
+];
 
 export function ModelCenter() {
-  const [models, setModels] = useState<ModelsView | null>(null);
-  const [prov, setProv] = useState<ProvidersView | null>(null);
-  const [caps, setCaps] = useState<CapsView | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const [probeMs, setProbeMs] = useState<number | null | "busy">(null);
-  const [connectFor, setConnectFor] = useState<string | null>(null);
-  const [keyDraft, setKeyDraft] = useState("");
-  const [savingKey, setSavingKey] = useState(false);
-
-  const load = useCallback(() => {
-    api.models().then((m) => setModels(m as ModelsView)).catch(() => setModels({}));
-    api.providers().then((p) => {
-      const v = Array.isArray(p) ? { providers: p } : p;
-      setProv(v as ProvidersView);
-    }).catch(() => setProv({}));
-  }, []);
-  useEffect(load, [load]);
-
-  const selRuntime = models?.selected?.runtime ?? "ollama";
-  const selModel = models?.selected?.model ?? "";
-  const local = (models?.runtimes ?? []).find((r) => r.id === selRuntime) ?? models?.current ?? null;
-  const localRunning = Boolean(local?.running);
-  const cloudRows = (prov?.providers ?? []).filter((p) => p.kind !== "local" || CLOUD_IDS.includes(String(p.id)));
-  const fallbackId = prov?.fallback ?? null;
-  const fallbackRow = cloudRows.find((p) => p.id === fallbackId) ?? null;
-  const primaryIsLocal = Boolean(prov?.primary && (prov.primary === local?.providerId || String(prov.primary).startsWith("ollama") || String(prov.primary).startsWith("local")));
-
-  useEffect(() => {
-    const target = primaryIsLocal ? (local?.providerId ?? selRuntime) : (prov?.primary ?? selRuntime);
-    api.providersCapabilities(String(target)).then((c) => setCaps(c as CapsView)).catch(() => setCaps(null));
-  }, [prov?.primary, selRuntime, local?.providerId, primaryIsLocal]);
-
-  async function probe() {
-    if (!selModel) { setNote("select a local model first"); return; }
-    setProbeMs("busy");
-    try {
-      const r = await api.modelsTest(selRuntime, selModel) as { result?: { ok?: boolean; latencyMs?: number | null; detail?: string } };
-      const ms = r.result?.latencyMs ?? null;
-      setProbeMs(ms);
-      setNote(r.result?.ok ? `probe ok — ${ms ?? "?"} ms round-trip on ${selRuntime}` : `probe: ${r.result?.detail ?? "failed"}`);
-    } catch (e) {
-      setProbeMs(null);
-      setNote(`probe failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  async function selectModel(model: string) {
-    try {
-      await api.modelsSelect(selRuntime, model);
-      setNote(`selected ${selRuntime} · ${model} (engine persisted + audited)`);
-      load();
-    } catch (e) {
-      setNote(`select failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  async function testCloud(row: ProviderRow) {
-    try {
-      const fresh = (await api.providers()) as ProvidersView | ProviderRow[];
-      const rows = Array.isArray(fresh) ? fresh : (fresh.providers ?? []);
-      const f = rows.find((p) => p.id === row.id);
-      if (!f) { setNote(`${row.id}: not in engine provider list`); return; }
-      if (!f.hasKey) { setNote(`${row.id}: no key stored — connect first (key goes straight to the engine secret store)`); return; }
-      setNote(`${row.id}: ${f.healthy ? `reachable — ${f.latencyMs ?? "?"} ms, auth ok` : f.authOk ? "auth ok, health probe degraded" : `unreachable — ${String((f as { detail?: string }).detail ?? "check key/network")}`}`);
-    } catch (e) {
-      setNote(`test failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  async function saveKey(providerId: string) {
-    const key = keyDraft.trim();
-    if (!key) return;
-    setSavingKey(true);
-    try {
-      const r = await api.onboardingProvider({ providerId, apiKey: key }) as { ok?: boolean; error?: string };
-      setNote(r.ok === false ? `connect: ${r.error ?? "rejected"}` : `${providerId}: key stored in the engine secret store (never in the shell)`);
-      setKeyDraft("");
-      setConnectFor(null);
-      load();
-    } catch (e) {
-      setNote(`connect failed: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setSavingKey(false);
-    }
-  }
-
-  async function setDefault(row: ProviderRow) {
-    try {
-      const fb = localRunning ? { provider: String(local?.providerId ?? selRuntime), model: selModel } : undefined;
-      await api.providersSet(row.id, row.defaultModel, fb);
-      setNote(`default → ${row.id}${fb ? ` · fallback → local ${selRuntime}` : ""} (engine persisted + audited)`);
-      load();
-    } catch (e) {
-      setNote(`set default failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  async function makeLocalPrimary() {
-    if (!selModel) { setNote("select a local model first"); return; }
-    try {
-      await api.modelsSelect(selRuntime, selModel, "local-only");
-      setNote(`${selRuntime} · ${selModel} is now the primary route (engine persisted)`);
-      load();
-    } catch (e) {
-      setNote(`route change failed: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  const capRows: Array<[string, boolean | undefined]> = caps?.capabilities ? [
-    ["streaming", caps.capabilities.streaming],
-    ["tools", Boolean(caps.capabilities.toolCalling || caps.capabilities.functionCalling)],
-    ["vision", caps.capabilities.vision],
-    ["structured output", caps.capabilities.structuredOutput],
-    ["reasoning", caps.capabilities.reasoning],
-    ["embeddings", caps.capabilities.embeddings],
-  ] : [];
-
+  const [sel, setSel] = useState("Claude Sonnet 4.6");
   return (
-    <div className="mc">
-      <div className="section-h">
-        <h2>Models &amp; Providers</h2>
-        <span className="faint" style={{ fontSize: 12 }}>{models?.hardware?.summary ?? ""}</span>
-      </div>
-
-      {/* ONE unambiguous active-pair hero: local primary → cloud fallback */}
-      <div className="mc-hero">
-        <button className={`mc-hero-card ${localRunning ? "on" : ""}`} onClick={() => void makeLocalPrimary()}
-          title={localRunning ? "local runtime is the primary route — click to re-assert local-only routing" : "click to make the selected local model the primary route"}>
-          <div className="mc-hero-k faint">LOCAL {primaryIsLocal ? "· ACTIVE" : ""}</div>
-          <div className="mc-hero-v">{String(local?.label ?? selRuntime)} · {selModel || "no model selected"}</div>
-          <div className={`mc-hero-s ${localRunning ? "green" : "amber"}`}>
-            {localRunning ? "● RUNNING LOCALLY" : local?.installed ? "● installed — not running" : "● not installed"}
-          </div>
-        </button>
-        <span className="mc-arrow faint" aria-hidden="true">→</span>
-        <div className="mc-hero-card">
-          <div className="mc-hero-k faint">CLOUD FALLBACK {prov?.primary && !primaryIsLocal ? "· ACTIVE" : ""}</div>
-          <div className="mc-hero-v">{fallbackRow?.label ?? prov?.fallback ?? prov?.primary ?? "none"}</div>
-          <div className="mc-hero-s faint">● {fallbackRow ? (fallbackRow.hasKey ? "ready if local fails" : "needs a key") : "configure a provider"}</div>
+    <div className="xr-page">
+      <div className="xr-page-head">
+        <div><h1>Models & Providers</h1><p className="xr-subtitle">Choose the default model and configure providers.</p></div>
+        <div className="xr-page-head-actions">
+          <button className="xr-btn xr-btn--sm xr-btn--ghost"><Icon.Plus width={13} height={13}/> Add provider</button>
         </div>
       </div>
 
-      {note && <p className="ob-note mono">{note}</p>}
-
-      <div className="mc-cols">
-        <div className="mc-col">
-          <div className="card prov mc-card">
-            <div className="mc-card-h">
-              <b>{String(local?.label ?? selRuntime)}</b>
-              <span className="spacer" />
-              <button className="chipbtn" onClick={() => void probe()} disabled={probeMs === "busy"}>{probeMs === "busy" ? "probing…" : "probe"}</button>
-              {typeof probeMs === "number" && <span className="chip green tiny">{probeMs}ms</span>}
-              {probeMs === null && local?.healthy && <span className="chip green tiny">healthy</span>}
-              {probeMs !== "busy" && probeMs === null && !local?.healthy && <span className="chip amber tiny">not running</span>}
+      <div style={{ padding: "0 24px", display: "grid", gridTemplateColumns: "1fr 380px", gap: 20 }}>
+        <div>
+          <div className="xr-section-header"><h3>Available models</h3>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button className="xr-filter-chip" aria-pressed="true">All</button>
+              <button className="xr-filter-chip" aria-pressed="false">Cloud</button>
+              <button className="xr-filter-chip" aria-pressed="false">Local</button>
             </div>
-            <div className="mc-sub faint">Available models ({(local?.models ?? []).length})</div>
-            <div className="mc-models">
-              {(local?.models ?? []).length === 0 && <div className="faint" style={{ fontSize: 12 }}>no models detected for this runtime — {String(local?.detail ?? "install one with your runtime's CLI")}</div>}
-              {(local?.models ?? []).map((m) => (
-                <button key={m} className={`mc-model ${m === selModel ? "on" : ""}`} onClick={() => void selectModel(m)}>
-                  {String(local?.label ?? selRuntime)} · {m}
-                  {m === selModel && <span className="chip green tiny">selected</span>}
-                </button>
+          </div>
+          <table className="xr-table">
+            <thead><tr><th/><th>Model</th><th>Provider</th><th>Context</th><th>Speed</th><th>Quality</th><th>Cost</th><th/></tr></thead>
+            <tbody>
+              {MODELS.map(m => (
+                <tr key={m.name} className={sel === m.name ? "selected" : ""} onClick={() => setSel(m.name)}>
+                  <td><StatusDot kind={m.status === "ok" ? "ok" : m.status as any}/></td>
+                  <td>
+                    <div style={{ fontWeight: 500 }}>{m.name}{m.default && <span className="xr-pill xr-pill--low" style={{ marginLeft: 8 }}>Default</span>}</div>
+                  </td>
+                  <td className="faint">{m.provider}</td>
+                  <td className="mono">{m.ctx}</td>
+                  <td>{m.speed}</td>
+                  <td>{m.quality}</td>
+                  <td>{m.cost}</td>
+                  <td>{m.status !== "ok" && m.default !== true && <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={(e) => { e.stopPropagation(); }}>Fix</button>}</td>
+                </tr>
               ))}
-            </div>
-          </div>
-
-          <div className="card prov mc-card">
-            <div className="mc-card-h"><b>Capability</b><span className="spacer" /><span className="faint mono">{String(caps?.credential?.available ? "key stored" : "no key needed")}</span></div>
-            {capRows.length === 0 && <div className="faint" style={{ fontSize: 12 }}>no capability data from the engine yet.</div>}
-            {capRows.map(([name, ok]) => (
-              <div key={name} className="mc-caprow">
-                <span>{name}</span>
-                <Check ok={ok} />
-              </div>
-            ))}
-          </div>
+            </tbody>
+          </table>
         </div>
 
-        <div className="mc-col">
-          {cloudRows.map((row) => (
-            <div key={row.id} className="card prov mc-card">
-              <div className="mc-card-h">
-                <b>{row.label ?? row.id}</b>
-                <span className="spacer" />
-                <button className="chipbtn" onClick={() => void testCloud(row)}>
-                  Test{row.healthy ? " ✓" : ""}
-                </button>
-                <button className="chipbtn" onClick={() => void setDefault(row)}>Set default</button>
-                <span className={`chip tiny ${row.hasKey ? "green" : "amber"}`}>{row.hasKey ? "key stored" : "no key"}</span>
-              </div>
-              {prov?.primary === row.id && <div className="faint" style={{ fontSize: 11.5, marginTop: 4 }}>current default · model {prov.model ?? row.defaultModel ?? "—"}</div>}
-              {connectFor === row.id ? (
-                <div className="mc-connect">
-                  <input
-                    type="password"
-                    value={keyDraft}
-                    autoFocus
-                    placeholder={`paste ${row.id} key — sent once to the engine secret store`}
-                    aria-label={`API key for ${row.id}`}
-                    onChange={(e) => setKeyDraft(e.target.value)}
-                  />
-                  <button className="chipbtn" disabled={savingKey || !keyDraft.trim()} onClick={() => void saveKey(row.id)}>{savingKey ? "…" : "save"}</button>
-                  <button className="chipbtn" onClick={() => { setConnectFor(null); setKeyDraft(""); }}>cancel</button>
-                </div>
-              ) : (
-                <div className="mc-connect">
-                  <span className="mono faint" style={{ fontSize: 12 }}>{row.hasKey ? "•••• stored engine-side — the shell never sees keys" : "not connected"}</span>
-                  <span className="spacer" />
-                  <button className="chipbtn" onClick={() => { setConnectFor(row.id); setKeyDraft(""); }}>connect…</button>
-                </div>
-              )}
+        <div style={{ background: "var(--xr-surface)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-lg)", padding: 18, alignSelf: "start", height: "fit-content" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--xr-gradient-brand)", display: "grid", placeItems: "center", color: "#000", fontWeight: 700 }}>AI</div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{sel}</div>
+              <div className="xr-dim" style={{ fontSize: 11.5 }}>{MODELS.find(m => m.name === sel)?.provider}</div>
             </div>
-          ))}
+          </div>
+          <div className="xr-policy-row" style={{ padding: "10px 0", background: "transparent", border: "none" }}>
+            <div style={{ flex: 1 }}><div className="xr-policy-label">Set as default</div></div>
+            <label className="xr-toggle"><input type="checkbox" defaultChecked={MODELS.find(m => m.name === sel)?.default}/><span/></label>
+          </div>
+          <div className="xr-policy-row" style={{ padding: "10px 0", background: "transparent", border: "none" }}>
+            <div style={{ flex: 1 }}><div className="xr-policy-label">Use for planning</div></div>
+            <label className="xr-toggle"><input type="checkbox" defaultChecked/><span/></label>
+          </div>
+          <div className="xr-policy-row" style={{ padding: "10px 0", background: "transparent", border: "none" }}>
+            <div style={{ flex: 1 }}><div className="xr-policy-label">Use for code edits</div></div>
+            <label className="xr-toggle"><input type="checkbox" defaultChecked/><span/></label>
+          </div>
+          <button className="xr-btn xr-btn--primary" style={{ width: "100%", marginTop: 8 }}>Save preferences</button>
         </div>
       </div>
-
-      {!localRunning && (
-        <div className="mc-banner">
-          <span>⚠ No local model running — cloud fallback will be used</span>
-          <span className="spacer" />
-          <button className="chipbtn" onClick={() => void probe()} title="probe the selected local runtime">probe local</button>
-        </div>
-      )}
     </div>
   );
 }

@@ -13,7 +13,7 @@
  * decision.
  */
 
-export type Theme = "dark" | "light" | "system";
+export type Theme = "dark" | "light" | "void" | "system";
 /** Alias used by Settings, where the name should read as a user choice. */
 export type ThemePref = Theme;
 export type Density = "compact" | "comfortable" | "spacious";
@@ -48,13 +48,13 @@ function write(key: string, value: string): void {
  */
 export function getTheme(): Theme {
   const v = read(THEME_KEY);
-  return v === "dark" || v === "light" || v === "system" ? v : "dark";
+  return v === "dark" || v === "light" || v === "void" || v === "system" ? v : "dark";
 }
 
 /** True until the user has expressed a theme choice (onboarding/Settings). */
 export function hasThemeChoice(): boolean {
   const v = read(THEME_KEY);
-  return v === "dark" || v === "light" || v === "system";
+  return v === "dark" || v === "light" || v === "void" || v === "system";
 }
 
 export function setTheme(t: Theme): void {
@@ -75,7 +75,7 @@ export function setDensity(d: Density): void {
 export function isLightActive(): boolean {
   const t = getTheme();
   if (t === "light") return true;
-  if (t === "dark") return false;
+  if (t === "dark" || t === "void") return false;
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches === true;
 }
 
@@ -96,11 +96,14 @@ export function isLightActive(): boolean {
  */
 export function applyTheme(t: Theme = getTheme()): void {
   const root = document.documentElement;
-  const light = t === "light" || (t === "system" && typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches === true);
-  root.setAttribute("data-theme", light ? "light" : "dark");
+  const resolved =
+    t === "void" ? "void" :
+    t === "light" ? "light" :
+    t === "dark" ? "dark" :
+    (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches === true ? "light" : "dark");
+  root.setAttribute("data-theme", resolved);
   root.setAttribute("data-theme-pref", t);
-  root.style.colorScheme = light ? "light" : "dark";
-  // Keep the meta in sync for hosts that read it before CSS loads.
+  root.style.colorScheme = resolved === "light" ? "light" : "dark";
   const meta = document.querySelector('meta[name="color-scheme"]');
   if (meta) meta.setAttribute("content", root.style.colorScheme);
 }

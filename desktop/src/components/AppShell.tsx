@@ -1,417 +1,221 @@
-import { memo, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { getLocale, subscribeLocale, t } from "../i18n";
-import { XrLogo, XrAvatar } from "./Brand";
-import { Icon, type IconName } from "./icons";
-import { AREA_LABELS } from "../commands/registry";
-import { api, asList, type ProviderInfo, type SessionSummary, type SkillInfo } from "../api/client";
-import { notify } from "../notify";
-import { StatusDot, providerLabel, type DotState } from "./StatusDot";
-import { notificationsEnabled } from "../prefs";
-import { engineLinkReason, engineLinkSnapshot, nativeNotifyApproval } from "../tauri-bridge";
-import { poll } from "../poll";
+import { useEffect, useState, type ReactNode } from "react";
+import { Icon } from "./icons";
+import { StatusDot } from "./StatusDot";
 
-export type Area = "home" | "projects" | "work" | "workspace" | "research" | "memory" | "models" | "control" | "agents" | "library" | "trust" | "runs" | "settings" | "voice";
+export type Area =
+  | "home"
+  | "workbench"
+  | "builder"
+  | "projects"
+  | "research"
+  | "agents"
+  | "trust"
+  | "voice"
+  | "settings"
+  | "memory"
+  | "models"
+  | "control"
+  | "runs"
+  | "diagnostics"
+  | "library";
 
-/* Phase 2 · F-6 — consolidated rail.
- *
- * BEFORE: 13 rail areas + settings. The IA (docs/xr-rebuild §1) names five
- * work areas plus secondary surfaces; research/models/memory/control were
- * rail peers of Work itself, fragmenting the mental model.
- *
- * AFTER: seven rail destinations. The folded surfaces stay fully reachable:
- *   · Research  → Library tab + palette
- *   · Models    → Library → Integrations + palette
- *   · Memory    → Work inspector tab + palette
- *   · Control   → Trust Center cockpit + palette
- *   · Projects  → palette + workspace switcher
- *   · Voice     → presence (statusbar + presence orb), not a nav area
- * The palette's AREA_LABELS keeps every one of them one ⌘K away.
- * Icons come from the v1 icon module (F-5): one grid, one stroke weight. */
-const NAV: { id: Area; label: string; icon: IconName }[] = [
-  { id: "home", label: "Home", icon: "home" },
-  { id: "work", label: "Work (chat)", icon: "work" },
-  { id: "workspace", label: "Workspace (files)", icon: "workspace" },
-  { id: "agents", label: "Multi-agent", icon: "agents" },
-  { id: "library", label: "Library", icon: "library" },
-  { id: "runs", label: "Team runs", icon: "runs" },
-  { id: "trust", label: "Trust Center", icon: "trust" },
-];
+type NavItem = { id: Area; label: string; icon: ReactNode; shortcut: string; badge?: number };
 
-const BOTTOM: { id: Area; label: string; icon: IconName }[] = [
-  { id: "settings", label: "Settings", icon: "settings" },
-];
-
-/**
- * Rail destination button.
- *
- * Phase 1 · this used to be declared INSIDE AppShell's body. A component
- * defined during render is a NEW type on every render, so React unmounted and
- * remounted all 17 rail buttons on each status poll (every 4 s). The visible
- * effects: keyboard focus was silently destroyed while a user was on the rail,
- * and any click that straddled a re-render landed on a detached node — which
- * is how the renderer lane caught it ("element was detached from the DOM,
- * retrying", indefinitely). Hoisting it is the fix: stable type, stable DOM.
- */
-const NavBtn = memo(function NavBtn({
-  n,
-  active,
-  onArea,
-  locale,
-}: {
-  n: { id: Area; label: string; icon: IconName };
-  active: boolean;
-  onArea: (a: Area) => void;
-  /* Phase 5 · i18n: locale in props so the memo re-renders on switch. */
-  locale: string;
-}) {
-  const label = t(n.label);
-  return (
-    <button
-      className={active ? "rbtn on" : "rbtn"}
-      title={label}
-      aria-label={label}
-      aria-current={active ? "page" : undefined}
-      onClick={() => onArea(n.id)}
-    >
-      <Icon name={n.icon} size={20} />
-    </button>
-  );
-});
-
-export function AppShell({
-  area,
-  onArea,
-  engineVersion,
-  onSearch,
-  onOpenRun,
-  voiceState,
-  onVoiceOpen,
-  onCheatSheet,
-  onRefresh,
-  onOpenPalette,
-  children,
-}: {
+export interface AppShellProps {
   area: Area;
   onArea: (a: Area) => void;
   engineVersion: string | null;
   onSearch: (q: string) => void;
   onOpenRun: (id: string) => void;
-  voiceState?: string;
-  onVoiceOpen?: () => void;
-  /** Phase 1 · ⌘K opens the palette; `?` opens the generated cheat-sheet. */
-  onCheatSheet?: () => void;
-  /**
-   * Phase 1 · the palette opener. ⌘K used to call preventDefault() and then do
-   * nothing — the shortcut was swallowed and the palette was unreachable from
-   * the UI entirely (the renderer lane's Ctrl+K test failed against a running
-   * app). This prop is required so a missing wiring fails the build, not the
-   * user.
-   */
+  voiceState: string;
+  onVoiceOpen: () => void;
+  onCheatSheet: () => void;
+  onRefresh: () => void;
   onOpenPalette: () => void;
-  /** Re-read engine truth (used by the palette "Refresh engine data" command). */
-  onRefresh?: () => void;
+  onToggleChat?: () => void;
+  onToggleTerminal?: () => void;
+  onToggleExplorer?: () => void;
   children: ReactNode;
-}) {
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [primaryId, setPrimaryId] = useState<string | null>(null);
-  const [up, setUp] = useState(true);
-  const [linkReason, setLinkReason] = useState<string | null>(null);
-  /* W-2 · the Rust shell reports when the sidecar runs WITHOUT job-object
-     containment (it then dies only on a clean shutdown, not on a crash). A
-     fact worth a visible warning, not a log line nobody reads. */
-  const [containment, setContainment] = useState<string | null>(null);
-  /* Phase 5 · i18n — chrome strings re-render on locale switch. */
-  const locale = useSyncExternalStore(subscribeLocale, getLocale);
-  const [pending, setPending] = useState(0);
+  providerState?: { name: string; kind: "ok" | "warn" | "err" | "info" | "idle" | "working"; label?: string };
+  projectName?: string;
+  approvalCount?: number;
+  isHome?: boolean;
+  isFullWidth?: boolean;
+}
 
-  /* Phase 5 · opt-in OS notifications: approval due + run done.
-   * Phase 1 · this is now a SUBSCRIBER of the shared poll hub. It previously
-   * owned a 10 s interval that fetched `pending` a second time, so two
-   * components wrote the same state from two different observations — the
-   * statusbar could disagree with the notification that had just fired. */
-  useEffect(() => {
-    let prevPending = -1;
-    const seenRuns = new Map<string, string>();
-    const off = poll.subscribe(["pending", "agents"], (o) => {
-      if (o.key === "pending") {
-        if (!o.ok) return;
-        const list = (o.value as { pending?: Array<{ id?: string; tool?: string }> }).pending ?? [];
-        const n = list.length;
-        // The count is always recorded (the statusbar needs engine truth even
-        // when notifications are off); only the OS notification is gated.
-        if (prevPending >= 0 && n > prevPending && notificationsEnabled()) {
-          const first = list[list.length - 1];
-          // Phase 4 · actionable OS notification; the decision goes through
-          // the same engine route as the Trust Center buttons.
-          void nativeNotifyApproval(first?.id ?? "", first?.tool ?? "action", (aid, approved) => {
-            void api.decide(aid, approved).catch(() => undefined);
-          }).then((ok) => {
-            if (!ok) void notify("XR — approval due", `${n} request(s) waiting in the Trust Center`);
-          });
-        }
-        prevPending = n;
-        setPending(n);
-        return;
-      }
-      if (!o.ok) return;
-      const workflows = (o.value as { workflows?: unknown[] }).workflows ?? [];
-      for (const w of workflows) {
-        const id = String((w as { id?: unknown }).id ?? "");
-        const st = String((w as { state?: unknown; status?: unknown }).state ?? (w as { status?: unknown }).status ?? "");
-        const prev = seenRuns.get(id);
-        if (prev && prev !== st && /completed|failed|done/.test(st) && notificationsEnabled()) {
-          void notify(`XR — run ${st}`, String((w as { goal?: unknown; name?: unknown }).goal ?? (w as { name?: unknown }).name ?? id).slice(0, 80));
-        }
-        if (id) seenRuns.set(id, st);
-      }
-    });
-    return off;
-  }, []);
+export function AppShell(props: AppShellProps) {
+  const {
+    area, onArea, engineVersion, onOpenPalette, onCheatSheet, voiceState,
+    onToggleChat, onToggleTerminal, onToggleExplorer, children,
+    providerState, projectName = "xr", approvalCount = 0,
+  } = props;
 
-  const [voiceCap, setVoiceCap] = useState<boolean>(false);
-  useEffect(() => {
-    api.voiceStatus().then((v) => setVoiceCap(Boolean((v?.stt as { available?: boolean } | undefined)?.available || (v?.tts as { available?: boolean } | undefined)?.available))).catch(() => setVoiceCap(false));
-  }, []);
-  const [q, setQ] = useState("");
-  const [pop, setPop] = useState<{ skills: SkillInfo[]; runs: SessionSummary[] } | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+  // Panel visibility is owned by the screen (e.g. Workbench sets classes on xr-body).
+  // We keep chatOpen/explorerOpen state here only because ⌘L/⌘B may fire from non-workbench areas
+  // and need to move the user into Workbench.
+  const [chatOpen] = useState(true);
+  const [explorerOpen] = useState(true);
 
-  // Debounced universal search: skills via the engine index, runs via live sessions.
+  // ⌘K → palette; ⌘L → toggle chat; ⌘B → toggle explorer; ⌘J → toggle terminal
   useEffect(() => {
-    const term = q.trim();
-    if (term.length < 2) { setPop(null); return; }
-    let live = true;
-    const t = setTimeout(() => {
-      Promise.allSettled([api.skills(term), api.sessions()]).then(([s, r]) => {
-        if (!live) return;
-        const skills = (s.status === "fulfilled" ? (s.value.skills ?? []) : []).slice(0, 5);
-        const all = r.status === "fulfilled" ? asList<SessionSummary>(r.value, "sessions") : [];
-        const low = term.toLowerCase();
-        const runs = all.filter((x) => `${x.title ?? ""} ${x.prompt ?? ""}`.toLowerCase().includes(low)).slice(0, 5);
-        setPop({ skills, runs });
-      });
-    }, 300);
-    return () => { live = false; clearTimeout(t); };
-  }, [q]);
-
-  /* ⌘K palette · `?` cheat-sheet · Esc closes the search popover. */
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    const handler = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === "k") { e.preventDefault(); onOpenPalette(); }
+      else if (e.key === "?" && !isTyping(e.target as HTMLElement)) { e.preventDefault(); onCheatSheet(); }
+      else if (meta && e.key.toLowerCase() === "l") {
         e.preventDefault();
-        onOpenPalette();
-        return;
+        if (area !== "workbench" && area !== "builder") onArea("workbench");
+        onToggleChat?.();
       }
-      // `?` is Shift+/ — never steal it while the user is typing.
-      if (!typing && (e.key === "?" || (e.key === "/" && e.shiftKey))) {
-        e.preventDefault();
-        onCheatSheet?.();
+      else if (meta && e.key.toLowerCase() === "b") { e.preventDefault(); onToggleExplorer?.(); }
+      else if (meta && e.key.toLowerCase() === "j") { e.preventDefault(); onToggleTerminal?.(); }
+      else if (meta && e.key >= "1" && e.key <= "8") {
+        const idx = parseInt(e.key, 10) - 1;
+        const items: Area[] = ["home", "workbench", "builder", "projects", "research", "agents", "trust", "voice"];
+        if (items[idx]) { e.preventDefault(); onArea(items[idx]); }
+      } else if (meta && e.key === ",") {
+        e.preventDefault(); onArea("settings");
       }
-      if (e.key === "Escape") setPop(null);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCheatSheet, onOpenPalette]);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onOpenPalette, onCheatSheet, onToggleChat, onToggleTerminal, onToggleExplorer, onArea, area]);
 
-  /* Engine truth: the link dot, the provider the ENGINE is routing to (not
-   * the first array entry — audit D-10), and the WHY when the link is down.
-   * Phase 1 · one subscription to the shared hub replaces this component's own
-   * 5 s interval. */
-  /* Phase 3 · F-11 — spend visibility. The meter renders ONLY engine-reported
-     numbers; clicking it opens the Trust Center budgets (real navigation). */
-  const [budget, setBudget] = useState<{ month: number; cap: number } | null>(null);
-  useEffect(() => {
-    const off = poll.subscribe(["health", "providers", "budget"], (o) => {
-      if (o.key === "budget") {
-        if (!o.ok) { setBudget(null); return; }
-        const u = o.value.usage;
-        const cap = Number(o.value.persisted?.monthly_cap ?? 0);
-        setBudget({ month: Number(u?.monthUsd ?? 0), cap: Number.isFinite(cap) ? cap : 0 });
-        return;
-      }
-      if (o.key === "health") {
-        if (o.ok) {
-          setUp(true);
-          setLinkReason(null);
-          void engineLinkSnapshot().then((l) => setContainment(l?.containment ?? null));
-        } else {
-          setUp(false);
-          // Surface WHY, instead of a bare red dot (audit D-10).
-          void engineLinkReason().then(setLinkReason);
-        }
-        return;
-      }
-      if (!o.ok) return;
-      const p = o.value as Record<string, unknown>;
-      setProviders(asList<ProviderInfo>(p, "providers", "items"));
-      const prim = p.primary;
-      setPrimaryId(typeof prim === "string" ? prim : null);
-    });
-    return off;
-  }, []);
+  const navTop: NavItem[] = [
+    { id: "home", label: "Home", icon: <Icon.Home width={20} height={20}/>, shortcut: "⌘1" },
+    { id: "workbench", label: "Workbench", icon: <Icon.Code width={20} height={20}/>, shortcut: "⌘2" },
+    { id: "builder", label: "Builder", icon: <Icon.Bolt width={20} height={20}/>, shortcut: "⌘3" },
+    { id: "projects", label: "Projects", icon: <Icon.Folder width={20} height={20}/>, shortcut: "⌘4" },
+    { id: "research", label: "Research", icon: <Icon.Book width={20} height={20}/>, shortcut: "⌘5" },
+    { id: "agents", label: "Agents", icon: <Icon.Bot width={20} height={20}/>, shortcut: "⌘6" },
+    { id: "trust", label: "Trust", icon: <Icon.Shield width={20} height={20}/>, shortcut: "⌘7", badge: approvalCount || undefined },
+    { id: "voice", label: "Voice", icon: <Icon.Mic width={20} height={20}/>, shortcut: "⌘8" },
+  ];
 
-  /* The engine's primary provider, falling back to any LOCAL provider that is
-   * actually healthy, then nothing — never an arbitrary first entry. */
-  const primary =
-    (primaryId ? providers.find((p) => p.id === primaryId) : undefined) ??
-    providers.find((p) => p.kind === "local" && p.healthy === true);
-  const prov = providerLabel(primary as Parameters<typeof providerLabel>[0]);
-  const engineState: DotState = up ? (prov.state === "unknown" ? "ok" : prov.state) : "danger";
+  const engStatus: "ok" | "warn" | "err" | "idle" | "working" = engineVersion ? "ok" : "err";
+  const prov = providerState ?? { name: "connect a model", kind: "idle" as const };
+  const isChrome = area === "workbench" || area === "builder";
 
   return (
-    <div className="shell">
-      <header className="titlebar">
-        <XrLogo height={22} radius={5} />
-        {/* Phase 5 · a11y: the page needs a real level-one heading. */}
-        <h1 className="appname">XR Desktop</h1>
-        <span className="tb-sep" />
-        <span className="crumb mono faint">{AREA_LABELS.find(([id]) => id === area)?.[1] ?? ""}</span>
-        <div className="gsearch-wrap">
-          <form
-            className="gsearch"
-            role="search"
-            onSubmit={(e) => { e.preventDefault(); if (q.trim()) { onSearch(q.trim()); setPop(null); } }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-            </svg>
-            <input
-              ref={searchRef}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search skills, runs… · ⌘K palette"
-              aria-label="Global search"
-            />
-          </form>
-          {pop && (pop.skills.length > 0 || pop.runs.length > 0) && (
-            <div className="gpop" role="listbox" aria-label="Search results">
-              {pop.skills.length > 0 && <div className="gpop-h">Skills · engine index</div>}
-              {pop.skills.map((s) => (
-                <button key={s.id} className="gpop-item" role="option" aria-selected={false} onClick={() => { onSearch(s.name ?? s.id); setPop(null); setQ(""); }}>
-                  <span className="chip tiny">skill</span> {s.name ?? s.id}
-                </button>
-              ))}
-              {pop.runs.length > 0 && <div className="gpop-h">Runs · live sessions</div>}
-              {pop.runs.map((r) => (
-                <button key={r.id} className="gpop-item" role="option" aria-selected={false} onClick={() => { onOpenRun(r.id); setPop(null); setQ(""); }}>
-                  <span className="chip tiny">run</span> {r.title || r.prompt?.slice(0, 48) || r.id}
-                </button>
-              ))}
-            </div>
-          )}
+    <div className="xr-app">
+      {/* Title bar */}
+      <div className="xr-titlebar">
+        <div className="traffic">
+          <span className="close"/>
+          <span className="min"/>
+          <span className="max"/>
         </div>
-        {/* The palette must be discoverable without knowing the shortcut —
-            a command surface that only exists behind ⌘K is a hidden feature. */}
-        <button
-          className="tb-icon tb-pal"
-          onClick={onOpenPalette}
-          title="Command palette (Ctrl/⌘ K)"
-          aria-label="Command palette"
-          aria-keyshortcuts="Control+K Meta+K"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-            <path d="M4 7h16M4 12h10M4 17h7" />
-          </svg>
-        </button>
-        <button
-          className="tb-icon"
-          onClick={onCheatSheet}
-          title="Keyboard shortcuts (?)"
-          aria-label="Keyboard shortcuts"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-            <rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
-          </svg>
-        </button>
-        <span className="mono faint tb-right" title={linkReason ?? `engine ${engineVersion ?? "—"}`}>
-          engine {engineVersion ?? "—"}
-        </span>
-      </header>
-      <nav className="rail" aria-label="Primary">
-        {NAV.map((n) => <NavBtn key={n.id} n={n} active={n.id === area} onArea={onArea} locale={locale} />)}
-        <div className="spacer" />
-        {BOTTOM.map((n) => <NavBtn key={n.id} n={n} active={n.id === area} onArea={onArea} locale={locale} />)}
-        {/* Phase 2 · presence, not navigation (IA §1): the avatar orb is XR's
-            presence; the mic opens voice mode. */}
-        <button
-          className="rail-presence"
-          title={`${t("Voice mode")} — XR presence`}
-          aria-label={t("Voice mode")}
-          onClick={() => onVoiceOpen?.()}
-        >
-          <XrAvatar size={26} />
-          <span className="rail-mic" aria-hidden="true"><Icon name="mic" size={11} /></span>
-        </button>
-      </nav>
-      <main className="main">{children}</main>
-      <footer className="statusbar" aria-label="Status">
-        <span
-          className={up ? (engineState === "ok" ? "sb-item ok" : `sb-item ${engineState}`) : "sb-item bad"}
-          title={up ? "Engine connected" : linkReason ?? "Engine offline — start it with `xr serve`"}
-        >
-          {t("Engine")} <StatusDot state={up ? "ok" : "danger"} /> {up ? "" : "offline"}
-        </span>
-        {containment && (
-          <span className="sb-item warn sb-contain" title={containment} role="status">
-            <StatusDot state="warn" /> sidecar uncontained
-          </span>
-        )}
-        <span className="sb-sep" aria-hidden="true" />
-        {/* Honest provider state (audit D-07): grey when unknown, amber when
-            configured-but-unreachable, red when the key is missing. */}
-        <span className={`sb-item sb-prov ${prov.state === "ok" ? "ok" : prov.state}`} title={prov.detail}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-            <rect x="5" y="5" width="14" height="14" rx="3" /><path d="M9.5 9.5h5v5h-5z" />
-          </svg>
-          <StatusDot state={prov.state} />
-          {prov.text}
-        </span>
-        {prov.state !== "ok" && prov.state !== "unknown" && (
+        <div className="brand" onClick={() => onArea("home")} style={{ cursor: "pointer" }}>
+          <img src="/src/assets/xr-logo.png" alt="XR" style={{ width: 22, height: 22, objectFit: "contain", filter: "drop-shadow(0 0 10px rgba(0,212,255,0.45))" }}/>
+          <span>XR</span>
+        </div>
+        {isChrome && (
           <>
-            <span className="sb-sep" aria-hidden="true" />
-            <span className="sb-prov-detail" title={prov.detail}>{prov.detail}</span>
+            <div className="project" title="Current project">
+              <Icon.Folder width={14} height={14}/>
+              <b>{projectName}</b>
+            </div>
           </>
         )}
-        <span className="sb-spacer" />
-        {budget !== null && (budget.month > 0 || budget.cap > 0) && (
-          <>
+        <div className="title-center" onClick={onOpenPalette} style={{ cursor: "pointer" }}>
+          <div className="quick-search">
+            <Icon.Search width={14} height={14}/>
+            <span>Search or ask XR…</span>
+            <span className="kbd xr-keycap">⌘K</span>
+          </div>
+        </div>
+        <div className="title-right">
+          <button className="xr-btn xr-btn--icon" onClick={onOpenPalette} title="Command Palette (⌘K)">
+            <Icon.Search width={16} height={16}/>
+          </button>
+          <button className="xr-btn xr-btn--icon" onClick={onCheatSheet} title="Keyboard shortcuts (?)">
+            <Icon.Help width={16} height={16}/>
+          </button>
+        </div>
+      </div>
+
+      {/* Rail */}
+      <div className="xr-rail">
+        <div className="rail-top">
+          {navTop.map((it) => (
             <button
-              className="sb-item sb-budget mono"
-              title={`engine-reported spend this month: $${budget.month.toFixed(4)}${budget.cap > 0 ? ` · cap $${budget.cap}` : " · no cap set"} — enforced engine-side; open Trust Center`}
-              onClick={() => onArea("trust")}
+              key={it.id}
+              className="rail-btn"
+              aria-current={area === it.id ? "page" : undefined}
+              onClick={() => onArea(it.id)}
+              title={`${it.label} (${it.shortcut})`}
             >
-              ${budget.month.toFixed(2)}{budget.cap > 0 ? ` / $${budget.cap}` : " · no cap"}
+              {it.icon}
+              {it.badge ? <span className="badge">{it.badge}</span> : null}
             </button>
-            <span className="sb-sep" aria-hidden="true" />
-          </>
+          ))}
+        </div>
+        <div className="rail-spacer"/>
+        <div className="rail-bottom">
+          <button className="rail-btn" onClick={() => onArea("library")} aria-current={area === "library" ? "page" : undefined} title="Library (Skills / MCP / Plugins)">
+            <Icon.Layers width={20} height={20}/>
+          </button>
+          <button className="rail-btn" onClick={() => onArea("memory")} aria-current={area === "memory" ? "page" : undefined} title="Memory">
+            <Icon.Bookmark width={20} height={20}/>
+          </button>
+          <button className="rail-btn" onClick={() => onArea("runs")} aria-current={area === "runs" ? "page" : undefined} title="Runs history">
+            <Icon.History width={20} height={20}/>
+          </button>
+          <button className="rail-btn" onClick={() => onArea("diagnostics")} aria-current={area === "diagnostics" ? "page" : undefined} title="Diagnostics">
+            <Icon.Activity width={20} height={20}/>
+          </button>
+          <button className="rail-btn" onClick={() => onArea("settings")} aria-current={area === "settings" ? "page" : undefined} title="Settings (⌘,)">
+            <Icon.Settings width={20} height={20}/>
+          </button>
+          <button className="rail-btn" title="Profile">
+            <img src="/src/assets/xr-avatar.png" alt="Profile" style={{ width: 22, height: 22, borderRadius: "var(--xr-radius-md)", objectFit: "cover" }}/>
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className={`xr-body ${props.isFullWidth ? "xr-body-full" : ""} ${!chatOpen && isChrome ? "no-chat" : ""} ${!explorerOpen && isChrome ? "no-explorer" : ""}`}>
+        {children}
+      </div>
+
+      {/* Status bar */}
+      <div className="xr-statusbar">
+        <span className="item" title="Engine status">
+          <StatusDot kind={engStatus} size={8}/>
+          {engineVersion ? `Ready` : `Offline`}
+          {engineVersion ? <span className="sep">·</span> : null}
+          {engineVersion ? <span className="xr-truncate">{engineVersion}</span> : null}
+        </span>
+        <span className="item" title="Active provider">
+          <StatusDot kind={prov.kind as "ok" | "warn" | "err" | "idle" | "working"} size={8} pulse={prov.kind === "working"}/>
+          {prov.name}
+          {prov.label ? <span className="sep">·</span> : null}
+          {prov.label}
+        </span>
+        {voiceState !== "idle" && (
+          <span className="item"><Icon.Mic width={12} height={12}/> Voice: {voiceState}</span>
         )}
-        {pending > 0 && (
-          <>
-            <button className="sb-item sb-approvals" onClick={() => onArea("trust")} title={`${pending} request(s) waiting for you`}>
-              <StatusDot state="warn" /> {pending} {t("approvals")}
-            </button>
-            <span className="sb-sep" aria-hidden="true" />
-          </>
-        )}
-        {/* D-03 · was <span role="button" tabIndex={0}> with hand-rolled key
-            handling. A button element gives the same interaction with correct
-            semantics, and the status text below stays readable to AT. */}
-        <button
-          type="button"
-          className={voiceState && voiceState !== "idle" ? "sb-item ok sb-btn" : "sb-item off sb-btn"}
-          title={voiceState && voiceState !== "idle" ? `Voice session ${voiceState} — open voice mode` : `Voice idle — open voice mode (offline on-device pipeline ${voiceCap ? "available" : "unavailable"})`}
-          onClick={onVoiceOpen}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 3v12M8 11a4 4 0 0 0 8 0M5 21h14" /></svg>
-          <span className="sb-voice-cap">
-            {voiceState && voiceState !== "idle" ? `VOICE ${voiceState.toUpperCase()}` : t("OFFLINE VOICE")}
+        <span className="right">
+          <span className="item xr-sb-budget" title="Today's spend / monthly cap (click to open Trust Center)" onClick={() => onArea("trust")} style={{ cursor: "pointer" }}>
+            <Icon.Wallet width={11} height={11}/>
+            <span className="mono" style={{ fontSize: 11 }}>$0.42</span>
+            <span style={{ opacity: 0.55 }}>/</span>
+            <span className="mono" style={{ fontSize: 11, opacity: 0.75 }}>$25</span>
+            <span className="xr-sb-budget-bar"><span style={{ width: "1.7%" }}/></span>
           </span>
-        </button>
-        <span className="sb-sep" aria-hidden="true" />
-        <span className="sb-item mono">{engineVersion ?? "v—"}</span>
-      </footer>
+          <span className="item"><span style={{ opacity: 0.7 }}>UTF-8</span></span>
+          <span className="item"><span style={{ opacity: 0.7 }}>LF</span></span>
+          <span className="item"><span style={{ opacity: 0.7 }}>TypeScript</span></span>
+          <span className="item"><span style={{ opacity: 0.7 }}>Ln 1, Col 1</span></span>
+          <span className="item"><span style={{ opacity: 0.7 }}>100%</span></span>
+        </span>
+      </div>
     </div>
   );
+}
+
+function isTyping(el: HTMLElement | null): boolean {
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
 }
