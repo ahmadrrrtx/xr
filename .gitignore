@@ -66,3 +66,5 @@ desktop/src-tauri/binaries/
 # produced by a local `npm install` is an artifact of that machine, not a source
 # of truth, and two lockfiles in one package drift.
 desktop/package-lock.json
+desktop/node_modules
+desktop/dist

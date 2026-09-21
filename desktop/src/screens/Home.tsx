@@ -1,164 +1,187 @@
-import { useEffect, useRef, useState } from "react";
-import { asList, type Approval, type ProviderInfo, type SessionSummary } from "../api/client";
-import { ApprovalCountdown } from "../components/ApprovalCountdown";
-import { XrLogo } from "../components/Brand";
-import { poll } from "../poll";
+import { useCallback, useState } from "react";
+import { Icon } from "../components/icons";
+import { StatusDot } from "../components/StatusDot";
 
-/**
- * Home (phase 6, mock 02): brand hero, universal composer, "Continue work" cards
- * from real sessions (cost/status engine-owned), pending-approvals banner.
- */
 export function Home({
-  onOpenRun,
-  onGoWork,
-  onReview,
+  onOpenRun, onGoWork, onReview, approvalCount = 2,
 }: {
   onOpenRun: (id: string) => void;
-  onGoWork: (task: string) => void;
+  onGoWork: (seed?: string) => void;
   onReview: () => void;
+  approvalCount?: number;
 }) {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [model, setModel] = useState("");
-  const [text, setText] = useState("");
-  const [attach, setAttach] = useState<string | null>(null);
-  const [attachBody, setAttachBody] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    /* Phase 1 · subscribers of the shared poll hub (src/poll.ts). Home used to
-     * fetch sessions and approvals on its own 4 s timer while the toast bus
-     * fetched the same two on a 3 s timer — two unsynchronised views of the
-     * same run list. The model default is still seeded exactly once. */
-    let seededModel = false;
-    const off = poll.subscribe(["sessions", "approvals", "providers"], (o) => {
-      if (o.key === "sessions") {
-        if (o.ok) setSessions(asList<SessionSummary>(o.value, "sessions", "items").slice(0, 4));
-        return;
-      }
-      if (o.key === "approvals") {
-        if (o.ok) setApprovals(asList<Approval>(o.value, "pending", "approvals"));
-        return;
-      }
-      if (!o.ok || seededModel) return;
-      const list = asList<ProviderInfo>(o.value, "providers", "items");
-      setProviders(list);
-      const first = list.find((x) => x.available !== false);
-      if (first) {
-        seededModel = true;
-        setModel(first.models?.[0] ?? first.id);
-      }
-    });
-    return off;
-  }, []);
-
-  function onPickFile(f: File | undefined) {
-    if (!f) return;
-    setAttach(f.name);
-    const r = new FileReader();
-    r.onload = () => setAttachBody(typeof r.result === "string" ? r.result.slice(0, 4000) : null);
-    r.onerror = () => setAttachBody(null);
-    r.readAsText(f.slice(0, 8192));
-  }
-
-  function submit() {
-    const task = text.trim();
-    if (!task) return;
-    const withAttach = attachBody
-      ? `${task}\n\n[attached ${attach} — first 4KB]\n\`\`\`\n${attachBody}\n\`\`\``
-      : attach ? `${task}\n\n[references file: ${attach}]` : task;
-    setText(""); setAttach(null); setAttachBody(null);
-    onGoWork(withAttach);
-  }
-
-  const statusDot = (s?: string) =>
-    s === "completed" || s === "done" ? "ok" : s === "failed" || s === "error" ? "bad" : s === "running" || s === "active" ? "run" : "idle";
+  const [composer, setComposer] = useState("");
+  const send = useCallback(() => {
+    const seed = composer.trim();
+    if (!seed) return;
+    onGoWork(seed);
+  }, [composer, onGoWork]);
+  const hour = new Date().getHours();
+  const greet = hour < 5 ? "Late night." : hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening.";
 
   return (
-    <div className="home">
-      <div className="hero">
-        <div className="hero-glow" aria-hidden="true" />
-        <XrLogo height={112} radius={20} />
-        <div className="hero-sub faint">The AI Agent You Can Actually Trust</div>
-      </div>
-
-      <div className="composer-card">
-        <textarea
-          className="composer-input"
-          rows={2}
-          placeholder="What do you want XR to do?"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-        />
-        <div className="composer-actions">
-          <input ref={fileRef} type="file" hidden onChange={(e) => onPickFile(e.target.files?.[0])} />
-          <button className="pill" onClick={() => fileRef.current?.click()} title="Attach a text file (read locally)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Attach{attach ? ` · ${attach}` : ""}
-          </button>
-          <label className="pill model" title="Model (engine providers)">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-              <rect x="4" y="4" width="16" height="16" rx="3" /><path d="M9 9h6v6H9z" />
-            </svg>
-            <select value={model} onChange={(e) => setModel(e.target.value)} aria-label="Model">
-              {providers.length === 0 && <option value="">no providers</option>}
-              {providers.map((p) =>
-                (p.models?.length ? p.models : [p.id]).map((m) => <option key={`${p.id}/${m}`} value={m}>{p.id} · {m}</option>),
-              )}
-            </select>
-          </label>
-          <span className="spacer" />
-          <button className="send" onClick={submit} disabled={!text.trim()} aria-label="Send to Work">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M3.4 11.2 20.6 3.3c.6-.3 1.2.3.9.9l-7.9 17.2c-.3.7-1.3.6-1.5-.1l-1.9-6.6a.8.8 0 0 0-.55-.55l-6.6-1.9c-.7-.2-.8-1.2-.1-1.5z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <section className="cw" aria-label="Continue work">
-        <h3>Continue work</h3>
-        {sessions.length === 0 && <p className="faint">No sessions yet — start a task above and it will appear here.</p>}
-        <div className="cw-grid">
-          {sessions.map((s) => (
-            <button key={s.id} className="cw-card" onClick={() => onOpenRun(s.id)} title={`Open ${s.id}`}>
-              <div className="cw-title">{s.title || s.prompt?.slice(0, 60) || s.id}</div>
-              <div className="cw-top">
-                <span className="chip cw-cat">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-                    <path d="M4 8h16v12H4zM9 8V5h6v3" />
-                  </svg>
-                  {String(s.mode ?? "agent").toUpperCase()}
-                </span>
-              </div>
-              <div className="cw-foot">
-                <span className={`cw-state ${statusDot(s.status)}`}>
-                  <i className={`sdot ${statusDot(s.status)}`} aria-label={s.status ?? "unknown"} />
-                  {statusDot(s.status) === "ok" ? "Green" : statusDot(s.status) === "bad" ? "Red" : statusDot(s.status) === "run" ? "Yellow" : "Idle"}
-                </span>
-                <span className="cw-cost mono">{`$${(typeof s.costUsd === "number" ? s.costUsd : 0).toFixed(2)}`}</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {approvals.length > 0 && (
-        <div className="appr-banner" role="status">
-          <span className="ab-pill">{approvals.length} Pending Approval{approvals.length > 1 ? "s" : ""}</span>
-          <div className="ab-line">
-            {String(approvals[0].tool ?? approvals[0].action ?? approvals[0].reason ?? "An agent action")}
-            {" "}and {approvals.length > 1 ? `${approvals.length - 1} more` : "the latest"} request{approvals.length > 1 ? "s" : ""} need review
-            {" · "}
-            <ApprovalCountdown deadline={approvals[0]} />
+    <div className="xr-home">
+      <div className="xr-home-inner">
+        {/* Hero */}
+        <div className="hero full-width">
+          <img src="/src/assets/xr-logo.png" alt="XR" style={{ width: 48, height: 48, objectFit: "contain", filter: "drop-shadow(0 0 14px rgba(0,212,255,0.45))" }}/>
+          <div>
+            <h2 className="greet">{greet}
+              <span className="sub">You're working on <b style={{ color: "var(--xr-text)" }}>xr</b>. XR is ready.</span>
+            </h2>
           </div>
-          <button className="btn small" onClick={onReview}>Review</button>
+          <div className="cta">
+            <button className="xr-btn xr-btn--primary" onClick={() => onGoWork()}>
+              <Icon.Code width={14} height={14}/> Open Workbench
+            </button>
+          </div>
         </div>
-      )}
+
+        {/* Approval callout */}
+        {approvalCount > 0 && (
+          <div className="card approval-callout full-width">
+            <Icon.AlertTriangle width={22} height={22}/>
+            <div>
+              <h3>{approvalCount} approval{approvalCount > 1 ? "s" : ""} waiting</h3>
+              <p>XR needs your decision before continuing.</p>
+            </div>
+            <div className="actions">
+              <button className="xr-btn xr-btn--sm xr-btn--secondary">Review</button>
+              <button className="xr-btn xr-btn--sm" style={{ background: "var(--xr-warning)", color: "#0A0A0F" }}>Approve all</button>
+            </div>
+          </div>
+        )}
+
+        {/* Continue Working */}
+        <div className="card">
+          <h3>
+            <Icon.Clock width={14} height={14} style={{ color: "var(--xr-primary)" }}/>
+            Continue working
+            <span className="count">4 recent</span>
+          </h3>
+          <div className="continue-list">
+            {[
+              { title: "Refactor retry loop in agent.ts", time: "2 min ago", kind: "ok", proj: "xr" },
+              { title: "Summarize docs folder", time: "1 hour ago", kind: "ok", proj: "xr" },
+              { title: "Fix the Ollama connection handler", time: "4 hours ago", kind: "err", proj: "xr" },
+              { title: "Research competitor pricing pages", time: "Yesterday", kind: "working", proj: "xr" },
+            ].map((r, i) => (
+              <div key={i} className="continue-item" onClick={() => onOpenRun(String(i))}>
+                <StatusDot kind={r.kind as "ok" | "err" | "working"} size={8}/>
+                <span className="ctitle">{r.title}</span>
+                <span className="ctime">{r.time}</span>
+                <Icon.ChevronRight width={12} height={12} className="xr-muted"/>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick actions */}
+        <div className="card">
+          <h3>
+            <Icon.Sparkles width={14} height={14} style={{ color: "var(--xr-secondary)" }}/>
+            Quick actions
+          </h3>
+          <div className="quick-actions">
+            {[
+              { ic: <Icon.Code width={16} height={16}/>, title: "Open project", desc: "Pick a folder", act: () => onGoWork() },
+              { ic: <Icon.Bolt width={16} height={16}/>, title: "Build website", desc: "Start Builder", act: () => onGoWork("Build a landing page") },
+              { ic: <Icon.Book width={16} height={16}/>, title: "Research", desc: "Deep search", act: () => onGoWork("Research: ") },
+              { ic: <Icon.Folder width={16} height={16}/>, title: "Open folder", desc: "Browse local", act: () => {} },
+              { ic: <Icon.Globe width={16} height={16}/>, title: "Connect model", desc: "Add provider", act: () => {} },
+              { ic: <Icon.Shield width={16} height={16}/>, title: "Review trust", desc: "Policy & approvals", act: onReview },
+            ].map((q, i) => (
+              <div key={i} className="qa-tile" onClick={q.act}>
+                <div className="qic">{q.ic}</div>
+                <div className="qtitle">{q.title}</div>
+                <div className="qdesc">{q.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Today's Spend */}
+        <div className="card">
+          <h3>
+            <Icon.Wallet width={14} height={14} style={{ color: "var(--xr-success)" }}/>
+            Today's spend
+          </h3>
+          <div className="spend-mini">
+            <div><span className="amount">$0.42</span><span className="cap"> / $5.00 cap</span></div>
+            <div className="bar"><div className="bar-fill" style={{ width: "8.4%" }}/></div>
+            <div style={{ display: "flex", gap: 8, marginTop: 8, fontSize: 11 }}>
+              <span className="xr-pill xr-pill--green">Within budget</span>
+              <button className="xr-btn xr-btn--sm xr-btn--ghost" style={{ marginLeft: "auto", padding: "2px 8px", height: 22, fontSize: 11 }}>Adjust cap</button>
+            </div>
+          </div>
+        </div>
+
+        {/* System Status */}
+        <div className="card">
+          <h3>
+            <Icon.Activity width={14} height={14} style={{ color: "var(--xr-info)" }}/>
+            System status
+          </h3>
+          <div className="sys-status">
+            {[
+              { label: "Engine", kind: "ok" as const, value: "Online" },
+              { label: "Ollama", kind: "warn" as const, value: "Not detected" },
+              { label: "Cloud providers", kind: "ok" as const, value: "Connected" },
+              { label: "Voice", kind: "idle" as const, value: "Offline" },
+            ].map((r, i) => (
+              <div key={i} className="row">
+                <StatusDot kind={r.kind} size={8}/>
+                <span className="label">{r.label}</span>
+                <span className="xr-dim">{r.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Activity Feed */}
+        <div className="card" style={{ gridColumn: "1 / -1" }}>
+          <h3>
+            <Icon.Layers width={14} height={14} style={{ color: "var(--xr-warning)" }}/>
+            Activity
+          </h3>
+          <div className="activity">
+            {[
+              { ic: <Icon.Check width={13} height={13} style={{ color: "var(--xr-success)" }}/>, t: "XR completed", d: "Refactor retry loop in agent.ts", time: "2 min ago" },
+              { ic: <Icon.AlertTriangle width={13} height={13} style={{ color: "var(--xr-warning)" }}/>, t: "Approval requested", d: "Run shell command: npm test", time: "5 min ago" },
+              { ic: <Icon.X width={13} height={13} style={{ color: "var(--xr-error)" }}/>, t: "Run failed", d: "Ollama unreachable — switching to cloud", time: "4 hours ago" },
+              { ic: <Icon.Book width={13} height={13} style={{ color: "var(--xr-secondary)" }}/>, t: "Report generated", d: "research/competitor-pricing.md", time: "Yesterday" },
+              { ic: <Icon.Shield width={13} height={13} style={{ color: "var(--xr-success)" }}/>, t: "Audit verified", d: "1,247 events logged", time: "Today" },
+            ].map((a, i) => (
+              <div key={i} className="act-item">
+                <span className="ic">{a.ic}</span>
+                <div style={{ flex: 1 }}>
+                  <span className="tt">{a.t}:</span> {a.d}
+                  <div className="time">{a.time}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Full-width composer */}
+        <div className="home-composer full-width">
+          <textarea
+            className="xr-textarea"
+            rows={1}
+            placeholder="Tell XR what to do…  (try: 'add exponential backoff to agent.ts', 'research top landing page trends', 'build a personal site')"
+            value={composer}
+            onChange={(e) => { setComposer(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 140) + "px"; }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          />
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 4px 4px" }}>
+            <button className="xr-btn xr-btn--sm xr-btn--ghost"><Icon.Paperclip width={14} height={14}/> Attach</button>
+            <button className="xr-model-pill"><span className="dot"/>Claude Opus<Icon.ChevronDown width={10} height={10}/></button>
+            <div style={{ flex: 1 }}/>
+            <span className="xr-keycap">↵</span>
+            <button className="xr-send-btn" onClick={send} disabled={!composer.trim()}><Icon.Send width={13} height={13}/></button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

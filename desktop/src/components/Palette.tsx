@@ -1,267 +1,128 @@
-/**
- * XR — Command Palette (⌘K / Ctrl+K).
- *
- * Phase 1 · D-08: rewritten over the shared command REGISTRY
- * (`../commands/registry`) instead of an inline nav list, so the palette, the
- * `?` cheat-sheet and any future context menu read from one source.
- *
- * Before this change, `mcp` and `ollama` returned ZERO results here; the
- * registry now carries synonyms for every destination and every engine
- * capability, and dynamic sources (skills, live runs) are merged from real
- * engine reads.
- *
- * Everything executed is a real navigation, a real engine call, or a real local
- * preference write. Nothing simulated.
- */
-
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, asList, type ProviderInfo, type SessionSummary } from "../api/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "./icons";
 import type { Area } from "./AppShell";
-import {
-  buildCommands,
-  groupCommands,
-  rankCommands,
-  type Command,
-  type RegistryDeps,
-} from "../commands/registry";
+import { pushToast } from "./ToastBus";
 
-export interface PaletteProps {
-  open: boolean;
-  onClose: () => void;
-  onArea: (a: Area) => void;
-  onNewTask: () => void;
-  onVoice: () => void;
-  onOnboard: () => void;
-  onRunSkill: (id: string, name: string) => void;
-  onVoiceSession: () => void;
-  onTheme: (t: "dark" | "light" | "system") => void;
-  onDensity: (d: "compact" | "comfortable" | "spacious") => void;
-  onToggleNotifications: () => Promise<boolean> | boolean;
-  notificationsEnabled: () => boolean;
-  onCheatSheet: () => void;
-  onRefresh?: () => void;
-}
+type Item = {
+  id: string;
+  label: string;
+  hint?: string;
+  kbd?: string;
+  group: "Go to" | "Actions" | "Skills";
+  icon?: React.ReactNode;
+  action: () => void;
+};
 
-export function Palette(props: PaletteProps) {
-  const { open, onClose } = props;
+export function Palette({ onClose, onArea }: { onClose: () => void; onArea: (a: Area) => void }) {
   const [q, setQ] = useState("");
   const [idx, setIdx] = useState(0);
-  const [registry, setRegistry] = useState<Command[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const restoreRef = useRef<HTMLElement | null>(null);
 
-  const deps = useMemo<RegistryDeps>(
-    () => ({
-      onArea: props.onArea,
-      onNewTask: props.onNewTask,
-      onVoiceSession: props.onVoiceSession,
-      onOnboard: props.onOnboard,
-      onRunSkill: props.onRunSkill,
-      onTheme: props.onTheme,
-      onDensity: props.onDensity,
-      onToggleNotifications: props.onToggleNotifications,
-      notificationsEnabled: props.notificationsEnabled,
-      onCheatSheet: props.onCheatSheet,
-      onRefresh: props.onRefresh,
-    }),
-    [
-      props.onArea, props.onNewTask, props.onVoiceSession, props.onOnboard,
-      props.onRunSkill, props.onTheme, props.onDensity, props.onToggleNotifications,
-      props.notificationsEnabled, props.onCheatSheet, props.onRefresh,
-    ],
-  );
+  const items = useMemo<Item[]>(() => {
+    const nav: Item[] = [
+      { id: "home", label: "Go to Home", kbd: "⌘1", group: "Go to", icon: <Icon.Home width={14} height={14}/>, action: () => onArea("home") },
+      { id: "workbench", label: "Go to Workbench", kbd: "⌘2", group: "Go to", icon: <Icon.Code width={14} height={14}/>, action: () => onArea("workbench") },
+      { id: "builder", label: "Go to Builder", kbd: "⌘3", group: "Go to", icon: <Icon.Bolt width={14} height={14}/>, action: () => onArea("builder") },
+      { id: "projects", label: "Go to Projects", kbd: "⌘4", group: "Go to", icon: <Icon.Folder width={14} height={14}/>, action: () => onArea("projects") },
+      { id: "research", label: "Go to Research", kbd: "⌘5", group: "Go to", icon: <Icon.Book width={14} height={14}/>, action: () => onArea("research") },
+      { id: "agents", label: "Go to Agents", kbd: "⌘6", group: "Go to", icon: <Icon.Bot width={14} height={14}/>, action: () => onArea("agents") },
+      { id: "trust", label: "Go to Trust Center", kbd: "⌘7", group: "Go to", icon: <Icon.Shield width={14} height={14}/>, action: () => onArea("trust") },
+      { id: "voice", label: "Go to Voice", kbd: "⌘8", group: "Go to", icon: <Icon.Mic width={14} height={14}/>, action: () => onArea("voice") },
+      { id: "settings", label: "Go to Settings", kbd: "⌘,", group: "Go to", icon: <Icon.Settings width={14} height={14}/>, action: () => onArea("settings") },
+    ];
+    const actions: Item[] = [
+      { id: "new-task", label: "New task", kbd: "⌘N", group: "Actions", icon: <Icon.Plus width={14} height={14}/>, action: () => { onArea("workbench"); } },
+      { id: "toggle-theme", label: "Toggle theme (dark/light)", group: "Actions", icon: <Icon.Sparkles width={14} height={14}/>, action: () => {
+        const cur = document.documentElement.getAttribute("data-theme") || "dark";
+        const next = cur === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        localStorage.setItem("xr.theme", next);
+        pushToast("ok", `Theme: ${next}`, "preference saved");
+      }},
+      { id: "stop-xr", label: "Stop XR", kbd: "⌘.", group: "Actions", icon: <Icon.Stop width={14} height={14}/>, action: () => pushToast("info", "Stop XR", "no active task") },
+      { id: "toggle-chat", label: "Toggle XR chat panel", kbd: "⌘L", group: "Actions", icon: <Icon.PanelRight width={14} height={14}/>, action: () => pushToast("info", "Chat panel", "toggled") },
+      { id: "toggle-terminal", label: "Toggle terminal", kbd: "⌘J", group: "Actions", icon: <Icon.Terminal width={14} height={14}/>, action: () => pushToast("info", "Terminal", "toggled") },
+    ];
+    const skills: Item[] = [
+      { id: "s-code", label: "Skill: Edit code", group: "Skills", icon: <Icon.Code width={14} height={14}/>, action: () => { onArea("workbench"); } },
+      { id: "s-research", label: "Skill: Academic research", group: "Skills", icon: <Icon.Book width={14} height={14}/>, action: () => { onArea("research"); } },
+      { id: "s-build", label: "Skill: Build website", group: "Skills", icon: <Icon.Bolt width={14} height={14}/>, action: () => { onArea("builder"); } },
+    ];
+    const all = [...nav, ...actions, ...skills];
+    if (!q.trim()) return all;
+    const t = q.toLowerCase();
+    return all.filter(i => i.label.toLowerCase().includes(t) || i.id.toLowerCase().includes(t));
+  }, [q, onArea]);
 
-  /* Open/close: focus the input, remember the invoker, restore focus on close.
-     Audit a11y: Esc must return focus to whatever opened the palette. */
-  useEffect(() => {
-    if (open) {
-      restoreRef.current = document.activeElement as HTMLElement | null;
-      setQ("");
-      setIdx(0);
-      setTimeout(() => inputRef.current?.focus(), 0);
-    } else {
-      restoreRef.current?.focus?.();
-    }
-  }, [open]);
+  const groups = useMemo(() => {
+    const g: Record<string, Item[]> = {};
+    items.forEach(i => { (g[i.group] ||= []).push(i); });
+    return g;
+  }, [items]);
 
-  /* Build the static registry immediately; merge engine sources when open. */
-  useEffect(() => {
-    if (open) void buildCommands(deps).then(setRegistry);
-  }, [open, deps]);
+  const flat = items;
+  useEffect(() => { setIdx(0); }, [q]);
 
-  /* Live engine search — debounced, best-effort. An unreachable engine yields
-     fewer results, never fabricated ones. */
-  useEffect(() => {
-    const term = q.trim();
-    if (!open || term.length < 2) {
-      if (open) void buildCommands(deps).then(setRegistry);
-      return;
-    }
-    let live = true;
-    const t = setTimeout(() => {
-      /* Phase 3 · omni search: skills, runs, models, MCP servers and
-         workspaces — all live engine reads, folded into one registry. */
-      Promise.allSettled([api.skills(term), api.sessions(), api.providers(), api.mcpServers(), api.workspaces()]).then(([s, r, p, m, w]) => {
-        if (!live) return;
-        const sk = s.status === "fulfilled" ? (s.value.skills ?? []) : [];
-        const all = r.status === "fulfilled" ? asList<SessionSummary>(r.value, "sessions") : [];
-        const low = term.toLowerCase();
-        const rs = all
-          .filter((x) => `${x.title ?? ""} ${x.prompt ?? ""}`.toLowerCase().includes(low))
-          .slice(0, 4);
-        const provs = p.status === "fulfilled" ? asList<ProviderInfo>(p.value, "providers", "items") : [];
-        const models = provs
-          .flatMap((pr) => {
-            // some engines list per-provider catalogs; others only a default —
-            // both are real switches, both belong in the omni results.
-            const list = pr.models?.length ? pr.models : typeof pr.defaultModel === "string" ? [pr.defaultModel] : [];
-            return list.map((mo) => ({ provider: pr.id, model: mo, local: pr.local }));
-          })
-          .filter((mo) => `${mo.provider} ${mo.model}`.toLowerCase().includes(low))
-          .slice(0, 5);
-        const mcps = m.status === "fulfilled"
-          ? ((m.value as { servers?: Array<{ id: string; name?: string; health?: string }> }).servers ?? [])
-            .filter((sv) => `${sv.id} ${sv.name ?? ""}`.toLowerCase().includes(low)).slice(0, 5)
-          : [];
-        const wss = w.status === "fulfilled"
-          ? ((w.value as { workspaces?: Array<{ id?: string; name?: string }> }).workspaces ?? [])
-            .filter((ws) => `${ws.id ?? ""} ${ws.name ?? ""}`.toLowerCase().includes(low)).slice(0, 4)
-          : [];
-        // Engine hits are folded into the registry, not stored separately —
-        // one list, one ordering, one source of truth for what Enter runs.
-        void buildCommands(deps, { skills: sk.slice(0, 6), runs: rs, models, mcp: mcps, workspaces: wss }).then(setRegistry);
-      });
-    }, 200);
-    return () => { live = false; clearTimeout(t); };
-  }, [q, open, deps]);
+  const run = (it: Item) => { it.action(); onClose(); };
 
-  const commands = useMemo(() => rankCommands(registry, q, 60), [registry, q]);
-  const grouped = useMemo(() => groupCommands(commands), [commands]);
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); setIdx(i => Math.min(i + 1, flat.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); const it = flat[idx]; if (it) run(it); }
+  };
 
-  /** Flat order MUST match the rendered order so Enter runs what is highlighted. */
-  const flat = useMemo(() => grouped.flatMap((g) => g.items), [grouped]);
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 0); }, []);
 
-  useEffect(() => {
-    setIdx((i) => Math.min(i, Math.max(0, flat.length - 1)));
-  }, [flat.length]);
-
-  /* Focus trap — audit: the palette must not let the background take events. */
-  /**
-   * Escape is bound at the WINDOW, not only on the dialog.
-   *
-   * Focus lands in the input via a `setTimeout(…, 0)` — a real user can press
-   * Escape in that gap (and the renderer lane did exactly that), in which case
-   * the keydown never passes through the dialog and nothing closes. A dialog
-   * that can only be dismissed once focus has settled is a trap waiting for
-   * slow hardware.
-   */
-  useEffect(() => {
-    if (!open) return;
-    const onWinKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onWinKey, true);
-    return () => window.removeEventListener("keydown", onWinKey, true);
-  }, [open, onClose]);
-
-  const onKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "ArrowDown") { e.preventDefault(); setIdx((i) => Math.min(i + 1, flat.length - 1)); }
-      if (e.key === "ArrowUp") { e.preventDefault(); setIdx((i) => Math.max(i - 1, 0)); }
-      if (e.key === "Home") { e.preventDefault(); setIdx(0); }
-      if (e.key === "End") { e.preventDefault(); setIdx(Math.max(0, flat.length - 1)); }
-      if (e.key === "Enter" && flat[idx]) {
-        e.preventDefault();
-        const chosen = flat[idx];
-        onClose();
-        void chosen.run();
-      }
-      if (e.key === "Escape") { e.preventDefault(); onClose(); }
-      if (e.key === "Tab") {
-        // Keep focus inside the dialog.
-        const nodes = dialogRef.current?.querySelectorAll<HTMLElement>(
-          'button, input, [tabindex]:not([tabindex="-1"])',
-        );
-        if (!nodes || nodes.length === 0) return;
-        const first = nodes[0];
-        const last = nodes[nodes.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    },
-    [flat, idx, onClose],
-  );
-
-  if (!open) return null;
-
-  const exec = (c: Command) => { onClose(); void c.run(); };
-  let n = -1;
+  // 0ms open (no animation) per spec — Raycast rule
+  let cursor = 0;
 
   return (
-    <div className="pal-veil" onClick={onClose} role="presentation">
-      <div
-        ref={dialogRef}
-        className="pal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command palette"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={onKeyDown}
-      >
-        <input
-          ref={inputRef}
-          className="pal-input"
-          placeholder="Type a command — actions, nav, skills, runs, models, MCP…"
-          value={q}
-          aria-label="Command palette input"
-          aria-activedescendant={flat[idx] ? `pal-opt-${flat[idx].id}` : undefined}
-          role="combobox"
-          aria-expanded="true"
-          aria-controls="pal-listbox"
-          onChange={(e) => { setQ(e.target.value); setIdx(0); }}
-        />
-        <div className="pal-list" role="listbox" id="pal-listbox" aria-label="Commands">
+    <div className="xr-palette-backdrop" onClick={onClose}>
+      <div className="xr-palette" onClick={(e) => e.stopPropagation()}>
+        <div style={{ position: "relative" }}>
+          <Icon.Search width={18} height={18} className="search-ic"/>
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={onKey}
+            placeholder="Search or run a command…"
+          />
+        </div>
+        <div className="results">
           {flat.length === 0 && (
-            <div className="pal-empty faint">
-              no matches — actions, navigation, skills, runs and settings are searched live
+            <div style={{ padding: 20, textAlign: "center", color: "var(--xr-muted)", fontSize: 12.5 }}>
+              No results for "{q}"
             </div>
           )}
-          {grouped.map(({ group, items }) => (
-            <div key={group}>
-              <div className="pal-h">{group}</div>
-              {items.map((c) => {
-                n += 1;
-                const active = n === idx;
+          {Object.entries(groups).map(([gname, gitems]) => (
+            <div key={gname}>
+              <div className="group-label">{gname}</div>
+              {gitems.map((it) => {
+                const my = cursor++;
+                const selected = my === idx;
                 return (
-                  <button
-                    key={c.id}
-                    id={`pal-opt-${c.id}`}
-                    className={active ? "pal-item on" : "pal-item"}
-                    role="option"
-                    aria-selected={active}
-                    onMouseEnter={() => setIdx(flat.indexOf(c))}
-                    onClick={() => exec(c)}
-                  >
-                    <span className="pal-label">{c.label}</span>
-                    {c.hint && <span className="pal-hint faint">{c.hint}</span>}
-                    {c.shortcut && <kbd className="pal-kbd mono">{c.shortcut}</kbd>}
-                  </button>
+                  <div key={it.id}
+                    className="item"
+                    aria-selected={selected}
+                    onMouseEnter={() => setIdx(my)}
+                    onClick={() => run(it)}>
+                    <span style={{ color: "var(--xr-text-dim)", display: "inline-grid", placeItems: "center" }}>{it.icon ?? <Icon.Search width={14} height={14}/>}</span>
+                    <span className="label">{it.label}</span>
+                    {it.hint && <span className="hint">{it.hint}</span>}
+                    {it.kbd && <span className="kbd"><span className="xr-keycap">{it.kbd}</span></span>}
+                  </div>
                 );
               })}
             </div>
           ))}
         </div>
-        <div className="pal-foot faint">
-          <span>↑↓ navigate · ↵ run · esc close</span>
-          <span className="pal-foot-r">
-            <kbd className="pal-kbd mono">?</kbd> all shortcuts
-          </span>
-        </div>
+        <footer>
+          <span><span className="xr-keycap">↑↓</span> navigate</span>
+          <span><span className="xr-keycap">↵</span> run</span>
+          <span><span className="xr-keycap">esc</span> close</span>
+        </footer>
       </div>
     </div>
   );

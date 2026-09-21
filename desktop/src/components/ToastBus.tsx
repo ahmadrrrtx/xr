@@ -1,109 +1,34 @@
-import { useEffect, useRef, useState } from "react";
-import { asList, type Approval, type SessionSummary } from "../api/client";
-import { poll } from "../poll";
+import { useCallback, useEffect, useState } from "react";
 
-export interface Toast {
-  id: number;
-  kind: "ok" | "warn" | "bad" | "info";
-  title: string;
-  body?: string;
-  /* Phase 5 · undo/undo-toast: reversible UI ops (pin/unpin …) attach a real
-     inverse action; the button runs it and dismisses the toast. */
-  action?: { label: string; run: () => void };
-}
-let nextId = 1;
+type Toast = { id: number; kind: "ok" | "warn" | "err" | "info"; title: string; msg?: string };
+let PUSH: ((t: Omit<Toast, "id">) => void) | null = null;
+let nid = 0;
 
-/** Local code (onboarding, palette…) can push toasts without prop-drilling. */
-export function pushToast(
-  kind: Toast["kind"],
-  title: string,
-  body?: string,
-  action?: Toast["action"],
-): void {
-  window.dispatchEvent(new CustomEvent("xr-toast", { detail: { kind, title, body, action } }));
+export function pushToast(kind: Toast["kind"], title: string, msg?: string) {
+  PUSH?.({ kind, title, msg });
 }
 
-/**
- * Phase 1 · ToastBus — change-detection over REAL engine state only:
- * new pending approvals and session status transitions become toasts.
- * Polls /approvals + /sessions (same vocabulary every screen already uses);
- * never invents events, never computes policy.
- */
 export function ToastBus() {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const seenAppr = useRef<Set<string> | null>(null);
-  const seenSess = useRef<Map<string, string> | null>(null);
-
-  const push = (kind: Toast["kind"], title: string, body?: string, action?: Toast["action"]) => {
-    const id = nextId++;
-    setToasts((t) => [...t.slice(-4), { id, kind, title, body, action }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), action ? 8000 : 6500);
-  };
+  const remove = useCallback((id: number) => setToasts((cur) => cur.filter((t) => t.id !== id)), []);
 
   useEffect(() => {
-    const onLocal = (e: Event) => {
-      const d = (e as CustomEvent<Partial<Toast>>).detail ?? {};
-      push((d.kind as Toast["kind"]) ?? "info", String(d.title ?? ""), d.body, d.action);
+    PUSH = (t) => {
+      const id = ++nid;
+      setToasts((cur) => [...cur, { id, ...t }]);
+      setTimeout(() => remove(id), 3200);
     };
-    window.addEventListener("xr-toast", onLocal);
+    return () => { PUSH = null; };
+  }, [remove]);
 
-    const off = poll.subscribe(["approvals", "sessions"], (o) => {
-      if (o.key === "approvals") {
-        if (!o.ok) return;
-        const pending = asList<Approval>(o.value, "pending", "approvals");
-        if (seenAppr.current === null) { seenAppr.current = new Set(pending.map((p) => p.id)); return; }
-        for (const p of pending) {
-          if (!seenAppr.current.has(p.id)) {
-            seenAppr.current.add(p.id);
-            push("warn", "Approval needed", String(p.tool ?? p.action ?? p.reason ?? "agent action").slice(0, 90));
-          }
-        }
-        return;
-      }
-      // sessions
-      if (o.ok) {
-        const sessions = asList<SessionSummary>(o.value, "sessions", "items");
-        if (seenSess.current === null) { seenSess.current = new Map(sessions.map((s) => [s.id, String(s.status ?? "?")])); return; }
-        for (const s of sessions) {
-          const prev = seenSess.current.get(s.id);
-          const now = String(s.status ?? "?");
-          if (prev !== undefined && prev !== now) {
-            seenSess.current.set(s.id, now);
-            const name = (s.title || s.prompt?.slice(0, 60) || s.id) as string;
-            if (/fail|error/.test(now)) push("bad", "Run failed", name);
-            else if (/complet|done/.test(now)) push("ok", "Run completed", name);
-            else if (/stop|cancel/.test(now)) push("info", "Run stopped", name);
-          } else if (prev === undefined) {
-            seenSess.current.set(s.id, now);
-          }
-        }
-      }
-    });
-    return () => { off(); window.removeEventListener("xr-toast", onLocal); };
-  }, []);
-
-  if (toasts.length === 0) return null;
   return (
-    <div className="toast-stack" role="status" aria-live="polite">
+    <div className="xr-toast-host" role="region" aria-label="Notifications">
       {toasts.map((t) => (
-        <div key={t.id} className={`toast ${t.kind}`}>
-          <i className="toast-dot" aria-hidden="true" />
+        <div key={t.id} className={`xr-toast xr-toast--${t.kind}`} onClick={() => remove(t.id)}>
           <div>
-            <div className="toast-title">{t.title}</div>
-            {t.body && <div className="toast-body">{t.body}</div>}
+            <strong>{t.title}</strong>
+            {t.msg && <span>{t.msg}</span>}
           </div>
-          {t.action && (
-            <button
-              className="toast-undo"
-              onClick={() => {
-                t.action?.run();
-                setToasts((x) => x.filter((y) => y.id !== t.id));
-              }}
-            >
-              {t.action.label}
-            </button>
-          )}
-          <button className="toast-x" aria-label="Dismiss" onClick={() => setToasts((x) => x.filter((y) => y.id !== t.id))}>×</button>
         </div>
       ))}
     </div>
