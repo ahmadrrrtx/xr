@@ -26,6 +26,8 @@ export function Teams() {
   const [nodes, setNodes] = useState(BOARD);
   const [selected, setSelected] = useState<string | null>("tester");
   const [paused, setPaused] = useState(false);
+  const [idle, setIdle] = useState(false);
+  const [transcript, setTranscript] = useState<AgentNode | null>(null);
   const active = nodes.filter(n => n.state === "running").length;
   const done = nodes.filter(n => n.state === "done").length;
   const failed = nodes.filter(n => n.state === "failed").length;
@@ -36,27 +38,62 @@ export function Teams() {
     pushToast("info", "Retrying node", "Restarting the agent with fresh context.");
   }
 
+  function cancelNode(id: string) {
+    setNodes(ns => ns.map(n => n.id === id ? { ...n, state: "failed", step: "Cancelled by user" } : n));
+    pushToast("warn", "Node cancelled", id);
+  }
+
   const sel = nodes.find(n => n.id === selected);
 
-  return (
-    <div className="xr-page" style={{ display: "flex", flexDirection: "column" }}>
-      <div className="xr-page-head">
-        <div>
-          <h1>Team run</h1>
-          <p className="xr-subtitle">Phase 2 build — V2.1 Operator · 6 roles · live</p>
+  if (idle) {
+    return (
+      <div className="xr-page" style={{ display: "flex", flexDirection: "column" }}>
+        <div className="xr-page-head">
+          <div>
+            <h1>Team run</h1>
+            <p className="xr-subtitle">Spin up a multi-agent team. XR assigns roles based on the task and shows you the graph live.</p>
+          </div>
         </div>
-        <div className="xr-page-head-actions">
-          <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={() => pushToast("info","Replan","Asking planner for an updated graph")}><Icon.Refresh width={12} height={12}/> Replan</button>
-          {paused
-            ? <button className="xr-btn xr-btn--sm xr-btn--primary" onClick={() => setPaused(false)}><Icon.Play width={12} height={12}/> Resume</button>
-            : <button className="xr-btn xr-btn--sm xr-btn--secondary" onClick={() => setPaused(true)}><Icon.Pause width={12} height={12}/> Pause all</button>}
-          <button className="xr-btn xr-btn--sm" onClick={() => pushToast("info","Stopped","Run cancelled")}><Icon.Stop width={12} height={12}/> Stop</button>
+        <div className="xr-empty-state" style={{ flex: 1 }}>
+          <Icon.Users width={72} height={72} className="xr-empty-illust"/>
+          <h3>No team running</h3>
+          <p>Start a new team task — XR will plan the roles, draw the dependency graph, and let you steer each node.</p>
+          <div className="actions">
+            <button className="xr-btn xr-btn--primary" onClick={() => setIdle(false)}><Icon.Play width={12} height={12}/> Start team task</button>
+            <button className="xr-btn xr-btn--ghost">Team templates</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="xr-page" style={{ display: "flex", flexDirection: "column", padding: 0 }}>
+      <div style={{ padding: "24px 32px 14px", flexShrink: 0 }}>
+        <div className="xr-page-head" style={{ padding: 0 }}>
+          <div>
+            <h1>Team run</h1>
+            <p className="xr-subtitle">V2.1 Operator · 6 roles · live board</p>
+          </div>
+          <div className="xr-page-head-actions">
+            <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={() => setIdle(true)}><Icon.ArrowLeft width={12} height={12}/> Back to idle</button>
+            <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={() => pushToast("info","Replan","Asking planner for an updated graph")}><Icon.Refresh width={12} height={12}/> Replan</button>
+            {paused
+              ? <button className="xr-btn xr-btn--sm xr-btn--primary" onClick={() => setPaused(false)}><Icon.Play width={12} height={12}/> Resume</button>
+              : <button className="xr-btn xr-btn--sm xr-btn--secondary" onClick={() => setPaused(true)}><Icon.Pause width={12} height={12}/> Pause all</button>}
+            <button className="xr-btn xr-btn--sm" onClick={() => { setIdle(true); pushToast("info","Run stopped","Run cancelled"); }}><Icon.Stop width={12} height={12}/> Stop</button>
+          </div>
         </div>
       </div>
 
       <div className="xr-board-controls">
         <StatusDot kind={failed ? "err" : active ? "info" : "ok"} size={10} pulse={active > 0 && !paused}/>
-        <span style={{ fontSize: 12.5 }}>{paused ? "Paused" : active ? `${active} running` : failed ? `${failed} failed` : "All done"}</span>
+        <span style={{ fontSize: 12.5 }}>
+          {paused ? "Paused" :
+            failed ? `${failed} failed · ${active} running` :
+            active ? `${active} role${active === 1 ? "" : "s"} running` :
+            "All done"}
+        </span>
         <div className="stats">
           <span><b>{done}</b> done</span>
           <span><b>{active}</b> running</span>
@@ -94,12 +131,25 @@ export function Teams() {
               {n.state === "failed" && (
                 <div className="node-actions">
                   <button className="xr-btn xr-btn--sm xr-btn--primary" onClick={(e) => { e.stopPropagation(); retry(n.id); }}><Icon.Wrench width={11} height={11}/> Fix & retry</button>
-                  <button className="xr-btn xr-btn--sm xr-btn--ghost">View log</button>
+                  <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={(e) => { e.stopPropagation(); setTranscript(n); }}>Transcript</button>
+                  <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={(e) => { e.stopPropagation(); cancelNode(n.id); }}>Cancel</button>
+                </div>
+              )}
+              {n.state === "running" && (
+                <div className="node-actions">
+                  <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={(e) => { e.stopPropagation(); pushToast("info","Steer sent","Message delivered to "+n.name); }}>Steer</button>
+                  <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={(e) => { e.stopPropagation(); setTranscript(n); }}>Transcript</button>
                 </div>
               )}
               {n.state === "waiting" && (
                 <div className="node-actions">
-                  <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={(e) => { e.stopPropagation(); pushToast("info","Message sent","Sending steer message to agent"); }}>Nudge</button>
+                  <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={(e) => { e.stopPropagation(); pushToast("info","Nudge sent","Pinging "+n.name); }}>Nudge</button>
+                  <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={(e) => { e.stopPropagation(); setTranscript(n); }}>Transcript</button>
+                </div>
+              )}
+              {n.state === "done" && (
+                <div className="node-actions">
+                  <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={(e) => { e.stopPropagation(); setTranscript(n); }}>View transcript</button>
                 </div>
               )}
             </div>
@@ -151,6 +201,49 @@ export function Teams() {
             )}
           </aside>
         )}
+      </div>
+      {transcript && <TranscriptSheet node={transcript} onClose={() => setTranscript(null)} onRetry={(id) => { retry(id); setTranscript(null); }}/>}
+    </div>
+  );
+}
+
+function TranscriptSheet({ node, onClose, onRetry }: { node: AgentNode; onClose: () => void; onRetry: (id: string) => void }) {
+  const lines = [
+    { who: "system" as const, text: `Node ${node.name} (${node.role}) started`, t: "3m 42s" },
+    { who: "user" as const, text: node.step, t: "3m 42s" },
+    { who: "xr" as const, text: "Planning approach: reading repo layout, identifying tests entry point.", t: "3m 30s" },
+    { who: "tool" as const, text: "$ ls -la && cat package.json", t: "3m 28s" },
+    { who: "xr" as const, text: "Found test runner: vitest. Attempting to run tests.", t: "3m 10s" },
+    { who: "tool" as const, text: "$ npm test", t: "3m 08s" },
+    { who: "err" as const, text: "Error: Node.js v20 is required. Found v18.17.0.", t: "2m 59s" },
+    { who: "xr" as const, text: "Node 20 not on PATH. Cannot proceed without runtime.", t: "2m 58s" },
+  ];
+  return (
+    <div className="xr-modal-backdrop" onClick={onClose}>
+      <div className="xr-modal" style={{ width: 720, maxHeight: "80vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--xr-border)", display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="role-chip" style={{ color: ROLE_COLORS[node.role], background: `${ROLE_COLORS[node.role]}14`, fontSize: 10.5, padding: "2px 8px", borderRadius: 999, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{node.role}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{node.name} transcript</div>
+            <div className="mono" style={{ fontSize: 11, color: "var(--xr-muted)" }}>{node.step}</div>
+          </div>
+          <button className="xr-btn xr-btn--icon xr-btn--sm" onClick={onClose}><Icon.X width={14} height={14}/></button>
+        </div>
+        <div style={{ padding: 14, overflow: "auto", flex: 1, fontSize: 12, fontFamily: "var(--xr-font-mono)", lineHeight: 1.7 }}>
+          {lines.map((l, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, marginBottom: 4 }}>
+              <span className="mono" style={{ color: "var(--xr-muted)", width: 60, flexShrink: 0 }}>{l.t}</span>
+              <span className={"xr-pill xr-pill--" + (l.who === "err" ? "err" : l.who === "tool" ? "warn" : l.who === "system" ? "" : "low")} style={{ flexShrink: 0, textTransform: "uppercase", fontSize: 9.5 }}>{l.who}</span>
+              <span style={{ flex: 1, color: l.who === "err" ? "var(--xr-error)" : "var(--xr-text)" }}>{l.text}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: "12px 22px", borderTop: "1px solid var(--xr-border)", background: "var(--xr-bg-2)", display: "flex", gap: 8 }}>
+          <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={onClose}>Close</button>
+          <div style={{ flex: 1 }}/>
+          <button className="xr-btn xr-btn--sm xr-btn--secondary" onClick={() => { navigator.clipboard?.writeText(lines.map(l=>`[${l.t}] ${l.who}: ${l.text}`).join("\n")); pushToast("ok","Copied","Transcript copied to clipboard"); }}>Copy</button>
+          {node.state === "failed" && <button className="xr-btn xr-btn--sm xr-btn--primary" onClick={() => onRetry(node.id)}><Icon.Wrench width={11} height={11}/> Fix & retry</button>}
+        </div>
       </div>
     </div>
   );

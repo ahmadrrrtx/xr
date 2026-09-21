@@ -108,7 +108,7 @@ export function Runs() {
         <button className="xr-filter-chip" aria-pressed={kind === "multi-agent"} onClick={() => setKind("multi-agent")}>Multi-agent</button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", height: "calc(100% - 120px)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 420px", flex: 1, minHeight: 0 }}>
         <div style={{ overflowY: "auto" }}>
           <table className="xr-table">
             <thead><tr><th style={{ width: 16 }}/><th>Task</th><th style={{ width: 90 }}>Kind</th><th style={{ width: 80 }}>Duration</th><th style={{ width: 70 }}>Cost</th><th style={{ width: 100 }}>When</th></tr></thead>

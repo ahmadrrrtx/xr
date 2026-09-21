@@ -106,6 +106,7 @@ export function Library() {
 function SkillsPane() {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("All");
+  const [detail, setDetail] = useState<Skill | null>(null);
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() => Object.fromEntries(SKILLS.map(s => [s.id, s.enabled])));
   const list = useMemo(() => SKILLS.filter(s =>
     (cat === "All" || s.cat === cat) &&
@@ -123,29 +124,33 @@ function SkillsPane() {
           </div>
         ))}
         <h4>Shortcuts</h4>
-        <div className="side-link" onClick={() => pushToast("info", "Featured", "Showing 3 featured skills")}><Icon.Sparkles width={14} height={14}/> Featured</div>
+        <div className="side-link" onClick={() => setCat("All")}><Icon.Sparkles width={14} height={14}/> Featured</div>
         <div className="side-link" onClick={() => setCat("All")}><Icon.Download width={14} height={14}/> Installed</div>
         <div className="side-link" onClick={() => setCat("All")}><Icon.AlertTriangle width={14} height={14}/> Legacy <span className="count" style={{ color: "var(--xr-warning)" }}>{SKILLS.filter(s => s.legacy).length}</span></div>
       </aside>
       <main className="xr-library-main">
-        <div className="xr-library-search">
-          <Icon.Search width={15} height={15}/>
-          <input className="xr-input" placeholder="Search skills…" value={q} onChange={e => setQ(e.target.value)}/>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <div className="xr-library-search" style={{ marginBottom: 0, flex: 1 }}>
+            <Icon.Search width={15} height={15}/>
+            <input className="xr-input" placeholder={`Search ${SKILLS.length} installed skills…`} value={q} onChange={e => setQ(e.target.value)}/>
+          </div>
+          <span className="xr-dim" style={{ fontSize: 12 }}>{list.length} result{list.length === 1 ? "" : "s"}</span>
         </div>
         {list.length === 0 ? (
           <EmptyState illust="search" title="No skills match" desc="Try a different category or clear your search."/>
         ) : (
           <div className="xr-cap-grid">
             {list.map(s => (
-              <div key={s.id} className={"xr-cap-card" + (s.legacy ? " legacy" : "")}>
-                <div className="toggle-corner">
+              <div key={s.id} className={"xr-cap-card" + (s.legacy ? " legacy" : "")} onClick={() => setDetail(s)}>
+                <div className="toggle-corner" onClick={e => e.stopPropagation()}>
                   <label className="xr-toggle"><input type="checkbox" checked={enabled[s.id]} onChange={e => setEnabled(v => ({ ...v, [s.id]: e.target.checked }))}/><span/></label>
                 </div>
                 <div className="cap-ic"><Icon.Bolt width={18} height={18}/></div>
                 <h4>{s.name}{s.featured && <span className="xr-pill xr-pill--low" style={{ marginLeft: 6 }}>Featured</span>}{s.legacy && <span className="xr-pill xr-pill--warn" style={{ marginLeft: 6 }}>Legacy</span>}</h4>
                 <p>{s.desc}</p>
                 <div className="cap-meta">
-                  {s.tools.map(t => <span key={t} className="xr-pill">{t}</span>)}
+                  {s.tools.slice(0, 3).map(t => <span key={t} className="xr-pill">{t}</span>)}
+                  {s.tools.length > 3 && <span className="xr-pill">+{s.tools.length - 3}</span>}
                   <span className="xr-pill">{s.cat}</span>
                 </div>
               </div>
@@ -153,18 +158,108 @@ function SkillsPane() {
           </div>
         )}
       </main>
+      {detail && <SkillDetailSheet skill={detail} enabled={enabled[detail.id]} onClose={() => setDetail(null)} onToggle={() => setEnabled(v => ({ ...v, [detail.id]: !v[detail.id] }))} onRun={() => { pushToast("ok", "Running skill", detail.name); setDetail(null); }}/>}
     </>
   );
 }
 
+function SkillDetailSheet({ skill, enabled, onClose, onToggle, onRun }: { skill: Skill; enabled: boolean; onClose: () => void; onToggle: () => void; onRun: () => void }) {
+  const examples = [
+    `@${skill.name.toLowerCase().replace(/\s+/g, "-")} on src/core/agent.ts`,
+    `Use ${skill.name.toLowerCase()} for the open file`,
+    `XR, ${skill.name.toLowerCase()} and explain what you changed`,
+  ];
+  return (
+    <div className="xr-modal-backdrop" onClick={onClose}>
+      <div className="xr-modal" style={{ width: 640 }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "20px 22px 14px", display: "flex", gap: 14, alignItems: "flex-start" }}>
+          <div style={{ width: 44, height: 44, borderRadius: "var(--xr-radius-md)", background: skill.legacy ? "rgba(255,181,71,0.1)" : "rgba(0,212,255,0.1)", color: skill.legacy ? "var(--xr-warning)" : "var(--xr-primary)", display: "grid", placeItems: "center" }}>
+            <Icon.Bolt width={22} height={22}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: "-0.01em" }}>{skill.name}</h2>
+            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+              <span className="xr-pill">{skill.cat}</span>
+              {skill.tools.map(t => <span key={t} className="xr-pill">{t}</span>)}
+              {skill.legacy && <span className="xr-pill xr-pill--warn">Basic manifest</span>}
+              {skill.installed && <span className="xr-pill xr-pill--low">Installed</span>}
+            </div>
+            <p style={{ margin: "10px 0 0", fontSize: 13, color: "var(--xr-text-dim)", lineHeight: 1.55 }}>{skill.desc}</p>
+          </div>
+          <button className="xr-btn xr-btn--icon xr-btn--sm" onClick={onClose} title="Close"><Icon.X width={14} height={14}/></button>
+        </div>
+
+        <div style={{ padding: "4px 22px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ background: "var(--xr-bg-2)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-md)", padding: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--xr-muted)", marginBottom: 6 }}>Permissions required</div>
+            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12, color: "var(--xr-text-dim)", lineHeight: 1.8 }}>
+              {skill.tools.includes("Shell") && <li>Run shell commands in workspace</li>}
+              {skill.tools.includes("Edit") && <li>Read & write files in workspace</li>}
+              {skill.tools.includes("Fetch") && <li>Fetch web pages (egress)</li>}
+              {skill.tools.includes("Git") && <li>Git operations (commit, diff, branch)</li>}
+              {skill.tools.length === 0 && <li>In-editor only — no external access</li>}
+            </ul>
+          </div>
+          <div style={{ background: "var(--xr-bg-2)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-md)", padding: 12 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--xr-muted)", marginBottom: 6 }}>Provenance</div>
+            <div style={{ fontSize: 12, color: "var(--xr-text-dim)", lineHeight: 1.8 }}>
+              <div>Source: <span style={{ color: "var(--xr-text)" }}>xr/builtin</span></div>
+              <div>Version: <span className="mono">1.3.0</span></div>
+              <div>Last updated: <span className="mono">3 days ago</span></div>
+              <div>Signed: <span style={{ color: "var(--xr-success)" }}>xr-official</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: "0 22px 16px" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--xr-muted)", marginBottom: 6 }}>Example prompts</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {examples.map((e, i) => (
+              <div key={i} className="mono" style={{ background: "var(--xr-bg-2)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-sm)", padding: "8px 10px", fontSize: 11.5 }}>{e}</div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ padding: "14px 22px", borderTop: "1px solid var(--xr-border)", background: "var(--xr-bg-2)", display: "flex", alignItems: "center", gap: 10 }}>
+          <label className="xr-toggle"><input type="checkbox" checked={enabled} onChange={onToggle}/><span/></label>
+          <span style={{ fontSize: 12, color: "var(--xr-text-dim)" }}>{enabled ? "Enabled" : "Disabled"} in composer</span>
+          <div style={{ flex: 1 }}/>
+          <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={onClose}>Cancel</button>
+          <button className="xr-btn xr-btn--sm xr-btn--primary" onClick={onRun}><Icon.Play width={12} height={12}/> Run in Work</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function McpPane() {
+  const [adding, setAdding] = useState(false);
+  const [url, setUrl] = useState("");
+  const [servers, setServers] = useState(MCP_SERVERS);
+  function add() {
+    if (!url.trim()) return;
+    setServers(s => [{ id: "new-"+Date.now(), name: url.split("/").pop() || url, url, status: "unapproved", tools: 0 }, ...s]);
+    setUrl(""); setAdding(false);
+    pushToast("ok","Server added","Approve tool grants to activate");
+  }
   return (
     <main className="xr-library-main" style={{ maxWidth: 820 }}>
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <button className="xr-btn xr-btn--primary xr-btn--sm"><Icon.Plus width={12} height={12}/> Connect server</button>
+        <button className="xr-btn xr-btn--primary xr-btn--sm" onClick={() => setAdding(v => !v)}><Icon.Plus width={12} height={12}/> Connect server</button>
         <button className="xr-btn xr-btn--ghost xr-btn--sm" onClick={() => pushToast("ok", "Health rechecked", "All approved servers responded")}><Icon.Refresh width={12} height={12}/> Recheck health</button>
       </div>
-      {MCP_SERVERS.map(m => (
+      {adding && (
+        <div style={{ background: "var(--xr-surface)", border: "1px solid var(--xr-border)", borderRadius: "var(--xr-radius-md)", padding: 14, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Connect MCP server</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input className="xr-input" placeholder="npx -y @modelcontextprotocol/server-…" value={url} onChange={e => setUrl(e.target.value)} style={{ flex: 1 }} autoFocus/>
+            <button className="xr-btn xr-btn--sm xr-btn--primary" onClick={add}>Connect</button>
+            <button className="xr-btn xr-btn--sm xr-btn--ghost" onClick={() => { setAdding(false); setUrl(""); }}>Cancel</button>
+          </div>
+          <div className="xr-dim" style={{ fontSize: 11.5, marginTop: 6 }}>Paste an npx command, STDIO path, or http(s) URL. XR will fetch the manifest and ask you to approve each tool before activation.</div>
+        </div>
+      )}
+      {servers.map(m => (
         <div key={m.id} className={"xr-mcp-card" + (m.drift ? " drift" : "")}>
           <StatusDot kind={m.status === "ok" ? "ok" : m.status === "err" ? "err" : "warn"} size={10}/>
           <div className="mcp-body">

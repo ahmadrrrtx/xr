@@ -967,7 +967,9 @@
   border-radius: var(--xr-radius-md); border: 1px solid var(--xr-border);
   margin-bottom: var(--xr-s-3);
 }
-.about-card { grid-column: 1 / -1; max-width: 640px; }
+.about-card { grid-column: 1 / -1; max-width: 640px; overflow: hidden; padding: 0; gap: 0; }
+.about-card .about-hero { margin: 0 auto; max-width: 100%; border-radius: var(--xr-radius-md) var(--xr-radius-md) 0 0; border: 0; border-bottom: 1px solid var(--xr-border); }
+.about-card .kv2 { padding: 14px 16px; }
 
 /* --- Phase 3 · MCP drift card (SEC-01 legibility) -------------------------- */
 .drift-card {

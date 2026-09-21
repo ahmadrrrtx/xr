@@ -32,7 +32,7 @@ export function Memory() {
           }}><Icon.Trash width={12} height={12}/> Clear session</button>
         </div>
       </div>
-      <div className="xr-section-grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+      <div className="xr-stat-grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", margin: "0 0 16px" }}>
         <div className="xr-stat-card"><StatusDot kind="ok" size={8}/><div className="label">Global facts</div><div className="value mono">{entries.filter(e => e.scope === "global").length}</div></div>
         <div className="xr-stat-card"><StatusDot kind="info" size={8}/><div className="label">Workspace facts</div><div className="value mono">{entries.filter(e => e.scope === "workspace").length}</div></div>
         <div className="xr-stat-card"><StatusDot kind="warn" size={8}/><div className="label">Session</div><div className="value mono">{entries.filter(e => e.scope === "session").length}</div></div>

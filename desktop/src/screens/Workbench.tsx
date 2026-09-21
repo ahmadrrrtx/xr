@@ -5,6 +5,7 @@ import { DiffViewer } from "../components/DiffViewer";
 import { ResizeHandle, useResizer } from "../components/Resizer";
 import { ContextMenu, type CtxState } from "../components/ContextMenu";
 import { pushToast } from "../components/ToastBus";
+import { TERMINAL_SPLASH_SRC } from "../components/Brand";
 
 /* File tree data — demo for Phase 1. Will wire to real project tree via API later. */
 type Node = { name: string; type: "file" | "dir"; children?: Node[]; ext?: string; status?: "M" | "A" | "D"; open?: boolean };
@@ -335,6 +336,13 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
               </div>
             </div>
             <div className="xr-terminal-body">
+              <div className="xr-term-motd">
+                <img src={TERMINAL_SPLASH_SRC} alt="XR terminal splash" style={{ maxWidth: 420, width: "100%", display: "block", marginBottom: 8, opacity: 0.92 }} draggable={false}/>
+                <div style={{ fontSize: 11.5, color: "var(--xr-text-dim)", marginBottom: 10, lineHeight: 1.6 }}>
+                  Welcome to <b style={{ color: "var(--xr-primary)" }}>xr</b> — engine <span className="mono">v2.1.0-phase3</span>.
+                  Workspace: <span className="mono">~/xr</span>. Type <span className="mono">help</span> for commands.
+                </div>
+              </div>
               <div>
                 <span className="prompt">xr@xr</span>
                 <span style={{ color: "var(--xr-muted)" }}>:</span>
