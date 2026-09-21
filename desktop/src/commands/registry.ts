@@ -49,11 +49,12 @@ export interface Command {
 const AREA_KEYWORDS: Record<string, string[]> = {
   home: ["start", "dashboard", "overview", "compose", "goal"],
   projects: ["repository", "repo", "roots", "folders"],
-  work: ["chat", "talk", "ask", "task", "conversation"],
-  workspace: ["editor", "files", "code", "terminal", "git", "diff"],
+  workbench: ["work", "chat", "talk", "ask", "task", "conversation", "editor", "code"],
+  builder: ["preview", "deploy", "live"],
   research: ["browse", "sources", "citations", "web"],
   memory: ["recall", "facts", "context", "remember"],
   models: ["ollama", "lmstudio", "llamacpp", "vllm", "local", "provider", "byok", "openai", "anthropic"],
+  diagnostics: ["health", "check", "doctor", "status", "fix", "repair"],
   control: ["computer", "mouse", "keyboard", "automat", "screen"],
   agents: ["multi-agent", "team", "workflow", "orchestrat", "delegate"],
   runs: ["history", "sessions", "log", "inspect"],
@@ -75,7 +76,7 @@ export interface RegistryDeps {
   /** Seed a Work prompt with a skill invocation. */
   onRunSkill: (id: string, name: string) => void;
   /** Set theme; "system" follows the OS. */
-  onTheme: (t: "dark" | "light" | "system") => void;
+  onTheme: (t: "dark" | "light" | "void" | "system") => void;
   /** Set density. */
   onDensity: (d: "compact" | "comfortable" | "spacious") => void;
   /** Toggle opt-in OS notifications. */
@@ -90,15 +91,16 @@ export interface RegistryDeps {
 /** Area labels, kept in one place so the palette and cheat-sheet agree. */
 export const AREA_LABELS: Array<[Area, string]> = [
   ["home", "Home"],
+  ["workbench", "Workbench (editor + chat)"],
+  ["builder", "Builder (preview)"],
   ["projects", "Projects"],
-  ["work", "Work (chat)"],
-  ["workspace", "Workspace (files)"],
   ["research", "Research"],
-  ["memory", "Memory"],
+  ["agents", "Multi-agent"],
+  ["runs", "Runs history"],
+  ["diagnostics", "Diagnostics"],
   ["models", "Model Center"],
   ["control", "Control Room"],
-  ["agents", "Multi-agent"],
-  ["runs", "Team runs"],
+  ["memory", "Memory"],
   ["library", "Library"],
   ["trust", "Trust Center"],
   ["voice", "Voice mode"],
@@ -172,6 +174,7 @@ export function staticCommands(deps: RegistryDeps): Command[] {
   for (const [id, label, kw] of [
     ["dark", "Theme: Dark", ["appearance", "night", "colour", "color"]],
     ["light", "Theme: Light", ["appearance", "day", "colour", "color"]],
+    ["void", "Theme: Void (minimal)", ["appearance", "quiet", "minimal", "mono"]],
     ["system", "Theme: Follow system", ["appearance", "auto", "os", "colour", "color"]],
   ] as const) {
     cmds.push({
@@ -179,7 +182,7 @@ export function staticCommands(deps: RegistryDeps): Command[] {
       group: "Settings",
       label,
       keywords: ["theme", ...kw],
-      run: () => deps.onTheme(id as "dark" | "light" | "system"),
+      run: () => deps.onTheme(id as "dark" | "light" | "void" | "system"),
     });
   }
   for (const [id, label] of [

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../components/icons";
 import { CodeEditor } from "../components/Editor";
 import { DiffViewer } from "../components/DiffViewer";
+import { ResizeHandle, useResizer } from "../components/Resizer";
 
 /* File tree data — demo for Phase 1. Will wire to real project tree via API later. */
 type Node = { name: string; type: "file" | "dir"; children?: Node[]; ext?: string; status?: "M" | "A" | "D"; open?: boolean };
@@ -118,10 +119,26 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
   ]);
   const [thinking, setThinking] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(true);
+  const [explorerOpen, setExplorerOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(defaultChatOpen);
   const chatRef = useRef<HTMLDivElement>(null);
+
+  // Resizable panels
+  const explorerR = useResizer("--xr-explorer-w", "x", 240, 180, 420, "xr.wb.explorer");
+  const chatR = useResizer("--xr-chat-w", "x", 380, 260, 640, "xr.wb.chat");
+  const termR = useResizer("--xr-terminal-h", "y", 200, 80, 500, "xr.wb.terminal");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeTab = useMemo(() => tabs.find(t => t.active) ?? tabs[0], [tabs]);
+
+  // Push panel hide state up to the .xr-body grid (owned by AppShell) via DOM classes.
+  useEffect(() => {
+    const body = document.querySelector(".xr-body");
+    if (!body) return;
+    body.classList.toggle("xr-hide-explorer", !explorerOpen);
+    body.classList.toggle("xr-hide-chat", !chatOpen);
+    return () => { body.classList.remove("xr-hide-explorer", "xr-hide-chat"); };
+  }, [explorerOpen, chatOpen]);
 
   // Seed from Home
   useEffect(() => {
@@ -219,13 +236,13 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
 
   return (
     <>
-      {/* Explorer */}
-      <div className="xr-explorer">
+      {/* Explorer (always in DOM for resizer; hidden via class) */}
+      <div className="xr-explorer" style={{ display: explorerOpen ? undefined : "none" }}>
         <div className="xr-explorer-header">
           <span>Explorer</span>
           <div className="actions">
             <button className="xr-btn xr-btn--icon xr-btn--sm" title="New file"><Icon.Plus width={13} height={13}/></button>
-            <button className="xr-btn xr-btn--icon xr-btn--sm" title="Collapse"><Icon.ChevronDown width={13} height={13}/></button>
+            <button className="xr-btn xr-btn--icon xr-btn--sm" onClick={() => setExplorerOpen(false)} title="Hide explorer (⌘B)"><Icon.ChevronLeft width={13} height={13}/></button>
           </div>
         </div>
         <input className="xr-search-files xr-input" placeholder="Search files…"/>
@@ -244,6 +261,9 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
         </div>
       </div>
 
+      {/* Explorer ↔ Editor resizer */}
+      {explorerOpen && <ResizeHandle direction="v" {...explorerR.handlers}/>}
+
       {/* Editor area */}
       <div className="xr-editor-area">
         <div className="xr-tabbar">
@@ -256,6 +276,8 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
             </button>
           ))}
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 2, paddingRight: 6 }}>
+            {!explorerOpen && <button className="xr-btn xr-btn--icon xr-btn--sm" onClick={() => setExplorerOpen(true)} title="Show explorer (⌘B)"><Icon.PanelLeft width={14} height={14}/></button>}
+            {!chatOpen && <button className="xr-btn xr-btn--icon xr-btn--sm" onClick={() => setChatOpen(true)} title="Show chat (⌘L)"><Icon.PanelRight width={14} height={14}/></button>}
             <button className="xr-btn xr-btn--icon xr-btn--sm" title="Split editor"><Icon.PanelRight width={14} height={14}/></button>
             <button className="xr-btn xr-btn--icon xr-btn--sm" onClick={() => setTerminalOpen(v => !v)} title="Toggle terminal (⌘J)">
               <Icon.PanelBottom width={14} height={14}/>
@@ -282,6 +304,9 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
             </div>
           )}
         </div>
+
+        {/* Editor ↔ Terminal resizer */}
+        {terminalOpen && <ResizeHandle direction="h" {...termR.handlers}/>}
 
         {/* Terminal */}
         {terminalOpen && (
@@ -319,8 +344,11 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
         )}
       </div>
 
+      {/* Editor ↔ Chat resizer */}
+      {chatOpen && <ResizeHandle direction="v" {...chatR.handlers}/>}
+
       {/* XR Chat panel */}
-      <div className="xr-chat">
+      <div className="xr-chat" style={{ display: chatOpen ? undefined : "none" }}>
         <div className="xr-chat-head">
           <button
             className={`xr-follows-chip ${followsCursor ? "" : "off"}`}
@@ -337,6 +365,7 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
               </button>
             ))}
           </div>
+          <button className="xr-btn xr-btn--icon xr-btn--sm" onClick={() => setChatOpen(false)} title="Hide chat (⌘L)"><Icon.X width={12} height={12}/></button>
         </div>
 
         {chatTab === "chat" && (
@@ -423,72 +452,6 @@ export function Workbench({ seed, onConsumed, defaultChatOpen = true }: { seed?:
   );
 }
 
-/* Simple code viewer with line numbers and basic token coloring */
-function CodeView({ content, ext }: { content: string; ext?: string }) {
-  const lines = content.split("\n");
-  const diffAdd = new Set([13, 14, 15]); // demo — lines added by XR
-  const diffDel = new Set<number>();
-  return (
-    <div style={{ display: "flex", height: "100%", overflow: "auto", fontFamily: "var(--xr-font-mono)", fontSize: 13, lineHeight: "21px" }}>
-      <div style={{ padding: "10px 10px 10px 14px", color: "var(--xr-muted)", textAlign: "right", userSelect: "none", borderRight: "1px solid var(--xr-border)", minWidth: 52 }}>
-        {lines.map((_, i) => (
-          <div key={i} style={{ position: "relative" }}>
-            {diffAdd.has(i) && <span style={{ position: "absolute", left: -14, top: 0, bottom: 0, width: 3, background: "var(--xr-success)" }}/>}
-            {diffDel.has(i) && <span style={{ position: "absolute", left: -14, top: 0, bottom: 0, width: 3, background: "var(--xr-error)" }}/>}
-            {i + 1}
-          </div>
-        ))}
-      </div>
-      <pre style={{ margin: 0, padding: "10px 16px", flex: 1, minWidth: 0, overflowX: "auto" }}>
-        {lines.map((line, i) => {
-          let cls = "";
-          if (diffAdd.has(i)) cls = "xr-line-add";
-          else if (diffDel.has(i)) cls = "xr-line-del";
-          return (
-            <div key={i} className={cls} style={{ position: "group-hunk" }}>
-              <CodeLine text={line} ext={ext}/>
-              {diffAdd.has(i) && <span style={{ position: "absolute", right: 14, display: "none", gap: 4 }} className="hunk-actions-inline">
-                <button style={{ width: 20, height: 20, border: 0, borderRadius: 4, background: "rgba(0,255,136,0.2)", color: "var(--xr-success)", cursor: "pointer" }}>✓</button>
-                <button style={{ width: 20, height: 20, border: 0, borderRadius: 4, background: "rgba(255,77,94,0.2)", color: "var(--xr-error)", cursor: "pointer" }}>✕</button>
-              </span>}
-            </div>
-          );
-        })}
-      </pre>
-    </div>
-  );
-}
-
-function CodeLine({ text, ext }: { text: string; ext?: string }) {
-  // Very lightweight token coloring for demo. Phase 2 swaps in Monaco/CodeMirror.
-  if (ext === "ts" || ext === "tsx" || ext === "js") {
-    const parts = text.split(/(\/\/.*$|import |from |export |async |await |class |function |const |let |var |return |if |else |for |while |throw |new |private |public |return |interface |type |true|false|null|undefined|void|"[^"]*"|'[^']*'|`[^`]*`|\b\d+\b)/g);
-    return <>{parts.map((p, i) => {
-      if (!p) return null;
-      if (/^\/\/.*/.test(p)) return <span key={i} style={{ color: "#6B7A99", fontStyle: "italic" }}>{p}</span>;
-      if (/^(import|from|export|async|await|class|function|const|let|var|return|if|else|for|while|throw|new|private|public|interface|type|void)$/.test(p)) return <span key={i} style={{ color: "#C792EA" }}>{p}</span>;
-      if (/^(true|false|null|undefined)$/.test(p)) return <span key={i} style={{ color: "#FFB547" }}>{p}</span>;
-      if (/^["'`]/.test(p)) return <span key={i} style={{ color: "#00FF88" }}>{p}</span>;
-      if (/^\d+$/.test(p)) return <span key={i} style={{ color: "#FFB547" }}>{p}</span>;
-      return <span key={i} style={{ color: "#E6EAF5" }}>{p}</span>;
-    })}</>;
-  }
-  if (ext === "json") {
-    return <span style={{ color: "#E6EAF5" }} dangerouslySetInnerHTML={{ __html: text
-      .replace(/"([^"]+)":/g, '<span style="color:#6048F8">"$1"</span>:')
-      .replace(/: "([^"]+)"/g, ': <span style="color:#00FF88">"$1"</span>')
-      .replace(/: (true|false)/g, ': <span style="color:#FFB547">$1</span>')
-    }}/>;
-  }
-  if (ext === "md") {
-    if (text.startsWith("#")) return <span style={{ color: "var(--xr-primary)", fontWeight: 700 }}>{text}</span>;
-    if (text.startsWith("```")) return <span style={{ color: "var(--xr-muted)" }}>{text}</span>;
-    if (text.startsWith("##")) return <span style={{ color: "var(--xr-secondary)", fontWeight: 600 }}>{text}</span>;
-  }
-  return <span style={{ color: "#E6EAF5" }}>{text}</span>;
-}
-
-/* Plan tab */
 function PlanPanel({ onStart }: { onStart: () => void }) {
   const [steps, setSteps] = useState([
     { id: 1, text: "Read src/core/agent.ts to understand the current retry logic", checked: true },
@@ -573,7 +536,7 @@ function DiffsPanel() {
         {
           id: "h3",
           context: "+1,0",
-          removed: [],
+          removed: [] as string[],
           added: [
             "export async function sleep(ms: number, signal?: AbortSignal) {",
             "  return new Promise((resolve, reject) => {",
@@ -606,8 +569,8 @@ function DiffsPanel() {
           <DiffViewer
             path={cur.path}
             hunks={cur.hunks}
-            onReject={(id) => console.log("reject", id)}
-            onAcceptAll={() => console.log("accept all", cur.path)}
+            onReject={() => {}}
+            onAcceptAll={() => {}}
           />
         </div>
       </div>

@@ -34,7 +34,7 @@ function App() {
   const [palette, setPalette] = useState(false);
   const [cheat, setCheat] = useState(false);
   const [engineVersion, setEngineVersion] = useState<string | null>(null);
-  const [provider, setProvider] = useState<ProviderState>({ name: "Claude Opus", kind: "ok", label: "cloud" });
+  const [provider] = useState<ProviderState>({ name: "Claude Opus", kind: "ok", label: "cloud" });
   const [approvalCount] = useState(2);
 
   // Attempt engine link once; if unavailable (web preview) show stub state.
@@ -43,7 +43,7 @@ function App() {
     import("./api/client").then(({ api, engineEndpointFacts }) => {
       engineEndpointFacts().then(f => {
         if (!live) return;
-        if (f.via === "sidecar" || f.via === "proxy") {
+        if (f.via === "sidecar" || (f.via as string) === "proxy" || (f.via as string) === "dev-proxy") {
           api.health?.()?.then((h: unknown) => {
             const v = (h as { version?: string })?.version ?? null;
             if (live) setEngineVersion(v);
@@ -73,9 +73,7 @@ function App() {
   }, []);
 
   const chromeAreas: Area[] = ["workbench", "builder"];
-  const isHome = area === "home";
   const isFullWidth = !chromeAreas.includes(area);
-  const isChrome = chromeAreas.includes(area);
 
   return (
     <AppShell
@@ -92,7 +90,7 @@ function App() {
       providerState={provider}
       projectName="xr"
       approvalCount={approvalCount}
-      isHome={isHome}
+      isHome={area === "home"}
       isFullWidth={isFullWidth}
     >
       {/* SR live region */}

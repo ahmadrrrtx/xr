@@ -11,7 +11,7 @@ const color = (k: StatusKind) =>
   "var(--xr-muted)";
 
 export function StatusDot({ kind = "idle", size = 8, title, pulse, style, ...rest }:
-  SVGProps<SVGSVGElement> & { kind?: StatusKind; size?: number; pulse?: boolean }) {
+  SVGProps<SVGSVGElement> & { kind?: StatusKind; size?: number; pulse?: boolean; title?: string }) {
   const c = color(kind);
   return (
     <span className="xr-dot-wrap" style={{ display: "inline-grid", placeItems: "center", width: size + 8, height: size + 8, ...style }} title={title}>

@@ -214,6 +214,15 @@ export const Icon = {
   Plug: (p: IP) => (
     <svg {...base(p)}><path d="M9 2v6M15 2v6"/><path d="M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v4"/></svg>
   ),
+  PanelLeft: (p: IP) => (
+    <svg {...base(p)}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+  ),
+  Maximize2: (p: IP) => (
+    <svg {...base(p)}><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+  ),
+  List: (p: IP) => (
+    <svg {...base(p)}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>
+  ),
 };
 
 export type IconName = keyof typeof Icon;

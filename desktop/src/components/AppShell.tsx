@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 import { StatusDot } from "./StatusDot";
 
@@ -45,14 +45,16 @@ export interface AppShellProps {
 
 export function AppShell(props: AppShellProps) {
   const {
-    area, onArea, engineVersion, onOpenPalette, onCheatSheet, voiceState, onVoiceOpen,
+    area, onArea, engineVersion, onOpenPalette, onCheatSheet, voiceState,
     onToggleChat, onToggleTerminal, onToggleExplorer, children,
-    providerState, projectName = "xr", approvalCount = 0, isHome = false,
+    providerState, projectName = "xr", approvalCount = 0,
   } = props;
 
-  const [chatOpen, setChatOpen] = useState(true);
-  const [explorerOpen, setExplorerOpen] = useState(true);
-  const [terminalOpen, setTerminalOpen] = useState(true);
+  // Panel visibility is owned by the screen (e.g. Workbench sets classes on xr-body).
+  // We keep chatOpen/explorerOpen state here only because ⌘L/⌘B may fire from non-workbench areas
+  // and need to move the user into Workbench.
+  const [chatOpen] = useState(true);
+  const [explorerOpen] = useState(true);
 
   // ⌘K → palette; ⌘L → toggle chat; ⌘B → toggle explorer; ⌘J → toggle terminal
   useEffect(() => {
@@ -63,11 +65,10 @@ export function AppShell(props: AppShellProps) {
       else if (meta && e.key.toLowerCase() === "l") {
         e.preventDefault();
         if (area !== "workbench" && area !== "builder") onArea("workbench");
-        setChatOpen((v) => !v);
         onToggleChat?.();
       }
-      else if (meta && e.key.toLowerCase() === "b") { e.preventDefault(); setExplorerOpen((v) => !v); onToggleExplorer?.(); }
-      else if (meta && e.key.toLowerCase() === "j") { e.preventDefault(); setTerminalOpen((v) => !v); onToggleTerminal?.(); }
+      else if (meta && e.key.toLowerCase() === "b") { e.preventDefault(); onToggleExplorer?.(); }
+      else if (meta && e.key.toLowerCase() === "j") { e.preventDefault(); onToggleTerminal?.(); }
       else if (meta && e.key >= "1" && e.key <= "8") {
         const idx = parseInt(e.key, 10) - 1;
         const items: Area[] = ["home", "workbench", "builder", "projects", "research", "agents", "trust", "voice"];
@@ -94,8 +95,6 @@ export function AppShell(props: AppShellProps) {
   const engStatus: "ok" | "warn" | "err" | "idle" | "working" = engineVersion ? "ok" : "err";
   const prov = providerState ?? { name: "connect a model", kind: "idle" as const };
   const isChrome = area === "workbench" || area === "builder";
-  // Status bar provider color: status dots shouldn't use the statusbar's on-primary color
-  const statusDotStyle = { color: "var(--xr-on-primary)" };
 
   return (
     <div className="xr-app">
