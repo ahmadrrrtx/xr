@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Icon } from "../components/icons";
 import { StatusDot } from "../components/StatusDot";
+import { api } from "../api/client";
 
 export function Home({
   onOpenRun, onGoWork, onReview, approvalCount = 2,
@@ -11,6 +12,19 @@ export function Home({
   approvalCount?: number;
 }) {
   const [composer, setComposer] = useState("");
+  const [engineOk, setEngineOk] = useState<boolean | null>(null);
+  const [engineVer, setEngineVer] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const probe = () => {
+      api.health?.()
+        ?.then((h: unknown) => { if (!alive) return; setEngineOk(true); setEngineVer((h as { version?: string })?.version ?? null); })
+        .catch(() => { if (!alive) return; setEngineOk(false); setEngineVer(null); });
+    };
+    probe();
+    const t = window.setInterval(probe, 5000);
+    return () => { alive = false; window.clearInterval(t); };
+  }, []);
   const send = useCallback(() => {
     const seed = composer.trim();
     if (!seed) return;
@@ -124,7 +138,7 @@ export function Home({
           </h3>
           <div className="sys-status">
             {[
-              { label: "Engine", kind: "ok" as const, value: "Online" },
+              { label: "Engine", kind: (engineOk === null ? "idle" : engineOk ? "ok" : "err") as "ok"|"err"|"idle", value: engineOk ? (engineVer ? `v${engineVer}` : "Online") : engineOk === null ? "Checking…" : "Offline" },
               { label: "Ollama", kind: "warn" as const, value: "Not detected" },
               { label: "Cloud providers", kind: "ok" as const, value: "Connected" },
               { label: "Voice", kind: "idle" as const, value: "Offline" },

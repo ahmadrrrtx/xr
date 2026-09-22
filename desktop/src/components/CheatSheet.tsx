@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Icon } from "./icons";
 
 const SHORTCUTS: Array<{ keys: string[]; desc: string; group: string }> = [
@@ -12,34 +12,57 @@ const SHORTCUTS: Array<{ keys: string[]; desc: string; group: string }> = [
   { keys: ["⌘", "6"], desc: "Agents", group: "Navigation" },
   { keys: ["⌘", "7"], desc: "Trust Center", group: "Navigation" },
   { keys: ["⌘", "8"], desc: "Voice", group: "Navigation" },
+  { keys: ["⌘", "9"], desc: "Computer Control", group: "Navigation" },
   { keys: ["⌘", ","], desc: "Settings", group: "Navigation" },
   { keys: ["⌘", "L"], desc: "Toggle XR chat panel / focus composer", group: "Workbench" },
   { keys: ["⌘", "B"], desc: "Toggle file explorer", group: "Workbench" },
   { keys: ["⌘", "J"], desc: "Toggle terminal", group: "Workbench" },
   { keys: ["⌘", "N"], desc: "New task", group: "Workbench" },
   { keys: ["⌘", "O"], desc: "Open project / folder", group: "Workbench" },
+  { keys: ["⌘", "P"], desc: "Quick open file", group: "Workbench" },
   { keys: ["⌘", "↵"], desc: "Approve / Send / Start executing", group: "Actions" },
   { keys: ["⌘", "."], desc: "Stop XR / Deny approval", group: "Actions" },
-  { keys: ["Esc"], desc: "Close / Cancel / Deny", group: "Actions" },
+  { keys: ["Esc"], desc: "Close / Cancel / Dock voice (session keeps running)", group: "Actions" },
   { keys: ["⌘", "T"], desc: "New terminal", group: "Terminal" },
-  { keys: ["⌘", "P"], desc: "Quick open file", group: "Workbench" },
-  { keys: ["⌘", "Shift", "Space"], desc: "Push to talk (voice)", group: "Voice" },
+  { keys: ["Space"], desc: "Start/stop voice (when not in a text field)", group: "Voice" },
+  { keys: ["⌘", "⇧", "P"], desc: "Global push-to-talk (works anywhere)", group: "Voice" },
+  { keys: ["Hold", "PT"], desc: "Push-to-talk (hold to speak, release to mute)", group: "Voice" },
 ];
 
 export function CheatSheet({ onClose }: { onClose: () => void }) {
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
-    const on = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const prev = document.activeElement as HTMLElement | null;
+    const tid = window.setTimeout(() => closeRef.current?.focus(), 40);
+    const on = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+      if (e.key !== "Tab") return;
+      const card = cardRef.current;
+      if (!card) return;
+      const focusables = card.querySelectorAll<HTMLElement>("button, [tabindex]:not([tabindex='-1'])");
+      if (!focusables.length) return;
+      const first = focusables[0]; const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener("keydown", on);
-    return () => window.removeEventListener("keydown", on);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.clearTimeout(tid);
+      window.removeEventListener("keydown", on);
+      document.body.style.overflow = "";
+      prev?.focus?.();
+    };
   }, [onClose]);
   const groups = Array.from(new Set(SHORTCUTS.map(s => s.group)));
   return (
     <div className="xr-cheat-backdrop" onClick={onClose}>
-      <div className="xr-cheat" onClick={(e) => e.stopPropagation()}>
+      <div className="xr-cheat" onClick={(e) => e.stopPropagation()} ref={cardRef} role="dialog" aria-modal="true" aria-labelledby="xr-cheat-title">
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-          <Icon.Help width={18} height={18} style={{ color: "var(--xr-primary)" }}/>
-          <h2 style={{ margin: 0, fontSize: 18, fontFamily: "var(--xr-font-display)", fontWeight: 600 }}>Keyboard shortcuts</h2>
-          <button className="xr-btn xr-btn--icon" style={{ marginLeft: "auto" }} onClick={onClose}><Icon.X width={14} height={14}/></button>
+          <Icon.Help width={18} height={18} style={{ color: "var(--xr-primary)" }} aria-hidden="true"/>
+          <h2 id="xr-cheat-title" style={{ margin: 0, fontSize: 18, fontFamily: "var(--xr-font-display)", fontWeight: 600 }}>Keyboard shortcuts</h2>
+          <button className="xr-btn xr-btn--icon" style={{ marginLeft: "auto" }} onClick={onClose} ref={closeRef} aria-label="Close shortcut sheet"><Icon.X width={14} height={14}/></button>
         </div>
         {groups.map(g => (
           <div key={g}>
@@ -58,3 +81,4 @@ export function CheatSheet({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+

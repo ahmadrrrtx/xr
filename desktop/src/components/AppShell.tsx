@@ -74,9 +74,9 @@ export function AppShell(props: AppShellProps) {
       }
       else if (meta && e.key.toLowerCase() === "b") { e.preventDefault(); onToggleExplorer?.(); }
       else if (meta && e.key.toLowerCase() === "j") { e.preventDefault(); onToggleTerminal?.(); }
-      else if (meta && e.key >= "1" && e.key <= "8") {
+      else if (meta && e.key >= "1" && e.key <= "9") {
         const idx = parseInt(e.key, 10) - 1;
-        const items: Area[] = ["home", "workbench", "builder", "projects", "research", "agents", "trust", "voice"];
+        const items: Area[] = ["home", "workbench", "builder", "projects", "research", "agents", "trust", "voice", "control"];
         if (items[idx]) { e.preventDefault(); onArea(items[idx]); }
       } else if (meta && e.key === ",") {
         e.preventDefault(); onArea("settings");
@@ -169,7 +169,7 @@ export function AppShell(props: AppShellProps) {
           <button className="rail-btn" onClick={() => onArea("diagnostics")} aria-current={area === "diagnostics" ? "page" : undefined} title="Diagnostics">
             <Icon.Activity width={20} height={20}/>
           </button>
-          <button className="rail-btn" onClick={() => onArea("control")} aria-current={area === "control" ? "page" : undefined} title="Computer Control">
+          <button className="rail-btn" onClick={() => onArea("control")} aria-current={area === "control" ? "page" : undefined} title="Computer Control (⌘9)">
             <Icon.Crosshair width={20} height={20}/>
           </button>
           <button className="rail-btn" onClick={() => onArea("settings")} aria-current={area === "settings" ? "page" : undefined} title="Settings (⌘,)">

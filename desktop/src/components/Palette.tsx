@@ -28,6 +28,7 @@ export function Palette({ onClose, onArea }: { onClose: () => void; onArea: (a: 
       { id: "agents", label: "Go to Agents", kbd: "⌘6", group: "Go to", icon: <Icon.Bot width={14} height={14}/>, action: () => onArea("agents") },
       { id: "trust", label: "Go to Trust Center", kbd: "⌘7", group: "Go to", icon: <Icon.Shield width={14} height={14}/>, action: () => onArea("trust") },
       { id: "voice", label: "Go to Voice", kbd: "⌘8", group: "Go to", icon: <Icon.Mic width={14} height={14}/>, action: () => onArea("voice") },
+      { id: "control", label: "Go to Computer Control", kbd: "⌘9", group: "Go to", icon: <Icon.Crosshair width={14} height={14}/>, action: () => onArea("control") },
       { id: "runs", label: "Go to Runs", group: "Go to", icon: <Icon.History width={14} height={14}/>, action: () => onArea("runs") },
       { id: "library", label: "Go to Library", group: "Go to", icon: <Icon.Layers width={14} height={14}/>, action: () => onArea("library") },
       { id: "models", label: "Go to Model Center", group: "Go to", icon: <Icon.Cpu width={14} height={14}/>, action: () => onArea("models") },
