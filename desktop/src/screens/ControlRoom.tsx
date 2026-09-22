@@ -140,7 +140,9 @@ export function ControlRoom() {
       <div style={{ padding: "0 32px 16px", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       {!enabled ? (
         <div className="cr-banner red">
-          computer control is DISABLED — {String(cockpit?.control?.disabledReason ?? "reason in engine config")} · nothing can run until the engine re-enables it
+          <span>computer control is DISABLED — {String(cockpit?.control?.disabledReason ?? "reason in engine config")} · nothing can run until the engine re-enables it</span>
+          <span className="spacer" />
+          <button className="chipbtn red" title="Stop is always available — denies pending approvals, blocks new control actions" onClick={() => void verb({ stop: true })}>■ Stop</button>
         </div>
       ) : paused ? (
         <div className="cr-banner amber">
