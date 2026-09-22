@@ -73,21 +73,30 @@ function AppInner() {
     return () => { live = false; };
   }, []);
 
-  // Esc handling
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (palette) { setPalette(false); return; }
-      if (cheat) { setCheat(false); return; }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [palette, cheat]);
-
   const go = useCallback((a: Area) => {
     setArea(a);
     setPalette(false);
   }, []);
+
+  // Esc + ⌘⇧P global push-to-talk handling
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (palette) { setPalette(false); return; }
+        if (cheat) { setCheat(false); return; }
+      }
+      // ⌘⇧P / Ctrl+Shift+P — global push-to-talk toggle (same as Space on Voice page)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "p" || e.key === "P")) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        e.preventDefault();
+        if (voice.state === "idle") { void voice.start(); go("voice"); }
+        else { voice.stop(); }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [palette, cheat, voice, go]);
 
   // Phase 4 · native integration (graceful no-op outside Tauri):
   //  - tray "New task"       -> Workbench

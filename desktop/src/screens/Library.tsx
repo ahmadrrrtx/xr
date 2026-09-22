@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Icon } from "../components/icons";
 import { StatusDot } from "../components/StatusDot";
 import { pushToast } from "../components/ToastBus";
+import { undoable } from "../undo";
 
 type LibTab = "skills" | "mcp" | "plugins" | "integrations" | "automations";
 
@@ -108,10 +109,15 @@ function SkillsPane() {
   const [cat, setCat] = useState("All");
   const [detail, setDetail] = useState<Skill | null>(null);
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() => Object.fromEntries(SKILLS.map(s => [s.id, s.enabled])));
-  const list = useMemo(() => SKILLS.filter(s =>
-    (cat === "All" || s.cat === cat) &&
-    (q === "" || s.name.toLowerCase().includes(q.toLowerCase()) || s.desc.toLowerCase().includes(q.toLowerCase()))
-  ), [q, cat]);
+  const [pinned, setPinned] = useState<Record<string, boolean>>({});
+  const list = useMemo(() => {
+    const all = SKILLS.filter(s =>
+      (cat === "All" || s.cat === cat) &&
+      (q === "" || s.name.toLowerCase().includes(q.toLowerCase()) || s.desc.toLowerCase().includes(q.toLowerCase()))
+    );
+    // Pinned skills float to top.
+    return [...all].sort((a, b) => Number(!!pinned[b.id]) - Number(!!pinned[a.id]));
+  }, [q, cat, pinned]);
 
   return (
     <>
@@ -141,12 +147,20 @@ function SkillsPane() {
         ) : (
           <div className="xr-cap-grid">
             {list.map(s => (
-              <div key={s.id} className={"xr-cap-card" + (s.legacy ? " legacy" : "")} onClick={() => setDetail(s)}>
+              <div key={s.id} className={"xr-cap-card" + (s.legacy ? " legacy" : "") + (pinned[s.id] ? " pinned" : "")} onClick={() => setDetail(s)}>
                 <div className="toggle-corner" onClick={e => e.stopPropagation()}>
                   <label className="xr-toggle"><input type="checkbox" checked={enabled[s.id]} onChange={e => setEnabled(v => ({ ...v, [s.id]: e.target.checked }))}/><span/></label>
                 </div>
+                <button className={`cap-pin ${pinned[s.id] ? "on" : ""}`} title={pinned[s.id] ? "Unpin from quick bar" : "Pin to quick bar"} onClick={(e) => {
+                  e.stopPropagation();
+                  const was = !!pinned[s.id];
+                  undoable("skill-pin", was ? "Unpinned skill" : "Pinned skill", s.name, {
+                    do: () => setPinned(p => ({ ...p, [s.id]: !was })),
+                    undo: () => setPinned(p => ({ ...p, [s.id]: was })),
+                  });
+                }}><Icon.Pin width={12} height={12}/></button>
                 <div className="cap-ic"><Icon.Bolt width={18} height={18}/></div>
-                <h4>{s.name}{s.featured && <span className="xr-pill xr-pill--low" style={{ marginLeft: 6 }}>Featured</span>}{s.legacy && <span className="xr-pill xr-pill--warn" style={{ marginLeft: 6 }}>Legacy</span>}</h4>
+                <h4>{s.name}{pinned[s.id] && <span className="xr-pill xr-pill--low" style={{ marginLeft: 6 }}>Pinned</span>}{s.featured && !pinned[s.id] && <span className="xr-pill xr-pill--low" style={{ marginLeft: 6 }}>Featured</span>}{s.legacy && <span className="xr-pill xr-pill--warn" style={{ marginLeft: 6 }}>Legacy</span>}</h4>
                 <p>{s.desc}</p>
                 <div className="cap-meta">
                   {s.tools.slice(0, 3).map(t => <span key={t} className="xr-pill">{t}</span>)}
