@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Icon } from "./icons";
 import { StatusDot } from "./StatusDot";
+import { t, getLocale, subscribeLocale } from "../i18n";
 
 export type Area =
   | "home"
@@ -56,6 +57,8 @@ export function AppShell(props: AppShellProps) {
   // and need to move the user into Workbench.
   const [chatOpen] = useState(true);
   const [explorerOpen] = useState(true);
+  const locale = useSyncExternalStore(subscribeLocale, getLocale);
+  void locale; // subscription only — re-renders when t() is called below
 
   // ⌘K → palette; ⌘L → toggle chat; ⌘B → toggle explorer; ⌘J → toggle terminal
   useEffect(() => {
@@ -83,14 +86,14 @@ export function AppShell(props: AppShellProps) {
   }, [onOpenPalette, onCheatSheet, onToggleChat, onToggleTerminal, onToggleExplorer, onArea, area]);
 
   const navTop: NavItem[] = [
-    { id: "home", label: "Home", icon: <Icon.Home width={20} height={20}/>, shortcut: "⌘1" },
-    { id: "workbench", label: "Workbench", icon: <Icon.Code width={20} height={20}/>, shortcut: "⌘2" },
-    { id: "builder", label: "Builder", icon: <Icon.Bolt width={20} height={20}/>, shortcut: "⌘3" },
-    { id: "projects", label: "Projects", icon: <Icon.Folder width={20} height={20}/>, shortcut: "⌘4" },
-    { id: "research", label: "Research", icon: <Icon.Book width={20} height={20}/>, shortcut: "⌘5" },
-    { id: "agents", label: "Agents", icon: <Icon.Bot width={20} height={20}/>, shortcut: "⌘6" },
-    { id: "trust", label: "Trust", icon: <Icon.Shield width={20} height={20}/>, shortcut: "⌘7", badge: approvalCount || undefined },
-    { id: "voice", label: "Voice", icon: <Icon.Mic width={20} height={20}/>, shortcut: "⌘8" },
+    { id: "home", label: t("Home"), icon: <Icon.Home width={20} height={20}/>, shortcut: "⌘1" },
+    { id: "workbench", label: t("Workbench"), icon: <Icon.Code width={20} height={20}/>, shortcut: "⌘2" },
+    { id: "builder", label: t("Builder"), icon: <Icon.Bolt width={20} height={20}/>, shortcut: "⌘3" },
+    { id: "projects", label: t("Projects"), icon: <Icon.Folder width={20} height={20}/>, shortcut: "⌘4" },
+    { id: "research", label: t("Research"), icon: <Icon.Book width={20} height={20}/>, shortcut: "⌘5" },
+    { id: "agents", label: t("Agents"), icon: <Icon.Bot width={20} height={20}/>, shortcut: "⌘6" },
+    { id: "trust", label: t("Trust"), icon: <Icon.Shield width={20} height={20}/>, shortcut: "⌘7", badge: approvalCount || undefined },
+    { id: "voice", label: t("Voice"), icon: <Icon.Mic width={20} height={20}/>, shortcut: "⌘8" },
   ];
 
   const engStatus: "ok" | "warn" | "err" | "idle" | "working" = engineVersion ? "ok" : "err";
@@ -121,7 +124,7 @@ export function AppShell(props: AppShellProps) {
         <div className="title-center" onClick={onOpenPalette} style={{ cursor: "pointer" }}>
           <div className="quick-search">
             <Icon.Search width={14} height={14}/>
-            <span>Search or ask XR…</span>
+            <span>{t("Search or ask XR…")}</span>
             <span className="kbd xr-keycap">⌘K</span>
           </div>
         </div>
