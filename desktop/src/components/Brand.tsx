@@ -6,6 +6,7 @@ import heroUrl from "../assets/xr-hero.webp";
 import terminalSplashUrl from "../assets/xr-terminal-splash.png";
 import readmeHeroUrl from "../assets/xr-readme-hero.png";
 import type { VoiceState } from "../voice/session";
+export type { VoiceState };
 
 /**
  * OFFICIAL XR BRAND ASSETS — used EXACTLY as provided (decision D-05, amended

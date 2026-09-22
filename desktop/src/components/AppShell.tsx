@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Icon } from "./icons";
 import { StatusDot } from "./StatusDot";
+import { t, getLocale, subscribeLocale } from "../i18n";
 
 export type Area =
   | "home"
@@ -36,18 +37,20 @@ export interface AppShellProps {
   onToggleTerminal?: () => void;
   onToggleExplorer?: () => void;
   children: ReactNode;
+  dockedVoice?: ReactNode;
   providerState?: { name: string; kind: "ok" | "warn" | "err" | "info" | "idle" | "working"; label?: string };
   projectName?: string;
   approvalCount?: number;
   isHome?: boolean;
   isFullWidth?: boolean;
+  footer?: ReactNode;
 }
 
 export function AppShell(props: AppShellProps) {
   const {
     area, onArea, engineVersion, onOpenPalette, onCheatSheet, voiceState,
-    onToggleChat, onToggleTerminal, onToggleExplorer, children,
-    providerState, projectName = "xr", approvalCount = 0,
+    onToggleChat, onToggleTerminal, onToggleExplorer, children, dockedVoice,
+    providerState, projectName = "xr", approvalCount = 0, footer,
   } = props;
 
   // Panel visibility is owned by the screen (e.g. Workbench sets classes on xr-body).
@@ -55,6 +58,8 @@ export function AppShell(props: AppShellProps) {
   // and need to move the user into Workbench.
   const [chatOpen] = useState(true);
   const [explorerOpen] = useState(true);
+  const locale = useSyncExternalStore(subscribeLocale, getLocale);
+  void locale; // subscription only — re-renders when t() is called below
 
   // ⌘K → palette; ⌘L → toggle chat; ⌘B → toggle explorer; ⌘J → toggle terminal
   useEffect(() => {
@@ -82,14 +87,14 @@ export function AppShell(props: AppShellProps) {
   }, [onOpenPalette, onCheatSheet, onToggleChat, onToggleTerminal, onToggleExplorer, onArea, area]);
 
   const navTop: NavItem[] = [
-    { id: "home", label: "Home", icon: <Icon.Home width={20} height={20}/>, shortcut: "⌘1" },
-    { id: "workbench", label: "Workbench", icon: <Icon.Code width={20} height={20}/>, shortcut: "⌘2" },
-    { id: "builder", label: "Builder", icon: <Icon.Bolt width={20} height={20}/>, shortcut: "⌘3" },
-    { id: "projects", label: "Projects", icon: <Icon.Folder width={20} height={20}/>, shortcut: "⌘4" },
-    { id: "research", label: "Research", icon: <Icon.Book width={20} height={20}/>, shortcut: "⌘5" },
-    { id: "agents", label: "Agents", icon: <Icon.Bot width={20} height={20}/>, shortcut: "⌘6" },
-    { id: "trust", label: "Trust", icon: <Icon.Shield width={20} height={20}/>, shortcut: "⌘7", badge: approvalCount || undefined },
-    { id: "voice", label: "Voice", icon: <Icon.Mic width={20} height={20}/>, shortcut: "⌘8" },
+    { id: "home", label: t("Home"), icon: <Icon.Home width={20} height={20}/>, shortcut: "⌘1" },
+    { id: "workbench", label: t("Workbench"), icon: <Icon.Code width={20} height={20}/>, shortcut: "⌘2" },
+    { id: "builder", label: t("Builder"), icon: <Icon.Bolt width={20} height={20}/>, shortcut: "⌘3" },
+    { id: "projects", label: t("Projects"), icon: <Icon.Folder width={20} height={20}/>, shortcut: "⌘4" },
+    { id: "research", label: t("Research"), icon: <Icon.Book width={20} height={20}/>, shortcut: "⌘5" },
+    { id: "agents", label: t("Agents"), icon: <Icon.Bot width={20} height={20}/>, shortcut: "⌘6" },
+    { id: "trust", label: t("Trust"), icon: <Icon.Shield width={20} height={20}/>, shortcut: "⌘7", badge: approvalCount || undefined },
+    { id: "voice", label: t("Voice"), icon: <Icon.Mic width={20} height={20}/>, shortcut: "⌘8" },
   ];
 
   const engStatus: "ok" | "warn" | "err" | "idle" | "working" = engineVersion ? "ok" : "err";
@@ -120,7 +125,7 @@ export function AppShell(props: AppShellProps) {
         <div className="title-center" onClick={onOpenPalette} style={{ cursor: "pointer" }}>
           <div className="quick-search">
             <Icon.Search width={14} height={14}/>
-            <span>Search or ask XR…</span>
+            <span>{t("Search or ask XR…")}</span>
             <span className="kbd xr-keycap">⌘K</span>
           </div>
         </div>
@@ -163,6 +168,9 @@ export function AppShell(props: AppShellProps) {
           </button>
           <button className="rail-btn" onClick={() => onArea("diagnostics")} aria-current={area === "diagnostics" ? "page" : undefined} title="Diagnostics">
             <Icon.Activity width={20} height={20}/>
+          </button>
+          <button className="rail-btn" onClick={() => onArea("control")} aria-current={area === "control" ? "page" : undefined} title="Computer Control">
+            <Icon.Crosshair width={20} height={20}/>
           </button>
           <button className="rail-btn" onClick={() => onArea("settings")} aria-current={area === "settings" ? "page" : undefined} title="Settings (⌘,)">
             <Icon.Settings width={20} height={20}/>
@@ -210,6 +218,8 @@ export function AppShell(props: AppShellProps) {
           <span className="item"><span style={{ opacity: 0.7 }}>100%</span></span>
         </span>
       </div>
+      {footer}
+      {dockedVoice}
     </div>
   );
 }

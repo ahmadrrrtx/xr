@@ -128,7 +128,16 @@ export function ControlRoom() {
   }
 
   return (
-    <div className="cr">
+    <div className="xr-page" style={{ padding: 0 }}>
+      <div style={{ padding: "24px 32px 14px", flexShrink: 0 }}>
+        <div className="xr-page-head" style={{ padding: 0 }}>
+          <div>
+            <h1>Computer Control</h1>
+            <p className="xr-subtitle">XR is acting on your machine — stop anytime. Every action is audited, gated, and visible.</p>
+          </div>
+        </div>
+      </div>
+      <div style={{ padding: "0 32px 16px", flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       {!enabled ? (
         <div className="cr-banner red">
           computer control is DISABLED — {String(cockpit?.control?.disabledReason ?? "reason in engine config")} · nothing can run until the engine re-enables it
@@ -227,9 +236,10 @@ export function ControlRoom() {
         </div>
       </div>
 
-      <div className="cr-foot">
+      <div className="cr-foot" style={{ marginTop: 14 }}>
         Trust mode <span className="chip">{String(cockpit?.mode ?? "balanced").toUpperCase()}</span>
         <span className="faint" style={{ fontSize: 11.5 }}>· verbs = engine `/control/pause` · grants = `/control/permissions/grant` — nothing bypasses the gate</span>
+      </div>
       </div>
     </div>
   );

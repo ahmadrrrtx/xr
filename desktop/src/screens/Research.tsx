@@ -52,15 +52,15 @@ export function Research() {
   const outR = useResizer("--xr-research-out", "x", 360, 220, 600, "xr.research.out");
 
   return (
-    <div className="xr-page" style={{ display: "flex", flexDirection: "column" }}>
-      <div className="xr-page-head" style={{ paddingBottom: 12 }}>
-        <div style={{ flex: 1 }}>
-          <h1>Research</h1>
-          <p className="xr-subtitle">XR reads sources, cites evidence, and writes a report you can trust.</p>
+    <div className="xr-page" style={{ display: "flex", flexDirection: "column", padding: 0 }}>
+      <div style={{ padding: "24px 32px 12px", flexShrink: 0 }}>
+        <div className="xr-page-head" style={{ padding: 0 }}>
+          <div style={{ flex: 1 }}>
+            <h1>Research</h1>
+            <p className="xr-subtitle">XR reads sources, cites evidence, and writes a report you can trust.</p>
+          </div>
         </div>
-      </div>
-
-      <div style={{ padding: "0 24px 12px", display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
         <div style={{ flex: 1, position: "relative" }}>
           <Icon.Search width={15} height={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--xr-muted)" }}/>
           <input className="xr-input" value={query} onChange={e => setQuery(e.target.value)} placeholder="Ask a research question…" style={{ paddingLeft: 36, fontFamily: "var(--xr-font-mono)", fontSize: 13 }}/>
@@ -68,20 +68,21 @@ export function Research() {
         <button className="xr-btn xr-btn--primary" onClick={() => { setPhase("searching"); setTimeout(() => setPhase("reading"), 1500); setTimeout(() => setPhase("writing"), 3500); setTimeout(() => setPhase("done"), 5500); }}>
           {phase === "done" ? <><Icon.RotateCw width={13} height={13}/> Re-research</> : <><Icon.Sparkles width={13} height={13}/> Research</>}
         </button>
-      </div>
-
-      {phase !== "idle" && phase !== "done" && (
-        <div style={{ padding: "0 24px 12px" }}>
-          <div className="xr-alert" style={{ background: "var(--xr-surface)", border: "1px solid var(--xr-border)" }}>
-            <StatusDot kind="info" pulse size={10}/>
-            <span style={{ fontSize: 12.5 }}>
-              {phase === "searching" && "Searching the web for sources…"}
-              {phase === "reading" && `Reading ${SAMPLE_SOURCES.length} sources…`}
-              {phase === "writing" && "Writing report with citations…"}
-            </span>
-          </div>
         </div>
-      )}
+
+        {phase !== "idle" && phase !== "done" && (
+          <div style={{ marginTop: 10 }}>
+            <div className="xr-alert" style={{ background: "var(--xr-surface)", border: "1px solid var(--xr-border)" }}>
+              <StatusDot kind="info" pulse size={10}/>
+              <span style={{ fontSize: 12.5 }}>
+                {phase === "searching" && "Searching the web for sources…"}
+                {phase === "reading" && `Reading ${SAMPLE_SOURCES.length} sources…`}
+                {phase === "writing" && "Writing report with citations…"}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="xr-research-3col" style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {srcOpen && (

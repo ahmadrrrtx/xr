@@ -2,54 +2,138 @@ import { useState } from "react";
 import { Icon } from "../components/icons";
 import { StatusDot } from "../components/StatusDot";
 
-type Section = "approvals" | "budget" | "audit" | "models" | "data" | "networks";
+type Section = "queue" | "modes" | "approvals" | "budget" | "audit" | "models" | "data" | "permissions" | "shield";
 
 export function Trust() {
-  const [section, setSection] = useState<Section>("approvals");
+  const [section, setSection] = useState<Section>("queue");
+  const [mode, setMode] = useState<"careful"|"balanced"|"autonomous">("balanced");
 
   return (
     <div className="xr-page">
       <div className="xr-page-head">
         <div>
           <h1>Trust Center</h1>
-          <p className="xr-subtitle">What XR can do, what you've approved, and how your credits are spent.</p>
+          <p className="xr-subtitle">One place for safety: approvals, modes, audit, budgets, network, and permissions.</p>
         </div>
         <div className="xr-page-head-actions">
-          <span className="xr-mode-pill"><Icon.Shield width={14} height={14}/> Autopilot: On</span>
+          <span className="xr-mode-pill"><Icon.Shield width={14} height={14}/> {mode.toUpperCase()}</span>
         </div>
       </div>
 
       <div className="xr-two-col">
         <nav className="xr-subnav">
-          <button className="sub-item" aria-current={section === "approvals" ? "page" : undefined} onClick={() => setSection("approvals")}>
-            <Icon.Check width={15} height={15}/> Approvals
+          <button className="sub-item" aria-current={section === "queue" ? "page" : undefined} onClick={() => setSection("queue")}>
+            <Icon.AlertTriangle width={15} height={15}/> Queue
             <span className="badge">2</span>
           </button>
+          <button className="sub-item" aria-current={section === "modes" ? "page" : undefined} onClick={() => setSection("modes")}>
+            <Icon.Shield width={15} height={15}/> Modes
+          </button>
+          <button className="sub-item" aria-current={section === "approvals" ? "page" : undefined} onClick={() => setSection("approvals")}>
+            <Icon.Check width={15} height={15}/> Permissions
+          </button>
           <button className="sub-item" aria-current={section === "budget" ? "page" : undefined} onClick={() => setSection("budget")}>
-            <Icon.Dashboard width={15} height={15}/> Budget & spending
+            <Icon.Dashboard width={15} height={15}/> Budget
           </button>
           <button className="sub-item" aria-current={section === "audit" ? "page" : undefined} onClick={() => setSection("audit")}>
             <Icon.File width={15} height={15}/> Audit log
           </button>
           <button className="sub-item" aria-current={section === "models" ? "page" : undefined} onClick={() => setSection("models")}>
-            <Icon.Cpu width={15} height={15}/> Models & providers
+            <Icon.Cpu width={15} height={15}/> Providers
           </button>
           <button className="sub-item" aria-current={section === "data" ? "page" : undefined} onClick={() => setSection("data")}>
             <Icon.Folder width={15} height={15}/> Data & memory
           </button>
-          <button className="sub-item" aria-current={section === "networks" ? "page" : undefined} onClick={() => setSection("networks")}>
-            <Icon.Globe width={15} height={15}/> Networks & tools
+          <button className="sub-item" aria-current={section === "permissions" ? "page" : undefined} onClick={() => setSection("permissions")}>
+            <Icon.Globe width={15} height={15}/> Networks
+          </button>
+          <button className="sub-item" aria-current={section === "shield" ? "page" : undefined} onClick={() => setSection("shield")}>
+            <Icon.Shield width={15} height={15}/> Shield
           </button>
         </nav>
 
         <div className="xr-section-body" style={{ padding: 16 }}>
+          {section === "queue" && <QueueSection/>}
+          {section === "modes" && <ModesSection mode={mode} setMode={setMode}/>}
           {section === "approvals" && <ApprovalsSection/>}
           {section === "budget" && <BudgetSection/>}
           {section === "audit" && <AuditSection/>}
           {section === "models" && <ModelsSection/>}
           {section === "data" && <DataSection/>}
-          {section === "networks" && <NetworksSection/>}
+          {section === "permissions" && <NetworksSection/>}
+          {section === "shield" && <ShieldSection/>}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function QueueSection() {
+  const pending = [
+    { id: "a1", tool: "shell", text: "npm install puppeteer", risk: "mid", reason: "installs packages into node_modules" },
+    { id: "a2", tool: "fs.write", text: "write /home/user/xr/desktop/src/screens/Voice.tsx", risk: "high", reason: "modifies source file outside the active edit buffer" },
+  ];
+  return (
+    <div>
+      <div className="xr-section-header"><h3>Awaiting your decision</h3></div>
+      {pending.length === 0 ? (
+        <div className="xr-empty-state" style={{ minHeight: 200, padding: "40px 24px" }}>
+          <Icon.Check width={48} height={48} className="xr-empty-illust" style={{ color: "var(--xr-success)" }}/>
+          <h3>Nothing waiting</h3>
+          <p>XR has all the approvals it needs. Approvals appear here the moment XR asks.</p>
+        </div>
+      ) : pending.map(p => (
+        <div key={p.id} className="xr-alert xr-alert--error" style={{ marginBottom: 10 }}>
+          <Icon.AlertTriangle width={20} height={20}/>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{p.text}</div>
+            <div style={{ fontSize: 12, color: "var(--xr-text-dim)", marginTop: 2 }}>{p.tool} · {p.reason}</div>
+          </div>
+          <button className="xr-btn xr-btn--sm xr-btn--ghost">Deny</button>
+          <button className="xr-btn xr-btn--sm xr-btn--primary">Allow once</button>
+          <button className="xr-btn xr-btn--sm xr-btn--secondary">Always</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ModesSection({ mode, setMode }: { mode: "careful"|"balanced"|"autonomous"; setMode: (m: "careful"|"balanced"|"autonomous") => void }) {
+  const modes = [
+    { id: "careful" as const, title: "Careful", desc: "Approve every action. XR plans, shows you, then waits. Best for production code and sensitive environments.", color: "var(--xr-success)" },
+    { id: "balanced" as const, title: "Balanced", desc: "Approve risky actions (shell, external network, deletes). Read-only actions and edits in open files run freely.", color: "var(--xr-primary)" },
+    { id: "autonomous" as const, title: "Autonomous", desc: "Run until done. Pause only on errors, budget, or explicit policy blocks. You can interrupt at any time.", color: "var(--xr-secondary)" },
+  ];
+  return (
+    <div>
+      <div className="xr-section-header"><h3>Trust mode</h3><p className="xr-dim" style={{ fontSize: 12, margin: 0 }}>Mode is a single decision. Changing it is audited.</p></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginTop: 12 }}>
+        {modes.map(m => (
+          <button key={m.id} onClick={() => setMode(m.id)} className={"xr-mode-card" + (mode === m.id ? " on" : "")} style={{ borderColor: mode === m.id ? m.color : undefined }}>
+            <div className="t" style={{ color: mode === m.id ? m.color : undefined }}>{m.title}</div>
+            <div className="d">{m.desc}</div>
+            {mode === m.id && <div className="check" style={{ color: m.color }}><Icon.Check width={14} height={14}/> active</div>}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ShieldSection() {
+  return (
+    <div>
+      <div className="xr-section-header"><h3>Audit chain</h3></div>
+      <div className="xr-stat-grid" style={{ gridTemplateColumns: "repeat(4,1fr)", margin: "0 0 16px" }}>
+        <div className="xr-stat-card ok"><div className="label">Engine</div><div className="value">signed</div><div className="hint">v2.1.0 phase4</div></div>
+        <div className="xr-stat-card ok"><div className="label">App bundle</div><div className="value mono">4a93…f021</div><div className="hint">verified</div></div>
+        <div className="xr-stat-card ok"><div className="label">Sidecar TLS</div><div className="value">mTLS</div><div className="hint">localhost-only</div></div>
+        <div className="xr-stat-card warn"><div className="label">Telemetry</div><div className="value">off</div><div className="hint">all opt-in</div></div>
+      </div>
+      <div className="xr-alert"><Icon.Shield width={18} height={18}/><div style={{ flex:1 }}><b>Shield is on.</b> Every tool call, approval, and denial is signed in the audit chain. Nothing bypasses the gate.</div></div>
+      <div style={{ marginTop: 14 }}>
+        <button className="xr-btn xr-btn--sm xr-btn--ghost">Export audit log</button>
+        <button className="xr-btn xr-btn--sm xr-btn--secondary" style={{ marginLeft: 8 }}>Verify chain</button>
       </div>
     </div>
   );
