@@ -7,6 +7,7 @@ import { Palette } from "./components/Palette";
 import { CheatSheet } from "./components/CheatSheet";
 import { VoiceProvider, useVoice } from "./voice/session";
 import { DockedVoice } from "./voice/DockedVoice";
+import { GlobalApprovalBar } from "./voice/GlobalApprovalBar";
 import { native } from "./native";
 
 import { Home } from "./screens/Home";
@@ -165,6 +166,7 @@ function AppInner() {
       <ToastBus/>
       {palette && <Palette onClose={() => setPalette(false)} onArea={(a) => { if (["home","workbench","builder","projects","research","agents","trust","voice","settings","control","library","memory","runs","diagnostics","models"].includes(a)) go(a as Area); }}/>}
       {cheat && <CheatSheet onClose={() => setCheat(false)}/>}
+      {area !== "voice" && <GlobalApprovalBar onDecide={() => go("trust")}/>}
     </AppShell>
   );
 }
