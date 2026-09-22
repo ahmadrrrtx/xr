@@ -168,16 +168,17 @@
 .xr-app {
   display: grid;
   grid-template-columns: var(--xr-rail-w) 1fr;
-  grid-template-rows: var(--xr-titlebar-h) 1fr var(--xr-statusbar-h);
+  grid-template-rows: var(--xr-titlebar-h) 1fr auto var(--xr-statusbar-h);
   height: 100vh; width: 100vw;
   background: var(--xr-bg); color: var(--xr-text);
   overflow: hidden;
 }
 
-.xr-titlebar { grid-column: 1 / -1; }
-.xr-statusbar { grid-column: 1 / -1; }
-.xr-rail { grid-column: 1; grid-row: 2; }
-.xr-body { grid-column: 2; grid-row: 2; }
+.xr-titlebar { grid-column: 1 / -1; grid-row: 1; }
+.xr-rail { grid-column: 1; grid-row: 2 / span 2; }
+.xr-body { grid-column: 2; grid-row: 2; overflow: hidden; }
+.xr-art50 { grid-column: 2; grid-row: 3; }
+.xr-statusbar { grid-column: 1 / -1; grid-row: 4; }
 
 /* Titlebar */
 .xr-titlebar {
@@ -422,6 +423,68 @@
 .xr-global-approval .spacer { flex: 1; }
 .xr-global-approval .faint { color: var(--xr-text-dim, rgba(255,255,255,0.65)); margin-left: 6px; }
 .xr-global-approval b { font-weight: 600; }
+
+/* Phase 5 · engine-down honest banner — top-stuck strip; offsets content so titlebar stays visible */
+.xr-engine-down {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: color-mix(in oklab, var(--xr-error, #ff5d74) 14%, var(--xr-surface));
+  border-bottom: 1px solid color-mix(in oklab, var(--xr-error, #ff5d74) 55%, transparent);
+  color: var(--xr-text);
+  font-size: 12.5px;
+  backdrop-filter: blur(8px);
+  height: 36px;
+}
+body.has-engine-down .xr-app { margin-top: 36px; height: calc(100vh - 36px); }
+.xr-engine-down .faint { color: var(--xr-text-dim); margin-left: 6px; }
+
+/* Phase 5 · SEC-09 Art. 50 disclosure bar — sits between body and status bar */
+.xr-art50 {
+  font-size: 10.5px;
+  color: var(--xr-text-dim);
+  letter-spacing: 0.01em;
+  padding: 6px 16px;
+  border-top: 1px dashed var(--xr-border);
+  background: var(--xr-surface);
+  line-height: 1.4;
+  grid-column: 2;
+  display: flex; align-items: center; gap: 6px;
+}
+.xr-art50 b { color: var(--xr-warning); font-weight: 600; }
+
+/* Phase 5 · onboarding modal */
+.xr-onboard {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(3,5,10,0.72);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.xr-onboard-card {
+  width: min(560px, 100%);
+  background: var(--xr-bg-2);
+  border: 1px solid var(--xr-border);
+  border-radius: var(--xr-radius-lg, 14px);
+  padding: 28px 28px 22px;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+}
+.xr-onboard-card h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.02em; }
+.xr-onboard-card .sub { color: var(--xr-text-dim); font-size: 13px; margin-bottom: 18px; }
+.xr-onboard-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; font-size: 12.5px; line-height: 1.45; }
+.xr-onboard-row .icon { width: 28px; height: 28px; border-radius: 8px; background: var(--xr-surface); display: grid; place-items: center; color: var(--xr-primary); flex-shrink: 0; border: 1px solid var(--xr-border); }
+.xr-onboard-row b { display: block; font-weight: 600; margin-bottom: 2px; }
+.xr-onboard-row .faint { color: var(--xr-text-dim); font-size: 11.5px; }
+.xr-onboard-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; gap: 8px; }
+.xr-onboard-actions .spacer { flex: 1; }
+.xr-onboard-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--xr-text-dim); cursor: pointer; user-select: none; }
+.xr-onboard-toggle input { accent-color: var(--xr-primary); }
 .ob-note { font-size: 11.5px; padding: 6px 10px; background: var(--xr-surface-2); border-radius: var(--xr-radius-sm); color: var(--xr-text-dim); }
 .chip.tiny { font-size: 10px; padding: 1px 6px; }
 .chip.cyan { background: rgba(0,212,255,0.12); color: var(--xr-primary); border-color: rgba(0,212,255,0.3); }

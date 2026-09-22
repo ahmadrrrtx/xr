@@ -43,13 +43,14 @@ export interface AppShellProps {
   approvalCount?: number;
   isHome?: boolean;
   isFullWidth?: boolean;
+  footer?: ReactNode;
 }
 
 export function AppShell(props: AppShellProps) {
   const {
     area, onArea, engineVersion, onOpenPalette, onCheatSheet, voiceState,
     onToggleChat, onToggleTerminal, onToggleExplorer, children, dockedVoice,
-    providerState, projectName = "xr", approvalCount = 0,
+    providerState, projectName = "xr", approvalCount = 0, footer,
   } = props;
 
   // Panel visibility is owned by the screen (e.g. Workbench sets classes on xr-body).
@@ -217,6 +218,7 @@ export function AppShell(props: AppShellProps) {
           <span className="item"><span style={{ opacity: 0.7 }}>100%</span></span>
         </span>
       </div>
+      {footer}
       {dockedVoice}
     </div>
   );

@@ -9,6 +9,8 @@ import { VoiceProvider, useVoice } from "./voice/session";
 import { DockedVoice } from "./voice/DockedVoice";
 import { GlobalApprovalBar } from "./voice/GlobalApprovalBar";
 import { native } from "./native";
+import { EngineDownBanner } from "./components/EngineDownBanner";
+import { Onboarding } from "./components/Onboarding";
 
 import { Home } from "./screens/Home";
 const Workbench = lazy(() => import("./screens/Workbench").then(m => ({ default: m.Workbench })));
@@ -116,6 +118,9 @@ function AppInner() {
   const isFullWidth = !chromeAreas.includes(area);
 
   return (
+    <>
+    <Onboarding/>
+    <EngineDownBanner onDiagnostics={() => go("diagnostics")} onRetry={() => window.location.reload()}/>
     <AppShell
       area={area}
       onArea={go}
@@ -133,6 +138,11 @@ function AppInner() {
       approvalCount={approvalCount}
       isHome={area === "home"}
       isFullWidth={isFullWidth}
+      footer={
+        <div className="xr-art50" aria-label="AI system disclosure">
+          <b>AI disclosure (Art. 50 EU AI Act).</b> XR is an AI assistant — per-action approval required for files, shells, network. Stop anytime from <span className="mono">Computer Control</span>.
+        </div>
+      }
     >
       {/* SR live region */}
       <div className="xr-sr-only" aria-live="polite" aria-atomic="true">XR {area}</div>
@@ -168,6 +178,7 @@ function AppInner() {
       {cheat && <CheatSheet onClose={() => setCheat(false)}/>}
       {area !== "voice" && <GlobalApprovalBar onDecide={() => go("trust")}/>}
     </AppShell>
+    </>
   );
 }
 

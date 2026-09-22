@@ -86,6 +86,13 @@ export const native = {
     return () => notifActionListeners.delete(l);
   },
 
+  // Autostart opt-in (Phase 5 onboarding). Tauri plugin-autostart exposes
+  // enable()/disable(); outside Tauri this is a no-op so the onboarding
+  // checkbox still renders harmlessly.
+  _autostart: {
+    async set(_on: boolean) { hint(); /* Tauri: invoke('plugin:autostart|enable' | 'disable') */ },
+  },
+
   // Test helper for dev server / stories — simulate a tray click / deep link.
   _simulateTray(a: TrayAction) { trayListeners.forEach((fn) => fn(a)); },
   _simulateDeepLink(path: string) { deepLinkListeners.forEach((fn) => fn(path)); },
