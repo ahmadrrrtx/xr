@@ -114,6 +114,11 @@ export function Voice({ onDock, onDecide }: { onDock: () => void; onDecide?: () 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.code === "Escape") {
+        e.preventDefault();
+        onDock();
+        return;
+      }
       if (e.code !== "Space") return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
@@ -123,7 +128,7 @@ export function Voice({ onDock, onDecide }: { onDock: () => void; onDecide?: () 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [voice]);
+  }, [voice, onDock]);
 
   const speaking = state === "speaking";
   /* Pose map lives in Brand.tsx: side = XR is working, side-alt = XR is

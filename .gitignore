@@ -69,3 +69,4 @@ desktop/package-lock.json
 desktop/node_modules
 desktop/dist
 audit*.mjs
+p4shots.mjs
