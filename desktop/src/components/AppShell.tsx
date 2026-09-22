@@ -36,6 +36,7 @@ export interface AppShellProps {
   onToggleTerminal?: () => void;
   onToggleExplorer?: () => void;
   children: ReactNode;
+  dockedVoice?: ReactNode;
   providerState?: { name: string; kind: "ok" | "warn" | "err" | "info" | "idle" | "working"; label?: string };
   projectName?: string;
   approvalCount?: number;
@@ -46,7 +47,7 @@ export interface AppShellProps {
 export function AppShell(props: AppShellProps) {
   const {
     area, onArea, engineVersion, onOpenPalette, onCheatSheet, voiceState,
-    onToggleChat, onToggleTerminal, onToggleExplorer, children,
+    onToggleChat, onToggleTerminal, onToggleExplorer, children, dockedVoice,
     providerState, projectName = "xr", approvalCount = 0,
   } = props;
 
@@ -164,6 +165,9 @@ export function AppShell(props: AppShellProps) {
           <button className="rail-btn" onClick={() => onArea("diagnostics")} aria-current={area === "diagnostics" ? "page" : undefined} title="Diagnostics">
             <Icon.Activity width={20} height={20}/>
           </button>
+          <button className="rail-btn" onClick={() => onArea("control")} aria-current={area === "control" ? "page" : undefined} title="Computer Control">
+            <Icon.Crosshair width={20} height={20}/>
+          </button>
           <button className="rail-btn" onClick={() => onArea("settings")} aria-current={area === "settings" ? "page" : undefined} title="Settings (⌘,)">
             <Icon.Settings width={20} height={20}/>
           </button>
@@ -210,6 +214,7 @@ export function AppShell(props: AppShellProps) {
           <span className="item"><span style={{ opacity: 0.7 }}>100%</span></span>
         </span>
       </div>
+      {dockedVoice}
     </div>
   );
 }

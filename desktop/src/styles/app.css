@@ -355,6 +355,45 @@
 .xr-terminal-body .prompt { color: var(--xr-success); }
 .xr-terminal-body .path { color: var(--xr-primary); }
 .xr-term-motd { padding-bottom: 10px; margin-bottom: 6px; border-bottom: 1px dashed var(--xr-border-2); }
+
+/* Trust Modes cards (Phase 4 S17) */
+.xr-mode-card { background: var(--xr-surface); border: 1px solid var(--xr-border); border-radius: var(--xr-radius-lg); padding: 16px; text-align: left; cursor: pointer; transition: border-color 160ms, transform 120ms; display: flex; flex-direction: column; gap: 8px; }
+.xr-mode-card:hover { border-color: var(--xr-border-2); transform: translateY(-1px); }
+.xr-mode-card.on { box-shadow: 0 0 0 1px currentColor; }
+.xr-mode-card .t { font-size: 14px; font-weight: 600; font-family: var(--xr-font-display); }
+.xr-mode-card .d { font-size: 12px; color: var(--xr-text-dim); line-height: 1.5; }
+.xr-mode-card .check { font-size: 11px; font-weight: 600; margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; }
+
+/* Control Room (Phase 4 S16) — key layout rules promoted so it works even if phase CSS loads late */
+.cr-banner { width: 100%; padding: 10px 14px; border-radius: var(--xr-radius-md); font-size: 12.5px; display: flex; align-items: center; gap: 10px; margin-bottom: 12px; border: 1px solid var(--xr-border); }
+.cr-banner .spacer { flex: 1; }
+.cr-banner.red { border-color: rgba(255,77,94,0.5); background: rgba(255,77,94,0.08); color: var(--xr-error); }
+.cr-banner.amber { border-color: rgba(255,181,71,0.5); background: rgba(255,181,71,0.10); color: var(--xr-warning); }
+.cr-banner.dim { border-color: var(--xr-border); background: var(--xr-surface); color: var(--xr-text-dim); }
+.cr-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; flex: 1; min-height: 0; }
+.cr-feed, .cr-ctx, .cr-perms { background: var(--xr-surface); border: 1px solid var(--xr-border); border-radius: var(--xr-radius-md); padding: 14px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.cr-feed .t, .cr-ctx .t, .cr-perms .t { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--xr-muted); margin-bottom: 6px; }
+.cr-row { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 6px 0; border-bottom: 1px dashed var(--xr-border); }
+.cr-row:last-child { border-bottom: 0; }
+.cr-row .spacer { flex: 1; }
+.cr-row.pending { color: var(--xr-warning); }
+.cr-perm { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 6px 2px; cursor: pointer; border-radius: var(--xr-radius-sm); }
+.cr-perm:hover { background: var(--xr-surface-2); }
+.cr-perm .spacer { flex: 1; }
+.cr-app { font-size: 14px; font-weight: 600; }
+.cr-why { font-size: 12px; color: var(--xr-text-dim); margin-top: 8px; line-height: 1.5; }
+.cr-locked { font-size: 11px; color: var(--xr-muted); margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--xr-border); }
+.cr-foot { margin-top: 14px; font-size: 12px; color: var(--xr-text-dim); }
+.cr-acting { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--xr-primary); margin-left: 6px; box-shadow: 0 0 0 0 rgba(0,212,255,.6); animation: cr-pulse 1.2s infinite; }
+@keyframes cr-pulse { 0% { box-shadow: 0 0 0 0 rgba(0,212,255,.5); } 70% { box-shadow: 0 0 0 8px rgba(0,212,255,0); } 100% { box-shadow: 0 0 0 0 rgba(0,212,255,0); } }
+.cr-foot .chip { background: var(--xr-surface-2); border: 1px solid var(--xr-border); padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; margin: 0 6px; }
+@media (max-width: 980px) { .cr-grid { grid-template-columns: 1fr; } }
+.ob-note { font-size: 11.5px; padding: 6px 10px; background: var(--xr-surface-2); border-radius: var(--xr-radius-sm); color: var(--xr-text-dim); }
+.chip.tiny { font-size: 10px; padding: 1px 6px; }
+.chip.cyan { background: rgba(0,212,255,0.12); color: var(--xr-primary); border-color: rgba(0,212,255,0.3); }
+.chip.red { background: rgba(255,77,94,0.12); color: var(--xr-error); border-color: rgba(255,77,94,0.3); }
+.chip.amber { background: rgba(255,181,71,0.12); color: var(--xr-warning); border-color: rgba(255,181,71,0.3); }
+.chip.green { background: rgba(0,255,136,0.12); color: var(--xr-success); border-color: rgba(0,255,136,0.3); }
 .xr-terminal-body .cursor { display: inline-block; width: 7px; height: 14px; background: var(--xr-primary); vertical-align: middle; animation: xr-blink 1s step-end infinite; margin-left: 2px; }
 @keyframes xr-blink { 50% { opacity: 0; } }
 
