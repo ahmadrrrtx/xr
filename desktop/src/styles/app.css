@@ -1101,3 +1101,25 @@ body.has-engine-down .xr-app { margin-top: 36px; height: calc(100vh - 36px); }
 .cap-pin:hover { color: var(--xr-text); border-color: var(--xr-primary); }
 .cap-pin.on { opacity: 1; color: var(--xr-primary); background: color-mix(in oklab, var(--xr-primary) 15%, var(--xr-surface)); border-color: color-mix(in oklab, var(--xr-primary) 40%, var(--xr-border)); }
 .xr-cap-card.pinned { border-color: color-mix(in oklab, var(--xr-primary) 35%, var(--xr-border)); box-shadow: 0 0 0 1px color-mix(in oklab, var(--xr-primary) 20%, transparent) inset; }
+
+/* Phase 5 · a11y focus rings for keyboard users */
+.xr-rail .rail-btn:focus-visible,
+.xr-btn:focus-visible,
+button:focus-visible,
+.xr-filter-chip:focus-visible,
+.vd-orb-main:focus-visible,
+.vd-mic:focus-visible,
+.vc-dock-btn:focus-visible,
+.vc-mic:focus-visible,
+.vc-mute:focus-visible,
+.vc-ptt:focus-visible,
+.cap-pin:focus-visible,
+.xr-input:focus-visible {
+  outline: 2px solid var(--xr-primary);
+  outline-offset: 2px;
+}
+.xr-toast { outline: none; }
+.xr-toast:focus-within { outline: 2px solid var(--xr-primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}

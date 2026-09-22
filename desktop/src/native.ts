@@ -88,9 +88,25 @@ export const native = {
 
   // Autostart opt-in (Phase 5 onboarding). Tauri plugin-autostart exposes
   // enable()/disable(); outside Tauri this is a no-op so the onboarding
-  // checkbox still renders harmlessly.
+  // checkbox still renders harmlessly. We route through tauri-bridge when
+  // available rather than re-implementing invoke here.
   _autostart: {
-    async set(_on: boolean) { hint(); /* Tauri: invoke('plugin:autostart|enable' | 'disable') */ },
+    async set(on: boolean): Promise<boolean | null> {
+      hint();
+      try {
+        const mod = await import("./tauri-bridge");
+        if (mod.isTauri()) return await mod.nativeSetAutostart(on);
+      } catch { /* bridge not loaded or not in Tauri */ }
+      return null;
+    },
+    async status(): Promise<boolean | null> {
+      hint();
+      try {
+        const mod = await import("./tauri-bridge");
+        if (mod.isTauri()) return await mod.nativeAutostartStatus();
+      } catch { /* ignore */ }
+      return null;
+    },
   },
 
   // Test helper for dev server / stories — simulate a tray click / deep link.

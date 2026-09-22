@@ -48,6 +48,7 @@ function costStr(c?: number) { return c == null ? "—" : `$${c.toFixed(2)}`; }
 
 function exportRun(r: Run | undefined, fmt: "md" | "json") {
   if (!r) return;
+  const art50 = "> **AI disclosure (Art. 50 EU AI Act).** XR is an AI assistant. Actions in this run were gated by per-action approval (see Trust Center audit log). Stop/override is always available from Computer Control.\n";
   const md = `# Run: ${r.title}
 
 - **ID**: ${r.id}
@@ -61,7 +62,8 @@ function exportRun(r: Run | undefined, fmt: "md" | "json") {
 ## Summary
 ${r.steps?.current ?? (r.error ? r.error.title : "Completed.")}
 ${r.error ? `\n## Error\n**${r.error.title}**\n\n${r.error.fix}\n` : ""}
-`;
+---
+${art50}`;
   const body = fmt === "md" ? md : JSON.stringify(r, null, 2);
   const blob = new Blob([body], { type: fmt === "md" ? "text/markdown" : "application/json" });
   const url = URL.createObjectURL(blob);
