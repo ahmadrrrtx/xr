@@ -1,0 +1,297 @@
+/*
+ * XR THEME SYSTEM — 5 canonical themes (docs/THEME-SYSTEM.md).
+ *
+ * Architecture:
+ *   1. Each theme is a full token set declared on `html[data-theme="…"]`
+ *      (the default `xr-native` also lives on `:root` as the pre-attr fallback).
+ *   2. A Tailwind v4 `@theme inline` block maps every token into the utility
+ *      namespace, so `bg-bg-void`, `text-accent`, `border-subtle`,
+ *      `font-display`, etc. resolve to `var(--*)` references — switching the
+ *      `data-theme` attribute swaps every color instantly, with zero re-render
+ *      and zero per-theme component forks.
+ *   3. shadcn/ui semantic aliases (background/foreground/primary/…) point at
+ *      the same tokens so vendored primitives adapt to every theme.
+ *
+ * Only this file contains hex colors (traffic-light constants included).
+ */
+
+/* ─── Fonts (local, self-hosted — no CDN) ──────────────────────────────── */
+
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-latin-wght-normal.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Orbitron';
+  src: url('/fonts/orbitron-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ─── THEME 1: XR NATIVE (default) — deep-space void + cyan glow ───────── */
+
+:root,
+html[data-theme='xr-native'] {
+  --bg-void: #03070d;
+  --bg-ink: #0a0f1a;
+  --bg-raised: #121826;
+  --bg-overlay: rgba(3, 7, 13, 0.72);
+  --border-subtle: rgba(183, 194, 207, 0.08);
+  --border-default: rgba(183, 194, 207, 0.16);
+  --border-accent: rgba(0, 229, 255, 0.4);
+  --text-primary: #f0f4f8;
+  --text-secondary: #9aa8ba;
+  --text-tertiary: #5a6678;
+  --accent: #00e5ff;
+  --accent-hover: #33ebff;
+  --accent-dim: #008da8;
+  --accent-glow: rgba(0, 229, 255, 0.45);
+  --accent-contrast: #02141b;
+  --metal: #b7c2cf;
+  --metal-bright: #e8edf3;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --danger-contrast: #2b0b0b;
+  --wait: #a78bfa;
+  --editor-bg: #070b14;
+}
+
+/* ─── THEME 2: GRAPHITE — warm industrial grayscale, matte ─────────────── */
+
+html[data-theme='graphite'] {
+  --bg-void: #4a4a4a;
+  --bg-ink: #5e5e5e;
+  --bg-raised: #707070;
+  --bg-overlay: rgba(60, 60, 60, 0.78);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(0, 0, 0, 0.15);
+  --border-accent: rgba(91, 138, 158, 0.6);
+  --text-primary: #1a1a1a;
+  --text-secondary: #3a3a3a;
+  --text-tertiary: #6b6b6b;
+  --accent: #5b8a9e;
+  --accent-hover: #6e9db2;
+  --accent-dim: #3f6778;
+  --accent-glow: rgba(91, 138, 158, 0.2);
+  --accent-contrast: #f5f7f8;
+  --metal: #b0b0b0;
+  --metal-bright: #d0d0d0;
+  --success: #4a8d6e;
+  --warning: #b88a2e;
+  --danger: #b25454;
+  --danger-contrast: #f5f2f0;
+  --wait: #7a6bae;
+  --editor-bg: #3f3f3f;
+}
+
+/* ─── THEME 3: MIDNIGHT — deep navy cobalt, 12-hour sessions ───────────── */
+
+html[data-theme='midnight'] {
+  --bg-void: #0d1422;
+  --bg-ink: #131c2e;
+  --bg-raised: #1a2744;
+  --bg-overlay: rgba(13, 20, 34, 0.8);
+  --border-subtle: rgba(148, 163, 184, 0.08);
+  --border-default: rgba(148, 163, 184, 0.15);
+  --border-accent: rgba(59, 130, 246, 0.5);
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #55657c;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-dim: #1e40af;
+  --accent-glow: rgba(59, 130, 246, 0.22);
+  --accent-contrast: #f8fafc;
+  --metal: #94a3b8;
+  --metal-bright: #cbd5e1;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --danger-contrast: #fef2f2;
+  --wait: #8b5cf6;
+  --editor-bg: #0a1020;
+}
+
+/* ─── THEME 4: PAPER — warm cream, reading-heavy sessions ─────────────── */
+
+html[data-theme='paper'] {
+  --bg-void: #ede6d9;
+  --bg-ink: #f5f0e8;
+  --bg-raised: #faf7f2;
+  --bg-overlay: rgba(220, 210, 195, 0.85);
+  --border-subtle: rgba(60, 50, 35, 0.08);
+  --border-default: rgba(60, 50, 35, 0.18);
+  --border-accent: rgba(42, 122, 111, 0.5);
+  --text-primary: #2b2318;
+  --text-secondary: #5c4f3d;
+  --text-tertiary: #908069;
+  --accent: #2a7a6f;
+  --accent-hover: #379487;
+  --accent-dim: #1b554d;
+  --accent-glow: transparent;
+  --accent-contrast: #f9f6f0;
+  --metal: #8a7c66;
+  --metal-bright: #b5a890;
+  --success: #4f8a5c;
+  --warning: #b8862e;
+  --danger: #b2504a;
+  --danger-contrast: #faf5f2;
+  --wait: #7b6ba8;
+  --editor-bg: #fbf8f2;
+}
+
+/* ─── THEME 5: ARCTIC — pure white light mode, crisp ──────────────────── */
+
+html[data-theme='arctic'] {
+  --bg-void: #ffffff;
+  --bg-ink: #f8fafc;
+  --bg-raised: #f1f5f9;
+  --bg-overlay: rgba(255, 255, 255, 0.78);
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --border-default: rgba(15, 23, 42, 0.12);
+  --border-accent: rgba(6, 182, 212, 0.5);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --accent: #06b6d4;
+  --accent-hover: #0891b2;
+  --accent-dim: #0e7490;
+  --accent-glow: transparent;
+  --accent-contrast: #082f3e;
+  --metal: #64748b;
+  --metal-bright: #334155;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --danger-contrast: #fef2f2;
+  --wait: #7c3aed;
+  --editor-bg: #ffffff;
+}
+
+/* ─── Window chrome constants (OS traffic lights — theme-independent) ──── */
+
+:root {
+  --traffic-red: #ff5f57;
+  --traffic-yellow: #febc2e;
+  --traffic-green: #28c840;
+  --traffic-red-hover: #ff4d44;
+  --traffic-yellow-hover: #f5ac2b;
+  --traffic-green-hover: #22b535;
+}
+
+/* ─── Tailwind v4 utility mapping ─────────────────────────────────────────
+ * `@theme inline` emits utilities that reference the vars directly, so
+ * attribute-based theme swaps cascade through every utility class.
+ * ------------------------------------------------------------------------ */
+
+@theme inline {
+  /* Surfaces */
+  --color-bg-void: var(--bg-void);
+  --color-bg-ink: var(--bg-ink);
+  --color-bg-raised: var(--bg-raised);
+  --color-bg-overlay: var(--bg-overlay);
+
+  /* Borders */
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-accent: var(--border-accent);
+
+  /* Text */
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  /* Accent (XR cyan family) */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-glow: var(--accent-glow);
+  --color-accent-contrast: var(--accent-contrast);
+
+  /* Metal / silver */
+  --color-metal: var(--metal);
+  --color-metal-bright: var(--metal-bright);
+
+  /* Semantic */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-danger-contrast: var(--danger-contrast);
+  --color-wait: var(--wait);
+  --color-editor-bg: var(--editor-bg);
+
+  /* Window chrome */
+  --color-traffic-red: var(--traffic-red);
+  --color-traffic-yellow: var(--traffic-yellow);
+  --color-traffic-green: var(--traffic-green);
+
+  /* shadcn/ui semantic aliases (vendored primitives stay theme-aware) */
+  --color-background: var(--bg-void);
+  --color-foreground: var(--text-primary);
+  --color-card: var(--bg-ink);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--bg-raised);
+  --color-popover-foreground: var(--text-primary);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-contrast);
+  --color-secondary: var(--bg-raised);
+  --color-secondary-foreground: var(--text-primary);
+  --color-muted: var(--bg-raised);
+  --color-muted-foreground: var(--text-secondary);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--danger-contrast);
+  --color-input: var(--border-default);
+  --color-ring: var(--accent);
+
+  /* Typography — families */
+  --font-sans:
+    Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:
+    'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, Consolas,
+    monospace;
+  --font-display: Orbitron, Inter, sans-serif;
+
+  /* Radii (docs/DESIGN-SYSTEM.md §3.2) */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+@theme {
+  /* Type scale (docs/DESIGN-SYSTEM.md §2.2 — 1.250 modified for UI density) */
+  --text-xs: 11px;
+  --text-xs--line-height: 16px;
+  --text-sm: 12px;
+  --text-sm--line-height: 18px;
+  --text-base: 14px;
+  --text-base--line-height: 20px;
+  --text-lg: 16px;
+  --text-lg--line-height: 24px;
+  --text-xl: 18px;
+  --text-xl--line-height: 26px;
+  --text-2xl: 22px;
+  --text-2xl--line-height: 30px;
+  --text-3xl: 28px;
+  --text-3xl--line-height: 36px;
+  --text-4xl: 36px;
+  --text-4xl--line-height: 44px;
+  --text-5xl: 48px;
+  --text-5xl--line-height: 56px;
+  --text-6xl: 72px;
+  --text-6xl--line-height: 84px;
+}

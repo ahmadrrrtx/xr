@@ -1,25 +1,29 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="xr-native">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Phase 1 · D-05: the resolved scheme is set by prefs.applyTheme(); this
-         declares both so native controls match before JS runs. -->
     <meta name="color-scheme" content="dark light" />
-    <script>
-      // Apply the stored theme before first paint to avoid a flash.
-      try {
-        var t = localStorage.getItem("xr.theme") || "system";
-        var d = localStorage.getItem("xr.density") || "comfortable";
-        var light = t === "light" || (t === "system" && window.matchMedia("(prefers-color-scheme: light)").matches);
-        // Resolved value + recorded preference — see src/prefs.ts applyTheme().
-        document.documentElement.setAttribute("data-theme", light ? "light" : "dark");
-        document.documentElement.setAttribute("data-theme-pref", t);
-        document.documentElement.setAttribute("data-density", d);
-        document.documentElement.style.colorScheme = light ? "light" : "dark";
-      } catch (e) { /* storage disabled */ }
-    </script>
-    <title>XR — Workstation</title>
+    <title>XR</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#03070D" />
+    <!-- Apply the persisted theme before first paint (CSP-safe: same-origin script). -->
+    <script src="/theme-init.js"></script>
+    <!-- First-paint fonts: Inter (UI) + Orbitron (wordmark). JetBrains Mono swaps in lazily. -->
+    <link
+      rel="preload"
+      href="/fonts/inter-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="/fonts/orbitron-latin-700-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
   </head>
   <body>
     <div id="root"></div>

@@ -1,29 +1,28 @@
-# XR Desktop (Phase 1 foundation)
+# XR Desktop
 
-Tauri v2 shell over the existing XR engine daemon (`xr serve`, loopback API v1).
-Blueprint: `docs/xr-rebuild/` · decisions: `XR_DECISION_RECORD.md` (D-02: Tauri v2, Win+mac+Linux first-class).
+**XR — the AI agent you can actually trust.**
 
-## Layout
-- `src/` — web shell (React + TS, XR Prism tokens): AppShell (icon rail), Home (composer/continue/approvals/readiness), Runs (list + anatomy drawer), engine-down splash.
-- `src/api/client.ts` — typed daemon client; display-only: never computes risk/policy/budget (SEC-07).
-- `src-tauri/` — Rust shell: sidecar attach probe, 0600 pairing-token discovery, tray quick actions. Native matrix (notifications/deep links/autostart/updater) = Phase 4.
+Tauri v2 + React 18 + TypeScript + Tailwind v4 (Oxide) + shadcn/ui shell.
+Phase 0 scaffold: app chrome (sidebar + topbar + custom window controls),
+14 placeholder routes, and the full 5-theme system (XR Native / Graphite /
+Midnight / Paper / Arctic).
 
-## Dev (any OS)
+## Quick start
+
 ```bash
-# 1. engine
-bun run src/index.ts serve          # repo root → daemon on 127.0.0.1:3141 (prints token)
-# 2. shell (from desktop/)
-XR_DEV_TOKEN=<daemon token> bun run dev   # vite on :5173, proxies /api → daemon, injects bearer server-side
+bun install          # dependencies
+bun run dev          # Vite dev server (browser preview) → http://127.0.0.1:5173
+bun run dev:tauri    # native shell (requires Rust toolchain)
 ```
-Open http://127.0.0.1:5173 — token never reaches browser code.
 
-## Package (per OS)
-Prereqs: Rust stable, Bun ≥1.3, platform webview libs.
-- **macOS:** `bun run tauri build --target universal-apple-darwin` (needs Xcode; notarize in CI).
-- **Windows:** `bun run tauri build --target x86_64-pc-windows-msvc` (WebView2 evergreen; MSI in bundle targets).
-- **Linux:** `bun run tauri build` (webkit2gtk-4.1 + rpm tools; AppImage/deb/rpm targets).
-Icons: drop official-mark renders into `src-tauri/icons/` (generate from `assets/logo.png` per Asset Audit §4).
+## Scripts
 
-## Phase gates
-- P1 DoD (this slice): pair/attach, Home live data, Runs anatomy read, engine-down recovery splash, 3-OS CI job green.
-- P2: Work transcript/approvals, editor+terminal, Model Center, onboarding.
+`dev` · `dev:tauri` · `build` · `build:tauri` · `typecheck` · `lint` · `format`
+
+## Docs
+
+Master design docs live in [`../docs/`](../docs/) — `DESIGN-SYSTEM.md`,
+`THEME-SYSTEM.md`, `SCREEN-BRIEFS.md`, `DEEP-DIVE-ARCHITECTURE.md`,
+`IMPLEMENTATION-PLAN.md`. This phase's plan: `../docs/phases/00-scaffold.plan.md`.
+
+License: MIT (repo root `LICENSE`).
