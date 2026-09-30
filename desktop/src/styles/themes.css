@@ -366,18 +366,16 @@ html[data-theme='arctic'] {
  * The per-theme glow radius (--avatar-glow-strength, above) still controls
  * how much ambient glow the energy layers cast in each theme. */
 :root {
-  --brand-lg-ink-0: #000916;
-    --brand-lg-ink-1: #010d1d;
-    --brand-lg-cy-0: #011023;
-    --brand-lg-cy-1: #03152b;
-    --brand-lg-cy-2: #061d37;
-    --brand-lg-cy-3: #072b4f;
-    --brand-lg-cy-4: #1e4b72;
-    --brand-lg-cy-5: #0b72b0;
-    --brand-lg-cy-6: #36d2f3;
-    --brand-lg-hi-0: #a7b4c2;
-    --brand-lg-cy-7: #c4d7e3;
-    --brand-lg-hi-1: #eff4f8;
+  --brand-lg-cy-0: #16cdf8;
+  --brand-lg-cy-1: #44dbf6;
+  --brand-lg-hi-0: #a9b9c7;
+  --brand-lg-hi-1: #bcccd9;
+  --brand-lg-cy-2: #74eefc;
+  --brand-lg-cy-3: #c7ddeb;
+  --brand-lg-hi-2: #dde7f0;
+  --brand-lg-hi-3: #eef3f7;
+  --brand-lg-hi-4: #f5f8fb;
+  --brand-lg-hi-5: #fdfefe;
     --brand-av-ink-0: #000105;
     --brand-av-ink-1: #00060d;
     --brand-av-ink-2: #010911;

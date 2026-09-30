@@ -21,6 +21,7 @@ import { Logo } from '@/components/brand/Logo';
 import { NAV_ITEMS } from '@/lib/nav';
 import { useSidebarStore } from '@/stores/sidebar';
 import { useThemeStore } from '@/stores/theme';
+import { clearOnboardingFlag } from '@/stores/onboarding';
 import { useUIStore } from '@/stores/ui';
 
 /** Small right-aligned shortcut chip (mono, per the design system). */
@@ -78,6 +79,19 @@ export function CommandPalette() {
       shortcut: '⌘B',
       run: () => useSidebarStore.getState().toggle(),
     },
+    // Dev-only: replay the whole first-run flow (Phase 3 QA).
+    ...(import.meta.env.DEV
+      ? [
+          {
+            id: 'reset-onboarding',
+            label: 'Reset onboarding (dev)',
+            shortcut: '⇧⌘R',
+            run: () => {
+              void clearOnboardingFlag().then(() => window.location.reload());
+            },
+          },
+        ]
+      : []),
     {
       id: 'cycle-theme',
       label: 'Cycle Theme',

@@ -34,6 +34,11 @@ tauri-plugin-store = "2"
 tauri-plugin-stronghold = "2"
 tauri-plugin-updater = "2"
 
+# Phase 3 — hardware detection (sysinfo) + localhost Ollama HTTP probes
+# (ureq, blocking, rustls — deliberately not reqwest/tokio).
+sysinfo = "0.33"
+ureq = { version = "2", features = ["json", "tls"] }
+
 # Stronghold key derivation (Argon2id) — see src/lib.rs `key_derivation`.
 argon2 = "0.5"
 # `tauri::generate_context!` requires serde/serde_json as direct dependencies.

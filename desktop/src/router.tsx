@@ -1,6 +1,7 @@
 import { createHashRouter, Navigate } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
+import { OnboardingGate, OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
 import AgentsScreen from '@/screens/Agents';
 import BrainScreen from '@/screens/Brain';
 import BudgetScreen from '@/screens/Budget';
@@ -23,7 +24,15 @@ import WorkspacesScreen from '@/screens/Workspaces';
  */
 export const router = createHashRouter([
   {
-    element: <AppShell />,
+    path: '/onboarding',
+    element: <OnboardingScreen />,
+  },
+  {
+    element: (
+      <OnboardingGate>
+        <AppShell />
+      </OnboardingGate>
+    ),
     children: [
       { index: true, element: <Navigate to="/chat" replace /> },
       { path: '/chat/:sessionId?', element: <ChatScreen /> },

@@ -74,6 +74,9 @@ pub fn run() {
             commands::window::toggle_maximize,
             commands::window::close_window,
             commands::window::get_platform,
+            commands::system::detect_system,
+            commands::system::detect_ollama,
+            commands::ollama::ollama_pull,
             events::theme_changed,
         ])
         .run(tauri::generate_context!())
