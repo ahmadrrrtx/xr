@@ -85,6 +85,13 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile --ignore-scripts
 
+      # The desktop program (desktop/tsconfig.json) typechecks against the
+      # shell's own node_modules (React 18 types, Tailwind v4, …), installed
+      # from desktop/bun.lock — a separate lockfile from the root's.
+      - name: Install desktop dependencies (frozen lockfile)
+        working-directory: desktop
+        run: bun install --frozen-lockfile
+
       # `bun run typecheck` is the single authority: the root program (engine,
       # no DOM lib) AND desktop/tsconfig.json (the React 18 + Tailwind v4
       # desktop shell under its own DOM lib). Running only `tsc --noEmit` here
