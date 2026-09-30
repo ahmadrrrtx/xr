@@ -68,6 +68,12 @@ html[data-theme='xr-native'] {
   --danger-contrast: #2b0b0b;
   --wait: #a78bfa;
   --editor-bg: #070b14;
+  --bg-glass: rgba(10, 15, 26, 0.92);
+  --glass-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px -8px var(--accent-glow);
+  --palette-selected-bg: color-mix(in oklab, var(--accent) 15%, transparent);
+  --palette-selected-fg: var(--accent);
+  --kbd-bg: rgba(0, 0, 0, 0.4);
 }
 
 /* ─── THEME 2: GRAPHITE — warm industrial grayscale, matte ─────────────── */
@@ -96,6 +102,12 @@ html[data-theme='graphite'] {
   --danger-contrast: #f5f2f0;
   --wait: #7a6bae;
   --editor-bg: #3f3f3f;
+  --bg-glass: rgba(90, 90, 90, 0.92);
+  --glass-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.35), 0 0 40px -8px var(--accent-glow);
+  --palette-selected-bg: color-mix(in oklab, var(--accent) 18%, transparent);
+  --palette-selected-fg: var(--metal-bright);
+  --kbd-bg: rgba(0, 0, 0, 0.25);
 }
 
 /* ─── THEME 3: MIDNIGHT — deep navy cobalt, 12-hour sessions ───────────── */
@@ -124,6 +136,12 @@ html[data-theme='midnight'] {
   --danger-contrast: #fef2f2;
   --wait: #8b5cf6;
   --editor-bg: #0a1020;
+  --bg-glass: rgba(19, 28, 46, 0.92);
+  --glass-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px -8px var(--accent-glow);
+  --palette-selected-bg: color-mix(in oklab, var(--accent) 15%, transparent);
+  --palette-selected-fg: var(--accent);
+  --kbd-bg: rgba(0, 0, 0, 0.4);
 }
 
 /* ─── THEME 4: PAPER — warm cream, reading-heavy sessions ─────────────── */
@@ -152,6 +170,12 @@ html[data-theme='paper'] {
   --danger-contrast: #faf5f2;
   --wait: #7b6ba8;
   --editor-bg: #fbf8f2;
+  --bg-glass: rgba(245, 240, 232, 0.92);
+  --glass-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05), 0 20px 50px -10px rgba(15, 23, 42, 0.15);
+  --palette-selected-bg: var(--accent);
+  --palette-selected-fg: var(--accent-contrast);
+  --kbd-bg: rgba(0, 0, 0, 0.05);
 }
 
 /* ─── THEME 5: ARCTIC — pure white light mode, crisp ──────────────────── */
@@ -180,6 +204,12 @@ html[data-theme='arctic'] {
   --danger-contrast: #fef2f2;
   --wait: #7c3aed;
   --editor-bg: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.88);
+  --glass-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05), 0 20px 50px -10px rgba(15, 23, 42, 0.15);
+  --palette-selected-bg: var(--accent);
+  --palette-selected-fg: var(--accent-contrast);
+  --kbd-bg: rgba(0, 0, 0, 0.05);
 }
 
 /* ─── Window chrome constants (OS traffic lights — theme-independent) ──── */
@@ -204,6 +234,8 @@ html[data-theme='arctic'] {
   --color-bg-ink: var(--bg-ink);
   --color-bg-raised: var(--bg-raised);
   --color-bg-overlay: var(--bg-overlay);
+  --color-bg-glass: var(--bg-glass);
+  --color-palette-selected-fg: var(--palette-selected-fg);
 
   /* Borders */
   --color-border-subtle: var(--border-subtle);

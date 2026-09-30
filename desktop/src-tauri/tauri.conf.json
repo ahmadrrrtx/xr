@@ -11,6 +11,7 @@
   },
   "app": {
     "withGlobalTauri": false,
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
@@ -24,6 +25,25 @@
         "decorations": false,
         "transparent": false,
         "theme": "Dark"
+      },
+      {
+        "label": "hud",
+        "url": "hud.html",
+        "title": "XR HUD",
+        "width": 640,
+        "height": 480,
+        "minWidth": 480,
+        "minHeight": 200,
+        "resizable": false,
+        "center": true,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "shadow": false,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

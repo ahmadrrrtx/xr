@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "hud",
+  "description": "HUD palette window (Phase 5): core APIs, event listen/emit, and the frameless-window drag region. App-defined commands (chat persistence, hud_* window ops, theme_changed) need no extra grants.",
+  "windows": ["hud"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging"
+  ]
+}

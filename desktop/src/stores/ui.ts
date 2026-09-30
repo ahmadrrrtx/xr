@@ -21,22 +21,17 @@ function readInitialName(): string {
 
 interface UIState {
   platform: Platform;
-  paletteOpen: boolean;
   userName: string;
   setPlatform: (platform: Platform) => void;
-  setPaletteOpen: (open: boolean) => void;
   setUserName: (name: string) => void;
   hydrateUserName: (name: string | null) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
   platform: 'web',
-  paletteOpen: false,
   userName: readInitialName(),
 
   setPlatform: (platform) => set({ platform }),
-
-  setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
 
   setUserName: (name) => {
     writeSettingJSON(NAME_KEY, name);

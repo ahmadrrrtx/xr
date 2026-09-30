@@ -9,8 +9,7 @@ const projectRoot = dirname(fileURLToPath(import.meta.url));
 
   // https://vite.dev/config/
   export default defineConfig({
-    plugins: [react(), tailwindcss()],
-    // Never watch Rust build artifacts (src-tauri/target can hold 40k+ files
+    plugins: [react(), tailwindcss()],    // Never watch Rust build artifacts (src-tauri/target can hold 40k+ files
     // after a cargo build and exhausts inotify watchers).
     watch: {
       ignored: ['**/src-tauri/**'],
@@ -27,6 +26,14 @@ const projectRoot = dirname(fileURLToPath(import.meta.url));
   },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
+    // Multi-page: the main app AND the HUD palette window (Phase 5) —
+    // tauri.conf.json's hud window loads dist/hud.html.
+    rollupOptions: {
+      input: {
+        main: resolve(projectRoot, 'index.html'),
+        hud: resolve(projectRoot, 'hud.html'),
+      },
+    },
     target:
       process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
     minify: !process.env.TAURI_ENV_DEBUG ? 'oxc' : false,

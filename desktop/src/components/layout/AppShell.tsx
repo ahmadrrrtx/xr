@@ -10,6 +10,8 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { CommandPalette } from '@/components/cmdk/CommandPalette';
+import { usePaletteIpc } from '@/hooks/usePalette';
+import { usePaletteStore } from '@/stores/paletteStore';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
@@ -18,7 +20,7 @@ import { useHotkeys } from '@/hooks/useHotkeys';
 import { readSettingJSON, readSettingRaw } from '@/lib/persistent-store';
 import { useSidebarStore } from '@/stores/sidebar';
 import { useThemeStore, type ThemeId } from '@/stores/theme';
-import { hydrateUIState, useUIStore } from '@/stores/ui';
+import { hydrateUIState } from '@/stores/ui';
 
 /** Below 960px the sidebar force-collapses (and re-collapses on resize). */
 function useResponsiveSidebar(): void {
@@ -68,8 +70,7 @@ function useGlobalHotkeys(): void {
     {
       combo: 'mod+k',
       handler: () => {
-        const { paletteOpen, setPaletteOpen } = useUIStore.getState();
-        setPaletteOpen(!paletteOpen);
+        usePaletteStore.getState().togglePalette();
       },
     },
     {
@@ -121,7 +122,11 @@ function useWelcomeToast(): void {
 export function AppShell() {
   useResponsiveSidebar();
   usePersistedSettings();
+  const navigate = useNavigate();
   useGlobalHotkeys();
+  // Cross-window effects from the HUD: navigation, remote commands, theme
+  // sync, session-list refresh (Phase 5).
+  usePaletteIpc(false, navigate);
   useWelcomeToast();
   const location = useLocation();
   // Chat manages its own flush, full-height layout — no content padding.
@@ -142,7 +147,7 @@ export function AppShell() {
       </div>
 
       {/* Global overlays */}
-      <CommandPalette />
+      <CommandPalette embedded />
       {/* Toaster moved to App root (Phase 3) so onboarding toasts render too */}
 
     </TooltipProvider>
