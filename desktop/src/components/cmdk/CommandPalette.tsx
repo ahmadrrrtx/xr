@@ -61,10 +61,12 @@ export function CommandPalette() {
       label: 'New chat',
       shortcut: '⌘N',
       run: () => {
-        navigate('/chat');
-        toast('New chat — chat logic coming in Phase 4', {
-          description: 'The conversation UI ships with the Chat phase.',
-        });
+        void (async () => {
+          const { useSessionsStore } = await import('@/stores/sessionsStore');
+          const s = await useSessionsStore.getState().createNewSession();
+          useSessionsStore.getState().selectSession(s.id);
+          navigate(`/chat/${s.id}`);
+        })();
       },
     },
     {

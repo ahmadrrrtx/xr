@@ -29,7 +29,6 @@ tauri-plugin-notification = "2"
 tauri-plugin-os = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
-tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-store = "2"
 tauri-plugin-stronghold = "2"
 tauri-plugin-updater = "2"
@@ -38,6 +37,9 @@ tauri-plugin-updater = "2"
 # (ureq, blocking, rustls — deliberately not reqwest/tokio).
 sysinfo = "0.33"
 ureq = { version = "2", features = ["json", "tls"] }
+
+# Phase 4 — chat persistence (SQLite, WAL; bundled build so no system sqlite needed).
+rusqlite = { version = "0.37", features = ["bundled"] }
 
 # Stronghold key derivation (Argon2id) — see src/lib.rs `key_derivation`.
 argon2 = "0.5"
