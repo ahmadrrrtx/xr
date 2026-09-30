@@ -52,11 +52,11 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_stronghold::Builder::new(key_derivation).build())
-        .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            commands::chat::init(app)?;
             #[cfg(desktop)]
             {
                 app.handle().plugin(tauri_plugin_autostart::init(
@@ -77,6 +77,16 @@ pub fn run() {
             commands::system::detect_system,
             commands::system::detect_ollama,
             commands::ollama::ollama_pull,
+            commands::chat::chat_list_sessions,
+            commands::chat::chat_get_session,
+            commands::chat::chat_create_session,
+            commands::chat::chat_update_session_title,
+            commands::chat::chat_update_session_model,
+            commands::chat::chat_archive_session,
+            commands::chat::chat_delete_session,
+            commands::chat::chat_list_messages,
+            commands::chat::chat_save_message,
+            commands::chat::chat_delete_message,
             events::theme_changed,
         ])
         .run(tauri::generate_context!())

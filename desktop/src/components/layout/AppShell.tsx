@@ -6,7 +6,7 @@
  * (docs/SCREEN-BRIEFS.md · GLOBAL APPLICATION SHELL).
  */
 import { useEffect } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { CommandPalette } from '@/components/cmdk/CommandPalette';
@@ -79,10 +79,12 @@ function useGlobalHotkeys(): void {
     {
       combo: 'mod+n',
       handler: () => {
-        navigate('/chat');
-        toast('New chat — chat logic coming in Phase 4', {
-          description: 'The conversation UI ships with the Chat phase.',
-        });
+        void (async () => {
+          const { useSessionsStore } = await import('@/stores/sessionsStore');
+          const s = await useSessionsStore.getState().createNewSession();
+          useSessionsStore.getState().selectSession(s.id);
+          navigate(`/chat/${s.id}`);
+        })();
       },
     },
     {
@@ -121,6 +123,9 @@ export function AppShell() {
   usePersistedSettings();
   useGlobalHotkeys();
   useWelcomeToast();
+  const location = useLocation();
+  // Chat manages its own flush, full-height layout — no content padding.
+  const flush = location.pathname.startsWith('/chat');
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -128,7 +133,7 @@ export function AppShell() {
         <Topbar />
         <div className="flex min-h-0 flex-1">
           <Sidebar />
-          <main className="bg-bg-void min-w-0 flex-1 overflow-y-auto p-6">
+          <main className={`bg-bg-void min-w-0 flex-1 overflow-y-auto ${flush ? 'p-0' : 'p-6'}`}>
             <PageTransition>
               <Outlet />
             </PageTransition>

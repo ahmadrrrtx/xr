@@ -1,0 +1,41 @@
+PASS  welcome greeting with name
+PASS  4 suggestion chips
+PASS  composer placeholder
+PASS  chip created session route
+PASS  stop button appears while streaming
+PASS  mock response completed
+PASS  Today group in session list
+PASS  auto-title from first message
+PASS  send enabled with text
+PASS  Shift+Enter newline
+PASS  Enter sends + greeting pool responds
+PASS  stop returns to send button
+PASS  code block rendered
+PASS  code contains sortBy
+PASS  shiki syntax spans
+PASS  tool card appears collapsed
+PASS  tool card expands with output
+PASS  post-tool response continues
+PASS  attachment chip (doc)
+PASS  attachment chip (image w/ preview)
+PASS  toast about future upload
+PASS  attachment removed
+PASS  attachment note in message
+PASS  popover lists 3 models
+PASS  chip updates
+PASS  second new chat created
+PASS  scroll-to-bottom appears when scrolled up
+PASS  scroll-to-bottom appears when scrolled up
+PASS  jump hides at bottom
+PASS  ⌘/ focuses composer
+PASS  ⌘⇧O hides panel
+PASS  ⌘⇧O shows panel
+PASS  Esc cancels stream
+PASS  offline banner shows
+PASS  queued message styled
+PASS  queued message flushed on reconnect
+PASS  panel hides <960px
+PASS  sessions persist after reload
+PASS  messages persist after reload
+PASS  5 theme screenshots
+PASS  no console/page errors
