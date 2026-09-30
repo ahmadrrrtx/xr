@@ -295,3 +295,31 @@ html[data-theme='arctic'] {
   --text-6xl: 72px;
   --text-6xl--line-height: 84px;
 }
+
+/* ─── Tooltip adaptation (docs/THEME-SYSTEM.md · component table) ──────────
+ * Dark themes: light silver bubble, dark text. Light themes: dark bubble,
+ * light text. Graphite uses --metal for its foreground (the table's
+ * bg-raised pairing falls below AA contrast on that theme). */
+:root,
+html[data-theme='xr-native'],
+html[data-theme='midnight'] {
+  --tooltip-bg: var(--metal-bright);
+  --tooltip-fg: var(--bg-void);
+}
+
+html[data-theme='graphite'] {
+  --tooltip-bg: var(--text-primary);
+  --tooltip-fg: var(--metal);
+}
+
+html[data-theme='paper'],
+html[data-theme='arctic'] {
+  --tooltip-bg: var(--text-primary);
+  --tooltip-fg: var(--bg-raised);
+}
+
+/* Brand constants — the sentinel helmet ink. Identical in every theme:
+ * brand imagery, not theme chrome (docs/DESIGN-SYSTEM.md §6.1). */
+:root {
+  --brand-ink: #050912;
+}

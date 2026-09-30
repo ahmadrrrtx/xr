@@ -1,12 +1,14 @@
 /*
  * Theme store — the single source of truth for XR's 5 canonical themes.
  *
- * Persistence: localStorage for now (Phase 8 moves it to the Tauri Store,
- * encrypted via Stronghold). The pre-paint `public/theme-init.js` reads the
- * same key before React mounts, so there is no flash of the wrong theme.
+ * Persistence (Phase 1): write-through — Tauri Store (`settings.json`) is the
+ * durable source inside the native shell; the localStorage copy stays in sync
+ * so the pre-paint `public/theme-init.js` applies the theme before React
+ * mounts (no flash) and the browser preview keeps working.
  */
 import { create } from 'zustand';
 
+import { writeSettingRaw } from '@/lib/persistent-store';
 import { emitThemeChanged } from '@/lib/tauri';
 
 export const THEMES = [
@@ -46,11 +48,8 @@ function readStoredTheme(): ThemeId {
 }
 
 function persistTheme(theme: ThemeId): void {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, theme);
-  } catch {
-    /* storage unavailable (private mode etc.) — theme still applies for the session */
-  }
+  // Raw string — `public/theme-init.js` reads this exact format pre-paint.
+  writeSettingRaw(STORAGE_KEY, theme);
 }
 
 /** Apply a theme id to the document root (`html[data-theme]`). */

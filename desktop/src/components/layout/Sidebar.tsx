@@ -1,52 +1,234 @@
+/*
+ * Sidebar — the permanent left rail (docs/SCREEN-BRIEFS.md · GLOBAL
+ * APPLICATION SHELL · Phase 1 brief §5.2).
+ *
+ * Widths 72px (collapsed, launch default) ↔ 240px (expanded), animated with
+ * a Framer spring (380/28). Fourteen nav items in fixed order, a 4px accent
+ * bar on the active item's left edge, collapsed-only tooltips (200ms),
+ * budget health dot, user card (expanded), rotating collapse toggle.
+ * The nav region scrolls only when the viewport is too short (<700px);
+ * logo (top) and user/collapse (bottom) stay pinned.
+ */
+import { AnimatePresence, motion } from 'framer-motion';
+import { PanelLeft } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
-import { NAV_ITEMS } from '@/lib/nav';
+import { Logo } from '@/components/brand/Logo';
+import { UserMenu } from '@/components/layout/UserMenu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { NAV_ITEMS, type NavItem } from '@/lib/nav';
 import { cn } from '@/lib/utils';
+import { useSidebarStore } from '@/stores/sidebar';
 
-/**
- * Placeholder icon-rail sidebar (72px) — Phase 1 ships the full version
- * (240px expand, tooltips, collapse toggle, user card).
- */
+const COLLAPSED_WIDTH = 72;
+const EXPANDED_WIDTH = 240;
+
+/** 4px accent bar on the active item's left edge (24–28px tall). */
+function ActiveBar({ tall }: { tall: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'bg-accent absolute top-1/2 left-0 w-[4px] translate-y-[-50%] rounded-r-[4px]',
+        tall ? 'h-7' : 'h-6'
+      )}
+    />
+  );
+}
+
+/** Budget health dot — static green until the Phase 13 spend governor. */
+function BudgetDot() {
+  return (
+    <span
+      aria-hidden="true"
+      className="bg-success absolute top-[7px] right-[9px] h-1.5 w-1.5 rounded-full"
+    />
+  );
+}
+
+function SidebarNavItem({
+  item,
+  collapsed,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+}) {
+  const Icon = item.icon;
+  const isBudget = item.id === 'budget';
+
+  const link = (
+    <NavLink
+      to={item.path}
+      aria-label={item.label}
+      className={({ isActive }) =>
+        cn(
+          'group relative flex items-center rounded-md no-underline transition-colors duration-150 ease-out',
+          'focus-visible:ring-accent focus-visible:ring-2 focus-visible:outline-none',
+          collapsed ? 'h-11 w-11 justify-center' : 'h-10 w-full gap-2.5 px-2',
+          isActive
+            ? 'bg-[color-mix(in_oklab,var(--accent)_10%,transparent)]'
+            : 'hover:bg-bg-raised'
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && <ActiveBar tall={collapsed} />}
+          <span className="relative flex shrink-0 items-center">
+            <Icon
+              size={20}
+              strokeWidth={isActive ? 2 : 1.5}
+              aria-hidden="true"
+              className={cn(
+                'transition-colors duration-150 ease-out',
+                isActive
+                  ? 'text-text-primary'
+                  : 'text-text-secondary group-hover:text-text-primary'
+              )}
+            />
+            {isBudget && <BudgetDot />}
+          </span>
+          {!collapsed && (
+            <span
+              className={cn(
+                'text-[14px] whitespace-nowrap transition-colors duration-150 ease-out',
+                isActive
+                  ? 'text-text-primary font-medium'
+                  : 'text-text-secondary group-hover:text-text-primary'
+              )}
+            >
+              {item.label}
+            </span>
+          )}
+        </>
+      )}
+    </NavLink>
+  );
+
+  // Collapsed: tooltip to the right (200ms via the app-wide TooltipProvider).
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent
+          side="right"
+          className="border-none bg-[var(--tooltip-bg)] text-[var(--tooltip-fg)]"
+        >
+          {item.label}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+  return link;
+}
+
+function CollapseButton({ collapsed }: { collapsed: boolean }) {
+  const toggle = useSidebarStore((state) => state.toggle);
+  return (
+    <button
+      type="button"
+      aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      aria-keyshortcuts="Meta+B Control+B"
+      title="Toggle sidebar (⌘B)"
+      onClick={toggle}
+      className={cn(
+        'text-text-secondary hover:bg-bg-raised hover:text-text-primary focus-visible:ring-accent flex items-center rounded-md transition-colors duration-150 ease-out focus-visible:ring-2 focus-visible:outline-none',
+        collapsed ? 'h-11 w-11 justify-center' : 'h-10 w-full justify-end px-2'
+      )}
+    >
+      <motion.span
+        aria-hidden="true"
+        animate={{ rotate: collapsed ? 0 : 180 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+        className="flex items-center"
+      >
+        <PanelLeft size={18} strokeWidth={1.5} />
+      </motion.span>
+    </button>
+  );
+}
+
 export function Sidebar() {
+  const collapsed = useSidebarStore((state) => state.collapsed);
   const navigate = useNavigate();
 
   return (
-    <aside
+    <motion.aside
       aria-label="Primary navigation"
-      className="border-border-subtle bg-bg-ink flex h-full w-[72px] shrink-0 flex-col items-center border-r py-4"
+      initial={false}
+      animate={{ width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH }}
+      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+      className="bg-bg-ink border-border-subtle text-text-primary relative z-30 flex h-full shrink-0 flex-col overflow-hidden border-r"
     >
-      {/* Wordmark — "XR" in Orbitron, cyan (real logo SVG lands in Phase 2). */}
-      <button
-        type="button"
-        onClick={() => navigate('/chat')}
-        aria-label="XR — go to Chat"
-        className="mb-6 flex h-11 w-11 items-center justify-center rounded-md"
-      >
-        <span className="font-display text-accent text-xl font-bold tracking-[0.04em]">
-          XR
-        </span>
-      </button>
+      {/* Top — logo (clicking returns to Chat) */}
+      <div className="flex h-[64px] shrink-0 items-center px-2 pt-4 pb-2">
+        <button
+          type="button"
+          onClick={() => navigate('/chat')}
+          aria-label="XR — go to Chat"
+          title="XR"
+          className={cn(
+            'focus-visible:ring-accent flex h-10 w-full items-center rounded-md transition-colors duration-150 ease-out focus-visible:ring-2 focus-visible:outline-none',
+            collapsed ? 'justify-center' : 'px-4'
+          )}
+        >
+          <AnimatePresence mode="wait" initial={false}>
+            {collapsed ? (
+              <motion.span
+                key="icon"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12 }}
+              >
+                <Logo variant="icon" />
+              </motion.span>
+            ) : (
+              <motion.span
+                key="full"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.12 }}
+              >
+                <Logo variant="full" />
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+      </div>
 
-      <nav className="flex flex-col items-center gap-1">
+      {/* Middle — the 14 fixed-order nav items (scrolls only when short) */}
+      <nav
+        aria-label="Screens"
+        className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-x-hidden overflow-y-auto px-2 pt-2"
+      >
         {NAV_ITEMS.map((item) => (
-          <NavLink
-            key={item.id}
-            to={item.path}
-            aria-label={item.label}
-            title={item.label}
-            className={({ isActive }) =>
-              cn(
-                'flex h-11 w-11 items-center justify-center rounded-md',
-                isActive
-                  ? 'text-accent'
-                  : 'text-text-secondary hover:text-text-primary'
-              )
-            }
-          >
-            <item.icon size={20} strokeWidth={1.5} aria-hidden="true" />
-          </NavLink>
+          <SidebarNavItem key={item.id} item={item} collapsed={collapsed} />
         ))}
       </nav>
-    </aside>
+
+      {/* Bottom — user card (expanded only) + collapse toggle */}
+      <div className="flex shrink-0 flex-col items-center gap-1 p-2">
+        <AnimatePresence initial={false}>
+          {!collapsed && (
+            <motion.div
+              key="user-card"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12 }}
+            >
+              <UserMenu variant="card" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <CollapseButton collapsed={collapsed} />
+      </div>
+    </motion.aside>
   );
 }

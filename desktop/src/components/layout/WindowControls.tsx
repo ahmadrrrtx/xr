@@ -1,3 +1,12 @@
+/*
+ * Custom window controls for the frameless main window.
+ *
+ *  - macOS: traffic-light dots (12px, 8px apart, 20px from the left edge),
+ *    vertically centered in the 52px topbar (docs/SCREEN-BRIEFS.md).
+ *  - Windows/Linux: 46px-tall caption buttons flush to the right edge
+ *    (minimize / maximize / close, Windows style — Phase 1 brief §5.3).
+ *  - Browser preview: not rendered (nothing to control).
+ */
 import { Minus, Square, X } from 'lucide-react';
 
 import {
@@ -9,14 +18,6 @@ import {
 import type { Platform } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
 
-/**
- * Custom window controls for the frameless main window.
- *
- *  - macOS: traffic-light dots (12px) at the top-left, 20px from the edge,
- *    vertically centered in the 52px topbar (per Phase 0 brief).
- *  - Windows/Linux: minimize / maximize / close cluster on the right, 40px tall.
- *  - Browser preview: not rendered (nothing to control).
- */
 export function WindowControls({ platform }: { platform: Platform }) {
   if (!isTauri()) return null;
   return platform === 'macos' ? <MacTrafficLights /> : <WindowsControls />;
@@ -69,7 +70,7 @@ function TrafficLight({
 
 function WindowsControls() {
   return (
-    <div className="absolute top-0 right-4 z-10 flex h-[52px] items-stretch">
+    <div className="absolute top-0 right-0 z-10 flex h-[52px] items-center">
       <WinButton label="Minimize window" onClick={() => void minimizeWindow()}>
         <Minus size={14} strokeWidth={1.5} aria-hidden="true" />
       </WinButton>
@@ -101,7 +102,7 @@ function WinButton({
       title={label}
       onClick={onClick}
       className={cn(
-        'text-text-secondary flex h-10 w-11 items-center justify-center rounded-md',
+        'text-text-secondary flex h-[46px] w-[46px] items-center justify-center transition-colors duration-150 ease-out',
         danger
           ? 'hover:bg-danger hover:text-danger-contrast'
           : 'hover:bg-bg-raised hover:text-text-primary'

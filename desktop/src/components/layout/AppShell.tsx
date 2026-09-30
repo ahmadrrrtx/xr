@@ -1,23 +1,164 @@
-import { Outlet } from 'react-router-dom';
+/*
+ * Global application shell: fixed 52px topbar (also the drag region), the
+ * collapsible 72↔240px sidebar, one scrollable content region with route
+ * transitions, and the global overlays (command palette + toasts).
+ * Every one of the 14 screens renders inside this layout
+ * (docs/SCREEN-BRIEFS.md · GLOBAL APPLICATION SHELL).
+ */
+import { useEffect } from 'react';
+import { Outlet, useNavigate } from 'react-router-dom';
+import { Toaster, toast } from 'sonner';
 
+import { CommandPalette } from '@/components/cmdk/CommandPalette';
+import { PageTransition } from '@/components/layout/PageTransition';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { useHotkeys } from '@/hooks/useHotkeys';
+import { readSettingJSON, readSettingRaw } from '@/lib/persistent-store';
+import { useSidebarStore } from '@/stores/sidebar';
+import { useThemeStore, type ThemeId } from '@/stores/theme';
+import { hydrateUIState, useUIStore } from '@/stores/ui';
+
+/** Below 960px the sidebar force-collapses (and re-collapses on resize). */
+function useResponsiveSidebar(): void {
+  useEffect(() => {
+    const force = (): void => {
+      if (window.innerWidth < 960) {
+        useSidebarStore.getState().setCollapsed(true);
+      }
+    };
+    force();
+    window.addEventListener('resize', force);
+    return () => window.removeEventListener('resize', force);
+  }, []);
+}
 
 /**
- * Global application shell: fixed 52px topbar (also the drag region), fixed
- * 72px icon-rail sidebar, and a single scrollable content region below.
- * Every one of the 14 screens renders inside this layout (docs/SCREEN-BRIEFS.md).
+ * Startup hydration: apply the durably persisted theme (Tauri Store is
+ * authoritative; localStorage keeps the pre-paint value in sync) plus the
+ * sidebar + user-name settings. Runs once.
  */
+function usePersistedSettings(): void {
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const [theme, sidebarCollapsed] = await Promise.all([
+        readSettingRaw('xr.theme'),
+        readSettingJSON<boolean>('xr.sidebar.collapsed'),
+      ]);
+      if (!alive) return;
+      if (theme) useThemeStore.getState().setTheme(theme as ThemeId);
+      if (sidebarCollapsed !== null) {
+        useSidebarStore.getState().hydrate(sidebarCollapsed);
+      }
+      await hydrateUIState();
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+}
+
+/** Global keyboard map (Phase 1 brief §5.10). */
+function useGlobalHotkeys(): void {
+  const navigate = useNavigate();
+
+  useHotkeys([
+    {
+      combo: 'mod+k',
+      handler: () => {
+        const { paletteOpen, setPaletteOpen } = useUIStore.getState();
+        setPaletteOpen(!paletteOpen);
+      },
+    },
+    {
+      combo: 'mod+b',
+      handler: () => useSidebarStore.getState().toggle(),
+    },
+    {
+      combo: 'mod+n',
+      handler: () => {
+        navigate('/chat');
+        toast('New chat — chat logic coming in Phase 4', {
+          description: 'The conversation UI ships with the Chat phase.',
+        });
+      },
+    },
+    {
+      combo: 'mod+.',
+      handler: () =>
+        toast('Voice coming in Phase 15', {
+          description:
+            'Voice sessions, wake word and the Theater arrive later.',
+        }),
+    },
+    {
+      combo: 'mod+shift+t',
+      handler: () => useThemeStore.getState().cycleTheme(),
+    },
+    {
+      combo: 'mod+,',
+      handler: () => navigate('/settings'),
+    },
+  ]);
+}
+
+/** Dev-only welcome toast (fires once per page load, StrictMode-safe). */
+let welcomed = false;
+function useWelcomeToast(): void {
+  useEffect(() => {
+    if (!import.meta.env.DEV || welcomed) return;
+    welcomed = true;
+    toast('Welcome back to XR', {
+      description: 'Phase 1 app shell — dev build.',
+    });
+  }, []);
+}
+
 export function AppShell() {
+  useResponsiveSidebar();
+  usePersistedSettings();
+  useGlobalHotkeys();
+  useWelcomeToast();
+
   return (
-    <div className="bg-bg-void text-text-primary flex h-screen flex-col">
-      <Topbar />
-      <div className="flex min-h-0 flex-1">
-        <Sidebar />
-        <main className="bg-bg-void min-w-0 flex-1 overflow-y-auto p-6">
-          <Outlet />
-        </main>
+    <TooltipProvider delayDuration={200}>
+      <div className="bg-bg-void text-text-primary flex h-screen flex-col">
+        <Topbar />
+        <div className="flex min-h-0 flex-1">
+          <Sidebar />
+          <main className="bg-bg-void min-w-0 flex-1 overflow-y-auto p-6">
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
+          </main>
+        </div>
       </div>
-    </div>
+
+      {/* Global overlays */}
+      <CommandPalette />
+      <Toaster
+        position="bottom-right"
+        duration={4000}
+        style={{ zIndex: 60 }}
+        toastOptions={{
+          classNames: {
+            toast:
+              'bg-bg-ink border-border-subtle text-text-primary rounded-lg border text-sm shadow-lg',
+            title: 'text-text-primary text-sm font-medium',
+            description: 'text-text-secondary text-xs',
+            actionButton:
+              'bg-accent text-accent-contrast rounded-md text-xs font-medium',
+            cancelButton:
+              'text-text-secondary hover:text-text-primary text-xs font-medium',
+            success: 'border-l-[3px]! border-l-success',
+            error: 'border-l-[3px]! border-l-danger',
+            warning: 'border-l-[3px]! border-l-warning',
+            info: 'border-l-[3px]! border-l-accent',
+          },
+        }}
+      />
+    </TooltipProvider>
   );
 }
