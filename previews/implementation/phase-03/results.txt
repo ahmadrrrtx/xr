@@ -1,0 +1,41 @@
+PASS  splash renders with status text
+PASS  splash ≥800ms (was 1732ms)
+PASS  first run routed to /onboarding step 1
+PASS  wizard dialog role
+PASS  step counter 1 / 10
+PASS  step 1 not skippable (no Skip button)
+PASS  Continue disabled before checkbox
+PASS  Continue enabled after checkbox
+PASS  all system rows resolved (no spinners)
+PASS  mock CPU row (Apple M3 Pro)
+PASS  mock memory row (36 GB)
+PASS  recommended model qwen2.5-coder:7b for 36GB
+PASS  Recommended badge present
+PASS  BYO key inline expand
+PASS  download progress streams
+PASS  download completes (success)
+PASS  noise suppression toggle
+PASS  wake word toggle (visual only)
+PASS  voice card Ahmad
+PASS  voice card Nova
+PASS  voice card Atlas
+PASS  voice card Sage
+PASS  speed slider
+PASS  5 theme swatches
+PASS  Paper theme selected
+PASS  budget default $5
+PASS  budget moved to $10
+PASS  6 integration chips
+PASS  Phase 22 toast appears
+PASS  greeting uses name
+PASS  Ready when you are. present
+PASS  navigated to /chat
+PASS  welcome toast shown
+PASS  onboardingComplete persisted
+PASS  userName persisted
+PASS  second run stays in /chat (no onboarding)
+PASS  no wizard dialog on second run
+PASS  command palette opens
+PASS  dev reset command listed
+PASS  dev reset returns to onboarding
+PASS  no console/page errors

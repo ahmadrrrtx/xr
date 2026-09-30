@@ -17,6 +17,7 @@
 import { motion, useReducedMotion } from 'framer-motion';
 
 import {
+  LOGO_HALO,
   LOGO_LAYERS,
   LOGO_VIEWBOX,
   type ArtLayer,
@@ -99,6 +100,18 @@ export function Logo({
       aria-hidden={decorative || undefined}
       preserveAspectRatio="xMidYMid meet"
     >
+      {/* Soft edge halo bands (traced from the original's alpha falloff). */}
+      {LOGO_HALO.map((hl) => (
+        <g
+          key={`halo-${hl.var}-${hl.opacity}`}
+          fill={`var(${hl.var})`}
+          opacity={hl.opacity}
+        >
+          {hl.paths.map((p, j) => (
+            <path key={j} d={p.d} transform={`translate(${p.t[0]},${p.t[1]})`} />
+          ))}
+        </g>
+      ))}
       {LOGO_LAYERS.map((layer) =>
         isLarge && energyVars.has(layer.var) ? (
           <motion.g

@@ -7,7 +7,7 @@
  */
 import { useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
 
 import { CommandPalette } from '@/components/cmdk/CommandPalette';
 import { PageTransition } from '@/components/layout/PageTransition';
@@ -138,27 +138,8 @@ export function AppShell() {
 
       {/* Global overlays */}
       <CommandPalette />
-      <Toaster
-        position="bottom-right"
-        duration={4000}
-        style={{ zIndex: 60 }}
-        toastOptions={{
-          classNames: {
-            toast:
-              'bg-bg-ink border-border-subtle text-text-primary rounded-lg border text-sm shadow-lg',
-            title: 'text-text-primary text-sm font-medium',
-            description: 'text-text-secondary text-xs',
-            actionButton:
-              'bg-accent text-accent-contrast rounded-md text-xs font-medium',
-            cancelButton:
-              'text-text-secondary hover:text-text-primary text-xs font-medium',
-            success: 'border-l-[3px]! border-l-success',
-            error: 'border-l-[3px]! border-l-danger',
-            warning: 'border-l-[3px]! border-l-warning',
-            info: 'border-l-[3px]! border-l-accent',
-          },
-        }}
-      />
+      {/* Toaster moved to App root (Phase 3) so onboarding toasts render too */}
+
     </TooltipProvider>
   );
 }
