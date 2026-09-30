@@ -65,6 +65,7 @@ export function CodeBlock({ code, langTag }: { code: string; langTag: string }) 
       {html ? (
         <div
           className="max-h-[480px] overflow-auto px-4 py-3 [&_pre]:bg-transparent! [&_pre]:font-mono! [&_pre]:text-[13px]! [&_pre]:leading-6!"
+          // sink-allow: shiki engine output only — the code string is tokenized and HTML-escaped BY shiki itself (it is a syntax highlighter), and react-markdown never emits raw HTML, so no user-authored HTML can reach this node.
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
