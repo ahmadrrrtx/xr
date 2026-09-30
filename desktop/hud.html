@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en" data-theme="xr-native">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>XR HUD</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#03070D" />
+    <!-- Same pre-paint theme bootstrap as index.html: both windows share one
+         origin (and therefore one localStorage), so the persisted theme is
+         already correct before the HUD paints. -->
+    <script src="/theme-init.js"></script>
+    <link
+      rel="preload"
+      href="/fonts/inter-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+  </head>
+  <!-- The HUD window is transparent: the glass panel itself paints the bg. -->
+  <body class="hud">
+    <div id="hud-root"></div>
+    <script type="module" src="/src/hud/main.tsx"></script>
+  </body>
+</html>

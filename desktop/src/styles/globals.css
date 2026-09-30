@@ -96,6 +96,98 @@
   }
 }
 
+/* ── Phase 5 · HUD palette ──────────────────────────────────────────── */
+
+/* Frosted glass surface — the one palette chrome class shared by the in-app
+ * overlay and the HUD window. backdrop-filter has an honest solid fallback
+ * (Linux compositors, remote desktops). */
+.xr-glass {
+  background-color: var(--bg-glass);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .xr-glass {
+    background-color: var(--bg-ink);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Shortcut chips — mono micro-badges (kbd-bg adapts per theme). */
+.xr-kbd {
+  background-color: var(--kbd-bg);
+  border-radius: 4px;
+  padding: 2px 6px;
+  line-height: 1;
+}
+
+/* cmdk item chrome. Selection rides data-selected + per-theme tokens so the
+ * same markup tints on dark themes and FILLS on Paper/Arctic. */
+.xr-palette-item {
+  margin: 0 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.xr-palette-item[data-selected='true'] {
+  background-color: var(--palette-selected-bg);
+  color: var(--palette-selected-fg);
+}
+.xr-palette-item[data-selected='true'] .text-text-primary,
+.xr-palette-item[data-selected='true'] .text-text-secondary,
+.xr-palette-item[data-selected='true'] .text-text-tertiary {
+  color: var(--palette-selected-fg);
+}
+
+/* cmdk hides fully-filtered groups via the hidden ATTRIBUTE — author styles
+ * override the UA stylesheet, so enforce it (see plan §Research). */
+[cmdk-group][hidden] {
+  display: none !important;
+}
+
+/* Result stagger on palette open: first 8 rows, 40ms apart. Skipped entirely
+ * under reduced motion (Commandment: fades only). */
+.xr-palette-item {
+  animation: xr-palette-item-in 160ms ease-out both;
+}
+.xr-palette-item:nth-child(n + 9) {
+  animation-delay: 0ms;
+}
+.xr-palette-item:nth-child(1) { animation-delay: 0ms; }
+.xr-palette-item:nth-child(2) { animation-delay: 40ms; }
+.xr-palette-item:nth-child(3) { animation-delay: 80ms; }
+.xr-palette-item:nth-child(4) { animation-delay: 120ms; }
+.xr-palette-item:nth-child(5) { animation-delay: 160ms; }
+.xr-palette-item:nth-child(6) { animation-delay: 200ms; }
+.xr-palette-item:nth-child(7) { animation-delay: 240ms; }
+.xr-palette-item:nth-child(8) { animation-delay: 280ms; }
+
+@keyframes xr-palette-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xr-palette-item {
+    animation: none;
+  }
+}
+
+/* The HUD window: transparent chrome — only the glass panel paints. */
+body.hud,
+body.hud #hud-root {
+  background: transparent !important;
+  height: 100%;
+}
+
 /* ── Phase 4 · Chat ──────────────────────────────────────────────────── */
 
 /* Streaming caret — CSS keyframe (animate-pulse stalls mid-stream). */

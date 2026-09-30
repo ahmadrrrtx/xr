@@ -17,7 +17,7 @@ import { usePlatform } from '@/hooks/usePlatform';
 import { NAV_ITEMS } from '@/lib/nav';
 import { isTauri } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
-import { useUIStore } from '@/stores/ui';
+import { usePaletteStore } from '@/stores/paletteStore';
 
 /** Resolve the current screen's display name from the route. */
 function useScreenTitle(): string {
@@ -29,7 +29,7 @@ function useScreenTitle(): string {
 
 /** The centered command-palette trigger pill (opens cmdk). */
 function CommandTrigger() {
-  const setPaletteOpen = useUIStore((state) => state.setPaletteOpen);
+  const openPalette = usePaletteStore((s) => s.openPalette);
   const platform = usePlatform();
   const hint = platform === 'macos' ? '⌘K' : 'Ctrl K';
 
@@ -39,7 +39,7 @@ function CommandTrigger() {
       aria-label="Open command palette"
       aria-keyshortcuts="Meta+K Control+K"
       title="Command palette (⌘K)"
-      onClick={() => setPaletteOpen(true)}
+      onClick={() => openPalette()}
       className={cn(
         'bg-bg-ink border-border-default hover:border-accent/60 focus-visible:border-accent focus-visible:ring-accent/30',
         'flex h-9 w-full max-w-[480px] flex-1 items-center gap-2.5 rounded-full border px-3',

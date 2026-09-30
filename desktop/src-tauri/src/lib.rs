@@ -65,6 +65,8 @@ pub fn run() {
                 ))?;
                 app.handle()
                     .plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
+                // HUD palette (Phase 5): global shortcut + hidden second window.
+                commands::hud::init(app.handle())?;
                 tray::create_tray(app.handle())?;
             }
             Ok(())
@@ -87,8 +89,31 @@ pub fn run() {
             commands::chat::chat_list_messages,
             commands::chat::chat_save_message,
             commands::chat::chat_delete_message,
+            #[cfg(desktop)]
+            commands::hud::hud_show,
+            #[cfg(desktop)]
+            commands::hud::hud_hide,
+            #[cfg(desktop)]
+            commands::hud::hud_toggle,
+            #[cfg(desktop)]
+            commands::hud::hud_navigate,
+            #[cfg(desktop)]
+            commands::hud::hud_run_main_command,
+            #[cfg(desktop)]
+            commands::hud::hud_notify_sessions_changed,
+            #[cfg(desktop)]
+            commands::hud::hud_shortcut_info,
             events::theme_changed,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Belt-and-braces global-shortcut teardown: the plugin unregisters
+            // on drop, but a hotkey that outlives a crashed process sticks
+            // until reboot on macOS — clean up loudly on the way out.
+            if let tauri::RunEvent::Exit = event {
+                #[cfg(desktop)]
+                commands::hud::unregister_all(app);
+            }
+        });
 }
