@@ -228,6 +228,12 @@ pub fn chat_list_messages(
 }
 
 #[tauri::command]
+// 8 fields is the shape of a persisted message row; the flat args ARE the
+// wire contract with the frontend (desktop/src/lib/chat-db.ts invokes this
+// command with exactly these camelCase keys, covered by the Phase-4 e2e
+// suite). Collapsing them into a struct would change the IPC shape for a
+// lint preference, so the boundary is allowed explicitly instead.
+#[allow(clippy::too_many_arguments)]
 pub fn chat_save_message(
     db: State<ChatDb>,
     id: String,

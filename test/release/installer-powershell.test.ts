@@ -147,6 +147,16 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
     return { status: res.status, out: `${res.stdout ?? ""}${res.stderr ?? ""}` };
   }
 
+  // Every test below spawns a real pwsh process. A COLD first spawn (pwsh +
+  // .NET runtime, on a loaded hosted runner) can exceed bun's default 5s
+  // test timeout — which then kills the spawn mid-flight (`status=null`,
+  // "killed 1 dangling process") and fails the lane even though the script
+  // is fine and every warm sibling assertion passes in ~1s. These are
+  // external-process tests, not pure functions, so they carry an explicit
+  // 30s budget. (Seen on main: [5015.82ms] — "this test timed out after
+  // 5000ms", while the five warm siblings passed in ~1s each.)
+  const PS_SPAWN_TEST_TIMEOUT_MS = 30_000;
+
   test("the script parses with zero syntax errors", () => {
     // Pass the ABSOLUTE path in, rather than resolving './install.ps1' inside
     // PowerShell. `Resolve-Path` is relative to the PowerShell *provider*
@@ -187,7 +197,7 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
       count,
       `install.ps1 failed to parse under ${shell}. Parser diagnostics:\n${diagnostics || "(none reported)"}`,
     ).toBe("0");
-  });
+  }, PS_SPAWN_TEST_TIMEOUT_MS);
 
   test("Invoke-Expression of the script does NOT raise ValidateSetFailure", () => {
     // The exact failure mode users hit. The install itself cannot complete in
@@ -199,7 +209,7 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
     expect(out).not.toContain("ValidationMetadataException");
     expect(out).not.toContain("attribute cannot be added");
     expect(out).not.toContain("ValidateSetFailure");
-  });
+  }, PS_SPAWN_TEST_TIMEOUT_MS);
 
   test("Invoke-Expression does not pollute caller scope with installer variables", () => {
     const { out } = run(
@@ -211,7 +221,7 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
     expect(out).toContain("MODE=False");
     expect(out).toContain("INSTALLMODE=False");
     expect(out).toContain("TARGETDIR=False");
-  });
+  }, PS_SPAWN_TEST_TIMEOUT_MS);
 
   test("a pre-existing $Mode in the caller's session is left untouched", () => {
     const { out } = run(
@@ -220,7 +230,7 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
         `Write-Output ("MODE=" + (Get-Variable Mode -ValueOnly))`,
     );
     expect(out).toContain("MODE=user-value");
-  });
+  }, PS_SPAWN_TEST_TIMEOUT_MS);
 
   test("dot-sourcing defines Invoke-XrInstall and ValidateSet still rejects bad modes", () => {
     const { out } = run(
@@ -231,7 +241,7 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
     );
     expect(out).toContain("DEFINED=True");
     expect(out).toContain("REJECTED=True");
-  });
+  }, PS_SPAWN_TEST_TIMEOUT_MS);
 
   test("a valid -InstallMode binds without a validation error", () => {
     const { out } = run(
@@ -241,5 +251,5 @@ describeShell(`install.ps1 — executed under ${shell ?? "powershell"}`, () => {
     );
     expect(out).not.toContain("does not belong to the set");
     expect(out).not.toContain("ValidationMetadataException");
-  });
+  }, PS_SPAWN_TEST_TIMEOUT_MS);
 });
