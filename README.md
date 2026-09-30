@@ -662,6 +662,8 @@ binary/npm/git layouts) and are atomic with an automatic rollback path.
 | Doc | Purpose |
 |---|---|
 | [**`docs/CONSTITUTION.md`**](docs/CONSTITUTION.md) | **The law the codebase cites** — 30 Articles + the Commandments. Enforced: `claim-lint` fails if code cites an Article that isn't there |
+| [`docs/DESIGN-SYSTEM.md`](docs/DESIGN-SYSTEM.md) · [`THEME-SYSTEM.md`](docs/THEME-SYSTEM.md) · [`SCREEN-BRIEFS.md`](docs/SCREEN-BRIEFS.md) | Master design contracts for the [`desktop/`](desktop/) shell: visual language, 5 canonical themes, per-screen specs |
+| [`docs/DEEP-DIVE-ARCHITECTURE.md`](docs/DEEP-DIVE-ARCHITECTURE.md) · [`docs/IMPLEMENTATION-PLAN.md`](docs/IMPLEMENTATION-PLAN.md) | Desktop architecture (Tauri v2 plugin matrix, sidecars) and the phased implementation plan (Phase 0 = scaffold) |
 | [`docs/development/GETTING_STARTED.md`](docs/development/GETTING_STARTED.md) | The golden path: install → onboarding → provider → first task → restart/resume → uninstall |
 | [`docs/guides/cli-compat.md`](docs/guides/cli-compat.md) | Exit codes, global flags, `--yes` semantics, scripting envs |
 | [`docs/security/KNOWN_LIMITATIONS.md`](docs/security/KNOWN_LIMITATIONS.md) | Canonical known-limitations register (living) |

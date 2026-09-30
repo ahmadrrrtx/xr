@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "XR Desktop",
-  "version": "0.1.0",
-  "identifier": "ai.rrrtx.xr-desktop",
+  "productName": "XR",
+  "version": "0.2.0",
+  "identifier": "ai.rrrtx.xr",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://127.0.0.1:5173",
@@ -10,39 +10,34 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "withGlobalTauri": false,
     "windows": [
       {
-        "title": "XR \u2014 Workstation",
+        "label": "main",
+        "title": "XR",
         "width": 1280,
-        "height": 820,
-        "minWidth": 940,
-        "minHeight": 640,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600,
         "resizable": true,
+        "center": true,
+        "decorations": false,
+        "transparent": false,
         "theme": "Dark"
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*"
-    },
-    "withGlobalTauri": true
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost ws://127.0.0.1:5173"
+    }
   },
   "bundle": {
     "active": true,
-    "targets": [
-      "app",
-      "dmg",
-      "msi",
-      "nsis",
-      "appimage",
-      "deb",
-      "rpm"
-    ],
+    "targets": ["app", "dmg", "msi", "nsis", "appimage", "deb", "rpm"],
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": [
-          "English"
-        ]
+        "languages": ["English"]
       },
       "webviewInstallMode": {
         "type": "offlineInstaller",
@@ -52,22 +47,18 @@
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
+      "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "XR \u2014 the AI agent you can actually trust, with a desk to work at",
-    "longDescription": "XR Desktop is a local-first, provider-neutral AI workstation: talk, task, code, research, control and automate with audited trust.",
-    "externalBin": [
-      "binaries/xr-engine"
-    ]
+    "shortDescription": "XR — the AI agent you can actually trust",
+    "longDescription": "XR is a local-first, provider-neutral AI agent with audited trust. This is the desktop shell."
   },
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": [
-          "xr"
-        ]
+        "schemes": ["xr"]
       }
     }
   }
