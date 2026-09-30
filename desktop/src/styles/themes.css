@@ -323,3 +323,105 @@ html[data-theme='arctic'] {
 :root {
   --brand-ink: #050912;
 }
+
+/* ─── Phase 2 brand tokens (docs/phases/02-brand-components.plan.md) ───────
+ * --avatar-glow-strength: per-theme glow radius for the Avatar/Orb eyes and
+ *   core (docs/THEME-SYSTEM.md adaptation table: heavy cyan in XR Native,
+ *   soft steel in Graphite, soft cobalt in Midnight, none in Paper/Arctic —
+ *   those two also set --accent-glow: transparent, so glow is double-off).
+ * --accent-2: the plasma-trail tip blue, per theme. */
+:root,
+html[data-theme='xr-native'] {
+  --avatar-glow-strength: 8px;
+  --accent-2: #38bdf8;
+}
+
+html[data-theme='graphite'] {
+  --avatar-glow-strength: 3px;
+  --accent-2: #7fa3b5;
+}
+
+html[data-theme='midnight'] {
+  --avatar-glow-strength: 6px;
+  --accent-2: #60a5fa;
+}
+
+html[data-theme='paper'] {
+  --avatar-glow-strength: 0px;
+  --accent-2: #2a7a6f;
+}
+
+html[data-theme='arctic'] {
+  --avatar-glow-strength: 0px;
+  --accent-2: #0e7490;
+}
+
+/* ─── Phase 2: official brand-art palette ───────────────────────────────────
+ * Auto-extracted by k-means from Ahmad's original uploads
+ * (uploads/xr logo (1).png · XR AVATAR .png · side faces) and referenced by
+ * the vectorized brand components (components/brand/art.ts). These are the
+ * BRAND's own colors — constant across themes (a logo does not re-theme).
+ * lg = logo crest · av = avatar front · sd1/sd2 = side profiles.
+ * cls: ink (dark body) · cy (cyan energy) · hi (bright highlight).
+ * The per-theme glow radius (--avatar-glow-strength, above) still controls
+ * how much ambient glow the energy layers cast in each theme. */
+:root {
+  --brand-lg-ink-0: #000916;
+    --brand-lg-ink-1: #010d1d;
+    --brand-lg-cy-0: #011023;
+    --brand-lg-cy-1: #03152b;
+    --brand-lg-cy-2: #061d37;
+    --brand-lg-cy-3: #072b4f;
+    --brand-lg-cy-4: #1e4b72;
+    --brand-lg-cy-5: #0b72b0;
+    --brand-lg-cy-6: #36d2f3;
+    --brand-lg-hi-0: #a7b4c2;
+    --brand-lg-cy-7: #c4d7e3;
+    --brand-lg-hi-1: #eff4f8;
+    --brand-av-ink-0: #000105;
+    --brand-av-ink-1: #00060d;
+    --brand-av-ink-2: #010911;
+    --brand-av-ink-3: #010c16;
+    --brand-av-ink-4: #01101d;
+    --brand-av-ink-5: #06111a;
+    --brand-av-cy-0: #061725;
+    --brand-av-cy-1: #041e32;
+    --brand-av-cy-2: #102332;
+    --brand-av-cy-3: #072c47;
+    --brand-av-cy-4: #1a3244;
+    --brand-av-cy-5: #0c4568;
+    --brand-av-cy-6: #29485e;
+    --brand-av-cy-7: #166b95;
+    --brand-av-cy-8: #436c87;
+    --brand-av-cy-9: #2eabd2;
+    --brand-av-cy-10: #91e2f1;
+    --brand-sd1-ink-0: #000308;
+    --brand-sd1-ink-1: #00070f;
+    --brand-sd1-ink-2: #020d18;
+    --brand-sd1-ink-3: #051523;
+    --brand-sd1-cy-0: #0a1f32;
+    --brand-sd1-cy-1: #122f46;
+    --brand-sd1-cy-2: #124464;
+    --brand-sd1-cy-3: #2e495e;
+    --brand-sd1-cy-4: #2b5f7e;
+    --brand-sd1-cy-5: #3d7c9d;
+    --brand-sd1-cy-6: #5caac7;
+    --brand-sd1-cy-7: #b1e3ee;
+    --brand-sd2-ink-0: #000003;
+    --brand-sd2-ink-1: #000106;
+    --brand-sd2-ink-2: #00040a;
+    --brand-sd2-ink-3: #01070f;
+    --brand-sd2-ink-4: #020b14;
+    --brand-sd2-ink-5: #030f1a;
+    --brand-sd2-ink-6: #061422;
+    --brand-sd2-cy-0: #0a1c2c;
+    --brand-sd2-cy-1: #102a3e;
+    --brand-sd2-cy-2: #183d56;
+    --brand-sd2-cy-3: #2b5d7c;
+    --brand-sd2-cy-4: #3f9ac0;
+    --brand-sd2-cy-5: #9edcee;
+
+  /* semantic aliases — stable across re-traces */
+  --brand-bright: var(--brand-av-cy-10);
+  --brand-mid: var(--brand-av-cy-9);
+}

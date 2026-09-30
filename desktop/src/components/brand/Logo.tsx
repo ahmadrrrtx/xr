@@ -1,73 +1,126 @@
-/*
- * XR logo — temporary Phase 1 inline SVG (docs/phases/01-app-shell.plan.md §5.1).
+/**
+ * XR Logo — Ahmad's ORIGINAL crest, auto-vectorized from
+ * `uploads/xr logo (1).png` (dark diamond shield · silver+cyan sentinel
+ * face · energy sweeping to the tip · monogram + tagline).
  *
- * `icon`: minimal X — two silver strokes (metal sweep) + cyan core dot.
- * `full`: icon + "XR" wordmark in Orbitron (font-display), accent cyan.
- * The detailed atomic-ring SVG lands in Phase 2 (docs/IMPLEMENTATION-PLAN.md).
- * Colors come from theme tokens; the metal sweep gradient is defined inline
- * from those tokens so it adapts per theme (no hardcoded hex here).
+ * Variants:
+ *  - `icon`  (default 28px tall): the emblem crop (crest without tagline) —
+ *    sidebar rail, cmdk.
+ *  - `full`  (default 22px): emblem + "XR" Orbitron wordmark — expanded
+ *    sidebar.
+ *  - `large` (default 140px): the complete art including the tagline line,
+ *    with a subtle energy breathe — splash/hero.
+ *
+ * Geometry lives in ./art.ts (generated); fills are CSS vars from
+ * themes.css. No hand-drawn shapes, no images.
  */
+import { motion, useReducedMotion } from 'framer-motion';
+
+import {
+  LOGO_LAYERS,
+  LOGO_VIEWBOX,
+  type ArtLayer,
+  type ArtPath,
+} from '@/components/brand/art';
+import { brandGlow } from '@/components/brand/defs';
 import { cn } from '@/lib/utils';
 
-export function LogoX({ size = 28 }: { size?: number }) {
+/** Renders one traced art layer (a flat fill color) as a `<g>` of paths. */
+export function ArtLayerPaths({ layer }: { layer: ArtLayer }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 28 28"
-      fill="none"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <linearGradient id="xr-logo-sweep" x1="4" y1="4" x2="24" y2="24">
-          <stop offset="0%" stopColor="var(--metal-bright)" />
-          <stop offset="55%" stopColor="var(--metal)" />
-          <stop offset="100%" stopColor="var(--metal-bright)" />
-        </linearGradient>
-      </defs>
-      {/* X — two diagonal strokes with rounded caps */}
-      <line
-        x1="6.5"
-        y1="6.5"
-        x2="21.5"
-        y2="21.5"
-        stroke="url(#xr-logo-sweep)"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      <line
-        x1="21.5"
-        y1="6.5"
-        x2="6.5"
-        y2="21.5"
-        stroke="url(#xr-logo-sweep)"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      {/* cyan core at the intersection */}
-      <circle cx="14" cy="14" r="2.6" fill="var(--accent)" />
-    </svg>
+    <g fill={`var(${layer.var})`}>
+      {layer.paths.map((p: ArtPath, i: number) => (
+        <path key={i} d={p.d} transform={`translate(${p.t[0]},${p.t[1]})`} />
+      ))}
+    </g>
   );
+}
+
+function vbSize(vb: string): { w: number; h: number } {
+  const [, , w, h] = vb.split(' ').map(Number);
+  return { w, h };
 }
 
 export function Logo({
   variant,
+  size,
   className,
+  decorative = true,
 }: {
-  variant: 'icon' | 'full';
+  variant: 'icon' | 'full' | 'large';
+  /** Height in px (width follows the art's aspect ratio). */
+  size?: number;
   className?: string;
+  /** Standalone display (dev gallery) passes false for a real role="img". */
+  decorative?: boolean;
 }) {
-  if (variant === 'icon') {
-    return <LogoX size={28} />;
+  const reduced = useReducedMotion();
+
+  if (variant === 'full') {
+    const h = size ?? 22;
+    return (
+      <span
+        className={cn('flex items-center gap-2', className)}
+        role={decorative ? undefined : 'img'}
+        aria-label={decorative ? undefined : 'XR'}
+        aria-hidden={decorative || undefined}
+      >
+        <Logo variant="icon" size={h + 6} decorative />
+        <span
+          className="font-display text-accent font-bold tracking-[0.04em]"
+          style={{ fontSize: `${h}px`, lineHeight: 1 }}
+        >
+          XR
+        </span>
+      </span>
+    );
   }
 
+  const isLarge = variant === 'large';
+  const vb = isLarge ? LOGO_VIEWBOX.full : LOGO_VIEWBOX.emblem;
+  const h = size ?? (isLarge ? 140 : 28);
+  const { w } = vbSize(vb);
+  const width = Math.round((h * w) / vbSize(vb).h);
+
+  // Energy layers breathe on the large variant (Apple-calm, 4s).
+  const energyVars = new Set(
+    LOGO_LAYERS.filter((l) => l.cls === 'cy' || l.cls === 'hi').map((l) => l.var),
+  );
+
   return (
-    <span className={cn('flex items-center gap-2', className)}>
-      <LogoX size={24} />
-      <span className="font-display text-accent text-xl font-bold tracking-[0.04em]">
-        XR
-      </span>
-    </span>
+    <svg
+      width={width}
+      height={h}
+      viewBox={vb}
+      fill="none"
+      className={cn('shrink-0', className)}
+      role={decorative ? undefined : 'img'}
+      aria-label={decorative ? undefined : 'XR'}
+      aria-hidden={decorative || undefined}
+      preserveAspectRatio="xMidYMid meet"
+    >
+      {LOGO_LAYERS.map((layer) =>
+        isLarge && energyVars.has(layer.var) ? (
+          <motion.g
+            key={layer.var}
+            fill={`var(${layer.var})`}
+            style={brandGlow}
+            initial={{ opacity: 0.9 }}
+            animate={
+              reduced ? { opacity: 0.9 } : { opacity: [0.82, 1, 0.82] }
+            }
+            transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            {layer.paths.map((p, j) => (
+              <path key={j} d={p.d} transform={`translate(${p.t[0]},${p.t[1]})`} />
+            ))}
+          </motion.g>
+        ) : (
+          <ArtLayerPaths key={layer.var} layer={layer} />
+        ),
+      )}
+    </svg>
   );
 }
+
+Logo.displayName = 'Logo';

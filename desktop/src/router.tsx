@@ -43,4 +43,16 @@ export const router = createHashRouter([
       { path: '*', element: <Navigate to="/chat" replace /> },
     ],
   },
+  // Dev-only brand QA gallery — stripped from production builds.
+  ...(import.meta.env.DEV
+    ? [
+        {
+          path: '/__brand',
+          lazy: async () => {
+            const { BrandGallery } = await import('@/components/dev/BrandGallery');
+            return { Component: BrandGallery };
+          },
+        },
+      ]
+    : []),
 ]);

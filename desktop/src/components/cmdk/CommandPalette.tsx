@@ -17,7 +17,7 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command';
-import { LogoX } from '@/components/brand/Logo';
+import { Logo } from '@/components/brand/Logo';
 import { NAV_ITEMS } from '@/lib/nav';
 import { useSidebarStore } from '@/stores/sidebar';
 import { useThemeStore } from '@/stores/theme';
@@ -94,7 +94,7 @@ export function CommandPalette() {
   return (
     <CommandDialog open={open} onOpenChange={handleOpenChange}>
       <div className="border-border-subtle flex items-center gap-3 border-b px-4">
-        <LogoX size={24} />
+        <Logo variant="icon" size={20} />
         <CommandInput
           value={query}
           onValueChange={setQuery}

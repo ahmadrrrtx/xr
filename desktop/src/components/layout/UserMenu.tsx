@@ -17,7 +17,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { MiniAvatar } from '@/components/brand/MiniAvatar';
+import { Avatar } from '@/components/brand/Avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +56,7 @@ export function UserMenu({
             title="Account"
             className="flex h-7 w-7 items-center justify-center rounded-full"
           >
-            <MiniAvatar size={28} />
+            <Avatar size="sm" variant="head" />
           </button>
         ) : (
           <button
@@ -65,7 +65,7 @@ export function UserMenu({
             title="Account"
             className="flex h-10 w-full items-center gap-2.5 text-left"
           >
-            <MiniAvatar size={24} />
+            <Avatar size="sm" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="text-text-primary truncate text-sm leading-tight font-medium">
                 {userName}
@@ -80,7 +80,7 @@ export function UserMenu({
 
       <DropdownMenuContent align="end" className="w-[220px]">
         <DropdownMenuLabel className="flex items-center gap-2.5 px-2 py-2">
-          <MiniAvatar size={28} />
+          <Avatar size="md" />
           <span className="flex min-w-0 flex-col">
             <span className="text-text-primary truncate text-sm font-medium">
               {userName}
