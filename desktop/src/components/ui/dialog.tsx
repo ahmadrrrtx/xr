@@ -29,12 +29,18 @@ function DialogClose({
   return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
 }
 
-function DialogOverlay({
-  className,
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+/**
+ * ForwardRef is required: Radix's Portal renders each child through
+ * `Portal asChild`, which clones it with a ref (plain function components
+ * cannot take one on React 18).
+ */
+const DialogOverlay = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentProps<typeof DialogPrimitive.Overlay>
+>(function DialogOverlay({ className, ...props }, ref) {
   return (
     <DialogPrimitive.Overlay
+      ref={ref}
       data-slot="dialog-overlay"
       className={cn(
         'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50',
@@ -43,7 +49,7 @@ function DialogOverlay({
       {...props}
     />
   );
-}
+});
 
 function DialogContent({
   className,

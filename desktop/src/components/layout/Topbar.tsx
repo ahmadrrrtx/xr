@@ -1,10 +1,23 @@
-import { Bell, Mic, Wallet } from 'lucide-react';
+/*
+ * Topbar — the permanent 52px chrome (docs/SCREEN-BRIEFS.md · GLOBAL
+ * APPLICATION SHELL · Phase 1 brief §5.3). Doubles as the frameless window's
+ * drag region. Left: screen title (inset for macOS traffic lights). Center:
+ * the command-palette trigger pill. Right: wallet, mic, bell, avatar —
+ * with clearance for the Windows/Linux window-control cluster.
+ */
+import { Search } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
-import { NAV_ITEMS } from '@/lib/nav';
+import { MicButton } from '@/components/layout/MicButton';
+import { NotificationBell } from '@/components/layout/NotificationBell';
+import { UserMenu } from '@/components/layout/UserMenu';
+import { WalletWidget } from '@/components/layout/WalletWidget';
 import { WindowControls } from '@/components/layout/WindowControls';
 import { usePlatform } from '@/hooks/usePlatform';
+import { NAV_ITEMS } from '@/lib/nav';
+import { isTauri } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
+import { useUIStore } from '@/stores/ui';
 
 /** Resolve the current screen's display name from the route. */
 function useScreenTitle(): string {
@@ -14,69 +27,84 @@ function useScreenTitle(): string {
   return match?.label ?? 'XR';
 }
 
-interface TopbarButtonProps {
-  label: string;
-  children: React.ReactNode;
-}
+/** The centered command-palette trigger pill (opens cmdk). */
+function CommandTrigger() {
+  const setPaletteOpen = useUIStore((state) => state.setPaletteOpen);
+  const platform = usePlatform();
+  const hint = platform === 'macos' ? '⌘K' : 'Ctrl K';
 
-function TopbarButton({ label, children }: TopbarButtonProps) {
   return (
     <button
       type="button"
-      aria-label={label}
-      title={label}
-      className="text-text-secondary hover:bg-bg-raised hover:text-text-primary flex h-8 w-8 items-center justify-center rounded-md"
+      aria-label="Open command palette"
+      aria-keyshortcuts="Meta+K Control+K"
+      title="Command palette (⌘K)"
+      onClick={() => setPaletteOpen(true)}
+      className={cn(
+        'bg-bg-ink border-border-default hover:border-accent/60 focus-visible:border-accent focus-visible:ring-accent/30',
+        'flex h-9 w-full max-w-[480px] flex-1 items-center gap-2.5 rounded-full border px-3',
+        'transition-colors duration-150 ease-out focus-visible:ring-2 focus-visible:outline-none'
+      )}
     >
-      {children}
+      <Search
+        size={16}
+        strokeWidth={1.5}
+        aria-hidden="true"
+        className="text-text-tertiary shrink-0"
+      />
+      <span className="text-text-secondary truncate text-left text-[14px]">
+        Type a command or ask XR...
+      </span>
+      <span
+        aria-hidden="true"
+        className="bg-bg-raised text-text-tertiary ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[11px] leading-none"
+      >
+        {hint}
+      </span>
     </button>
   );
 }
 
-/**
- * Placeholder topbar (52px) — doubles as the custom titlebar drag region.
- * Phase 1 ships the command-palette pill, wallet widget and notifications.
- */
 export function Topbar() {
   const title = useScreenTitle();
   const platform = usePlatform();
 
+  // Windows/Linux: the window-control cluster occupies the far right (~138px).
+  const controlsOnRight = isTauri() && platform !== 'macos';
+
   return (
     <header
       data-tauri-drag-region
-      className="border-border-subtle bg-bg-void relative flex h-[52px] shrink-0 items-center border-b pr-4"
+      className="bg-bg-void border-border-subtle relative z-40 flex h-[52px] shrink-0 items-center gap-3 border-b px-4"
     >
-      {/* Window controls (native shell only): macOS traffic lights inset the
-          title; Windows/Linux keep the title flush-left with controls right. */}
       <WindowControls platform={platform} />
 
+      {/* Screen title — macOS leaves room for the traffic lights */}
       <h1
         className={cn(
-          'text-text-primary truncate text-lg font-semibold',
-          platform === 'macos' ? 'ml-[84px]' : 'ml-6'
+          'text-text-primary min-w-[120px] truncate text-[18px] leading-none font-semibold',
+          platform === 'macos' ? 'ml-[68px]' : 'ml-2'
         )}
       >
         {title}
       </h1>
 
-      <div className="ml-auto flex items-center gap-1">
-        <TopbarButton label="Wallet and budget">
-          <Wallet size={16} strokeWidth={1.5} aria-hidden="true" />
-        </TopbarButton>
-        <TopbarButton label="Voice">
-          <Mic size={16} strokeWidth={1.5} aria-hidden="true" />
-        </TopbarButton>
-        <TopbarButton label="Notifications">
-          <Bell size={16} strokeWidth={1.5} aria-hidden="true" />
-        </TopbarButton>
+      {/* Centered palette trigger */}
+      <div className="mx-auto flex min-w-0 flex-1 justify-center px-4">
+        <CommandTrigger />
+      </div>
 
-        {/* Avatar placeholder — sentinel head lands in Phase 2. */}
-        <div
-          aria-label="XR avatar"
-          title="XR"
-          className="border-border-subtle bg-bg-ink ml-2 flex h-7 w-7 items-center justify-center rounded-full border"
-        >
-          <span className="bg-accent h-1.5 w-1.5 rounded-full" />
-        </div>
+      {/* Right actions */}
+      <div
+        className={cn(
+          'flex items-center gap-1',
+          controlsOnRight && 'mr-[138px]'
+        )}
+      >
+        <WalletWidget />
+        <MicButton />
+        <NotificationBell />
+        <UserMenu />
       </div>
     </header>
   );
