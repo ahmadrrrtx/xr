@@ -97,6 +97,9 @@ pub fn run() {
             commands::chat::chat_save_message,
             commands::chat::chat_delete_message,
             #[cfg(desktop)]
+            commands::approvals::load_rules,
+            commands::approvals::save_rules,
+            commands::approvals::send_os_notification,
             commands::hud::hud_show,
             #[cfg(desktop)]
             commands::hud::hud_hide,

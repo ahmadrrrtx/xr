@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
 
+import { ApprovalModal } from '@/components/approvals/ApprovalModal';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { isOnboardingComplete } from '@/stores/onboarding';
 import { hydrateUIState } from '@/stores/ui';
@@ -100,6 +101,8 @@ export default function App() {
       <ErrorBoundary>
         <RouterProvider router={router} />
       </ErrorBoundary>
+      {/* Phase 7 — the approval modal rides above every route (main window) */}
+      <ApprovalModal />
       <AnimatePresence>
         {showSplash && <Splash key="splash" progress={progress} status={status} />}
       </AnimatePresence>

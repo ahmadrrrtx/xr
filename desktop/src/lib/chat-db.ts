@@ -47,6 +47,8 @@ export interface ToolCallRecord {
   output?: string;
   status: 'running' | 'done' | 'error' | 'waiting-approval';
   error?: string;
+  /** Phase 7: the approval request gating this call, while one is pending. */
+  approvalId?: string;
 }
 
 export interface MessagePage {

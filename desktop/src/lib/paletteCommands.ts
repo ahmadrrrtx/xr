@@ -27,6 +27,7 @@ import {
   PanelLeft,
   PenLine,
   Search,
+  ShieldQuestion,
   Settings,
   Trash2,
   Wallet,
@@ -34,11 +35,15 @@ import {
 } from 'lucide-react';
 
 import { AVATAR_STATES } from '@/components/brand/types';
+import { newApprovalId, type PendingDecision } from '@/lib/approvalCore';
+import { requestApproval } from '@/lib/approvalEvents';
 import { hudNavigate, hudNotifySessionsChanged, hudRunMainCommand } from '@/lib/hud';
 import { orbSetState } from '@/lib/orb';
 import { relativeTime, type PaletteGroup } from '@/lib/paletteQuery';
 import type { Session } from '@/lib/chat-db';
 import { clearOnboardingFlag } from '@/stores/onboarding';
+import { useApprovalStore } from '@/stores/approvalStore';
+import { useNotificationStore } from '@/stores/notificationStore';
 import { useSessionsStore } from '@/stores/sessionsStore';
 import { useSidebarStore } from '@/stores/sidebar';
 import { useThemeStore } from '@/stores/theme';
@@ -277,6 +282,30 @@ export function buildPaletteCommands(
     },
   ];
 
+  // Canned medium-risk request (dev only) — trigger twice to demo the queue.
+  const triggerTestApproval = (): Promise<PendingDecision> =>
+    requestApproval({
+      id: newApprovalId(),
+      createdAt: Date.now(),
+      skillId: 'gmail-skill',
+      skillName: 'gmail-skill',
+      skillVersion: 'v1.2',
+      skillIcon: 'mail',
+      action: 'Send email',
+      resource: 'sarah@company.com',
+      subject: 'Portfolio update',
+      bodyPreview:
+        'Hi Sarah,' +
+        '\n\n' +
+        "Here's the portfolio update we discussed — the Q3 numbers are in, and the new deck is attached." +
+        '\n\n' +
+        'Best,' +
+        '\n' +
+        'XR (on behalf of Ahmad)',
+      risk: 'medium',
+      justification: 'Triggered from the dev palette command to demo approvals.',
+    });
+
   const devCommands: PaletteCommand[] = [
     {
       id: 'dev-reset-onboarding',
@@ -326,6 +355,41 @@ export function buildPaletteCommands(
         ctx.toast(`Orb state — ${next}`);
       },
     },
+    {
+      id: 'dev-reset-approval-rules',
+      title: 'Reset Approval Rules (dev)',
+      subtitle: 'Clear remember rules + the notification feed',
+      icon: OctagonX,
+      group: 'settings',
+      devOnly: true,
+      action: () => {
+        useApprovalStore.getState().setRules([]);
+        useNotificationStore.getState().clear();
+        try {
+          window.localStorage.removeItem('xr.approval.rules');
+        } catch {
+          /* storage unavailable */
+        }
+        ctx.toast('Approval rules + notifications reset');
+      },
+    },
+    {
+      id: 'dev-trigger-approval',
+      title: 'Trigger Test Approval (dev)',
+      subtitle: 'Fire a canned permission request — no chat needed',
+      icon: ShieldQuestion,
+      group: 'settings',
+      devOnly: true,
+      action: () => {
+        void triggerTestApproval().then((decision) => {
+          ctx.toast(
+            decision.status === 'approved'
+              ? 'Test approval — approved'
+              : 'Test approval — denied'
+          );
+        });
+      },
+    },
   ];
 
   // Dev commands are compiled into the registry only in dev builds, so the
@@ -350,4 +414,38 @@ export function recentCommands(
     .map((id) => byId.get(id))
     .filter((c): c is PaletteCommand => !!c)
     .slice(0, 5);
+}
+
+// Dev-only window hook (never shipped in prod): fire the canned approval.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  (
+    window as unknown as {
+      __xrTriggerTestApproval?: () => void;
+    }
+  ).__xrTriggerTestApproval = () => {
+    // Re-created lazily: the canned request needs the live stores.
+    void import('@/lib/approvalEvents').then(({ requestApproval }) => {
+      void requestApproval({
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+        skillId: 'gmail-skill',
+        skillName: 'gmail-skill',
+        skillVersion: 'v1.2',
+        skillIcon: 'mail',
+        action: 'Send email',
+        resource: 'sarah@company.com',
+        subject: 'Portfolio update',
+        bodyPreview:
+          'Hi Sarah,' +
+          '\n\n' +
+          "Here's the portfolio update we discussed — the Q3 numbers are in, and the new deck is attached." +
+          '\n\n' +
+          'Best,' +
+          '\n' +
+          'XR (on behalf of Ahmad)',
+        risk: 'medium',
+        justification: 'Triggered from the dev window hook to demo approvals.',
+      });
+    });
+  };
 }

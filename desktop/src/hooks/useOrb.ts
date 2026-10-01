@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 
 import { isTauri } from '@/lib/tauri';
+import { useApprovalStore } from '@/stores/approvalStore';
 
 export function useOrbIpc(): void {
   useEffect(() => {
@@ -43,9 +44,18 @@ export function useOrbIpc(): void {
 
       track(
         await listen('orb:approvals-requested', () => {
-          toast('Approvals ship in Phase 7', {
-            description: 'Pending approvals will open the Shield queue.',
-          });
+          // Phase 7: surface the oldest pending approval (or say all-clear).
+          const { pending, activate } = useApprovalStore.getState();
+          if (pending.length > 0) {
+            activate(pending[0]?.id ?? '');
+            toast('Approval needed', {
+              description: `${pending.length} request${pending.length === 1 ? '' : 's'} waiting — the oldest is up front now.`,
+            });
+          } else {
+            toast('No pending approvals', {
+              description: "You're all caught up — nothing is waiting on you.",
+            });
+          }
         })
       );
     })();

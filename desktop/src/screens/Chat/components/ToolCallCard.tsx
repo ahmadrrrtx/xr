@@ -11,14 +11,15 @@ import {
   Loader2,
   Mail,
   Search,
+  ShieldAlert,
   Terminal,
   Wrench,
 } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useState } from 'react';
-import { toast } from 'sonner';
 
 import type { ToolCallRecord } from '@/lib/chat-db';
+import { useApprovalStore } from '@/stores/approvalStore';
 
 const ICONS: Record<string, typeof Mail> = {
   gmail: Mail,
@@ -65,9 +66,11 @@ function StatusIcon({ status }: { status: ToolCallRecord['status'] }) {
       </span>
     );
   return (
-    <span aria-label="waiting approval" className="text-warning text-[13px] leading-none font-bold">
-      ⏸
-    </span>
+    <ShieldAlert
+      aria-label="waiting approval"
+      className="text-warning size-4 shrink-0"
+      strokeWidth={1.5}
+    />
   );
 }
 
@@ -104,13 +107,22 @@ export function ToolCallCard({ call }: { call: ToolCallRecord | null }) {
         type="button"
         onClick={() => {
           if (call.status === 'waiting-approval') {
-            toast('Approvals come in Phase 7', {
-              description: 'For now the mock continues automatically.',
-            });
+            // Surface the approval this call is parked on (queue-aware:
+            // bring it to the modal even if others are queued ahead).
+            const { pending, activate } = useApprovalStore.getState();
+            const linked = call.approvalId
+              ? pending.find((r) => r.id === call.approvalId)
+              : pending[0];
+            if (linked) activate(linked.id);
           }
           setExpanded((v) => !v);
         }}
         aria-expanded={expanded}
+        title={
+          call.status === 'waiting-approval'
+            ? 'Waiting for your approval — click to review'
+            : undefined
+        }
         className="hover:bg-bg-raised/40 flex min-h-12 w-full items-center gap-2.5 px-3 py-2 text-left transition-colors"
       >
         <Icon aria-hidden="true" className="text-text-secondary size-4 shrink-0" strokeWidth={1.5} />
