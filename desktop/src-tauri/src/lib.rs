@@ -41,6 +41,10 @@ pub fn run() {
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
+            // A relaunch is a fine moment to re-check the orb's display
+            // still exists (monitor layouts change between runs).
+            #[cfg(desktop)]
+            commands::orb::validate_position(app);
         },
     ));
 
@@ -67,6 +71,9 @@ pub fn run() {
                     .plugin(tauri_plugin_global_shortcut::Builder::new().build())?;
                 // HUD palette (Phase 5): global shortcut + hidden second window.
                 commands::hud::init(app.handle())?;
+                // Companion Orb (Phase 6): startup gate, position memory,
+                // native context menu, ⌥⌘O visibility toggle.
+                commands::orb::init(app.handle())?;
                 tray::create_tray(app.handle())?;
             }
             Ok(())
@@ -103,6 +110,20 @@ pub fn run() {
             commands::hud::hud_notify_sessions_changed,
             #[cfg(desktop)]
             commands::hud::hud_shortcut_info,
+            #[cfg(desktop)]
+            commands::orb::orb_show,
+            #[cfg(desktop)]
+            commands::orb::orb_hide,
+            #[cfg(desktop)]
+            commands::orb::orb_toggle,
+            #[cfg(desktop)]
+            commands::orb::orb_open_main,
+            #[cfg(desktop)]
+            commands::orb::orb_show_context_menu,
+            #[cfg(desktop)]
+            commands::orb::orb_get_position,
+            #[cfg(desktop)]
+            commands::orb::orb_set_position,
             events::theme_changed,
         ])
         .build(tauri::generate_context!())
@@ -114,6 +135,9 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 #[cfg(desktop)]
                 commands::hud::unregister_all(app);
+                // Park the orb's final position (drag → quit race).
+                #[cfg(desktop)]
+                commands::orb::flush_position(app);
             }
         });
 }

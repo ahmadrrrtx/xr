@@ -388,6 +388,23 @@ html[data-theme='arctic'] {
   --accent-2: #0e7490;
 }
 
+/* ─── Phase 6 · Companion Orb glow scaling ──────────────────────────────────
+ * The orb is a branded desktop presence, not an in-app surface: orb.html
+ * pins data-theme="xr-native", so it always renders the signature
+ * black+cyan look. Only its glow INTENSITY follows the active app theme —
+ * set as --orb-glow-intensity from the palette:theme-change broadcast
+ * (full on XR Native/Midnight/Graphite, dimmed on the two light themes).
+ * 8px matches XR Native's --avatar-glow-strength above; 0.07 matches the
+ * halo circle's attribute opacity in CompanionOrb.tsx. */
+body.orb {
+  --orb-glow-intensity: 1;
+  --avatar-glow-strength: calc(8px * var(--orb-glow-intensity));
+}
+
+body.orb .xr-orb-halo {
+  opacity: calc(0.07 * var(--orb-glow-intensity));
+}
+
 /* ─── Phase 2: official brand-art palette ───────────────────────────────────
  * Auto-extracted by k-means from Ahmad's original uploads
  * (uploads/xr logo (1).png · XR AVATAR .png · side faces) and referenced by

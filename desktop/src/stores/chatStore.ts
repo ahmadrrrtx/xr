@@ -18,6 +18,7 @@ import {
   type ToolCallRecord,
 } from '@/lib/chat-db';
 import { streamChat, type ChatTurn } from '@/lib/mockLLM';
+import { orbSetState } from '@/lib/orb';
 import { newId, useSessionsStore } from '@/stores/sessionsStore';
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error';
@@ -98,6 +99,8 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
   useChatStore.setState({
     stream: { sessionId, text: '', toolCalls: [], status: 'connecting', startedAt: Date.now() },
   });
+  // Companion Orb (Phase 6): XR is thinking until the first token lands.
+  void orbSetState('thinking');
 
   await streamChat({
     messages: history,
@@ -114,6 +117,7 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
             useChatStore.setState({
               stream: { ...stream, status: 'streaming', text: stream.text + e.text },
             });
+            void orbSetState('speaking');
           } else {
             useChatStore.setState({ stream: { ...stream, text: stream.text + e.text } });
           }
@@ -140,6 +144,7 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
           useChatStore.setState({
             stream: { ...stream, status: 'error' },
           });
+          void orbSetState('error');
           // Persist the partial as an errored assistant message.
           const msg: ChatMessage = {
             id: newId(),
@@ -174,6 +179,7 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
 async function finishStream(sessionId: string, stream: StreamingTurn): Promise<void> {
   if (!stream.text && stream.toolCalls.length === 0) {
     useChatStore.setState({ stream: null });
+    void orbSetState('idle');
     return;
   }
   const segments: NonNullable<ChatMessage['metadata']>['segments'] = [];
@@ -190,6 +196,7 @@ async function finishStream(sessionId: string, stream: StreamingTurn): Promise<v
   };
   await commit(msg);
   useChatStore.setState({ stream: null });
+  void orbSetState('idle');
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({

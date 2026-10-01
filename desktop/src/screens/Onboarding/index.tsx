@@ -12,6 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { orbShow } from '@/lib/orb';
+
 import { clearOnboardingFlag, useOnboardingStore } from '@/stores/onboarding';
 
 import { StepAllSet } from './StepAllSet';
@@ -56,6 +58,8 @@ export function OnboardingWizard() {
 
   const finish = useCallback(async () => {
     await useOnboardingStore.getState().finishOnboarding();
+    // The orb joins the desktop the moment onboarding completes (Phase 6).
+    void orbShow();
     navigate('/chat', { replace: true });
     const name = useOnboardingStore.getState().userName;
     toast(`Welcome${name ? `, ${name}` : ''}. XR is ready.`);

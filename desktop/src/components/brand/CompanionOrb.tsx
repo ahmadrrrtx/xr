@@ -229,7 +229,14 @@ export function CompanionOrb({
         </motion.g>
 
         {/* Halo behind the sphere. */}
-        <circle cx="50" cy="50" r="45" fill="var(--brand-bright)" opacity={dim ? 0.03 : 0.07} />
+        <circle
+          className="xr-orb-halo"
+          cx="50"
+          cy="50"
+          r="45"
+          fill="var(--brand-bright)"
+          opacity={dim ? 0.03 : 0.07}
+        />
 
         {/* Glossy black sphere. */}
         <circle cx="50" cy="50" r="40" fill={`url(#${ids.helmet})`} />

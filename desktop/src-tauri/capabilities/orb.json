@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "orb",
+  "description": "Companion Orb window (Phase 6): core APIs, event listen/emit, and native window dragging. App-defined commands (orb_* window/menu ops, chat persistence, theme_changed) need no extra grants.",
+  "windows": ["orb"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging"
+  ]
+}

@@ -27,6 +27,7 @@ import {
   type PaletteCommand,
 } from '@/lib/paletteCommands';
 import { hudClose, hudNavigate, hudNotifySessionsChanged, hudShortcutInfo } from '@/lib/hud';
+import { orbSetState } from '@/lib/orb';
 import { streamChat } from '@/lib/mockLLM';
 import { chatDb, type ChatMessage } from '@/lib/chat-db';
 import { newId, useSessionsStore } from '@/stores/sessionsStore';
@@ -128,11 +129,14 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
     const store = usePaletteStore.getState();
     abortRef.current?.abort();
     store.startQuickAsk(question);
+    // Companion Orb (Phase 6): quick-ask is a stream too.
+    void orbSetState('thinking');
 
     const controller = new AbortController();
     abortRef.current = controller;
     const model = useSessionsStore.getState().sessions[0]?.model ?? 'claude-sonnet-4.5';
 
+    let spoke = false; // orb: thinking → speaking on the first token
     void streamChat({
       messages: [{ role: 'user', content: question }],
       model,
@@ -141,13 +145,19 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
         const s = usePaletteStore.getState();
         switch (event.type) {
           case 'token':
+            if (!spoke) {
+              spoke = true;
+              void orbSetState('speaking');
+            }
             s.appendQuickAskToken(event.text);
             break;
           case 'done':
             s.finishQuickAsk('done');
+            void orbSetState('idle');
             break;
           case 'error':
             s.finishQuickAsk('error');
+            void orbSetState('error');
             break;
           // Quick-ask answers are text-only for v1; tool chatter stays in chat.
           default:
@@ -157,14 +167,20 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
     }).catch(() => {
       // Abort fires as a rejection — the store already reflects the state.
       const s = usePaletteStore.getState();
-      if (s.quickAsk.status === 'streaming') s.finishQuickAsk('stopped');
+      if (s.quickAsk.status === 'streaming') {
+        s.finishQuickAsk('stopped');
+        void orbSetState('idle');
+      }
     });
   }, []);
 
   const stopQuickAsk = useCallback((): void => {
     abortRef.current?.abort();
     const s = usePaletteStore.getState();
-    if (s.quickAsk.status === 'streaming') s.finishQuickAsk('stopped');
+    if (s.quickAsk.status === 'streaming') {
+      s.finishQuickAsk('stopped');
+      void orbSetState('idle');
+    }
   }, []);
 
   /** Persist the Q&A pair as a real chat session, then open it. */
