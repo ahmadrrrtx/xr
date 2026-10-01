@@ -284,3 +284,66 @@ body.orb {
     animation: none;
   }
 }
+
+/* ─── Phase 8 · Appearance effects (Settings → Appearance) ──────────────
+   data-density / --fs-body / data-glass / data-glow / data-motion are set
+   on <html> by lib/appearance.ts (applied in every window). */
+
+/* Body font scale (12–16px, default 14 — matches the shipped app). */
+body {
+  font-size: var(--fs-body, 14px);
+}
+
+/* Density scale — hooks onto .xr-density-row (sidebar rows, settings rows,
+   chat message rows) and scales main-content padding. */
+[data-density='compact'] {
+  --row-pad-y: 6px;
+  --row-min-h: 36px;
+  --pad-scale: 0.875;
+}
+[data-density='comfortable'] {
+  --row-pad-y: 10px;
+  --row-min-h: 44px;
+  --pad-scale: 1;
+}
+[data-density='spacious'] {
+  --row-pad-y: 14px;
+  --row-min-h: 52px;
+  --pad-scale: 1.125;
+}
+
+.xr-density-row {
+  padding-block: var(--row-pad-y, 10px);
+  min-height: var(--row-min-h, 44px);
+}
+
+/* Glass off: solid panel instead of backdrop blur (performance toggle). */
+[data-glass='off'] .xr-glass {
+  backdrop-filter: none;
+  background-color: var(--bg-ink);
+}
+
+/* Glow off: every glow shadow rides --accent-glow, so flattening the var
+   flattens the app in one rule. (Paper/Arctic ship it transparent already.) */
+[data-glow='off'] {
+  --accent-glow: transparent;
+}
+
+/* App-level reduced motion — mirrors the OS media query for users who want
+   it per-app. Framer side is handled by <MotionConfig reducedMotion>. */
+[data-motion='reduced'] *,
+[data-motion='reduced'] *::before,
+[data-motion='reduced'] *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+}
+
+/* Native time inputs need the right picker chrome per theme. */
+.xr-time-input {
+  color-scheme: dark;
+}
+[data-theme='paper'] .xr-time-input,
+[data-theme='arctic'] .xr-time-input {
+  color-scheme: light;
+}

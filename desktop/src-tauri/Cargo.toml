@@ -26,6 +26,7 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
 tauri-plugin-os = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
@@ -40,6 +41,11 @@ ureq = { version = "2", features = ["json", "tls"] }
 
 # Phase 4 — chat persistence (SQLite, WAL; bundled build so no system sqlite needed).
 rusqlite = { version = "0.37", features = ["bundled"] }
+
+# Phase 8 — Settings: OS keychain for provider API keys (never plaintext in
+# the JSON store) + zip for data export/import.
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+zip = { version = "4", default-features = false, features = ["deflate"] }
 
 # Stronghold key derivation (Argon2id) — see src/lib.rs `key_derivation`.
 argon2 = "0.5"

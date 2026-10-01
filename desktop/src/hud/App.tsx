@@ -11,11 +11,13 @@ import { Toaster } from 'sonner';
 
 import { CommandPalette } from '@/components/palette/CommandPalette';
 import { usePaletteIpc } from '@/hooks/usePalette';
+import { useSettingsSync } from '@/hooks/useSettingsSync';
 import { useSessionsStore } from '@/stores/sessionsStore';
 import { hydratePaletteHistory } from '@/stores/paletteStore';
 
 export function HudApp() {
   usePaletteIpc(true);
+  useSettingsSync();
 
   // Seed the store once at boot; every hud:show re-hydrates (usePaletteIpc).
   useEffect(() => {

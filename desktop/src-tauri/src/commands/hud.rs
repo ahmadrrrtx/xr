@@ -363,6 +363,65 @@ pub fn unregister_all<R: Runtime>(app: &AppHandle<R>) {
     let _ = app.global_shortcut().unregister_all();
 }
 
+// ─── Runtime re-binding (Phase 8 Settings) ──────────────────────────────────
+
+/// Re-bind the HUD global shortcut live: register the new chord first, then
+/// drop the old one, so a failure never leaves the HUD keyless. The user's
+/// override persists (`xr.hud.shortcut`) and `init` reads it on next boot.
+#[tauri::command]
+pub async fn hud_set_shortcut<R: Runtime>(
+    app: AppHandle<R>,
+    chord: String,
+) -> Result<super::settings::ShortcutRegistration, String> {
+    let new_shortcut: Shortcut = chord
+        .parse()
+        .map_err(|e| format!("Cannot parse shortcut: {e}"))?;
+
+    let state = app.state::<HudShortcutState>();
+    let old = {
+        let inner = state.0.lock().map_err(|e| e.to_string())?;
+        if inner.shortcut == chord {
+            return Ok(super::settings::ShortcutRegistration {
+                shortcut: chord,
+                conflict: false,
+            });
+        }
+        inner.shortcut.clone()
+    };
+
+    let global = app.global_shortcut();
+    global
+        .on_shortcut(new_shortcut, |app, _s, event| {
+            if event.state() == ShortcutState::Pressed {
+                toggle_hud(app);
+            }
+        })
+        .map_err(|e| format!("Shortcut is reserved by the system or another app: {e}"))?;
+
+    if let Ok(old_shortcut) = old.parse::<Shortcut>() {
+        if old_shortcut != new_shortcut {
+            let _ = global.unregister(old_shortcut);
+        }
+    }
+
+    if let Some(state) = app.try_state::<HudShortcutState>() {
+        if let Ok(mut guard) = state.0.lock() {
+            guard.shortcut = chord.clone();
+            guard.fallback_used = false;
+            guard.conflict = false;
+        }
+    }
+    if let Some(store) = settings(&app) {
+        store.set(SHORTCUT_KEY, serde_json::json!(chord.clone()));
+        store.set(SHORTCUT_CONFLICT_KEY, serde_json::json!(false));
+        let _ = store.save();
+    }
+    Ok(super::settings::ShortcutRegistration {
+        shortcut: chord,
+        conflict: false,
+    })
+}
+
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

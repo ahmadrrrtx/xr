@@ -91,13 +91,7 @@ export function UserMenu({
           </span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() =>
-            toast('Profile coming in Phase 8', {
-              description: 'Settings owns the real profile in Phase 8.',
-            })
-          }
-        >
+        <DropdownMenuItem onSelect={() => navigate('/settings#general')}>
           <User size={16} strokeWidth={1.5} aria-hidden="true" />
           Profile
         </DropdownMenuItem>

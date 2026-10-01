@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { CommandPalette } from '@/components/cmdk/CommandPalette';
 import { useOrbIpc } from '@/hooks/useOrb';
 import { usePaletteIpc } from '@/hooks/usePalette';
+import { useSettingsSync } from '@/hooks/useSettingsSync';
 import { usePaletteStore } from '@/stores/paletteStore';
 import { PageTransition } from '@/components/layout/PageTransition';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -19,6 +20,8 @@ import { Topbar } from '@/components/layout/Topbar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { readSettingJSON, readSettingRaw } from '@/lib/persistent-store';
+import { effectiveCombo } from '@/lib/shortcuts';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useSidebarStore } from '@/stores/sidebar';
 import { useThemeStore, type ThemeId } from '@/stores/theme';
 import { hydrateUIState } from '@/stores/ui';
@@ -63,23 +66,28 @@ function usePersistedSettings(): void {
   }, []);
 }
 
-/** Global keyboard map (Phase 1 brief §5.10). */
+/**
+ * Global keyboard map (Phase 1 brief §5.10). Every combo resolves through
+ * the user's Settings → Shortcuts overrides (Phase 8), live.
+ */
 function useGlobalHotkeys(): void {
   const navigate = useNavigate();
+  const overrides = useSettingsStore((state) => state.settings.shortcuts.overrides);
+  const combo = (id: string): string => effectiveCombo(id, overrides);
 
   useHotkeys([
     {
-      combo: 'mod+k',
+      combo: combo('palette'),
       handler: () => {
         usePaletteStore.getState().togglePalette();
       },
     },
     {
-      combo: 'mod+b',
+      combo: combo('sidebar'),
       handler: () => useSidebarStore.getState().toggle(),
     },
     {
-      combo: 'mod+n',
+      combo: combo('new-chat'),
       handler: () => {
         void (async () => {
           const { useSessionsStore } = await import('@/stores/sessionsStore');
@@ -90,20 +98,26 @@ function useGlobalHotkeys(): void {
       },
     },
     {
-      combo: 'mod+.',
+      combo: combo('ptt'),
       handler: () =>
-        toast('Voice coming in Phase 15', {
+        toast('Voice comes in Phase 15', {
           description:
-            'Voice sessions, wake word and the Theater arrive later.',
+            'Hold the push-to-talk key from anywhere — rebinding it in Settings → Voice.',
         }),
     },
     {
-      combo: 'mod+shift+t',
+      combo: combo('cycle-theme'),
       handler: () => useThemeStore.getState().cycleTheme(),
     },
     {
-      combo: 'mod+,',
+      combo: combo('settings'),
       handler: () => navigate('/settings'),
+    },
+    {
+      combo: combo('focus-composer'),
+      handler: () => {
+        document.getElementById('xr-composer')?.focus();
+      },
     },
   ]);
 }
@@ -125,6 +139,7 @@ export function AppShell() {
   usePersistedSettings();
   const navigate = useNavigate();
   useGlobalHotkeys();
+  useSettingsSync();
   // Cross-window effects from the HUD: navigation, remote commands, theme
   // sync, session-list refresh (Phase 5).
   usePaletteIpc(false, navigate);
@@ -132,8 +147,11 @@ export function AppShell() {
   useOrbIpc();
   useWelcomeToast();
   const location = useLocation();
-  // Chat manages its own flush, full-height layout — no content padding.
-  const flush = location.pathname.startsWith('/chat');
+  // Chat and Settings manage their own flush, full-height layout — no
+  // content padding (Settings is a two-pane pane, SCREEN 14).
+  const flush =
+    location.pathname.startsWith('/chat') ||
+    location.pathname.startsWith('/settings');
 
   return (
     <TooltipProvider delayDuration={200}>

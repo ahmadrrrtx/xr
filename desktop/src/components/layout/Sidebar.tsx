@@ -22,10 +22,14 @@ import {
 } from '@/components/ui/tooltip';
 import { NAV_ITEMS, type NavItem } from '@/lib/nav';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useSidebarStore } from '@/stores/sidebar';
 
 const COLLAPSED_WIDTH = 72;
 const EXPANDED_WIDTH = 240;
+
+/** Settings → Appearance icon size → Lucide pixels. */
+const ICON_PX: Record<'s' | 'm' | 'l', number> = { s: 16, m: 20, l: 24 };
 
 /** 4px accent bar on the active item's left edge (24–28px tall). */
 function ActiveBar({ tall }: { tall: boolean }) {
@@ -53,9 +57,11 @@ function BudgetDot() {
 function SidebarNavItem({
   item,
   collapsed,
+  iconSize,
 }: {
   item: NavItem;
   collapsed: boolean;
+  iconSize: number;
 }) {
   const Icon = item.icon;
   const isBudget = item.id === 'budget';
@@ -80,7 +86,7 @@ function SidebarNavItem({
           {isActive && <ActiveBar tall={collapsed} />}
           <span className="relative flex shrink-0 items-center">
             <Icon
-              size={20}
+              size={iconSize}
               strokeWidth={isActive ? 2 : 1.5}
               aria-hidden="true"
               className={cn(
@@ -154,6 +160,7 @@ function CollapseButton({ collapsed }: { collapsed: boolean }) {
 
 export function Sidebar() {
   const collapsed = useSidebarStore((state) => state.collapsed);
+  const iconSize = useSettingsStore((state) => state.settings.appearance.iconSize);
   const navigate = useNavigate();
 
   return (
@@ -208,7 +215,12 @@ export function Sidebar() {
         className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-x-hidden overflow-y-auto px-2 pt-2"
       >
         {NAV_ITEMS.map((item) => (
-          <SidebarNavItem key={item.id} item={item} collapsed={collapsed} />
+          <SidebarNavItem
+            key={item.id}
+            item={item}
+            collapsed={collapsed}
+            iconSize={ICON_PX[iconSize] ?? 20}
+          />
         ))}
       </nav>
 

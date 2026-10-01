@@ -1,11 +1,13 @@
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, MotionConfig } from 'framer-motion';
 import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
 
 import { ApprovalModal } from '@/components/approvals/ApprovalModal';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
+import { hydrateLocale } from '@/lib/i18n';
 import { isOnboardingComplete } from '@/stores/onboarding';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { hydrateUIState } from '@/stores/ui';
 import { Splash, type SplashStatus } from '@/screens/Splash';
 import { router } from '@/router';
@@ -50,6 +52,9 @@ export default function App() {
   const [status, setStatus] = useState<SplashStatus>('Starting XR...');
   const [showSplash, setShowSplash] = useState(true);
   const startedAt = useRef(0);
+  const reduceMotion = useSettingsStore(
+    (state) => state.settings.appearance.reduceMotion
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +72,8 @@ export default function App() {
         setProgress(20);
         setStatus('Loading settings...');
         await hydrateUIState();
+        await useSettingsStore.getState().load();
+        await hydrateLocale();
 
         if (cancelled) return;
         setProgress(50);
@@ -97,7 +104,7 @@ export default function App() {
   }, []);
 
   return (
-    <>
+    <MotionConfig reducedMotion={reduceMotion ? 'always' : 'user'}>
       <ErrorBoundary>
         <RouterProvider router={router} />
       </ErrorBoundary>
@@ -108,6 +115,6 @@ export default function App() {
       </AnimatePresence>
       {/* Root-level toaster — covers the app shell AND onboarding (Phase 3) */}
       {toasterBlock}
-    </>
+    </MotionConfig>
   );
 }

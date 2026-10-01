@@ -27,7 +27,14 @@ import {
   type PendingDecision,
   type RememberKey,
 } from '@/lib/approvalCore';
+import {
+  notificationKindFor,
+  playNotificationSound,
+  shouldOsNotify,
+  shouldSound,
+} from '@/lib/notificationPolicy';
 import { orbSetState } from '@/lib/orb';
+import { currentSettings } from '@/stores/settingsStore';
 import { isTauri } from '@/lib/tauri';
 import { useApprovalStore } from '@/stores/approvalStore';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -93,15 +100,23 @@ export function sendNotification(
     read: false,
     ...partial,
   };
+  // The feed is always written ("Managed by XR"); the policy gates the
+  // noisier channels: OS notifications (per-event + quiet hours + channel)
+  // and the optional chime.
+  const settings = currentSettings();
+  const kind = notificationKindFor(notification.type);
   useNotificationStore.getState().add(notification);
   devSeam('notification', notification);
   void emit('notification:new', { notification });
-  if (appUnfocused()) {
+  if (appUnfocused() && shouldOsNotify(kind, settings)) {
     void sendOsNotification(
       `XR — ${notification.title}`,
       notification.body ?? '',
       notification.id
     );
+  }
+  if (shouldSound(kind, settings)) {
+    playNotificationSound(settings.voice.soundsVolume);
   }
   return notification;
 }
