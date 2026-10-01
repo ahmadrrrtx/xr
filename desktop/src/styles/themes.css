@@ -472,3 +472,44 @@ body.orb .xr-orb-halo {
   --brand-bright: var(--brand-av-cy-10);
   --brand-mid: var(--brand-av-cy-9);
 }
+
+/* ─── Phase 8 · Theme swatch previews (Settings → Appearance) ───────────
+   Literal previews OF each theme for the 72px swatches — they must show a
+   theme's bg+accent even while that theme is inactive, so these live here,
+   with the other hex constants, never in TS. */
+.swatch-xr-native {
+  --swatch-bg: #0a0f1a;
+  --swatch-dot: #00e5ff;
+  --swatch-glow: rgba(0, 229, 255, 0.45);
+  --swatch-border: transparent;
+}
+.swatch-graphite {
+  --swatch-bg: #6b6b6b;
+  --swatch-dot: #5b8a9e;
+  --swatch-glow: transparent;
+  --swatch-border: rgba(0, 0, 0, 0.25);
+}
+.swatch-midnight {
+  --swatch-bg: #0f1b2d;
+  --swatch-dot: #3b82f6;
+  --swatch-glow: rgba(59, 130, 246, 0.4);
+  --swatch-border: transparent;
+}
+.swatch-paper {
+  --swatch-bg: #f5f0e8;
+  --swatch-dot: #2a7a6f;
+  --swatch-glow: transparent;
+  --swatch-border: rgba(0, 0, 0, 0.12);
+}
+.swatch-arctic {
+  --swatch-bg: #f8fafc;
+  --swatch-dot: #06b6d4;
+  --swatch-glow: transparent;
+  --swatch-border: rgba(0, 0, 0, 0.1);
+}
+.swatch-system {
+  --swatch-dark: #0a0f1a;
+  --swatch-light: #f8fafc;
+  --swatch-dot: #00e5ff;
+  --swatch-border: rgba(0, 0, 0, 0.12);
+}

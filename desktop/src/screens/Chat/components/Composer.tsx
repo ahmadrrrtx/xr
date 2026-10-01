@@ -197,6 +197,7 @@ export function Composer({
 
             <TextareaAutosize
               ref={inputRef}
+              id="xr-composer"
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={onKeyDown}

@@ -38,6 +38,8 @@ use tauri_plugin_store::{Store, StoreBuilder};
 const POSITION_KEY: &str = "xr.orb.position";
 const SHOW_KEY: &str = "xr.orb.showOrb";
 const ONBOARDING_KEY: &str = "xr.onboarding.complete";
+/// User rebind for the orb visibility toggle (Settings → Shortcuts, Phase 8).
+const ORB_SHORTCUT_KEY: &str = "xr.orb.shortcut";
 
 /// Orb window label (tauri.conf.json > app.windows).
 const ORB_LABEL: &str = "orb";
@@ -176,6 +178,11 @@ fn primary_rect<R: Runtime>(app: &AppHandle<R>) -> Option<MonitorRect> {
 /// by the writer thread below and by the exit flush).
 #[derive(Default)]
 pub struct OrbPositionState(pub std::sync::Mutex<OrbPositionInner>);
+
+/// The chord actually registered for the orb toggle (init candidate loop or
+/// a Phase 8 rebind). Read by `orb_shortcut_info` for the Settings UI.
+#[derive(Default)]
+pub struct OrbShortcutState(pub std::sync::Mutex<String>);
 
 #[derive(Default)]
 pub struct OrbPositionInner {
@@ -532,9 +539,19 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         });
     }
 
-    // ⌥⌘O / Ctrl+Alt+O visibility toggle (fallback Alt+Shift+O when taken).
+    // ⌥⌘O / Ctrl+Alt+O visibility toggle — the user override (Phase 8
+    // Settings) wins, then the platform primary, then the fallback.
+    app.manage(OrbShortcutState::default());
     let (primary, fallback) = default_shortcuts(std::env::consts::OS);
-    let candidates: [(&str, bool); 2] = [(primary, false), (fallback, true)];
+    let user_override = settings(app)
+        .and_then(|store| store.get(ORB_SHORTCUT_KEY))
+        .and_then(|value| value.as_str().map(str::to_string));
+    let mut candidates: Vec<(String, bool)> = Vec::new();
+    if let Some(user) = user_override {
+        candidates.push((user, false));
+    }
+    candidates.push((primary.to_string(), false));
+    candidates.push((fallback.to_string(), true));
     for (candidate, is_fallback) in candidates {
         let shortcut: Shortcut = match candidate.parse() {
             Ok(s) => s,
@@ -547,6 +564,11 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             }
         }) {
             Ok(()) => {
+                if let Some(state) = app.try_state::<OrbShortcutState>() {
+                    if let Ok(mut guard) = state.0.lock() {
+                        *guard = candidate.clone();
+                    }
+                }
                 if is_fallback {
                     eprintln!(
                         "[xr] orb shortcut: {primary} unavailable — using {candidate} instead"
@@ -564,6 +586,70 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     }
 
     Ok(())
+}
+
+// ─── Shortcut rebind (Settings → Shortcuts, Phase 8) ────────────────────────
+
+/// The chord the OS currently holds for the orb toggle ("" before init).
+#[tauri::command]
+pub fn orb_shortcut_info(app: AppHandle) -> String {
+    app.try_state::<OrbShortcutState>()
+        .and_then(|state| state.0.lock().ok().map(|guard| guard.clone()))
+        .unwrap_or_default()
+}
+
+/// Register-new-first rebind (hud_set_shortcut pattern): the new chord is
+/// claimed before the old one is released, so a failed swap never leaves
+/// the orb without a shortcut.
+#[tauri::command]
+pub async fn orb_set_shortcut(
+    app: AppHandle,
+    chord: String,
+) -> Result<super::settings::ShortcutRegistration, String> {
+    let new_shortcut: Shortcut = chord
+        .parse()
+        .map_err(|e| format!("Cannot parse shortcut: {e}"))?;
+
+    let state = app.state::<OrbShortcutState>();
+    let old = {
+        let guard = state.0.lock().map_err(|e| e.to_string())?;
+        if *guard == chord {
+            return Ok(super::settings::ShortcutRegistration {
+                shortcut: chord,
+                conflict: false,
+            });
+        }
+        guard.clone()
+    };
+
+    let global = app.global_shortcut();
+    global
+        .on_shortcut(new_shortcut, |app, _s, event| {
+            if event.state() == ShortcutState::Pressed {
+                toggle_orb(app);
+            }
+        })
+        .map_err(|e| format!("Shortcut is reserved by the system or another app: {e}"))?;
+
+    if let Ok(old_shortcut) = old.parse::<Shortcut>() {
+        if old_shortcut != new_shortcut {
+            let _ = global.unregister(old_shortcut);
+        }
+    }
+
+    if let Some(state) = app.try_state::<OrbShortcutState>() {
+        if let Ok(mut guard) = state.0.lock() {
+            *guard = chord.clone();
+        }
+    }
+    if let Some(store) = settings(&app) {
+        store.set(ORB_SHORTCUT_KEY, serde_json::json!(chord.clone()));
+        let _ = store.save();
+    }
+    Ok(super::settings::ShortcutRegistration {
+        shortcut: chord,
+        conflict: false,
+    })
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

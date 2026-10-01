@@ -57,6 +57,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_stronghold::Builder::new(key_derivation).build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -74,6 +75,8 @@ pub fn run() {
                 // Companion Orb (Phase 6): startup gate, position memory,
                 // native context menu, ⌥⌘O visibility toggle.
                 commands::orb::init(app.handle())?;
+                // Push-to-talk (Phase 8): global chord, override-aware.
+                commands::settings::init_ptt(app.handle())?;
                 tray::create_tray(app.handle())?;
             }
             Ok(())
@@ -100,6 +103,31 @@ pub fn run() {
             commands::approvals::load_rules,
             commands::approvals::save_rules,
             commands::approvals::send_os_notification,
+            commands::settings::settings_changed,
+            commands::settings::get_settings,
+            commands::settings::set_setting,
+            commands::settings::keychain_get,
+            commands::settings::keychain_set,
+            commands::settings::keychain_delete,
+            commands::settings::reveal_data_folder,
+            commands::settings::reveal_path,
+            commands::settings::get_data_dir,
+            commands::settings::open_url,
+            commands::settings::storage_stats,
+            commands::settings::clear_cache,
+            commands::settings::export_all_data,
+            commands::settings::import_all_data,
+            commands::settings::reset_app,
+            commands::settings::restart_app,
+            commands::settings::set_devtools_enabled,
+            commands::settings::get_autostart,
+            commands::settings::set_autostart,
+            commands::settings::test_provider_connection,
+            commands::settings::ptt_shortcut_info,
+            #[cfg(desktop)]
+            commands::settings::ptt_set_shortcut,
+            #[cfg(desktop)]
+            commands::hud::hud_set_shortcut,
             commands::hud::hud_show,
             #[cfg(desktop)]
             commands::hud::hud_hide,
@@ -127,6 +155,10 @@ pub fn run() {
             commands::orb::orb_get_position,
             #[cfg(desktop)]
             commands::orb::orb_set_position,
+            #[cfg(desktop)]
+            commands::orb::orb_set_shortcut,
+            #[cfg(desktop)]
+            commands::orb::orb_shortcut_info,
             events::theme_changed,
         ])
         .build(tauri::generate_context!())
