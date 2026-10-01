@@ -52,3 +52,51 @@ Lucide @1.5px · no hardcoded hex outside themes.css (use tokens: `text-accent`,
 **Rust** — `commands/settings.rs` (~26 commands), hud/orb runtime rebind commands, `init_ptt` in desktop setup, keyring 3 + zip 4 deps, `updater:default` capability. API facts: pull events carry `id` (not model) — filter by the u32 the invoke returns; `detect_ollama` lives in system.rs, `ollama_pull` in ollama.rs; `readSettingJSON` takes 1 arg (no default).
 
 **Pending** — cargo check → clippy -D warnings → cargo test → screenshots/e2e (playwright absent) → push branch → PR.
+
+## Acceptance audit (final — headless verification)
+
+Verified: 9 tabs render (route + hash deep links), sidebar search/groups/accent-bar/arrow-key tablist, theme swatches → `setPreference` → Rust `theme_changed` → `palette:theme-change` broadcast → HUD listener (Phase 5 chain, now driven by Appearance), density/font/glass/glow via data-attrs, autostart round-trip with revert-on-fail, i18n en/ur swap via `setLocale`, keychain-backed provider keys with local-insecure fallback + warning badge, real list-models pings per provider auth shape, Ollama detect + RAM-tuned pull w/ id-filtered progress, shortcut recorder (capture-phase, modifier rule, conflicts, global rebind via Rust, reset), notification policy gate (master→event→quiet hours→osEnabled→sound), mic/TTS real devices, storage stats, telemetry OFF default, typed-DELETE destructive flows, updater graceful dev fallback, licenses (395 entries), devtools toggle, `⌘,`/orb-menu/palette/UserMenu all route to /settings, breadcrumb shows "Settings", `mod+l` focus-composer, settings:changed → HUD + main via useSettingsSync (orb stays lean by design).
+
+Environment-blocked (not done in sandbox): GUI screenshots per theme (no display/TTY — `bun tauri dev` cannot open a window here; playwright not installed), `bun tauri build` full bundle (frontend `vite build` + `cargo check`/`clippy -D warnings`/`cargo test` 23/23 all green as the headless equivalent), and push/PR (no GitHub credentials in this session — commit `fedaceb` sits on local `phase/8-settings`; `git bundle` at `/home/user/phase8-settings.bundle` for transport).
+
+Known deviations from brief: `~/xr` data folder → Tauri app-data dir (the app has always used it); settings-sidebar search omits the ⌘K hint chip (⌘K is the palette's global chord — a hint there would be misleading; the palette itself carries 9 settings deep-links instead); PTT default `⌘.` matches the brief.
+
+## Git rollback incident + full recovery (2026-10-01, later)
+
+Mid-turn, a sandbox restart left `.git` at the **phase-4 era** while the working tree kept Phase 8 state; a subsequent `git reset --hard` (run before that mismatch was understood) reverted every tracked file to phase-4 content, destroying the Phase 8 edits to pre-existing files and deleting this notes file (untracked new files survived).
+
+Everything was recovered with zero loss:
+
+1. The pre-restart `git bundle` (`/home/user/phase8-settings.bundle`) contained the original Phase 8 commit `fedaceb` as a thin pack.
+2. The repo turned out to be publicly readable → `git fetch https://github.com/ahmadrrrtx/xr.git main` restored the true phase-5–7 history (`e014e8d`), which resolved the bundle's 32 thin-pack deltas.
+3. `git fetch <bundle> phase/8-settings:…` resurrected `fedaceb` bit-identical — 51 files, 7,638 insertions on top of true main — now checked out as `phase/8-settings`. The notes file was recovered from the dangling docs commit.
+4. Gates re-run on the restored tree: tsc ✅ eslint ✅ vite build 1.41s ✅ (Rust side is bit-identical to the pre-rollback state that passed cargo check, clippy -D warnings, and cargo test 23/23).
+
+Lesson recorded for every future phase: **never `git reset --hard` with a dirty tree in a sandbox whose `.git` may not match the working tree; verify `git log` vs expected base first.** The bundle remains at `/home/user/phase8-settings.bundle` (and a copy at `/home/user/xr/.git/…` is unnecessary — the branch itself is the artifact now).
+
+Push still requires credentials (repo is read-public, write-gated).
+
+## Durability protocol (added after a SECOND .git rollback)
+
+Observed twice: across session boundaries this sandbox persists /home/user **files** but the `.git` directory reverts to the phase-4 era — branches, fetched history and new commits vanish while the working tree survives. Recovery from scratch takes four commands and is fully repeatable:
+
+```
+cd /home/user/xr
+git fetch https://github.com/ahmadrrrtx/xr.git +refs/heads/main:refs/remotes/origin/main   # repo is read-public
+git fetch /home/user/phase8-settings.bundle phase/8-settings:phase/8-recovered             # thin bundle (prereq = main)
+git switch -f phase/8-recovered && git branch -m phase/8-recovered phase/8-settings
+# restore this notes file from the working tree copy BEFORE switch if it carries newer appends
+```
+
+Redundant artifacts (regular files, they DO persist):
+- `/home/user/phase8-settings.patch` — plain 51-file diff vs main; `git apply` anywhere.
+- `/home/user/phase8-settings-FULL.bundle` — self-contained complete history (bootstrap a repo with `git clone phase8-settings-FULL.bundle xr`).
+- `/home/user/phase8-settings.bundle` (+ `.bak`) — the thin bundle used above.
+
+Push still requires write credentials (repo is public-read, auth-write). Branch tip: 289e65b.
+
+## Addendum — tests + full lane (final session)
+
+- `test/desktop/settings-core.test.ts` — 26 units over `lib/shortcuts.ts` + `lib/notificationPolicy.ts` (registry shape, override resolution, mac/win chord formatting, recorder capture rules, conflict detection, quiet-hours boundaries incl. midnight wrap, gate order, toast lifetimes, sound gating). `lib/shortcuts.ts` was made dependency-free (inlined platform guess, orbCore pattern) and Windows/Linux chord ordering canonicalized to Ctrl→Alt→Shift.
+- Gates re-run on the final tree: desktop tsc/eslint clean, `vite build` 1.45s, `test/desktop/` 71/71, full root lane `bun test` **3439 pass / 0 fail** (341 files). Rust gates (check/clippy -D warnings/test 23/23) passed on identical Rust sources during the build session; toolchain was later wiped by a sandbox reset — re-run locally before merge.
+- `docs/phases/08-settings.report.md` written (phase 4–7 convention; doubles as the PR body).

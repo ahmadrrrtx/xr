@@ -11,7 +11,32 @@
  * The Settings → Keyboard Shortcuts tab records new chords here; AppShell
  * re-resolves combos reactively so overrides apply without a restart.
  */
-import { detectPlatform, type Platform } from '@/lib/tauri';
+
+/**
+ * Platform guess, inlined from lib/tauri's detectPlatform (minus the
+ * platform-API enrichment) so this module stays dependency-free and runs
+ * under the root bun test lane (orbCore pattern). Every exported resolver
+ * also accepts an explicit platform for deterministic tests.
+ */
+export type Platform =
+  | 'macos'
+  | 'windows'
+  | 'linux'
+  | 'android'
+  | 'ios'
+  | 'web';
+
+function detectPlatform(): Platform {
+  if (typeof navigator === 'undefined') return 'web';
+  const ua = navigator.userAgent.toLowerCase();
+  return ua.includes('mac')
+    ? 'macos'
+    : ua.includes('win')
+      ? 'windows'
+      : ua.includes('linux')
+        ? 'linux'
+        : 'web';
+}
 
 export type ShortcutScope = 'app' | 'chat' | 'global';
 export type GlobalOwner = 'hud' | 'orb' | 'ptt';
@@ -78,6 +103,13 @@ const MAC: Record<Platform, boolean> = {
 
 const GLYPH = { mod: '⌘', alt: '⌥', shift: '⇧' } as const;
 
+/** Windows/Linux display + registration order: Ctrl, Alt, Shift. */
+const WIN_MOD_ORDER: Record<string, number> = { mod: 0, alt: 1, shift: 2 };
+
+function sortModsForWin(mods: string[]): string[] {
+  return [...mods].sort((a, b) => (WIN_MOD_ORDER[a] ?? 9) - (WIN_MOD_ORDER[b] ?? 9));
+}
+
 function keyLabel(key: string, mac: boolean): string {
   if (key === 'space') return mac ? 'Space' : 'Space';
   if (key === 'escape') return 'Esc';
@@ -99,7 +131,7 @@ export function formatChord(combo: string, platform?: Platform): string {
       .join('');
     return `${prefix}${keyLabel(key, mac)}`;
   }
-  const names = mods.map((mod) =>
+  const names = sortModsForWin(mods).map((mod) =>
     mod === 'mod' ? 'Ctrl' : mod.charAt(0).toUpperCase() + mod.slice(1)
   );
   return [...names, keyLabel(key, mac)].join('+');
@@ -110,7 +142,8 @@ export function toTauriChord(combo: string, platform?: Platform): string {
   const mac = MAC[platform ?? detectPlatform()];
   const parts = combo.toLowerCase().split('+');
   const key = parts[parts.length - 1] ?? '';
-  const mods = parts.slice(0, -1).map((mod) =>
+  const rawMods = parts.slice(0, -1);
+  const mods = (mac ? rawMods : sortModsForWin(rawMods)).map((mod) =>
     mod === 'mod' ? (mac ? 'Cmd' : 'Ctrl') : mod.charAt(0).toUpperCase() + mod.slice(1)
   );
   const keyName = key === 'space' ? 'Space' : key.length === 1 ? key.toUpperCase() : key;
