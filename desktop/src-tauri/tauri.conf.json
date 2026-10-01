@@ -44,6 +44,24 @@
         "focus": false,
         "shadow": false,
         "acceptFirstMouse": true
+      },
+      {
+        "label": "orb",
+        "url": "orb.html",
+        "title": "XR Orb",
+        "width": 120,
+        "height": 120,
+        "minWidth": 120,
+        "minHeight": 120,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false,
+        "shadow": false,
+        "acceptFirstMouse": true
       }
     ],
     "security": {

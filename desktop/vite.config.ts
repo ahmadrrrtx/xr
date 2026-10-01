@@ -32,6 +32,7 @@ const projectRoot = dirname(fileURLToPath(import.meta.url));
       input: {
         main: resolve(projectRoot, 'index.html'),
         hud: resolve(projectRoot, 'hud.html'),
+        orb: resolve(projectRoot, 'orb.html'),
       },
     },
     target:

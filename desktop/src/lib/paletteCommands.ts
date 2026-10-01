@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Mic,
   OctagonX,
+  Orbit,
   Palette,
   PanelLeft,
   PenLine,
@@ -32,7 +33,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import { AVATAR_STATES } from '@/components/brand/types';
 import { hudNavigate, hudNotifySessionsChanged, hudRunMainCommand } from '@/lib/hud';
+import { orbSetState } from '@/lib/orb';
 import { relativeTime, type PaletteGroup } from '@/lib/paletteQuery';
 import type { Session } from '@/lib/chat-db';
 import { clearOnboardingFlag } from '@/stores/onboarding';
@@ -302,6 +305,26 @@ export function buildPaletteCommands(
       icon: MessageSquare,
       devOnly: true,
       action: () => ctx.toast('XR toast — this is a test', 'Fired from the command palette (dev command).'),
+    },
+    {
+      id: 'dev-cycle-orb-states',
+      group: 'settings',
+      title: 'Cycle Orb States (dev)',
+      subtitle: 'All 7 Companion Orb states, live',
+      icon: Orbit,
+      devOnly: true,
+      keepOpen: true,
+      action: () => {
+        const raw = Number.parseInt(
+          window.localStorage.getItem('xr.orb.devStateIndex') ?? '0',
+          10
+        );
+        const index = ((Number.isFinite(raw) ? raw : 0) + 1) % AVATAR_STATES.length;
+        const next = AVATAR_STATES[index] ?? 'idle';
+        window.localStorage.setItem('xr.orb.devStateIndex', String(index));
+        void orbSetState(next);
+        ctx.toast(`Orb state — ${next}`);
+      },
     },
   ];
 

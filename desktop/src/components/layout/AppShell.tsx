@@ -10,6 +10,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { CommandPalette } from '@/components/cmdk/CommandPalette';
+import { useOrbIpc } from '@/hooks/useOrb';
 import { usePaletteIpc } from '@/hooks/usePalette';
 import { usePaletteStore } from '@/stores/paletteStore';
 import { PageTransition } from '@/components/layout/PageTransition';
@@ -127,6 +128,8 @@ export function AppShell() {
   // Cross-window effects from the HUD: navigation, remote commands, theme
   // sync, session-list refresh (Phase 5).
   usePaletteIpc(false, navigate);
+  // Companion Orb reactions (Phase 6): click toasts, menu voice/approvals.
+  useOrbIpc();
   useWelcomeToast();
   const location = useLocation();
   // Chat manages its own flush, full-height layout — no content padding.

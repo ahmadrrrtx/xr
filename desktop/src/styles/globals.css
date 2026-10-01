@@ -188,6 +188,21 @@ body.hud #hud-root {
   height: 100%;
 }
 
+/* The orb window (Phase 6): fully transparent chrome — only the SVG paints.
+   Fixed 120×120, nothing selectable, no scrollbars ever. */
+body.orb,
+body.orb #orb-root {
+  background: transparent !important;
+  height: 100%;
+}
+
+body.orb {
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
 /* ── Phase 4 · Chat ──────────────────────────────────────────────────── */
 
 /* Streaming caret — CSS keyframe (animate-pulse stalls mid-stream). */

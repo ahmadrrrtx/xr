@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en" data-theme="xr-native">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>XR Orb</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Deliberately minimal: no fonts (no text), no theme-init.js — the orb is
+         a branded desktop presence theme-locked to XR Native; only its glow
+         intensity follows the active app theme (--orb-glow-intensity). -->
+  </head>
+  <!-- The orb window is fully transparent: the SVG paints everything. -->
+  <body class="orb">
+    <div id="orb-root"></div>
+    <script type="module" src="/src/orb/main.tsx"></script>
+  </body>
+</html>
