@@ -12,6 +12,7 @@
  *   done       {}                    — stream complete
  *   error      { message }           — stream failed
  */
+import type { ApprovalSpec } from '@/lib/approvalCore';
 import type { ToolCallRecord } from '@/lib/chat-db';
 import { useUIStore } from '@/stores/ui';
 
@@ -32,6 +33,16 @@ export interface StreamOptions {
   model: string;
   signal: AbortSignal;
   onEvent: (e: StreamEvent) => void;
+  /**
+   * Phase 7: when a script's tool needs permission, the provider parks the
+   * stream on this gate until the human decides (approval modal / rules).
+   * Surfaces that pass no gate (e.g. the HUD quick-ask) keep the old
+   * auto-continue behavior.
+   */
+  requestApproval?: (
+    call: { summary: string },
+    spec: ApprovalSpec
+  ) => Promise<{ approved: boolean }>;
 }
 
 /** Dev-only simulated failure rate (0 in tests). Overridable via
@@ -104,7 +115,13 @@ async function emitText(
 
 interface Script {
   before?: string;
-  tool?: Omit<ToolCallRecord, 'id' | 'status'> & { output: string };
+  tool?: Omit<ToolCallRecord, 'id' | 'status'> & {
+    output: string;
+    /** Present → the tool is blocked until the user approves. */
+    approval?: ApprovalSpec;
+    /** After-text when the user denies (approved keeps `after`). */
+    deniedAfter?: string;
+  };
   after?: string;
   code?: string;
 }
@@ -135,6 +152,117 @@ const sorted = sortBy(users, (a, b) => a.name.localeCompare(b.name));
 console.log(sorted); // [Ada, Grace, linus]`,
       after:
         "A couple of notes:\n\n- The spread copy keeps the original array intact — safer for React state.\n- `localeCompare` gives you natural, case-insensitive ordering for free.\n- For large arrays where you sort repeatedly, consider memoizing the comparator result.",
+    };
+  }
+  // ── Permission-gated actions (Phase 7) — deterministic keyword matches ──
+  const emailAddr =
+    p.match(/[\w.+-]+@[\w-]+\.[\w.]+/)?.[0] ?? 'sarah@company.com';
+  if (/\b(send|write|draft|reply|forward)\b/.test(p) && /\b(email|mail|gmail)\b/.test(p)) {
+    return {
+      before: "I can send that for you — one thing first:",
+      tool: {
+        tool: 'gmail',
+        summary: `Send email to ${emailAddr}`,
+        category: 'approval',
+        input: { to: emailAddr, subject: 'Portfolio update' },
+        output: `Message sent to ${emailAddr} (gmail id gm-1a2b3c).`,
+        approval: {
+          skillId: 'gmail-skill',
+          skillName: 'gmail-skill',
+          skillVersion: 'v1.2',
+          skillIcon: 'mail',
+          action: 'Send email',
+          resource: emailAddr,
+          subject: 'Portfolio update',
+          bodyPreview: `Hi Sarah,
+
+Here's the portfolio update we discussed — the Q3 numbers are in, and the new deck is attached.
+
+Best,
+XR (on behalf of Ahmad)`,
+          risk: 'medium',
+          justification: 'Ahmad asked to send the portfolio update to Sarah.',
+        },
+        deniedAfter:
+          "No problem — I didn't send anything. Want me to draft it first so you can review, or adjust the message?",
+      },
+      after: "Done — the email is on its way to **" + emailAddr + "**. Anything else you'd like me to add to the thread?",
+    };
+  }
+  if (/\b(delete|remove|trash)\b/.test(p) && /\bfile|folder|directory\b/.test(p)) {
+    return {
+      before: "That's a destructive one, so I'll need your sign-off:",
+      tool: {
+        tool: 'write_file',
+        summary: 'Delete ~/projects/old-build',
+        category: 'file',
+        input: { path: '~/projects/old-build', op: 'rm -rf' },
+        output: 'Deleted ~/projects/old-build (412 files, 61 MB).',
+        approval: {
+          skillId: 'fs-skill',
+          skillName: 'fs-skill',
+          skillVersion: 'v1.0',
+          skillIcon: 'file',
+          action: 'Delete a folder',
+          resource: '~/projects/old-build',
+          bodyPreview: 'rm -rf ~/projects/old-build\n\n412 files · 61 MB · cannot be undone.',
+          risk: 'high',
+          justification: 'Ahmad asked to delete the old build folder to free space.',
+        },
+        deniedAfter:
+          "Understood — **nothing was deleted**. I can move it to the trash instead so it's recoverable for 30 days, if you want.",
+      },
+      after: "Deleted **~/projects/old-build** — 61 MB freed. The disk had plenty of headroom anyway.",
+    };
+  }
+  if (/\bwrite|save|log\b/.test(p) && /\bfile\b/.test(p) && !/\b(delete|remove)\b/.test(p)) {
+    return {
+      before: "I'll write that to disk — approving it is on you:",
+      tool: {
+        tool: 'write_file',
+        summary: 'Write ~/notes/standup.md',
+        category: 'file',
+        input: { path: '~/notes/standup.md', bytes: 412 },
+        output: 'Wrote 412 bytes to ~/notes/standup.md.',
+        approval: {
+          skillId: 'fs-skill',
+          skillName: 'fs-skill',
+          skillVersion: 'v1.0',
+          skillIcon: 'file',
+          action: 'Write a file',
+          resource: '~/notes/standup.md',
+          bodyPreview: '# Standup\n\n- Shipped the approval modal\n- Orb sync green\n- Next: Shield screen',
+          risk: 'medium',
+          justification: "Ahmad asked to save today's standup notes to a file.",
+        },
+        deniedAfter: "Okay — I kept it in the chat instead. Copy it whenever you're ready.",
+      },
+      after: "Saved to **~/notes/standup.md** (412 bytes).",
+    };
+  }
+  if (/\b(shell|terminal|bash|command line|cli command)\b/.test(p)) {
+    return {
+      before: "This runs a shell command on your machine — review it:",
+      tool: {
+        tool: 'shell',
+        summary: 'Run shell command',
+        category: 'shell',
+        input: { command: 'brew upgrade && brew cleanup' },
+        output: 'Upgraded 14 formulae, cleaned 812 MB.',
+        approval: {
+          skillId: 'shell-skill',
+          skillName: 'shell-skill',
+          skillVersion: 'v1.1',
+          skillIcon: 'terminal',
+          action: 'Run a shell command',
+          resource: null,
+          bodyPreview: '$ brew upgrade && brew cleanup\n\n(updates every installed Homebrew package)',
+          risk: 'high',
+          justification: 'Ahmad asked to update the installed packages via the shell.',
+        },
+        deniedAfter: "Skipped — no commands were run. Want to see exactly what it would have done first?",
+      },
+      after: "All done — 14 packages upgraded and **812 MB** cleaned. Everything still links cleanly.",
     };
   }
   if (/\b(email|gmail|inbox|mail)\b/.test(p)) {
@@ -207,12 +335,29 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
     }
 
     if (script.tool) {
+      const { approval, deniedAfter, ...rest } = script.tool;
       const call: ToolCallRecord = {
-        ...script.tool,
+        ...rest,
         id: uid(),
-        status: 'running',
+        status: approval ? 'waiting-approval' : 'running',
       };
       opts.onEvent({ type: 'tool_call', call });
+
+      if (approval && opts.requestApproval) {
+        // Park the stream until the human (or a remember rule) decides.
+        const { approved } = await opts.requestApproval(call, approval);
+        if (!approved) {
+          opts.onEvent({
+            type: 'tool_result',
+            id: call.id,
+            output: 'User denied this action — nothing ran.',
+            status: 'error',
+          });
+          if (deniedAfter) await emitText(deniedAfter, opts);
+          opts.onEvent({ type: 'done' });
+          return;
+        }
+      }
       await sleep(900, opts.signal); // tool runs
       opts.onEvent({ type: 'tool_result', id: call.id, output: script.tool.output, status: 'done' });
     }

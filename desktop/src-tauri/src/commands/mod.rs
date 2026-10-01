@@ -1,3 +1,4 @@
+pub mod approvals;
 pub mod chat;
 pub mod hud;
 pub mod ollama;

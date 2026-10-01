@@ -28,6 +28,7 @@ import {
 } from '@/lib/paletteCommands';
 import { hudClose, hudNavigate, hudNotifySessionsChanged, hudShortcutInfo } from '@/lib/hud';
 import { orbSetState } from '@/lib/orb';
+import { makeApprovalGate } from '@/lib/approvalEvents';
 import { streamChat } from '@/lib/mockLLM';
 import { chatDb, type ChatMessage } from '@/lib/chat-db';
 import { newId, useSessionsStore } from '@/stores/sessionsStore';
@@ -141,6 +142,10 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
       messages: [{ role: 'user', content: question }],
       model,
       signal: controller.signal,
+      // Phase 7: quick-ask can hit the same permission gate as chat — but
+      // only from the MAIN window (the modal lives there; the HUD keeps the
+      // auto-continue behavior).
+      requestApproval: isHud ? undefined : makeApprovalGate(controller.signal),
       onEvent: (event) => {
         const s = usePaletteStore.getState();
         switch (event.type) {
@@ -172,7 +177,7 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
         void orbSetState('idle');
       }
     });
-  }, []);
+  }, [isHud]);
 
   const stopQuickAsk = useCallback((): void => {
     abortRef.current?.abort();

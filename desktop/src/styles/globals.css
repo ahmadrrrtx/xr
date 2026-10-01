@@ -256,3 +256,31 @@ body.orb {
   background-color: rgba(0, 0, 0, 0.05);
   color: var(--accent-dim);
 }
+
+/* ─── Phase 7 · Approval modal glow ───────────────────────────────────── */
+/* Breathing cyan ring on the approval card (2s cycle, calm not alarming).
+   Paper/Arctic set --accent-glow: transparent, so the shadow part vanishes
+   and the 2px accent border stays static — exactly the light-theme spec. */
+@keyframes approval-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px var(--border-accent),
+      0 0 20px -6px var(--accent-glow);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px var(--border-accent),
+      0 0 32px -4px var(--accent-glow);
+  }
+}
+
+.approval-glow {
+  animation: approval-pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .approval-glow {
+    animation: none;
+  }
+}

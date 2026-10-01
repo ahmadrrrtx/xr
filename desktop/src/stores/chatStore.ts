@@ -11,6 +11,7 @@
  */
 import { create } from 'zustand';
 
+import { makeApprovalGate } from '@/lib/approvalEvents';
 import {
   chatDb,
   type ChatMessage,
@@ -106,6 +107,8 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
     messages: history,
     model: sessions.sessions.find((s) => s.id === sessionId)?.model ?? 'claude-sonnet-4.5',
     signal,
+    // Phase 7: permission-gated tools park the stream on the approval modal.
+    requestApproval: makeApprovalGate(signal),
     onEvent: (e) => {
       const st = useChatStore.getState();
       const stream = st.stream;
