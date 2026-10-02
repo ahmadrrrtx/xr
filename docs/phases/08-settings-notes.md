@@ -100,3 +100,28 @@ Push still requires write credentials (repo is public-read, auth-write). Branch 
 - `test/desktop/settings-core.test.ts` — 26 units over `lib/shortcuts.ts` + `lib/notificationPolicy.ts` (registry shape, override resolution, mac/win chord formatting, recorder capture rules, conflict detection, quiet-hours boundaries incl. midnight wrap, gate order, toast lifetimes, sound gating). `lib/shortcuts.ts` was made dependency-free (inlined platform guess, orbCore pattern) and Windows/Linux chord ordering canonicalized to Ctrl→Alt→Shift.
 - Gates re-run on the final tree: desktop tsc/eslint clean, `vite build` 1.45s, `test/desktop/` 71/71, full root lane `bun test` **3439 pass / 0 fail** (341 files). Rust gates (check/clippy -D warnings/test 23/23) passed on identical Rust sources during the build session; toolchain was later wiped by a sandbox reset — re-run locally before merge.
 - `docs/phases/08-settings.report.md` written (phase 4–7 convention; doubles as the PR body).
+
+## Post-merge incident — release-only compile failure (fixed same day)
+
+PR #146 merged green-on-local but the `Desktop App (Tauri packaging)` workflow
+failed all three OS bundle jobs on `main` (run 36884253719):
+
+```
+error[E0599]: no method named `open_devtools` found for struct `tauri::WebviewWindow<R>`
+error[E0599]: no method named `close_devtools` found for struct `tauri::WebviewWindow<R>`
+```
+
+Root cause: `set_devtools_enabled` (About → Advanced) calls the WebviewWindow
+devtools methods, which Tauri v2 gates behind `#[cfg(any(debug_assertions,
+feature = "devtools"))]`. Every local gate ran the dev profile, where the
+methods exist without the feature — `cargo check --release` was the missing
+dimension. Fix: add the `devtools` feature to the `tauri` dependency
+(one line in `desktop/src-tauri/Cargo.toml`). Verified: `cargo check --release`
+green locally (2m57s, fresh toolchain + GTK dev libs).
+
+Lesson for later phases: any API behind a feature flag or `debug_assertions`
+must be gated with a **release-profile** check before PR — dev-profile
+`cargo check/test` does not cover it.
+
+Pre-existing `main` failures NOT from this phase (already red on e014e8d):
+`Live provider smoke` and the `Real-Device Matrix` `matrix (os)` jobs.
