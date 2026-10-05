@@ -14,10 +14,7 @@
  */
 import { create } from 'zustand';
 
-import {
-  readSettingJSON,
-  writeSettingJSON,
-} from '@/lib/persistent-store';
+import { readSettingJSON, writeSettingJSON } from '@/lib/persistent-store';
 import { settingsChanged } from '@/lib/settingsApi';
 import { applyAppearanceEffects } from '@/lib/appearance';
 
@@ -31,11 +28,7 @@ export type UpdateChannel = 'stable' | 'beta' | 'nightly';
 export type OpenTo = 'chat' | 'last-session' | 'workspaces';
 export type BudgetPreset = 'auto' | '2' | '5' | '10' | '20' | '50' | 'custom';
 export type ProviderKind =
-  | 'openai-compatible'
-  | 'anthropic'
-  | 'gemini'
-  | 'ollama'
-  | 'custom';
+  'openai-compatible' | 'anthropic' | 'gemini' | 'ollama' | 'custom';
 
 export interface ProviderConfig {
   id: string;
@@ -81,6 +74,11 @@ export interface XRSettings {
     launchAtLogin: boolean;
     startMinimized: boolean;
     openTo: OpenTo;
+  };
+  workspaces: {
+    viewMode: 'grid' | 'list';
+    filter: 'all' | 'pinned' | 'recent' | 'git';
+    templateStripCollapsed: boolean;
   };
   defaults: {
     model: string;
@@ -152,6 +150,11 @@ export const DEFAULT_SETTINGS: XRSettings = {
     launchAtLogin: false,
     startMinimized: false,
     openTo: 'chat',
+  },
+  workspaces: {
+    viewMode: 'grid',
+    filter: 'all',
+    templateStripCollapsed: false,
   },
   defaults: {
     model: '',
@@ -271,7 +274,11 @@ export function getPath(settings: XRSettings, path: string): unknown {
 }
 
 /** Immutable dot-path write ('notifications.style' → new object). */
-export function setPathImmutable<T>(settings: T, path: string, value: unknown): T {
+export function setPathImmutable<T>(
+  settings: T,
+  path: string,
+  value: unknown
+): T {
   const parts = path.split('.');
   const clone = (node: unknown, depth: number): unknown => {
     if (depth === parts.length) return value;
@@ -292,7 +299,10 @@ interface SettingsStoreState {
   /** Boot hydration: durable store → defaults merge → apply effects. */
   load: () => Promise<void>;
   /** Group-level patch — the primary API for tab components. */
-  update: <K extends SettingsGroup>(group: K, patch: Partial<XRSettings[K]>) => void;
+  update: <K extends SettingsGroup>(
+    group: K,
+    patch: Partial<XRSettings[K]>
+  ) => void;
   /** Leaf path write ('notifications.style', 'banner'). */
   setPath: (path: string, value: unknown) => void;
   /** Cross-window `settings:changed` merge (no re-broadcast). */

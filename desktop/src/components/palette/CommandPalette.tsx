@@ -26,7 +26,12 @@ import {
   paletteFilter,
   type PaletteCommand,
 } from '@/lib/paletteCommands';
-import { hudClose, hudNavigate, hudNotifySessionsChanged, hudShortcutInfo } from '@/lib/hud';
+import {
+  hudClose,
+  hudNavigate,
+  hudNotifySessionsChanged,
+  hudShortcutInfo,
+} from '@/lib/hud';
 import { orbSetState } from '@/lib/orb';
 import { makeApprovalGate } from '@/lib/approvalEvents';
 import { streamChat } from '@/lib/mockLLM';
@@ -34,6 +39,7 @@ import { chatDb, type ChatMessage } from '@/lib/chat-db';
 import { newId, useSessionsStore } from '@/stores/sessionsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { usePaletteStore } from '@/stores/paletteStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { useThemeStore } from '@/stores/theme';
 import { usePlatform } from '@/hooks/usePlatform';
 import { cn } from '@/lib/utils';
@@ -76,6 +82,7 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
 
   const platform = usePlatform();
   const sessions = useSessionsStore((s) => s.sessions);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -103,9 +110,10 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
           toast: (message, description) =>
             description ? toast(message, { description }) : toast(message),
         },
-        sessions
+        sessions,
+        workspaces
       ),
-    [isHud, ctxNavigate, platform, sessions]
+    [isHud, ctxNavigate, platform, sessions, workspaces]
   );
 
   // ── Open/close plumbing ────────────────────────────────────────────────
@@ -114,6 +122,15 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
   useEffect(() => {
     if (isHud) usePaletteStore.getState().openPalette();
   }, [isHud]);
+
+  // Workspace commands need the working set — load it lazily on first open
+  // (Phase 10). The screen's own mount effect covers normal navigation.
+  useEffect(() => {
+    if (open) {
+      const st = useWorkspaceStore.getState();
+      if (!st.loaded && !st.loading) void st.refresh();
+    }
+  }, [open]);
 
   const close = useCallback((): void => {
     abortRef.current?.abort();
@@ -126,58 +143,64 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
   }, [isHud, closePalette]);
 
   // ── Quick-ask stream (mockLLM — same contract as the chat screen) ─────
-  const startQuickAsk = useCallback((question: string): void => {
-    const store = usePaletteStore.getState();
-    abortRef.current?.abort();
-    store.startQuickAsk(question);
-    // Companion Orb (Phase 6): quick-ask is a stream too.
-    void orbSetState('thinking');
+  const startQuickAsk = useCallback(
+    (question: string): void => {
+      const store = usePaletteStore.getState();
+      abortRef.current?.abort();
+      store.startQuickAsk(question);
+      // Companion Orb (Phase 6): quick-ask is a stream too.
+      void orbSetState('thinking');
 
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const model = useSessionsStore.getState().sessions[0]?.model ?? 'claude-sonnet-4.5';
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const model =
+        useSessionsStore.getState().sessions[0]?.model ?? 'claude-sonnet-4.5';
 
-    let spoke = false; // orb: thinking → speaking on the first token
-    void streamChat({
-      messages: [{ role: 'user', content: question }],
-      model,
-      signal: controller.signal,
-      // Phase 7: quick-ask can hit the same permission gate as chat — but
-      // only from the MAIN window (the modal lives there; the HUD keeps the
-      // auto-continue behavior).
-      requestApproval: isHud ? undefined : makeApprovalGate(controller.signal),
-      onEvent: (event) => {
+      let spoke = false; // orb: thinking → speaking on the first token
+      void streamChat({
+        messages: [{ role: 'user', content: question }],
+        model,
+        signal: controller.signal,
+        // Phase 7: quick-ask can hit the same permission gate as chat — but
+        // only from the MAIN window (the modal lives there; the HUD keeps the
+        // auto-continue behavior).
+        requestApproval: isHud
+          ? undefined
+          : makeApprovalGate(controller.signal),
+        onEvent: (event) => {
+          const s = usePaletteStore.getState();
+          switch (event.type) {
+            case 'token':
+              if (!spoke) {
+                spoke = true;
+                void orbSetState('speaking');
+              }
+              s.appendQuickAskToken(event.text);
+              break;
+            case 'done':
+              s.finishQuickAsk('done');
+              void orbSetState('idle');
+              break;
+            case 'error':
+              s.finishQuickAsk('error');
+              void orbSetState('error');
+              break;
+            // Quick-ask answers are text-only for v1; tool chatter stays in chat.
+            default:
+              break;
+          }
+        },
+      }).catch(() => {
+        // Abort fires as a rejection — the store already reflects the state.
         const s = usePaletteStore.getState();
-        switch (event.type) {
-          case 'token':
-            if (!spoke) {
-              spoke = true;
-              void orbSetState('speaking');
-            }
-            s.appendQuickAskToken(event.text);
-            break;
-          case 'done':
-            s.finishQuickAsk('done');
-            void orbSetState('idle');
-            break;
-          case 'error':
-            s.finishQuickAsk('error');
-            void orbSetState('error');
-            break;
-          // Quick-ask answers are text-only for v1; tool chatter stays in chat.
-          default:
-            break;
+        if (s.quickAsk.status === 'streaming') {
+          s.finishQuickAsk('stopped');
+          void orbSetState('idle');
         }
-      },
-    }).catch(() => {
-      // Abort fires as a rejection — the store already reflects the state.
-      const s = usePaletteStore.getState();
-      if (s.quickAsk.status === 'streaming') {
-        s.finishQuickAsk('stopped');
-        void orbSetState('idle');
-      }
-    });
-  }, [isHud]);
+      });
+    },
+    [isHud]
+  );
 
   const stopQuickAsk = useCallback((): void => {
     abortRef.current?.abort();
@@ -315,7 +338,10 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
       }
 
       // Backspace on an empty query closes (Raycast parity).
-      if (event.key === 'Backspace' && usePaletteStore.getState().query === '') {
+      if (
+        event.key === 'Backspace' &&
+        usePaletteStore.getState().query === ''
+      ) {
         const { mode: m } = usePaletteStore.getState();
         // ...but never while a quick-ask answer is being read.
         if (m === 'quick-ask') return;
@@ -345,7 +371,9 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
           if (flag === 'true') {
             const fallback =
               window.localStorage.getItem('xr.hud.shortcutFallback') ??
-              (navigator.userAgent.toLowerCase().includes('mac') ? '⌥Space' : 'Ctrl+Shift+Space');
+              (navigator.userAgent.toLowerCase().includes('mac')
+                ? '⌥Space'
+                : 'Ctrl+Shift+Space');
             if (alive) setConflictShortcut(fallback);
             return;
           }
@@ -393,7 +421,10 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
         <ShortcutConflictBanner shortcut={conflictShortcut} />
       )}
       {mode === 'quick-ask' ? (
-        <PaletteQuickAsk onStop={stopQuickAsk} onOpenInChat={openQuickAskInChat} />
+        <PaletteQuickAsk
+          onStop={stopQuickAsk}
+          onOpenInChat={openQuickAskInChat}
+        />
       ) : (
         <PaletteResults
           commands={commands}
@@ -433,17 +464,28 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
   if (isHud) {
     return (
       <div className="flex h-full w-full justify-center pt-10">
-        <div className={cn('flex h-[calc(100%-2.5rem)] w-full max-w-[640px] min-h-0')}>{body}</div>
+        <div
+          className={cn(
+            'flex h-[calc(100%-2.5rem)] min-h-0 w-full max-w-[640px]'
+          )}
+        >
+          {body}
+        </div>
       </div>
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => (next ? usePaletteStore.getState().openPalette() : close())}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) =>
+        next ? usePaletteStore.getState().openPalette() : close()
+      }
+    >
       <DialogContent
         showCloseButton={false}
         aria-describedby={undefined}
-        className="top-[18%] translate-y-0 gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none backdrop-blur-0 sm:max-w-[640px]"
+        className="backdrop-blur-0 top-[18%] translate-y-0 gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-[640px]"
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <div className="flex max-h-[70vh] min-h-0 w-full flex-col">{body}</div>

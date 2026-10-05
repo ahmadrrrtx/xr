@@ -7,3 +7,4 @@ pub mod orb;
 pub mod settings;
 pub mod system;
 pub mod window;
+pub mod workspaces;

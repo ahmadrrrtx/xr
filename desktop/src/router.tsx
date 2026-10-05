@@ -1,7 +1,10 @@
 import { createHashRouter, Navigate } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
-import { OnboardingGate, OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
+import {
+  OnboardingGate,
+  OnboardingScreen,
+} from '@/screens/Onboarding/OnboardingScreen';
 import AgentsScreen from '@/screens/Agents';
 import BrainScreen from '@/screens/Brain';
 import BudgetScreen from '@/screens/Budget';
@@ -15,6 +18,7 @@ import SettingsScreen from '@/screens/Settings';
 import ShieldScreen from '@/screens/Shield';
 import SkillsStoreScreen from '@/screens/SkillsStore';
 import VoiceScreen from '@/screens/Voice';
+import WorkspaceLanding from '@/screens/WorkspaceLanding';
 import WorkspacesScreen from '@/screens/Workspaces';
 
 /**
@@ -38,6 +42,7 @@ export const router = createHashRouter([
       { path: '/chat/:sessionId?', element: <ChatScreen /> },
       { path: '/brain/:runId?', element: <BrainScreen /> },
       { path: '/workspaces', element: <WorkspacesScreen /> },
+      { path: '/workspaces/:id', element: <WorkspaceLanding /> },
       { path: '/builder/:workspaceId?', element: <BuilderScreen /> },
       { path: '/research', element: <ResearchScreen /> },
       { path: '/agents', element: <AgentsScreen /> },
@@ -58,7 +63,8 @@ export const router = createHashRouter([
         {
           path: '/__brand',
           lazy: async () => {
-            const { BrandGallery } = await import('@/components/dev/BrandGallery');
+            const { BrandGallery } =
+              await import('@/components/dev/BrandGallery');
             return { Component: BrandGallery };
           },
         },
