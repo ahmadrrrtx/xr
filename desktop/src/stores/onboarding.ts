@@ -167,6 +167,13 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     await writeSettingJSON('xr.user.name', s.userName || 'You');
     await writeSettingJSON(BUDGET_KEY, s.budget);
     await writeSettingJSON(MODEL_KEY, s.modelChoice);
+    // Phase 13: the slider value becomes the enforced monthly limit.
+    try {
+      const { budgetBackend } = await import('@/budget/api');
+      await budgetBackend().updateSettings({ monthlyLimit: s.budget });
+    } catch {
+      /* governor not reachable yet — Budget screen defaults apply */
+    }
     await writeSettingJSON(VOICE_KEY, {
       ttsVoice: s.ttsVoice,
       micDevice: s.micSelected,

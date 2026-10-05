@@ -105,6 +105,15 @@ html[data-theme='xr-native'] {
   --chart-google: #60a5fa;
   --chart-local: #22d3ee;
   --chart-other: #64748b;
+  /* Phase 13 · Budget — spend categories (stacked area) + bar health */
+  --spend-llm: #22d3ee;
+  --spend-tools: #a78bfa;
+  --spend-voice: #fbbf24;
+  --spend-compute: #f87171;
+  --budget-ok: var(--success);
+  --budget-warn: var(--warning);
+  --budget-danger: var(--danger);
+  --budget-reserve: rgba(148, 163, 184, 0.35);
   --agent-main: var(--accent);
   --agent-coder: #34d399;
   --agent-research: #a78bfa;
@@ -176,6 +185,15 @@ html[data-theme='graphite'] {
   --chart-google: #4f7ba3;
   --chart-local: #4fa3b8;
   --chart-other: #8a8a8a;
+  /* Phase 13 · Budget */
+  --spend-llm: #5b8a9e;
+  --spend-tools: #8d7fb3;
+  --spend-voice: #b88a2e;
+  --spend-compute: #b25454;
+  --budget-ok: var(--success);
+  --budget-warn: var(--warning);
+  --budget-danger: var(--danger);
+  --budget-reserve: rgba(176, 176, 176, 0.3);
   --agent-main: var(--accent);
   --agent-coder: #4a8d6e;
   --agent-research: #7a6bae;
@@ -247,6 +265,15 @@ html[data-theme='midnight'] {
   --chart-google: #60a5fa;
   --chart-local: #22d3ee;
   --chart-other: #64748b;
+  /* Phase 13 · Budget */
+  --spend-llm: #38bdf8;
+  --spend-tools: #a78bfa;
+  --spend-voice: #f59e0b;
+  --spend-compute: #ef4444;
+  --budget-ok: var(--success);
+  --budget-warn: var(--warning);
+  --budget-danger: var(--danger);
+  --budget-reserve: rgba(148, 163, 184, 0.35);
   --agent-main: var(--accent);
   --agent-coder: #10b981;
   --agent-research: #a78bfa;
@@ -318,6 +345,15 @@ html[data-theme='paper'] {
   --chart-google: #1d4ed8;
   --chart-local: #0e7490;
   --chart-other: #8a7d6a;
+  /* Phase 13 · Budget */
+  --spend-llm: #2a7a6f;
+  --spend-tools: #7a5ea8;
+  --spend-voice: #b8862e;
+  --spend-compute: #b2504a;
+  --budget-ok: var(--success);
+  --budget-warn: var(--warning);
+  --budget-danger: var(--danger);
+  --budget-reserve: rgba(138, 124, 102, 0.3);
   --agent-main: var(--accent);
   --agent-coder: #2f7a4f;
   --agent-research: #6d28d9;
@@ -389,6 +425,15 @@ html[data-theme='arctic'] {
   --chart-google: #2563eb;
   --chart-local: #0891b2;
   --chart-other: #94a3b8;
+  /* Phase 13 · Budget */
+  --spend-llm: #0891b2;
+  --spend-tools: #7c3aed;
+  --spend-voice: #d97706;
+  --spend-compute: #dc2626;
+  --budget-ok: var(--success);
+  --budget-warn: var(--warning);
+  --budget-danger: var(--danger);
+  --budget-reserve: rgba(100, 116, 139, 0.3);
   --agent-main: var(--accent);
   --agent-coder: #059669;
   --agent-research: #6d28d9;

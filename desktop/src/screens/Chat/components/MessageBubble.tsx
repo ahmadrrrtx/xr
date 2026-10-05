@@ -13,6 +13,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Avatar } from '@/components/brand/Avatar';
+import { BudgetBlockedCard, CutoffNote, DownshiftBadge } from '@/components/budget/BudgetNoteCard';
 import type { ChatMessage } from '@/lib/chat-db';
 import { MarkdownRenderer } from '@/lib/markdown';
 import { useThemeStore } from '@/stores/theme';
@@ -93,6 +94,9 @@ export function MessageBubble({
   const queued = message.metadata?.status === 'queued';
   const failed = message.metadata?.status === 'failed';
   const errored = message.metadata?.status === 'error';
+  // Phase 13: what the budget governor did to this turn.
+  const budget = message.metadata?.budget;
+  const blocked = budget?.kind === 'blocked';
 
   const copy = async () => {
     try {
@@ -240,15 +244,22 @@ export function MessageBubble({
             <Avatar size="sm" variant="head" state={isStreaming ? 'speaking' : 'idle'} />
           </span>
           <div className="flex max-w-[70%] flex-col items-start">
-            <div
-              className={`border-border-subtle bg-bg-ink text-text-primary rounded-2xl rounded-tl-[4px] px-4 py-3 ${
-                errored ? 'border-l-[3px]' : ''
-              }`}
-              style={{
-                ...(errored ? { borderLeftColor: 'var(--danger)' } : xrBubbleStyle(theme)),
-              }}
-            >
+            {budget?.kind === 'downshifted' && !blocked && (
+              <DownshiftBadge note={budget} className="mb-1" />
+            )}
+            {blocked ? (
+              <BudgetBlockedCard note={budget} />
+            ) : (
+              <div
+                className={`border-border-subtle bg-bg-ink text-text-primary rounded-2xl rounded-tl-[4px] px-4 py-3 ${
+                  errored ? 'border-l-[3px]' : ''
+                }`}
+                style={{
+                  ...(errored ? { borderLeftColor: 'var(--danger)' } : xrBubbleStyle(theme)),
+                }}
+              >
               {body}
+              {budget?.kind === 'cutoff' && !isStreaming && <CutoffNote note={budget} />}
               {errored && (
                 <div className="mt-2 flex items-center gap-3">
                   <span className="text-danger text-[12px]">Something went wrong.</span>
@@ -263,7 +274,8 @@ export function MessageBubble({
                   )}
                 </div>
               )}
-            </div>
+              </div>
+            )}
             <div className="mt-1 flex items-center gap-1 pl-1">
               <span className="text-text-tertiary text-[11px]">
                 {timeLabel(message.createdAt)}

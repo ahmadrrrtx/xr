@@ -88,7 +88,7 @@ export interface RunsState {
   applyBrainUpdate: (payload: BrainUpdate) => void;
   applyCancelled: (
     ids: string[],
-    meta?: { by?: 'user' | 'shield'; reason?: string }
+    meta?: { by?: 'user' | 'shield' | 'budget'; reason?: string }
   ) => void;
 
   setStatusFilter: (f: StatusFilter) => void;
@@ -450,7 +450,12 @@ export const useRunsStore = create<RunsState>()((set, get) => {
                   errorSummary:
                     meta.reason ?? 'Paused by XR Shield emergency revoke',
                 }
-              : {}),
+              : meta?.by === 'budget'
+                ? {
+                    killedBy: 'budget' as const,
+                    errorSummary: meta.reason ?? 'Budget limit reached',
+                  }
+                : {}),
           },
           'event'
         );

@@ -23,6 +23,7 @@ import {
 import { NAV_ITEMS, type NavItem } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { selectBudgetState, useBudgetStore } from '@/stores/budgetStore';
 import { selectShieldState, useShieldStore } from '@/stores/shieldStore';
 import { useSidebarStore } from '@/stores/sidebar';
 
@@ -45,12 +46,24 @@ function ActiveBar({ tall }: { tall: boolean }) {
   );
 }
 
-/** Budget health dot — static green until the Phase 13 spend governor. */
+/** Budget health dot (Phase 13): live from the spend governor. */
 function BudgetDot() {
+  const state = useBudgetStore(selectBudgetState);
+  const color =
+    state === 'paused' || state === 'capped' || state === 'over'
+      ? 'var(--danger)'
+      : state === 'warn' || state === 'danger'
+        ? 'var(--warning)'
+        : state === 'local'
+          ? 'var(--text-tertiary)'
+          : 'var(--success)';
   return (
     <span
       aria-hidden="true"
-      className="bg-success absolute top-[7px] right-[9px] h-1.5 w-1.5 rounded-full"
+      data-testid="sidebar-budget-dot"
+      data-state={state}
+      className="absolute top-[7px] right-[9px] h-1.5 w-1.5 rounded-full"
+      style={{ background: color }}
     />
   );
 }

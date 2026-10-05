@@ -32,8 +32,10 @@ import {
   flavorFromId,
   materialize,
   streamMockRun,
+  type BudgetHooks,
   type StreamHandle,
 } from '@/brain/mock';
+import { budgetGate, recordSpend } from '@/budget/enforce';
 import {
   type BrainEvent,
   type BrainLogLine,
@@ -162,6 +164,43 @@ function withStatus(run: Run, status: SpanStatus, endedAt: number | null): Run {
   return { ...run, status, endedAt };
 }
 
+/**
+ * Phase 13: every LLM span of a mock run asks the budget governor first and
+ * reports its real cost after (budget/enforce.ts). Agents are keyed
+ * lowercase so per-agent caps match across chat, Brain and the seed.
+ */
+const brainBudget: BudgetHooks = {
+  gate: (req) =>
+    budgetGate({
+      model: req.model,
+      estimatedTokensIn: req.estimatedTokensIn,
+      estimatedTokensOut: req.estimatedTokensOut,
+      estimatedCost: req.estimatedCost,
+      agent: req.agent.toLowerCase(),
+      workspace: req.workspace,
+      sessionId: req.sessionId,
+      surface: 'brain',
+    }),
+  record: (i) => {
+    void recordSpend({
+      kind: 'llm_call',
+      agent: i.agent.toLowerCase(),
+      workspace: i.workspace,
+      sessionId: i.sessionId,
+      model: i.model,
+      tokensIn: i.tokensIn,
+      tokensOut: i.tokensOut,
+      costUsd: i.costUsd,
+      category: 'llm',
+      detail: {
+        surface: 'brain',
+        route: `/brain/${i.sessionId}`,
+        ...(i.partial ? { partial: true } : {}),
+      },
+    });
+  },
+};
+
 /* ── Store ────────────────────────────────────────────────────────────── */
 
 export const useBrainStore = create<BrainState>()(
@@ -206,14 +245,19 @@ export const useBrainStore = create<BrainState>()(
       const endRun = (
         runId: string,
         status: SpanStatus,
-        endedAt: number
+        endedAt: number,
+        extra?: { errorSummary?: string; killedBy?: 'budget' }
       ): void => {
         const st = get();
         const run = st.runs[runId];
         const d = st.data[runId];
         if (!run || !d) return;
         const durationMs = endedAt - run.startedAt;
-        const nextRun = withStatus(run, status, endedAt);
+        const nextRun: Run = {
+          ...withStatus(run, status, endedAt),
+          ...(extra?.errorSummary ? { errorSummary: extra.errorSummary } : {}),
+          ...(extra?.killedBy ? { killedBy: extra.killedBy } : {}),
+        };
         set((s) => ({ runs: { ...s.runs, [runId]: nextRun } }));
         brainRunEnd(runId, status, durationMs, nextRun.costUsd);
         const secs = Math.round(durationMs / 100) / 10;
@@ -535,11 +579,15 @@ export const useBrainStore = create<BrainState>()(
         onRunEnd: ({
           status,
           endedAt,
+          errorSummary,
+          killedBy,
         }: {
           status: SpanStatus;
           endedAt: number;
+          errorSummary?: string;
+          killedBy?: 'budget';
         }): void => {
-          endRun(runId, status, endedAt);
+          endRun(runId, status, endedAt, { errorSummary, killedBy });
         },
       });
 
@@ -720,6 +768,7 @@ export const useBrainStore = create<BrainState>()(
             const handle = streamMockRun(id, hooks(id), {
               startedAt,
               fromPlayhead: asOf,
+              budget: brainBudget,
             });
             attachHooks(id, handle);
             if (asOf === 0) beginRun(id);
@@ -811,6 +860,7 @@ export const useBrainStore = create<BrainState>()(
           const handle = streamMockRun(id, hooks(id), {
             startedAt: now,
             fromPlayhead: 0,
+            budget: brainBudget,
           });
           attachHooks(id, handle);
           beginRun(id);

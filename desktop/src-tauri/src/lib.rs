@@ -6,6 +6,7 @@
  * "active" beyond what the scaffold uses: window controls, platform
  * detection, theme events, single-instance focus, and a minimal tray.
  */
+mod budget;
 mod commands;
 mod events;
 mod shield;
@@ -71,6 +72,9 @@ pub fn run() {
             app.handle().manage(commands::workspaces::SpawnState::new());
             // Phase 12 — XR Shield: append-only audit chain on the shared xr.db.
             app.handle().manage(shield::ShieldDb::init(app.handle()));
+            // Phase 13 — Budget governor: spend events + settings on the shared
+            // xr.db; every mock LLM call is gated by `budget_check` before it starts.
+            app.handle().manage(budget::BudgetDb::init(app.handle()));
             #[cfg(desktop)]
             {
                 app.handle().plugin(tauri_plugin_autostart::init(
@@ -162,6 +166,18 @@ pub fn run() {
             shield::save_shield_checks,
             shield::revoke_all,
             shield::list_approvals,
+            budget::budget_init,
+            budget::budget_overview,
+            budget::budget_check,
+            budget::budget_record,
+            budget::budget_events,
+            budget::budget_series,
+            budget::budget_breakdown,
+            budget::budget_update_settings,
+            budget::budget_set_paused,
+            budget::budget_reset_month,
+            budget::budget_clear,
+            budget::budget_export,
             commands::settings::ptt_shortcut_info,
             #[cfg(desktop)]
             commands::settings::ptt_set_shortcut,

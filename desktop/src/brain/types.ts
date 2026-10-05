@@ -68,6 +68,9 @@ export interface Run {
   tokensOut: number;
   costUsd: number;
   rootSpanId: string;
+  /** Phase 13: set when the budget governor ended the run. */
+  errorSummary?: string;
+  killedBy?: 'shield' | 'budget';
 }
 
 /* ── Phase 11 · Control Room list-level projection ─────────────────────── */
@@ -113,8 +116,8 @@ export interface RunSummary {
   surface: RunSurface;
   /** Client-side soft hide (Phase 11: lost on reload, by design). */
   archived?: boolean;
-  /** Phase 12: the run was stopped by an XR Shield emergency revoke. */
-  killedBy?: 'shield';
+  /** Phase 12: stopped by an XR Shield emergency revoke · Phase 13: by the budget governor. */
+  killedBy?: 'shield' | 'budget';
 }
 
 export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
@@ -179,7 +182,13 @@ export interface StreamHooks {
     stream: BrainLogLine['stream'],
     text: string
   ) => void;
-  onRunEnd: (update: { status: SpanStatus; endedAt: number }) => void;
+  onRunEnd: (update: {
+    status: SpanStatus;
+    endedAt: number;
+    /** Phase 13: the governor ended the run (reason shown in Runs / Brain). */
+    errorSummary?: string;
+    killedBy?: 'budget';
+  }) => void;
 }
 
 export const CATEGORY_LABEL: Record<SpanCategory, string> = {

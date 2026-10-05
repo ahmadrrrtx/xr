@@ -20,6 +20,8 @@ export interface QuickAskState {
   question: string;
   answer: string;
   status: QuickAskStatus;
+  /** Phase 13: the budget governor blocked / downshifted / cut off the answer. */
+  budget?: import('@/lib/chat-db').BudgetNote;
 }
 
 interface PaletteState {
@@ -38,6 +40,7 @@ interface PaletteState {
   startQuickAsk: (question: string) => void;
   appendQuickAskToken: (text: string) => void;
   finishQuickAsk: (status: Extract<QuickAskStatus, 'done' | 'error' | 'stopped'>) => void;
+  setQuickAskBudget: (note: import('@/lib/chat-db').BudgetNote) => void;
   resetQuickAsk: () => void;
   recordSelection: (id: string) => void;
 }
@@ -105,6 +108,9 @@ export const usePaletteStore = create<PaletteState>((set, get) => ({
 
   finishQuickAsk: (status) =>
     set((s) => ({ quickAsk: { ...s.quickAsk, status } })),
+
+  setQuickAskBudget: (note) =>
+    set((s) => ({ quickAsk: { ...s.quickAsk, budget: { ...s.quickAsk.budget, ...note } } })),
 
   resetQuickAsk: () => set({ quickAsk: idleQuickAsk, mode: 'commands' }),
 
