@@ -1,0 +1,9 @@
+# osv-scanner policy for website/package-lock.json (Supply Chain workflow).
+#
+# Same discipline as the shell's policy: every ignore names its evidence and
+# EXPIRES, so it is re-argued rather than forgotten.
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-31
+reason = "braces <=3.0.3 stack-exhaustion DoS via deeply nested patterns (CVE-2026-93687). No fixed release on npm as of 2026-10-05 (3.0.3 is latest). Transitive dev-time dep via micromatch (glob expansion inside build tooling); no untrusted input reaches the pattern strings. Remove as soon as a fixed braces releases; re-argue at expiry."

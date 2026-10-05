@@ -66,6 +66,7 @@ function ShikiJson({
     html && (expanded || !long) ? (
       <pre
         className="shiki font-mono text-[12px] leading-5"
+        // sink-allow: shiki engine output only — the text is JSON.stringify'd span data, tokenized and HTML-escaped BY shiki itself (it is a syntax highlighter), so no raw or user-authored HTML can reach this node.
         dangerouslySetInnerHTML={{ __html: html }}
       />
     ) : (
