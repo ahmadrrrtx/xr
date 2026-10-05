@@ -873,7 +873,7 @@ pub fn normalize_domains(list: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::with_capacity(list.len());
     for raw in list {
         let host = raw.trim().to_lowercase();
-        if host.is_empty() || out.iter().any(|x| *x == host) {
+        if host.is_empty() || out.contains(&host) {
             continue;
         }
         out.push(host);
@@ -1168,13 +1168,13 @@ mod tests {
 
     #[test]
     fn mulberry32_matches_the_js_generator() {
-        // First five doubles from mulberry32(0x5a1e1d) in the webview.
+        // First five outputs of mulberry32(0x5a1e1d) in the webview, as the
+        // exact 32-bit numerators of the doubles it produced (value * 2^32).
         let mut r = Mulberry32::new(SEED);
-        assert_eq!(r.next_f64(), 0.17755939578637481_f64);
-        assert_eq!(r.next_f64(), 0.23168646264821291_f64);
-        assert_eq!(r.next_f64(), 0.59413540200330317_f64);
-        assert_eq!(r.next_f64(), 0.53720333194360137_f64);
-        assert_eq!(r.next_f64(), 0.88609548262320459_f64);
+        for expected in [762611798u32, 995085780u32, 2551792121u32, 2307270742u32, 3805751119u32] {
+            let numerator = (r.next_f64() * 4_294_967_296.0) as u32;
+            assert_eq!(numerator, expected);
+        }
     }
 
     #[test]
