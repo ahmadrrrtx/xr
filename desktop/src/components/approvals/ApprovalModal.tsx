@@ -103,8 +103,12 @@ export function ApprovalModal() {
   const activeId = useApprovalStore((s) => s.activeId);
   const pending = useApprovalStore((s) => s.pending);
   const hydrate = useApprovalStore((s) => s.hydrate);
+  // Phase 12: while the Shield Approvals tab is on screen the inline cards
+  // own the queue (same promises); the modal yields and the away-countdown
+  // pauses — the user is looking at the requests.
+  const inlineSurface = useApprovalStore((s) => s.inlineSurface);
   const active = pending.find((r) => r.id === activeId) ?? null;
-  const open = active !== null;
+  const open = active !== null && !inlineSurface;
 
   const denyRef = useRef<HTMLButtonElement | null>(null);
   const reduced = useReducedMotion();
@@ -169,6 +173,7 @@ export function ApprovalModal() {
         setSecondsLeft(0);
         decideApproval(active.id, 'denied', {
           reason: 'Timed out — you were away',
+          decidedBy: 'auto-timeout',
         });
       } else {
         setSecondsLeft(left);
@@ -177,7 +182,7 @@ export function ApprovalModal() {
     return () => window.clearInterval(timer);
   }, [counting, active]);
 
-  if (!active) return null;
+  if (!active || inlineSurface) return null;
 
   const deny = (reason?: string): void =>
     decideApproval(active.id, 'denied', { reason });

@@ -86,7 +86,10 @@ export interface RunsState {
   upsert: (next: RunSummary, origin?: 'brain' | 'event' | 'local') => void;
   upsertFromBrain: (run: import('@/brain/types').Run) => void;
   applyBrainUpdate: (payload: BrainUpdate) => void;
-  applyCancelled: (ids: string[]) => void;
+  applyCancelled: (
+    ids: string[],
+    meta?: { by?: 'user' | 'shield'; reason?: string }
+  ) => void;
 
   setStatusFilter: (f: StatusFilter) => void;
   cycleStatusFilter: (dir: 1 | -1) => void;
@@ -101,7 +104,11 @@ export interface RunsState {
   requestKillAll: () => void;
   closeStopDialog: () => void;
   kill: (id: string, reason?: string) => Promise<void>;
-  killAll: (reason?: string) => Promise<void>;
+  /** Resolves with the number of runs that were in progress. */
+  killAll: (
+    reason?: string,
+    opts?: { silent?: boolean; by?: 'user' | 'shield' }
+  ) => Promise<number>;
   retry: (id: string) => void;
   archive: (id: string) => void;
   unarchive: (id: string) => void;
@@ -426,7 +433,7 @@ export const useRunsStore = create<RunsState>()((set, get) => {
       }
     },
 
-    applyCancelled: (ids) => {
+    applyCancelled: (ids, meta) => {
       const now = Date.now();
       for (const id of ids) {
         const prev = get().runs[id];
@@ -437,6 +444,13 @@ export const useRunsStore = create<RunsState>()((set, get) => {
             status: 'killed',
             endedAt: now,
             durationMs: now - prev.startedAt,
+            ...(meta?.by === 'shield'
+              ? {
+                  killedBy: 'shield' as const,
+                  errorSummary:
+                    meta.reason ?? 'Paused by XR Shield emergency revoke',
+                }
+              : {}),
           },
           'event'
         );
@@ -495,28 +509,33 @@ export const useRunsStore = create<RunsState>()((set, get) => {
       announce(`Stopped run ${r.shortId}.`);
     },
 
-    killAll: async (reason) => {
+    killAll: async (reason, opts) => {
       const s = get();
       const ids = Object.values(s.runs)
         .filter((r) => inProgress(r.status))
         .map((r) => r.id);
       set({ stopDialog: null });
-      if (ids.length === 0) return;
+      if (ids.length === 0) return 0;
       const brain = useBrainStore.getState();
       for (const id of ids) {
         const owned =
           brain.runs[id] && inProgress(runStatusOf(brain.runs[id].status));
-        if (owned) brain.stopRun(id, { silent: true });
+        if (owned) brain.stopRun(id, { silent: true, reason });
       }
-      get().applyCancelled(ids);
+      get().applyCancelled(ids, { by: opts?.by, reason });
       await invokeCancel(ids, reason);
-      toast.error(
-        `Stopped ${ids.length} ${ids.length === 1 ? 'agent' : 'agents'}.`,
-        {
-          description: reason ? `Reason: ${reason}` : 'No new work will start.',
-        }
-      );
-      announce(`Stopped ${ids.length} agents.`);
+      if (!opts?.silent) {
+        toast.error(
+          `Stopped ${ids.length} ${ids.length === 1 ? 'agent' : 'agents'}.`,
+          {
+            description: reason
+              ? `Reason: ${reason}`
+              : 'No new work will start.',
+          }
+        );
+        announce(`Stopped ${ids.length} agents.`);
+      }
+      return ids.length;
     },
 
     retry: () => {

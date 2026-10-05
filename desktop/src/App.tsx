@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
 
 import { ApprovalModal } from '@/components/approvals/ApprovalModal';
+import { CompromisedModal } from '@/components/shield/CompromisedModal';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { hydrateLocale } from '@/lib/i18n';
 import { isOnboardingComplete } from '@/stores/onboarding';
@@ -110,6 +111,8 @@ export default function App() {
       </ErrorBoundary>
       {/* Phase 7 — the approval modal rides above every route (main window) */}
       <ApprovalModal />
+      {/* Phase 12 — non-dismissible integrity failure modal */}
+      <CompromisedModal />
       <AnimatePresence>
         {showSplash && <Splash key="splash" progress={progress} status={status} />}
       </AnimatePresence>

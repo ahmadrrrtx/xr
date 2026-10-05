@@ -49,6 +49,8 @@ export interface ToolCallRecord {
   error?: string;
   /** Phase 7: the approval request gating this call, while one is pending. */
   approvalId?: string;
+  /** Phase 12: XR Shield blocked this call by policy (no human was asked). */
+  blocked?: boolean;
 }
 
 export interface MessagePage {

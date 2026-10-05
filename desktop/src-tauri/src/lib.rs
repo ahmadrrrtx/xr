@@ -8,6 +8,7 @@
  */
 mod commands;
 mod events;
+mod shield;
 #[cfg(desktop)]
 mod tray;
 
@@ -68,6 +69,8 @@ pub fn run() {
             app.handle()
                 .manage(commands::workspaces::WorkspaceDb::init(app.handle()));
             app.handle().manage(commands::workspaces::SpawnState::new());
+            // Phase 12 — XR Shield: append-only audit chain on the shared xr.db.
+            app.handle().manage(shield::ShieldDb::init(app.handle()));
             #[cfg(desktop)]
             {
                 app.handle().plugin(tauri_plugin_autostart::init(
@@ -148,6 +151,17 @@ pub fn run() {
             commands::runs::cancel_run,
             commands::runs::bulk_cancel_runs,
             commands::runs::save_runs_export,
+            shield::get_shield_status,
+            shield::get_audit_log,
+            shield::append_audit,
+            shield::verify_audit_chain,
+            shield::run_health_check,
+            shield::set_security_policy,
+            shield::set_shield_paused,
+            shield::set_quarantine,
+            shield::save_shield_checks,
+            shield::revoke_all,
+            shield::list_approvals,
             commands::settings::ptt_shortcut_info,
             #[cfg(desktop)]
             commands::settings::ptt_set_shortcut,

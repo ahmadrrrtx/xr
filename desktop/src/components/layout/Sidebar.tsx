@@ -23,6 +23,7 @@ import {
 import { NAV_ITEMS, type NavItem } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { selectShieldState, useShieldStore } from '@/stores/shieldStore';
 import { useSidebarStore } from '@/stores/sidebar';
 
 const COLLAPSED_WIDTH = 72;
@@ -54,6 +55,30 @@ function BudgetDot() {
   );
 }
 
+/** Shield status dot (Phase 12): green/yellow/red from the last health check. */
+function ShieldDot() {
+  const state = useShieldStore(selectShieldState);
+  const paused = useShieldStore((s) => s.paused);
+  const effective = paused && state !== 'compromised' ? 'attention' : state;
+  const color =
+    effective === 'compromised'
+      ? 'var(--danger)'
+      : effective === 'attention'
+        ? 'var(--warning)'
+        : effective === 'protected'
+          ? 'var(--success)'
+          : 'var(--text-tertiary)';
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="sidebar-shield-dot"
+      data-state={effective}
+      className="absolute top-[7px] right-[9px] h-1.5 w-1.5 rounded-full"
+      style={{ background: color }}
+    />
+  );
+}
+
 function SidebarNavItem({
   item,
   collapsed,
@@ -65,6 +90,7 @@ function SidebarNavItem({
 }) {
   const Icon = item.icon;
   const isBudget = item.id === 'budget';
+  const isShield = item.id === 'shield';
 
   const link = (
     <NavLink
@@ -97,6 +123,7 @@ function SidebarNavItem({
               )}
             />
             {isBudget && <BudgetDot />}
+            {isShield && <ShieldDot />}
           </span>
           {!collapsed && (
             <span

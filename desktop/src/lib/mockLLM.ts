@@ -24,7 +24,14 @@ export interface ChatTurn {
 export type StreamEvent =
   | { type: 'token'; text: string }
   | { type: 'tool_call'; call: ToolCallRecord }
-  | { type: 'tool_result'; id: string; output: string; status: 'done' | 'error' }
+  | {
+      type: 'tool_result';
+      id: string;
+      output: string;
+      status: 'done' | 'error';
+      /** Phase 12: XR Shield answered before the human could (policy block). */
+      blocked?: boolean;
+    }
   | { type: 'done' }
   | { type: 'error'; message: string };
 
@@ -42,7 +49,7 @@ export interface StreamOptions {
   requestApproval?: (
     call: { summary: string },
     spec: ApprovalSpec
-  ) => Promise<{ approved: boolean }>;
+  ) => Promise<{ approved: boolean; reason?: string; blocked?: boolean }>;
 }
 
 /** Dev-only simulated failure rate (0 in tests). Overridable via
@@ -215,6 +222,31 @@ XR (on behalf of Ahmad)`,
       after: "Deleted **~/projects/old-build** — 61 MB freed. The disk had plenty of headroom anyway.",
     };
   }
+  if (/\b(read|open|show|cat)\b/.test(p) && /\b(file|readme|notes?)\b/.test(p) && !/\b(delete|remove|write|save)\b/.test(p)) {
+    return {
+      before: 'Reading it now:',
+      tool: {
+        tool: 'read_file',
+        summary: 'Read ~/notes/standup.md',
+        category: 'file',
+        input: { path: '~/notes/standup.md' },
+        output: '# Standup\n\n- Shipped the approval modal\n- Orb sync green\n- Next: Shield screen',
+        approval: {
+          skillId: 'fs-skill',
+          skillName: 'fs-skill',
+          skillVersion: 'v1.0',
+          skillIcon: 'file',
+          action: 'Read a file',
+          resource: '~/notes/standup.md',
+          risk: 'low',
+          justification: 'Ahmad asked to read the standup notes. Read-only, inside the workspace.',
+        },
+        deniedAfter: "Okay — I didn't open it. Tell me which file you'd like instead.",
+      },
+      after:
+        "Here's what's in **~/notes/standup.md**:\n\n- Shipped the approval modal\n- Orb sync green\n- Next: Shield screen",
+    };
+  }
   if (/\bwrite|save|log\b/.test(p) && /\bfile\b/.test(p) && !/\b(delete|remove)\b/.test(p)) {
     return {
       before: "I'll write that to disk — approving it is on you:",
@@ -344,16 +376,27 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
       opts.onEvent({ type: 'tool_call', call });
 
       if (approval && opts.requestApproval) {
-        // Park the stream until the human (or a remember rule) decides.
-        const { approved } = await opts.requestApproval(call, approval);
-        if (!approved) {
+        // Park the stream until the human (or a remember rule / XR Shield
+        // policy) decides.
+        const verdict = await opts.requestApproval(call, approval);
+        if (!verdict.approved) {
           opts.onEvent({
             type: 'tool_result',
             id: call.id,
-            output: 'User denied this action — nothing ran.',
+            output: verdict.blocked
+              ? `${verdict.reason ?? 'Blocked by XR Shield'} — nothing ran.`
+              : 'User denied this action — nothing ran.',
             status: 'error',
+            blocked: verdict.blocked === true,
           });
-          if (deniedAfter) await emitText(deniedAfter, opts);
+          if (verdict.blocked) {
+            await emitText(
+              "XR Shield blocked that before it reached you — nothing ran. You can change the policy under Shield → Security Settings if you want me to ask next time.",
+              opts
+            );
+          } else if (deniedAfter) {
+            await emitText(deniedAfter, opts);
+          }
           opts.onEvent({ type: 'done' });
           return;
         }

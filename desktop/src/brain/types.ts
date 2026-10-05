@@ -113,6 +113,8 @@ export interface RunSummary {
   surface: RunSurface;
   /** Client-side soft hide (Phase 11: lost on reload, by design). */
   archived?: boolean;
+  /** Phase 12: the run was stopped by an XR Shield emergency revoke. */
+  killedBy?: 'shield';
 }
 
 export const RUN_STATUS_LABEL: Record<RunStatus, string> = {

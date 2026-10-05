@@ -31,6 +31,7 @@ import {
   FolderOpen,
   MoreHorizontal,
   RotateCcw,
+  ShieldX,
   Square,
 } from 'lucide-react';
 
@@ -300,7 +301,24 @@ function RunRowImpl({
         >
           {/* Status */}
           <div role="cell" className="flex items-center">
-            <StatusIcon status={run.status} />
+            {run.killedBy === 'shield' ? (
+              <span
+                role="img"
+                aria-label="Shield revoked"
+                title="Shield revoked — paused by XR Shield emergency revoke"
+                data-testid="run-shield-revoked"
+                className="inline-flex size-4 shrink-0 items-center justify-center"
+              >
+                <ShieldX
+                  size={14}
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                  style={{ color: 'var(--danger)' }}
+                />
+              </span>
+            ) : (
+              <StatusIcon status={run.status} />
+            )}
           </div>
 
           {/* ID + copy */}
@@ -323,7 +341,8 @@ function RunRowImpl({
 
           {/* Title (+ error tooltip) */}
           <div role="cell" className="min-w-0">
-            {run.status === 'failed' && run.errorSummary ? (
+            {(run.status === 'failed' || run.killedBy === 'shield') &&
+            run.errorSummary ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="text-text-primary block cursor-help truncate underline decoration-[var(--danger)]/40 decoration-dotted underline-offset-2">

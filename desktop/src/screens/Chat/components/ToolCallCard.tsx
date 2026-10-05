@@ -14,6 +14,7 @@ import {
   Mail,
   Search,
   ShieldAlert,
+  ShieldX,
   SquareArrowOutUpRight,
   Terminal,
   Wrench,
@@ -33,6 +34,7 @@ const ICONS: Record<string, typeof Mail> = {
   web_search: Search,
   search: Search,
   write_file: FileEdit,
+  read_file: FileEdit,
   file: FileEdit,
   shell: Terminal,
   terminal: Terminal,
@@ -127,7 +129,8 @@ export function ToolCallCard({ call }: { call: ToolCallRecord | null }) {
   return (
     <div
       role="region"
-      aria-label={`Tool call: ${call.summary} — ${statusLabel[call.status]}`}
+      aria-label={`Tool call: ${call.summary} — ${call.blocked ? 'blocked by XR Shield' : statusLabel[call.status]}`}
+      data-blocked={call.blocked ? 'true' : undefined}
       className="border-border-subtle my-2 w-full overflow-hidden rounded-lg border border-l-[3px] bg-black/20"
       style={{ borderLeftColor: CATEGORY_BORDER[call.category] }}
     >
@@ -162,6 +165,16 @@ export function ToolCallCard({ call }: { call: ToolCallRecord | null }) {
           <span className="text-text-primary min-w-0 flex-1 truncate text-[14px]">
             {call.summary}
           </span>
+          {call.blocked ? (
+            // Phase 12: Shield answered by policy — no human was asked.
+            <span
+              data-testid="tool-blocked-badge"
+              className="text-danger flex shrink-0 items-center gap-1 rounded-full border border-[color-mix(in_oklab,var(--danger)_45%,transparent)] px-1.5 py-px font-mono text-[10px] select-none"
+            >
+              <ShieldX size={11} strokeWidth={1.75} aria-hidden="true" />
+              Blocked by XR Shield
+            </span>
+          ) : null}
           <span className="text-text-tertiary font-mono text-[10px] uppercase select-none">
             {call.tool}
           </span>

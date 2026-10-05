@@ -51,6 +51,10 @@ uuid = { version = "1", features = ["v4"] }
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 zip = { version = "4", default-features = false, features = ["deflate"] }
 
+# Phase 12 — XR Shield audit chain (SHA-256 over a canonical JSON array;
+# byte-identical to the webview's WebCrypto fallback). Ed25519 is planned.
+sha2 = "0.10"
+
 # Stronghold key derivation (Argon2id) — see src/lib.rs `key_derivation`.
 argon2 = "0.5"
 # `tauri::generate_context!` requires serde/serde_json as direct dependencies.

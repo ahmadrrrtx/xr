@@ -99,7 +99,7 @@ interface BrainState {
     opts?: { flavor?: 'short' | 'medium' }
   ) => string;
   /** `silent`: the caller (Control Room) announces the outcome itself. */
-  stopRun: (id: string, opts?: { silent?: boolean }) => void;
+  stopRun: (id: string, opts?: { silent?: boolean; reason?: string }) => void;
   restartRun: (id: string) => void;
   exportJson: (id: string) => void;
 
@@ -752,11 +752,20 @@ export const useBrainStore = create<BrainState>()(
           if (opts?.silent) silentStops.add(id);
           const st = get();
           const d = st.data[id];
+          // Phase 12: a Shield revoke leaves its reason in the run's log so
+          // the trace says why it ended (the Control Room row says the same).
+          if (d && opts?.reason) {
+            pushLog(d, null, 'system', opts.reason);
+            set((s) => ({ data: { ...s.data, [id]: { ...d } } }));
+          }
           // Withdraw a parked approval so the Phase 7 modal doesn't leak.
           if (d?.pendingApprovalRequest) {
             useApprovalStore
               .getState()
-              .withdraw(d.pendingApprovalRequest, 'Run stopped');
+              .withdraw(
+                d.pendingApprovalRequest,
+                opts?.reason ?? 'Run stopped'
+              );
             set((s) => ({
               data: {
                 ...s.data,

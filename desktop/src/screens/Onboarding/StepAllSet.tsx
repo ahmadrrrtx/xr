@@ -8,7 +8,14 @@ import { Reveal } from './parts';
  * Step 10 — all set. Avatar idles then pulses a greeting; exact copy:
  * "Hey {name}. I'm XR." / "Ready when you are." → Start chatting → /chat.
  */
-export function StepAllSet({ onStart }: { onStart: () => void }) {
+export function StepAllSet({
+  onStart,
+  onShield,
+}: {
+  onStart: () => void;
+  /** Phase 12: "See how XR keeps you in control" → /shield. */
+  onShield?: () => void;
+}) {
   const userName = useOnboardingStore((s) => s.userName);
   const [greeting, setGreeting] = useState(false);
 
@@ -46,6 +53,18 @@ export function StepAllSet({ onStart }: { onStart: () => void }) {
           press Enter
         </p>
       </Reveal>
+      {onShield && (
+        <Reveal delay={1.3}>
+          <button
+            type="button"
+            onClick={onShield}
+            data-testid="onboarding-shield-link"
+            className="text-text-tertiary hover:text-text-secondary mt-6 cursor-pointer text-[12px] underline-offset-4 transition-colors hover:underline"
+          >
+            See how XR keeps you in control →
+          </button>
+        </Reveal>
+      )}
     </div>
   );
 }

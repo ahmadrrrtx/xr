@@ -56,11 +56,11 @@ export function OnboardingWizard() {
     return true;
   }, [step, understood]);
 
-  const finish = useCallback(async () => {
+  const finish = useCallback(async (to: string = '/chat') => {
     await useOnboardingStore.getState().finishOnboarding();
     // The orb joins the desktop the moment onboarding completes (Phase 6).
     void orbShow();
-    navigate('/chat', { replace: true });
+    navigate(to, { replace: true });
     const name = useOnboardingStore.getState().userName;
     toast(`Welcome${name ? `, ${name}` : ''}. XR is ready.`);
   }, [navigate]);
@@ -126,7 +126,7 @@ export function OnboardingWizard() {
     7: <StepVoice />,
     8: <StepPrefs />,
     9: <StepIntegrations />,
-    10: <StepAllSet onStart={finish} />,
+    10: <StepAllSet onStart={() => void finish()} onShield={() => void finish('/shield')} />,
   };
 
   const variants = {
