@@ -347,3 +347,56 @@ body {
 [data-theme='arctic'] .xr-time-input {
   color-scheme: light;
 }
+
+/* ─── Phase 9 · Brain ────────────────────────────────────────────────────
+ * Running-node pulse. Dark themes (XR Native/Midnight/Graphite) get the
+ * glow shadow; Paper/Arctic set --accent-glow: transparent, so the shadow
+ * term vanishes and the border-color pulse carries the motion instead
+ * (brief §12: NO glow in light themes).
+ * ------------------------------------------------------------------------ */
+@keyframes xr-run-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    border-color: var(--accent);
+  }
+  50% {
+    box-shadow: 0 0 10px -2px var(--accent-glow);
+    border-color: var(--accent-hover);
+  }
+}
+
+.xr-run-pulse {
+  animation: xr-run-pulse 1500ms ease-in-out infinite;
+}
+
+/* Status dot pulse — same 1500ms cycle, box-shadow ring. */
+@keyframes xr-dot-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  70% {
+    box-shadow: 0 0 0 5px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.xr-dot-pulse {
+  animation: xr-dot-pulse 1500ms ease-out infinite;
+}
+
+/* Gantt running bar: brighter leading tip (2px). */
+.xr-gantt-tip {
+  box-shadow: 0 0 6px 0 var(--accent-glow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xr-run-pulse,
+  .xr-dot-pulse {
+    animation: none;
+  }
+}
+/* App-level reduced motion covers these via the [data-motion='reduced']
+ * blanket rule above; the media query handles the OS pref. */

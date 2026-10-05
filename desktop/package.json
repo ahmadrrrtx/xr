@@ -44,6 +44,7 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.4",
     "react-textarea-autosize": "^8.5.9",
+    "react-window": "^2.3.3",
     "remark-gfm": "^4.0.1",
     "shiki": "^4.4.3",
     "sonner": "^2.0.8",
