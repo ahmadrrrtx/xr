@@ -610,10 +610,6 @@ pub fn estimate_cost(id: &str, tokens_in: f64, tokens_out: f64) -> f64 {
     round6((tokens_in * m.in_per_1m + tokens_out * m.out_per_1m) / 1_000_000.0)
 }
 
-pub fn per_output_token(id: &str) -> f64 {
-    model_info(id).out_per_1m / 1_000_000.0
-}
-
 fn registry_index(id: &str) -> usize {
     MODEL_REGISTRY
         .iter()
