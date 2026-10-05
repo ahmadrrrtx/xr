@@ -65,10 +65,16 @@ fn list_files(root: &Path) -> Vec<String> {
         if let Ok(entries) = fs::read_dir(dir) {
             for e in entries.flatten() {
                 let p = e.path();
-                let rel = p.strip_prefix(root).unwrap_or(&p).to_string_lossy().to_string();
                 if p.is_dir() {
                     walk(&p, root, out);
                 } else {
+                    // Forward slashes everywhere: the list crosses into JSON,
+                    // and Windows paths would otherwise carry backslashes.
+                    let rel = p
+                        .strip_prefix(root)
+                        .unwrap_or(&p)
+                        .to_string_lossy()
+                        .replace('\\', "/");
                     out.push(rel);
                 }
             }
