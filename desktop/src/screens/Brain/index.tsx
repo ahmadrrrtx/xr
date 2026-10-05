@@ -250,8 +250,18 @@ function BrainIndex() {
 
       {/* Recent runs */}
       <div className="mt-12 w-full max-w-[720px]">
-        <div className="text-text-tertiary mb-2 font-mono text-[11px] tracking-wider uppercase">
-          Recent runs
+        <div className="mb-2 flex items-baseline justify-between">
+          <div className="text-text-tertiary font-mono text-[11px] tracking-wider uppercase">
+            Recent runs
+          </div>
+          {/* Phase 11: the full history lives in the Control Room. */}
+          <button
+            type="button"
+            onClick={() => navigate('/runs')}
+            className="text-text-secondary hover:text-text-primary text-[12px] underline-offset-2 hover:underline"
+          >
+            All runs in Control Room →
+          </button>
         </div>
         {recent.length === 0 ? (
           <div className="border-border-subtle bg-bg-ink rounded-lg border p-6 text-center">

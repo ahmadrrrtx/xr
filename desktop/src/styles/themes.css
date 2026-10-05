@@ -99,6 +99,18 @@ html[data-theme='xr-native'] {
   --ws-scratch-to: #475569;
   --ws-star: #fbbf24;
   --ws-glow: 0 0 24px -6px var(--accent-glow);
+  /* Phase 11 · Control Room — model families (donut/stack) + agent chips */
+  --chart-openai: #34d399;
+  --chart-anthropic: #fb923c;
+  --chart-google: #60a5fa;
+  --chart-local: #22d3ee;
+  --chart-other: #64748b;
+  --agent-main: var(--accent);
+  --agent-coder: #34d399;
+  --agent-research: #a78bfa;
+  --agent-writer: #fbbf24;
+  --agent-ops: #fb923c;
+  --agent-planner: #60a5fa;
 }
 
 /* ─── THEME 2: GRAPHITE — warm industrial grayscale, matte ─────────────── */
@@ -158,6 +170,18 @@ html[data-theme='graphite'] {
   --ws-scratch-to: #6a6a6a;
   --ws-star: #d8c9a3;
   --ws-glow: 0 0 0 rgba(0, 0, 0, 0);
+  /* Phase 11 · Control Room — muted metal set */
+  --chart-openai: #4a8d6e;
+  --chart-anthropic: #b0683a;
+  --chart-google: #4f7ba3;
+  --chart-local: #4fa3b8;
+  --chart-other: #8a8a8a;
+  --agent-main: var(--accent);
+  --agent-coder: #4a8d6e;
+  --agent-research: #7a6bae;
+  --agent-writer: #b88a2e;
+  --agent-ops: #b0683a;
+  --agent-planner: #4f7ba3;
 }
 
 /* ─── THEME 3: MIDNIGHT — deep navy cobalt, 12-hour sessions ───────────── */
@@ -217,6 +241,18 @@ html[data-theme='midnight'] {
   --ws-scratch-to: #475569;
   --ws-star: #fbbf24;
   --ws-glow: 0 0 24px -6px var(--accent-glow);
+  /* Phase 11 · Control Room */
+  --chart-openai: #10b981;
+  --chart-anthropic: #f97316;
+  --chart-google: #60a5fa;
+  --chart-local: #22d3ee;
+  --chart-other: #64748b;
+  --agent-main: var(--accent);
+  --agent-coder: #10b981;
+  --agent-research: #a78bfa;
+  --agent-writer: #fbbf24;
+  --agent-ops: #f97316;
+  --agent-planner: #38bdf8;
 }
 
 /* ─── THEME 4: PAPER — warm cream, reading-heavy sessions ─────────────── */
@@ -276,6 +312,18 @@ html[data-theme='paper'] {
   --ws-scratch-to: #6b6259;
   --ws-star: #b45309;
   --ws-glow: 0 0 0 rgba(0, 0, 0, 0);
+  /* Phase 11 · Control Room — warm print inks (AA on cream) */
+  --chart-openai: #2f7a4f;
+  --chart-anthropic: #c2410c;
+  --chart-google: #1d4ed8;
+  --chart-local: #0e7490;
+  --chart-other: #8a7d6a;
+  --agent-main: var(--accent);
+  --agent-coder: #2f7a4f;
+  --agent-research: #6d28d9;
+  --agent-writer: #b45309;
+  --agent-ops: #c2410c;
+  --agent-planner: #1d4ed8;
 }
 
 /* ─── THEME 5: ARCTIC — pure white light mode, crisp ──────────────────── */
@@ -335,6 +383,18 @@ html[data-theme='arctic'] {
   --ws-scratch-to: #64748b;
   --ws-star: #b45309;
   --ws-glow: 0 0 0 rgba(0, 0, 0, 0);
+  /* Phase 11 · Control Room — cool light */
+  --chart-openai: #059669;
+  --chart-anthropic: #ea580c;
+  --chart-google: #2563eb;
+  --chart-local: #0891b2;
+  --chart-other: #94a3b8;
+  --agent-main: var(--accent);
+  --agent-coder: #059669;
+  --agent-research: #6d28d9;
+  --agent-writer: #b45309;
+  --agent-ops: #ea580c;
+  --agent-planner: #2563eb;
 }
 
 /* ─── Window chrome constants (OS traffic lights — theme-independent) ──── */

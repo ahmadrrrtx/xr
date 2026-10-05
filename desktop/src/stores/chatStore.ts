@@ -130,6 +130,20 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
           useChatStore.setState({
             stream: { ...stream, toolCalls: [...stream.toolCalls, e.call] },
           });
+          // Phase 11: the first tool call of a reply is an agent run — give
+          // it a short Brain run so it shows up in the Control Room (and the
+          // card's "View trace" lands on it). Lazy import: no store cycle.
+          if (stream.toolCalls.length === 0) {
+            void import('@/stores/brainStore').then(({ useBrainStore }) => {
+              const b = useBrainStore.getState();
+              const live = b.runOrder.some(
+                (id) =>
+                  b.runs[id]?.status === 'running' ||
+                  b.runs[id]?.status === 'waiting'
+              );
+              if (!live) b.startMockRun(e.call.summary, { flavor: 'short' });
+            });
+          }
           return;
         }
         case 'tool_result': {

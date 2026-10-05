@@ -4,8 +4,8 @@
  * Icons: Lucide @ 1.5px stroke. Order is part of the product spec.
  */
 import {
+  Activity,
   Brain,
-  Clock,
   Database,
   Hammer,
   LayoutGrid,
@@ -98,11 +98,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   {
     id: 'runs',
-    label: 'Runs',
+    label: 'Control Room',
     path: '/runs',
-    icon: Clock,
+    icon: Activity,
     phase: 11,
-    description: 'Control room for every agent run.',
+    description: 'Every agent run, live — stop, inspect, export.',
   },
   {
     id: 'memory',

@@ -13,6 +13,7 @@
  *     window surfaces, focuses and does the work.
  */
 import {
+  Activity,
   Braces,
   CircleDot,
   Clock,
@@ -32,6 +33,7 @@ import {
   ShieldQuestion,
   Trash2,
   Wallet,
+  XCircle,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -232,6 +234,33 @@ export function buildPaletteCommands(
           'Pause ships in Phase 13',
           'The spend governor will pause every agent run.'
         ),
+    },
+    // Control Room (Phase 11). URL intents are consumed by the screen, so
+    // these work identically from the HUD and from inside the app.
+    {
+      id: 'runs-stop-all',
+      group: 'commands',
+      title: 'Control Room: Stop all runs',
+      icon: OctagonX,
+      shortcut: sc('⌘⇧.', 'Ctrl+Shift+.'),
+      keywords: ['emergency', 'kill', 'halt', 'agents', 'runs', 'control room'],
+      action: () => openRoute('/runs?action=stop-all'),
+    },
+    {
+      id: 'runs-view-running',
+      group: 'commands',
+      title: 'Control Room: View running',
+      icon: Activity,
+      keywords: ['runs', 'live', 'in progress', 'agents', 'control room'],
+      action: () => openRoute('/runs?status=running'),
+    },
+    {
+      id: 'runs-view-failed',
+      group: 'commands',
+      title: 'Control Room: View failed runs',
+      icon: XCircle,
+      keywords: ['runs', 'errors', 'failures', 'control room'],
+      action: () => openRoute('/runs?status=failed'),
     },
     {
       id: 'clear-chat-history',

@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Desktop · Phase 11 — Control Room (`/runs`)
+
+- **Live runs table**: every agent run across chat, builder, research, voice,
+  CLI and background surfaces in one virtualized 36px-row table (react-window,
+  10k-row stress seed verified) with status/ID/title/agent/workspace/model/
+  started/duration/tokens/cost columns, sortable headers, keyboard navigation
+  (`/` ↑↓ Enter Space ←→ Delete S R E C Esc 1–5) and a right-click menu
+  (View trace, Open workspace, Copy ID, Retry, Archive, Stop run).
+- **Emergency stop**: red STOP ALL appears only while runs are in progress,
+  always confirms (`alertdialog`, optional reason) and actually halts the mock
+  stream; per-row stop; Rust `cancel_run` / `bulk_cancel_runs` commands emit
+  `run:cancelled` which the renderer honours.
+- **Stats + charts**: today's runs/tokens/cost, in-progress and failed-24h
+  tiles with tweened numbers; collapsible hand-rolled SVG charts (runs per
+  hour, cost per day stacked by model family, tokens by model donut) themed
+  via `--chart-*` tokens — no chart library added.
+- **Export**: CSV/JSON of the filtered view (`xr-runs-YYYY-MM-DD-HHmm.*`),
+  native save dialog in Tauri via `save_runs_export`, Blob download in the
+  browser.
+- **Cross-surface**: canonical `runsStore` fed by the Brain store and
+  `brain:run-update`; chat tool calls create short live runs; sidebar
+  "Control Room" entry, pulsing topbar activity dot → `/runs?status=running`,
+  palette commands (stop all / view running / view failed), workspace landing
+  shows its recent runs. All five themes, reduced motion, filtered and
+  fresh-install empty states.
+
 ### Phase 12 · F-2 — Honesty pass: dashboard redesign + real MCP/agents/automation/approvals surfaces
 
 **Daemon (real data behind every panel):**

@@ -21,6 +21,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import { readSettingJSON, readSettingRaw } from '@/lib/persistent-store';
 import { effectiveCombo } from '@/lib/shortcuts';
+import { initRunsBridge } from '@/runs/bridge';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSidebarStore } from '@/stores/sidebar';
 import { useThemeStore, type ThemeId } from '@/stores/theme';
@@ -116,6 +117,10 @@ function useGlobalHotkeys(): void {
       handler: () => navigate('/settings'),
     },
     {
+      combo: combo('control-room'),
+      handler: () => navigate('/runs'),
+    },
+    {
       combo: combo('focus-composer'),
       handler: () => {
         document.getElementById('xr-composer')?.focus();
@@ -148,6 +153,8 @@ export function AppShell() {
   // Companion Orb reactions (Phase 6): click toasts, menu voice/approvals.
   useOrbIpc();
   useWelcomeToast();
+  // Control Room feed (Phase 11): Brain runs + shell events → runsStore.
+  useEffect(() => initRunsBridge(), []);
   const location = useLocation();
   // Chat, Settings and Brain manage their own full-height layouts — no
   // content padding (Settings is a two-pane pane, SCREEN 14; Brain is a
@@ -155,7 +162,8 @@ export function AppShell() {
   const flush =
     location.pathname.startsWith('/chat') ||
     location.pathname.startsWith('/settings') ||
-    location.pathname.startsWith('/brain');
+    location.pathname.startsWith('/brain') ||
+    location.pathname.startsWith('/runs');
 
   return (
     <TooltipProvider delayDuration={200}>

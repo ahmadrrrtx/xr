@@ -60,9 +60,10 @@ function settings(patch: {
 /* ── shortcuts ─────────────────────────────────────────────────────── */
 
 describe("Phase 8 · shortcut registry", () => {
-  test("harvests 9 shortcuts with unique ids", () => {
-    expect(SHORTCUTS).toHaveLength(9);
-    expect(new Set(SHORTCUTS.map((s) => s.id)).size).toBe(9);
+  test("harvests 10 shortcuts with unique ids (9 from Phases 1–7 + Control Room)", () => {
+    expect(SHORTCUTS).toHaveLength(10);
+    expect(new Set(SHORTCUTS.map((s) => s.id)).size).toBe(10);
+    expect(shortcutById("control-room")?.combo).toBe("alt+mod+r");
   });
 
   test("exactly the three Rust-owned rows are global, each with an owner", () => {
@@ -88,7 +89,7 @@ describe("Phase 8 · shortcut registry", () => {
   test("inAppHotkeys excludes globals and applies overrides", () => {
     const rows = inAppHotkeys({ palette: "mod+shift+p" });
     expect(rows.map((r) => r.id)).not.toContain("hud");
-    expect(rows).toHaveLength(6);
+    expect(rows).toHaveLength(7);
     expect(rows.find((r) => r.id === "palette")?.combo).toBe("mod+shift+p");
   });
 });

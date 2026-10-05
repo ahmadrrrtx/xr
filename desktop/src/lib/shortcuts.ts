@@ -51,12 +51,13 @@ export interface ShortcutDef {
   global?: GlobalOwner;
 }
 
-/** Every in-app chord XR registers today (harvested from Phases 1–7). */
+/** Every in-app chord XR registers today (harvested from Phases 1–7, +Phase 11). */
 export const SHORTCUTS: readonly ShortcutDef[] = [
   { id: 'palette', label: 'Toggle command palette', scope: 'app', combo: 'mod+k' },
   { id: 'sidebar', label: 'Toggle sidebar', scope: 'app', combo: 'mod+b' },
   { id: 'new-chat', label: 'New chat', scope: 'app', combo: 'mod+n' },
   { id: 'settings', label: 'Open Settings', scope: 'app', combo: 'mod+,' },
+  { id: 'control-room', label: 'Open Control Room', scope: 'app', combo: 'alt+mod+r' },
   { id: 'cycle-theme', label: 'Cycle theme', scope: 'app', combo: 'mod+shift+t' },
   { id: 'focus-composer', label: 'Focus composer', scope: 'chat', combo: 'mod+l' },
   { id: 'hud', label: 'Toggle HUD (global)', scope: 'global', combo: 'mod+space', global: 'hud' },

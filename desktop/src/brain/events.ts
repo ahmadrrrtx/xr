@@ -32,6 +32,12 @@ export type BrainUpdate =
       status: SpanStatus;
       durationMs: number | null;
       costUsd: number;
+    }
+  | {
+      /** Phase 11: in-flight status changes (approval gate ↔ running). */
+      kind: 'run-status';
+      runId: string;
+      status: SpanStatus;
     };
 
 function devSeam(payload: BrainUpdate): void {
@@ -81,3 +87,6 @@ export const brainRunEnd = (
   costUsd: number
 ): void =>
   void emitBrainUpdate({ kind: 'run-end', runId, status, durationMs, costUsd });
+
+export const brainRunStatus = (runId: string, status: SpanStatus): void =>
+  void emitBrainUpdate({ kind: 'run-status', runId, status });
