@@ -18,13 +18,27 @@ import { NAV_ITEMS } from '@/lib/nav';
 import { isTauri } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
 import { usePaletteStore } from '@/stores/paletteStore';
+import { useBrainStore } from '@/stores/brainStore';
 
-/** Resolve the current screen's display name from the route. */
+/**
+ * Resolve the current screen's display name from the route. Brain appends
+ * the open run's short id ("Brain · #847") so the breadcrumb tracks the
+ * active trace (Phase 9).
+ */
 function useScreenTitle(): string {
   const { pathname } = useLocation();
-  const segment = pathname.split('/').filter(Boolean)[0] ?? 'chat';
+  const segments = pathname.split('/').filter(Boolean);
+  const segment = segments[0] ?? 'chat';
+  const runId = segment === 'brain' ? segments[1] : undefined;
+  const shortId = useBrainStore((s) =>
+    runId ? s.runs[runId]?.shortId : undefined
+  );
   const match = NAV_ITEMS.find((item) => item.id === segment);
-  return match?.label ?? 'XR';
+  const label = match?.label ?? 'XR';
+  if (segment === 'brain' && runId) {
+    return shortId ? `${label} · ${shortId}` : `${label} · ${runId}`;
+  }
+  return label;
 }
 
 /** The centered command-palette trigger pill (opens cmdk). */

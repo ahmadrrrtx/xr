@@ -72,7 +72,9 @@ function usePersistedSettings(): void {
  */
 function useGlobalHotkeys(): void {
   const navigate = useNavigate();
-  const overrides = useSettingsStore((state) => state.settings.shortcuts.overrides);
+  const overrides = useSettingsStore(
+    (state) => state.settings.shortcuts.overrides
+  );
   const combo = (id: string): string => effectiveCombo(id, overrides);
 
   useHotkeys([
@@ -147,11 +149,13 @@ export function AppShell() {
   useOrbIpc();
   useWelcomeToast();
   const location = useLocation();
-  // Chat and Settings manage their own flush, full-height layout — no
-  // content padding (Settings is a two-pane pane, SCREEN 14).
+  // Chat, Settings and Brain manage their own full-height layouts — no
+  // content padding (Settings is a two-pane pane, SCREEN 14; Brain is a
+  // developer-tool surface, SCREEN 2).
   const flush =
     location.pathname.startsWith('/chat') ||
-    location.pathname.startsWith('/settings');
+    location.pathname.startsWith('/settings') ||
+    location.pathname.startsWith('/brain');
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -159,7 +163,9 @@ export function AppShell() {
         <Topbar />
         <div className="flex min-h-0 flex-1">
           <Sidebar />
-          <main className={`bg-bg-void min-w-0 flex-1 overflow-y-auto ${flush ? 'p-0' : 'p-6'}`}>
+          <main
+            className={`bg-bg-void min-w-0 flex-1 overflow-y-auto ${flush ? 'p-0' : 'p-6'}`}
+          >
             <PageTransition>
               <Outlet />
             </PageTransition>
@@ -170,7 +176,6 @@ export function AppShell() {
       {/* Global overlays */}
       <CommandPalette embedded />
       {/* Toaster moved to App root (Phase 3) so onboarding toasts render too */}
-
     </TooltipProvider>
   );
 }

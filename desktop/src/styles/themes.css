@@ -74,6 +74,15 @@ html[data-theme='xr-native'] {
   --palette-selected-bg: color-mix(in oklab, var(--accent) 15%, transparent);
   --palette-selected-fg: var(--accent);
   --kbd-bg: rgba(0, 0, 0, 0.4);
+  /* Phase 9 · Brain category palette (saturated on the void) */
+  --cat-llm: #00e5ff;
+  --cat-tool: #a78bfa;
+  --cat-file: #f59e0b;
+  --cat-network: #10b981;
+  --cat-shell: #f97316;
+  --cat-approval: #eab308;
+  --cat-user: #94a3b8;
+  --cat-agent: #818cf8;
 }
 
 /* ─── THEME 2: GRAPHITE — warm industrial grayscale, matte ─────────────── */
@@ -108,6 +117,15 @@ html[data-theme='graphite'] {
   --palette-selected-bg: color-mix(in oklab, var(--accent) 18%, transparent);
   --palette-selected-fg: var(--metal-bright);
   --kbd-bg: rgba(0, 0, 0, 0.25);
+  /* Phase 9 · Brain categories — desaturated to sit on the warm gray matte */
+  --cat-llm: #8fc3d6;
+  --cat-tool: #b3a5d4;
+  --cat-file: #d2b06a;
+  --cat-network: #93bda3;
+  --cat-shell: #d29a78;
+  --cat-approval: #d2bd85;
+  --cat-user: #b8b8b8;
+  --cat-agent: #b0adc9;
 }
 
 /* ─── THEME 3: MIDNIGHT — deep navy cobalt, 12-hour sessions ───────────── */
@@ -142,6 +160,15 @@ html[data-theme='midnight'] {
   --palette-selected-bg: color-mix(in oklab, var(--accent) 15%, transparent);
   --palette-selected-fg: var(--accent);
   --kbd-bg: rgba(0, 0, 0, 0.4);
+  /* Phase 9 · Brain categories — slightly lifted for the deep navy */
+  --cat-llm: #60a5fa;
+  --cat-tool: #a78bfa;
+  --cat-file: #f59e0b;
+  --cat-network: #34d399;
+  --cat-shell: #fb923c;
+  --cat-approval: #fbbf24;
+  --cat-user: #94a3b8;
+  --cat-agent: #818cf8;
 }
 
 /* ─── THEME 4: PAPER — warm cream, reading-heavy sessions ─────────────── */
@@ -176,6 +203,15 @@ html[data-theme='paper'] {
   --palette-selected-bg: var(--accent);
   --palette-selected-fg: var(--accent-contrast);
   --kbd-bg: rgba(0, 0, 0, 0.05);
+  /* Phase 9 · Brain categories — darkened for ≥4.5:1 on cream */
+  --cat-llm: #1b554d;
+  --cat-tool: #6d5a9e;
+  --cat-file: #8a5f14;
+  --cat-network: #3c6e48;
+  --cat-shell: #9a4a12;
+  --cat-approval: #7d6414;
+  --cat-user: #6b5d49;
+  --cat-agent: #4c52a8;
 }
 
 /* ─── THEME 5: ARCTIC — pure white light mode, crisp ──────────────────── */
@@ -210,6 +246,15 @@ html[data-theme='arctic'] {
   --palette-selected-bg: var(--accent);
   --palette-selected-fg: var(--accent-contrast);
   --kbd-bg: rgba(0, 0, 0, 0.05);
+  /* Phase 9 · Brain categories — darkened for ≥4.5:1 on white */
+  --cat-llm: #0e7490;
+  --cat-tool: #7c3aed;
+  --cat-file: #b45309;
+  --cat-network: #047857;
+  --cat-shell: #c2410c;
+  --cat-approval: #a16207;
+  --cat-user: #64748b;
+  --cat-agent: #4f46e5;
 }
 
 /* ─── Window chrome constants (OS traffic lights — theme-independent) ──── */
