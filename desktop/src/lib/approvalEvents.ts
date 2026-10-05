@@ -27,6 +27,8 @@ import {
   type PendingDecision,
   type RememberKey,
 } from '@/lib/approvalCore';
+import type { AuditDecision, DecidedBy } from '@/shield/types';
+import { emitApprovalEvent, runApprovalGate } from '@/lib/approvalGate';
 import {
   notificationKindFor,
   playNotificationSound,
@@ -156,7 +158,15 @@ export async function requestApproval(
 ): Promise<PendingDecision> {
   const store = useApprovalStore.getState();
   const now = Date.now();
-  const { decision, rules } = checkRules(store.rules, req, now);
+
+  // Phase 12: a quarantined skill ignores remember rules (it must prompt);
+  // the store applies the gate's hard decisions (paused / blocked / auto)
+  // itself below — this preview only decides whether rules may run.
+  const preview = runApprovalGate(req);
+  const rulesApply = preview.kind === 'prompt' && !preview.quarantined;
+  const { decision, rules } = rulesApply
+    ? checkRules(store.rules, req, now)
+    : { decision: null, rules: store.rules };
   if (rules.length !== useApprovalStore.getState().rules.length) {
     useApprovalStore.getState().setRules(rules); // pruned expired 1h rules
   }
@@ -167,6 +177,13 @@ export async function requestApproval(
       decisions: { ...st.decisions, [req.id]: decision },
     }));
     devSeam('auto', { request: req, decision });
+    emitApprovalEvent({
+      kind: 'decided',
+      request: req,
+      decision,
+      decidedBy: 'auto-rule',
+      remember: null,
+    });
     sendNotification({
       type: decision.status === 'approved' ? 'success' : 'warning',
       title:
@@ -181,6 +198,24 @@ export async function requestApproval(
   }
 
   const decisionPromise = useApprovalStore.getState().requestApproval(req);
+
+  // Shield decided synchronously (paused, policy block, low-risk auto):
+  // nothing was queued, so say what happened instead of "needs approval".
+  if (!useApprovalStore.getState().pending.some((r) => r.id === req.id)) {
+    const gated = await decisionPromise;
+    devSeam('auto', { request: req, decision: gated });
+    sendNotification({
+      type: gated.status === 'approved' ? 'success' : 'warning',
+      title:
+        gated.status === 'approved'
+          ? `Auto-approved: ${req.action}`
+          : `Blocked: ${req.action}`,
+      body: gated.reason ?? req.skillName,
+      data: { approvalId: req.id, auto: true },
+    });
+    void emit('approval:decided', { request: req, decision: gated });
+    return gated;
+  }
 
   // Effects: broadcast, bell feed (with OS notification when unfocused),
   // and a toast only when this request is queued BEHIND another — the modal
@@ -216,7 +251,16 @@ export async function requestApproval(
 export function decideApproval(
   id: string,
   status: 'approved' | 'denied',
-  opts: { remember?: RememberKey; reason?: string } = {}
+  opts: {
+    remember?: RememberKey;
+    reason?: string;
+    /** Who/what decided — the audit log records it (default: the user). */
+    decidedBy?: DecidedBy;
+    /** Audit row override (a paused-deny is recorded as `blocked`). */
+    auditDecision?: AuditDecision;
+    /** Sonner feedback — off for bulk actions that announce themselves. */
+    silent?: boolean;
+  } = {}
 ): void {
   const store = useApprovalStore.getState();
   const req = store.pending.find((r) => r.id === id);
@@ -233,7 +277,11 @@ export function decideApproval(
     reason: opts.reason,
   };
 
-  store.decide(id, decision, newRule);
+  store.decide(id, decision, newRule, {
+    decidedBy: opts.decidedBy ?? 'user',
+    remember: opts.remember ?? null,
+    auditDecision: opts.auditDecision,
+  });
 
   devSeam('decided', { request: req, decision });
   void emit('approval:decided', { request: req, decision });
@@ -244,6 +292,10 @@ export function decideApproval(
     body: opts.reason ?? req.skillName,
     data: { approvalId: id, status },
   });
+  if (opts.silent) {
+    void syncOrbToQueue();
+    return;
+  }
   if (status === 'approved') {
     toast.success(`Approved: ${req.action}`, {
       description: opts.remember
@@ -268,7 +320,7 @@ export function withdrawRequest(id: string, reason: string): void {
   const req = store.pending.find((r) => r.id === id);
   if (!req) return;
   const decision: PendingDecision = { status: 'denied', reason };
-  store.decide(id, decision);
+  store.decide(id, decision, undefined, { decidedBy: 'user', remember: null });
   devSeam('decided', { request: req, decision });
   void emit('approval:decided', { request: req, decision });
   void syncOrbToQueue();
@@ -288,7 +340,7 @@ export function makeApprovalGate(
 ): (
   call: { summary: string; approvalId?: string },
   spec: ApprovalSpec
-) => Promise<{ approved: boolean }> {
+) => Promise<{ approved: boolean; reason?: string; blocked?: boolean }> {
   return async (call, spec) => {
     const req: ApprovalRequest = {
       ...spec,
@@ -316,6 +368,14 @@ export function makeApprovalGate(
 
     signal.removeEventListener('abort', onAbort);
     if (cancelled) withdrawRequest(req.id, 'Generation cancelled');
-    return { approved: decision.status === 'approved' };
+    return {
+      approved: decision.status === 'approved',
+      reason: decision.reason,
+      // Shield answered before the human could: the card says so.
+      blocked:
+        decision.status === 'denied' &&
+        decision.auto === true &&
+        decision.ruleId?.startsWith('policy.') === true,
+    };
   };
 }

@@ -5,6 +5,7 @@
  * local until the user says otherwise.
  */
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -29,6 +30,7 @@ function mb(bytes: number): string {
 export function PrivacyTab() {
   const privacy = useSettingsStore((state) => state.settings.privacy);
   const update = useSettingsStore((state) => state.update);
+  const navigate = useNavigate();
 
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
@@ -153,18 +155,27 @@ export function PrivacyTab() {
       <SettingsSection title="Network">
         <SettingRow
           label="Egress proxy (Shield)"
-          description="Every outbound request, proxied and logged. Not configured."
+          description="Every outbound request, proxied and logged. Planned — the allow/block lists live in Shield."
         >
           <Button
             variant="ghost"
             size="sm"
-            onClick={() =>
-              toast('Shield control room comes in Phase 12', {
-                description: 'The egress proxy configures itself from there.',
-              })
-            }
+            onClick={() => navigate('/shield?tab=security')}
           >
             Configure…
+          </Button>
+        </SettingRow>
+        <SettingRow
+          label="Advanced security controls"
+          description="Approval policy, shell execution, quarantine, audit log and emergency revoke."
+        >
+          <Button
+            variant="ghost"
+            size="sm"
+            data-testid="privacy-shield-link"
+            onClick={() => navigate('/shield?tab=security')}
+          >
+            Advanced security controls →
           </Button>
         </SettingRow>
         <SettingRow

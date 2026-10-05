@@ -151,7 +151,14 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
             stream: {
               ...stream,
               toolCalls: stream.toolCalls.map((t) =>
-                t.id === e.id ? { ...t, status: e.status, output: e.output } : t,
+                t.id === e.id
+                  ? {
+                      ...t,
+                      status: e.status,
+                      output: e.output,
+                      ...(e.blocked ? { blocked: true } : {}),
+                    }
+                  : t,
               ),
             },
           });

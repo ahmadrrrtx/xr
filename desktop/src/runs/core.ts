@@ -431,6 +431,7 @@ export function summaryFromRun(run: Run, prev?: RunSummary): RunSummary {
     errorSummary: prev?.errorSummary,
     surface: prev?.surface ?? kind,
     archived: prev?.archived,
+    killedBy: prev?.killedBy,
   };
 }
 

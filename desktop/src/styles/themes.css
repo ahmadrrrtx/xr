@@ -449,6 +449,9 @@ html[data-theme='arctic'] {
   --color-danger: var(--danger);
   --color-danger-contrast: var(--danger-contrast);
   --color-wait: var(--wait);
+  --color-risk-low: var(--risk-low);
+  --color-risk-medium: var(--risk-medium);
+  --color-risk-high: var(--risk-high);
   --color-editor-bg: var(--editor-bg);
 
   /* Window chrome */
@@ -697,4 +700,36 @@ body.orb .xr-orb-halo {
   --swatch-light: #f8fafc;
   --swatch-dot: #00e5ff;
   --swatch-border: rgba(0, 0, 0, 0.12);
+}
+
+/* ─── Phase 12 · Shield tokens (docs/phases/12-shield-plan.md) ─────────────
+ * Risk tiers reuse each theme's contrast-tuned semantic colours (low = the
+ * calm success green, never the accent). `--shield-glow` gates the hero's
+ * breathing halo: on for XR Native + Midnight only (THEME-SYSTEM: glow is
+ * brand chrome on the two deep-space themes, absent elsewhere). */
+:root,
+html[data-theme='xr-native'] {
+  --risk-low: var(--success);
+  --risk-medium: var(--warning);
+  --risk-high: var(--danger);
+  --shield-glow: 1;
+  --shield-glow-color: rgba(52, 211, 153, 0.45);
+}
+
+html[data-theme='midnight'] {
+  --risk-low: var(--success);
+  --risk-medium: var(--warning);
+  --risk-high: var(--danger);
+  --shield-glow: 1;
+  --shield-glow-color: rgba(16, 185, 129, 0.35);
+}
+
+html[data-theme='graphite'],
+html[data-theme='paper'],
+html[data-theme='arctic'] {
+  --risk-low: var(--success);
+  --risk-medium: var(--warning);
+  --risk-high: var(--danger);
+  --shield-glow: 0;
+  --shield-glow-color: transparent;
 }

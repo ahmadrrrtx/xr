@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+### Desktop · Phase 12 — Shield / Trust Center (`/shield`)
+
+- **Status tab**: hero state (protected / needs attention / compromised /
+  paused / unknown — never green before a check has run), four stat tiles
+  (blocked 24h, pending → Approvals, auto-approved share, quarantined →
+  Security), health card sorted fail → warn → pass → planned with re-run,
+  recent activity, and the emergency card. Breathing glow only in XR Native and
+  Midnight; reduced motion → opacity only.
+- **Approvals tab**: pending cards (risk border, justification, Shiki JSON
+  payload, remember rules, inline Approve/Deny resolving the same Phase 7
+  promise the modal awaits, `A`/`D` on the first card, bulk "Approve all
+  low-risk" / "Deny all"), plus approved/denied-last-24h history derived from
+  the audit log. No auto-deny timer while the queue is on screen.
+- **Audit log**: append-only, SHA-256 hash-chained entries (labelled
+  "hash-chained — Ed25519 signatures planned", never "signed"); virtualized
+  ARIA grid, `/` search, decision/actor/date filters, time/cost sort, 420px
+  slide-over (Detail / Payload / Chain with on-demand verification), CSV/JSON
+  export of the filtered view, infinite scroll.
+- **Security settings**: every control carries an honest **Enforced** or
+  **Planned** badge (Constitution Art. IV.2). Enforced in this build:
+  auto-approve low-risk, shell execution off → auto-deny + audit, quarantine
+  new skills, PII redaction (applied before the audit write). Planned: egress
+  proxy (lists persist, nothing is proxied yet), strictness, biometric prompt
+  (shown as unavailable), data sharing (mirrors Settings → Privacy).
+  Quarantine list with Trust (confirm + audit) / Remove.
+- **Emergency revoke**: `alertdialog` (focus lands on Cancel, required
+  acknowledgement), closes the gate first, denies the pending queue, stops
+  every active run (Brain + Control Room show "Paused by XR Shield"), writes
+  one audit row, broadcasts `shield:emergency-revoke`, and raises the app-wide
+  red banner until Resume (which also confirms).
+- **Compromised modal**: non-dismissible (no X / Esc / backdrop) when a
+  critical check fails; "Quarantine all new skills and restart XR"; Orb blinks
+  red once; notification bell badge; dev-only trigger in development builds.
+- **Rust shell** (`src/shield/mod.rs`): `shield_audit` table with
+  UPDATE/DELETE triggers (append-only), writes serialised under one lock so the
+  chain cannot fork, deterministic 204-entry seed byte-identical to the webview
+  fallback (cross-language test vectors), `verify_audit_chain`, five real host
+  health checks (audit db, keychain probe, chain, settings/data dir, version
+  match), policy/pause/quarantine persistence in `shield.json`,
+  `revoke_all` / `shield:resumed` broadcasts. Browser preview mirrors all of
+  it with WebCrypto + localStorage.
+- **Cross-surface**: sidebar/topbar Shield dot, shell tool cards blocked while
+  shell exec is off, Runs rows killed by Shield show a shield icon, Settings →
+  Privacy "Advanced security controls →", onboarding link, palette command.
+- Out of scope (unchanged): real Ed25519 signing, sidecar, injection
+  scanning, microVM, real biometric prompt, real egress proxy, rule editor,
+  FIDO2, export-and-wipe, remote log shipping, scheduled checks.
+
 ### Desktop · Phase 11 — Control Room (`/runs`)
 
 - **Live runs table**: every agent run across chat, builder, research, voice,

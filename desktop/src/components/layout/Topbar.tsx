@@ -20,6 +20,7 @@ import { isTauri } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
 import { usePaletteStore } from '@/stores/paletteStore';
 import { useBrainStore } from '@/stores/brainStore';
+import { selectShieldState, useShieldStore } from '@/stores/shieldStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 
 /**
@@ -88,9 +89,47 @@ function CommandTrigger() {
   );
 }
 
+/** Breadcrumb state dot on /shield (Phase 12) — mirrors the sidebar dot. */
+function ShieldTitleDot() {
+  const state = useShieldStore(selectShieldState);
+  const paused = useShieldStore((s) => s.paused);
+  const effective = paused && state !== 'compromised' ? 'attention' : state;
+  const color =
+    effective === 'compromised'
+      ? 'var(--danger)'
+      : effective === 'attention'
+        ? 'var(--warning)'
+        : effective === 'protected'
+          ? 'var(--success)'
+          : 'var(--text-tertiary)';
+  const label =
+    effective === 'compromised'
+      ? 'Compromised'
+      : effective === 'attention'
+        ? paused
+          ? 'Paused'
+          : 'Attention needed'
+        : effective === 'protected'
+          ? 'Protected'
+          : 'Checking';
+  return (
+    <span
+      role="img"
+      aria-label={`Shield: ${label}`}
+      title={label}
+      data-testid="topbar-shield-dot"
+      data-state={effective}
+      className="ml-2 inline-block size-1.5 rounded-full align-middle"
+      style={{ background: color }}
+    />
+  );
+}
+
 export function Topbar() {
   const title = useScreenTitle();
   const platform = usePlatform();
+  const { pathname } = useLocation();
+  const onShield = pathname.startsWith('/shield');
 
   // Windows/Linux: the window-control cluster occupies the far right (~138px).
   const controlsOnRight = isTauri() && platform !== 'macos';
@@ -110,6 +149,7 @@ export function Topbar() {
         )}
       >
         {title}
+        {onShield && <ShieldTitleDot />}
       </h1>
 
       {/* Centered palette trigger */}
