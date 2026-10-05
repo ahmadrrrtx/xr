@@ -160,7 +160,7 @@ pub fn save_runs_export(
     Ok(Some(dest.display().to_string()))
 }
 
-/// Lower-cased extension without the dot, if any.
+/// Extension without the dot (as written), if any.
 pub fn extension_of(filename: &str) -> Option<&str> {
     let (_, ext) = filename.rsplit_once('.')?;
     if ext.is_empty() || ext.contains('/') || ext.contains('\\') {
@@ -204,7 +204,8 @@ mod tests {
 
     #[test]
     fn run_summary_round_trips_camel_case() {
-        let json = r#"{"id":"run-1","shortId":"#1","title":"t","agent":"Main","agentKind":"chat","model":"gpt-4o","status":"completed","startedAt":1,"endedAt":2,"durationMs":1,"tokensIn":10,"tokensOut":20,"costUsd":0.01,"surface":"chat"}"#;
+        // `"#` would end an r#""# literal, so the delimiter is doubled.
+        let json = r##"{"id":"run-1","shortId":"#1","title":"t","agent":"Main","agentKind":"chat","model":"gpt-4o","status":"completed","startedAt":1,"endedAt":2,"durationMs":1,"tokensIn":10,"tokensOut":20,"costUsd":0.01,"surface":"chat"}"##;
         let r: RunSummary = serde_json::from_str(json).expect("parse");
         assert_eq!(r.short_id, "#1");
         assert_eq!(r.workspace, None);
