@@ -27,6 +27,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
+trash = "5"
 tauri-plugin-os = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
@@ -41,6 +42,9 @@ ureq = { version = "2", features = ["json", "tls"] }
 
 # Phase 4 — chat persistence (SQLite, WAL; bundled build so no system sqlite needed).
 rusqlite = { version = "0.37", features = ["bundled"] }
+
+# Phase 10 — workspace row ids (v4; already transitive via tauri).
+uuid = { version = "1", features = ["v4"] }
 
 # Phase 8 — Settings: OS keychain for provider API keys (never plaintext in
 # the JSON store) + zip for data export/import.

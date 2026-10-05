@@ -19,6 +19,7 @@ import { isTauri } from '@/lib/tauri';
 import { cn } from '@/lib/utils';
 import { usePaletteStore } from '@/stores/paletteStore';
 import { useBrainStore } from '@/stores/brainStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 
 /**
  * Resolve the current screen's display name from the route. Brain appends
@@ -33,10 +34,17 @@ function useScreenTitle(): string {
   const shortId = useBrainStore((s) =>
     runId ? s.runs[runId]?.shortId : undefined
   );
+  const wsId = segment === 'workspaces' ? segments[1] : undefined;
+  const wsName = useWorkspaceStore((s) =>
+    wsId ? s.workspaces.find((w) => w.id === wsId)?.name : undefined
+  );
   const match = NAV_ITEMS.find((item) => item.id === segment);
   const label = match?.label ?? 'XR';
   if (segment === 'brain' && runId) {
     return shortId ? `${label} · ${shortId}` : `${label} · ${runId}`;
+  }
+  if (segment === 'workspaces' && wsId) {
+    return wsName ? `${label} · ${wsName}` : label;
   }
   return label;
 }

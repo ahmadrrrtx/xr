@@ -17,7 +17,7 @@ import {
   CircleDot,
   Clock,
   FileText,
-  Folder,
+  LayoutGrid,
   MessageCircle,
   MessageSquare,
   Mic,
@@ -26,9 +26,10 @@ import {
   Palette,
   PanelLeft,
   PenLine,
+  Plus,
   Search,
-  ShieldQuestion,
   Settings,
+  ShieldQuestion,
   Trash2,
   Wallet,
   type LucideIcon,
@@ -37,7 +38,11 @@ import {
 import { AVATAR_STATES } from '@/components/brand/types';
 import { newApprovalId, type PendingDecision } from '@/lib/approvalCore';
 import { requestApproval } from '@/lib/approvalEvents';
-import { hudNavigate, hudNotifySessionsChanged, hudRunMainCommand } from '@/lib/hud';
+import {
+  hudNavigate,
+  hudNotifySessionsChanged,
+  hudRunMainCommand,
+} from '@/lib/hud';
 import { orbSetState } from '@/lib/orb';
 import { relativeTime, type PaletteGroup } from '@/lib/paletteQuery';
 import type { Session } from '@/lib/chat-db';
@@ -47,6 +52,8 @@ import { useNotificationStore } from '@/stores/notificationStore';
 import { useSessionsStore } from '@/stores/sessionsStore';
 import { useSidebarStore } from '@/stores/sidebar';
 import { useThemeStore } from '@/stores/theme';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { WORKSPACE_KIND_META, type Workspace } from '@/workspaces/types';
 
 // Pure query primitives live in paletteQuery.ts (importable by the root test
 // tier) — re-exported here so palette components have one import site.
@@ -95,7 +102,8 @@ const AGENTS = [
 
 export function buildPaletteCommands(
   ctx: PaletteContext,
-  sessions: readonly Session[]
+  sessions: readonly Session[],
+  workspaces: readonly Workspace[] = []
 ): PaletteCommand[] {
   const isMac = ctx.platform === 'macos';
   const sc = (mac: string, other: string) => (isMac ? mac : other);
@@ -170,13 +178,40 @@ export function buildPaletteCommands(
       action: () => openRoute('/settings'),
     },
     {
+      id: 'go-workspaces',
+      group: 'commands',
+      title: 'Go to Workspaces',
+      icon: LayoutGrid,
+      keywords: ['projects', 'folders', 'launch', 'pad'],
+      action: () => openRoute('/workspaces'),
+    },
+    {
+      id: 'new-workspace',
+      group: 'commands',
+      title: 'New Workspace',
+      icon: Plus,
+      shortcut: sc('⌘N', 'Ctrl+N'),
+      keywords: ['project', 'folder', 'template', 'scaffold', 'clone'],
+      action: () => {
+        openRoute('/workspaces');
+        if (!ctx.isHud) {
+          // give the router a beat, then open the create modal
+          setTimeout(() => useWorkspaceStore.getState().openModal(), 60);
+        }
+      },
+    },
+    {
       id: 'start-voice',
       group: 'commands',
       title: 'Start Voice Session',
       icon: Mic,
       shortcut: sc('⌘.', 'Ctrl+.'),
       keywords: ['talk', 'speak', 'listen'],
-      action: () => ctx.toast('Voice ships in Phase 15', 'The Voice Theater opens from this command.'),
+      action: () =>
+        ctx.toast(
+          'Voice ships in Phase 15',
+          'The Voice Theater opens from this command.'
+        ),
     },
     {
       id: 'show-budget',
@@ -192,7 +227,11 @@ export function buildPaletteCommands(
       title: 'Pause All Agents',
       icon: OctagonX,
       keywords: ['stop', 'halt', 'freeze'],
-      action: () => ctx.toast('Pause ships in Phase 13', 'The spend governor will pause every agent run.'),
+      action: () =>
+        ctx.toast(
+          'Pause ships in Phase 13',
+          'The spend governor will pause every agent run.'
+        ),
     },
     {
       id: 'clear-chat-history',
@@ -201,20 +240,25 @@ export function buildPaletteCommands(
       icon: Trash2,
       keywords: ['delete', 'wipe', 'remove', 'conversations'],
       action: () =>
-        ctx.toast('Clear history ships with Shield (Phase 12)', 'Nothing is deleted behind your back.'),
+        ctx.toast(
+          'Clear history ships with Shield (Phase 12)',
+          'Nothing is deleted behind your back.'
+        ),
     },
   ];
 
   // Chats — the 6 most recent sessions (the store list is newest-first).
-  const chatCommands: PaletteCommand[] = sessions.slice(0, 6).map((session) => ({
-    id: `chat:${session.id}`,
-    group: 'chats' as const,
-    title: session.title,
-    subtitle: relativeTime(session.updatedAt),
-    icon: MessageCircle,
-    keywords: ['open', 'conversation', 'session'],
-    action: () => openRoute(`/chat/${session.id}`),
-  }));
+  const chatCommands: PaletteCommand[] = sessions
+    .slice(0, 6)
+    .map((session) => ({
+      id: `chat:${session.id}`,
+      group: 'chats' as const,
+      title: session.title,
+      subtitle: relativeTime(session.updatedAt),
+      icon: MessageCircle,
+      keywords: ['open', 'conversation', 'session'],
+      action: () => openRoute(`/chat/${session.id}`),
+    }));
 
   const agentCommands: PaletteCommand[] = AGENTS.map((agent) => ({
     id: `agent:${agent.name.toLowerCase()}`,
@@ -226,24 +270,23 @@ export function buildPaletteCommands(
     action: async () => {
       ctx.toast(
         `Agents ship in Phase 19`,
-        `Opening a chat with ${agent.name} for now — its system prompt arrives with the real roster.`,
+        `Opening a chat with ${agent.name} for now — its system prompt arrives with the real roster.`
       );
       await newChat();
     },
   }));
 
-  const workspaceCommands: PaletteCommand[] = [
-    {
-      id: 'create-workspace',
-      group: 'workspaces',
-      title: 'Create workspace',
-      subtitle: 'Projects, files, switching',
-      icon: Folder,
-      keywords: ['project', 'new', 'space'],
-      action: () =>
-        ctx.toast('Workspaces ship in Phase 10', 'Workspace create/switch lands with the real store.'),
-    },
-  ];
+  const workspaceCommands: PaletteCommand[] = workspaces.map((ws) => ({
+    id: `workspace:${ws.id}`,
+    group: 'workspaces' as const,
+    title: `Open ${ws.name}`,
+    subtitle: ws.lastOpenedAt
+      ? relativeTime(ws.lastOpenedAt)
+      : WORKSPACE_KIND_META[ws.kind].label,
+    icon: WORKSPACE_KIND_META[ws.kind].icon,
+    keywords: ['workspace', 'project', ws.kind, ...ws.stack],
+    action: () => openRoute(`/workspaces/${ws.id}`),
+  }));
 
   const settingsCommands: PaletteCommand[] = [
     {
@@ -278,7 +321,15 @@ export function buildPaletteCommands(
       title: 'Models & providers',
       subtitle: 'API keys, defaults, Ollama',
       icon: Settings,
-      keywords: ['api', 'key', 'provider', 'openai', 'anthropic', 'ollama', 'model'],
+      keywords: [
+        'api',
+        'key',
+        'provider',
+        'openai',
+        'anthropic',
+        'ollama',
+        'model',
+      ],
       action: () => openRoute('/settings#models'),
     },
     {
@@ -347,7 +398,8 @@ export function buildPaletteCommands(
         '\n' +
         'XR (on behalf of Ahmad)',
       risk: 'medium',
-      justification: 'Triggered from the dev palette command to demo approvals.',
+      justification:
+        'Triggered from the dev palette command to demo approvals.',
     });
 
   const devCommands: PaletteCommand[] = [
@@ -377,7 +429,11 @@ export function buildPaletteCommands(
       title: 'Test Notification (dev)',
       icon: MessageSquare,
       devOnly: true,
-      action: () => ctx.toast('XR toast — this is a test', 'Fired from the command palette (dev command).'),
+      action: () =>
+        ctx.toast(
+          'XR toast — this is a test',
+          'Fired from the command palette (dev command).'
+        ),
     },
     {
       id: 'dev-cycle-orb-states',
@@ -392,7 +448,8 @@ export function buildPaletteCommands(
           window.localStorage.getItem('xr.orb.devStateIndex') ?? '0',
           10
         );
-        const index = ((Number.isFinite(raw) ? raw : 0) + 1) % AVATAR_STATES.length;
+        const index =
+          ((Number.isFinite(raw) ? raw : 0) + 1) % AVATAR_STATES.length;
         const next = AVATAR_STATES[index] ?? 'idle';
         window.localStorage.setItem('xr.orb.devStateIndex', String(index));
         void orbSetState(next);
