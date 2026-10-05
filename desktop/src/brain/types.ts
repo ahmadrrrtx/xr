@@ -70,6 +70,59 @@ export interface Run {
   rootSpanId: string;
 }
 
+/* ── Phase 11 · Control Room list-level projection ─────────────────────── */
+
+/** Run-level status — `pending` is a span-only state and never a run's. */
+export type RunStatus =
+  'running' | 'completed' | 'failed' | 'killed' | 'waiting';
+
+/** What kind of agent produced the run (drives the agent chip colour). */
+export type AgentKind =
+  'chat' | 'builder' | 'research' | 'voice' | 'background';
+
+/** Which surface started the run (drives the "Active across surfaces" chips). */
+export type RunSurface = AgentKind | 'cli';
+
+/**
+ * A lighter projection of `Run` for the cross-surface list: no span tree,
+ * plus the fields the table needs that a trace doesn't carry (surface,
+ * agent kind, a one-line error summary). The canonical list lives in
+ * `stores/runsStore.ts`; `Run` (above) stays the trace-level record.
+ */
+export interface RunSummary {
+  id: string;
+  /** "#847" */
+  shortId: string;
+  title: string;
+  /** "Main" | "Research" | "Coder" | "Planner" | custom names */
+  agent: string;
+  agentKind: AgentKind;
+  workspace?: string;
+  workspaceId?: string;
+  model: string;
+  status: RunStatus;
+  /** ms since epoch */
+  startedAt: number;
+  endedAt: number | null;
+  /** Settled on end; null while in flight (derive from the store clock). */
+  durationMs: number | null;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+  errorSummary?: string;
+  surface: RunSurface;
+  /** Client-side soft hide (Phase 11: lost on reload, by design). */
+  archived?: boolean;
+}
+
+export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
+  running: 'Running',
+  completed: 'Completed',
+  failed: 'Failed',
+  killed: 'Killed',
+  waiting: 'Waiting approval',
+};
+
 /** One entry in the Events / Logs tabs. */
 export interface BrainEvent {
   id: number;

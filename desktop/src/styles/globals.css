@@ -477,3 +477,205 @@ html[data-theme='midnight'] {
     animation: none;
   }
 }
+
+/* ── Phase 11 · Control Room ────────────────────────────────────────────── */
+
+/* Row surfaces. react-window positions rows with transforms, so entrance
+   motion is a one-shot keyframe class gated by the store's flash timestamp,
+   never a layout animation. Running tint is accent at 6% — "alive", not
+   "selected". */
+.run-row {
+  transition:
+    background-color 120ms ease,
+    opacity 160ms ease,
+    box-shadow 160ms ease;
+}
+.run-row[data-status='running'] {
+  background: color-mix(in oklab, var(--accent) 6%, transparent);
+}
+.run-row[data-status='waiting'] {
+  background: color-mix(in oklab, var(--warning) 6%, transparent);
+}
+.run-row[data-status='failed'] {
+  box-shadow: inset 2px 0 0 0 var(--danger);
+}
+.run-row[data-status='killed'] {
+  opacity: 0.5;
+}
+.run-row[data-selected='true'] {
+  background: color-mix(in oklab, var(--accent) 10%, var(--bg-raised));
+  box-shadow:
+    inset 2px 0 0 0 var(--accent),
+    0 1px 0 0 var(--border-default);
+  opacity: 1;
+}
+.run-row:hover {
+  background: color-mix(in oklab, var(--text-primary) 4%, transparent);
+}
+.run-row[data-status='running']:hover {
+  background: color-mix(in oklab, var(--accent) 9%, transparent);
+}
+
+/* New row: slide down 4px + accent flash that decays over 1s. */
+@keyframes run-row-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+    background-color: color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    background-color: color-mix(in oklab, var(--accent) 6%, transparent);
+  }
+}
+.run-row[data-flash='new'] {
+  animation: run-row-in 1000ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Completion flash — a brief green wash. */
+@keyframes run-row-done {
+  0% {
+    background-color: color-mix(in oklab, var(--success) 20%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.run-row[data-flash='completed'] {
+  animation: run-row-done 900ms ease-out both;
+}
+
+/* Failure: 1px horizontal shake, once, plus red wash. */
+@keyframes run-row-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+    background-color: color-mix(in oklab, var(--danger) 18%, transparent);
+  }
+  20% {
+    transform: translateX(-1px);
+  }
+  40% {
+    transform: translateX(1px);
+  }
+  60% {
+    transform: translateX(-1px);
+  }
+  80% {
+    transform: translateX(1px);
+    background-color: transparent;
+  }
+}
+.run-row[data-flash='failed'] {
+  animation: run-row-shake 320ms ease-out both;
+}
+
+/* Running status icon pulse (1.5 s, opacity + scale). */
+@keyframes run-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.85);
+  }
+}
+.run-status-running {
+  animation: run-status-pulse 1500ms ease-in-out infinite;
+}
+
+/* Skeleton shimmer (12 rows while the list loads). */
+@keyframes run-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.run-shimmer {
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--text-primary) 5%, transparent) 25%,
+    color-mix(in oklab, var(--text-primary) 10%, transparent) 50%,
+    color-mix(in oklab, var(--text-primary) 5%, transparent) 75%
+  );
+  background-size: 200% 100%;
+  animation: run-shimmer 1400ms linear infinite;
+}
+
+/* Charts: bars grow from the baseline (400 ms), areas draw in (800 ms). */
+@keyframes run-bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.run-bar {
+  transform-origin: bottom;
+  transform-box: fill-box;
+  animation: run-bar-grow 400ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes run-area-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.run-area {
+  animation: run-area-in 800ms ease-out both;
+}
+@keyframes run-line-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.run-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: run-line-draw 800ms ease-out both;
+}
+.run-donut-seg {
+  transition: stroke-width 160ms ease;
+}
+.run-donut-seg:hover {
+  stroke-width: 18;
+}
+
+/* STOP ALL: red, glowing only in glow themes (--accent-glow is transparent
+   in Paper/Arctic and under [data-glow='off']). */
+.run-stop-all {
+  box-shadow: 0 0 16px -4px
+    color-mix(in oklab, var(--danger) 70%, var(--accent-glow));
+}
+[data-glow='off'] .run-stop-all,
+html[data-theme='paper'] .run-stop-all,
+html[data-theme='arctic'] .run-stop-all,
+html[data-theme='graphite'] .run-stop-all {
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .run-row[data-flash],
+  .run-status-running,
+  .run-shimmer,
+  .run-bar,
+  .run-line {
+    animation: none;
+  }
+  .run-row[data-flash='new'] {
+    animation: run-area-in 200ms ease-out both; /* opacity only */
+  }
+}

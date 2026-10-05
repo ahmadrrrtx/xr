@@ -22,6 +22,7 @@ import { persist } from 'zustand/middleware';
 import {
   brainRunEnd,
   brainRunStart,
+  brainRunStatus,
   brainSpanEnd,
   brainSpanStart,
 } from '@/brain/events';
@@ -44,6 +45,7 @@ import {
 import type { ApprovalRequest, ApprovalSpec } from '@/lib/approvalCore';
 import { isTauri } from '@/lib/tauri';
 import { orbSetState } from '@/lib/orb';
+import { lookupRunSummary } from '@/runs/registry';
 import { useApprovalStore } from '@/stores/approvalStore';
 
 /* ── Module-level (non-serializable) state ────────────────────────────── */
@@ -51,7 +53,11 @@ import { useApprovalStore } from '@/stores/approvalStore';
 const streams = new Map<string, StreamHandle>();
 const ticked = new Map<string, { tokensOut: number; cost: number }>();
 const lastTokenEvent = new Map<string, number>();
-let demoCounter = 0;
+/** Runs being stopped by a bulk action (Phase 11) — no per-run toast. */
+const silentStops = new Set<string>();
+// Demo ids are `mock-latest-N` and the shortId is N, so start just above the
+// seeded history (#…847) — a fresh run reads "#848", not "#1" (Phase 11).
+let demoCounter = 847;
 let eventId = 0;
 let logId = 0;
 
@@ -87,8 +93,13 @@ interface BrainState {
 
   loadRun: (id: string) => Promise<void>;
   /** Spawns a fresh demo run and returns its id (navigate to it). */
-  startMockRun: (title?: string) => string;
-  stopRun: (id: string) => void;
+  /** `flavor: 'short'` → a ~5 s run (chat tool calls, Phase 11). */
+  startMockRun: (
+    title?: string,
+    opts?: { flavor?: 'short' | 'medium' }
+  ) => string;
+  /** `silent`: the caller (Control Room) announces the outcome itself. */
+  stopRun: (id: string, opts?: { silent?: boolean }) => void;
   restartRun: (id: string) => void;
   exportJson: (id: string) => void;
 
@@ -229,20 +240,24 @@ export const useBrainStore = create<BrainState>()(
         );
         // Cross-surface: the orb leaves its thinking state (Phase 6).
         void orbSetState(status === 'failed' ? 'error' : 'idle');
-        // Sonner toast — the visible confirmation.
-        void import('sonner').then(({ toast }) => {
-          if (status === 'completed') {
-            toast(
-              `Run ${run.shortId} completed in ${secs}s · $${nextRun.costUsd.toFixed(3)}`
-            );
-          } else if (status === 'failed') {
-            toast(`Run ${run.shortId} failed`, {
-              description: 'Open the failed span for the error detail.',
-            });
-          } else {
-            toast(`Run ${run.shortId} stopped`);
-          }
-        });
+        // Sonner toast — the visible confirmation (unless a bulk stop from
+        // the Control Room already announces it, Phase 11).
+        const silent = silentStops.delete(runId);
+        if (!silent) {
+          void import('sonner').then(({ toast }) => {
+            if (status === 'completed') {
+              toast(
+                `Run ${run.shortId} completed in ${secs}s · $${nextRun.costUsd.toFixed(3)}`
+              );
+            } else if (status === 'failed') {
+              toast(`Run ${run.shortId} failed`, {
+                description: 'Open the failed span for the error detail.',
+              });
+            } else {
+              toast(`Run ${run.shortId} stopped`);
+            }
+          });
+        }
         attachHooks(runId, null);
       };
 
@@ -291,12 +306,21 @@ export const useBrainStore = create<BrainState>()(
           set((s) => ({
             runs: { ...s.runs, [runId]: withStatus(run, 'waiting', null) },
           }));
+          brainRunStatus(runId, 'waiting');
         }
         void useApprovalStore
           .getState()
           .requestApproval(req)
           .then((decision) => {
             const approved = decision.status === 'approved';
+            // Granted → the run is live again (denied ends it via the stream).
+            const cur = get().runs[runId];
+            if (approved && cur && cur.status === 'waiting') {
+              set((s) => ({
+                runs: { ...s.runs, [runId]: withStatus(cur, 'running', null) },
+              }));
+              brainRunStatus(runId, 'running');
+            }
             const d2 = get().data[runId];
             if (d2) {
               set((s) => ({
@@ -606,6 +630,10 @@ export const useBrainStore = create<BrainState>()(
           if (st.data[id]) return; // already loaded (live or frozen)
 
           const persisted = st.runs[id];
+          // Phase 11: a Control Room row this window never streamed (seeded
+          // history or another window's run) — keep ITS metadata, rebuild
+          // the trace from the deterministic script for its flavour.
+          const summary = persisted ? undefined : lookupRunSummary(id);
           const flavor = flavorFromId(id);
           const script = buildScript(flavor, id);
           const now = Date.now();
@@ -613,14 +641,20 @@ export const useBrainStore = create<BrainState>()(
           let startedAt: number;
           let asOf: number;
           let live: boolean;
-          if (persisted) {
+          if (summary) {
+            startedAt = summary.startedAt;
+            asOf = Number.POSITIVE_INFINITY;
+            live = false;
+          } else if (persisted) {
             // Reopened after a reload: rebuild the frozen trace from the
             // script (deterministic per id), anchored to its original start.
             // The live stream can't resume, so it settles as complete.
             startedAt = persisted.startedAt;
             asOf = Number.POSITIVE_INFINITY;
             live = false;
-          } else if (flavor === 'latest') {
+          } else if (flavor === 'latest' || id.startsWith('mock-latest-')) {
+            // Fresh demo run — streams live from t=0. The id may carry a
+            // flavour suffix (`mock-latest-848-short`, Phase 11 chat runs).
             startedAt = now;
             asOf = 0;
             live = true;
@@ -649,10 +683,29 @@ export const useBrainStore = create<BrainState>()(
 
           if (!live) seedHistory(mat.run, d, script.spans);
 
+          const fromSummary: Run | null = summary
+            ? {
+                ...mat.run,
+                shortId: summary.shortId,
+                title: summary.title,
+                agent: summary.agent,
+                workspace: summary.workspace,
+                model: summary.model,
+                status: summary.status,
+                startedAt: summary.startedAt,
+                endedAt: summary.endedAt ?? mat.run.endedAt,
+                tokensIn: summary.tokensIn,
+                tokensOut: summary.tokensOut,
+                costUsd: summary.costUsd,
+              }
+            : null;
+
           set((s) => ({
             // A persisted run keeps its own metadata (title, cost, status);
             // mat.run is only the deterministic span rebuild.
-            runs: persisted ? s.runs : { ...s.runs, [id]: mat.run },
+            runs: persisted
+              ? s.runs
+              : { ...s.runs, [id]: fromSummary ?? mat.run },
             data: { ...s.data, [id]: d },
             runOrder: s.runOrder.includes(id)
               ? s.runOrder
@@ -673,14 +726,17 @@ export const useBrainStore = create<BrainState>()(
           }
         },
 
-        startMockRun: (title) => {
+        startMockRun: (title, opts) => {
           const st = get();
+          // `-short` routes flavorFromId to the short script; the shortId is
+          // still the trailing digits, so "#12" either way.
+          const suffix = opts?.flavor === 'short' ? '-short' : '';
           demoCounter += 1;
           // Skip numbers a persisted run already owns (counter resets on reload).
-          let id = `mock-latest-${demoCounter}`;
-          while (st.runs[id]) {
+          let id = `mock-latest-${demoCounter}${suffix}`;
+          while (st.runs[id] || st.runs[`mock-latest-${demoCounter}`]) {
             demoCounter += 1;
-            id = `mock-latest-${demoCounter}`;
+            id = `mock-latest-${demoCounter}${suffix}`;
           }
           void get().loadRun(id);
           if (title) {
@@ -692,7 +748,8 @@ export const useBrainStore = create<BrainState>()(
           return id;
         },
 
-        stopRun: (id) => {
+        stopRun: (id, opts) => {
+          if (opts?.silent) silentStops.add(id);
           const st = get();
           const d = st.data[id];
           // Withdraw a parked approval so the Phase 7 modal doesn't leak.

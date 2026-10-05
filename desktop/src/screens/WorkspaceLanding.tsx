@@ -25,6 +25,9 @@ import {
 
 import { DeleteDialog } from '@/components/workspaces/DeleteDialog';
 import { StackChips } from '@/components/workspaces/StackChips';
+import { fmtRelative } from '@/brain/format';
+import type { RunStatus } from '@/brain/types';
+import { useRunsStore } from '@/stores/runsStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { cn } from '@/lib/utils';
 import {
@@ -32,6 +35,14 @@ import {
   workspaceIcon,
   type Workspace,
 } from '@/workspaces/types';
+
+const RUN_DOT: Record<RunStatus, string> = {
+  running: 'var(--accent)',
+  completed: 'var(--success)',
+  failed: 'var(--danger)',
+  waiting: 'var(--warning)',
+  killed: 'var(--text-tertiary)',
+};
 
 export default function WorkspaceLanding() {
   const { id } = useParams<{ id: string }>();
@@ -57,6 +68,28 @@ export default function WorkspaceLanding() {
     () => workspaces.find((w) => w.id === id) ?? null,
     [workspaces, id]
   );
+
+  // Runs attached to this workspace (by id, or by name for seeded history),
+  // newest first, capped at five. Structural changes only — no tick churn.
+  const runsVersion = useRunsStore((s) => s.listVersion);
+  const clock = useRunsStore((s) => s.clock);
+  useEffect(() => {
+    useRunsStore.getState().tick(); // fresh "now" for the relative times below
+  }, [runsVersion]);
+  const wsRuns = useMemo(() => {
+    if (!ws) return [];
+    const name = ws.name.toLowerCase();
+    return Object.values(useRunsStore.getState().runs)
+      .filter(
+        (r) =>
+          !r.archived &&
+          (r.workspaceId === ws.id ||
+            (r.workspace ?? '').toLowerCase() === name)
+      )
+      .sort((a, b) => b.startedAt - a.startedAt)
+      .slice(0, 5);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ws, runsVersion]);
 
   const doLaunch = async (): Promise<void> => {
     if (!ws) return;
@@ -228,17 +261,62 @@ export default function WorkspaceLanding() {
           </div>
         </section>
 
-        {/* ── Recent runs (honest empty state) ─────────────────────────── */}
+        {/* ── Recent runs (Phase 11: fed by the Control Room store) ─────── */}
         <section aria-label="Recent runs">
-          <h2 className="text-text-tertiary mb-2 font-mono text-[10.5px] tracking-wider uppercase">
-            Recent runs
-          </h2>
-          <div className="border-border-subtle rounded-xl border border-dashed p-5 text-center">
-            <p className="text-text-secondary text-[12.5px]">No runs yet.</p>
-            <p className="text-text-tertiary mt-1 text-[11.5px]">
-              Agent runs will attach here once the runtime lands (Phase 14).
-            </p>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="text-text-tertiary font-mono text-[10.5px] tracking-wider uppercase">
+              Recent runs
+            </h2>
+            {wsRuns.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  useRunsStore.getState().setSearch(ws.name);
+                  navigate('/runs');
+                }}
+                className="text-text-secondary hover:text-text-primary text-[11.5px] underline-offset-2 hover:underline"
+              >
+                All in Control Room →
+              </button>
+            )}
           </div>
+          {wsRuns.length === 0 ? (
+            <div className="border-border-subtle rounded-xl border border-dashed p-5 text-center">
+              <p className="text-text-secondary text-[12.5px]">No runs yet.</p>
+              <p className="text-text-tertiary mt-1 text-[11.5px]">
+                Agent runs in this workspace will appear here and in the Control
+                Room.
+              </p>
+            </div>
+          ) : (
+            <ul className="border-border-subtle bg-bg-ink divide-border-subtle divide-y overflow-hidden rounded-xl border">
+              {wsRuns.map((r) => (
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/brain/${r.id}`)}
+                    className="hover:bg-bg-raised flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
+                    aria-label={`Open run ${r.shortId}: ${r.title}`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{ background: RUN_DOT[r.status] }}
+                    />
+                    <span className="text-text-tertiary w-12 shrink-0 font-mono text-[11px]">
+                      {r.shortId}
+                    </span>
+                    <span className="text-text-primary min-w-0 flex-1 truncate text-[12.5px]">
+                      {r.title}
+                    </span>
+                    <span className="text-text-tertiary shrink-0 font-mono text-[11px]">
+                      {fmtRelative(r.startedAt, clock)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
 

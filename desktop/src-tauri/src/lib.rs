@@ -144,6 +144,10 @@ pub fn run() {
             commands::settings::get_autostart,
             commands::settings::set_autostart,
             commands::settings::test_provider_connection,
+            commands::runs::list_runs,
+            commands::runs::cancel_run,
+            commands::runs::bulk_cancel_runs,
+            commands::runs::save_runs_export,
             commands::settings::ptt_shortcut_info,
             #[cfg(desktop)]
             commands::settings::ptt_set_shortcut,

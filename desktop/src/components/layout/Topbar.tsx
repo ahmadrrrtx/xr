@@ -8,6 +8,7 @@
 import { Search } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
+import { ActivityDot } from '@/components/layout/ActivityDot';
 import { MicButton } from '@/components/layout/MicButton';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { UserMenu } from '@/components/layout/UserMenu';
@@ -125,6 +126,7 @@ export function Topbar() {
       >
         <WalletWidget />
         <MicButton />
+        <ActivityDot />
         <NotificationBell />
         <UserMenu />
       </div>
