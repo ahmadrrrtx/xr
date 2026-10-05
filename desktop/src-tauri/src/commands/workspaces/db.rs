@@ -471,6 +471,7 @@ mod tests {
         let _ = db.delete(&ws.id, false).unwrap();
         let _ = db.delete(&copy.id, false).unwrap();
         assert!(db.list().unwrap().is_empty());
+        drop(db); // release the SQLite handle so Windows can clean the dir
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
