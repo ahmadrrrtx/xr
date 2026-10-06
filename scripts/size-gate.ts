@@ -107,7 +107,20 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 144_500; // Phase 14 (real LLM wire) · 144,000 → 144,500 (2026-10-06):
+export const TREE_CEILING = 145_500; // Phase 15 (voice) · 144,500 → 145,500 (2026-10-06):
+// the voice loop becomes real for a first-run user: a measured model
+// catalogue + resumable downloader (models.ts, 354 — the only place that
+// knows byte sizes, so the download card can never lie), catalogue-driven
+// native binding with per-voice Piper loading (native.ts), transcript shaping
+// + cloud price table (transcript.ts, 64), settings sanitiser, and the
+// Phase 15 routes (models/voices/settings/download/test-tts/transcribe) with
+// durable approvals and cost events in voice.routes.ts (788, under 800).
+// Audio authority + consent plane again: it composes the approval store,
+// the config service and the native loader and cannot move to a satellite
+// without splitting them. No waived giant grew (config.ts enum edits were
+// in-line). Measured 145,092. Smallest round number that fits; 110k stays
+// the direction of travel.
+// Phase 14 (real LLM wire) · 144,000 → 144,500 (2026-10-06):
 // the default run path streams for real: `chatStream()` on ResilientProvider
 // (degradation.ts +170) and the legacy FallbackProvider (routing-service.ts
 // +56) with the same fail-over rule as `chat()`; ConfigService.reload() per
