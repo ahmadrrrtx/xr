@@ -57,8 +57,20 @@ let buffer = '';
   }
 })();
 
+let stopping = false;
 const stop = () => {
-  child.kill();
+  if (stopping) return;
+  stopping = true;
+  child.kill(); // SIGTERM — the engine drains and exits (bounded on its side too)
+  // Belt and braces: never leave a half-dead engine holding the Vite "already
+  // running" slot. 3 s is longer than the engine's own 2 s bounded exit.
+  setTimeout(() => {
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      /* already gone */
+    }
+  }, 3000).unref();
 };
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);

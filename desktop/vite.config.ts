@@ -123,8 +123,28 @@ let engineChild: ReturnType<typeof spawn> | null = null;
  * Launches `bun run scripts/dev-engine.ts` (which writes the token file the
  * proxy reads) detached from the Vite process. Idempotent while it runs.
  */
-function startDevEngine(): { started: boolean; reason?: string } {
-  if (engineChild && engineChild.exitCode === null) return { started: true, reason: 'already running' };
+async function engineAnswers(): Promise<boolean> {
+  try {
+    const r = await fetch(`${DAEMON}/api/v1/health`, { signal: AbortSignal.timeout(1500) });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function startDevEngine(): Promise<{ started: boolean; reason?: string }> {
+  if (engineChild && engineChild.exitCode === null) {
+    // A live wrapper is not proof of a live engine: if the port is silent the
+    // child is stale (crashed engine, hung drain). Replace it instead of
+    // reporting "already running" to a banner that is still red.
+    if (await engineAnswers()) return { started: true, reason: 'already running' };
+    try {
+      engineChild.kill('SIGKILL');
+    } catch {
+      /* already gone */
+    }
+    engineChild = null;
+  }
   if (!existsSync(resolve(projectRoot, '..', 'src', 'index.ts'))) {
     return { started: false, reason: 'engine sources not found next to desktop/ (packaged builds use the sidecar)' };
   }
@@ -161,9 +181,10 @@ function pairingPlugin() {
             res.end(JSON.stringify({ error: 'not paired' }));
             return;
           }
-          const r = startDevEngine();
-          res.statusCode = r.started ? 200 : 500;
-          res.end(JSON.stringify(r));
+          void startDevEngine().then((r) => {
+            res.statusCode = r.started ? 200 : 500;
+            res.end(JSON.stringify(r));
+          });
           return;
         }
         if (!req.url?.startsWith('/__xr/pair')) return next();

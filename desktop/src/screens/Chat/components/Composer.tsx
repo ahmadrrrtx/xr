@@ -228,6 +228,9 @@ export function Composer({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               placeholder={engineDown ? 'Engine not running — start it to chat' : 'Message XR...'}
+              // The draft lives in state, so disabling the field while the
+              // engine is down loses nothing; it re-enables on the next probe.
+              disabled={engineDown}
               aria-label="Message XR"
               aria-describedby={engineDown ? 'xr-composer-engine-hint' : undefined}
               minRows={1}
