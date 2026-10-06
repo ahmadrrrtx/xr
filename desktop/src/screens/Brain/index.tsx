@@ -29,6 +29,7 @@ import {
 import { toast } from 'sonner';
 import { useListRef } from 'react-window';
 
+import { modelInfo } from '@/budget/models';
 import { useEngineStore } from '@/stores/engineStore';
 import { resolveDefaultModel } from '@/stores/sessionsStore';
 
@@ -703,7 +704,7 @@ function BrainRun({ runId }: { runId: string }) {
           </span>
         )}
 
-        <span className="ml-1 flex shrink-0 items-center gap-1.5">
+        <span className="ml-1 flex shrink-0 items-center gap-1.5" data-run-status={run.status}>
           <StatusDot status={run.status} pulse={live} />
           <span className="text-text-secondary text-[12px]">
             {STATUS_LABEL[run.status]}
@@ -726,9 +727,18 @@ function BrainRun({ runId }: { runId: string }) {
             <span className="text-text-tertiary"> / </span>
             <TokenCounter n={run.tokensOut} label="out" />
           </span>
-          <span className="text-accent" title="Cumulative cost">
-            <CostTween value={run.costUsd} />
-          </span>
+          {run.costUsd === 0 && modelInfo(run.model).local ? (
+            <span
+              className="bg-bg-raised text-text-tertiary rounded px-1.5 py-px font-mono text-[10.5px]"
+              title="Local model — no metered cost"
+            >
+              local
+            </span>
+          ) : (
+            <span className="text-accent" title="Cumulative cost">
+              <CostTween value={run.costUsd} />
+            </span>
+          )}
         </span>
 
         {/* Actions */}

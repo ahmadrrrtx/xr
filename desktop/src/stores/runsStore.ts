@@ -40,7 +40,8 @@ import {
   type StatusFilter,
 } from '@/runs/core';
 import { seedMockHistory, seedStress } from '@/runs/seed';
-import { useBrainStore } from '@/stores/brainStore';
+import { useEngineStore } from '@/stores/engineStore';
+import { isEngineRunId, useBrainStore } from '@/stores/brainStore';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -308,15 +309,23 @@ export const useRunsStore = create<RunsState>()((set, get) => {
         }
       }
 
+      // Phase 14: with the engine reachable the rows are real engine runs
+      // (bridged from brainStore); the scripted demo history only seeds a
+      // window that has no engine link — never next to real runs.
+      const engineUp = useEngineStore.getState().status === 'up';
       let seeded: RunSummary[] = [];
       if (mode === 'stress') seeded = seedStress(now);
-      else if (mode === 'default') seeded = seedMockHistory(now);
+      else if (mode === 'default' && !engineUp) seeded = seedMockHistory(now);
 
-      // Keep live rows (bridged from brainStore) across a reseed.
+      // Keep live rows (bridged from brainStore) and real engine runs
+      // across a reseed.
       const keep: Record<string, RunSummary> = {};
       for (const r of Object.values(get().runs)) {
-        if (inProgress(r.status) || r.id.startsWith('mock-latest'))
+        if (inProgress(r.status) || r.id.startsWith('mock-latest') || isEngineRunId(r.id))
           keep[r.id] = r;
+      }
+      for (const r of Object.values(useBrainStore.getState().runs)) {
+        if (r.source === 'engine' && !keep[r.id]) keep[r.id] = summaryFromRun(r, get().runs[r.id]);
       }
       const runs: Record<string, RunSummary> = {};
       for (const r of seeded) runs[r.id] = r;
