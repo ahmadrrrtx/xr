@@ -7,12 +7,25 @@
 import { create } from 'zustand';
 
 import { chatDb, type Session } from '@/lib/chat-db';
-import { readSettingJSON } from '@/lib/persistent-store';
+import { readSettingJSON, writeSettingJSON } from '@/lib/persistent-store';
+import { engineDefaultModel } from '@/stores/engineStore';
 
+/** Last-resort default when neither the user nor the engine has chosen. */
 export const DEFAULT_MODEL = 'claude-sonnet-4.5';
 
 /** Persisted default (seeded by onboarding / last picker choice). */
 let defaultModel: string | null = null;
+
+/** Phase 14: the picker's choice becomes the default for new sessions now, not after a reload. */
+export async function setDefaultModel(id: string): Promise<void> {
+  defaultModel = id;
+  await writeSettingJSON('xr.model.default', id);
+}
+
+/** New-session model: user default → engine's current default → fallback. */
+export function resolveDefaultModel(): string {
+  return defaultModel ?? engineDefaultModel() ?? DEFAULT_MODEL;
+}
 
 interface SessionsState {
   sessions: Session[];
@@ -75,12 +88,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
       set({ activeSessionId: existing.id });
       return existing;
     }
-    const session = await chatDb.createSession(
-      newId(),
-      'New chat',
-      model ?? defaultModel ?? DEFAULT_MODEL,
-      now,
-    );
+    const session = await chatDb.createSession(newId(), 'New chat', model ?? resolveDefaultModel(), now);
     set((st) => ({
       sessions: [session, ...st.sessions],
       activeSessionId: session.id,

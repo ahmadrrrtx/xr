@@ -17,19 +17,18 @@ import { fmtUsd } from '@/budget/core';
 import { modelInfo, type ModelInfo } from '@/budget/models';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { chatDb } from '@/lib/chat-db';
-import { writeSettingJSON } from '@/lib/persistent-store';
 import { useBudgetStore } from '@/stores/budgetStore';
-import { engineDefaultModel, engineModelOptions, useEngineStore, type EngineModelOption } from '@/stores/engineStore';
-import { DEFAULT_MODEL, useSessionsStore } from '@/stores/sessionsStore';
+import { engineModelOptions, useEngineStore, type EngineModelOption } from '@/stores/engineStore';
+import { resolveDefaultModel, setDefaultModel, useSessionsStore } from '@/stores/sessionsStore';
 
-function iconFor(m: ModelInfo) {
-  if (m.local) return Cpu;
+function iconFor(m: ModelInfo, o: EngineModelOption) {
+  if (o.kind === 'local') return Cpu;
   return m.latency === 'fast' ? Zap : Sparkles;
 }
 
 function priceLine(m: ModelInfo, o: EngineModelOption): string {
   const ctx = `${m.contextK}K ctx`;
-  if (m.local) return `${o.providerLabel} · ${ctx}${o.detail ? ` · ${o.detail}` : ''} · $0`;
+  if (o.kind === 'local') return `${o.providerLabel}${o.detail ? ` · ${o.detail}` : ''} · $0`;
   return `${o.providerLabel} · ${ctx} · ${fmtUsd(m.inPer1M, { compact: true })} in / ${fmtUsd(m.outPer1M, { compact: true })} out per 1M`;
 }
 
@@ -49,8 +48,7 @@ export function ModelPicker({
   const catalogError = useEngineStore((s) => s.catalogError);
   const [open, setOpen] = useState(false);
 
-  const active =
-    sessions.sessions.find((s) => s.id === sessionId)?.model ?? engineDefaultModel() ?? DEFAULT_MODEL;
+  const active = sessions.sessions.find((s) => s.id === sessionId)?.model ?? resolveDefaultModel();
   const label = modelInfo(active).name;
   const groups = useMemo(() => engineModelOptions(providers, models), [providers, models]);
   const engineDefault = providers?.model ?? null;
@@ -72,7 +70,7 @@ export function ModelPicker({
       }));
     }
     // The desktop default (new sessions) follows the last explicit choice.
-    await writeSettingJSON('xr.model.default', o.id);
+    await setDefaultModel(o.id);
     void useBudgetStore.getState().updateSettings({ defaultModel: o.id }, { quiet: true });
     setOpen(false);
   };
@@ -90,7 +88,7 @@ export function ModelPicker({
 
   const Row = ({ o }: { o: EngineModelOption }) => {
     const m = modelInfo(o.id);
-    const Icon = iconFor(m);
+    const Icon = iconFor(m, o);
     const isActive = o.id === active;
     const isDefault = o.id === engineDefault;
     return (
@@ -114,13 +112,17 @@ export function ModelPicker({
         <Icon aria-hidden="true" className="text-text-secondary mt-0.5 size-4 shrink-0" strokeWidth={1.5} />
         <span className="min-w-0 flex-1">
           <span className="text-text-primary flex items-center gap-1.5 text-[13px] font-semibold">
-            <span className="truncate">{m.name}</span>
-            {m.estimate && !m.local && (
+            <span className="truncate">{!o.available && o.kind === 'cloud' ? o.providerLabel : m.name}</span>
+            {m.estimate && o.kind !== 'local' && (
               <span className="text-text-tertiary font-mono text-[9px] font-normal tracking-wide uppercase">estimate</span>
             )}
           </span>
           <span className="text-text-tertiary block truncate text-[11px]">
-            {o.available ? priceLine(m, o) : `${o.providerLabel} · ${o.unavailableReason ?? 'Unavailable'}`}
+            {o.available
+              ? priceLine(m, o)
+              : o.kind === 'cloud'
+                ? `${m.name} and others · ${o.unavailableReason ?? 'Unavailable'}`
+                : `${o.providerLabel} · ${o.unavailableReason ?? 'Unavailable'}`}
           </span>
           {!o.available && o.kind === 'cloud' && (
             <span className="text-accent mt-0.5 flex items-center gap-1 text-[11px]">
@@ -130,7 +132,7 @@ export function ModelPicker({
           )}
         </span>
         <span className="text-text-tertiary font-mono text-[9px] tracking-wide uppercase">
-          {m.local ? 'local' : 'cloud'}
+          {o.kind === 'local' ? 'local' : 'cloud'}
         </span>
         {o.available && (
           <button
@@ -178,7 +180,11 @@ export function ModelPicker({
           </button>
         )}
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[320px] border-border-subtle bg-bg-ink p-1">
+      <PopoverContent
+        align="start"
+        side="top"
+        className="w-[320px] border-border-subtle bg-bg-ink max-h-[min(480px,70vh)] overflow-y-auto p-1"
+      >
         {empty ? (
           <div className="text-text-secondary px-2 py-3 text-[12.5px]">
             {engineStatus === 'up'

@@ -1,7 +1,7 @@
 /*
  * Quick-ask answer area (Phase 5) — replaces the results list while XR
- * streams a short answer inside the palette (mockLLM; the real engine takes
- * over in Phase 14). Footer: Stop while streaming, Open in chat always.
+ * streams a short answer inside the palette (Phase 14: the XR engine in
+ * read-only `ask` mode). Footer: Stop while streaming, Open in chat always.
  */
 import { useEffect, useRef } from 'react';
 import { ArrowDownRight, ArrowRight, CircleStop, Wallet } from 'lucide-react';
@@ -10,7 +10,9 @@ import { modelLabel } from '@/budget/models';
 
 import { Avatar } from '@/components/brand/Avatar';
 import { StreamingCursor } from '@/screens/Chat/components/StreamingCursor';
+import type { TurnError } from '@/lib/chat-db';
 import { usePaletteStore } from '@/stores/paletteStore';
+import { resolveDefaultModel } from '@/stores/sessionsStore';
 import { cn } from '@/lib/utils';
 
 interface PaletteQuickAskProps {
@@ -20,6 +22,24 @@ interface PaletteQuickAskProps {
   onOpenInChat: () => void | Promise<void>;
   /** Phase 13: the budget governor's repair path (main window or HUD). */
   onOpenBudget: () => void;
+}
+
+/** One honest line per failure cause (the full card lives in chat). */
+function quickAskErrorLine(e: TurnError): string {
+  switch (e.kind) {
+    case 'no_provider':
+      return 'No AI provider configured — add an API key or install Ollama.';
+    case 'engine_down':
+      return 'Engine not running — start it and try again.';
+    case 'auth':
+      return 'Engine rejected the session token — restart the engine.';
+    case 'busy':
+      return 'The engine is busy — try again in a moment.';
+    case 'interrupted':
+      return 'Interrupted — try again or open in chat.';
+    default:
+      return e.code === 'turn.empty' ? 'The model returned nothing — try again.' : `${e.message} — try again or open in chat.`;
+  }
 }
 
 export function PaletteQuickAsk({ onStop, onOpenInChat, onOpenBudget }: PaletteQuickAskProps) {
@@ -51,8 +71,17 @@ export function PaletteQuickAsk({ onStop, onOpenInChat, onOpenBudget }: PaletteQ
           <Avatar size="sm" variant="head" state={streaming ? 'speaking' : 'idle'} aria-hidden="true" />
           <span className="text-accent font-mono text-[12px] tracking-wide">XR</span>
           {quickAsk.status === 'error' && (
-            <span className="text-danger ml-1 text-[12px]">
-              Something went wrong — try again or open in chat.
+            <span className="text-danger ml-1 text-[12px]" data-testid="hud-error">
+              {quickAsk.error ? quickAskErrorLine(quickAsk.error) : 'Something went wrong — try again or open in chat.'}
+            </span>
+          )}
+          {streaming && !quickAsk.answer && (
+            <span className="text-text-tertiary ml-1 text-[12px]" data-testid="hud-waiting">
+              {quickAsk.phase === 'awaiting_approval'
+                ? 'Waiting for approval…'
+                : quickAsk.phase === 'provider_selection' || quickAsk.phase === 'preparing'
+                  ? 'Connecting to the engine…'
+                  : `Waiting for ${modelLabel(resolveDefaultModel())}…`}
             </span>
           )}
           {quickAsk.status === 'stopped' && (

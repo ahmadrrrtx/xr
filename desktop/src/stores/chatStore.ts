@@ -25,8 +25,8 @@ import {
 } from '@/lib/chat-db';
 import { streamChat, type ChatMode, type ChatTurn } from '@/lib/llm';
 import { orbSetState } from '@/lib/orb';
-import { engineDefaultModel, useEngineStore } from '@/stores/engineStore';
-import { DEFAULT_MODEL, newId, useSessionsStore } from '@/stores/sessionsStore';
+import { useEngineStore } from '@/stores/engineStore';
+import { newId, resolveDefaultModel, useSessionsStore } from '@/stores/sessionsStore';
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error';
 
@@ -58,6 +58,17 @@ export interface StreamingTurn {
   runId?: string;
   usage?: { inTokens: number; outTokens: number };
   firstTokenAt?: number;
+}
+
+export interface WorkspaceContext {
+  id: string;
+  name: string;
+  path: string;
+}
+
+/** What the engine is told about the open workspace (system-prompt context). */
+export function workspaceContextText(ws: WorkspaceContext): string {
+  return `The user is working in the workspace "${ws.name}" located at ${ws.path}. Treat that directory as the project root: read and write files there unless told otherwise, and keep answers specific to this project.`;
 }
 
 export const CHAT_MODES: readonly ChatMode[] = ['ask', 'agent', 'plan'];
@@ -101,6 +112,9 @@ interface ChatState {
   /** Phase 14: per-session execution mode (ask / agent / plan). */
   modes: Record<string, ChatMode>;
   setMode: (sessionId: string | null, mode: ChatMode) => void;
+  /** Phase 14: Workbench context (`/chat?workspace=:id`) sent with every turn. */
+  workspace: WorkspaceContext | null;
+  setWorkspace: (ws: WorkspaceContext | null) => void;
 
   loadMessages: (sessionId: string) => Promise<void>;
   loadOlder: (sessionId: string) => Promise<void>;
@@ -156,8 +170,7 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
   const sessions = useSessionsStore.getState();
   controller = new AbortController();
   const signal = controller.signal;
-  const model =
-    sessions.sessions.find((s) => s.id === sessionId)?.model ?? engineDefaultModel() ?? DEFAULT_MODEL;
+  const model = sessions.sessions.find((s) => s.id === sessionId)?.model ?? resolveDefaultModel();
   const mode = useChatStore.getState().modes[sessionId] ?? modeFor(sessionId);
 
   useChatStore.setState({
@@ -179,16 +192,18 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
     if (cur && cur.sessionId === sessionId) useChatStore.setState({ stream: { ...cur, ...fn(cur) } });
   };
 
+  const workspace = useChatStore.getState().workspace;
   await streamChat({
     messages: history,
     model,
     mode,
     sessionId,
     signal,
+    ...(workspace ? { context: workspaceContextText(workspace) } : {}),
     // Phase 7 contract (mock seam only; engine approvals bridge themselves).
     requestApproval: makeApprovalGate(signal),
     // Phase 13: the budget governor gates, meters and bills this turn.
-    budget: { surface: 'chat', sessionId, agent: 'main' },
+    budget: { surface: 'chat', sessionId, agent: 'main', workspace: workspace?.id ?? null },
     onEvent: (e) => {
       const st = useChatStore.getState();
       const stream = st.stream;
@@ -430,6 +445,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   online: true,
   queuedIds: [],
   modes: {},
+  workspace: null,
+  setWorkspace: (workspace) => set({ workspace }),
 
   setMode: (sessionId, mode) => {
     try {

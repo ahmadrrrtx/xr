@@ -22,6 +22,10 @@ export interface QuickAskState {
   status: QuickAskStatus;
   /** Phase 13: the budget governor blocked / downshifted / cut off the answer. */
   budget?: import('@/lib/chat-db').BudgetNote;
+  /** Phase 14: why the engine failed (rendered honestly, with its repair path). */
+  error?: import('@/lib/chat-db').TurnError;
+  /** Phase 14: engine status while nothing has streamed yet. */
+  phase?: string;
 }
 
 interface PaletteState {
@@ -39,7 +43,12 @@ interface PaletteState {
   setQuery: (query: string) => void;
   startQuickAsk: (question: string) => void;
   appendQuickAskToken: (text: string) => void;
-  finishQuickAsk: (status: Extract<QuickAskStatus, 'done' | 'error' | 'stopped'>) => void;
+  finishQuickAsk: (
+    status: Extract<QuickAskStatus, 'done' | 'error' | 'stopped'>,
+    error?: import('@/lib/chat-db').TurnError,
+  ) => void;
+  setQuickAskPhase: (phase: string | undefined) => void;
+  replaceQuickAskAnswer: (text: string) => void;
   setQuickAskBudget: (note: import('@/lib/chat-db').BudgetNote) => void;
   resetQuickAsk: () => void;
   recordSelection: (id: string) => void;
@@ -106,8 +115,10 @@ export const usePaletteStore = create<PaletteState>((set, get) => ({
       quickAsk: { ...s.quickAsk, answer: s.quickAsk.answer + text },
     })),
 
-  finishQuickAsk: (status) =>
-    set((s) => ({ quickAsk: { ...s.quickAsk, status } })),
+  finishQuickAsk: (status, error) =>
+    set((s) => ({ quickAsk: { ...s.quickAsk, status, phase: undefined, ...(error ? { error } : {}) } })),
+  setQuickAskPhase: (phase) => set((s) => ({ quickAsk: { ...s.quickAsk, phase } })),
+  replaceQuickAskAnswer: (text) => set((s) => ({ quickAsk: { ...s.quickAsk, answer: text } })),
 
   setQuickAskBudget: (note) =>
     set((s) => ({ quickAsk: { ...s.quickAsk, budget: { ...s.quickAsk.budget, ...note } } })),

@@ -407,7 +407,8 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
         return;
       }
       case 'usage': {
-        if (frame.usage) {
+        // Local runtimes report 0/0 — that is "not measured", not "free of tokens".
+        if (frame.usage && ((frame.usage.inTokens ?? 0) > 0 || (frame.usage.outTokens ?? 0) > 0)) {
           usage = { inTokens: frame.usage.inTokens ?? 0, outTokens: frame.usage.outTokens ?? 0 };
           emit({ type: 'usage', ...usage });
         }
@@ -427,7 +428,7 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
           runId = frame.runId;
           emit({ type: 'run', runId });
         }
-        if (frame.usage) {
+        if (frame.usage && ((frame.usage.inTokens ?? 0) > 0 || (frame.usage.outTokens ?? 0) > 0)) {
           usage = { inTokens: frame.usage.inTokens ?? 0, outTokens: frame.usage.outTokens ?? 0 };
           emit({ type: 'usage', ...usage });
         }

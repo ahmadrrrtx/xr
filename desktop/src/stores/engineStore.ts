@@ -314,7 +314,16 @@ export function engineModelOptions(
 
   for (const p of providers.providers) {
     if (p.kind !== 'cloud' && p.kind !== 'hosted') continue;
-    const ids = CLOUD_PROVIDER_IDS.has(p.id) ? cloudModelsFor(p.id) : p.defaultModel ? [p.defaultModel] : [];
+    // With a key: every registry model for the major providers (one row per
+    // model), the provider's default otherwise. Without a key: one compact
+    // row per major provider pointing at "Configure API key"; the long tail
+    // lives under Manage models and keys.
+    let ids: string[];
+    if (p.hasKey) {
+      ids = CLOUD_PROVIDER_IDS.has(p.id) ? cloudModelsFor(p.id) : p.defaultModel ? [p.defaultModel] : [];
+    } else {
+      ids = CLOUD_PROVIDER_IDS.has(p.id) ? [cloudModelsFor(p.id)[0] ?? p.defaultModel ?? ''].filter(Boolean) : [];
+    }
     for (const id of ids) {
       cloud.push({
         id,

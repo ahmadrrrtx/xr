@@ -4,12 +4,14 @@
  * Owns: session/route sync, offline banner, panel toggle (⌘⇧O), Esc handling,
  * narrow-viewport collapse, drag-drop overlay across the whole conversation.
  */
-import { PanelLeftClose, PanelLeftOpen, WifiOff } from 'lucide-react';
+import { FolderOpen, PanelLeftClose, PanelLeftOpen, WifiOff, X } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useChatStore } from '@/stores/chatStore';
 import { useSessionsStore } from '@/stores/sessionsStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { ChatHeader } from './components/ChatHeader';
 import { Composer } from './components/Composer';
 import { MessageList } from './components/MessageList';
 import { SessionList } from './components/SessionList';
@@ -24,6 +26,31 @@ export default function ChatScreen() {
   const online = useChatStore((s) => s.online);
   const cancelGeneration = useChatStore((s) => s.cancelGeneration);
   const stream = useChatStore((s) => s.stream);
+  const workspace = useChatStore((s) => s.workspace);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const workspaceParam = searchParams.get('workspace');
+
+  // Workbench hand-off (Phase 14): `/chat?workspace=:id` scopes every turn
+  // to that project (engine system context + budget workspace scope).
+  useEffect(() => {
+    if (!workspaceParam) {
+      useChatStore.getState().setWorkspace(null);
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const ws = useWorkspaceStore.getState();
+      if (!ws.loaded) await ws.refresh();
+      if (!alive) return;
+      const found = useWorkspaceStore.getState().workspaces.find((w) => w.id === workspaceParam);
+      useChatStore
+        .getState()
+        .setWorkspace(found ? { id: found.id, name: found.name, path: found.path } : null);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [workspaceParam]);
 
   // Boot: sessions + default model (idempotent).
   useEffect(() => {
@@ -42,9 +69,11 @@ export default function ChatScreen() {
   // must move the URL; deleting the active session returns to /chat.
   const activeId = useSessionsStore((s) => s.activeSessionId);
   useEffect(() => {
-    if (activeId && activeId !== sessionId) navigate(`/chat/${activeId}`, { replace: true });
-    if (!activeId && sessionId) navigate('/chat', { replace: true });
-  }, [activeId, sessionId, navigate]);
+    const search = searchParams.toString();
+    const qs = search ? `?${search}` : '';
+    if (activeId && activeId !== sessionId) navigate(`/chat/${activeId}${qs}`, { replace: true });
+    if (!activeId && sessionId) navigate(`/chat${qs}`, { replace: true });
+  }, [activeId, sessionId, navigate, searchParams]);
 
   // Offline banner: navigator.onLine + auto-flush queue on reconnect.
   useEffect(() => {
@@ -145,9 +174,35 @@ export default function ChatScreen() {
           </div>
         )}
 
+        {sessionId && <ChatHeader sessionId={sessionId} />}
+
         <div id="conversation" className="contents">
           {sessionId ? <MessageList sessionId={sessionId} /> : <WelcomeState />}
         </div>
+
+        {workspace && (
+          <div className="mx-auto flex w-full max-w-[820px] items-center gap-2 px-6 pb-1">
+            <span
+              className="border-border-subtle bg-bg-ink text-text-secondary inline-flex h-6 items-center gap-1.5 rounded-full border pr-1 pl-2 text-[11.5px]"
+              data-testid="chat-workspace-chip"
+              title={workspace.path}
+            >
+              <FolderOpen size={12} strokeWidth={1.75} aria-hidden="true" />
+              Workspace: {workspace.name}
+              <button
+                type="button"
+                aria-label="Detach workspace from this chat"
+                onClick={() => {
+                  searchParams.delete('workspace');
+                  setSearchParams(searchParams, { replace: true });
+                }}
+                className="text-text-tertiary hover:text-text-primary flex size-4 items-center justify-center rounded-full"
+              >
+                <X size={11} strokeWidth={2} aria-hidden="true" />
+              </button>
+            </span>
+          </div>
+        )}
 
         {/* Streaming that starts while still on /chat (chip click) shows
             through the welcome state until the route catches up. */}

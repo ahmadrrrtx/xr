@@ -227,7 +227,12 @@ export const UNKNOWN_OUT_PER_1M = 15;
 export function modelInfo(id: string): ModelInfo {
   const known = BY_ID.get(id);
   if (known) return known;
-  const isLocal = id.startsWith('ollama/') || /:\d+b$/i.test(id);
+  // Ollama tags: `qwen2.5:0.5b`, `llama3.1:8b-instruct-q4_K_M`, `gemma3:latest`.
+  const isLocal =
+    id.startsWith('ollama/') ||
+    /:\d+(?:\.\d+)?[bm](?:[-_][\w.]+)?$/i.test(id) ||
+    /:latest$/i.test(id) ||
+    /^(qwen|llama|gemma|phi|mistral|mixtral|deepseek-r1|codellama|starcoder|tinyllama|smollm|granite)[\w.-]*:/i.test(id);
   return {
     id,
     name: id,

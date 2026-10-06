@@ -34,9 +34,9 @@ import {
 } from '@/lib/hud';
 import { orbSetState } from '@/lib/orb';
 import { makeApprovalGate } from '@/lib/approvalEvents';
-import { streamChat } from '@/lib/mockLLM';
+import { streamChat } from '@/lib/llm';
 import { chatDb, type ChatMessage } from '@/lib/chat-db';
-import { newId, useSessionsStore } from '@/stores/sessionsStore';
+import { newId, resolveDefaultModel, useSessionsStore } from '@/stores/sessionsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { usePaletteStore } from '@/stores/paletteStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
@@ -142,7 +142,7 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
     }
   }, [isHud, closePalette]);
 
-  // ── Quick-ask stream (mockLLM — same contract as the chat screen) ─────
+  // ── Quick-ask stream (the engine, `ask` mode — same contract as chat) ──
   const startQuickAsk = useCallback(
     (question: string): void => {
       const store = usePaletteStore.getState();
@@ -153,13 +153,14 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
 
       const controller = new AbortController();
       abortRef.current = controller;
-      const model =
-        useSessionsStore.getState().sessions[0]?.model ?? 'claude-sonnet-4.5';
+      const model = resolveDefaultModel();
 
       let spoke = false; // orb: thinking → speaking on the first token
       void streamChat({
         messages: [{ role: 'user', content: question }],
         model,
+        // Read-only: the quick-ask answers; tools and approvals stay in chat.
+        mode: 'ask',
         signal: controller.signal,
         // Phase 7: quick-ask can hit the same permission gate as chat — but
         // only from the MAIN window (the modal lives there; the HUD keeps the
@@ -178,6 +179,12 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
                 void orbSetState('speaking');
               }
               s.appendQuickAskToken(event.text);
+              break;
+            case 'replace':
+              s.replaceQuickAskAnswer(event.text);
+              break;
+            case 'status':
+              if (!spoke) s.setQuickAskPhase(event.status);
               break;
             case 'budget_blocked':
               s.setQuickAskBudget({
@@ -204,7 +211,12 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
               void orbSetState('idle');
               break;
             case 'error':
-              s.finishQuickAsk('error');
+              s.finishQuickAsk('error', {
+                kind: event.kind ?? 'model',
+                message: event.message,
+                ...(event.code ? { code: event.code } : {}),
+                ...(typeof event.retryable === 'boolean' ? { retryable: event.retryable } : {}),
+              });
               void orbSetState('error');
               break;
             // Quick-ask answers are text-only for v1; tool chatter stays in chat.
