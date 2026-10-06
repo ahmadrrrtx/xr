@@ -23,11 +23,19 @@ const PANES: { id: Pane; label: string }[] = [
   { id: 'chain', label: 'Chain' },
 ];
 
-export function AuditSlideOver() {
+export function AuditSlideOver({
+  extra = [],
+  engineChainValid = null,
+}: {
+  /** Phase 14: engine-recorded rows shown alongside the desktop log. */
+  extra?: AuditEntry[];
+  engineChainValid?: boolean | null;
+}) {
   const selectedId = useShieldStore((s) => s.selectedAuditId);
-  const entry = useShieldStore((s) =>
+  const local = useShieldStore((s) =>
     selectedId ? s.audit.find((e) => e.id === selectedId) : undefined
   );
+  const entry = local ?? (selectedId ? extra.find((e) => e.id === selectedId) : undefined);
   const reduced = useReducedMotion();
   return (
     <AnimatePresence>
@@ -48,15 +56,16 @@ export function AuditSlideOver() {
           transition={{ type: 'spring', stiffness: 500, damping: 30 }}
           className="border-border-subtle bg-bg-ink absolute top-0 right-0 bottom-0 z-30 flex w-[420px] max-w-full flex-col border-l shadow-xl"
         >
-          <Body entry={entry} />
+          <Body entry={entry} engineChainValid={engineChainValid} />
         </motion.aside>
       )}
     </AnimatePresence>
   );
 }
 
-function Body({ entry }: { entry: AuditEntry }) {
+function Body({ entry, engineChainValid }: { entry: AuditEntry; engineChainValid: boolean | null }) {
   const [pane, setPane] = useState<Pane>('detail');
+  const fromEngine = entry.id.startsWith('eng_');
   const closeRef = useRef<HTMLButtonElement>(null);
   const chain = useShieldStore((s) => s.chain);
   const audit = useShieldStore((s) => s.audit);
@@ -185,7 +194,28 @@ function Body({ entry }: { entry: AuditEntry }) {
         {pane === 'payload' && (
           <JsonView value={entry} maxHeight={520} testId="entry-payload" />
         )}
-        {pane === 'chain' && (
+        {pane === 'chain' && fromEngine && (
+          <div className="flex flex-col gap-3 text-[12px]" data-testid="audit-chain-engine">
+            <p className="text-text-tertiary leading-relaxed">
+              This entry was recorded by the XR engine in its own append-only,
+              hash-chained log. The engine verifies that chain itself; the
+              desktop shows the result and never recomputes it.
+            </p>
+            <dl className="grid grid-cols-[96px_1fr] gap-x-3 gap-y-2.5">
+              <Field label="hash">
+                <Mono className="break-all">{entry.hash}</Mono>
+              </Field>
+              <Field label="engine chain">
+                {engineChainValid === null
+                  ? 'Not reported'
+                  : engineChainValid
+                    ? 'Verified by the engine'
+                    : 'Broken — the engine reports a chain mismatch'}
+              </Field>
+            </dl>
+          </div>
+        )}
+        {pane === 'chain' && !fromEngine && (
           <div className="flex flex-col gap-3 text-[12px]">
             <p className="text-text-tertiary leading-relaxed">
               Each entry stores the SHA-256 of its canonical form and the hash

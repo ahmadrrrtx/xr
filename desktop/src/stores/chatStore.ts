@@ -221,6 +221,7 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
           sessionId,
           prompt: prompt.slice(0, 2000),
           mode,
+          quiet: true,
         },
         { stop: () => controller?.abort() },
       );

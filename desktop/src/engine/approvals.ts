@@ -161,3 +161,63 @@ export async function bridgeEngineApproval(
     gone: sent === 'gone',
   };
 }
+
+/* ── Pending-approval sync (Phase 14) ──────────────────────────────────── */
+
+const syncing = new Set<string>();
+let syncTimer: number | null = null;
+let syncRefs = 0;
+const SYNC_MS = 5_000;
+
+/**
+ * Approvals the engine is holding that did NOT arrive over a stream this
+ * window owns (another client, a reload mid-turn, a CLI run): bridge them
+ * into the same queue so the modal / Bell / Shield Approvals show them and
+ * a decision here resolves them on the engine. Each id is bridged once.
+ */
+export async function syncPendingEngineApprovals(): Promise<number> {
+  const { useEngineStore } = await import('@/stores/engineStore');
+  if (useEngineStore.getState().status !== 'up') return 0;
+  const { useApprovalStore } = await import('@/stores/approvalStore');
+  let pending: EnginePendingApproval[];
+  try {
+    pending = await listPendingEngineApprovals();
+  } catch {
+    return 0;
+  }
+  const known = new Set(useApprovalStore.getState().pending.map((r) => r.id));
+  let bridged = 0;
+  for (const p of pending) {
+    if (known.has(p.id) || syncing.has(p.id)) continue;
+    if (p.expiresAt && p.expiresAt <= Date.now()) continue;
+    syncing.add(p.id);
+    bridged += 1;
+    const required: EngineApprovalRequired = {
+      id: p.id,
+      tool: p.tool,
+      reason: p.reason,
+      preview: p.preview,
+      riskTier: p.riskTier,
+      ttlMs: p.ttlMs,
+    };
+    void bridgeEngineApproval(required, new AbortController().signal).finally(() => syncing.delete(p.id));
+  }
+  return bridged;
+}
+
+/** Ref-counted poller — mount once per window (AppShell). */
+export function startEngineApprovalSync(): () => void {
+  syncRefs += 1;
+  if (syncTimer === null) {
+    void syncPendingEngineApprovals();
+    syncTimer = window.setInterval(() => void syncPendingEngineApprovals(), SYNC_MS);
+  }
+  return () => {
+    syncRefs -= 1;
+    if (syncRefs <= 0 && syncTimer !== null) {
+      window.clearInterval(syncTimer);
+      syncTimer = null;
+      syncRefs = 0;
+    }
+  };
+}

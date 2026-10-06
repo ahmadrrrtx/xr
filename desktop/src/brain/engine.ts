@@ -35,6 +35,8 @@ export interface EngineRunMeta {
   sessionId?: string | null;
   prompt?: string;
   mode?: string;
+  /** The owning surface shows the outcome itself — no run-end toast. */
+  quiet?: boolean;
 }
 
 export interface EngineRunRecorder {

@@ -243,7 +243,7 @@ export function ToolCallCard({
             type="button"
             onClick={openTrace}
             title="Open the full trace in the Brain"
-            className="text-text-tertiary hover:text-accent focus-visible:ring-accent flex w-20 shrink-0 items-center justify-end gap-1 pr-3 font-mono text-[11px] focus-visible:ring-1 focus-visible:outline-none"
+            className="text-text-tertiary hover:text-accent focus-visible:ring-accent flex shrink-0 items-center justify-end gap-1 pr-3 font-mono text-[11px] whitespace-nowrap focus-visible:ring-1 focus-visible:outline-none"
             aria-label={`View trace for ${call.summary} in the Brain`}
           >
             View trace

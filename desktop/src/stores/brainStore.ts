@@ -36,6 +36,7 @@ import {
   type StreamHandle,
 } from '@/brain/mock';
 import { budgetGate, recordSpend } from '@/budget/enforce';
+import { modelInfo } from '@/budget/models';
 import {
   createEngineRecorder,
   type EngineRunMeta,
@@ -63,6 +64,9 @@ const ticked = new Map<string, { tokensOut: number; cost: number }>();
 const lastTokenEvent = new Map<string, number>();
 /** Runs being stopped by a bulk action (Phase 11) — no per-run toast. */
 const silentStops = new Set<string>();
+/** Phase 14: runs recorded behind another surface (Chat) — that surface
+ *  already shows the outcome, so the Brain store doesn't toast for them. */
+const quietRuns = new Set<string>();
 // Demo ids are `mock-latest-N` and the shortId is N, so start just above the
 // seeded history (#…847) — a fresh run reads "#848", not "#1" (Phase 11).
 let demoCounter = 847;
@@ -312,13 +316,15 @@ export const useBrainStore = create<BrainState>()(
         void orbSetState(status === 'failed' ? 'error' : 'idle');
         // Sonner toast — the visible confirmation (unless a bulk stop from
         // the Control Room already announces it, Phase 11).
-        const silent = silentStops.delete(runId);
+        const silent = silentStops.delete(runId) || quietRuns.delete(runId);
         if (!silent) {
           void import('sonner').then(({ toast }) => {
             if (status === 'completed') {
-              toast(
-                `Run ${run.shortId} completed in ${secs}s · $${nextRun.costUsd.toFixed(3)}`
-              );
+              const cost =
+                nextRun.costUsd === 0 && modelInfo(nextRun.model).local
+                  ? 'local'
+                  : `$${nextRun.costUsd.toFixed(3)}`;
+              toast(`Run ${run.shortId} completed in ${secs}s · ${cost}`);
             } else if (status === 'failed') {
               toast(`Run ${run.shortId} failed`, {
                 description: 'Open the failed span for the error detail.',
@@ -868,6 +874,7 @@ export const useBrainStore = create<BrainState>()(
         },
 
         beginEngineRun: (id, meta, control) => {
+          if (meta.quiet) quietRuns.add(id);
           const d = emptyRunData();
           d.expanded = new Set([`${id}:root`]);
           set((s) => ({

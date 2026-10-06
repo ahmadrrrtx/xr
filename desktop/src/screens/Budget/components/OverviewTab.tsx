@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { useTween } from '@/screens/Runs/useTween';
 import { useBudgetStore } from '@/stores/budgetStore';
 
+import { EngineLedgerCard } from './EngineLedgerCard';
 import { PauseDialog } from './PauseDialog';
 import {
   BudgetCard,
@@ -207,6 +208,8 @@ export function OverviewTab({
 
       {/* Quick settings */}
       <QuickSettings onPause={() => setPauseOpen(true)} />
+      {/* Engine ledger (Phase 14): the engine's own metering, as reported */}
+      <EngineLedgerCard />
       <PauseDialog open={pauseOpen} onOpenChange={setPauseOpen} />
     </div>
   );
