@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "vite",
     "engine": "bun run scripts/dev-engine.ts",
-    "dev:tauri": "tauri dev",
+    "dev:tauri": "bun run ../scripts/compile-sidecar.ts --if-missing && tauri dev",
     "build": "tsc --noEmit && vite build",
-    "build:tauri": "tauri build",
+    "build:tauri": "bun run ../scripts/compile-sidecar.ts && tauri build",
+    "sidecar": "bun run ../scripts/compile-sidecar.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
