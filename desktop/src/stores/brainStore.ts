@@ -37,6 +37,12 @@ import {
 } from '@/brain/mock';
 import { budgetGate, recordSpend } from '@/budget/enforce';
 import {
+  createEngineRecorder,
+  type EngineRunMeta,
+  type EngineRunRecorder,
+} from '@/brain/engine';
+import { streamChat } from '@/lib/llm';
+import {
   type BrainEvent,
   type BrainLogLine,
   type BrainTab,
@@ -100,6 +106,21 @@ interface BrainState {
     title?: string,
     opts?: { flavor?: 'short' | 'medium' }
   ) => string;
+  /**
+   * Phase 14: record a real engine stream as a run. The caller owns the
+   * stream (Chat tee) and feeds every event to the returned recorder;
+   * `control.stop` is what the Brain / Runs Stop button calls.
+   */
+  beginEngineRun: (
+    id: string,
+    meta: EngineRunMeta,
+    control: { stop: () => void }
+  ) => EngineRunRecorder;
+  /**
+   * Phase 14: Brain "Start a run" — one real agent-mode turn through the
+   * engine with the configured model. Returns the run id to navigate to.
+   */
+  startEngineRun: (prompt: string, opts?: { model: string; title?: string }) => string;
   /** `silent`: the caller (Control Room) announces the outcome itself. */
   stopRun: (id: string, opts?: { silent?: boolean; reason?: string }) => void;
   restartRun: (id: string) => void;
@@ -119,6 +140,11 @@ interface BrainState {
 }
 
 /* ── Per-run data helpers (store-internal) ────────────────────────────── */
+
+/** Engine ids: `dash_<hex>` (engine-issued) or `eng-<local>` (Brain-started). */
+export function isEngineRunId(id: string): boolean {
+  return id.startsWith('dash_') || id.startsWith('eng-');
+}
 
 function emptyRunData(): RunData {
   return {
@@ -395,6 +421,13 @@ export const useBrainStore = create<BrainState>()(
         onRunStart: (run: Run): void => {
           set((s) => ({ runs: { ...s.runs, [runId]: run } }));
           beginRun(runId);
+        },
+        onRunStatus: (status: SpanStatus): void => {
+          const run = get().runs[runId];
+          if (!run || run.endedAt || run.status === status) return;
+          set((s) => ({ runs: { ...s.runs, [runId]: withStatus(run, status, null) } }));
+          brainRunStatus(runId, status);
+          if (status === 'waiting') announce('Waiting for approval.');
         },
         onSpanStart: (span: Span): void => {
           const st = get();
@@ -678,6 +711,65 @@ export const useBrainStore = create<BrainState>()(
           if (st.data[id]) return; // already loaded (live or frozen)
 
           const persisted = st.runs[id];
+
+          // Phase 14: real engine runs are recorded live (beginEngineRun);
+          // after a reload only the run record survives. Never rebuild a
+          // scripted trace for one — show what is known and say so.
+          if (persisted?.source === 'engine' || isEngineRunId(id)) {
+            const d = emptyRunData();
+            const now = Date.now();
+            const run: Run = persisted ?? {
+              id,
+              shortId: `#${id.replace(/[^a-z0-9]/gi, '').slice(-4).toLowerCase()}`,
+              title: 'Engine run (not recorded by this window)',
+              agent: 'Main',
+              model: '—',
+              status: 'completed',
+              startedAt: now,
+              endedAt: now,
+              tokensIn: 0,
+              tokensOut: 0,
+              costUsd: 0,
+              rootSpanId: `${id}:root`,
+              source: 'engine',
+            };
+            const rootId = run.rootSpanId;
+            d.spans[rootId] = {
+              id: rootId,
+              parentId: null,
+              name: 'agent.run',
+              category: 'agent',
+              status: run.status === 'running' || run.status === 'waiting' ? 'completed' : run.status,
+              startedAt: run.startedAt,
+              endedAt: run.endedAt ?? run.startedAt,
+              durationMs: (run.endedAt ?? run.startedAt) - run.startedAt,
+              tokensIn: run.tokensIn,
+              tokensOut: run.tokensOut,
+              costUsd: run.costUsd,
+              model: run.model,
+              metadata: { source: 'engine', detailRetained: false },
+            };
+            d.expanded = new Set([rootId]);
+            pushLog(
+              d,
+              null,
+              'system',
+              persisted
+                ? 'Span detail for this run was not kept across restarts; totals come from the run record.'
+                : 'This window has no trace for this engine run.'
+            );
+            set((s) => ({
+              runs: persisted ? s.runs : { ...s.runs, [id]: run },
+              data: { ...s.data, [id]: d },
+              runOrder: s.runOrder.includes(id) ? s.runOrder : [id, ...s.runOrder].slice(0, 32),
+              selectedSpanId: null,
+              search: '',
+              ganttZoom: 1,
+              ganttPanMs: 0,
+            }));
+            return;
+          }
+
           // Phase 11: a Control Room row this window never streamed (seeded
           // history or another window's run) — keep ITS metadata, rebuild
           // the trace from the deterministic script for its flavour.
@@ -775,6 +867,79 @@ export const useBrainStore = create<BrainState>()(
           }
         },
 
+        beginEngineRun: (id, meta, control) => {
+          const d = emptyRunData();
+          d.expanded = new Set([`${id}:root`]);
+          set((s) => ({
+            data: { ...s.data, [id]: d },
+            runOrder: [id, ...s.runOrder.filter((x) => x !== id)].slice(0, 32),
+          }));
+          const h = hooks(id);
+          const rec = createEngineRecorder(
+            id,
+            {
+              ...h,
+              onRunStart: (run) => h.onRunStart({ ...run, source: 'engine' }),
+            },
+            meta
+          );
+          attachHooks(id, {
+            resolveApproval: () => {
+              /* engine approvals answer through @/engine/approvals */
+            },
+            stop: () => {
+              control.stop();
+              rec.finish('killed', 'Stopped by the user');
+            },
+            isWaitingApproval: () => get().runs[id]?.status === 'waiting',
+            isWaitingBudget: () => false,
+          });
+          return rec;
+        },
+
+        startEngineRun: (prompt, opts) => {
+          const id = `eng-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+          const model = opts?.model ?? get().runs[get().runOrder[0] ?? '']?.model ?? '';
+          const controller = new AbortController();
+          const rec = get().beginEngineRun(
+            id,
+            {
+              title: opts?.title ?? prompt.slice(0, 72),
+              agent: 'Main',
+              model,
+              startedAt: Date.now(),
+              sessionId: id,
+              prompt,
+              mode: 'agent',
+            },
+            { stop: () => controller.abort() }
+          );
+          void streamChat({
+            messages: [{ role: 'user', content: prompt }],
+            model,
+            mode: 'agent',
+            sessionId: id,
+            maxSteps: 4,
+            signal: controller.signal,
+            onEvent: (e) => {
+              rec.feed(e);
+              if (e.type === 'run') {
+                const run = get().runs[id];
+                if (run) set((s) => ({ runs: { ...s.runs, [id]: { ...run, engineRunId: e.runId } } }));
+              }
+            },
+            budget: { surface: 'brain', sessionId: id, agent: 'main' },
+          })
+            .catch((err: unknown) => {
+              if (controller.signal.aborted) return;
+              rec.finish('failed', err instanceof Error ? err.message : String(err));
+            })
+            .finally(() => {
+              if (!rec.ended()) rec.finish(controller.signal.aborted ? 'killed' : 'completed');
+            });
+          return id;
+        },
+
         startMockRun: (title, opts) => {
           const st = get();
           // `-short` routes flavorFromId to the short script; the shortId is
@@ -830,6 +995,23 @@ export const useBrainStore = create<BrainState>()(
         },
 
         restartRun: (id) => {
+          const cur = get().runs[id];
+          if (cur?.source === 'engine' || isEngineRunId(id)) {
+            // A real run is not a script: re-run the same prompt as a new run.
+            const prompt = (get().data[id]?.spans[`${id}:root`]?.inputs as { prompt?: string } | undefined)?.prompt;
+            void import('sonner').then(({ toast }) => {
+              if (prompt && cur) {
+                const next = get().startEngineRun(prompt, { model: cur.model, title: cur.title });
+                toast('Started a new run', { description: `Run ${get().runs[next]?.shortId ?? ''} — the original trace is kept.` });
+                window.location.hash = `#/brain/${next}`;
+              } else {
+                toast('Engine runs restart from where they began', {
+                  description: 'Send the message again in Chat; this trace stays as it is.',
+                });
+              }
+            });
+            return;
+          }
           streams.get(id)?.stop();
           streams.delete(id);
           ticked.clear();

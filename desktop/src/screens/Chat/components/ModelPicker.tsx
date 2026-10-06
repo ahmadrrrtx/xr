@@ -86,13 +86,14 @@ export function ModelPicker({
     }
   };
 
-  const Row = ({ o }: { o: EngineModelOption }) => {
+  const renderRow = (o: EngineModelOption) => {
     const m = modelInfo(o.id);
     const Icon = iconFor(m, o);
     const isActive = o.id === active;
     const isDefault = o.id === engineDefault;
     return (
       <div
+        key={`${o.provider}/${o.id}`}
         role="menuitemradio"
         aria-checked={isActive}
         aria-disabled={!o.available || undefined}
@@ -152,13 +153,11 @@ export function ModelPicker({
     );
   };
 
-  const Group = ({ title, items }: { title: string; items: EngineModelOption[] }) =>
+  const renderGroup = (title: string, items: EngineModelOption[]) =>
     items.length === 0 ? null : (
-      <div>
+      <div key={title}>
         <div className="text-text-tertiary px-2 pt-2 pb-1 text-[11px] font-semibold tracking-wide uppercase">{title}</div>
-        {items.map((o) => (
-          <Row key={`${o.provider}/${o.id}`} o={o} />
-        ))}
+        {items.map(renderRow)}
       </div>
     );
 
@@ -196,8 +195,8 @@ export function ModelPicker({
           </div>
         ) : (
           <>
-            <Group title="Local" items={groups.local} />
-            <Group title="Cloud" items={groups.cloud} />
+            {renderGroup('Local', groups.local)}
+            {renderGroup('Cloud', groups.cloud)}
           </>
         )}
         <button

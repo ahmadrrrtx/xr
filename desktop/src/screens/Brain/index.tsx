@@ -29,6 +29,9 @@ import {
 import { toast } from 'sonner';
 import { useListRef } from 'react-window';
 
+import { useEngineStore } from '@/stores/engineStore';
+import { resolveDefaultModel } from '@/stores/sessionsStore';
+
 import { DetailPanel } from '@/brain/detail';
 import { Gantt } from '@/brain/gantt';
 import {
@@ -162,10 +165,33 @@ function BrainIndex() {
   const runOrder = useBrainStore((s) => s.runOrder);
   const runs = useBrainStore((s) => s.runs);
   const startMockRun = useBrainStore((s) => s.startMockRun);
+  const startEngineRun = useBrainStore((s) => s.startEngineRun);
   const reduced = useReducedMotion();
+  // Phase 14: a real run needs the engine up with a provider that answers.
+  const engineUp = useEngineStore((s) => s.status === 'up');
+  const providers = useEngineStore((s) => s.providers);
+  const providerReady =
+    engineUp && !!providers?.providers.some((x) => x.healthy && (x.kind === 'local' || x.hasKey));
+  const defaultModel = providers?.model ?? resolveDefaultModel();
+
+  useEffect(() => {
+    const stop = useEngineStore.getState().startPolling();
+    void useEngineStore.getState().loadCatalog();
+    return stop;
+  }, []);
 
   const startDemo = (): void => {
-    const id = startMockRun();
+    if (providerReady) {
+      // One real agent-mode turn: a read-only tool step plus a short answer,
+      // so the trace has an LLM span, a tool span and real token counts.
+      const id = startEngineRun(
+        'Use the read_file tool with {"path":"README.md"} and then summarise what this project is in three short bullet points.',
+        { model: defaultModel, title: 'Summarise README.md' }
+      );
+      navigate(`/brain/${id}`);
+      return;
+    }
+    const id = startMockRun('Demo run (no model configured)');
     navigate(`/brain/${id}`);
   };
 
@@ -224,11 +250,17 @@ function BrainIndex() {
         <div className="mt-5 flex items-center gap-3">
           <Button
             onClick={startDemo}
-            aria-label="Start a demo run"
+            aria-label={providerReady ? `Start a run with ${defaultModel}` : 'Start a demo run'}
+            title={
+              providerReady
+                ? `Runs one agent turn through the engine (${defaultModel}).`
+                : 'No model is configured — this plays a scripted demo trace.'
+            }
             className="h-9 gap-2 px-4 text-[13px]"
+            data-testid="brain-start-run"
           >
             <Play size={14} strokeWidth={1.5} aria-hidden="true" />
-            Start a demo run
+            {providerReady ? 'Start a run' : 'Start a demo run'}
           </Button>
           <button
             type="button"

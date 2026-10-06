@@ -23,8 +23,10 @@ import {
   type ToolCallRecord,
   type TurnError,
 } from '@/lib/chat-db';
-import { streamChat, type ChatMode, type ChatTurn } from '@/lib/llm';
+import { streamChat, type ChatMode, type ChatTurn, type StreamEvent } from '@/lib/llm';
 import { orbSetState } from '@/lib/orb';
+import type { EngineRunRecorder } from '@/brain/engine';
+import { useBrainStore } from '@/stores/brainStore';
 import { useEngineStore } from '@/stores/engineStore';
 import { newId, resolveDefaultModel, useSessionsStore } from '@/stores/sessionsStore';
 
@@ -193,6 +195,43 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
   };
 
   const workspace = useChatStore.getState().workspace;
+
+  // Phase 14: every engine turn is a real Brain run. The recorder starts
+  // when the engine acknowledges (its run id keys the trace, so the tool
+  // card's "View trace" deep-link resolves); events before that are replayed.
+  let recorder: EngineRunRecorder | null = null;
+  const early: StreamEvent[] = [];
+  const prompt = history[history.length - 1]?.content ?? '';
+  const turnStartedAt = Date.now();
+  const tee = (e: StreamEvent): void => {
+    if (recorder) {
+      recorder.feed(e);
+      return;
+    }
+    if (e.type === 'run') {
+      const title = useSessionsStore.getState().sessions.find((x) => x.id === sessionId)?.title;
+      recorder = useBrainStore.getState().beginEngineRun(
+        e.runId,
+        {
+          title: (title && title !== 'New chat' ? title : prompt).slice(0, 72) || 'Chat turn',
+          agent: 'Main',
+          model: useChatStore.getState().stream?.model ?? model,
+          ...(workspace ? { workspace: workspace.name } : {}),
+          startedAt: turnStartedAt,
+          sessionId,
+          prompt: prompt.slice(0, 2000),
+          mode,
+        },
+        { stop: () => controller?.abort() },
+      );
+      recorder.feed(e);
+      for (const b of early) recorder.feed(b);
+      early.length = 0;
+      return;
+    }
+    if (early.length < 200) early.push(e);
+  };
+
   await streamChat({
     messages: history,
     model,
@@ -205,6 +244,7 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
     // Phase 13: the budget governor gates, meters and bills this turn.
     budget: { surface: 'chat', sessionId, agent: 'main', workspace: workspace?.id ?? null },
     onEvent: (e) => {
+      tee(e);
       const st = useChatStore.getState();
       const stream = st.stream;
       if (e.type === 'budget_charged') {
@@ -378,6 +418,11 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
     },
   }).finally(() => {
     if (controller?.signal === signal) controller = null;
+    // A stream that ended without `done` (abort, transport drop) still
+    // closes its trace honestly.
+    if (recorder && !recorder.ended()) {
+      recorder.finish(signal.aborted ? 'killed' : 'failed', signal.aborted ? 'Stopped by the user' : 'Stream ended early');
+    }
   });
 }
 
