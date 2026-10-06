@@ -29,6 +29,7 @@ import {
   SLEEP_MS_DEFAULT,
   glowIntensityFor,
   isOrbState,
+  orbStateForVoice,
   parseDevMs,
 } from '@/lib/orbCore';
 import { orbEmitClicked, orbOpenMain, orbShowContextMenu, orbStartDrag } from '@/lib/orb';
@@ -93,6 +94,18 @@ export function OrbApp() {
         await listen<{ state: AvatarState }>('orb:set-state', (event) => {
           const next = event.payload?.state;
           if (!isOrbState(next)) return;
+          clearPreview();
+          setBaseState(next);
+          setSleeping(false);
+        })
+      );
+
+      // Phase 15: the main window's voice controller broadcasts its session
+      // state; the orb mirrors it (listening / thinking / speaking / approval).
+      track(
+        await listen<{ state?: string; active?: boolean }>('voice:state-changed', (event) => {
+          const next = orbStateForVoice(event.payload?.state, event.payload?.active);
+          if (!next) return;
           clearPreview();
           setBaseState(next);
           setSleeping(false);

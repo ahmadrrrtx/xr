@@ -11,6 +11,9 @@ import { toast } from 'sonner';
 
 import { CommandPalette } from '@/components/cmdk/CommandPalette';
 import { useOrbIpc } from '@/hooks/useOrb';
+import { DockedVoice } from '@/components/voice/DockedVoice';
+import { voice } from '@/voice/session';
+import { useVoiceIpc } from '@/voice/useVoice';
 import { usePaletteIpc } from '@/hooks/usePalette';
 import { useSettingsSync } from '@/hooks/useSettingsSync';
 import { usePaletteStore } from '@/stores/paletteStore';
@@ -107,12 +110,10 @@ function useGlobalHotkeys(): void {
       },
     },
     {
+      // Phase 15: in-app fallback for the global key (the native shortcut
+      // consumes the chord when it is registered; the controller debounces).
       combo: combo('ptt'),
-      handler: () =>
-        toast('Voice comes in Phase 15', {
-          description:
-            'Hold the push-to-talk key from anywhere — rebinding it in Settings → Voice.',
-        }),
+      handler: () => void voice.toggle('hotkey'),
     },
     {
       combo: combo('cycle-theme'),
@@ -156,8 +157,10 @@ export function AppShell() {
   // Cross-window effects from the HUD: navigation, remote commands, theme
   // sync, session-list refresh (Phase 5).
   usePaletteIpc(false, navigate);
-  // Companion Orb reactions (Phase 6): click toasts, menu voice/approvals.
+  // Companion Orb reactions (Phase 6): menu approvals; click → voice (15).
   useOrbIpc();
+  // Voice (Phase 15): global hotkey, orb click/menu, device hot-plug.
+  useVoiceIpc();
   useWelcomeToast();
   // Control Room feed (Phase 11): Brain runs + shell events → runsStore.
   useEffect(() => initRunsBridge(), []);
@@ -178,7 +181,8 @@ export function AppShell() {
     location.pathname.startsWith('/brain') ||
     location.pathname.startsWith('/runs') ||
     location.pathname.startsWith('/shield') ||
-    location.pathname.startsWith('/budget');
+    location.pathname.startsWith('/budget') ||
+    location.pathname.startsWith('/voice');
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -201,6 +205,8 @@ export function AppShell() {
 
       {/* Global overlays */}
       <CommandPalette embedded />
+      {/* Phase 15: docked voice pill while a session runs off-screen */}
+      <DockedVoice />
       {/* Toaster moved to App root (Phase 3) so onboarding toasts render too */}
     </TooltipProvider>
   );

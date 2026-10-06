@@ -2,13 +2,14 @@
  * Composer (Phase 4) — auto-grow textarea (Enter send · Shift+Enter newline ·
  * IME-safe via isComposing/229), paperclip attach (Tauri dialog / browser
  * file input), paste-image, drag-drop overlay handled by the screen, mic +
- * voice-theater toasts (real voice: 15/16), send ⇄ stop while streaming,
+ * mic → voice session (Phase 15), send ⇄ stop while streaming,
  * model chip + token counter below.
  */
 import { ArrowRight, Mic, Paperclip, Square, Waves } from 'lucide-react';
 import TextareaAutosize from 'react-textarea-autosize';
 import { motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { modelInfo } from '@/budget/models';
@@ -16,6 +17,8 @@ import { isTauri } from '@/lib/tauri';
 import { MAX_ATTACHMENT_BYTES, useChatStore, type FileAttachment } from '@/stores/chatStore';
 import { useEngineStore } from '@/stores/engineStore';
 import { newId, useSessionsStore } from '@/stores/sessionsStore';
+import { voice } from '@/voice/session';
+import { useVoiceStore } from '@/voice/voiceStore';
 import { AttachmentStrip } from './AttachmentStrip';
 import { ModeSwitch } from './ModeSwitch';
 import { ModelPicker } from './ModelPicker';
@@ -38,6 +41,8 @@ export function Composer({
   sessionId: string | null;
 }) {
   const [text, setText] = useState('');
+  const navigate = useNavigate();
+  const voiceActive = useVoiceStore((s) => s.active);
   const [dragOver, setDragOver] = useState(false);
   const dragCounter = useRef(0);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -185,7 +190,7 @@ export function Composer({
   const ratio = tokens / (contextK * 1000);
 
   return (
-    <div className="w-full px-6 pb-6">
+    <div className="w-full px-6 pb-6" data-voice-dock-anchor>
       <div className="mx-auto w-full max-w-[820px]">
         <AttachmentStrip attachments={attachments} onRemove={removeAttachment} />
 
@@ -241,12 +246,24 @@ export function Composer({
 
             <button
               type="button"
-              onClick={() =>
-                toast('Voice coming in Phase 15', {
-                  description: 'Dictation, wake word and the Theater arrive later.',
-                })
-              }
-              aria-label="Voice input (coming in Phase 15)"
+              onClick={() => {
+                // Phase 15: "When I press mic in Chat" — open the Voice screen
+                // or run a docked session right here.
+                const target = useVoiceStore.getState().settings?.desktop.chatMicTarget ?? 'screen';
+                if (useVoiceStore.getState().active) {
+                  void voice.stop('user');
+                  return;
+                }
+                if (target === 'docked') {
+                  useVoiceStore.getState().setDocked(true);
+                  void voice.start('chat');
+                } else {
+                  navigate('/voice');
+                  void voice.start('screen');
+                }
+              }}
+              aria-label={voiceActive ? 'Stop voice session' : 'Voice input'}
+              aria-pressed={voiceActive}
               className="text-text-tertiary hover:bg-bg-raised hover:text-text-secondary flex size-10 shrink-0 items-center justify-center rounded-xl transition-colors focus-visible:ring-accent focus-visible:ring-2 focus-visible:outline-none"
             >
               <Mic aria-hidden="true" className="size-[18px]" strokeWidth={1.5} />
@@ -285,12 +302,8 @@ export function Composer({
             )}
             <button
               type="button"
-              onClick={() =>
-                toast('Voice theater in Phase 16', {
-                  description: 'The full-screen voice session arrives later.',
-                })
-              }
-              aria-label="Open voice theater (coming in Phase 16)"
+              onClick={() => navigate('/voice')}
+              aria-label="Open the Voice screen"
               className="text-text-tertiary hover:bg-bg-raised hover:text-text-secondary flex size-9 items-center justify-center rounded-lg transition-colors focus-visible:ring-accent focus-visible:ring-2 focus-visible:outline-none"
             >
               <Waves aria-hidden="true" className="size-[18px]" strokeWidth={1.5} />

@@ -1,9 +1,9 @@
 /**
  * Main-window reactions to orb events (Phase 6) — mounted once by AppShell.
  *
- * The orb's single click focuses the Chat composer and toasts (real voice
- * is Phase 15; the visual states are live today), and the native context
- * menu's voice/approvals items arrive as Rust events.
+ * The orb's single click and the menu's voice item toggle a voice session
+ * (Phase 15, see useVoiceIpc); the approvals item arrives here as a Rust
+ * event and surfaces the oldest pending request.
  */
 import { useEffect } from 'react';
 import { toast } from 'sonner';
@@ -25,35 +25,8 @@ export function useOrbIpc(): void {
     void (async () => {
       const { listen } = await import('@tauri-apps/api/event');
 
-      track(
-        await listen('orb:clicked', () => {
-          // Phase 14: a click is "talk to XR" — until voice lands (Phase 15)
-          // that means the Chat composer. Bring Chat up and focus it; the
-          // orb window itself stays where it is.
-          if (!window.location.hash.startsWith('#/chat')) window.location.hash = '#/chat';
-          let tries = 0;
-          const focus = (): void => {
-            const el = document.getElementById('xr-composer');
-            if (el) {
-              el.focus();
-              return;
-            }
-            if (tries++ < 10) window.setTimeout(focus, 100);
-          };
-          focus();
-          toast('Voice coming in Phase 15', {
-            description: 'Type to XR for now — the composer is ready.',
-          });
-        })
-      );
-
-      track(
-        await listen('orb:voice-requested', () => {
-          toast('Voice sessions ship in Phase 15', {
-            description: 'The orb will open the Voice Theater from this command.',
-          });
-        })
-      );
+      // Phase 15: `orb:clicked` and `orb:voice-requested` toggle the voice
+      // session — handled by useVoiceIpc (src/voice/useVoice.ts).
 
       track(
         await listen('orb:approvals-requested', () => {

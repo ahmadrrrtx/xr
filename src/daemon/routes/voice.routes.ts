@@ -35,12 +35,11 @@ import { pcm16Rms } from "../../voice/audio.ts";
 import { parseConfirmation } from "../../voice/wake.ts";
 import { loadNativeVoice, resetNativeVoice } from "../../voice/native.ts";
 import { shapeTranscript } from "../../voice/transcript.ts";
+import { modelCatalogue, voiceCatalogue } from "../../voice/catalogue.ts";
 import {
   DEFAULT_TTS_VOICE,
   ESPEAK_ENTRY,
-  RUNTIME_ENTRY,
   STT_ENTRIES,
-  TTS_VOICES,
   VoiceDownloader,
   clearVoiceModels,
   entryBytes,
@@ -53,7 +52,6 @@ import {
   type VoiceComponent,
 } from "../../voice/models.ts";
 import { getApprovalStore } from "../../control/approval-store.ts";
-import { commandExists } from "../../util/process.ts";
 import type { ApprovalRequest } from "../../core/types.ts";
 import type { Store } from "../../state/workspace-store.ts";
 
@@ -68,6 +66,8 @@ export interface VoiceEvent {
   id?: string;
   tool?: string;
   reason?: string;
+  /** approval: the engine has decided it (by voice or another surface). */
+  resolved?: "approved" | "denied";
   /** error/status: machine-readable code (stt-model-missing, tts-model-missing, tts-no-audio, stt-failed, tts-failed, run-failed). */
   detail?: string;
   message?: string;
@@ -111,6 +111,8 @@ export function speechRmsFor(sensitivity: VoiceWakeSensitivity | undefined): num
 
 const MIN_SPEECH_MS = 250;    // utterance floor (rejects clicks)
 const SILENCE_TAIL_MS = 700;  // acoustic endpointing tail (stage 1)
+/** A session with no event subscriber for this long is stopped (client gone). */
+const ORPHAN_GRACE_MS = 10_000;
 // Stage 2 (semantic): provisional-transcript probe fires this far into the
 // tail; the verdict may extend the tail once to maxSilenceMs. Fail-open.
 const SEM_PROBE_AT_MS = 450;
@@ -132,7 +134,10 @@ export class VoiceSession {
   private busy = false;
   private speakDeadline = 0;
   private lastSayText = "";
+  private orphanTimer: ReturnType<typeof setTimeout> | null = null;
   private announced = new Set<string>();
+  /** Approval ids that already got one spoken "I didn't catch that". */
+  private unclearOnce = new Set<string>();
   private approvalTimer: ReturnType<typeof setInterval> | null = null;
   pipeline!: VoicePipeline;
   private stt!: SpeechToText;
@@ -229,6 +234,8 @@ export class VoiceSession {
       this.store.audit("voice.confirm.request", { tool: req.tool, id: handle.id });
       void this.pipeline.say(`I'm about to ${req.reason}. Say confirm or cancel.`);
       const outcome = await handle.outcome;
+      this.unclearOnce.delete(handle.id);
+      this.emit({ type: "approval", id: handle.id, resolved: outcome.approved ? "approved" : "denied" });
       return outcome.approved;
     } catch (err) {
       // Fail closed: a consent-plane fault can never become a silent approval.
@@ -243,8 +250,22 @@ export class VoiceSession {
 
   subscribe(fn: (e: VoiceEvent) => void): () => void {
     this.subs.add(fn);
+    if (this.orphanTimer) { clearTimeout(this.orphanTimer); this.orphanTimer = null; }
     fn({ type: "state", state: this.state });
-    return () => this.subs.delete(fn);
+    return () => {
+      this.subs.delete(fn);
+      // No client left to hear the reply: a session whose window vanished
+      // (crash, closed tab) must not stay "listening" forever.
+      if (this.subs.size === 0 && this.state !== "idle" && !this.orphanTimer) {
+        this.orphanTimer = setTimeout(() => {
+          this.orphanTimer = null;
+          if (this.subs.size === 0 && this.state !== "idle") {
+            this.store.audit("voice.session.orphaned", {});
+            this.stop();
+          }
+        }, ORPHAN_GRACE_MS);
+      }
+    };
   }
 
   emit(e: VoiceEvent): void {
@@ -404,17 +425,29 @@ export class VoiceSession {
       // Approvals-in-voice: confirm/cancel decides the newest pending item
       // through the same durable store every surface uses.
       const decision = parseConfirmation(text);
-      if (decision !== "unclear") {
-        const store = getApprovalStore(this.store);
-        const pending = store.listPending();
-        const newest = pending[pending.length - 1];
-        if (newest) {
-          const ok = store.decide(newest.id, decision === "confirm", { channel: "voice", userId: null });
-          this.store.audit("voice.approval.decided", { id: newest.id, approved: decision === "confirm", ok });
-          await this.pipeline.say(ok ? (decision === "confirm" ? "Approved." : "Cancelled.") : "That approval already expired.");
+      const store = getApprovalStore(this.store);
+      const pending = store.listPending();
+      const newest = pending[pending.length - 1];
+      if (newest) {
+        if (decision === "unclear") {
+          // Once by voice, then the buttons take over — never loop on the user.
+          if (!this.unclearOnce.has(newest.id)) {
+            this.unclearOnce.add(newest.id);
+            await this.pipeline.say("I didn't catch that. Say confirm or cancel, or use the buttons.");
+          } else {
+            this.emit({ type: "status", text: "Use the buttons to decide." });
+            this.setState("listening");
+          }
           this.busy = false;
           return;
         }
+        const approved = decision === "confirm";
+        const ok = store.decide(newest.id, approved, { channel: "voice", userId: null });
+        this.store.audit("voice.approval.decided", { id: newest.id, approved, ok });
+        this.emit({ type: "approval", id: newest.id, resolved: approved ? "approved" : "denied" });
+        await this.pipeline.say(ok ? (approved ? "Approved." : "Cancelled.") : "That approval already expired.");
+        this.busy = false;
+        return;
       }
 
       this.setState("working");
@@ -508,50 +541,6 @@ let session: VoiceSession | null = null;
 export function voiceSessionFor(store: Store): VoiceSession {
   if (!session) session = new VoiceSession(store);
   return session;
-}
-
-async function modelCatalogue(): Promise<Record<string, unknown>> {
-  const [whisperCli, whisperCpp] = await Promise.all([commandExists("whisper"), commandExists("whisper-cli")]);
-  const hasKey = (env: string) => Boolean(process.env[env]);
-  return {
-    runtime: { ...RUNTIME_ENTRY, bytes: entryBytes(RUNTIME_ENTRY), installed: entryInstalled(RUNTIME_ENTRY), files: undefined },
-    stt: [
-      ...STT_ENTRIES.map((e) => ({ id: e.id, kind: "offline", name: e.name, detail: e.detail, bytes: entryBytes(e), installed: entryInstalled(e), downloadable: true })),
-      { id: "whispercpp", kind: "local-binary", name: "Whisper (whisper.cpp)", detail: whisperCpp ? "whisper-cli found on PATH" : "Install whisper.cpp (whisper-cli) and set XR_WHISPERCPP_MODEL", available: whisperCpp, downloadable: false },
-      { id: "whisper-cli", kind: "local-binary", name: "Whisper (openai-whisper CLI)", detail: whisperCli ? "whisper found on PATH" : "Install the openai-whisper CLI", available: whisperCli, downloadable: false },
-      { id: "groq", kind: "cloud", name: "Cloud · Groq whisper-large-v3-turbo", detail: hasKey("GROQ_API_KEY") ? "key configured · ≈$0.04 per audio hour (estimate)" : "Add a Groq key in Settings → Models", available: hasKey("GROQ_API_KEY"), downloadable: false },
-      { id: "openai", kind: "cloud", name: "Cloud · OpenAI gpt-4o-mini-transcribe", detail: hasKey("OPENAI_API_KEY") ? "key configured · ≈$0.18 per audio hour (estimate)" : "Add an OpenAI key in Settings → Models", available: hasKey("OPENAI_API_KEY"), downloadable: false },
-    ],
-    espeak: { id: ESPEAK_ENTRY.id, bytes: entryBytes(ESPEAK_ENTRY), installed: entryInstalled(ESPEAK_ENTRY) },
-  };
-}
-
-function voiceCatalogue(): Record<string, unknown>[] {
-  const openai = Boolean(process.env.OPENAI_API_KEY);
-  return [
-    ...TTS_VOICES.map((v) => ({
-      id: v.id,
-      label: v.label,
-      name: v.name,
-      gender: v.gender,
-      accent: v.accent,
-      detail: v.detail,
-      kind: "offline",
-      bytes: entryBytes(v) + (entryInstalled(ESPEAK_ENTRY) ? 0 : entryBytes(ESPEAK_ENTRY)),
-      installed: entryInstalled(v) && entryInstalled(ESPEAK_ENTRY),
-      downloadable: true,
-    })),
-    ...["alloy", "nova", "onyx", "shimmer"].map((id) => ({
-      id,
-      label: `OpenAI ${id}`,
-      name: "OpenAI tts-1",
-      kind: "cloud",
-      detail: openai ? "cloud · ≈$15 per million characters (estimate)" : "Add an OpenAI key in Settings → Models",
-      available: openai,
-      installed: false,
-      downloadable: false,
-    })),
-  ];
 }
 
 export function voiceRoutes(): DaemonRoute[] {

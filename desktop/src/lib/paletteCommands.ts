@@ -237,11 +237,10 @@ export function buildPaletteCommands(
       icon: Mic,
       shortcut: sc('⌘.', 'Ctrl+.'),
       keywords: ['talk', 'speak', 'listen'],
-      action: () =>
-        ctx.toast(
-          'Voice ships in Phase 15',
-          'The Voice Theater opens from this command.'
-        ),
+      action: () => {
+        // Phase 15: the HUD asks the main window; in-app we start right away.
+        ctx.navigate('/voice?start=1');
+      },
     },
     {
       id: 'show-budget',

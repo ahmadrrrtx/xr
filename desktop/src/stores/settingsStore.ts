@@ -121,6 +121,22 @@ export interface XRSettings {
     alwaysListen: boolean;
     soundsVolume: number;
     muted: boolean;
+    /* Phase 15 mirror of the engine's voice settings (engine is the source
+       of truth; voiceStore writes these after every accepted patch). */
+    wakePhrase: string;
+    wakeSensitivity: 'low' | 'medium' | 'high';
+    wakeSound: boolean;
+    sttModel: string;
+    ttsVoice: string;
+    pitch: number;
+    theaterEnabled: boolean;
+    autoExitSilence: number;
+    showTranscripts: boolean;
+    pttMode: 'hold' | 'tap' | 'always';
+    noiseSuppression: boolean;
+    chatMicTarget: 'screen' | 'docked';
+    holdGlobalHotkey: boolean;
+    profanityFilter: boolean;
   };
   privacy: {
     telemetry: boolean;
@@ -204,13 +220,27 @@ export const DEFAULT_SETTINGS: XRSettings = {
   },
   voice: {
     micDeviceId: null,
-    inputVolume: 80,
+    inputVolume: 100,
     ttsVoiceUri: null,
     rate: 1,
     wakeWord: false,
     alwaysListen: false,
     soundsVolume: 70,
     muted: false,
+    wakePhrase: 'hey xr',
+    wakeSensitivity: 'medium',
+    wakeSound: true,
+    sttModel: 'sherpa-small-en',
+    ttsVoice: 'piper-lessac',
+    pitch: 0,
+    theaterEnabled: false,
+    autoExitSilence: 30,
+    showTranscripts: true,
+    pttMode: 'tap',
+    noiseSuppression: true,
+    chatMicTarget: 'screen',
+    holdGlobalHotkey: false,
+    profanityFilter: false,
   },
   privacy: {
     telemetry: false,

@@ -19,6 +19,34 @@ export function isOrbState(value: unknown): value is AvatarState {
   return typeof value === 'string' && (ORB_STATES as readonly string[]).includes(value);
 }
 
+/* ── Voice (Phase 15) ───────────────────────────────────────────────── */
+
+/** Voice session state → orb avatar state. */
+const VOICE_TO_ORB: Record<string, AvatarState> = {
+  idle: 'idle',
+  listening: 'listening',
+  interrupted: 'listening',
+  thinking: 'thinking',
+  planning: 'thinking',
+  working: 'thinking',
+  tool: 'thinking',
+  speaking: 'speaking',
+  approval: 'waiting-approval',
+  success: 'idle',
+  error: 'error',
+};
+
+/**
+ * `voice:state-changed {state, active}` → what the orb should show, or null
+ * for payloads it does not understand. A session that ended is idle whatever
+ * its last state said.
+ */
+export function orbStateForVoice(state: unknown, active: unknown): AvatarState | null {
+  if (active === false) return 'idle';
+  if (typeof state !== 'string') return null;
+  return VOICE_TO_ORB[state] ?? null;
+}
+
 /*
  * Glow scaling (Phase 6 prompt / docs/THEME-SYSTEM.md): the orb keeps its
  * signature black+cyan look on EVERY theme — only the halo/eye glow
