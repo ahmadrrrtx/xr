@@ -30,6 +30,11 @@ export function MicButton() {
           void voice.stop('user');
           return;
         }
+        // Immersive preference (Phase 16): the start opens the theater.
+        if (useVoiceStore.getState().settings?.desktop.theaterImmersive) {
+          void voice.start('theater');
+          return;
+        }
         if (!location.pathname.startsWith('/voice')) navigate('/voice');
         void voice.start('screen');
       }}

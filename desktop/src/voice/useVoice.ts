@@ -2,9 +2,10 @@
  * React glue for the voice controller (Phase 15).
  *
  *   useVoiceIpc()     — AppShell, once: global hotkey (toggle or hold), orb
- *                       menu / click, device hot-plug, engine-down → stop.
+ *                       menu / click, device hot-plug, engine-down → stop,
+ *                       the Voice Theater link (Phase 16).
  *   useVoiceHotkeys() — the Voice screen: Space toggle, Esc dock/back,
- *                       M mute, T theater toast, P cycle PTT mode.
+ *                       M mute, T theater, P cycle PTT mode.
  *   useLevels()       — 60 fps mic/out levels for meters (RAF, no re-render
  *                       storms: consumers get a ref + a tick counter).
  */
@@ -14,8 +15,10 @@ import { toast } from 'sonner';
 
 import { useEngineStore } from '@/stores/engineStore';
 import { isTauri } from '@/lib/tauri';
+import { theaterToggle } from '@/lib/theater';
 
 import { probeMicrophones, voice, type VoiceLevels } from './session';
+import { initTheaterLink } from './theaterLink';
 import type { VoiceActivation } from './voiceApi';
 import { useVoiceStore } from './voiceStore';
 
@@ -38,6 +41,8 @@ export function useVoiceIpc(): void {
       });
     };
     navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+    // Voice Theater (Phase 16): mirror voice state out, take intents in.
+    track(initTheaterLink({ navigate }));
 
     if (isTauri()) {
       void (async () => {
@@ -127,7 +132,7 @@ export function useVoiceHotkeys(opts: { onEscape: () => void }): void {
         case 't':
         case 'T':
           e.preventDefault();
-          toast('Voice Theater arrives in Phase 16', { description: 'The immersive window is not built yet; this session view is the whole experience today.' });
+          void theaterToggle();
           return;
         case 'p':
         case 'P': {

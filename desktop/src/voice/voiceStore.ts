@@ -92,7 +92,7 @@ interface VoiceStoreState {
   error: VoiceErrorView | null;
   docked: boolean;
   /** Where the running session was started from (routes the Esc behaviour). */
-  origin: 'screen' | 'docked' | 'hotkey' | 'orb' | 'chat' | null;
+  origin: 'screen' | 'docked' | 'hotkey' | 'orb' | 'chat' | 'theater' | null;
   cost: VoiceCost;
   startedAt: number | null;
 

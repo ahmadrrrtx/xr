@@ -30,6 +30,8 @@ import {
   orbShortcutInfo,
   pttSetShortcut,
   pttShortcutInfo,
+  theaterSetShortcut,
+  theaterShortcutInfo,
 } from '@/lib/settingsApi';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -37,12 +39,14 @@ const SETTERS: Record<GlobalOwner, (chord: string) => Promise<{ shortcut: string
   hud: hudSetShortcut,
   orb: orbSetShortcut,
   ptt: pttSetShortcut,
+  theater: theaterSetShortcut,
 };
 
 const INFOS: Record<GlobalOwner, () => Promise<string | null>> = {
   hud: hudShortcutInfo,
   orb: orbShortcutInfo,
   ptt: pttShortcutInfo,
+  theater: theaterShortcutInfo,
 };
 
 type Warning = { kind: 'modifier' | 'conflict' | 'system' } | null;
@@ -61,7 +65,7 @@ export function ShortcutsTab() {
     if (!isTauri()) return;
     void (async () => {
       const entries = await Promise.all(
-        (['hud', 'orb', 'ptt'] as GlobalOwner[]).map(async (owner) => {
+        (['hud', 'orb', 'ptt', 'theater'] as GlobalOwner[]).map(async (owner) => {
           const chord = await INFOS[owner]();
           return [owner, chord] as const;
         })

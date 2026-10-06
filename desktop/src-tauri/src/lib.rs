@@ -107,6 +107,8 @@ pub fn run() {
                 commands::orb::init(app.handle())?;
                 // Push-to-talk (Phase 8): global chord, override-aware.
                 commands::settings::init_ptt(app.handle())?;
+                // Voice Theater (Phase 16): ⌥⌘V toggle + native context menu.
+                commands::theater::init(app.handle())?;
                 tray::create_tray(app.handle())?;
             }
             Ok(())
@@ -235,6 +237,24 @@ pub fn run() {
             commands::orb::orb_set_shortcut,
             #[cfg(desktop)]
             commands::orb::orb_shortcut_info,
+            #[cfg(desktop)]
+            commands::theater::theater_open,
+            #[cfg(desktop)]
+            commands::theater::theater_close,
+            #[cfg(desktop)]
+            commands::theater::theater_toggle,
+            #[cfg(desktop)]
+            commands::theater::theater_is_open,
+            #[cfg(desktop)]
+            commands::theater::theater_focus_main,
+            #[cfg(desktop)]
+            commands::theater::theater_set_always_on_top,
+            #[cfg(desktop)]
+            commands::theater::theater_show_context_menu,
+            #[cfg(desktop)]
+            commands::theater::theater_shortcut_info,
+            #[cfg(desktop)]
+            commands::theater::theater_set_shortcut,
             events::theme_changed,
         ])
         .build(tauri::generate_context!())
@@ -249,6 +269,14 @@ pub fn run() {
             // (Moved/Resized fire during drags; cheap in-memory writes) and
             // persist them to the DB when the window closes.
             if let tauri::RunEvent::WindowEvent { label, event: wev, .. } = &event {
+                // Phase 16 — Voice Theater: bounds memory + "voice keeps
+                // running" hand-off when the window closes.
+                #[cfg(desktop)]
+                {
+                    if label == commands::theater::LABEL {
+                        commands::theater::on_window_event(app, wev);
+                    }
+                }
                 if label.starts_with("workspace-") {
                     match wev {
                         tauri::WindowEvent::Moved(pos) => {
@@ -294,6 +322,9 @@ pub fn run() {
                 // Park the orb's final position (drag → quit race).
                 #[cfg(desktop)]
                 commands::orb::flush_position(app);
+                // Theater still open at quit: remember where it was.
+                #[cfg(desktop)]
+                commands::theater::flush(app);
             }
         });
 }

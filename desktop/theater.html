@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" data-theme="xr-native">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>XR Voice Theater</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Cinematic exception (docs/THEME-SYSTEM.md rule 7): the theater is
+         always deep space, whatever the app theme — so no theme-init.js.
+         Inter is preloaded for the transcript; nothing else. -->
+    <link
+      rel="preload"
+      href="/fonts/inter-latin-wght-normal.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <style>
+      html,
+      body {
+        background: #03070d;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body class="theater">
+    <div id="theater-root"></div>
+    <script type="module" src="/src/theater/main.tsx"></script>
+  </body>
+</html>

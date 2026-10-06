@@ -334,6 +334,7 @@ pub fn validate_position<R: Runtime>(app: &AppHandle<R>) {
 mod menu_ids {
     pub const OPEN: &str = "orb-open";
     pub const VOICE: &str = "orb-voice";
+    pub const THEATER: &str = "orb-theater";
     pub const APPROVALS: &str = "orb-approvals";
     pub const SETTINGS: &str = "orb-settings";
     pub const HIDE: &str = "orb-hide";
@@ -341,7 +342,7 @@ mod menu_ids {
 
     /// Every id `build_menu` creates, in menu order (tests iterate this).
     #[cfg(test)]
-    pub const ALL: &[&str] = &[OPEN, VOICE, APPROVALS, SETTINGS, HIDE, QUIT];
+    pub const ALL: &[&str] = &[OPEN, VOICE, THEATER, APPROVALS, SETTINGS, HIDE, QUIT];
 }
 
 /// What a menu selection should do — `handle_menu_id` dispatches on this.
@@ -349,6 +350,7 @@ mod menu_ids {
 enum MenuAction {
     OpenMain,
     Voice,
+    Theater,
     Approvals,
     Settings,
     Hide,
@@ -360,12 +362,19 @@ fn menu_action_for(id: &str) -> Option<MenuAction> {
     match id {
         menu_ids::OPEN => Some(MenuAction::OpenMain),
         menu_ids::VOICE => Some(MenuAction::Voice),
+        menu_ids::THEATER => Some(MenuAction::Theater),
         menu_ids::APPROVALS => Some(MenuAction::Approvals),
         menu_ids::SETTINGS => Some(MenuAction::Settings),
         menu_ids::HIDE => Some(MenuAction::Hide),
         menu_ids::QUIT => Some(MenuAction::Quit),
         _ => None,
     }
+}
+
+/// Phase 16: the theater item shows its global chord like the voice item.
+pub fn theater_menu_label(os: &str) -> String {
+    let chord = if os == "macos" { "⌥⌘V" } else { "Ctrl+Alt+V" };
+    format!("Voice theater ({chord})")
 }
 
 /// Whether a voice session is running (Phase 15). The main window broadcasts
@@ -407,6 +416,8 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let open = MenuItem::with_id(app, menu_ids::OPEN, "Open XR", true, None::<&str>)?;
     let voice_label = voice_menu_label(voice_active(app), std::env::consts::OS);
     let voice = MenuItem::with_id(app, menu_ids::VOICE, voice_label, true, None::<&str>)?;
+    let theater_label = theater_menu_label(std::env::consts::OS);
+    let theater = MenuItem::with_id(app, menu_ids::THEATER, theater_label, true, None::<&str>)?;
     let approvals =
         MenuItem::with_id(app, menu_ids::APPROVALS, "Pending Approvals", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
@@ -418,6 +429,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         &[
             &open,
             &voice,
+            &theater,
             &approvals,
             &separator,
             &settings,
@@ -446,6 +458,8 @@ fn handle_menu_id<R: Runtime>(app: &AppHandle<R>, id: &str) {
             focus_main(app);
             let _ = app.emit_to("main", "orb:voice-requested", ());
         }
+        // Phase 16: the theater is its own window — no main-window detour.
+        Some(MenuAction::Theater) => super::theater::open_theater(app),
         Some(MenuAction::Approvals) => {
             focus_main(app);
             let _ = app.emit_to("main", "orb:approvals-requested", ());
@@ -719,7 +733,7 @@ mod tests {
             assert!(!seen.contains(&action), "duplicate action for {id}");
             seen.push(action);
         }
-        assert_eq!(seen.len(), 6, "expected exactly 6 menu actions");
+        assert_eq!(seen.len(), 7, "expected exactly 7 menu actions");
         assert_eq!(menu_action_for("orb-unknown"), None);
         assert_eq!(menu_action_for(""), None);
         assert_eq!(menu_action_for("open"), None, "unprefixed id must not match");
@@ -731,6 +745,8 @@ mod tests {
         assert_eq!(voice_menu_label(false, "macos"), "Start voice session (⌘.)");
         assert_eq!(voice_menu_label(true, "macos"), "Stop listening (⌘.)");
         assert_eq!(voice_menu_label(true, "windows"), "Stop listening (Ctrl+.)");
+        assert_eq!(theater_menu_label("macos"), "Voice theater (⌥⌘V)");
+        assert_eq!(theater_menu_label("linux"), "Voice theater (Ctrl+Alt+V)");
         assert_eq!(voice_active_from_payload(r#"{"state":"listening","active":true}"#), Some(true));
         assert_eq!(voice_active_from_payload(r#"{"state":"idle","active":false}"#), Some(false));
         assert_eq!(voice_active_from_payload(r#"{"state":"speaking"}"#), Some(true));

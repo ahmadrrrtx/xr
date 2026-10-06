@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "theater",
+  "description": "Voice Theater window (Phase 16): core APIs + event listen/emit, the frameless drag region, the window ops its five controls need (minimize, fullscreen on/off + query, close, maximize on double-click) and the settings store for the captions toggle. App-defined theater_* commands need no grants.",
+  "windows": [
+    "theater"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen",
+    "core:window:allow-close",
+    "store:default"
+  ]
+}
