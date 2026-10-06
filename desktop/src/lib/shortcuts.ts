@@ -39,7 +39,7 @@ function detectPlatform(): Platform {
 }
 
 export type ShortcutScope = 'app' | 'chat' | 'global';
-export type GlobalOwner = 'hud' | 'orb' | 'ptt';
+export type GlobalOwner = 'hud' | 'orb' | 'ptt' | 'theater';
 
 export interface ShortcutDef {
   id: string;
@@ -63,6 +63,7 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
   { id: 'hud', label: 'Toggle HUD (global)', scope: 'global', combo: 'mod+space', global: 'hud' },
   { id: 'orb', label: 'Toggle Orb (global)', scope: 'global', combo: 'alt+mod+o', global: 'orb' },
   { id: 'ptt', label: 'Push-to-talk (global)', scope: 'global', combo: 'mod+.', global: 'ptt' },
+  { id: 'theater', label: 'Toggle Voice Theater (global)', scope: 'global', combo: 'alt+mod+v', global: 'theater' },
 ] as const;
 
 export function shortcutById(id: string): ShortcutDef | undefined {

@@ -236,13 +236,14 @@ export default defineConfig({
   },
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   build: {
-    // Multi-page: the main app AND the HUD palette window (Phase 5) —
-    // tauri.conf.json's hud window loads dist/hud.html.
+    // Multi-page: the main app, the HUD palette window (Phase 5), the orb
+    // (Phase 6) and the Voice Theater (Phase 16, opened on demand from Rust).
     rollupOptions: {
       input: {
         main: resolve(projectRoot, 'index.html'),
         hud: resolve(projectRoot, 'hud.html'),
         orb: resolve(projectRoot, 'orb.html'),
+        theater: resolve(projectRoot, 'theater.html'),
       },
     },
     target:

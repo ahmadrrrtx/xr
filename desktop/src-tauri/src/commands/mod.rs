@@ -7,5 +7,7 @@ pub mod orb;
 pub mod runs;
 pub mod settings;
 pub mod system;
+#[cfg(desktop)]
+pub mod theater;
 pub mod window;
 pub mod workspaces;

@@ -60,15 +60,16 @@ function settings(patch: {
 /* ── shortcuts ─────────────────────────────────────────────────────── */
 
 describe("Phase 8 · shortcut registry", () => {
-  test("harvests 10 shortcuts with unique ids (9 from Phases 1–7 + Control Room)", () => {
-    expect(SHORTCUTS).toHaveLength(10);
-    expect(new Set(SHORTCUTS.map((s) => s.id)).size).toBe(10);
+  test("harvests 11 shortcuts with unique ids (9 from Phases 1–7 + Control Room + Theater)", () => {
+    expect(SHORTCUTS).toHaveLength(11);
+    expect(new Set(SHORTCUTS.map((s) => s.id)).size).toBe(11);
     expect(shortcutById("control-room")?.combo).toBe("alt+mod+r");
+    expect(shortcutById("theater")?.combo).toBe("alt+mod+v");
   });
 
-  test("exactly the three Rust-owned rows are global, each with an owner", () => {
+  test("exactly the four Rust-owned rows are global, each with an owner", () => {
     const globals = SHORTCUTS.filter((s) => s.scope === "global");
-    expect(globals.map((s) => s.id).sort()).toEqual(["hud", "orb", "ptt"]);
+    expect(globals.map((s) => s.id).sort()).toEqual(["hud", "orb", "ptt", "theater"]);
     for (const g of globals) expect(g.global).toBeTruthy();
     for (const app of SHORTCUTS.filter((s) => s.scope !== "global")) {
       expect(app.global).toBeUndefined();

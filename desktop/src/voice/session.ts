@@ -26,6 +26,8 @@ import type { AvatarState } from '@/components/brand/types';
 import { sendNotification, decideApproval } from '@/lib/approvalEvents';
 import { orbSetState } from '@/lib/orb';
 import { isTauri } from '@/lib/tauri';
+import { emitTheater } from '@/lib/theater';
+import { THEATER_IN } from '@/lib/theaterCore';
 import { useApprovalStore } from '@/stores/approvalStore';
 
 import {
@@ -47,7 +49,10 @@ const BARGE_MS = 220;
 const HOLD_TAIL_MS = 900;
 const SEND_FAILURES_BEFORE_ERROR = 4;
 
-export type VoiceOrigin = 'screen' | 'docked' | 'hotkey' | 'orb' | 'chat';
+export type VoiceOrigin = 'screen' | 'docked' | 'hotkey' | 'orb' | 'chat' | 'theater';
+
+/** Playback observer (Phase 16 karaoke): one utterance started / stopped. */
+export type TtsEvent = { kind: 'start'; text: string; durationMs: number } | { kind: 'stop' };
 
 export interface VoiceLevels {
   /** Mic RMS after gain (0..1). */
@@ -121,6 +126,7 @@ export class VoiceController {
   private ctx: AudioContext | null = null;
   private mic: MicGraph | null = null;
   private playing: Playback | null = null;
+  private ttsObservers = new Set<(ev: TtsEvent) => void>();
   private pending: Int16Array[] = [];
   private flushTimer: number | null = null;
   private bargeHotMs = 0;
@@ -476,7 +482,19 @@ export class VoiceController {
 
   /* ── playback ───────────────────────────────────────────────────────── */
 
-  private async play(wavB64: string): Promise<void> {
+  /** Subscribe to utterance start/stop (the theater's word sweep). */
+  onTts(cb: (ev: TtsEvent) => void): () => void {
+    this.ttsObservers.add(cb);
+    return () => {
+      this.ttsObservers.delete(cb);
+    };
+  }
+
+  private notifyTts(ev: TtsEvent): void {
+    this.ttsObservers.forEach((cb) => cb(ev));
+  }
+
+  private async play(wavB64: string, text = ''): Promise<void> {
     const ctx = this.ensureContext();
     if (ctx.state === 'suspended') await ctx.resume().catch(() => undefined);
     let buffer: AudioBuffer;
@@ -504,6 +522,7 @@ export class VoiceController {
       if (this.playing === me) {
         this.playing = null;
         this.levels.out = 0;
+        this.notifyTts({ kind: 'stop' });
         void voiceApi.played().catch(() => undefined);
         this.touch();
       }
@@ -511,6 +530,7 @@ export class VoiceController {
     this.playing = me;
     this.bargeHotMs = 0;
     src.start();
+    this.notifyTts({ kind: 'start', text, durationMs: buffer.duration * 1000 });
     this.pumpOutLevel();
   }
 
@@ -532,6 +552,7 @@ export class VoiceController {
     if (!p) return;
     this.playing = null;
     p.src.onended = null;
+    this.notifyTts({ kind: 'stop' });
     try {
       p.src.stop();
     } catch {
@@ -664,7 +685,7 @@ export class VoiceController {
         return;
       case 'tts':
         if (e.text) store._caption('xr', e.text);
-        if (e.wav && store.active) void this.play(e.wav);
+        if (e.wav && store.active) void this.play(e.wav, e.text ?? '');
         else if (e.wav) void voiceApi.played().catch(() => undefined);
         return;
       case 'tts_stop':
@@ -749,11 +770,8 @@ export class VoiceController {
     if (this.lastBroadcast === state) return;
     this.lastBroadcast = state;
     void orbSetState(avatarStateFor(state)).catch(() => undefined);
-    if (isTauri()) {
-      void import('@tauri-apps/api/event')
-        .then(({ emit }) => emit('voice:state-changed', { state, active: useVoiceStore.getState().active }))
-        .catch(() => undefined);
-    }
+    // Orb (Rust VoiceActiveState) + Voice Theater (Phase 16) share this one.
+    emitTheater(THEATER_IN.state, { state, active: useVoiceStore.getState().active });
   }
 
   private async bringForward(): Promise<void> {

@@ -248,13 +248,18 @@ export function Composer({
               type="button"
               onClick={() => {
                 // Phase 15: "When I press mic in Chat" — open the Voice screen
-                // or run a docked session right here.
-                const target = useVoiceStore.getState().settings?.desktop.chatMicTarget ?? 'screen';
+                // or run a docked session right here. Phase 16: with
+                // "Open in immersive theater" on, the session start itself
+                // opens the theater (theaterLink), so stay in Chat.
+                const desktop = useVoiceStore.getState().settings?.desktop;
+                const target = desktop?.chatMicTarget ?? 'screen';
                 if (useVoiceStore.getState().active) {
                   void voice.stop('user');
                   return;
                 }
-                if (target === 'docked') {
+                if (desktop?.theaterImmersive) {
+                  void voice.start('chat');
+                } else if (target === 'docked') {
                   useVoiceStore.getState().setDocked(true);
                   void voice.start('chat');
                 } else {

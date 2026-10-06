@@ -3,7 +3,7 @@
  * pattern: grouped cards, 44 px rows, cyan switches. Every control writes
  * through voiceStore.applySettings → engine (validated there) → mirror.
  */
-import { AlertTriangle, Mic, Play, Square, Trash2, FolderOpen, Loader2 } from 'lucide-react';
+import { AlertTriangle, Mic, Play, Square, Trash2, FolderOpen, Loader2, Clapperboard } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -11,8 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LabeledSlider, Segmented, Select, Toggle } from '@/components/settings/controls';
 import { SettingRow, SettingsSection } from '@/components/settings/primitives';
+import { readSettingJSON, writeSettingJSON } from '@/lib/persistent-store';
 import { revealPath } from '@/lib/settingsApi';
 import { isTauri } from '@/lib/tauri';
+import { theaterOpen } from '@/lib/theater';
+import { THEATER_KEYS } from '@/lib/theaterCore';
 import { cn } from '@/lib/utils';
 import { base64ToBytes, bytesToBase64, concatPcm16, dbfs, floatToPcm16, formatBytes, pitchToCents, resampleTo16k, engineModeFor } from '@/voice/audio';
 import { probeMicrophones, voice } from '@/voice/session';
@@ -560,24 +563,49 @@ export function ActivationSection() {
   );
 }
 
+/** Theater window prefs live in the settings store (Rust reads them too). */
+function useTheaterPref(key: string, fallback: boolean): [boolean, (v: boolean) => void] {
+  const [value, setValue] = useState(fallback);
+  useEffect(() => {
+    let alive = true;
+    void readSettingJSON<boolean>(key).then((v) => {
+      if (alive && typeof v === 'boolean') setValue(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [key]);
+  const set = useCallback(
+    (v: boolean) => {
+      setValue(v);
+      writeSettingJSON(key, v);
+    },
+    [key],
+  );
+  return [value, set];
+}
+
 export function TheaterSection() {
   const settings = useVoiceStore((s) => s.settings);
   const apply = useApply();
+  const [secondMonitor, setSecondMonitor] = useTheaterPref(THEATER_KEYS.secondMonitor, false);
+  const [closeStops, setCloseStops] = useTheaterPref(THEATER_KEYS.closeStopsVoice, false);
+  const mac = navigator.userAgent.toLowerCase().includes('mac');
   return (
     <SettingsSection title="Voice Theater">
-      <SettingRow
-        label="Immersive mode"
-        htmlFor="xr-voice-theater"
-        description="A full-screen companion window. Not built yet — Phase 16. The toggle is remembered."
-      >
-        <Toggle
-          id="xr-voice-theater"
-          checked={settings?.desktop.theaterImmersive ?? false}
-          onCheckedChange={(v) => {
-            apply({ desktop: { theaterImmersive: v } });
-            if (v) toast('Voice Theater arrives in Phase 16', { description: 'Saved. Sessions use the in-app view until then.' });
-          }}
-        />
+      <SettingRow label="Theater window" htmlFor="xr-voice-theater-open" description={`A frameless companion window for the running session. ${mac ? '⌥⌘V' : 'Alt+Ctrl+V'} toggles it from anywhere.`}>
+        <Button id="xr-voice-theater-open" variant="outline" size="sm" onClick={() => void theaterOpen()} data-testid="voice-theater-open">
+          <Clapperboard size={14} aria-hidden="true" /> Open theater
+        </Button>
+      </SettingRow>
+      <SettingRow label="Open in immersive theater" htmlFor="xr-voice-theater" description="Starting a session opens the theater instead of this screen's session view.">
+        <Toggle id="xr-voice-theater" checked={settings?.desktop.theaterImmersive ?? false} onCheckedChange={(v) => apply({ desktop: { theaterImmersive: v } })} />
+      </SettingRow>
+      <SettingRow label="Open on second display when available" htmlFor="xr-voice-theater-display" description="Falls back to the primary display when there is only one.">
+        <Toggle id="xr-voice-theater-display" checked={secondMonitor} onCheckedChange={setSecondMonitor} />
+      </SettingRow>
+      <SettingRow label="Closing the theater stops voice" htmlFor="xr-voice-theater-close" description="Off: the session keeps running docked when the theater closes.">
+        <Toggle id="xr-voice-theater-close" checked={closeStops} onCheckedChange={setCloseStops} />
       </SettingRow>
       <SettingRow label="Auto-exit on silence" htmlFor="xr-voice-autoexit" description="Hold and tap modes end the session after this much quiet.">
         <LabeledSlider

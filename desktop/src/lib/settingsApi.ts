@@ -246,6 +246,18 @@ export async function pttSetShortcut(
   }
 }
 
+/** Phase 16: re-bind the Voice Theater toggle (default ⌥⌘V). */
+export async function theaterSetShortcut(
+  chord: string
+): Promise<ShortcutRegistration | null> {
+  if (!isTauri()) return null;
+  try {
+    return await invoke<ShortcutRegistration>('theater_set_shortcut', { chord });
+  } catch {
+    return null;
+  }
+}
+
 export async function hudShortcutInfo(): Promise<string | null> {
   if (!isTauri()) return null;
   try {
@@ -269,6 +281,16 @@ export async function pttShortcutInfo(): Promise<string | null> {
   if (!isTauri()) return null;
   try {
     const info = await invoke<{ shortcut: string }>('ptt_shortcut_info');
+    return info?.shortcut ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function theaterShortcutInfo(): Promise<string | null> {
+  if (!isTauri()) return null;
+  try {
+    const info = await invoke<{ shortcut: string }>('theater_shortcut_info');
     return info?.shortcut ?? null;
   } catch {
     return null;
