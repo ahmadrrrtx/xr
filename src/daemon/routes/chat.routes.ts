@@ -41,6 +41,10 @@ interface ChatBody {
   mode?: "agent" | "ask" | "plan";
   /** Explicit execution mode gate. Default is the SAFE read-only `ask` mode. */
   stream?: boolean;
+  /** Phase 14: surface context (e.g. the Workbench's open workspace) appended
+   * to the system prompt. Bounded; it is instructions ABOUT the task, never
+   * the task itself. */
+  context?: string;
   provider?: string;
   model?: string;
   budget?: number;
@@ -234,6 +238,9 @@ export function chatRoutes(): DaemonRoute[] {
                       : undefined,
                     provider: body.provider,
                     model: body.model,
+                    ...(typeof body.context === "string" && body.context.trim()
+                      ? { systemPrompt: body.context.trim().slice(0, 4_000) }
+                      : {}),
                     budget: body.budget,
                     maxTokens: body.maxTokens,
                     maxSteps: body.maxSteps,

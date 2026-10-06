@@ -96,7 +96,20 @@ function pretty(value: unknown): string {
   }
 }
 
-export function ToolCallCard({ call }: { call: ToolCallRecord | null }) {
+function fmtDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
+  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+}
+
+export function ToolCallCard({
+  call,
+  runId,
+}: {
+  call: ToolCallRecord | null;
+  /** Phase 14: the engine run this call belongs to (real trace link). */
+  runId?: string;
+}) {
   const [expanded, setExpanded] = useState(false);
   const reduced = useReducedMotion();
   const navigate = useNavigate();
@@ -106,17 +119,20 @@ export function ToolCallCard({ call }: { call: ToolCallRecord | null }) {
   const statusLabel: Record<ToolCallRecord['status'], string> = {
     running: 'running',
     done: 'done',
-    error: 'failed',
+    error: call.denied ? 'denied' : 'failed',
     'waiting-approval': 'waiting approval',
   };
 
   /**
-   * Phase 9: open the Brain run behind this tool call. Loose coupling —
-   * reuse a live run when one is streaming (it's almost certainly the same
-   * agent loop), otherwise start a fresh demo run. Phase 14 replaces this
-   * with a real `?span=sp_xxx` deep link into the production trace.
+   * Open the Brain run behind this tool call. Phase 14: a real engine run
+   * id deep-links to its trace (`/brain/<runId>`); the Brain store resolves
+   * engine runs. Without one (mock seam), reuse a live demo run or start one.
    */
   const openTrace = (): void => {
+    if (runId) {
+      navigate(`/brain/${runId}`);
+      return;
+    }
     const st = useBrainStore.getState();
     const live = st.runOrder.find(
       (id) =>
@@ -125,14 +141,19 @@ export function ToolCallCard({ call }: { call: ToolCallRecord | null }) {
     const id = live ?? st.startMockRun(call.summary);
     navigate(`/brain/${id}`);
   };
+  const denied = call.denied === true && !call.blocked;
 
   return (
     <div
       role="region"
       aria-label={`Tool call: ${call.summary} — ${call.blocked ? 'blocked by XR Shield' : statusLabel[call.status]}`}
       data-blocked={call.blocked ? 'true' : undefined}
-      className="border-border-subtle my-2 w-full overflow-hidden rounded-lg border border-l-[3px] bg-black/20"
-      style={{ borderLeftColor: CATEGORY_BORDER[call.category] }}
+      data-denied={denied ? 'true' : undefined}
+      data-status={call.status}
+      className={`my-2 w-full overflow-hidden rounded-lg border border-l-[3px] bg-black/20 ${
+        denied || call.blocked ? 'border-danger/50' : 'border-border-subtle'
+      }`}
+      style={{ borderLeftColor: denied || call.blocked ? 'var(--danger)' : CATEGORY_BORDER[call.category] }}
     >
       <div className="flex items-stretch">
         <button
@@ -174,10 +195,24 @@ export function ToolCallCard({ call }: { call: ToolCallRecord | null }) {
               <ShieldX size={11} strokeWidth={1.75} aria-hidden="true" />
               Blocked by XR Shield
             </span>
+          ) : denied ? (
+            // Phase 14: the human (or the engine's approval timeout) said no.
+            <span
+              data-testid="tool-denied-badge"
+              className="text-danger flex shrink-0 items-center gap-1 rounded-full border border-[color-mix(in_oklab,var(--danger)_45%,transparent)] px-1.5 py-px font-mono text-[10px] select-none"
+            >
+              <ShieldX size={11} strokeWidth={1.75} aria-hidden="true" />
+              Denied
+            </span>
           ) : null}
           <span className="text-text-tertiary font-mono text-[10px] uppercase select-none">
             {call.tool}
           </span>
+          {call.durationMs !== undefined && call.status !== 'running' && (
+            <span className="text-text-tertiary font-mono text-[10px] select-none" title="Tool duration">
+              {fmtDuration(call.durationMs)}
+            </span>
+          )}
           <StatusIcon status={call.status} />
           <ChevronDown
             aria-hidden="true"

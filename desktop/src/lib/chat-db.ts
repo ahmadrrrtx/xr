@@ -28,6 +28,36 @@ export interface MessageMetadata {
   attachments?: Array<{ name: string; size: number }>;
   /** Phase 13: what the budget governor did to this turn. */
   budget?: BudgetNote;
+  /** Phase 14: text of attached files as sent to the engine (not rendered). */
+  attachmentText?: string;
+  /** Phase 14: why an assistant turn failed — rendered as the honest state. */
+  error?: TurnError;
+  /** Phase 14: the engine run behind this turn (trace link, Runs row). */
+  runId?: string;
+  /** Phase 14: real token counts from the provider. */
+  usage?: { inTokens: number; outTokens: number };
+  /** Phase 14: execution mode and model the turn ran with. */
+  mode?: 'agent' | 'ask' | 'plan';
+  model?: string;
+  /** Phase 14: how the turn ended when not a normal completion. */
+  stopped?: 'cancelled' | 'max_steps' | 'budget' | 'error' | 'interrupted';
+  /** Phase 14: measured time to first token / total (ms). */
+  timing?: { ttftMs?: number; totalMs?: number };
+}
+
+/** Phase 14: a failed assistant turn, by cause (the UI never guesses). */
+export interface TurnError {
+  kind:
+    | 'engine_down'
+    | 'no_provider'
+    | 'auth'
+    | 'busy'
+    | 'model'
+    | 'interrupted'
+    | 'request';
+  message: string;
+  code?: string;
+  retryable?: boolean;
 }
 
 /** Phase 13: inline budget outcome rendered with the assistant turn. */
@@ -66,6 +96,11 @@ export interface ToolCallRecord {
   approvalId?: string;
   /** Phase 12: XR Shield blocked this call by policy (no human was asked). */
   blocked?: boolean;
+  /** Phase 14: the human (or the engine's approval timeout) denied this call. */
+  denied?: boolean;
+  /** Phase 14: wall-clock duration once finished (ms). */
+  durationMs?: number;
+  startedAt?: number;
 }
 
 export interface MessagePage {

@@ -28,7 +28,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   const retryMessage = useChatStore((s) => s.retryMessage);
   const regenerate = useChatStore((s) => s.regenerate);
 
-  const scrollKey = `${sessionId}|${messages.length}|${stream?.text.length ?? -1}|${stream?.toolCalls.length ?? 0}|${stream?.status ?? 'idle'}|${stream ? 'streaming' : 'idle'}`;
+  const scrollKey = `${sessionId}|${messages.length}|${stream?.text.length ?? -1}|${stream?.toolCalls.length ?? 0}|${stream?.status ?? 'idle'}|${stream?.phase ?? ''}|${stream ? 'streaming' : 'idle'}`;
   const { containerRef, onScroll, scrollToBottom, forceStick, isStuck, newCount } =
     useStickToBottom(scrollKey);
 
@@ -114,6 +114,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
             isStreaming
             streamingText={stream.text}
             streamingTools={stream.toolCalls}
+            streamingTurn={stream}
           />
         )}
         <div aria-live="polite" className="sr-only">

@@ -1,13 +1,16 @@
 /*
- * Chat conversation state (Phase 4): messages per session, the streaming
- * pipeline (mock provider → tokens/tool events → persisted assistant
- * message), attachments, offline queue, and pagination cursors.
+ * Chat conversation state (Phase 4; Phase 14: real engine): messages per
+ * session, the streaming pipeline (engine SSE → tokens/tool/status events →
+ * persisted assistant message), attachments, offline queue, pagination.
  *
  * Streaming shape: `stream` holds the in-flight assistant turn
- * { sessionId, text, toolCalls, status } — tokens append to `text`, tool
- * events update `toolCalls`. On `done` the turn is persisted (content +
- * segments in metadata) and `stream` clears. `editingId` tracks a user
- * message being edited (v1: save → send as new message).
+ * { sessionId, text, toolCalls, status, phase, runId, usage } — tokens
+ * append to `text`, tool events update `toolCalls`, engine status frames
+ * update `phase` ("Waiting for qwen2.5:0.5b…"). On `done` the turn is
+ * persisted (content + segments + run/usage in metadata) and `stream`
+ * clears. A failed turn persists with `metadata.error{kind}` so the bubble
+ * renders the honest state (no provider, engine down, …) — never a fake
+ * reply. `mode` (ask/agent/plan) is per session, default agent.
  */
 import { create } from 'zustand';
 
@@ -18,10 +21,12 @@ import {
   type ChatMessage,
   type MessagePage,
   type ToolCallRecord,
+  type TurnError,
 } from '@/lib/chat-db';
-import { streamChat, type ChatTurn } from '@/lib/mockLLM';
+import { streamChat, type ChatMode, type ChatTurn } from '@/lib/llm';
 import { orbSetState } from '@/lib/orb';
-import { newId, useSessionsStore } from '@/stores/sessionsStore';
+import { engineDefaultModel, useEngineStore } from '@/stores/engineStore';
+import { DEFAULT_MODEL, newId, useSessionsStore } from '@/stores/sessionsStore';
 
 export type StreamStatus = 'idle' | 'connecting' | 'streaming' | 'error';
 
@@ -32,6 +37,8 @@ export interface FileAttachment {
   type: string;
   /** dataURL preview for images (UI-only in v1). */
   preview?: string;
+  /** Phase 14: text content (UTF-8 files ≤ 1 MB) sent to the engine. */
+  text?: string;
 }
 
 export interface StreamingTurn {
@@ -42,6 +49,43 @@ export interface StreamingTurn {
   startedAt: number;
   /** Phase 13: downshift / cutoff note carried into the final message. */
   budget?: BudgetNote;
+  /** Phase 14: engine status vocabulary (`provider_selection`, `generating`, …). */
+  phase?: string;
+  phaseMessage?: string;
+  provider?: string;
+  model: string;
+  mode: ChatMode;
+  runId?: string;
+  usage?: { inTokens: number; outTokens: number };
+  firstTokenAt?: number;
+}
+
+export const CHAT_MODES: readonly ChatMode[] = ['ask', 'agent', 'plan'];
+const MODE_KEY = (id: string | null): string => `xr.chat.mode.${id ?? 'default'}`;
+
+function readMode(sessionId: string | null): ChatMode | null {
+  try {
+    const v = window.localStorage.getItem(MODE_KEY(sessionId));
+    return v === 'ask' || v === 'agent' || v === 'plan' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Per-session mode, falling back to the last chosen default, then `agent`. */
+export function modeFor(sessionId: string | null): ChatMode {
+  return readMode(sessionId) ?? readMode(null) ?? 'agent';
+}
+
+const MAX_ATTACHMENT_BYTES = 1024 * 1024;
+export { MAX_ATTACHMENT_BYTES };
+
+/** Fenced blocks for attached text files (what the engine sees). */
+export function attachmentText(atts: FileAttachment[]): string {
+  return atts
+    .filter((a) => typeof a.text === 'string' && a.text.length > 0)
+    .map((a) => `\n\n--- Attached file: ${a.name} ---\n${a.text}\n--- end of ${a.name} ---`)
+    .join('');
 }
 
 interface ChatState {
@@ -54,6 +98,9 @@ interface ChatState {
   online: boolean;
   /** ids of user messages parked while offline. */
   queuedIds: string[];
+  /** Phase 14: per-session execution mode (ask / agent / plan). */
+  modes: Record<string, ChatMode>;
+  setMode: (sessionId: string | null, mode: ChatMode) => void;
 
   loadMessages: (sessionId: string) => Promise<void>;
   loadOlder: (sessionId: string) => Promise<void>;
@@ -91,26 +138,54 @@ function currentUserTurns(sessionId: string): ChatTurn[] {
   return msgs
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .filter((m) => m.metadata?.status !== 'queued' && m.metadata?.status !== 'failed')
-    .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    .filter((m) => !(m.role === 'assistant' && m.metadata?.error && !m.content))
+    .map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content + (m.metadata?.attachmentText ?? ''),
+    }));
 }
 
-/** Run the (mock) provider and fold events into store state. */
+/** The engine is known to be down (two misses) — don't pretend to send. */
+function engineKnownDown(): boolean {
+  const e = useEngineStore.getState();
+  return (e.status === 'down' && e.failures >= 2) || e.status === 'unauthorized';
+}
+
+/** Run the engine and fold its events into store state. */
 async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<void> {
   const sessions = useSessionsStore.getState();
   controller = new AbortController();
   const signal = controller.signal;
+  const model =
+    sessions.sessions.find((s) => s.id === sessionId)?.model ?? engineDefaultModel() ?? DEFAULT_MODEL;
+  const mode = useChatStore.getState().modes[sessionId] ?? modeFor(sessionId);
 
   useChatStore.setState({
-    stream: { sessionId, text: '', toolCalls: [], status: 'connecting', startedAt: Date.now() },
+    stream: {
+      sessionId,
+      text: '',
+      toolCalls: [],
+      status: 'connecting',
+      startedAt: Date.now(),
+      model,
+      mode,
+    },
   });
   // Companion Orb (Phase 6): XR is thinking until the first token lands.
   void orbSetState('thinking');
 
+  const patchStream = (fn: (st: StreamingTurn) => Partial<StreamingTurn>): void => {
+    const cur = useChatStore.getState().stream;
+    if (cur && cur.sessionId === sessionId) useChatStore.setState({ stream: { ...cur, ...fn(cur) } });
+  };
+
   await streamChat({
     messages: history,
-    model: sessions.sessions.find((s) => s.id === sessionId)?.model ?? 'claude-sonnet-4.5',
+    model,
+    mode,
+    sessionId,
     signal,
-    // Phase 7: permission-gated tools park the stream on the approval modal.
+    // Phase 7 contract (mock seam only; engine approvals bridge themselves).
     requestApproval: makeApprovalGate(signal),
     // Phase 13: the budget governor gates, meters and bills this turn.
     budget: { surface: 'chat', sessionId, agent: 'main' },
@@ -152,7 +227,7 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
             role: 'assistant',
             content: '',
             createdAt: Date.now(),
-            metadata: { budget: { kind: 'blocked', code: e.code, reason: e.reason } },
+            metadata: { budget: { kind: 'blocked', code: e.code, reason: e.reason }, mode, model },
           };
           void commit(msg);
           useChatStore.setState({ stream: null });
@@ -160,24 +235,48 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
           return;
         }
         case 'model_switched': {
-          useChatStore.setState({
-            stream: {
-              ...stream,
-              budget: { kind: 'downshifted', from: e.from, to: e.to, why: e.why ?? undefined },
-            },
-          });
+          patchStream(() => ({
+            budget: { kind: 'downshifted', from: e.from, to: e.to, why: e.why ?? undefined },
+            model: e.to,
+          }));
           return;
         }
         case 'budget_cutoff': {
-          useChatStore.setState({
-            stream: { ...stream, budget: { ...stream.budget, kind: 'cutoff', reason: e.reason } },
-          });
+          patchStream((cur) => ({ budget: { ...cur.budget, kind: 'cutoff', reason: e.reason } }));
+          return;
+        }
+        case 'status': {
+          patchStream(() => ({
+            phase: e.status,
+            phaseMessage: e.message,
+            ...(e.provider ? { provider: e.provider } : {}),
+            ...(e.model ? { model: e.model } : {}),
+          }));
+          if (e.status === 'awaiting_approval') void orbSetState('waiting-approval');
+          else if (e.status === 'tool_running') void orbSetState('thinking');
+          return;
+        }
+        case 'run': {
+          patchStream(() => ({ runId: e.runId }));
+          return;
+        }
+        case 'usage': {
+          patchStream(() => ({ usage: { inTokens: e.inTokens, outTokens: e.outTokens } }));
+          return;
+        }
+        case 'replace': {
+          patchStream(() => ({ text: e.text }));
           return;
         }
         case 'token': {
           if (stream.status !== 'streaming') {
             useChatStore.setState({
-              stream: { ...stream, status: 'streaming', text: stream.text + e.text },
+              stream: {
+                ...stream,
+                status: 'streaming',
+                text: stream.text + e.text,
+                firstTokenAt: stream.firstTokenAt ?? Date.now(),
+              },
             });
             void orbSetState('speaking');
           } else {
@@ -186,49 +285,51 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
           return;
         }
         case 'tool_call': {
+          const call: ToolCallRecord = { ...e.call, startedAt: e.call.startedAt ?? Date.now() };
           useChatStore.setState({
-            stream: { ...stream, toolCalls: [...stream.toolCalls, e.call] },
+            stream: { ...stream, toolCalls: [...stream.toolCalls, call], status: 'streaming' },
           });
-          // Phase 11: the first tool call of a reply is an agent run — give
-          // it a short Brain run so it shows up in the Control Room (and the
-          // card's "View trace" lands on it). Lazy import: no store cycle.
-          if (stream.toolCalls.length === 0) {
-            void import('@/stores/brainStore').then(({ useBrainStore }) => {
-              const b = useBrainStore.getState();
-              const live = b.runOrder.some(
-                (id) =>
-                  b.runs[id]?.status === 'running' ||
-                  b.runs[id]?.status === 'waiting'
-              );
-              if (!live) b.startMockRun(e.call.summary, { flavor: 'short' });
-            });
-          }
+          void orbSetState('thinking');
+          return;
+        }
+        case 'tool_waiting': {
+          patchStream((cur) => ({
+            toolCalls: cur.toolCalls.map((t) =>
+              t.id === e.id ? { ...t, status: 'waiting-approval', approvalId: e.approvalId } : t,
+            ),
+          }));
           return;
         }
         case 'tool_result': {
-          useChatStore.setState({
-            stream: {
-              ...stream,
-              toolCalls: stream.toolCalls.map((t) =>
-                t.id === e.id
-                  ? {
-                      ...t,
-                      status: e.status,
-                      output: e.output,
-                      ...(e.blocked ? { blocked: true } : {}),
-                    }
-                  : t,
-              ),
-            },
-          });
+          patchStream((cur) => ({
+            toolCalls: cur.toolCalls.map((t) =>
+              t.id === e.id
+                ? {
+                    ...t,
+                    status: e.status,
+                    output: e.output,
+                    ...(e.status === 'error' ? { error: e.output } : {}),
+                    ...(e.blocked ? { blocked: true } : {}),
+                    ...(e.denied ? { denied: true } : {}),
+                    durationMs: t.startedAt ? Date.now() - t.startedAt : undefined,
+                  }
+                : t,
+            ),
+          }));
           return;
         }
         case 'error': {
-          useChatStore.setState({
-            stream: { ...stream, status: 'error' },
-          });
           void orbSetState('error');
-          // Persist the partial as an errored assistant message.
+          const error: TurnError = {
+            kind: e.kind ?? 'model',
+            message: e.message,
+            ...(e.code ? { code: e.code } : {}),
+            ...(typeof e.retryable === 'boolean' ? { retryable: e.retryable } : {}),
+          };
+          // Persist the partial (if any) as an errored assistant message.
+          const segments: NonNullable<ChatMessage['metadata']>['segments'] = [];
+          if (stream.text) segments.push({ type: 'text', text: stream.text });
+          for (let i = 0; i < stream.toolCalls.length; i++) segments.push({ type: 'tool', index: i });
           const msg: ChatMessage = {
             id: newId(),
             sessionId,
@@ -236,20 +337,26 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
             content: stream.text,
             createdAt: Date.now(),
             metadata: {
-              ...(stream.text ? { segments: [{ type: 'text', text: stream.text }] } : {}),
+              ...(segments.length ? { segments } : {}),
               status: 'error',
+              error,
+              mode,
+              model: stream.model,
+              ...(stream.runId ? { runId: stream.runId } : {}),
+              ...(stream.usage ? { usage: stream.usage } : {}),
               ...(stream.budget ? { budget: stream.budget } : {}),
             },
             toolCalls: stream.toolCalls.length ? stream.toolCalls : undefined,
           };
           void commit(msg);
           useChatStore.setState({ stream: null });
+          window.setTimeout(() => void orbSetState('idle'), 1500);
           return;
         }
         case 'done': {
           // Compose the final message: text segments + tool cards interleaved
           // in arrival order (tools land between the text that surrounded them).
-          void finishStream(sessionId, stream);
+          void finishStream(sessionId, stream, e.stopped);
           return;
         }
       }
@@ -260,26 +367,53 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
 }
 
 /** Fold a finished streaming turn into a persisted assistant message. */
-async function finishStream(sessionId: string, stream: StreamingTurn): Promise<void> {
-  if (!stream.text && stream.toolCalls.length === 0) {
+async function finishStream(
+  sessionId: string,
+  stream: StreamingTurn,
+  stopped?: string,
+): Promise<void> {
+  // The latest snapshot may carry late fields (usage, cost, run id).
+  const latest = useChatStore.getState().stream;
+  const turn = latest?.sessionId === sessionId ? latest : stream;
+  const text = turn.text;
+  const toolCalls = turn.toolCalls.map((t) =>
+    t.status === 'running' || t.status === 'waiting-approval'
+      ? { ...t, status: 'error' as const, error: t.error ?? 'Stopped before the tool finished.' }
+      : t,
+  );
+  const ended =
+    stopped === 'cancelled' || stopped === 'max_steps' || stopped === 'budget' || stopped === 'error'
+      ? stopped
+      : undefined;
+  if (!text && toolCalls.length === 0 && !ended) {
     useChatStore.setState({ stream: null });
     void orbSetState('idle');
     return;
   }
   const segments: NonNullable<ChatMessage['metadata']>['segments'] = [];
-  if (stream.text) segments.push({ type: 'text', text: stream.text });
-  for (let i = 0; i < stream.toolCalls.length; i++) segments.push({ type: 'tool', index: i });
-  // The budget note may have been updated after `done` (cost lands async).
-  const latest = useChatStore.getState().stream;
-  const budget = latest?.sessionId === sessionId ? (latest.budget ?? stream.budget) : stream.budget;
+  if (text) segments.push({ type: 'text', text });
+  for (let i = 0; i < toolCalls.length; i++) segments.push({ type: 'tool', index: i });
+  const now = Date.now();
   const msg: ChatMessage = {
     id: newId(),
     sessionId,
     role: 'assistant',
-    content: stream.text,
-    createdAt: Date.now(),
-    metadata: { segments, ...(budget ? { budget } : {}) },
-    toolCalls: stream.toolCalls,
+    content: text,
+    createdAt: now,
+    metadata: {
+      segments,
+      mode: turn.mode,
+      model: turn.model,
+      ...(turn.budget ? { budget: turn.budget } : {}),
+      ...(turn.runId ? { runId: turn.runId } : {}),
+      ...(turn.usage ? { usage: turn.usage } : {}),
+      ...(ended ? { stopped: ended } : {}),
+      timing: {
+        ...(turn.firstTokenAt ? { ttftMs: turn.firstTokenAt - turn.startedAt } : {}),
+        totalMs: now - turn.startedAt,
+      },
+    },
+    toolCalls,
   };
   await commit(msg);
   useChatStore.setState({ stream: null });
@@ -295,6 +429,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   attachments: [],
   online: true,
   queuedIds: [],
+  modes: {},
+
+  setMode: (sessionId, mode) => {
+    try {
+      window.localStorage.setItem(MODE_KEY(sessionId), mode);
+      window.localStorage.setItem(MODE_KEY(null), mode); // becomes the default for new chats
+    } catch {
+      /* storage unavailable */
+    }
+    if (sessionId) set((st) => ({ modes: { ...st.modes, [sessionId]: mode } }));
+  },
 
   loadMessages: async (sessionId) => {
     set({ loadingSession: true });
@@ -330,12 +475,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sessionId = s.id;
     }
 
-    // Attachments ride along as a text note (v1 contract — no upload yet).
+    // Attachments: the bubble shows a note; the engine gets the file text.
     const atts = get().attachments;
     const note = atts.length
       ? `\n\n${atts.map((a) => `[Attached: ${a.name}]`).join('\n')}`
       : '';
     const content = text + note;
+    const extra = attachmentText(atts);
 
     const userMsg: ChatMessage = {
       id: newId(),
@@ -344,11 +490,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content,
       createdAt: Date.now(),
       metadata: atts.length
-        ? { attachments: atts.map(({ name, size }) => ({ name, size })) }
+        ? {
+            attachments: atts.map(({ name, size }) => ({ name, size })),
+            ...(extra ? { attachmentText: extra } : {}),
+          }
         : undefined,
     };
 
-    set({ attachments: [] }); // strip clears on send (v1)
+    set({ attachments: [] }); // strip clears on send
 
     // Offline → park as queued, flush on reconnect.
     if (!get().online) {
@@ -357,18 +506,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    // Engine down → the message is kept and marked, never silently dropped.
+    if (engineKnownDown()) {
+      await commit({ ...userMsg, metadata: { ...userMsg.metadata, status: 'failed' } });
+      void sessions.titleFromFirstMessage(sessionId, text);
+      return;
+    }
+
     await commit(userMsg);
     void sessions.titleFromFirstMessage(sessionId, text);
-    await runGeneration(sessionId, [...currentUserTurns(sessionId), { role: 'user', content }]);
+    await runGeneration(sessionId, [
+      ...currentUserTurns(sessionId).slice(0, -1),
+      { role: 'user', content: content + extra },
+    ]);
   },
 
   cancelGeneration: () => {
     const stream = get().stream;
-    controller?.abort();
+    controller?.abort(); // closes the reader → the engine aborts the run
     controller = null;
     if (stream) {
-      // Keep whatever streamed so far as a normal assistant message.
-      void finishStream(stream.sessionId, stream);
+      // Keep whatever streamed so far, marked as stopped by the user.
+      void finishStream(stream.sessionId, stream, 'cancelled');
     }
   },
 
@@ -378,17 +537,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const msg = all.find((m) => m.id === id);
     if (!msg) return;
     await commit({ ...msg, metadata: { ...msg.metadata, status: undefined } });
-    await runGeneration(msg.sessionId, [
-      ...currentUserTurns(msg.sessionId),
-      { role: 'user', content: msg.content },
-    ]);
+    // The retried message is the last user turn; everything after it (a
+    // failed assistant turn, say) is not part of the prompt.
+    const turns = currentUserTurns(msg.sessionId);
+    let cut = turns.length;
+    for (let i = turns.length - 1; i >= 0; i--) {
+      if (turns[i].role === 'user') {
+        cut = i + 1;
+        break;
+      }
+    }
+    await runGeneration(msg.sessionId, turns.slice(0, cut));
   },
 
   regenerate: async (assistantId) => {
     const all = Object.values(get().messages).flat();
     const msg = all.find((m) => m.id === assistantId);
     if (!msg) return;
-    await runGeneration(msg.sessionId, currentUserTurns(msg.sessionId));
+    const turns = currentUserTurns(msg.sessionId);
+    let cut = turns.length;
+    for (let i = turns.length - 1; i >= 0; i--) {
+      if (turns[i].role === 'user') {
+        cut = i + 1;
+        break;
+      }
+    }
+    await runGeneration(msg.sessionId, turns.slice(0, cut));
   },
 
   setOnline: (online) => {

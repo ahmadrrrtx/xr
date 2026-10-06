@@ -11,15 +11,26 @@ import { motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { modelInfo } from '@/budget/models';
 import { isTauri } from '@/lib/tauri';
-import { useChatStore, type FileAttachment } from '@/stores/chatStore';
-import { newId } from '@/stores/sessionsStore';
+import { MAX_ATTACHMENT_BYTES, useChatStore, type FileAttachment } from '@/stores/chatStore';
+import { useEngineStore } from '@/stores/engineStore';
+import { newId, useSessionsStore } from '@/stores/sessionsStore';
 import { AttachmentStrip } from './AttachmentStrip';
+import { ModeSwitch } from './ModeSwitch';
 import { ModelPicker } from './ModelPicker';
 
-const CONTEXT_WINDOW = 128_000; // tokens (mock assumption per brief)
-/** Rough chars/token estimate — a real tokenizer lands with the backend. */
+/** Rough chars/token estimate for the composer counter (the engine reports real usage). */
 const estimateTokens = (chars: number): number => Math.ceil(chars / 4);
+
+/** Text-like files only: the engine reads their content inline. */
+const TEXT_EXT = /\.(txt|md|markdown|json|jsonl|csv|tsv|ya?ml|toml|ini|cfg|conf|log|xml|html?|css|scss|js|jsx|ts|tsx|mjs|cjs|py|rb|go|rs|java|kt|swift|c|h|cpp|hpp|cs|php|sh|bash|zsh|fish|sql|graphql|env|gitignore|dockerfile|makefile|lock|diff|patch|tex|rst|org)$/i;
+
+function isTextFile(f: File): boolean {
+  if (f.type.startsWith('text/')) return true;
+  if (/^application\/(json|xml|x-yaml|yaml|toml|javascript|typescript|x-sh)/.test(f.type)) return true;
+  return TEXT_EXT.test(f.name);
+}
 
 export function Composer({
   sessionId,
@@ -38,9 +49,17 @@ export function Composer({
   const addAttachment = useChatStore((s) => s.addAttachment);
   const removeAttachment = useChatStore((s) => s.removeAttachment);
   const stream = useChatStore((s) => s.stream);
+  const engineStatus = useEngineStore((s) => s.status);
+  const engineFailures = useEngineStore((s) => s.failures);
+  const engineDown =
+    (engineStatus === 'down' && engineFailures >= 2) || engineStatus === 'unauthorized';
+  const sessionModel = useSessionsStore(
+    (s) => s.sessions.find((x) => x.id === sessionId)?.model ?? null,
+  );
+  const contextK = modelInfo(sessionModel ?? '').contextK || 128;
 
   const streaming = stream !== null;
-  const canSend = (text.trim().length > 0 || attachments.length > 0) && !streaming;
+  const canSend = (text.trim().length > 0 || attachments.length > 0) && !streaming && !engineDown;
 
   // ↑ with an empty composer prefills the last user message (edit-and-resend).
   const prefillLast = () => {
@@ -82,14 +101,16 @@ export function Composer({
     if (isTauri()) {
       try {
         const { open } = await import('@tauri-apps/plugin-dialog');
-        const result = await open({ multiple: true, title: 'Attach files' });
+        const result = await open({ multiple: true, title: 'Attach text files' });
         if (!result) return;
         const paths = Array.isArray(result) ? result : [result];
+        const { readFile } = await import('@tauri-apps/plugin-fs');
         for (const p of paths) {
           const name = String(p).split(/[\\/]/).pop() ?? 'file';
-          addAttachment({ id: newId(), name, size: 0, type: 'file' });
+          const bytes = await readFile(String(p));
+          const file = new File([bytes], name);
+          ingestFiles([file]);
         }
-        toast('File attachments will send with your message in a future update.');
         return;
       } catch {
         /* fall through to browser input */
@@ -100,25 +121,29 @@ export function Composer({
 
   const ingestFiles = (files: File[]) => {
     for (const f of files) {
-      const isImage = f.type.startsWith('image/');
-      const att: FileAttachment = {
-        id: newId(),
-        name: f.name,
-        size: f.size,
-        type: f.type,
-      };
-      if (isImage && f.size < 2 * 1024 * 1024) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          addAttachment({ ...att, preview: String(reader.result) });
-        };
-        reader.readAsDataURL(f);
+      if (f.size > MAX_ATTACHMENT_BYTES) {
+        toast(`${f.name} is too large`, { description: 'Attachments are limited to 1 MB of text.' });
         continue;
       }
-      addAttachment(att);
-    }
-    if (files.length > 0) {
-      toast('File attachments will send with your message in a future update.');
+      if (!isTextFile(f)) {
+        toast(`${f.name} skipped`, {
+          description: 'Only text files can be attached for now (images and binaries come later).',
+        });
+        continue;
+      }
+      const att: FileAttachment = { id: newId(), name: f.name, size: f.size, type: f.type || 'text/plain' };
+      const reader = new FileReader();
+      reader.onload = () => {
+        const content = String(reader.result ?? '');
+        // Binary disguised with a text extension → NUL bytes; refuse honestly.
+        if (content.includes('\u0000')) {
+          toast(`${f.name} skipped`, { description: 'That file is not plain text.' });
+          return;
+        }
+        addAttachment({ ...att, text: content });
+      };
+      reader.onerror = () => toast(`Could not read ${f.name}`);
+      reader.readAsText(f);
     }
   };
 
@@ -157,7 +182,7 @@ export function Composer({
   }, [sessionId]);
 
   const tokens = estimateTokens(text.length);
-  const ratio = tokens / CONTEXT_WINDOW;
+  const ratio = tokens / (contextK * 1000);
 
   return (
     <div className="w-full px-6 pb-6">
@@ -202,8 +227,9 @@ export function Composer({
               onChange={(e) => setText(e.target.value)}
               onKeyDown={onKeyDown}
               onPaste={onPaste}
-              placeholder="Message XR..."
+              placeholder={engineDown ? 'Engine not running — start it to chat' : 'Message XR...'}
               aria-label="Message XR"
+              aria-describedby={engineDown ? 'xr-composer-engine-hint' : undefined}
               minRows={1}
               maxRows={8}
               cacheMeasurements
@@ -225,8 +251,17 @@ export function Composer({
           </div>
         </div>
 
+        {engineDown && (
+          <p id="xr-composer-engine-hint" className="sr-only">
+            The XR engine is not running; sending is disabled until it is back.
+          </p>
+        )}
+
         <div className="mt-2 flex items-center justify-between gap-3">
-          <ModelPicker sessionId={sessionId} />
+          <div className="flex min-w-0 items-center gap-2">
+            <ModeSwitch sessionId={sessionId} />
+            <ModelPicker sessionId={sessionId} />
+          </div>
 
           <div className="flex items-center gap-2">
             {ratio > 0.75 && (
@@ -242,7 +277,7 @@ export function Composer({
                 }}
                 aria-live="off"
               >
-                {(tokens / 1000).toFixed(1)}K / 128K tokens
+                {(tokens / 1000).toFixed(1)}K / {contextK}K tokens
               </span>
             )}
             <button
@@ -262,7 +297,8 @@ export function Composer({
                 type="button"
                 onClick={cancelGeneration}
                 aria-label="Stop generating"
-                className="bg-bg-raised text-text-primary hover:bg-border-default flex size-10 items-center justify-center rounded-full transition-colors"
+                data-testid="chat-stop"
+                className="bg-bg-raised text-danger hover:bg-border-default flex size-10 items-center justify-center rounded-full transition-colors focus-visible:ring-accent focus-visible:ring-2 focus-visible:outline-none"
                 whileTap={{ scale: 0.9 }}
               >
                 <Square aria-hidden="true" className="size-4 fill-current" strokeWidth={1.5} />
@@ -272,7 +308,8 @@ export function Composer({
                 type="button"
                 onClick={() => void send()}
                 disabled={!canSend}
-                aria-label="Send message"
+                aria-label={engineDown ? 'Send message (engine not running)' : 'Send message'}
+                data-testid="chat-send"
                 className={
                   canSend
                     ? 'bg-accent text-accent-contrast flex size-10 items-center justify-center rounded-full transition-[background-color,transform]'
