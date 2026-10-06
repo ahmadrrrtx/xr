@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 
-import { boundedHistory } from "../../src/core/agent";
+import { boundedHistory } from "../../src/core/agent-history";
 
 describe("boundedHistory", () => {
   test("empty or missing history yields no messages", () => {

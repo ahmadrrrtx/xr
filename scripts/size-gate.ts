@@ -107,7 +107,18 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 144_000; // Phase 2 (core workspace) · 142,500 → 144,000 (2026-09-20):
+export const TREE_CEILING = 144_500; // Phase 14 (real LLM wire) · 144,000 → 144,500 (2026-10-06):
+// the default run path streams for real: `chatStream()` on ResilientProvider
+// (degradation.ts +170) and the legacy FallbackProvider (routing-service.ts
+// +56) with the same fail-over rule as `chat()`; ConfigService.reload() per
+// run; config-named local models in the catalog (+58); SSE keepalive in
+// chat.routes.ts; bounded replayed history (agent-history.ts); empty-turn
+// retry without tools in ask/plan. All of it is the provider/consent path
+// every surface shares and cannot live in a satellite without splitting the
+// run authority. No waived giant grew (agent.ts 1215 → 1203 after the split).
+// Measured 144,055. Smallest round number that fits; 110k stays the direction
+// of travel.
+// Phase 2 (core workspace) · 142,500 → 144,000 (2026-09-20):
 // engine-owned PTY sessions (pty-sessions.ts + terminal.routes.ts: a real
 // terminal, consent per session), hunk-level review (hunks.ts +
 // files.routes.ts + a patch-shaped approval preview), desktop UI state

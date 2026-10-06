@@ -27,7 +27,7 @@ import {
   startMeter,
   type Meter,
 } from '@/budget/enforce';
-import { estimateCost, modelInfo } from '@/budget/models';
+import { estimateCost } from '@/budget/models';
 import type { PreCallCheck } from '@/budget/types';
 import type { ToolCallRecord } from '@/lib/chat-db';
 import type { ChatTurn, StreamErrorKind, StreamEvent, StreamOptions } from '@/lib/llm';
@@ -37,67 +37,10 @@ import { EnvelopeDecoder } from './envelope';
 import { readSse } from './sse';
 import { EngineDown, engineFetch } from './transport';
 import type { EngineChatFrame } from './types';
+import { describeTool, resolveEngineModel } from './wire';
 
-/** Provider ids the engine knows (`GET /api/v1/providers`). */
-const ENGINE_PROVIDERS = new Set([
-  'ollama', 'lmstudio', 'llamacpp', 'jan', 'localai', 'vllm', 'gpt4all', 'koboldcpp',
-  'textgenwebui', 'sglang', 'groq', 'deepseek', 'openrouter', 'together', 'fireworks',
-  'sambanova', 'xai', 'perplexity', 'huggingface', 'cerebras', 'anthropic', 'google',
-  'mistral', 'cohere', 'bedrock', 'openai',
-]);
-
-/**
- * Desktop model id → engine `{provider, model}`. Accepts the registry's bare
- * ids (`claude-sonnet-4.5` → anthropic), Ollama tags (`qwen2.5:0.5b`) and an
- * explicit `provider/model` prefix. Unknown → model only (engine default
- * provider decides).
- */
-export function resolveEngineModel(id: string): { provider?: string; model?: string } {
-  const trimmed = id.trim();
-  if (!trimmed) return {};
-  const slash = trimmed.indexOf('/');
-  if (slash > 0 && ENGINE_PROVIDERS.has(trimmed.slice(0, slash))) {
-    return { provider: trimmed.slice(0, slash), model: trimmed.slice(slash + 1) };
-  }
-  const info = modelInfo(trimmed);
-  const provider = info.provider === 'other' ? undefined : info.provider;
-  return provider ? { provider, model: trimmed } : { model: trimmed };
-}
-
-/** Human summary + category for a tool card, from the engine's call. */
-export function describeTool(tool: string, args: Record<string, unknown> | undefined): {
-  summary: string;
-  category: ToolCallRecord['category'];
-} {
-  const a = args ?? {};
-  const str = (k: string): string | null => {
-    const v = a[k];
-    return typeof v === 'string' && v.trim() ? v.trim() : null;
-  };
-  const clip = (s: string, n = 72): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-  const t = tool.toLowerCase();
-  if (/^(write_file|edit_file|read_file|delete_file|delete|list_dir|list_files|mkdir|move_file|copy_file|append_file|glob|grep|search_files)$/.test(t)) {
-    const target = str('path') ?? str('file') ?? str('dir') ?? str('pattern');
-    return { summary: target ? `${tool} ${clip(target)}` : tool, category: 'file' };
-  }
-  if (/^(shell|run_command|exec|bash|terminal|run)$/.test(t)) {
-    const cmd = str('command') ?? str('cmd') ?? str('script');
-    return { summary: cmd ? `$ ${clip(cmd)}` : tool, category: 'shell' };
-  }
-  if (/^(http_request|fetch_url|fetch|web_search|search|browser|browse|download)$/.test(t)) {
-    const target = str('url') ?? str('query') ?? str('q');
-    return { summary: target ? `${tool} ${clip(target)}` : tool, category: 'network' };
-  }
-  if (/^(send|send_email|send_message|email)$/.test(t)) {
-    const to = str('to') ?? str('recipient');
-    return { summary: to ? `${tool} → ${clip(to)}` : tool, category: 'tool' };
-  }
-  const first = Object.entries(a).find(([, v]) => typeof v === 'string' && (v as string).trim());
-  return {
-    summary: first ? `${tool} ${clip(first[1] as string)}` : tool,
-    category: 'tool',
-  };
-}
+// Pure mappers live in ./wire.ts (unit-tested without the UI graph).
+export { describeTool, resolveEngineModel };
 
 function splitTurns(messages: ChatTurn[]): {
   message: string;

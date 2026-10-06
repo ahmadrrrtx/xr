@@ -13,85 +13,15 @@
  * The desktop never computes risk here: `riskTier` comes from the engine's
  * tool registry and is only mapped onto the modal's three-step scale.
  */
-import type { ApprovalRequest, ApprovalRisk, PendingDecision } from '@/lib/approvalCore';
+import type { PendingDecision } from '@/lib/approvalCore';
 import { requestApproval, withdrawRequest } from '@/lib/approvalEvents';
 import { engineJson, enginePost, EngineHttpError } from './transport';
-import type { EngineApprovalRequired, EnginePendingApproval, EnginePreview } from './types';
+import type { EngineApprovalRequired, EnginePendingApproval } from './types';
+import { riskFromTier, toApprovalRequest } from './wire';
 
-const TOOL_META: Record<string, { action: string; icon: string }> = {
-  write_file: { action: 'Write a file', icon: 'file-edit' },
-  edit_file: { action: 'Edit a file', icon: 'file-edit' },
-  delete_file: { action: 'Delete a file', icon: 'file' },
-  delete: { action: 'Delete', icon: 'file' },
-  shell: { action: 'Run a shell command', icon: 'terminal' },
-  run_command: { action: 'Run a shell command', icon: 'terminal' },
-  exec: { action: 'Run a shell command', icon: 'terminal' },
-  send: { action: 'Send a message', icon: 'mail' },
-  send_email: { action: 'Send an email', icon: 'mail' },
-  http_request: { action: 'Call a web endpoint', icon: 'globe' },
-  fetch_url: { action: 'Fetch a URL', icon: 'globe' },
-  browser: { action: 'Drive the browser', icon: 'globe' },
-};
-
-function humanize(tool: string): string {
-  const words = tool.replace(/[_-]+/g, ' ').trim();
-  return words ? words[0].toUpperCase() + words.slice(1) : 'Run a tool';
-}
-
-/** Engine tiers → the modal's scale. Unknown tiers are treated as medium. */
-export function riskFromTier(tier: string | undefined): ApprovalRisk {
-  const t = (tier ?? '').toLowerCase();
-  if (t === 'tier0' || t === 'low' || t === 'read' || t === 'safe') return 'low';
-  if (t === 'tier2' || t === 'tier3' || t === 'high' || t === 'critical' || t === 'destructive') return 'high';
-  return 'medium';
-}
-
-function previewText(preview: EnginePreview | string | null | undefined): string | undefined {
-  if (!preview) return undefined;
-  if (typeof preview === 'string') return preview.slice(0, 4000);
-  const parts = (preview.sections ?? []).map((s) =>
-    s.title ? `${s.title}\n${s.body}${s.truncated ? '\n…' : ''}` : s.body,
-  );
-  const text = parts.join('\n\n').trim();
-  return text ? text.slice(0, 4000) : undefined;
-}
-
-function resourceOf(a: EngineApprovalRequired): string | null {
-  const args = a.args ?? {};
-  for (const k of ['path', 'file', 'command', 'cmd', 'to', 'url', 'target']) {
-    const v = args[k];
-    if (typeof v === 'string' && v.trim()) return v.length > 160 ? `${v.slice(0, 160)}…` : v;
-  }
-  if (a.preview && typeof a.preview !== 'string') {
-    const p = a.preview.sections?.find((s) => /^(path|command|target|url)$/i.test(s.title));
-    if (p?.body) return p.body.length > 160 ? `${p.body.slice(0, 160)}…` : p.body;
-  }
-  return null;
-}
-
-/** Engine request → the desktop's `ApprovalRequest` (same id). */
-export function toApprovalRequest(
-  a: EngineApprovalRequired,
-  createdAt: number = Date.now(),
-): ApprovalRequest {
-  const meta = TOOL_META[a.tool] ?? { action: humanize(a.tool), icon: 'wrench' };
-  const tier = a.riskTier ?? (typeof a.preview === 'object' && a.preview ? a.preview.riskTier : undefined);
-  return {
-    id: a.id,
-    skillId: a.tool,
-    skillName: a.tool,
-    skillVersion: 'engine',
-    skillIcon: meta.icon,
-    action: meta.action,
-    resource: resourceOf(a),
-    bodyPreview: previewText(a.preview),
-    risk: riskFromTier(tier),
-    // The reason is model-shaped text — the engine marks it untrusted; the
-    // modal renders it as a quote, never as instructions.
-    justification: a.reason || `${a.tool} needs your approval`,
-    createdAt,
-  };
-}
+// Pure mappers (engine request → ApprovalRequest, tier → risk) live in
+// ./wire.ts so they can be unit-tested without the UI dependency graph.
+export { riskFromTier, toApprovalRequest };
 
 /** `GET /api/v1/approvals` → the engine's still-pending requests. */
 export async function listPendingEngineApprovals(): Promise<EnginePendingApproval[]> {

@@ -73,8 +73,8 @@ describe("Envelope decoder — raw `{\"message\": …}` tokens become visible pr
 });
 
 // ── Mappers (engine shapes → desktop shapes) ────────────────────────────────
-import { toApprovalRequest } from "../../desktop/src/engine/approvals.ts";
-import { describeTool, resolveEngineModel } from "../../desktop/src/engine/chat.ts";
+// wire.ts is the dependency-free mapper module (no desktop/node_modules needed here).
+import { describeTool, resolveEngineModel, toApprovalRequest } from "../../desktop/src/engine/wire.ts";
 
 describe("approval_required → ApprovalRequest (same id, engine resource, honest risk)", () => {
   test("keeps the engine id so the decision posts back to the right request", () => {

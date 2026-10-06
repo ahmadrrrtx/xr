@@ -158,7 +158,7 @@ export const useEngineStore = create<EngineState>()((set, get) => ({
   },
 
   setEngineDefault: async (modelId) => {
-    const { resolveEngineModel } = await import('@/engine/chat');
+    const { resolveEngineModel } = await import('@/engine/wire');
     const t = resolveEngineModel(modelId);
     const provider = t.provider ?? get().providers?.primary;
     if (!provider || !t.model) return;
