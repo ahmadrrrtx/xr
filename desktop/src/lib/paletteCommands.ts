@@ -19,6 +19,7 @@ import {
   Clock,
   Cpu,
   FileText,
+  Hammer,
   LayoutGrid,
   MessageCircle,
   MessageSquare,
@@ -28,6 +29,7 @@ import {
   Palette,
   PanelLeft,
   PenLine,
+  Play,
   Plus,
   Search,
   Settings,
@@ -369,6 +371,28 @@ export function buildPaletteCommands(
     action: () => openRoute(`/workspaces/${ws.id}`),
   }));
 
+  // Phase 17 — Builder entry points (also what the HUD offers).
+  const builderCommands: PaletteCommand[] = workspaces.flatMap((ws) => [
+    {
+      id: `builder:${ws.id}`,
+      group: 'workspaces' as const,
+      title: `Open ${ws.name} in Builder`,
+      subtitle: 'Editor, live preview, AI chat',
+      icon: Hammer,
+      keywords: ['builder', 'editor', 'code', 'ide', 'open file', ws.name],
+      action: () => openRoute(`/builder/${ws.id}`),
+    },
+    {
+      id: `builder-dev:${ws.id}`,
+      group: 'workspaces' as const,
+      title: `Start dev server · ${ws.name}`,
+      subtitle: 'Opens Builder and starts the detected dev server',
+      icon: Play,
+      keywords: ['dev server', 'preview', 'vite', 'next', 'run', ws.name],
+      action: () => openRoute(`/builder/${ws.id}?action=dev-server`),
+    },
+  ]);
+
   const settingsCommands: PaletteCommand[] = [
     {
       id: 'settings-open',
@@ -581,6 +605,7 @@ export function buildPaletteCommands(
     ...chatCommands,
     ...agentCommands,
     ...workspaceCommands,
+    ...builderCommands,
     ...settingsCommands,
     ...(import.meta.env.DEV ? devCommands : []),
   ];

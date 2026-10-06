@@ -223,7 +223,11 @@ export default function WorkspaceLanding() {
             >
               <MessageSquare className="size-4.5" strokeWidth={1.5} />
             </QuickAction>
-            <QuickAction label="Builder" hint="Coming soon" disabled iconMuted>
+            <QuickAction
+              label="Builder"
+              hint="Edit, preview, chat"
+              onClick={() => navigate(`/builder/${ws.id}`)}
+            >
               <Wrench className="size-4.5" strokeWidth={1.5} />
             </QuickAction>
             <QuickAction label="Research" hint="Coming soon" disabled iconMuted>
