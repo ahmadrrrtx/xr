@@ -26,11 +26,12 @@
  * Shortcut teardown: lib.rs's RunEvent::Exit calls hud::unregister_all,
  * which unregisters EVERY global shortcut — the orb's included.
  */
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::menu::{ContextMenu, Menu, MenuItem, PredefinedMenuItem};
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Listener, Manager, Runtime};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_store::{Store, StoreBuilder};
 
@@ -367,11 +368,45 @@ fn menu_action_for(id: &str) -> Option<MenuAction> {
     }
 }
 
+/// Whether a voice session is running (Phase 15). The main window broadcasts
+/// `voice:state-changed {state, active}` on every change; the menu reads it
+/// so the voice item is an honest toggle, not a dead "Start" while listening.
+#[derive(Default)]
+pub struct VoiceActiveState(pub AtomicBool);
+
+/// Label for the voice menu item given the session + OS (unit-tested).
+pub fn voice_menu_label(active: bool, os: &str) -> String {
+    let chord = if os == "macos" { "⌘." } else { "Ctrl+." };
+    if active {
+        format!("Stop listening ({chord})")
+    } else {
+        format!("Start voice session ({chord})")
+    }
+}
+
+/// `voice:state-changed` payload → is a session active? Tolerates both the
+/// explicit `active` flag and a bare state string.
+pub fn voice_active_from_payload(payload: &str) -> Option<bool> {
+    let value: serde_json::Value = serde_json::from_str(payload).ok()?;
+    if let Some(active) = value.get("active").and_then(|v| v.as_bool()) {
+        return Some(active);
+    }
+    let state = value.get("state").and_then(|v| v.as_str())?;
+    Some(state != "idle" && state != "offline")
+}
+
+fn voice_active<R: Runtime>(app: &AppHandle<R>) -> bool {
+    app.try_state::<VoiceActiveState>()
+        .map(|s| s.0.load(Ordering::Relaxed))
+        .unwrap_or(false)
+}
+
 /// The right-click menu. Ids are `orb-`-prefixed: selections arrive on the
 /// app-wide menu event stream, which the tray's menu shares.
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let open = MenuItem::with_id(app, menu_ids::OPEN, "Open XR", true, None::<&str>)?;
-    let voice = MenuItem::with_id(app, menu_ids::VOICE, "Start Voice Session", true, None::<&str>)?;
+    let voice_label = voice_menu_label(voice_active(app), std::env::consts::OS);
+    let voice = MenuItem::with_id(app, menu_ids::VOICE, voice_label, true, None::<&str>)?;
     let approvals =
         MenuItem::with_id(app, menu_ids::APPROVALS, "Pending Approvals", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
@@ -406,6 +441,8 @@ fn handle_menu_id<R: Runtime>(app: &AppHandle<R>, id: &str) {
     match menu_action_for(id) {
         Some(MenuAction::OpenMain) => focus_main(app),
         Some(MenuAction::Voice) => {
+            // Toggle: the main window's controller starts or stops based on
+            // its own state, so the label and the action can't disagree.
             focus_main(app);
             let _ = app.emit_to("main", "orb:voice-requested", ());
         }
@@ -507,9 +544,22 @@ pub async fn orb_set_position<R: Runtime>(
 /// shortcut, and the startup gate. Called once from lib.rs setup.
 pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     app.manage(OrbPositionState::default());
+    app.manage(VoiceActiveState::default());
 
     // Native menu selections (shared stream — only orb-* ids match here).
     app.on_menu_event(|app, event| handle_menu_id(app, event.id.as_ref()));
+
+    // Voice session state (Phase 15) — drives the menu's Start/Stop label.
+    {
+        let handle = app.clone();
+        app.listen_any("voice:state-changed", move |event| {
+            if let Some(active) = voice_active_from_payload(event.payload()) {
+                if let Some(state) = handle.try_state::<VoiceActiveState>() {
+                    state.0.store(active, Ordering::Relaxed);
+                }
+            }
+        });
+    }
 
     // Position memory: Moved → the debouncer's latest.
     if let Some(orb) = orb_window(app) {
@@ -673,6 +723,19 @@ mod tests {
         assert_eq!(menu_action_for("orb-unknown"), None);
         assert_eq!(menu_action_for(""), None);
         assert_eq!(menu_action_for("open"), None, "unprefixed id must not match");
+    }
+
+    /// Phase 15: the voice item is a toggle whose label follows the session.
+    #[test]
+    fn voice_menu_label_follows_session() {
+        assert_eq!(voice_menu_label(false, "macos"), "Start voice session (⌘.)");
+        assert_eq!(voice_menu_label(true, "macos"), "Stop listening (⌘.)");
+        assert_eq!(voice_menu_label(true, "windows"), "Stop listening (Ctrl+.)");
+        assert_eq!(voice_active_from_payload(r#"{"state":"listening","active":true}"#), Some(true));
+        assert_eq!(voice_active_from_payload(r#"{"state":"idle","active":false}"#), Some(false));
+        assert_eq!(voice_active_from_payload(r#"{"state":"speaking"}"#), Some(true));
+        assert_eq!(voice_active_from_payload(r#"{"state":"idle"}"#), Some(false));
+        assert_eq!(voice_active_from_payload("not json"), None);
     }
 
     use super::*;

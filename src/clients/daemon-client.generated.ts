@@ -216,6 +216,51 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/voice/say");
   }
 
+  /** Phase 15: STT model catalogue (offline/download, local binaries, cloud) with install state and sizes. */
+  async voiceModels(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/voice/models");
+  }
+
+  /** Phase 15: TTS voice catalogue (Piper offline voices + cloud) with install state and sizes. */
+  async voiceVoices(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/voice/voices");
+  }
+
+  /** Phase 15: effective voice settings (engine config `voice` block). */
+  async voiceSettingsGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/voice/settings");
+  }
+
+  /** Phase 15: patch voice settings (validated, clamped); applies live to the session. */
+  async voiceSettingsSet(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/settings");
+  }
+
+  /** Phase 15: start a model download (component+id, or the first-run bundle); progress streams on /events. */
+  async voiceDownload(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/download");
+  }
+
+  /** Phase 15: cancel the running model download (partial files resume on retry). */
+  async voiceDownloadCancel(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/cancel-download");
+  }
+
+  /** Phase 15: delete every downloaded voice model and the extracted runtime. */
+  async voiceModelsClear(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/clear-models");
+  }
+
+  /** Phase 15: synthesize a sample (voice/speed override) and return WAV bytes without touching the session. */
+  async voiceTest_tts(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/test-tts");
+  }
+
+  /** Phase 15: transcribe one pcm16 utterance directly (settings screen 'Test transcription'). */
+  async voiceTranscribe(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/voice/transcribe");
+  }
+
   /** First-run status: does this install need setup, and why. */
   async onboardingStatus(): Promise<z.infer<typeof S.OnboardingStatusResponse>> {
     return await this.call("GET", "/api/v1/onboarding/status");

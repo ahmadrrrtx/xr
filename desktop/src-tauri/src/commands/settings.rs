@@ -226,6 +226,29 @@ pub fn reveal_path(app: AppHandle, path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// The OS deep link for the microphone privacy pane, if the platform has one.
+/// Not a web URL, so it bypasses `is_web_url` on purpose — the allow-list is
+/// this exact set of schemes, nothing the webview can choose.
+pub fn microphone_settings_url(os: &str) -> Option<&'static str> {
+    match os {
+        "macos" => {
+            Some("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+        }
+        "windows" => Some("ms-settings:privacy-microphone"),
+        _ => None,
+    }
+}
+
+/// Voice screen → "Open system settings" on the microphone-denied card.
+#[tauri::command]
+pub fn open_microphone_settings(app: AppHandle) -> Result<(), String> {
+    let url = microphone_settings_url(std::env::consts::OS)
+        .ok_or("No microphone settings link on this system — check your desktop's sound or privacy settings.")?;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 // ─── Storage stats / cache ──────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -623,10 +646,14 @@ fn ptt_handler<R: Runtime>(
     _shortcut: &Shortcut,
     event: tauri_plugin_global_shortcut::ShortcutEvent,
 ) {
-    if event.state() == ShortcutState::Pressed {
-        // Voice theater (Phase 16) owns the real UX; for now every window
-        // gets an honest broadcast.
+    // Phase 15: the main window's voice controller decides what a press means
+    // (toggle, or hold-to-talk when "Hold global hotkey to talk" is on) and
+    // brings itself forward when unfocused — Rust only reports both edges.
+    let state = event.state();
+    if state == ShortcutState::Pressed {
         let _ = app.emit("ptt:pressed", ());
+    } else if state == ShortcutState::Released {
+        let _ = app.emit("ptt:released", ());
     }
 }
 
@@ -796,6 +823,18 @@ mod tests {
     fn ptt_default_pairs() {
         assert_eq!(default_ptt_shortcuts("macos"), ("Cmd+.", "Alt+Shift+P"));
         assert_eq!(default_ptt_shortcuts("linux"), ("Ctrl+.", "Alt+Shift+P"));
+    }
+
+    /// The microphone pane deep link is a fixed per-OS constant (never a web
+    /// URL, never caller-supplied) and absent where no such link exists.
+    #[test]
+    fn microphone_settings_links() {
+        let mac = microphone_settings_url("macos").unwrap();
+        assert!(mac.starts_with("x-apple.systempreferences:"));
+        assert!(mac.ends_with("Privacy_Microphone"));
+        assert_eq!(microphone_settings_url("windows"), Some("ms-settings:privacy-microphone"));
+        assert_eq!(microphone_settings_url("linux"), None);
+        assert!(!is_web_url(mac));
     }
 
     #[test]

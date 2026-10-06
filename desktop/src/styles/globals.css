@@ -900,3 +900,20 @@ html[data-theme='xr-native'] .budget-hero-glow,
 html[data-theme='midnight'] .budget-hero-glow {
   text-shadow: 0 0 18px var(--accent-glow);
 }
+
+/* ── Phase 15 · voice session motion ──────────────────────────────────────
+   Breathing rings while listening / idle, outward ripple while speaking.
+   Both are opacity + transform only and switch off under reduced motion. */
+@keyframes xr-voice-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+@keyframes xr-voice-ripple {
+  0% { transform: scale(0.92); opacity: 0.9; }
+  100% { transform: scale(1.12); opacity: 0; }
+}
+.xr-voice-breathe { animation: xr-voice-breathe 3.2s ease-in-out infinite; }
+.xr-voice-ripple { animation: xr-voice-ripple 1.6s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .xr-voice-breathe, .xr-voice-ripple { animation: none; }
+}

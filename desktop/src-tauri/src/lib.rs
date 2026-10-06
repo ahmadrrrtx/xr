@@ -161,6 +161,7 @@ pub fn run() {
             commands::settings::reveal_path,
             commands::settings::get_data_dir,
             commands::settings::open_url,
+            commands::settings::open_microphone_settings,
             commands::settings::storage_stats,
             commands::settings::clear_cache,
             commands::settings::export_all_data,

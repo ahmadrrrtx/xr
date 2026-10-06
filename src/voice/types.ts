@@ -8,7 +8,43 @@
 
 export type VoiceMode = "off" | "push-to-talk" | "wake-word" | "always-listen";
 export type VoiceSttBackend = "auto" | "sherpa" | "http" | "groq" | "openai" | "whisper-cli" | "whispercpp" | "disabled";
-export type VoiceTtsBackend = "auto" | "sherpa" | "http" | "piper" | "kokoro-cli" | "system" | "say" | "espeak" | "powershell" | "disabled";
+export type VoiceTtsBackend = "auto" | "sherpa" | "http" | "piper" | "kokoro-cli" | "system" | "say" | "espeak" | "powershell" | "openai" | "disabled";
+export type VoiceWakeSensitivity = "low" | "medium" | "high";
+export type VoiceActivation = "hold" | "tap" | "always";
+
+/**
+ * Phase 15 · desktop-only preferences. The engine never reads them; they are
+ * persisted here so one settings record owns voice (mirrored by the desktop
+ * store for instant UI).
+ */
+export interface VoiceDesktopPrefs {
+  micDeviceId: string | null;
+  /** 0–200 (%), applied in the capture graph. */
+  inputGain: number;
+  activation: VoiceActivation;
+  /** −5…+5 semitones, applied on playback (Piper voices have no pitch control). */
+  ttsPitch: number;
+  /** 10–300 s; the session ends after this much silence ("Goodbye"). */
+  autoExitSilenceSec: number;
+  showTranscripts: boolean;
+  theaterImmersive: boolean;
+  chatMicTarget: "screen" | "docked";
+  holdGlobalHotkey: boolean;
+}
+
+export function defaultVoiceDesktopPrefs(): VoiceDesktopPrefs {
+  return {
+    micDeviceId: null,
+    inputGain: 100,
+    activation: "tap",
+    ttsPitch: 0,
+    autoExitSilenceSec: 30,
+    showTranscripts: true,
+    theaterImmersive: false,
+    chatMicTarget: "screen",
+    holdGlobalHotkey: false,
+  };
+}
 export type VoiceVadBackend = "energy" | "silero-external" | "none";
 export type VoiceWakeBackend = "text" | "openwakeword-external" | "none";
 export type VoiceInterruptionPolicy = "barge-in" | "finish-sentence" | "disabled";
@@ -91,6 +127,13 @@ export interface VoiceSettings {
   sentenceTts?: boolean;
   bargeInCancelsRun?: boolean;
   spokenStatus?: boolean;
+  /** Phase 15 · 0.7–1.3, native Piper speed (1 = natural). */
+  ttsSpeed?: number;
+  /** Phase 15 · maps to the speech energy threshold the session uses. */
+  wakeSensitivity?: VoiceWakeSensitivity;
+  wakeSound?: boolean;
+  profanityFilter?: boolean;
+  desktop?: VoiceDesktopPrefs;
 }
 
 export interface VoiceTranscriptEntry {
@@ -135,5 +178,10 @@ export function defaultVoiceSettings(): VoiceSettings {
       semantic: true,
     },
     deviceMetadata: {},
+    ttsSpeed: 1,
+    wakeSensitivity: "medium",
+    wakeSound: true,
+    profanityFilter: false,
+    desktop: defaultVoiceDesktopPrefs(),
   };
 }

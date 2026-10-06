@@ -16,8 +16,30 @@ import {
   SLEEP_MS_DEFAULT,
   glowIntensityFor,
   isOrbState,
+  orbStateForVoice,
   parseDevMs,
 } from "../../desktop/src/lib/orbCore.ts";
+
+describe("Phase 15 · voice session → orb state", () => {
+  test("maps every loop state to an avatar state", () => {
+    expect(orbStateForVoice("listening", true)).toBe("listening");
+    expect(orbStateForVoice("interrupted", true)).toBe("listening");
+    for (const s of ["thinking", "planning", "working", "tool"]) {
+      expect(orbStateForVoice(s, true)).toBe("thinking");
+    }
+    expect(orbStateForVoice("speaking", true)).toBe("speaking");
+    expect(orbStateForVoice("approval", true)).toBe("waiting-approval");
+    expect(orbStateForVoice("error", true)).toBe("error");
+    expect(orbStateForVoice("idle", false)).toBe("idle");
+  });
+
+  test("a finished session is idle whatever its last state; junk is ignored", () => {
+    expect(orbStateForVoice("speaking", false)).toBe("idle");
+    expect(orbStateForVoice("not-a-state", true)).toBeNull();
+    expect(orbStateForVoice(undefined, undefined)).toBeNull();
+    expect(orbStateForVoice(42, true)).toBeNull();
+  });
+});
 
 describe("Phase 6 · orb states", () => {
   test("all 7 canonical states validate", () => {
