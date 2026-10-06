@@ -6,9 +6,11 @@
   "description": "XR Desktop — the AI agent you can actually trust. Tauri v2 + React 18 + Tailwind v4 shell.",
   "scripts": {
     "dev": "vite",
-    "dev:tauri": "tauri dev",
+    "engine": "bun run scripts/dev-engine.ts",
+    "dev:tauri": "bun run ../scripts/compile-sidecar.ts --if-missing && tauri dev",
     "build": "tsc --noEmit && vite build",
-    "build:tauri": "tauri build",
+    "build:tauri": "bun run ../scripts/compile-sidecar.ts && tauri build",
+    "sidecar": "bun run ../scripts/compile-sidecar.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

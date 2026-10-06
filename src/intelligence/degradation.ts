@@ -20,7 +20,7 @@
  * retry is restricted to transient failures only.
  */
 
-import type { ChatOptions, Message, ModelTurn, Provider, Tool } from "../core/types.ts";
+import type { ChatOptions, Message, ModelTurn, Provider, ProviderStreamChunk, Tool } from "../core/types.ts";
 import { ProviderAbortError } from "../providers/request-guard.ts";
 import {
   contextManifest,
@@ -370,6 +370,176 @@ export class ResilientProvider implements Provider {
             qualityOk: classified.cls === "transient",
           });
 
+          const canRetry =
+            classified.cls === "transient" &&
+            retry < this.policy.maxInPlaceRetries &&
+            sleptMs < this.policy.totalBudgetMs;
+          if (!canRetry) break;
+          const delay = backoffDelay(retry, this.policy, sleptMs, random);
+          if (delay > 0) {
+            sleptMs += delay;
+            await sleep(delay);
+          }
+        }
+      }
+    }
+
+    const pkg: EscalationPackage = {
+      schemaVersion: 1,
+      decisionId: this.deps.decisionId,
+      reason:
+        `No viable provider: ${attempts.length} attempt(s) across ${targets.length} target(s) failed. ` +
+        `Last failure (${lastError.cls}): ${lastError.reason}`,
+      attempts,
+      level: "L3_escalation",
+      repair: [
+        "Run `xr doctor` to check provider health and credentials.",
+        "Inspect the circuit breakers: `xr providers health --json`.",
+        "Switch or pin a healthy provider: `xr providers set <provider> [model]`.",
+        "Re-measure behavioral contracts: `xr providers measure --provider <id>`.",
+      ],
+      at: Date.now(),
+    };
+    this.escalate("L3_escalation", "fallback chain exhausted");
+    this.deps.onDegradation?.("L3_escalation", "fallback chain exhausted");
+    throw new RoutingEscalationError(pkg);
+  }
+
+  /**
+   * Phase 14 — the streaming variant of `chat()`.
+   *
+   * Before this existed the resilient wrapper exposed only `chat()`, so the
+   * default run path (every decision with a fallback chain) silently lost
+   * token streaming: the loop saw no `chatStream`, called `chat()`, and the
+   * dashboard/desktop received the whole reply as ONE token event after the
+   * full generation time. This streams from the selected target and keeps the
+   * chain semantics where they are honest:
+   *
+   *   · a target that fails BEFORE emitting anything is treated exactly like a
+   *     failed `chat()` attempt (health sample, in-place retry for transient
+   *     errors within budget, failover to the next step);
+   *   · a target that fails AFTER tokens were already yielded is NOT replaced —
+   *     the user has seen partial output, and a silent switch would stitch two
+   *     models' words into one answer. The error propagates and the loop
+   *     reports it (the desktop shows "Interrupted — retry").
+   *   · cancellation is terminal for the whole call, as in `chat()`.
+   *
+   * A target without native `chatStream` is driven through `chat()` and its
+   * complete turn is yielded as text/tool/usage chunks + `finish:true`.
+   */
+  async *chatStream(messages: Message[], tools: Tool[], options?: ChatOptions): AsyncGenerator<ProviderStreamChunk> {
+    const sleep = this.deps.sleep ?? DEFAULT_SLEEP;
+    const random = this.deps.random ?? Math.random;
+    const warn = this.deps.warn ?? ((l: string) => console.warn(l));
+    const attempts: FailoverAttempt[] = [];
+    let sleptMs = 0;
+    let lastError: ClassifiedError = { cls: "permanent", reason: "no target attempted" };
+
+    const targets: ResilientTarget[] = [
+      { providerId: this.primary.id, modelId: this.primaryModel, level: "L0_full" },
+      ...this.chain.map((s) => ({
+        providerId: s.providerId,
+        modelId: s.modelId,
+        level: s.level ?? "L1_equivalent_fallback",
+        step: s,
+      })),
+    ];
+
+    let provider: Provider = this.primary;
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i]!;
+      if (!this.deps.localityGuard(target.providerId)) {
+        attempts.push(this.attempt(target, "skipped", `locality guard refused ${target.providerId}`, 0));
+        continue;
+      }
+      const permit = this.deps.health.permit(target.providerId, target.modelId);
+      if (permit === "deny_open") {
+        attempts.push(this.attempt(target, "skipped", "circuit open — target skipped", 0));
+        continue;
+      }
+      if (i > 0) {
+        provider = this.deps.construct(target.step!);
+        const manifest = contextManifest(messages, this.deps.contextAnchors ?? []);
+        this.escalate(target.level, `failover to ${target.providerId}/${target.modelId}`);
+        this.deps.onFailover?.({
+          decisionId: this.deps.decisionId,
+          from: { providerId: targets[i - 1]!.providerId, modelId: targets[i - 1]!.modelId },
+          to: { providerId: target.providerId, modelId: target.modelId },
+          trigger: lastError.cls,
+          level: target.level,
+          context: manifest,
+          at: Date.now(),
+        });
+        warn(
+          `\x1b[33m! ${targets[i - 1]!.providerId}/${targets[i - 1]!.modelId} failed (${lastError.cls}). ` +
+            `Failing over to ${target.providerId}/${target.modelId} [${target.level}, context: ${manifest.messageCount} messages preserved]\x1b[0m`,
+        );
+      }
+
+      for (let retry = 0; ; retry++) {
+        const t0 = Date.now();
+        let emitted = false;
+        let usage: ModelTurn["usage"];
+        try {
+          const stream = (provider as Provider & {
+            chatStream?: (m: Message[], t: Tool[], o?: ChatOptions) => AsyncGenerator<ProviderStreamChunk>;
+          }).chatStream;
+          if (typeof stream === "function") {
+            for await (const chunk of stream.call(provider, messages, tools, options)) {
+              if (chunk.text || chunk.toolCall) emitted = true;
+              if (chunk.usage) usage = chunk.usage;
+              yield chunk;
+            }
+          } else {
+            const turn = await provider.chat(messages, tools, options);
+            const validation = validateTurn(turn);
+            if (!validation.ok) throw new SemanticFailure(validation.reason!);
+            usage = turn.usage;
+            if (turn.message) {
+              emitted = true;
+              yield { text: turn.message, providerId: provider.id, model: target.modelId };
+            }
+            for (const tc of turn.toolCalls ?? []) {
+              emitted = true;
+              yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: provider.id, model: target.modelId };
+            }
+            if (turn.usage) yield { usage: turn.usage, providerId: provider.id, model: target.modelId };
+            yield { finish: true, providerId: provider.id, model: target.modelId };
+          }
+          const ms = Date.now() - t0;
+          this.deps.health.record(target.providerId, target.modelId, { ok: true, latencyMs: ms, qualityOk: true });
+          if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, true);
+          this.deps.onOutcome?.({
+            providerId: target.providerId,
+            modelId: target.modelId,
+            success: true,
+            latencyMs: ms,
+            qualityOk: true,
+            usage,
+          });
+          return;
+        } catch (e) {
+          const ms = Date.now() - t0;
+          const classified = classifyError(e);
+          if (classified.cls === "cancelled") throw e;
+          // Partial output already reached the consumer: no silent switch.
+          if (emitted) throw e;
+          lastError = classified;
+          attempts.push(this.attempt(target, classified.cls, classified.reason, ms));
+          if (permit === "probe") this.deps.health.resolveProbe(target.providerId, target.modelId, false);
+          const trip = this.deps.health.record(target.providerId, target.modelId, {
+            ok: false,
+            latencyMs: ms,
+            qualityOk: classified.cls === "transient",
+          });
+          if (trip) this.deps.onTrip?.(trip);
+          this.deps.onOutcome?.({
+            providerId: target.providerId,
+            modelId: target.modelId,
+            success: false,
+            latencyMs: ms,
+            qualityOk: classified.cls === "transient",
+          });
           const canRetry =
             classified.cls === "transient" &&
             retry < this.policy.maxInPlaceRetries &&

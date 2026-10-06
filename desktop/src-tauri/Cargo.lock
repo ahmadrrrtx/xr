@@ -7237,6 +7237,7 @@ version = "0.2.0"
 dependencies = [
  "argon2",
  "keyring",
+ "libc",
  "rusqlite",
  "serde",
  "serde_json",

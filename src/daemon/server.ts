@@ -434,7 +434,10 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   }
 
   const bindHost = resolveBindHost();
-  const server = Bun.serve({ hostname: bindHost, port, fetch: handler });
+  // Phase 14 — SSE streams send a keepalive comment every 5 s (chat.routes),
+  // so a 120 s idle ceiling only ever closes a connection whose peer is gone;
+  // the Bun default (10 s) cut cold local-model streams before the first token.
+  const server = Bun.serve({ hostname: bindHost, port, fetch: handler, idleTimeout: 120 });
   // Phase 4 · T4 fix — report the ACTUAL bound port: `port: 0` asks the OS to
   // assign an ephemeral port (used by the perf dashboard-bench, which spawns
   // many bench processes; a fixed/random port can collide with the previous

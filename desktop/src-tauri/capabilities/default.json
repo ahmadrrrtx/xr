@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Phase 0 scaffold + Phase 1 app shell: core APIs, frameless-window drag region and controls, OS platform detection, and the settings store (theme/sidebar persistence).",
+  "description": "Phase 0 scaffold + Phase 1 app shell: core APIs, frameless-window drag region and controls, OS platform detection, the settings store (theme/sidebar persistence); Phase 14: file dialog + read of picked text files for chat attachments.",
   "windows": [
     "main"
   ],
@@ -13,6 +13,11 @@
     "core:window:allow-close",
     "os:default",
     "store:default",
-    "updater:default"
+    "updater:default",
+    "dialog:default",
+    "fs:default",
+    "fs:allow-read-file",
+    "dialog:allow-save",
+    "fs:allow-write-text-file"
   ]
 }

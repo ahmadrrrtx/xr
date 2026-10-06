@@ -1,9 +1,9 @@
 /**
  * Main-window reactions to orb events (Phase 6) — mounted once by AppShell.
  *
- * The orb's single click toasts here (real voice is Phase 15; the visual
- * states are live today), and the native context menu's voice/approvals
- * items arrive as Rust events (their real surfaces ship in Phase 15/7).
+ * The orb's single click focuses the Chat composer and toasts (real voice
+ * is Phase 15; the visual states are live today), and the native context
+ * menu's voice/approvals items arrive as Rust events.
  */
 import { useEffect } from 'react';
 import { toast } from 'sonner';
@@ -27,9 +27,22 @@ export function useOrbIpc(): void {
 
       track(
         await listen('orb:clicked', () => {
-          toast('Push-to-talk arrives in Phase 15', {
-            description:
-              'Voice will listen right from the orb — the visual states are live today.',
+          // Phase 14: a click is "talk to XR" — until voice lands (Phase 15)
+          // that means the Chat composer. Bring Chat up and focus it; the
+          // orb window itself stays where it is.
+          if (!window.location.hash.startsWith('#/chat')) window.location.hash = '#/chat';
+          let tries = 0;
+          const focus = (): void => {
+            const el = document.getElementById('xr-composer');
+            if (el) {
+              el.focus();
+              return;
+            }
+            if (tries++ < 10) window.setTimeout(focus, 100);
+          };
+          focus();
+          toast('Voice coming in Phase 15', {
+            description: 'Type to XR for now — the composer is ready.',
           });
         })
       );

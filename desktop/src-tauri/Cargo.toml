@@ -55,6 +55,10 @@ zip = { version = "4", default-features = false, features = ["deflate"] }
 # byte-identical to the webview's WebCrypto fallback). Ed25519 is planned.
 sha2 = "0.10"
 
+# Phase 14 — engine sidecar containment: PR_SET_PDEATHSIG + SIGTERM-first
+# shutdown on Unix (src/unix.rs). Already transitive via tauri.
+libc = "0.2"
+
 # Stronghold key derivation (Argon2id) — see src/lib.rs `key_derivation`.
 argon2 = "0.5"
 # `tauri::generate_context!` requires serde/serde_json as direct dependencies.

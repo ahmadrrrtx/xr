@@ -11,6 +11,7 @@ import { RefreshCw, ShieldX } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { useEngineAudit } from '@/engine/audit';
 import { cn } from '@/lib/utils';
 import { filterAudit, sortAudit, tabForKey } from '@/shield/core';
 import { SHIELD_TABS, type ShieldTab } from '@/shield/types';
@@ -91,9 +92,20 @@ export default function ShieldScreen() {
     [checks, paused, audit, quarantine, lastCheckedAt, pendingCount, clock]
   );
 
+  // Phase 14: the engine's own audit chain joins the desktop log in the
+  // table (each row says where it was recorded; chains verify separately).
+  const engineAudit = useEngineAudit();
   const auditRows = useMemo(
-    () => sortAudit(filterAudit(audit, auditFilter, clock), auditSort),
-    [audit, auditFilter, auditSort, clock]
+    () =>
+      sortAudit(
+        filterAudit(
+          engineAudit.rows.length ? [...audit, ...engineAudit.rows] : audit,
+          auditFilter,
+          clock
+        ),
+        auditSort
+      ),
+    [audit, engineAudit.rows, auditFilter, auditSort, clock]
   );
 
   /* ── Keyboard ──────────────────────────────────────────────────────── */
@@ -282,7 +294,7 @@ export default function ShieldScreen() {
           <AuditTab
             ref={searchRef}
             rows={auditRows}
-            total={auditTotal}
+            total={auditTotal + engineAudit.rows.length}
             loading={!hydrated || auditLoading}
             fresh={fresh}
           />
@@ -299,7 +311,7 @@ export default function ShieldScreen() {
         )}
       </div>
 
-      <AuditSlideOver />
+      <AuditSlideOver extra={engineAudit.rows} engineChainValid={engineAudit.chainValid} />
       <EmergencyDialogs />
       <div aria-live="polite" aria-atomic="true" className="sr-only">
         {announce?.text}

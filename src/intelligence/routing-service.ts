@@ -44,7 +44,7 @@
  * · `FallbackProvider` keeps its legible label and its runtime behaviour.
  */
 
-import type { Provider } from "../core/types.ts";
+import type { ChatOptions, Message, Provider, ProviderStreamChunk, Tool } from "../core/types.ts";
 import { ProviderAbortError } from "../providers/request-guard.ts";
 import type { XRConfig } from "../config/config.ts";
 import { registry } from "../providers/registry.ts";
@@ -468,9 +468,65 @@ export class FallbackProvider implements Provider {
     }
   }
 
+  /**
+   * Phase 14 — streaming with the same failover rule as `chat()`.
+   *
+   * The wrapper used to expose only `chat()`, so every run routed through it
+   * (the legacy/default path) lost token streaming: the loop found no
+   * `chatStream` and the whole reply arrived as one event after the full
+   * generation time. Failover is only honest BEFORE any output reached the
+   * consumer; once tokens were yielded a primary failure propagates as-is —
+   * a silent switch would stitch two models' words into one answer.
+   */
+  async *chatStream(
+    messages: Message[],
+    tools: Tool[],
+    options?: ChatOptions,
+  ): AsyncGenerator<ProviderStreamChunk> {
+    let emitted = false;
+    try {
+      for await (const chunk of streamOf(this.primary, messages, tools, options)) {
+        if (chunk.text || chunk.toolCall) emitted = true;
+        yield chunk;
+      }
+      return;
+    } catch (e) {
+      if (e instanceof ProviderAbortError) throw e;
+      if (emitted) throw e;
+      console.warn(
+        `\x1b[33m! Primary provider (${this.describe(this.primary)}) failed: ${(e as Error).message}. Falling back to ${this.describe(this.fallback)}...\x1b[0m`,
+      );
+    }
+    yield* streamOf(this.fallback, messages, tools, options);
+  }
+
   async health(): Promise<{ ok: boolean; latencyMs?: number; detail?: string }> {
     const h = await this.primary.health();
     if (h.ok) return h;
     return await this.fallback.health();
   }
+}
+
+/**
+ * Drive a provider as a stream: its native `chatStream` when it has one,
+ * otherwise its complete `chat()` turn as text/tool/usage chunks + finish.
+ */
+async function* streamOf(
+  provider: Provider,
+  messages: Message[],
+  tools: Tool[],
+  options?: ChatOptions,
+): AsyncGenerator<ProviderStreamChunk> {
+  const native = (provider as Provider & {
+    chatStream?: (m: Message[], t: Tool[], o?: ChatOptions) => AsyncGenerator<ProviderStreamChunk>;
+  }).chatStream;
+  if (typeof native === "function") {
+    yield* native.call(provider, messages, tools, options);
+    return;
+  }
+  const turn = await provider.chat(messages, tools, options);
+  if (turn.message) yield { text: turn.message, providerId: provider.id };
+  for (const tc of turn.toolCalls ?? []) yield { toolCall: { tool: tc.tool, args: tc.args }, providerId: provider.id };
+  if (turn.usage) yield { usage: turn.usage, providerId: provider.id };
+  yield { finish: true, providerId: provider.id };
 }

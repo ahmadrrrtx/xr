@@ -83,6 +83,8 @@ export interface EnvelopePlan {
   readonly modelId: string;
   readonly maxSteps: number;
   readonly systemPrompt?: string;
+  /** Phase 14 — prior chat turns replayed ahead of the task (bounded by the loop). */
+  readonly history?: ReadonlyArray<{ role: "user" | "assistant"; content: string }>;
   /** Secret-free routing decision from the single routing authority. */
   readonly routingDecision?: import("../../intelligence/types.ts").RoutingDecision;
 }

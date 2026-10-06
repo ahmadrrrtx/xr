@@ -22,7 +22,15 @@ import {
   testProviderConnection,
   type ProviderTestResult,
 } from '@/lib/settingsApi';
+import {
+  engineKnowsProvider,
+  pingEngineLocalModel,
+  sampleExchangeUsd,
+  saveProviderKeyToEngine,
+} from '@/engine/providers';
+import { useEngineStore } from '@/stores/engineStore';
 import type { ProviderConfig, ProviderKind } from '@/stores/settingsStore';
+import { fmtUsd } from '@/budget/core';
 
 export interface ProviderCatalogEntry {
   id: string;
@@ -102,13 +110,45 @@ function ProviderForm({
   const [model, setModel] = useState(existing?.model ?? '');
   const [test, setTest] = useState<TestState>({ status: 'idle' });
   const [saving, setSaving] = useState(false);
+  const [setDefault, setSetDefault] = useState(false);
+  const [engineNote, setEngineNote] = useState<{ tone: 'ok' | 'warn' | 'error'; text: string } | null>(null);
+  const engineUp = useEngineStore((s) => s.status === 'up');
+  const engineModel = useEngineStore((s) => s.providers?.model ?? null);
 
   const isOllama = entry.kind === 'ollama';
   const isCustom = entry.kind === 'custom';
   const canSave = isOllama || apiKey.trim().length > 0 || existing !== null;
+  // Phase 14: the engine makes the calls, so the engine must hold the key.
+  const engineTakesKey = !isOllama && !isCustom && engineKnowsProvider(entry.id);
 
   const runTest = (): void => {
     setTest({ status: 'testing' });
+    if (isOllama && engineUp && engineModel) {
+      // Real round trip through the engine: the same path a chat turn takes.
+      const started = performance.now();
+      void pingEngineLocalModel('ollama', engineModel)
+        .then((r) => {
+          const ms = r.result.latencyMs ?? Math.round(performance.now() - started);
+          setTest({
+            status: 'done',
+            result: {
+              ok: r.result.ok,
+              message: r.result.ok
+                ? `${engineModel} answered in ${ms} ms via the engine · local, $0`
+                : (r.result.detail ?? 'The engine could not reach this model.'),
+              latencyMs: ms,
+              models: [],
+            },
+          });
+        })
+        .catch((e: unknown) => {
+          setTest({
+            status: 'done',
+            result: { ok: false, message: e instanceof Error ? e.message : String(e), latencyMs: 0, models: [] },
+          });
+        });
+      return;
+    }
     void testProviderConnection(
       entry.kind,
       baseUrl.trim() || null,
@@ -130,9 +170,41 @@ function ProviderForm({
   const save = (): void => {
     setSaving(true);
     void (async () => {
+      const key = apiKey.trim();
+      if (engineTakesKey && key) {
+        if (!engineUp) {
+          setEngineNote({
+            tone: 'error',
+            text: 'Engine not running — it is the process that calls providers, so it must store this key. Start it and save again.',
+          });
+          setSaving(false);
+          return;
+        }
+        try {
+          const r = await saveProviderKeyToEngine({ providerId: entry.id, apiKey: key, setDefault });
+          const sample = r.model ? sampleExchangeUsd(r.model) : null;
+          const health = r.health
+            ? r.health.ok
+              ? `answered in ${r.health.latencyMs ?? '?'} ms`
+              : `did not answer (${r.health.detail ?? 'unknown'}) — key kept`
+            : 'not probed';
+          const text = `Stored by the engine (${r.secretBackend}) · ${entry.name} ${health}${
+            sample ? ` · ≈${fmtUsd(sample.usd, { precise: true })} per 1k-in/500-out exchange${sample.estimate ? ' (estimate)' : ''}` : ''
+          }`;
+          setEngineNote({ tone: r.health && !r.health.ok ? 'warn' : 'ok', text });
+          // The parent closes the dialog on save; the toast carries the result.
+          if (r.health && !r.health.ok) toast.warning(`${entry.name} key saved, provider did not answer`, { description: text });
+          else toast(`${entry.name} key saved`, { description: text });
+          void useEngineStore.getState().loadCatalog();
+        } catch (e) {
+          setEngineNote({ tone: 'error', text: `The engine refused the key: ${e instanceof Error ? e.message : String(e)}` });
+          setSaving(false);
+          return;
+        }
+      }
       const keyStorage: ProviderConfig['keyStorage'] =
-        !isOllama && apiKey.trim().length > 0
-          ? (await keychainSet('xr', entry.id, apiKey.trim())).status === 'ok'
+        !isOllama && key.length > 0
+          ? (await keychainSet('xr', entry.id, key)).status === 'ok'
             ? 'keychain'
             : 'local-insecure' // caller stores the key + shows the badge
           : 'none';
@@ -244,6 +316,39 @@ function ProviderForm({
           </>
         )}
       </div>
+
+      {engineTakesKey ? (
+        <label className="text-text-secondary flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={setDefault}
+            onChange={(e) => setSetDefault(e.target.checked)}
+            className="accent-accent size-3.5"
+            data-testid="provider-set-default"
+          />
+          Make {entry.name} the engine's default provider for new turns
+        </label>
+      ) : null}
+      {engineTakesKey && !engineUp ? (
+        <p className="text-text-tertiary text-[11.5px]">
+          Engine not running — keys are stored by the engine, so saving needs it up.
+        </p>
+      ) : null}
+      {engineNote ? (
+        <div
+          role="status"
+          data-testid="provider-engine-note"
+          className={
+            engineNote.tone === 'ok'
+              ? 'border-success/40 bg-success/10 text-success rounded-md border px-3 py-2 text-xs'
+              : engineNote.tone === 'warn'
+                ? 'border-warning/40 bg-warning/10 text-warning rounded-md border px-3 py-2 text-xs'
+                : 'border-danger/40 bg-danger/10 text-danger rounded-md border px-3 py-2 text-xs'
+          }
+        >
+          {engineNote.text}
+        </div>
+      ) : null}
 
       {test.status === 'done' ? (
         <div

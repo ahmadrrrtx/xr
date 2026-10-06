@@ -34,13 +34,17 @@ import { getApprovalStore } from "../../control/approval-store.ts";
 /** Chat request body (typed, minimal surface). */
 interface ChatBody {
   message?: string;
-  /** Legacy continuity field. The canonical loop maintains continuity via the
-   * session store, so history is accepted for compatibility and passed along
-   * as context metadata rather than replayed through a provider directly. */
+  /** Prior conversation turns. Phase 14: replayed into the loop's transcript
+   * (bounded: newest 24 turns / 24k chars) so follow-up questions keep their
+   * context. Earlier generations accepted this field and dropped it. */
   history?: Array<{ role: string; content: string }>;
   mode?: "agent" | "ask" | "plan";
   /** Explicit execution mode gate. Default is the SAFE read-only `ask` mode. */
   stream?: boolean;
+  /** Phase 14: surface context (e.g. the Workbench's open workspace) appended
+   * to the system prompt. Bounded; it is instructions ABOUT the task, never
+   * the task itself. */
+  context?: string;
   provider?: string;
   model?: string;
   budget?: number;
@@ -56,6 +60,9 @@ function stripAnsi(s: string): string {
   // eslint-disable-next-line no-control-regex
   return s.replace(/\u001b\[[0-9;]*m/g, "").replace(/^\s+|\s+$/g, "");
 }
+
+/** Phase 14 — SSE comment heartbeat cadence (see `keepalive` in the stream). */
+const SSE_KEEPALIVE_MS = 5_000;
 
 export function chatRoutes(): DaemonRoute[] {
   return [
@@ -123,9 +130,26 @@ export function chatRoutes(): DaemonRoute[] {
                 seq += 1;
                 controller.enqueue(enc.encode(`data: ${JSON.stringify({ ...data, event_id: seq })}\n\n`));
               };
+              // Phase 14 — SSE keepalive. Bun's server closes a connection
+              // that moves no bytes for `idleTimeout` seconds (default 10).
+              // A cold local model (first load on a laptop CPU) or a long
+              // tool step can easily be silent for longer than that, and the
+              // client then saw the socket drop with no terminal frame. A
+              // comment line every 5 s is invisible to SSE parsers and keeps
+              // the connection — and any proxy in front of it — honest.
+              const keepalive = setInterval(() => {
+                if (closed) return;
+                try {
+                  controller.enqueue(enc.encode(": keepalive\n\n"));
+                } catch {
+                  /* stream already closed by the peer */
+                }
+              }, SSE_KEEPALIVE_MS);
+              (keepalive as { unref?: () => void }).unref?.();
               const close = () => {
                 if (closed) return;
                 closed = true;
+                clearInterval(keepalive);
                 controller.enqueue(enc.encode("data: [DONE]\n\n"));
                 releaseOnce();
                 controller.close();
@@ -200,8 +224,23 @@ export function chatRoutes(): DaemonRoute[] {
                     runId,
                     laneKey,
                     sessionId: body.sessionId,
+                    // Phase 14 — prior turns are replayed into the loop's
+                    // transcript (bounded there); only chat roles with text.
+                    history: Array.isArray(body.history)
+                      ? body.history
+                          .filter(
+                            (h): h is { role: "user" | "assistant"; content: string } =>
+                              !!h &&
+                              (h.role === "user" || h.role === "assistant") &&
+                              typeof h.content === "string",
+                          )
+                          .slice(-64)
+                      : undefined,
                     provider: body.provider,
                     model: body.model,
+                    ...(typeof body.context === "string" && body.context.trim()
+                      ? { systemPrompt: body.context.trim().slice(0, 4_000) }
+                      : {}),
                     budget: body.budget,
                     maxTokens: body.maxTokens,
                     maxSteps: body.maxSteps,

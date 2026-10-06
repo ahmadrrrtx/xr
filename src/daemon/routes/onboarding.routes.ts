@@ -104,6 +104,8 @@ export function onboardingRoutes(): DaemonRoute[] {
             apiKey?: string;
             model?: string;
             probe?: boolean;
+            /** Phase 14 — the desktop stores keys without switching the default provider. */
+            setDefault?: boolean;
           };
           const providerId = body.providerId ?? "";
           const allowed = new Set(getProviderEnvStatus().map((p) => p.id));
@@ -129,12 +131,16 @@ export function onboardingRoutes(): DaemonRoute[] {
           // "API key not set" negative from before the key existed.
           invalidateProviderHealthCache(providerId);
           const next = loadConfig().config;
-          next.defaults.provider = providerId;
-          if (body.model?.trim()) next.defaults.model = body.model.trim();
-          saveConfig(next);
+          const setDefault = body.setDefault !== false;
+          if (setDefault) {
+            next.defaults.provider = providerId;
+            if (body.model?.trim()) next.defaults.model = body.model.trim();
+            saveConfig(next);
+          }
           state.store.audit("onboarding.provider", {
             provider: providerId,
-            model: next.defaults.model,
+            model: setDefault ? next.defaults.model : null,
+            setDefault,
             secretBackend: backend,
           });
 
@@ -150,7 +156,14 @@ export function onboardingRoutes(): DaemonRoute[] {
               health = { ok: false, detail: (e as Error).message, latencyMs: null };
             }
           }
-          return json({ ok: true, provider: providerId, model: next.defaults.model, secretBackend: backend, health });
+          return json({
+            ok: true,
+            provider: providerId,
+            model: setDefault ? next.defaults.model : null,
+            setDefault,
+            secretBackend: backend,
+            health,
+          });
         } catch (e) {
           return json({ error: (e as Error).message }, 400);
         }

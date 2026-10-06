@@ -16,9 +16,17 @@
  *     engine install — it does not carry repo dev state.
  *
  * Override the host triple with SIDECAR_TRIPLE (cross-compile is NOT claimed;
- * this only renames for runners that know their own target).
+ * this only renames for runners that know their own target). `--if-missing`
+ * skips the (slow) compile when the binary is already there — `tauri dev`
+ * needs it to exist because tauri-build validates bundle.externalBin.
  */
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { resolve } from "node:path";
+
+// cwd-independent: `bun run dev:tauri` in desktop/ and CI at the repo root
+// both land on the same paths.
+const root = resolve(import.meta.dir, "..");
+const ifMissing = process.argv.includes("--if-missing");
 
 const TRIPLES: Record<string, string> = {
   "linux-x64": "x86_64-unknown-linux-gnu",
@@ -35,13 +43,18 @@ if (!triple) {
   process.exit(1);
 }
 const ext = process.platform === "win32" ? ".exe" : "";
-const out = `desktop/src-tauri/binaries/xr-engine-${triple}${ext}`;
-mkdirSync("desktop/src-tauri/binaries", { recursive: true });
+const out = resolve(root, `desktop/src-tauri/binaries/xr-engine-${triple}${ext}`);
+mkdirSync(resolve(root, "desktop/src-tauri/binaries"), { recursive: true });
+
+if (ifMissing && existsSync(out)) {
+  console.log(`[sidecar] present, skipping (--if-missing): ${out}`);
+  process.exit(0);
+}
 
 console.log(`[sidecar] compiling engine → ${out}`);
 const proc = Bun.spawnSync(
   ["bun", "build", "src/index.ts", "--compile", "--external", "playwright", "--external", "playwright-core", "--outfile", out],
-  { stdout: "inherit", stderr: "inherit" },
+  { cwd: root, stdout: "inherit", stderr: "inherit" },
 );
 if (proc.exitCode !== 0) process.exit(proc.exitCode);
 console.log(`[sidecar] done: ${out}`);

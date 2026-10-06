@@ -29,6 +29,11 @@ import {
 import { toast } from 'sonner';
 import { useListRef } from 'react-window';
 
+import { startDemoRun } from '@/brain/demo';
+import { modelInfo } from '@/budget/models';
+import { useEngineStore } from '@/stores/engineStore';
+import { resolveDefaultModel } from '@/stores/sessionsStore';
+
 import { DetailPanel } from '@/brain/detail';
 import { Gantt } from '@/brain/gantt';
 import {
@@ -161,11 +166,23 @@ function BrainIndex() {
   const navigate = useNavigate();
   const runOrder = useBrainStore((s) => s.runOrder);
   const runs = useBrainStore((s) => s.runs);
-  const startMockRun = useBrainStore((s) => s.startMockRun);
   const reduced = useReducedMotion();
+  // Phase 14: a real run needs the engine up with a provider that answers.
+  const engineUp = useEngineStore((s) => s.status === 'up');
+  const providers = useEngineStore((s) => s.providers);
+  const providerReady =
+    engineUp && !!providers?.providers.some((x) => x.healthy && (x.kind === 'local' || x.hasKey));
+  const defaultModel = providers?.model ?? resolveDefaultModel();
+
+  useEffect(() => {
+    const stop = useEngineStore.getState().startPolling();
+    void useEngineStore.getState().loadCatalog();
+    return stop;
+  }, []);
 
   const startDemo = (): void => {
-    const id = startMockRun();
+    // Real agent-mode turn when a provider answers; honest mock otherwise.
+    const { id } = startDemoRun();
     navigate(`/brain/${id}`);
   };
 
@@ -224,11 +241,17 @@ function BrainIndex() {
         <div className="mt-5 flex items-center gap-3">
           <Button
             onClick={startDemo}
-            aria-label="Start a demo run"
+            aria-label={providerReady ? `Start a run with ${defaultModel}` : 'Start a demo run'}
+            title={
+              providerReady
+                ? `Runs one agent turn through the engine (${defaultModel}).`
+                : 'No model is configured — this plays a scripted demo trace.'
+            }
             className="h-9 gap-2 px-4 text-[13px]"
+            data-testid="brain-start-run"
           >
             <Play size={14} strokeWidth={1.5} aria-hidden="true" />
-            Start a demo run
+            {providerReady ? 'Start a run' : 'Start a demo run'}
           </Button>
           <button
             type="button"
@@ -266,7 +289,7 @@ function BrainIndex() {
         {recent.length === 0 ? (
           <div className="border-border-subtle bg-bg-ink rounded-lg border p-6 text-center">
             <p className="text-text-secondary text-[13px]">
-              No runs yet. Start a demo run above or use XR in Chat to begin.
+              No runs yet. Every chat turn and agent run records a trace here. Start one above, or open Chat.
             </p>
           </div>
         ) : (
@@ -671,7 +694,7 @@ function BrainRun({ runId }: { runId: string }) {
           </span>
         )}
 
-        <span className="ml-1 flex shrink-0 items-center gap-1.5">
+        <span className="ml-1 flex shrink-0 items-center gap-1.5" data-run-status={run.status}>
           <StatusDot status={run.status} pulse={live} />
           <span className="text-text-secondary text-[12px]">
             {STATUS_LABEL[run.status]}
@@ -694,9 +717,18 @@ function BrainRun({ runId }: { runId: string }) {
             <span className="text-text-tertiary"> / </span>
             <TokenCounter n={run.tokensOut} label="out" />
           </span>
-          <span className="text-accent" title="Cumulative cost">
-            <CostTween value={run.costUsd} />
-          </span>
+          {run.costUsd === 0 && modelInfo(run.model).local ? (
+            <span
+              className="bg-bg-raised text-text-tertiary rounded px-1.5 py-px font-mono text-[10.5px]"
+              title="Local model — no metered cost"
+            >
+              local
+            </span>
+          ) : (
+            <span className="text-accent" title="Cumulative cost">
+              <CostTween value={run.costUsd} />
+            </span>
+          )}
         </span>
 
         {/* Actions */}

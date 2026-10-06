@@ -22,6 +22,7 @@ import {
   Settings2,
   Shield,
   type LucideIcon,
+  Activity,
 } from 'lucide-react';
 
 import { SearchInput } from '@/components/settings/controls';
@@ -29,6 +30,7 @@ import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 import { AboutTab } from './tabs/AboutTab';
+import { DiagnosticsTab } from './tabs/DiagnosticsTab';
 import { AppearanceTab } from './tabs/AppearanceTab';
 import { GeneralTab } from './tabs/GeneralTab';
 import { ModelsTab } from './tabs/ModelsTab';
@@ -47,6 +49,7 @@ export type SettingsTabId =
   | 'voice'
   | 'privacy'
   | 'updates'
+  | 'diagnostics'
   | 'about';
 
 type GroupId = 'account' | 'app' | 'preferences' | 'privacy' | 'system';
@@ -68,6 +71,7 @@ const TABS: readonly TabDef[] = [
   { id: 'voice', icon: Mic, labelKey: 'tab.voice', group: 'preferences', subtitle: 'Microphone, speech and push-to-talk.' },
   { id: 'privacy', icon: Shield, labelKey: 'tab.privacy', group: 'privacy', subtitle: 'Local-first by design. You decide what leaves the machine.' },
   { id: 'updates', icon: RefreshCw, labelKey: 'tab.updates', group: 'system', subtitle: 'Keep XR current.' },
+  { id: 'diagnostics', icon: Activity, labelKey: 'tab.diagnostics', group: 'system', subtitle: 'Engine link, version, providers and recent errors.' },
   { id: 'about', icon: Info, labelKey: 'tab.about', group: 'system', subtitle: 'The AI agent you can actually trust.' },
 ];
 
@@ -252,6 +256,7 @@ export default function SettingsScreen() {
                 {active === 'voice' ? <VoiceTab /> : null}
                 {active === 'privacy' ? <PrivacyTab /> : null}
                 {active === 'updates' ? <UpdatesTab /> : null}
+                {active === 'diagnostics' ? <DiagnosticsTab /> : null}
                 {active === 'about' ? <AboutTab /> : null}
               </div>
             </motion.div>

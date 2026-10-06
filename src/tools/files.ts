@@ -2,7 +2,7 @@
  * XR — file tools: read_file (safe) and write_file (diff + approval gate).
  * write_file NEVER touches disk without explicit human approval.
  */
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { resolve, relative, isAbsolute } from "node:path";
 import type { Tool, ToolContext, ToolResult } from "../core/types.ts";
 import { readTrustRequest, workspaceWriteTrustRequest } from "../runtime/trust/tool-support.ts";
@@ -55,7 +55,18 @@ export const writeFileTool: Tool = {
   requiresApproval: true,
   trustRequest: (args, ctx) => workspaceWriteTrustRequest("write_file", ctx.cwd, [String(args.path ?? "")]),
   async run(args, ctx: ToolContext): Promise<ToolResult> {
-    const p = safePath(ctx.cwd, String(args.path ?? ""));
+    // Phase 14 — small models often emit `{file, text}` instead of
+    // `{path, content}`; an empty path resolved to the workspace root and the
+    // diff pre-read failed with a bare EISDIR before the approval prompt. Name
+    // the real problem so the model (and the user) can correct it.
+    const rawPath = String(args.path ?? "").trim();
+    if (!rawPath) {
+      return { ok: false, output: "write_file requires a non-empty `path` (and the file body in `content`)" };
+    }
+    const p = safePath(ctx.cwd, rawPath);
+    if (existsSync(p) && statSync(p).isDirectory()) {
+      return { ok: false, output: `write_file: ${rawPath} is a directory` };
+    }
     const newContent = String(args.content ?? "");
     const old = existsSync(p) ? readFileSync(p, "utf8") : "";
     const diff = makeDiff(old, newContent);

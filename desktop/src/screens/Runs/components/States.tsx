@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { demoRunIsReal } from '@/brain/demo';
 import { useRunsStore } from '@/stores/runsStore';
 
 import { GRID, ROW_HEIGHT } from './RunsTable';
@@ -110,8 +111,10 @@ export function EmptyFresh() {
           data-testid="runs-demo"
           onClick={() => {
             const id = useRunsStore.getState().startDemoRun();
-            toast('Demo run started', {
-              description: 'Watch it live here, or open the trace.',
+            toast(demoRunIsReal() ? 'Run started' : 'Demo run started', {
+              description: demoRunIsReal()
+                ? 'A real agent turn on the engine. Watch it live here, or open the trace.'
+                : 'No model configured — this is a canned trace. Watch it live here, or open it.',
               action: {
                 label: 'View trace',
                 onClick: () => navigate(`/brain/${id}`),

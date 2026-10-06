@@ -65,8 +65,17 @@ async function runServeCommand(args: string[]): Promise<void> {
       }
       resolve();
     };
-    process.on("SIGINT", stop);
-    process.on("SIGTERM", stop);
+    const stopOnSignal = (signal: string) => {
+      stop();
+      // Graceful first; bounded always. Kernel timers (approval TTL sweeps,
+      // provider probes) can keep the loop alive after the listener closes —
+      // measured: a SIGTERM'd engine lingered with its port released, so the
+      // desktop's "Start engine" saw a live child and refused to respawn.
+      // unref'd: a clean drain still exits on its own.
+      setTimeout(() => process.exit(signal === "SIGINT" ? 130 : 0), 2000).unref();
+    };
+    process.on("SIGINT", () => stopOnSignal("SIGINT"));
+    process.on("SIGTERM", () => stopOnSignal("SIGTERM"));
     if (parentPid !== undefined) {
       startParentWatch(parentPid, () => {
         // One structured line on stderr: the shell's W-5 tail (if any) and

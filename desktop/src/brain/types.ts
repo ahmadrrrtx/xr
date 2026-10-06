@@ -71,6 +71,10 @@ export interface Run {
   /** Phase 13: set when the budget governor ended the run. */
   errorSummary?: string;
   killedBy?: 'shield' | 'budget';
+  /** Phase 14: recorded from a real engine stream (never a scripted demo). */
+  source?: 'engine';
+  /** Phase 14: the engine's own run id when it differs from ours. */
+  engineRunId?: string;
 }
 
 /* ── Phase 11 · Control Room list-level projection ─────────────────────── */
@@ -189,6 +193,8 @@ export interface StreamHooks {
     errorSummary?: string;
     killedBy?: 'budget';
   }) => void;
+  /** Phase 14: in-flight run status (engine parked on an approval ↔ running). */
+  onRunStatus?: (status: SpanStatus) => void;
 }
 
 export const CATEGORY_LABEL: Record<SpanCategory, string> = {

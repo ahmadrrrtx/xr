@@ -105,7 +105,7 @@ fn row_to_message(row: &rusqlite::Row) -> rusqlite::Result<ChatMessage> {
 pub fn chat_list_sessions(db: State<ChatDb>) -> Result<Vec<Session>, String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
-        .prepare("SELECT id, title, model, created_at, updated_at, archived FROM sessions WHERE archived = 0 ORDER BY updated_at DESC LIMIT 100")
+        .prepare("SELECT id, title, model, created_at, updated_at, archived FROM sessions WHERE archived = 0 ORDER BY updated_at DESC LIMIT 1000")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], row_to_session)

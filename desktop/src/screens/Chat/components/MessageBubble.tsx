@@ -14,12 +14,41 @@ import { toast } from 'sonner';
 
 import { Avatar } from '@/components/brand/Avatar';
 import { BudgetBlockedCard, CutoffNote, DownshiftBadge } from '@/components/budget/BudgetNoteCard';
+import { modelInfo } from '@/budget/models';
 import type { ChatMessage } from '@/lib/chat-db';
 import { MarkdownRenderer } from '@/lib/markdown';
+import type { StreamingTurn } from '@/stores/chatStore';
 import { useThemeStore } from '@/stores/theme';
 import { useUIStore } from '@/stores/ui';
 import { StreamingCursor } from './StreamingCursor';
 import { ToolCallCard } from './ToolCallCard';
+import { TurnErrorCard } from './TurnErrorCard';
+
+/** Honest in-flight status (engine `status` frames), never a fake "thinking". */
+function waitingLine(turn: StreamingTurn): string {
+  const model = modelInfo(turn.model).name;
+  switch (turn.phase) {
+    case 'awaiting_approval':
+      return 'Waiting for your approval…';
+    case 'tool_running':
+      return turn.phaseMessage || 'Running a tool…';
+    case 'compacting_context':
+      return 'Compacting context…';
+    case 'provider_selection':
+    case 'preparing':
+      return 'Connecting to the engine…';
+    case 'provider_ready':
+    case 'generating':
+    default:
+      return `Waiting for ${model}…`;
+  }
+}
+
+const STOPPED_NOTE: Record<string, string> = {
+  cancelled: 'Stopped.',
+  max_steps: 'Stopped at the step limit for this turn.',
+  interrupted: 'Interrupted — the stream ended early.',
+};
 
 function timeLabel(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -71,6 +100,7 @@ export function MessageBubble({
   isStreaming = false,
   streamingText = '',
   streamingTools,
+  streamingTurn,
   onEdit,
   onRetry,
   onRegenerate,
@@ -79,6 +109,8 @@ export function MessageBubble({
   isStreaming?: boolean;
   streamingText?: string;
   streamingTools?: ChatMessage['toolCalls'];
+  /** The live turn (status line while nothing has streamed yet). */
+  streamingTurn?: StreamingTurn;
   onEdit?: (text: string) => void;
   onRetry?: () => void;
   onRegenerate?: () => void;
@@ -94,9 +126,13 @@ export function MessageBubble({
   const queued = message.metadata?.status === 'queued';
   const failed = message.metadata?.status === 'failed';
   const errored = message.metadata?.status === 'error';
+  const turnError = message.metadata?.error;
+  const stoppedNote = message.metadata?.stopped ? STOPPED_NOTE[message.metadata.stopped] : undefined;
   // Phase 13: what the budget governor did to this turn.
   const budget = message.metadata?.budget;
   const blocked = budget?.kind === 'blocked';
+  // A failed turn with nothing streamed renders as the honest state card only.
+  const errorOnly = errored && !!turnError && !message.content && !(message.toolCalls?.length);
 
   const copy = async () => {
     try {
@@ -115,8 +151,17 @@ export function MessageBubble({
     <>
       {streamingText && <MarkdownRenderer content={streamingText} />}
       {streamingTools?.map((t) => (
-        <ToolCallCard key={t.id} call={t} />
+        <ToolCallCard key={t.id} call={t} runId={streamingTurn?.runId} />
       ))}
+      {!streamingText && streamingTurn && (
+        <span
+          className="text-text-tertiary text-[13px]"
+          data-testid="chat-waiting-line"
+          aria-live="polite"
+        >
+          {waitingLine(streamingTurn)}
+        </span>
+      )}
       <StreamingCursor />
     </>
   ) : (
@@ -126,9 +171,10 @@ export function MessageBubble({
           <MarkdownRenderer key={i} content={seg.text} />
         ) : (
           <ToolCallCard
-          key={`t-${i}`}
-          call={message.toolCalls?.[seg.index] ?? null}
-        />
+            key={`t-${i}`}
+            call={message.toolCalls?.[seg.index] ?? null}
+            runId={message.metadata?.runId}
+          />
         ),
     )
   );
@@ -249,6 +295,8 @@ export function MessageBubble({
             )}
             {blocked ? (
               <BudgetBlockedCard note={budget} />
+            ) : errorOnly && turnError ? (
+              <TurnErrorCard error={turnError} onRetry={onRegenerate} />
             ) : (
               <div
                 className={`border-border-subtle bg-bg-ink text-text-primary rounded-2xl rounded-tl-[4px] px-4 py-3 ${
@@ -262,7 +310,11 @@ export function MessageBubble({
               {budget?.kind === 'cutoff' && !isStreaming && <CutoffNote note={budget} />}
               {errored && (
                 <div className="mt-2 flex items-center gap-3">
-                  <span className="text-danger text-[12px]">Something went wrong.</span>
+                  <span className="text-danger text-[12px]">
+                    {turnError?.kind === 'interrupted'
+                      ? '[Interrupted — retry]'
+                      : (turnError?.message ?? 'Something went wrong.')}
+                  </span>
                   {onRegenerate && (
                     <button
                       type="button"
@@ -274,11 +326,28 @@ export function MessageBubble({
                   )}
                 </div>
               )}
+              {!errored && stoppedNote && !isStreaming && (
+                <div className="text-text-tertiary mt-2 text-[12px]" data-testid="turn-stopped">
+                  {stoppedNote}
+                </div>
+              )}
               </div>
             )}
             <div className="mt-1 flex items-center gap-1 pl-1">
               <span className="text-text-tertiary text-[11px]">
                 {timeLabel(message.createdAt)}
+                {!isStreaming && message.metadata?.model && (
+                  <> · {modelInfo(message.metadata.model).name}</>
+                )}
+                {!isStreaming && message.metadata?.usage && (
+                  <>
+                    {' '}
+                    · {message.metadata.usage.inTokens + message.metadata.usage.outTokens} tok
+                  </>
+                )}
+                {!isStreaming && message.metadata?.timing?.ttftMs !== undefined && (
+                  <> · {(message.metadata.timing.ttftMs / 1000).toFixed(1)}s to first token</>
+                )}
               </span>
               {!isStreaming && (
                 <HoverActions>

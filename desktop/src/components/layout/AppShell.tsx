@@ -23,6 +23,8 @@ import { readSettingJSON, readSettingRaw } from '@/lib/persistent-store';
 import { effectiveCombo } from '@/lib/shortcuts';
 import { initRunsBridge } from '@/runs/bridge';
 import { BudgetBanners } from '@/components/budget/BudgetBanners';
+import { EngineDownBanner } from '@/components/engine/EngineDownBanner';
+import { startEngineApprovalSync } from '@/engine/approvals';
 import { PausedBanner } from '@/components/shield/PausedBanner';
 import { initBudget } from '@/budget/enforce';
 import { initShield } from '@/shield/enforce';
@@ -163,6 +165,9 @@ export function AppShell() {
   useEffect(() => initShield(), []);
   // Budget (Phase 13): spend governor state + cross-surface notifications.
   useEffect(() => initBudget(), []);
+  // Engine (Phase 14): approvals the engine holds for other clients / after
+  // a reload still reach the modal, the Bell and Shield.
+  useEffect(() => startEngineApprovalSync(), []);
   const location = useLocation();
   // Chat, Settings and Brain manage their own full-height layouts — no
   // content padding (Settings is a two-pane pane, SCREEN 14; Brain is a
@@ -180,6 +185,7 @@ export function AppShell() {
       <div className="bg-bg-void text-text-primary flex h-screen flex-col">
         <Topbar />
         <PausedBanner />
+        <EngineDownBanner />
         <BudgetBanners />
         <div className="flex min-h-0 flex-1">
           <Sidebar />
