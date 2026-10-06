@@ -143,6 +143,9 @@ engine + Ollama. Console errors: only the expected 503s during the no-provider
 step. Measured: cold TTFT 15–34 s, warm ≈0.2–2 s; engine-kill → banner 15 s;
 Start engine → recovered 2 s; no-provider → honest card, zero fabricated
 replies; approval modal fires from the engine (`ap_…` id) and the decision is
-posted back; $0.01 cap blocks through the engine path (`status budget_stopped`
-→ blocked card). `qwen2.5:0.5b` frequently skips or malforms tool calls — the
+posted back. Budget: a local model costs $0, so a $0.01 per-task cap can never
+trip on this machine; the same engine governor was exercised through its token
+ceiling instead (`perTaskTokens: 100` → `status budget_stopped` → blocked card
+with the engine's reason + Raise limit, `42-budget-blocked-engine.png`). The
+USD ceiling takes the identical path (`governor.checkBeforeStep`). `qwen2.5:0.5b` frequently skips or malforms tool calls — the
 tool cards then show the honest failed state (not a desktop defect).

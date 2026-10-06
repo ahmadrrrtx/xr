@@ -100,4 +100,4 @@ Principle: the desktop renders engine truth and forwards decisions. No mock
 `30-chat-paper-waiting` · `31-chat-paper-done` (Paper theme) ·
 `32-topbar-model-chip` · `33-hud-quick-ask` · `35-engine-down` ·
 `36-engine-back` · `37-no-provider` · `38-workspace-landing` ·
-`39-workbench-waiting` · `40-workbench-chat`.
+`39-workbench-waiting` · `40-workbench-chat` · `41-sessions-virtualized` (240 seeded sessions, 22 DOM rows) · `42-budget-blocked-engine` (engine governor `budget_stopped` → blocked card + Raise limit).
