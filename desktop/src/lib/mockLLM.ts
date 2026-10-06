@@ -12,6 +12,16 @@
  *   done       {}                    — stream complete
  *   error      { message }           — stream failed
  */
+import {
+  budgetGate,
+  cutoffText,
+  estimateTokens,
+  PRE_CALL_OUT_TOKENS,
+  recordSpend,
+  startMeter,
+  type Meter,
+} from '@/budget/enforce';
+import type { PreCallCheck, SpendSurface } from '@/budget/types';
 import type { ApprovalSpec } from '@/lib/approvalCore';
 import type { ToolCallRecord } from '@/lib/chat-db';
 import { useUIStore } from '@/stores/ui';
@@ -33,7 +43,15 @@ export type StreamEvent =
       blocked?: boolean;
     }
   | { type: 'done' }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  /** Phase 13: the budget governor refused the call — nothing was sent. */
+  | { type: 'budget_blocked'; code: string; reason: string }
+  /** Phase 13: the governor routed the turn to a cheaper model. */
+  | { type: 'model_switched'; from: string; to: string; why: string | null }
+  /** Phase 13: the stream hit the hard limit mid-reply (partial kept). */
+  | { type: 'budget_cutoff'; reason: string }
+  /** Phase 13: what the turn actually cost (after the stream). */
+  | { type: 'budget_charged'; costUsd: number; model: string };
 
 export interface StreamOptions {
   messages: ChatTurn[];
@@ -50,6 +68,17 @@ export interface StreamOptions {
     call: { summary: string },
     spec: ApprovalSpec
   ) => Promise<{ approved: boolean; reason?: string; blocked?: boolean }>;
+  /**
+   * Phase 13: who is spending. When set, the stream asks the budget
+   * governor before connecting (a denial arrives as `budget_blocked`),
+   * meters output tokens against the hard limit and records the real cost.
+   */
+  budget?: {
+    surface: SpendSurface;
+    sessionId: string | null;
+    agent?: string;
+    workspace?: string | null;
+  };
 }
 
 /** Dev-only simulated failure rate (0 in tests). Overridable via
@@ -103,16 +132,22 @@ async function sleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /** Emit tokens at a human 30–60ms cadence with occasional thinking pauses. */
+/** Phase 13: thrown by the token emitter when the meter hits the hard limit. */
+class BudgetCutoff extends Error {}
+
+type TokenEmitter = (text: string) => void;
+
 async function emitText(
   text: string,
   opts: StreamOptions,
   startPaused = false,
+  emit: TokenEmitter = (t) => opts.onEvent({ type: 'token', text: t }),
 ): Promise<void> {
   if (startPaused) await sleep(500 + Math.random() * 400, opts.signal);
   const tokens = tokenize(text);
   for (let i = 0; i < tokens.length; i++) {
     await sleep(30 + Math.random() * 30, opts.signal);
-    opts.onEvent({ type: 'token', text: tokens[i] });
+    emit(tokens[i]);
     // Occasional pause after sentence ends — feels human, not fake-fast.
     if (/[.!?]\s*$/.test(tokens[i]) && Math.random() < 0.25) {
       await sleep(180 + Math.random() * 250, opts.signal);
@@ -342,6 +377,71 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
   const prompt = lastUser?.content ?? '';
   const script = scriptFor(prompt, useUIStore.getState().userName);
 
+  // Phase 13: ask the governor before anything connects. The verdict may
+  // swap the model; the meter stops the stream at the hard limit.
+  let check: PreCallCheck | null = null;
+  let meter: Meter | null = null;
+  const tokensIn = opts.messages.reduce((t, m) => t + estimateTokens(m.content), 0);
+  if (opts.budget) {
+    check = await budgetGate({
+      model: opts.model,
+      estimatedTokensIn: tokensIn,
+      estimatedTokensOut: PRE_CALL_OUT_TOKENS,
+      agent: opts.budget.agent ?? 'main',
+      workspace: opts.budget.workspace ?? null,
+      sessionId: opts.budget.sessionId,
+      surface: opts.budget.surface,
+    });
+    if (!check.allowed) {
+      opts.onEvent({
+        type: 'budget_blocked',
+        code: check.code,
+        reason: check.reason ?? 'Budget limit reached.',
+      });
+      return;
+    }
+    if (check.downgradedToModel) {
+      opts.onEvent({
+        type: 'model_switched',
+        from: opts.model,
+        to: check.downgradedToModel,
+        why: check.downshiftWhy,
+      });
+    }
+    meter = startMeter(check);
+  }
+  const settle = (): void => {
+    if (!check || !meter || !opts.budget) return;
+    const b = opts.budget;
+    const m = meter;
+    const c = check;
+    meter = null; // record once
+    void recordSpend({
+      kind: 'llm_call',
+      agent: b.agent ?? 'main',
+      workspace: b.workspace ?? null,
+      sessionId: b.sessionId,
+      model: c.model,
+      tokensIn,
+      tokensOut: m.tokensOut,
+      costUsd: Math.round(m.cost * 1e6) / 1e6,
+      category: 'llm',
+      detail: {
+        surface: b.surface,
+        ...(m.cutoff ? { cutoff: true } : {}),
+        ...(c.downgradedToModel ? { from: opts.model } : {}),
+      },
+    }).then((res) => {
+      if (res) opts.onEvent({ type: 'budget_charged', costUsd: res.event.costUsd, model: c.model });
+    });
+  };
+  const emit: TokenEmitter = (text) => {
+    opts.onEvent({ type: 'token', text });
+    if (meter && check && !meter.add(estimateTokens(text))) {
+      throw new BudgetCutoff(cutoffText(check));
+    }
+  };
+
   try {
     await sleep(250 + Math.random() * 350, opts.signal); // "connect"
 
@@ -351,19 +451,19 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
       return;
     }
 
-    if (script.before) await emitText(script.before, opts);
+    if (script.before) await emitText(script.before, opts, false, emit);
 
     if (script.code) {
       // Guard blank line before the fence — the preceding prose token may
       // not end with a newline (a glued "```ts" doesn't open a fence).
-      await emitText('\n\n```ts\n', opts);
+      await emitText('\n\n```ts\n', opts, false, emit);
       // Stream the code a little faster, line by line — mirrors real behavior.
       for (const line of script.code.split('\n')) {
         await sleep(40 + Math.random() * 40, opts.signal);
-        opts.onEvent({ type: 'token', text: line + '\n' });
+        emit(line + '\n');
       }
       // Closing fence on its own line + blank line before the prose.
-      await emitText('```\n\n', opts);
+      await emitText('```\n\n', opts, false, emit);
     }
 
     if (script.tool) {
@@ -392,12 +492,15 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
           if (verdict.blocked) {
             await emitText(
               "XR Shield blocked that before it reached you — nothing ran. You can change the policy under Shield → Security Settings if you want me to ask next time.",
-              opts
+              opts,
+              false,
+              emit
             );
           } else if (deniedAfter) {
-            await emitText(deniedAfter, opts);
+            await emitText(deniedAfter, opts, false, emit);
           }
           opts.onEvent({ type: 'done' });
+          settle();
           return;
         }
       }
@@ -405,11 +508,23 @@ export async function streamChat(opts: StreamOptions): Promise<void> {
       opts.onEvent({ type: 'tool_result', id: call.id, output: script.tool.output, status: 'done' });
     }
 
-    if (script.after) await emitText(script.after, opts, Boolean(script.tool));
+    if (script.after) await emitText(script.after, opts, Boolean(script.tool), emit);
 
     opts.onEvent({ type: 'done' });
+    settle();
   } catch (err) {
-    if (err instanceof Aborted) return; // cancelled — caller handles state
+    if (err instanceof BudgetCutoff) {
+      // Hard limit mid-reply: keep the partial, say why, charge what streamed.
+      opts.onEvent({ type: 'budget_cutoff', reason: err.message });
+      opts.onEvent({ type: 'done' });
+      settle();
+      return;
+    }
+    if (err instanceof Aborted) {
+      settle(); // cancelled — tokens already streamed were still spent
+      return;
+    }
+    settle();
     opts.onEvent({ type: 'error', message: err instanceof Error ? err.message : 'Stream failed.' });
   }
 }

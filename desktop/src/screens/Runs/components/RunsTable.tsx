@@ -32,6 +32,7 @@ import {
   MoreHorizontal,
   RotateCcw,
   ShieldX,
+  Wallet,
   Square,
 } from 'lucide-react';
 
@@ -316,6 +317,21 @@ function RunRowImpl({
                   style={{ color: 'var(--danger)' }}
                 />
               </span>
+            ) : run.killedBy === 'budget' ? (
+              <span
+                role="img"
+                aria-label="Stopped by budget"
+                title={run.errorSummary ?? 'Stopped by the budget governor'}
+                data-testid="run-budget-killed"
+                className="inline-flex size-4 shrink-0 items-center justify-center"
+              >
+                <Wallet
+                  size={14}
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                  style={{ color: 'var(--warning)' }}
+                />
+              </span>
             ) : (
               <StatusIcon status={run.status} />
             )}
@@ -341,7 +357,7 @@ function RunRowImpl({
 
           {/* Title (+ error tooltip) */}
           <div role="cell" className="min-w-0">
-            {(run.status === 'failed' || run.killedBy === 'shield') &&
+            {(run.status === 'failed' || run.killedBy !== undefined) &&
             run.errorSummary ? (
               <Tooltip>
                 <TooltipTrigger asChild>

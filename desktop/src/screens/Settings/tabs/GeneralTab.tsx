@@ -34,6 +34,7 @@ import {
 } from '@/lib/settingsApi';
 import { isTauri } from '@/lib/tauri';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useBudgetStore } from '@/stores/budgetStore';
 import { useUIStore } from '@/stores/ui';
 
 const MAX_AVATAR_BYTES = 1_500_000;
@@ -367,15 +368,23 @@ export function GeneralTab() {
         <SettingRow
           label="Default budget"
           htmlFor="xr-default-budget"
-          description="Enforcement arrives with the Budget screen (Phase 13)."
+          description="Enforced by the Budget governor before every call. Fine-tune under Budget › Settings."
         >
           <Select
             value={settings.defaults.budget}
-            onValueChange={(value) =>
+            onValueChange={(value) => {
               update('defaults', {
                 budget: value as typeof settings.defaults.budget,
-              })
-            }
+              });
+              const limit =
+                value === 'auto'
+                  ? 5
+                  : value === 'custom'
+                    ? settings.defaults.budgetCustom
+                    : Number(value);
+              if (Number.isFinite(limit))
+                void useBudgetStore.getState().updateSettings({ monthlyLimit: limit });
+            }}
           >
             <SelectTrigger id="xr-default-budget" className="w-40">
               <SelectValue />
@@ -396,7 +405,10 @@ export function GeneralTab() {
               min={1}
               max={200}
               value={settings.defaults.budgetCustom}
-              onChange={(value) => update('defaults', { budgetCustom: value })}
+              onChange={(value) => {
+                update('defaults', { budgetCustom: value });
+                void useBudgetStore.getState().updateSettings({ monthlyLimit: value }, { quiet: true });
+              }}
               format={(value) => `$${value}`}
             />
           </SettingRow>

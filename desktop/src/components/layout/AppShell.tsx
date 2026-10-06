@@ -22,7 +22,9 @@ import { useHotkeys } from '@/hooks/useHotkeys';
 import { readSettingJSON, readSettingRaw } from '@/lib/persistent-store';
 import { effectiveCombo } from '@/lib/shortcuts';
 import { initRunsBridge } from '@/runs/bridge';
+import { BudgetBanners } from '@/components/budget/BudgetBanners';
 import { PausedBanner } from '@/components/shield/PausedBanner';
+import { initBudget } from '@/budget/enforce';
 import { initShield } from '@/shield/enforce';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSidebarStore } from '@/stores/sidebar';
@@ -159,6 +161,8 @@ export function AppShell() {
   useEffect(() => initRunsBridge(), []);
   // Shield (Phase 12): policy gate on the approval queue + audit observer.
   useEffect(() => initShield(), []);
+  // Budget (Phase 13): spend governor state + cross-surface notifications.
+  useEffect(() => initBudget(), []);
   const location = useLocation();
   // Chat, Settings and Brain manage their own full-height layouts — no
   // content padding (Settings is a two-pane pane, SCREEN 14; Brain is a
@@ -168,13 +172,15 @@ export function AppShell() {
     location.pathname.startsWith('/settings') ||
     location.pathname.startsWith('/brain') ||
     location.pathname.startsWith('/runs') ||
-    location.pathname.startsWith('/shield');
+    location.pathname.startsWith('/shield') ||
+    location.pathname.startsWith('/budget');
 
   return (
     <TooltipProvider delayDuration={200}>
       <div className="bg-bg-void text-text-primary flex h-screen flex-col">
         <Topbar />
         <PausedBanner />
+        <BudgetBanners />
         <div className="flex min-h-0 flex-1">
           <Sidebar />
           <main

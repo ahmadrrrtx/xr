@@ -167,6 +167,8 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
         requestApproval: isHud
           ? undefined
           : makeApprovalGate(controller.signal),
+        // Phase 13: the quick-ask spends like chat — same governor, same gate.
+        budget: { surface: 'hud', sessionId: null, agent: 'main' },
         onEvent: (event) => {
           const s = usePaletteStore.getState();
           switch (event.type) {
@@ -176,6 +178,26 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
                 void orbSetState('speaking');
               }
               s.appendQuickAskToken(event.text);
+              break;
+            case 'budget_blocked':
+              s.setQuickAskBudget({
+                kind: 'blocked',
+                code: event.code,
+                reason: event.reason,
+              });
+              s.finishQuickAsk('done');
+              void orbSetState('idle');
+              break;
+            case 'model_switched':
+              s.setQuickAskBudget({
+                kind: 'downshifted',
+                from: event.from,
+                to: event.to,
+                why: event.why ?? undefined,
+              });
+              break;
+            case 'budget_cutoff':
+              s.setQuickAskBudget({ kind: 'cutoff', reason: event.reason });
               break;
             case 'done':
               s.finishQuickAsk('done');
@@ -424,6 +446,10 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
         <PaletteQuickAsk
           onStop={stopQuickAsk}
           onOpenInChat={openQuickAskInChat}
+          onOpenBudget={() => {
+            ctxNavigate('/budget');
+            if (!isHud) closePalette();
+          }}
         />
       ) : (
         <PaletteResults

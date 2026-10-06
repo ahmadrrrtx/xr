@@ -109,6 +109,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
               role: 'assistant',
               content: stream.text,
               createdAt: stream.startedAt,
+              ...(stream.budget ? { metadata: { budget: stream.budget } } : {}),
             }}
             isStreaming
             streamingText={stream.text}

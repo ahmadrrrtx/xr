@@ -1,56 +1,52 @@
 /*
- * Model picker popover (Phase 4) — static catalogue for now (real model
- * management is Settings/Phase 8+). Selecting sets the session's model and
- * persists it as the default (xr.model.default, seeded by onboarding).
+ * Model picker popover (Phase 4, Phase 13: registry-backed). Lists the
+ * models the Budget governor knows about — cloud models with a key
+ * configured plus installed local models — with their list price so the
+ * cost of a choice is visible before the first token. Selecting sets the
+ * session's model and persists it as the default (xr.model.default).
  */
 import { Check, Cpu, Sparkles, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+import { fmtUsd } from '@/budget/core';
+import { modelInfo, type ModelInfo } from '@/budget/models';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { chatDb } from '@/lib/chat-db';
-import { DEFAULT_MODEL, useSessionsStore } from '@/stores/sessionsStore';
 import { writeSettingJSON } from '@/lib/persistent-store';
+import { useBudgetStore } from '@/stores/budgetStore';
+import { DEFAULT_MODEL, useSessionsStore } from '@/stores/sessionsStore';
 
-export const MODELS = [
-  {
-    id: 'claude-sonnet-4.5',
-    name: 'Claude Sonnet 4.5',
-    desc: 'Best for coding & agents',
-    badge: 'cloud',
-    icon: Sparkles,
-  },
-  {
-    id: 'gpt-4o-mini',
-    name: 'GPT-4o-mini',
-    desc: 'Fast + cheap everyday model',
-    badge: 'cloud',
-    icon: Zap,
-  },
-  {
-    id: 'qwen2.5:3b',
-    name: 'Qwen 2.5 3B',
-    desc: 'Local via Ollama — private',
-    badge: 'local',
-    icon: Cpu,
-  },
-] as const;
+function iconFor(m: ModelInfo) {
+  if (m.local) return Cpu;
+  return m.latency === 'fast' ? Zap : Sparkles;
+}
+
+function priceLine(m: ModelInfo): string {
+  if (m.local) return 'Local via Ollama · $0 per call';
+  const q = m.quality === 'best' ? 'Best quality' : m.quality === 'great' ? 'Strong all-rounder' : 'Everyday';
+  return `${q} · ${fmtUsd(m.outPer1M, { compact: true })}/1M out`;
+}
 
 export function ModelPicker({ sessionId }: { sessionId: string | null }) {
   const navigate = useNavigate();
   const sessions = useSessionsStore();
+  const configured = useBudgetStore((s) => s.settings.configuredModels);
+  const installed = useBudgetStore((s) => s.settings.installedLocal);
   const active =
     sessions.sessions.find((s) => s.id === sessionId)?.model ?? DEFAULT_MODEL;
 
-  const activeModel = MODELS.find((m) => m.id === active);
-  const label = activeModel?.name ?? 'Claude Sonnet 4.5';
+  const ids = [...new Set([...configured, ...installed, active])];
+  const models = ids.map(modelInfo);
+  const label = modelInfo(active).name;
 
   const pick = async (id: string) => {
     if (!sessionId) {
       await writeSettingJSON('xr.model.default', id);
+      void useBudgetStore.getState().updateSettings({ defaultModel: id }, { quiet: true });
       // Reflect in any future session creation.
       useSessionsStore.setState((st) => ({
         sessions: st.sessions.map((s) => (s.id === st.activeSessionId ? { ...s, model: id } : s)),
@@ -62,6 +58,7 @@ export function ModelPicker({ sessionId }: { sessionId: string | null }) {
       sessions: st.sessions.map((s) => (s.id === sessionId ? { ...s, model: id } : s)),
     }));
     await writeSettingJSON('xr.model.default', id);
+    void useBudgetStore.getState().updateSettings({ defaultModel: id }, { quiet: true });
   };
 
   return (
@@ -79,16 +76,19 @@ export function ModelPicker({ sessionId }: { sessionId: string | null }) {
         <div className="text-text-tertiary px-2 py-1.5 text-[11px] font-semibold tracking-wide uppercase">
           Model
         </div>
-        {MODELS.map((m) => (
+        {models.map((m) => {
+          const Icon = iconFor(m);
+          return (
           <button
             key={m.id}
             type="button"
             onClick={() => void pick(m.id)}
             role="menuitemradio"
             aria-checked={m.id === active}
+            data-testid={`model-pick-${m.id}`}
             className="hover:bg-bg-raised flex w-full items-start gap-2.5 rounded-md px-2 py-2 text-left"
           >
-            <m.icon
+            <Icon
               aria-hidden="true"
               className="text-text-secondary mt-0.5 size-4 shrink-0"
               strokeWidth={1.5}
@@ -97,19 +97,20 @@ export function ModelPicker({ sessionId }: { sessionId: string | null }) {
               <span className="text-text-primary block text-[13px] font-semibold">
                 {m.name}
               </span>
-              <span className="text-text-tertiary block text-[11px]">{m.desc}</span>
+              <span className="text-text-tertiary block text-[11px]">{priceLine(m)}</span>
             </span>
             <span className="text-text-tertiary font-mono text-[9px] tracking-wide uppercase">
-              {m.badge}
+              {m.local ? 'local' : m.estimate ? 'estimate' : 'cloud'}
             </span>
             {m.id === active && (
               <Check aria-hidden="true" className="text-accent mt-0.5 size-4" strokeWidth={1.5} />
             )}
           </button>
-        ))}
+          );
+        })}
         <button
           type="button"
-          onClick={() => navigate('/settings')}
+          onClick={() => navigate('/budget?tab=models')}
           className="text-text-tertiary hover:text-text-secondary mt-1 w-full border-t border-border-subtle px-2 pt-2 pb-1 text-left text-[12px]"
         >
           Manage models →

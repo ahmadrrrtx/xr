@@ -14,6 +14,7 @@ import { create } from 'zustand';
 import { makeApprovalGate } from '@/lib/approvalEvents';
 import {
   chatDb,
+  type BudgetNote,
   type ChatMessage,
   type MessagePage,
   type ToolCallRecord,
@@ -39,6 +40,8 @@ export interface StreamingTurn {
   toolCalls: ToolCallRecord[];
   status: StreamStatus;
   startedAt: number;
+  /** Phase 13: downshift / cutoff note carried into the final message. */
+  budget?: BudgetNote;
 }
 
 interface ChatState {
@@ -109,12 +112,68 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
     signal,
     // Phase 7: permission-gated tools park the stream on the approval modal.
     requestApproval: makeApprovalGate(signal),
+    // Phase 13: the budget governor gates, meters and bills this turn.
+    budget: { surface: 'chat', sessionId, agent: 'main' },
     onEvent: (e) => {
       const st = useChatStore.getState();
       const stream = st.stream;
+      if (e.type === 'budget_charged') {
+        // Lands after the stream settles: keep the cost with the turn.
+        if (stream && stream.sessionId === sessionId) {
+          useChatStore.setState({
+            stream: {
+              ...stream,
+              budget: { ...(stream.budget ?? { kind: 'charged' }), costUsd: e.costUsd },
+            },
+          });
+          return;
+        }
+        const list = st.messages[sessionId] ?? [];
+        const last = [...list].reverse().find((m) => m.role === 'assistant');
+        if (last && last.metadata?.budget?.costUsd === undefined) {
+          void commit({
+            ...last,
+            metadata: {
+              ...last.metadata,
+              budget: { ...(last.metadata?.budget ?? { kind: 'charged' }), costUsd: e.costUsd },
+            },
+          });
+        }
+        return;
+      }
       if (!stream || stream.sessionId !== sessionId) return; // stale (switched away)
 
       switch (e.type) {
+        case 'budget_blocked': {
+          // Nothing was sent. The turn becomes a calm inline block card.
+          const msg: ChatMessage = {
+            id: newId(),
+            sessionId,
+            role: 'assistant',
+            content: '',
+            createdAt: Date.now(),
+            metadata: { budget: { kind: 'blocked', code: e.code, reason: e.reason } },
+          };
+          void commit(msg);
+          useChatStore.setState({ stream: null });
+          void orbSetState('idle');
+          return;
+        }
+        case 'model_switched': {
+          useChatStore.setState({
+            stream: {
+              ...stream,
+              budget: { kind: 'downshifted', from: e.from, to: e.to, why: e.why ?? undefined },
+            },
+          });
+          return;
+        }
+        case 'budget_cutoff': {
+          useChatStore.setState({
+            stream: { ...stream, budget: { ...stream.budget, kind: 'cutoff', reason: e.reason } },
+          });
+          return;
+        }
         case 'token': {
           if (stream.status !== 'streaming') {
             useChatStore.setState({
@@ -179,6 +238,7 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
             metadata: {
               ...(stream.text ? { segments: [{ type: 'text', text: stream.text }] } : {}),
               status: 'error',
+              ...(stream.budget ? { budget: stream.budget } : {}),
             },
             toolCalls: stream.toolCalls.length ? stream.toolCalls : undefined,
           };
@@ -209,13 +269,16 @@ async function finishStream(sessionId: string, stream: StreamingTurn): Promise<v
   const segments: NonNullable<ChatMessage['metadata']>['segments'] = [];
   if (stream.text) segments.push({ type: 'text', text: stream.text });
   for (let i = 0; i < stream.toolCalls.length; i++) segments.push({ type: 'tool', index: i });
+  // The budget note may have been updated after `done` (cost lands async).
+  const latest = useChatStore.getState().stream;
+  const budget = latest?.sessionId === sessionId ? (latest.budget ?? stream.budget) : stream.budget;
   const msg: ChatMessage = {
     id: newId(),
     sessionId,
     role: 'assistant',
     content: stream.text,
     createdAt: Date.now(),
-    metadata: { segments },
+    metadata: { segments, ...(budget ? { budget } : {}) },
     toolCalls: stream.toolCalls,
   };
   await commit(msg);

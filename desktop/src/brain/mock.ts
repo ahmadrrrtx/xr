@@ -1066,6 +1066,8 @@ export interface StreamHandle {
   stop: () => void;
   /** True while the playhead is parked at an approval gate. */
   isWaitingApproval: () => boolean;
+  /** Phase 13: true while parked on the budget governor's answer. */
+  isWaitingBudget: () => boolean;
 }
 
 interface RunningSpan extends ScriptSpan {
@@ -1073,6 +1075,54 @@ interface RunningSpan extends ScriptSpan {
   endedEmitted: boolean;
   tokenAcc: number;
   logIdx: number;
+  /** Phase 13: the governor answered for this LLM span. */
+  gated?: boolean;
+  /** Absolute stop for this span's running cost (null = no hard cap). */
+  hardRemaining?: number | null;
+  /** Running cost already handed to the governor (partial records on stop). */
+  recorded?: boolean;
+}
+
+/**
+ * Phase 13 budget seam. The mock never imports the governor; the store
+ * passes `budgetGate` / `recordSpend` from budget/enforce.ts. Every LLM span
+ * asks before it starts and reports what it actually cost when it ends.
+ */
+export interface BudgetHooks {
+  gate: (req: BudgetGateRequest) => Promise<BudgetVerdict>;
+  record: (input: BudgetSpendInput) => void;
+}
+
+export interface BudgetGateRequest {
+  model: string;
+  estimatedTokensIn: number;
+  estimatedTokensOut: number;
+  estimatedCost: number;
+  agent: string;
+  workspace: string | null;
+  sessionId: string;
+}
+
+export interface BudgetVerdict {
+  allowed: boolean;
+  reason: string | null;
+  /** The model to run with (may be a cheaper downshift). */
+  model: string;
+  downgradedToModel: string | null;
+  downshiftWhy: string | null;
+  estimatedCost: number;
+  hardRemaining: number | null;
+}
+
+export interface BudgetSpendInput {
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+  agent: string;
+  workspace: string | null;
+  sessionId: string;
+  partial: boolean;
 }
 
 const TICK_MS = 100;
@@ -1087,7 +1137,11 @@ export interface StreamOptions {
    * for them (the store already materialised them — `waiting` flavour).
    */
   fromPlayhead?: number;
+  /** Phase 13: ask the budget governor before each LLM span (optional seam). */
+  budget?: BudgetHooks;
 }
+
+const BUDGET_EPS = 0.0001;
 
 export function streamMockRun(
   runId: string,
@@ -1101,6 +1155,9 @@ export function streamMockRun(
   let playhead = opts.fromPlayhead ?? 0;
   let stopped = false;
   let parkedAt: string | null = null;
+  /** Span id waiting on the budget governor (Phase 13). */
+  let gatingAt: string | null = null;
+  const budget = opts.budget;
 
   const running = new Map<string, RunningSpan>();
   for (const sp of script.spans) {
@@ -1139,6 +1196,27 @@ export function streamMockRun(
 
   const failSpanId = script.endsFailedAt;
 
+  /** Phase 13: hand the governor what an LLM span actually cost. */
+  function recordSpan(rs: RunningSpan, partial: boolean) {
+    if (!budget || rs.category !== 'llm' || rs.recorded || !rs.startedEmitted)
+      return;
+    rs.recorded = true;
+    const tokensOut = partial ? rs.tokenAcc : (rs.tokensOut ?? rs.tokenAcc);
+    const full = rs.costUsd ?? 0;
+    const cost =
+      partial && rs.tokensOut ? (full * rs.tokenAcc) / rs.tokensOut : full;
+    budget.record({
+      model: rs.model ?? script.model,
+      tokensIn: rs.tokensIn ?? 0,
+      tokensOut,
+      costUsd: Math.round(cost * 1e6) / 1e6,
+      agent: script.agent,
+      workspace: script.workspace ?? null,
+      sessionId: runId,
+      partial,
+    });
+  }
+
   function finishSpan(
     rs: RunningSpan,
     status: Span['status'],
@@ -1152,6 +1230,62 @@ export function streamMockRun(
       durationMs: rs.duration,
       outputs: status === 'failed' && !rs.error ? undefined : rs.outputs,
       error,
+    });
+    recordSpan(rs, false);
+  }
+
+  /** Phase 13: the governor said no — fail the span, pend the rest, end the run. */
+  function budgetStop(rs: RunningSpan, reason: string, partial: boolean) {
+    if (stopped) return;
+    if (!rs.startedEmitted) {
+      rs.startedEmitted = true;
+      hooks.onSpanStart({
+        id: rs.id,
+        parentId: rs.parentId,
+        name: rs.name,
+        category: rs.category,
+        status: 'running',
+        startedAt: startedAt + playhead,
+        endedAt: null,
+        durationMs: 0,
+        model: rs.model,
+        inputs: rs.inputs,
+        metadata: rs.metadata,
+        tokensIn: rs.tokensIn,
+        costUsd: 0,
+      });
+    }
+    rs.endedEmitted = true;
+    hooks.onSpanEnd(rs.id, {
+      status: 'failed',
+      endedAt: startedAt + playhead,
+      durationMs: Math.max(0, playhead - rs.start),
+      error: { name: 'BudgetLimit', message: reason },
+    });
+    if (partial) recordSpan(rs, true);
+    hooks.onLog(rs.id, 'system', `budget: ${reason}`);
+    for (const other of running.values()) {
+      if (other.id === rs.id || other.endedEmitted) continue;
+      if (!other.startedEmitted) {
+        other.startedEmitted = true;
+        other.endedEmitted = true;
+        hooks.onSpanEnd(other.id, { status: 'pending' });
+      } else {
+        other.endedEmitted = true;
+        hooks.onSpanEnd(other.id, {
+          status: 'killed',
+          endedAt: startedAt + playhead,
+          durationMs: Math.max(0, playhead - other.start),
+        });
+      }
+    }
+    stopped = true;
+    window.clearInterval(timer);
+    hooks.onRunEnd({
+      status: 'failed',
+      endedAt: startedAt + playhead,
+      errorSummary: reason,
+      killedBy: 'budget',
     });
   }
 
@@ -1172,6 +1306,7 @@ export function streamMockRun(
             : undefined,
       });
       rs.endedEmitted = true;
+      recordSpan(rs, true); // Phase 13: tokens already streamed were spent
     }
     hooks.onRunEnd({ status: 'killed', endedAt: startedAt + playhead });
   }
@@ -1179,6 +1314,7 @@ export function streamMockRun(
   const timer = window.setInterval(() => {
     if (stopped) return;
     if (parkedAt) return; // parked at the approval gate
+    if (gatingAt) return; // parked on the budget governor (Phase 13)
 
     playhead += TICK_MS * speed;
     let done = false;
@@ -1186,6 +1322,62 @@ export function streamMockRun(
     for (const rs of running.values()) {
       const startAt = rs.start;
       const endAt = rs.start + rs.duration;
+
+      // Phase 13: an LLM span asks the governor before it starts. The run
+      // parks (no playhead advance) until the verdict lands.
+      if (
+        !rs.startedEmitted &&
+        playhead >= startAt &&
+        rs.category === 'llm' &&
+        budget &&
+        !rs.gated
+      ) {
+        rs.gated = true;
+        gatingAt = rs.id;
+        const model = rs.model ?? script.model;
+        void budget
+          .gate({
+            model,
+            estimatedTokensIn: rs.tokensIn ?? 0,
+            estimatedTokensOut: rs.tokensOut ?? 0,
+            estimatedCost: rs.costUsd ?? 0,
+            agent: script.agent,
+            workspace: script.workspace ?? null,
+            sessionId: runId,
+          })
+          .then((v) => {
+            gatingAt = null;
+            if (stopped) return;
+            if (!v.allowed) {
+              budgetStop(rs, v.reason ?? 'Budget limit reached', false);
+              return;
+            }
+            rs.hardRemaining = v.hardRemaining;
+            if (v.downgradedToModel) {
+              rs.model = v.model;
+              rs.costUsd = v.estimatedCost;
+              rs.metadata = {
+                ...rs.metadata,
+                budgetDownshift: {
+                  from: model,
+                  to: v.model,
+                  why: v.downshiftWhy,
+                },
+              };
+              hooks.onLog(
+                rs.id,
+                'system',
+                `budget: switched ${model} → ${v.model} — ${v.downshiftWhy ?? 'to stay within budget'}`
+              );
+            }
+          })
+          .catch(() => {
+            gatingAt = null;
+            if (!stopped)
+              budgetStop(rs, 'Budget check failed — nothing was sent.', false);
+          });
+        return;
+      }
 
       // Emit start
       if (!rs.startedEmitted && playhead >= startAt) {
@@ -1242,6 +1434,20 @@ export function streamMockRun(
             delta,
             rs.costUsd ? (rs.costUsd * delta) / rs.tokensOut : 0
           );
+          // Phase 13 mid-stream guard: stop at the hard limit, not after it.
+          if (
+            rs.hardRemaining != null &&
+            rs.costUsd &&
+            (rs.costUsd * rs.tokenAcc) / rs.tokensOut >=
+              rs.hardRemaining - BUDGET_EPS
+          ) {
+            budgetStop(
+              rs,
+              'Stopped at the hard budget limit — raise the limit under Budget to continue.',
+              true
+            );
+            return;
+          }
         }
       }
 
@@ -1315,6 +1521,7 @@ export function streamMockRun(
     },
     stop: killRun,
     isWaitingApproval: () => parkedAt !== null,
+    isWaitingBudget: () => gatingAt !== null,
   };
   return handle;
 }

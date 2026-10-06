@@ -428,10 +428,10 @@ export function summaryFromRun(run: Run, prev?: RunSummary): RunSummary {
     tokensIn: run.tokensIn,
     tokensOut: run.tokensOut,
     costUsd: run.costUsd,
-    errorSummary: prev?.errorSummary,
+    errorSummary: run.errorSummary ?? prev?.errorSummary,
     surface: prev?.surface ?? kind,
     archived: prev?.archived,
-    killedBy: prev?.killedBy,
+    killedBy: run.killedBy ?? prev?.killedBy,
   };
 }
 

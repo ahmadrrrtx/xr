@@ -26,6 +26,21 @@ export interface MessageMetadata {
   segments?: Array<{ type: 'text'; text: string } | { type: 'tool'; index: number }>;
   status?: 'queued' | 'failed' | 'error';
   attachments?: Array<{ name: string; size: number }>;
+  /** Phase 13: what the budget governor did to this turn. */
+  budget?: BudgetNote;
+}
+
+/** Phase 13: inline budget outcome rendered with the assistant turn. */
+export interface BudgetNote {
+  kind: 'blocked' | 'downshifted' | 'cutoff' | 'charged';
+  /** Governor code (`month`, `per-request`, `paused`, …) for the icon/CTA. */
+  code?: string;
+  reason?: string;
+  from?: string;
+  to?: string;
+  why?: string;
+  /** What this turn cost (USD), once recorded. */
+  costUsd?: number;
 }
 
 export interface ChatMessage {
