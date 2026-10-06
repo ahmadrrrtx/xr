@@ -292,6 +292,15 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
   "voice.barge": { summary: "Barge-in: cancel current TTS (and flagged run), return to listening.", tag: "voice", stability: "experimental" },
   "voice.played": { summary: "Shell reports TTS playback finished; session returns to listening.", tag: "voice", stability: "experimental" },
   "voice.say": { summary: "Make the assistant speak a line through the offline TTS pipeline.", tag: "voice", stability: "experimental" },
+  "voice.models": { summary: "Phase 15: STT model catalogue (offline/download, local binaries, cloud) with install state and sizes.", tag: "voice", stability: "experimental" },
+  "voice.voices": { summary: "Phase 15: TTS voice catalogue (Piper offline voices + cloud) with install state and sizes.", tag: "voice", stability: "experimental" },
+  "voice.settings.get": { summary: "Phase 15: effective voice settings (engine config `voice` block).", tag: "voice", stability: "experimental" },
+  "voice.settings.set": { summary: "Phase 15: patch voice settings (validated, clamped); applies live to the session.", tag: "voice", stability: "experimental" },
+  "voice.download": { summary: "Phase 15: start a model download (component+id, or the first-run bundle); progress streams on /events.", tag: "voice", stability: "experimental" },
+  "voice.download.cancel": { summary: "Phase 15: cancel the running model download (partial files resume on retry).", tag: "voice", stability: "experimental" },
+  "voice.models.clear": { summary: "Phase 15: delete every downloaded voice model and the extracted runtime.", tag: "voice", stability: "experimental" },
+  "voice.test_tts": { summary: "Phase 15: synthesize a sample (voice/speed override) and return WAV bytes without touching the session.", tag: "voice", stability: "experimental" },
+  "voice.transcribe": { summary: "Phase 15: transcribe one pcm16 utterance directly (settings screen 'Test transcription').", tag: "voice", stability: "experimental" },
 
   // ── budget ────────────────────────────────────────────────────────────────
   "budget.get": { summary: "Budget caps, current usage, and remaining headroom.", tag: "budget", stability: "stable" },

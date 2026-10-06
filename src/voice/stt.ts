@@ -14,6 +14,7 @@ import { commandExists, runCommand } from "../util/process.ts";
 import { mkdtempPath, readText, removePath, writeBytes } from "../util/fs-async.ts";
 import { voiceIoLimit } from "../util/concurrency.ts";
 import { loadNativeVoice } from "./native.ts";
+import { getSecretSyncCached } from "../security/secrets.ts";
 
 export interface SttOptions {
   backend?: VoiceSttBackend | "local";
@@ -32,6 +33,9 @@ export interface SttResult {
   backend: string;
   language?: string;
   confidence?: number;
+  /** Phase 15 · cloud only: estimated USD + billed seconds (local = absent). */
+  estimatedUsd?: number;
+  audioSeconds?: number;
 }
 
 function sherpaSttAvailable(): boolean {
@@ -208,7 +212,15 @@ export class SpeechToText {
         return { ok: false, text: "", backend, detail: `HTTP ${res.status}${txt ? ` ${txt.slice(0, 160)}` : ""}` };
       }
       const json: any = await res.json();
-      return { ok: true, text: String(json.text ?? "").trim(), backend, language: json.language };
+      const { estimateSttUsd } = await import("./transcript.ts");
+      const seconds = Math.max(0, (audio.length - 44) / 32000); // pcm16 mono 16 kHz
+      return {
+        ok: true,
+        text: String(json.text ?? "").trim(),
+        backend,
+        language: json.language,
+        ...(backend === "groq" || backend === "openai" ? { estimatedUsd: estimateSttUsd(backend, seconds), audioSeconds: seconds } : {}),
+      };
     } catch (e) {
       return { ok: false, text: "", backend, detail: (e as Error).message };
     }
@@ -269,6 +281,12 @@ export class SpeechToText {
 
   private apiKeyFor(backend: VoiceSttBackend): string {
     const env = this.apiKeyEnv ?? (backend === "groq" ? "GROQ_API_KEY" : "OPENAI_API_KEY");
-    return process.env[env] ?? "";
+    if (process.env[env]) return process.env[env] ?? "";
+    // Phase 15 · keys the desktop stored through the secrets backend count too.
+    try {
+      return getSecretSyncCached(env) ?? "";
+    } catch {
+      return "";
+    }
   }
 }

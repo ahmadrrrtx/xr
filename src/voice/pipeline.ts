@@ -30,6 +30,14 @@ export interface VoiceDeps {
   onText?: (entry: { role: "user" | "assistant" | "system"; text: string }) => void;
   /** Phase 4 · avatar state machine: planning before the run, tool on each tool_call. */
   onPhase?: (phase: "planning" | "tool") => void;
+  /**
+   * Phase 15 · approval override. The daemon session injects the DURABLE
+   * approval store (surface "voice") so a spoken confirm/cancel, the desktop
+   * buttons or the TTL decide — without it the CLI mic approver is used.
+   */
+  approve?: (req: ApprovalRequest) => Promise<boolean>;
+  /** Phase 15 · tts failures surface as events instead of silence. */
+  onTtsResult?: (r: { ok: boolean; engine: string; detail?: string; hasAudio: boolean; estimatedUsd?: number }) => void;
 }
 
 export class VoicePipeline {
@@ -67,6 +75,7 @@ export class VoicePipeline {
     appendTranscript({ at: new Date().toISOString(), role: "assistant", text: trimmed, mode: this.settings.mode, ttsBackend: this.settings.ttsBackend }, this.settings);
     if (this.muted || this.settings.ttsBackend === "disabled") return trimmed;
     const r = await this.deps.tts.speak(trimmed);
+    this.deps.onTtsResult?.({ ok: r.ok, engine: r.engine, detail: r.detail, hasAudio: Boolean(r.audio), estimatedUsd: r.estimatedUsd });
     if (r.ok && r.audio && this.deps.play) {
       this.speaking = this.deps.play(r.audio);
       this.speaking.done?.finally(() => { if (this.speaking) this.speaking = null; });
@@ -175,7 +184,7 @@ export class VoicePipeline {
       modelId: model,
       cwd: process.cwd(),
       say: () => {},
-      approve: this.voiceApprover(),
+      approve: this.deps.approve ?? this.voiceApprover(),
       signal: this.runAbort.signal,
       onStreamEvent: (ev) => {
         if (ev.type === "tool_call") this.deps.onPhase?.("tool");

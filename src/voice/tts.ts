@@ -25,14 +25,21 @@ export interface TtsOptions {
   systemVoice?: string;
   persona?: VoicePersona;
   fetchFn?: typeof fetch;
+  /** Phase 15 · 0.7–1.3 (Piper native speed; OpenAI `speed`). */
+  speed?: number;
+  /** Phase 15 · cloud TTS needs an explicit opt-in (settings.allowCloudTts). */
+  allowCloud?: boolean;
 }
 
 export interface TtsResult {
   ok: boolean;
   audio: Uint8Array | null;
   spokenText: string;
-  engine: "http" | "piper" | "kokoro-cli" | "system" | "say" | "espeak" | "powershell" | "sherpa" | "none";
+  engine: "http" | "piper" | "kokoro-cli" | "system" | "say" | "espeak" | "powershell" | "sherpa" | "openai" | "none";
   detail?: string;
+  sampleRate?: number;
+  /** Phase 15 · cloud only: estimated USD for this utterance (local = absent). */
+  estimatedUsd?: number;
 }
 
 export function shapeForPersona(text: string, persona: VoicePersona): string {
@@ -53,6 +60,8 @@ export function ttsFromSettings(settings: VoiceSettings, fetchFn?: typeof fetch)
     systemVoice: settings.ttsVoice === "default" ? undefined : settings.ttsVoice,
     persona: settings.ttsPersona,
     fetchFn,
+    speed: settings.ttsSpeed,
+    allowCloud: settings.allowCloudTts,
   });
 }
 
@@ -63,6 +72,8 @@ export class TextToSpeech {
   private systemVoice: string;
   private persona: VoicePersona;
   private injectedFetch?: typeof fetch;
+  private speed: number;
+  private allowCloud: boolean;
   private engineCache: { engine: VoiceTtsBackend; available: boolean; detail: string; at: number } | null = null;
 
   constructor(opts: TtsOptions = {}) {
@@ -72,6 +83,13 @@ export class TextToSpeech {
     this.systemVoice = opts.systemVoice ?? (this.voice === "default" ? "" : this.voice);
     this.persona = opts.persona ?? "calm";
     this.injectedFetch = opts.fetchFn;
+    this.speed = Math.min(1.3, Math.max(0.7, opts.speed ?? 1));
+    this.allowCloud = opts.allowCloud ?? false;
+  }
+
+  /** Phase 15 · live speed changes from the settings screen (no re-probe). */
+  setSpeed(speed: number): void {
+    this.speed = Math.min(1.3, Math.max(0.7, speed || 1));
   }
 
   setPersona(p: VoicePersona): void {
@@ -102,11 +120,12 @@ export class TextToSpeech {
 
       if (selected.engine === "http") return this.speakHttp(spokenText);
       if (selected.engine === "sherpa") {
-        const native = loadNativeVoice();
-        const out = native.handles?.speak(spokenText) ?? null;
+        const native = loadNativeVoice(false, this.voice === "default" ? undefined : this.voice);
+        const out = native.handles?.speak(spokenText, this.speed) ?? null;
         if (!out) return { ok: false, audio: null, spokenText, engine: "none", detail: native.handles?.ttsDetail ?? "offline TTS unavailable" };
         return { ok: true, audio: out.wav, spokenText, engine: "sherpa", sampleRate: out.sampleRate };
       }
+      if (selected.engine === "openai") return this.speakOpenAi(spokenText);
       if (selected.engine === "piper") return this.speakPiper(spokenText);
       if (selected.engine === "kokoro-cli") return this.speakKokoroCli(spokenText);
       if (selected.engine === "say" || selected.engine === "espeak" || selected.engine === "powershell" || selected.engine === "system") {
@@ -130,10 +149,15 @@ export class TextToSpeech {
     } else if (this.engine === "http") {
       selected = { engine: "http", available: true, detail: `HTTP TTS at ${this.baseUrl}` };
     } else if (this.engine === "sherpa") {
-      const native = loadNativeVoice();
+      const native = loadNativeVoice(false, this.voice === "default" ? undefined : this.voice);
       const ok = Boolean(native.ok && native.handles && native.handles.ttsDetail.startsWith("sherpa-onnx piper"));
-      selected = { engine: "sherpa", available: ok, detail: ok ? (native.handles?.ttsDetail ?? "sherpa-onnx piper offline") : native.detail };
-    } else if (this.engine === "auto" && loadNativeVoice().ok && loadNativeVoice().handles?.ttsDetail.startsWith("sherpa-onnx piper")) {
+      selected = { engine: "sherpa", available: ok, detail: ok ? (native.handles?.ttsDetail ?? "sherpa-onnx piper offline") : (native.handles?.ttsDetail ?? native.detail) };
+    } else if (this.engine === "openai") {
+      const key = process.env.OPENAI_API_KEY ?? "";
+      selected = !this.allowCloud
+        ? { engine: "openai", available: false, detail: "cloud TTS is not enabled; allow it in voice settings first" }
+        : { engine: "openai", available: !!key, detail: key ? "OpenAI tts-1 (cloud, billed per character)" : "missing OPENAI_API_KEY" };
+    } else if (this.engine === "auto" && loadNativeVoice(false, this.voice === "default" ? undefined : this.voice).handles?.ttsDetail.startsWith("sherpa-onnx piper")) {
       selected = { engine: "sherpa", available: true, detail: loadNativeVoice().handles?.ttsDetail ?? "sherpa-onnx piper offline" };
     } else if (this.engine === "piper") {
       const ok = await commandExists("piper");
@@ -186,6 +210,25 @@ export class TextToSpeech {
       return { ok: true, audio: new Uint8Array(await res.arrayBuffer()), spokenText: text, engine: "http" };
     } catch (e) {
       return { ok: false, audio: null, spokenText: text, engine: "http", detail: (e as Error).message };
+    }
+  }
+
+  /** Phase 15 · OpenAI speech endpoint → WAV bytes. Only reachable when the user allowed cloud TTS. */
+  private async speakOpenAi(text: string): Promise<TtsResult> {
+    try {
+      const fetcher = this.injectedFetch ?? fetch;
+      const voice = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"].includes(this.voice) ? this.voice : "alloy";
+      const res = await fetcher("https://api.openai.com/v1/audio/speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY ?? ""}` },
+        body: JSON.stringify({ model: "tts-1", voice, input: text, response_format: "wav", speed: this.speed }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) return { ok: false, audio: null, spokenText: text, engine: "openai", detail: `HTTP ${res.status}` };
+      const { estimateTtsUsd } = await import("./transcript.ts");
+      return { ok: true, audio: new Uint8Array(await res.arrayBuffer()), spokenText: text, engine: "openai", estimatedUsd: estimateTtsUsd(text.length) };
+    } catch (e) {
+      return { ok: false, audio: null, spokenText: text, engine: "openai", detail: (e as Error).message };
     }
   }
 
