@@ -56,6 +56,14 @@ export interface AgentDeps {
   cwd: string;
   /** Extra system guidance for role-scoped or workflow-scoped agents. */
   systemPrompt?: string;
+  /**
+   * Phase 14 — prior conversation turns for a multi-turn chat surface. The
+   * loop starts every run with a fresh transcript (continuity used to exist
+   * only inside one run), so the desktop/dashboard replayed nothing and every
+   * follow-up question lost its context. Bounded on injection (see
+   * HISTORY_MAX_TURNS / HISTORY_MAX_CHARS); the compactor applies on top.
+   */
+  history?: ReadonlyArray<{ role: "user" | "assistant"; content: string }>;
   /** Fine-grained tool scoping for multi-agent workers. */
   tools?: {
     allow?: string[];
@@ -309,13 +317,48 @@ function finalizeTurn(turn: ModelTurn): ModelTurn {
   return turn;
 }
 
+/** Phase 14 — bounds for replayed chat history (newest turns win). */
+const HISTORY_MAX_TURNS = 24;
+const HISTORY_MAX_CHARS = 24_000;
+
+/**
+ * Keep the most recent prior turns that fit the bounds, dropping oldest
+ * first; empty/non-chat roles are ignored. Never includes the current task.
+ */
+export function boundedHistory(
+  history: ReadonlyArray<{ role: string; content: string }> | undefined,
+): Message[] {
+  if (!history?.length) return [];
+  const out: Message[] = [];
+  let chars = 0;
+  for (let i = history.length - 1; i >= 0 && out.length < HISTORY_MAX_TURNS; i--) {
+    const h = history[i]!;
+    if (h.role !== "user" && h.role !== "assistant") continue;
+    const content = typeof h.content === "string" ? h.content : "";
+    if (!content.trim()) continue;
+    if (chars + content.length > HISTORY_MAX_CHARS) break;
+    chars += content.length;
+    out.push({ role: h.role, content });
+  }
+  return out.reverse();
+}
+
 async function runModelTurn(
   provider: Provider,
   messages: Message[],
   tools: Tool[],
   deps: Pick<AgentDeps, "signal" | "onStreamEvent">,
+  /**
+   * Phase 14 — mint `tool_call` ids with the SAME run-scoped scheme the loop
+   * uses for `tool_result` (`tc_<session>_<seq>`), so a surface can pair the
+   * two events by id. They used to differ (`tc_1` vs `tc_s_x_7`), which forced
+   * every consumer to correlate by position.
+   */
+  ids?: { sessionId: string; seqBase: number },
 ): Promise<{ turn: ModelTurn; streamed: boolean }> {
   const sink = deps.onStreamEvent;
+  const toolCallId = (ordinal: number) =>
+    ids ? `tc_${ids.sessionId}_${ids.seqBase + ordinal}` : `tc_${ordinal}`;
   const chatStream = (provider as Provider & { chatStream?: (m: Message[], t: Tool[], o?: { signal?: AbortSignal }) => AsyncGenerator<import("./types.ts").ProviderStreamChunk> }).chatStream;
 
   const caps = provider.capabilities;
@@ -337,7 +380,7 @@ async function runModelTurn(
       );
       if (existing) return;
       toolCalls.push({ tool, args });
-      sink?.({ type: "tool_call", id: `tc_${toolCalls.length}`, tool, args });
+      sink?.({ type: "tool_call", id: toolCallId(toolCalls.length), tool, args });
     };
 
     for await (const chunk of chatStream.call(provider, messages, tools, { signal: deps.signal })) {
@@ -385,7 +428,7 @@ async function runModelTurn(
   const turn = await provider.chat(messages, tools, { signal: deps.signal });
   if (turn.message) sink?.({ type: "token", text: turn.message });
   for (const [i, tc] of (turn.toolCalls ?? []).entries()) {
-    sink?.({ type: "tool_call", id: `tc_${i + 1}`, tool: tc.tool, args: tc.args });
+    sink?.({ type: "tool_call", id: toolCallId(i + 1), tool: tc.tool, args: tc.args });
   }
   if (turn.usage) sink?.({ type: "usage", usage: turn.usage });
   return { turn: finalizeTurn(turn), streamed: false };
@@ -741,6 +784,7 @@ export async function runAgentLoop(
   }
 
   if (!deps.resumeFrom) {
+    for (const turn of boundedHistory(deps.history)) messages.push(turn);
     messages.push({ role: "user", content: task });
   }
   let finalMessage = "";
@@ -871,7 +915,29 @@ export async function runAgentLoop(
       // killed). The provider now also applies a bounded default timeout.
       // Phase 05 — the turn prefers the provider's streaming variant so real
       // token deltas flow to the surface (see runModelTurn).
-      const { turn, streamed } = await runModelTurn(provider, compacted, tools, deps);
+      const turnIds = { sessionId, seqBase: toolCallSeq };
+      let { turn, streamed } = await runModelTurn(provider, compacted, tools, deps, turnIds);
+
+      // ── Phase 14 — empty turn with a tool catalog attached ─────────────────
+      // Small local models (reproduced live with qwen2.5:0.5b on Ollama) often
+      // answer a plain question with a malformed tool call; the runtime discards
+      // the undecodable call and returns an EMPTY completion (24 tokens billed,
+      // zero delivered). In the conversational modes the tools are optional
+      // read-only helpers, so one retry without the catalog is a real recovery,
+      // not a fabrication: the user sees the model's actual words. Agent mode
+      // keeps the honest error — there the tools ARE the task.
+      if (
+        turn.error &&
+        turn.status === "empty" &&
+        tools.length > 0 &&
+        mode !== "agent" &&
+        !deps.signal?.aborted
+      ) {
+        auditStore.audit("turn.empty_retry", { step: stepIdx, reason: "empty turn with tools; retrying without tools" }, sessionId);
+        say(`\x1b[2m▸ retry  (step ${stepIdx + 1}/${maxSteps}) · empty turn — retrying without tools\x1b[0m`);
+        deps.onStreamEvent?.({ type: "status", status: "generating", message: "Empty reply with tools attached — retrying without tools" });
+        ({ turn, streamed } = await runModelTurn(provider, compacted, [], deps, turnIds));
+      }
 
       // ── Phase 1 · F-02/M-02/M-06 — strict turn contract ─────────────────────
       // A turn that is `error` (empty/undecodable, no content and no tool

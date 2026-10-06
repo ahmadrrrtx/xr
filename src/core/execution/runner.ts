@@ -103,6 +103,7 @@ export async function runEnvelope(
     ...(stores.userMemoryStore ? { userMemoryStore: stores.userMemoryStore } : {}),
     cwd: intent.cwd,
     ...(plan.systemPrompt ? { systemPrompt: plan.systemPrompt } : {}),
+    ...(plan.history?.length ? { history: plan.history } : {}),
     say: observation.say,
     approve: policy.approve,
     ...(observation.onOverBudget ? { onOverBudget: observation.onOverBudget } : {}),

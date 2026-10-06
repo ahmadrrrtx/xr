@@ -100,6 +100,8 @@ export function catalogFingerprint(config?: XRConfig): string {
           runtime: (config.localModels as any)?.runtime ?? null,
           selected: (config.localModels as any)?.selected ?? null,
           runtimes: (config.localModels as any)?.runtimes ?? {},
+          // Phase 14 — config-named models are part of the catalog now.
+          installed: ((config.localModels as any)?.installed ?? []).map((r: any) => `${r?.runtime}/${r?.model}`),
         }
       : null,
     providers: config ? (config.providers as Record<string, unknown>) ?? {} : null,
@@ -183,7 +185,63 @@ function buildCatalogUncached(config?: XRConfig): IntelligenceCatalog {
     }
   }
 
+  // Phase 14 — models the CONFIG names but the static preset list does not.
+  //
+  // A locally pulled model (`ollama pull qwen2.5:0.5b`), the model chosen in
+  // the desktop picker (`defaults.model`) or a `models/select`ed local model
+  // used to be invisible here, so `findModel()` fell through to the preset
+  // default and the run silently used a different model than the one the
+  // user pinned — while the `provider_ready` status still named the pinned
+  // one. Each config-named model gets a descriptor cloned from its provider's
+  // default (same declared capabilities as the runtime default; refined by
+  // the model-id heuristics), marked `tags: [..., "config"]` so a surface can
+  // tell a declared preset entry from a user-named one.
+  for (const named of configNamedModels(config)) {
+    if (models.some((m) => m.providerId === named.providerId && m.modelId === named.modelId)) continue;
+    const base =
+      models.find((m) => m.providerId === named.providerId && m.isDefault) ??
+      models.find((m) => m.providerId === named.providerId);
+    if (!base) continue; // unknown provider — nothing credible to clone
+    const preset = presets.get(named.providerId);
+    if (!preset) continue;
+    const cloned = modelsFromPreset(
+      { ...preset, defaultModel: named.modelId, knownModels: [] },
+      credentialAvailable(preset),
+    )[0];
+    if (!cloned) continue;
+    models.push({
+      ...cloned,
+      health: base.health,
+      isDefault: false,
+      tags: [...cloned.tags, "config"],
+    });
+  }
+
   return { providers, models, builtAt: Date.now() };
+}
+
+/** Provider/model pairs the configuration names explicitly (deduplicated). */
+function configNamedModels(config?: XRConfig): Array<{ providerId: string; modelId: string }> {
+  if (!config) return [];
+  const out: Array<{ providerId: string; modelId: string }> = [];
+  const push = (providerId: unknown, modelId: unknown): void => {
+    if (typeof providerId !== "string" || typeof modelId !== "string") return;
+    if (!providerId || !modelId) return;
+    if (out.some((e) => e.providerId === providerId && e.modelId === modelId)) return;
+    out.push({ providerId, modelId });
+  };
+  push(config.defaults?.provider, config.defaults?.model);
+  push(config.defaults?.fallbackProvider, config.defaults?.fallbackModel);
+  const local = config.localModels as
+    | { provider?: string; runtime?: string; selected?: string; installed?: unknown }
+    | undefined;
+  push(local?.provider ?? local?.runtime, local?.selected);
+  if (Array.isArray(local?.installed)) {
+    for (const row of local.installed as Array<{ providerId?: string; runtime?: string; model?: string }>) {
+      push(row?.providerId ?? row?.runtime, row?.model);
+    }
+  }
+  return out;
 }
 
 /**

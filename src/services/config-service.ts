@@ -48,6 +48,25 @@ export class ConfigService implements LifecycleHook {
   }
 
   /**
+   * Phase 14 — re-read the configuration that other writers persisted.
+   *
+   * The daemon routes (`/api/providers/set`, `/api/models/select`,
+   * `/api/budget/set`, `/api/onboarding/provider`) and the CLI write
+   * config.json through `loadConfig()`/`saveConfig()`, which refresh the
+   * process-level cache but never this snapshot. A long-lived kernel (the
+   * daemon's) therefore kept routing on the provider/model it booted with
+   * until a restart — the desktop's model picker had no effect. The executor
+   * calls this before each run; it is a cache hit (no disk read) unless the
+   * file changed, so it is safe on the hot path.
+   */
+  reload(): XRConfig {
+    const { config, warnings } = loadConfig();
+    this.config = config;
+    this.warnings = warnings;
+    return config;
+  }
+
+  /**
    * Get configuration warnings.
    */
   getWarnings(): string[] {

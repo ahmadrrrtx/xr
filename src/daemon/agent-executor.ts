@@ -145,6 +145,9 @@ export function createAgentExecutor(opts: { surface?: SurfaceId } = {}): AgentEx
     opts: AgentExecutorOptions = {},
   ): Promise<AgentResult> {
     const app = await ensureApp();
+    // Phase 14 — pick up provider/model/budget changes other writers saved
+    // (desktop model picker, dashboard, CLI) without an engine restart.
+    app.registry.resolve(Tokens.Config).reload();
     const agent = app.registry.resolve(Tokens.Agent);
     const runId = opts.runId ?? `dash_${randomUUID().slice(0, 8)}`;
 
@@ -170,7 +173,9 @@ export function createAgentExecutor(opts: { surface?: SurfaceId } = {}): AgentEx
 
   async function preflight(): Promise<void> {
     const app = await ensureApp();
-    const config = app.registry.resolve(Tokens.Config).get();
+    // Phase 14 — same reason as executeTask: the pre-flight must probe the
+    // provider the user just selected, not the one the kernel booted with.
+    const config = app.registry.resolve(Tokens.Config).reload();
     const timeoutDetail = `health check timed out after ${HEALTH_BOUND_MS} ms`;
     const timeoutReport = (id: string) => ({
       id,

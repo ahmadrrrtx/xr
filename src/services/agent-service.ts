@@ -62,6 +62,8 @@ export interface AgentRunOverrides {
   dryRun?: boolean;
   json?: boolean;
   systemPrompt?: string;
+  /** Phase 14 — prior chat turns (user/assistant) for multi-turn surfaces. */
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
   toolsAllow?: string[];
   toolsDeny?: string[];
   say?: (line: string) => void;
@@ -600,6 +602,7 @@ export class AgentService implements LifecycleHook {
         modelId: selectedModel,
         maxSteps: overrides.maxSteps ?? 12,
         ...(scopedSystemPrompt ? { systemPrompt: scopedSystemPrompt } : {}),
+        ...(overrides.history?.length ? { history: overrides.history } : {}),
         ...(routingDecision ? { routingDecision } : {}),
       },
       policy: {
