@@ -94,6 +94,11 @@ describe("voice model catalogue", () => {
     expect(bundle).toBe(95_930_951);
     expect(TTS_VOICES.map((v) => v.label)).toEqual(["Ahmad", "Nova", "Atlas", "Sage"]);
     expect(TTS_VOICES.every((v) => v.gender && v.accent)).toBe(true);
+    // Each voice's .onnx.json has its own size on Hugging Face (4885/4882/4888/4895):
+    // a copy-pasted size fails the integrity check and strands a .part on retry.
+    const jsonBytes = TTS_VOICES.map((v) => v.files.find((f) => f.path.endsWith(".onnx.json"))?.bytes);
+    expect(jsonBytes).toEqual([4_885, 4_882, 4_888, 4_895]);
+    expect(TTS_VOICES.map((v) => entryBytes(v))).toEqual([63_207_231, 63_207_228, 63_207_239, 63_207_246]);
   });
 
   test("first-run plan lists only missing entries and empties once files are complete", () => {

@@ -135,7 +135,12 @@ const STATE_TONE: Record<VoiceSessionState, { icon: typeof Mic; tone: string }> 
 };
 
 export function StateChip({ state, className, dark }: { state: VoiceSessionState; className?: string; dark?: boolean }) {
-  const { icon: Icon, tone } = STATE_TONE[state];
+  const status = useVoiceStore((s) => s.status);
+  const statusError = useVoiceStore((s) => s.statusError);
+  // "Ready" is a promise — only make it when the engine can actually listen.
+  const blocked = state === 'idle' && (statusError === 'engine-down' || (status !== null && !status.available));
+  const { icon: Icon, tone } = blocked ? STATE_TONE.offline : STATE_TONE[state];
+  const label = blocked ? (statusError === 'engine-down' ? 'Engine offline' : 'Models needed') : STATE_COPY[state];
   const spin = state === 'thinking' || state === 'planning' || state === 'working';
   return (
     <span
@@ -149,7 +154,7 @@ export function StateChip({ state, className, dark }: { state: VoiceSessionState
       )}
     >
       <Icon size={13} strokeWidth={1.75} aria-hidden="true" className={cn(spin && 'motion-safe:animate-spin')} />
-      <span aria-live="polite">{STATE_COPY[state]}</span>
+      <span aria-live="polite">{label}</span>
     </span>
   );
 }
@@ -197,6 +202,7 @@ export function ModelDownloadCard({ className, compact }: { className?: string; 
   const err = useVoiceStore((s) => s.downloadError);
   const startDownload = useVoiceStore((s) => s.startDownload);
   const cancelDownload = useVoiceStore((s) => s.cancelDownload);
+  const dismissDownload = useVoiceStore((s) => s.dismissDownload);
   const applySettings = useVoiceStore((s) => s.applySettings);
   const statusError = useVoiceStore((s) => s.statusError);
 
@@ -209,23 +215,32 @@ export function ModelDownloadCard({ className, compact }: { className?: string; 
   }
   if (!status) return null;
   const pending = status.firstRun.pending;
-  if (pending.length === 0 && !busy) return null;
+  const running = busy && download && (download.status === 'downloading' || download.status === 'extracting');
+  const failed = download?.status === 'error' || download?.status === 'cancelled' || !!err;
+  // A stopped download outside the first-run bundle (an extra voice) stays
+  // visible with its reason and a retry — never a card that silently vanishes.
+  const extra = pending.length === 0;
+  if (extra && !busy && !failed) return null;
 
   const total = download?.bundleTotal ?? status.firstRun.bytes;
   const received = download?.bundleReceived ?? 0;
   const pct = total > 0 ? Math.min(100, Math.round((received / total) * 100)) : 0;
-  const running = busy && download && (download.status === 'downloading' || download.status === 'extracting');
-  const failed = download?.status === 'error' || download?.status === 'cancelled' || !!err;
+  const retryTarget = download?.component && download.id ? { component: download.component, id: download.id } : { firstRun: true };
+  const title = running ? 'Downloading voice models' : extra && failed ? 'Voice download stopped' : 'Voice models need to be downloaded';
 
   return (
     <Card
       className={className}
-      tone="info"
+      tone={!running && failed ? 'warn' : 'info'}
       icon={Download}
-      title={running ? 'Downloading voice models' : 'Voice models need to be downloaded'}
+      title={title}
       testId="voice-download-card"
     >
-      {!running ? (
+      {!running && extra ? (
+        <p>
+          {download?.id ?? 'The download'} did not finish. Partial files stay on disk, so retrying picks up where it stopped.
+        </p>
+      ) : !running ? (
         <p>
           About <strong className="text-text-primary">{formatBytes(status.firstRun.bytes)}</strong> once, kept on this machine, so speech recognition and
           the voice work offline. {pending.map((p) => p.name).join(' · ')}.
@@ -257,12 +272,17 @@ export function ModelDownloadCard({ className, compact }: { className?: string; 
             <X size={14} aria-hidden="true" /> Cancel
           </Button>
         ) : (
-          <Button size="sm" onClick={() => void startDownload({ firstRun: true })} data-testid="voice-download-start">
+          <Button size="sm" onClick={() => void startDownload(retryTarget)} data-testid="voice-download-start">
             {failed ? <RefreshCw size={14} aria-hidden="true" /> : <Download size={14} aria-hidden="true" />}
             {failed ? 'Retry' : `Download ${formatBytes(status.firstRun.bytes)}`}
           </Button>
         )}
-        {!running ? (
+        {!running && failed ? (
+          <Button size="sm" variant="ghost" onClick={dismissDownload} data-testid="voice-download-dismiss">
+            Dismiss
+          </Button>
+        ) : null}
+        {!running && !extra ? (
           <Button
             size="sm"
             variant="ghost"
@@ -275,7 +295,7 @@ export function ModelDownloadCard({ className, compact }: { className?: string; 
           </Button>
         ) : null}
       </div>
-      {!running ? (
+      {!running && !extra ? (
         <p className="text-text-tertiary mt-2 text-[11px]">
           Cloud voice sends your audio to a provider, needs network and keys, and is metered (shown as ≈$/hr).
         </p>

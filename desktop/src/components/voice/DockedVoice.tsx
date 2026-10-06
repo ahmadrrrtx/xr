@@ -29,28 +29,51 @@ export function DockedVoice() {
 
   // Screens with a bottom bar (Chat's composer) mark it `data-voice-dock-anchor`;
   // the pill lifts above it instead of covering its controls.
-  const [lift, setLift] = useState(0);
+  // Lift above the anchor and centre over its column (Chat's composer sits
+  // right of the conversation list, so the viewport centre is off).
+  const [dock, setDock] = useState<{ lift: number; left: number; right: number } | null>(null);
   useEffect(() => {
     if (!shown) return;
     let ro: ResizeObserver | null = null;
-    const timer = setTimeout(() => {
+    let observed: HTMLElement | null = null;
+    let raf = 0;
+    // Screens are lazy-loaded and Chat re-mounts its composer when the
+    // session changes, so the anchor is re-resolved on every DOM change
+    // (rAF-coalesced) instead of being looked up once.
+    const sync = (): void => {
       const anchor = document.querySelector<HTMLElement>('[data-voice-dock-anchor]');
-      if (!anchor) {
-        setLift(0);
-        return;
+      if (anchor) {
+        const r = anchor.getBoundingClientRect();
+        setDock({ lift: anchor.offsetHeight, left: Math.round(r.left), right: Math.round(window.innerWidth - r.right) });
+      } else {
+        setDock(null);
       }
-      const measure = (): void => setLift(anchor.offsetHeight);
-      measure();
-      if (typeof ResizeObserver !== 'undefined') {
-        ro = new ResizeObserver(measure);
-        ro.observe(anchor);
+      if (anchor !== observed && typeof ResizeObserver !== 'undefined') {
+        ro?.disconnect();
+        ro = null;
+        observed = anchor;
+        if (anchor) {
+          ro = new ResizeObserver(() => schedule());
+          ro.observe(anchor);
+        }
       }
-    }, 60);
-    return () => {
-      clearTimeout(timer);
-      ro?.disconnect();
     };
-  }, [shown, location.pathname]);
+    const schedule = (): void => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        sync();
+      });
+    };
+    const mo = new MutationObserver(schedule);
+    mo.observe(document.body, { childList: true, subtree: true });
+    schedule();
+    return () => {
+      mo.disconnect();
+      ro?.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [shown]);
 
   if (!shown) return null;
 
@@ -65,8 +88,8 @@ export function DockedVoice() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4"
-      style={{ bottom: lift > 0 ? lift + 4 : 20 }}
+      className="pointer-events-none fixed z-40 flex justify-center px-4"
+      style={dock ? { bottom: dock.lift + 4, left: dock.left, right: dock.right } : { bottom: 20, left: 0, right: 0 }}
       data-testid="voice-docked"
     >
       <div

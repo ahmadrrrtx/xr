@@ -101,6 +101,8 @@ interface VoiceStoreState {
   applySettings: (patch: VoiceSettingsPatch) => Promise<void>;
   startDownload: (body: { component?: 'runtime' | 'stt' | 'tts'; id?: string; firstRun?: boolean }) => Promise<boolean>;
   cancelDownload: () => Promise<void>;
+  /** Drop a finished/stopped download from view (the files stay for resume). */
+  dismissDownload: () => void;
   clearModels: () => Promise<void>;
   setDevices: (devices: VoiceDevice[]) => void;
   setMicPermission: (p: MicPermission) => void;
@@ -263,6 +265,8 @@ export const useVoiceStore = create<VoiceStoreState>((set, get) => ({
     }
     set({ downloadBusy: false });
   },
+
+  dismissDownload: () => set({ download: null, downloadBusy: false, downloadError: null }),
 
   clearModels: async () => {
     await voiceApi.clearModels();

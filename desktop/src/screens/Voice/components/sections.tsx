@@ -155,7 +155,7 @@ export function MicrophoneSection() {
                 key={i}
                 className={cn(
                   'w-[5px] rounded-sm transition-colors duration-75',
-                  i < lit ? (level.clipped && i >= segments - 3 ? 'bg-danger' : i >= segments - 4 ? 'bg-warning' : 'bg-accent') : 'bg-bg-raised',
+                  i < lit ? (level.clipped && i >= segments - 3 ? 'bg-danger' : i >= segments - 4 ? 'bg-warning' : 'bg-accent') : 'bg-border-default',
                 )}
                 style={{ height: `${6 + (i / segments) * 14}px` }}
               />

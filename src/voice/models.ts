@@ -119,12 +119,15 @@ function piperVoice(id: string, model: string, label: string, gender: "male" | "
 /**
  * The four named voices. There is no Pakistani-English Piper voice; "Ahmad"
  * is the clearest neutral US-English voice available and is labelled so.
+ * Byte counts are the Hugging Face Content-Length of each file (the
+ * `.onnx.json` differs per voice — a wrong size here fails the download's
+ * integrity check and strands a `.part`, so verify before editing).
  */
 export const TTS_VOICES: readonly VoiceModelEntry[] = [
   piperVoice("piper-lessac", "en_US-lessac-medium", "Ahmad", "male", "US English", 63_201_425, 921, 4_885),
-  piperVoice("piper-amy", "en_US-amy-medium", "Nova", "female", "US English", 63_201_425, 921, 4_885),
-  piperVoice("piper-alan", "en_GB-alan-medium", "Atlas", "male", "British English", 63_201_430, 921, 4_885),
-  piperVoice("piper-jenny", "en_GB-jenny_dioco-medium", "Sage", "female", "British English", 63_201_430, 921, 4_885),
+  piperVoice("piper-amy", "en_US-amy-medium", "Nova", "female", "US English", 63_201_425, 921, 4_882),
+  piperVoice("piper-alan", "en_GB-alan-medium", "Atlas", "male", "British English", 63_201_430, 921, 4_888),
+  piperVoice("piper-jenny", "en_GB-jenny_dioco-medium", "Sage", "female", "British English", 63_201_430, 921, 4_895),
 ];
 export const DEFAULT_STT_ID = "sherpa-small-en";
 export const DEFAULT_TTS_VOICE = "piper-lessac";
