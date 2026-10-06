@@ -17,6 +17,7 @@ import {
   Braces,
   CircleDot,
   Clock,
+  Cpu,
   FileText,
   LayoutGrid,
   MessageCircle,
@@ -39,6 +40,7 @@ import {
 } from 'lucide-react';
 
 import { AVATAR_STATES } from '@/components/brand/types';
+import { OPEN_MODEL_PICKER_EVENT } from '@/components/layout/ModelChip';
 import { newApprovalId, type PendingDecision } from '@/lib/approvalCore';
 import { requestApproval } from '@/lib/approvalEvents';
 import {
@@ -141,6 +143,31 @@ export function buildPaletteCommands(
       shortcut: sc('⌘N', 'Ctrl+N'),
       keywords: ['start', 'conversation', 'compose'],
       action: newChat,
+    },
+    {
+      id: 'open-chat',
+      group: 'commands',
+      title: 'Open Chat',
+      icon: MessageSquare,
+      shortcut: sc('⌘⇧O', 'Ctrl+Shift+O'),
+      keywords: ['conversation', 'thread', 'go to chat'],
+      action: () => openRoute('/chat'),
+    },
+    {
+      id: 'switch-model',
+      group: 'commands',
+      title: 'Switch model…',
+      icon: Cpu,
+      keywords: ['model', 'provider', 'ollama', 'llm', 'picker'],
+      action: () => {
+        if (ctx.isHud) {
+          void hudRunMainCommand('switch-model');
+          return;
+        }
+        // The topbar chip hosts the live picker on every screen; open it
+        // after the palette has closed so focus lands inside the popover.
+        window.setTimeout(() => window.dispatchEvent(new Event(OPEN_MODEL_PICKER_EVENT)), 50);
+      },
     },
     {
       id: 'toggle-sidebar',

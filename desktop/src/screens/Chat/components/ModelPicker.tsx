@@ -17,6 +17,7 @@ import { fmtUsd } from '@/budget/core';
 import { modelInfo, type ModelInfo } from '@/budget/models';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { chatDb } from '@/lib/chat-db';
+import { openUrl } from '@/lib/settingsApi';
 import { useBudgetStore } from '@/stores/budgetStore';
 import { engineModelOptions, useEngineStore, type EngineModelOption } from '@/stores/engineStore';
 import { resolveDefaultModel, setDefaultModel, useSessionsStore } from '@/stores/sessionsStore';
@@ -35,10 +36,17 @@ function priceLine(m: ModelInfo, o: EngineModelOption): string {
 export function ModelPicker({
   sessionId,
   trigger,
+  openOnEvent,
+  side = 'top',
+  align = 'start',
 }: {
   sessionId: string | null;
   /** Optional custom trigger (topbar chip). */
   trigger?: (label: string) => React.ReactNode;
+  /** Window event name that opens this instance (palette "Switch model…"). */
+  openOnEvent?: string;
+  side?: 'top' | 'bottom';
+  align?: 'start' | 'end';
 }) {
   const navigate = useNavigate();
   const sessions = useSessionsStore();
@@ -56,6 +64,13 @@ export function ModelPicker({
   useEffect(() => {
     if (open) void useEngineStore.getState().loadCatalog();
   }, [open]);
+
+  useEffect(() => {
+    if (!openOnEvent) return;
+    const onOpen = (): void => setOpen(true);
+    window.addEventListener(openOnEvent, onOpen);
+    return () => window.removeEventListener(openOnEvent, onOpen);
+  }, [openOnEvent]);
 
   const pick = async (o: EngineModelOption) => {
     if (!o.available) {
@@ -180,8 +195,8 @@ export function ModelPicker({
         )}
       </PopoverTrigger>
       <PopoverContent
-        align="start"
-        side="top"
+        align={align}
+        side={side}
         className="w-[320px] border-border-subtle bg-bg-ink max-h-[min(480px,70vh)] overflow-y-auto p-1"
       >
         {empty ? (
@@ -189,9 +204,33 @@ export function ModelPicker({
             {engineStatus === 'up'
               ? catalogError
                 ? `Could not load models: ${catalogError}`
-                : 'No models available. Install Ollama or add an API key.'
+                : 'No models available. Install Ollama for local models, or add an API key.'
               : 'Engine not running — the model list comes from the engine.'}
             <div className="text-text-tertiary mt-1 text-[11.5px]">Current: {label}</div>
+            {engineStatus === 'up' && !catalogError ? (
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    void openUrl('https://ollama.com/download');
+                  }}
+                  className="border-border-subtle text-text-primary hover:bg-bg-raised rounded-md border px-2 py-1 text-[12px]"
+                >
+                  Install Ollama ↗
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    navigate('/budget?tab=models');
+                  }}
+                  className="border-border-subtle text-text-primary hover:bg-bg-raised rounded-md border px-2 py-1 text-[12px]"
+                >
+                  Add API key
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : (
           <>

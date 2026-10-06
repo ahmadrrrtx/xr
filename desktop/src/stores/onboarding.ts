@@ -182,6 +182,23 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
     });
     await writeSettingJSON(INTEGRATIONS_KEY, s.desiredIntegrations);
     applyTheme(s.theme);
+    // Phase 14: the model choice reaches the engine, which is what actually
+    // answers. Best effort — when the engine is not up yet the desktop
+    // default still applies and Settings → Models can finish the job.
+    try {
+      const { useEngineStore } = await import('@/stores/engineStore');
+      if (useEngineStore.getState().status === 'up') {
+        const { saveProviderKeyToEngine, setEngineDefault, inferProviderFromKey } = await import('@/engine/providers');
+        if (s.modelChoice.source === 'local') {
+          await setEngineDefault('ollama', s.modelChoice.model);
+        } else if (s.modelChoice.source === 'cloud' && s.modelChoice.apiKey?.trim()) {
+          const providerId = inferProviderFromKey(s.modelChoice.apiKey);
+          if (providerId) await saveProviderKeyToEngine({ providerId, apiKey: s.modelChoice.apiKey.trim(), setDefault: true, probe: false });
+        }
+      }
+    } catch {
+      /* engine not reachable — Settings → Models & Providers can set it later */
+    }
     set({ complete: true });
   },
 }));

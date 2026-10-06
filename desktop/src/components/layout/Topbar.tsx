@@ -10,6 +10,7 @@ import { useLocation } from 'react-router-dom';
 
 import { ActivityDot } from '@/components/layout/ActivityDot';
 import { MicButton } from '@/components/layout/MicButton';
+import { ModelChip } from '@/components/layout/ModelChip';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import { UserMenu } from '@/components/layout/UserMenu';
 import { WalletWidget } from '@/components/layout/WalletWidget';
@@ -164,6 +165,7 @@ export function Topbar() {
           controlsOnRight && 'mr-[138px]'
         )}
       >
+        <ModelChip />
         <WalletWidget />
         <MicButton />
         <ActivityDot />

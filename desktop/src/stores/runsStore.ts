@@ -41,6 +41,7 @@ import {
 } from '@/runs/core';
 import { seedMockHistory, seedStress } from '@/runs/seed';
 import { useEngineStore } from '@/stores/engineStore';
+import { startDemoRun } from '@/brain/demo';
 import { isEngineRunId, useBrainStore } from '@/stores/brainStore';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -606,8 +607,10 @@ export const useRunsStore = create<RunsState>()((set, get) => {
     },
 
     startDemoRun: (title) => {
-      const id = useBrainStore.getState().startMockRun(title);
-      return id;
+      // Real engine run when a provider answers (same path as Brain's button);
+      // a titled request is always the local mock (used by seeds/tests).
+      if (title) return useBrainStore.getState().startMockRun(title);
+      return startDemoRun().id;
     },
 
     exportCsv: async () => {

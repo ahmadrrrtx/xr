@@ -96,6 +96,22 @@ describe("B-1 — onboarding provider (key save, fail-closed)", () => {
     expect(await getSecretAsync("OPENAI_API_KEY")).toBe("sk-super-secret");
   });
 
+  test("setDefault:false stores the key without switching the default provider (desktop key save)", async () => {
+    const { h } = fresh();
+    const before = loadConfig().config.defaults;
+    const res = await h(post("/api/v1/onboarding/provider", { providerId: "groq", apiKey: "gsk_desktop_test", probe: false, setDefault: false }));
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.setDefault).toBe(false);
+    expect(body.model).toBeNull();
+    expect(JSON.stringify(body)).not.toContain("gsk_desktop_test");
+    const after = loadConfig().config.defaults;
+    expect(after.provider).toBe(before.provider);
+    expect(after.model).toBe(before.model);
+    expect(await getSecretAsync("GROQ_API_KEY")).toBe("gsk_desktop_test");
+  });
+
   test("the save is recorded in the audit log", async () => {
     const { store, h } = fresh();
     await h(post("/api/v1/onboarding/provider", { providerId: "openai", apiKey: "sk-audited", probe: false }));

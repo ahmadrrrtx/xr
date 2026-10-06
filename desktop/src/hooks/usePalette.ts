@@ -17,6 +17,7 @@ import { isTauri } from '@/lib/tauri';
 import { hudClose } from '@/lib/hud';
 import { usePaletteStore } from '@/stores/paletteStore';
 import { useSessionsStore } from '@/stores/sessionsStore';
+import { OPEN_MODEL_PICKER_EVENT } from '@/components/layout/ModelChip';
 import { useSidebarStore } from '@/stores/sidebar';
 import { useThemeStore, type ThemeId } from '@/stores/theme';
 
@@ -104,6 +105,8 @@ export function usePaletteIpc(isHud: boolean, navigate?: (route: string) => void
           await listen<string>('palette:execute-command', (event) => {
             if (event.payload === 'toggle-sidebar') {
               useSidebarStore.getState().toggle();
+            } else if (event.payload === 'switch-model') {
+              window.dispatchEvent(new Event(OPEN_MODEL_PICKER_EVENT));
             }
           })
         );

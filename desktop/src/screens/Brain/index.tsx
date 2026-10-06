@@ -29,6 +29,7 @@ import {
 import { toast } from 'sonner';
 import { useListRef } from 'react-window';
 
+import { startDemoRun } from '@/brain/demo';
 import { modelInfo } from '@/budget/models';
 import { useEngineStore } from '@/stores/engineStore';
 import { resolveDefaultModel } from '@/stores/sessionsStore';
@@ -165,8 +166,6 @@ function BrainIndex() {
   const navigate = useNavigate();
   const runOrder = useBrainStore((s) => s.runOrder);
   const runs = useBrainStore((s) => s.runs);
-  const startMockRun = useBrainStore((s) => s.startMockRun);
-  const startEngineRun = useBrainStore((s) => s.startEngineRun);
   const reduced = useReducedMotion();
   // Phase 14: a real run needs the engine up with a provider that answers.
   const engineUp = useEngineStore((s) => s.status === 'up');
@@ -182,17 +181,8 @@ function BrainIndex() {
   }, []);
 
   const startDemo = (): void => {
-    if (providerReady) {
-      // One real agent-mode turn: a read-only tool step plus a short answer,
-      // so the trace has an LLM span, a tool span and real token counts.
-      const id = startEngineRun(
-        'Use the read_file tool with {"path":"README.md"} and then summarise what this project is in three short bullet points.',
-        { model: defaultModel, title: 'Summarise README.md' }
-      );
-      navigate(`/brain/${id}`);
-      return;
-    }
-    const id = startMockRun('Demo run (no model configured)');
+    // Real agent-mode turn when a provider answers; honest mock otherwise.
+    const { id } = startDemoRun();
     navigate(`/brain/${id}`);
   };
 
@@ -299,7 +289,7 @@ function BrainIndex() {
         {recent.length === 0 ? (
           <div className="border-border-subtle bg-bg-ink rounded-lg border p-6 text-center">
             <p className="text-text-secondary text-[13px]">
-              No runs yet. Start a demo run above or use XR in Chat to begin.
+              No runs yet. Every chat turn and agent run records a trace here. Start one above, or open Chat.
             </p>
           </div>
         ) : (
