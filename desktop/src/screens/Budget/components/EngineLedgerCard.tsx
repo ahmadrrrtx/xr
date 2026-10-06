@@ -5,7 +5,7 @@
  * engine's figures as reported, so the two can be compared, not conflated.
  */
 import { RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { fmtTokens, fmtUsd } from '@/budget/core';
 import { engineJson } from '@/engine/transport';
@@ -29,7 +29,30 @@ export function EngineLedgerCard() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
+  // Poll while the link is up; state is only set after a response arrives.
+  useEffect(() => {
+    if (!up) return;
+    let alive = true;
+    const tick = async (): Promise<void> => {
+      try {
+        const next = await engineJson<EngineBudgetResponse>('/budget');
+        if (alive) {
+          setData(next);
+          setError(null);
+        }
+      } catch (e) {
+        if (alive) setError(e instanceof Error ? e.message : String(e));
+      }
+    };
+    void tick();
+    const t = window.setInterval(() => void tick(), 30_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [up]);
+
+  const refresh = async (): Promise<void> => {
     setLoading(true);
     try {
       setData(await engineJson<EngineBudgetResponse>('/budget'));
@@ -39,14 +62,7 @@ export function EngineLedgerCard() {
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (!up) return;
-    void load();
-    const t = window.setInterval(() => void load(), 30_000);
-    return () => window.clearInterval(t);
-  }, [up, load]);
+  };
 
   const usage = data?.usage;
   const providers = (data?.byProvider ?? []).slice(0, 5);
@@ -59,7 +75,7 @@ export function EngineLedgerCard() {
         up ? (
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void refresh()}
             disabled={loading}
             aria-label="Refresh engine ledger"
             className="text-text-tertiary hover:text-text-primary flex size-6 items-center justify-center rounded-md disabled:opacity-50"

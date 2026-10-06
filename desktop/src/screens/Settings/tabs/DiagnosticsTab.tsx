@@ -121,12 +121,25 @@ export function DiagnosticsTab() {
             {lastError ?? 'none'}
           </span>
         </SettingRow>
-        <SettingRow label={isTauri() ? 'Restart engine' : 'Start engine'} description={isTauri() ? 'Stops the sidecar and spawns a fresh one; open chats reconnect.' : 'Development: asks the Vite dev server to launch `bun run src/index.ts serve`.'}>
-          <Button variant="outline" size="sm" onClick={() => void restart()} disabled={restarting} data-testid="diag-engine-restart">
-            <RefreshCw size={13} strokeWidth={1.75} aria-hidden="true" className={restarting ? 'animate-spin' : undefined} />
-            {restarting ? 'Working…' : isTauri() ? 'Restart' : 'Start'}
-          </Button>
-        </SettingRow>
+        {isTauri() || status !== 'up' ? (
+          <SettingRow
+            label={isTauri() ? 'Restart engine' : 'Start engine'}
+            description={
+              isTauri()
+                ? 'Stops the sidecar and spawns a fresh one; open chats reconnect.'
+                : 'Development: asks the Vite dev server to launch `bun run src/index.ts serve`.'
+            }
+          >
+            <Button variant="outline" size="sm" onClick={() => void restart()} disabled={restarting} data-testid="diag-engine-restart">
+              <RefreshCw size={13} strokeWidth={1.75} aria-hidden="true" className={restarting ? 'animate-spin' : undefined} />
+              {restarting ? 'Working…' : isTauri() ? 'Restart' : 'Start'}
+            </Button>
+          </SettingRow>
+        ) : (
+          <SettingRow label="Restart engine" description="Development: the engine runs in your terminal — stop and start it there.">
+            <span className="text-text-tertiary text-[12.5px]">not from here</span>
+          </SettingRow>
+        )}
       </SettingsSection>
 
       <SettingsSection title="Engine logs" description="The last lines the engine wrote to stderr (packaged app). Tokens are never included.">

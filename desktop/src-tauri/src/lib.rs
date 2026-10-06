@@ -8,10 +8,20 @@
  */
 mod budget;
 mod commands;
+/// Phase 14 — engine sidecar lifecycle (spawn, pair, restart, stderr tail).
+mod engine;
+/// Banner parsing / bounded stderr tail / probe cache (pure std, unit-tested).
+mod engine_state;
 mod events;
 mod shield;
 #[cfg(desktop)]
 mod tray;
+/// Linux parent-death signal + graceful SIGTERM shutdown (libc).
+#[cfg(unix)]
+mod unix;
+/// Windows job-object containment + CREATE_NO_WINDOW (hand-written FFI).
+#[cfg(windows)]
+mod win;
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use tauri::Manager as _;
@@ -31,7 +41,10 @@ fn key_derivation(password: &str) -> Vec<u8> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default();
+    let engine_state = std::sync::Arc::new(engine::EngineState::default());
+    let engine_setup = std::sync::Arc::clone(&engine_state);
+    let engine_exit = std::sync::Arc::clone(&engine_state);
+    let builder = tauri::Builder::default().manage(engine_state);
 
     // Single instance must be registered first: a second launch hands its
     // argv to the running shell and exits — we focus the existing window.
@@ -63,7 +76,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .setup(|app| {
+        .setup(move |app| {
+            // Phase 14 — spawn the engine sidecar first (main thread: the
+            // Linux parent-death signal binds to the spawning thread). In
+            // dev there is no binary and the webview uses the Vite proxy.
+            engine::spawn_sidecar(&engine_setup);
             commands::chat::init(app)?;
             // Phase 10 — workspaces: same xr.db (WAL), own connection + DDL,
             // plus the in-memory window-bounds map used by multi-window spawn.
@@ -101,6 +118,9 @@ pub fn run() {
             commands::window::get_platform,
             commands::system::detect_system,
             commands::system::detect_ollama,
+            engine::engine_link,
+            engine::engine_restart,
+            engine::engine_logs_tail,
             commands::ollama::ollama_pull,
             commands::chat::chat_list_sessions,
             commands::chat::chat_get_session,
@@ -218,7 +238,12 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
+        .run(move |app, event| {
+            // Phase 14 — never orphan the engine: the sidecar dies with the
+            // shell. SIGTERM first (Unix) so it runs its own stop path.
+            if let tauri::RunEvent::Exit = event {
+                engine::stop_sidecar(&engine_exit, std::time::Duration::from_millis(1_500));
+            }
             // Phase 10 — workspace windows: track live bounds in SpawnState
             // (Moved/Resized fire during drags; cheap in-memory writes) and
             // persist them to the DB when the window closes.
