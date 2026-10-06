@@ -4,13 +4,63 @@
  * Auto-hides under 960px; ⌘⇧O toggles.
  */
 import { Plus, Search } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { List } from 'react-window';
 
+import type { Session } from '@/lib/chat-db';
 import { useSessionsStore } from '@/stores/sessionsStore';
 import { SessionItem } from './SessionItem';
 
 const DAY = 86_400_000;
+
+/** Above this many sessions the list is virtualized (react-window, like Brain). */
+const VIRTUALIZE_AT = 100;
+const HEADER_H = 30;
+const ITEM_H = 44; // SessionItem is h-11
+
+type Row = { kind: 'header'; key: string; label: string } | { kind: 'session'; key: string; session: Session };
+
+interface SessionRowProps {
+  rows: Row[];
+  activeSessionId: string | null;
+  onSelect: (id: string) => void;
+  onRename: (id: string, title: string) => void;
+  onArchive: (id: string) => void;
+  onDelete: (id: string) => void;
+  index: number;
+  style: React.CSSProperties;
+  ariaAttributes: Record<string, unknown>;
+}
+
+function SessionRow({ rows, activeSessionId, onSelect, onRename, onArchive, onDelete, index, style, ariaAttributes }: SessionRowProps) {
+  const row = rows[index];
+  if (!row) return null;
+  if (row.kind === 'header') {
+    return (
+      <div
+        {...ariaAttributes}
+        style={style}
+        className="text-text-tertiary flex items-end px-2 pb-1.5 text-[11px] font-semibold tracking-[0.08em] uppercase"
+      >
+        {row.label}
+      </div>
+    );
+  }
+  const s = row.session;
+  return (
+    <div {...ariaAttributes} style={style}>
+      <SessionItem
+        session={s}
+        active={s.id === activeSessionId}
+        onSelect={() => onSelect(s.id)}
+        onRename={(t) => onRename(s.id, t)}
+        onArchive={() => onArchive(s.id)}
+        onDelete={() => onDelete(s.id)}
+      />
+    </div>
+  );
+}
 
 /** Captured once at module load — date grouping never calls Date.now in render. */
 const MOUNT_NOW = Date.now();
@@ -42,7 +92,6 @@ export function SessionList({ activeSessionId }: { activeSessionId: string | nul
   const archiveSession = useSessionsStore((s) => s.archiveSession);
   const deleteSession = useSessionsStore((s) => s.deleteSession);
   const [query, setQuery] = useState('');
-  const [showAll, setShowAll] = useState(false);
   // "Now" for date grouping — set in an effect (purity rule) and refreshed
   // every minute so Today/Yesterday roll over on long-lived windows.
   const [now, setNow] = useState<number>(MOUNT_NOW);
@@ -57,11 +106,8 @@ export function SessionList({ activeSessionId }: { activeSessionId: string | nul
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const base = q
-      ? sessions.filter((s) => s.title.toLowerCase().includes(q))
-      : sessions;
-    return showAll ? base : base.slice(0, 100);
-  }, [sessions, query, showAll]);
+    return q ? sessions.filter((s) => s.title.toLowerCase().includes(q)) : sessions;
+  }, [sessions, query]);
 
   const groups = useMemo(() => {
     const out: Record<string, typeof filtered> = {};
@@ -72,10 +118,39 @@ export function SessionList({ activeSessionId }: { activeSessionId: string | nul
     return out;
   }, [filtered, now]);
 
+  // Flat rows (group header + items) for the virtualized path.
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = [];
+    for (const g of GROUP_ORDER) {
+      const items = groups[g];
+      if (!items?.length) continue;
+      out.push({ kind: 'header', key: `h:${g}`, label: GROUP_LABELS[g] });
+      for (const s of items) out.push({ kind: 'session', key: s.id, session: s });
+    }
+    return out;
+  }, [groups]);
+  const virtualized = filtered.length > VIRTUALIZE_AT;
+
+  // Measured height for react-window (it needs a pixel height to window rows).
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !virtualized) return;
+    const ro = new ResizeObserver(() => setHeight(el.clientHeight));
+    ro.observe(el);
+    setHeight(el.clientHeight);
+    return () => ro.disconnect();
+  }, [virtualized]);
+
   const newChat = async () => {
     const s = await createNewSession();
     selectSession(s.id);
     navigate(`/chat/${s.id}`);
+  };
+  const open = (id: string) => {
+    selectSession(id);
+    navigate(`/chat/${id}`);
   };
 
   return (
@@ -116,13 +191,33 @@ export function SessionList({ activeSessionId }: { activeSessionId: string | nul
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <div
+        ref={scrollRef}
+        className={`min-h-0 flex-1 px-2 pb-2 ${virtualized ? 'overflow-hidden' : 'overflow-y-auto'}`}
+      >
         {loading ? (
           <div className="text-text-tertiary px-2 py-4 text-[12px]">Loading…</div>
         ) : filtered.length === 0 ? (
           <div className="text-text-tertiary/70 px-2 py-6 text-center text-[12px]">
             {query ? 'No matching conversations' : 'No conversations yet'}
           </div>
+        ) : virtualized ? (
+          <List<Omit<SessionRowProps, 'index' | 'style' | 'ariaAttributes'>>
+            rowComponent={SessionRow}
+            rowCount={rows.length}
+            rowHeight={(i) => (rows[i]?.kind === 'header' ? HEADER_H : ITEM_H)}
+            rowKey={(i) => rows[i]?.key ?? String(i)}
+            rowProps={{
+              rows,
+              activeSessionId,
+              onSelect: open,
+              onRename: (id, t) => void renameSession(id, t),
+              onArchive: (id) => void archiveSession(id),
+              onDelete: (id) => void deleteSession(id),
+            }}
+            overscanCount={8}
+            style={{ height }}
+          />
         ) : (
           GROUP_ORDER.map((g) =>
             groups[g]?.length ? (
@@ -147,15 +242,6 @@ export function SessionList({ activeSessionId }: { activeSessionId: string | nul
               </div>
             ) : null,
           )
-        )}
-        {!query && sessions.length > 100 && !showAll && (
-          <button
-            type="button"
-            onClick={() => setShowAll(true)}
-            className="text-text-tertiary hover:text-text-secondary w-full py-2 text-[12px]"
-          >
-            Show all ({sessions.length})
-          </button>
         )}
       </div>
 

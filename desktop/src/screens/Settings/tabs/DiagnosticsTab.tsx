@@ -77,6 +77,8 @@ export function DiagnosticsTab() {
 
   const version = engineVersion();
   const healthy = providers?.providers.filter((p) => p.healthy && (p.kind === 'local' || p.hasKey)) ?? [];
+  // `hasKey` is the engine's view: a stored key OR environment credentials
+  // (e.g. bedrock via AWS env). Label it as credentials, not "API keys".
   const keyed = providers?.providers.filter((p) => p.kind === 'hosted' && p.hasKey) ?? [];
 
   return (
@@ -108,7 +110,7 @@ export function DiagnosticsTab() {
           label="Providers"
           description={
             providers
-              ? `${healthy.length} ready${keyed.length ? ` · ${keyed.length} with API keys` : ''} · default ${providers.primary}${providers.model ? ` / ${providers.model}` : ''}`
+              ? `${healthy.length} ready${keyed.length ? ` · ${keyed.length} cloud with credentials` : ''} · default ${providers.primary}${providers.model ? ` / ${providers.model}` : ''}`
               : 'Loads when the engine is up.'
           }
         >

@@ -67,3 +67,37 @@ Principle: the desktop renders engine truth and forwards decisions. No mock
 | model error | `error{code}` / `done.stopped==='error'` | error card, Retry when `retryable` |
 | stream cut | reader ends without `done` | partial kept + "[Interrupted — retry]" |
 | cancelled | user Stop (fetch abort) | partial kept, status cancelled |
+
+## Step outcomes
+
+| Step | Outcome |
+| --- | --- |
+| 1 | Engine fixes 1–7 shipped (`04ee15e`); wrapper tests + `boundedHistory` test. |
+| 2 | Proxy + transport + SSE + `engineStore` (15 s poll) + banner; composer (Send + textarea) disabled while down. |
+| 3 | `engine/chat.ts` → `lib/llm.ts#streamChat`; rAF-batched tokens; Stop aborts the fetch (reader closed); `done.fullText` authoritative; counters live (Ollama reports no usage → "— tok", honest). |
+| 4 | Approvals bridge: modal from `approval_required`, decision `POST /approvals/:id/decision`, TTL/deny → red card, abort withdraws; Bell + Shield list `GET /approvals` (5 s). |
+| 5 | Ask/Agent/Plan segmented, default agent, persisted per session. |
+| 6 | Picker from `/models` + `/providers` (Local/Cloud, no-key rows disabled → Configure API key, Set default → engine). Default model from the engine (`resolveDefaultModel`). |
+| 7 | Local gate + `budget.perTaskUsd` on the request; `budget_stopped` → blocked card + Raise limit; Budget screen ledger card from `/budget`. |
+| 8 | HUD quick-ask real (`mode:'ask'`) + Open in chat; cmdk New chat / Switch model… / Open Chat; orb follows stream; orb click focuses composer. |
+| 9 | Workbench → `/chat?workspace=:id` with workspace context chip, agent mode. |
+| 10 | Brain: engine runs recorded from the SSE (`dash_` runIds); demo labelled "Demo run (no model configured)"; Runs rows from the engine when up. |
+| 11 | Shield audit from `/audit` (engine verifies its own chain); pending approvals synced. |
+| 12 | Keys saved by the engine (secret broker, `setDefault` opt-in); ping through `/models/test`; Ollama list / Install CTA; onboarding choice sets the engine default. |
+| 13 | Rust: spawn/banner/`engine_link`/`engine_restart`/`engine_logs_tail`, externalBin + CSP, Diagnostics Engine card; `compile-sidecar.ts --if-missing`; signing documented, not wired. |
+| 14 | Shortcuts (Enter/Shift+Enter/Esc/⌘N/⌘⇧O/ArrowUp/⌘K/`/`), focus rings, aria-live throttled, reduced motion static cursor; 5 themes checked (XR Native, Paper screenshots). |
+| 15 | Tests `test/desktop/*` (9 files) + `test/core/bounded-history`; eslint/tsc clean; screenshots below; PR. |
+| + | Found during testing: SIGTERM'd engine lingered → Start engine no-op (`cabb7cc`). |
+
+## Screenshots (`previews/implementation/phase-14/`)
+
+`chat-real.png` (reference mock, generated before coding) · `01-picker` ·
+`02-waiting` ("Waiting for qwen2.5:0.5b…") · `03-done` (markdown reply) ·
+`04-followup` · `05-approval` (modal fired by the engine) · `06-tool-done` ·
+`07-tool-expanded` · `08-chat-trace` (View trace → Brain) · `10-brain-index` ·
+`11-brain-live` · `12-brain-done` · `14-runs` · `20-diagnostics` (Engine card) ·
+`21-shield-audit` · `22-shield-audit-engine-row` · `23-budget-ledger` ·
+`30-chat-paper-waiting` · `31-chat-paper-done` (Paper theme) ·
+`32-topbar-model-chip` · `33-hud-quick-ask` · `35-engine-down` ·
+`36-engine-back` · `37-no-provider` · `38-workspace-landing` ·
+`39-workbench-waiting` · `40-workbench-chat`.

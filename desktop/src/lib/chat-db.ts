@@ -219,7 +219,7 @@ const browserDb: ChatDb = {
     return readLS<Session[]>(LS_SESSIONS, [])
       .filter((s) => !s.archived)
       .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, 100);
+      .slice(0, 1000); // same ceiling as the SQLite backend; the list virtualizes past 100
   },
   async getSession(id) {
     return readLS<Session[]>(LS_SESSIONS, []).find((s) => s.id === id) ?? null;

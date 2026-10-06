@@ -85,3 +85,64 @@ Chat persistence stays in `lib/chat-db.ts` (SQLite in Tauri, localStorage mirror
 ## Ollama detection
 
 `GET /api/v1/models` → `current{installed, running, healthy, models[]}` + `hardware{specs}` + `recommendation`; `GET /api/v1/providers` → per provider `{kind:'local'|'cloud', hasKey, authOk, healthy, latencyMs, defaultModel}`. The picker groups Local (Ollama models actually installed) and Cloud (providers with a key); cloud rows without a key are disabled → "Configure API key" → `/budget?tab=models`.
+
+## Engine lifecycle (dev and packaged)
+
+- **One spawn mechanism per mode.** Browser dev: Vite's `/__xr/engine/start`
+  spawns `desktop/scripts/dev-engine.ts` (which runs `bun run src/index.ts serve
+  --port 3141` and writes the banner token to `desktop/.xr-dev/token`, read per
+  request by the proxy). Packaged: the Tauri shell spawns
+  `xr-engine-<triple> serve --port 0 --parent-pid <shell>` and parses the
+  banner (`✓ Listening on http://127.0.0.1:<port>` + `Token: <48 hex>`);
+  `engine_link` hands the pair to the web layer. Nothing else spawns an engine.
+- **SIGTERM must end the process.** Measured during the engine-kill test: after
+  SIGTERM the daemon closed its listener but lingered (kernel timers kept the
+  loop alive). The dev wrapper waits for the child, so Vite still saw a live
+  child and answered "already running" to the banner's Start engine while the
+  port stayed silent. Fixed on both sides: `src/cli/router.ts` schedules a
+  bounded `process.exit` 2 s after SIGINT/SIGTERM (unref'd — a clean drain
+  still exits on its own), `dev-engine.ts` escalates to SIGKILL after 3 s, and
+  `/__xr/engine/start` probes `/health` before trusting a live child. The Rust
+  side already did SIGTERM → 1.5 s → SIGKILL (`unix.rs::terminate_gracefully`).
+- **Health poll cadence.** `engineStore` polls `/health` every 15 s and flips to
+  `down` on the first failed request, so a killed engine shows the banner
+  within ≤15 s (measured 15 s idle, immediate on the next send). Start engine
+  → banner gone in 2 s (engine boot ≈1 s).
+
+## Sidecar build and signing (packaged builds)
+
+- `scripts/compile-sidecar.ts` → `desktop/src-tauri/binaries/xr-engine-<target-triple>`
+  (`bun build --compile`); `tauri.conf.json` lists it under `bundle.externalBin`
+  as `binaries/xr-engine` and `tauri-build` refuses to build when the file for
+  the host triple is missing, so `dev:tauri` / `build:tauri` compile it first
+  (`--if-missing` for dev). CI (`desktop-app.yml`) compiles per OS.
+- **Signing caveats (not done in this phase):** macOS — the sidecar is a
+  separate Mach-O inside the bundle; it must be signed with the same identity
+  and hardened runtime as the app (`tauri build` signs `externalBin` when
+  `APPLE_SIGNING_IDENTITY` is set, but notarization also needs the Bun-compiled
+  binary to pass `codesign --verify --deep`; Bun's single-file executables are
+  signable but carry an embedded zip-like payload that some notarization runs
+  flag — verify before shipping). Windows — unsigned sidecars trigger
+  SmartScreen separately from the installer; sign `xr-engine-x86_64-pc-windows-msvc.exe`
+  with the same certificate. Linux — no signing; AppImage must mark the
+  sidecar executable. None of this is wired into CI yet.
+
+## Diagnostics "providers with API keys" is engine data
+
+`GET /api/v1/providers` reports `hasKey:true` for local providers (no key
+needed) and for providers whose credentials come from the environment (e.g.
+`bedrock` via AWS env). So the Diagnostics Engine card can say "1 cloud with
+credentials" on a machine with no stored key — that is what the engine
+reports (the label says credentials, not API keys, for that reason).
+
+## Verification log (sandbox, `qwen2.5:0.5b` on CPU)
+
+Playwright scripts live outside the repo (`/home/user/shots/p14/*.py`); every
+screenshot in `previews/implementation/phase-14/` was taken against the real
+engine + Ollama. Console errors: only the expected 503s during the no-provider
+step. Measured: cold TTFT 15–34 s, warm ≈0.2–2 s; engine-kill → banner 15 s;
+Start engine → recovered 2 s; no-provider → honest card, zero fabricated
+replies; approval modal fires from the engine (`ap_…` id) and the decision is
+posted back; $0.01 cap blocks through the engine path (`status budget_stopped`
+→ blocked card). `qwen2.5:0.5b` frequently skips or malforms tool calls — the
+tool cards then show the honest failed state (not a desktop defect).
