@@ -32,6 +32,7 @@ import { builderDevRoutes } from "./builder-dev.routes.ts";
 import { uiStateRoutes } from "./ui-state.routes.ts";
 import { trustRoutes } from "./trust.routes.ts";
 import { researchRoutes } from "./research.routes.ts";
+import { researchRunRoutes } from "./research-run.routes.ts";
 import { mcpRoutes } from "./mcp.routes.ts";
 import type { DaemonRoute } from "./router.ts";
 import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
@@ -39,6 +40,9 @@ import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
 /** Base daemon routes (everything except the Phase-8 meta routes). */
 export function listBaseRoutes(): DaemonRoute[] {
   return [
+    // Phase 18 — full research runs (/api/research/run…, upload-pdf, settings,
+    // remember) precede the Phase 10 operation routes and `research.get`.
+    ...researchRunRoutes(),
     // Phase 10 — research routes precede system routes so job paths resolve
     // before the `research.get` prefix route (GET /api/research/{id}).
     ...researchRoutes(),

@@ -506,6 +506,9 @@ export const useBrainStore = create<BrainState>()(
           const finalCost = update.costUsd ?? span.costUsd ?? 0;
           const remainderTokens = Math.max(0, finalTokensOut - t.tokensOut);
           const remainderCost = Math.max(0, finalCost - t.cost);
+          // Engine runs learn their measured input tokens only at the end
+          // (usage frame) — credit what the start-time settle did not see.
+          const remainderIn = Math.max(0, (update.tokensIn ?? 0) - (span.tokensIn ?? 0));
           ticked.delete(spanId);
 
           const endedAt = update.endedAt ?? Date.now();
@@ -531,6 +534,7 @@ export const useBrainStore = create<BrainState>()(
                       ...s.runs,
                       [runId]: {
                         ...run,
+                        tokensIn: run.tokensIn + remainderIn,
                         tokensOut: run.tokensOut + remainderTokens,
                         costUsd: run.costUsd + remainderCost,
                       },

@@ -22,6 +22,7 @@ import {
   type SecurityPolicy,
   type Strictness,
 } from '@/shield/types';
+import { getSettings as getResearchSettings, setAllowPublicWeb, type ResearchSettings } from '@/research/api';
 import { useShieldStore } from '@/stores/shieldStore';
 
 import { EnforcementBadge, ShieldCard } from './shared';
@@ -53,15 +54,18 @@ export function SecurityTab({
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const quarantineRef = useRef<HTMLElement>(null);
+  const networkRef = useRef<HTMLElement>(null);
   const [trusting, setTrusting] = useState<QuarantinedSkill | null>(null);
 
-  // `?section=quarantine` (from the Status tile) scrolls the section in.
+  // `?section=quarantine` (from the Status tile) / `?section=network` (from
+  // Research's egress card) scroll the section in.
   useEffect(() => {
-    if (params.get('section') === 'quarantine')
-      quarantineRef.current?.scrollIntoView({
-        block: 'start',
-        behavior: 'smooth',
-      });
+    const section = params.get('section');
+    const target = section === 'quarantine' ? quarantineRef.current : section === 'network' ? networkRef.current : null;
+    target?.scrollIntoView({
+      block: 'start',
+      behavior: 'smooth',
+    });
   }, [params]);
 
   const set = (patch: Partial<SecurityPolicy>): void => {
@@ -100,7 +104,9 @@ export function SecurityTab({
       </ShieldCard>
 
       {/* Network */}
+      <section ref={networkRef} id="network" className="scroll-mt-4">
       <ShieldCard title="Network" testId="policy-network">
+        <ResearchWebRow />
         <PolicyRow id="egressProxy" policy={policy} onChange={set} />
         <DomainList
           label="Allowed domains"
@@ -130,6 +136,7 @@ export function SecurityTab({
           </button>
         </div>
       </ShieldCard>
+      </section>
 
       {/* Privacy */}
       <ShieldCard title="Privacy" testId="policy-privacy">
@@ -300,6 +307,75 @@ function Row({
         </div>
       )}
     </div>
+  );
+}
+
+/* ── Research web access (engine-enforced) ─────────────────────────────── */
+
+/**
+ * Phase 18: `research.allowPublicWeb` lives in the ENGINE config and is
+ * checked before every research page fetch (src/research/search.ts) — so
+ * this switch is honestly "Enforced". Search itself only ever goes to the
+ * allow-listed search host, and the SSRF guard applies either way.
+ */
+function ResearchWebRow() {
+  const [settings, setSettings] = useState<ResearchSettings | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    getResearchSettings()
+      .then((s) => {
+        if (alive) setSettings(s);
+      })
+      .catch((e: unknown) => {
+        if (alive) setError(e instanceof Error ? e.message : 'Engine unreachable');
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const toggle = async (v: boolean): Promise<void> => {
+    setBusy(true);
+    try {
+      const next = await setAllowPublicWeb(v);
+      setSettings(next);
+      toast(v ? 'Research may fetch public web pages' : 'Research web access off', {
+        description: v ? 'Only for research runs; the egress allow-list and SSRF guard still apply.' : 'Research reads allow-listed hosts, PDFs and local files only.',
+      });
+    } catch (e) {
+      toast("Couldn't update the engine", { description: e instanceof Error ? e.message : 'Engine unreachable' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const note = error
+    ? `Engine not reachable — ${error}`
+    : settings
+      ? settings.searchAvailable
+        ? `Search host ${settings.searchHost} is allow-listed.`
+        : `Search host ${settings.searchHost} is not in the engine egress allow-list — research cannot search until it is added (config security.egressAllowlist).`
+      : undefined;
+
+  return (
+    <Row
+      label="Research web access"
+      description="Let research runs fetch public web pages beyond the egress allow-list. Off by default: XR does not reach the public internet unless you turn this on."
+      note={note}
+      htmlFor="policy-researchWeb"
+      badge={<EnforcementBadge enforcement="enforced" unavailable={Boolean(error)} />}
+    >
+      <Toggle
+        id="policy-researchWeb"
+        checked={settings?.allowPublicWeb ?? false}
+        disabled={busy || !settings}
+        onCheckedChange={(v) => void toggle(v)}
+        ariaLabel="Research web access"
+      />
+    </Row>
   );
 }
 

@@ -17,6 +17,8 @@ export interface StructuredCallDeps {
   provider: Provider;
   /** Called with token usage after each model call, for budget accounting. */
   onUsage?: (inTokens: number, outTokens: number) => void;
+  /** Phase 18: caller cancellation — reaches the provider socket, not just loop checkpoints. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -46,7 +48,7 @@ export async function structuredCall<T = unknown>(
     },
   ];
 
-  const turn = await deps.provider.chat(messages, []);
+  const turn = await deps.provider.chat(messages, [], deps.signal ? { signal: deps.signal } : undefined);
   if (turn.usage && deps.onUsage) deps.onUsage(turn.usage.inTokens, turn.usage.outTokens);
 
   const raw = turn.message ?? "";

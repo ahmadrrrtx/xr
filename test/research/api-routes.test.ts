@@ -85,3 +85,58 @@ test("cancel of an unknown job is a truthful 409", async () => {
   const res = await fetch(`${base}/api/v1/research/jobs/nope/cancel`, auth({ method: "POST" }));
   expect(res.status).toBe(409);
 });
+
+// ── Phase 18 — full research runs (offline surface: validation + truthful states) ──
+
+test("POST /api/v1/research/run rejects a malformed body (400) and an empty query (400) before touching any provider", async () => {
+  const bad = await fetch(`${base}/api/v1/research/run`, auth({ method: "POST", body: JSON.stringify({ query: 7 }) }));
+  expect(bad.status).toBe(400);
+  const empty = await fetch(`${base}/api/v1/research/run`, auth({ method: "POST", body: JSON.stringify({ query: "   ", depth: "quick" }) }));
+  expect(empty.status).toBe(400);
+  const depth = await fetch(`${base}/api/v1/research/run`, auth({ method: "POST", body: JSON.stringify({ query: "x", depth: "academic" }) }));
+  expect(depth.status).toBe(400);
+});
+
+test("GET/cancel/stream of an unknown run are truthful (404 / 409 / 404)", async () => {
+  expect((await fetch(`${base}/api/v1/research/run/rr_nope`, auth())).status).toBe(404);
+  const cancel = await fetch(`${base}/api/v1/research/run/rr_nope/cancel`, auth({ method: "POST" }));
+  expect(cancel.status).toBe(409);
+  const body: any = await cancel.json();
+  expect(body.ok).toBe(false);
+  expect(body.error).toContain("not found");
+  expect((await fetch(`${base}/api/v1/research/run/rr_nope/stream`, auth())).status).toBe(404);
+});
+
+test("POST /api/v1/research/upload-pdf: non-PDF bytes → 422, > 20 MB → 413, nothing written to disk", async () => {
+  const notPdf = await fetch(`${base}/api/v1/research/upload-pdf`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/octet-stream", "x-xr-filename": "notes.pdf" },
+    body: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]),
+  });
+  expect(notPdf.status).toBe(422);
+  const big = await fetch(`${base}/api/v1/research/upload-pdf`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/pdf", "x-xr-filename": "big.pdf" },
+    body: new Uint8Array(20 * 1024 * 1024 + 1),
+  });
+  expect(big.status).toBe(413);
+});
+
+test("GET /api/v1/research/settings reports the fail-closed web posture and the engine's depth budgets", async () => {
+  const res = await fetch(`${base}/api/v1/research/settings`, auth());
+  expect(res.status).toBe(200);
+  const body: any = await res.json();
+  expect(typeof body.allowPublicWeb).toBe("boolean");
+  expect(typeof body.searchAvailable).toBe("boolean");
+  expect(Array.isArray(body.egressAllowlist)).toBe(true);
+  expect(body.budgets.quick.maxSources).toBe(10);
+  expect(body.budgets.deep.maxFetched).toBe(16);
+  expect(body.budgets.thorough.maxQueries).toBe(14);
+  const patch = await fetch(`${base}/api/v1/research/settings`, auth({ method: "PATCH", body: JSON.stringify({ allowPublicWeb: "yes" }) }));
+  expect(patch.status).toBe(400);
+});
+
+test("POST /api/v1/research/{unknown}/remember → 404 (never invents a memory)", async () => {
+  const res = await fetch(`${base}/api/v1/research/r_00000000/remember`, auth({ method: "POST" }));
+  expect(res.status).toBe(404);
+});

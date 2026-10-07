@@ -22,12 +22,10 @@ import type { Store } from "../state/workspace-store.ts";
 import { loadConfig, XR_HOME } from "../config/config.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
-import { BudgetManager } from "../cost/manager.ts";
-import { CostGovernor } from "../cost/governor.ts";
 import { banner, ok, warn, info, colors as C } from "../interfaces/cli.ts";
 import type { ResearchDepth, ResearchMode, ResearchSession } from "./types.ts";
 import { WebSearchCapability } from "./search.ts";
-import { GovernedResearchBudget, LocalResearchBudget } from "./budget.ts";
+import { GovernedResearchBudget, LocalResearchBudget, governedProviderRoute } from "./budget.ts";
 import { runResearch, summarizeExisting, refreshResearch, type ResearchEngineDeps } from "./engine.ts";
 import { makePlan } from "./plan.ts";
 import { DEPTH_BUDGETS } from "./types.ts";
@@ -37,6 +35,7 @@ import { isMemoryEnabled } from "../config/config.ts";
 import { buildResearchPool, researchLimitsFromConfig } from "./factory.ts";
 import { ResearchJobRegistry } from "./jobs.ts";
 import { runResearchOperation } from "./runner.ts";
+import { rememberResearch } from "./remember.ts";
 import type { ResearchJob, ResearchRequest } from "./provider-types.ts";
 
 /** Build engine deps with the same routing/budget logic the agent uses. */
@@ -47,26 +46,23 @@ function buildEngine(
 ): { deps: ResearchEngineDeps; providerId: string; model: string } {
   const { config } = loadConfig();
 
-  let providerId = override.provider ?? config.defaults.provider;
+  const requested = override.provider ?? config.defaults.provider;
   const model = override.model ?? config.defaults.model;
 
   // Budget-aware fallback to local (mirrors src/index.ts default-task
-  // routing). Phase 2 · F-12 — the decision runs INSIDE the Governor:
-  // checkBeforeStep is the single budget decision point; the fallback is
-  // taken only when the Governor reports the global cap with auto_fallback.
-  if (!isLocal(providerId)) {
-    const governor = new CostGovernor(
-      { maxUsd: perTaskBudgetUsd ?? config.budget.perTaskUsd, maxTokens: config.budget.perTaskTokens },
-      priceFor(providerId, model),
-      new BudgetManager(store),
-    );
-    const decision = governor.checkBeforeStep();
-    if (!decision.allow && decision.suggestLocal) {
-      const localModel = config.localModels.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
-      warn(`Global budget exhausted: ${decision.reason}`);
-      warn(`Falling back to local model: ${localModel}`);
-      providerId = "ollama";
-    }
+  // routing). Phase 2 · F-12 — the decision runs INSIDE the Governor via
+  // governedProviderRoute (shared with the daemon's research run route).
+  const { providerId, fallbackReason } = governedProviderRoute(
+    store,
+    { maxUsd: perTaskBudgetUsd ?? config.budget.perTaskUsd, maxTokens: config.budget.perTaskTokens },
+    priceFor(requested, model),
+    requested,
+    isLocal(requested),
+  );
+  if (fallbackReason) {
+    const localModel = config.localModels.selected ?? config.defaults.fallbackModel ?? config.defaults.model;
+    warn(`Global budget exhausted: ${fallbackReason}`);
+    warn(`Falling back to local model: ${localModel}`);
   }
 
   const provider = buildProvider(config, { provider: providerId, model });
@@ -360,110 +356,19 @@ async function doRemember(store: Store, id: string | undefined): Promise<void> {
     info("No research session found to remember.");
     return;
   }
-  const { isMemoryEnabled } = await import("../config/config.ts");
-  if (!isMemoryEnabled()) {
-    warn("Memory is disabled. Enable it in config to save research findings.");
-    return;
-  }
-  const { MemoryStore } = await import("../context/memory/store.ts");
-  const mem = new MemoryStore(store);
-  const finding =
-    session.synthesis?.shortAnswer?.trim() ||
-    `Researched "${session.topic}" (${session.sources.length} sources).`;
-  const content = `${session.topic}: ${finding}`;
-  const res = mem.add({
-    content: content.slice(0, 1000),
-    category: "fact",
-    source: "research",
-    provenance: { source: "user", ref: `research:${session.id}` }, // Phase 7: user-commanded save of a synthesis
-    tags: ["research", session.depth],
-    importance: 3,
-  });
+  const res = await rememberResearch(store, session);
   if (!res.ok) {
-    warn(`not saved: ${res.reason}`);
+    if (res.reason === "memory_disabled") warn("Memory is disabled. Enable it in config to save research findings.");
+    else warn(`not saved: ${res.detail ?? "unknown reason"}`);
     return;
   }
   if (res.duplicate) {
     info("already in memory — no duplicate created.");
     return;
   }
-
-  // ── XR 4.5 — link the saved finding to its evidence ──────────────────
-  //
-  // A research finding is model SYNTHESIS over sources, not a user fact.
-  // Recording it honestly means:
-  //   • trust  = generated_synthesis (never approved_memory)
-  //   • consent = approved (the user ran `remember` deliberately)
-  //   • provenance = the research session, plus a reference per source
-  // so the claim can always be traced back and never silently hardens
-  // into "the user told me this".
-  const memId = res.entry!.id;
-  let linkedSources = 0;
-  try {
-    store.setMemoryProvenance(memId, {
-      provenanceKind: "research",
-      provenanceRef: `research:${session.id}`,
-      actorKind: "model",
-      actorName: "research-engine",
-      trustStatus: "generated_synthesis",
-      confidence:
-        session.synthesis?.overallConfidence === "high"
-          ? "high"
-          : session.synthesis?.overallConfidence === "low"
-            ? "low"
-            : "medium",
-      sourceObservedAt: session.updatedAt,
-    });
-    store.setMemoryConsent(memId, "approved", "user");
-
-    const { ContextRepository, adaptStoreForContext } = await import(
-      "../context/repository.ts"
-    );
-    const { ProvenanceService, provenanceFromResearchSource } = await import(
-      "../context/provenance.ts"
-    );
-    const repo = new ContextRepository(adaptStoreForContext(store), store.workspaceId);
-    repo.migrate();
-    const prov = new ProvenanceService(repo);
-
-    // Record the finding as an evidence-class context item carrying citations.
-    const itemId = repo.insertItem({
-      type: "evidence",
-      content: content.slice(0, 4000),
-      title: session.topic.slice(0, 72),
-      scope: { workspaceId: store.workspaceId, projectScope: "global", userId: "local" },
-      trustStatus: "generated_synthesis",
-      consentState: "approved",
-      consentActor: "user",
-      consentAt: Date.now(),
-      provenanceKind: "research",
-      provenanceRef: `research:${session.id}`,
-      actorKind: "model",
-      actorName: "research-engine",
-      sourceObservedAt: session.updatedAt,
-      confidence: session.synthesis?.overallConfidence ?? "unknown",
-      links: { researchSessionId: session.id, derivedFrom: memId },
-      tags: ["research", session.depth],
-    });
-
-    for (const src of session.sources.slice(0, 32)) {
-      if (prov.link(itemId, provenanceFromResearchSource(src))) linkedSources++;
-    }
-    // Claims carry their own citations so a report can cite line by line.
-    for (const claim of (session.claims ?? []).slice(0, 32)) {
-      prov.link(itemId, {
-        kind: "research",
-        ref: `claim:${claim.id}`,
-        label: claim.text.slice(0, 120),
-      });
-    }
-  } catch {
-    /* provenance linkage is best-effort — the memory entry is already saved */
-  }
-
-  ok(`saved to memory ${C.dim(memId)}`);
-  if (linkedSources) {
-    info(`linked ${linkedSources} source citation(s) — inspect with: xr context explain ${memId}`);
+  ok(`saved to memory ${C.dim(res.memoryId)}`);
+  if (res.linkedSources) {
+    info(`linked ${res.linkedSources} source citation(s) — inspect with: xr context explain ${res.memoryId}`);
   }
   info("recorded as model synthesis, not a user fact — its sources stay traceable.");
   info(`recall later with:  xr memory recall "${session.topic}"`);

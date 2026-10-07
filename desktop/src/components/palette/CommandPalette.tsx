@@ -469,11 +469,11 @@ export function CommandPalette({ embedded }: { embedded: boolean }) {
           isHud={isHud}
           onSelectCommand={onSelectCommand}
           onAsk={startQuickAsk}
-          onWebSearchStub={() =>
-            toast('Web search ships in Phase 18', {
-              description: 'The ? prefix will query the XR search stack.',
-            })
-          }
+          onResearch={(question) => {
+            if (!question) return;
+            close();
+            ctxNavigate(`/research?q=${encodeURIComponent(question)}&start=1`);
+          }}
         />
       )}
       <div className="border-border-subtle text-text-tertiary flex h-9 shrink-0 items-center justify-between border-t px-4 text-[11px]">
