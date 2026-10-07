@@ -681,7 +681,10 @@ export class VoiceController {
         return;
       }
       case 'final':
-        if (e.text) store._caption('you', e.text);
+        if (e.text) {
+          store._caption('you', e.text);
+          this.followResearch(e.text);
+        }
         return;
       case 'tts':
         if (e.text) store._caption('xr', e.text);
@@ -772,6 +775,19 @@ export class VoiceController {
     void orbSetState(avatarStateFor(state)).catch(() => undefined);
     // Orb (Rust VoiceActiveState) + Voice Theater (Phase 16) share this one.
     emitTheater(THEATER_IN.state, { state, active: useVoiceStore.getState().active });
+  }
+
+  /**
+   * Phase 18: the ENGINE's voice pipeline runs "research <topic>" itself
+   * (src/voice/intents.ts → runVoiceResearch); the desktop must not start a
+   * second run. Instead the main window opens Research in follow mode, which
+   * picks the finished session up from the engine when it lands.
+   */
+  private followResearch(text: string): void {
+    const m = /^(?:research|investigate|look up deeply|make a report on|give me a brief on)\s+(.+)$/i.exec(text.trim());
+    if (!m?.[1] || !useVoiceStore.getState().active) return;
+    if (/\/(hud|orb|theater)\.html$/.test(window.location.pathname)) return; // only the main window routes
+    window.location.hash = `#/research?q=${encodeURIComponent(m[1].trim())}&via=voice`;
   }
 
   private async bringForward(): Promise<void> {

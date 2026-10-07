@@ -211,6 +211,19 @@ export class RateLimiter {
 /** Phase 4 · T5 — request body size cap (route caps; fail closed). */
 export const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024; // 2 MiB
 
+/**
+ * Phase 18 — the ONE route allowed a larger body: a research PDF upload
+ * (authenticated, loopback, multipart; parsed in memory and never persisted).
+ * Keyed by both mounts so the cap cannot be dodged through the other prefix.
+ */
+const ROUTE_BODY_CAPS: Readonly<Record<string, number>> = {
+  "/api/research/upload-pdf": 20 * 1024 * 1024 + 64 * 1024, // 20 MiB + multipart framing
+  "/api/v1/research/upload-pdf": 20 * 1024 * 1024 + 64 * 1024,
+};
+export function bodyCapFor(path: string): number {
+  return ROUTE_BODY_CAPS[path] ?? MAX_REQUEST_BODY_BYTES;
+}
+
 /** Build a daemon-scoped Trust service (backends are detected lazily on first use). */
 function makeDaemonTrust(): TrustService {
   const broker = new CredentialBroker();
@@ -314,15 +327,16 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
     // the actual bytes (read from a clone; the original request is untouched
     // for the route handlers).
     if (method === "POST" || method === "PUT" || method === "PATCH") {
+      const cap = bodyCapFor(path);
       const len = req.headers.get("content-length");
-      if (len && Number(len) > MAX_REQUEST_BODY_BYTES) {
+      if (len && Number(len) > cap) {
         return safeJson({ error: "payload too large" }, 413);
       }
       if (!len) {
         const clone = req.clone();
         try {
           const body = await clone.text();
-          if (body.length > MAX_REQUEST_BODY_BYTES) {
+          if (body.length > cap) {
             return safeJson({ error: "payload too large" }, 413);
           }
         } catch {

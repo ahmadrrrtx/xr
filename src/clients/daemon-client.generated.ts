@@ -66,6 +66,46 @@ export class XRDaemonClient {
     return (await res.json()) as T;
   }
 
+  /** Start a full research run (plan → search → read → extract → synthesize) through the same engine as `xr research`; returns immediately with a run id to stream. */
+  async researchRunStart(body: z.infer<typeof S.ResearchRunStartRequest>): Promise<z.infer<typeof S.ResearchRunStartResponse>> {
+    return await this.call("POST", "/api/v1/research/run", body);
+  }
+
+  /** Status of a research run (state, session id, result once finished). */
+  async researchRunGet(runId: string): Promise<z.infer<typeof S.ResearchRunResponse>> {
+    return await this.call("GET", `/api/v1/research/run/${encodeURIComponent(runId)}`);
+  }
+
+  /** Stream a research run as Server-Sent Events: buffered replay, then live run_started · status · log · plan · search · sources · fetch · extract · contradictions · budget · run_completed | run_error · stream_end. (SSE stream — returns the raw Response). */
+  async researchRunStream(runId: string): Promise<Response> {
+    return await this.raw("GET", `/api/v1/research/run/${encodeURIComponent(runId)}/stream`);
+  }
+
+  /** Cancel a research run — the abort reaches the in-flight model call and page fetch; the session persists as stopped (cancelled) with everything gathered so far. */
+  async researchRunCancel(runId: string): Promise<z.infer<typeof S.OkResponse>> {
+    return await this.call("POST", `/api/v1/research/run/${encodeURIComponent(runId)}/cancel`);
+  }
+
+  /** Extract text from an uploaded PDF (multipart field `file`, ≤ 20 MB) in memory — nothing is written to disk; attach the text to a run as a document. */
+  async researchUploadPdf(): Promise<z.infer<typeof S.ResearchPdfUploadResponse>> {
+    return await this.call("POST", "/api/v1/research/upload-pdf");
+  }
+
+  /** Research network posture: whether the search host is allow-listed and whether research may fetch the public web. */
+  async researchSettingsGet(): Promise<z.infer<typeof S.ResearchSettingsResponse>> {
+    return await this.call("GET", "/api/v1/research/settings");
+  }
+
+  /** Persist research.allowPublicWeb (the research-only public-web fetch path; the egress allow-list and SSRF guard still apply). */
+  async researchSettingsSet(body: z.infer<typeof S.ResearchSettingsPatchRequest>): Promise<z.infer<typeof S.ResearchSettingsResponse>> {
+    return await this.call("PATCH", "/api/v1/research/settings", body);
+  }
+
+  /** Save a finished research finding to durable memory as model synthesis (provenance + per-source links); explicit, never automatic. */
+  async researchRemember(id: string): Promise<z.infer<typeof S.ResearchRememberResponse>> {
+    return await this.call("POST", `/api/v1/research/${encodeURIComponent(id)}/remember`);
+  }
+
   /** Search the web through XR's research providers (SearXNG / Firecrawl) and return normalized sources. */
   async researchSearch(body: z.infer<typeof S.ResearchOperationRequest>): Promise<z.infer<typeof S.ResearchJobResponse>> {
     return await this.call("POST", "/api/v1/research/search", body);

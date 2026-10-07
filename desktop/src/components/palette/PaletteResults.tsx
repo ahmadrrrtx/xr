@@ -47,8 +47,8 @@ interface PaletteResultsProps {
   onSelectCommand: (command: PaletteCommand) => void;
   /** Fired when the user picks the synthesized "Ask XR" row. */
   onAsk: (question: string) => void;
-  /** Fired for the "?" prefix web-search stub. */
-  onWebSearchStub: () => void;
+  /** Fired for the "?" prefix — opens Research with the question. */
+  onResearch: (question: string) => void;
 }
 
 export function PaletteResults({
@@ -56,7 +56,7 @@ export function PaletteResults({
   isHud,
   onSelectCommand,
   onAsk,
-  onWebSearchStub,
+  onResearch,
 }: PaletteResultsProps) {
   const query = usePaletteStore((s) => s.query);
   const history = usePaletteStore((s) => s.history);
@@ -99,16 +99,17 @@ export function PaletteResults({
       )}
     >
       {mode === 'search' ? (
-        <Command.Group heading="Search">
+        <Command.Group heading="Research">
           <Command.Item
-            value={`Search the web ${rest}`}
-            onSelect={onWebSearchStub}
+            value={`Research ${rest}`}
+            onSelect={() => onResearch(rest.trim())}
             className="xr-palette-item"
+            disabled={!rest.trim()}
           >
             <PaletteItem
               icon={Globe}
-              title={rest.trim() ? `Search the web for “${rest.trim()}”` : 'Search the web'}
-              subtitle="XR web search"
+              title={rest.trim() ? `Research “${rest.trim()}”` : 'Type a question to research'}
+              subtitle="Opens Research · searches, reads and cites"
             />
           </Command.Item>
         </Command.Group>

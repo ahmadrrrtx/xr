@@ -107,7 +107,21 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 148_000; // Phase 17 (Builder) · 145,500 → 148,000 (2026-10-06):
+export const TREE_CEILING = 149_000; // Phase 18 (Research) · 148,000 → 149,000 (2026-10-07):
+// the desktop Research screen is wired to the EXISTING research engine
+// (runResearch) rather than a second loop, so the engine half is thin:
+// structured run events beside the say() lines (run-events.ts), an in-memory
+// run registry with SSE replay + AbortSignal cancellation (run-registry.ts),
+// the config-driven deps builder shared with the CLI (run-deps.ts), in-memory
+// PDF text extraction (pdf-text.ts), research→memory bridge (remember.ts),
+// and the routes + contract/schemas (research-run.routes.ts,
+// contract-research.ts, schemas-research.ts). Cancel and budget live with the
+// store + audit log, so this is consent-plane transport again and cannot move
+// to a satellite. No waived giant grew except the generated client
+// (940 → 979, register updated). Measured 148,688. Smallest round number
+// that fits; 110k stays the direction of travel.
+//
+// Phase 17 (Builder) · 145,500 → 148,000 (2026-10-06):
 // the Builder's engine half: registered project roots with the same
 // insideRoot scope rule as the dashboard files (builder-projects.ts, incl.
 // the recursive watcher + backup naming), a pure content-matching unified

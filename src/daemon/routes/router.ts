@@ -8,6 +8,7 @@ import type { TrustService } from "../../runtime/trust/service.ts";
 import type { XRApp } from "../../core/app.ts";
 import type { AgentExecutorHandle } from "../agent-executor.ts";
 import type { ResearchJobRegistry } from "../../research/jobs.ts";
+import type { ResearchRunRegistry } from "../../research/run-registry.ts";
 
 export interface DaemonState {
   store: Store;
@@ -25,6 +26,8 @@ export interface DaemonState {
   agentExecutor?: AgentExecutorHandle;
   /** Phase 10 — shared research job registry (jobs/cancellation/SSE). */
   researchRegistry?: ResearchJobRegistry;
+  /** Phase 18 — full research runs (`runResearch()`): cancel + SSE replay. */
+  researchRunRegistry?: ResearchRunRegistry;
 }
 
 export interface DaemonResponseHelpers {

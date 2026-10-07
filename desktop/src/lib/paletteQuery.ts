@@ -64,7 +64,7 @@ export function groupAllowed(mode: PrefixMode, group: PaletteGroup, dev: boolean
     case 'dev':
       return dev; // '>' shows ONLY dev commands
     case 'search':
-      return false; // '?' replaces the registry with the web-search stub
+      return false; // '?' replaces the registry with the Research row
     default:
       return true;
   }

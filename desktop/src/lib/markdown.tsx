@@ -2,7 +2,8 @@
  * Markdown renderer (Phase 4) — react-markdown + remark-gfm, XR-typography
  * components. Code fences render through <CodeBlock> (shiki, lazy); HTML in
  * messages stays escaped (react-markdown never passes raw HTML through).
- * Citations render as cyan superscripts (source panel lands in Phase 18).
+ * Chat citations render as cyan superscripts; Chat has no source list behind
+ * them, so the chip points at Research (which does).
  */
 import React, { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -18,8 +19,8 @@ function Citation({ n }: { n: string }) {
         type="button"
         className="text-accent hover:underline px-0.5 text-[11px] font-semibold"
         onClick={() =>
-          toast('Source linking coming in the Research phase', {
-            description: 'Citations will open the source panel (Phase 18).',
+          toast('Chat citations are not linked to sources', {
+            description: 'For a report where every claim links to a source, use Research (⌘K, then “?”).',
           })
         }
       >

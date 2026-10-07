@@ -291,6 +291,23 @@ export function buildPaletteCommands(
       keywords: ['runs', 'errors', 'failures', 'control room'],
       action: () => openRoute('/runs?status=failed'),
     },
+    // Research (Phase 18). "?" prefix starts a run; this opens the screen.
+    {
+      id: 'research-open',
+      group: 'commands',
+      title: 'Research…',
+      icon: Search,
+      keywords: ['research', 'search', 'sources', 'cite', 'citations', 'web', 'report', 'deep'],
+      action: () => openRoute('/research'),
+    },
+    {
+      id: 'research-web-access',
+      group: 'commands',
+      title: 'Research: Web access settings',
+      icon: ShieldCheck,
+      keywords: ['research', 'web', 'egress', 'internet', 'allow', 'shield', 'network'],
+      action: () => openRoute('/shield?tab=security&section=network'),
+    },
     // Shield (Phase 12). Same URL-intent pattern as the Control Room.
     {
       id: 'shield-open',

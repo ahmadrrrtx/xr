@@ -16,6 +16,7 @@
  */
 
 import { z } from "zod/v4";
+export * from "./schemas-research.ts";
 
 // ── Shared primitives ────────────────────────────────────────────────────────
 

@@ -7,8 +7,9 @@
  * risky DB migrations for every internal field.
  */
 
-export type ResearchMode = "quick" | "deep" | "compare" | "factcheck" | "briefing";
-export type ResearchDepth = "quick" | "deep";
+export type ResearchMode = "quick" | "deep" | "thorough" | "compare" | "factcheck" | "briefing";
+/** Phase 18: `thorough` is the desktop's "Deep" tier — a bigger budget, same pipeline. */
+export type ResearchDepth = "quick" | "deep" | "thorough";
 
 export type ResearchStatus =
   | "planning"
@@ -26,7 +27,7 @@ export type ResearchStatus =
 export type ClaimKind = "fact" | "inference" | "opinion" | "uncertainty";
 export type Claim = ClaimKind;
 export type Confidence = "high" | "medium" | "low";
-export type SourceType = "official" | "primary" | "academic" | "news" | "docs" | "community" | "blog" | "reference" | "unknown";
+export type SourceType = "official" | "primary" | "academic" | "news" | "docs" | "community" | "blog" | "reference" | "local" | "unknown";
 export type Freshness = "fresh" | "recent" | "stale" | "unknown";
 export type EvidenceStrength = "strong" | "moderate" | "weak";
 export type OutputFormat = "markdown" | "html" | "json";
@@ -198,6 +199,8 @@ export interface ResearchSession {
   liveSourcesOnly: boolean;
   lastRefreshedAt?: number;
   meter?: string;
+  /** Phase 18: why a run ended `stopped` ("cancelled" | budget reason). */
+  stopReason?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -214,4 +217,5 @@ export interface DepthBudget {
 export const DEPTH_BUDGETS: Record<ResearchDepth, DepthBudget> = {
   quick: { maxQueries: 4, resultsPerQuery: 6, maxSources: 10, maxFetched: 5, maxQuestions: 4, maxEvidencePerSource: 5 },
   deep: { maxQueries: 10, resultsPerQuery: 8, maxSources: 28, maxFetched: 16, maxQuestions: 8, maxEvidencePerSource: 8 },
+  thorough: { maxQueries: 14, resultsPerQuery: 8, maxSources: 40, maxFetched: 24, maxQuestions: 10, maxEvidencePerSource: 8 },
 };

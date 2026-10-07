@@ -16,6 +16,28 @@ import type { Store } from "../state/workspace-store.ts";
 import type { ResearchBudgetGuard } from "./engine.ts";
 import type { ResearchBudgetState } from "./provider-types.ts";
 
+/** Outcome of asking the Governor whether a cloud run may start as requested. */
+export interface ProviderRoute {
+  /** Provider to use — the requested one, or "ollama" when the Governor said to fall back. */
+  providerId: string;
+  /** Governor reason when the run was routed to the local model; null otherwise. */
+  fallbackReason: string | null;
+}
+
+/**
+ * Budget-aware provider routing for a research run (Phase 2 · F-12). The
+ * decision runs INSIDE the Governor — checkBeforeStep is the single budget
+ * decision point; the local fallback is taken only when the Governor reports
+ * the global cap with auto_fallback. Shared by the CLI and the daemon route so
+ * both start a run under exactly the same rule.
+ */
+export function governedProviderRoute(store: Store, budget: Budget, pricing: Pricing, providerId: string, local: boolean): ProviderRoute {
+  if (local) return { providerId, fallbackReason: null };
+  const decision = new CostGovernor(budget, pricing, new BudgetManager(store)).checkBeforeStep();
+  if (!decision.allow && decision.suggestLocal) return { providerId: "ollama", fallbackReason: decision.reason };
+  return { providerId, fallbackReason: null };
+}
+
 export class GovernedResearchBudget implements ResearchBudgetGuard {
   private gov: CostGovernor;
   private lastReason = "";
