@@ -351,6 +351,91 @@ export class XRDaemonClient {
     return await this.call("DELETE", `/api/v1/terminal/pty/${encodeURIComponent(sessionId)}`);
   }
 
+  /** Register/open an absolute folder as a Builder project (validated, realpath'd, audited) → stable id for every other Builder route. */
+  async builderProjectsOpen(body: z.infer<typeof S.BuilderProjectOpenRequest>): Promise<z.infer<typeof S.BuilderProjectResponse>> {
+    return await this.call("POST", "/api/v1/builder/projects", body);
+  }
+
+  /** Projects this daemon has open. */
+  async builderProjectsList(): Promise<z.infer<typeof S.BuilderProjectsListResponse>> {
+    return await this.call("GET", "/api/v1/builder/projects");
+  }
+
+  /** Project tree (heavy folders listed, not descended; 4 000-entry cap) with git badges and branch. */
+  async builderTree(projectId: string): Promise<z.infer<typeof S.BuilderTreeResponse>> {
+    return await this.call("GET", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/tree`);
+  }
+
+  /** Read a text file inside the project (?path=, 512 KB cap, binary detected). */
+  async builderFileRead(projectId: string, body: z.infer<typeof S.BuilderFileReadRequest>): Promise<z.infer<typeof S.BuilderFileReadResponse>> {
+    return await this.call("GET", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/file`, body);
+  }
+
+  /** Save a file — SSE: approval_required (write_file, per-project scope) → applied | denied; stale mtime answers 409 first. (SSE stream — returns the raw Response). */
+  async builderFileWrite(projectId: string, body: z.infer<typeof S.BuilderFileWriteRequest>): Promise<Response> {
+    return await this.raw("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/file/write`, body);
+  }
+
+  /** Create an empty file or a folder — SSE consent stream (create_file | mkdir). (SSE stream — returns the raw Response). */
+  async builderFileCreate(projectId: string, body: z.infer<typeof S.BuilderFileCreateRequest>): Promise<Response> {
+    return await this.raw("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/file/create`, body);
+  }
+
+  /** Rename/move inside the project — SSE consent stream (rename_file). (SSE stream — returns the raw Response). */
+  async builderFileRename(projectId: string, body: z.infer<typeof S.BuilderFileRenameRequest>): Promise<Response> {
+    return await this.raw("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/file/rename`, body);
+  }
+
+  /** Delete a file or folder (recursive, stated in the approval) — SSE consent stream (delete_file). (SSE stream — returns the raw Response). */
+  async builderFileDelete(projectId: string, body: z.infer<typeof S.BuilderFileDeleteRequest>): Promise<Response> {
+    return await this.raw("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/file/delete`, body);
+  }
+
+  /** Branch, dirty flag and per-path badges for the project. */
+  async builderGit(projectId: string): Promise<z.infer<typeof S.BuilderGitResponse>> {
+    return await this.call("GET", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/git`);
+  }
+
+  /** Syntax diagnostics from the PROJECT's own TypeScript (transpileModule); {available:false} when it is not installed. */
+  async builderDiagnostics(projectId: string, body: z.infer<typeof S.BuilderDiagnosticsRequest>): Promise<z.infer<typeof S.BuilderDiagnosticsResponse>> {
+    return await this.call("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/diagnostics`, body);
+  }
+
+  /** Apply selected hunks of a unified diff — dry-run first (conflicts → 409, nobody asked), then SSE consent stream (patch) with a backup for undo. (SSE stream — returns the raw Response). */
+  async builderApplyDiff(projectId: string, body: z.infer<typeof S.BuilderApplyDiffRequest>): Promise<Response> {
+    return await this.raw("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/apply-diff`, body);
+  }
+
+  /** Restore the backup an apply-diff made — SSE consent stream (write_file). (SSE stream — returns the raw Response). */
+  async builderUndo(projectId: string, body: z.infer<typeof S.BuilderUndoRequest>): Promise<Response> {
+    return await this.raw("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/undo`, body);
+  }
+
+  /** Detected dev command (vite/next/cra/node/cargo/django/flask/static), live status and the recent log tail. */
+  async builderDevServerStatus(projectId: string): Promise<z.infer<typeof S.BuilderDevServerResponse>> {
+    return await this.call("GET", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/dev-server`);
+  }
+
+  /** Start the dev server — deterministic policy gate, then SSE consent stream (shell; static sites: serve_static) → applied{status}. (SSE stream — returns the raw Response). */
+  async builderDevServerStart(projectId: string, body: z.infer<typeof S.BuilderDevServerStartRequest>): Promise<Response> {
+    return await this.raw("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/dev-server/start`, body);
+  }
+
+  /** Stop the project's dev server (SIGTERM → 2 s → SIGKILL). */
+  async builderDevServerStop(projectId: string): Promise<z.infer<typeof S.BuilderDevServerStopResponse>> {
+    return await this.call("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/dev-server/stop`);
+  }
+
+  /** Install dependencies with the lockfile's package manager — SSE consent stream (shell); output streams on the events feed. (SSE stream — returns the raw Response). */
+  async builderDevServerInstall(projectId: string): Promise<Response> {
+    return await this.raw("POST", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/dev-server/install`);
+  }
+
+  /** Live feed (SSE): dev-server log/ready/exit/status and debounced fs:changed batches from a recursive watcher. (SSE stream — returns the raw Response). */
+  async builderEvents(projectId: string): Promise<Response> {
+    return await this.raw("GET", `/api/v1/builder/projects/${encodeURIComponent(projectId)}/events`);
+  }
+
   /** Desktop UI state for this workspace (layout, tabs, drafts, last area) — opaque JSON the renderer owns, kept durable by the engine. */
   async stateUiGet(body: z.infer<typeof S.UiStateGetQuery>): Promise<z.infer<typeof S.UiStateGetResponse>> {
     return await this.call("GET", "/api/v1/state/ui", body);

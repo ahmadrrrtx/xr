@@ -486,6 +486,12 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
         .catch(() => {
           /* best-effort on shutdown */
         });
+      // Phase 17 · Builder: dev servers the engine started die with it too.
+      void import("./dev-servers.ts")
+        .then((m) => m.getDevServers().stopAll())
+        .catch(() => {
+          /* best-effort on shutdown */
+        });
       server.stop();
       void shutdownObservability();
     },

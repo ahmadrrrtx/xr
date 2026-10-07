@@ -22,6 +22,10 @@ interface ResizerProps {
   max: number;
   /** Default size — restored on double-click. */
   defaultValue: number;
+  /** Phase 17: the sized pane sits AFTER the handle (right/bottom), so dragging toward it shrinks it. */
+  invert?: boolean;
+  /** Optional accessible name (defaults to a generic one). */
+  label?: string;
 }
 
 export function Resizer({
@@ -32,6 +36,8 @@ export function Resizer({
   min,
   max,
   defaultValue,
+  invert = false,
+  label,
 }: ResizerProps) {
   const [dragging, setDragging] = useState(false);
   const startPos = useRef(0);
@@ -65,11 +71,11 @@ export function Resizer({
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!dragging) return;
       const pos = orientation === 'vertical' ? e.clientX : e.clientY;
-      const delta = pos - startPos.current;
+      const delta = (pos - startPos.current) * (invert ? -1 : 1);
       const next = Math.min(max, Math.max(min, startValue.current + delta));
       if (next !== value) onChange(next);
     },
-    [dragging, max, min, onChange, orientation, value]
+    [dragging, invert, max, min, onChange, orientation, value]
   );
 
   const endDrag = useCallback(() => {
@@ -90,6 +96,7 @@ export function Resizer({
       aria-valuenow={Math.round(value)}
       aria-valuemin={min}
       aria-valuemax={max}
+      aria-label={label ?? 'Resize panes'}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}

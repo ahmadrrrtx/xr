@@ -232,12 +232,20 @@ function ptyRoutes(): DaemonRoute[] {
       path: "/api/terminal/pty",
       method: "POST",
       handle: async ({ req, json, sse, state, config }) => {
-        const root = resolve(process.cwd());
-        let body: { cwd?: string; cols?: number; rows?: number };
+        let body: { cwd?: string; cols?: number; rows?: number; projectId?: string };
         try {
           body = (await req.json().catch(() => ({}))) as typeof body;
         } catch {
           return json({ error: "expected JSON body" }, 400);
+        }
+        // Phase 17 · Builder: a registered project's root replaces the daemon
+        // cwd as the scope boundary — same insideRoot rule, different root.
+        let root = resolve(process.cwd());
+        if (typeof body?.projectId === "string" && body.projectId) {
+          const { getBuilderProjects } = await import("../builder-projects.ts");
+          const project = getBuilderProjects().get(body.projectId);
+          if (!project) return json({ error: "unknown project — open it first" }, 404);
+          root = project.root;
         }
         const relCwd = typeof body?.cwd === "string" && body.cwd.trim() ? body.cwd.trim() : ".";
         const cwd = insideRoot(root, relCwd);

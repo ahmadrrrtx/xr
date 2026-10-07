@@ -24,6 +24,7 @@ import {
   type TurnError,
 } from '@/lib/chat-db';
 import { streamChat, type ChatMode, type ChatTurn, type StreamEvent } from '@/lib/llm';
+import type { SpendSurface } from '@/budget/types';
 import { orbSetState } from '@/lib/orb';
 import type { EngineRunRecorder } from '@/brain/engine';
 import { useBrainStore } from '@/stores/brainStore';
@@ -73,6 +74,25 @@ export function workspaceContextText(ws: WorkspaceContext): string {
   return `The user is working in the workspace "${ws.name}" located at ${ws.path}. Treat that directory as the project root: read and write files there unless told otherwise, and keep answers specific to this project.`;
 }
 
+/**
+ * Phase 17: a surface other than Chat (the Builder) drives the same
+ * pipeline with its own context, Brain agent label, budget surface and
+ * mode. Remembered per session so retry/regenerate keep the surface.
+ */
+export interface TurnOverrides {
+  /** Extra system context for the turn (open files, selection, git …). */
+  context?: string;
+  /** Brain agent label (default `Main`; `Builder` maps to the builder kind). */
+  agent?: string;
+  /** Budget surface the spend is attributed to (default `chat`). */
+  surface?: SpendSurface;
+  /** Force a mode for the turn (the Builder asks for diffs in `ask`). */
+  mode?: ChatMode;
+  /** Workspace context override (defaults to the store's workspace). */
+  workspace?: WorkspaceContext | null;
+}
+const overridesBySession = new Map<string, TurnOverrides>();
+
 export const CHAT_MODES: readonly ChatMode[] = ['ask', 'agent', 'plan'];
 const MODE_KEY = (id: string | null): string => `xr.chat.mode.${id ?? 'default'}`;
 
@@ -121,6 +141,8 @@ interface ChatState {
   loadMessages: (sessionId: string) => Promise<void>;
   loadOlder: (sessionId: string) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
+  /** Phase 17: send into a specific session with surface overrides (Builder). */
+  sendMessageIn: (sessionId: string, text: string, overrides?: TurnOverrides) => Promise<void>;
   cancelGeneration: () => void;
   retryMessage: (id: string) => Promise<void>;
   regenerate: (assistantId: string) => Promise<void>;
@@ -168,12 +190,14 @@ function engineKnownDown(): boolean {
 }
 
 /** Run the engine and fold its events into store state. */
-async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<void> {
+async function runGeneration(sessionId: string, history: ChatTurn[], overrides?: TurnOverrides): Promise<void> {
   const sessions = useSessionsStore.getState();
   controller = new AbortController();
   const signal = controller.signal;
   const model = sessions.sessions.find((s) => s.id === sessionId)?.model ?? resolveDefaultModel();
-  const mode = useChatStore.getState().modes[sessionId] ?? modeFor(sessionId);
+  if (overrides) overridesBySession.set(sessionId, overrides);
+  const turn = overrides ?? overridesBySession.get(sessionId);
+  const mode = turn?.mode ?? useChatStore.getState().modes[sessionId] ?? modeFor(sessionId);
 
   useChatStore.setState({
     stream: {
@@ -194,7 +218,11 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
     if (cur && cur.sessionId === sessionId) useChatStore.setState({ stream: { ...cur, ...fn(cur) } });
   };
 
-  const workspace = useChatStore.getState().workspace;
+  const workspace = turn?.workspace !== undefined ? turn.workspace : useChatStore.getState().workspace;
+  const contextParts = [
+    ...(workspace ? [workspaceContextText(workspace)] : []),
+    ...(turn?.context ? [turn.context] : []),
+  ];
 
   // Phase 14: every engine turn is a real Brain run. The recorder starts
   // when the engine acknowledges (its run id keys the trace, so the tool
@@ -214,7 +242,7 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
         e.runId,
         {
           title: (title && title !== 'New chat' ? title : prompt).slice(0, 72) || 'Chat turn',
-          agent: 'Main',
+          agent: turn?.agent ?? 'Main',
           model: useChatStore.getState().stream?.model ?? model,
           ...(workspace ? { workspace: workspace.name } : {}),
           startedAt: turnStartedAt,
@@ -239,11 +267,16 @@ async function runGeneration(sessionId: string, history: ChatTurn[]): Promise<vo
     mode,
     sessionId,
     signal,
-    ...(workspace ? { context: workspaceContextText(workspace) } : {}),
+    ...(contextParts.length ? { context: contextParts.join('\n\n') } : {}),
     // Phase 7 contract (mock seam only; engine approvals bridge themselves).
     requestApproval: makeApprovalGate(signal),
     // Phase 13: the budget governor gates, meters and bills this turn.
-    budget: { surface: 'chat', sessionId, agent: 'main', workspace: workspace?.id ?? null },
+    budget: {
+      surface: turn?.surface ?? 'chat',
+      sessionId,
+      agent: (turn?.agent ?? 'main').toLowerCase(),
+      workspace: workspace?.id ?? null,
+    },
     onEvent: (e) => {
       tee(e);
       const st = useChatStore.getState();
@@ -582,6 +615,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ...currentUserTurns(sessionId).slice(0, -1),
       { role: 'user', content: content + extra },
     ]);
+  },
+
+  sendMessageIn: async (sessionId, rawText, overrides) => {
+    const text = rawText.trim();
+    if (!text) return;
+    if (get().stream) return; // one in-flight turn at a time (shared controller)
+    const userMsg: ChatMessage = { id: newId(), sessionId, role: 'user', content: text, createdAt: Date.now() };
+    if (!get().online) {
+      await commit({ ...userMsg, metadata: { status: 'queued' } });
+      set((st) => ({ queuedIds: [...st.queuedIds, userMsg.id] }));
+      return;
+    }
+    if (engineKnownDown()) {
+      await commit({ ...userMsg, metadata: { status: 'failed' } });
+      return;
+    }
+    await commit(userMsg);
+    await runGeneration(sessionId, [...currentUserTurns(sessionId).slice(0, -1), { role: 'user', content: text }], overrides);
   },
 
   cancelGeneration: () => {

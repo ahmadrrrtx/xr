@@ -9,6 +9,7 @@ import {
   PinOff,
   Rocket,
   Trash2,
+  Wrench,
 } from 'lucide-react';
 
 import {
@@ -18,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useNavigate } from 'react-router-dom';
 import type { Workspace } from '@/workspaces/types';
 
 interface Props {
@@ -43,6 +45,7 @@ export function WorkspaceMenu({
   onDuplicate,
   onDelete,
 }: Props) {
+  const navigate = useNavigate();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -66,6 +69,13 @@ export function WorkspaceMenu({
         <DropdownMenuItem onClick={() => onLaunch(ws)}>
           <Rocket className="size-4" strokeWidth={1.5} />
           Open window
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!ws.pathExists}
+          onClick={() => navigate(`/builder/${ws.id}`)}
+        >
+          <Wrench className="size-4" strokeWidth={1.5} />
+          Open in Builder
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!ws.pathExists}

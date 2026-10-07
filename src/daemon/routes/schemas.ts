@@ -253,6 +253,7 @@ export const TerminalRunEvent = z.looseObject({
 // ── Phase 2 · G-05 — engine-owned PTY sessions (experimental) ───────────────
 
 export const TerminalPtyOpenRequest = z.looseObject({
+  projectId: z.string().regex(/^[0-9a-f]{16}$/).optional().describe("Builder project id (from POST /api/builder/projects): the shell opens in that project's root instead of the daemon root. Same approval."),
   cwd: z.string().max(2000).optional().describe("Working directory relative to the project root (default: the root). Must stay inside it."),
   cols: z.number().int().min(2).max(500).optional().describe("Initial columns (default 80)."),
   rows: z.number().int().min(1).max(300).optional().describe("Initial rows (default 24)."),
@@ -562,4 +563,167 @@ export const GitStageRequest = z.looseObject({
 
 export const GitCommitRequest = z.looseObject({
   message: z.string().min(1).max(2000).describe("Commit message; executed only after durable human approval."),
+});
+
+// ── Phase 17 · Builder (project-rooted files, diff apply, dev server) ────────
+
+export const BuilderProjectOpenRequest = z.looseObject({
+  path: z.string().min(1).max(4000).describe("Absolute folder to open as a project (must exist; never /, $HOME or XR's state dir)."),
+  name: z.string().max(120).optional().describe("Display name (defaults to the folder name)."),
+});
+
+const BuilderGitSummary = z.looseObject({
+  branch: z.string().nullable(),
+  dirty: z.boolean(),
+  isRepo: z.boolean(),
+});
+
+export const BuilderProjectResponse = z.looseObject({
+  id: z.string().describe("Stable id (hash of the real path); every other Builder route is keyed by it."),
+  name: z.string(),
+  root: z.string().describe("Real, absolute project root."),
+  git: BuilderGitSummary,
+});
+
+export const BuilderProjectsListResponse = z.looseObject({
+  projects: z.array(z.looseObject({ id: z.string(), name: z.string(), root: z.string(), openedAt: z.number() })),
+});
+
+export const BuilderTreeEntry = z.looseObject({
+  rel: z.string(),
+  name: z.string(),
+  type: z.enum(["file", "dir"]),
+  size: z.number(),
+  mtimeMs: z.number(),
+  heavy: z.literal(true).optional().describe("Listed but never descended (node_modules, .git, …)."),
+});
+
+export const BuilderGitResponse = BuilderGitSummary.extend({
+  files: z.record(z.string(), z.enum(["modified", "staged", "untracked", "added", "deleted", "renamed"]))
+    .describe("Per-path badges (folders inherit a dot from their children)."),
+});
+
+export const BuilderTreeResponse = z.looseObject({
+  root: z.string(),
+  name: z.string(),
+  entries: z.array(BuilderTreeEntry),
+  truncated: z.boolean().describe("True when the 4 000-entry cap cut the walk short (top level is always complete)."),
+  git: BuilderGitResponse,
+});
+
+export const BuilderFileReadRequest = z.looseObject({
+  path: z.string().max(2000).describe("Path relative to the project root (must be inside)."),
+});
+
+export const BuilderFileReadResponse = z.looseObject({
+  path: z.string(),
+  content: z.string().describe("Empty for binary files (isText=false)."),
+  size: z.number(),
+  mtimeMs: z.number(),
+  isText: z.boolean(),
+  truncated: z.boolean().describe("True when only the first 512 KB were returned."),
+});
+
+export const BuilderFileWriteRequest = z.looseObject({
+  path: z.string().max(2000),
+  content: z.string().describe("Full new content (UTF-8, ≤ 1 MB)."),
+  baseMtimeMs: z.number().optional().describe("mtimeMs the editor loaded; a mismatch answers 409 instead of clobbering."),
+});
+
+export const BuilderFileCreateRequest = z.looseObject({
+  path: z.string().max(2000),
+  kind: z.enum(["file", "folder"]).optional().describe("Default: file."),
+});
+
+export const BuilderFileRenameRequest = z.looseObject({
+  from: z.string().max(2000),
+  to: z.string().max(2000),
+});
+
+export const BuilderFileDeleteRequest = z.looseObject({
+  path: z.string().max(2000).describe("File or folder; folders are deleted recursively and the approval says so."),
+});
+
+export const BuilderApplyDiffRequest = z.looseObject({
+  path: z.string().max(2000),
+  patch: z.string().max(524_288).describe("Unified diff for THIS file (≤ 512 KB); loose `@@` headers are tolerated."),
+  hunks: z.array(z.number().int().min(0)).optional().describe("0-based hunk indexes to apply (default: all)."),
+  baseMtimeMs: z.number().optional(),
+});
+
+export const BuilderUndoRequest = z.looseObject({
+  path: z.string().max(2000),
+  backupId: z.string().max(200).describe("backupId returned by apply-diff."),
+});
+
+/** Every Builder write streams the same consent frames (same framing as /api/chat). */
+export const BuilderMutationEvent = z.looseObject({
+  event_id: z.number().int().positive().optional(),
+  approval_required: z.looseObject({
+    id: z.string(),
+    tool: z.string(),
+    reason: z.string(),
+    args: z.record(z.string(), z.unknown()).optional().describe("Includes `scope` (project name) so remembered rules are per project."),
+    riskTier: z.string().optional(),
+    ttlMs: z.number().optional(),
+  }).optional(),
+  type: z.enum(["applied", "denied", "timed_out", "error"]).optional(),
+  approvalId: z.string().optional(),
+  decision: z.string().nullish(),
+  error: z.string().optional(),
+  path: z.string().optional(),
+  mtimeMs: z.number().optional(),
+  content: z.string().optional().describe("New file content after apply-diff / undo."),
+  backupId: z.string().nullish().describe("Handle for undo (apply-diff only)."),
+});
+
+export const BuilderDiagnosticsRequest = z.looseObject({
+  path: z.string().max(2000),
+  content: z.string().describe("Current editor buffer (≤ 512 KB)."),
+});
+
+export const BuilderDiagnosticsResponse = z.looseObject({
+  available: z.boolean().describe("False when the project has no node_modules/typescript — never guessed."),
+  reason: z.string().optional(),
+  diagnostics: z.array(z.looseObject({
+    from: z.number().int(), to: z.number().int(), severity: z.enum(["error", "warning", "info"]), message: z.string(), code: z.number().int().optional(),
+  })),
+});
+
+export const BuilderDevServerStatus = z.looseObject({
+  state: z.enum(["stopped", "starting", "running", "exited"]),
+  installing: z.boolean(),
+  kind: z.string().nullable(),
+  cmd: z.string().nullable(),
+  pid: z.number().nullable(),
+  port: z.number().nullable(),
+  url: z.string().nullable(),
+  startedAt: z.number().nullable(),
+  readyMs: z.number().nullable().describe("Spawn → first printed local URL, measured by the engine."),
+  exit: z.looseObject({ code: z.number().nullable(), signal: z.string().nullable() }).nullable(),
+});
+
+export const BuilderDevServerResponse = z.looseObject({
+  detected: z.looseObject({
+    kind: z.string(), label: z.string(), argv: z.array(z.string()).nullable(), cmd: z.string().nullable(), pm: z.string(),
+    needsInstall: z.boolean(), installArgv: z.array(z.string()).nullable(), hint: z.string(),
+  }),
+  status: BuilderDevServerStatus.nullable(),
+  log: z.array(z.looseObject({ seq: z.number(), ts: z.number(), stream: z.enum(["stdout", "stderr", "system"]), line: z.string() })),
+});
+
+export const BuilderDevServerStartRequest = z.looseObject({
+  cmd: z.string().max(2000).optional().describe("Override the detected command (policy-checked like the terminal)."),
+});
+
+export const BuilderDevServerStopResponse = z.looseObject({
+  stopped: z.boolean(),
+  status: BuilderDevServerStatus.nullable(),
+});
+
+export const BuilderProjectEvent = z.looseObject({
+  event_id: z.number().int().positive().optional(),
+  type: z.string().describe("hello | ping | dev-server:log | dev-server:ready | dev-server:exit | dev-server:status | fs:changed"),
+  projectId: z.string().optional(),
+  paths: z.array(z.string()).optional(),
 });

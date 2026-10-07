@@ -336,13 +336,15 @@ mod menu_ids {
     pub const VOICE: &str = "orb-voice";
     pub const THEATER: &str = "orb-theater";
     pub const APPROVALS: &str = "orb-approvals";
+    /// Phase 17: the Builder (3-pane IDE) — routes the main window.
+    pub const BUILDER: &str = "orb-builder";
     pub const SETTINGS: &str = "orb-settings";
     pub const HIDE: &str = "orb-hide";
     pub const QUIT: &str = "orb-quit";
 
     /// Every id `build_menu` creates, in menu order (tests iterate this).
     #[cfg(test)]
-    pub const ALL: &[&str] = &[OPEN, VOICE, THEATER, APPROVALS, SETTINGS, HIDE, QUIT];
+    pub const ALL: &[&str] = &[OPEN, VOICE, THEATER, APPROVALS, BUILDER, SETTINGS, HIDE, QUIT];
 }
 
 /// What a menu selection should do — `handle_menu_id` dispatches on this.
@@ -352,6 +354,7 @@ enum MenuAction {
     Voice,
     Theater,
     Approvals,
+    Builder,
     Settings,
     Hide,
     Quit,
@@ -364,6 +367,7 @@ fn menu_action_for(id: &str) -> Option<MenuAction> {
         menu_ids::VOICE => Some(MenuAction::Voice),
         menu_ids::THEATER => Some(MenuAction::Theater),
         menu_ids::APPROVALS => Some(MenuAction::Approvals),
+        menu_ids::BUILDER => Some(MenuAction::Builder),
         menu_ids::SETTINGS => Some(MenuAction::Settings),
         menu_ids::HIDE => Some(MenuAction::Hide),
         menu_ids::QUIT => Some(MenuAction::Quit),
@@ -420,6 +424,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let theater = MenuItem::with_id(app, menu_ids::THEATER, theater_label, true, None::<&str>)?;
     let approvals =
         MenuItem::with_id(app, menu_ids::APPROVALS, "Pending Approvals", true, None::<&str>)?;
+    let builder = MenuItem::with_id(app, menu_ids::BUILDER, "Open Builder", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let settings = MenuItem::with_id(app, menu_ids::SETTINGS, "Settings…", true, None::<&str>)?;
     let hide = MenuItem::with_id(app, menu_ids::HIDE, "Hide Orb", true, None::<&str>)?;
@@ -431,6 +436,7 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &voice,
             &theater,
             &approvals,
+            &builder,
             &separator,
             &settings,
             &hide,
@@ -468,6 +474,11 @@ fn handle_menu_id<R: Runtime>(app: &AppHandle<R>, id: &str) {
             focus_main(app);
             // Phase 5's route event — the main window's palette IPC navigates.
             let _ = app.emit_to("main", "palette:navigate", "/settings");
+        }
+        Some(MenuAction::Builder) => {
+            focus_main(app);
+            // Phase 17: no workspace id here — the route shows recent projects.
+            let _ = app.emit_to("main", "palette:navigate", "/builder");
         }
         Some(MenuAction::Hide) => hide_orb(app),
         Some(MenuAction::Quit) => app.exit(0),
@@ -733,7 +744,7 @@ mod tests {
             assert!(!seen.contains(&action), "duplicate action for {id}");
             seen.push(action);
         }
-        assert_eq!(seen.len(), 7, "expected exactly 7 menu actions");
+        assert_eq!(seen.len(), 8, "expected exactly 8 menu actions");
         assert_eq!(menu_action_for("orb-unknown"), None);
         assert_eq!(menu_action_for(""), None);
         assert_eq!(menu_action_for("open"), None, "unprefixed id must not match");

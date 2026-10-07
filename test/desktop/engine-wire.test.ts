@@ -91,6 +91,16 @@ describe("approval_required → ApprovalRequest (same id, engine resource, hones
     expect(r.createdAt).toBe(123);
   });
 
+  test("Phase 17: a Builder scope becomes the rule resource (per project, not per path); new tools are named", () => {
+    const r = toApprovalRequest({ id: "ap_s", tool: "patch", reason: "Apply 2 hunks to src/app.ts — Builder", args: { path: "src/app.ts", scope: "my-app (Builder)", hunks: 2 }, riskTier: "medium", ttlMs: 1 });
+    expect(r.resource).toBe("my-app (Builder)");
+    expect(r.action).toBe("Apply a diff");
+    expect(r.justification).toContain("src/app.ts");
+    expect(toApprovalRequest({ id: "ap_m", tool: "mkdir", reason: "", args: { path: "src/new" }, ttlMs: 1 }).action).toBe("Create a folder");
+    expect(toApprovalRequest({ id: "ap_r", tool: "rename_file", reason: "", args: { path: "a", to: "b" }, ttlMs: 1 }).resource).toBe("a");
+    expect(toApprovalRequest({ id: "ap_st", tool: "serve_static", reason: "", args: { path: ".", scope: "site (Builder)" }, riskTier: "low", ttlMs: 1 }).risk).toBe("low");
+  });
+
   test("shell commands surface the command as the resource; an unknown tool is humanised, not dropped", () => {
     expect(toApprovalRequest({ id: "ap_1", tool: "shell", reason: "", args: { command: "rm -rf build" }, ttlMs: 1 }).resource).toBe("rm -rf build");
     const odd = toApprovalRequest({ id: "ap_2", tool: "deploy_rocket", reason: "", args: {}, ttlMs: 1 });

@@ -14,6 +14,11 @@ import type { EngineApprovalRequired, EnginePreview } from './types';
 const TOOL_META: Record<string, { action: string; icon: string }> = {
   write_file: { action: 'Write a file', icon: 'file-edit' },
   edit_file: { action: 'Edit a file', icon: 'file-edit' },
+  patch: { action: 'Apply a diff', icon: 'file-edit' },
+  create_file: { action: 'Create a file', icon: 'file-edit' },
+  mkdir: { action: 'Create a folder', icon: 'file' },
+  rename_file: { action: 'Rename a file', icon: 'file' },
+  serve_static: { action: 'Serve a folder locally', icon: 'globe' },
   delete_file: { action: 'Delete a file', icon: 'file' },
   delete: { action: 'Delete', icon: 'file' },
   shell: { action: 'Run a shell command', icon: 'terminal' },
@@ -49,9 +54,15 @@ function previewText(preview: EnginePreview | string | null | undefined): string
   return text ? text.slice(0, 4000) : undefined;
 }
 
+/**
+ * The resource a remembered rule keys on. `scope` wins when present: the
+ * Builder (Phase 17) names the project there so "Always allow · Write a
+ * file · my-app (Builder)" is one rule per project, not one per path — the
+ * exact path and diff stay in the preview the human reads.
+ */
 function resourceOf(a: EngineApprovalRequired): string | null {
   const args = a.args ?? {};
-  for (const k of ['path', 'file', 'command', 'cmd', 'to', 'url', 'target']) {
+  for (const k of ['scope', 'path', 'file', 'command', 'cmd', 'to', 'url', 'target']) {
     const v = args[k];
     if (typeof v === 'string' && v.trim()) return v.length > 160 ? `${v.slice(0, 160)}…` : v;
   }

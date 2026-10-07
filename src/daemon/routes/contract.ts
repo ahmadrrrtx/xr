@@ -75,6 +75,7 @@ import {
   ResearchJobResponse,
   ResearchJobsListResponse,
 } from "./schemas.ts";
+import { BUILDER_CONTRACT } from "./contract-builder.ts";
 
 export type Stability = "stable" | "experimental";
 
@@ -767,6 +768,7 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     response: OkResponse,
   },
 
+  ...BUILDER_CONTRACT, // Phase 17 · Builder (contract-builder.ts)
   // ── Phase 8 · meta operations (registered by meta.routes.ts) ──────────────
   "meta.apiRoot.get": {
     summary: "API index: version, operation catalogue link, OpenAPI location.",

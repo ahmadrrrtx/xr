@@ -107,7 +107,23 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 145_500; // Phase 15 (voice) · 144,500 → 145,500 (2026-10-06):
+export const TREE_CEILING = 148_000; // Phase 17 (Builder) · 145,500 → 148,000 (2026-10-06):
+// the Builder's engine half: registered project roots with the same
+// insideRoot scope rule as the dashboard files (builder-projects.ts, incl.
+// the recursive watcher + backup naming), a pure content-matching unified
+// diff applier (builder-patch.ts — the human reviews hunks, the engine lands
+// them or refuses with a conflict report), engine-owned dev servers with
+// honest readiness (dev-servers.ts), and the approval-gated SSE mutation
+// routes (builder.routes.ts / builder-dev.routes.ts / builder-shared.ts,
+// every write through the durable approval store + audit log) with their
+// contract entries (contract-builder.ts) and schemas. Consent plane again:
+// it composes the approval store, policy gate and audit log and cannot move
+// to a satellite without splitting them. proc-tree.ts (process-tree kill)
+// exists because `npm run dev` is a wrapper: stopping only the top pid
+// orphaned the real listener. No waived giant grew except the generated
+// client (854 → 940, register updated). Measured 147,564. Smallest round
+// number that fits; 110k stays the direction of travel.
+// Phase 15 (voice) · 144,500 → 145,500 (2026-10-06):
 // the voice loop becomes real for a first-run user: a measured model
 // catalogue + resumable downloader (models.ts, 354 — the only place that
 // knows byte sizes, so the download card can never lie), catalogue-driven

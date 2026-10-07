@@ -64,6 +64,14 @@ function stripAnsi(s: string): string {
 /** Phase 14 — SSE comment heartbeat cadence (see `keepalive` in the stream). */
 const SSE_KEEPALIVE_MS = 5_000;
 
+/**
+ * Caller-supplied system context. 4 000 chars served the Chat surface; the
+ * Builder (Phase 17) sends the open file excerpt, selection, terminal tail
+ * and git state, so the cap is 24 000 — bounded on the desktop side too and
+ * metered by the budget governor like any other prompt token.
+ */
+const CONTEXT_CAP = 24_000;
+
 export function chatRoutes(): DaemonRoute[] {
   return [
     route({
@@ -239,7 +247,7 @@ export function chatRoutes(): DaemonRoute[] {
                     provider: body.provider,
                     model: body.model,
                     ...(typeof body.context === "string" && body.context.trim()
-                      ? { systemPrompt: body.context.trim().slice(0, 4_000) }
+                      ? { systemPrompt: body.context.trim().slice(0, CONTEXT_CAP) }
                       : {}),
                     budget: body.budget,
                     maxTokens: body.maxTokens,
