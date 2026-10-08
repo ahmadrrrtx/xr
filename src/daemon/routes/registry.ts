@@ -33,6 +33,8 @@ import { uiStateRoutes } from "./ui-state.routes.ts";
 import { trustRoutes } from "./trust.routes.ts";
 import { researchRoutes } from "./research.routes.ts";
 import { researchRunRoutes } from "./research-run.routes.ts";
+import { customAgentsRoutes } from "./custom-agents.routes.ts";
+import { workflowsRoutes } from "./workflows.routes.ts";
 import { mcpRoutes } from "./mcp.routes.ts";
 import type { DaemonRoute } from "./router.ts";
 import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
@@ -64,6 +66,10 @@ export function listBaseRoutes(): DaemonRoute[] {
     // Phase 2 · G-08 — desktop UI state (layout, tabs, drafts) per workspace.
     ...uiStateRoutes(),
     ...chatRoutes(),
+    // Phase 19 — custom agents (/api/agents/custom…) precede the agents
+    // routes; visual workflows live under /api/workflows.
+    ...customAgentsRoutes(),
+    ...workflowsRoutes(),
     ...agentsRoutes(),
     ...budgetRoutes(),
     ...triggerRoutes(),

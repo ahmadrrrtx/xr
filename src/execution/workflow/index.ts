@@ -21,3 +21,6 @@ export * from "./versioning.ts";
 export * from "./engine.ts";
 export * from "./repository.ts";
 export * from "./inspection.ts";
+export * from "./events.ts";
+export * from "./lint.ts";
+export * from "./canvas.ts";

@@ -7,6 +7,10 @@ import { planningService } from "../../services/planning-service.ts";
 import { Tokens } from "../../core/tokens.ts";
 import type { MultiAgentService } from "../../services/multi-agent-service.ts";
 import { CoreEvents } from "../../core/event-bus.ts";
+import { listAgents } from "../../agents/registry.ts";
+import { toAgentDefinition } from "../../agents/custom-store.ts";
+import { allTools } from "../../tools/registry.ts";
+import { customAgentStore } from "./custom-agents.routes.ts";
 
 /**
  * Phase 4 · team-run control plane — resolve the CANONICAL multi-agent service
@@ -71,9 +75,19 @@ export function agentsRoutes(): DaemonRoute[] {
             awaitingReview: w.tasksAwaitingReview,
           },
         }));
+        // Phase 19 — the full agent registry (builtin specialists + the
+        // user's custom agents) and the engine tool list the editor picks
+        // from. Additive: `roles` stays for older clients.
+        const agents = [
+          ...listAgents({ includeDisabled: true }).map((a) => ({ ...a, builtin: true as const })),
+          ...customAgentStore().list().map((c) => toAgentDefinition(c)),
+        ];
+        const tools = allTools().map((t) => ({ name: t.name, description: t.description, requiresApproval: t.requiresApproval }));
         return json({
           // Static, honest product facts (built-in roles — not user agents).
           roles: BUILTIN_ROLES,
+          agents,
+          tools,
           // Live multi-agent work.
           workflows,
           health,

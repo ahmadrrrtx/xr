@@ -35,7 +35,7 @@ export type WorkflowRunEvent =
   /** Aggregate cost changed (after an agentic node settled). */
   | { type: "cost_update"; runId: string; cost: WorkflowCost; at: number }
   /** A human node is waiting; `approvalId` is the durable approval record. */
-  | { type: "approval_required"; runId: string; nodeId: string; approvalId: string | null; kind: "approval" | "review"; summary: string; at: number }
+  | { type: "approval_required"; runId: string; nodeId: string; approvalId: string | null; kind: "approval" | "review" | "tool"; summary: string; at: number }
   /** The run reached a terminal state. */
   | { type: "run_end"; runId: string; summary: WorkflowRunSummary; at: number };
 

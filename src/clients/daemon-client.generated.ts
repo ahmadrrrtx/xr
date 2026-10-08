@@ -491,6 +491,116 @@ export class XRDaemonClient {
     return await this.raw("POST", "/api/v1/chat", body);
   }
 
+  /** List user-authored agents (full documents, newest first). */
+  async agentsCustomList(): Promise<z.infer<typeof S.CustomAgentListResponse>> {
+    return await this.call("GET", "/api/v1/agents/custom");
+  }
+
+  /** Create a custom agent; validated (name, prompt ≥ 20 chars, tools ⊆ engine tools, budget $0.01–$5) and stored as versioned JSON. */
+  async agentsCustomCreate(body: z.infer<typeof S.CustomAgentInputRequest>): Promise<z.infer<typeof S.CustomAgentResponse>> {
+    return await this.call("POST", "/api/v1/agents/custom", body);
+  }
+
+  /** Import an exported agent document; a free, well-formed id is kept, otherwise a new one is minted (imports never overwrite). */
+  async agentsCustomImport(body: z.infer<typeof S.CustomAgentInputRequest>): Promise<z.infer<typeof S.CustomAgentResponse>> {
+    return await this.call("POST", "/api/v1/agents/custom/import", body);
+  }
+
+  /** One custom agent — the same document the Export action downloads. */
+  async agentsCustomGet(id: string): Promise<z.infer<typeof S.CustomAgentResponse>> {
+    return await this.call("GET", `/api/v1/agents/custom/${encodeURIComponent(id)}`);
+  }
+
+  /** Update a custom agent (partial merge, same validation); every save bumps `version`. */
+  async agentsCustomUpdate(id: string, body: z.infer<typeof S.CustomAgentPatchRequest>): Promise<z.infer<typeof S.CustomAgentResponse>> {
+    return await this.call("PATCH", `/api/v1/agents/custom/${encodeURIComponent(id)}`, body);
+  }
+
+  /** Delete a custom agent file. */
+  async agentsCustomDelete(id: string): Promise<z.infer<typeof S.OkResponse>> {
+    return await this.call("DELETE", `/api/v1/agents/custom/${encodeURIComponent(id)}`);
+  }
+
+  /** Duplicate a custom agent into a new document. */
+  async agentsCustomDuplicate(id: string, body: z.infer<typeof S.CustomAgentDuplicateRequest>): Promise<z.infer<typeof S.CustomAgentResponse>> {
+    return await this.call("POST", `/api/v1/agents/custom/${encodeURIComponent(id)}/duplicate`, body);
+  }
+
+  /** Compile + lint a canvas graph without saving; returns problems and a graph summary (nodes · tools · human checks). */
+  async workflowsInspect(body: z.infer<typeof S.WorkflowInspectRequest>): Promise<z.infer<typeof S.WorkflowInspectResponse>> {
+    return await this.call("POST", "/api/v1/workflows/inspect", body);
+  }
+
+  /** Recent workflow runs across all definitions. */
+  async workflowsRunsList(): Promise<z.infer<typeof S.WorkflowRunListResponse>> {
+    return await this.call("GET", "/api/v1/workflows/runs");
+  }
+
+  /** A workflow run with per-node states, cost and pending human checks. */
+  async workflowsRunsGet(runId: string): Promise<z.infer<typeof S.WorkflowRunResponse>> {
+    return await this.call("GET", `/api/v1/workflows/runs/${encodeURIComponent(runId)}`);
+  }
+
+  /** Stream a workflow run as Server-Sent Events: buffered replay, then live run_state · node_state · log · cost_update · approval_required · run_end · stream_end. Every event is emitted by the engine as the run advances. (SSE stream — returns the raw Response). */
+  async workflowsRunsStream(runId: string): Promise<Response> {
+    return await this.raw("GET", `/api/v1/workflows/runs/${encodeURIComponent(runId)}/stream`);
+  }
+
+  /** Cancel a run — aborts the in-flight node (model call / tool) and withdraws any parked human check. */
+  async workflowsRunsCancel(runId: string): Promise<z.infer<typeof S.WorkflowControlResponse>> {
+    return await this.call("POST", `/api/v1/workflows/runs/${encodeURIComponent(runId)}/cancel`);
+  }
+
+  /** Pause a running workflow after the current node finishes. */
+  async workflowsRunsPause(runId: string): Promise<z.infer<typeof S.WorkflowControlResponse>> {
+    return await this.call("POST", `/api/v1/workflows/runs/${encodeURIComponent(runId)}/pause`);
+  }
+
+  /** Resume a paused workflow. */
+  async workflowsRunsResume(runId: string): Promise<z.infer<typeof S.WorkflowControlResponse>> {
+    return await this.call("POST", `/api/v1/workflows/runs/${encodeURIComponent(runId)}/resume`);
+  }
+
+  /** Record a human decision for a parked approval/review node. Goes through the same approval record the Shield modal decides; the engine enforces the node's denial/expiry policy. */
+  async workflowsRunsDecide(runId: string, body: z.infer<typeof S.WorkflowDecisionRequest>): Promise<z.infer<typeof S.WorkflowRunResponse>> {
+    return await this.call("POST", `/api/v1/workflows/runs/${encodeURIComponent(runId)}/human-decision`, body);
+  }
+
+  /** List saved workflows (latest active version each) with a graph summary and the last run. */
+  async workflowsList(): Promise<z.infer<typeof S.WorkflowListResponse>> {
+    return await this.call("GET", "/api/v1/workflows");
+  }
+
+  /** Compile a canvas graph into a canonical WorkflowDefinition, lint it (errors → 422 with per-node problems) and publish version 1 (immutable, content-hashed). */
+  async workflowsCreate(body: z.infer<typeof S.WorkflowCreateRequest>): Promise<z.infer<typeof S.WorkflowResponse>> {
+    return await this.call("POST", "/api/v1/workflows", body);
+  }
+
+  /** A workflow definition (latest or ?version=) with its canvas graph, lint problems and version list. */
+  async workflowsGet(id: string): Promise<z.infer<typeof S.WorkflowResponse>> {
+    return await this.call("GET", `/api/v1/workflows/${encodeURIComponent(id)}`);
+  }
+
+  /** Publish a new immutable version from the canvas graph; `baseVersion` must be the latest (409 otherwise). */
+  async workflowsUpdate(id: string, body: z.infer<typeof S.WorkflowUpdateRequest>): Promise<z.infer<typeof S.WorkflowResponse>> {
+    return await this.call("PATCH", `/api/v1/workflows/${encodeURIComponent(id)}`, body);
+  }
+
+  /** Retire a workflow: every version is marked inactive (runs and history are kept). */
+  async workflowsDelete(id: string): Promise<z.infer<typeof S.OkResponse>> {
+    return await this.call("DELETE", `/api/v1/workflows/${encodeURIComponent(id)}`);
+  }
+
+  /** Start a run of a workflow (latest or a given version) with resolved parameters; at most 3 runs in flight (429 otherwise). Returns the queued run to stream. */
+  async workflowsRun(id: string, body: z.infer<typeof S.WorkflowRunStartRequest>): Promise<z.infer<typeof S.WorkflowRunResponse>> {
+    return await this.call("POST", `/api/v1/workflows/${encodeURIComponent(id)}/run`, body);
+  }
+
+  /** Run history for one workflow definition. */
+  async workflowsRunsHistory(id: string): Promise<z.infer<typeof S.WorkflowRunListResponse>> {
+    return await this.call("GET", `/api/v1/workflows/${encodeURIComponent(id)}/runs`);
+  }
+
   /** List built-in orchestration roles and live multi-agent workflow runs. */
   async agentsList(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/agents");
