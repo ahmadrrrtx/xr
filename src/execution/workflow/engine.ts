@@ -36,6 +36,7 @@ import type {
 import { applyRunEvent, applyNodeEvent, canAdvanceNodes, canAcceptHumanInput, canPause, canCancel } from "./state-machine.ts";
 import { verifyIntegrity } from "./versioning.ts";
 import type { RunEvent } from "./state-machine.ts";
+import type { WorkflowEventSink } from "./events.ts";
 
 // ── Interfaces to existing systems ─────────────────────────────────────────
 
@@ -55,7 +56,15 @@ export interface WorkflowAgentRunner {
     taskId: string;
     workflowId: string;
     say: (line: string) => void;
-  }): Promise<{ summary: string; structured?: Record<string, unknown>; artifacts?: Array<{ path: string; description?: string }> }>;
+    /** Phase 19 — aborted when the run is cancelled; runners MUST observe it. */
+    signal?: AbortSignal;
+  }): Promise<{
+    summary: string;
+    structured?: Record<string, unknown>;
+    artifacts?: Array<{ path: string; description?: string }>;
+    /** Phase 19 — measured spend for this node (added to `run.cost`). */
+    cost?: { usd: number; tokensIn: number; tokensOut: number };
+  }>;
 }
 
 /** Interface for the ExecutionService. */
@@ -95,6 +104,10 @@ export interface WorkflowToolExecutor {
     workflowId: string;
     nodeId: string;
     signal?: AbortSignal;
+    /** Phase 19 — the node's own risk facts so the executor can gate on them. */
+    requiresApproval?: boolean;
+    riskTier?: "low" | "medium" | "high";
+    label?: string;
   }): Promise<{ ok: boolean; output?: unknown; error?: string }>;
 
   /** Whether this executor can perform the named capability at all. */
@@ -160,14 +173,82 @@ export interface WorkflowEngineConfig {
    * pretending the delay elapsed.
    */
   timerScheduler?: WorkflowTimerScheduler;
+  /**
+   * Phase 19 — run event sink. Receives one event per REAL transition
+   * (run state, node state, cost, log line). Optional: the engine's behaviour
+   * is identical without it; surfaces that stream a run subscribe here.
+   */
+  onEvent?: WorkflowEventSink;
 }
 
 // ── The Engine ─────────────────────────────────────────────────────────────
 
 export class WorkflowEngine {
   private readonly running = new Map<string, AbortController>();
+  /**
+   * Phase 19 — runs that are in flight in THIS process. The repository is
+   * the durable record, but a tick mutates one object for the whole node
+   * execution (a long model call, a timer, a parked human check); reading a
+   * fresh copy from the store mid-tick would see stale state, and mutating
+   * that copy (pause/cancel/decide) would be overwritten when the tick saved.
+   * Control verbs therefore operate on the live object until it is terminal.
+   */
+  private readonly live = new Map<string, WorkflowRun>();
+  /** Last node/run states reported per run, so `emitChanges` only reports deltas. */
+  private readonly reported = new Map<string, { run: WorkflowRunState; nodes: Map<string, WorkflowNodeState>; ended: boolean }>();
 
   constructor(private readonly config: WorkflowEngineConfig) {}
+
+  // ── Phase 19 — event reporting ───────────────────────────────────────────
+
+  private emit(event: Parameters<WorkflowEventSink>[0]): void {
+    const sink = this.config.onEvent;
+    if (!sink) return;
+    try {
+      sink(event);
+    } catch {
+      /* a listener failure must never alter the run */
+    }
+  }
+
+  /** Report every node/run state that changed since the last report. */
+  private emitChanges(run: WorkflowRun): void {
+    if (!this.config.onEvent) return;
+    const at = Date.now();
+    let last = this.reported.get(run.runId);
+    if (!last) {
+      last = { run: "draft", nodes: new Map(), ended: false };
+      this.reported.set(run.runId, last);
+    }
+    if (last.ended) return; // terminal summary already sent — never re-emit a finished run
+    // Order: run state first (so a client can set the run status before the
+    // node deltas), then node deltas, then the terminal summary last.
+    const runChanged = last.run !== run.state;
+    if (runChanged) {
+      last.run = run.state;
+      this.emit({ type: "run_state", runId: run.runId, state: run.state, at });
+    }
+    for (const ns of run.nodeStates.values()) {
+      if (last.nodes.get(ns.nodeId) === ns.state) continue;
+      last.nodes.set(ns.nodeId, ns.state);
+      const terminal = ns.state === "completed" || ns.state === "failed" || ns.state === "skipped" || ns.state === "cancelled" || ns.state === "compensated";
+      this.emit({
+        type: "node_state",
+        runId: run.runId,
+        nodeId: ns.nodeId,
+        kind: ns.kind,
+        state: ns.state,
+        attempt: ns.attempt,
+        ...(ns.error ? { error: ns.error } : {}),
+        ...(terminal && ns.outputs ? { outputs: ns.outputs } : {}),
+        at,
+      });
+    }
+    if (runChanged && (run.state === "completed" || run.state === "failed" || run.state === "cancelled" || run.state === "expired")) {
+      this.emit({ type: "run_end", runId: run.runId, summary: this.summarizeRun(run), at });
+      last.ended = true;
+    }
+  }
 
   // ── Definition Management ────────────────────────────────────────────────
 
@@ -247,6 +328,7 @@ export class WorkflowEngine {
     run.contentHash = this.computeRunHash(run);
 
     this.config.runStore.saveRun(run);
+    this.live.set(run.runId, run);
     return run;
   }
 
@@ -254,7 +336,9 @@ export class WorkflowEngine {
   async executeRun(runId: string): Promise<WorkflowRun> {
     const run = this.requireRun(runId);
     if (run.state === "queued") {
+      run.startedAt = run.startedAt ?? Date.now();
       this.applyRunTransition(run, "start");
+      this.emitChanges(run);
     }
     return this.advanceRun(run);
   }
@@ -281,6 +365,7 @@ export class WorkflowEngine {
       if (readyNodes.length === 0) {
         // No ready nodes — determine if we're done or blocked
         this.recomputeRunState(run);
+        this.emitChanges(run);
         break;
       }
 
@@ -308,6 +393,7 @@ export class WorkflowEngine {
       }
 
       this.recomputeRunState(run);
+      this.emitChanges(run);
 
       if (canAcceptHumanInput(run.state)) {
         this.config.runStore.saveRun(run);
@@ -318,7 +404,17 @@ export class WorkflowEngine {
     run.updatedAt = Date.now();
     run.contentHash = this.computeRunHash(run);
     this.config.runStore.saveRun(run);
+    this.emitChanges(run);
+    this.forgetIfTerminal(run);
     return run;
+  }
+
+  private forgetIfTerminal(run: WorkflowRun): void {
+    if (run.state === "completed" || run.state === "failed" || run.state === "cancelled" || run.state === "expired") {
+      this.live.delete(run.runId);
+    } else {
+      this.live.set(run.runId, run);
+    }
   }
 
   /** Submit a human decision (approval or review). */
@@ -414,12 +510,14 @@ export class WorkflowEngine {
     run.state = nextState;
     run.updatedAt = now;
     this.config.runStore.saveRun(run);
+    this.emitChanges(run);
 
     // If we can advance, continue execution
     if (canAdvanceNodes(run.state)) {
       return this.advanceRun(run);
     }
 
+    this.forgetIfTerminal(run);
     return run;
   }
 
@@ -430,6 +528,7 @@ export class WorkflowEngine {
       throw new Error(`Cannot pause run ${runId} in state ${run.state}`);
     }
     this.applyRunTransition(run, "pause");
+    this.emitChanges(run);
     return run;
   }
 
@@ -457,15 +556,22 @@ export class WorkflowEngine {
       }
     }
     try { run.state = applyRunEvent(run.state, "cancel"); } catch { /* may already be terminal */ }
+    if (run.state === "cancelled") run.endedAt = Date.now();
     run.updatedAt = Date.now();
     this.config.runStore.saveRun(run);
+    // Abort the in-flight tick so agent/tool work observes the cancellation
+    // (that tick performs the final save and drops the live entry).
+    const inFlight = this.running.get(runId);
+    this.emitChanges(run);
+    if (inFlight) inFlight.abort();
+    else this.forgetIfTerminal(run);
     return run;
   }
 
   // ── Inspection ───────────────────────────────────────────────────────────
 
   getRun(runId: string): WorkflowRun | null {
-    return this.config.runStore.getRun(runId);
+    return this.live.get(runId) ?? this.config.runStore.getRun(runId);
   }
 
   listRuns(opts: { limit?: number; state?: WorkflowRunState; definitionId?: string } = {}): WorkflowRunSummary[] {
@@ -492,7 +598,7 @@ export class WorkflowEngine {
   // ── Private ──────────────────────────────────────────────────────────────
 
   private requireRun(runId: string): WorkflowRun {
-    const run = this.config.runStore.getRun(runId);
+    const run = this.getRun(runId);
     if (!run) throw new Error(`Run not found: ${runId}`);
     return run;
   }
@@ -553,6 +659,7 @@ export class WorkflowEngine {
     nodeState.attempt++;
     nodeState.startedAt = Date.now();
     run.updatedAt = Date.now();
+    this.emitChanges(run);
 
     // Check cancellation
     if (signal.aborted) {
@@ -622,7 +729,10 @@ export class WorkflowEngine {
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      if (node.retry.maxRetries > 0 && nodeState.attempt <= node.retry.maxRetries) {
+      if (signal.aborted || nodeState.state === "cancelled") {
+        // The run was cancelled under this node — it is cancelled, not failed.
+        try { nodeState.state = applyNodeEvent(nodeState.state, "cancel", node.id); } catch { /* already terminal */ }
+      } else if (node.retry.maxRetries > 0 && nodeState.attempt <= node.retry.maxRetries) {
         nodeState.retryHistory.push({
           attempt: nodeState.attempt,
           startedAt: nodeState.startedAt ?? Date.now(),
@@ -644,6 +754,7 @@ export class WorkflowEngine {
 
     nodeState.endedAt = Date.now();
     run.updatedAt = Date.now();
+    this.emitChanges(run);
   }
 
   private async executeDeterministicNode(
@@ -692,11 +803,12 @@ export class WorkflowEngine {
   ): Promise<void> {
     const startTime = Date.now();
     try {
+      const instruction = this.render(run, node.instruction);
       const result = await this.config.agentRunner.runAgentTask({
         agentRole: node.agentRole,
         agentId: node.agentId,
-        instruction: node.instruction,
-        systemPrompt: node.systemPrompt,
+        instruction,
+        systemPrompt: node.systemPrompt ? this.render(run, node.systemPrompt) : node.systemPrompt,
         providerScope: node.providerScope as any,
         toolScope: node.toolScope,
         permissions: node.permissions as any,
@@ -705,10 +817,13 @@ export class WorkflowEngine {
         includeUserMemory: node.contextScope.includeUserMemory,
         taskId: ns.nodeId,
         workflowId: run.runId,
-        say: (_line) => {
-          // Progress callback — streamed to subscribers
+        say: (line) => {
+          // Progress callback — streamed to subscribers (Phase 19).
+          this.emit({ type: "log", runId: run.runId, nodeId: node.id, line, at: Date.now() });
         },
+        signal: this.running.get(run.runId)?.signal,
       });
+      if (result.cost) this.addCost(run, node.id, result.cost);
       ns.state = applyNodeEvent(ns.state, "complete", node.id);
       ns.outputs = { summary: result.summary, structured: result.structured, artifacts: result.artifacts };
       await this.config.executionRecorder.recordExecution({
@@ -720,6 +835,7 @@ export class WorkflowEngine {
         outcome: "succeeded",
         message: result.summary.slice(0, 200),
         durationMs: Date.now() - startTime,
+        cost: result.cost,
       });
     } catch (err) {
       ns.state = applyNodeEvent(ns.state, "fail", node.id);
@@ -735,6 +851,35 @@ export class WorkflowEngine {
         durationMs: Date.now() - startTime,
       });
     }
+  }
+
+  /**
+   * Phase 19 — resolve `{{name}}` placeholders from the run's parameters and
+   * `{{nodeId.field}}` from an upstream node's outputs. Unknown placeholders
+   * are left verbatim so a typo is visible in the output, never silently blank.
+   */
+  private render(run: WorkflowRun, text: string): string {
+    if (!text || !text.includes("{{")) return text;
+    return text.replace(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g, (whole, key: string) => {
+      if (Object.prototype.hasOwnProperty.call(run.resolvedParameters, key)) return stringify(run.resolvedParameters[key]);
+      const dot = key.indexOf(".");
+      const nodeId = dot === -1 ? key : key.slice(0, dot);
+      const field = dot === -1 ? "summary" : key.slice(dot + 1);
+      const outputs = run.nodeStates.get(nodeId)?.outputs;
+      if (outputs && Object.prototype.hasOwnProperty.call(outputs, field)) return stringify(outputs[field]);
+      if (outputs && field === "summary" && Object.prototype.hasOwnProperty.call(outputs, "result")) return stringify(outputs.result);
+      return whole;
+    });
+  }
+
+  /** Phase 19 — fold a node's measured spend into the run total (and emit). */
+  private addCost(run: WorkflowRun, nodeId: string, cost: { usd: number; tokensIn: number; tokensOut: number }): void {
+    run.cost.actualUsd += cost.usd;
+    run.cost.tokensIn += cost.tokensIn;
+    run.cost.tokensOut += cost.tokensOut;
+    const prev = run.cost.breakdown[nodeId] ?? { usd: 0, tokensIn: 0, tokensOut: 0 };
+    run.cost.breakdown[nodeId] = { usd: prev.usd + cost.usd, tokensIn: prev.tokensIn + cost.tokensIn, tokensOut: prev.tokensOut + cost.tokensOut };
+    this.emit({ type: "cost_update", runId: run.runId, cost: run.cost, at: Date.now() });
   }
 
   private async enterHumanWait(
@@ -811,12 +956,17 @@ export class WorkflowEngine {
     }
 
     try {
+      const rawInputs = (node.inputs ?? {}) as Record<string, unknown>;
+      const inputs = Object.fromEntries(Object.entries(rawInputs).map(([k, v]) => [k, typeof v === "string" ? this.render(run, v) : v]));
       const result = await executor.executeTool({
         capability,
-        inputs: (node.inputs ?? {}) as Record<string, unknown>,
+        inputs,
         workflowId: run.runId,
         nodeId: node.id,
         signal: this.running.get(run.runId)?.signal,
+        requiresApproval: node.requiresApproval,
+        riskTier: node.riskTier,
+        label: node.label,
       });
 
       if (!result.ok) {
@@ -867,10 +1017,18 @@ export class WorkflowEngine {
 
       const startedAt = Date.now();
       try {
-        ns.state = applyNodeEvent(ns.state, "start", node.id);
+        // Stay in waiting_timer while the timer runs (observable as such);
+        // resume to running only when it fires (Phase 19).
+        this.emitChanges(run);
         await scheduler.wait(durationMs, signal);
+        ns.state = applyNodeEvent(ns.state, "start", node.id);
       } catch (err) {
-        ns.state = applyNodeEvent(ns.state, "fail", node.id);
+        if (signal?.aborted) {
+          ns.state = applyNodeEvent(ns.state, "cancel", node.id);
+          ns.error = "cancelled";
+          return;
+        }
+        ns.state = applyNodeEvent(applyNodeEvent(ns.state, "start", node.id), "fail", node.id);
         ns.error = err instanceof Error ? err.message : String(err);
         return;
       }
@@ -966,6 +1124,39 @@ export class WorkflowEngine {
         targetState.state = "ready";
       }
     }
+
+    // Phase 19 — the untaken side is SKIPPED, not left pending forever
+    // (pending nodes whose only dependency is a finished branch would
+    // otherwise become ready regardless of the condition). Skipping
+    // propagates to nodes whose dependencies are all skipped; a node that
+    // also depends on a taken path (a merge) stays pending and runs normally.
+    const untaken = (conditionResult ? node.falseNodes : node.trueNodes).filter((id) => !targetIds.includes(id));
+    const skipped = new Set<string>();
+    const skip = (id: string): void => {
+      const st = run.nodeStates.get(id);
+      if (!st || st.state !== "pending") return;
+      try {
+        st.state = applyNodeEvent(st.state, "skip", id);
+        st.outputs = { skipped: true, reason: `branch ${node.id} took the ${conditionResult ? "true" : "false"} path` };
+        skipped.add(id);
+      } catch {
+        /* not skippable from this state */
+      }
+    };
+    for (const id of untaken) skip(id);
+    let changed = skipped.size > 0;
+    while (changed) {
+      changed = false;
+      for (const candidate of run.definitionSnapshot.nodes) {
+        const st = run.nodeStates.get(candidate.id);
+        if (!st || st.state !== "pending" || candidate.dependencies.length === 0) continue;
+        const allSkipped = candidate.dependencies.every((d) => run.nodeStates.get(d)?.state === "skipped");
+        if (allSkipped) {
+          skip(candidate.id);
+          changed = changed || skipped.has(candidate.id);
+        }
+      }
+    }
   }
 
   private executeJoinNode(
@@ -1038,7 +1229,7 @@ export class WorkflowEngine {
   ): Promise<void> {
     // In production, this would dispatch through the notification system
     ns.state = applyNodeEvent(ns.state, "complete", node.id);
-    ns.outputs = { notified: node.channels, recipients: node.recipients.length };
+    ns.outputs = { notified: node.channels, recipients: node.recipients.length, message: this.render(run, node.message), severity: node.severity };
   }
 
   private executeCompletionNode(
@@ -1047,8 +1238,11 @@ export class WorkflowEngine {
     ns: WorkflowNodeStateDetail,
   ): void {
     ns.state = applyNodeEvent(ns.state, "complete", node.id);
-    ns.outputs = { outcome: node.outcome, message: node.message };
+    ns.outputs = { outcome: node.outcome, message: this.render(run, node.message) };
     run.state = applyRunEvent(run.state, node.outcome === "success" ? "complete" : "partial_complete");
+    // The completion node ends the run right here; stamp endedAt before the
+    // node's emitChanges() publishes run_end so the summary carries it (Phase 19).
+    if (run.state === "completed" || run.state === "partially_completed") run.endedAt = run.endedAt ?? Date.now();
   }
 
   private async executeCompensationNode(
@@ -1070,6 +1264,19 @@ export class WorkflowEngine {
 
   private recomputeRunState(run: WorkflowRun): void {
     const allStates = [...run.nodeStates.values()];
+
+    // A cancel requested while a node was in flight wins over whatever that
+    // node did when its abort landed (Phase 19).
+    if (run.state === "cancelled" || run.state === "cancelling") {
+      for (const ns of allStates) {
+        if (ns.state === "pending" || ns.state === "ready" || ns.state === "running" || ns.state === "waiting_timer" || ns.state === "waiting_event") {
+          try { ns.state = applyNodeEvent(ns.state, "cancel", ns.nodeId); } catch { /* best effort */ }
+        }
+      }
+      run.state = "cancelled";
+      run.endedAt = run.endedAt ?? Date.now();
+      return;
+    }
 
     // Check for human waiting
     if (allStates.some(ns => ns.state === "waiting_approval")) {
@@ -1159,5 +1366,16 @@ export class WorkflowEngine {
       h = Math.imul(h, 16777619) >>> 0;
     }
     return h.toString(16).padStart(8, "0");
+  }
+}
+
+function stringify(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
   }
 }

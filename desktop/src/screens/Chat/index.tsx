@@ -4,10 +4,12 @@
  * Owns: session/route sync, offline banner, panel toggle (⌘⇧O), Esc handling,
  * narrow-viewport collapse, drag-drop overlay across the whole conversation.
  */
-import { FolderOpen, PanelLeftClose, PanelLeftOpen, WifiOff, X } from 'lucide-react';
+import { Bot, FolderOpen, PanelLeftClose, PanelLeftOpen, WifiOff, X } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 
+import { useAgentsStore } from '@/stores/agentsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useSessionsStore } from '@/stores/sessionsStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
@@ -29,6 +31,48 @@ export default function ChatScreen() {
   const workspace = useChatStore((s) => s.workspace);
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceParam = searchParams.get('workspace');
+  const agentParam = searchParams.get('agent');
+  const sessionAgent = useChatStore((s) => (sessionId ? s.agents[sessionId] : undefined) ?? null);
+
+  // Agents hand-off (Phase 19): `/chat?agent=:id` opens a NEW session that
+  // speaks as that agent — its system prompt, tool allowlist, model and
+  // per-run cap ride every turn (engine-side tool scope, local governor).
+  useEffect(() => {
+    if (!agentParam) return;
+    let alive = true;
+    void (async () => {
+      const binding = await useAgentsStore.getState().bindingFor(agentParam);
+      if (!alive) return;
+      if (!binding) {
+        toast.error('That agent is not available from the engine.');
+        navigate('/chat', { replace: true });
+        return;
+      }
+      const title = `${binding.emoji ? `${binding.emoji} ` : ''}${binding.label}`;
+      const session = await useSessionsStore.getState().createTitledSession(title, binding.model);
+      if (!alive) return;
+      useChatStore.getState().bindAgent(session.id, {
+        id: binding.id,
+        label: binding.label,
+        emoji: binding.emoji,
+        builtin: binding.builtin,
+        systemPrompt: binding.systemPrompt,
+        tools: binding.tools,
+        ...(binding.model ? { model: binding.model } : {}),
+        ...(binding.budgetUsd !== undefined ? { budgetUsd: binding.budgetUsd } : {}),
+      });
+      navigate(`/chat/${session.id}`, { replace: true });
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- consume the intent once per value
+  }, [agentParam]);
+
+  // A reload keeps the binding (localStorage) — surface it for the chip.
+  useEffect(() => {
+    if (sessionId) useChatStore.getState().agentFor(sessionId);
+  }, [sessionId]);
 
   // Workbench hand-off (Phase 14): `/chat?workspace=:id` scopes every turn
   // to that project (engine system context + budget workspace scope).
@@ -179,6 +223,31 @@ export default function ChatScreen() {
         <div id="conversation" className="contents">
           {sessionId ? <MessageList sessionId={sessionId} /> : <WelcomeState />}
         </div>
+
+        {sessionAgent && sessionId && (
+          <div className="mx-auto flex w-full max-w-[820px] items-center gap-2 px-6 pb-1">
+            <span
+              className="border-border-subtle bg-bg-ink text-text-secondary inline-flex h-6 items-center gap-1.5 rounded-full border pr-1 pl-2 text-[11.5px]"
+              data-testid="chat-agent-chip"
+              title={`${sessionAgent.tools.length ? `${sessionAgent.tools.length} tools` : 'engine default tools'}${sessionAgent.model ? ` · ${sessionAgent.model}` : ''}${sessionAgent.budgetUsd !== undefined ? ` · $${sessionAgent.budgetUsd.toFixed(2)} per run` : ''}`}
+            >
+              {sessionAgent.emoji ? (
+                <span aria-hidden="true">{sessionAgent.emoji}</span>
+              ) : (
+                <Bot size={12} strokeWidth={1.75} aria-hidden="true" />
+              )}
+              Agent: {sessionAgent.label}
+              <button
+                type="button"
+                aria-label="Stop speaking as this agent"
+                onClick={() => useChatStore.getState().bindAgent(sessionId, null)}
+                className="text-text-tertiary hover:text-text-primary flex size-4 items-center justify-center rounded-full"
+              >
+                <X size={11} strokeWidth={2} aria-hidden="true" />
+              </button>
+            </span>
+          </div>
+        )}
 
         {workspace && (
           <div className="mx-auto flex w-full max-w-[820px] items-center gap-2 px-6 pb-1">

@@ -140,12 +140,17 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
   // The engine's own hard stop for this task: the per-request cap, tightened
   // by whatever is left under the hard cap.
   const settings = useBudgetStore.getState().settings;
-  const perTaskUsd = opts.budget
+  const governorCap = opts.budget
     ? Math.max(
         0,
         Math.min(settings.perRequestLimit, check?.hardRemaining ?? Number.POSITIVE_INFINITY),
       )
     : undefined;
+  // Phase 19: an agent's own per-run cap tightens (never loosens) the stop.
+  const perTaskUsd =
+    opts.budgetUsd !== undefined && Number.isFinite(opts.budgetUsd)
+      ? Math.min(opts.budgetUsd, governorCap ?? Number.POSITIVE_INFINITY)
+      : governorCap;
 
   let usage: { inTokens: number; outTokens: number } | null = null;
   let runId: string | null = null;
@@ -193,6 +198,8 @@ export async function streamEngineChat(opts: StreamOptions): Promise<void> {
     ...(target.model ? { model: target.model } : {}),
     ...(perTaskUsd !== undefined && Number.isFinite(perTaskUsd) ? { budget: perTaskUsd } : {}),
     ...(opts.maxSteps ? { maxSteps: opts.maxSteps } : {}),
+    ...(opts.toolsAllow?.length ? { toolsAllow: opts.toolsAllow } : {}),
+    ...(opts.toolsDeny?.length ? { toolsDeny: opts.toolsDeny } : {}),
     ...(context ? { context } : {}),
   };
 

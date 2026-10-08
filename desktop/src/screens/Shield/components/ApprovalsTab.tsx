@@ -290,7 +290,11 @@ function PendingCard({
       )}
 
       <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-        {quarantined ? (
+        {req.humanOnly ? (
+          <p className="text-text-tertiary text-[11px]">
+            This step always asks a person. Nothing is remembered.
+          </p>
+        ) : quarantined ? (
           <p className="text-text-tertiary text-[11px]">
             Remember rules are ignored while this skill is quarantined — trust
             it under Security Settings to allow rules.

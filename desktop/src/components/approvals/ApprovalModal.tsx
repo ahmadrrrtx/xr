@@ -244,13 +244,19 @@ export function ApprovalModal() {
           <JustificationRow req={active} />
         </div>
 
-        {/* Remember options */}
-        <RememberSection
-          alwaysLabel={alwaysLabel}
-          hourLabel={hourLabel}
-          value={remember}
-          onChange={setRemember}
-        />
+        {/* Remember options (a workflow human check asks a person every time) */}
+        {active.humanOnly ? (
+          <p className="text-text-tertiary mt-4 text-[11px]" data-testid="approval-human-only">
+            This step always asks a person. Nothing is remembered.
+          </p>
+        ) : (
+          <RememberSection
+            alwaysLabel={alwaysLabel}
+            hourLabel={hourLabel}
+            value={remember}
+            onChange={setRemember}
+          />
+        )}
 
         {/* Decision buttons */}
         <div className="mt-6 flex gap-3">

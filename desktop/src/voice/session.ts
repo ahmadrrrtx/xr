@@ -684,6 +684,7 @@ export class VoiceController {
         if (e.text) {
           store._caption('you', e.text);
           this.followResearch(e.text);
+          this.followAgents(e.text);
         }
         return;
       case 'tts':
@@ -783,6 +784,21 @@ export class VoiceController {
    * second run. Instead the main window opens Research in follow mode, which
    * picks the finished session up from the engine when it lands.
    */
+  /**
+   * Phase 19: "open agents" / "open my agents" / "open workflows" /
+   * "new workflow" navigate the main window; the screen shows a toast
+   * naming the voice intent. Nothing runs without the user on the screen.
+   */
+  private followAgents(text: string): void {
+    const m = /^(?:open|show|go to|new)\s+(?:my\s+)?(agents?|workflows?|workflow)\b/i.exec(text.trim());
+    if (!m) return;
+    const word = m[1].toLowerCase();
+    const isNew = /^new\s/i.test(text.trim());
+    const tab = word.startsWith('workflow') ? 'workflows' : /\bmy\b/i.test(text) ? 'mine' : 'prebuilt';
+    const extra = isNew ? (tab === 'workflows' ? '&new=workflow' : '&new=agent') : '';
+    window.location.hash = `#/agents?tab=${tab}${extra}&via=voice`;
+  }
+
   private followResearch(text: string): void {
     const m = /^(?:research|investigate|look up deeply|make a report on|give me a brief on)\s+(.+)$/i.exec(text.trim());
     if (!m?.[1] || !useVoiceStore.getState().active) return;

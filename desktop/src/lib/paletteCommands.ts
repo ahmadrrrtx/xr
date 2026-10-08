@@ -14,6 +14,7 @@
  */
 import {
   Activity,
+  Bot,
   Braces,
   CircleDot,
   Clock,
@@ -37,6 +38,7 @@ import {
   ShieldQuestion,
   Trash2,
   Wallet,
+  Workflow,
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
@@ -307,6 +309,39 @@ export function buildPaletteCommands(
       icon: ShieldCheck,
       keywords: ['research', 'web', 'egress', 'internet', 'allow', 'shield', 'network'],
       action: () => openRoute('/shield?tab=security&section=network'),
+    },
+    // Agents (Phase 19). URL intents the screen consumes once.
+    {
+      id: 'agents-open',
+      group: 'commands',
+      title: 'Agents…',
+      icon: Bot,
+      keywords: ['agents', 'prebuilt', 'specialists', 'custom agent', 'workflows'],
+      action: () => openRoute('/agents'),
+    },
+    {
+      id: 'agents-new',
+      group: 'commands',
+      title: 'New agent',
+      icon: Bot,
+      keywords: ['agent', 'create', 'custom', 'new agent', 'system prompt'],
+      action: () => openRoute('/agents?tab=mine&new=agent'),
+    },
+    {
+      id: 'workflows-new',
+      group: 'commands',
+      title: 'New workflow',
+      icon: Workflow,
+      keywords: ['workflow', 'canvas', 'dag', 'new workflow', 'automation'],
+      action: () => openRoute('/agents?tab=workflows&new=workflow'),
+    },
+    {
+      id: 'workflows-run',
+      group: 'commands',
+      title: 'Run workflow…',
+      icon: Play,
+      keywords: ['workflow', 'run', 'execute', 'start workflow'],
+      action: () => openRoute('/agents?tab=workflows&run=1'),
     },
     // Shield (Phase 12). Same URL-intent pattern as the Control Room.
     {

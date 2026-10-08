@@ -98,6 +98,14 @@ export interface StreamOptions {
   /** Cap on agent steps for this turn (engine default otherwise). */
   maxSteps?: number;
   /**
+   * Phase 19: run the turn "as" an agent. The engine narrows its tool set
+   * to `toolsAllow` (minus `toolsDeny`) and caps the task at `budgetUsd`;
+   * the desktop governor still gates first. Empty allowlist = engine default.
+   */
+  toolsAllow?: string[];
+  toolsDeny?: string[];
+  budgetUsd?: number;
+  /**
    * Phase 7 contract kept for the mock seam: when a scripted tool needs
    * permission the mock parks on this gate. The engine path ignores it —
    * engine approvals are bridged through `@/engine/approvals` under the

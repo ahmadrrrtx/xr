@@ -82,6 +82,13 @@ export interface ApprovalRequest {
   createdAt: number;
   /** Optional per-request remember labels (defaults built from the fields). */
   rememberOptions?: { label: string; key: RememberKey }[];
+  /**
+   * Phase 19: a person must decide this one. Policy may still BLOCK it
+   * (paused, shell off) but never auto-approve it, remember rules are
+   * ignored, and no new rule is created from the decision. Used for
+   * workflow human-approval / review nodes — their whole point is a human.
+   */
+  humanOnly?: boolean;
 }
 
 /** The subset a caller supplies — id/createdAt are added by the queue. */

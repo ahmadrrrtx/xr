@@ -41,6 +41,8 @@ interface SessionsState {
   renameSession: (id: string, title: string) => Promise<void>;
   archiveSession: (id: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
+  /** Phase 19: a fresh, titled session (agent chats never reuse "New chat"). */
+  createTitledSession: (title: string, model?: string) => Promise<Session>;
   /** Auto-title from the first user message (truncate 40 chars). */
   titleFromFirstMessage: (id: string, text: string) => Promise<void>;
   setPanelOpen: (open: boolean) => void;
@@ -96,6 +98,13 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
     return session;
   },
 
+  createTitledSession: async (title, model) => {
+    const now = Date.now();
+    const session = await chatDb.createSession(newId(), title.slice(0, 80) || 'New chat', model ?? resolveDefaultModel(), now);
+    set((st) => ({ sessions: [session, ...st.sessions], activeSessionId: session.id }));
+    return session;
+  },
+
   selectSession: (id) => set({ activeSessionId: id }),
 
   renameSession: async (id, title) => {
@@ -123,6 +132,11 @@ export const useSessionsStore = create<SessionsState>((set, get) => ({
 
   deleteSession: async (id) => {
     await chatDb.deleteSession(id);
+    try {
+      window.localStorage.removeItem(`xr.chat.agent.${id}`);
+    } catch {
+      /* nothing to forget */
+    }
     set((st) => ({
       sessions: st.sessions.filter((s) => s.id !== id),
       activeSessionId: st.activeSessionId === id ? null : st.activeSessionId,

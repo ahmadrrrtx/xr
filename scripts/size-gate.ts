@@ -107,7 +107,25 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 149_000; // Phase 18 (Research) · 148,000 → 149,000 (2026-10-07):
+export const TREE_CEILING = 152_500; // Phase 19 (Agents) · 149,000 → 152,500 (2026-10-08):
+// the Agents screen is wired to the EXISTING multi-agent runtime and the
+// EXISTING workflow DAG engine; the engine half is what the UI was missing:
+// the daemon finally constructs the engine (workflow-runtime.ts: agent
+// runner over the canonical AgentService with per-node tool scope and
+// permissions enforced engine-side, core-tool executor behind durable
+// approvals, human nodes as approval records, SSE replay), the canvas →
+// canonical compiler + decompiler (canvas.ts), the definition linter
+// (lint.ts), run events (events.ts), versioned custom-agent JSON documents
+// with schema validation (agents/custom-store.ts), and the routes +
+// contract/schemas (workflows.routes.ts, custom-agents.routes.ts,
+// contract-agents.ts, schemas-agents.ts). Approvals, cost and audit sit
+// with the store, so this is consent-plane transport and cannot move to a
+// satellite. Waived giants that grew: engine.ts (1163 → 1378, register
+// updated) and the generated client (979 → 1089, register updated).
+// Measured 151,742. Smallest round number that fits with headroom for the
+// recorder labels still to land; 110k stays the direction of travel.
+//
+// Phase 18 (Research) · 148,000 → 149,000 (2026-10-07):
 // the desktop Research screen is wired to the EXISTING research engine
 // (runResearch) rather than a second loop, so the engine half is thin:
 // structured run events beside the say() lines (run-events.ts), an in-memory

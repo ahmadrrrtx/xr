@@ -90,8 +90,52 @@ export interface TurnOverrides {
   mode?: ChatMode;
   /** Workspace context override (defaults to the store's workspace). */
   workspace?: WorkspaceContext | null;
+  /** Phase 19: engine tool allow/deny lists for the turn (agent scope). */
+  toolsAllow?: string[];
+  toolsDeny?: string[];
+  /** Phase 19: model override (an agent pins its model). */
+  model?: string;
+  /** Phase 19: the agent's per-run cap — tightens the governor's stop. */
+  budgetUsd?: number;
 }
 const overridesBySession = new Map<string, TurnOverrides>();
+
+/* ── Phase 19: chat "as" an agent ─────────────────────────────────────── */
+
+/** Which agent a session speaks as (prebuilt or custom). Survives reloads. */
+export interface SessionAgent {
+  id: string;
+  label: string;
+  emoji: string;
+  builtin: boolean;
+  systemPrompt: string;
+  tools: string[];
+  model?: string;
+  budgetUsd?: number;
+}
+
+const AGENT_KEY = (id: string): string => `xr.chat.agent.${id}`;
+
+function readAgent(sessionId: string): SessionAgent | null {
+  try {
+    const raw = window.localStorage.getItem(AGENT_KEY(sessionId));
+    if (!raw) return null;
+    const j = JSON.parse(raw) as SessionAgent;
+    return j && typeof j.id === 'string' && typeof j.systemPrompt === 'string' ? j : null;
+  } catch {
+    return null;
+  }
+}
+
+function overridesForAgent(a: SessionAgent): TurnOverrides {
+  return {
+    context: `You are acting as the agent "${a.label}".\n\n${a.systemPrompt}`,
+    agent: a.label,
+    ...(a.tools.length ? { toolsAllow: a.tools } : {}),
+    ...(a.model ? { model: a.model } : {}),
+    ...(a.budgetUsd !== undefined ? { budgetUsd: a.budgetUsd } : {}),
+  };
+}
 
 export const CHAT_MODES: readonly ChatMode[] = ['ask', 'agent', 'plan'];
 const MODE_KEY = (id: string | null): string => `xr.chat.mode.${id ?? 'default'}`;
@@ -137,6 +181,10 @@ interface ChatState {
   /** Phase 14: Workbench context (`/chat?workspace=:id`) sent with every turn. */
   workspace: WorkspaceContext | null;
   setWorkspace: (ws: WorkspaceContext | null) => void;
+  /** Phase 19: sessions bound to an agent (`/chat?agent=:id`). */
+  agents: Record<string, SessionAgent>;
+  bindAgent: (sessionId: string, agent: SessionAgent | null) => void;
+  agentFor: (sessionId: string | null) => SessionAgent | null;
 
   loadMessages: (sessionId: string) => Promise<void>;
   loadOlder: (sessionId: string) => Promise<void>;
@@ -194,9 +242,11 @@ async function runGeneration(sessionId: string, history: ChatTurn[], overrides?:
   const sessions = useSessionsStore.getState();
   controller = new AbortController();
   const signal = controller.signal;
-  const model = sessions.sessions.find((s) => s.id === sessionId)?.model ?? resolveDefaultModel();
   if (overrides) overridesBySession.set(sessionId, overrides);
+  // A session bound to an agent keeps the agent's overrides after a reload.
+  if (!overrides && !overridesBySession.has(sessionId)) useChatStore.getState().agentFor(sessionId);
   const turn = overrides ?? overridesBySession.get(sessionId);
+  const model = turn?.model ?? sessions.sessions.find((s) => s.id === sessionId)?.model ?? resolveDefaultModel();
   const mode = turn?.mode ?? useChatStore.getState().modes[sessionId] ?? modeFor(sessionId);
 
   useChatStore.setState({
@@ -268,6 +318,9 @@ async function runGeneration(sessionId: string, history: ChatTurn[], overrides?:
     sessionId,
     signal,
     ...(contextParts.length ? { context: contextParts.join('\n\n') } : {}),
+    ...(turn?.toolsAllow?.length ? { toolsAllow: turn.toolsAllow } : {}),
+    ...(turn?.toolsDeny?.length ? { toolsDeny: turn.toolsDeny } : {}),
+    ...(turn?.budgetUsd !== undefined ? { budgetUsd: turn.budgetUsd } : {}),
     // Phase 7 contract (mock seam only; engine approvals bridge themselves).
     requestApproval: makeApprovalGate(signal),
     // Phase 13: the budget governor gates, meters and bills this turn.
@@ -526,6 +579,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
   modes: {},
   workspace: null,
   setWorkspace: (workspace) => set({ workspace }),
+  agents: {},
+  bindAgent: (sessionId, agent) => {
+    try {
+      if (agent) window.localStorage.setItem(AGENT_KEY(sessionId), JSON.stringify(agent));
+      else window.localStorage.removeItem(AGENT_KEY(sessionId));
+    } catch {
+      /* private mode: the binding lives for this window only */
+    }
+    if (agent) overridesBySession.set(sessionId, overridesForAgent(agent));
+    else overridesBySession.delete(sessionId);
+    set((st) => {
+      const next = { ...st.agents };
+      if (agent) next[sessionId] = agent;
+      else delete next[sessionId];
+      return { agents: next };
+    });
+  },
+  agentFor: (sessionId) => {
+    if (!sessionId) return null;
+    const known = get().agents[sessionId];
+    if (known) return known;
+    const stored = readAgent(sessionId);
+    if (stored) {
+      overridesBySession.set(sessionId, overridesForAgent(stored));
+      set((st) => ({ agents: { ...st.agents, [sessionId]: stored } }));
+    }
+    return stored;
+  },
 
   setMode: (sessionId, mode) => {
     try {
