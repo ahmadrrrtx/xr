@@ -511,11 +511,9 @@ export function downstreamNodes(nodes: WorkflowNode[], startIds: string[]): Set<
 
 /** Get the entry point nodes (nodes with no inbound dependencies). */
 export function entryNodes(nodes: WorkflowNode[]): WorkflowNode[] {
-  const hasDep = new Set<string>();
-  for (const n of nodes) {
-    for (const d of n.dependencies) hasDep.add(d);
-  }
-  return nodes.filter(n => !hasDep.has(n.id));
+  // Phase 19 fix: this used to return the nodes nobody depends on (the
+  // sinks), which contradicted the docstring and every caller's intent.
+  return nodes.filter(n => (n.dependencies ?? []).length === 0);
 }
 
 /** Validate a node graph: no cycles, no missing dependencies, triggers first. */
