@@ -11,6 +11,18 @@ export interface DownloadResult {
   error?: string;
 }
 
+export interface DownloadProgress {
+  /** Bytes written so far. */
+  received: number;
+  /** Total bytes when the server sent Content-Length. */
+  total: number | null;
+  /** 0..100 when total is known, else 0. */
+  pct: number;
+}
+
+/** Progress sink for determinate download bars (Phase 20 install flow). */
+export type DownloadProgressSink = (progress: DownloadProgress) => void;
+
 function downloadsDir(): string {
   return join(packageCacheDir(), "downloads");
 }
@@ -21,7 +33,7 @@ function safeName(url: string): string {
 }
 
 export class SkillDownloadEngine {
-  async download(url: string, expectedSha256?: string): Promise<DownloadResult> {
+  async download(url: string, expectedSha256?: string, onProgress?: DownloadProgressSink): Promise<DownloadResult> {
     try {
       const dir = downloadsDir();
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -29,10 +41,33 @@ export class SkillDownloadEngine {
       if (/^https?:\/\//i.test(url)) {
         const res = await fetch(url);
         if (!res.ok) return { ok: false, error: `download HTTP ${res.status}` };
-        writeFileSync(out, Buffer.from(await res.arrayBuffer()));
+        const total = Number(res.headers.get("content-length")) || null;
+        // Stream with byte counts when the body is readable so the install
+        // flow can show a determinate bar (no indeterminate sweep).
+        if (res.body && typeof res.body.getReader === "function") {
+          const reader = res.body.getReader();
+          const chunks: Uint8Array[] = [];
+          let received = 0;
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) {
+              chunks.push(value);
+              received += value.length;
+              onProgress?.({ received, total, pct: total ? Math.min(100, Math.round((received / total) * 100)) : 0 });
+            }
+          }
+          writeFileSync(out, Buffer.concat(chunks.map((c) => Buffer.from(c))));
+        } else {
+          const buf = Buffer.from(await res.arrayBuffer());
+          writeFileSync(out, buf);
+          onProgress?.({ received: buf.length, total: buf.length, pct: 100 });
+        }
       } else {
         const src = url.startsWith("file://") ? new URL(url) : resolve(url);
-        writeFileSync(out, readFileSync(src instanceof URL ? src : src));
+        const buf = readFileSync(src instanceof URL ? src : src);
+        writeFileSync(out, buf);
+        onProgress?.({ received: buf.length, total: buf.length, pct: 100 });
       }
       const actual = sha256File(out);
       if (expectedSha256 && actual.toLowerCase() !== expectedSha256.toLowerCase()) return { ok: false, path: out, sha256: actual, error: "download sha256 mismatch" };
