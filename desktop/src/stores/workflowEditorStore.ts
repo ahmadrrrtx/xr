@@ -60,8 +60,9 @@ import {
   type XrFlowNode,
   type XrNodeData,
 } from '@/agents/canvasCore';
-import { applyRunEvent, emptyProgress, isActive, isTerminal, progressFromView, type RunProgress } from '@/agents/reduce';
+import { applyRunEvent, emptyProgress, isActive, isTerminal, mergeView, progressFromView, type RunProgress } from '@/agents/reduce';
 import type { EngineRunRecorder } from '@/brain/engine';
+import { settleEngineApproval } from '@/engine/approvals';
 import { EngineDown, EngineHttpError } from '@/engine/transport';
 import type { StreamEvent } from '@/lib/llm';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -348,6 +349,19 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     const patch: Partial<WorkflowEditorState> = { progress: next };
     if (e.type === 'node_state') {
       const label = labelOf(e.nodeId);
+      // The same human check also sits in the Shield queue (synced from the
+      // engine). Once the node leaves its waiting state the engine has
+      // recorded a decision — settle the local copy with that outcome.
+      const settled = e.state !== 'waiting_approval' && e.state !== 'waiting_review' ? pendingApproval(e.nodeId) : null;
+      if (settled) {
+        const expired = e.state === 'expired';
+        void settleEngineApproval(
+          settled,
+          e.state === 'completed',
+          expired ? 'Expired before anyone decided' : e.state === 'cancelled' ? 'Withdrawn — the run was cancelled' : `Decided on the workflow canvas (${label})`,
+          expired ? 'auto-timeout' : 'user',
+        );
+      }
       if (e.state === 'running') Object.assign(patch, say(`${label} started`));
       else if (e.state === 'completed') Object.assign(patch, say(`${label} completed`));
       else if (e.state === 'failed') Object.assign(patch, say(`${label} failed${e.error ? `: ${e.error}` : ''}`));
@@ -863,7 +877,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       if (p && p.runId === runId && !isTerminal(p.state)) {
         try {
           const view = await getRun(runId);
-          set({ progress: { ...progressFromView(view), logs: p.logs, summary: p.summary } });
+          set({ progress: mergeView(p, view) });
         } catch {
           /* leave what we have */
         }
@@ -910,7 +924,7 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
       set({ deciding: nodeId });
       try {
         const view = await decideHuman(p.runId, { nodeId, decision, ...(comment ? { comment } : {}) });
-        set((s) => (s.progress && s.progress.runId === view.runId ? { progress: { ...progressFromView(view), logs: s.progress.logs, summary: s.progress.summary }, deciding: null } : { deciding: null }));
+        set((s) => (s.progress && s.progress.runId === view.runId ? { progress: mergeView(s.progress, view), deciding: null } : { deciding: null }));
       } catch (e) {
         set({ deciding: null });
         const gone = e instanceof EngineHttpError && (e.status === 404 || e.status === 409);
@@ -957,9 +971,13 @@ export const useWorkflowEditorStore = create<WorkflowEditorState>((set, get) => 
     },
 
     leaveScreen: () => {
-      // The run belongs to the engine; we only stop listening.
-      streamCtl?.abort();
-      streamCtl = null;
+      // The run belongs to the engine. While it is still going we keep
+      // listening (Brain spans, Budget settle and the completion summary
+      // depend on the tail of the stream); an idle document just stops.
+      if (!isActive(get().progress?.state ?? null)) {
+        streamCtl?.abort();
+        streamCtl = null;
+      }
       if (inspectTimer !== null) {
         window.clearTimeout(inspectTimer);
         inspectTimer = null;

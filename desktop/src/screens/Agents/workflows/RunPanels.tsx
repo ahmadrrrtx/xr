@@ -10,12 +10,15 @@
  *   HistorySheet      past runs of this definition (engine list)
  */
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import type { HumanDecision } from '@/agents/api';
+import type { HumanDecision, PendingHuman } from '@/agents/api';
 import { completionSummary, fmtDuration, isActive, isTerminal, runStateLabel } from '@/agents/reduce';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useApprovalStore } from '@/stores/approvalStore';
 import { useWorkflowEditorStore } from '@/stores/workflowEditorStore';
+
+const NO_PENDING: PendingHuman[] = [];
 
 function coerce(type: string, raw: string): unknown {
   const t = raw.trim();
@@ -91,7 +94,7 @@ export function RunParamsDialog() {
 }
 
 export function ApprovalModal() {
-  const pending = useWorkflowEditorStore((s) => s.progress?.pendingHuman ?? []);
+  const pending = useWorkflowEditorStore((s) => s.progress?.pendingHuman ?? NO_PENDING);
   const runState = useWorkflowEditorStore((s) => s.progress?.state ?? null);
   const deciding = useWorkflowEditorStore((s) => s.deciding);
   const nodes = useWorkflowEditorStore((s) => s.nodes);
@@ -101,6 +104,15 @@ export function ApprovalModal() {
   // Deferral is keyed per pending node, so a new one re-opens the modal on its own.
   const key = current ? `${current.nodeId}:${current.approvalId}` : null;
   const open = !!current && isActive(runState) && dismissed !== key;
+  // The same check is also bridged into the Shield queue (it is a real
+  // approval record). While this dialog is up it IS the approval surface, so
+  // the root modal yields instead of covering the same question twice.
+  const setInlineSurface = useApprovalStore((s) => s.setInlineSurface);
+  useEffect(() => {
+    if (!open) return;
+    setInlineSurface(true);
+    return () => setInlineSurface(false);
+  }, [open, setInlineSurface]);
 
   if (!current) return null;
   const node = nodes.find((n) => n.id === current.nodeId);

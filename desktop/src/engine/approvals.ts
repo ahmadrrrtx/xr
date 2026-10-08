@@ -46,6 +46,9 @@ export async function decideOnEngine(
   }
 }
 
+/** Ids `settleEngineApproval` closed locally — their bridge skips the POST. */
+const settledElsewhere = new Set<string>();
+
 export interface EngineApprovalOutcome {
   approved: boolean;
   reason?: string;
@@ -80,7 +83,9 @@ export async function bridgeEngineApproval(
   if (aborted) withdrawRequest(req.id, 'Generation cancelled');
 
   const approved = decision.status === 'approved';
-  const sent = await decideOnEngine(req.id, approved);
+  // Settled through another door (see settleEngineApproval): the engine
+  // already holds this outcome — posting it again would only earn a 409.
+  const sent = settledElsewhere.delete(req.id) ? 'gone' : await decideOnEngine(req.id, approved);
   return {
     approved,
     reason: decision.reason,
@@ -90,6 +95,32 @@ export async function bridgeEngineApproval(
       decision.ruleId?.startsWith('policy.') === true,
     gone: sent === 'gone',
   };
+}
+
+/**
+ * Phase 19: the engine resolved one of its approvals through ANOTHER door
+ * (a workflow human check decided from the canvas, expired, or withdrawn
+ * with a cancelled run). Close the local copy with the real outcome so the
+ * modal / bell / Shield list do not keep asking about a settled question.
+ * No-op when nothing local is pending under that id. The bridge's trailing
+ * `decideOnEngine` then simply hears "gone".
+ */
+export async function settleEngineApproval(
+  id: string,
+  approved: boolean,
+  reason: string,
+  decidedBy: 'user' | 'auto-timeout' = 'user',
+): Promise<void> {
+  const { useApprovalStore } = await import('@/stores/approvalStore');
+  const store = useApprovalStore.getState();
+  if (!store.pending.some((r) => r.id === id)) return;
+  settledElsewhere.add(id);
+  store.decide(
+    id,
+    { status: approved ? 'approved' : 'denied', reason },
+    undefined,
+    { decidedBy, remember: null, auditDecision: approved ? 'allowed' : 'denied' },
+  );
 }
 
 /* ── Pending-approval sync (Phase 14) ──────────────────────────────────── */

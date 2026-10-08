@@ -12,42 +12,46 @@
 | Daemon runtime | `daemon/workflow-runtime.ts` | `getWorkflowRuntime(state, config)`: engine + repo + `WorkflowRunRegistry` (replay buffer, subscribers, approval bridge, ≤ 3 concurrent runs) + `startRun(def, params)` (background `executeRun`). Agent runner → `AgentService.execute`, tool executor → core tools with approval ctx, timer → real `setTimeout` + abort. |
 | Routes | `daemon/routes/workflows.routes.ts`, `agents.routes.ts` (custom CRUD) | See §C. Contract in `contract-agents.ts`, schemas in `schemas-agents.ts`; `contract.ts` stays at 800 lines. |
 
-## B. Desktop (`desktop/src/`)
+## B. Desktop (`desktop/src/`) — as built
 
 ```
-agents/                       core.ts (role families, colours, icons, labels), api.ts (typed calls + SSE), canvasCore.ts (palette, node defaults, graph helpers, layout, describe), reduce.ts (run events → canvas state)
-stores/agentsStore.ts         prebuilt + custom + favourites + editor state
-stores/workflowEditorStore.ts nodes/edges/selection/history/clipboard/dirty/definition/run state
+agents/                       core.ts (role families, colours, labels), api.ts (typed calls + run SSE), canvasCore.ts (palette, node defaults, graph helpers, layer layout, describe, quick lint), reduce.ts (run events → RunProgress, completion summary)
+stores/agentsStore.ts         prebuilt + custom + favourites + editor state (memoised selectors — Zustand v5 needs stable refs)
+stores/workflowEditorStore.ts nodes/edges/selection/history/clipboard/dirty/definition/run state (lazy chunk: it pulls in @xyflow/react)
 screens/Agents/
   index.tsx                   lazy wrapper
-  AgentsScreen.tsx            head + tabs (?tab=prebuilt|mine|workflows)
-  components/AgentCard.tsx, AgentGrid.tsx, AgentConfigPanel.tsx (read-only), AgentEditor.tsx (slide-over), EmojiPicker.tsx
-  workflows/WorkflowCanvas.tsx, NodePalette.tsx, Inspector.tsx, nodes/XrNode.tsx (+ per-kind bodies), edges/FlowEdge.tsx, Toolbar.tsx, ProblemsPanel.tsx, RunSummary.tsx, ParamsDialog.tsx, DefinitionsList.tsx
+  AgentsScreen.tsx            head + tabs (?tab=prebuilt|mine|workflows, persisted), import/new intents
+  icons.ts                    role → Lucide icon map
+  components/                 AgentCard, PrebuiltTab, MyAgentsTab, DeleteAgentDialog, ModelSelect, AgentEditor (slide-over), AgentConfigSheet (read-only)
+  workflows/                  WorkflowsTab (canvas), XrNode, XrEdge, Palette, Toolbar, Inspector, ProblemsPanel, RunPanels (params, approval modal, summary, failure banner), WorkflowLibrary
 styles/agents.css             grid, cards, slide-over, canvas theme variables, marching ants, pulses, reduced motion
 ```
 
-Cross-surface: `stores/chatStore.ts` (`TurnOverrides` + `?agent=`), Chat composer agent chip/picker, Builder top bar agent select, Research researcher picker, `lib/paletteCommands.ts` ("New agent", "Open workflows", "Run workflow …"), Orb/HUD commands, `components/approvals/ApprovalInfo.tsx` labels, Runs/Brain via recorder.
+Cross-surface: `stores/chatStore.ts` + `screens/Chat` (`?agent=` pre-wires a session), `lib/paletteCommands.ts`, `voice/session.ts` (navigate + toast), `components/approvals/ApprovalInfo.tsx` (workflow tool labels), Brain via `beginEngineRun`, Budget via `recordSpend` on `run_end`.
 
-## C. API (all under `/api`, mounted as `/api/v1` too)
+Shield interplay (found in the rig, fixed here): a workflow human check is a real approval record, so the Shield poller bridges it into the global queue too. Such requests carry `humanOnly: true` (`engine/wire.ts`): the policy gate never auto-approves them (Art. IV.4 — "low risk" does not mean "nobody asks"), remember rules are ignored and none are minted, bulk "approve low-risk" skips them, and the modal says so. While the canvas's own dialog is up the root modal yields (`inlineSurface`); when the engine records the decision through either door the other copy is settled with the real outcome (`settleEngineApproval`), so nothing stale stays on screen and no second POST is sent. Leaving the screen mid-run keeps the stream open; an idle document stops listening.
+
+## C. API — as built (`/api/v1`; contract in `routes/contract-agents.ts`, schemas in `schemas-agents.ts`)
 
 | Method | Path | Body → Response |
 | --- | --- | --- |
-| GET | `/agents` | existing + `agents: AgentSummary[]` (builtin + custom), `tools: string[]` (core tool names) |
-| GET | `/agents/custom` | `{ agents: CustomAgent[] }` |
-| POST | `/agents/custom` | `CustomAgentInput` → `{ agent }` (400 on validation; 409 duplicate name) |
-| GET/PATCH/DELETE | `/agents/custom/{id}` | `{ agent }` / `{ ok }` |
-| GET | `/workflows` | `{ definitions: DefinitionSummary[] }` (latest version per id, lastRunAt) |
-| POST | `/workflows` | `{ definitionId?, name, description?, tags?, graph: CanvasGraph, parameters? }` → `{ definition, graph, problems }` (422 when hard problems) |
-| POST | `/workflows/inspect` | same body → `{ problems }` |
-| GET | `/workflows/{id}` | `{ definition, graph, versions: number[] }` (`?version=`) |
-| PATCH | `/workflows/{id}` | `{ name?, tags? }` → new version (metadata only) |
+| GET | `/agents` | `{ roles, agents: AgentSummary[] (builtin + custom, `builtin:false`), tools[{name,description,requiresApproval}], workflows, health }` |
+| GET / POST | `/agents/custom` | `{ agents }` / `CustomAgentInput` → 201 `{ agent }` (400 `errors[{path,message}]`, 422 semantic, 409 duplicate name) |
+| POST | `/agents/custom/import` | exported JSON (`schemaVersion: "xr-5.0.0/agent-v1"`) → 201 `{ agent }` |
+| GET / PATCH / DELETE | `/agents/custom/{id}` | `{ agent }` / `{ agent }` (version++) / `{ ok }` |
+| POST | `/agents/custom/{id}/duplicate` | → 201 `{ agent }` |
+| GET | `/workflows` | `{ workflows: WorkflowSummary[] }` (`definitionId, name, version, nodeCount, summary{nodes,tools,humanChecks,llmSteps}, tags, publishedAt, lastRun`) |
+| POST | `/workflows` | `{ name, description?, graph: CanvasGraph, tags? }` → 201 `{ workflow, graph, problems, versions }` (422 lint errors) |
+| POST | `/workflows/inspect` | `{ graph }` → `{ ok, problems, summary }` |
+| GET | `/workflows/{id}` | `{ workflow, graph, problems, versions }` (`?version=`) |
+| PATCH | `/workflows/{id}` | `{ graph, baseVersion, name?, description?, tags? }` → new immutable version (409 when `baseVersion` is stale) |
 | DELETE | `/workflows/{id}` | deactivate all versions → `{ ok }` |
-| GET | `/workflows/runs` | `{ runs: WorkflowRunSummary[] }` (`?definitionId=`) |
-| POST | `/workflows/{id}/run` | `{ version?, parameters? }` → 202 `{ runId, state }` (409 inactive, 429 concurrency) |
-| GET | `/workflows/runs/{runId}` | `{ run: inspection + nodeStates + pendingApproval }` |
-| GET | `/workflows/runs/{runId}/stream` | SSE replay + live; `stream_end` + `[DONE]` |
+| POST | `/workflows/{id}/run` | `{ version?, parameters? }` → 202 `{ run: WorkflowRunView }` (400 missing params, 429 at 3 in flight) |
+| GET | `/workflows/runs` | `{ runs }` (`?limit=&definitionId=`) |
+| GET | `/workflows/runs/{runId}` | `{ run: WorkflowRunView }` (`nodes[]`, `cost`, `pendingHuman[{nodeId,approvalId,kind,summary}]`, `artifacts`) |
+| GET | `/workflows/runs/{runId}/stream` | SSE `run_state · node_state · log · cost_update · approval_required · run_end`, replay then live, `stream_end` + `[DONE]` |
 | POST | `/workflows/runs/{runId}/cancel` · `/pause` · `/resume` | `{ ok, state }` |
-| POST | `/workflows/runs/{runId}/human-decision` | `{ nodeId, decision: approve|deny|changes_requested|reject, comment? }` → `{ ok, state }` |
+| POST | `/workflows/runs/{runId}/human-decision` | `{ nodeId, decision: approve|deny|changes_requested|reject, comment? }` → `{ run }` — goes THROUGH the approval record when one exists |
 
 ## D. Order of work
 

@@ -349,10 +349,17 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
 
 /* ── Selectors ────────────────────────────────────────────────────────── */
 
+// Derived arrays are cached on the identity of `agents` so selectors stay
+// referentially stable (zustand v5 re-renders until the snapshot settles).
+let prebuiltCache: { src: AgentSummary[]; out: AgentSummary[] } | null = null;
+let customCache: { src: AgentSummary[]; out: AgentSummary[] } | null = null;
+
 export function selectPrebuilt(s: AgentsState): AgentSummary[] {
-  return s.agents.filter((a) => a.builtin);
+  if (prebuiltCache?.src !== s.agents) prebuiltCache = { src: s.agents, out: s.agents.filter((a) => a.builtin) };
+  return prebuiltCache.out;
 }
 
 export function selectCustom(s: AgentsState): AgentSummary[] {
-  return s.agents.filter((a) => !a.builtin);
+  if (customCache?.src !== s.agents) customCache = { src: s.agents, out: s.agents.filter((a) => !a.builtin) };
+  return customCache.out;
 }

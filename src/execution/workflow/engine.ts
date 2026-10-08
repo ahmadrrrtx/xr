@@ -1240,6 +1240,9 @@ export class WorkflowEngine {
     ns.state = applyNodeEvent(ns.state, "complete", node.id);
     ns.outputs = { outcome: node.outcome, message: this.render(run, node.message) };
     run.state = applyRunEvent(run.state, node.outcome === "success" ? "complete" : "partial_complete");
+    // The completion node ends the run right here; stamp endedAt before the
+    // node's emitChanges() publishes run_end so the summary carries it (Phase 19).
+    if (run.state === "completed" || run.state === "partially_completed") run.endedAt = run.endedAt ?? Date.now();
   }
 
   private async executeCompensationNode(

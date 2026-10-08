@@ -141,6 +141,11 @@ describe("gate", () => {
     expect(core.gateRequest(low, ctx)).toMatchObject({ kind: "decide", status: "approved", decision: "auto-approved", ruleId: "policy.auto-approve-low" });
     expect(core.gateRequest(low, { ...ctx, policy: { ...DEFAULT_POLICY, autoApproveLowRisk: false } })).toEqual({ kind: "prompt", quarantined: false });
   });
+  test("Phase 19: a human-only request (workflow human check) is never auto-approved, but paused still blocks it", () => {
+    const human = req({ skillId: "workflow.human_approval", action: "Approve a workflow step", risk: "low", humanOnly: true });
+    expect(core.gateRequest(human, ctx)).toEqual({ kind: "prompt", quarantined: false });
+    expect(core.gateRequest(human, { ...ctx, paused: true })).toMatchObject({ kind: "decide", decision: "blocked", ruleId: "policy.paused" });
+  });
   test("quarantined skills always prompt; removed ones are blocked", () => {
     const q = req({ skillId: "figma-plugin", risk: "low" });
     expect(core.gateRequest(q, ctx)).toEqual({ kind: "prompt", quarantined: true });

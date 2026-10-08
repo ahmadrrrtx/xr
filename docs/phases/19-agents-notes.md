@@ -45,3 +45,12 @@ Branch `phase/19-agents-workflows`. Written before code (Step 0 of the brief).
 5. "Test" on a custom agent navigates to `/chat?agent=<id>` (a Chat session is a desktop concept; no engine "test session" endpoint needed).
 6. Academic/ArXiv-style agent pickers in Research: the depth panel gets a researcher-role picker only when more than one research-family agent is enabled; the engine still runs `runResearch()` unchanged.
 7. Size gate: tree ceiling raised with a dated reason (Phase 19 adds ~9k lines incl. the canvas).
+
+## 5. Found in the rig (and fixed in this PR)
+
+- **Shield auto-approved a workflow human check.** The daemon parks a human node as a `workflow.human_approval` record with the node's `riskLevel`; the desktop's pending-approval sync bridged it into the global queue, and the policy `autoApproveLowRisk` + risk `low` approved it before anyone saw it. Fix: such requests are `humanOnly` — never auto-approved, remember rules ignored, none minted, excluded from bulk low-risk approval. Covered by `test/desktop/shield-core.test.ts` and `engine-wire.test.ts`.
+- **Two dialogs for one question.** Canvas dialog and root Shield modal showed the same record. The canvas dialog now claims the approval surface (`inlineSurface`) while open; a decision through either door settles the other copy with the engine's outcome (no stale modal, no duplicate POST).
+- **Duration showed "—".** The completion node moved the run to `completed` before `endedAt` was stamped, so `run_end.summary.endedAt` and the decision reply lacked it; the reply then overwrote fresher stream state. Engine stamps `endedAt` in `executeCompletionNode`; the desktop merges views instead of replacing (`mergeView`).
+- **Leaving the screen mid-run froze the canvas.** `leaveScreen` aborted the stream, so Budget/Brain/summary missed the tail. It now keeps listening while a run is active.
+- **Zustand v5 selectors** must return stable references (React #185). Store-level memoisation + module constants; see `agentsStore.selectPrebuilt/selectCustom`.
+

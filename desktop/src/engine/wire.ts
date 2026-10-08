@@ -97,6 +97,9 @@ export function toApprovalRequest(
     // modal renders it as a quote, never as instructions.
     justification: a.reason || `${a.tool} needs your approval`,
     createdAt,
+    ...(a.tool === 'workflow.human_approval' || a.tool === 'workflow.human_review'
+      ? { humanOnly: true }
+      : {}),
   };
 }
 

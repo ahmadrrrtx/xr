@@ -163,7 +163,7 @@ export async function requestApproval(
   // the store applies the gate's hard decisions (paused / blocked / auto)
   // itself below — this preview only decides whether rules may run.
   const preview = runApprovalGate(req);
-  const rulesApply = preview.kind === 'prompt' && !preview.quarantined;
+  const rulesApply = preview.kind === 'prompt' && !preview.quarantined && !req.humanOnly;
   const { decision, rules } = rulesApply
     ? checkRules(store.rules, req, now)
     : { decision: null, rules: store.rules };
@@ -266,20 +266,22 @@ export function decideApproval(
   const req = store.pending.find((r) => r.id === id);
   if (!req) return;
 
+  // A human-only request never mints a rule: the next one asks again.
+  const remember = req.humanOnly ? undefined : opts.remember;
   const newRule =
-    status === 'approved' && opts.remember
-      ? ruleFromDecision(req, opts.remember, Date.now())
+    status === 'approved' && remember
+      ? ruleFromDecision(req, remember, Date.now())
       : undefined;
   const decision: PendingDecision = {
     status,
-    remember: opts.remember,
+    remember,
     ruleId: newRule?.id,
     reason: opts.reason,
   };
 
   store.decide(id, decision, newRule, {
     decidedBy: opts.decidedBy ?? 'user',
-    remember: opts.remember ?? null,
+    remember: remember ?? null,
     auditDecision: opts.auditDecision,
   });
 
@@ -298,7 +300,7 @@ export function decideApproval(
   }
   if (status === 'approved') {
     toast.success(`Approved: ${req.action}`, {
-      description: opts.remember
+      description: remember
         ? 'Remembered — matching requests auto-approve next time.'
         : undefined,
     });

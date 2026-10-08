@@ -155,7 +155,10 @@ describe("Phase 19 · engine additions", () => {
     expect(kinds[kinds.length - 1]).toBe("run_end");
     const llmStates = events.filter((e): e is Extract<WorkflowRunEvent, { type: "node_state" }> => e.type === "node_state" && e.nodeId === "n_llm").map((e) => e.state).filter((st) => st !== "pending" && st !== "ready");
     expect(llmStates).toEqual(["running", "completed"]);
+    const end = events.find((e): e is Extract<WorkflowRunEvent, { type: "run_end" }> => e.type === "run_end");
     expect(events.filter((e) => e.type === "run_end")).toHaveLength(1);
+    expect(end?.summary.startedAt).toBeDefined();
+    expect(end?.summary.endedAt).toBeDefined(); // the completion node stamps it before run_end
     const runStates = events.filter((e): e is Extract<WorkflowRunEvent, { type: "run_state" }> => e.type === "run_state").map((e) => e.state);
     expect(runStates[0]).toBe("running");
     expect(runStates[runStates.length - 1]).toBe("completed");

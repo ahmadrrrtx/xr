@@ -5,7 +5,7 @@
  */
 import { useReactFlow } from '@xyflow/react';
 import { ChevronLeft, LayoutGrid, Maximize2, Minus, MoreHorizontal, Pause, Play, Plus, Save, Square } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { countsLine, graphCounts } from '@/agents/canvasCore';
 import { isActive, runFraction, runStateLabel } from '@/agents/reduce';
@@ -31,7 +31,9 @@ export function Toolbar() {
   const starting = useWorkflowEditorStore((s) => s.starting);
   const runState = useWorkflowEditorStore((s) => s.progress?.state ?? null);
   const fraction = useWorkflowEditorStore((s) => runFraction(s.progress, s.nodes.length));
-  const counts = useWorkflowEditorStore((s) => s.summary ?? graphCounts(s.nodes));
+  const summary = useWorkflowEditorStore((s) => s.summary);
+  const nodeList = useWorkflowEditorStore((s) => s.nodes);
+  const counts = useMemo(() => summary ?? graphCounts(nodeList), [summary, nodeList]);
   const problems = useWorkflowEditorStore((s) => s.problems);
   const problemsOpen = useWorkflowEditorStore((s) => s.problemsOpen);
   const cost = useWorkflowEditorStore((s) => s.progress?.cost?.actualUsd ?? 0);

@@ -84,6 +84,25 @@ export function progressFromView(v: WorkflowRunView): RunProgress {
   };
 }
 
+/**
+ * Fold a fresh engine view into live progress. The stream may already be
+ * ahead of a response body (a decision's reply races its own events), so
+ * timestamps and cost never regress to "unknown".
+ */
+export function mergeView(prev: RunProgress, view: WorkflowRunView): RunProgress {
+  const fresh = progressFromView(view);
+  return {
+    ...fresh,
+    logs: prev.logs,
+    summary: prev.summary,
+    startedAt: fresh.startedAt ?? prev.startedAt,
+    endedAt: fresh.endedAt ?? (isTerminal(fresh.state) ? prev.endedAt : null),
+    cost: fresh.cost ?? prev.cost,
+    error: fresh.error ?? prev.error,
+    tick: prev.tick + 1,
+  };
+}
+
 export function applyRunEvent(p: RunProgress, e: WorkflowRunEvent): RunProgress {
   switch (e.type) {
     case 'run_state': {

@@ -223,7 +223,7 @@ function Editor() {
                   minZoom={0.25}
                   maxZoom={2}
                   fitView
-                  fitViewOptions={{ padding: 0.2 }}
+                  fitViewOptions={{ padding: 0.2, maxZoom: 1.15 }}
                   proOptions={{ hideAttribution: true }}
                   nodesFocusable
                   edgesFocusable

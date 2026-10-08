@@ -85,6 +85,13 @@ export default function AgentsScreen() {
     [setParams],
   );
 
+  // A tab reached by URL (palette, voice, a link) is the one we come back to.
+  useEffect(() => {
+    if (isTab(urlTab) && urlTab !== useSettingsStore.getState().settings.agents.tab) {
+      useSettingsStore.getState().update('agents', { tab: urlTab });
+    }
+  }, [urlTab]);
+
   // Boot: both lists (cheap, one call each). The screen never caches.
   useEffect(() => {
     void useAgentsStore.getState().load();

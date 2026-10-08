@@ -236,7 +236,9 @@ export function isShellRequest(
  * Pure policy gate. Order matters and fails closed (Art. IV.4):
  *   paused → blocked; removed skill → blocked; shell while shell is off →
  *   blocked; quarantined skill → prompt (high-risk, rules ignored);
- *   low-risk + auto-approve policy → auto-approved; otherwise prompt.
+ *   low-risk + auto-approve policy → auto-approved (never for a
+ *   `humanOnly` request — a workflow human check always reaches a person);
+ *   otherwise prompt.
  */
 export function gateRequest(
   req: ApprovalRequest,
@@ -274,7 +276,7 @@ export function gateRequest(
   if (ctx.policy.quarantineNewSkills && q?.status === 'quarantined') {
     return { kind: 'prompt', quarantined: true };
   }
-  if (ctx.policy.autoApproveLowRisk && req.risk === 'low') {
+  if (ctx.policy.autoApproveLowRisk && req.risk === 'low' && !req.humanOnly) {
     return {
       kind: 'decide',
       status: 'approved',

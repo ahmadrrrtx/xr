@@ -57,9 +57,9 @@
     },
     {
       "path": "src/execution/workflow/engine.ts",
-      "lines": 1378,
+      "lines": 1381,
       "owner": "execution",
-      "reason": "The DAG engine relocated under execution/ by the T6 retirement. It keeps delegating agent work through the injected WorkflowAgentRunner (Phase 0 \u00b7 T3). Phase 19 (1163->1378): run event sink with delta reporting, per-node cost accumulation, {{param}}/{{node.field}} templates, untaken-branch skipping, live-run map so pause/cancel/decide mutate the in-flight run, cancellation-aware node failure handling.",
+      "reason": "The DAG engine relocated under execution/ by the T6 retirement. It keeps delegating agent work through the injected WorkflowAgentRunner (Phase 0 \u00b7 T3). Phase 19 (1163->1381): run event sink with delta reporting, per-node cost accumulation, {{param}}/{{node.field}} templates, untaken-branch skipping, live-run map so pause/cancel/decide mutate the in-flight run, cancellation-aware node failure handling, endedAt stamped by the completion node before run_end.",
       "plan": "Extract node executors into execution/workflow/executors/* behind the current engine interface. Deferred to Phase 3.",
       "review": "2026-12-31"
     },

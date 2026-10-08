@@ -101,6 +101,14 @@ describe("approval_required → ApprovalRequest (same id, engine resource, hones
     expect(toApprovalRequest({ id: "ap_st", tool: "serve_static", reason: "", args: { path: ".", scope: "site (Builder)" }, riskTier: "low", ttlMs: 1 }).risk).toBe("low");
   });
 
+  test("Phase 19: workflow human checks are human-only (no policy auto-approve, no remember rules); tools are not", () => {
+    const h = toApprovalRequest({ id: "ap_h", tool: "workflow.human_approval", reason: "Ship it?", args: {}, riskTier: "low", ttlMs: 1 });
+    expect(h.humanOnly).toBe(true);
+    expect(h.action).toBe("Approve a workflow step");
+    expect(toApprovalRequest({ id: "ap_rv", tool: "workflow.human_review", reason: "", args: {}, ttlMs: 1 }).humanOnly).toBe(true);
+    expect(toApprovalRequest({ id: "ap_t", tool: "shell", reason: "", args: { cmd: "ls" }, ttlMs: 1 }).humanOnly).toBeUndefined();
+  });
+
   test("shell commands surface the command as the resource; an unknown tool is humanised, not dropped", () => {
     expect(toApprovalRequest({ id: "ap_1", tool: "shell", reason: "", args: { command: "rm -rf build" }, ttlMs: 1 }).resource).toBe("rm -rf build");
     const odd = toApprovalRequest({ id: "ap_2", tool: "deploy_rocket", reason: "", args: {}, ttlMs: 1 });

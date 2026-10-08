@@ -348,6 +348,8 @@ html[data-theme='graphite'] .xa-root {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .xa-card-desc {
@@ -447,6 +449,8 @@ html[data-theme='graphite'] .xa-root {
   letter-spacing: 0.02em;
   background: var(--bg-raised);
   color: var(--text-tertiary);
+  white-space: nowrap;
+  flex: none;
 }
 
 .xa-pill--custom {
@@ -1052,6 +1056,15 @@ html[data-theme='graphite'] .xa-root {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.xw-palette-group h4 {
+  margin: 0 0 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 }
 
 .xw-stencil {

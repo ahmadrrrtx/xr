@@ -385,9 +385,10 @@ export const useShieldStore = create<ShieldStoreState>((set, get) => {
     },
 
     bulkApproveLowRisk: () => {
+      // Workflow human checks are excluded: each one asks a person directly.
       const low = useApprovalStore
         .getState()
-        .pending.filter((r) => r.risk === 'low');
+        .pending.filter((r) => r.risk === 'low' && !r.humanOnly);
       if (low.length === 0) {
         toast('No low-risk requests pending');
         return;
