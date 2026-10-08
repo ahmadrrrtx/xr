@@ -133,7 +133,7 @@ export const CATEGORY_LABEL: Record<SpendCategory, string> = {
 };
 
 export type SpendSurface =
-  'chat' | 'brain' | 'hud' | 'voice' | 'builder' | 'research' | 'playground' | 'test' | 'seed';
+  'chat' | 'brain' | 'hud' | 'voice' | 'builder' | 'research' | 'workflows' | 'playground' | 'test' | 'seed';
 
 export interface SpendEvent {
   id: string;

@@ -29,6 +29,7 @@ export type OpenTo = 'chat' | 'last-session' | 'workspaces';
 export type BudgetPreset = 'auto' | '2' | '5' | '10' | '20' | '50' | 'custom';
 export type ProviderKind =
   'openai-compatible' | 'anthropic' | 'gemini' | 'ollama' | 'custom';
+export type AgentsTab = 'prebuilt' | 'mine' | 'workflows';
 
 export interface ProviderConfig {
   id: string;
@@ -153,6 +154,13 @@ export interface XRSettings {
   about: {
     devtools: boolean;
   };
+  /** Phase 19 — Agents screen preferences (favourites, last tab, canvas chrome). */
+  agents: {
+    tab: AgentsTab;
+    favoriteAgents: string[];
+    paletteCollapsed: boolean;
+    lastWorkflowId: string | null;
+  };
 }
 
 export const DEFAULT_SETTINGS: XRSettings = {
@@ -262,6 +270,12 @@ export const DEFAULT_SETTINGS: XRSettings = {
   },
   about: {
     devtools: false,
+  },
+  agents: {
+    tab: 'prebuilt',
+    favoriteAgents: [],
+    paletteCollapsed: false,
+    lastWorkflowId: null,
   },
 };
 

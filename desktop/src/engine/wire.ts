@@ -28,6 +28,9 @@ const TOOL_META: Record<string, { action: string; icon: string }> = {
   send_email: { action: 'Send an email', icon: 'mail' },
   http_request: { action: 'Call a web endpoint', icon: 'globe' },
   fetch_url: { action: 'Fetch a URL', icon: 'globe' },
+  // Phase 19: workflow human nodes park as approval records.
+  'workflow.human_approval': { action: 'Approve a workflow step', icon: 'workflow' },
+  'workflow.human_review': { action: 'Review a workflow step', icon: 'workflow' },
   browser: { action: 'Drive the browser', icon: 'globe' },
 };
 
@@ -62,7 +65,7 @@ function previewText(preview: EnginePreview | string | null | undefined): string
  */
 function resourceOf(a: EngineApprovalRequired): string | null {
   const args = a.args ?? {};
-  for (const k of ['scope', 'path', 'file', 'command', 'cmd', 'to', 'url', 'target']) {
+  for (const k of ['scope', 'path', 'file', 'command', 'cmd', 'to', 'url', 'target', 'node']) {
     const v = args[k];
     if (typeof v === 'string' && v.trim()) return v.length > 160 ? `${v.slice(0, 160)}…` : v;
   }

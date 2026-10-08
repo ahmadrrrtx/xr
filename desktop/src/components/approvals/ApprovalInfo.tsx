@@ -4,16 +4,7 @@
  * risk chip, justification quote. Pure presentation — state lives in
  * ApprovalModal.
  */
-import {
-  ChevronDown,
-  FileEdit,
-  Globe,
-  Mail,
-  Quote,
-  ShieldCheck,
-  Terminal,
-  Wrench,
-} from 'lucide-react';
+import { ChevronDown, FileEdit, Globe, Mail, Quote, ShieldCheck, Terminal, Workflow, Wrench } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useState } from 'react';
 
@@ -37,6 +28,7 @@ const SKILL_ICONS: Record<string, typeof Mail> = {
   shell: Terminal,
   globe: Globe,
   web: Globe,
+  workflow: Workflow,
 };
 
 function SkillIcon({ icon, className }: { icon: string; className?: string }) {
