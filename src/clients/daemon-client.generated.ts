@@ -1011,6 +1011,51 @@ export class XRDaemonClient {
     return await this.call("GET", "/api/v1/memory/search", body);
   }
 
+  /** Explicitly remember something (user-provenance write). Refused for do-not-remember matches; sensitive content needs acknowledgeSensitive. */
+  async memoryCreate(body: z.infer<typeof S.MemoryCreateRequest>): Promise<z.infer<typeof S.MemoryWriteResponse>> {
+    return await this.call("POST", "/api/v1/memory", body);
+  }
+
+  /** Edit a memory's content, tags, importance or expiry. Exclusion and sensitivity checks apply to edits. */
+  async memoryUpdate(id: string, body: z.infer<typeof S.MemoryUpdateRequest>): Promise<z.infer<typeof S.MemoryWriteResponse>> {
+    return await this.call("PATCH", `/api/v1/memory/${encodeURIComponent(id)}`, body);
+  }
+
+  /** Export this workspace's memory as an xr-memory JSON bundle (includes provenance). */
+  async memoryExport(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/memory/export");
+  }
+
+  /** Import an xr-memory bundle (merge, or replace with acknowledgeReplace). Sensitive entries are skipped, not imported. */
+  async memoryImport(body: z.infer<typeof S.MemoryImportRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/memory/import", body);
+  }
+
+  /** Heuristic entity graph over memories (people, projects, files, tools). Read-only. */
+  async memoryGraph(): Promise<z.infer<typeof S.MemoryGraphResponse>> {
+    return await this.call("GET", "/api/v1/memory/graph");
+  }
+
+  /** Memory settings. Auto-memory is reported off and cannot be enabled in this version. */
+  async memorySettingsGet(): Promise<z.infer<typeof S.MemorySettingsResponse>> {
+    return await this.call("GET", "/api/v1/memory/settings");
+  }
+
+  /** Update memory settings (show expired). Turning on auto-memory is refused with 409. */
+  async memorySettingsPut(body: z.infer<typeof S.MemorySettingsRequest>): Promise<z.infer<typeof S.MemorySettingsResponse>> {
+    return await this.call("PUT", "/api/v1/memory/settings", body);
+  }
+
+  /** Plan (default) or apply (apply: true) consolidation of old, low-importance memories into a summary. Originals are superseded, not deleted. */
+  async memoryConsolidate(body: z.infer<typeof S.MemoryConsolidateRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/memory/consolidate", body);
+  }
+
+  /** Scan text for sensitive patterns (card numbers, SSNs, API and private keys) without saving it. */
+  async memoryScan(body: z.infer<typeof S.MemoryScanRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/memory/scan-sensitive", body);
+  }
+
   /** Delete one memory record by id. */
   async memoryDelete(id: string): Promise<Record<string, unknown>> {
     return await this.call("DELETE", `/api/v1/memory/${encodeURIComponent(id)}`);
