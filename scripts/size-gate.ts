@@ -107,7 +107,12 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 153_000; // Phase 20 (Skills Store) · 152,500 → 153,000 (2026-10-09):
+export const TREE_CEILING = 154_000; // Phase 21 (Memory Explorer) · 153,000 → 154,000 (2026-10-09):
+// the memory explorer adds the engine write routes (add, edit, export, import,
+// graph, settings, consolidate, scan-sensitive), the sensitivity scanner, the
+// heuristic graph and the desktop screen. These are consent-plane writes (they
+// gate what is remembered), so they stay in core. Measured 153,657 at PR head.
+// Phase 20 (Skills Store) · 152,500 → 153,000 (2026-10-09):
 // the skills store is engine-backed: the install engine (quarantine policy,
 // install jobs with SSE progress, promote, parked dangerous grants, settings
 // validation, install-from-URL preview) lives in src/skills/quarantine.ts,
