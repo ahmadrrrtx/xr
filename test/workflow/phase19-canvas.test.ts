@@ -15,7 +15,19 @@ import { createDraft, publishDraft } from "../../src/execution/workflow/versioni
 import type { WorkflowRunEvent } from "../../src/execution/workflow/events.ts";
 
 const home = mkdtempSync(join(tmpdir(), "xr-p19-"));
-afterAll(() => rmSync(home, { recursive: true, force: true }));
+const openStores: WorkspaceStore[] = [];
+afterAll(() => {
+  // Close every SQLite handle before deleting the directory. On Windows an open
+  // handle makes rmSync fail with EBUSY, which failed the Windows parity job.
+  for (const store of openStores) {
+    try {
+      store.close();
+    } catch {
+      /* already closed */
+    }
+  }
+  rmSync(home, { recursive: true, force: true });
+});
 
 function graph(): CanvasGraph {
   return {
@@ -33,6 +45,7 @@ function graph(): CanvasGraph {
 
 function engineWith(events: WorkflowRunEvent[], runner?: (p: { instruction: string }) => Promise<{ summary: string; cost?: { usd: number; tokensIn: number; tokensOut: number } }>) {
   const store = new WorkspaceStore(join(home, `wf-${Math.random().toString(36).slice(2)}.db`));
+  openStores.push(store);
   const repo = new WorkflowRepository(store);
   const engine = new WorkflowEngine({
     agentRunner: {
