@@ -9,7 +9,7 @@ import { ArrowRight, Mic, Paperclip, Square, Waves } from 'lucide-react';
 import TextareaAutosize from 'react-textarea-autosize';
 import { motion } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { modelInfo } from '@/budget/models';
@@ -42,6 +42,17 @@ export function Composer({
 }) {
   const [text, setText] = useState('');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Skills Store hand-off (Phase 20 "Test it"): `?prompt=` seeds the draft once.
+  useEffect(() => {
+    const seed = searchParams.get('prompt');
+    if (!seed) return;
+    setText(seed.slice(0, 2000));
+    const next = new URLSearchParams(searchParams);
+    next.delete('prompt');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- consume the intent once
+  }, []);
   const voiceActive = useVoiceStore((s) => s.active);
   const [dragOver, setDragOver] = useState(false);
   const dragCounter = useRef(0);

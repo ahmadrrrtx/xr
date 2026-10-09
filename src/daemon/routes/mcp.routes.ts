@@ -13,6 +13,7 @@
  *   POST   /api/mcp/enable       → enable a server by id
  *   POST   /api/mcp/disable      → disable a server by id
  *   GET    /api/mcp/health       → health summary (best-effort, bounded)
+ *                                   optional ?id=<server> probes ONE server
  */
 
 import { route, type DaemonRoute } from "./router.ts";
@@ -150,11 +151,23 @@ export function mcpRoutes(): DaemonRoute[] {
       id: "mcp.health",
       path: "/api/mcp/health",
       method: "GET",
-      handle: async ({ json, state }) => {
+      handle: async ({ req, json, state }) => {
         const mgr = new McpManager(state.store);
         // Bounded health probe: this may spawn/connect, so it is its own
-        // endpoint (the list view never blocks on it).
-        const reports = await mgr.healthCheck();
+        // endpoint (the list view never blocks on it). `?id=` probes a single
+        // server so a UI action on one server does not wait on every other one.
+        const id = new URL(req.url).searchParams.get("id")?.trim() || undefined;
+        if (id) {
+          // A probe starts the server. A disabled server stays unstarted ("Off means
+          // registered but not started"), so report it without probing.
+          const target = mgr.listServers().find((s) => s.id === id);
+          if (target && !target.enabled) {
+            return json({
+              reports: [{ id, state: "disabled", checkedAt: Date.now(), toolsCount: 0, resourcesCount: 0, promptsCount: 0, detail: "server is disabled; not started" }],
+            });
+          }
+        }
+        const reports = await mgr.healthCheck(id);
         return json({ reports });
       },
     }),

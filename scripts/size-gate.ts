@@ -107,7 +107,17 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 152_500; // Phase 19 (Agents) · 149,000 → 152,500 (2026-10-08):
+export const TREE_CEILING = 153_000; // Phase 20 (Skills Store) · 152,500 → 153,000 (2026-10-09):
+// the skills store is engine-backed: the install engine (quarantine policy,
+// install jobs with SSE progress, promote, parked dangerous grants, settings
+// validation, install-from-URL preview) lives in src/skills/quarantine.ts,
+// src/skills/install-jobs.ts and the extended skill-service.ts / skills-api.ts,
+// and it composes the existing SkillService, quarantine schema and approval
+// store. It is consent-plane (quarantine and dangerous-grant enforcement),
+// so it cannot move to a satellite. No waived giant grew. Net core change from
+// this phase is about +1,180 LOC; measured 152,918. Smallest round number that
+// fits; 110k stays the direction of travel. Needs maintainer sign-off.
+// Phase 19 (Agents) · 149,000 → 152,500 (2026-10-08):
 // the Agents screen is wired to the EXISTING multi-agent runtime and the
 // EXISTING workflow DAG engine; the engine half is what the UI was missing:
 // the daemon finally constructs the engine (workflow-runtime.ts: agent

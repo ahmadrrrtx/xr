@@ -28,6 +28,18 @@ export interface OnlineInstallResult {
   errors: string[];
 }
 
+/**
+ * Phase 20 — progress sink for the install flow UI (SSE job streams). The
+ * backend is the single install path; the sink only observes it.
+ */
+export interface OnlineInstallProgress {
+  step: "download" | "verify" | "install";
+  /** 0..100 within the step (determinate while bytes stream). */
+  pct: number;
+  message: string;
+}
+export type OnlineInstallProgressSink = (progress: OnlineInstallProgress) => void;
+
 export class SkillMarketplaceBackend {
   readonly store: MarketplaceBackendStore;
   readonly online: OnlineSkillRegistryClient;
@@ -91,7 +103,7 @@ export class SkillMarketplaceBackend {
     return { ok: result.ok, warnings, errors };
   }
 
-  private async installVersion(version: OnlineSkillVersion, registry: SkillRegistryEndpoint, options: OnlineInstallOptions): Promise<{ ok: boolean; warnings: string[]; errors: string[] }> {
+  private async installVersion(version: OnlineSkillVersion, registry: SkillRegistryEndpoint, options: OnlineInstallOptions, emit?: OnlineInstallProgressSink): Promise<{ ok: boolean; warnings: string[]; errors: string[] }> {
     const warnings: string[] = [];
     const errors: string[] = [];
     const compatibility = checkSkillCompatibility(version.manifest);
@@ -99,24 +111,31 @@ export class SkillMarketplaceBackend {
     if (!compatibility.ok) return { ok: false, warnings, errors: compatibility.errors };
 
     this.snapshotExisting(version.id);
-    const download = await this.downloader.download(version.packageUrl, version.packageSha256);
+    emit?.({ step: "download", pct: 0, message: `Downloading ${version.id}@${version.version}…` });
+    const download = await this.downloader.download(version.packageUrl, version.packageSha256, (p) => {
+      emit?.({ step: "download", pct: p.pct, message: `Downloading ${version.id}@${version.version}…` });
+    });
     if (!download.ok || !download.path) return { ok: false, warnings, errors: [download.error ?? "download failed"] };
     if (version.packageSha256 && download.sha256 !== version.packageSha256) return { ok: false, warnings, errors: ["download hash mismatch"] };
 
+    emit?.({ step: "verify", pct: 50, message: "Verifying signature…" });
     const signature = this.verifySignatureIfPresent(version, download.path);
     warnings.push(...signature.warnings);
     if (!signature.ok) return { ok: false, warnings, errors: signature.errors };
+    emit?.({ step: "verify", pct: 100, message: version.signature ? "Signature verified." : "Package is unsigned." });
 
     try {
+      emit?.({ step: "install", pct: 50, message: `Installing ${version.id}@${version.version}…` });
       this.marketplace.importPackage(download.path, { enable: options.enable ?? true, force: options.force });
       this.store.recordInstalledSource(version.id, { registryId: registry.id, packageUrl: version.packageUrl, packageSha256: version.packageSha256 });
+      emit?.({ step: "install", pct: 100, message: "Installed." });
       return { ok: true, warnings, errors };
     } catch (e) {
       return { ok: false, warnings, errors: [(e as Error).message] };
     }
   }
 
-  async installOnline(id: string, options: OnlineInstallOptions = {}): Promise<OnlineInstallResult> {
+  async installOnline(id: string, options: OnlineInstallOptions = {}, emit?: OnlineInstallProgressSink): Promise<OnlineInstallResult> {
     await this.syncRegistries();
     const resolved = this.resolver.resolve({ id, range: options.versionRange, registryId: options.registryId, includeYanked: options.includeYanked });
     if (!resolved.ok || !resolved.version || !resolved.registry) return { ok: false, installed: [], warnings: [], errors: [resolved.reason ?? "version resolution failed"] };
@@ -128,13 +147,13 @@ export class SkillMarketplaceBackend {
     const warnings = [...plan.warnings];
     const errors: string[] = [];
     for (const dep of plan.dependencies) {
-      const r = await this.installVersion(dep, resolved.registry, options);
+      const r = await this.installVersion(dep, resolved.registry, options, emit);
       warnings.push(...r.warnings);
       if (!r.ok) errors.push(...r.errors);
       else installed.push({ id: dep.id, version: dep.version });
     }
     if (!errors.length) {
-      const r = await this.installVersion(plan.root, resolved.registry, options);
+      const r = await this.installVersion(plan.root, resolved.registry, options, emit);
       warnings.push(...r.warnings);
       if (!r.ok) errors.push(...r.errors);
       else installed.push({ id: plan.root.id, version: plan.root.version });
@@ -157,13 +176,13 @@ export class SkillMarketplaceBackend {
     return updates;
   }
 
-  async updateOnline(id: string): Promise<OnlineInstallResult> {
+  async updateOnline(id: string, emit?: OnlineInstallProgressSink): Promise<OnlineInstallResult> {
     const current = this.marketplace.get(id);
     if (!current) return { ok: false, installed: [], warnings: [], errors: [`skill not installed: ${id}`] };
     const updates = await this.checkUpdates();
     const update = updates.find((u) => u.id === id);
     if (!update) return { ok: true, installed: [], warnings: [`${id} is already up to date`], errors: [] };
-    return await this.installOnline(id, { registryId: update.registryId, versionRange: update.latestVersion, force: true });
+    return await this.installOnline(id, { registryId: update.registryId, versionRange: update.latestVersion, force: true }, emit);
   }
 
   rollback(id: string, version?: string): { ok: boolean; reason: string } {

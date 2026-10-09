@@ -271,6 +271,20 @@ export const ReviewSchema = z.object({
 });
 export type SkillReview = z.infer<typeof ReviewSchema>;
 
+/**
+ * Phase 20 · quarantine state — ENGINE-SIDE truth (the client can never clear
+ * it; only `POST /api/skills/:id/promote` can). While quarantined the granted
+ * set is capped to non-dangerous scopes; dangerous scopes the operator
+ * approved are parked in `pendingGrants` and applied on promotion.
+ */
+export const SkillQuarantineSchema = z.object({
+  until: z.number().int(),
+  reason: z.string().max(400).optional(),
+  pendingGrants: z.array(z.enum(SKILL_PERMISSION_SCOPES)).default([]),
+  quarantinedAt: z.number().int(),
+});
+export type SkillQuarantine = z.infer<typeof SkillQuarantineSchema>;
+
 export const InstallationSchema = z.object({
   id: Identifier,
   version: Semver,
@@ -284,6 +298,7 @@ export const InstallationSchema = z.object({
   installedAt: z.number().int(),
   updatedAt: z.number().int(),
   lastUsedAt: z.number().int().optional(),
+  quarantine: SkillQuarantineSchema.optional(),
   rollback: z.array(z.object({ version: Semver, dir: z.string().min(1).max(1200), at: z.number().int() })).default([]),
 });
 export type SkillInstallation = z.infer<typeof InstallationSchema>;
