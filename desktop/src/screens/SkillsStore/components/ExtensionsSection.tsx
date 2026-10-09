@@ -90,18 +90,21 @@ export function McpCard({ server, index }: { server: McpServer; index: number })
 export function PluginCard({ plugin, index }: { plugin: PluginRow; index: number }) {
   const toggle = useSkillsStore((s) => s.togglePlugin);
   const grant = useSkillsStore((s) => s.grantPluginPermission);
-  const sandboxed = plugin.sandboxed !== false;
   return (
     <article className="sk-card" style={{ ['--i' as string]: index }} data-testid={`plugin-card-${plugin.id}`} aria-label={`${plugin.name}, plugin`}>
       <div className="sk-card-top">
         <span className="sk-icon" style={{ background: '#5B6BD8' }} aria-hidden="true">
           <Puzzle size={22} strokeWidth={1.5} />
         </span>
-        {sandboxed ? <span className="sk-chip" style={{ color: 'var(--success)' }}>sandboxed</span> : <span className="sk-chip" data-muted="true">in-process</span>}
+        {/* Only what the engine reports. No "sandboxed" claim unless it says so. */}
+        {plugin.sandboxed === true ? <span className="sk-chip" style={{ color: 'var(--success)' }}>sandboxed</span> : null}
       </div>
       <div style={{ minWidth: 0 }}>
         <h3 className="sk-card-name">{plugin.name}</h3>
-        <div className="sk-publisher"><span className="sk-chip">plugin · v{plugin.version}</span></div>
+        <div className="sk-publisher">
+          <span className="sk-chip">plugin · v{plugin.version}</span>
+          <span className="sk-chip" data-muted="true">trust: {plugin.trustLevel ?? 'unknown'}</span>
+        </div>
       </div>
       <p className="sk-card-desc">{plugin.description}</p>
       {plugin.permissions?.length ? (

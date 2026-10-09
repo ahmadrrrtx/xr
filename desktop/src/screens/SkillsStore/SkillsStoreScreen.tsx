@@ -328,12 +328,18 @@ export default function SkillsStoreScreen() {
               ) : (
                 <div className="sk-grid">{mcpServers.map((s, i) => <McpCard key={s.id} server={s} index={i} />)}</div>
               )}
-              {plugins.length ? (
-                <>
-                  <div className="sk-section" style={{ marginTop: 20 }}>Plugins · {plugins.length}</div>
+              <section aria-labelledby="ext-plugins" style={{ marginTop: 20 }}>
+                <div className="sk-section" id="ext-plugins">Plugins · {plugins.length}</div>
+                {plugins.length === 0 ? (
+                  <p className="sk-hint" data-testid="plugins-empty">
+                    No plugins installed. Plugins install from a folder on this machine with{' '}
+                    <code>xr plugins install ./my-plugin</code>. They appear here once installed, and each permission
+                    stays off until you grant it.
+                  </p>
+                ) : (
                   <div className="sk-grid">{plugins.map((p, i) => <PluginCard key={p.id} plugin={p} index={i} />)}</div>
-                </>
-              ) : null}
+                )}
+              </section>
             </section>
           ) : null}
         </main>

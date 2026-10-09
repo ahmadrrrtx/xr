@@ -36,7 +36,7 @@ import {
   mcpUnpin as apiMcpUnpin,
   removeMcp as apiRemoveMcp,
   setMcpEnabled as apiSetMcpEnabled,
-  grantPluginPermissions as apiGrantPluginPermissions,
+  setPluginPermissions as apiSetPluginPermissions,
   setPluginEnabled as apiSetPluginEnabled,
   type AddMcpInput,
   type InspectResponse,
@@ -605,18 +605,31 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
           : { url: f.url.trim() }),
       };
       await apiAddMcp(input);
-      // Health check after add (bounded, live probe).
-      let lastHealth = 'registered';
-      try {
-        const { reports } = await apiMcpHealth();
-        const report = reports.find((r) => r.id === id);
-        if (report) lastHealth = `${report.state}${report.detail ? ` — ${report.detail}` : ''}`;
-      } catch {
-        lastHealth = 'registered (health check unavailable)';
+      // The dialog closes as soon as the engine has registered the server. The
+      // health probe runs in the background for this one server only: a stdio
+      // server that never answers initialize can take ~15s to time out, and the
+      // user should not wait on it.
+      set({ addMcp: { ...EMPTY_MCP } });
+      void get().load();
+      if (!input.enabled) {
+        // "Off means it is registered but not started": never probe (a probe starts the server).
+        toast.success(`MCP server ${id} registered. It is off, so it has not been started.`);
+        return;
       }
-      set({ addMcp: { ...get().addMcp, busy: false, lastHealth, error: null } });
-      toast.success(`MCP server ${id} added — health: ${lastHealth}`);
-      await get().load();
+      toast.success(`MCP server ${id} added. Checking health…`);
+      void (async () => {
+        try {
+          const { reports } = await apiMcpHealth({ id });
+          const report = reports.find((r) => r.id === id);
+          if (!report) toast.success(`MCP server ${id} added.`);
+          else if (report.state === 'healthy') toast.success(`MCP server ${id} is healthy.`);
+          else toast.error(`MCP server ${id} added, but it is not healthy: ${report.detail ?? report.state}`);
+        } catch {
+          toast.error(`MCP server ${id} added, but the health check could not run.`);
+        } finally {
+          void get().load();
+        }
+      })();
     } catch (e) {
       set({ addMcp: { ...get().addMcp, busy: false, error: describeEngineError(e) } });
     }
@@ -672,7 +685,11 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   // ── plugins ──────────────────────────────────────────────────────────────
   togglePlugin: async (id, enabled) => {
     try {
-      await apiSetPluginEnabled(id, enabled);
+      const res = await apiSetPluginEnabled(id, enabled);
+      if (res.ok === false) {
+        toast.error(res.reason ?? 'The engine refused the change.');
+        return;
+      }
       await get().load();
     } catch (e) {
       toast.error(describeEngineError(e));
@@ -681,7 +698,15 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
 
   grantPluginPermission: async (id, scope, granted) => {
     try {
-      await apiGrantPluginPermissions(id, [scope], granted);
+      const row = get().plugins.find((p) => p.id === id);
+      if (!row) return;
+      const current = (row.permissions ?? []).filter((p) => p.granted).map((p) => p.scope);
+      const next = granted ? [...new Set([...current, scope])] : current.filter((s) => s !== scope);
+      const res = await apiSetPluginPermissions(id, next);
+      if (res.ok === false) {
+        toast.error(res.reason ?? 'The engine refused the permission change.');
+        return;
+      }
       await get().load();
     } catch (e) {
       toast.error(describeEngineError(e));

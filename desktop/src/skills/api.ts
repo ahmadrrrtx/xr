@@ -203,8 +203,10 @@ export interface McpHealthReport {
   tools?: number;
 }
 
-export function mcpHealth(signal?: AbortSignal): Promise<{ reports: McpHealthReport[] }> {
-  return engineJson('/mcp/health', { signal });
+/** Probe one server by id (bounded engine-side) or all enabled servers when omitted. */
+export function mcpHealth(opts: { id?: string; signal?: AbortSignal } = {}): Promise<{ reports: McpHealthReport[] }> {
+  const qs = opts.id ? `?id=${encodeURIComponent(opts.id)}` : '';
+  return engineJson(`/mcp/health${qs}`, { signal: opts.signal });
 }
 
 export function mcpPins(signal?: AbortSignal): Promise<{ servers: Record<string, { pinnedAt: number; by: string; tools: Record<string, unknown> }> }> {
@@ -232,22 +234,76 @@ export interface PluginRow {
   description: string;
   enabled: boolean;
   loaded: boolean;
+  /** Only set when the engine reports it; never assumed. */
   sandboxed?: boolean;
   health?: string;
+  trustLevel?: string;
+  source?: string;
   permissions?: Array<{ scope: string; granted: boolean; dangerous?: boolean }>;
   errors?: string[];
 }
 
-export function listPlugins(signal?: AbortSignal): Promise<{ summary: Record<string, number>; plugins: PluginRow[] }> {
-  return engineJson('/plugins', { signal });
+/** Shape the engine actually returns from GET /api/plugins (plugin-api.ts). */
+interface EnginePluginRow {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  enabled: boolean;
+  loaded: boolean;
+  status?: string;
+  detail?: string;
+  /** The engine sends an object ({ state, checkedAt }), not a string. */
+  health?: { state?: string } | string;
+  /** Manifest-declared scopes: plain strings from the engine. */
+  permissions?: string[];
+  grantedPermissions?: string[];
+  trustLevel?: string;
+  source?: string;
 }
 
-export function setPluginEnabled(id: string, enabled: boolean): Promise<{ ok: boolean }> {
+/**
+ * Normalise engine rows into `PluginRow`. The engine sends manifest scopes as
+ * strings plus a separate granted list; the UI wants one `{scope, granted}`
+ * entry per scope. Nothing is inferred here (no "dangerous" guess): the engine
+ * does not classify plugin scopes, so `dangerous` stays unset.
+ */
+function toPluginRow(raw: EnginePluginRow): PluginRow {
+  const granted = new Set(raw.grantedPermissions ?? []);
+  return {
+    id: raw.id,
+    name: raw.name,
+    version: raw.version,
+    description: raw.description ?? '',
+    enabled: raw.enabled,
+    loaded: raw.loaded,
+    health: typeof raw.health === 'string' ? raw.health : (raw.health?.state ?? raw.status),
+    trustLevel: raw.trustLevel,
+    source: raw.source,
+    errors: raw.detail && raw.status === 'error' ? [raw.detail] : undefined,
+    permissions: (raw.permissions ?? []).map((scope) => ({ scope, granted: granted.has(scope) })),
+  };
+}
+
+export async function listPlugins(signal?: AbortSignal): Promise<{ summary: Record<string, number>; plugins: PluginRow[] }> {
+  const res = await engineJson<{ summary: Record<string, number>; plugins: EnginePluginRow[] }>('/plugins', { signal });
+  return { summary: res.summary, plugins: (res.plugins ?? []).map(toPluginRow) };
+}
+
+/**
+ * The engine answers 200 with `{ ok: false, reason }` for refusals (plugin-api.ts),
+ * so callers must check `ok`, not just the HTTP status.
+ */
+export async function setPluginEnabled(id: string, enabled: boolean): Promise<{ ok: boolean; reason?: string }> {
   return enginePost(`/plugins/${encodeURIComponent(id)}/${enabled ? 'enable' : 'disable'}`, {});
 }
 
-export function grantPluginPermissions(id: string, scopes: string[], granted: boolean): Promise<{ ok: boolean }> {
-  return enginePost(`/plugins/${encodeURIComponent(id)}/permissions`, { scopes, granted });
+/**
+ * POST /plugins/:id/permissions REPLACES the granted set (PluginManager.setPermissions),
+ * so the caller sends the complete next set, not a single-scope delta.
+ */
+export async function setPluginPermissions(id: string, permissions: string[]): Promise<{ ok: boolean; reason?: string; granted?: string[] }> {
+  return enginePost(`/plugins/${encodeURIComponent(id)}/permissions`, { permissions });
 }
 
 // ─── Shared error copy ──────────────────────────────────────────────────────
