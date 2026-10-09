@@ -219,6 +219,9 @@ export const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024; // 2 MiB
 const ROUTE_BODY_CAPS: Readonly<Record<string, number>> = {
   "/api/research/upload-pdf": 20 * 1024 * 1024 + 64 * 1024, // 20 MiB + multipart framing
   "/api/v1/research/upload-pdf": 20 * 1024 * 1024 + 64 * 1024,
+  // Phase 21 — memory import bundle (≤5,000 entries × ≤2,000 chars, plus JSON overhead).
+  "/api/memory/import": 8 * 1024 * 1024,
+  "/api/v1/memory/import": 8 * 1024 * 1024,
 };
 export function bodyCapFor(path: string): number {
   return ROUTE_BODY_CAPS[path] ?? MAX_REQUEST_BODY_BYTES;
