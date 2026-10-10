@@ -29,8 +29,26 @@ export interface GlobalFlags {
   model?: string;
   provider?: string;
   budget?: number;
+  /** `--max-steps <n>` — tool-step cap for one coding turn (default 20). */
+  maxSteps?: number;
   maxTokens?: number;
   resume?: string;
+  /**
+   * Phase 23 — coding-agent flags (the `xr` command). `-p`, `-m`, `-d`, `-a` are
+   * "dual": they set the field AND stay in `args` so legacy commands that use the
+   * same letters (e.g. `xr providers -p ollama`) keep their behaviour. The coder
+   * strips them from the prompt itself.
+   */
+  print: boolean;
+  diff: boolean;
+  approveAll: boolean;
+  noHistory: boolean;
+  /** `--tools a,b` — restrict the coding agent's toolset. */
+  tools?: string;
+  /** `--cwd <dir>` — run as if started in this directory. */
+  cwd?: string;
+  /** `--config <path>` — an alternative XR home (its config.json is read). */
+  configPath?: string;
   /** Raw original argv (for debugging). */
   raw: string[];
 }
@@ -47,6 +65,11 @@ const BOOLEAN_FLAGS = new Set([
   "yes", "y",
   "dry-run", "dryRun",
   "tui",
+  // Phase 23 — coding agent (long forms are consumed; short forms are dual, see GlobalFlags).
+  "print", "p",
+  "diff", "d",
+  "approve-all", "a",
+  "no-history",
 ]);
 
 const VALUE_FLAGS = new Set([
@@ -56,9 +79,14 @@ const VALUE_FLAGS = new Set([
   "model",
   "provider",
   "budget",
+  "max-steps",
   "max-tokens", "maxTokens",
   "resume",
   "port",
+  // Phase 23 — coding agent.
+  "tools",
+  "cwd",
+  "config",
 ]);
 
 function isBooleanFlag(name: string): boolean {
@@ -96,6 +124,10 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
     noColor: false,
     yes: false,
     dryRun: false,
+    print: false,
+    diff: false,
+    approveAll: false,
+    noHistory: false,
     raw,
   };
 
@@ -121,6 +153,34 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
     if (token.startsWith("-") && token !== "-") {
       const name = normalizeFlagName(token);
 
+      // Phase 23 — coding-agent dual short flags (kept in args for legacy commands).
+      if (name === "p" || name === "print") {
+        out.print = true;
+        if (name === "p") args.push(token);
+        continue;
+      }
+      if (name === "d" || name === "diff") {
+        out.diff = true;
+        if (name === "d") args.push(token);
+        continue;
+      }
+      if (name === "a" || name === "approve-all") {
+        out.approveAll = true;
+        if (name === "a") args.push(token);
+        continue;
+      }
+      if (name === "no-history") { out.noHistory = true; continue; }
+      if (name === "m") {
+        const next = argv[i + 1];
+        if (next != null && !next.startsWith("-")) {
+          i++;
+          applyValue(out, "model", next);
+          args.push(token, next);
+        } else {
+          args.push(token);
+        }
+        continue;
+      }
       if (name === "h" || name === "help") { out.help = true; continue; }
       if (name === "v" || name === "version") { out.version = true; continue; }
       if (name === "q" || name === "quiet") { out.quiet = true; continue; }
@@ -204,6 +264,11 @@ function applyValue(out: GlobalFlags, name: string, value: string): void {
       if (Number.isFinite(n)) out.budget = n;
       break;
     }
+    case "max-steps": {
+      // Kept as typed; the coder validates the range and refuses bad values before a run.
+      out.maxSteps = Number(value);
+      break;
+    }
     case "max-tokens":
     case "maxTokens": {
       const n = Number.parseInt(value, 10);
@@ -212,6 +277,15 @@ function applyValue(out: GlobalFlags, name: string, value: string): void {
     }
     case "resume":
       out.resume = value;
+      break;
+    case "tools":
+      out.tools = value;
+      break;
+    case "cwd":
+      out.cwd = value;
+      break;
+    case "config":
+      out.configPath = value;
       break;
     case "port":
       // leave for serve; also keep as passthrough

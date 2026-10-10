@@ -14,6 +14,8 @@
 import type { Mode, Tool } from "../core/types.ts";
 import { readFileTool, writeFileTool } from "./files.ts";
 import { listDirTool, deleteFileTool, shellTool } from "./system.ts";
+import { searchCodeTool } from "./search.ts";
+import { patchFileTool } from "./patch.ts";
 import { fetchUrlTool, webSearchTool, checkPackageTool } from "./web.ts";
 import { SYSTEM_TOOLS } from "../computer/system-control.ts";
 import { computerControlTool } from "./control.ts";
@@ -24,8 +26,10 @@ const ALL: Tool[] = [
   // File operations
   readFileTool,
   writeFileTool,
+  patchFileTool,
   // Directory / system
   listDirTool,
+  searchCodeTool,
   deleteFileTool,
   shellTool,
   // Web / live data
@@ -43,7 +47,7 @@ const ALL: Tool[] = [
 ];
 
 // Read-only tools — safe in plan/ask modes (no state change, no exec, no system access)
-const READ_ONLY = ["read_file", "list_dir", "fetch_url", "web_search", "check_package", "system_apps", "system_clipboard_read", "research_search", "research_scrape", "research_crawl", "research_map", "research_extract", "repo_map", "repo_search", "repo_symbols", "repo_dependencies", "repo_context", "repo_diff"];
+const READ_ONLY = ["read_file", "list_dir", "search_code", "fetch_url", "web_search", "check_package", "system_apps", "system_clipboard_read", "research_search", "research_scrape", "research_crawl", "research_map", "research_extract", "repo_map", "repo_search", "repo_symbols", "repo_dependencies", "repo_context", "repo_diff"];
 
 // Agent gets everything
 const MODE_ALLOW: Record<Mode, string[]> = {

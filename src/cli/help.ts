@@ -77,7 +77,7 @@ export function showHelp(topic?: string, opts?: { all?: boolean }): void {
   console.log(`  ${xrBold("Quick start")}`);
   console.log(`  ${xrDim("─".repeat(46))}`);
   console.log(`  ${xrCyan("xr onboarding")}               ${xrDim("first-time setup wizard")}`);
-  console.log(`  ${xrCyan("xr")}                          ${xrDim("open the fullscreen Shell")}`);
+  console.log(`  ${xrCyan("xr")}                          ${xrDim("coding agent: interactive REPL (in a terminal)")}`);
   console.log(`  ${xrCyan('xr "write a hello world"')}    ${xrDim("run a task (one-shot)")}`);
   console.log(`  ${xrCyan("xr serve")}                    ${xrDim("start Control Center (web)")}`);
   console.log(`  ${xrCyan("xr doctor")}                   ${xrDim("system health check")}`);
@@ -301,7 +301,7 @@ const TOPIC_HANDLERS: Record<string, () => void> = {
 function topicShell(): void {
   banner();
   heading("XR Shell");
-  console.log(`  The Shell is the terminal-native fullscreen experience.`);
+  console.log(`  The Shell (xr shell) is the terminal-native fullscreen experience.`);
   console.log(`  (Internal name “TUI” is never shown to users.)\n`);
   console.log(`  Start:  ${xrCyan("xr")}  or  ${xrCyan("xr --tui")}\n`);
   console.log(`  ${xrBold("Essentials")}`);

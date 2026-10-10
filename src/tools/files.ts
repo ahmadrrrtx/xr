@@ -88,6 +88,11 @@ export const writeFileTool: Tool = {
       });
     }
 
+    // CLI `v` (edit before accepting): the approval surface may replace
+    // `content` on this object with a human-edited body. Only the human path
+    // mutates it; desktop surfaces never do, so the written bytes equal the
+    // approved bytes there.
+    const approvalArgs: { path: string; content: string } = { path: String(args.path ?? ""), content: newContent };
     const approved = await ctx.approve({
       tool: "write_file",
       // Phase 2 · F-11/F-26 — pass the RAW args so the consent plane renders a
@@ -95,7 +100,7 @@ export const writeFileTool: Tool = {
       // the decision to the argument hash. The preview builder redacts
       // secret-shaped values itself; the reason string below is the only
       // model-shaped text and stays explicitly untrusted.
-      args: { path: String(args.path ?? ""), content: newContent },
+      args: approvalArgs,
       reason: trust.requiresApproval
         ? `TRUST-HANDOFF WRITE [${trust.classification}] ${existsSync(p) ? "overwrite" : "create"} ${args.path} — consumed by: ${trust.trustedComponent}. ${trust.reason}`
         : existsSync(p)
@@ -107,8 +112,9 @@ export const writeFileTool: Tool = {
       ctx.audit("write_file.denied", { path: String(args.path) });
       return { ok: false, output: "write denied by user" };
     }
-    writeFileSync(p, newContent);
-    ctx.audit("write_file.applied", { path: String(args.path), bytes: newContent.length });
-    return { ok: true, output: `wrote ${args.path} (${newContent.length} bytes)` };
+    const finalContent = typeof approvalArgs.content === "string" ? approvalArgs.content : newContent;
+    writeFileSync(p, finalContent);
+    ctx.audit("write_file.applied", { path: String(args.path), bytes: finalContent.length });
+    return { ok: true, output: `wrote ${args.path} (${finalContent.length} bytes)` };
   },
 };

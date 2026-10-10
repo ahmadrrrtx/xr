@@ -125,7 +125,42 @@ export function registryNameFor(input: string): string | undefined {
 }
 
 /** Fast-path classification of a command token (route decision, pure). */
-export type RouteKind = "version" | "help" | "command-help" | "shell" | "serve" | "command" | "task" | "unknown";
+export type RouteKind = "version" | "help" | "command-help" | "shell" | "serve" | "command" | "task" | "coder" | "unknown";
+
+/**
+ * Phase 23 — tokens that are coding-agent flags (dual short flags stay in argv;
+ * their values are stripped by `coderPositionals`). Never a command word.
+ */
+const CODER_DUAL_FLAGS = new Set(["-p", "-d", "-a"]);
+
+/**
+ * The coding agent's prompt words: argv with the dual flags removed (`-m <id>`
+ * drops its value too). Used by the router (is the head a command?) and by the
+ * coder (what is the user asking?).
+ */
+export function coderPositionals(args: readonly string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (CODER_DUAL_FLAGS.has(a)) continue;
+    if (a === "-m") {
+      i++;
+      continue;
+    }
+    out.push(a);
+  }
+  return out;
+}
+
+/**
+ * The command word, if argv starts with one. A leading dash-token (a flag such as
+ * `-p`) is never a command word, so `xr -p "explain"` has no command head.
+ */
+export function commandHeadOf(args: readonly string[]): string | undefined {
+  const first = args[0];
+  if (!first || first.startsWith("-")) return undefined;
+  return first;
+}
 
 export interface RouteDecision {
   kind: RouteKind;
@@ -166,9 +201,13 @@ export function decideRoute(input: RouteInput): RouteDecision {
   if (head && (flagsHelp || wantsCommandHelp)) {
     return { kind: "command-help", command: resolveCommandName(head) ?? head };
   }
-  if (!head || head === "shell" || head === "--tui" || head === "tui") {
+  // Phase 23 — no command word: the coding agent (REPL in a TTY, stdin/one-shot otherwise).
+  if (!head) return { kind: "coder" };
+  if (head === "shell" || head === "--tui" || head === "tui") {
     return { kind: "shell" };
   }
+  // Phase 23 — `xr ask "<prompt>"` is the one-shot coding agent (IA: discoverable alias).
+  if (head === "ask") return { kind: "coder" };
   if (head === "serve") return { kind: "serve" };
   const regName = registryNameFor(head);
   if (regName && regName !== "shell" && regName !== "serve" && regName !== "help" && regName !== "version") {

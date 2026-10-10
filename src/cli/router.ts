@@ -22,7 +22,7 @@ import { setOutputFlags, emitJson, isJsonMode, printDidYouMean, printError, tip 
 import { handleFatal, usageError, CliError } from "./errors.ts";
 import { CORE_VERSION, CODENAME, PKG, DISPLAY_VERSION, versionInfo } from "../core/version.ts";
 import { resolveCommandName, getCatalogEntry, allAliasesAndNames } from "./catalog.ts";
-import { decideRoute } from "./route-decision.ts";
+import { decideRoute, commandHeadOf, coderPositionals } from "./route-decision.ts";
 import { showHelp, showCommandHelp } from "./help.ts";
 import { bootTrace } from "../core/boot-trace.ts";
 import { installCommandLoaders } from "./command-loaders.ts";
@@ -216,6 +216,8 @@ export function registerCommands(kernel: XRKernel): void {
 
 // ── Public entry ──────────────────────────────────────────────────────────────
 
+const CODER_LEAD_FLAGS = new Set(["-p", "-d", "-a", "-m"]);
+
 export async function runCli(argv: string[]): Promise<number> {
   const cleaned = argv.filter((a) => a !== "--from-bootstrap");
   const flags = parseGlobalFlags(cleaned);
@@ -223,11 +225,14 @@ export async function runCli(argv: string[]): Promise<number> {
 
   const head = flags.args[0];
   const rest = flags.args.slice(1);
+  // Phase 23 — `-p`, `-m`, `-d`, `-a` may lead argv (`xr -p "question"`): then there is no
+  // command word, and the first positional is the prompt, never a command.
+  const routeHead = head && CODER_LEAD_FLAGS.has(head) ? undefined : head;
 
   try {
     // ── Route decision (pure, no kernel, no command modules) ─────────────
     const route = decideRoute({
-      head,
+      head: routeHead,
       flagsVersion: flags.version,
       flagsHelp: flags.help,
       wantsCommandHelp: !!head && (rest.includes("--help") || rest.includes("-h")),
@@ -273,6 +278,19 @@ export async function runCli(argv: string[]): Promise<number> {
       return EXIT.OK;
     }
 
+    // ── Coding agent (Phase 23) — `xr`, `xr "task"`, `xr ask`, `xr -p`, `xr -d` ──
+    // Routed BEFORE the legacy command table. A command word always wins
+    // (`xr providers -p ollama` keeps its meaning); no command word, `ask`, or a
+    // free-form task is the coding agent.
+    if (route.kind === "coder" || route.kind === "task") {
+      const { runCoderCommand } = await import("./coder/index.ts"); // static literal — compile-safe
+      const promptArgs = coderPositionals(flags.args);
+      // `xr ask ...` — drop the alias word itself.
+      const ask = commandHeadOf(flags.args) === "ask";
+      const words = ask ? promptArgs.slice(1) : promptArgs;
+      return runCoderCommand({ flags, words, fromTask: route.kind === "task" });
+    }
+
     // ── Shell (fast, default) ─────────────────────────────────────────────
     if (route.kind === "shell") {
       const { runTUI } = await import("../interfaces/tui.ts"); // static literal
@@ -316,46 +334,8 @@ export async function runCli(argv: string[]): Promise<number> {
       return currentExitCode();
     }
 
-    /**
-     * ── Default: free-form task → run ───────────────────────────────────────
-     *
-     * Phase 0 · T11 — one-word tasks must route to task mode.
-     *
-     * The rule is unambiguous: a RESERVED command name is a command;
-     * everything else is a task. Near-miss typos get a suggestion as a
-     * non-fatal hint printed alongside the task run — never a refusal.
-     */
-    if (route.kind === "task" && head) {
-      const looksLikeSingleWord = rest.length === 0 && head.length < 24 && !head.includes(" ");
-      if (looksLikeSingleWord) {
-        const { didYouMean, editDistance } = await import("./output.ts");
-        const suggestions = didYouMean(
-          head,
-          allAliasesAndNames().filter((n) => !n.startsWith("-")),
-        );
-        const nearest = suggestions[0];
-        if (nearest && nearest !== head && editDistance(head.toLowerCase(), nearest.toLowerCase()) <= 2) {
-          const { tip } = await import("./output.ts");
-          tip(`Running "${head}" as a task. Did you mean the command \`xr ${nearest}\`?`);
-        }
-      }
-    }
-
-    // Free-form run
-    bootTrace.begin("run");
-    await withKernel("run", flags, async (kernel) => {
-      const taskArgs = injectRunOverrides(flags.args, flags);
-      if (!taskArgs.length) {
-        throw usageError(
-          "No task provided",
-          'Pass a task: xr "your task"   or open the Shell: xr',
-          ["xr help", "xr onboarding"],
-        );
-      }
-      await kernel.executeCommand("run", taskArgs, process.cwd());
-      bootTrace.noteLoadedCommand("run");
-    });
-    return currentExitCode();
+    // Unreachable: "task" and the no-head case are routed to the coding agent above.
+    return EXIT.USAGE;
   } catch (e) {
     if (e instanceof CliError && e.id === "unknown_command") {
       return EXIT.USAGE;

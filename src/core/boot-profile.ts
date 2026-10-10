@@ -110,6 +110,10 @@ export const COMMAND_PROFILES: Readonly<Record<string, readonly string[] | null>
   // provider plane, execution, context, plugins, skills, budget).
   run: ["agent"],
   ask: ["agent"],
+  // Phase 23 — the `xr` coding agent (REPL, one-shot, print, diff). It needs the
+  // agent closure (loop, file/shell/web tools, approval, budget, egress) and
+  // nothing UI-facing: no voice, desktop control, research pipeline, or plugin UI.
+  coder: ["agent"],
   plan: ["agent"],
   agents: ["multi-agents"],
 

@@ -29,6 +29,7 @@
     "ownership:generate": "bun run scripts/ownership-map.ts",
     "ownership:check": "bun run scripts/ownership-map.ts --check",
     "xr": "bun run src/index.ts",
+    "build:cli": "bun run scripts/build-cli.ts",
     "cli:help": "bun run src/index.ts help",
     "cli:doctor": "bun run src/index.ts doctor",
     "prepublishOnly": "bun run release:check && bun run claim-lint",

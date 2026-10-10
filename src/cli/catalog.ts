@@ -80,7 +80,7 @@ export const CATALOG: CatalogEntry[] = [
   // ── Get started ───────────────────────────────────────────────────────────
   {
     name: "shell",
-    description: "open the fullscreen XR Shell (default when you run xr alone)",
+    description: "open the fullscreen XR Shell (xr shell; bare xr is the coding agent)",
     usage: "xr [shell|--tui|tui]",
     group: "start",
     glyph: "terminal",
@@ -171,13 +171,13 @@ export const CATALOG: CatalogEntry[] = [
   },
   {
     name: "ask",
-    description: "answer a question without tools (read-only, cheap)",
-    usage: 'xr ask "<question>" [--model p/m]',
+    description: "one coding-agent turn, same as xr \"<task>\" (ask also reads files)",
+    usage: 'xr ask "<task>" [-p] [-d] [--json] [--model p/m]',
     group: "work",
     glyph: "chat",
     needsKernel: true,
     examples: [
-      { cmd: 'xr ask "what does this error mean?"', description: "read-only Q&A" },
+      { cmd: 'xr ask "explain what src/cli/router.ts does"', description: "one-shot coding turn" },
     ],
     related: ["run", "plan", "research"],
     topics: ["ask", "work", "modes"],
