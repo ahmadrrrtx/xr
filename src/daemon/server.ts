@@ -44,6 +44,7 @@ import {
 } from "../observability/index.ts";
 import { CORE_VERSION } from "../core/version.ts";
 import { AUTH_PAGE_CSP, authPageHtml } from "./auth-page.ts";
+import { TelegramManager } from "../telegram/manager.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -246,7 +247,7 @@ function makeDaemonTrust(): TrustService {
 }
 
 /** Build the request handler (pure; used by both serve() and tests). */
-export function makeHandler(initialStore: Store, token: string, opts: { rateLimit?: number } = {}) {
+export function makeHandler(initialStore: Store, token: string, opts: { rateLimit?: number; telegram?: TelegramManager } = {}) {
   const workspaceManager = new WorkspaceManager();
   const agentExecutor = createAgentExecutor();
   const state: DaemonState = {
@@ -258,6 +259,7 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
     // CLI (lazily booted on first task/workspace-switch). Chat and workspace
     // switching route through it instead of duplicating orchestration.
     agentExecutor,
+    telegram: opts.telegram ?? new TelegramManager({ store: initialStore }),
   };
   const routes = createRouteHandler();
   // Phase 4 · T5 — rate limiting: generous default, but bounded (429).
@@ -272,7 +274,9 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
     // Phase 8 · T3: the sign-in page's behaviour script is the one other open
     // path — a static script with no data/endpoints that the pre-auth page
     // needs (see src/daemon/auth-page.ts).
-    if (path !== "/api/health" && path !== "/api/v1/health" && path !== "/assets/auth.js") {
+    // Phase 24: Telegram cannot send the XR token. The webhook authenticates
+    // with Telegram's secret_token header inside the route instead.
+    if (path !== "/api/health" && path !== "/api/v1/health" && path !== "/assets/auth.js" && path !== "/api/telegram/webhook") {
       const auth = authorizeRequest(req, token);
 
       // Phase 4 · T5 — one-time bootstrap: set the session cookie and
@@ -431,7 +435,13 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     void detectAllRuntimes().catch(() => {});
   }).catch(() => {});
 
-  const handler = makeHandler(store, token);
+  // Phase 24 — the Telegram lifecycle is owned by the daemon: auto-start on
+  // boot when enabled, and a clean stop on shutdown.
+  const telegram = new TelegramManager({ store });
+  const handler = makeHandler(store, token, { telegram });
+  void telegram.autoStartOnBoot().catch((err) => {
+    structuredLog("warn", "telegram.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
+  });
 
   // Phase 8 · T2 — observability lifecycle: resolves the telemetry config
   // (file + env; OPT-IN, disabled by default) and starts the OTLP exporter
@@ -494,6 +504,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     token,
     stop: () => {
       stopTriggers();
+      void telegram.shutdown();
       // Phase 2 · G-05: every interactive shell this daemon owns gets the
       // closing-window treatment (SIGHUP → SIGKILL) — the engine going away
       // must never leave user shells orphaned. Lazy import keeps the

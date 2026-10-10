@@ -126,6 +126,11 @@ export function integrationRoutes(): DaemonRoute[] {
       handle: async (ctx) => {
         const body = await readBody(ctx.req);
         if (!body) return ctx.json({ ok: false, code: "invalid_body", error: "Send a JSON object." }, 400);
+        // Telegram has its own setup (token → getMe → pairing). The generic path
+        // would mark it connected without a token, so it is refused here.
+        if (connectorIdFrom(ctx.path) === "telegram") {
+          return ctx.json({ ok: false, code: "use_telegram_setup", error: "Telegram connects through its own setup." }, 409);
+        }
         const config = (body.config && typeof body.config === "object" ? body.config : body) as Record<string, unknown>;
         return withService(ctx, async (svc) => {
           const connector = await svc.connectApiKey(connectorIdFrom(ctx.path), config);
@@ -145,6 +150,9 @@ export function integrationRoutes(): DaemonRoute[] {
       method: "POST",
       handle: (ctx) => withService(ctx, async (svc) => {
         const connectorId = connectorIdFrom(ctx.path);
+        if (connectorId === "telegram") {
+          return ctx.json({ ok: false, code: "use_telegram_setup", error: "Disconnect Telegram from its settings (POST /api/telegram/disconnect)." }, 409);
+        }
         const result = await svc.disconnect(connectorId);
         return { ...result, mcp: await syncMcp(ctx, connectorId, false) };
       }),

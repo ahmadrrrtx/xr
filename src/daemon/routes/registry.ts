@@ -37,6 +37,7 @@ import { researchRunRoutes } from "./research-run.routes.ts";
 import { customAgentsRoutes } from "./custom-agents.routes.ts";
 import { workflowsRoutes } from "./workflows.routes.ts";
 import { mcpRoutes } from "./mcp.routes.ts";
+import { telegramRoutes } from "./telegram.routes.ts";
 import type { DaemonRoute } from "./router.ts";
 import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
 
@@ -80,6 +81,7 @@ export function listBaseRoutes(): DaemonRoute[] {
     ...providersRoutes(),
     // MCP registry management (dashboard Extensions ⇄ `xr mcp` CLI parity).
     ...mcpRoutes(),
+    ...telegramRoutes(),
     ...extensionRoutes(),
     ...controlRoutes(),
     ...environmentRoutes(),

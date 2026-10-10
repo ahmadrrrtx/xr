@@ -20,6 +20,7 @@ export * from "./schemas-research.ts";
 export * from "./schemas-agents.ts";
 export * from "./schemas-memory.ts"; // Phase 21
 export * from "./schemas-integrations.ts"; // Phase 22
+export * from "./schemas-telegram.ts"; // Phase 24
 
 // ── Shared primitives ────────────────────────────────────────────────────────
 

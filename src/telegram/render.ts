@@ -1,8 +1,12 @@
 /**
  * XR — Telegram message + inline-keyboard builders (pure, testable).
- * The phone-approval mechanism: risky actions arrive as a message with
- * ✅ Approve / ❌ Reject / 👀 Diff buttons, answered from your lock screen.
+ *
+ * Risky actions arrive as a MarkdownV2 message with ✅ Approve / ❌ Reject /
+ * 👀 Details buttons. Every model- or tool-controlled string is escaped via
+ * `escapeV2`. System and status text is plain (no parse mode), so counters
+ * like "90% block-rate" appear exactly as written.
  */
+import { escapeV2, escapeCodeV2 } from "./markdown.ts";
 
 export interface InlineButton {
   text: string;
@@ -12,8 +16,24 @@ export type InlineKeyboard = InlineButton[][];
 
 export interface OutgoingMessage {
   text: string;
-  parse_mode?: "Markdown";
+  parse_mode?: "MarkdownV2";
   reply_markup?: { inline_keyboard: InlineKeyboard };
+}
+
+/** Plain system text: no parse mode, no escaping needed. */
+export function plain(text: string, keyboard?: InlineKeyboard): OutgoingMessage {
+  return keyboard ? { text, reply_markup: { inline_keyboard: keyboard } } : { text };
+}
+
+/** Keyboard for a live approval: Approve / Reject on row 1, Details on row 2. */
+export function approvalKeyboard(id: string): InlineKeyboard {
+  return [
+    [
+      { text: "✅ Approve", callback_data: `ok:${id}` },
+      { text: "❌ Reject", callback_data: `no:${id}` },
+    ],
+    [{ text: "👀 Details", callback_data: `det:${id}` }],
+  ];
 }
 
 /** An approval request rendered for Telegram. */
@@ -24,56 +44,80 @@ export function approvalMessage(opts: {
   preview?: string;
   riskTier?: string;
 }): OutgoingMessage {
-  const risk = opts.riskTier && opts.riskTier !== "unknown" ? ` · risk: ${opts.riskTier}` : "";
-  const lines = [`🔒 *Approval needed*${risk}`, `tool: \`${opts.tool}\``, `${opts.reason}`];
-  if (opts.preview) {
-    const clipped = opts.preview.split("\n").slice(0, 20).join("\n");
-    lines.push("```\n" + clipped.slice(0, 600) + "\n```");
-  }
+  const head = [
+    `*Approval needed* \\(\`${escapeCodeV2(opts.id)}\`\\)`,
+    `Tool: \`${escapeCodeV2(opts.tool)}\``,
+    `Reason: ${escapeV2(opts.reason)}`,
+  ];
+  if (opts.riskTier) head.push(`Risk: ${escapeV2(opts.riskTier)}`);
+  const body = opts.preview ? "\n```\n" + escapeCodeV2(truncate(opts.preview, 600)) + "\n```" : "";
   return {
-    text: lines.join("\n"),
-    parse_mode: "Markdown",
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: "✅ Approve", callback_data: `ok:${opts.id}` },
-          { text: "❌ Reject", callback_data: `no:${opts.id}` },
-        ],
-      ],
-    },
+    text: head.join("\n") + body,
+    parse_mode: "MarkdownV2",
+    reply_markup: { inline_keyboard: approvalKeyboard(opts.id) },
   };
 }
 
-export function statusMessage(s: {
+/** Full details for an approval (the 👀 button), with the buttons repeated. */
+export function approvalDetailsMessage(opts: {
+  id: string;
+  tool: string;
+  reason: string;
+  preview?: string;
+}): OutgoingMessage {
+  const body = opts.preview ? escapeCodeV2(truncate(opts.preview, 3500)) : "(no preview recorded)";
+  return {
+    text: `*Details* \\(\`${escapeCodeV2(opts.id)}\`\\)\nTool: \`${escapeCodeV2(opts.tool)}\`\nReason: ${escapeV2(opts.reason)}\n\`\`\`\n${body}\n\`\`\``,
+    parse_mode: "MarkdownV2",
+    reply_markup: { inline_keyboard: approvalKeyboard(opts.id) },
+  };
+}
+
+/** Text shown on the approval message once it is decided elsewhere. */
+export function approvalResolvedText(opts: {
+  tool: string;
+  outcome: "approved" | "rejected" | "expired";
+  surface?: string;
+}): string {
+  const from = opts.surface && opts.surface !== "telegram" ? ` from ${opts.surface}` : "";
+  if (opts.outcome === "expired") return `⌛ Expired · ${opts.tool}`;
+  if (opts.outcome === "approved") return `✅ Approved${from} · ${opts.tool}`;
+  return `❌ Rejected${from} · ${opts.tool}`;
+}
+
+export function statusMessage(opts: {
   project: string;
   costUsd: number;
   tokens: number;
   blockRate: number;
   auditOk: boolean;
   paused: boolean;
+  model?: string;
+  busy?: boolean;
 }): OutgoingMessage {
-  const text = [
-    `🛡️ *XR status*`,
-    `project: \`${s.project}\``,
-    `state: ${s.paused ? "⏸ paused" : "▶️ ready"}`,
-    `cost: $${s.costUsd.toFixed(4)} · ${fmtK(s.tokens)} tok`,
-    `security: ${Math.round(s.blockRate * 100)}% block-rate`,
-    `audit chain: ${s.auditOk ? "✓ intact" : "✗ BROKEN"}`,
-  ].join("\n");
-  return { text, parse_mode: "Markdown" };
+  return plain(
+    [
+      `XR status · ${opts.project}`,
+      `State: ${opts.paused ? "paused" : opts.busy ? "working" : "idle"}`,
+      opts.model ? `Model: ${opts.model}` : "",
+      `Spend: $${opts.costUsd.toFixed(4)} · ${opts.tokens} tokens (total)`,
+      `Security: ${Math.round(opts.blockRate * 100)}% block-rate`,
+      `Audit chain: ${opts.auditOk ? "intact" : "BROKEN"}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
 }
 
-export function plain(text: string): OutgoingMessage {
-  return { text, parse_mode: "Markdown" };
-}
-
-/** Parse an inline-button callback (e.g. "ok:abc12") → {decision,id}. */
-export function parseCallback(data: string): { decision: "approve" | "reject"; id: string } | null {
-  const m = data.match(/^(ok|no):(.+)$/);
+export function parseCallback(
+  data: string,
+): { decision: "approve" | "reject" | "details"; id: string } | null {
+  const m = /^(ok|no|det):([A-Za-z0-9_-]{1,64})$/.exec(data ?? "");
   if (!m) return null;
-  return { decision: m[1] === "ok" ? "approve" : "reject", id: m[2] };
+  const decision = m[1] === "ok" ? "approve" : m[1] === "no" ? "reject" : "details";
+  return { decision, id: m[2] };
 }
 
-function fmtK(n: number): string {
-  return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(Math.round(n));
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n) + "\n…(truncated)" : s;
 }

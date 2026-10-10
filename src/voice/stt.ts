@@ -59,6 +59,16 @@ export function sttFromSettings(settings: VoiceSettings, fetchFn?: typeof fetch)
   });
 }
 
+/** Cloud STT infers the container from the upload name, so label it honestly. */
+function uploadNameFor(mime: string): string {
+  const m = mime.toLowerCase();
+  if (m.includes("ogg") || m.includes("opus")) return "audio.ogg";
+  if (m.includes("mpeg") || m.includes("mp3")) return "audio.mp3";
+  if (m.includes("mp4") || m.includes("m4a")) return "audio.m4a";
+  if (m.includes("webm")) return "audio.webm";
+  return "audio.wav";
+}
+
 export class SpeechToText {
   private backend: VoiceSttBackend;
   private baseUrl: string;
@@ -192,7 +202,7 @@ export class SpeechToText {
     try {
       const fetcher = this.injectedFetch ?? fetch;
       const form = new FormData();
-      form.append("file", new Blob([audio], { type: mime }), "audio.wav");
+      form.append("file", new Blob([audio], { type: mime }), uploadNameFor(mime));
       form.append("model", backend === "http" ? (process.env.XR_STT_MODEL ?? this.model) : this.cloudModel(backend));
       if (this.language) form.append("language", this.language);
 

@@ -16,6 +16,8 @@ import { CATEGORY_CHIPS, countByCategory, filterIntegrations } from '@/integrati
 import { openInSystemBrowser } from '@/integrations/browser';
 import { IntegrationCard } from './components/IntegrationCard';
 import { ApiKeyDialog, AppCredentialsDialog } from './components/ConnectDialogs';
+import { TelegramSetupDialog, TelegramSettingsDialog } from './components/TelegramDialogs';
+import { telegramCardStatus, useTelegramStatus } from '@/integrations/telegram';
 
 const REQUEST_URL =
   'https://github.com/ahmadrrrtx/xr/issues/new?title=' +
@@ -24,6 +26,12 @@ const REQUEST_URL =
 
 export default function IntegrationsScreen() {
   const connectors = useIntegrationsStore((s) => s.connectors);
+  // The Telegram card shows the live bot state, not the generic vault state.
+  const { status: telegram } = useTelegramStatus(4000);
+  const cards = useMemo(
+    () => connectors.map((c) => (c.id === 'telegram' && telegram ? { ...c, status: telegramCardStatus(telegram.label) } : c)),
+    [connectors, telegram],
+  );
   const loaded = useIntegrationsStore((s) => s.loaded);
   const loading = useIntegrationsStore((s) => s.loading);
   const loadError = useIntegrationsStore((s) => s.loadError);
@@ -58,11 +66,11 @@ export default function IntegrationsScreen() {
   }, []);
 
   const counts = useMemo(() => countByCategory(connectors), [connectors]);
-  const visible = useMemo(() => filterIntegrations(connectors, { category, query }), [connectors, category, query]);
-  const connected = connectors.filter((c) => c.status === 'connected');
-  const needsAttention = connectors.filter((c) => c.status === 'expired' || c.status === 'error');
+  const visible = useMemo(() => filterIntegrations(cards, { category, query }), [cards, category, query]);
+  const connected = cards.filter((c) => c.status === "connected");
+  const needsAttention = cards.filter((c) => c.status === "expired" || c.status === "error");
   const dialogView = dialog ? connectors.find((c) => c.id === dialog.id) : undefined;
-  const quick = connectors.filter((c) => c.support === 'available' && c.status !== 'connected');
+  const quick = cards.filter((c) => c.support === "available" && c.status !== "connected");
   const offline = loadError !== null && /fetch|network|engine|offline|unreachable/i.test(loadError);
 
   return (
@@ -185,6 +193,8 @@ export default function IntegrationsScreen() {
 
       {dialog && dialogView && dialog.kind === 'api_key' && <ApiKeyDialog view={dialogView} />}
       {dialog && dialogView && dialog.kind === 'app_credentials' && <AppCredentialsDialog view={dialogView} />}
+      {dialog && dialogView && dialog.kind === 'telegram' && <TelegramSetupDialog />}
+      {dialog && dialogView && dialog.kind === 'telegram_settings' && <TelegramSettingsDialog />}
       <AddMcpDialog />
     </div>
   );
