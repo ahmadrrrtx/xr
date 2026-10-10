@@ -77,8 +77,10 @@ export function showHelp(topic?: string, opts?: { all?: boolean }): void {
   console.log(`  ${xrBold("Quick start")}`);
   console.log(`  ${xrDim("─".repeat(46))}`);
   console.log(`  ${xrCyan("xr onboarding")}               ${xrDim("first-time setup wizard")}`);
-  console.log(`  ${xrCyan("xr")}                          ${xrDim("open the fullscreen Shell")}`);
-  console.log(`  ${xrCyan('xr "write a hello world"')}    ${xrDim("run a task (one-shot)")}`);
+  console.log(`  ${xrCyan("xr")}                          ${xrDim("coding REPL in this folder")}`);
+  console.log(`  ${xrCyan('xr "write a hello world"')}    ${xrDim("run a coding task (one-shot)")}`);
+  console.log(`  ${xrCyan('xr -p "explain src/cli"')}     ${xrDim("read-only answer, no edits")}`);
+  console.log(`  ${xrCyan("xr shell")}                     ${xrDim("open the fullscreen Shell")}`);
   console.log(`  ${xrCyan("xr serve")}                    ${xrDim("start Control Center (web)")}`);
   console.log(`  ${xrCyan("xr doctor")}                   ${xrDim("system health check")}`);
   console.log();

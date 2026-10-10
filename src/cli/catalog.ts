@@ -80,7 +80,7 @@ export const CATALOG: CatalogEntry[] = [
   // ── Get started ───────────────────────────────────────────────────────────
   {
     name: "shell",
-    description: "open the fullscreen XR Shell (default when you run xr alone)",
+    description: "open the fullscreen XR Shell (bare xr opens the coding REPL)",
     usage: "xr [shell|--tui|tui]",
     group: "start",
     glyph: "terminal",
@@ -153,7 +153,7 @@ export const CATALOG: CatalogEntry[] = [
   // ── Work ──────────────────────────────────────────────────────────────────
   {
     name: "run",
-    description: "run a task in agent mode (default for free-form input)",
+    description: "run an engine task in agent mode (xr \"<task>\" is the coding CLI)",
     usage: 'xr run "<task>" [--mode agent|plan|ask] [--model p/m] [--budget usd]',
     group: "work",
     glyph: "chat",

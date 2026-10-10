@@ -197,6 +197,8 @@ export const PRESETS: Record<string, ProviderPreset> = {
       "llama-3.1-8b-instant",
       "mixtral-8x7b-32768",
       "gemma2-9b-it",
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
     ],
     capabilities: caps({ toolUse: true, jsonMode: true, streaming: true }),
     description: "Blazing fast inference on open-source models. Generous free tier.",

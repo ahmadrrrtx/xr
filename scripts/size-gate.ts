@@ -107,7 +107,16 @@ export const THRESHOLD = 800;
  * tts.ts +18). Measured below. Smallest round number that fits; 110k stays
  * the direction of travel.
  */
-export const TREE_CEILING = 156_000; // Phase 22 (Integrations) · 154,000 → 156,000 (2026-10-09):
+export const TREE_CEILING = 158_000; // Phase 23 (xr coding agent CLI) · 156,000 → 158,000 (2026-10-10):
+// the coding CLI (`xr`, `xr "task"`, `xr -p`, the REPL): session and approval
+// engine, print/JSON/diff modes, mention and repo-map context, the first-run
+// wizard, and the durable-store consent wrapper (cli/coder/consent.ts). The
+// approval path is consent-plane: it resolves through the approval store and
+// must stay in core beside the engine it calls. Net src growth from this phase
+// is +2,653 LOC (measured 157,848 at PR head against the 155,195 base). Moving
+// the coder to a satellite is the follow-up that would return core to the
+// ceiling. Waived giants did not grow. Needs maintainer sign-off.
+// Phase 22 (Integrations) · 154,000 → 156,000 (2026-10-09):
 // the integrations engine: the CredentialVault wiring (integration table and
 // keychain-held master key), connection store, GitHub OAuth (PKCE, state,
 // refresh, revoke), API-key probes, the service, routes and contract. Tokens and
