@@ -1,0 +1,8 @@
+# Build output and packaged artifacts for the VS Code extension
+node_modules/
+out/
+out-test/
+media/webview.js
+media/webview.css
+media/webview.js.map
+*.vsix

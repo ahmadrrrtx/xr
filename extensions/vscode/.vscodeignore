@@ -1,0 +1,10 @@
+# Ship only the bundles, the manifest, the docs and the license.
+**
+!package.json
+!README.md
+!LICENSE.txt
+!out/extension.js
+!out/extension.js.map
+!media/xr-sentinel.svg
+!media/webview.js
+!media/webview.css
