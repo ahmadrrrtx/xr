@@ -30,8 +30,40 @@ export interface SecretBrokerLike {
   get(name: string, opts?: SecretGetOptions): Promise<string | undefined>;
 }
 
+/**
+ * Memory-only resolvers consulted before the durable store. Phase 22 uses one for
+ * integration tokens, which live in the Integrations CredentialVault. A resolver
+ * returns undefined for names it does not own. Values are never written anywhere.
+ */
+export type RuntimeSecretResolver = (name: string) => string | undefined;
+const runtimeResolvers: RuntimeSecretResolver[] = [];
+
+/** Registers a resolver. Returns an unregister function. */
+export function registerRuntimeSecretResolver(resolver: RuntimeSecretResolver): () => void {
+  runtimeResolvers.push(resolver);
+  return () => {
+    const i = runtimeResolvers.indexOf(resolver);
+    if (i >= 0) runtimeResolvers.splice(i, 1);
+  };
+}
+
+function fromRuntimeResolvers(name: string): string | undefined {
+  for (const r of runtimeResolvers) {
+    let value: string | undefined;
+    try {
+      value = r(name);
+    } catch {
+      value = undefined;
+    }
+    if (value) return value;
+  }
+  return undefined;
+}
+
 export const secretBroker: SecretBrokerLike = {
   async get(name: string, _opts?: SecretGetOptions): Promise<string | undefined> {
+    const runtime = fromRuntimeResolvers(name);
+    if (runtime) return runtime;
     if (envSecretCompatEnabled()) {
       const ambient = process.env[name];
       if (ambient) return ambient;
@@ -51,6 +83,8 @@ export const secretBroker: SecretBrokerLike = {
  * process.env (compat-gated) + the sync cached/file lookup only.
  */
 export function secretBrokerSync(name: string): string | undefined {
+  const runtime = fromRuntimeResolvers(name);
+  if (runtime) return runtime;
   if (envSecretCompatEnabled()) {
     const ambient = process.env[name];
     if (ambient) return ambient;
