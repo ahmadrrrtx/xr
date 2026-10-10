@@ -31,6 +31,20 @@ export interface GlobalFlags {
   budget?: number;
   maxTokens?: number;
   resume?: string;
+  /** Coding agent (`xr`): `-p/--print [prompt]`. `""` means the prompt comes from stdin. */
+  print?: string;
+  /** Coding agent: `-a/--approve-all` (requires a typed confirmation). */
+  approveAll: boolean;
+  /** Coding agent: `-d/--diff` (propose only, print unified diffs). */
+  diffOnly: boolean;
+  /** Coding agent: `--tools read,search,edit,shell,web` (narrows the tool set). */
+  tools?: string;
+  /** Coding agent: `--cwd <dir>`. */
+  cwd?: string;
+  /** Coding agent: `--no-history` (do not read or write the REPL history file). */
+  noHistory: boolean;
+  /** Coding agent: `--config <file>` (alternative cli.json). */
+  configPath?: string;
   /** Raw original argv (for debugging). */
   raw: string[];
 }
@@ -47,6 +61,9 @@ const BOOLEAN_FLAGS = new Set([
   "yes", "y",
   "dry-run", "dryRun",
   "tui",
+  "approve-all", "approveAll", "a",
+  "diff", "d",
+  "no-history", "noHistory",
 ]);
 
 const VALUE_FLAGS = new Set([
@@ -59,6 +76,11 @@ const VALUE_FLAGS = new Set([
   "max-tokens", "maxTokens",
   "resume",
   "port",
+  "print", "p",
+  "tools",
+  "cwd",
+  "config",
+  "m",
 ]);
 
 function isBooleanFlag(name: string): boolean {
@@ -96,6 +118,9 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
     noColor: false,
     yes: false,
     dryRun: false,
+    approveAll: false,
+    diffOnly: false,
+    noHistory: false,
     raw,
   };
 
@@ -136,6 +161,14 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
       if (name === "y" || name === "yes") { out.yes = true; continue; }
       if (name === "dry-run" || name === "dryRun") { out.dryRun = true; continue; }
       if (name === "tui") { args.push("--tui"); continue; }
+      if (name === "approve-all" || name === "approveAll" || name === "a") { out.approveAll = true; continue; }
+      if (name === "diff" || name === "d") { out.diffOnly = true; continue; }
+      if (name === "no-history" || name === "noHistory") { out.noHistory = true; continue; }
+      if ((name === "p" || name === "print") && (argv[i + 1] == null || argv[i + 1]!.startsWith("-"))) {
+        // `-p` with no value: the prompt comes from stdin.
+        out.print = "";
+        continue;
+      }
 
       if (isValueFlag(name)) {
         const next = argv[i + 1];
@@ -173,6 +206,22 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
 
 function applyValue(out: GlobalFlags, name: string, value: string): void {
   switch (name) {
+    case "print":
+    case "p":
+      out.print = value;
+      return;
+    case "tools":
+      out.tools = value;
+      return;
+    case "cwd":
+      out.cwd = value;
+      return;
+    case "config":
+      out.configPath = value;
+      return;
+    case "m":
+      out.model = value;
+      return;
     case "format":
     case "output":
     case "o": {

@@ -317,44 +317,62 @@ export async function runCli(argv: string[]): Promise<number> {
     }
 
     /**
-     * ── Default: free-form task → run ───────────────────────────────────────
+     * ── Coding agent: `xr`, `xr "task"`, `xr -p`, piped stdin, `--diff`, `--json`.
      *
-     * Phase 0 · T11 — one-word tasks must route to task mode.
-     *
-     * The rule is unambiguous: a RESERVED command name is a command;
-     * everything else is a task. Near-miss typos get a suggestion as a
-     * non-fatal hint printed alongside the task run — never a refusal.
+     * Bare `xr` on a TTY opens the REPL; any task runs one turn and exits. The
+     * kernel boots the `coder` profile (the agent closure) only here, so
+     * `--help` / `--version` never pay for it.
      */
-    if (route.kind === "task" && head) {
-      const looksLikeSingleWord = rest.length === 0 && head.length < 24 && !head.includes(" ");
-      if (looksLikeSingleWord) {
-        const { didYouMean, editDistance } = await import("./output.ts");
-        const suggestions = didYouMean(
-          head,
-          allAliasesAndNames().filter((n) => !n.startsWith("-")),
-        );
-        const nearest = suggestions[0];
-        if (nearest && nearest !== head && editDistance(head.toLowerCase(), nearest.toLowerCase()) <= 2) {
-          const { tip } = await import("./output.ts");
-          tip(`Running "${head}" as a task. Did you mean the command \`xr ${nearest}\`?`);
+    if (route.kind === "coder" || route.kind === "task") {
+      const { runCoder, readAllStdin } = await import("./coder/index.ts"); // static literal — compile-safe
+      const { Terminal } = await import("./coder/tty.ts"); // static literal — compile-safe
+      const { Tokens } = await import("../core/tokens.ts"); // static literal — compile-safe
+      const { resolve: resolvePath } = await import("node:path");
+      // The engine's tools and project scope use process.cwd(), so --cwd is
+      // applied to the process itself, before the kernel boots.
+      const workdir = resolvePath(flags.cwd ?? process.cwd());
+      if (workdir !== process.cwd()) {
+        try {
+          process.chdir(workdir);
+        } catch {
+          throw usageError(`--cwd is not a directory: ${flags.cwd}`, "Pass an existing folder: xr --cwd <dir>", ["xr help"]);
         }
       }
+      const prompt = flags.args.join(" ").trim();
+      const stdinText = process.stdin.isTTY ? undefined : await readAllStdin();
+      const term = new Terminal();
+      let code: number = EXIT.OK;
+      bootTrace.begin("coder");
+      await withKernel("coder", flags, async (kernel) => {
+        const agent = kernel.registry.resolve(Tokens.Agent);
+        // Consent for interactive approvals goes through the durable store.
+        const { storeConsent } = await import("./coder/consent.ts"); // static literal — compile-safe
+        const consent = storeConsent(kernel.registry.resolve(Tokens.Store));
+        code = await runCoder(
+          {
+            ...(prompt ? { prompt } : {}),
+            print: flags.print !== undefined,
+            ...(flags.print ? { printPrompt: flags.print } : {}),
+            json: flags.json,
+            diffOnly: flags.diffOnly,
+            approveAll: flags.approveAll,
+            ...(flags.tools ? { tools: flags.tools } : {}),
+            noHistory: flags.noHistory,
+            noColor: flags.noColor,
+            cwd: process.cwd(),
+            ...(flags.model ? { model: flags.model } : {}),
+            ...(flags.provider ? { provider: flags.provider } : {}),
+            ...(flags.configPath ? { configPath: flags.configPath } : {}),
+            ...(flags.maxTokens ? { maxTokens: flags.maxTokens } : {}),
+            ...(stdinText !== undefined ? { stdinText } : {}),
+          },
+          { agent, term, consent },
+        );
+        bootTrace.noteLoadedCommand("coder");
+      });
+      return code;
     }
 
-    // Free-form run
-    bootTrace.begin("run");
-    await withKernel("run", flags, async (kernel) => {
-      const taskArgs = injectRunOverrides(flags.args, flags);
-      if (!taskArgs.length) {
-        throw usageError(
-          "No task provided",
-          'Pass a task: xr "your task"   or open the Shell: xr',
-          ["xr help", "xr onboarding"],
-        );
-      }
-      await kernel.executeCommand("run", taskArgs, process.cwd());
-      bootTrace.noteLoadedCommand("run");
-    });
     return currentExitCode();
   } catch (e) {
     if (e instanceof CliError && e.id === "unknown_command") {

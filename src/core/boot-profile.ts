@@ -109,6 +109,11 @@ export const COMMAND_PROFILES: Readonly<Record<string, readonly string[] | null>
   // Agent-family: the agent closure is inherently broad (it composes the
   // provider plane, execution, context, plugins, skills, budget).
   run: ["agent"],
+  // The coding agent (`xr` with a task, `xr -p`, piped stdin, or the REPL).
+  // Same closure as `run`: the engine loop, file/shell/web tools, approval,
+  // budget and audit. The coder sends no skill instructions
+  // (`includeSkills: false`) and offers only the tools it was given.
+  coder: ["agent"],
   ask: ["agent"],
   plan: ["agent"],
   agents: ["multi-agents"],

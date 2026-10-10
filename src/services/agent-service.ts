@@ -62,6 +62,8 @@ export interface AgentRunOverrides {
   dryRun?: boolean;
   json?: boolean;
   systemPrompt?: string;
+  /** Inject installed skills' instructions into the system prompt (default true). */
+  includeSkills?: boolean;
   /** Phase 14 — prior chat turns (user/assistant) for multi-turn surfaces. */
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   toolsAllow?: string[];
@@ -406,7 +408,9 @@ export class AgentService implements LifecycleHook {
       },
     });
 
-    const scopedSystemPrompt = [toolRegistry.skillPrompt(), overrides.systemPrompt]
+    // Skill instructions are added to every run by default. A caller that does
+    // not use skills (the coding CLI) turns them off to keep the request small.
+    const scopedSystemPrompt = [overrides.includeSkills === false ? undefined : toolRegistry.skillPrompt(), overrides.systemPrompt]
       .map((s) => s?.trim())
       .filter(Boolean)
       .join("\n\n");

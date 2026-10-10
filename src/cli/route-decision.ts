@@ -125,7 +125,7 @@ export function registryNameFor(input: string): string | undefined {
 }
 
 /** Fast-path classification of a command token (route decision, pure). */
-export type RouteKind = "version" | "help" | "command-help" | "shell" | "serve" | "command" | "task" | "unknown";
+export type RouteKind = "version" | "help" | "command-help" | "shell" | "serve" | "command" | "task" | "coder" | "unknown";
 
 export interface RouteDecision {
   kind: RouteKind;
@@ -166,7 +166,10 @@ export function decideRoute(input: RouteInput): RouteDecision {
   if (head && (flagsHelp || wantsCommandHelp)) {
     return { kind: "command-help", command: resolveCommandName(head) ?? head };
   }
-  if (!head || head === "shell" || head === "--tui" || head === "tui") {
+  // Bare `xr` runs the coding agent (REPL on a TTY, or one-shot with flags/stdin).
+  if (!head) return { kind: "coder" };
+  // The full-screen Shell is still reachable explicitly.
+  if (head === "shell" || head === "--tui" || head === "tui") {
     return { kind: "shell" };
   }
   if (head === "serve") return { kind: "serve" };

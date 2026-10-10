@@ -42,6 +42,9 @@ let _flags: GlobalFlags = {
   noColor: false,
   yes: false,
   dryRun: false,
+  approveAll: false,
+  diffOnly: false,
+  noHistory: false,
   raw: [],
 };
 

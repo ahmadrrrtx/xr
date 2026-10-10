@@ -65,6 +65,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/automation/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/baseline/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/capabilities/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/cli/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/config/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/context/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/control-memory.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

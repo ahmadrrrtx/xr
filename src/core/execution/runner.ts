@@ -127,6 +127,17 @@ export async function runEnvelope(
      * made bare-name collisions resolvable two different ways.
      */
     toolRegistry: placement.registry,
+    // The caller's tool allow/deny lists are enforced by the loop as well: the
+    // registry alone only filters by mode, so without this the lists were
+    // silently ignored on the envelope path.
+    ...(policy.toolsAllow || policy.toolsDeny
+      ? {
+          tools: {
+            ...(policy.toolsAllow ? { allow: [...policy.toolsAllow] } : {}),
+            ...(policy.toolsDeny ? { deny: [...policy.toolsDeny] } : {}),
+          },
+        }
+      : {}),
     envelopeId: envelope.evidence.envelopeId,
     surface: intent.surface,
     // Phase 4 · T1 — enforce placement on the canonical path: the loop wires

@@ -60,15 +60,18 @@ Status key: ✅ done and tested offline · 🟡 done, needs live or device verif
 
 ## Size gate (needs a maintainer decision)
 
-The Telegram backend and desktop UI add about 1,600 LOC to core. The ceiling in
-`scripts/size-gate.ts` cannot absorb that. The same applies to PR #166, which is already
-waiting on a ceiling raise. Options: (a) a dated, reasoned ceiling raise in this diff, or
-(b) move the Telegram runtime to a satellite package in a follow-up. This PR takes (a) so
-CI can go green, and asks the maintainer to decide between them.
+`main` now includes Phase 23 (PR #166), which set the ceiling to 158,000 and measured 157,848.
+With this phase on top, the tree measures 159,610 LOC. Phase 24 adds about 1,760 LOC. The Telegram
+runtime is the bot itself, and the daemon routes and desktop dialogs are included too. Those
+numbers replace the earlier estimate. The ceiling in `scripts/size-gate.ts` is raised
+158,000 → 160,000 (99.8%), with a dated Phase 24 comment and about 390 LOC of headroom.
+
+Options for the maintainer: (a) accept this reasoned raise, or (b) move the Telegram runtime to a
+satellite package in a follow-up. This PR takes (a) so CI can go green, and asks the maintainer to
+decide between them.
 
 Two gate records change in this PR, both on the same reasoning:
 
-- `scripts/size-gate.ts`: `TREE_CEILING` 156,000 → 157,500. Tree is 156,957 LOC (99.7%).
 - `docs/perf/SIZE-WAIVERS.json`: the generated typed client is recorded at 1,229 lines (was
   1,174), because it now includes the eleven telegram operations. The waiver's reason
   records the growth, as the earlier phases did. A waiver is not raised silently: the

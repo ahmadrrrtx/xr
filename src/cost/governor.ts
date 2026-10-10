@@ -369,7 +369,7 @@ export class CostGovernor {
     const tokPart = `${fmt(s.totalTokens)} tok`;
     const usdPart = this.pricing.inPerMTok + this.pricing.outPerMTok > 0
       ? ` ≈ $${s.usd.toFixed(4)}`
-      : " (local · $0)";
+      : " (no price data)";
     const cap = this.budget.maxUsd
       ? ` / $${this.budget.maxUsd} cap`
       : this.budget.maxTokens
