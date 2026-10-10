@@ -13,6 +13,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 |---|---|---|
 | `src/agents/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/automation/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `src/bots/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/capabilities/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/cli/` | @ahmadrrrtx | explicit entry |
 | `src/clients/` | @ahmadrrrtx | explicit entry |
@@ -64,6 +65,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/architecture/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/automation/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/baseline/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/bots/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/capabilities/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/cli/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/config/` | @ahmadrrrtx | default (@ahmadrrrtx) |

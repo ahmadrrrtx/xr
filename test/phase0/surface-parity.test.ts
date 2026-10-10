@@ -120,7 +120,9 @@ describe("Phase 0 · T8 / Phase 2 · T1 — extensibility parity across surfaces
     // and must NOT construct an agent run themselves.
     const surfaces = [
       "src/interfaces/shell/app.ts",
-      "src/telegram/bot.ts",
+      // Telegram's agent runs moved to the shared bot runtime (Phase 26); the
+      // envelope call lives there, and the Telegram adapter goes through it.
+      "src/bots/runtime.ts",
       "src/voice/pipeline.ts",
     ];
     for (const rel of surfaces) {

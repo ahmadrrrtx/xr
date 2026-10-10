@@ -153,7 +153,9 @@ describe("Phase 2 · T1 — no surface bypasses the execution envelope", () => {
     //   executeOnSurface()      (surface-owned-store paths)
     const surfaces = [
       "src/interfaces/shell/app.ts",
-      "src/telegram/bot.ts",
+      // Telegram's agent runs moved into the shared bot runtime (Phase 26).
+      // The envelope call lives there now; the Telegram adapter goes through it.
+      "src/bots/runtime.ts",
       "src/voice/pipeline.ts",
     ];
     for (const rel of surfaces) {

@@ -59,7 +59,17 @@ export type EnvelopePhase = (typeof ENVELOPE_PHASES)[number];
 export type Placement = "in_process" | "worker" | "container";
 
 /** Which surface originated the request. Recorded on every envelope. */
-export type SurfaceId = "cli" | "shell" | "telegram" | "voice" | "daemon" | "workflow" | "test" | "scheduler";
+export type SurfaceId =
+  | "cli"
+  | "shell"
+  | "telegram"
+  | "discord"
+  | "whatsapp"
+  | "voice"
+  | "daemon"
+  | "workflow"
+  | "test"
+  | "scheduler";
 
 /**
  * INTENT — what the human asked for, and on whose authority.
