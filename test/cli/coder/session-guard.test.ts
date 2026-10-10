@@ -188,3 +188,35 @@ describe("--tools reaches the engine", () => {
     expect(seen[0]!.includeSkills).toBe(false);
   });
 });
+
+describe("consent wrapper (durable store path)", () => {
+  test("every approval passes through the wrapper, and its answer is the one used", async () => {
+    const probe: Probe = { approvals: [], notices: [], summaries: [] };
+    const answers: boolean[] = [];
+    const wrapped: string[] = [];
+    const consent = (ask: (r: ApprovalRequest) => Promise<boolean>) => async (r: ApprovalRequest) => {
+      wrapped.push(r.tool);
+      return ask(r);
+    };
+    const session = new CoderSession(
+      agentAsking([shell("npm test"), shell("sudo true")], answers),
+      fakeUI(false, probe),
+      opts({ mode: "yolo", interactive: false, rules: { allow: ["shell:npm*"] }, consent }),
+    );
+    await session.turn("task", new AbortController().signal);
+    expect(wrapped).toEqual(["shell", "shell"]);
+    expect(answers).toEqual([true, false]);
+  });
+
+  test("a refusal from the wrapper stops the action", async () => {
+    const probe: Probe = { approvals: [], notices: [], summaries: [] };
+    const answers: boolean[] = [];
+    const session = new CoderSession(
+      agentAsking([shell("npm test")], answers),
+      fakeUI(false, probe),
+      opts({ mode: "yolo", interactive: false, rules: { allow: ["shell:npm*"] }, consent: () => async () => false }),
+    );
+    await session.turn("task", new AbortController().signal);
+    expect(answers).toEqual([false]);
+  });
+});
