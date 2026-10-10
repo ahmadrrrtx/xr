@@ -1,24 +1,267 @@
 {
   "name": "xr-vscode",
-  "displayName": "XR — trustworthy agent",
-  "description": "Status-bar cost meter + 'Ask XR' on selection, talking to your local XR daemon.",
-  "version": "0.1.0",
+  "displayName": "XR",
+  "description": "XR in VS Code: a compact chat panel, code lenses, selection actions and optional inline suggestions, backed by your local XR daemon.",
+  "version": "0.2.0",
   "publisher": "rrrtx",
-  "engines": { "vscode": "^1.85.0" },
-  "categories": ["AI", "Other"],
-  "activationEvents": ["onStartupFinished"],
-  "main": "./extension.js",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ahmadrrrtx/xr.git",
+    "directory": "extensions/vscode"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "AI",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "xr",
+    "ai",
+    "chat",
+    "local",
+    "daemon"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "scripts": {
+    "compile": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json",
+    "test": "node esbuild.mjs --tests && node scripts/run-tests.mjs",
+    "package": "node esbuild.mjs && vsce package --no-dependencies -o xr-vscode-0.2.0.vsix",
+    "build:vsix": "npm run typecheck && npm test && npm run package"
+  },
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "xr",
+          "title": "XR",
+          "icon": "media/xr-sentinel.svg"
+        }
+      ]
+    },
+    "views": {
+      "xr": [
+        {
+          "type": "webview",
+          "id": "xr.chat",
+          "name": "Chat",
+          "icon": "media/xr-sentinel.svg"
+        }
+      ]
+    },
     "commands": [
-      { "command": "xr.ask", "title": "Ask XR about selection" },
-      { "command": "xr.openDashboard", "title": "XR: Open Dashboard" }
+      {
+        "command": "xr.openChat",
+        "title": "Open Chat",
+        "category": "XR"
+      },
+      {
+        "command": "xr.askSelection",
+        "title": "Ask about selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.ask",
+        "title": "Ask XR about selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.explain",
+        "title": "Explain selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.fix",
+        "title": "Fix selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.improve",
+        "title": "Improve selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.addTests",
+        "title": "Add tests",
+        "category": "XR"
+      },
+      {
+        "command": "xr.refactor",
+        "title": "Refactor selection…",
+        "category": "XR"
+      },
+      {
+        "command": "xr.statusMenu",
+        "title": "Menu",
+        "category": "XR"
+      },
+      {
+        "command": "xr.switchModel",
+        "title": "Switch model",
+        "category": "XR"
+      },
+      {
+        "command": "xr.showBudget",
+        "title": "Show budget",
+        "category": "XR"
+      },
+      {
+        "command": "xr.toggleInlineSuggestions",
+        "title": "Toggle inline suggestions",
+        "category": "XR"
+      },
+      {
+        "command": "xr.startDaemon",
+        "title": "Start XR",
+        "category": "XR"
+      },
+      {
+        "command": "xr.setToken",
+        "title": "Set daemon token",
+        "category": "XR"
+      },
+      {
+        "command": "xr.forgetToken",
+        "title": "Forget stored daemon token",
+        "category": "XR"
+      },
+      {
+        "command": "xr.openDashboard",
+        "title": "Open dashboard",
+        "category": "XR"
+      },
+      {
+        "command": "xr.clearDiagnostics",
+        "title": "Clear XR problems",
+        "category": "XR"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "xr.askSelection",
+          "when": "editorHasSelection",
+          "group": "xr@1"
+        },
+        {
+          "command": "xr.explain",
+          "when": "editorHasSelection",
+          "group": "xr@2"
+        },
+        {
+          "command": "xr.fix",
+          "when": "editorHasSelection",
+          "group": "xr@3"
+        },
+        {
+          "command": "xr.improve",
+          "when": "editorHasSelection",
+          "group": "xr@4"
+        },
+        {
+          "command": "xr.addTests",
+          "when": "editorHasSelection",
+          "group": "xr@5"
+        },
+        {
+          "command": "xr.refactor",
+          "when": "editorHasSelection",
+          "group": "xr@6"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "xr.openChat",
+        "key": "ctrl+alt+x",
+        "mac": "cmd+ctrl+x"
+      },
+      {
+        "command": "xr.askSelection",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+ctrl+l"
+      }
     ],
     "configuration": {
       "title": "XR",
       "properties": {
-        "xr.daemonUrl": { "type": "string", "default": "http://127.0.0.1:3141" },
-        "xr.token": { "type": "string", "default": "" }
+        "xr.daemonUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:3141",
+          "scope": "application",
+          "description": "Base URL of the XR daemon. Must be a loopback address (127.0.0.1, localhost or ::1). Anything else is refused."
+        },
+        "xr.token": {
+          "type": "string",
+          "default": "",
+          "scope": "application",
+          "markdownDescription": "Daemon bearer token. Leave empty to use the token stored in VS Code's secret storage (run **XR: Set daemon token**). Application scope only, so it is never read from a workspace or a repository."
+        },
+        "xr.mode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "agent"
+          ],
+          "enumDescriptions": [
+            "Read-only answers. The daemon runs no tools that change files.",
+            "The daemon may run tools. Dangerous tools still need your approval."
+          ],
+          "default": "ask",
+          "description": "Execution mode for chat requests sent from VS Code."
+        },
+        "xr.daemonCommand": {
+          "type": "string",
+          "default": "xr serve",
+          "scope": "application",
+          "description": "Command used by XR: Start XR when the daemon is not reachable. Application scope only, so a repository cannot choose what runs."
+        },
+        "xr.codeLens.explain": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an XR: explain lens above functions, classes and methods."
+        },
+        "xr.codeLens.fix": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an XR: fix lens above functions, classes and methods."
+        },
+        "xr.codeLens.improve": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an XR: improve lens above functions, classes and methods."
+        },
+        "xr.codeLens.addTests": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an XR: add tests lens above functions, classes and methods."
+        },
+        "xr.inlineSuggestions": {
+          "type": "boolean",
+          "default": false,
+          "description": "Ghost-text suggestions from XR while you type. Off by default so it does not compete with other inline completion tools. Each suggestion uses your XR budget."
+        }
       }
     }
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.25.12",
+    "highlight.js": "^11.11.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "~5.6.3"
   }
 }
