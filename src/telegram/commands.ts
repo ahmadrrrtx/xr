@@ -1,11 +1,11 @@
 /**
  * XR — Telegram command parsing (pure, testable).
- * Parses incoming messages into structured commands. Supports slash commands
- * (/budget, /pause, /status, /cron, /help) and free-text tasks with inline
- * budget constraints ("...keep it under $0.50").
+ * Slash commands map to structured commands. Anything else is a task, with an
+ * optional inline budget ("...keep it under $0.50").
  */
 
 export type TgCommand =
+  | { type: "start" }
   | { type: "status" }
   | { type: "help" }
   | { type: "pause" }
@@ -14,6 +14,10 @@ export type TgCommand =
   | { type: "resume-all" }
   | { type: "cost" }
   | { type: "budget"; usd: number }
+  | { type: "model"; model: string }
+  | { type: "stop" }
+  | { type: "approve"; id: string }
+  | { type: "deny"; id: string }
   | { type: "task"; text: string; budgetUsd?: number }
   | { type: "empty" };
 
@@ -28,13 +32,16 @@ export function parseCommand(raw: string): TgCommand {
   if (!text) return { type: "empty" };
 
   if (text.startsWith("/")) {
-    const [cmd, ...rest] = text.slice(1).split(/\s+/);
+    // Telegram appends @botname in groups; private chats never do, but strip it anyway.
+    const [head, ...rest] = text.slice(1).split(/\s+/);
+    const cmd = head.split("@")[0].toLowerCase();
     const arg = rest.join(" ").trim();
-    switch (cmd.toLowerCase()) {
+    switch (cmd) {
+      case "start":
+        return { type: "start" };
       case "status":
         return { type: "status" };
       case "help":
-      case "start":
         return { type: "help" };
       case "pause":
         return { type: "pause" };
@@ -50,6 +57,15 @@ export function parseCommand(raw: string): TgCommand {
         const usd = extractBudget(arg) ?? Number(arg);
         return { type: "budget", usd: Number.isFinite(usd) ? usd : 0 };
       }
+      case "model":
+        return { type: "model", model: arg.split(/\s+/)[0] ?? "" };
+      case "stop":
+      case "cancel":
+        return { type: "stop" };
+      case "approve":
+        return { type: "approve", id: arg.split(/\s+/)[0] ?? "" };
+      case "deny":
+        return { type: "deny", id: arg.split(/\s+/)[0] ?? "" };
       case "task":
         return { type: "task", text: arg, budgetUsd: extractBudget(arg) };
       default:
@@ -57,28 +73,30 @@ export function parseCommand(raw: string): TgCommand {
     }
   }
 
-  // Free text → a task, with optional inline budget.
+  // Free text is a task, with optional inline budget.
   return { type: "task", text, budgetUsd: extractBudget(text) };
 }
 
-/** Build the help message body. */
+/** Help text (plain, no parse mode). */
 export function helpText(): string {
   return [
-    "🛡️ *XR — remote control*",
+    "XR — remote control for your computer.",
+    "XR must be running on your computer for the bot to respond.",
     "",
-    "Send a task in plain text, e.g.:",
-    "`refactor the auth module, keep it under $0.50`",
+    "Send a task in plain text, for example:",
+    "refactor the auth module, keep it under $0.50",
     "",
-    "*Commands*",
-    "/status — current task, cost, security",
-    "/cost — token & spend summary",
-    "/budget $1.00 — set per-task ceiling",
-    "/pause — freeze the agent",
-    "/resume — continue",
-    "/pause-all — stop scheduled triggers",
-    "/resume-all — resume scheduled triggers",
+    "Commands",
+    "/status — current state, model, spend, security",
+    "/cost — spend summary",
+    "/budget $1.00 — per-task ceiling for this chat",
+    "/model <id> — model for this chat",
+    "/stop — cancel the running task",
+    "/pause and /resume — freeze or continue this chat",
+    "/pause-all and /resume-all — scheduled triggers",
+    "/approve <id> and /deny <id> — answer an approval by id",
     "/help — this message",
     "",
-    "_Risky actions ask for your ✅/❌ approval right here._",
+    "Risky actions ask for approval here with Approve, Reject, or Details buttons.",
   ].join("\n");
 }

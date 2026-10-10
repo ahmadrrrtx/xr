@@ -33,6 +33,10 @@ export function IntegrationCard({ view, index, error, busy }: Props) {
   const connect = useIntegrationsStore((s) => s.connect);
   const openDialog = useIntegrationsStore((s) => s.openDialog);
   const brand = brandFor(view.id, view.name);
+  // Telegram has its own setup and settings (token → pairing). The generic
+  // connect path is refused by the engine for this connector.
+  const isTelegram = view.id === 'telegram';
+  const startConnect = () => (isTelegram ? openDialog({ kind: 'telegram', id: view.id }) : void connect(view.id));
   const state: CardState = deriveCardState(view, connecting);
   const open = popoverId === view.id;
   const chips = view.capabilities.slice(0, MAX_CHIPS);
@@ -44,7 +48,7 @@ export function IntegrationCard({ view, index, error, busy }: Props) {
     // C connects the focused card, as the screen brief asks. Only when the card itself is focused.
     if (e.target === e.currentTarget && (e.key === 'c' || e.key === 'C') && (state === 'connect' || state === 'setup_required')) {
       e.preventDefault();
-      void connect(view.id);
+      startConnect();
     }
   };
 
@@ -86,7 +90,7 @@ export function IntegrationCard({ view, index, error, busy }: Props) {
         </PopoverAnchor>
 
         <div className="ix-card__footer">
-          <CardFooter state={state} view={view} busy={busy} connecting={connecting} onConnect={() => void connect(view.id)} onReauth={() => void connect(view.id)} onSetup={() => openDialog({ kind: 'app_credentials', id: view.id })} onSettings={() => openPopover(view.id)} />
+          <CardFooter state={state} view={view} busy={busy} connecting={connecting} onConnect={startConnect} onReauth={startConnect} onSetup={() => openDialog({ kind: 'app_credentials', id: view.id })} onSettings={() => (isTelegram ? openDialog({ kind: 'telegram_settings', id: view.id }) : openPopover(view.id))} />
         </div>
 
         {error && (

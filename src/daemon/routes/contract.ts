@@ -77,7 +77,7 @@ import {
 } from "./schemas.ts";
 import { BUILDER_CONTRACT } from "./contract-builder.ts";
 import { RESEARCH_RUN_CONTRACT } from "./contract-research.ts"; import { AGENTS_WORKFLOWS_CONTRACT } from "./contract-agents.ts"; // Phase 19
-import { MEMORY_EXPLORER_CONTRACT } from "./contract-memory.ts"; import { INTEGRATIONS_CONTRACT } from "./contract-integrations.ts"; // Phase 21 · Phase 22
+import { MEMORY_EXPLORER_CONTRACT } from "./contract-memory.ts"; import { INTEGRATIONS_CONTRACT } from "./contract-integrations.ts"; import { TELEGRAM_CONTRACT } from "./contract-telegram.ts"; // Phase 21 · Phase 22 · Phase 24
 
 export type Stability = "stable" | "experimental";
 export interface ApiOperationMeta {
@@ -769,7 +769,7 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     response: OkResponse,
   },
   ...BUILDER_CONTRACT, // Phase 17 · Builder (contract-builder.ts)
-  ...RESEARCH_RUN_CONTRACT, ...AGENTS_WORKFLOWS_CONTRACT, ...MEMORY_EXPLORER_CONTRACT, ...INTEGRATIONS_CONTRACT, // Phase 18 · Research runs (contract-research.ts) · Phase 19 · Agents + workflows (contract-agents.ts)
+  ...RESEARCH_RUN_CONTRACT, ...AGENTS_WORKFLOWS_CONTRACT, ...MEMORY_EXPLORER_CONTRACT, ...INTEGRATIONS_CONTRACT, ...TELEGRAM_CONTRACT, // Phase 18 · Research runs (contract-research.ts) · Phase 19 · Agents + workflows (contract-agents.ts)
   // ── Phase 8 · meta operations (registered by meta.routes.ts) ──────────────
   "meta.apiRoot.get": {
     summary: "API index: version, operation catalogue link, OpenAPI location.",

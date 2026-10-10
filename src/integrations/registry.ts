@@ -109,14 +109,12 @@ export const CONNECTORS: ConnectorDefinition[] = [
   {
     id: 'telegram',
     name: 'Telegram',
-    description: 'Send messages through Telegram Bot API',
+    description: 'Run tasks and approve actions from your phone. XR must be running on your computer.',
     category: 'communication',
     icon: '✈️',
-    authType: 'api_key',
-    configFields: [
-      { key: 'botToken', label: 'Bot Token', type: 'password', required: true },
-      { key: 'chatId', label: 'Chat ID', type: 'text', required: false },
-    ],
+    authType: 'bot_token',
+    // The token goes through the Telegram setup (getMe, then pairing), never through configFields.
+    configFields: [],
     capabilities: ['send_message', 'read_messages'],
   },
   {

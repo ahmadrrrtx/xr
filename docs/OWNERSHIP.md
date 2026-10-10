@@ -126,6 +126,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/state/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/supply-chain/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/telegram.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/telegram/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/tools.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/tools/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/trust.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

@@ -18,10 +18,11 @@ export const phase9ConfigShape = {
     .default({}),
   telegram: z
     .object({
+      /** Per-chat message bucket. Default 20 messages a minute. */
       rateLimit: z
         .object({
-          tokens: z.number().positive().default(10),
-          refillPerSec: z.number().min(0).default(0.2),
+          tokens: z.number().positive().default(20),
+          refillPerSec: z.number().min(0).default(20 / 60),
         })
         .default({}),
       chatBudgets: z
@@ -30,6 +31,16 @@ export const phase9ConfigShape = {
           maxTokens: z.number().int().min(0).optional(),
         })
         .default({}),
+      /** The user wants the bot running. Set by Start/Stop and Connect/Disconnect. */
+      enabled: z.boolean().default(false),
+      /** Start on daemon boot when enabled and a token is present. */
+      autoStart: z.boolean().default(true),
+      /** Paired Telegram user ids. Written by the /start pairing flow; never preconfigured. */
+      pairedUserIds: z.array(z.number().int().positive()).max(50).default([]),
+      /** Optional public HTTPS URL. When set, Telegram pushes updates here instead of polling. */
+      webhookUrl: z.string().url().startsWith("https://").max(2048).optional(),
+      /** Documents are capped here; photos are capped at 2 MB regardless. */
+      maxAttachmentBytes: z.number().int().min(64 * 1024).max(20 * 1024 * 1024).default(5 * 1024 * 1024),
     })
     .default({}),
 };

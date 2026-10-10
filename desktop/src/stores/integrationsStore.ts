@@ -28,6 +28,8 @@ import type { OAuthCallback } from '@/integrations/oauthCallback';
 export type IntegrationDialog =
   | { kind: 'api_key'; id: string }
   | { kind: 'app_credentials'; id: string }
+  | { kind: 'telegram'; id: string }
+  | { kind: 'telegram_settings'; id: string }
   | null;
 
 interface IntegrationsState {

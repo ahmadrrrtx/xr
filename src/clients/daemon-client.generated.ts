@@ -901,6 +901,61 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/mcp/unpin");
   }
 
+  /** Telegram bot state: connection, running status, paired users and settings. Never includes the token. */
+  async telegramStatus(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/telegram/status");
+  }
+
+  /** Save a BotFather token after a getMe check, then start the bot. */
+  async telegramConnect(body: z.infer<typeof S.TelegramConnectRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/telegram/connect", body);
+  }
+
+  /** Stop the bot, remove the token and every paired user. Requires confirm: true. */
+  async telegramDisconnect(body: z.infer<typeof S.TelegramDisconnectRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/telegram/disconnect", body);
+  }
+
+  /** Start polling (or the webhook, when one is set) for the connected bot. */
+  async telegramStart(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/telegram/start");
+  }
+
+  /** Stop the bot cleanly. The token is kept so the bot can be started again. */
+  async telegramStop(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/telegram/stop");
+  }
+
+  /** Open the 10-minute pairing window. A user who sends /start then receives a 6-digit code. */
+  async telegramPairOpen(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/telegram/pair/open");
+  }
+
+  /** Confirm a 6-digit code shown in Telegram. The single-use code adds the sender to the paired list. */
+  async telegramPair(body: z.infer<typeof S.TelegramPairRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/telegram/pair", body);
+  }
+
+  /** Remove one paired Telegram user. */
+  async telegramUnpair(body: z.infer<typeof S.TelegramUnpairRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/telegram/unpair", body);
+  }
+
+  /** Update rate limit, attachment cap, webhook URL and auto-start. Only sent fields change. */
+  async telegramSettings(body: z.infer<typeof S.TelegramSettingsRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/telegram/settings", body);
+  }
+
+  /** Redacted tail of the Telegram bot log. */
+  async telegramLogs(body: z.infer<typeof S.TelegramLogsQuery>): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/telegram/logs", body);
+  }
+
+  /** Receive a Telegram update in webhook mode. Authenticated by Telegram's secret_token header, not the XR token. */
+  async telegramWebhook(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/telegram/webhook");
+  }
+
   /** Computer-control subsystem status. */
   async controlStatus(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/control/status");
