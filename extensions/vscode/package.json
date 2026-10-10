@@ -58,37 +58,137 @@
       ]
     },
     "commands": [
-      { "command": "xr.openChat", "title": "Open Chat", "category": "XR" },
-      { "command": "xr.askSelection", "title": "Ask about selection", "category": "XR" },
-      { "command": "xr.ask", "title": "Ask XR about selection", "category": "XR" },
-      { "command": "xr.explain", "title": "Explain selection", "category": "XR" },
-      { "command": "xr.fix", "title": "Fix selection", "category": "XR" },
-      { "command": "xr.improve", "title": "Improve selection", "category": "XR" },
-      { "command": "xr.addTests", "title": "Add tests", "category": "XR" },
-      { "command": "xr.refactor", "title": "Refactor selection…", "category": "XR" },
-      { "command": "xr.statusMenu", "title": "Menu", "category": "XR" },
-      { "command": "xr.switchModel", "title": "Switch model", "category": "XR" },
-      { "command": "xr.showBudget", "title": "Show budget", "category": "XR" },
-      { "command": "xr.toggleInlineSuggestions", "title": "Toggle inline suggestions", "category": "XR" },
-      { "command": "xr.startDaemon", "title": "Start XR", "category": "XR" },
-      { "command": "xr.setToken", "title": "Set daemon token", "category": "XR" },
-      { "command": "xr.forgetToken", "title": "Forget stored daemon token", "category": "XR" },
-      { "command": "xr.openDashboard", "title": "Open dashboard", "category": "XR" },
-      { "command": "xr.clearDiagnostics", "title": "Clear XR problems", "category": "XR" }
+      {
+        "command": "xr.openChat",
+        "title": "Open Chat",
+        "category": "XR"
+      },
+      {
+        "command": "xr.askSelection",
+        "title": "Ask about selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.ask",
+        "title": "Ask XR about selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.explain",
+        "title": "Explain selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.fix",
+        "title": "Fix selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.improve",
+        "title": "Improve selection",
+        "category": "XR"
+      },
+      {
+        "command": "xr.addTests",
+        "title": "Add tests",
+        "category": "XR"
+      },
+      {
+        "command": "xr.refactor",
+        "title": "Refactor selection…",
+        "category": "XR"
+      },
+      {
+        "command": "xr.statusMenu",
+        "title": "Menu",
+        "category": "XR"
+      },
+      {
+        "command": "xr.switchModel",
+        "title": "Switch model",
+        "category": "XR"
+      },
+      {
+        "command": "xr.showBudget",
+        "title": "Show budget",
+        "category": "XR"
+      },
+      {
+        "command": "xr.toggleInlineSuggestions",
+        "title": "Toggle inline suggestions",
+        "category": "XR"
+      },
+      {
+        "command": "xr.startDaemon",
+        "title": "Start XR",
+        "category": "XR"
+      },
+      {
+        "command": "xr.setToken",
+        "title": "Set daemon token",
+        "category": "XR"
+      },
+      {
+        "command": "xr.forgetToken",
+        "title": "Forget stored daemon token",
+        "category": "XR"
+      },
+      {
+        "command": "xr.openDashboard",
+        "title": "Open dashboard",
+        "category": "XR"
+      },
+      {
+        "command": "xr.clearDiagnostics",
+        "title": "Clear XR problems",
+        "category": "XR"
+      }
     ],
     "menus": {
       "editor/context": [
-        { "command": "xr.askSelection", "when": "editorHasSelection", "group": "xr@1" },
-        { "command": "xr.explain", "when": "editorHasSelection", "group": "xr@2" },
-        { "command": "xr.fix", "when": "editorHasSelection", "group": "xr@3" },
-        { "command": "xr.improve", "when": "editorHasSelection", "group": "xr@4" },
-        { "command": "xr.addTests", "when": "editorHasSelection", "group": "xr@5" },
-        { "command": "xr.refactor", "when": "editorHasSelection", "group": "xr@6" }
+        {
+          "command": "xr.askSelection",
+          "when": "editorHasSelection",
+          "group": "xr@1"
+        },
+        {
+          "command": "xr.explain",
+          "when": "editorHasSelection",
+          "group": "xr@2"
+        },
+        {
+          "command": "xr.fix",
+          "when": "editorHasSelection",
+          "group": "xr@3"
+        },
+        {
+          "command": "xr.improve",
+          "when": "editorHasSelection",
+          "group": "xr@4"
+        },
+        {
+          "command": "xr.addTests",
+          "when": "editorHasSelection",
+          "group": "xr@5"
+        },
+        {
+          "command": "xr.refactor",
+          "when": "editorHasSelection",
+          "group": "xr@6"
+        }
       ]
     },
     "keybindings": [
-      { "command": "xr.openChat", "key": "ctrl+alt+x", "mac": "cmd+ctrl+x" },
-      { "command": "xr.askSelection", "key": "ctrl+alt+l", "mac": "cmd+ctrl+l" }
+      {
+        "command": "xr.openChat",
+        "key": "ctrl+alt+x",
+        "mac": "cmd+ctrl+x"
+      },
+      {
+        "command": "xr.askSelection",
+        "key": "ctrl+alt+l",
+        "mac": "cmd+ctrl+l"
+      }
     ],
     "configuration": {
       "title": "XR",
@@ -158,7 +258,7 @@
     "@types/react-dom": "^18.3.0",
     "@types/vscode": "1.85.0",
     "@vscode/vsce": "^3.2.0",
-    "esbuild": "^0.24.0",
+    "esbuild": "^0.25.12",
     "highlight.js": "^11.11.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
