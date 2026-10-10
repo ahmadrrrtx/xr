@@ -481,6 +481,9 @@ export class McpClient {
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
     };
+    // Re-read the bearer on every request, so a rotated token (for example an
+    // Integrations refresh) takes effect without reloading the server.
+    if (this.cfg.apiKeyEnv) this.apiKey = secretBrokerSync(this.cfg.apiKeyEnv);
     if (this.apiKey) headers["authorization"] = `Bearer ${this.apiKey}`;
 
     if (!this.cfg.url) throw new Error("no URL for HTTP transport");

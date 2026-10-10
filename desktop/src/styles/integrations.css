@@ -1,0 +1,170 @@
+/*
+ * Integrations (Phase 22). Uses the shared theme variables, so the five themes apply
+ * without per-theme rules. Glow is an accent-glow token, which light themes set to
+ * transparent. Reduced motion keeps opacity fades and drops every transform, spring,
+ * stagger and pulse.
+ */
+
+.ix-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 28px 40px;
+  color: var(--text-primary);
+  min-height: 100%;
+}
+
+.ix-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ix-head__title { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+.ix-head__sub { margin: 4px 0 0; color: var(--text-secondary); font-size: 13px; max-width: 60ch; }
+.ix-head__actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.ix-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: 10px; font-size: 13px;
+  border: 1px solid var(--border-subtle); background: var(--bg-raised);
+}
+.ix-banner--warn { border-color: var(--warning); }
+.ix-banner--error { border-color: var(--danger); }
+
+.ix-toolbar { display: flex; flex-direction: column; gap: 10px; }
+.ix-chips-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.ix-cat {
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  height: 32px; padding: 0 12px; border-radius: 999px;
+  border: 1px solid var(--border-subtle); background: transparent; color: var(--text-secondary);
+  font-size: 13px; cursor: pointer;
+}
+.ix-cat:focus-visible, .ix-card:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ix-cat[aria-pressed='true'] { color: var(--text-primary); border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
+.ix-cat:disabled { opacity: 0.45; cursor: default; }
+.ix-cat__count { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+
+.ix-search { position: relative; max-width: 480px; width: 100%; }
+.ix-search__icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); }
+.ix-search__input { padding-left: 32px; height: 36px; }
+
+.ix-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (min-width: 1024px) { .ix-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .ix-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1600px) { .ix-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+.ix-card {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px; border-radius: 12px; min-height: 196px;
+  background: var(--bg-raised); border: 1px solid var(--border-subtle);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  animation: ix-enter 220ms ease both;
+}
+.ix-card:hover { transform: translateY(-2px); border-color: var(--border-default); box-shadow: 0 0 0 1px var(--border-default), 0 8px 24px -12px var(--accent-glow); }
+.ix-card--connected { border-color: var(--accent-dim); }
+.ix-card--reauth { border-color: var(--warning); }
+.ix-card--coming_soon { opacity: 0.82; }
+.ix-card__body { display: flex; flex-direction: column; gap: 8px; flex: 1; cursor: default; }
+.ix-card__top { display: flex; align-items: center; justify-content: space-between; }
+.ix-card__name { font-size: 15px; font-weight: 600; margin: 0; }
+.ix-card__desc {
+  margin: 0; font-size: 13px; color: var(--text-secondary);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ix-card__footer { display: flex; flex-direction: column; gap: 6px; }
+.ix-card__error { margin: 0; font-size: 12px; color: var(--danger); }
+
+.ix-tile {
+  width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+  color: #fff; font-weight: 700; font-size: 13px; letter-spacing: 0.02em;
+}
+.ix-auth-chip {
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-tertiary); border: 1px solid var(--border-subtle);
+  border-radius: 6px; padding: 2px 6px;
+}
+.ix-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ix-chip {
+  font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border-subtle);
+  border-radius: 999px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: transparent;
+}
+.ix-chip--muted { color: var(--text-tertiary); }
+.ix-chip--connected { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.ix-chip--warn { border-color: var(--warning); color: var(--warning); cursor: pointer; }
+.ix-chip--lock { color: var(--text-tertiary); }
+.ix-chip--pending { color: var(--accent); border-color: var(--accent-dim); }
+.ix-footer-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ix-footer-hint { font-size: 12px; color: var(--text-tertiary); }
+.ix-connect { border-color: var(--accent); color: var(--accent); }
+.ix-disconnect-hint { color: var(--text-secondary); }
+.ix-danger { color: var(--danger); }
+.ix-danger-solid { background: var(--danger); color: var(--danger-contrast, #fff); }
+
+.ix-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); }
+.ix-dot--ok { background: var(--accent); }
+.ix-dot--pulse { background: var(--warning); animation: ix-pulse 2s ease-in-out infinite; }
+
+.ix-spin { animation: ix-spin 900ms linear infinite; }
+
+.ix-card--skeleton { min-height: 196px; animation: none; }
+.ix-skel { background: var(--border-subtle); border-radius: 8px; }
+.ix-skel--tile { width: 40px; height: 40px; }
+.ix-skel--line { height: 12px; width: 80%; margin-top: 8px; }
+.ix-skel--line.short { width: 50%; }
+
+.ix-empty {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 18px 20px; border-radius: 12px; border: 1px dashed var(--border-default); background: var(--bg-raised);
+}
+.ix-empty__icon { color: var(--text-tertiary); }
+.ix-empty__title { font-size: 15px; font-weight: 600; margin: 4px 0 0; }
+.ix-empty__sub { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.ix-empty__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.ix-none { color: var(--text-secondary); font-size: 13px; grid-column: 1 / -1; }
+
+.ix-popover { width: 360px; padding: 16px; border-radius: 12px; }
+.ix-settings { display: flex; flex-direction: column; gap: 14px; }
+.ix-settings__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.ix-settings__title { margin: 0; font-size: 15px; font-weight: 600; }
+.ix-settings__since { margin: 2px 0 0; font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.ix-settings__section { display: flex; flex-direction: column; gap: 6px; }
+.ix-settings__label { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); font-weight: 600; }
+.ix-settings__value { margin: 0; font-size: 13px; }
+.ix-settings__sub { margin: 4px 0 0; font-size: 12px; color: var(--text-secondary); }
+.ix-settings__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ix-settings__error { margin: 0; font-size: 12px; color: var(--danger); }
+.ix-settings__foot { display: flex; justify-content: flex-end; border-top: 1px solid var(--border-subtle); padding-top: 10px; }
+.ix-perm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ix-perm-list li { display: flex; align-items: flex-start; gap: 6px; }
+.ix-perm--yes { color: var(--success); margin-top: 3px; flex-shrink: 0; }
+.ix-perm--no { color: var(--text-tertiary); margin-top: 3px; flex-shrink: 0; }
+
+.ix-dialog { max-width: 480px; }
+.ix-form { display: flex; flex-direction: column; gap: 14px; }
+.ix-field { display: flex; flex-direction: column; gap: 4px; }
+.ix-field__label { font-size: 13px; font-weight: 500; }
+.ix-field__opt { color: var(--text-tertiary); font-weight: 400; }
+.ix-field__hint { margin: 0; font-size: 12px; color: var(--text-secondary); }
+.ix-field__control { display: flex; gap: 6px; align-items: center; }
+.ix-field__control > input { flex: 1; }
+.ix-field__error, .ix-form__error { margin: 0; font-size: 12px; color: var(--danger); }
+.ix-form code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
+
+.ix-screen .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@keyframes ix-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ix-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes ix-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ix-card, .ix-card:hover { transition: none; transform: none; animation: ix-fade 150ms linear both; }
+  .ix-dot--pulse, .ix-spin { animation: none; }
+}
+@keyframes ix-fade { from { opacity: 0; } to { opacity: 1; } }

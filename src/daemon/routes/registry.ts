@@ -19,6 +19,7 @@ import { environmentRoutes } from "./environment.routes.ts";
 import { extensionRoutes } from "./extensions.routes.ts";
 import { businessRoutes } from "./business.routes.ts";
 import { memoryRoutes } from "./memory.routes.ts";
+import { integrationRoutes } from "./integrations.routes.ts"; // Phase 22
 import { contextRoutes } from "./context.routes.ts";
 import { providersRoutes } from "./providers.routes.ts";
 import { shieldRoutes } from "./shield.routes.ts";
@@ -83,6 +84,7 @@ export function listBaseRoutes(): DaemonRoute[] {
     ...controlRoutes(),
     ...environmentRoutes(),
     ...memoryRoutes(),
+    ...integrationRoutes(),
     ...contextRoutes(),
     // SEC-05 — business routes are post-satellite residue: OFF by default so
     // the trusted surface matches the documented product. Operators re-enable

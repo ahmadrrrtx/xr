@@ -1061,6 +1061,46 @@ export class XRDaemonClient {
     return await this.call("DELETE", `/api/v1/memory/${encodeURIComponent(id)}`);
   }
 
+  /** List built-in integrations with connection state. Secrets are never included. */
+  async integrationsList(): Promise<z.infer<typeof S.IntegrationEnvelope>> {
+    return await this.call("GET", "/api/v1/integrations");
+  }
+
+  /** Get one integration with its connection state. */
+  async integrationsGet(id: string): Promise<z.infer<typeof S.IntegrationEnvelope>> {
+    return await this.call("GET", `/api/v1/integrations/${encodeURIComponent(id)}`);
+  }
+
+  /** Save the OAuth app client ID and secret (BYOK) in the credential vault. */
+  async integrationsApp_credentials(id: string, body: z.infer<typeof S.IntegrationAppCredentialsRequest>): Promise<z.infer<typeof S.IntegrationEnvelope>> {
+    return await this.call("PUT", `/api/v1/integrations/${encodeURIComponent(id)}/app`, body);
+  }
+
+  /** Start an OAuth sign-in. Returns the provider authorize URL with PKCE and state. */
+  async integrationsOauthStart(id: string): Promise<z.infer<typeof S.IntegrationOAuthStartResponse>> {
+    return await this.call("POST", `/api/v1/integrations/${encodeURIComponent(id)}/oauth/start`);
+  }
+
+  /** Finish an OAuth sign-in from the xr:// callback. Validates the single-use state and stores tokens in the vault. */
+  async integrationsOauthComplete(body: z.infer<typeof S.IntegrationOAuthCompleteRequest>): Promise<z.infer<typeof S.IntegrationEnvelope>> {
+    return await this.call("POST", "/api/v1/integrations/oauth/complete", body);
+  }
+
+  /** Connect an API-key integration. Secrets go to the vault after a successful probe. */
+  async integrationsConnect(id: string, body: z.infer<typeof S.IntegrationConnectRequest>): Promise<z.infer<typeof S.IntegrationEnvelope>> {
+    return await this.call("POST", `/api/v1/integrations/${encodeURIComponent(id)}/connect`, body);
+  }
+
+  /** Run a health probe and refresh the account and last-sync time. Refreshes the token first when needed. */
+  async integrationsSync(id: string): Promise<z.infer<typeof S.IntegrationEnvelope>> {
+    return await this.call("POST", `/api/v1/integrations/${encodeURIComponent(id)}/sync`);
+  }
+
+  /** Disconnect: revoke the grant (best effort) and delete the local token. */
+  async integrationsDisconnect(id: string): Promise<z.infer<typeof S.IntegrationEnvelope>> {
+    return await this.call("POST", `/api/v1/integrations/${encodeURIComponent(id)}/disconnect`);
+  }
+
   /** Context store status (counts, freshness, integrity). */
   async contextStatus(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/context");

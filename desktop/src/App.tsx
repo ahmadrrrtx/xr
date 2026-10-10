@@ -12,6 +12,8 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { hydrateUIState } from '@/stores/ui';
 import { Splash, type SplashStatus } from '@/screens/Splash';
 import { router } from '@/router';
+import { registerOAuthCallbackListener } from '@/integrations/oauthCallback';
+import { useIntegrationsStore } from '@/stores/integrationsStore';
 
 const MIN_SPLASH_MS = 800;
 const MAX_SPLASH_MS = 5000;
@@ -56,6 +58,12 @@ export default function App() {
   const reduceMotion = useSettingsStore(
     (state) => state.settings.appearance.reduceMotion
   );
+
+  // Phase 22: the xr://oauth/callback listener lives at app root, so a browser return
+  // is caught on any screen. It registers once per session (see oauthCallback.ts).
+  useEffect(() => {
+    void registerOAuthCallbackListener((cb) => { void useIntegrationsStore.getState().handleCallback(cb); });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
