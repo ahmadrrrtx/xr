@@ -184,14 +184,16 @@ describe("cli.json config and precedence", () => {
     expect(() => loadCliConfig(path)).toThrow(path);
   });
 
-  test("saving writes owner-only permissions", () => {
+  // Windows does not enforce POSIX mode bits (a file is 0666 there whatever
+  // mode is asked for), so the 0600 assertions run on POSIX only.
+  test.skipIf(process.platform === "win32")("saving writes owner-only permissions", () => {
     const path = join(dir, "sub", "cli.json");
     saveCliConfig(path, { provider: "groq" });
     expect(statSync(path).mode & 0o777).toBe(0o600);
     expect(JSON.parse(readFileSync(path, "utf8")).provider).toBe("groq");
   });
 
-  test("writePrivate creates parent folders and sets 0600", () => {
+  test.skipIf(process.platform === "win32")("writePrivate creates parent folders and sets 0600", () => {
     const path = join(dir, "a", "b", "f.json");
     writePrivate(path, "{}");
     expect(statSync(path).mode & 0o777).toBe(0o600);
