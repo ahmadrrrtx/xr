@@ -113,9 +113,12 @@ describe.skipIf(POSIX_ONLY)("T11 · free-form routing", () => {
     expect(r.combined).not.toMatch(/Unknown command/i);
   });
 
-  test("a one-word near-miss still offers a hint, without refusing", async () => {
+  test("a one-word near-miss is not refused: it reaches the coding agent", async () => {
+    // The coding agent (Phase 23) owns free-form tasks. With no model
+    // configured in this isolated HOME it says so, instead of a usage refusal.
     const r = await runCli(["hello"]);
-    expect(r.combined).toMatch(/Running "hello" as a task/i);
+    expect(r.combined).toMatch(/No model is configured/);
+    expect(r.combined).not.toMatch(/Unknown command/i);
   });
 
   test("a multi-word free-form task routes to task mode", async () => {

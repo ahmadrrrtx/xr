@@ -13,6 +13,7 @@
  */
 import type { Mode, Tool } from "../core/types.ts";
 import { readFileTool, writeFileTool } from "./files.ts";
+import { searchCodeTool } from "./search.ts";
 import { listDirTool, deleteFileTool, shellTool } from "./system.ts";
 import { fetchUrlTool, webSearchTool, checkPackageTool } from "./web.ts";
 import { SYSTEM_TOOLS } from "../computer/system-control.ts";
@@ -24,6 +25,7 @@ const ALL: Tool[] = [
   // File operations
   readFileTool,
   writeFileTool,
+  searchCodeTool,
   // Directory / system
   listDirTool,
   deleteFileTool,
