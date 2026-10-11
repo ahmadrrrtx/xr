@@ -26,7 +26,9 @@ import {
 } from "./render.ts";
 import { splitForTelegram } from "./markdown.ts";
 import { PairingBook } from "./pairing.ts";
-import { ReplyContext } from "./context.ts";
+import { BotRuntime } from "../bots/runtime.ts";
+import { startTypingPulse } from "../bots/typing.ts";
+import type { ApprovalRequest } from "../bots/approvals.ts";
 import { checkSize, extractAttachment, classifyAttachment } from "./attachments.ts";
 import { transcribeVoice } from "./voice.ts";
 import type { ChatSettings } from "./state.ts";
@@ -35,13 +37,14 @@ import { executeOnSurface } from "../services/surface-execution.ts";
 import { loadConfig } from "../config/config.ts";
 import { getApprovalStore } from "../control/approval-store.ts";
 import { renderPreviewText } from "../control/preview.ts";
+import type { ChatRef } from "../bots/types.ts";
 import { buildProvider } from "../providers/factory.ts";
 import { PRESETS } from "../providers/presets.ts";
 import { priceFor, isLocal } from "../cost/pricing.ts";
 import { runLab } from "../security/lab.ts";
 import { wrapUntrusted } from "../context/injection.ts";
 import { basename } from "node:path";
-import { KeyedTokenBuckets, DEFAULT_TELEGRAM_RATE_LIMIT } from "../automation/token-bucket.ts";
+import { DEFAULT_TELEGRAM_RATE_LIMIT } from "../automation/token-bucket.ts";
 import { pauseAllTriggers, resumeAllTriggers } from "../automation/triggers.ts";
 
 const API = (token: string) => `https://api.telegram.org/bot${token}`;
@@ -73,29 +76,51 @@ export interface BotDeps {
   maxAttachmentBytes?: () => number;
 }
 
+const BUSY_REPLY = "A task is already running in this chat. /stop cancels it.";
+
 export class TelegramBot {
   private offset = 0;
   private running = false;
   private paused = false;
   private abortPoll: AbortController | null = null;
-  /** Pending approvals: id -> resolver. */
-  readonly pending = new Map<string, (ok: boolean) => void>();
-  /** Approval id → chat that owns it and the message to edit when decided. */
-  private approvalSlots = new Map<string, { chatId: number; messageId?: number }>();
   private f: typeof fetch;
-  private rate = new KeyedTokenBuckets(DEFAULT_TELEGRAM_RATE_LIMIT);
-  private rateCfgKey = "";
-  private active = new Map<number, AbortController>();
-  private replies = new ReplyContext(20);
+  /** Shared chat runtime (rate limit, one task per chat, approvals, spend, context). */
+  private runtime: BotRuntime<OutgoingMessage>;
   readonly pairing: PairingBook;
+
+  /** Pending approvals: id -> resolver. Owned by the shared approval bridge. */
+  get pending(): Map<string, (ok: boolean) => void> {
+    return this.runtime.approvals.pending;
+  }
+
   /** Per-chat spend against telegram.chatBudgets (Governor envelope per chat). */
-  readonly chatSpendUsd = new Map<number, number>();
-  readonly chatSpendTokens = new Map<number, number>();
+  get chatSpendUsd(): Map<ChatRef, number> {
+    return this.runtime.spend.usd;
+  }
+
+  get chatSpendTokens(): Map<ChatRef, number> {
+    return this.runtime.spend.tokens;
+  }
 
   constructor(private deps: BotDeps) {
     this.f = deps.fetchFn ?? fetch;
     this.pairing = deps.pairing ?? new PairingBook();
     this.offset = 0;
+    this.runtime = new BotRuntime<OutgoingMessage>({
+      surface: {
+        id: "telegram",
+        send: (chatId, msg) => this.send(Number(chatId), msg),
+        edit: (chatId, messageId, text) => this.edit(Number(chatId), Number(messageId), text),
+        setTyping: (chatId) => this.typing(Number(chatId)),
+      },
+      store: deps.store,
+      storeConfig: () => {
+        const { config } = loadConfig();
+        return { defaultTtlMs: config.approvals.defaultTtlMs, perSurface: config.approvals.perSurface };
+      },
+      renderRequest: (p) => approvalMessage(p),
+      renderResolved: (p) => approvalResolvedText(p),
+    });
   }
 
   // ── transport ────────────────────────────────────────────────────────────
@@ -195,66 +220,7 @@ export class TelegramBot {
    * answered.
    */
   approver(chatId: number) {
-    return (req: {
-      tool: string;
-      reason: string;
-      preview?: string;
-      args?: Record<string, unknown>;
-      structuredPreview?: import("../control/preview.ts").StructuredPreview;
-      riskTier?: string;
-      taskId?: string;
-      runId?: string;
-      sessionId?: string;
-    }): Promise<boolean> => {
-      const { config } = loadConfig();
-      const approvalStore = getApprovalStore(this.deps.store, {
-        defaultTtlMs: config.approvals.defaultTtlMs,
-        perSurface: config.approvals.perSurface,
-      });
-      const handle = approvalStore.request({
-        tool: req.tool,
-        reason: req.reason,
-        args: req.args,
-        preview: req.structuredPreview,
-        riskTier: req.riskTier,
-        surface: "telegram",
-        taskId: req.taskId ?? null,
-        runId: req.runId ?? null,
-        sessionId: req.sessionId ?? null,
-      });
-      this.deps.store.audit("telegram.approval.request", { tool: req.tool, approvalId: handle.id });
-      const slot: { chatId: number; messageId?: number } = { chatId };
-      this.approvalSlots.set(handle.id, slot);
-
-      // The message is edited once the outcome is known, whichever surface decided.
-      let resolvedText: string | null = null;
-      void handle.outcome.then((o) => {
-        this.pending.delete(handle.id);
-        this.approvalSlots.delete(handle.id);
-        const outcome = o.timedOut ? "expired" : o.approved ? "approved" : "rejected";
-        if (o.timedOut) this.deps.store.audit("telegram.approval.timeout", { tool: req.tool, approvalId: handle.id });
-        resolvedText = approvalResolvedText({ tool: req.tool, outcome, surface: o.decidedBy?.channel });
-        if (slot.messageId !== undefined) void this.edit(chatId, slot.messageId, resolvedText);
-      });
-
-      const msg = approvalMessage({
-        id: handle.id,
-        tool: req.tool,
-        reason: req.reason,
-        preview: handle.record.preview ? renderPreviewText(handle.record.preview) : req.preview,
-        riskTier: handle.record.riskTier,
-      });
-      void this.send(chatId, msg).then((messageId) => {
-        slot.messageId = messageId;
-        // Decided before the message id came back: apply the real outcome now.
-        if (resolvedText !== null && messageId !== undefined) void this.edit(chatId, messageId, resolvedText);
-      });
-
-      return new Promise<boolean>((resolve) => {
-        this.pending.set(handle.id, resolve);
-        void handle.outcome.then((o) => resolve(o.approved));
-      });
-    };
+    return (req: ApprovalRequest): Promise<boolean> => this.runtime.approvals.request(chatId, req);
   }
 
   /** Answer an approval from the phone. Returns the user-facing text. */
@@ -264,18 +230,7 @@ export class TelegramBot {
     chatId: number,
     userId: number,
   ): "decided" | "not_found" | "already" {
-    const slot = this.approvalSlots.get(id);
-    if (!slot || slot.chatId !== chatId) return "not_found";
-    const decided = getApprovalStore(this.deps.store).decide(id, approved, {
-      channel: "telegram",
-      userId: String(userId),
-    });
-    if (!decided) return "already";
-    const resolve = this.pending.get(id);
-    this.pending.delete(id);
-    resolve?.(approved);
-    this.deps.store.audit("telegram.approval.answered", { decision: approved ? "approve" : "reject", approvalId: id });
-    return "decided";
+    return this.runtime.approvals.decideFromChat(id, approved, chatId, userId);
   }
 
   // ── updates ──────────────────────────────────────────────────────────────
@@ -320,12 +275,7 @@ export class TelegramBot {
 
     const { config } = loadConfig();
     const rl = config.telegram?.rateLimit ?? DEFAULT_TELEGRAM_RATE_LIMIT;
-    const key = JSON.stringify(rl);
-    if (key !== this.rateCfgKey) {
-      this.rate = new KeyedTokenBuckets({ tokens: rl.tokens, refillPerSec: rl.refillPerSec });
-      this.rateCfgKey = key;
-    }
-    if (!this.rate.allow(String(chatId), Date.now())) {
+    if (!this.runtime.rate.allow(String(chatId), rl)) {
       this.deps.store.audit("telegram.rate_limited", { userId, chatId });
       await this.send(chatId, plain(`Rate limit reached (${Math.round(rl.refillPerSec * 60)} messages a minute per chat). Try again shortly.`));
       return;
@@ -365,8 +315,7 @@ export class TelegramBot {
     const chatId: number = cq.message?.chat?.id ?? (userId as number);
 
     if (parsed.decision === "details") {
-      const slot = this.approvalSlots.get(parsed.id);
-      if (!slot || slot.chatId !== chatId) return this.answerCb(cq.id, "Not for this chat");
+      if (!this.runtime.approvals.ownsIn(parsed.id, chatId)) return this.answerCb(cq.id, "Not for this chat");
       const rec = getApprovalStore(this.deps.store).get(parsed.id);
       if (!rec || rec.decision !== null) return this.answerCb(cq.id, "Already decided");
       await this.send(
@@ -542,9 +491,7 @@ export class TelegramBot {
       }
 
       case "stop": {
-        const ac = this.active.get(chatId);
-        if (!ac) return this.send(chatId, plain("Nothing is running in this chat.")).then(() => undefined);
-        ac.abort();
+        if (!this.runtime.tasks.abort(chatId)) return this.send(chatId, plain("Nothing is running in this chat.")).then(() => undefined);
         this.deps.store.audit("telegram.stop", { chatId, userId });
         return this.send(chatId, plain("Stopping the running task.")).then(() => undefined);
       }
@@ -562,7 +509,7 @@ export class TelegramBot {
             auditOk: this.deps.store.verifyChain().valid,
             paused: this.paused,
             model: this.chatSettings(chatId).model ?? config.defaults.model,
-            busy: this.active.has(chatId),
+            busy: this.runtime.tasks.isBusy(chatId),
           }),
         ).then(() => undefined);
       }
@@ -582,12 +529,12 @@ export class TelegramBot {
   ): Promise<void> {
     if (this.paused) return this.send(chatId, plain("Paused. /resume first.")).then(() => undefined);
     if (!text && !ctx.blocks.length) return this.send(chatId, plain("Send a task description.")).then(() => undefined);
-    if (this.active.has(chatId)) {
-      return this.send(chatId, plain("A task is already running in this chat. /stop cancels it.")).then(() => undefined);
+    if (this.runtime.tasks.isBusy(chatId)) {
+      return this.send(chatId, plain(BUSY_REPLY)).then(() => undefined);
     }
 
     const chatCap = config.telegram?.chatBudgets?.maxUsd;
-    const spent = this.chatSpendUsd.get(chatId) ?? 0;
+    const spent = this.runtime.spend.usd.get(chatId) ?? 0;
     if (chatCap != null && spent >= chatCap) {
       this.deps.store.audit("telegram.chat_budget", { chatId, spent, cap: chatCap, stopped: "budget" });
       return this.send(chatId, plain(`Chat budget exhausted ($${spent.toFixed(4)} of $${chatCap.toFixed(2)}). Raise it in XR settings.`)).then(() => undefined);
@@ -599,7 +546,7 @@ export class TelegramBot {
     const modelId = chat.model ?? config.defaults.model;
     const perTask = Math.min(chat.budgetUsd ?? config.budget.perTaskUsd, inlineBudget ?? Infinity);
 
-    const history = this.replies.recent(chatId).slice(-6);
+    const history = this.runtime.replies.recent(chatId).slice(-6);
     const historyBlock = history.length
       ? wrapUntrusted(history.map((t) => `${t.role}: ${t.text}`).join("\n"), { kind: "telegram_history", label: "earlier in this chat" })
       : "";
@@ -613,10 +560,11 @@ export class TelegramBot {
       .filter(Boolean)
       .join("\n\n");
 
-    const ac = new AbortController();
-    this.active.set(chatId, ac);
+    // Synchronous with the busy check above (no await in between), so no race.
+    const ac = this.runtime.tasks.begin(chatId);
+    if (!ac) return this.send(chatId, plain(BUSY_REPLY)).then(() => undefined);
     await this.typing(chatId);
-    const typingTimer = setInterval(() => void this.typing(chatId), 4000);
+    const stopTyping = startTypingPulse(() => this.typing(chatId), 4000);
     const costBefore = this.deps.store.costSummary().totalUsd;
     try {
       await this.send(chatId, plain("Working on it."));
@@ -644,19 +592,19 @@ export class TelegramBot {
         egressAllowlist: config.security.egressAllowlist,
       });
       const charged = Math.max(0, this.deps.store.costSummary().totalUsd - costBefore);
-      this.chatSpendUsd.set(chatId, spent + charged);
+      this.runtime.spend.usd.set(chatId, spent + charged);
 
       const body = result.finalMessage?.trim() || (result.stopped === "cancelled" ? "Stopped." : "(no answer)");
       const footer = `${result.stopped}${result.meter ? ` · ${result.meter}` : ""}`;
-      this.replies.push(chatId, { role: "user", text: text || "(attachment)" });
-      this.replies.push(chatId, { role: "assistant", text: body });
+      this.runtime.replies.push(chatId, { role: "user", text: text || "(attachment)" });
+      this.runtime.replies.push(chatId, { role: "assistant", text: body });
       await this.sendAnswer(chatId, `${body}\n\n${footer}`);
     } catch (err) {
       this.log(`task failed: ${(err as Error).message}`);
       await this.send(chatId, plain("The task failed. Check the XR logs for details."));
     } finally {
-      clearInterval(typingTimer);
-      this.active.delete(chatId);
+      stopTyping();
+      this.runtime.tasks.finish(chatId);
     }
   }
 
@@ -718,7 +666,7 @@ export class TelegramBot {
 
   /** Cancel every running task (used on daemon shutdown). */
   cancelAll(): void {
-    for (const ac of this.active.values()) ac.abort();
+    this.runtime.abortAll();
   }
 }
 
