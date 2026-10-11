@@ -956,6 +956,56 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/telegram/webhook");
   }
 
+  /** Discord bot state: connection, gateway status, paired users, allowed channels and the invite URL. Never includes the token. */
+  async discordStatus(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/discord/status");
+  }
+
+  /** Validate a bot token with /users/@me, store it in the OS keychain, then start the bot. */
+  async discordConnect(body: z.infer<typeof S.DiscordConnectRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/connect", body);
+  }
+
+  /** Stop the bot, remove the token, and forget every pairing and allowed channel. Requires confirm: true. */
+  async discordDisconnect(body: z.infer<typeof S.DiscordDisconnectRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/disconnect", body);
+  }
+
+  /** Start the gateway connection for the saved bot token. */
+  async discordStart(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/start");
+  }
+
+  /** Stop the bot cleanly. The token is kept so the bot can be started again. */
+  async discordStop(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/stop");
+  }
+
+  /** Issue a one-time 6-digit pairing code (10 minutes). The user redeems it in Discord with /xr pair or /xr pairchannel. */
+  async discordPairOpen(body: z.infer<typeof S.DiscordPairOpenRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/pair/open", body);
+  }
+
+  /** Remove one paired Discord user. */
+  async discordUnpair(body: z.infer<typeof S.DiscordUnpairRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/unpair", body);
+  }
+
+  /** Remove one channel from the allowed list. */
+  async discordChannelsRemove(body: z.infer<typeof S.DiscordChannelRemoveRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/channels/remove", body);
+  }
+
+  /** Set whether the bot starts with the daemon. */
+  async discordSettings(body: z.infer<typeof S.DiscordSettingsRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/settings", body);
+  }
+
+  /** Redacted tail of the Discord bot log. */
+  async discordLogs(body: z.infer<typeof S.DiscordLogsQuery>): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/discord/logs", body);
+  }
+
   /** Computer-control subsystem status. */
   async controlStatus(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/control/status");
