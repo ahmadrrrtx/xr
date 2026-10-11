@@ -35,6 +35,9 @@ export interface MockDiscord {
 }
 
 export function startMockDiscord(): MockDiscord {
+  // Set after the server starts. Handlers read this instead of the server
+  // object, which avoids a self-referencing initializer.
+  let listenPort = 0;
   const calls: MockCall[] = [];
   const sockets = new Set<{ send(s: string): void; close(code?: number): void }>();
   let identifies = 0;
@@ -53,7 +56,7 @@ export function startMockDiscord(): MockDiscord {
         return new Response("upgrade required", { status: 426 });
       }
       const path = url.pathname.replace(/^\/api\/v10/, "");
-      const body = req.method === "GET" ? null : await req.json().catch(() => null);
+      const body: any = req.method === "GET" ? null : await req.json().catch(() => null);
       const auth = req.headers.get("authorization");
       calls.push({ method: req.method, path, body, auth });
 
@@ -69,7 +72,7 @@ export function startMockDiscord(): MockDiscord {
         return Response.json({ id: MOCK_BOT_ID, username: "XR", bot: true });
       }
       if (req.method === "GET" && path === "/gateway/bot") {
-        return Response.json({ url: `ws://127.0.0.1:${server.port}/gateway`, shards: 1 });
+        return Response.json({ url: `ws://127.0.0.1:${listenPort}/gateway`, shards: 1 });
       }
       if (req.method === "PUT" && /^\/applications\/[^/]+\/commands$/.test(path)) {
         return Response.json(body ?? []);
@@ -120,7 +123,7 @@ export function startMockDiscord(): MockDiscord {
                 v: 10,
                 user: { id: MOCK_BOT_ID, username: "XR", bot: true },
                 session_id: "session-test",
-                resume_gateway_url: `ws://127.0.0.1:${server.port}/gateway`,
+                resume_gateway_url: `ws://127.0.0.1:${listenPort}/gateway`,
                 guilds: [{ id: MOCK_GUILD_ID }],
                 application: { id: MOCK_APP_ID },
               },
@@ -135,10 +138,11 @@ export function startMockDiscord(): MockDiscord {
     },
   });
 
+  listenPort = server.port ?? 0;
   return {
-    url: `http://127.0.0.1:${server.port}`,
+    url: `http://127.0.0.1:${listenPort}`,
     get port() {
-      return server.port!;
+      return listenPort;
     },
     calls,
     get identifies() {
