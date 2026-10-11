@@ -45,6 +45,7 @@ import {
 import { CORE_VERSION } from "../core/version.ts";
 import { AUTH_PAGE_CSP, authPageHtml } from "./auth-page.ts";
 import { TelegramManager } from "../telegram/manager.ts";
+import { DiscordManager } from "../discord/manager.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -247,7 +248,7 @@ function makeDaemonTrust(): TrustService {
 }
 
 /** Build the request handler (pure; used by both serve() and tests). */
-export function makeHandler(initialStore: Store, token: string, opts: { rateLimit?: number; telegram?: TelegramManager } = {}) {
+export function makeHandler(initialStore: Store, token: string, opts: { rateLimit?: number; telegram?: TelegramManager; discord?: DiscordManager } = {}) {
   const workspaceManager = new WorkspaceManager();
   const agentExecutor = createAgentExecutor();
   const state: DaemonState = {
@@ -260,6 +261,7 @@ export function makeHandler(initialStore: Store, token: string, opts: { rateLimi
     // switching route through it instead of duplicating orchestration.
     agentExecutor,
     telegram: opts.telegram ?? new TelegramManager({ store: initialStore }),
+    discord: opts.discord ?? new DiscordManager({ store: initialStore }),
   };
   const routes = createRouteHandler();
   // Phase 4 · T5 — rate limiting: generous default, but bounded (429).
@@ -438,9 +440,14 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   // Phase 24 — the Telegram lifecycle is owned by the daemon: auto-start on
   // boot when enabled, and a clean stop on shutdown.
   const telegram = new TelegramManager({ store });
-  const handler = makeHandler(store, token, { telegram });
+  // Phase 26 — the Discord bot follows the same lifecycle: auto-start only when the user left it connected.
+  const discord = new DiscordManager({ store });
+  const handler = makeHandler(store, token, { telegram, discord });
   void telegram.autoStartOnBoot().catch((err) => {
     structuredLog("warn", "telegram.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
+  });
+  void discord.autoStartOnBoot().catch((err) => {
+    structuredLog("warn", "discord.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
   });
 
   // Phase 8 · T2 — observability lifecycle: resolves the telemetry config
@@ -505,6 +512,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     stop: () => {
       stopTriggers();
       void telegram.shutdown();
+      void discord.shutdown();
       // Phase 2 · G-05: every interactive shell this daemon owns gets the
       // closing-window treatment (SIGHUP → SIGKILL) — the engine going away
       // must never leave user shells orphaned. Lazy import keeps the
