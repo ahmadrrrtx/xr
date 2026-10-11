@@ -179,7 +179,8 @@ test("access: pairing and allowed channels persist, and the state file is mode 0
   expect(again.isAllowedChannel("G1", "C1")).toBe(true);
   expect(again.isAllowedChannel("G2", "C1")).toBe(false);
   expect(again.chat("C1").model).toBe("m1");
-  expect(statSync(path).mode & 0o777).toBe(0o600);
+  // POSIX mode bits do not exist on Windows; the write is best-effort there.
+  if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600);
   expect(readFileSync(path, "utf8")).not.toMatch(/Bot |token/i);
 });
 
