@@ -115,7 +115,16 @@ export const THRESHOLD = 800;
 // approval store and SecretBroker. The fix that returns core to the ceiling is a
 // maintainer decision: accept this reasoned raise, or move the Telegram runtime to a
 // satellite package in a follow-up. Headroom is intentionally small (about 390 LOC).
-export const TREE_CEILING = 160_000; // Phase 23 (xr coding agent CLI) · 156,000 → 158,000 (2026-10-10):
+// Phase 26 (Discord, PR 2) · 160,000 → 162,500 (2026-10-11). The Discord adapter
+// is src/discord (REST, gateway WebSocket, slash commands and buttons, pairing,
+// render, the BotRuntime wiring, and the manager), plus discord.routes.ts, its
+// schemas and contract. It is about 2,100 LOC of source, of which the consent-plane
+// parts (the approval bridge, the SecretBroker token, pairing codes) must stay in
+// core beside the approval store. Measured 162,053 on PR head. The ceiling is
+// raised by the least that fits, with headroom of about 450 LOC. The follow-up that
+// returns core to the ceiling is a satellite package for the chat surfaces, which
+// needs a plugin seam for daemon routes first. Needs maintainer sign-off.
+export const TREE_CEILING = 162_500; // Phase 23 (xr coding agent CLI) · 156,000 → 158,000 (2026-10-10):
 // the coding CLI (`xr`, `xr "task"`, `xr -p`, the REPL): session and approval
 // engine, print/JSON/diff modes, mention and repo-map context, the first-run
 // wizard, and the durable-store consent wrapper (cli/coder/consent.ts). The
