@@ -46,6 +46,7 @@ import { CORE_VERSION } from "../core/version.ts";
 import { AUTH_PAGE_CSP, authPageHtml } from "./auth-page.ts";
 import { TelegramManager } from "../telegram/manager.ts";
 import { DiscordManager } from "../discord/manager.ts";
+import { WhatsAppManager } from "../whatsapp/manager.ts";
 
 export interface DaemonOptions {
   port?: number;
@@ -251,7 +252,7 @@ function makeDaemonTrust(): TrustService {
 export function makeHandler(
   initialStore: Store,
   token: string,
-  opts: { rateLimit?: number; telegram?: TelegramManager; discord?: DiscordManager } = {},
+  opts: { rateLimit?: number; telegram?: TelegramManager; discord?: DiscordManager; whatsapp?: WhatsAppManager } = {},
 ) {
   const workspaceManager = new WorkspaceManager();
   const agentExecutor = createAgentExecutor();
@@ -268,6 +269,9 @@ export function makeHandler(
     // Phase 26 — Discord is configured through its own routes; nothing starts
     // until a token exists and start/autoStart asks for it.
     discord: opts.discord ?? new DiscordManager({ store: initialStore }),
+    // Phase 26 — WhatsApp links as a companion device. Nothing connects until
+    // the user pairs (QR) or auto-start finds sealed credentials.
+    whatsapp: opts.whatsapp ?? new WhatsAppManager({ store: initialStore }),
   };
   const routes = createRouteHandler();
   // Phase 4 · T5 — rate limiting: generous default, but bounded (429).
@@ -458,12 +462,18 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
   // Phase 26 — same lifecycle for Discord. The dashboard URL is passed in so
   // the approval cards' "Open XR" button points at the real bound port.
   const discord = new DiscordManager({ store, dashboardBaseUrl: `http://127.0.0.1:${port}/` });
-  const handler = makeHandler(store, token, { telegram, discord });
+  // Phase 26 — WhatsApp. Pairing is the QR dialog; auto-start only reconnects a
+  // device that is already linked.
+  const whatsapp = new WhatsAppManager({ store, dashboardBaseUrl: `http://127.0.0.1:${port}/` });
+  const handler = makeHandler(store, token, { telegram, discord, whatsapp });
   void telegram.autoStartOnBoot().catch((err) => {
     structuredLog("warn", "telegram.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
   });
   void discord.autoStartOnBoot().catch((err) => {
     structuredLog("warn", "discord.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
+  });
+  void whatsapp.autoStartOnBoot().catch((err) => {
+    structuredLog("warn", "whatsapp.autostart_failed", { reason: err instanceof Error ? err.message : String(err) });
   });
 
   // Phase 8 · T2 — observability lifecycle: resolves the telemetry config
@@ -529,6 +539,7 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
       stopTriggers();
       void telegram.shutdown();
       void discord.shutdown();
+      void whatsapp.shutdown();
       // Phase 2 · G-05: every interactive shell this daemon owns gets the
       // closing-window treatment (SIGHUP → SIGKILL) — the engine going away
       // must never leave user shells orphaned. Lazy import keeps the

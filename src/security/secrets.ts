@@ -144,6 +144,23 @@ function decryptSecretValue(raw: string): string {
 }
 
 /**
+ * Seal an arbitrary string with the per-install vault key (AES-256-GCM).
+ *
+ * Used by the WhatsApp session store (Phase 26): the linked-device credential
+ * blob is far too large for the `NAME=value` secrets file, but it must use the
+ * same key, the same algorithm and the same fail-closed key handling as every
+ * other secret on the machine. Never log the return value.
+ */
+export function sealVaultValue(plain: string): string {
+  return encryptSecretValue(plain);
+}
+
+/** Open a value sealed by `sealVaultValue`. Throws when the value was tampered with. */
+export function openVaultValue(sealed: string): string {
+  return decryptSecretValue(sealed);
+}
+
+/**
  * Read the fallback file, decrypting sealed values and transparently migrating
  * legacy plaintext entries. Returns null only if the file does not exist.
  * A line that fails to decrypt is preserved verbatim and surfaced as undefined
