@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>XR · Connect WhatsApp</title>
+<style>
+  /* Theme: XR Midnight (the desktop default). Copied from desktop/src/styles/themes.css. */
+  :root {
+    --bg-base: #0b0f17;
+    --bg-raised: #121826;
+    --bg-elevated: #18202f;
+    --border-subtle: rgba(183, 194, 207, 0.08);
+    --border-default: rgba(183, 194, 207, 0.16);
+    --text-primary: #f0f4f8;
+    --text-secondary: #9aa8ba;
+    --text-tertiary: #5a6678;
+    --accent: #00e5ff;
+    --accent-dim: #008da8;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg-base); color: var(--text-primary);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { padding: 24px 28px 40px; display: flex; flex-direction: column; gap: 16px; }
+  .caption {
+    font-size: 12px; color: var(--text-tertiary); border-left: 2px solid var(--accent-dim);
+    padding-left: 10px; margin: 0 0 4px; max-width: 90ch;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  h3 { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+  h4 { font-size: 13px; margin: 12px 0 6px; font-weight: 600; color: var(--text-secondary); }
+  p { margin: 0; }
+  .sub { color: var(--text-secondary); font-size: 13px; max-width: 60ch; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+    border-radius: 8px; font-size: 13px; cursor: default; border: 1px solid var(--border-default);
+    background: transparent; color: var(--text-primary);
+  }
+  .btn--outline { border-color: var(--accent); color: var(--accent); }
+  .btn--ghost { border-color: transparent; color: var(--text-secondary); }
+  .btn--danger { border-color: var(--danger); color: var(--danger); }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .card {
+    position: relative; display: flex; flex-direction: column; gap: 10px; padding: 16px;
+    border-radius: var(--radius); border: 1px solid var(--border-subtle); background: var(--bg-raised);
+  }
+  .card--connected { border-color: rgba(52, 211, 153, 0.35); }
+  .card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .badges { display: inline-flex; align-items: center; gap: 6px; }
+  .tile {
+    width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+    font-size: 20px; background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  }
+  .chip {
+    font-size: 11px; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--border-subtle);
+    color: var(--text-secondary); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  }
+  .chip--connected { border-color: var(--success); color: var(--success); background: rgba(52, 211, 153, 0.08); }
+  .chip--warn { border-color: var(--warning); color: var(--warning); }
+  .chips { list-style: none; display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0 0; padding: 0; }
+  .dots { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot--green { background: var(--success); }
+  .dot--yellow { background: var(--warning); }
+  .dot--red { background: var(--danger); }
+  .card__name { font-size: 15px; font-weight: 600; margin: 0; }
+  .card__desc { font-size: 13px; color: var(--text-secondary); margin: 0; }
+  .card__footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+
+  /* Dialog shell (Phase 22 .ix-dialog). */
+  .dialog {
+    width: 480px; max-width: 100%; border-radius: var(--radius); border: 1px solid var(--border-default);
+    background: var(--bg-elevated); padding: 20px; display: flex; flex-direction: column; gap: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  }
+  .dialog__title { font-size: 16px; font-weight: 600; margin: 0; }
+  .dialog__desc { font-size: 13px; color: var(--text-secondary); margin: 4px 0 0; }
+  .form { display: flex; flex-direction: column; gap: 14px; }
+  .form label { font-size: 13px; font-weight: 500; }
+  .input {
+    height: 36px; border-radius: 8px; border: 1px solid var(--border-default); background: var(--bg-raised);
+    color: var(--text-primary); padding: 0 12px; font-size: 13px; width: 100%;
+  }
+  .hint { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .hint--warn { color: var(--warning); display: flex; gap: 6px; align-items: flex-start; }
+  .link { color: var(--accent); text-decoration: underline; font-size: 12px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; }
+  .check input { margin-top: 2px; }
+  .foot { display: flex; justify-content: flex-end; gap: 8px; }
+  .notice {
+    display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--warning); background: var(--bg-raised); font-size: 13px;
+  }
+  .notice p { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); }
+  .paircode {
+    display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 12px 14px;
+    border-radius: 10px; border: 1px solid var(--accent-dim); background: var(--bg-raised);
+  }
+  .paircode__digits {
+    font-family: var(--font-mono); font-size: 24px; letter-spacing: 0.16em; font-variant-numeric: tabular-nums;
+  }
+  .paircode__meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-secondary); }
+  .invite {
+    display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--border-subtle); background: var(--bg-raised);
+  }
+  .invite__url { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+  .qr { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .qr__frame {
+    width: 300px; height: 300px; border-radius: 12px; border: 1px solid var(--border-subtle);
+    background: #fff; display: grid; place-items: center; overflow: hidden;
+  }
+  .qr__meta { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; min-height: 18px; }
+  .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .logs {
+    margin: 0; max-height: 160px; overflow: auto; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--border-subtle); background: var(--bg-raised); font-family: var(--font-mono);
+    font-size: 11px; line-height: 1.5; color: var(--text-secondary); white-space: pre-wrap;
+  }
+  .row { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+  .mono { font-family: var(--font-mono); font-size: 12px; }
+  .kbd {
+    font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--border-default);
+    border-radius: 6px; padding: 1px 6px; background: var(--bg-raised);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<p class="caption"><strong>Mockup, not a screenshot.</strong> The WhatsApp connect dialog. The risk acknowledgement comes before the QR: linking uses an unofficial client, so the user has to say they understand before a code is minted. The QR area is 300×300 and follows the engine's frame stream. The markup, class names and copy mirror desktop/src/screens/Integrations/**, and the QR images are real (generated with the same qrcode dependency the engine uses).</p>
+  <h1>Connect WhatsApp</h1>
+  <div class="row">
+    <section class="dialog" aria-label="Step 1: disclosure and QR">
+      <div>
+        <h2 class="dialog__title">Connect WhatsApp</h2>
+        <p class="dialog__desc">XR must be running on your computer for this chat to answer.</p>
+      </div>
+      <div class="form">
+        <div class="notice">
+          <span aria-hidden="true">🛡</span>
+          <div>
+            <strong>⚠️ Unofficial client</strong>
+            <p>WhatsApp does not offer an official API for personal accounts. XR links as a companion device using an unofficial
+              open-source client (Baileys), exactly like a second phone you signed in from. That is against WhatsApp's terms for
+              automated use, and accounts have been banned for it. Use a number you can afford to lose, keep the rate low, and only
+              allow the contacts you mean to.</p>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" checked /> I understand: this uses an unofficial WhatsApp client, and my account
+          could be banned.</label>
+        <div class="qr">
+          <div class="qr__frame"><img src="data:image/png;base64,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" width="300" height="300" alt="WhatsApp pairing QR code (mockup)" /></div>
+          <div class="qr__meta">New code in 37s</div>
+        </div>
+        <p class="hint">On your phone: <strong>Settings → Linked devices → Link a device</strong>, then scan this code. WhatsApp
+          rotates it every twenty seconds — XR follows along.</p>
+        <div class="foot"><span class="btn btn--ghost">Close</span><span class="btn btn--outline">Waiting for the scan…</span></div>
+      </div>
+    </section>
+
+    <section class="dialog" aria-label="Step 2: second QR frame">
+      <div>
+        <h2 class="dialog__title">Connect WhatsApp</h2>
+        <p class="dialog__desc">A later frame from the same stream: the code rotated, the countdown restarted.</p>
+      </div>
+      <div class="form">
+        <div class="qr">
+          <div class="qr__frame"><img src="data:image/png;base64,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" width="300" height="300" alt="WhatsApp pairing QR code, second frame (mockup)" /></div>
+          <div class="qr__meta">New code in 52s</div>
+        </div>
+        <p class="hint">Both images are genuinely different QR codes — the generator encodes two different payloads, the way
+          WhatsApp's stream produces new frames.</p>
+      </div>
+    </section>
+
+    <section class="dialog" aria-label="Step 3: linked">
+      <div>
+        <h2 class="dialog__title">Connect WhatsApp</h2>
+        <p class="dialog__desc">After the scan: linked, and still nobody may talk to XR.</p>
+      </div>
+      <div class="form">
+        <p role="status">✓ Linked as …4567. XR is a companion device now.</p>
+        <p class="hint">⚠︎ Linking authorizes nobody. Add the contacts you want below, or switch on “respond to contacts I message
+          first” in settings. Everything else is ignored silently.</p>
+        <label for="contact" class="hint">Allow a contact</label>
+        <input class="input" id="contact" placeholder="923001234567 (country code, no +)" readonly />
+        <div class="actions"><span class="btn btn--outline">Add contact</span></div>
+        <div class="foot"><span class="btn btn--ghost">Close</span><span class="btn btn--outline">Start now</span></div>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

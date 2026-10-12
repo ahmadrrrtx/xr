@@ -8,9 +8,14 @@ The phase ships in four staged PRs (`docs/phases/26-bots-plan.md`):
 | PR | Scope | Branch | State |
 | --- | --- | --- | --- |
 | 1 | Shared `src/bots/` chat runtime | `phase/26-bots-shared` | merged (#169) |
-| 2 | Discord surface — this document's main subject | `phase/26-discord` | **this PR** |
-| 3 | WhatsApp surface (Baileys, QR pairing) | `phase/26-whatsapp` | **this PR** (stacked on PR 2) |
-| 4 | Desktop Integrations UI (Discord + WhatsApp dialogs, cards) | `phase/26-desktop` | after PR 3 |
+| 2 | Discord surface — this document's main subject | `phase/26-discord-surface` | PR #172 |
+| 3 | WhatsApp surface (Baileys, QR pairing) | `phase/26-whatsapp` | PR #173 (stacked on PR 2) |
+| 4 | Desktop Integrations UI (Discord + WhatsApp dialogs, cards, mockup set) | `phase/26-desktop` | **this PR** (stacked on PR 3) |
+
+> The remote already had a branch named `phase/26-discord` (an unrelated Discord
+> implementation, no PR) when PR 2 was pushed, so this work went up as
+> `phase/26-discord-surface` rather than over the top of it. Nothing was
+> force-pushed; which branch to keep is the maintainer's call.
 
 Telegram is not rewritten. PR 2 extends the shared layer only where Discord genuinely needs
 it, and keeps every Phase 24 behavior intact (the Phase 24 suite is the regression gate).
@@ -260,17 +265,18 @@ because there is no URL XR can be pointed at.
 | 23 | Groups dropped; 1:1 only | ✅ |
 | 24 | Unofficial-client disclosure in the UI and README | ✅ one constant, `UNOFFICIAL_CLIENT_NOTICE`, surfaced by `/status` and the README |
 | 25 | No history scraping on connect | ✅ `syncFullHistory: false`; drops counted and shown |
-| 26 | Desktop dialogs, status dots, settings popovers | ⏳ PR 4 |
-| 27 | Screenshots to `previews/implementation/phase-26/` | ⏳ PR 4 |
+| 26 | Desktop dialogs, status dots, settings popovers | ✅ `DiscordDialogs.tsx`, `WhatsAppDialogs.tsx`, `statusDots.ts`, cards wired through `chatSurfaceOf` |
+| 27 | Screenshots to `previews/implementation/phase-26/` | ✅ six self-contained HTML mockups (see §7 — no live account exists to screenshot; the QR images are real) |
 
 ## 6 · Verification
 
 ```bash
 bun test test/discord/          # 39 tests, offline: mock REST + fake socket + one real local WS
 bun test test/whatsapp/         # 35 tests, offline: fake socket, stub downloaders, real QR render
-bun test                        # 4017 pass / 19 skip / 0 fail (baseline main: 3978 / 19 / 0)
+bun test                        # 4053 pass / 19 skip / 0 fail (baseline main: 3978 / 19 / 0)
 bun run typecheck               # root + desktop, strict
 bun run ci                      # every gate, including api:schema:check + client:check after regen
+bun run scripts/phase26-mockups.ts /home/user/previews/implementation/phase-26   # PR 4 mockups
 ```
 
 The Discord suite covers: command parsing (text and slash), renders/splits, fail-closed
@@ -280,11 +286,75 @@ identify/READY/RESUME/4004, a real local WebSocket round-trip with heartbeats, E
 signature verification, state persistence, settings validation and every route (including the
 unsigned webhook rejection).
 
-## 7 · What is left in the phase
+## 7 · Desktop Integrations UI (PR 4)
 
-- **PR 3 — WhatsApp.** Shipped in this PR: the surface, its routes, sealed credentials, the
-  SSE QR stream and the test suite above. It is stacked on PR 2 (`phase/26-discord`) so it
-  rebases cleanly once PR 2 merges; nothing in it depends on Discord.
-- **PR 4 — Desktop.** `DiscordConnectDialog` and `WhatsAppConnectDialog`, the two
-  Integrations cards with status dots, settings popovers, and the screenshot set under
-  `previews/implementation/phase-26/`.
+The two new surfaces are drawn with the Phase 22 components and the Phase 24 dialog shell —
+no new design language, no new dependency. Files:
+
+| file | what it is |
+| --- | --- |
+| `desktop/src/integrations/discord.ts` | engine client + `useDiscordStatus` (4 s poll) + `discordCardStatus` / `discordDot` |
+| `desktop/src/integrations/whatsapp.ts` | engine client + `useWhatsAppStatus` + `useWhatsAppQr` (SSE reader over the authenticated engine fetch, not `EventSource`) |
+| `desktop/src/integrations/statusDots.ts` | the one green/yellow/red vocabulary every surface card uses |
+| `desktop/src/screens/Integrations/components/DiscordDialogs.tsx` | `DiscordConnectDialog` (token → invite URL → pairing code → done) and `DiscordSettingsDialog` |
+| `desktop/src/screens/Integrations/components/WhatsAppDialogs.tsx` | `WhatsAppConnectDialog` (risk ack → 300×300 QR → linked → contacts) and `WhatsAppSettingsDialog` |
+
+Three routing rules keep the generic vault path away from these cards:
+
+1. `src/integrations/registry.ts` gives Discord the Phase 26 description, an empty
+   `configFields` and the new `qr_link` auth type for WhatsApp (labelled “QR link”).
+2. `src/integrations/service.ts` marks the chat surfaces `support: "available"` — that is
+   what turns their cards from *Coming soon* into *Connect*. Nothing else changes: they still
+   have no `configFields`, no OAuth app credentials, and the generic connect/disconnect routes
+   still refuse them, so a token can never be stored twice.
+3. `desktop/src/integrations/core.ts` exports `chatSurfaceOf()`, and both the store's
+   `connect()` and the card's settings button route to the surface's own dialog. An unknown
+   surface falls through to the existing behavior.
+
+Copy and behavior that the brief called out, and where it lives:
+
+- **Pairing code.** 24 px mono, copy button, live countdown (`PairingCode` in
+  `DiscordDialogs.tsx`). The desktop mints the code and the user types it into Discord, so the
+  code proves the person on the other end saw this screen.
+- **Invite URL.** Copy *and* open-in-browser, with the exact permission set stated in words
+  (“five permissions only: view channels, send messages, embed links, attach files, read
+  history. No moderation, no administrator”).
+- **MESSAGE_CONTENT warning** on the token step: the one privileged intent the user must
+  switch on in the Developer Portal, named there because that is where they will look.
+- **QR area** is exactly 300×300, seeded from `/api/whatsapp/qr`, with the “New code in Ns”
+  countdown and a *Try again* affordance once the stream reports `timeout`/`closed`/`error`.
+  The disclosure checkbox gates the button that mints a code.
+- **Settings** per surface: allowed channels with a build/live guild+channel picker (Discord),
+  allowed contacts by country code, the outbox switch and the history-dropped counter
+  (WhatsApp), rate limits, caps, auto-start, a 100-line log tail and disconnect/unpair.
+- **Status dots** are `ix-dot--green|yellow|red` with the label in the title and `aria-label`,
+  never colour alone.
+
+### The mockup set — why not screenshots
+
+No Discord bot token and no WhatsApp account exist in the environment that built this phase, so
+there is nothing to photograph. Instead, `scripts/phase26-mockups.ts` renders six
+**self-contained HTML mockups** (no scripts, no external stylesheets, no network — the theme
+tokens are inlined) into `previews/implementation/phase-26/` and, kept with the app, in
+`desktop/previews/implementation/phase-26/`:
+
+| file | what it shows |
+| --- | --- |
+| `01-integrations-cards.html` | the grid with Discord connected (green dot), WhatsApp linked-but-stopped (yellow), Telegram and GitHub |
+| `02-discord-connect.html` | the three connect steps: token, invite URL, pairing code |
+| `03-discord-settings.html` | accounts, channels + picker, limits, webhook, dev-guild, logs, disconnect |
+| `04-whatsapp-connect.html` | disclosure, the 300×300 QR, a second rotated frame, and the linked state |
+| `05-whatsapp-settings.html` | contacts, outbox switch, limits, auto-reconnect, redacted log, unpair |
+| `06-approvals-and-runs.html` | one approval decided once, the actor labels, and the Runs surface badges |
+
+The markup, class names and copy mirror the real components, and the QR images are genuine —
+generated by the same `qrcode` dependency the engine uses, from two different payloads so the
+“frame rotated” pair is honestly two different codes. These are mockups and say so in their
+own captions; the real components are the TypeScript beside them.
+
+## 8 · What is left in the phase
+
+- **PR 2 / PR 3** are open (#172, #173) and not merged by the agent, per the brief.
+- **Live verification** remains the honest gap: Discord has never been pointed at
+  discord.com and WhatsApp has never been paired to a real phone from here. Everything that
+  can be proven offline is proven offline, and the document says which is which.

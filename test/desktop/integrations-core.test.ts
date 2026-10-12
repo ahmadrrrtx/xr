@@ -74,10 +74,11 @@ describe("search and category", () => {
     expect(countByCategory(items)).toEqual({ all: 3, development: 1, infrastructure: 1, communication: 1 });
   });
 
-  test("the registry has 32 connectors across the chips, so no connector is left without a category chip", () => {
+  test("the registry has 33 connectors across the chips, so no connector is left without a category chip", () => {
     const reg = new ConnectorRegistry();
     const all = reg.list();
-    expect(all.length).toBe(32);
+    // Phase 26 added the plain `whatsapp` surface beside `whatsapp_business`.
+    expect(all.length).toBe(33);
     const chipIds = new Set(["communication", "calendar", "development", "storage", "crm_erp", "automation", "analytics", "payments", "commerce", "design", "infrastructure"]);
     expect(all.every((c) => chipIds.has(c.category))).toBe(true);
   });

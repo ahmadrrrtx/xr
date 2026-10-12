@@ -168,3 +168,103 @@
   .ix-dot--pulse, .ix-spin { animation: none; }
 }
 @keyframes ix-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── Phase 26 · chat surfaces (Telegram, Discord, WhatsApp) ─────────────────
+   The two new dialogs reuse the Phase 22 dialog shell and add only what a bot
+   surface needs: a status dot, a pairing code, a QR area, an invite row and a
+   risk notice. Every colour is a theme token, so the five themes still apply
+   and light themes keep their contrast. */
+
+.ix-card__badges { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Green = answering, yellow = configured but not answering, red = attention. */
+.ix-dot--green { background: var(--success); }
+.ix-dot--yellow { background: var(--warning); }
+.ix-dot--red { background: var(--danger); }
+.ix-dot--green, .ix-dot--yellow, .ix-dot--red { width: 8px; height: 8px; flex-shrink: 0; }
+
+/* Hints used by every chat dialog (the Phase 24 dialog used these unstyled). */
+.ix-form__hint { margin: 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+.ix-form__hint--warn { color: var(--warning); display: flex; align-items: flex-start; gap: 6px; }
+.ix-form__hint code, .ix-form__hint strong { font-size: 12px; }
+.ix-form label { font-size: 13px; font-weight: 500; }
+
+.ix-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--accent); font-size: 12px; text-decoration: underline;
+}
+.ix-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.ix-check { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; }
+.ix-check input { margin-top: 2px; flex-shrink: 0; }
+
+.ix-notice {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: 10px; font-size: 13px; line-height: 1.5;
+  border: 1px solid var(--border-subtle); background: var(--bg-raised);
+}
+.ix-notice p { margin: 6px 0 0; color: var(--text-secondary); font-size: 12px; }
+/* The unofficial-client disclosure: warning-coloured, never muted away. */
+.ix-notice--risk { border-color: var(--warning); }
+
+.ix-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ix-list li { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+
+.ix-inline-form { display: flex; gap: 6px; align-items: center; }
+.ix-inline-form > input { flex: 1; }
+
+.ix-pair-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* The 6-digit pairing code: 24px mono, as the phase brief specifies. The code
+   is single-use and expires with the window; the countdown says when. */
+.ix-paircode {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  padding: 12px 14px; border-radius: 10px;
+  border: 1px solid var(--accent-dim, var(--border-subtle)); background: var(--bg-raised);
+}
+.ix-paircode__digits {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 24px; letter-spacing: 0.16em; font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.ix-paircode__meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-secondary); }
+
+.ix-invite {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--bg-raised);
+}
+.ix-invite__url {
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px;
+  overflow-wrap: anywhere; color: var(--text-secondary);
+}
+.ix-invite__actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* QR area: 300×300, per the brief. The image is a PNG data URL from the engine. */
+.ix-qr { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ix-qr__frame {
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px; border: 1px solid var(--border-subtle); background: #fff; overflow: hidden;
+}
+.ix-qr__img { display: block; image-rendering: pixelated; }
+.ix-qr__placeholder {
+  padding: 16px; text-align: center; font-size: 13px; color: var(--text-secondary);
+  display: flex; flex-direction: column; align-items: center; gap: 8px; background: var(--bg-raised); width: 100%; height: 100%;
+  justify-content: center;
+}
+.ix-qr__meta { font-size: 12px; color: var(--text-secondary); min-height: 20px; font-variant-numeric: tabular-nums; }
+
+.ix-picker { display: flex; flex-direction: column; gap: 6px; }
+.ix-picker label { font-size: 12px; color: var(--text-secondary); }
+.ix-picker select {
+  height: 36px; border-radius: 8px; padding: 0 10px; font-size: 13px;
+  border: 1px solid var(--border-subtle); background: var(--bg-raised); color: var(--text-primary);
+}
+.ix-picker select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.ix-logs {
+  margin: 0; max-height: 200px; overflow: auto; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--border-subtle); background: var(--bg-raised);
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; line-height: 1.5; color: var(--text-secondary);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}

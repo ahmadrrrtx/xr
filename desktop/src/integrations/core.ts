@@ -36,6 +36,7 @@ export const AUTH_LABEL: Record<IntegrationView['authType'], string> = {
   basic: 'Password',
   bearer: 'Token',
   bot_token: 'Bot token',
+  qr_link: 'QR link',
   none: 'No sign-in',
 };
 
@@ -53,6 +54,22 @@ export const CATEGORY_CHIPS: ReadonlyArray<{ id: string; label: string }> = [
   { id: 'design', label: 'Design' },
   { id: 'infrastructure', label: 'Infrastructure' },
 ];
+
+/**
+ * Phase 26 — the chat surfaces (Telegram, Discord, WhatsApp) have their own
+ * setup dialogs: a bot token checked with the provider, a pairing step, and in
+ * WhatsApp's case a QR scan. Their connect path must never fall through to the
+ * generic API-key form.
+ */
+export type ChatSurfaceId = 'telegram' | 'discord' | 'whatsapp';
+
+export function chatSurfaceOf(id: string): ChatSurfaceId | null {
+  return id === 'telegram' || id === 'discord' || id === 'whatsapp' ? id : null;
+}
+
+export function isChatSurface(id: string): boolean {
+  return chatSurfaceOf(id) !== null;
+}
 
 export function categoryLabel(id: string): string {
   return CATEGORY_CHIPS.find((c) => c.id === id)?.label ?? id;

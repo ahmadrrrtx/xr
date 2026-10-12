@@ -588,9 +588,16 @@ conservative surface in the product:
   your chat archive, and the status view shows how many history payloads it declined.
 
 Egress is limited to WhatsApp's own endpoints and the media CDN named by the incoming message.
-The full decision record, tests and deviations: [`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
 
-Full detail, decisions and the deviation list: [`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
+**Where you connect them.** Integrations → the Discord card (token → invite → a 6-digit code you
+type into Discord with `/xr pair`) or the WhatsApp card (the unofficial-client acknowledgement,
+then a QR you scan from *Settings → Linked devices*). Each card carries a status dot — green
+answering, yellow configured but idle, red needs attention — and a settings popover with the
+allow-lists, limits, logs and disconnect/unpair. Nothing is typed twice and no token is ever
+sent back to the screen.
+
+The full decision record, tests and the deviation list:
+[`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
 
 ---
 

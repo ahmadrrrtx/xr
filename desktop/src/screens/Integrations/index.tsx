@@ -18,6 +18,11 @@ import { IntegrationCard } from './components/IntegrationCard';
 import { ApiKeyDialog, AppCredentialsDialog } from './components/ConnectDialogs';
 import { TelegramSetupDialog, TelegramSettingsDialog } from './components/TelegramDialogs';
 import { telegramCardStatus, useTelegramStatus } from '@/integrations/telegram';
+import { DiscordConnectDialog, DiscordSettingsDialog } from './components/DiscordDialogs';
+import { WhatsAppConnectDialog, WhatsAppSettingsDialog } from './components/WhatsAppDialogs';
+import { discordCardStatus, discordDot, useDiscordStatus } from '@/integrations/discord';
+import { useWhatsAppStatus, whatsappCardStatus, whatsappDot } from '@/integrations/whatsapp';
+import { telegramDot, type DotState } from '@/integrations/statusDots';
 
 const REQUEST_URL =
   'https://github.com/ahmadrrrtx/xr/issues/new?title=' +
@@ -26,12 +31,28 @@ const REQUEST_URL =
 
 export default function IntegrationsScreen() {
   const connectors = useIntegrationsStore((s) => s.connectors);
-  // The Telegram card shows the live bot state, not the generic vault state.
+  // The chat-surface cards show their live bot state, not the generic vault state.
   const { status: telegram } = useTelegramStatus(4000);
+  const { status: discord } = useDiscordStatus(5000);
+  const { status: whatsapp } = useWhatsAppStatus(5000);
   const cards = useMemo(
-    () => connectors.map((c) => (c.id === 'telegram' && telegram ? { ...c, status: telegramCardStatus(telegram.label) } : c)),
-    [connectors, telegram],
+    () =>
+      connectors.map((c) => {
+        if (c.id === 'telegram' && telegram) return { ...c, status: telegramCardStatus(telegram.label) };
+        if (c.id === 'discord' && discord) return { ...c, status: discordCardStatus(discord) };
+        if (c.id === 'whatsapp' && whatsapp) return { ...c, status: whatsappCardStatus(whatsapp) };
+        return c;
+      }),
+    [connectors, telegram, discord, whatsapp],
   );
+  // Green = answering, yellow = configured but not answering, red = needs attention.
+  const dots = useMemo(() => {
+    const map: Record<string, DotState> = {};
+    if (telegram) map.telegram = telegramDot(telegram.label);
+    if (discord) map.discord = discordDot(discord);
+    if (whatsapp) map.whatsapp = whatsappDot(whatsapp);
+    return map;
+  }, [telegram, discord, whatsapp]);
   const loaded = useIntegrationsStore((s) => s.loaded);
   const loading = useIntegrationsStore((s) => s.loading);
   const loadError = useIntegrationsStore((s) => s.loadError);
@@ -183,6 +204,7 @@ export default function IntegrationsScreen() {
               index={index}
               error={cardError[view.id]}
               busy={busyId === view.id}
+              dot={dots[view.id]}
             />
           ))}
           {visible.length === 0 && (
@@ -195,6 +217,10 @@ export default function IntegrationsScreen() {
       {dialog && dialogView && dialog.kind === 'app_credentials' && <AppCredentialsDialog view={dialogView} />}
       {dialog && dialogView && dialog.kind === 'telegram' && <TelegramSetupDialog />}
       {dialog && dialogView && dialog.kind === 'telegram_settings' && <TelegramSettingsDialog />}
+      {dialog && dialog.kind === 'discord' && <DiscordConnectDialog />}
+      {dialog && dialog.kind === 'discord_settings' && <DiscordSettingsDialog />}
+      {dialog && dialog.kind === 'whatsapp' && <WhatsAppConnectDialog />}
+      {dialog && dialog.kind === 'whatsapp_settings' && <WhatsAppSettingsDialog />}
       <AddMcpDialog />
     </div>
   );
