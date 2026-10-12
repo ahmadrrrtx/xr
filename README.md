@@ -566,9 +566,29 @@ Discord specifics worth knowing before you connect a bot:
 - network egress is `discord.com`, `gateway.discord.gg` and Discord's CDN — no telemetry,
   no relay, nothing else.
 
-**WhatsApp** arrives in the next PR of this phase (Baileys, QR pairing streamed to the XR app,
-credentials sealed at rest, 1:1 allow-listed contacts by default). Until it ships it is not
-advertised in the app.
+**WhatsApp** links the same way your second phone would: scan a QR from the XR app
+(Integrations → WhatsApp) and XR becomes a companion device. It is deliberately the most
+conservative surface in the product:
+
+- **⚠️ It uses an unofficial client.** WhatsApp offers no API for personal accounts, so XR
+  links through the open-source Baileys library — the same protocol your phone speaks. That is
+  against WhatsApp's terms for automated use, and accounts have been banned for it. Use a
+  number you can afford to lose.
+- **Linking authorizes nobody.** After pairing, the allow-list is still empty: add the contacts
+  you want (digits with country code) or switch on *"respond to contacts I message first"*,
+  which answers numbers you wrote to first — learned from live messages, never from your chat
+  history. Everything else is ignored silently, groups are dropped, and 1:1 is the only shape
+  this surface speaks.
+- **The session is sealed at rest** in `~/.xr/whatsapp/` (AES-256-GCM, 0600, the same
+  per-install key as your other secrets). Unlinking your phone deletes it; XR refuses to start
+  on a tampered blob instead of quietly re-registering the device.
+- **Rate and cost are bounded**: one message per second per chat, 1500-character replies, and
+  the shared per-chat budget. Approvals arrive as `[1] Approve  [2] Deny  [3] View details`.
+- **No history scraping.** XR answers what it is sent while it is running; it never ingests
+  your chat archive, and the status view shows how many history payloads it declined.
+
+Egress is limited to WhatsApp's own endpoints and the media CDN named by the incoming message.
+The full decision record, tests and deviations: [`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
 
 Full detail, decisions and the deviation list: [`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
 
