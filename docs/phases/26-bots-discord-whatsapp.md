@@ -8,14 +8,23 @@ The phase ships in four staged PRs (`docs/phases/26-bots-plan.md`):
 | PR | Scope | Branch | State |
 | --- | --- | --- | --- |
 | 1 | Shared `src/bots/` chat runtime | `phase/26-bots-shared` | merged (#169) |
-| 2 | Discord surface — this document's main subject | `phase/26-discord-surface` | PR #172 |
-| 3 | WhatsApp surface (Baileys, QR pairing) | `phase/26-whatsapp` | PR #173 (stacked on PR 2) |
-| 4 | Desktop Integrations UI (Discord + WhatsApp dialogs, cards, mockup set) | `phase/26-desktop` | **this PR** (stacked on PR 3) |
+| 2 | Discord surface — this document's main subject | `phase/26-discord-surface` | merged (#172) |
+| 3 | WhatsApp surface (Baileys, QR pairing) | `phase/26-whatsapp` | merged into PR 2's branch (#173) |
+| 4 | Desktop Integrations UI (Discord + WhatsApp dialogs, cards, mockup set) | `phase/26-desktop` | **this PR** |
 
-> The remote already had a branch named `phase/26-discord` (an unrelated Discord
-> implementation, no PR) when PR 2 was pushed, so this work went up as
-> `phase/26-discord-surface` rather than over the top of it. Nothing was
-> force-pushed; which branch to keep is the maintainer's call.
+> **Why PR 3 and PR 4 land together.** PR 3 was stacked on PR 2's branch, and PR 2
+> merged into `main` fifteen seconds *before* PR 3 was merged into that same branch.
+> GitHub therefore recorded PR 3 as merged, but `main` had already absorbed the
+> branch as it stood — so the WhatsApp commit never reached `main` and only ever
+> lived on `phase/26-discord-surface` / `phase/26-whatsapp`. PR 4's base was
+> retargeted to `main`, which both carries the WhatsApp work to `main` with the
+> desktop work and puts the changes under the repository's Quality Gate (the
+> workflows only run for pull requests whose base is `main`, which is why the
+> stacked PRs showed no checks at all).
+>
+> The remote also still has an unrelated branch named `phase/26-discord` (an
+> earlier, pre-#169 attempt: thin shared layer, Discord only, no routes, no
+> WhatsApp, no docs). Nothing was force-pushed or deleted; it is untouched.
 
 Telegram is not rewritten. PR 2 extends the shared layer only where Discord genuinely needs
 it, and keeps every Phase 24 behavior intact (the Phase 24 suite is the regression gate).
@@ -354,7 +363,8 @@ own captions; the real components are the TypeScript beside them.
 
 ## 8 · What is left in the phase
 
-- **PR 2 / PR 3** are open (#172, #173) and not merged by the agent, per the brief.
+- **PR 2** is merged (#172); **PR 3's** content arrives with PR 4 (see the note above),
+  because its merge landed on a branch `main` had already absorbed.
 - **Live verification** remains the honest gap: Discord has never been pointed at
   discord.com and WhatsApp has never been paired to a real phone from here. Everything that
   can be proven offline is proven offline, and the document says which is which.

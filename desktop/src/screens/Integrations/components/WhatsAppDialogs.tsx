@@ -12,11 +12,12 @@
  * rotates the code every ~20 seconds, and the countdown tells the user when the
  * picture they are looking at stops being valid.
  */
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { Check, RefreshCw, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { secondsUntil, useNow } from '@/integrations/clock';
 import {
   addWhatsAppContact,
   closeWhatsAppPairing,
@@ -30,7 +31,6 @@ import {
   useWhatsAppQr,
   useWhatsAppStatus,
   type WhatsAppLogLine,
-  type WhatsAppStatus,
 } from '@/integrations/whatsapp';
 import { useIntegrationsStore } from '@/stores/integrationsStore';
 
@@ -45,15 +45,11 @@ function errorText(e: unknown): string {
  * the engine said would expire; otherwise the area explains what it is waiting for.
  */
 function QrArea({ active, onRefresh, refreshBusy }: { active: boolean; onRefresh: () => void; refreshBusy: boolean }) {
-  const { state, png, reason, frames } = useWhatsAppQr(active);
-  const [left, setLeft] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (state !== 'qr' || !frames) return;
-    setLeft(60);
-    const t = setInterval(() => setLeft((l) => (l === null ? null : Math.max(0, l - 1))), 1000);
-    return () => clearInterval(t);
-  }, [state, frames]);
+  const { state, png, reason, expiresAt } = useWhatsAppQr(active);
+  // The countdown is derived, not stored: the clock ticks, the deadline comes
+  // from the frame. No state is written from an effect.
+  const now = useNow(1000);
+  const left = secondsUntil(expiresAt, now);
 
   return (
     <div className="ix-qr" data-testid="whatsapp-qr">
@@ -91,7 +87,8 @@ export function WhatsAppConnectDialog() {
   const close = useIntegrationsStore((s) => s.closeDialog);
   const { status, refresh } = useWhatsAppStatus(3000);
   const [understood, setUnderstood] = useState(false);
-  const [pairing, setPairing] = useState(false);
+  // Whether the QR stream should be open: we asked for it and the link has not landed yet.
+  const [pairingRequested, setPairingRequested] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contactDraft, setContactDraft] = useState('');
@@ -104,7 +101,7 @@ export function WhatsAppConnectDialog() {
     setError(null);
     try {
       await openWhatsAppPairing();
-      setPairing(true);
+      setPairingRequested(true);
       refresh();
     } catch (err) {
       setError(errorText(err));
@@ -128,10 +125,9 @@ export function WhatsAppConnectDialog() {
     }
   };
 
-  // The stream goes quiet once the link lands; reset the local pairing flag.
-  useEffect(() => {
-    if (linked) setPairing(false);
-  }, [linked]);
+  // The stream goes quiet once the link lands. Deriving the flag (rather than
+  // clearing it in an effect) means no state is written just to follow status.
+  const pairing = pairingRequested && !linked;
 
   const notice = status?.notice ?? 'WhatsApp does not offer an official API for personal accounts. XR links as a companion device using an unofficial open-source client.';
 
@@ -425,7 +421,3 @@ export function WhatsAppSettingsDialog() {
     </Dialog>
   );
 }
-
-/** Kept for the connect dialog's cancel path and for tests. */
-export { closeWhatsAppPairing };
-export type { WhatsAppStatus };

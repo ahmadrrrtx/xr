@@ -17,7 +17,7 @@
  * engine, and the stream ends with a terminal state (`open`, `timeout`,
  * `closed`, `error`).
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { engineFetch, engineJson, enginePost, EngineDown, EngineHttpError } from '@/engine/transport';
 
 export type WhatsAppConnectionStatus = 'idle' | 'connecting' | 'qr' | 'open' | 'reconnecting' | 'unpaired' | 'error';
@@ -172,63 +172,63 @@ export function useWhatsAppStatus(intervalMs = 4000): { status: WhatsAppStatus |
 
 export type QrState = 'idle' | 'streaming' | 'qr' | 'open' | 'timeout' | 'closed' | 'error';
 
-export interface QrFrame {
-  state: Exclude<QrState, 'idle' | 'streaming'> | 'ping';
+interface QrFrame {
+  state: 'qr' | 'open' | 'timeout' | 'closed' | 'error' | 'ping';
   png?: string;
   expiresAt?: number;
   reason?: string;
 }
 
+export interface QrView {
+  state: QrState;
+  png: string | null;
+  reason: string | null;
+  /** When the code currently on screen stops being valid, if the engine said. */
+  expiresAt: number | null;
+}
+
+const QR_IDLE: QrView = { state: 'idle', png: null, reason: null, expiresAt: null };
+
 /**
  * Subscribe to the engine's QR stream while `active`.
  *
  * The stream is plain SSE over the engine's authenticated fetch (not the
- * browser EventSource, which cannot send the bearer token). Reconnects are the
- * caller's business: the dialog opens it when it mints a code and closes it
- * when the link succeeds or the user walks away.
+ * browser EventSource, which cannot send the bearer token). Every `setState`
+ * happens inside the async reader — never synchronously in the effect body —
+ * so a re-render is never triggered from the effect itself, and an inactive
+ * hook returns `idle` without touching state at all.
  */
-export function useWhatsAppQr(active: boolean): {
-  state: QrState;
-  png: string | null;
-  reason: string | null;
-  frames: number;
-} {
-  const [state, setState] = useState<QrState>('idle');
-  const [png, setPng] = useState<string | null>(null);
-  const [reason, setReason] = useState<string | null>(null);
-  const frames = useRef(0);
-
-  const reset = useCallback(() => {
-    setPng(null);
-    setReason(null);
-    frames.current = 0;
-  }, []);
+export function useWhatsAppQr(active: boolean): QrView {
+  const [frame, setFrame] = useState<QrView | null>(null);
 
   useEffect(() => {
-    if (!active) {
-      setState('idle');
-      reset();
-      return;
-    }
+    if (!active) return;
     const controller = new AbortController();
     let alive = true;
-    setState('streaming');
 
-    const run = async (): Promise<void> => {
+    const read = async (): Promise<void> => {
       let res: Response;
       try {
         res = await engineFetch('/whatsapp/qr', { headers: { Accept: 'text/event-stream' }, signal: controller.signal });
       } catch (e) {
         if (alive) {
-          setState('error');
-          setReason(e instanceof EngineDown ? 'XR is not reachable right now.' : 'Could not open the pairing stream.');
+          setFrame({
+            state: 'error',
+            png: null,
+            reason: e instanceof EngineDown ? 'XR is not reachable right now.' : 'Could not open the pairing stream.',
+            expiresAt: null,
+          });
         }
         return;
       }
       if (!res.ok || !res.body) {
         if (alive) {
-          setState('error');
-          setReason(res.status === 401 ? 'The engine refused the pairing stream.' : 'Could not open the pairing stream.');
+          setFrame({
+            state: 'error',
+            png: null,
+            reason: res.status === 401 ? 'The engine refused the pairing stream.' : 'Could not open the pairing stream.',
+            expiresAt: null,
+          });
         }
         return;
       }
@@ -249,41 +249,37 @@ export function useWhatsAppQr(active: boolean): {
             boundary = buffer.indexOf('\n\n');
             const line = chunk.split('\n').find((l) => l.startsWith('data: '));
             if (!line) continue;
-            let frame: QrFrame;
+            let next: QrFrame;
             try {
-              frame = JSON.parse(line.slice(6)) as QrFrame;
+              next = JSON.parse(line.slice(6)) as QrFrame;
             } catch {
               continue;
             }
-            if (!alive) return;
-            if (frame.state === 'ping') continue;
-            frames.current += 1;
-            if (frame.state === 'qr' && frame.png) {
-              setPng(frame.png);
-              setState('qr');
-            } else if (frame.state === 'open') {
-              setPng(null);
-              setState('open');
-            } else if (frame.state === 'timeout' || frame.state === 'closed' || frame.state === 'error') {
-              setPng(null);
-              setState(frame.state);
-              setReason(frame.reason ?? null);
+            if (!alive || next.state === 'ping') continue;
+            if (next.state === 'qr' && next.png) {
+              setFrame({ state: 'qr', png: next.png, reason: null, expiresAt: next.expiresAt ?? null });
+            } else if (next.state === 'open') {
+              setFrame({ state: 'open', png: null, reason: null, expiresAt: null });
+            } else {
+              setFrame({ state: next.state, png: null, reason: next.reason ?? null, expiresAt: null });
               return;
             }
           }
         }
-        if (alive) setState((s) => (s === 'qr' || s === 'streaming' ? 'closed' : s));
+        if (alive) setFrame((f) => (f && (f.state === 'qr' || f.state === 'streaming') ? { ...f, state: 'closed', png: null } : f));
       } catch {
-        if (alive) setState('closed');
+        if (alive) setFrame({ state: 'closed', png: null, reason: null, expiresAt: null });
       }
     };
 
-    void run();
+    void read();
     return () => {
       alive = false;
       controller.abort();
     };
-  }, [active, reset]);
+  }, [active]);
 
-  return { state, png, reason, frames: frames.current };
+  if (!active) return QR_IDLE;
+  // Between subscribing and the first frame there is a state to show: streaming.
+  return frame ?? { state: 'streaming', png: null, reason: null, expiresAt: null };
 }

@@ -19,7 +19,6 @@ import { Input } from '@/components/ui/input';
 import { openInSystemBrowser } from '@/integrations/browser';
 import {
   addDiscordChannel,
-  closeDiscordPairing,
   connectDiscord,
   disconnectDiscord,
   getDiscordLogs,
@@ -506,6 +505,3 @@ export function DiscordSettingsDialog() {
     </Dialog>
   );
 }
-
-/** Exported for the connect dialog's "Close pairing" affordance and for tests. */
-export { closeDiscordPairing };
