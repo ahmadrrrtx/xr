@@ -17,6 +17,7 @@ import { envSecretCompatEnabled, hydrateProviderEnv, secretBrokerSync } from "..
 import { PRESETS } from "../providers/presets.ts";
 import { migrate20to21 } from "./migrate-21.ts";
 import { migrate21to22, phase9ConfigShape } from "./migrate-22.ts";
+import { phase26ConfigShape } from "./migrate-26.ts";
 import {
   getCachedConfig,
   setCachedConfig,
@@ -685,7 +686,7 @@ const ConfigSchema = z.object({
         .default({}),
     })
     .default({}),
-}).extend(phase9ConfigShape);
+}).extend(phase9ConfigShape).extend(phase26ConfigShape);
 
 export type XRConfig = z.infer<typeof ConfigSchema>;
 /** Exposed for tests and tooling that need schema-validated config fixtures. */

@@ -25,6 +25,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `src/core/` | @ahmadrrrtx | explicit entry |
 | `src/cost/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/daemon/` | @ahmadrrrtx | explicit entry |
+| `src/discord/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/execution/` | @ahmadrrrtx | explicit entry |
 | `src/export/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/hygiene/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -79,6 +80,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/daemon.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/daemon/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/desktop/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/discord/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/e2e-blackbox/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/ecosystem.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/environment/` | @ahmadrrrtx | default (@ahmadrrrtx) |

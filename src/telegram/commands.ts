@@ -3,6 +3,7 @@
  * Slash commands map to structured commands. Anything else is a task, with an
  * optional inline budget ("...keep it under $0.50").
  */
+import { extractBudget } from "../bots/parse.ts";
 
 export type TgCommand =
   | { type: "start" }
@@ -21,11 +22,12 @@ export type TgCommand =
   | { type: "task"; text: string; budgetUsd?: number }
   | { type: "empty" };
 
-/** Extract an inline budget like "under $0.50" / "$2 budget" / "max $1.5". */
-export function extractBudget(text: string): number | undefined {
-  const m = text.match(/\$\s?(\d+(?:\.\d+)?)/);
-  return m ? Number(m[1]) : undefined;
-}
+/**
+ * Inline-budget extraction moved to the shared chat runtime
+ * (src/bots/parse.ts) in Phase 26 · PR 2, because Discord and WhatsApp parse the
+ * same sentence. Re-exported here so Phase 24 importers are unchanged.
+ */
+export { extractBudget } from "../bots/parse.ts";
 
 export function parseCommand(raw: string): TgCommand {
   const text = (raw ?? "").trim();

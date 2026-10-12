@@ -956,6 +956,81 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/telegram/webhook");
   }
 
+  /** Discord bot state: gateway, paired users, allowed channels and settings. Never includes the token. */
+  async discordStatus(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/discord/status");
+  }
+
+  /** Save a bot token after checking it against Discord, register slash commands, then open the gateway. */
+  async discordConnect(body: z.infer<typeof S.DiscordConnectRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/connect", body);
+  }
+
+  /** Stop the bot, remove the token, paired users and the channel allow-list. Requires confirm: true. */
+  async discordDisconnect(body: z.infer<typeof S.DiscordDisconnectRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/disconnect", body);
+  }
+
+  /** Open the gateway for the connected bot (resumes the session when one is saved). */
+  async discordStart(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/start");
+  }
+
+  /** Close the gateway cleanly. The token is kept so the bot can be started again. */
+  async discordStop(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/stop");
+  }
+
+  /** Open the 10-minute pairing window and mint one 6-digit code for the dialog to display. */
+  async discordPairOpen(body: z.infer<typeof S.DiscordPairOpenRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/pair/open", body);
+  }
+
+  /** Close the pairing window and invalidate any code that was minted in it. */
+  async discordPairClose(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/pair/close");
+  }
+
+  /** Remove one paired Discord user. Their DMs stop being answered immediately. */
+  async discordUnpair(body: z.infer<typeof S.DiscordUnpairRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/unpair", body);
+  }
+
+  /** Servers the bot is a member of, for the channel picker. Read-only. */
+  async discordGuilds(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/discord/guilds");
+  }
+
+  /** Text channels in one server, for the channel picker. Read-only. */
+  async discordChannels(body: z.infer<typeof S.DiscordChannelsQuery>): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/discord/channels", body);
+  }
+
+  /** Allow XR to answer in one server channel (mention or slash command only). */
+  async discordChannelsAdd(body: z.infer<typeof S.DiscordChannelRemoveRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/channels/add", body);
+  }
+
+  /** Revoke XR's access to one server channel. */
+  async discordChannelsRemove(body: z.infer<typeof S.DiscordChannelRemoveRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/channels/remove", body);
+  }
+
+  /** Update rate limit, attachment cap, webhook URL, dev server and auto-start. Only sent fields change. */
+  async discordSettings(body: z.infer<typeof S.DiscordSettingsRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/settings", body);
+  }
+
+  /** Redacted tail of the Discord bot log. */
+  async discordLogs(body: z.infer<typeof S.DiscordLogsQuery>): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/discord/logs", body);
+  }
+
+  /** Receive an interaction in webhook mode. Authenticated by Discord's Ed25519 signature, not the XR token. */
+  async discordWebhook(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/discord/webhook");
+  }
+
   /** Computer-control subsystem status. */
   async controlStatus(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/control/status");

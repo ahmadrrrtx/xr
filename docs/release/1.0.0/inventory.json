@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-09T15:07:55.185Z",
+  "generatedAt": "2026-10-12T13:23:22.226Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -26,6 +26,7 @@
       "xr": "./bin/xr"
     },
     "dependencies": {
+      "unpdf": "^1.8.1",
       "zod": "^3.23.8"
     },
     "optionalDependencies": {
@@ -33,7 +34,7 @@
     },
     "devDependencies": {
       "@types/bun": "latest",
-      "axe-core": "^4.12.1",
+      "axe-core": "^4.13.0",
       "dependency-cruiser": "^17.0.0",
       "typescript": "^5.5.0"
     },
@@ -51,10 +52,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 593,
-    "testFiles": 317,
+    "sourceFiles": 710,
+    "testFiles": 378,
     "cliCommands": 43,
-    "daemonRoutes": 133,
+    "daemonRoutes": 270,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -67,7 +68,7 @@
     },
     {
       "path": ".dependency-cruiser.cjs",
-      "bytes": 15442
+      "bytes": 15760
     },
     {
       "path": ".gitattributes",
@@ -75,15 +76,15 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 837
+      "bytes": 1321
     },
     {
       "path": ".gitleaksignore",
-      "bytes": 1797
+      "bytes": 2427
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 87638
+      "bytes": 92570
     },
     {
       "path": "CODEOWNERS",
@@ -95,7 +96,7 @@
     },
     {
       "path": "CONTRIBUTING.md",
-      "bytes": 12918
+      "bytes": 14812
     },
     {
       "path": "Dockerfile",
@@ -115,7 +116,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 38823
+      "bytes": 42421
     },
     {
       "path": "SECURITY.md",
@@ -123,7 +124,7 @@
     },
     {
       "path": "bun.lock",
-      "bytes": 10862
+      "bytes": 11129
     },
     {
       "path": "bunfig.toml",
@@ -143,7 +144,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 5282
+      "bytes": 5492
     },
     {
       "path": "release.manifest.json",
@@ -151,10 +152,11 @@
     },
     {
       "path": "tsconfig.json",
-      "bytes": 408
+      "bytes": 442
     }
   ],
   "sourceFiles": [
+    "src/agents/custom-store.ts",
     "src/agents/identity.ts",
     "src/agents/planner.ts",
     "src/agents/registry.ts",
@@ -164,6 +166,18 @@
     "src/automation/trigger-spec.ts",
     "src/automation/triggers.ts",
     "src/automation/webhook.ts",
+    "src/bots/approvals.ts",
+    "src/bots/chunk.ts",
+    "src/bots/context.ts",
+    "src/bots/media.ts",
+    "src/bots/parse.ts",
+    "src/bots/rate.ts",
+    "src/bots/runtime.ts",
+    "src/bots/spend.ts",
+    "src/bots/tasks.ts",
+    "src/bots/types.ts",
+    "src/bots/typing.ts",
+    "src/bots/voice-note.ts",
     "src/capabilities/authorize.ts",
     "src/capabilities/compatibility.ts",
     "src/capabilities/discovery.ts",
@@ -177,6 +191,19 @@
     "src/capabilities/service.ts",
     "src/capabilities/types.ts",
     "src/cli/catalog.ts",
+    "src/cli/coder/config.ts",
+    "src/cli/coder/consent.ts",
+    "src/cli/coder/context.ts",
+    "src/cli/coder/diff.ts",
+    "src/cli/coder/index.ts",
+    "src/cli/coder/markdown.ts",
+    "src/cli/coder/mentions.ts",
+    "src/cli/coder/permissions.ts",
+    "src/cli/coder/session.ts",
+    "src/cli/coder/style.ts",
+    "src/cli/coder/tty.ts",
+    "src/cli/coder/ui.ts",
+    "src/cli/coder/wizard.ts",
     "src/cli/command-loaders.ts",
     "src/cli/errors.ts",
     "src/cli/flags.ts",
@@ -221,6 +248,7 @@
     "src/config/config.ts",
     "src/config/migrate-21.ts",
     "src/config/migrate-22.ts",
+    "src/config/migrate-26.ts",
     "src/context/assembler.ts",
     "src/context/budget.ts",
     "src/context/cli-phase6.ts",
@@ -246,10 +274,12 @@
     "src/context/memory/consolidate.ts",
     "src/context/memory/embed.ts",
     "src/context/memory/forget-export.ts",
+    "src/context/memory/graph.ts",
     "src/context/memory/inject.ts",
     "src/context/memory/intent.ts",
     "src/context/memory/provenance.ts",
     "src/context/memory/rag.ts",
+    "src/context/memory/sensitivity.ts",
     "src/context/memory/store.ts",
     "src/context/memory/summarize.ts",
     "src/context/memory/types.ts",
@@ -269,6 +299,7 @@
     "src/control/approval-store.ts",
     "src/control/approvals.ts",
     "src/control/audit.ts",
+    "src/control/browser-availability.ts",
     "src/control/browser.ts",
     "src/control/classify.ts",
     "src/control/cli.ts",
@@ -277,13 +308,16 @@
     "src/control/files.ts",
     "src/control/index.ts",
     "src/control/memory.ts",
+    "src/control/pause.ts",
     "src/control/permissions.ts",
     "src/control/planner.ts",
     "src/control/preview.ts",
     "src/control/service.ts",
+    "src/control/trust-mode.ts",
     "src/control/typed-confirm.ts",
     "src/control/types.ts",
     "src/control/vision.ts",
+    "src/core/agent-history.ts",
     "src/core/agent.ts",
     "src/core/app.ts",
     "src/core/audit-anchor-job.ts",
@@ -330,6 +364,8 @@
     "src/daemon/agent-executor.ts",
     "src/daemon/api/openapi.ts",
     "src/daemon/auth-page.ts",
+    "src/daemon/builder-patch.ts",
+    "src/daemon/builder-projects.ts",
     "src/daemon/dashboard.ts",
     "src/daemon/dashboard/client-chat.ts",
     "src/daemon/dashboard/client-core.ts",
@@ -347,36 +383,80 @@
     "src/daemon/dashboard/style-tokens.ts",
     "src/daemon/dashboard/style-ui.ts",
     "src/daemon/dashboard/styles.ts",
+    "src/daemon/dev-servers.ts",
+    "src/daemon/hunks.ts",
+    "src/daemon/parent-watch.ts",
     "src/daemon/plugin-api.ts",
+    "src/daemon/proc-tree.ts",
+    "src/daemon/pty-sessions.ts",
+    "src/daemon/routes/agents-view.ts",
     "src/daemon/routes/agents.routes.ts",
     "src/daemon/routes/approvals.routes.ts",
     "src/daemon/routes/budget.routes.ts",
+    "src/daemon/routes/builder-dev.routes.ts",
+    "src/daemon/routes/builder-shared.ts",
+    "src/daemon/routes/builder.routes.ts",
     "src/daemon/routes/business.routes.ts",
     "src/daemon/routes/capabilities.routes.ts",
     "src/daemon/routes/chat.routes.ts",
     "src/daemon/routes/context.routes.ts",
+    "src/daemon/routes/contract-agents.ts",
+    "src/daemon/routes/contract-builder.ts",
+    "src/daemon/routes/contract-discord.ts",
+    "src/daemon/routes/contract-integrations.ts",
+    "src/daemon/routes/contract-memory.ts",
+    "src/daemon/routes/contract-research.ts",
+    "src/daemon/routes/contract-telegram.ts",
     "src/daemon/routes/contract.ts",
     "src/daemon/routes/control.routes.ts",
+    "src/daemon/routes/custom-agents.routes.ts",
+    "src/daemon/routes/discord.routes.ts",
     "src/daemon/routes/environment.routes.ts",
     "src/daemon/routes/extensions.routes.ts",
     "src/daemon/routes/files.routes.ts",
+    "src/daemon/routes/git.routes.ts",
     "src/daemon/routes/index.ts",
+    "src/daemon/routes/integrations.routes.ts",
     "src/daemon/routes/mcp.routes.ts",
     "src/daemon/routes/memory.routes.ts",
     "src/daemon/routes/meta.routes.ts",
     "src/daemon/routes/onboarding.routes.ts",
     "src/daemon/routes/providers.routes.ts",
     "src/daemon/routes/registry.ts",
+    "src/daemon/routes/research-run.routes.ts",
     "src/daemon/routes/research.routes.ts",
     "src/daemon/routes/router.ts",
+    "src/daemon/routes/schemas-agents.ts",
+    "src/daemon/routes/schemas-discord.ts",
+    "src/daemon/routes/schemas-integrations.ts",
+    "src/daemon/routes/schemas-memory.ts",
+    "src/daemon/routes/schemas-research.ts",
+    "src/daemon/routes/schemas-telegram.ts",
     "src/daemon/routes/schemas.ts",
     "src/daemon/routes/shield.routes.ts",
     "src/daemon/routes/system.routes.ts",
+    "src/daemon/routes/telegram.routes.ts",
+    "src/daemon/routes/terminal.routes.ts",
     "src/daemon/routes/triggers.routes.ts",
     "src/daemon/routes/trust.routes.ts",
+    "src/daemon/routes/ui-state.routes.ts",
+    "src/daemon/routes/voice.routes.ts",
+    "src/daemon/routes/workflows.routes.ts",
     "src/daemon/server.ts",
     "src/daemon/skills-api.ts",
     "src/daemon/state/cache.ts",
+    "src/daemon/workflow-runtime.ts",
+    "src/discord/attachments.ts",
+    "src/discord/auth.ts",
+    "src/discord/bot.ts",
+    "src/discord/client.ts",
+    "src/discord/commands.ts",
+    "src/discord/manager.ts",
+    "src/discord/render.ts",
+    "src/discord/state.ts",
+    "src/discord/tasks.ts",
+    "src/discord/types.ts",
+    "src/discord/verify.ts",
     "src/execution/adapters/agent-adapter.ts",
     "src/execution/adapters/common.ts",
     "src/execution/adapters/control-adapter.ts",
@@ -400,9 +480,12 @@
     "src/execution/status-summary.ts",
     "src/execution/task-runtime.ts",
     "src/execution/types.ts",
+    "src/execution/workflow/canvas.ts",
     "src/execution/workflow/engine.ts",
+    "src/execution/workflow/events.ts",
     "src/execution/workflow/index.ts",
     "src/execution/workflow/inspection.ts",
+    "src/execution/workflow/lint.ts",
     "src/execution/workflow/nodes.ts",
     "src/execution/workflow/repository.ts",
     "src/execution/workflow/state-machine.ts",
@@ -415,8 +498,16 @@
     "src/install/baseline-status.ts",
     "src/install/system.ts",
     "src/install/uninstall.ts",
+    "src/integrations/connector-store.ts",
     "src/integrations/credentials.ts",
+    "src/integrations/mcp-bridge.ts",
+    "src/integrations/oauth-state.ts",
+    "src/integrations/providers/api-key.ts",
+    "src/integrations/providers/github.ts",
     "src/integrations/registry.ts",
+    "src/integrations/runtime.ts",
+    "src/integrations/service.ts",
+    "src/integrations/vault-adapter.ts",
     "src/intelligence/behavioral.ts",
     "src/intelligence/capability.ts",
     "src/intelligence/catalog.ts",
@@ -453,6 +544,7 @@
     "src/mcp/cli.ts",
     "src/mcp/client.ts",
     "src/mcp/manager.ts",
+    "src/mcp/pins.ts",
     "src/mcp/registry.ts",
     "src/mcp/types.ts",
     "src/observability/config.ts",
@@ -574,6 +666,7 @@
     "src/research/jobs.ts",
     "src/research/llm.ts",
     "src/research/observability.ts",
+    "src/research/pdf-text.ts",
     "src/research/plan.ts",
     "src/research/provider-types.ts",
     "src/research/providers/direct-fetch.ts",
@@ -582,7 +675,11 @@
     "src/research/providers/searxng.ts",
     "src/research/providers/types.ts",
     "src/research/ranking.ts",
+    "src/research/remember.ts",
     "src/research/report.ts",
+    "src/research/run-deps.ts",
+    "src/research/run-events.ts",
+    "src/research/run-registry.ts",
     "src/research/runner.ts",
     "src/research/search.ts",
     "src/research/synthesize.ts",
@@ -646,6 +743,7 @@
     "src/skills/dependencies.ts",
     "src/skills/download-engine.ts",
     "src/skills/engine.ts",
+    "src/skills/install-jobs.ts",
     "src/skills/installer.ts",
     "src/skills/lifecycle.ts",
     "src/skills/loader-runtime.ts",
@@ -659,6 +757,7 @@
     "src/skills/marketplace.ts",
     "src/skills/online-registry.ts",
     "src/skills/permissions.ts",
+    "src/skills/quarantine.ts",
     "src/skills/registry.ts",
     "src/skills/resolver.ts",
     "src/skills/runtime.ts",
@@ -674,6 +773,8 @@
     "src/state/idempotency.ts",
     "src/state/migrate-10.ts",
     "src/state/migrate-11.ts",
+    "src/state/migrate-12.ts",
+    "src/state/migration-lock.ts",
     "src/state/migrations.ts",
     "src/state/repos/audit-repo.ts",
     "src/state/repos/checkpoint-repo.ts",
@@ -687,13 +788,22 @@
     "src/state/repos/trigger-repo.ts",
     "src/state/repos/user-memory-repo.ts",
     "src/state/repos/workflow-repo.ts",
+    "src/state/store-hygiene.ts",
     "src/state/store.ts",
+    "src/state/ui-state.ts",
     "src/state/workspace-store.ts",
     "src/state/write-gate.ts",
+    "src/telegram/attachments.ts",
     "src/telegram/auth.ts",
     "src/telegram/bot.ts",
     "src/telegram/commands.ts",
+    "src/telegram/context.ts",
+    "src/telegram/manager.ts",
+    "src/telegram/markdown.ts",
+    "src/telegram/pairing.ts",
     "src/telegram/render.ts",
+    "src/telegram/state.ts",
+    "src/telegram/voice.ts",
     "src/templates/workflows/competitor-monitoring.json",
     "src/templates/workflows/content-calendar.json",
     "src/templates/workflows/customer-onboarding.json",
@@ -713,6 +823,7 @@
     "src/tools/registry-service.ts",
     "src/tools/registry-types.ts",
     "src/tools/registry.ts",
+    "src/tools/search.ts",
     "src/tools/system.ts",
     "src/tools/web.ts",
     "src/ui/ansi.ts",
@@ -729,19 +840,26 @@
     "src/update/atomic-updater.ts",
     "src/update/channels.ts",
     "src/update/selfheal.ts",
+    "src/util/child-channel.ts",
     "src/util/concurrency.ts",
     "src/util/fs-async.ts",
+    "src/util/paths.ts",
     "src/util/process.ts",
     "src/util/scan-cache.ts",
     "src/util/ttl-cache.ts",
     "src/voice/audio.ts",
+    "src/voice/catalogue.ts",
     "src/voice/cli.ts",
+    "src/voice/endpointing.ts",
     "src/voice/hardware.ts",
     "src/voice/index.ts",
     "src/voice/intents.ts",
+    "src/voice/models.ts",
+    "src/voice/native.ts",
     "src/voice/pipeline.ts",
     "src/voice/settings.ts",
     "src/voice/stt.ts",
+    "src/voice/transcript.ts",
     "src/voice/tts.ts",
     "src/voice/types.ts",
     "src/voice/v2.ts",
@@ -756,6 +874,8 @@
     "test/a11y/static.test.ts",
     "test/agent-cancel.test.ts",
     "test/agent.test.ts",
+    "test/agents/custom-store.test.ts",
+    "test/agents/team-view.test.ts",
     "test/api/chat-stream.test.ts",
     "test/api/client.test.ts",
     "test/api/compat.test.ts",
@@ -777,6 +897,8 @@
     "test/automation/triggers.test.ts",
     "test/baseline/doctor.test.ts",
     "test/baseline/status.test.ts",
+    "test/bots/shared-runtime.test.ts",
+    "test/bots/telegram-characterization.test.ts",
     "test/capabilities/ecosystem.test.ts",
     "test/capabilities/evidence-trust.test.ts",
     "test/capabilities/inventory.test.ts",
@@ -787,6 +909,11 @@
     "test/capabilities/security-matrix.test.ts",
     "test/capabilities/self-grant.test.ts",
     "test/capabilities/tuf-updates.test.ts",
+    "test/cli/coder/consent.test.ts",
+    "test/cli/coder/permissions.test.ts",
+    "test/cli/coder/routing-and-events.test.ts",
+    "test/cli/coder/session-guard.test.ts",
+    "test/cli/coder/workspace.test.ts",
     "test/config/cache.test.ts",
     "test/config/env-overrides.test.ts",
     "test/config/injection-mode-deprecation.test.ts",
@@ -798,6 +925,7 @@
     "test/context/integrity.test.ts",
     "test/context/lifecycle.test.ts",
     "test/context/local-only.test.ts",
+    "test/context/memory-explorer.test.ts",
     "test/context/migration.test.ts",
     "test/context/navigation.test.ts",
     "test/context/performance.test.ts",
@@ -815,7 +943,10 @@
     "test/control-plan.test.ts",
     "test/control.test.ts",
     "test/control/browser.test.ts",
+    "test/control/pause-stop.test.ts",
+    "test/control/trust-mode.test.ts",
     "test/core/background-services.test.ts",
+    "test/core/bounded-history.test.ts",
     "test/core/envelope.test.ts",
     "test/core/errors.test.ts",
     "test/core/health.test.ts",
@@ -826,19 +957,46 @@
     "test/core/service-registry.test.ts",
     "test/cost.test.ts",
     "test/daemon.test.ts",
+    "test/daemon/builder-routes.test.ts",
     "test/daemon/dashboard-split.test.ts",
     "test/daemon/dispatcher.test.ts",
+    "test/daemon/files-hunks.test.ts",
     "test/daemon/honesty.test.ts",
     "test/daemon/onboarding-routes.test.ts",
+    "test/daemon/parent-watch-mechanism.test.ts",
+    "test/daemon/parent-watch.test.ts",
     "test/daemon/phase-b.test.ts",
     "test/daemon/phase-c.test.ts",
     "test/daemon/phase-ef.test.ts",
     "test/daemon/phase-g.test.ts",
+    "test/daemon/phase2b.test.ts",
+    "test/daemon/proc-tree.test.ts",
+    "test/daemon/terminal-pty.test.ts",
     "test/daemon/token-drift.test.ts",
+    "test/daemon/workflows-routes.test.ts",
+    "test/desktop/approval-core.test.ts",
+    "test/desktop/budget-core.test.ts",
+    "test/desktop/builder-core.test.ts",
+    "test/desktop/engine-wire.test.ts",
+    "test/desktop/integrations-core.test.ts",
+    "test/desktop/memory-core.test.ts",
+    "test/desktop/orb-core.test.ts",
+    "test/desktop/palette-query.test.ts",
+    "test/desktop/research-core.test.ts",
+    "test/desktop/research-reduce.test.ts",
+    "test/desktop/runs-core.test.ts",
+    "test/desktop/settings-core.test.ts",
+    "test/desktop/shield-core.test.ts",
+    "test/desktop/sink-lint.test.ts",
+    "test/desktop/skills-core.test.ts",
+    "test/desktop/theater-core.test.ts",
+    "test/desktop/voice-audio.test.ts",
+    "test/discord/phase26.test.ts",
     "test/e2e-blackbox/audit-crypto.test.ts",
     "test/e2e-blackbox/budget.test.ts",
     "test/e2e-blackbox/cancel.test.ts",
     "test/e2e-blackbox/hygiene.test.ts",
+    "test/e2e-blackbox/parent-watch.test.ts",
     "test/e2e-blackbox/providers-lifecycle.test.ts",
     "test/e2e-blackbox/run-lifecycle.test.ts",
     "test/e2e-blackbox/streaming-matrix.test.ts",
@@ -857,6 +1015,7 @@
     "test/execution/adapters.test.ts",
     "test/execution/cancellation.test.ts",
     "test/execution/checkpoint.test.ts",
+    "test/execution/child-channel.test.ts",
     "test/execution/lease.test.ts",
     "test/execution/phase06-service.test.ts",
     "test/execution/recovery.test.ts",
@@ -864,6 +1023,9 @@
     "test/execution/retry-classification.test.ts",
     "test/execution/service.test.ts",
     "test/execution/state-machine.test.ts",
+    "test/integrations/integrations-mcp.test.ts",
+    "test/integrations/integrations-primitives.test.ts",
+    "test/integrations/integrations-service.test.ts",
     "test/intelligence/behavioral.test.ts",
     "test/intelligence/breaker.test.ts",
     "test/intelligence/capability.test.ts",
@@ -879,6 +1041,7 @@
     "test/intelligence/routing-slo.test.ts",
     "test/intelligence/routing-v5.test.ts",
     "test/intelligence/service-v5.test.ts",
+    "test/intelligence/stream-wrappers.test.ts",
     "test/memory-semantic.test.ts",
     "test/memory-stage6.test.ts",
     "test/memory-summarize.test.ts",
@@ -966,6 +1129,7 @@
     "test/release/platform-parity.test.ts",
     "test/release/release-workflow.test.ts",
     "test/release/tag-npm-invariant.test.ts",
+    "test/release/updater-manifest.test.ts",
     "test/release/write-sums.test.ts",
     "test/reliability.test.ts",
     "test/reliability/artifact-e2e.test.ts",
@@ -1000,6 +1164,8 @@
     "test/research/citations.test.ts",
     "test/research/firecrawl.test.ts",
     "test/research/jobs.test.ts",
+    "test/research/run-events.test.ts",
+    "test/research/run-registry.test.ts",
     "test/research/runner.test.ts",
     "test/research/security.test.ts",
     "test/research/url-guard.test.ts",
@@ -1007,11 +1173,13 @@
     "test/security/audit-anchor.test.ts",
     "test/security/audit-crypto.test.ts",
     "test/security/audit-signer.test.ts",
+    "test/security/business-flag.test.ts",
     "test/security/canonical-bypass.test.ts",
     "test/security/egress-proxy.test.ts",
     "test/security/exec-integrity.test.ts",
     "test/security/mcp-allowlist.test.ts",
     "test/security/mcp-description-poison.test.ts",
+    "test/security/mcp-pinning.test.ts",
     "test/security/nodevm-wording.test.ts",
     "test/security/secrets.test.ts",
     "test/security/shield.test.ts",
@@ -1029,10 +1197,15 @@
     "test/skills.test.ts",
     "test/skills/counts-authority.test.ts",
     "test/skills/quality.test.ts",
+    "test/skills/quarantine-policy.test.ts",
+    "test/state/close-releases-file.test.ts",
     "test/state/memory-to-context-migration.test.ts",
+    "test/state/migration-lock-self-deadlock.test.ts",
+    "test/state/ui-state.test.ts",
     "test/state/workspace-store.test.ts",
     "test/supply-chain/supply-chain.test.ts",
     "test/telegram.test.ts",
+    "test/telegram/phase24.test.ts",
     "test/tools.test.ts",
     "test/tools/registry-phase08.test.ts",
     "test/tools/semantics-contract.test.ts",
@@ -1065,7 +1238,13 @@
     "test/ux/sus.test.ts",
     "test/ux/undo.test.ts",
     "test/voice.test.ts",
+    "test/voice/endpointing.test.ts",
+    "test/voice/models.test.ts",
+    "test/voice/session-states.test.ts",
+    "test/voice/session.test.ts",
+    "test/voice/transcript.test.ts",
     "test/workflow/engine.test.ts",
+    "test/workflow/phase19-canvas.test.ts",
     "test/workflow/types.test.ts"
   ],
   "cliCommands": [
@@ -1085,7 +1264,7 @@
       "name": "serve",
       "aliases": [],
       "group": "start",
-      "usage": "xr serve [--port <n>]",
+      "usage": "xr serve [--port <n>] [--parent-pid <pid>]",
       "needsKernel": false,
       "fastPath": true,
       "classification": "stable"
@@ -1559,8 +1738,50 @@
     },
     {
       "file": "src/daemon/routes/agents.routes.ts",
+      "id": "agents.events",
+      "method": "GET",
+      "path": "/api/agents/events",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/agents.routes.ts",
+      "id": "agents.templates",
+      "method": "GET",
+      "path": "/api/agents/templates",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/agents.routes.ts",
+      "id": "agents.workflow.create",
+      "method": "POST",
+      "path": "/api/agents/workflows",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/agents.routes.ts",
       "id": "agents.workflow.get",
       "method": "GET",
+      "prefix": "/api/agents/workflows/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/agents.routes.ts",
+      "id": "agents.workflow.control",
+      "method": "POST",
+      "prefix": "/api/agents/workflows/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/agents.routes.ts",
+      "id": "agents.workflow.steer",
+      "method": "POST",
+      "prefix": "/api/agents/workflows/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/agents.routes.ts",
+      "id": "agents.workflow.review",
+      "method": "POST",
       "prefix": "/api/agents/workflows/",
       "auth": "local bearer token or dashboard query token"
     },
@@ -1586,6 +1807,13 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "audit.export",
+      "method": "GET",
+      "path": "/api/audit/export",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/budget.routes.ts",
       "id": "budget.get",
       "method": "GET",
@@ -1597,6 +1825,125 @@
       "id": "budget.set",
       "method": "POST",
       "path": "/api/budget/set",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.projects.open",
+      "method": "POST",
+      "path": "/api/builder/projects",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.projects.list",
+      "method": "GET",
+      "path": "/api/builder/projects",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder-dev.routes.ts",
+      "id": "builder.applyDiff",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder-dev.routes.ts",
+      "id": "builder.undo",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder-dev.routes.ts",
+      "id": "builder.devServer.status",
+      "method": "GET",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder-dev.routes.ts",
+      "id": "builder.devServer.start",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder-dev.routes.ts",
+      "id": "builder.devServer.stop",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder-dev.routes.ts",
+      "id": "builder.devServer.install",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder-dev.routes.ts",
+      "id": "builder.events",
+      "method": "GET",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.tree",
+      "method": "GET",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.file.read",
+      "method": "GET",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.file.write",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.file.create",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.file.rename",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.file.delete",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.git",
+      "method": "GET",
+      "prefix": "/api/builder/projects/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/builder.routes.ts",
+      "id": "builder.diagnostics",
+      "method": "POST",
+      "prefix": "/api/builder/projects/",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -1846,6 +2193,13 @@
     },
     {
       "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.cockpit",
+      "method": "GET",
+      "path": "/api/control/cockpit",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
       "id": "control.events",
       "method": "GET",
       "path": "/api/control/events",
@@ -1874,6 +2228,13 @@
     },
     {
       "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.pause",
+      "method": "POST",
+      "path": "/api/control/pause",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
       "id": "control.pending",
       "method": "GET",
       "path": "/api/control/pending",
@@ -1884,6 +2245,13 @@
       "id": "control.permissions.legacy",
       "method": "GET",
       "path": "/api/control/permissions",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/control.routes.ts",
+      "id": "control.permissions.grant",
+      "method": "POST",
+      "path": "/api/control/permissions/grant",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -1905,6 +2273,111 @@
       "id": "cost.get",
       "method": "GET",
       "path": "/api/cost",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.channels",
+      "method": "GET",
+      "path": "/api/discord/channels",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.channels.add",
+      "method": "POST",
+      "path": "/api/discord/channels/add",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.channels.remove",
+      "method": "POST",
+      "path": "/api/discord/channels/remove",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.connect",
+      "method": "POST",
+      "path": "/api/discord/connect",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.disconnect",
+      "method": "POST",
+      "path": "/api/discord/disconnect",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.guilds",
+      "method": "GET",
+      "path": "/api/discord/guilds",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.logs",
+      "method": "GET",
+      "path": "/api/discord/logs",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.pair.close",
+      "method": "POST",
+      "path": "/api/discord/pair/close",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.pair.open",
+      "method": "POST",
+      "path": "/api/discord/pair/open",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.settings",
+      "method": "POST",
+      "path": "/api/discord/settings",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.start",
+      "method": "POST",
+      "path": "/api/discord/start",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.status",
+      "method": "GET",
+      "path": "/api/discord/status",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.stop",
+      "method": "POST",
+      "path": "/api/discord/stop",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.unpair",
+      "method": "POST",
+      "path": "/api/discord/unpair",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/discord.routes.ts",
+      "id": "discord.webhook",
+      "method": "POST",
+      "path": "/api/discord/webhook",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -1972,9 +2445,51 @@
     },
     {
       "file": "src/daemon/routes/files.routes.ts",
+      "id": "files.hunks.revert",
+      "method": "POST",
+      "path": "/api/files/hunks/revert",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/files.routes.ts",
       "id": "files.read",
       "method": "GET",
       "path": "/api/files/read",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/files.routes.ts",
+      "id": "files.write",
+      "method": "POST",
+      "path": "/api/files/write",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/git.routes.ts",
+      "id": "git.commit",
+      "method": "POST",
+      "path": "/api/git/commit",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/git.routes.ts",
+      "id": "git.log",
+      "method": "GET",
+      "path": "/api/git/log",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/git.routes.ts",
+      "id": "git.stage",
+      "method": "POST",
+      "path": "/api/git/stage",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/git.routes.ts",
+      "id": "git.status",
+      "method": "GET",
+      "path": "/api/git/status",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -1983,6 +2498,20 @@
       "method": "GET",
       "path": "/api/health",
       "auth": "open"
+    },
+    {
+      "file": "src/daemon/routes/integrations.routes.ts",
+      "id": "integrations.list",
+      "method": "GET",
+      "path": "/api/integrations",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/integrations.routes.ts",
+      "id": "integrations.oauth.complete",
+      "method": "POST",
+      "path": "/api/integrations/oauth/complete",
+      "auth": "local bearer token or dashboard query token"
     },
     {
       "file": "src/daemon/routes/mcp.routes.ts",
@@ -2021,9 +2550,37 @@
     },
     {
       "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.pin",
+      "method": "POST",
+      "path": "/api/mcp/pin",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.pins",
+      "method": "GET",
+      "path": "/api/mcp/pins",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.pins.diff",
+      "method": "GET",
+      "prefix": "/api/mcp/pins/diff/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
       "id": "mcp.remove",
       "method": "POST",
       "path": "/api/mcp/remove",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/mcp.routes.ts",
+      "id": "mcp.unpin",
+      "method": "POST",
+      "path": "/api/mcp/unpin",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -2035,9 +2592,44 @@
     },
     {
       "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.create",
+      "method": "POST",
+      "path": "/api/memory",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.update",
+      "method": "PATCH",
+      "prefix": "/api/memory/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
       "id": "memory.delete",
       "method": "DELETE",
       "prefix": "/api/memory/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.consolidate",
+      "method": "POST",
+      "path": "/api/memory/consolidate",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.export",
+      "method": "GET",
+      "path": "/api/memory/export",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.graph",
+      "method": "GET",
+      "path": "/api/memory/graph",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -2049,9 +2641,37 @@
     },
     {
       "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.import",
+      "method": "POST",
+      "path": "/api/memory/import",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.scan",
+      "method": "POST",
+      "path": "/api/memory/scan-sensitive",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
       "id": "memory.search",
       "method": "GET",
       "path": "/api/memory/search",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.settings.get",
+      "method": "GET",
+      "path": "/api/memory/settings",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/memory.routes.ts",
+      "id": "memory.settings.put",
+      "method": "PUT",
+      "path": "/api/memory/settings",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -2187,6 +2807,13 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/research-run.routes.ts",
+      "id": "research.remember",
+      "method": "POST",
+      "prefix": "/api/research/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/system.routes.ts",
       "id": "research.get",
       "method": "GET",
@@ -2236,6 +2863,13 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/research-run.routes.ts",
+      "id": "research.run.start",
+      "method": "POST",
+      "path": "/api/research/run",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/research.routes.ts",
       "id": "research.scrape",
       "method": "POST",
@@ -2250,10 +2884,31 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/research-run.routes.ts",
+      "id": "research.settings.get",
+      "method": "GET",
+      "path": "/api/research/settings",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/research-run.routes.ts",
+      "id": "research.settings.set",
+      "method": "PATCH",
+      "path": "/api/research/settings",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/research.routes.ts",
       "id": "research.jobs.stream",
       "method": "GET",
       "prefix": "/api/research/stream/",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/research-run.routes.ts",
+      "id": "research.upload.pdf",
+      "method": "POST",
+      "path": "/api/research/upload-pdf",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -2361,6 +3016,118 @@
       "auth": "local bearer token or dashboard query token"
     },
     {
+      "file": "src/daemon/routes/ui-state.routes.ts",
+      "id": "state.ui.get",
+      "method": "GET",
+      "path": "/api/state/ui",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/ui-state.routes.ts",
+      "id": "state.ui.patch",
+      "method": "PUT",
+      "path": "/api/state/ui",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.connect",
+      "method": "POST",
+      "path": "/api/telegram/connect",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.disconnect",
+      "method": "POST",
+      "path": "/api/telegram/disconnect",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.logs",
+      "method": "GET",
+      "path": "/api/telegram/logs",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.pair",
+      "method": "POST",
+      "path": "/api/telegram/pair",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.pair.open",
+      "method": "POST",
+      "path": "/api/telegram/pair/open",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.settings",
+      "method": "POST",
+      "path": "/api/telegram/settings",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.start",
+      "method": "POST",
+      "path": "/api/telegram/start",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.status",
+      "method": "GET",
+      "path": "/api/telegram/status",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.stop",
+      "method": "POST",
+      "path": "/api/telegram/stop",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.unpair",
+      "method": "POST",
+      "path": "/api/telegram/unpair",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/telegram.routes.ts",
+      "id": "telegram.webhook",
+      "method": "POST",
+      "path": "/api/telegram/webhook",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/terminal.routes.ts",
+      "id": "terminal.pty.list",
+      "method": "GET",
+      "path": "/api/terminal/pty",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/terminal.routes.ts",
+      "id": "terminal.pty.open",
+      "method": "POST",
+      "path": "/api/terminal/pty",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/terminal.routes.ts",
+      "id": "terminal.run",
+      "method": "POST",
+      "path": "/api/terminal/run",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
       "file": "src/daemon/routes/meta.routes.ts",
       "id": "meta.traces.get",
       "method": "GET",
@@ -2407,6 +3174,125 @@
       "id": "trust.classify.post",
       "method": "POST",
       "path": "/api/trust/classify",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/trust.routes.ts",
+      "id": "trust.mode",
+      "method": "POST",
+      "path": "/api/trust/mode",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.audio",
+      "method": "POST",
+      "path": "/api/voice/audio",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.barge",
+      "method": "POST",
+      "path": "/api/voice/barge-in",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.download.cancel",
+      "method": "POST",
+      "path": "/api/voice/cancel-download",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.models.clear",
+      "method": "POST",
+      "path": "/api/voice/clear-models",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.download",
+      "method": "POST",
+      "path": "/api/voice/download",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.events",
+      "method": "GET",
+      "path": "/api/voice/events",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.models",
+      "method": "GET",
+      "path": "/api/voice/models",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.played",
+      "method": "POST",
+      "path": "/api/voice/played",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.say",
+      "method": "POST",
+      "path": "/api/voice/say",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.session",
+      "method": "POST",
+      "path": "/api/voice/session",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.settings.get",
+      "method": "GET",
+      "path": "/api/voice/settings",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.settings.set",
+      "method": "POST",
+      "path": "/api/voice/settings",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.status",
+      "method": "GET",
+      "path": "/api/voice/status",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.test_tts",
+      "method": "POST",
+      "path": "/api/voice/test-tts",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.transcribe",
+      "method": "POST",
+      "path": "/api/voice/transcribe",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/voice.routes.ts",
+      "id": "voice.voices",
+      "method": "GET",
+      "path": "/api/voice/voices",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -2463,6 +3349,222 @@
       "id": "dashboard.alias.get",
       "method": "GET",
       "path": "/dashboard",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/custom-agents.routes.ts",
+      "id": "agents.custom.list",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/custom-agents.routes.ts",
+      "id": "agents.custom.create",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/custom-agents.routes.ts",
+      "id": "agents.custom.import",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/custom-agents.routes.ts",
+      "id": "agents.custom.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/custom-agents.routes.ts",
+      "id": "agents.custom.update",
+      "method": "PATCH",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/custom-agents.routes.ts",
+      "id": "agents.custom.delete",
+      "method": "DELETE",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/custom-agents.routes.ts",
+      "id": "agents.custom.duplicate",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/integrations.routes.ts",
+      "id": "integrations.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/integrations.routes.ts",
+      "id": "integrations.app_credentials",
+      "method": "PUT",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/integrations.routes.ts",
+      "id": "integrations.oauth.start",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/integrations.routes.ts",
+      "id": "integrations.connect",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/integrations.routes.ts",
+      "id": "integrations.sync",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/integrations.routes.ts",
+      "id": "integrations.disconnect",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/research-run.routes.ts",
+      "id": "research.run.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/research-run.routes.ts",
+      "id": "research.run.stream",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/research-run.routes.ts",
+      "id": "research.run.cancel",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "brand.logo.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/system.routes.ts",
+      "id": "brand.avatar.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/terminal.routes.ts",
+      "id": "terminal.pty.input",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/terminal.routes.ts",
+      "id": "terminal.pty.resize",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/terminal.routes.ts",
+      "id": "terminal.pty.close",
+      "method": "DELETE",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.inspect",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.runs.list",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.runs.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.runs.stream",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.runs.cancel",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.runs.pause",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.runs.resume",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.runs.decide",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.list",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.create",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.get",
+      "method": "GET",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.update",
+      "method": "PATCH",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.delete",
+      "method": "DELETE",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.run",
+      "method": "POST",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/workflows.routes.ts",
+      "id": "workflows.runs.history",
+      "method": "GET",
       "auth": "local bearer token or dashboard query token"
     }
   ],

@@ -214,7 +214,9 @@ const LAYER_RULES: Array<{
     name: "no-one-imports-surfaces",
     from: /^src\//,
     // `src/index.ts` IS the CLI entry point — a surface, not an importer of one.
-    fromNot: /^src\/(interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update|index\.ts)/,
+    // Phase 26: discord and whatsapp are surfaces beside telegram (a chat bot
+    // composes the voice pipeline for speech-to-text, same as Telegram does).
+    fromNot: /^src\/(interfaces|cli|commands|daemon|telegram|discord|whatsapp|voice|ui|i18n|export|install|update|index\.ts)/,
     to: /^src\/(interfaces|cli|commands|daemon|telegram|voice|ui)\//,
     toNot: /^src\/(interfaces\/cli\.ts|cli\/catalog\.ts)$/,
   },
