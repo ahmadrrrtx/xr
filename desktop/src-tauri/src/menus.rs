@@ -108,6 +108,11 @@ pub fn developer_menu_visible() -> bool {
 #[cfg(target_os = "macos")]
 pub fn install<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     use tauri::menu::{AboutMetadata, MenuBuilder, MenuItem, PredefinedMenuItem, SubmenuBuilder};
+    // Manager is what provides `try_state`/`state`; the file-level import is
+    // deliberately minimal, and this function is the only macOS-gated code in
+    // the crate that needs it. The Linux clippy lane never compiles this block,
+    // which is how the missing import got as far as the macOS bundle job.
+    use tauri::Manager;
 
     let hud_chord = app
         .try_state::<crate::commands::hud::HudShortcutState>()
