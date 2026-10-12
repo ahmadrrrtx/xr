@@ -2,12 +2,16 @@
 <!--
   AppStream metadata (Flathub-ready: `appstreamcli validate` clean).
 
-  The screenshots are referenced by URL on purpose. AppStream wants at least one
-  screenshot for Flathub, and shipping a compressed PNG of the app inside this
-  repository would be a second copy of something the release page already hosts;
-  the URLs point at the release assets, which exist once a tag is cut. Until
-  then `appstreamcli validate` warns about the unreachable URL, which is the
-  honest state of a pre-release app.
+  Screenshots are referenced by URL because AppStream and Flathub both require a
+  publicly reachable image, and inlining a copy would duplicate artwork the repo
+  already tracks. These point at the committed preview renders under
+  `previews/implementation/` on `main`, so they resolve today and cannot rot into
+  a 404 the way a release-asset URL does before its tag exists.
+
+  They are renders of the UI, not on-device captures: replace them with real
+  screen captures before the first Flathub submission. `appstreamcli validate`
+  is run with the offline flag in CI (deterministic, offline); this comment is the
+  record of what the images actually are.
 -->
 <component type="desktop-application">
   <id>ai.rrrtx.xr-desktop</id>
@@ -40,16 +44,16 @@
 
   <screenshots>
     <screenshot type="default">
-      <caption>The Control Room: every run, every span, in real time</caption>
-      <image type="source">https://github.com/ahmadrrrtx/xr/releases/download/v0.2.0/desktop-control-room.png</image>
+      <caption>The Control Room: every run and every span, in real time</caption>
+      <image type="source">https://raw.githubusercontent.com/ahmadrrrtx/xr/main/previews/implementation/phase-11/01-control-room-running.png</image>
     </screenshot>
     <screenshot>
-      <caption>Chat with approvals inline — nothing runs without your say</caption>
-      <image type="source">https://github.com/ahmadrrrtx/xr/releases/download/v0.2.0/desktop-chat.png</image>
+      <caption>Chat with approvals inline — nothing privileged runs without your say</caption>
+      <image type="source">https://raw.githubusercontent.com/ahmadrrrtx/xr/main/previews/implementation/phase-04/02-populated-chat.png</image>
     </screenshot>
     <screenshot>
-      <caption>The HUD: a global hotkey from anywhere</caption>
-      <image type="source">https://github.com/ahmadrrrtx/xr/releases/download/v0.2.0/desktop-hud.png</image>
+      <caption>The HUD, one global hotkey away while XR is unfocused</caption>
+      <image type="source">https://raw.githubusercontent.com/ahmadrrrtx/xr/main/previews/implementation/phase-05/04-global-hud-desktop.png</image>
     </screenshot>
   </screenshots>
 
@@ -60,7 +64,6 @@
   <developer id="ai.rrrtx">
     <name>Muhammad Ahmad</name>
   </developer>
-  <developer_name>Muhammad Ahmad</developer_name>
 
   <categories>
     <category>Development</category>

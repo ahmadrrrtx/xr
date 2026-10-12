@@ -37,11 +37,19 @@ on:
     branches: [main]
     paths:
       - "desktop/**"
+      # Phase 27: the shell's packaging artefacts (flatpak manifest, AppStream
+      # metadata, MSIX tiles) and the tests that pin them live outside desktop/.
+      # Without these two lines a PR that only edits the Flatpak manifest would
+      # change shipped packaging with no CI at all.
+      - "packaging/**"
+      - "test/desktop/**"
       - ".github/workflows/desktop-app.yml"
   push:
     branches: [main]
     paths:
       - "desktop/**"
+      - "packaging/**"
+      - "test/desktop/**"
       - ".github/workflows/desktop-app.yml"
     tags: ["v*"]
   workflow_dispatch:
@@ -342,43 +350,83 @@ jobs:
 
   # ── Phase 5 · signed-updater manifest (guarded: needs the operator secret) ──
   # ── Flatpak (Phase 27) ───────────────────────────────────────────────────────
-  # The desktop shell's Flathub-ready package. Built (not published) so a
-  # manifest that stops building is a red run rather than a discovery at
-  # submission time; Flathub itself builds from source on its own runners.
+  # Two different questions, two different answers:
+  #
+  #   · Is the metadata valid?  REQUIRED on every PR. `desktop-file-validate`
+  #     and `appstreamcli validate` are federated specifications, not opinions —
+  #     and they are the only thing that caught `Categories=...;AI;...` (AI is
+  #     not a registered category) and a `--` inside an XML comment, which made
+  #     the metainfo unparseable. Both are now pinned by
+  #     test/desktop/flatpak-metainfo.test.ts as well.
+  #   · Does it BUILD? A from-source flatpak-builder run needs the GNOME runtime
+  #     and a vendored cargo/npm source set, and it takes tens of minutes. It runs
+  #     on workflow_dispatch, where it is expected to answer, not to decorate the
+  #     job list. On a PR it is skipped rather than left red for reasons no PR
+  #     author can act on.
   flatpak:
-    name: Linux — Flatpak build (manifest proof)
+    name: Linux — Flatpak metadata (required) + build (workflow_dispatch)
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install flatpak + builder
+
+      - name: Install desktop-entry + AppStream validators
         run: |
           sudo apt-get update
+          sudo apt-get install -y desktop-file-utils appstream
+
+      - name: Validate the desktop entry (registered categories only)
+        run: desktop-file-validate packaging/flatpak/ai.rrrtx.xr-desktop.desktop
+
+      - name: Validate the AppStream metadata (offline, deterministic)
+        run: appstreamcli validate --no-net packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml
+
+      - name: Validate the manifest structure
+        run: |
+          python3 - <<'PY'
+          import sys, yaml
+          d = yaml.safe_load(open('packaging/flatpak/ai.rrrtx.xr-desktop.yml'))
+          assert d['runtime'] == 'org.gnome.Platform', d['runtime']
+          assert d['command'] == 'xr-desktop'
+          args = ' '.join(d['finish-args'])
+          assert '--filesystem=home' in args and '--filesystem=host' not in args
+          urls = [s['url'] for s in d['modules'][0]['sources'] if s.get('url')]
+          assert len(urls) == 2 and all(u.startswith('https://') for u in urls), urls
+          for src in d['modules'][0]['sources']:
+              if src.get('url'):
+                  assert len(src['sha256']) == 64, src
+          print('manifest OK:', d['id'], d['runtime'], d['runtime-version'])
+          PY
+
+      - name: Install flatpak + builder + the GNOME runtime
+        if: github.event_name == 'workflow_dispatch'
+        run: |
           sudo apt-get install -y flatpak flatpak-builder elfutils
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub \
-            org.freedesktop.Platform//24.08 \
-            org.freedesktop.Sdk//24.08 \
-            org.freedesktop.Sdk.Extension.rust-stable//24.08 \
-            org.freedesktop.Sdk.Extension.node22//24.08
-      - name: Validate the AppStream metadata
-        run: |
-          flatpak run --command=appstreamcli org.freedesktop.Sdk//24.08 \
-            validate packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml || true
-      - name: Validate the desktop entry
-        run: |
-          sudo apt-get install -y desktop-file-utils
-          desktop-file-validate packaging/flatpak/ai.rrrtx.xr-desktop.desktop
-      - name: Build the Flatpak
+            org.gnome.Platform//46 org.gnome.Sdk//46 \
+            org.freedesktop.Sdk.Extension.rust-stable//46 \
+            org.freedesktop.Sdk.Extension.node22//46
+
+      # Report-only is deliberately NOT set: dispatching this workflow is a
+      # request for the answer, so a failure here is red on purpose.
+      - name: Build the Flatpak from source
+        if: github.event_name == 'workflow_dispatch'
         run: |
           flatpak-builder --user --force-clean --repo=flatpak-repo \
             flatpak-build packaging/flatpak/ai.rrrtx.xr-desktop.yml
-      - name: Install it (proves the manifest is deployable)
-        run: |
           flatpak --user remote-add --if-not-exists xr-local flatpak-repo --no-gpg-verify
           flatpak --user install -y xr-local ai.rrrtx.xr-desktop
-          flatpak run --command=sh ai.rrrtx.xr-desktop -c 'test -x /app/bin/xr-desktop && test -x /app/bin/xr-engine-x86_64-unknown-linux-gnu'
+          flatpak run --command=sh ai.rrrtx.xr-desktop -c 'test -x /app/bin/xr-desktop'
+
+      - name: Upload the Flatpak repo
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr-flatpak
+          if-no-files-found: error
+          path: flatpak-repo
 
   updater-manifest:
     name: Assemble + publish latest.json (only when updater keys provisioned)

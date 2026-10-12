@@ -8,25 +8,42 @@ tray situation under GNOME, and the sandbox the engine actually runs skills in.
 ## Flatpak
 
 ```sh
-# One-time
-flatpak install flathub org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.rust-stable org.freedesktop.Sdk.Extension.node22
+# One-time: the GNOME runtime, not the freedesktop one — org.gnome.Platform is
+# the runtime that ships webkit2gtk-4.1, which is what a Tauri v2 app needs at
+# both build and run time. The two SDK extensions are the freedesktop ones.
+flatpak install flathub org.gnome.Platform//46 org.gnome.Sdk//46 \
+  org.freedesktop.Sdk.Extension.rust-stable//46 org.freedesktop.Sdk.Extension.node22//46
 
 # Build + install locally
 cd /path/to/xr
 flatpak-builder --user --install --force-clean build-dir packaging/flatpak/ai.rrrtx.xr-desktop.yml
 flatpak run ai.rrrtx.xr-desktop
 
-# Validate the metadata the way Flathub does
-flatpak run --command=appstreamcli org.freedesktop.Sdk//24.08 validate packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml
+# Validate the metadata the way Flathub does (both tools are in the Debian/Ubuntu
+# package `appstream` + `desktop-file-utils`; no runtime needed for these two)
+desktop-file-validate packaging/flatpak/ai.rrrtx.xr-desktop.desktop
+appstreamcli validate --no-net packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml
 ```
+
+**Status of this manifest.** Its metadata is validated in CI on every PR (both
+commands above), and `test/desktop/flatpak-metainfo.test.ts` pins the same rules
+offline. A full from-source `flatpak-builder` run has **not** been executed here:
+it needs the GNOME runtime and, for Flathub, vendored sources. CI runs it on
+`workflow_dispatch`, not on PRs — see *Before a Flathub submission* below.
 
 The manifest builds the **engine sidecar and the shell in one module**, because
 the shell without its engine is not a smaller XR — it is a window that cannot
-answer. `scripts/compile-sidecar.ts` runs under the SDK's Node toolchain (Bun is
-not in the SDK, and a build step that downloads a runtime is a supply-chain hole
-rather than a convenience), and `tauri build --no-bundle` is used deliberately:
-Flatpak installs files itself, so the bundler's own `.deb`/AppImage inside the
-sandbox would be dead weight.
+answer.
+
+Bun is a real requirement of this build, not a preference: the repo locks with
+`bun.lock` (there is no `package-lock.json`), and `scripts/compile-sidecar.ts`
+calls `Bun.spawnSync`. So rather than downloading a runtime mid-build — which is
+exactly the supply-chain hole a Flatpak manifest exists to avoid — bun is a
+**checksummed source** (`type: archive`, `sha256`, pinned to `.bun-version`), and
+flatpak-builder verifies it before anything runs. The Rust step is a plain
+`cargo build --release --locked` rather than `tauri build`: there is no `.deb` to
+produce inside the sandbox, and the frontend is built by the `beforeBuildCommand`
+in `tauri.conf.json` (`bun run build`) one command earlier.
 
 **Permissions, and why each one is there** (all in the manifest, none implicit):
 
@@ -34,10 +51,12 @@ sandbox would be dead weight.
 | --- | --- |
 | `--filesystem=home` | XR is a coding agent: reading and writing the user's projects is the product. It does **not** get `host`. |
 | `--share=network` | Provider calls, the update channel, the user's own MCP servers. The engine still binds loopback only. |
-| `--socket=x11`, `--socket=wayland` | Both toolkits; a Wayland session must not fall back to XWayland for the HUD. |
+| `--socket=wayland`, `--socket=fallback-x11` | Wayland first; X11 only where there is no Wayland session. |
+| `--device=dri` | WebKit renders through GL — without it the window comes up blank, which looks like an app crash. |
 | `--socket=pulseaudio`, `--device=all`, `--filesystem=xdg-run/pipewire-0` | Voice: capture and playback. Flatpak has no finer-grained microphone permission than `--device=all`; that is recorded here rather than hidden. |
 | `--talk-name=org.kde.StatusNotifierWatcher`, `--talk-name=org.ayatana.indicator.application` | The tray (AppIndicator) talks over the session bus. |
 | `--talk-name=org.freedesktop.Notifications` | The "update downloaded" OS notification when the window is hidden. |
+| `--filesystem=xdg-run/tray-icon:create` | Tray hosts that export the icon over a socket instead of the session bus. |
 | `--env=XR_HOME=/var/data/xr` | Keeps app data in the per-app directory instead of a sandboxed `$HOME/.xr`. |
 
 **PipeWire note.** XR's voice path asks for the default input device and does not
@@ -60,7 +79,7 @@ agree on the fields that change behaviour:
 
 | Field | Value | Why it matters |
 | --- | --- | --- |
-| `Categories` | `Development;AI;Utility;` | Matches `bundle.category = DeveloperTool`. A missing `Development` puts XR in the wrong menu and breaks `gtk-launch` lookups by category. |
+| `Categories` | `Development;Utility;` | Matches `bundle.category = DeveloperTool`. A missing `Development` puts XR in the wrong menu and breaks `gtk-launch` lookups by category. There is deliberately **no `AI` entry**: it is not a registered freedesktop category, so `desktop-file-validate` fails on it and menus ignore it — "AI" lives in `Keywords`, where it is actually searchable. (This was caught by CI, not by eye.) |
 | `MimeType` | `x-scheme-handler/xr` | From `bundle.fileAssociations` (Phase 27). Without it, `xr://` links open a browser. |
 | `StartupWMClass` | `xr-desktop` | Without it a taskbar shows a second, unnamed icon and the tray grouping looks broken. |
 | `Exec` | `xr-desktop %u` | `%u` carries the deep link as a URL. |
@@ -122,6 +141,26 @@ Inside a Flatpak, bwrap still runs (user namespaces are available); the outer
 sandbox narrows what the inner one can reach, which is the intended layering
 rather than a conflict.
 
+## Before a Flathub submission
+
+Three things stand between this manifest and a Flathub PR, and none of them are
+code changes to the app:
+
+1. **Vendor the Rust sources.** Flathub's builders have no network, so
+   `cargo build` cannot reach crates.io. Generate `cargo-sources.json` with
+   flathub's `flatpak-cargo-generator.py` and add it as the first source of the
+   module; that is what every Rust app on Flathub does.
+2. **Vendor the JavaScript dependencies.** Either a generated
+   `flatpak-node-generator` sources file, or the bun offline cache, so
+   `bun install --frozen-lockfile` resolves without a registry.
+3. **Real screenshots.** The metainfo currently points at the committed preview
+   renders under `previews/implementation/`, because those URLs resolve today and
+   a release-asset URL does not exist until its tag is cut. Replace them with
+   on-device captures before submitting.
+
+Until (1) and (2) exist, a `flatpak-builder` run works only on a machine with
+network access — which is what the `workflow_dispatch` CI job provides.
+
 ## Verifying a Linux package
 
 ```sh
@@ -132,6 +171,8 @@ sudo dpkg -i xr-desktop_*.deb && xr-desktop --version && sudo dpkg -r xr-desktop
 chmod +x XR_*.AppImage && ./XR_*.AppImage
 
 # Flatpak
+desktop-file-validate packaging/flatpak/ai.rrrtx.xr-desktop.desktop
+appstreamcli validate --no-net packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml
 flatpak-builder --user --install --force-clean build-dir packaging/flatpak/ai.rrrtx.xr-desktop.yml
 flatpak run ai.rrrtx.xr-desktop
 ```

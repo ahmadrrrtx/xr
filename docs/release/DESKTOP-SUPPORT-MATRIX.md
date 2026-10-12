@@ -26,7 +26,8 @@ Last updated: Phase 27 (`phase/27-shell-polish`), 2026-10-12.
 | Engine sidecar boots and pairs | Linux x64 | `bash scripts/smoke-sidecar.sh x86_64-unknown-linux-gnu` |
 | Windows tray/menu/updater/Job-Object behaviour | — | **not run here** (no Windows host or CI runner in this environment) |
 | macOS traffic lights, app menu, Template icon rendering | — | **not run here** (no macOS host) |
-| Flatpak build + install | — | **not run here** (no `flatpak-builder` in this environment) |
+| Flatpak **metadata** (`desktop-file-validate`, `appstreamcli`) | **both pass** | Ran here: the desktop entry and `appstreamcli validate --no-net` are clean, and `test/desktop/flatpak-metainfo.test.ts` pins the same rules. Two real defects came out of this — an unregistered `AI` category and a `--` inside an XML comment. |
+| Flatpak build + install | — | **not run here** (no `flatpak-builder` in this environment; it needs the GNOME runtime and vendored sources). The CI job runs it on `workflow_dispatch`. |
 | MSIX pack + sign | — | **not run here** (no Windows SDK) |
 
 The GUI itself cannot be launched in the environment this phase was built in —
@@ -123,7 +124,7 @@ is operator-run — see `docs/release/UPDATER.md`.
 | Windows `.msi` + NSIS `-setup.exe` | CI (`tauri build`) | the dual-flavour rule lives in `docs/release/UPDATER.md` |
 | Windows **MSIX** | implemented, **not built here** | `packaging/windows/msix/` (manifest + PowerShell pack/sign script + generated tiles); Tauri 2.12 has no `msix` bundle target, so the release job wraps the built app directory. Store submission is explicitly out of scope. |
 | Linux `.deb` / `.rpm` / AppImage | CI (`tauri build`) | unchanged |
-| Linux **Flatpak** | implemented, **not built here** | `packaging/flatpak/` + `docs/linux/PACKAGING.md`. Flathub-ready manifest and AppStream metainfo. Snap remains deferred. |
+| Linux **Flatpak** | metadata **validated**; build **not run here** | `packaging/flatpak/` + `docs/linux/PACKAGING.md`. Manifest targets the GNOME runtime (the one that ships webkit2gtk-4.1, which Tauri v2 needs) with a checksummed bun pin; AppStream + desktop entry validated in CI and offline by test. Snap remains deferred. |
 | Deep-link file association (`xr://`) | implemented | `bundle.fileAssociations` — carries the scheme into the Linux `.desktop` MimeType, Windows registry handlers and the MSIX protocol extension. |
 
 ## What this phase could not verify, and why

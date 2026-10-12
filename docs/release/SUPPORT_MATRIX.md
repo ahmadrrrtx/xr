@@ -51,8 +51,11 @@ They land only when install tests exist; see the known-limitations register.
 (`packaging/flatpak/`), AppStream metainfo and the permissions it needs written
 out one by one, plus a desktop entry that carries the `xr://` scheme and
 `StartupWMClass`. This is a *desktop shell* package, not an agent-runtime
-channel: it is built with `flatpak-builder` (docs/linux/PACKAGING.md), has not
-been built or installed in CI yet, and is recorded that way in
+channel: its manifest, desktop entry and AppStream metadata are validated on
+every PR that touches `packaging/**`, and a full `flatpak-builder` run — which
+needs the GNOME runtime and, for Flathub, vendored sources — is wired to
+`workflow_dispatch` in `.github/workflows/desktop-app.yml`. It has not been built
+or installed in this repository's CI yet, and is recorded that way in
 [DESKTOP-SUPPORT-MATRIX.md](DESKTOP-SUPPORT-MATRIX.md) rather than here.
 
 ## Support contract
