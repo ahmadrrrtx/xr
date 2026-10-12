@@ -1,10 +1,38 @@
 # Signed auto-updater (Tauri) — provisioning runbook
 
 Status: **wired, inert until provisioned**. The Rust shell registers
-`tauri-plugin-updater` and exposes a `check_update` command; the release
+`tauri-plugin-updater` and exposes the full command surface (`check_update`,
+`download_update`, `install_update`, `updates_state`, channel + auto-download +
+skip preferences — `desktop/src-tauri/src/commands/updates.rs`); the release
 pipeline assembles and publishes `latest.json` **only** when the operator
-secret exists. An unprovisioned install never half-updates: `check_update`
-returns an honest error and the Settings "updates" row says so.
+secret exists. An unprovisioned install never half-updates: every command
+returns `provisioned: false` with the reason and the operator command, and the
+Settings "updates" card lights up by itself once a pubkey is present — no code
+change, no rebuild flag.
+
+## The four rules the shell holds to
+
+1. **Unprovisioned is a state, not an error.** Nothing throws, nothing spins,
+   and the copy names the fix (`bun run scripts/generate-updater-keys.ts --apply`).
+2. **Channels are real at runtime.** `UpdaterBuilder::endpoints` follows the
+   user's Stable/Beta/Nightly choice (with an optional operator override under
+   `plugins.updater.channels`), instead of the endpoint being frozen at build
+   time. A prerelease version defaults to its own channel, so a beta tester is
+   not dragged onto Stable by the first stable release.
+3. **Bytes are never persisted.** `Update::download` is where the Ed25519
+   signature is checked; `install` trusts what it is handed. Writing a payload to
+   disk and installing it on the next launch would mean installing bytes that
+   skipped verification, so "Later" hides the banner for the session and a fresh
+   launch re-checks (and, with auto-download on, re-fetches) instead.
+4. **Auto-download is not auto-apply.** The toggle (default ON on Stable, opt-in
+   on Beta/Nightly) fetches and verifies in the background; the modal is the only
+   path that installs. Release CI, the signature check and the UI all assume a
+   human is in the loop.
+
+Windows installs hand over to the installer (`restart_after_install` is true by
+default); macOS and Linux relaunch the shell after a successful install. A
+channel switch discards anything already downloaded — those bytes came from the
+other channel's manifest.
 
 ## Why manual provisioning
 
@@ -46,8 +74,12 @@ violation, so the pair is created once by the operator:
 - `updater-manifest` job (tag pushes only) downloads the sig artifacts and
   runs `scripts/make-updater-manifest.ts`; zero platforms ⇒ publish skipped
   with a warning (honest). Otherwise `latest.json` is attached to the release.
-- The shell's `check_update` command + Settings "check" button then work
-  end-to-end; installs are passive-mode on Windows, standard elsewhere.
+- The shell's update surface then works end-to-end (Settings card, pending-update
+  banner, release-notes modal, Install & restart); installs are passive-mode on
+  Windows, standard elsewhere.
+- Before the keys exist there is nothing to fake, and the phase says so out
+  loud: `docs/release/DESKTOP-SUPPORT-MATRIX.md` records the provisioned path as
+  operator-run rather than tested.
 
 ## Windows: two installer flavours, one rule
 
