@@ -55,6 +55,10 @@ pub struct EngineState {
     containment: Mutex<Option<String>>,
     /// How many times this shell has (re)spawned the sidecar.
     generation: Mutex<u32>,
+    /// True when this session attached to an engine the USER started
+    /// (Phase 27 recovery: "start without the local engine") instead of
+    /// spawning our own sidecar.
+    external: Mutex<bool>,
     /// Job object holding the sidecar; closing it kills the engine.
     #[cfg(windows)]
     job: Mutex<Option<crate::win::JobObject>>,
@@ -127,6 +131,7 @@ pub fn spawn_sidecar(state: &Arc<EngineState>) {
     *lock(&state.token) = None;
     *lock(&state.note) = None;
     *lock(&state.containment) = None;
+    *lock(&state.external) = false;
     *lock(&state.generation) += 1;
     let generation = *lock(&state.generation);
 
@@ -219,6 +224,18 @@ pub fn spawn_sidecar(state: &Arc<EngineState>) {
     }
 }
 
+/// Deliberately do not spawn this session (Phase 27 crash recovery: "start
+/// without the local engine"). The note is what `engine_link` reports, so the
+/// webview shows the engine as absent instead of spinning forever.
+pub fn skip_spawn(state: &EngineState, reason: &str) {
+    *lock(&state.port) = None;
+    *lock(&state.token) = None;
+    *lock(&state.containment) = None;
+    *lock(&state.external) = false;
+    *lock(&state.note) = Some(reason.to_string());
+    *lock(&state.generation) += 1;
+}
+
 /// Stop the sidecar we own (SIGTERM first on Unix, bounded grace), if any.
 /// Returns whether a child was running.
 pub fn stop_sidecar(state: &EngineState, grace: Duration) -> bool {
@@ -243,6 +260,61 @@ pub fn stop_sidecar(state: &EngineState, grace: Duration) -> bool {
         *cache = ProbeCache::default();
     }
     true
+}
+
+/// Point this shell at an engine it did not spawn (Phase 27 crash recovery).
+///
+/// Used only after the user has confirmed the port and pasted the engine's
+/// token: the link then behaves exactly like a spawned one for the webview,
+/// while `engine_link.mode` reports "external" so nothing pretends the shell
+/// owns a process it does not.
+pub fn attach_external(state: &EngineState, port: u16, token: String) {
+    *lock(&state.port) = Some(port);
+    *lock(&state.token) = Some(token);
+    *lock(&state.note) = None;
+    *lock(&state.containment) = None;
+    *lock(&state.external) = true;
+    if let Ok(mut cache) = state.probe_cache.lock() {
+        *cache = ProbeCache::default();
+    }
+}
+
+/// Read-only view for modules that must not hold the locks (tray, recovery).
+#[derive(Debug, Clone, Default)]
+pub struct EngineSnapshot {
+    /// A live child process exists (a spawn, not an attach).
+    pub spawned: bool,
+    pub external: bool,
+    pub port: Option<u16>,
+    pub note: Option<String>,
+    pub containment: Option<String>,
+    pub stderr_tail: Vec<String>,
+}
+
+impl EngineSnapshot {
+    /// The engine is usable right now (linked and, as far as we know, alive).
+    pub fn is_up(&self) -> bool {
+        self.port.is_some() && self.note.is_none()
+    }
+
+    /// The last spawn/start attempt failed — the honest input for the
+    /// "start without the local engine" offer.
+    pub fn spawn_failed(&self) -> bool {
+        self.note
+            .as_deref()
+            .is_some_and(|n| n.starts_with("spawn failed") || n.starts_with("sidecar binary not found"))
+    }
+}
+
+pub fn snapshot(state: &EngineState) -> EngineSnapshot {
+    EngineSnapshot {
+        spawned: lock(&state.child).is_some(),
+        external: *lock(&state.external),
+        port: *lock(&state.port),
+        note: lock(&state.note).clone(),
+        containment: lock(&state.containment).clone(),
+        stderr_tail: lock(&state.stderr_tail).last(20),
+    }
 }
 
 /// Which crash-containment mechanism is actually in force for the sidecar.
@@ -270,11 +342,14 @@ pub fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
     let spawned = lock(&state.child).is_some();
     let stderr: Vec<String> = lock(&state.stderr_tail).last(5);
 
+    let external = *lock(&state.external);
     if let (Some(port), Some(linked_token)) = (port, token.clone()) {
         if probe_reachable(state.inner(), port) {
             return serde_json::json!({
                 "reachable": true,
-                "spawned": true,
+                // An attached engine is reachable but was never spawned by us.
+                "spawned": spawned && !external,
+                "mode": if external { "external" } else { "sidecar" },
                 "port": port,
                 "token": linked_token,
                 "containment": containment,
@@ -287,7 +362,8 @@ pub fn engine_link(state: State<'_, Arc<EngineState>>) -> serde_json::Value {
         "reachable": false,
         // `spawned` stays true while a live child is still printing its
         // banner, so the webview keeps polling instead of giving up early.
-        "spawned": spawned && note.is_none(),
+        "spawned": spawned && note.is_none() && !external,
+        "mode": if external { "external" } else { "sidecar" },
         "port": port,
         "hasToken": token.is_some(),
         "reason": note,
