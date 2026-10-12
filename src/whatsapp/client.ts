@@ -4,8 +4,9 @@
  * One class wraps a linked-device socket and turns the raw protocol into the
  * three things the rest of XR needs: normalized incoming messages, a connection
  * state, and a QR frame stream for the dialog. The real socket comes from
- * Baileys, imported lazily so a user who never links WhatsApp never loads it;
- * tests inject a fake socket and never touch the package.
+ * Baileys through `baileys.ts` — an opt-in runtime (its GPL-3.0 libsignal is not
+ * in this repo's lockfile; see that file) loaded lazily, so a user who never
+ * links WhatsApp never loads it and tests never touch the package at all.
  *
  * Deliberate choices, mirrored from the Discord adapter:
  *   · no history sync. `syncFullHistory: false` is passed, `messaging-history`
@@ -20,21 +21,9 @@
 import type { MediaDownloader, WhatsAppConnectionState, WhatsAppIncoming, WhatsAppMedia, WhatsAppQrFrame, WhatsAppSocket } from "./types.ts";
 import { DISCONNECT } from "./types.ts";
 import type { WhatsAppAuthState, WhatsAppCredsStore } from "./creds.ts";
+import { loadBaileys } from "./baileys.ts";
 import { maskPhone, maskPhonesInText, phoneFromJid } from "./auth.ts";
 import { loadWhatsAppAuthState } from "./creds.ts";
-
-type BaileysModule = typeof import("@whiskeysockets/baileys");
-
-/** Baileys is an optional dependency: fail with words, not a stack trace. */
-async function loadBaileys(): Promise<BaileysModule> {
-  try {
-    return (await import("@whiskeysockets/baileys")) as BaileysModule;
-  } catch {
-    throw new Error(
-      "WhatsApp support needs the optional @whiskeysockets/baileys package. Install it (bun add @whiskeysockets/baileys) and restart the daemon.",
-    );
-  }
-}
 
 /** Render a QR payload as a PNG data URL. Same lazy-import rule as Baileys. */
 export async function qrToDataUrl(text: string): Promise<string> {

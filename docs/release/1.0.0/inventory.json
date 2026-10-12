@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-12T14:07:56.499Z",
+  "generatedAt": "2026-10-12T14:48:42.877Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -26,7 +26,6 @@
       "xr": "./bin/xr"
     },
     "dependencies": {
-      "@whiskeysockets/baileys": "6.7.24",
       "qrcode": "^1.5.4",
       "unpdf": "^1.8.1",
       "zod": "^3.23.8"
@@ -55,7 +54,7 @@
     ]
   },
   "counts": {
-    "sourceFiles": 724,
+    "sourceFiles": 725,
     "testFiles": 379,
     "cliCommands": 43,
     "daemonRoutes": 283,
@@ -119,7 +118,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 43982
+      "bytes": 44927
     },
     {
       "path": "SECURITY.md",
@@ -127,7 +126,7 @@
     },
     {
       "path": "bun.lock",
-      "bytes": 41118
+      "bytes": 16267
     },
     {
       "path": "bunfig.toml",
@@ -147,7 +146,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 5588
+      "bytes": 5547
     },
     {
       "path": "release.manifest.json",
@@ -873,6 +872,7 @@
     "src/voice/wake.ts",
     "src/whatsapp/attachments.ts",
     "src/whatsapp/auth.ts",
+    "src/whatsapp/baileys.ts",
     "src/whatsapp/bot.ts",
     "src/whatsapp/client.ts",
     "src/whatsapp/commands.ts",

@@ -136,7 +136,8 @@ The bot talks only to `discord.com` (REST), `gateway.discord.gg` (gateway, or th
 
 ```
 src/whatsapp/
-  client.ts       linked-device socket (Baileys, lazy) + QR → PNG + normalization
+  baileys.ts      the opt-in runtime boundary: structural types, the loader, the install hint
+  client.ts       linked-device socket (Baileys through baileys.ts) + QR → PNG + normalization
   types.ts        structural socket view, normalized incoming message, disconnect codes
   creds.ts        sealed credential blob (~/.xr/whatsapp/creds.sealed, AES-256-GCM)
   state.ts        ~/.xr/whatsapp/state.json (0600): link label, chats, outbox
@@ -234,10 +235,30 @@ because there is no URL XR can be pointed at.
    dedicated sealed file under `~/.xr/whatsapp/`, 0600, atomic, wiped on
    `loggedOut`. Nothing plaintext is ever written, and a test asserts the sealed
    file contains neither the string `noiseKey` nor the raw key material.
+   (The 0600 assertion is POSIX-only: Windows has no mode bits, so `statSync().mode`
+   reports `0o666` for every file there. It is guarded, not skipped — the sealing,
+   round-trip and "no plaintext" assertions run on every platform, the same shape
+   the release suite uses in `test/release/beta-survey.test.ts`.)
 7. **Busy-reply and budget behavior is deliberate.** A second task in a chat is
    refused in words (one task per chat, `/xr stop` cancels), and a chat that has
    spent its cap is told so before any model call — both are asserted in tests.
-8. **The repo's tree ceiling moved twice: 160,000 → 164,000 (PR 2) → 168,000 (PR 3)** — each
+8. **The Baileys runtime is opt-in and is not a dependency of this repo.** That is the one
+   deviation the CI gate forced, and it is a licensing decision rather than a design
+   preference: Baileys depends on `libsignal-node`, which is **GPL-3.0**, and
+   `scripts/license-check.ts` — a Quality Gate job — fails the build on copyleft
+   dependencies. So Baileys is not in `package.json` and not in `bun.lock`; the user installs
+   it where the daemon runs (`bun add @whiskeysockets/baileys`). The adapter pays one price for
+   that: it cannot use Baileys' types either (a type-only import still requires the package to
+   typecheck, and a devDependency for convenience would put the GPL tree back in the lockfile),
+   so the eleven members XR calls are declared structurally in `src/whatsapp/baileys.ts`. The
+   surface stays fully typed and fully testable without the package — the WhatsApp suite runs
+   against a fake socket with Baileys absent, which is the normal install. `/api/whatsapp/status`
+   reports `runtime: { installed, hint }`, the desktop disables the QR button and shows the
+   reason, and the hint names the license so the choice is the user's. If you would rather
+   bundle it, the alternative is one dated entry in the license allowlist (`ALLOWLIST` in
+   `scripts/license-check.ts`) — the agent did not take that decision for you.
+
+9. **The repo's tree ceiling moved twice: 160,000 → 164,000 (PR 2) → 168,000 (PR 3)** — each
    raise lands in its own diff with its measured number in `scripts/size-gate.ts`. Measured at
    each step: `main` 159,870, Discord PR head 163,856, WhatsApp PR head 166,968 (99.4% of the
    new ceiling). This is the deliberate mechanism Phase 24 used for Telegram, and PR 2's note

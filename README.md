@@ -574,6 +574,12 @@ conservative surface in the product:
   links through the open-source Baileys library — the same protocol your phone speaks. That is
   against WhatsApp's terms for automated use, and accounts have been banned for it. Use a
   number you can afford to lose.
+- **That client is opt-in, and it is not bundled.** Baileys links against `libsignal-node`,
+  which is **GPL-3.0**, and this project ships only permissive dependencies — the license gate
+  in CI is a release invariant, not a suggestion. So nothing is installed behind your back:
+  add it yourself where the daemon runs (`bun add @whiskeysockets/baileys`) and restart XR.
+  Until then the WhatsApp card says so plainly, the QR button stays disabled, and no socket is
+  ever opened. Nothing else in XR changes: `qrcode` (MIT) still renders the pairing frames.
 - **Linking authorizes nobody.** After pairing, the allow-list is still empty: add the contacts
   you want (digits with country code) or switch on *"respond to contacts I message first"*,
   which answers numbers you wrote to first — learned from live messages, never from your chat

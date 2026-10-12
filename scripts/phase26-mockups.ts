@@ -131,6 +131,8 @@ const THEME = `
     display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px;
     border: 1px solid var(--warning); background: var(--bg-raised); font-size: 13px;
   }
+  .notice p code { font-family: var(--font-mono); font-size: 12px; }
+  .btn--off { opacity: 0.45; }
   .notice p { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); }
   .paircode {
     display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 12px 14px;
@@ -151,6 +153,10 @@ const THEME = `
     background: #fff; display: grid; place-items: center; overflow: hidden;
   }
   .qr__meta { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; min-height: 18px; }
+  .qr__placeholder {
+    padding: 16px; text-align: center; font-size: 13px; color: var(--text-secondary);
+    display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: var(--bg-raised);
+  }
   .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
   .list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .logs {
@@ -403,7 +409,7 @@ const discordSettings = shell(
 
 const whatsappConnect = shell(
   "XR · Connect WhatsApp",
-  `${CAPTION("The WhatsApp connect dialog. The risk acknowledgement comes before the QR: linking uses an unofficial client, so the user has to say they understand before a code is minted. The QR area is 300×300 and follows the engine's frame stream.")}
+  `${CAPTION("The WhatsApp connect dialog. The risk acknowledgement comes before the QR: linking uses an unofficial client, so the user has to say they understand before a code is minted. The QR area is 300×300 and follows the engine's frame stream. The last panel is the state a fresh install is in — the Baileys runtime is opt-in and not bundled (GPL-3.0 libsignal), so the QR button is disabled until it is installed.")}
   <h1>Connect WhatsApp</h1>
   <div class="row">
     <section class="dialog" aria-label="Step 1: disclosure and QR">
@@ -446,6 +452,32 @@ const whatsappConnect = shell(
         </div>
         <p class="hint">Both images are genuinely different QR codes — the generator encodes two different payloads, the way
           WhatsApp's stream produces new frames.</p>
+      </div>
+    </section>
+
+    <section class="dialog" aria-label="Runtime not installed">
+      <div>
+        <h2 class="dialog__title">Connect WhatsApp</h2>
+        <p class="dialog__desc">The state a fresh install is in — and the reason the QR button is off.</p>
+      </div>
+      <div class="form">
+        <div class="notice">
+          <span aria-hidden="true">⚠️</span>
+          <div>
+            <strong>⚠️ Runtime not installed</strong>
+            <p>WhatsApp support needs the optional <code>@whiskeysockets/baileys</code> runtime, which XR cannot bundle:
+              it links against GPL-3.0 libsignal, and this project's release pipeline only ships permissive licenses.
+              Install it where the XR daemon runs (<code>bun add @whiskeysockets/baileys</code>) and restart the daemon.</p>
+          </div>
+        </div>
+        <div class="qr">
+          <div class="qr__frame"><div class="qr__placeholder">Waiting for WhatsApp to send a code…</div></div>
+          <div class="qr__meta"></div>
+        </div>
+        <label class="check"><input type="checkbox" checked /> I understand: this uses an unofficial WhatsApp client, and my
+          account could be banned.</label>
+        <p class="hint">Install the runtime, then reopen this dialog.</p>
+        <div class="foot"><span class="btn btn--ghost">Close</span><span class="btn btn--outline btn--off">Show QR code</span></div>
       </div>
     </section>
 

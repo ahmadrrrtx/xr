@@ -292,7 +292,22 @@ test("render: WhatsApp dialect, splitting and the numbered menu", () => {
 
 // ── sealed credentials ─────────────────────────────────────────────────────
 
-test("creds: the session blob is sealed, 0600, and never plaintext", () => {
+/**
+ * Windows has no POSIX mode bits: `statSync().mode` reports 0o666 for every
+ * file there, and the `mode:` passed to writeFileSync is a no-op on NTFS (the
+ * ACL is inherited instead). So the permission half of these two assertions is
+ * POSIX-only — guarded rather than skipped, because everything else they check
+ * (sealed content, round-trip, no plaintext) must hold on every platform. The
+ * release suite has the same shape (`test/release/beta-survey.test.ts`).
+ */
+const POSIX_MODES = process.platform !== "win32";
+/** Assert the file is owner-only where mode bits exist. */
+function expectOwnerOnly(path: string): void {
+  if (POSIX_MODES) expect(statSync(path).mode & 0o777).toBe(0o600);
+  else expect(existsSync(path)).toBe(true);
+}
+
+test("creds: the session blob is sealed, 0600 where POSIX modes exist, and never plaintext", () => {
   const dir = join(tmp, "wa");
   const creds = new WhatsAppCredsStore({ dir, now: () => 1_700_000_000_000 });
   expect(creds.exists()).toBe(false);
@@ -304,8 +319,7 @@ test("creds: the session blob is sealed, 0600, and never plaintext", () => {
   });
 
   const path = join(dir, "creds.sealed");
-  expect(existsSync(path)).toBe(true);
-  expect(statSync(path).mode & 0o777).toBe(0o600);
+  expectOwnerOnly(path);
   const sealedText = creds.peekSealed() ?? "";
   expect(sealedText.startsWith("XRG1.")).toBe(true);
   expect(sealedText).not.toContain("noiseKey");
@@ -349,13 +363,13 @@ test("creds: buffer codec round-trips, and the write-through key store persists"
   expect(Buffer.isBuffer((await reopened.keys.get("session", ["peer:1"]))["peer:1"])).toBe(true);
 });
 
-test("state: runtime state round-trips and stays 0600", () => {
+test("state: runtime state round-trips and stays owner-only", () => {
   const path = join(tmp, "state.json");
   saveWhatsAppState(
     { selfJid: SELF_JID, selfLabel: "…1111", linkedAt: 1, chats: { [PHONE]: { model: "m" } }, labels: { [PHONE]: "Ana" }, outbox: [FRIEND] },
     path,
   );
-  expect(statSync(path).mode & 0o777).toBe(0o600);
+  expectOwnerOnly(path);
   const loaded = loadWhatsAppState(path);
   expect(loaded.selfJid).toBe(SELF_JID);
   expect(loaded.chats[PHONE]).toEqual({ model: "m" });
@@ -870,6 +884,15 @@ test("manager: loggedOut wipes the credentials, and unpair cleans everything", a
   await tick(30);
   expect(creds.exists()).toBe(false);
   expect((await m.status()).linkedAs).toBeNull();
+  // Baileys is an opt-in runtime: it is deliberately not a dependency of this
+  // repo (GPL-3.0 libsignal fails the license gate), so the status view has to
+  // be able to say "install this first" before a user scans a QR. The probe is
+  // injected so the assertion holds whatever happens to be in node_modules.
+  const runtime = (await makeManager({ runtimeProbe: async () => false }).m.status()).runtime;
+  expect(runtime.installed).toBe(false);
+  expect(runtime.hint).toContain("@whiskeysockets/baileys");
+  expect(runtime.hint).toContain("GPL-3.0");
+  expect((await makeManager({ runtimeProbe: async () => true }).m.status()).runtime.installed).toBe(true);
   expect(store.recentAudit().some((e) => e.event === "whatsapp.unlinked")).toBe(true);
 
   const { m: m2 } = makeManager();

@@ -95,6 +95,10 @@ export function WhatsAppConnectDialog() {
   const formId = useId();
 
   const linked = Boolean(status?.linked);
+  // The runtime is a prerequisite, not a detail: without it the socket cannot
+  // be built, so the QR is not worth minting. The engine's own wording is used
+  // (one sentence, shared with the error path and the README).
+  const runtimeMissing = status ? !status.runtime.installed : false;
 
   const startPairing = async () => {
     setBusy(true);
@@ -166,6 +170,16 @@ export function WhatsAppConnectDialog() {
             I understand: this uses an unofficial WhatsApp client, and my account could be banned.
           </label>
 
+          {runtimeMissing && (
+            <div className="ix-notice ix-notice--warn" role="alert" data-testid="whatsapp-runtime-missing">
+              <TriangleAlert size={16} aria-hidden="true" />
+              <div>
+                <strong>⚠️ Runtime not installed</strong>
+                <p>{status?.runtime.hint}</p>
+              </div>
+            </div>
+          )}
+
           {!linked && (
             <>
               <QrArea active={pairing} onRefresh={() => void startPairing()} refreshBusy={busy} />
@@ -173,10 +187,11 @@ export function WhatsAppConnectDialog() {
                 On your phone: <strong>Settings → Linked devices → Link a device</strong>, then scan this code. WhatsApp rotates it every
                 twenty seconds — XR follows along.
               </p>
-              <Button onClick={() => void startPairing()} disabled={!understood || busy || pairing} aria-disabled={!understood}>
+              <Button onClick={() => void startPairing()} disabled={!understood || busy || pairing || runtimeMissing} aria-disabled={!understood || runtimeMissing}>
                 {pairing ? 'Waiting for the scan…' : busy ? 'Opening…' : 'Show QR code'}
               </Button>
               {!understood && <p className="ix-form__hint">Tick the box above to continue.</p>}
+              {understood && runtimeMissing && <p className="ix-form__hint">Install the runtime, then reopen this dialog.</p>}
             </>
           )}
 
@@ -295,6 +310,9 @@ export function WhatsAppSettingsDialog() {
           <p className="ix-form__hint">
             Session: {status.creds.linked ? `sealed on disk (${status.creds.keyCount} key${status.creds.keyCount === 1 ? '' : 's'})` : 'no linked device'} ·
             history payloads declined: {status.historyDropped}
+          </p>
+          <p className="ix-form__hint" data-testid="whatsapp-runtime-state">
+            Runtime: {status.runtime.installed ? 'baileys present' : 'not installed (unofficial client not bundled)'}
           </p>
 
           <section aria-labelledby={`${formId}-contacts`}>

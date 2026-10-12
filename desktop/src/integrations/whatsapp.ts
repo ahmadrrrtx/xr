@@ -43,6 +43,12 @@ export interface WhatsAppStatus {
   settings: { rateLimitPerMin: number; maxAttachmentBytes: number; selfJid: string | null };
   chats: Record<string, { model?: string; budgetUsd?: number }>;
   creds: { linked: boolean; updatedAt: number | null; keyCount: number; bytes: number };
+  /**
+   * Whether the opt-in Baileys runtime is installed. XR cannot bundle it (its
+   * GPL-3.0 libsignal fails this repo's license gate), so the dialog says so
+   * before a QR is minted instead of failing at link time.
+   */
+  runtime: { installed: boolean; hint: string };
   /** How many history payloads XR declined — proof it did not read your archive. */
   historyDropped: number;
   /** The unofficial-client disclosure, worded once by the engine. */

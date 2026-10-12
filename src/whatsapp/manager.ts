@@ -15,6 +15,7 @@
 import type { Store } from "../state/workspace-store.ts";
 import { loadConfig, saveConfig, type XRConfig } from "../config/config.ts";
 import { WhatsAppBot, type WhatsAppTransport } from "./bot.ts";
+import { RUNTIME_MISSING_MESSAGE, isRuntimeInstalled } from "./baileys.ts";
 import { WhatsAppClient } from "./client.ts";
 import { WhatsAppCredsStore, whatsappDir } from "./creds.ts";
 import { WhatsAppGate, jidForPhone, maskPhone, maskPhonesInText, normalizePhone, phoneFromJid } from "./auth.ts";
@@ -35,6 +36,12 @@ export interface WhatsAppManagerOptions {
   now?: () => number;
   /** Test seams: a fake socket, a fake media downloader, a fixed state path. */
   socketFactory?: () => Promise<WhatsAppSocket>;
+  /**
+   * Whether the optional Baileys runtime can be imported. Injectable so the
+   * status view can be tested without the package installed (which is the
+   * normal case: it is not a dependency of this repo).
+   */
+  runtimeProbe?: () => Promise<boolean>;
   mediaDownloader?: MediaDownloader | null;
   statePath?: string;
   credsDir?: string;
@@ -56,6 +63,13 @@ export interface WhatsAppStatusView {
   settings: { rateLimitPerMin: number; maxAttachmentBytes: number; selfJid: string | null };
   chats: Record<string, ChatSettings>;
   creds: { linked: boolean; updatedAt: number | null; keyCount: number; bytes: number };
+  /**
+   * Whether the opt-in Baileys runtime is importable. It is deliberately not a
+   * dependency of this repo (its GPL-3.0 libsignal would fail the license gate),
+   * so the dialog has to be able to say "install this first" before a QR is
+   * minted rather than fail at link time.
+   */
+  runtime: { installed: boolean; hint: string };
   /** Proof that XR did not ingest the phone's history. */
   historyDropped: number;
   /** The disclosure the dialog must show before linking. */
@@ -463,9 +477,22 @@ export class WhatsAppManager {
       },
       chats: this.state.chats,
       creds: summary,
+      runtime: { installed: await this.runtimeInstalled(), hint: RUNTIME_MISSING_MESSAGE },
       historyDropped: this.clientRef?.historyDropped ?? 0,
       notice: UNOFFICIAL_CLIENT_NOTICE,
     };
+  }
+
+  /**
+   * Cached runtime probe: the answer only changes when someone installs or
+   * removes the package, and a dynamic import per status poll would be wasteful.
+   */
+  private runtimeCache: boolean | null = null;
+  private async runtimeInstalled(): Promise<boolean> {
+    if (this.runtimeCache === null) {
+      this.runtimeCache = await (this.opts.runtimeProbe ?? isRuntimeInstalled)();
+    }
+    return this.runtimeCache;
   }
 
   /** Filesystem facts for the dialog ("stored at ~/.xr/whatsapp"). */
