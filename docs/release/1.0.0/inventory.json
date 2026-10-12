@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-12T13:23:22.226Z",
+  "generatedAt": "2026-10-12T13:53:11.693Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -26,6 +26,8 @@
       "xr": "./bin/xr"
     },
     "dependencies": {
+      "@whiskeysockets/baileys": "6.7.24",
+      "qrcode": "^1.5.4",
       "unpdf": "^1.8.1",
       "zod": "^3.23.8"
     },
@@ -34,6 +36,7 @@
     },
     "devDependencies": {
       "@types/bun": "latest",
+      "@types/qrcode": "^1.5.6",
       "axe-core": "^4.13.0",
       "dependency-cruiser": "^17.0.0",
       "typescript": "^5.5.0"
@@ -52,10 +55,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 710,
-    "testFiles": 378,
+    "sourceFiles": 724,
+    "testFiles": 379,
     "cliCommands": 43,
-    "daemonRoutes": 270,
+    "daemonRoutes": 283,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -116,7 +119,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 42421
+      "bytes": 43982
     },
     {
       "path": "SECURITY.md",
@@ -124,7 +127,7 @@
     },
     {
       "path": "bun.lock",
-      "bytes": 11129
+      "bytes": 41118
     },
     {
       "path": "bunfig.toml",
@@ -144,7 +147,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 5492
+      "bytes": 5588
     },
     {
       "path": "release.manifest.json",
@@ -407,6 +410,7 @@
     "src/daemon/routes/contract-memory.ts",
     "src/daemon/routes/contract-research.ts",
     "src/daemon/routes/contract-telegram.ts",
+    "src/daemon/routes/contract-whatsapp.ts",
     "src/daemon/routes/contract.ts",
     "src/daemon/routes/control.routes.ts",
     "src/daemon/routes/custom-agents.routes.ts",
@@ -432,6 +436,7 @@
     "src/daemon/routes/schemas-memory.ts",
     "src/daemon/routes/schemas-research.ts",
     "src/daemon/routes/schemas-telegram.ts",
+    "src/daemon/routes/schemas-whatsapp.ts",
     "src/daemon/routes/schemas.ts",
     "src/daemon/routes/shield.routes.ts",
     "src/daemon/routes/system.routes.ts",
@@ -441,6 +446,7 @@
     "src/daemon/routes/trust.routes.ts",
     "src/daemon/routes/ui-state.routes.ts",
     "src/daemon/routes/voice.routes.ts",
+    "src/daemon/routes/whatsapp.routes.ts",
     "src/daemon/routes/workflows.routes.ts",
     "src/daemon/server.ts",
     "src/daemon/skills-api.ts",
@@ -865,6 +871,17 @@
     "src/voice/v2.ts",
     "src/voice/vad.ts",
     "src/voice/wake.ts",
+    "src/whatsapp/attachments.ts",
+    "src/whatsapp/auth.ts",
+    "src/whatsapp/bot.ts",
+    "src/whatsapp/client.ts",
+    "src/whatsapp/commands.ts",
+    "src/whatsapp/creds.ts",
+    "src/whatsapp/manager.ts",
+    "src/whatsapp/render.ts",
+    "src/whatsapp/state.ts",
+    "src/whatsapp/tasks.ts",
+    "src/whatsapp/types.ts",
     "src/xr-shield/index.ts"
   ],
   "tests": [
@@ -1243,6 +1260,7 @@
     "test/voice/session-states.test.ts",
     "test/voice/session.test.ts",
     "test/voice/transcript.test.ts",
+    "test/whatsapp/phase26.test.ts",
     "test/workflow/engine.test.ts",
     "test/workflow/phase19-canvas.test.ts",
     "test/workflow/types.test.ts"
@@ -3293,6 +3311,97 @@
       "id": "voice.voices",
       "method": "GET",
       "path": "/api/voice/voices",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.connect",
+      "method": "POST",
+      "path": "/api/whatsapp/connect",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.contacts.add",
+      "method": "POST",
+      "path": "/api/whatsapp/contacts/add",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.contacts.remove",
+      "method": "POST",
+      "path": "/api/whatsapp/contacts/remove",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.disconnect",
+      "method": "POST",
+      "path": "/api/whatsapp/disconnect",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.logs",
+      "method": "GET",
+      "path": "/api/whatsapp/logs",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.pair",
+      "method": "POST",
+      "path": "/api/whatsapp/pair",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.pair.close",
+      "method": "POST",
+      "path": "/api/whatsapp/pair/close",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.qr",
+      "method": "GET",
+      "path": "/api/whatsapp/qr",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.settings",
+      "method": "POST",
+      "path": "/api/whatsapp/settings",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.start",
+      "method": "POST",
+      "path": "/api/whatsapp/start",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.status",
+      "method": "GET",
+      "path": "/api/whatsapp/status",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.stop",
+      "method": "POST",
+      "path": "/api/whatsapp/stop",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/whatsapp.routes.ts",
+      "id": "whatsapp.unpair",
+      "method": "POST",
+      "path": "/api/whatsapp/unpair",
       "auth": "local bearer token or dashboard query token"
     },
     {

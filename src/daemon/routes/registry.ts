@@ -39,6 +39,7 @@ import { workflowsRoutes } from "./workflows.routes.ts";
 import { mcpRoutes } from "./mcp.routes.ts";
 import { telegramRoutes } from "./telegram.routes.ts";
 import { discordRoutes } from "./discord.routes.ts";
+import { whatsappRoutes } from "./whatsapp.routes.ts";
 import type { DaemonRoute } from "./router.ts";
 import { API_CONTRACT, V1_PREFIX, type ApiOperationMeta } from "./contract.ts";
 
@@ -84,6 +85,8 @@ export function listBaseRoutes(): DaemonRoute[] {
     ...mcpRoutes(),
     ...telegramRoutes(),
     ...discordRoutes(),
+    // Phase 26 — WhatsApp (linked device; QR pairing streamed over SSE).
+    ...whatsappRoutes(),
     ...extensionRoutes(),
     ...controlRoutes(),
     ...environmentRoutes(),

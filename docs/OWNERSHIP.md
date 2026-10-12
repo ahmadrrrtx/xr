@@ -57,6 +57,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `src/update/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/util/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/voice/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `src/whatsapp/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/xr-shield/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/a11y/` | @ahmadrrrtx | explicit entry |
 | `test/agent-cancel.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -141,6 +142,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/ux/` | @ahmadrrrtx | explicit entry |
 | `test/voice.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/voice/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/whatsapp/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/workflow/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/api-compat.ts` | @ahmadrrrtx | explicit entry |
 | `scripts/baseline-inventory.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
