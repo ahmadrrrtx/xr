@@ -365,7 +365,14 @@ jobs:
   #     author can act on.
   flatpak:
     name: Linux — Flatpak metadata (required) + build (workflow_dispatch)
-    runs-on: ubuntu-22.04
+    # 24.04, not 22.04, for one specific reason: the AppStream CLI on 22.04 is
+    # from 2022 and does not know the modern tags this metadata uses — it reports
+    # `<developer>` as an unknown tag and `url type="vcs-browser"` as invalid,
+    # and its "warning" exit code fails the job on metadata that Flathub's
+    # current validator accepts. Validating with a decade-old parser would push
+    # us to write 2015-shaped metadata. Flathub runs a current appstreamcli; so
+    # does this job, and it prints the version it used.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: Checkout
@@ -375,6 +382,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y desktop-file-utils appstream
+          appstreamcli --version
+          desktop-file-validate --version
 
       - name: Validate the desktop entry (registered categories only)
         run: desktop-file-validate packaging/flatpak/ai.rrrtx.xr-desktop.desktop
@@ -382,22 +391,18 @@ jobs:
       - name: Validate the AppStream metadata (offline, deterministic)
         run: appstreamcli validate --no-net packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml
 
-      - name: Validate the manifest structure
-        run: |
-          python3 - <<'PY'
-          import sys, yaml
-          d = yaml.safe_load(open('packaging/flatpak/ai.rrrtx.xr-desktop.yml'))
-          assert d['runtime'] == 'org.gnome.Platform', d['runtime']
-          assert d['command'] == 'xr-desktop'
-          args = ' '.join(d['finish-args'])
-          assert '--filesystem=home' in args and '--filesystem=host' not in args
-          urls = [s['url'] for s in d['modules'][0]['sources'] if s.get('url')]
-          assert len(urls) == 2 and all(u.startswith('https://') for u in urls), urls
-          for src in d['modules'][0]['sources']:
-              if src.get('url'):
-                  assert len(src['sha256']) == 64, src
-          print('manifest OK:', d['id'], d['runtime'], d['runtime-version'])
-          PY
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      # The manifest is checked by the same test that runs locally, so CI and
+      # `bun test test/desktop/` can never disagree about what is required:
+      # GNOME runtime (webkit2gtk-4.1), home but never host, checksummed sources
+      # pinned to .bun-version, no reintroduced `npm ci`, sidecar next to the
+      # shell under /app/bin.
+      - name: Validate the manifest (shared with the unit suite)
+        run: bun test test/desktop/flatpak-metainfo.test.ts
 
       - name: Install flatpak + builder + the GNOME runtime
         if: github.event_name == 'workflow_dispatch'

@@ -27,7 +27,12 @@ appstreamcli validate --no-net packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xm
 
 **Status of this manifest.** Its metadata is validated in CI on every PR (both
 commands above), and `test/desktop/flatpak-metainfo.test.ts` pins the same rules
-offline. A full from-source `flatpak-builder` run has **not** been executed here:
+offline. The CI job runs on **ubuntu-24.04** deliberately: the AppStream CLI in
+22.04 is from 2022, reports the modern `<developer>` tag as unknown and
+`url type="vcs-browser"` as invalid, and fails on metadata that Flathub's current
+validator accepts. Validating against an ancient parser would push this file back
+to 2015-shaped metadata; the job prints `appstreamcli --version` so a future skew
+is visible rather than mysterious. A full from-source `flatpak-builder` run has **not** been executed here:
 it needs the GNOME runtime and, for Flathub, vendored sources. CI runs it on
 `workflow_dispatch`, not on PRs — see *Before a Flathub submission* below.
 
