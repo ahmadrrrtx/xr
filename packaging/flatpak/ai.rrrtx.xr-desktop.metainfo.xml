@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metadata (Flathub-ready: `appstreamcli validate` clean).
+
+  The screenshots are referenced by URL on purpose. AppStream wants at least one
+  screenshot for Flathub, and shipping a compressed PNG of the app inside this
+  repository would be a second copy of something the release page already hosts;
+  the URLs point at the release assets, which exist once a tag is cut. Until
+  then `appstreamcli validate` warns about the unreachable URL, which is the
+  honest state of a pre-release app.
+-->
+<component type="desktop-application">
+  <id>ai.rrrtx.xr-desktop</id>
+  <name>XR</name>
+  <summary>Local-first AI agent with audited trust</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <description>
+    <p>
+      XR is an AI agent that runs on your machine. It reads and writes your
+      projects, runs commands, and works across the models you already pay for —
+      while keeping a tamper-evident audit log of everything it did.
+    </p>
+    <p>
+      The desktop app keeps XR one keystroke away: a tray icon that stays up when
+      you close the window, a global hotkey for the HUD, push-to-talk, and
+      screenshot-a-region-and-ask. Updates are signed and verified locally; the
+      app carries no telemetry, and a crash report is a file you choose to send.
+    </p>
+    <ul>
+      <li>Runs locally: the engine binds loopback, and your keys stay in the OS keychain.</li>
+      <li>Audited: every privileged action is gated and written to an append-only chain.</li>
+      <li>Provider-neutral: Anthropic, OpenAI, Gemini or a local Ollama model.</li>
+      <li>Sandboxed on Linux: skills run under bubblewrap with a seccomp profile.</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">ai.rrrtx.xr-desktop.desktop</launchable>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>The Control Room: every run, every span, in real time</caption>
+      <image type="source">https://github.com/ahmadrrrtx/xr/releases/download/v0.2.0/desktop-control-room.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Chat with approvals inline — nothing runs without your say</caption>
+      <image type="source">https://github.com/ahmadrrrtx/xr/releases/download/v0.2.0/desktop-chat.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The HUD: a global hotkey from anywhere</caption>
+      <image type="source">https://github.com/ahmadrrrtx/xr/releases/download/v0.2.0/desktop-hud.png</image>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://github.com/ahmadrrrtx/xr</url>
+  <url type="bugtracker">https://github.com/ahmadrrrtx/xr/issues</url>
+  <url type="vcs-browser">https://github.com/ahmadrrrtx/xr</url>
+
+  <developer id="ai.rrrtx">
+    <name>Muhammad Ahmad</name>
+  </developer>
+  <developer_name>Muhammad Ahmad</developer_name>
+
+  <categories>
+    <category>Development</category>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>AI</keyword>
+    <keyword>agent</keyword>
+    <keyword>assistant</keyword>
+    <keyword>LLM</keyword>
+  </keywords>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.2.0" date="2026-10-12">
+      <description>
+        <p>Desktop shell polish: always-alive tray, screenshot-and-ask, signed auto-updates, crash recovery.</p>
+      </description>
+    </release>
+  </releases>
+</component>

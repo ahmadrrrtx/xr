@@ -1,0 +1,88 @@
+app-id: ai.rrrtx.xr-desktop
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+# Rust and Node come from the SDK extensions rather than downloaded toolchains:
+# a Flathub build has no network access, and a toolchain fetched at build time
+# is a supply-chain hole, not a convenience.
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node22
+command: xr-desktop
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+#
+# Every one of these is a decision the user can read, which is the point of
+# shipping a Flatpak manifest instead of a tarball. The two that matter:
+#
+#   · `--filesystem=home` — XR is a coding agent. It reads and writes the user's
+#     projects, runs their test suites and edits their files; that is the product,
+#     not a side effect. It does NOT get `host`: the engine and every command it
+#     runs stay inside the sandbox home, which is what makes the reverse case
+#     (a skill trying to escape the project) a sandbox decision instead of a
+#     trust exercise. See docs/security/CRASH-RECOVERY.md §sandbox and
+#     docs/linux/PACKAGING.md for the bubblewrap/landlock interaction.
+#   · `--share=network` — provider calls, the update channel, and the user's own
+#     MCP servers. The engine still binds 127.0.0.1 only (Phase 14), so a Flatpak
+#     install cannot be reached from the network.
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio          # voice: playback + capture both go through PipeWire/Pulse
+  - --socket=session-bus
+  - --device=all                 # microphone: Flatpak has no finer-grained capture permission
+  - --filesystem=home
+  - --filesystem=xdg-run/pipewire-0
+  - --filesystem=xdg-run/gvfsd
+  # Notifications, and the tray: AppIndicator hosts on the session bus.
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.ayatana.indicator.application
+  - --talk-name=org.freedesktop.portal.Desktop
+  # The engine's loopback port is default 3141 and the sidecar chooses a random
+  # one per launch; both are loopback, so no port forwarding is needed.
+  - --env=XR_HOME=/var/data/xr
+  - --env=NO_COLOR=1
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+
+modules:
+  # ── The engine sidecar + the shell, built in one step ──────────────────────
+  - name: xr-desktop
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin
+      env:
+        # Bun is not in the SDK; the build uses the pinned Node toolchain instead
+        # of downloading a runtime, and `scripts/compile-sidecar.ts` already
+        # supports that path.
+        NODE_ENV: production
+        CARGO_HOME: /run/build/xr-desktop/cargo
+    build-commands:
+      # 1. Engine deps + sidecar. The sidecar binary is what makes XR an agent;
+      #    failing loudly here beats shipping a shell with no engine.
+      - npm ci --omit=dev --ignore-scripts
+      - node --experimental-strip-types scripts/compile-sidecar.ts
+      # 2. The shell. `--no-bundle` because Flatpak installs files itself and
+      #    the bundler's own .deb/RPM/AppImage would be dead weight inside the
+      #    sandbox.
+      - cd desktop && npm ci --ignore-scripts
+      - cd desktop && npm run build
+      - cd desktop/src-tauri && cargo build --release --locked
+      - install -Dm755 desktop/src-tauri/target/release/xr-desktop /app/bin/xr-desktop
+      - install -Dm755 desktop/src-tauri/binaries/xr-engine-x86_64-unknown-linux-gnu /app/bin/xr-engine-x86_64-unknown-linux-gnu
+      - install -Dm644 packaging/flatpak/ai.rrrtx.xr-desktop.desktop /app/share/applications/ai.rrrtx.xr-desktop.desktop
+      - install -Dm644 packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml /app/share/metainfo/ai.rrrtx.xr-desktop.metainfo.xml
+      - install -Dm644 desktop/src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/ai.rrrtx.xr-desktop.png
+      - install -Dm644 desktop/src-tauri/icons/256x256.png /app/share/icons/hicolor/256x256/apps/ai.rrrtx.xr-desktop.png
+      - install -Dm644 desktop/src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/ai.rrrtx.xr-desktop.png
+      - install -d /app/share/icons/hicolor/scalable/apps
+    sources:
+      - type: dir
+        path: ../..

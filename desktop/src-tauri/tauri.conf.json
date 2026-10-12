@@ -91,6 +91,14 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
+    "fileAssociations": [
+      {
+        "ext": ["xr"],
+        "name": "XR deep link",
+        "description": "Open an xr:// link in XR",
+        "role": "Viewer"
+      }
+    ],
     "shortDescription": "XR — the AI agent you can actually trust",
     "longDescription": "XR is a local-first, provider-neutral AI agent with audited trust. This is the desktop shell."
   },
