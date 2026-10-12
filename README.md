@@ -528,6 +528,52 @@ See [`docs/business-os-extension.md`](docs/business-os-extension.md) and the
 
 ---
 
+## Phone & social remotes: Telegram, Discord, WhatsApp
+
+XR is remote-controllable from the phone you already carry, without a cloud relay: the bot
+runs inside your daemon, on your machine, and only routes work it is explicitly allowed to.
+
+**One framework, three adapters.** Everything that is not a wire protocol lives in
+`src/bots/`: per-chat rate limits, one task per chat with real cancellation, per-chat spend,
+the 20-turn reply context, typing pulses, text splitting, attachment policy, voice-note
+transcription, and the **durable approval bridge** — the same approval record is shown on every
+surface and the first answer wins, from the desktop, Telegram, Discord or WhatsApp.
+
+| | Telegram | Discord |
+| --- | --- | --- |
+| Pairing | 6-digit code from the chat, typed into XR; 10-minute window, single-use | 6-digit code from XR, typed into Discord with `/xr pair`; same window rules |
+| Who is answered | paired users, DM only | paired users (DM) + allow-listed guild channels, and there only `/`-commands and @mentions |
+| Commands | `/start /help /budget /model /stop /cost /status /approve /deny` | `/xr ask · budget · model · stop · approve · deny · status · help · pair · pairchannel` |
+| Answers | MarkdownV2, 4096-char splits | embeds + button components, 2000-char splits |
+| Approvals | ✅ / ❌ / 👀 inline buttons | ✅ / ❌ / 👀 buttons (green/red/grey) + a dashboard link |
+| Voice notes | Ogg/Opus → your speech model | same pipeline, same caps |
+| Attachments | 5 MB docs · 2 MB photos · 30 KB text | same policy; downloads only from Discord's CDN |
+
+Everything is fail-closed: an unknown sender gets **no reply at all** — not an error, not a
+hint that a bot is listening. Rate limits, attachment caps and per-chat budgets are enforced
+by the shared runtime, not by each adapter.
+
+Discord specifics worth knowing before you connect a bot:
+
+- the bot token is stored in the OS keychain (SecretBroker), never in `config.json`;
+- XR asks for the **MESSAGE_CONTENT** intent — it is privileged, and Discord requires you to
+  switch it on in the Developer Portal. Without it Discord delivers empty message text;
+- the invite URL XR shows requests five permissions only (view channel, send messages, embed
+  links, attach files, read history) — no moderation, no administrator;
+- the gateway is the default transport. Interactions-webhook mode is available for users who
+  already run a public HTTPS endpoint, and every request is verified with Discord's Ed25519
+  signature;
+- network egress is `discord.com`, `gateway.discord.gg` and Discord's CDN — no telemetry,
+  no relay, nothing else.
+
+**WhatsApp** arrives in the next PR of this phase (Baileys, QR pairing streamed to the XR app,
+credentials sealed at rest, 1:1 allow-listed contacts by default). Until it ships it is not
+advertised in the app.
+
+Full detail, decisions and the deviation list: [`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
+
+---
+
 ## Scripting & exit codes
 
 `xr doctor --json` is the stable machine-readable entrypoint (redacted config, provider
@@ -575,7 +621,7 @@ XR's differentiator is that its claims are checked by machines on every PR.
 | `bun test` + parity suite | **3,241 pass / 19 skip / 0 fail across 317 files** (measured on the Linux lane at `v1.0.0`; 707 enterprise/business tests moved to the satellites with their code, ADR-0028); one computation authority (`scripts/platform-parity.ts`) executed per OS on Linux/macOS/Windows via segmented runs with crash-class retry and file-level culprit attribution |
 | `release:check` + `claim-lint` | version identity stamped everywhere; every public claim has evidence; prohibited/supervised terms fail the build |
 | `baseline:inventory` | source-derived repository inventory regenerated and compared |
-| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a 139,000-LOC ceiling on the whole tree** |
+| `boundaries` + `ownership:check` + `size-gate` | layering, area ownership, per-file size discipline (waivers explicit) **and a 164,000-LOC ceiling on the whole tree** |
 | `claim-lint` constitution gate | every `Article N` cited anywhere in `src/`, `test/`, `scripts/`, `.github/` exists in [`docs/CONSTITUTION.md`](docs/CONSTITUTION.md) |
 | `api:schema:check` + `client:check` + `api:compat` | daemon OpenAPI schema, generated client, compatibility |
 | `channel:check` | channel configs match the release manifest |
@@ -621,7 +667,7 @@ xr/
 │  ├─ state/                 SQLite workspace store, repos, write-gate, migrations
 │  ├─ context/               memory: assembler, retrieval, embeddings, compression
 │  ├─ research/              research engine (offline default, opt-in web)
-│  ├─ mcp/ plugins/ skills/ local/ cost/ control/ computer/ telegram/ voice/
+│  ├─ mcp/ plugins/ skills/ local/ cost/ control/ computer/ telegram/ discord/ voice/
 │  ├─ daemon/                `xr serve`: API routes, dashboard, chat (127.0.0.1)
 │  ├─ update/ install/       atomic updater + channels; install/uninstall
 │  ├─ observability/ ui/     metrics/logs/exporters; design system
@@ -642,8 +688,9 @@ Layering is enforced in CI: the `boundaries` gate + `test/architecture/*` pin al
 directions (surfaces → services → execution/core → state; tools/providers as leaves), and
 `bun run ownership:check` requires every source area to have an owning document. Core imports
 **nothing** from `satellites/` — enforced three ways (dependency-cruiser rule, boundary test,
-isolation test) — and `bun run size-gate` holds the whole tree under a 139,000-LOC ceiling so the
-23,376 LOC Phase 5 removed cannot quietly grow back.
+isolation test) — and `bun run size-gate` holds the whole tree under a 164,000-LOC ceiling (raised deliberately,
+with the measurement in the diff, for the Phase 26 chat surfaces) so the 23,376 LOC
+Phase 5 removed cannot quietly grow back.
 
 ---
 
