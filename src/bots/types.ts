@@ -29,3 +29,13 @@ export interface BotSurface<Msg> {
 
 /** Outcome label used when an approval message is edited after a decision. */
 export type ApprovalOutcomeLabel = "approved" | "rejected" | "expired";
+
+/**
+ * Per-chat settings a user can change from a chat (`/model`, `/budget`).
+ * Telegram declared this shape first (Phase 24); Discord and WhatsApp reuse the
+ * same two fields, so it lives here and `telegram/state.ts` re-exports it.
+ */
+export interface ChatSettings {
+  model?: string;
+  budgetUsd?: number;
+}

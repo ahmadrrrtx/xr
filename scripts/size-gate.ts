@@ -115,7 +115,20 @@ export const THRESHOLD = 800;
 // approval store and SecretBroker. The fix that returns core to the ceiling is a
 // maintainer decision: accept this reasoned raise, or move the Telegram runtime to a
 // satellite package in a follow-up. Headroom is intentionally small (about 390 LOC).
-export const TREE_CEILING = 160_000; // Phase 23 (xr coding agent CLI) · 156,000 → 158,000 (2026-10-10):
+// Phase 26 · PR 2 (Discord) · 160,000 → 164,000 (2026-10-12). Measured 163,781 on
+// this branch against 159,870 on main — main had 130 LOC of headroom, so the ceiling
+// had to move or the surface could not land. What is here: the Discord adapter
+// (REST + gateway client, product rules, commands, rendering, pairing book, state,
+// Ed25519 webhook verification, lifecycle manager, daemon routes + contract), plus the
+// PR-1 shared extraction the phase required (chunk/media/voice-note/parse moved into
+// src/bots so all three surfaces share one policy). Discord is a consent-plane surface:
+// its approvals resolve through the approval store and its token lives in the
+// SecretBroker, so the runtime stays in core beside them — the same call Phase 24 made
+// for Telegram. WhatsApp (PR 3) will measure its own delta and, if it needs room, this
+// number gets raised again deliberately rather than folded in as an estimate. The
+// alternative that returns core to the ceiling is moving the chat surfaces to a
+// satellite package; that stays the recorded follow-up.
+export const TREE_CEILING = 164_000; // Phase 23 (xr coding agent CLI) · 156,000 → 158,000 (2026-10-10):
 // the coding CLI (`xr`, `xr "task"`, `xr -p`, the REPL): session and approval
 // engine, print/JSON/diff modes, mention and repo-map context, the first-run
 // wizard, and the durable-store consent wrapper (cli/coder/consent.ts). The

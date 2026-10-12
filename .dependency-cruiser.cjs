@@ -208,8 +208,12 @@ module.exports = {
         "Surfaces are leaves. A non-surface module importing a surface inverts " +
         "the dependency direction and is how presentation logic leaks inward.",
       from: {
+        // Surfaces (the UI folders every entry point talks to) are allowed to
+        // compose other surfaces: a chat bot legitimately calls the voice
+        // pipeline for its speech-to-text. Phase 26 added discord + whatsapp to
+        // this list beside telegram — same shape, same reason.
         pathNot:
-          "^src/(interfaces|cli|commands|daemon|telegram|voice|ui|i18n|export|install|update|index\\.ts)",
+          "^src/(interfaces|cli|commands|daemon|telegram|discord|whatsapp|voice|ui|i18n|export|install|update|index\\.ts)",
       },
       to: {
         path: "^src/(interfaces|cli|commands|daemon|telegram|voice|ui)/",

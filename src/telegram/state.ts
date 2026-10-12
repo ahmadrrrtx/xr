@@ -11,10 +11,13 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 
-export interface ChatSettings {
-  model?: string;
-  budgetUsd?: number;
-}
+/**
+ * Per-chat settings. The shape moved to the shared chat runtime
+ * (src/bots/types.ts) in Phase 26 · PR 2 because Discord and WhatsApp store the
+ * same two fields; the re-export keeps Phase 24 importers unchanged.
+ */
+import type { ChatSettings } from "../bots/types.ts";
+export type { ChatSettings };
 
 export interface TelegramRuntimeState {
   offset: number;

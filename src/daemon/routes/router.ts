@@ -14,6 +14,8 @@ export interface DaemonState {
   store: Store;
   /** Phase 24 — Telegram bot lifecycle (connect, pairing, polling/webhook). */
   telegram?: import("../../telegram/manager.ts").TelegramManager;
+  /** Phase 26 — Discord bot lifecycle (token, pairing, gateway/webhook). */
+  discord?: import("../../discord/manager.ts").DiscordManager;
   shield: XRShieldService;
   workspaceManager: WorkspaceManager;
   /** XR 4.2 — Trust & Isolation service (backend availability, health, classify). */
