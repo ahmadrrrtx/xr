@@ -60,16 +60,19 @@ function settings(patch: {
 /* ── shortcuts ─────────────────────────────────────────────────────── */
 
 describe("Phase 8 · shortcut registry", () => {
-  test("harvests 11 shortcuts with unique ids (9 from Phases 1–7 + Control Room + Theater)", () => {
-    expect(SHORTCUTS).toHaveLength(11);
-    expect(new Set(SHORTCUTS.map((s) => s.id)).size).toBe(11);
+  test("harvests 12 shortcuts with unique ids (9 from Phases 1–7 + Control Room + Theater + Screenshot)", () => {
+    expect(SHORTCUTS).toHaveLength(12);
+    expect(new Set(SHORTCUTS.map((s) => s.id)).size).toBe(12);
     expect(shortcutById("control-room")?.combo).toBe("alt+mod+r");
     expect(shortcutById("theater")?.combo).toBe("alt+mod+v");
+    // Phase 27: screenshot-and-ask is registered in Rust like the other OS-wide
+    // chords — the renderer only mirrors it so Settings can rebind it.
+    expect(shortcutById("screenshot")?.combo).toBe("mod+shift+x");
   });
 
-  test("exactly the four Rust-owned rows are global, each with an owner", () => {
+  test("exactly the five Rust-owned rows are global, each with an owner", () => {
     const globals = SHORTCUTS.filter((s) => s.scope === "global");
-    expect(globals.map((s) => s.id).sort()).toEqual(["hud", "orb", "ptt", "theater"]);
+    expect(globals.map((s) => s.id).sort()).toEqual(["hud", "orb", "ptt", "screenshot", "theater"]);
     for (const g of globals) expect(g.global).toBeTruthy();
     for (const app of SHORTCUTS.filter((s) => s.scope !== "global")) {
       expect(app.global).toBeUndefined();

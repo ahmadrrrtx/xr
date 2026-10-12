@@ -141,6 +141,15 @@ interface BrainState {
   /** Fit the Gantt to the whole run. */
   resetView: () => void;
   forgetRun: (id: string) => void;
+  /**
+   * Phase 27 — crash recovery. Runs that were in flight when the app stopped
+   * are settled with `status: 'killed'` and an honest note, instead of the
+   * optimistic `completed` older builds wrote. `note` is what the user is told:
+   * "App was interrupted" once the shell's dirty flag proves a crash.
+   */
+  settleInterruptedRuns: (note: string) => void;
+  /** Phase 27 — "start fresh": drop the interrupted runs entirely. */
+  dropInterruptedRuns: () => void;
 }
 
 /* ── Per-run data helpers (store-internal) ────────────────────────────── */
@@ -1152,6 +1161,48 @@ export const useBrainStore = create<BrainState>()(
             return { runs, data, runOrder: s.runOrder.filter((r) => r !== id) };
           });
         },
+
+        /**
+         * Settle every run that never finished. The persisted store already
+         * marks them `killed` at rehydrate time (a reload mid-run is not a
+         * crash); this action is what the recovery screen calls when the
+         * shell's dirty flag proves the app was interrupted — same status,
+         * sharper note, and span streams stopped so nothing keeps ticking.
+         */
+        settleInterruptedRuns: (note) => {
+          const { runs } = get();
+          const next: Record<string, Run> = { ...runs };
+          let changed = false;
+          for (const [id, run] of Object.entries(runs)) {
+            if (run.status !== 'running' && run.status !== 'waiting') continue;
+            streams.get(id)?.stop();
+            streams.delete(id);
+            next[id] = {
+              ...run,
+              status: 'killed',
+              endedAt: run.endedAt ?? Date.now(),
+              errorSummary: note,
+            };
+            changed = true;
+          }
+          if (changed) set({ runs: next });
+        },
+
+        /** Drop the interrupted runs (the ones this phase settled as such). */
+        dropInterruptedRuns: () => {
+          const { runs, runOrder } = get();
+          const keep: Record<string, Run> = {};
+          for (const [id, run] of Object.entries(runs)) {
+            const interrupted =
+              run.status === 'killed' && (run.errorSummary ?? '').toLowerCase().includes('interrupt');
+            if (!interrupted) keep[id] = run;
+          }
+          set({
+            runs: keep,
+            runOrder: runOrder.filter((id) => keep[id]),
+            selectedSpanId: null,
+          });
+        },
       };
       // ── Persistence: recent runs survive reloads (brief §2). Only the
       //    run list + order is durable; span data re-materializes from the
@@ -1167,12 +1218,17 @@ export const useBrainStore = create<BrainState>()(
           runOrder?: string[];
         };
         const runs = { ...(p.runs ?? {}) };
-        // A run still 'running' at page close was interrupted mid-stream —
-        // settle it instead of letting the recent list spin forever.
+        // A run still 'running' at page close never finished — whether the
+        // window was reloaded or the app died. Phase 27 marks it `killed` with
+        // an honest note instead of the optimistic `completed` older builds
+        // wrote: the Control Room must not show a green tick for work that was
+        // cut off. The recovery screen sharpens the note to "App was
+        // interrupted" when the shell's dirty flag proves an actual crash.
         for (const r of Object.values(runs)) {
           if (r.status === 'running' || r.status === 'waiting') {
-            r.status = 'completed';
+            r.status = 'killed';
             r.endedAt = r.endedAt ?? Date.now();
+            r.errorSummary = r.errorSummary ?? 'The app closed before this run finished';
           }
         }
         const runOrder = Array.isArray(p.runOrder)

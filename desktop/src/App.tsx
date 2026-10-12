@@ -1,5 +1,5 @@
 import { AnimatePresence, MotionConfig } from 'framer-motion';
-import { RouterProvider } from 'react-router-dom';
+import { RouterProvider, useNavigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
 
@@ -14,6 +14,12 @@ import { Splash, type SplashStatus } from '@/screens/Splash';
 import { router } from '@/router';
 import { registerOAuthCallbackListener } from '@/integrations/oauthCallback';
 import { useIntegrationsStore } from '@/stores/integrationsStore';
+import { CrashRecovery } from '@/components/shell/CrashRecovery';
+import { ShellBridge } from '@/components/shell/ShellBridge';
+import { UpdateBanner } from '@/components/shell/UpdateBanner';
+import { UpdateModal } from '@/components/shell/UpdateModal';
+import { crashState, type RecoveryInfo } from '@/lib/shellApi';
+import { attachUpdateEvents, useUpdateStore } from '@/stores/updateStore';
 
 const MIN_SPLASH_MS = 800;
 const MAX_SPLASH_MS = 5000;
@@ -58,6 +64,32 @@ export default function App() {
   const reduceMotion = useSettingsStore(
     (state) => state.settings.appearance.reduceMotion
   );
+
+  // Phase 27 — crash recovery gate. The shell's dirty flag decides whether the
+  // router mounts at all: a previous, unclean session gets the recovery screen
+  // first, because "did my work survive?" is the only question that matters
+  // until it is answered. A browser (or a clean launch) resolves to null and
+  // boots straight through.
+  const [recovery, setRecovery] = useState<RecoveryInfo | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const info = await crashState();
+      if (!cancelled && info?.interrupted) setRecovery(info);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Phase 27 — updater events (state + progress) for the whole session.
+  useEffect(() => attachUpdateEvents(), []);
+
+  // Phase 27 — tray state on launch, so the menu is right before anything moves.
+  useEffect(() => {
+    void useUpdateStore.getState().load();
+  }, []);
 
   // Phase 22: the xr://oauth/callback listener lives at app root, so a browser return
   // is caught on any screen. It registers once per session (see oauthCallback.ts).
@@ -112,9 +144,22 @@ export default function App() {
     };
   }, []);
 
+  if (recovery) {
+    return (
+      <MotionConfig reducedMotion={reduceMotion ? 'always' : 'user'}>
+        <CrashRecovery info={recovery} onResolve={(_action, info) => setRecovery(info && info.interrupted ? info : null)} />
+        {toasterBlock}
+      </MotionConfig>
+    );
+  }
+
   return (
     <MotionConfig reducedMotion={reduceMotion ? 'always' : 'user'}>
       <ErrorBoundary>
+        {/* Phase 27 — the update strip rides above every route, and only while
+            a verified update is waiting for a restart. */}
+        <UpdateBanner />
+        <ShellBridgeHost />
         <RouterProvider router={router} />
       </ErrorBoundary>
       {/* Phase 7 — the approval modal rides above every route (main window) */}
@@ -124,8 +169,27 @@ export default function App() {
       <AnimatePresence>
         {showSplash && <Splash key="splash" progress={progress} status={status} />}
       </AnimatePresence>
+      {/* Phase 27 — release notes / install, opened from Settings or the banner */}
+      <UpdateModal />
       {/* Root-level toaster — covers the app shell AND onboarding (Phase 3) */}
       {toasterBlock}
     </MotionConfig>
+  );
+}
+
+/**
+ * The bridge needs the router's `navigate`, which only exists inside a Router
+ * context — so it mounts as a child of the provider rather than beside it. It
+ * renders nothing; see components/shell/ShellBridge.tsx.
+ */
+function ShellBridgeHost() {
+  const navigate = useNavigate();
+  return (
+    <ShellBridge
+      navigate={(path) => navigate(path)}
+      onOpenPalette={() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, ctrlKey: true }));
+      }}
+    />
   );
 }
