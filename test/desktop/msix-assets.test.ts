@@ -22,6 +22,21 @@ const MANIFEST = join(ROOT, 'packaging/windows/msix/AppxManifest.xml');
 const MASTER = join(ROOT, 'desktop/src-tauri/icons/icon.png');
 const PS1 = join(ROOT, 'packaging/windows/msix/build-msix.ps1');
 
+const WORKFLOW = join(ROOT, '.github/workflows/desktop-app.yml');
+
+/** The MSIX step's shell, comments removed, stopping at the next step. */
+function msixStep(): string {
+  const workflow = readFileSync(WORKFLOW, 'utf8');
+  const start = workflow.indexOf('Package MSIX');
+  expect(start).toBeGreaterThan(0);
+  const next = workflow.indexOf('\n      - name:', start);
+  return workflow
+    .slice(start, next === -1 ? undefined : next)
+    .split('\n')
+    .filter((line) => !line.trimStart().startsWith('#'))
+    .join('\n');
+}
+
 /** Every image the manifest references, with the size it must be. */
 const REQUIRED: Array<{ file: string; width: number; height: number }> = [
   { file: 'StoreLogo.png', width: 50, height: 50 },
@@ -140,5 +155,33 @@ describe('MSIX packaging script', () => {
     expect(script).toContain('signtool.exe');
     // Unsigned builds are warned about, never presented as shippable.
     expect(script.toLowerCase()).toContain('unsigned');
+  });
+
+  /*
+   * The CI step that actually builds this package cannot run here, which is
+   * exactly why its two failure modes are pinned instead. The first PR run of
+   * that step failed on both of them:
+   *
+   *   · `-Version ${{ github.ref_name }}` — on a pull request the ref is
+   *     `175/merge`, and an MSIX Identity Version must be dotted numerics.
+   *   · `$pwd` — PowerShell's automatic working-directory variable, so the
+   *     "SecureString" handed to signtool was a path, and signing failed with a
+   *     type error that says nothing about the real cause.
+   */
+  test('the CI packaging step takes its version from tauri.conf.json, not the git ref', () => {
+    const step = msixStep();
+    expect(step).toContain('tauri.conf.json');
+    // `github.ref_name` on a pull request is `175/merge`: an MSIX Identity
+    // Version must be dotted numerics, so that is a failed package build.
+    expect(step).not.toContain('github.ref_name');
+  });
+
+  test('the CI packaging step never uses $pwd as a password holder', () => {
+    const step = msixStep();
+    // $PWD is automatic in PowerShell; assigning to it leaves the SecureString
+    // parameter holding a path, and signtool fails with a type error that says
+    // nothing about the cause.
+    expect(step).not.toMatch(/\$pwd\s*=/);
+    expect(step).toContain('$certPassword = ConvertTo-SecureString');
   });
 });

@@ -247,6 +247,13 @@ jobs:
         if: matrix.runsOn == 'windows-latest'
         shell: pwsh
         run: |
+          # The version comes from tauri.conf.json, never from github.ref_name:
+          # on a pull request the ref is `175/merge`, and an MSIX Identity
+          # Version must be dotted numerics — that mismatch is a failed package,
+          # not a warning.
+          $conf = Get-Content desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $version = $conf.version
+          Write-Host "packaging MSIX for XR $version"
           $cert = New-SelfSignedCertificate `
             -Type Custom `
             -Subject 'CN=Muhammad Ahmad, O=Muhammad Ahmad, C=PK' `
@@ -254,17 +261,22 @@ jobs:
             -FriendlyName 'XR local test signing' `
             -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3') `
             -CertStoreLocation Cert:\CurrentUser\My
-          $pwd = ConvertTo-SecureString -String 'xr-msix-test' -Force -AsPlainText
+          # Not `$pwd`: that is PowerShell's automatic working-directory
+          # variable, and assigning to it leaves the password parameter holding
+          # a path (SecureString conversion then fails at signing time).
+          $certPassword = ConvertTo-SecureString -String 'xr-msix-test' -Force -AsPlainText
           $pfx = Join-Path $env:RUNNER_TEMP 'xr-test.pfx'
-          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $pwd | Out-Null
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $certPassword | Out-Null
           Export-Certificate -Cert $cert -FilePath (Join-Path $env:RUNNER_TEMP 'xr-test.cer') | Out-Null
           pwsh packaging/windows/msix/build-msix.ps1 `
             -AppDir desktop/src-tauri/target/release `
-            -Version '${{ github.ref_name }}' `
+            -Version $version `
             -OutDir desktop/src-tauri/target/release/bundle/msix `
-            -Sign -CertPath $pfx -CertPassword $pwd
-          Copy-Item (Join-Path $env:RUNNER_TEMP 'xr-test.cer') desktop/src-tauri/target/release/bundle/msix/
-          Get-ChildItem desktop/src-tauri/target/release/bundle/msix | Format-Table Name,Length
+            -Sign -CertPath $pfx -CertPassword $certPassword
+          $out = 'desktop/src-tauri/target/release/bundle/msix'
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'xr-test.cer') $out -Force
+          Get-ChildItem $out | Format-Table Name,Length
       - name: Upload MSIX
         if: matrix.runsOn == 'windows-latest'
         uses: actions/upload-artifact@v4
