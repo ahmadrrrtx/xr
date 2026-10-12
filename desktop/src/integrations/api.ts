@@ -34,7 +34,7 @@ export interface IntegrationView {
   description: string;
   category: string;
   icon: string;
-  authType: 'oauth2' | 'api_key' | 'basic' | 'bearer' | 'bot_token' | 'none';
+  authType: 'oauth2' | 'api_key' | 'basic' | 'bearer' | 'bot_token' | 'qr_link' | 'none';
   scopes: string[];
   capabilities: string[];
   configFields: ConnectorConfigField[];

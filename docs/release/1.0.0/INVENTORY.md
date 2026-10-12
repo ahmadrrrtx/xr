@@ -1,15 +1,15 @@
 # XR 1.0.0 Repository Inventory
 
-Generated: 2026-10-12T13:23:22.226Z
+Generated: 2026-10-12T14:48:42.877Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 710 |
-| Test files | 378 |
+| Source files | 725 |
+| Test files | 379 |
 | CLI commands | 43 |
-| Daemon routes | 270 |
+| Daemon routes | 283 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -296,6 +296,19 @@ Generated: 2026-10-12T13:23:22.226Z
 - POST `/api/voice/test-tts` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
 - POST `/api/voice/transcribe` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
 - GET `/api/voice/voices` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/whatsapp/connect` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/contacts/add` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/contacts/remove` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/disconnect` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- GET `/api/whatsapp/logs` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/pair` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/pair/close` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- GET `/api/whatsapp/qr` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/settings` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/start` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- GET `/api/whatsapp/status` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/stop` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/unpair` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
 - GET `/api/workspaces` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/workspaces/create` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
 - POST `/api/workspaces/switch` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)

@@ -24,12 +24,17 @@ import {
   type IntegrationView,
 } from '@/integrations/api';
 import type { OAuthCallback } from '@/integrations/oauthCallback';
+import { chatSurfaceOf } from '@/integrations/core';
 
 export type IntegrationDialog =
   | { kind: 'api_key'; id: string }
   | { kind: 'app_credentials'; id: string }
   | { kind: 'telegram'; id: string }
   | { kind: 'telegram_settings'; id: string }
+  | { kind: 'discord'; id: string }
+  | { kind: 'discord_settings'; id: string }
+  | { kind: 'whatsapp'; id: string }
+  | { kind: 'whatsapp_settings'; id: string }
   | null;
 
 interface IntegrationsState {
@@ -116,6 +121,15 @@ export const useIntegrationsStore = create<IntegrationsState>((set, get) => {
       const view = get().connectors.find((c) => c.id === id);
       if (!view) return;
       setCardError(set, get, id, null);
+
+      // Chat surfaces own their setup: token + pairing (Telegram, Discord) or QR
+      // linking (WhatsApp). None of them goes through the vault path.
+      const surface = chatSurfaceOf(id);
+      if (surface) {
+        const kind = surface === 'telegram' ? 'telegram' : surface === 'discord' ? 'discord' : 'whatsapp';
+        set({ dialog: { kind, id } });
+        return;
+      }
 
       if (view.authType === 'oauth2') {
         if (!view.hasAppCredentials) {

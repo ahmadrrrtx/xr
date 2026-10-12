@@ -128,7 +128,20 @@ export const THRESHOLD = 800;
 // number gets raised again deliberately rather than folded in as an estimate. The
 // alternative that returns core to the ceiling is moving the chat surfaces to a
 // satellite package; that stays the recorded follow-up.
-export const TREE_CEILING = 164_000; // Phase 23 (xr coding agent CLI) · 156,000 → 158,000 (2026-10-10):
+export const TREE_CEILING = 168_000; // Phase 26 · PR 3 (WhatsApp) · 164,000 → 168,000 (2026-10-12):
+// the WhatsApp surface — the linked-device client (Baileys, imported lazily so
+// a user who never links it never loads it), the sealed credential store, the
+// 1:1 gate and outbox whitelist, the numbered-approval vocabulary, the task turn,
+// the manager, and the daemon routes/contract/schemas incl. the QR stream. Net src
+// growth is +3,112 LOC (measured 166,968 at PR head against the 163,856 Discord base
+// of PR 2). Linking a device and holding its credentials is consent-plane work: it
+// resolves through the same approval store and the same vault key, so it stays in
+// core beside them — the same call Phase 24 (Telegram) and PR 2 (Discord) made, and
+// the number PR 2's note said PR 3 would measure rather than estimate. The
+// alternative that returns core to the ceiling is moving the chat surfaces to a
+// satellite package; that stays the recorded follow-up. Waived giants did not grow.
+// Needs maintainer sign-off.
+// Phase 23 (xr coding agent CLI) · 156,000 → 158,000 (2026-10-10):
 // the coding CLI (`xr`, `xr "task"`, `xr -p`, the REPL): session and approval
 // engine, print/JSON/diff modes, mention and repo-map context, the first-run
 // wizard, and the durable-store consent wrapper (cli/coder/consent.ts). The

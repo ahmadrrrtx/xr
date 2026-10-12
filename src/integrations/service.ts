@@ -34,6 +34,19 @@ export const COOLIFY_CONNECTOR_ID = 'coolify';
 export const REFRESH_SKEW_MS = 5 * 60 * 1000;
 const SUPPORTED = new Set([GITHUB_CONNECTOR_ID, COOLIFY_CONNECTOR_ID]);
 
+/**
+ * Phase 26 — chat surfaces (Telegram, Discord, WhatsApp) are supported, but they
+ * do not connect through the vault path: each has its own daemon routes and its
+ * own desktop dialog (token → pairing, QR → link), and its credentials live in
+ * the SecretBroker or a sealed file. Marking them `available` here is what lets
+ * their cards show Connect instead of Coming soon; the generic
+ * connect/disconnect routes still refuse them, so nothing can be stored twice.
+ */
+export const CHAT_SURFACE_IDS = new Set(['telegram', 'discord', 'whatsapp']);
+export function isChatSurface(connectorId: string): boolean {
+  return CHAT_SURFACE_IDS.has(connectorId);
+}
+
 export type IntegrationStatus = 'disconnected' | 'connected' | 'expired' | 'error';
 
 export interface IntegrationView {
@@ -114,7 +127,7 @@ export class IntegrationService {
     const def = this.opts.registry.get(connectorId);
     if (!def) throw new IntegrationError(`Unknown integration "${connectorId}"`, 'not_found', 404);
     const record = this.record(connectorId);
-    const supported = SUPPORTED.has(connectorId);
+    const supported = SUPPORTED.has(connectorId) || isChatSurface(connectorId);
     const needsAppCredentials = def.authType === 'oauth2' && supported;
     return {
       id: def.id,

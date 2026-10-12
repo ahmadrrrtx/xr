@@ -566,11 +566,44 @@ Discord specifics worth knowing before you connect a bot:
 - network egress is `discord.com`, `gateway.discord.gg` and Discord's CDN — no telemetry,
   no relay, nothing else.
 
-**WhatsApp** arrives in the next PR of this phase (Baileys, QR pairing streamed to the XR app,
-credentials sealed at rest, 1:1 allow-listed contacts by default). Until it ships it is not
-advertised in the app.
+**WhatsApp** links the same way your second phone would: scan a QR from the XR app
+(Integrations → WhatsApp) and XR becomes a companion device. It is deliberately the most
+conservative surface in the product:
 
-Full detail, decisions and the deviation list: [`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
+- **⚠️ It uses an unofficial client.** WhatsApp offers no API for personal accounts, so XR
+  links through the open-source Baileys library — the same protocol your phone speaks. That is
+  against WhatsApp's terms for automated use, and accounts have been banned for it. Use a
+  number you can afford to lose.
+- **That client is opt-in, and it is not bundled.** Baileys links against `libsignal-node`,
+  which is **GPL-3.0**, and this project ships only permissive dependencies — the license gate
+  in CI is a release invariant, not a suggestion. So nothing is installed behind your back:
+  add it yourself where the daemon runs (`bun add @whiskeysockets/baileys`) and restart XR.
+  Until then the WhatsApp card says so plainly, the QR button stays disabled, and no socket is
+  ever opened. Nothing else in XR changes: `qrcode` (MIT) still renders the pairing frames.
+- **Linking authorizes nobody.** After pairing, the allow-list is still empty: add the contacts
+  you want (digits with country code) or switch on *"respond to contacts I message first"*,
+  which answers numbers you wrote to first — learned from live messages, never from your chat
+  history. Everything else is ignored silently, groups are dropped, and 1:1 is the only shape
+  this surface speaks.
+- **The session is sealed at rest** in `~/.xr/whatsapp/` (AES-256-GCM, 0600, the same
+  per-install key as your other secrets). Unlinking your phone deletes it; XR refuses to start
+  on a tampered blob instead of quietly re-registering the device.
+- **Rate and cost are bounded**: one message per second per chat, 1500-character replies, and
+  the shared per-chat budget. Approvals arrive as `[1] Approve  [2] Deny  [3] View details`.
+- **No history scraping.** XR answers what it is sent while it is running; it never ingests
+  your chat archive, and the status view shows how many history payloads it declined.
+
+Egress is limited to WhatsApp's own endpoints and the media CDN named by the incoming message.
+
+**Where you connect them.** Integrations → the Discord card (token → invite → a 6-digit code you
+type into Discord with `/xr pair`) or the WhatsApp card (the unofficial-client acknowledgement,
+then a QR you scan from *Settings → Linked devices*). Each card carries a status dot — green
+answering, yellow configured but idle, red needs attention — and a settings popover with the
+allow-lists, limits, logs and disconnect/unpair. Nothing is typed twice and no token is ever
+sent back to the screen.
+
+The full decision record, tests and the deviation list:
+[`docs/phases/26-bots-discord-whatsapp.md`](docs/phases/26-bots-discord-whatsapp.md).
 
 ---
 

@@ -11,9 +11,11 @@ import type { IntegrationView } from '@/integrations/api';
 import {
   AUTH_LABEL,
   brandFor,
+  chatSurfaceOf,
   deriveCardState,
   type CardState,
 } from '@/integrations/core';
+import type { DotState } from '@/integrations/statusDots';
 import { useIntegrationsStore } from '@/stores/integrationsStore';
 import { SettingsPanel } from './SettingsPanel';
 
@@ -22,21 +24,24 @@ interface Props {
   index: number;
   error?: string;
   busy: boolean;
+  /** Phase 26 — live dot for the chat surfaces, read from their own status. */
+  dot?: DotState;
 }
 
 const MAX_CHIPS = 3;
 
-export function IntegrationCard({ view, index, error, busy }: Props) {
+export function IntegrationCard({ view, index, error, busy, dot }: Props) {
   const connecting = useIntegrationsStore((s) => s.connectingId === view.id);
   const popoverId = useIntegrationsStore((s) => s.popoverId);
   const openPopover = useIntegrationsStore((s) => s.openPopover);
   const connect = useIntegrationsStore((s) => s.connect);
   const openDialog = useIntegrationsStore((s) => s.openDialog);
   const brand = brandFor(view.id, view.name);
-  // Telegram has its own setup and settings (token → pairing). The generic
-  // connect path is refused by the engine for this connector.
-  const isTelegram = view.id === 'telegram';
-  const startConnect = () => (isTelegram ? openDialog({ kind: 'telegram', id: view.id }) : void connect(view.id));
+  // The chat surfaces have their own setup and settings (token → pairing for
+  // Telegram and Discord, QR → link for WhatsApp). The generic connect path is
+  // refused by the engine for these connectors.
+  const surface = chatSurfaceOf(view.id);
+  const startConnect = () => (surface ? openDialog({ kind: surface, id: view.id }) : void connect(view.id));
   const state: CardState = deriveCardState(view, connecting);
   const open = popoverId === view.id;
   const chips = view.capabilities.slice(0, MAX_CHIPS);
@@ -74,7 +79,10 @@ export function IntegrationCard({ view, index, error, busy }: Props) {
               <div className="ix-tile" style={{ background: brand.color }} aria-hidden="true">
                 {brand.monogram}
               </div>
-              <span className="ix-auth-chip">{AUTH_LABEL[view.authType]}</span>
+              <span className="ix-card__badges">
+                {dot && <span className={`ix-dot ix-dot--${dot}`} role="img" aria-label={`Status: ${dot}`} data-testid={`integration-dot-${view.id}`} />}
+                <span className="ix-auth-chip">{AUTH_LABEL[view.authType]}</span>
+              </span>
             </div>
             <h3 id={titleId} className="ix-card__name">{view.name}</h3>
             <p className="ix-card__desc">{view.description}</p>
@@ -90,7 +98,7 @@ export function IntegrationCard({ view, index, error, busy }: Props) {
         </PopoverAnchor>
 
         <div className="ix-card__footer">
-          <CardFooter state={state} view={view} busy={busy} connecting={connecting} onConnect={startConnect} onReauth={startConnect} onSetup={() => openDialog({ kind: 'app_credentials', id: view.id })} onSettings={() => (isTelegram ? openDialog({ kind: 'telegram_settings', id: view.id }) : openPopover(view.id))} />
+          <CardFooter state={state} view={view} busy={busy} connecting={connecting} onConnect={startConnect} onReauth={startConnect} onSetup={() => openDialog({ kind: 'app_credentials', id: view.id })} onSettings={() => (surface ? openDialog({ kind: `${surface}_settings` as 'telegram_settings', id: view.id }) : openPopover(view.id))} />
         </div>
 
         {error && (

@@ -13,7 +13,7 @@ import { createHash } from "crypto";
 import { CredentialVault } from "../../src/integrations/credentials.ts";
 import { ConnectionStore } from "../../src/integrations/connector-store.ts";
 import { ConnectorRegistry } from "../../src/integrations/registry.ts";
-import { IntegrationError, IntegrationService, REFRESH_SKEW_MS } from "../../src/integrations/service.ts";
+import { IntegrationError, IntegrationService, REFRESH_SKEW_MS, isChatSurface } from "../../src/integrations/service.ts";
 import { PendingOAuthStore, createPkcePair } from "../../src/integrations/oauth-state.ts";
 import { buildGithubAuthorizeUrl, OAUTH_REDIRECT_URI } from "../../src/integrations/providers/github.ts";
 import { validateInstanceUrl } from "../../src/integrations/providers/api-key.ts";
@@ -128,13 +128,29 @@ describe("PKCE and pending sign-ins", () => {
 });
 
 describe("registry view", () => {
-  test("renders every built-in connector; only GitHub and Coolify are connectable", () => {
+  test("renders every built-in connector; only the supported ones are connectable", () => {
     const h = harness();
     const list = h.service.list();
-    expect(list.length).toBe(32);
+    expect(list.length).toBe(33);
     const available = list.filter((c) => c.support === "available").map((c) => c.id).sort();
-    expect(available).toEqual(["coolify", "github"]);
+    // Phase 26: the chat surfaces are supported too, but they connect through
+    // their own daemon routes and desktop dialogs rather than the vault path —
+    // `isChatSurface` is what tells the two kinds apart.
+    expect(available).toEqual(["coolify", "discord", "github", "telegram", "whatsapp"]);
+    expect(available.filter((id) => !isChatSurface(id))).toEqual(["coolify", "github"]);
     expect(list.every((c) => c.status === "disconnected")).toBe(true);
+  });
+
+  test("chat surfaces are available but still refuse the vault connect path", () => {
+    const h = harness();
+    for (const id of ["telegram", "discord", "whatsapp"]) {
+      expect(h.service.view(id).support).toBe("available");
+      // No OAuth app credentials, no config fields: their dialogs own the flow.
+      expect(h.service.view(id).needsAppCredentials).toBe(false);
+      expect(h.service.view(id).configFields).toEqual([]);
+    }
+    // The vault path refuses them: connectApiKey is synchronous and throws.
+    expect(() => h.service.connectApiKey("discord", { apiKey: "x" })).toThrow(IntegrationError);
   });
 
   test("GitHub reports BYOK setup needed until app credentials are saved", () => {

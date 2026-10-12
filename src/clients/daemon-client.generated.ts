@@ -1031,6 +1031,71 @@ export class XRDaemonClient {
     return await this.call("POST", "/api/v1/discord/webhook");
   }
 
+  /** WhatsApp link state: linked device, connection, QR window, allowed contacts, outbox, caps and per-chat settings. Never includes credentials. */
+  async whatsappStatus(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/whatsapp/status");
+  }
+
+  /** Open the linked-device connection. With credentials on disk this resumes silently, with no QR. */
+  async whatsappConnect(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/connect");
+  }
+
+  /** Same as connect: start the linked device and mark the surface enabled. */
+  async whatsappStart(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/start");
+  }
+
+  /** Close the socket but keep the link, so a later start resumes without a QR. */
+  async whatsappStop(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/stop");
+  }
+
+  /** Unlink the device: ask WhatsApp to log out, wipe the sealed credentials and stop. Requires confirm: true. */
+  async whatsappDisconnect(body: z.infer<typeof S.WhatsAppUnpairRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/disconnect", body);
+  }
+
+  /** The same unlink action, named the way the dialog's button reads. Requires confirm: true. */
+  async whatsappUnpair(body: z.infer<typeof S.WhatsAppUnpairRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/unpair", body);
+  }
+
+  /** Open the QR pairing window (three minutes). Refused while a device is already linked. */
+  async whatsappPair(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/pair");
+  }
+
+  /** Close the QR window early and stop offering frames. */
+  async whatsappPairClose(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/pair/close");
+  }
+
+  /** Allow one contact number to talk to XR. Anything not on this list is ignored in silence. */
+  async whatsappContactsAdd(body: z.infer<typeof S.WhatsAppContactRemoveRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/contacts/add", body);
+  }
+
+  /** Revoke one contact number. Their chat stops being answered immediately. */
+  async whatsappContactsRemove(body: z.infer<typeof S.WhatsAppContactRemoveRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/contacts/remove", body);
+  }
+
+  /** Update the message rate, attachment cap, outbox switch and auto-start. Only sent fields change. */
+  async whatsappSettings(body: z.infer<typeof S.WhatsAppSettingsRequest>): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/whatsapp/settings", body);
+  }
+
+  /** Redacted tail of the WhatsApp log. Phone numbers appear as last four digits only. */
+  async whatsappLogs(body: z.infer<typeof S.WhatsAppLogsQuery>): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/whatsapp/logs", body);
+  }
+
+  /** Server-sent events: QR frames as PNG data URLs while pairing, then a terminal state (open, timeout, closed or error). */
+  async whatsappQr(body: z.infer<typeof S.WhatsAppQrQuery>): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/whatsapp/qr", body);
+  }
+
   /** Computer-control subsystem status. */
   async controlStatus(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1/control/status");

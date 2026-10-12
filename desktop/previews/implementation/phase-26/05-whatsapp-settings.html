@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>XR · WhatsApp settings</title>
+<style>
+  /* Theme: XR Midnight (the desktop default). Copied from desktop/src/styles/themes.css. */
+  :root {
+    --bg-base: #0b0f17;
+    --bg-raised: #121826;
+    --bg-elevated: #18202f;
+    --border-subtle: rgba(183, 194, 207, 0.08);
+    --border-default: rgba(183, 194, 207, 0.16);
+    --text-primary: #f0f4f8;
+    --text-secondary: #9aa8ba;
+    --text-tertiary: #5a6678;
+    --accent: #00e5ff;
+    --accent-dim: #008da8;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg-base); color: var(--text-primary);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { padding: 24px 28px 40px; display: flex; flex-direction: column; gap: 16px; }
+  .caption {
+    font-size: 12px; color: var(--text-tertiary); border-left: 2px solid var(--accent-dim);
+    padding-left: 10px; margin: 0 0 4px; max-width: 90ch;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  h3 { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+  h4 { font-size: 13px; margin: 12px 0 6px; font-weight: 600; color: var(--text-secondary); }
+  p { margin: 0; }
+  .sub { color: var(--text-secondary); font-size: 13px; max-width: 60ch; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+    border-radius: 8px; font-size: 13px; cursor: default; border: 1px solid var(--border-default);
+    background: transparent; color: var(--text-primary);
+  }
+  .btn--outline { border-color: var(--accent); color: var(--accent); }
+  .btn--ghost { border-color: transparent; color: var(--text-secondary); }
+  .btn--danger { border-color: var(--danger); color: var(--danger); }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .card {
+    position: relative; display: flex; flex-direction: column; gap: 10px; padding: 16px;
+    border-radius: var(--radius); border: 1px solid var(--border-subtle); background: var(--bg-raised);
+  }
+  .card--connected { border-color: rgba(52, 211, 153, 0.35); }
+  .card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .badges { display: inline-flex; align-items: center; gap: 6px; }
+  .tile {
+    width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center;
+    font-size: 20px; background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  }
+  .chip {
+    font-size: 11px; border-radius: 999px; padding: 2px 8px; border: 1px solid var(--border-subtle);
+    color: var(--text-secondary); display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  }
+  .chip--connected { border-color: var(--success); color: var(--success); background: rgba(52, 211, 153, 0.08); }
+  .chip--warn { border-color: var(--warning); color: var(--warning); }
+  .chips { list-style: none; display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0 0; padding: 0; }
+  .dots { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot--green { background: var(--success); }
+  .dot--yellow { background: var(--warning); }
+  .dot--red { background: var(--danger); }
+  .card__name { font-size: 15px; font-weight: 600; margin: 0; }
+  .card__desc { font-size: 13px; color: var(--text-secondary); margin: 0; }
+  .card__footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+
+  /* Dialog shell (Phase 22 .ix-dialog). */
+  .dialog {
+    width: 480px; max-width: 100%; border-radius: var(--radius); border: 1px solid var(--border-default);
+    background: var(--bg-elevated); padding: 20px; display: flex; flex-direction: column; gap: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  }
+  .dialog__title { font-size: 16px; font-weight: 600; margin: 0; }
+  .dialog__desc { font-size: 13px; color: var(--text-secondary); margin: 4px 0 0; }
+  .form { display: flex; flex-direction: column; gap: 14px; }
+  .form label { font-size: 13px; font-weight: 500; }
+  .input {
+    height: 36px; border-radius: 8px; border: 1px solid var(--border-default); background: var(--bg-raised);
+    color: var(--text-primary); padding: 0 12px; font-size: 13px; width: 100%;
+  }
+  .hint { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+  .hint--warn { color: var(--warning); display: flex; gap: 6px; align-items: flex-start; }
+  .link { color: var(--accent); text-decoration: underline; font-size: 12px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; }
+  .check input { margin-top: 2px; }
+  .foot { display: flex; justify-content: flex-end; gap: 8px; }
+  .notice {
+    display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--warning); background: var(--bg-raised); font-size: 13px;
+  }
+  .notice p code { font-family: var(--font-mono); font-size: 12px; }
+  .btn--off { opacity: 0.45; }
+  .notice p { margin: 6px 0 0; font-size: 12px; color: var(--text-secondary); }
+  .paircode {
+    display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 12px 14px;
+    border-radius: 10px; border: 1px solid var(--accent-dim); background: var(--bg-raised);
+  }
+  .paircode__digits {
+    font-family: var(--font-mono); font-size: 24px; letter-spacing: 0.16em; font-variant-numeric: tabular-nums;
+  }
+  .paircode__meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-secondary); }
+  .invite {
+    display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid var(--border-subtle); background: var(--bg-raised);
+  }
+  .invite__url { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+  .qr { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .qr__frame {
+    width: 300px; height: 300px; border-radius: 12px; border: 1px solid var(--border-subtle);
+    background: #fff; display: grid; place-items: center; overflow: hidden;
+  }
+  .qr__meta { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; min-height: 18px; }
+  .qr__placeholder {
+    padding: 16px; text-align: center; font-size: 13px; color: var(--text-secondary);
+    display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; background: var(--bg-raised);
+  }
+  .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .logs {
+    margin: 0; max-height: 160px; overflow: auto; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--border-subtle); background: var(--bg-raised); font-family: var(--font-mono);
+    font-size: 11px; line-height: 1.5; color: var(--text-secondary); white-space: pre-wrap;
+  }
+  .row { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; }
+  .mono { font-family: var(--font-mono); font-size: 12px; }
+  .kbd {
+    font-family: var(--font-mono); font-size: 12px; border: 1px solid var(--border-default);
+    border-radius: 6px; padding: 1px 6px; background: var(--bg-raised);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<p class="caption"><strong>Mockup, not a screenshot.</strong> WhatsApp settings: the contact allow-list, the outbox switch, the 1/second limits, auto-reconnect, the redacted log (last four digits of any number), and unpair. The markup, class names and copy mirror desktop/src/screens/Integrations/**, and the QR images are real (generated with the same qrcode dependency the engine uses).</p>
+  <h1>WhatsApp settings</h1>
+  <section class="dialog" aria-label="WhatsApp settings">
+    <div>
+      <h2 class="dialog__title">WhatsApp settings</h2>
+      <p class="dialog__desc">…4567 · open. XR must be running on your computer for this chat to answer.</p>
+    </div>
+    <div class="form">
+      <p class="hint" style="color: var(--success)">State: open</p>
+      <p class="hint">Session: sealed on disk (128 keys) · history payloads declined: 3</p>
+
+      <section>
+        <h3>Allowed contacts</h3>
+        <ul class="list">
+          <li><span><strong>Ana</strong> · 923001234567</span><span class="btn btn--ghost">Remove</span></li>
+          <li><span>447700900123</span><span class="btn btn--ghost">Remove</span></li>
+        </ul>
+        <div class="actions" style="margin-top:8px">
+          <input class="input" style="max-width:220px" placeholder="923001234567" readonly />
+          <span class="btn btn--outline">Add</span>
+        </div>
+        <label class="check" style="margin-top:10px"><input type="checkbox" checked /> Respond to contacts I message first</label>
+        <p class="hint">Learned from messages you send while XR is running (never from your chat history). 1 number learned so far.</p>
+      </section>
+
+      <section>
+        <h3>Limits</h3>
+        <label for="wrate" class="hint">Messages per minute, per chat (1–60)</label>
+        <input class="input" id="wrate" value="20" readonly />
+        <label for="wattach" class="hint">Document limit (MB, photos stay capped at 2 MB)</label>
+        <input class="input" id="wattach" value="5" readonly />
+        <div class="actions"><span class="btn btn--outline">Save limits</span></div>
+      </section>
+
+      <section>
+        <h3>Running</h3>
+        <label class="check"><input type="checkbox" checked /> Reconnect automatically when XR starts</label>
+        <div class="actions" style="margin-top:8px"><span class="btn btn--outline">Stop</span></div>
+      </section>
+
+      <section>
+        <h3>Logs</h3>
+        <pre class="logs">13:40:11 info  linked as …4567
+13:40:11 info  someone may now talk to XR: 2 contacts allowed
+13:41:55 info  rate_limited for …0123 (too many messages)
+13:42:10 info  voice note from …4567 transcribed (41 chars)
+13:43:02 info  approval requested · whatsapp · run_command
+13:43:19 info  decision from telegram · approved</pre>
+        <p class="hint">Phone numbers appear as last four digits only, even here.</p>
+      </section>
+
+      <section>
+        <h3>Unpair</h3>
+        <div class="actions"><span class="btn btn--danger">Unpair this device</span></div>
+      </section>
+    </div>
+    <div class="foot"><span class="btn btn--ghost">Close</span></div>
+  </section>
+</div>
+</body>
+</html>

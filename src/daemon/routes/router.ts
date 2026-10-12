@@ -16,6 +16,8 @@ export interface DaemonState {
   telegram?: import("../../telegram/manager.ts").TelegramManager;
   /** Phase 26 — Discord bot lifecycle (token, pairing, gateway/webhook). */
   discord?: import("../../discord/manager.ts").DiscordManager;
+  /** Phase 26 — WhatsApp linked-device lifecycle (QR pairing, sealed creds). */
+  whatsapp?: import("../../whatsapp/manager.ts").WhatsAppManager;
   shield: XRShieldService;
   workspaceManager: WorkspaceManager;
   /** XR 4.2 — Trust & Isolation service (backend availability, health, classify). */

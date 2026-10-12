@@ -15,7 +15,7 @@ export interface ConnectorDefinition {
   description: string;
   category: 'communication' | 'calendar' | 'development' | 'storage' | 'crm_erp' | 'automation' | 'analytics' | 'payments' | 'commerce' | 'design' | 'infrastructure';
   icon: string;
-  authType: 'oauth2' | 'api_key' | 'basic' | 'bearer' | 'bot_token' | 'none';
+  authType: 'oauth2' | 'api_key' | 'basic' | 'bearer' | 'bot_token' | 'qr_link' | 'none';
   scopes?: string[];
   configFields: ConnectorConfigField[];
   capabilities: string[];
@@ -85,15 +85,15 @@ export const CONNECTORS: ConnectorDefinition[] = [
   {
     id: 'discord',
     name: 'Discord',
-    description: 'Send messages and manage servers in Discord',
+    description: 'Run tasks and approve actions from Discord. XR must be running on your computer.',
     category: 'communication',
     icon: '🎮',
     authType: 'bot_token',
-    configFields: [
-      { key: 'botToken', label: 'Bot Token', type: 'password', required: true },
-      { key: 'guildId', label: 'Server ID', type: 'text', required: true },
-    ],
-    capabilities: ['send_message', 'read_channels'],
+    // Phase 26: the token goes through the Discord setup dialog (application
+    // check → pairing → invite), never through configFields. An empty list is
+    // what tells the card to open its own dialog instead of a generic form.
+    configFields: [],
+    capabilities: ['send_message', 'read_messages', 'slash_commands', 'approvals'],
   },
   {
     id: 'microsoft_teams',
@@ -116,6 +116,17 @@ export const CONNECTORS: ConnectorDefinition[] = [
     // The token goes through the Telegram setup (getMe, then pairing), never through configFields.
     configFields: [],
     capabilities: ['send_message', 'read_messages'],
+  },
+  {
+    id: 'whatsapp',
+    name: 'WhatsApp',
+    description: 'Link XR as a companion device and talk to it from your phone. Unofficial client — read the warning first.',
+    category: 'communication',
+    icon: '💬',
+    authType: 'qr_link',
+    // Linking is a QR scan, not a field: nothing is typed here and nothing is stored by this screen.
+    configFields: [],
+    capabilities: ['send_message', 'read_messages', 'voice_notes', 'approvals'],
   },
   {
     id: 'whatsapp_business',
