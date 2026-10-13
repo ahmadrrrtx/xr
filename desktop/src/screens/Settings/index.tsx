@@ -23,6 +23,7 @@ import {
   Shield,
   type LucideIcon,
   Activity,
+  CreditCard,
 } from 'lucide-react';
 
 import { SearchInput } from '@/components/settings/controls';
@@ -30,6 +31,7 @@ import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 import { AboutTab } from './tabs/AboutTab';
+import { BillingTab } from './tabs/BillingTab';
 import { DiagnosticsTab } from './tabs/DiagnosticsTab';
 import { AppearanceTab } from './tabs/AppearanceTab';
 import { GeneralTab } from './tabs/GeneralTab';
@@ -42,6 +44,7 @@ import { VoiceTab } from './tabs/VoiceTab';
 
 export type SettingsTabId =
   | 'general'
+  | 'billing'
   | 'appearance'
   | 'notifications'
   | 'models'
@@ -64,6 +67,11 @@ interface TabDef {
 
 const TABS: readonly TabDef[] = [
   { id: 'general', icon: Settings2, labelKey: 'tab.general', group: 'account', subtitle: '' },
+  // Phase 30 · §D — Billing & Account sits in the account group, directly after
+  // General and before Appearance: it is account infrastructure, not a
+  // preference, and it must not read as an advertisement slot bolted on at the
+  // bottom of the list.
+  { id: 'billing', icon: CreditCard, labelKey: 'tab.billing', group: 'account', subtitle: 'Your plan, your team, and what signing in does — and does not — change.' },
   { id: 'appearance', icon: Palette, labelKey: 'tab.appearance', group: 'app', subtitle: 'Change how XR looks and feels.' },
   { id: 'notifications', icon: Bell, labelKey: 'tab.notifications', group: 'app', subtitle: 'Choose what XR tells you about, and when.' },
   { id: 'models', icon: Cpu, labelKey: 'tab.models', group: 'preferences', subtitle: 'Connect providers and pick the models XR uses.' },
@@ -249,6 +257,7 @@ export default function SettingsScreen() {
               </header>
               <div className="mt-6">
                 {active === 'general' ? <GeneralTab /> : null}
+                {active === 'billing' ? <BillingTab /> : null}
                 {active === 'appearance' ? <AppearanceTab /> : null}
                 {active === 'notifications' ? <NotificationsTab /> : null}
                 {active === 'models' ? <ModelsTab /> : null}

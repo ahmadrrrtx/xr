@@ -22,6 +22,7 @@ import { WorkspaceListRow } from '@/components/workspaces/WorkspaceListRow';
 import { Kbd } from '@/components/ui/kbd';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { TeamWorkspaces } from './TeamWorkspaces';
 import {
   filterCounts,
   filterWorkspaces,
@@ -457,6 +458,14 @@ export default function WorkspacesScreen() {
             ))}
           </div>
         )}
+
+        {/*
+          Phase 30 — the team section renders only when the team tier is active.
+          It is placed *after* the local workspaces and never merged with them:
+          local and shared are different things and the layout should not flirt
+          with the idea that they are the same.
+        */}
+        <TeamWorkspaces onOpenSettings={() => navigate('/settings#billing')} />
 
         {s.multiSelect && (
           <LaunchBar

@@ -42,6 +42,7 @@ type StringTable = Record<string, string>;
 
 const en: StringTable = {
   'tab.general': 'General',
+'tab.billing': 'Billing & Account',
   'tab.appearance': 'Appearance',
   'tab.models': 'Models & Providers',
   'tab.shortcuts': 'Keyboard Shortcuts',
@@ -86,6 +87,7 @@ const en: StringTable = {
 
 const ur: StringTable = {
   'tab.general': 'عمومی',
+'tab.billing': 'صورت‌حساب و حساب کاربری',
   'tab.appearance': 'ظاہری شکل',
   'tab.models': 'ماڈلز اور فراہم کنندگان',
   'tab.shortcuts': 'کی بورڈ شارٹ کٹس',
@@ -174,6 +176,7 @@ const es: StringTable = {
 
 const fr: StringTable = {
   'tab.general': 'Général',
+'tab.billing': 'Facturation et compte',
   'tab.appearance': 'Apparence',
   'tab.models': 'Modèles et fournisseurs',
   'tab.shortcuts': 'Raccourcis clavier',
@@ -217,6 +220,7 @@ const fr: StringTable = {
 
 const zh: StringTable = {
   'tab.general': '通用',
+'tab.billing': '账单与账户',
   'tab.appearance': '外观',
   'tab.models': '模型与提供商',
   'tab.shortcuts': '键盘快捷键',
