@@ -31,13 +31,34 @@ if (!bundles || !existsSync(bundles)) {
 }
 const os = process.platform === "win32" ? "windows" : process.platform === "darwin" ? "macos" : "linux";
 const XR_HOME = process.env.XR_HOME ?? join(homedir(), ".xr");
-const files = readdirSync(bundles);
+/*
+ * Installers do NOT sit at the top of --bundles. upload-artifact is given
+ * several globs (bundle/deb/*.deb, bundle/nsis/*-setup.exe, …) and preserves
+ * the directory structure below their common root, so the downloaded tree is
+ * `deb/…`, `dmg/…`, `nsis/…`. Walk it instead of reading one level — a flat
+ * readdir finds only the format directories and reports "no installer" for a
+ * bundle set that is in fact complete.
+ */
+function walk(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walk(p));
+    else out.push(p);
+  }
+  return out;
+}
+
+const files = walk(bundles);
 
 const pick = (re: RegExp): string => {
   const f = files.find((x) => re.test(x));
-  if (!f) throw new Error(`no ${re} installer in ${bundles}: ${files.join(", ")}`);
-  return join(bundles, f);
+  if (!f) throw new Error(`no ${re} installer under ${bundles}: ${files.join(", ")}`);
+  return f;
 };
+
+/** The same lookup for the previous-release set, which is laid out the same way. */
+const pickFrom = (dir: string, re: RegExp): string | undefined => walk(dir).find((x) => re.test(x));
 
 const sh = (cmd: string, opts: { silent?: boolean } = {}) =>
   execSync(cmd, { stdio: opts.silent ? "pipe" : "inherit", timeout: 240_000 });
@@ -110,7 +131,7 @@ await installBoot("installed", installer);
 
 /* ── lane: upgraded ──────────────────────────────────────────────────────── */
 const baseInstaller = prev && existsSync(prev)
-  ? join(prev, readdirSync(prev).find((x) => (os === "linux" ? /\.deb$/.test(x) : os === "macos" ? /\.dmg$/.test(x) : /-setup\.exe$/.test(x)))!)
+  ? pickFrom(prev, os === "linux" ? /\.deb$/ : os === "macos" ? /\.dmg$/ : /-setup\.exe$/)
   : installer;
 if (baseInstaller !== installer) await installBoot("upgraded/base", baseInstaller);
 else report.push(`· ${os}/upgraded: no --prev bundles → mechanics-only reinstall`);
