@@ -1,5 +1,5 @@
 import { AnimatePresence, MotionConfig } from 'framer-motion';
-import { RouterProvider, useNavigate } from 'react-router-dom';
+import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useEffect, useRef, useState } from 'react';
 
@@ -178,15 +178,22 @@ export default function App() {
 }
 
 /**
- * The bridge needs the router's `navigate`, which only exists inside a Router
- * context — so it mounts as a child of the provider rather than beside it. It
- * renders nothing; see components/shell/ShellBridge.tsx.
+ * Wires the host (tray, native menu, shortcuts) to navigation.
+ *
+ * Deliberately does NOT call `useNavigate()`. `RouterProvider` supplies its
+ * context only to the route tree it renders — a sibling rendered beside it, as
+ * this component is, is OUTSIDE that context and `useNavigate()` throws
+ * "may be used only in the context of a <Router>". Calling the hook here took
+ * down the whole app with the ErrorBoundary.
+ *
+ * `router` is a module-level `createHashRouter` singleton (see router.tsx), so
+ * we can drive it directly — no context required. It renders nothing; see
+ * components/shell/ShellBridge.tsx.
  */
 function ShellBridgeHost() {
-  const navigate = useNavigate();
   return (
     <ShellBridge
-      navigate={(path) => navigate(path)}
+      navigate={(path) => void router.navigate(path)}
       onOpenPalette={() => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, ctrlKey: true }));
       }}
