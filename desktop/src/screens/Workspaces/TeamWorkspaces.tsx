@@ -13,7 +13,7 @@
  * an empty state inviting them to upgrade. The upgrade lives in one place —
  * Settings → Billing & Account — and this is not that place.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Cloud, Loader2, Lock, RefreshCw, Users } from 'lucide-react';
 
 import { engineJson } from '@/engine/transport';
@@ -40,23 +40,27 @@ export function TeamWorkspaces({ onOpenSettings }: { onOpenSettings: () => void 
   const [view, setView] = useState<TeamWorkspacesView | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function load() {
-    setLoading(true);
-    try {
-      setView(await engineJson<TeamWorkspacesView>('/cloud/team-workspaces'));
-    } catch {
-      // The engine link is down. That is not a team problem, and it is not
-      // something to report here — the Workspaces screen already surfaces a
-      // failed engine. Stay silent rather than inventing an error.
-      setView({ available: false });
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Written as a continuation rather than an `async` function the effect calls
+  // straight away. A body like `setLoading(true); await fetch()` puts a setState
+  // in the effect's own frame — the cascading render `set-state-in-effect`
+  // exists to catch — and the linter cannot see past a bare `await` to prove
+  // otherwise. Here every setState is inside a callback, so the effect only ever
+  // starts the request.
+  const load = useCallback((): Promise<void> => {
+    return engineJson<TeamWorkspacesView>('/cloud/team-workspaces')
+      .then((next) => setView(next))
+      .catch(() => {
+        // The engine link is down. That is not a team problem, and it is not
+        // something to report here — the Workspaces screen already surfaces a
+        // failed engine. Stay silent rather than inventing an error.
+        setView({ available: false });
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   // Nothing at all for Personal: no empty state, no invitation, no card.
   if (!loading && !view?.available) return null;
@@ -84,7 +88,10 @@ export function TeamWorkspaces({ onOpenSettings }: { onOpenSettings: () => void 
         </span>
         <button
           type="button"
-          onClick={() => void load()}
+            onClick={() => {
+              setLoading(true);
+              void load();
+            }}
           className="text-text-tertiary hover:text-text-secondary ml-auto flex cursor-pointer items-center gap-1 text-[11.5px]"
         >
           <RefreshCw size={12} strokeWidth={1.5} aria-hidden="true" />

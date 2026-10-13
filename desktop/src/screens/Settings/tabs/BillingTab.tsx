@@ -68,11 +68,15 @@ export function BillingTab() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
-    const [licence, sess] = await Promise.all([license(), session()]);
-    setState(licence);
-    setAccount(sess);
-    setLoading(false);
+  // Continuation shape for the same reason as the team-workspaces list: the
+  // effect below starts the request, and every setState happens in a callback
+  // rather than in the effect's own frame.
+  const load = useCallback((): Promise<void> => {
+    return Promise.all([license(), session()]).then(([licence, sess]) => {
+      setState(licence);
+      setAccount(sess);
+      setLoading(false);
+    });
   }, []);
 
   useEffect(() => {
