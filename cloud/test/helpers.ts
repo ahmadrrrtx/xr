@@ -24,6 +24,7 @@
  * over with a green check.
  */
 
+import { createHash } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -59,6 +60,20 @@ export interface Harness {
   close(): Promise<void>;
 }
 
+/**
+ * Deterministic, non-secret key material for a test process.
+ *
+ * Derived at runtime rather than written down as a literal. A fixed "test" key
+ * in the tree is indistinguishable from a real one to a secret scanner, and a
+ * checked-in 32-byte value is one careless copy away from becoming somebody's
+ * deployment key. Deriving it keeps the value stable across runs, keeps it
+ * shaped the way the env validator demands (exactly 32 bytes of base64), and
+ * leaves nothing secret-shaped to scan.
+ */
+function derived(label: string): string {
+  return createHash("sha256").update(`xr-cloud-test:${label}`).digest("base64");
+}
+
 /** Boot a complete, isolated cloud instance. */
 export async function harness(label = "test"): Promise<Harness> {
   const dir = await mkdtemp(join(tmpdir(), `xr-cloud-${label}-`));
@@ -72,8 +87,8 @@ export async function harness(label = "test"): Promise<Harness> {
     MAIL_TRANSPORT: "capture",
     MAIL_CAPTURE_DIR: mailDir,
     MAIL_FROM: "XR <no-reply@xr.test>",
-    JWT_SECRET: "test-secret-that-is-at-least-32-characters-long",
-    XR_KEY_ENCRYPTION_KEY: "7DoG1/LYXQB8WIKmOBJt7J2YuZLKrLuckzW+79FYJIY=",
+    JWT_SECRET: derived("jwt-secret"),
+    XR_KEY_ENCRYPTION_KEY: derived("key-encryption"),
     APP_URL: "http://localhost:3000",
     API_URL: "http://localhost:8787",
     LOG_LEVEL: process.env.XR_TEST_LOG_LEVEL ?? "fatal",

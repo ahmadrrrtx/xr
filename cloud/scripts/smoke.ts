@@ -9,18 +9,28 @@
  *
  * Run: `bun run smoke`
  */
+import { createHash } from "node:crypto";
+
 import { createApp } from "../src/app.ts";
 import { resetEnvCache, loadEnv } from "../src/env.ts";
 import { bootstrap } from "../src/bootstrap.ts";
 
 const scratch = `.xr-cloud-smoke-${Date.now()}`;
 
+/**
+ * Derived, not written down: a fixed "test key" in the tree is one careless
+ * copy away from becoming a real deployment's key, and the env validator wants
+ * exactly 32 bytes of base64 anyway. Same derivation as `test/helpers.ts`.
+ */
+const derived = (label: string): string =>
+  createHash("sha256").update(`xr-cloud-test:${label}`).digest("base64");
+
 Object.assign(process.env, {
   NODE_ENV: "test",
   DATABASE_DRIVER: "pglite",
   PGLITE_DIR: scratch,
-  JWT_SECRET: "smoke-test-secret-that-is-long-enough-to-pass-validation",
-  XR_KEY_ENCRYPTION_KEY: "7DoG1/LYXQB8WIKmOBJt7J2YuZLKrLuckzW+79FYJIY=",
+  JWT_SECRET: derived("jwt-secret"),
+  XR_KEY_ENCRYPTION_KEY: derived("key-encryption"),
   APP_URL: "http://localhost:3000",
   API_URL: "http://localhost:8787",
   LOG_LEVEL: "error",
