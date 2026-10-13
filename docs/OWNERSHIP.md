@@ -17,6 +17,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `src/capabilities/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/cli/` | @ahmadrrrtx | explicit entry |
 | `src/clients/` | @ahmadrrrtx | explicit entry |
+| `src/cloud/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/commands/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/computer/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `src/config/` | @ahmadrrrtx | default (@ahmadrrrtx) |
@@ -70,6 +71,7 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `test/bots/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/capabilities/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/cli/` | @ahmadrrrtx | default (@ahmadrrrtx) |
+| `test/cloud/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/config/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/context/` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `test/control-memory.test.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

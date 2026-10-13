@@ -110,12 +110,72 @@
       "text": "The same canonical build installs through GitHub Releases, Homebrew, WinGet, Scoop, .deb, npm and Docker, with channel configs generated from one manifest.",
       "evidence": "scripts/channel-manifest.ts (one generator) + packaging/ (generated, drift-gated by `bun run channel:check` in CI) + .github/workflows/channel-install.yml (install tests). Real published-release installs run in the weekly job; .deb is dpkg-installed on every PR.",
       "expires": "2027-07-31"
+    },
+    {
+      "id": "pricing-personal-free",
+      "text": "XR Personal is free forever, with every local feature included and no account required.",
+      "evidence": "website/src/app/pricing/page.tsx; docs/business/BILLING.md §1; src/cloud/license.ts BUSINESS_FEATURES contains only hosted surfaces.",
+      "expires": "2027-10-14"
+    },
+    {
+      "id": "pricing-business",
+      "text": "XR Business is $15 per user per month, or $144 per user per year ($12 per month equivalent).",
+      "evidence": "website/src/lib/native.ts businessPricing; cloud/src/services/stripe.ts; docs/business/BILLING.md §2.",
+      "expires": "2027-10-14"
+    },
+    {
+      "id": "pricing-trial",
+      "text": "A 30-day Business trial needs no card and covers up to 5 seats.",
+      "evidence": "cloud/src/routes/billing.ts trial config; cloud/src/env.ts TRIAL_DAYS/TRIAL_MAX_SEATS; docs/business/BILLING.md §3.",
+      "expires": "2027-10-14"
+    },
+    {
+      "id": "pricing-enterprise",
+      "text": "Enterprise is quoted per contract and invoiced manually; there is no self-serve Enterprise checkout and no support SLA is offered.",
+      "evidence": "docs/business/BILLING.md §4 (NET 30 placeholder, contact sales only).",
+      "expires": "2027-10-14"
+    },
+    {
+      "id": "sso",
+      "text": "SSO (OIDC and SAML 2.0) is available on the Business tier as an organization feature.",
+      "evidence": "cloud/src/services/sso.ts; cloud/src/routes/sso.routes.ts; docs/business/SSO.md; SAML SP metadata is generated from API_URL at /auth/sso/saml/{orgId}/metadata.",
+      "expires": "2027-10-14"
+    },
+    {
+      "id": "managed-models",
+      "text": "Managed cloud models are an optional Business feature; BYOK remains free and direct-to-provider on every plan.",
+      "evidence": "cloud/src/services/metering.ts; cloud/src/routes/models.routes.ts; src/cloud/client.ts; docs/business/BILLING.md §5.",
+      "expires": "2027-10-14"
+    },
+    {
+      "id": "licence-offline",
+      "text": "A Business licence is a signed token verified offline against a key built into XR; no check-in is required and no remote kill switch exists.",
+      "evidence": "src/cloud/license.ts (node:crypto Ed25519, no network); test/cloud/license.test.ts asserts zero dial attempts.",
+      "expires": "2027-10-14"
+    },
+    {
+      "id": "retention",
+      "text": "Cancelling leaves all local data intact; hosted team data stays exportable for 30 days and is then purged.",
+      "evidence": "cloud/src/services/subscriptions.ts cancellation path; website/src/app/legal/privacy/page.tsx; docs/business/BILLING.md §6.",
+      "expires": "2027-10-14"
+    },
+    {
+      "id": "no-analytics",
+      "text": "The website ships no third-party analytics, no advertising pixels and no tracking scripts.",
+      "evidence": "website has no analytics dependency (website/package.json); K is server logs only.",
+      "expires": "2027-10-14"
+    },
+    {
+      "id": "no-drm",
+      "text": "XR contains no DRM, no obfuscation and no remote disable of local features.",
+      "evidence": "src/cloud/license.ts header comment; BUSINESS_FEATURES is the complete gate list and contains no local surface.",
+      "expires": "2027-10-14"
     }
   ],
   "prohibitedClaims": [
     {
-      "pattern": "SOC\\s*2",
-      "reason": "XR holds no SOC 2 audit. Article XIX forbids false certification claims."
+      "pattern": "SOC\\s*2[^.]{0,40}\\b(certified|compliant|audited|attested|we hold)\\b",
+      "reason": "XR holds no SOC 2 audit. Type I is in progress and Type II is not attempted; neither may be written as though it were held. Article XIX forbids false certification claims."
     },
     {
       "pattern": "ISO\\s*27001",
@@ -158,14 +218,6 @@
       "reason": "Absolute security claims are never evidenceable."
     },
     {
-      "pattern": "SSO\\s*/\\s*SAML",
-      "reason": "No SSO/SAML integration exists. Identity is local token issuance (src/enterprise/deployment/identity); there is no IdP client and no SCIM endpoint."
-    },
-    {
-      "pattern": "Enterprise\\s+SSO",
-      "reason": "No SSO integration exists; this fabricated feature was removed by the Phase 10 claim audit."
-    },
-    {
       "pattern": "SLAs?\\s*&\\s*dedicated",
       "reason": "No SLA or dedicated support exists. XR is free, MIT-licensed and self-hosted; there is no commercial support organization."
     },
@@ -194,18 +246,6 @@
       "reason": "Unsupported social-proof claim. No customer or regulated-industry adoption evidence exists."
     },
     {
-      "pattern": "per\\s+user\\s*/\\s*month",
-      "reason": "No hosted or per-seat pricing exists. XR is free, open source and self-hosted."
-    },
-    {
-      "pattern": "Start\\s+(Pro|Team)\\s+trial",
-      "reason": "No trial SaaS offering exists; the pricing page fabrications were removed."
-    },
-    {
-      "pattern": "Contact\\s+sales",
-      "reason": "There is no sales team and no hosted product (the enterprise page itself states this)."
-    },
-    {
       "pattern": "VPC\\s+deployment",
       "reason": "No hosted VPC offering exists; XR is self-hosted by the deployer."
     },
@@ -215,7 +255,7 @@
     },
     {
       "pattern": "commercial\\s+license",
-      "reason": "XR is MIT-licensed with no commercial tier. The FAQ asserted a commercial license; removed."
+      "reason": "The XR source remains MIT-licensed with no commercial source licence; the Business tier is a hosted service, not a licence for the software. Do not describe the software as commercially licensed."
     },
     {
       "pattern": "Audit\\s+logs\\s*\\(",
@@ -236,6 +276,26 @@
     {
       "pattern": "Business\\s+Operating\\s+System",
       "reason": "Business OS is an optional, default-off, effect-verified extension over local-first records (extensions/business-os), not an operating system (launch finding A-3)."
+    },
+    {
+      "pattern": "\\b(Personal|free)\\s+(tier|plan)\\b[^.]{0,30}\\b(limited|trial|upgrade to use)\\b",
+      "reason": "Personal is free forever and fully functional. It is never 'limited', never a trial, and no local feature is gated behind an upgrade. Article XXIX/XXX; Phase 30 §L."
+    },
+    {
+      "pattern": "\\b(voice|local memory|themes|CLI|bots?|VS Code|mobile PWA|multi-window|research|agents?|skills|MCP)\\b[^.]{0,25}\\b(requires?\\s+(a\\s+)?(Business|paid|subscription)|only\\s+(on|with)\\s+(Business|the paid|a subscription)|Business-only|upgrade\\s+to\\s+(use|unlock))\\b",
+      "reason": "Local features are free on every plan, signed in or not. Nothing may be described as requiring Business, subscription or an upgrade (Phase 30 §L: a constitutional bug, not a copywriting slip)."
+    },
+    {
+      "pattern": "\\b(free|local|offline)\\b[^.]{0,25}\\brequires?\\b[^.]{0,20}\\b(account|sign[- ]?in|subscription|licen[cs]e|cloud)\\b",
+      "reason": "Nothing local requires an account, a sign-in, a subscription or a licence. XR works identically signed out."
+    },
+    {
+      "pattern": "\\b(with|adds?|includes?|contains?|shows?|applies|stamps?)\\s+(a\\s+|its\\s+)?(watermark|nag screen|upsell popup|feature gate)\\b",
+      "reason": "No watermarks, no nags, no popups and no feature gates exist in any tier (Phase 30 §L)."
+    },
+    {
+      "pattern": "\\b(phone[ -]home|telemetry|analytics|tracking)\\b[^.]{0,20}\\b(enabled|required|on by default)\\b",
+      "reason": "XR has no telemetry pipeline and the website ships no third-party analytics in Phase 30. Server logs are the only telemetry and they are not person-linked."
     }
   ],
   "supervisedTerms": [
@@ -257,6 +317,7 @@
     "install.sh",
     "install.ps1",
     "package.json",
-    "docs/HISTORY.md"
+    "docs/HISTORY.md",
+    "docs/business/**/*.{md}"
   ]
 }

@@ -1,15 +1,15 @@
 # XR 1.0.0 Repository Inventory
 
-Generated: 2026-10-13T15:46:24.086Z
+Generated: 2026-10-13T20:55:42.685Z
 
 ## Summary
 
 | Area | Count |
 |---|---:|
-| Source files | 730 |
-| Test files | 382 |
+| Source files | 734 |
+| Test files | 384 |
 | CLI commands | 43 |
-| Daemon routes | 283 |
+| Daemon routes | 290 |
 | Providers | 26 |
 | Local runtimes | 11 |
 | Plugins | 2 |
@@ -127,6 +127,12 @@ Generated: 2026-10-13T15:46:24.086Z
 - POST `/api/capabilities/quarantine` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
 - POST `/api/capabilities/rollback` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
 - POST `/api/chat` — local bearer token or dashboard query token (src/daemon/routes/chat.routes.ts)
+- GET `/api/cloud/license` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- POST `/api/cloud/license/verify` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `/api/cloud/session` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- DELETE `/api/cloud/session` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `/api/cloud/teams` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `/api/cloud/usage` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
 - GET `/api/config` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/api/context` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
 - POST `/api/context/approve/*` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
@@ -317,6 +323,7 @@ Generated: 2026-10-13T15:46:24.086Z
 - GET `/assets/dashboard.js` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/chat` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
 - GET `/dashboard` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
 - GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
 - POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
 - POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
