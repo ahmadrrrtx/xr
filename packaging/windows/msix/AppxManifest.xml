@@ -67,11 +67,24 @@
 
         <!-- Toast activation: the shell shows OS notifications when hidden, and
              clicking one has to come back to the running app rather than
-             launching a second copy (W-3 single-instance still applies). -->
-        <desktop:Extension Category="windows.appUserModelId" />
-        <uap:Extension Category="windows.toastNotificationActivation">
-          <uap:ToastNotificationActivation ToastActivatorCLSID="3f2b8c1e-9a44-4d0e-9a6f-6d1c4a2b7e10" />
-        </uap:Extension>
+             launching a second copy (W-3 single-instance still applies).
+
+             There is deliberately no `desktop:Extension
+             Category="windows.appUserModelId"` here. That value is not in the
+             schema's Category enumeration, and MakeAppx rejects the entire
+             manifest for it — "Package creation failed", with the real cause
+             buried in a schema line reference. A Windows.FullTrustApplication
+             does not need to declare one: its AppUserModelID is derived from
+             the package family name plus the Application Id.
+
+             The element is `desktop:Extension`, not `uap:Extension`:
+             the two namespaces carry different Category enumerations, and
+             windows.toastNotificationActivation is only in the desktop one.
+             Declaring it under uap: is a schema error that reads back as a
+             long list of unrelated uap categories it does not match. -->
+        <desktop:Extension Category="windows.toastNotificationActivation">
+          <desktop:ToastNotificationActivation ToastActivatorCLSID="3f2b8c1e-9a44-4d0e-9a6f-6d1c4a2b7e10" />
+        </desktop:Extension>
       </Extensions>
     </Application>
   </Applications>
