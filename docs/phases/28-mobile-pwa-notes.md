@@ -71,8 +71,8 @@ xr-THEME-SYSTEM, xr-DESIGN-SYSTEM, xr-DEEP-DIVE-ARCHITECTURE) and the brief.
 ## Bundle audit (final)
 
 ```
-critical path  132.5 KB gz   (budget 140)
-total          179.4 KB gz   (budget 200)
+critical path  132.9 KB gz   (budget 140)   # measured after the vite 6 build
+total          179.9 KB gz   (budget 200)
 markdown+gfm    46.9 KB gz   lazy, only when a message contains markdown
 ```
 

@@ -95,6 +95,24 @@ real TLS with the real pairing/devices/Web-Push modules compiled from `src/`.
 - Install: manifest with maskable icons + screenshots, iOS splash meta,
   nudge sheet after 3 opens (twice max), update-available banner.
 
+## What the first CI run flagged, and the fix
+
+The supply-chain gate scans **every** lockfile, and the two this branch adds were new territory:
+`vite` 5.4.21 (3 advisories), `esbuild` 0.21.5 (pulled by Vite 5), and — through Puppeteer 24's
+browser-download chain — `basic-ftp` 5.3.1 and `extract-zip` 2.0.1 (no upstream fix). Fixed
+rather than waived:
+
+| Change | Effect |
+| --- | --- |
+| `vite` `^5.4.11 → ^6.4.4` in `mobile/` and `tools/` | clears the three vite advisories; `vite-plugin-pwa` 0.21.2 already peers to Vite 6; esbuild resolves to 0.25.12 |
+| `puppeteer` `^24.43.1 → ^25.13.0` in `tools/` | `@puppeteer/browsers` 3.x drops `extract-zip` and `proxy-agent`, so both findings disappear instead of being ignored |
+| `tools/package.json` gains `"engines": {"node": ">=22.12"}` | Puppeteer's published floor, declared honestly; the protocol suites still run on Node 18+ — only the browser-driven offline/screenshot harnesses need 22.12+ |
+
+`osv-scanner 2.4.0` (the CI binary, checksum-verified) now reports **no issues** across the whole
+repo. The preview harness also pins `react` / `react-dom` / `lucide-react` to `tools/node_modules`
+— it previously resolved them from whatever `node_modules` happened to sit at the repo root,
+which fails on a clean checkout.
+
 ## Verification — run on this branch
 
 ### The CI battery (bun 1.3.14, the same commands as `ci.yml`)
@@ -113,7 +131,7 @@ real TLS with the real pairing/devices/Web-Push modules compiled from `src/`.
 | `bun test test/architecture` | **68/68** |
 | `bun test` (full) | 1,914 pass / **0 fail** before the sandbox's OOM killer took the monolithic run (exit 137) — the same failure mode `ci.yml` documents and works around by sharding into four lanes, which remain the authoritative run |
 
-### The Phase 28 suites (they ship in `tools/`, so this is reproducible)
+### The Phase 28 suites (they ship in `tools/`, so this is reproducible — re-run on Node 22 + Puppeteer 25 after the bumps above)
 
 | Suite | Result |
 | --- | --- |
@@ -121,7 +139,7 @@ real TLS with the real pairing/devices/Web-Push modules compiled from `src/`.
 | `npm run mobile:test:lan` | 25/25 — auth, pairing, single-use, rate limit, cookie flags, mobile 403 gating, revoke→401, SSRF allowlist |
 | `npm run mobile:test:offline` | 12/12 — SW install/scope/precache, offline render + bar + cached rows, queued send + ⌛, drain on reconnect |
 | `npm --prefix mobile run typecheck` | strict, 0 errors (app + SW + config programs) |
-| `node tools/bundle-report.mjs` | critical **132.5 KB gz** / total **179.4 KB gz** (budgets 140/200) |
+| `node tools/bundle-report.mjs` | critical **132.9 KB gz** / total **179.9 KB gz** (budgets 140/200) |
 | `npm run mobile:screenshots` | 11 PNGs with content assertions → `previews/implementation/phase-28/` |
 
 ## Deviations from the brief (all documented in `docs/mobile/SECURITY.md`)

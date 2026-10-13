@@ -112,7 +112,7 @@ working on its next request), or phone **Settings → Unpair this device**.
 ## 8. Dev workflow
 
 ```bash
-npm --prefix tools install      # once — harness deps (Node 18+; never part of the shipped package)
+npm --prefix tools install      # once — harness deps (Node 22.12+ for puppeteer 25; never part of the shipped package)
 npm --prefix mobile run dev     # Vite on 127.0.0.1:5180, proxies /api to :3141
 npm run mobile:daemon:build     # bundle the daemon TS modules for the harness
 npm run mobile:daemon:lan       # full route surface + demo data (boot banner prints the token)
