@@ -101,9 +101,22 @@ const fail = (lane: string, detail: string): never => {
 async function installBoot(tag: string, installer: string): Promise<void> {
   if (os === "linux") {
     sh(`sudo dpkg -i "${installer}"`);
-    const bin = sh(`dpkg-deb -c "${installer}" | grep -oE '\\./usr/bin/[^ ]+' | head -1`, { silent: true })
-      .toString().trim().replace("./", "/");
-    if (!bin) fail("installed", "no /usr/bin entry in deb");
+    /*
+     * Two traps in one line, both of which reported "no /usr/bin entry in deb"
+     * for a package that had just installed and configured cleanly:
+     *
+     *   1. dpkg-deb lists these paths WITHOUT the legacy "./" prefix
+     *      (`usr/bin/xr-desktop`, not `./usr/bin/xr-desktop`), so a pattern
+     *      that requires the dot matches nothing at all.
+     *   2. /usr/bin holds both the shell (xr-desktop) and the engine sidecar
+     *      (xr-engine), so "the first match" is not necessarily the app.
+     */
+    const listing = sh(`dpkg-deb -c "${installer}"`, { silent: true }).toString();
+    const bins = (listing.match(/(\.\/)?usr\/bin\/[^\s]+/g) ?? []).map(
+      (p) => `/${p.replace(/^\.\//, "")}`,
+    );
+    const bin = bins.find((p) => /xr-desktop/.test(p)) ?? bins.find((p) => !/xr-engine/.test(p));
+    if (!bin) fail("installed", `no /usr/bin entry in deb (${bins.length} candidate(s))`);
     launch("deb", bin);
   } else if (os === "macos") {
     const mnt = "/Volumes/xrrdm";
