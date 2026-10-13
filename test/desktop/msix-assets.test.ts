@@ -145,6 +145,42 @@ describe('MSIX packaging script', () => {
     expect(manifest).toContain('Windows.FullTrustApplication');
   });
 
+  test('every extension category is one the MSIX schema actually allows', () => {
+    // Comments are stripped first: this manifest documents the removed category
+    // by name, and that prose must not be mistaken for a declaration.
+    const xml = readFileSync(MANIFEST, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+    /*
+     * `Category` is a closed enumeration, not free text. MakeAppx fails the
+     * whole package over one bad value — "Package creation failed", with the
+     * real cause reduced to a schema line reference, so it reads like a bundler
+     * bug rather than a typo. `windows.appUserModelId` was shipped here and is
+     * not a member of the enumeration; a Windows.FullTrustApplication derives
+     * its AppUserModelID from the package family name and Application Id
+     * instead, so nothing is lost by leaving it out.
+     */
+    const allowed = new Set([
+      // desktop:Extension — the closed set MakeAppx names in its error.
+      'windows.fullTrustProcess',
+      'windows.startupTask',
+      'windows.toastNotificationActivation',
+      'windows.searchProtocolHandler',
+      // uap:Extension categories a desktop package legitimately uses.
+      'windows.protocol',
+      'windows.fileTypeAssociation',
+      'windows.appExecutionAlias',
+      'windows.appService',
+      'windows.backgroundTasks',
+      'windows.updateTask',
+      'windows.preInstalledConfigTask',
+    ]);
+    const categories = [...xml.matchAll(/Category="([^"]+)"/g)].map((m) => m[1]);
+    expect(categories).toContain('windows.protocol');
+    expect(categories).toContain('windows.toastNotificationActivation');
+    for (const category of categories) {
+      expect(allowed).toContain(category);
+    }
+  });
+
   test('the build script refuses to package a shell without its engine', () => {
     const script = readFileSync(PS1, 'utf8');
     // The sidecar is what makes XR an agent rather than a window; silent
