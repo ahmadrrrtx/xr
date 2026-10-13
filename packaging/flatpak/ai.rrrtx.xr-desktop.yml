@@ -1,0 +1,126 @@
+# XR desktop — Flatpak manifest (Phase 27)
+#
+# Reviewed against Tauri v2's own Flatpak guide: a Tauri app needs webkit2gtk-4.1
+# at build AND run time, and the GNOME runtime is the one that ships it with the
+# right versions (the freedesktop runtime does not). So: org.gnome.Platform, not
+# org.freedesktop.Platform. The two SDK extensions below are the freedesktop ones
+# Prism/Flathub Tauri apps use, and they are compatible with the GNOME SDK.
+#
+# Status, stated plainly: this manifest is authored and its metadata is validated
+# in CI (appstream + desktop entry). A full `flatpak-builder` run is NOT proven —
+# there is no flatpak-builder in the sandbox this was written in, and Flathub
+# additionally requires vendored sources (cargo-sources.json + a node/bun source
+# manifest) because its builders have no network. The CI build step is therefore
+# report-only until those are generated; see docs/linux/PACKAGING.md §"Before a
+# Flathub submission" for the exact remaining steps.
+
+id: ai.rrrtx.xr-desktop
+runtime: org.gnome.Platform
+runtime-version: "46"
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node22
+command: xr-desktop
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+#
+# Every one of these is a decision the user can read, which is the point of
+# shipping a Flatpak manifest instead of a tarball. The two that matter:
+#
+#   · `--filesystem=home` — XR is a coding agent. It reads and writes the user's
+#     projects, runs their test suites and edits their files; that is the product,
+#     not a side effect. It does NOT get `host`: the engine and every command it
+#     runs stay inside the sandbox home, which is what makes the reverse case
+#     (a skill trying to escape the project) a sandbox decision instead of a
+#     trust exercise. See docs/security/CRASH-RECOVERY.md and
+#     docs/linux/PACKAGING.md for the bubblewrap/landlock interaction.
+#   · `--share=network` — provider calls, the update channel, and the user's own
+#     MCP servers. The engine still binds 127.0.0.1 only (Phase 14), so a Flatpak
+#     install cannot be reached from the network.
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11     # X11 only where Wayland is unavailable
+  - --socket=pulseaudio       # voice: capture + playback go through PipeWire/Pulse
+  - --socket=session-bus
+  - --device=dri              # WebKit renders through GL; without this the window is blank
+  - --device=all              # microphone: Flatpak has no finer-grained capture permission
+  - --filesystem=home
+  - --filesystem=xdg-run/pipewire-0
+  - --filesystem=xdg-run/gvfsd
+  # The tray. AppIndicator/StatusNotifier hosts live on the session bus; the
+  # xdg-run path covers hosts that export the icon over a socket instead.
+  - --filesystem=xdg-run/tray-icon:create
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.ayatana.indicator.application
+  - --talk-name=org.freedesktop.portal.Desktop
+  # The engine's loopback port is default 3141 and the sidecar chooses a random
+  # one per launch; both are loopback, so no port forwarding is needed.
+  - --env=XR_HOME=/var/data/xr
+  - --env=NO_COLOR=1
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - "*.a"
+
+modules:
+  # ── The engine sidecar + the shell, built from source ──────────────────────
+  - name: xr-desktop
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node22/bin:/usr/lib/sdk/node20/bin
+      env:
+        # Cargo must write somewhere; the build dir is the only writable place.
+        CARGO_HOME: /run/build/xr-desktop/cargo
+        NODE_ENV: production
+    build-commands:
+      # 1. Dependencies. The repo locks with bun (`.bun-version` = 1.3.14,
+      #    `packageManager` in package.json) — there is no package-lock.json, so
+      #    `npm ci` does not and cannot work here. Bun comes in as a checksummed
+      #    source below rather than being downloaded mid-build: flatpak-builder
+      #    verifies sources, so the toolchain is pinned like everything else.
+      - ./.flatpak-tools/bun install --frozen-lockfile
+      # 2. Engine deps + sidecar. The sidecar binary is what makes XR an agent;
+      #    failing loudly here beats shipping a shell with no engine.
+      - ./.flatpak-tools/bun run scripts/compile-sidecar.ts
+      # 3. The shell. tauri.conf.json's beforeBuildCommand is `bun run build`
+      #    (tsc --noEmit && vite build), so bun has to be on PATH for the Rust
+      #    step that follows.
+      - cd desktop && ../.flatpak-tools/bun install --frozen-lockfile
+      - cd desktop && ../.flatpak-tools/bun run build
+      # `cargo build` rather than `tauri build --no-bundle`: no bundler output is
+      # wanted inside /app, and the frontend is already built above.
+      - cd desktop/src-tauri && cargo build --release --locked
+      - install -Dm755 desktop/src-tauri/target/release/xr-desktop /app/bin/xr-desktop
+      # The shell and the engine ship together and must stay side by side: the
+      # Rust side resolves `xr-engine-<target-triple>` next to its own executable.
+      # Kept arch-agnostic so the same manifest builds aarch64 without edits.
+      - for bin in desktop/src-tauri/binaries/xr-engine-*-unknown-linux-gnu; do install -Dm755 "$bin" "/app/bin/$(basename "$bin")"; done
+      - install -Dm644 packaging/flatpak/ai.rrrtx.xr-desktop.desktop /app/share/applications/ai.rrrtx.xr-desktop.desktop
+      - install -Dm644 packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml /app/share/metainfo/ai.rrrtx.xr-desktop.metainfo.xml
+      - install -Dm644 desktop/src-tauri/icons/128x128.png /app/share/icons/hicolor/128x128/apps/ai.rrrtx.xr-desktop.png
+      - install -Dm644 desktop/src-tauri/icons/256x256.png /app/share/icons/hicolor/256x256/apps/ai.rrrtx.xr-desktop.png
+      - install -Dm644 desktop/src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/ai.rrrtx.xr-desktop.png
+    sources:
+      # Pinned toolchain (bun 1.3.14, the repo's canonical pin). Verified by
+      # checksum at fetch time — this is how flathub handles build tools, and it
+      # keeps the version from drifting with whatever CI happens to have.
+      - type: archive
+        url: https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip
+        sha256: 951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f
+        only-arches: [x86_64]
+        strip-components: 1
+        dest: .flatpak-tools
+      - type: archive
+        url: https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-aarch64.zip
+        sha256: a27ffb63a8310375836e0d6f668ae17fa8d8d18b88c37c821c65331973a19a3b
+        only-arches: [aarch64]
+        strip-components: 1
+        dest: .flatpak-tools
+      - type: dir
+        path: ../..

@@ -1,0 +1,21 @@
+[Desktop Entry]
+Type=Application
+Name=XR
+GenericName=AI Agent
+Comment=Local-first AI agent with audited trust
+Exec=xr-desktop %u
+Icon=ai.rrrtx.xr-desktop
+Terminal=false
+# Categories: Development is the honest primary (that is what people use it for);
+# Utility is the secondary. There is deliberately no "AI" category — it is not a
+# registered freedesktop category, so desktop-file-validate rejects it and menus
+# would ignore it anyway; "AI" lives in Keywords below, where it is searchable.
+# Keep the registered set in sync with tauri.conf.json `bundle.category`.
+Categories=Development;Utility;
+Keywords=AI;agent;assistant;local;LLM;developer;automation;
+# xr:// deep links (the deep-link plugin owns the runtime side).
+MimeType=x-scheme-handler/xr;
+StartupNotify=true
+# Set by the shell at runtime so the window matches the launcher entry — this is
+# what makes a Linux taskbar group the window under XR instead of "unknown".
+StartupWMClass=xr-desktop

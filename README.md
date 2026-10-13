@@ -607,6 +607,30 @@ The full decision record, tests and the deviation list:
 
 ---
 
+## The desktop shell — `desktop/`
+
+**Always-alive tray · Global shortcuts · Auto-update · Crash recovery · macOS/Windows/Linux polish**
+
+The shell (`desktop/`, Tauri v2 + React) is the same agent with a window: the engine runs as a
+supervised sidecar on loopback, and the UI is one more client of it.
+
+| | |
+|---|---|
+| 🛰 **Always alive** | Closing the window hides it; the tray keeps the engine, the shortcuts and the approvals badge working. The menu carries Open XR, New Chat, Toggle HUD, listening and agent pause state, the pending-approval count, today's spend, Settings, updates and Quit — each one drawn in the platform's own idiom (macOS Template icons, taskbar-friendly 16–32 px `.ico`, AppIndicator-sized PNGs). |
+| ⌨️ **Global, and honest about it** | HUD, push-to-talk and screenshot-a-region-and-ask work while XR is unfocused. Chords fall back when the OS already owns them, the Settings screen shows what the machine *actually* holds, and a chord that cannot work (a Wayland session with no capture tool) says so instead of doing nothing. |
+| 🔄 **Signed auto-update** | Stable/Beta/Nightly channels, Ed25519-verified payloads, background download, one-click restart. A build with no release key refuses to update rather than updating unverified — the state is shown, not hidden. |
+| 🧯 **Crash recovery that tells you the truth** | An interrupted session is detected by a marker file, not a guess. The recovery screen offers resume or start-fresh, marks runs that were cut off as `killed` (never "completed"), can start without the local engine, and can produce a **redacted report you choose to send**. There is no telemetry anywhere in XR, including here. |
+| 🪟 **Native where it counts** | macOS gets the full HIG application menu (⌘W hides, ⌘, settings, a Developer submenu in dev builds), Windows gets MSIX packaging with deep links and toast activation, Linux gets a Flathub-ready Flatpak and a desktop entry that groups correctly. |
+
+```bash
+cd desktop
+bun install
+bun run dev:tauri        # compile the sidecar, then run the shell
+```
+
+Verification status per platform — including what has *not* been run on real
+hardware — is in [`docs/release/DESKTOP-SUPPORT-MATRIX.md`](docs/release/DESKTOP-SUPPORT-MATRIX.md).
+
 ## Scripting & exit codes
 
 `xr doctor --json` is the stable machine-readable entrypoint (redacted config, provider

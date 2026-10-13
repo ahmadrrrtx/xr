@@ -142,7 +142,10 @@ export function Topbar() {
     >
       <WindowControls platform={platform} />
 
-      {/* Screen title — macOS leaves room for the traffic lights */}
+      {/* Screen title.
+          macOS leaves 68px so the title never slides under the real traffic
+          lights, which sit at x=20 (three 12px dots + two 8px gaps = 52px of
+          chrome, ending at x=72). The header itself is the drag region. */}
       <h1
         className={cn(
           'text-text-primary min-w-[120px] truncate text-[18px] leading-none font-semibold',

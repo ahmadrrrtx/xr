@@ -30,9 +30,12 @@ import {
   orbShortcutInfo,
   pttSetShortcut,
   pttShortcutInfo,
+  screenshotSetShortcut,
+  screenshotShortcutInfo,
   theaterSetShortcut,
   theaterShortcutInfo,
 } from '@/lib/settingsApi';
+import { shellResetShortcuts, shellShortcutInventory, type ShortcutRow } from '@/lib/shellApi';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 const SETTERS: Record<GlobalOwner, (chord: string) => Promise<{ shortcut: string; conflict: boolean } | null>> = {
@@ -40,6 +43,7 @@ const SETTERS: Record<GlobalOwner, (chord: string) => Promise<{ shortcut: string
   orb: orbSetShortcut,
   ptt: pttSetShortcut,
   theater: theaterSetShortcut,
+  screenshot: screenshotSetShortcut,
 };
 
 const INFOS: Record<GlobalOwner, () => Promise<string | null>> = {
@@ -47,7 +51,10 @@ const INFOS: Record<GlobalOwner, () => Promise<string | null>> = {
   orb: orbShortcutInfo,
   ptt: pttShortcutInfo,
   theater: theaterShortcutInfo,
+  screenshot: screenshotShortcutInfo,
 };
+
+const GLOBAL_OWNERS: GlobalOwner[] = ['hud', 'orb', 'ptt', 'theater', 'screenshot'];
 
 type Warning = { kind: 'modifier' | 'conflict' | 'system' } | null;
 
@@ -59,20 +66,39 @@ export function ShortcutsTab() {
   const [recordingId, setRecordingId] = useState<string | null>(null);
   const [warning, setWarning] = useState<Warning>(null);
   const [registered, setRegistered] = useState<Partial<Record<GlobalOwner, string>>>({});
+  // Phase 27 — the shell's inventory: what the OS holds, plus the notes that
+  // only the platform can know (a Wayland session with no capture tool, a chord
+  // another app owns, a fallback in use).
+  const [inventory, setInventory] = useState<ShortcutRow[]>([]);
 
-  // what the OS currently holds for the three global chords
-  useEffect(() => {
+  const loadInventory = (): void => {
     if (!isTauri()) return;
     void (async () => {
+      const rows = await shellShortcutInventory();
+      if (rows) {
+        setInventory(rows);
+        setRegistered(
+          Object.fromEntries(rows.map((row) => [row.id as GlobalOwner, row.shortcut]))
+        );
+        return;
+      }
+      // Older shell without the inventory command: fall back to asking each
+      // module one at a time (the pre-Phase-27 path).
       const entries = await Promise.all(
-        (['hud', 'orb', 'ptt', 'theater'] as GlobalOwner[]).map(async (owner) => {
+        GLOBAL_OWNERS.map(async (owner) => {
           const chord = await INFOS[owner]();
           return [owner, chord] as const;
         })
       );
       setRegistered(Object.fromEntries(entries.filter(([, chord]) => chord !== null)));
     })();
-  }, []);
+  };
+
+  useEffect(loadInventory, []);
+
+  /** The shell's note for one owner, if it has one. */
+  const noteFor = (owner: GlobalOwner): ShortcutRow | undefined =>
+    inventory.find((row) => row.id === owner);
 
   const stop = (): void => {
     setRecordingId(null);
@@ -141,6 +167,26 @@ export function ShortcutsTab() {
     update('shortcuts', { overrides: {} });
     if (isTauri()) {
       void (async () => {
+        // Phase 27: one call re-registers every global chord on its platform
+        // default and drops the stored overrides, then reports what the OS
+        // actually took. The per-owner loop stays as the fallback for an older
+        // shell; a reset that reports success while nothing registered would be
+        // worse than one that is merely slow.
+        const rows = await shellResetShortcuts();
+        if (rows) {
+          setInventory(rows);
+          setRegistered(Object.fromEntries(rows.map((row) => [row.id as GlobalOwner, row.shortcut])));
+          const stolen = rows.filter((row) => row.conflict);
+          if (stolen.length > 0) {
+            toast.warning('Some chords are taken by other apps', {
+              description: stolen.map((row) => row.label).join(', '),
+            });
+          } else {
+            toast.success('Shortcuts reset to defaults');
+          }
+          stop();
+          return;
+        }
         const defaults = SHORTCUTS.filter(
           (shortcut) => shortcut.scope === 'global' && shortcut.global
         );
@@ -149,7 +195,10 @@ export function ShortcutsTab() {
           const result = await SETTERS[owner](toTauriChord(shortcut.combo));
           if (result) setRegistered((current) => ({ ...current, [owner]: result.shortcut }));
         }
+        toast.success('Shortcuts reset to defaults');
+        stop();
       })();
+      return;
     }
     setRegistered({});
     stop();
@@ -203,7 +252,8 @@ export function ShortcutsTab() {
                   ? 'The OS refused that chord — another app may own it. Try again.'
                   : 'Press keys now. Esc cancels.'
             : scope === 'global'
-              ? 'Works even when XR is not focused.'
+              ? (noteFor(shortcut.global as GlobalOwner)?.platformNote ??
+                 'Works even when XR is not focused.')
               : undefined
         }
       >
@@ -223,6 +273,16 @@ export function ShortcutsTab() {
             ) : (
               <Kbd>{formatChord(effective(id))}</Kbd>
             )}
+            {scope === 'global' && noteFor(shortcut.global as GlobalOwner)?.conflict ? (
+              <Badge variant="outline" className="border-warning/40 text-warning text-[9px] uppercase tracking-wider">
+                unavailable
+              </Badge>
+            ) : null}
+            {scope === 'global' && noteFor(shortcut.global as GlobalOwner)?.fallbackUsed ? (
+              <Badge variant="outline" className="text-text-tertiary text-[9px] uppercase tracking-wider">
+                fallback
+              </Badge>
+            ) : null}
             <Button
               variant="ghost"
               size="sm"

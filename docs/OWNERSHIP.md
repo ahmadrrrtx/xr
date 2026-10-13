@@ -164,7 +164,9 @@ accountable owner at PR-review time (Constitution: *one responsibility, one owne
 | `scripts/gen-dashboard-dispatcher.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/gen-seccomp.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/generate-client.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/generate-msix-assets.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/generate-openapi.ts` | @ahmadrrrtx | explicit entry |
+| `scripts/generate-tray-icons.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/generate-updater-keys.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/golden-path.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |
 | `scripts/guarantee-matrix.ts` | @ahmadrrrtx | default (@ahmadrrrtx) |

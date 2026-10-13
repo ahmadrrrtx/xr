@@ -58,7 +58,7 @@ pub const PTT_SHORTCUT_KEY: &str = "xr.ptt.shortcut";
 
 // ─── Settings store helpers ─────────────────────────────────────────────────
 
-fn settings<R: Runtime>(app: &AppHandle<R>) -> Option<std::sync::Arc<Store<R>>> {
+pub(crate) fn settings<R: Runtime>(app: &AppHandle<R>) -> Option<std::sync::Arc<Store<R>>> {
     StoreBuilder::new(app, "settings.json").build().ok()
 }
 

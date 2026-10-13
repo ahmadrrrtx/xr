@@ -39,7 +39,7 @@ function detectPlatform(): Platform {
 }
 
 export type ShortcutScope = 'app' | 'chat' | 'global';
-export type GlobalOwner = 'hud' | 'orb' | 'ptt' | 'theater';
+export type GlobalOwner = 'hud' | 'orb' | 'ptt' | 'theater' | 'screenshot';
 
 export interface ShortcutDef {
   id: string;
@@ -64,6 +64,16 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
   { id: 'orb', label: 'Toggle Orb (global)', scope: 'global', combo: 'alt+mod+o', global: 'orb' },
   { id: 'ptt', label: 'Push-to-talk (global)', scope: 'global', combo: 'mod+.', global: 'ptt' },
   { id: 'theater', label: 'Toggle Voice Theater (global)', scope: 'global', combo: 'alt+mod+v', global: 'theater' },
+  // Phase 27 — capture a region and open a chat with it. The chord differs per
+  // platform (⌘⇧X on macOS, Ctrl+Shift+X elsewhere); this is the macOS display
+  // combo, and `lib/shellApi` reports what the OS actually holds.
+  {
+    id: 'screenshot',
+    label: 'Screenshot a region and ask (global)',
+    scope: 'global',
+    combo: 'mod+shift+x',
+    global: 'screenshot',
+  },
 ] as const;
 
 export function shortcutById(id: string): ShortcutDef | undefined {

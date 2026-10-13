@@ -40,14 +40,17 @@ export function Composer({
 }: {
   sessionId: string | null;
 }) {
-  const [text, setText] = useState('');
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  // Skills Store hand-off (Phase 20 "Test it"): `?prompt=` seeds the draft once.
+  // Skills Store hand-off (Phase 20 "Test it") and the screenshot-and-ask path:
+  // `?prompt=` seeds the draft once, when this composer mounts. Reading it in the
+  // initialiser instead of an effect is the same moment — the composer mounts
+  // with the parameter already in the URL — and it keeps the seeding out of the
+  // render-then-setState loop that react-hooks/set-state-in-effect exists to
+  // catch. The effect below only cleans the URL afterwards.
+  const [text, setText] = useState(() => (searchParams.get('prompt') ?? '').slice(0, 2000));
   useEffect(() => {
-    const seed = searchParams.get('prompt');
-    if (!seed) return;
-    setText(seed.slice(0, 2000));
+    if (!searchParams.has('prompt')) return;
     const next = new URLSearchParams(searchParams);
     next.delete('prompt');
     setSearchParams(next, { replace: true });

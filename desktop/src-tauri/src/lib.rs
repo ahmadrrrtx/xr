@@ -7,13 +7,21 @@
  * detection, theme events, single-instance focus, and a minimal tray.
  */
 mod budget;
+/// Screenshot-and-ask capture, per platform (Phase 27).
+mod capture;
 mod commands;
 /// Phase 14 — engine sidecar lifecycle (spawn, pair, restart, stderr tail).
 mod engine;
 /// Banner parsing / bounded stderr tail / probe cache (pure std, unit-tested).
 mod engine_state;
 mod events;
+/// Crash recovery: dirty flag, bounded shell log, manual report (Phase 27).
+mod crash;
+/// Native menus — the macOS application menu (Phase 27).
+pub mod menus;
 mod shield;
+/// OS appearance bridge: `xr-os-theme` (Phase 27).
+mod theme;
 #[cfg(desktop)]
 mod tray;
 /// Linux parent-death signal + graceful SIGTERM shutdown (libc).
@@ -77,16 +85,99 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
+            // Phase 27 §E — per-OS window chrome. Runs FIRST: macOS keeps its
+            // decorations (real traffic lights), Windows and Linux drop them
+            // because they draw their own caption buttons.
+            apply_platform_chrome(app.handle());
+
+            // Phase 27 — recovery gate. Read the dirty flag BEFORE touching
+            // the engine: "start without the local engine" has to be honoured
+            // from the first moment, otherwise a crash-looping engine gets one
+            // more chance to take the app down before the user sees the screen.
+            let skip_engine = commands::recovery::started_without_engine(app.handle());
             // Phase 14 — spawn the engine sidecar first (main thread: the
             // Linux parent-death signal binds to the spawning thread). In
             // dev there is no binary and the webview uses the Vite proxy.
-            engine::spawn_sidecar(&engine_setup);
+            if skip_engine {
+                engine::skip_spawn(&engine_setup, "recovery: starting without the local engine");
+            } else {
+                engine::spawn_sidecar(&engine_setup);
+            }
+
+            // Phase 27 — crash bookkeeping. The flag goes down now that the
+            // spawn has been attempted, and only the clean-exit path at the
+            // bottom of this file removes it.
+            let crash_home = crash::xr_home();
+            let previous_flag = crash::read_flag(&crash_home);
+            let interrupted_before = previous_flag
+                .as_ref()
+                .map(|flag| flag.consecutive_interruptions.saturating_add(1))
+                .unwrap_or(1);
+            let engine_failed = engine::snapshot(&engine_setup).spawn_failed();
+            match crash::write_flag(
+                &crash_home,
+                env!("CARGO_PKG_VERSION"),
+                interrupted_before,
+                engine_failed,
+            ) {
+                Ok(flag) => crash::log_shell(
+                    &crash_home,
+                    &format!(
+                        "session start: pid {} version {} interruption-count {} engine-failed {}",
+                        flag.pid, flag.version, flag.consecutive_interruptions, flag.engine_spawn_failed
+                    ),
+                ),
+                Err(e) => eprintln!("[xr] could not write the crash flag: {e}"),
+            }
+            // A capture from a session that died must not sit in /tmp forever.
+            let swept = capture::sweep_scratch(&capture::scratch_dir(), 24 * 60 * 60 * 1000);
+            if swept > 0 {
+                crash::log_shell(&crash_home, &format!("swept {swept} stale screenshot(s)"));
+            }
+            // The engine either pairs within a couple of seconds or it never
+            // will. If it never does, the NEXT launch should know, so the
+            // recovery screen can offer the engine-less start for real.
+            {
+                let handle = app.handle().clone();
+                let state = std::sync::Arc::clone(&engine_setup);
+                // A worker thread, not the async runtime: this is a timer, and
+                // nothing here needs to be async.
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(8));
+                    let snapshot = engine::snapshot(&state);
+                    app_log_engine_state(&snapshot);
+                    #[cfg(desktop)]
+                    crate::tray::refresh_engine(&handle, snapshot.is_up());
+                    if !snapshot.is_up() {
+                        let home = crash::xr_home();
+                        if let Some(flag) = crash::read_flag(&home) {
+                            if !flag.engine_spawn_failed && snapshot.note.is_some() {
+                                let _ = crash::write_flag(
+                                    &home,
+                                    env!("CARGO_PKG_VERSION"),
+                                    flag.consecutive_interruptions,
+                                    true,
+                                );
+                                crash::log_shell(
+                                    &home,
+                                    &format!("engine never came up: {}", snapshot.note.unwrap_or_default()),
+                                );
+                            }
+                        }
+                    }
+                });
+            }
+
             commands::chat::init(app)?;
             // Phase 10 — workspaces: same xr.db (WAL), own connection + DDL,
             // plus the in-memory window-bounds map used by multi-window spawn.
             app.handle()
                 .manage(commands::workspaces::WorkspaceDb::init(app.handle()));
             app.handle().manage(commands::workspaces::SpawnState::new());
+            // Phase 27 — recovery decision + updater state (both read-only
+            // until the user acts; neither talks to the network on its own).
+            app.handle().manage(commands::recovery::RecoveryState::default());
+            app.handle().manage(commands::updates::UpdatesState::default());
             // Phase 12 — XR Shield: append-only audit chain on the shared xr.db.
             app.handle().manage(shield::ShieldDb::init(app.handle()));
             // Phase 13 — Budget governor: spend events + settings on the shared
@@ -109,7 +200,19 @@ pub fn run() {
                 commands::settings::init_ptt(app.handle())?;
                 // Voice Theater (Phase 16): ⌥⌘V toggle + native context menu.
                 commands::theater::init(app.handle())?;
+                // Phase 27 — screenshot-and-ask: ⌘⇧X (Ctrl+Shift+X elsewhere).
+                app.handle().manage(commands::screenshot::ScreenshotState::default());
+                commands::screenshot::register(app.handle())?;
+                // Phase 27 — the always-alive tray, then the macOS app menu.
+                // (The menu reuses the tray's action ids, so one dispatcher
+                // serves the menu bar, the tray, and — later — the dock menu.)
                 tray::create_tray(app.handle())?;
+                // The tray opens with the truth about the engine, not with an
+                // optimistic default that flips a second later.
+                tray::refresh_engine(app.handle(), engine::snapshot(&engine_setup).is_up());
+                app.handle()
+                    .on_menu_event(|app, event| tray::on_menu_event(app, event.id.as_ref()));
+                menus::install(app.handle())?;
             }
             Ok(())
         })
@@ -256,6 +359,40 @@ pub fn run() {
             #[cfg(desktop)]
             commands::theater::theater_set_shortcut,
             events::theme_changed,
+            // Phase 27 — shell: state the tray renders, OS theme bridge,
+            // shortcut inventory + reset.
+            theme::subscribe_os_theme,
+            commands::shell::shell_shortcut_inventory,
+            commands::shell::shell_reset_shortcuts,
+            #[cfg(desktop)]
+            tray::tray_update_state,
+            #[cfg(desktop)]
+            commands::screenshot::screenshot_ask_info,
+            #[cfg(desktop)]
+            commands::screenshot::screenshot_ask_set_shortcut,
+            #[cfg(desktop)]
+            commands::screenshot::screenshot_ask_capture,
+            commands::screenshot::screenshot_ask_discard,
+            commands::screenshot::screenshot_ask_support,
+            // Phase 27 — crash recovery.
+            commands::recovery::crash_state,
+            commands::recovery::crash_resolve,
+            commands::recovery::crash_start_without_engine,
+            commands::recovery::crash_attach_external,
+            commands::recovery::crash_detach_external,
+            commands::recovery::crash_report,
+            commands::recovery::crash_forget,
+            commands::recovery::crash_report_dir,
+            commands::recovery::crash_simulate,
+            // Phase 27 — updates.
+            commands::updates::updates_state,
+            commands::updates::check_update,
+            commands::updates::download_update,
+            commands::updates::install_update,
+            commands::updates::updates_set_channel,
+            commands::updates::updates_set_auto_download,
+            commands::updates::updates_skip_version,
+            commands::updates::updates_clear_skip,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -269,6 +406,23 @@ pub fn run() {
             // (Moved/Resized fire during drags; cheap in-memory writes) and
             // persist them to the DB when the window closes.
             if let tauri::RunEvent::WindowEvent { label, event: wev, .. } = &event {
+                // Phase 27 — OS appearance: one event source for all three
+                // platforms (Windows included: no registry polling needed).
+                if let tauri::WindowEvent::ThemeChanged(theme) = wev {
+                    theme::on_theme_changed(app, *theme);
+                }
+                // Phase 27 — always-alive: closing the MAIN window hides it.
+                // Quitting is deliberate on every platform (tray, app menu,
+                // ⌘Q); a stray ⌘W must not silently kill the engine.
+                if label == "main" {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = wev {
+                        api.prevent_close();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.hide();
+                        }
+                        crash::log_shell(&crash::xr_home(), "main window hidden (close intercepted)");
+                    }
+                }
                 // Phase 16 — Voice Theater: bounds memory + "voice keeps
                 // running" hand-off when the window closes.
                 #[cfg(desktop)]
@@ -316,6 +470,19 @@ pub fn run() {
             // on drop, but a hotkey that outlives a crashed process sticks
             // until reboot on macOS — clean up loudly on the way out.
             if let tauri::RunEvent::Exit = event {
+                // Phase 27 — a clean exit is the ONLY thing that clears the
+                // dirty flag, and it happens after the sidecar has been
+                // stopped above (order matters: a flag cleared too early is a
+                // crash we cannot see).
+                let home = crash::xr_home();
+                #[cfg(desktop)]
+                commands::screenshot::unregister(app);
+                if engine::snapshot(app.state::<std::sync::Arc<engine::EngineState>>().inner()).spawned {
+                    crash::log_shell(&home, "exit: engine child was still running — stopping");
+                } else {
+                    crash::log_shell(&home, "exit: clean shutdown");
+                }
+                crash::clear_flag(&home);
                 commands::workspaces::flush_all_bounds(app);
                 #[cfg(desktop)]
                 commands::hud::unregister_all(app);
@@ -327,4 +494,55 @@ pub fn run() {
                 commands::theater::flush(app);
             }
         });
+
+/// One line per engine-state observation, in the shell log. Kept here (not in
+/// `engine.rs`) so the engine module stays free of file I/O.
+/// Per-OS window chrome (Phase 27 §E).
+///
+/// `tauri.conf.json` builds the main window DECORATED so macOS gets real
+/// traffic lights via `titleBarStyle: "Overlay"`. Windows and Linux have no
+/// equivalent native overlay for a custom title bar, so they strip decorations
+/// here and keep the drawn caption buttons in `WindowControls.tsx`.
+///
+/// Doing this in code rather than in `tauri.{windows,linux}.conf.json` is
+/// deliberate, and safe: Tauri's `setup()` builds every `create: true` window
+/// from config BEFORE running this closure, and shows them after it returns —
+/// so `set_decorations(false)` cannot flash a native title bar, and no window
+/// definition has to be duplicated per platform.
+fn apply_platform_chrome(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        // macOS keeps the system chrome. Nothing to do.
+        let _ = app;
+        return;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(window) = app.get_webview_window("main") {
+            if let Err(e) = window.set_decorations(false) {
+                eprintln!("[xr] could not remove window decorations: {e}");
+            }
+        }
+    }
+}
+
+fn app_log_engine_state(snapshot: &engine::EngineSnapshot) {
+    let home = crash::xr_home();
+    if snapshot.is_up() {
+        crash::log_shell(
+            &home,
+            &format!(
+                "engine up: port {:?} mode {} containment {}",
+                snapshot.port,
+                if snapshot.external { "external" } else { "sidecar" },
+                snapshot.containment.as_deref().unwrap_or("n/a")
+            ),
+        );
+    } else {
+        crash::log_shell(
+            &home,
+            &format!("engine down: {}", snapshot.note.as_deref().unwrap_or("no link")),
+        );
+    }
+}
 }

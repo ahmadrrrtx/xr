@@ -246,6 +246,34 @@ export async function pttSetShortcut(
   }
 }
 
+/**
+ * Phase 27: re-bind screenshot-and-ask (default ⌘⇧X / Ctrl+Shift+X).
+ *
+ * The Rust side enforces the same contract as the other chords: a taken chord
+ * registers nowhere, the old one is restored, and the caller is told via
+ * `conflict` rather than being silently left with nothing.
+ */
+export async function screenshotSetShortcut(
+  chord: string
+): Promise<ShortcutRegistration | null> {
+  if (!isTauri()) return null;
+  try {
+    return await invoke<ShortcutRegistration>('screenshot_ask_set_shortcut', { chord });
+  } catch {
+    return null;
+  }
+}
+
+export async function screenshotShortcutInfo(): Promise<string | null> {
+  if (!isTauri()) return null;
+  try {
+    const info = await invoke<ShortcutRegistration>('screenshot_ask_info');
+    return info.shortcut;
+  } catch {
+    return null;
+  }
+}
+
 /** Phase 16: re-bind the Voice Theater toggle (default ⌥⌘V). */
 export async function theaterSetShortcut(
   chord: string

@@ -104,6 +104,13 @@ interface ThemeState {
   setTheme: (theme: ThemeId) => void;
   setPreference: (preference: ThemePreference) => void;
   cycleTheme: () => ThemeId;
+  /**
+   * The OS appearance changed (Phase 27: `xr-os-theme` from the shell, and
+   * `prefers-color-scheme` on the web). Applies the new theme *only* while the
+   * preference is `system` and never rewrites the preference — someone who
+   * picked "Midnight" keeps Midnight when the OS flips to light.
+   */
+  refreshSystemTheme: (theme?: ThemeId) => void;
 }
 
 function activate(theme: ThemeId, preference: ThemePreference, set: (partial: Partial<ThemeState>) => void): void {
@@ -136,6 +143,13 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     get().setTheme(next);
     return next;
   },
+
+  refreshSystemTheme: (theme) => {
+    if (get().preference !== 'system') return;
+    const next = theme ?? resolveSystemTheme();
+    if (next === get().theme) return;
+    activate(next, 'system', set);
+  },
 }));
 
 // Live system-theme tracking: when the preference is `system`, follow the OS.
@@ -143,8 +157,10 @@ if (typeof window !== 'undefined' && window.matchMedia) {
   try {
     const query = window.matchMedia('(prefers-color-scheme: light)');
     const onChange = (): void => {
-      const { preference, setPreference } = useThemeStore.getState();
-      if (preference === 'system') setPreference('system'); // re-resolve + apply
+      // `setPreference('system')` returns early when the preference already is
+      // `system` (it is a no-change write), so the re-resolve goes through
+      // `refreshSystemTheme`: that is the action whose job is "the OS moved".
+      useThemeStore.getState().refreshSystemTheme();
     };
     query.addEventListener?.('change', onChange);
   } catch {
