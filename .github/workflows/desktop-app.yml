@@ -317,7 +317,13 @@ jobs:
           $pfx = Join-Path $env:RUNNER_TEMP 'xr-test.pfx'
           Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $certPassword | Out-Null
           Export-Certificate -Cert $cert -FilePath (Join-Path $env:RUNNER_TEMP 'xr-test.cer') | Out-Null
-          pwsh packaging/windows/msix/build-msix.ps1 `
+          # `&`, not `pwsh <script>`: a child pwsh process receives its
+          # arguments over a command line, which flattens the SecureString to
+          # the literal text "System.Security.SecureString". The -CertPassword
+          # bind then dies with "Cannot convert the value of type System.String
+          # to type System.Security.SecureString" — an error that names neither
+          # the process boundary nor the real cause. `&` keeps it in-process.
+          & ./packaging/windows/msix/build-msix.ps1 `
             -AppDir desktop/src-tauri/target/release `
             -Version $version `
             -OutDir desktop/src-tauri/target/release/bundle/msix `

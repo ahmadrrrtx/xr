@@ -40,8 +40,29 @@ function Require-Path([string]$Path, [string]$What) {
 
 function Require-Tool([string]$Name, [string]$Hint) {
   $cmd = Get-Command $Name -ErrorAction SilentlyContinue
-  if (-not $cmd) { throw "$Name is not available on PATH. $Hint" }
-  return $cmd.Source
+  if ($cmd) { return $cmd.Source }
+
+  # MakeAppx.exe and signtool.exe ship inside the Windows SDK bin folder,
+  # which the GitHub windows-latest image does not put on PATH. Search the
+  # newest SDK first so a stale 10.0.1xxxx copy never wins over the one
+  # that matches the manifest this package declares. Join-Path throws on a
+  # $null root, so empty roots are dropped before joining.
+  $binRoots = @(${env:ProgramFiles(x86)}, $env:ProgramFiles) |
+    Where-Object { $_ } |
+    ForEach-Object { Join-Path $_ 'Windows Kits\10\bin' }
+  foreach ($root in $binRoots) {
+    if (-not (Test-Path -LiteralPath $root)) { continue }
+    # The regex keeps [version] from throwing on a folder it cannot parse.
+    $found = Get-ChildItem -LiteralPath $root -Directory -Filter '10.0.*' -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -match '^\d+(\.\d+){1,3}$' } |
+      Sort-Object -Property { [version]$_.Name } -Descending |
+      ForEach-Object { Join-Path $_.FullName "x64\$Name" } |
+      Where-Object { Test-Path -LiteralPath $_ } |
+      Select-Object -First 1
+    if ($found) { return $found }
+  }
+
+  throw "$Name is not available on PATH or under Windows Kits\10\bin. $Hint"
 }
 
 # ── Inputs ──────────────────────────────────────────────────────────────────
