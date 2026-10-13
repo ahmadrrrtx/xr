@@ -60,9 +60,21 @@ jobs:
       - name: Install engine deps (probe script runtime)
         run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Linux display server for the installed lane
+      # The Tauri .deb declares runtime deps (WebKit, appindicator, …) that
+      # `dpkg -i` will not pull in on its own: it unpacks, then refuses to
+      # configure, and the lane dies before the app ever boots. Install them
+      # up front — xvfb alone is not enough for a WebView shell.
+      - name: Linux runtime deps for the installed lane
         if: matrix.os == 'linux'
-        run: sudo apt-get update -qq && sudo apt-get install -y xvfb
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            xvfb \
+            libwebkit2gtk-4.1-0 \
+            libjavascriptcoregtk-4.1-0 \
+            libsoup-3.0-0 \
+            libayatana-appindicator3-1 \
+            librsvg2-2
 
       - name: Download this OS's bundles
         uses: actions/download-artifact@v4
@@ -70,6 +82,11 @@ jobs:
           name: xr-desktop-${{ matrix.runner }}
           path: rdm-bundles
           run-id: ${{ steps.src.outputs.run }}
+          # v4 needs these three together to read out of a *different* run;
+          # without an explicit token it only looks inside the current run and
+          # reports the artifact as missing even though it is there.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
 
       - name: Optional previous-release bundles (real upgrade when present)
         if: vars.RDM_PREV_URL != ''
