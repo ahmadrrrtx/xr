@@ -631,6 +631,34 @@ bun run dev:tauri        # compile the sidecar, then run the shell
 Verification status per platform — including what has *not* been run on real
 hardware — is in [`docs/release/DESKTOP-SUPPORT-MATRIX.md`](docs/release/DESKTOP-SUPPORT-MATRIX.md).
 
+## The mobile companion — `mobile/`
+
+**On your own WiFi · Pairing code you compare · Web Push · Offline outbox**
+
+The bot remotes above reach your phone through Telegram, Discord and WhatsApp servers. The
+mobile companion is the same agent with a window that never leaves your network: `xr serve --lan`
+binds the daemon to your LAN (opt-in — loopback stays the default), *Settings → Mobile* shows a
+QR and a 6-digit code, and the phone installs XR as a PWA from [`mobile/`](mobile/) — no app
+store, no relay, no third party.
+
+| | |
+|---|---|
+| 🔒 **TLS, pinned on first use** | The daemon mints a self-signed P-256 certificate; the phone shows the SHA-256 fingerprint for you to compare against the desktop, then pins it. A certificate that changes later is a stop screen, not a retry button. |
+| 🛡 **A companion, not a console** | Mobile sessions are refused at `/files`, `/terminal`, `/git` and `/mcp` (403), and pairing is a single-use 6-digit code inside a 10-minute window, rate-limited per source. |
+| 🔔 **Push the push service cannot read** | Notifications ride the browser's push service with the payload sealed twice — RFC 8291 *and* an AES-GCM layer under a key only the paired phone holds. TTL 10 minutes, and the app says *"Push requires XR desktop to be running"* because it does. |
+| 📴 **Honest offline** | Cached chats, approvals and budget render with no connection; sends wait in an outbox and drain in order when you are home. Off WiFi, the app says so instead of spinning. |
+
+```bash
+xr serve --lan                  # opt-in LAN mode: TLS + pairing on 0.0.0.0:3141
+npm --prefix mobile run build   # build the PWA yourself, if you prefer
+```
+
+**Verification status:** Phase 28 landed the PWA, the LAN/TLS/pairing and Web-Push modules and
+their test suites; wiring those routes into the shipping daemon's route table is the remaining
+integration step. Wire format and design:
+[`docs/mobile/PWA.md`](docs/mobile/PWA.md) · threat model:
+[`docs/mobile/SECURITY.md`](docs/mobile/SECURITY.md).
+
 ## Scripting & exit codes
 
 `xr doctor --json` is the stable machine-readable entrypoint (redacted config, provider
@@ -777,6 +805,7 @@ binary/npm/git layouts) and are atomic with an automatic rollback path.
 | [`docs/release/RELEASING.md`](docs/release/RELEASING.md) | The release runbook |
 | [`docs/release/VERIFYING_RELEASES.md`](docs/release/VERIFYING_RELEASES.md) | cosign/SBOM/SLSA verification walkthrough |
 | [`docs/release/BETA.md`](docs/release/BETA.md) | Pre-release channel and feedback loop |
+| [`docs/mobile/PWA.md`](docs/mobile/PWA.md) · [`docs/mobile/SECURITY.md`](docs/mobile/SECURITY.md) | Mobile companion (Phase 28): LAN pairing, TLS trust-on-first-use, Web Push, offline outbox — and its threat model |
 | [`docs/`](docs/README.md) | Full documentation index |
 | [`README-ur.md`](README-ur.md) · [`README-es.md`](README-es.md) | This README in [اردو](README-ur.md) and [Español](README-es.md) |
 

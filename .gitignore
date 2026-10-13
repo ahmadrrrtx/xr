@@ -70,3 +70,7 @@ desktop/node_modules
 desktop/dist
 audit*.mjs
 p4shots.mjs
+
+# Phase 28 — reference-daemon + desktop-preview build output (generated, never committed)
+tools/.daemon-build/
+tools/desktop-preview/dist/

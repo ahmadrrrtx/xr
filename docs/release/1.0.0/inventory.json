@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-12T14:48:42.877Z",
+  "generatedAt": "2026-10-13T15:46:24.086Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -54,8 +54,8 @@
     ]
   },
   "counts": {
-    "sourceFiles": 725,
-    "testFiles": 379,
+    "sourceFiles": 730,
+    "testFiles": 382,
     "cliCommands": 43,
     "daemonRoutes": 283,
     "providers": 26,
@@ -78,7 +78,7 @@
     },
     {
       "path": ".gitignore",
-      "bytes": 1321
+      "bytes": 1463
     },
     {
       "path": ".gitleaksignore",
@@ -118,7 +118,7 @@
     },
     {
       "path": "README.md",
-      "bytes": 44927
+      "bytes": 49454
     },
     {
       "path": "SECURITY.md",
@@ -146,7 +146,7 @@
     },
     {
       "path": "package.json",
-      "bytes": 5547
+      "bytes": 6277
     },
     {
       "path": "release.manifest.json",
@@ -215,6 +215,7 @@
     "src/cli/output.ts",
     "src/cli/route-decision.ts",
     "src/cli/router.ts",
+    "src/cli/serve-lan.ts",
     "src/clients/daemon-client.generated.ts",
     "src/commands/agents.ts",
     "src/commands/ask-plan.ts",
@@ -387,6 +388,9 @@
     "src/daemon/dashboard/styles.ts",
     "src/daemon/dev-servers.ts",
     "src/daemon/hunks.ts",
+    "src/daemon/lan-tls.ts",
+    "src/daemon/mobile-devices.ts",
+    "src/daemon/mobile-pairing.ts",
     "src/daemon/parent-watch.ts",
     "src/daemon/plugin-api.ts",
     "src/daemon/proc-tree.ts",
@@ -450,6 +454,7 @@
     "src/daemon/server.ts",
     "src/daemon/skills-api.ts",
     "src/daemon/state/cache.ts",
+    "src/daemon/web-push.ts",
     "src/daemon/workflow-runtime.ts",
     "src/discord/attachments.ts",
     "src/discord/auth.ts",
@@ -995,8 +1000,10 @@
     "test/desktop/budget-core.test.ts",
     "test/desktop/builder-core.test.ts",
     "test/desktop/engine-wire.test.ts",
+    "test/desktop/flatpak-metainfo.test.ts",
     "test/desktop/integrations-core.test.ts",
     "test/desktop/memory-core.test.ts",
+    "test/desktop/msix-assets.test.ts",
     "test/desktop/orb-core.test.ts",
     "test/desktop/palette-query.test.ts",
     "test/desktop/research-core.test.ts",
@@ -1007,6 +1014,7 @@
     "test/desktop/sink-lint.test.ts",
     "test/desktop/skills-core.test.ts",
     "test/desktop/theater-core.test.ts",
+    "test/desktop/tray-icons.test.ts",
     "test/desktop/voice-audio.test.ts",
     "test/discord/phase26.test.ts",
     "test/e2e-blackbox/audit-crypto.test.ts",

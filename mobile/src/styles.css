@@ -1,0 +1,402 @@
+@import 'tailwindcss';
+
+/* ============================================================================
+   XR mobile — design tokens
+   Same 5 themes as desktop (xr-THEME-SYSTEM.md), expressed as CSS custom
+   properties. Components never fork per theme; tokens swap.
+   ========================================================================= */
+
+@theme inline {
+  --color-void: var(--bg-void);
+  --color-ink: var(--bg-ink);
+  --color-raised: var(--bg-raised);
+  --color-overlay: var(--bg-overlay);
+
+  --color-line: var(--border-default);
+  --color-line-subtle: var(--border-subtle);
+  --color-line-accent: var(--border-accent);
+
+  --color-fg: var(--text-primary);
+  --color-fg2: var(--text-secondary);
+  --color-fg3: var(--text-tertiary);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-glow: var(--accent-glow);
+
+  --color-metal: var(--metal);
+  --color-metal-bright: var(--metal-bright);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-wait: var(--wait);
+
+  --color-editor: var(--editor-bg);
+
+  /* Fonts: no CDN, no remote fetch. Inter/JetBrains/Orbitron are picked up if
+     installed locally or dropped into /mobile/fonts — otherwise the stack falls
+     back to the platform UI face (SF Pro on iOS, Roboto on Android), which is
+     exactly the "quiet companion" feel we want. */
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono:
+    'JetBrains Mono', 'SF Mono', ui-monospace, 'Fira Code', Menlo, Consolas, monospace;
+  --font-display: 'Orbitron', 'Inter', sans-serif;
+
+  --radius-pill: 9999px;
+}
+
+/* ---------------------------------------------------------------- tokens --- */
+
+:root {
+  --bg-void: #03070d;
+  --bg-ink: #0a0f1a;
+  --bg-raised: #121826;
+  --bg-overlay: rgba(3, 7, 13, 0.72);
+  --border-subtle: rgba(183, 194, 207, 0.08);
+  --border-default: rgba(183, 194, 207, 0.16);
+  --border-accent: rgba(0, 229, 255, 0.4);
+  --text-primary: #f0f4f8;
+  --text-secondary: #9aa8ba;
+  --text-tertiary: #5a6678;
+  --accent: #00e5ff;
+  --accent-hover: #33ebff;
+  --accent-dim: #008da8;
+  --accent-glow: rgba(0, 229, 255, 0.45);
+  --metal: #b7c2cf;
+  --metal-bright: #e8edf3;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --wait: #a78bfa;
+  --editor-bg: #070b14;
+
+  /* Semantic "is this theme dark" — drives iOS status bar + syntax palette */
+  --is-dark: 1;
+  --tabbar-blur: saturate(180%) blur(20px);
+}
+
+html[data-theme='graphite'] {
+  --bg-void: #4a4a4a;
+  --bg-ink: #5e5e5e;
+  --bg-raised: #707070;
+  --bg-overlay: rgba(60, 60, 60, 0.78);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(0, 0, 0, 0.15);
+  --border-accent: rgba(91, 138, 158, 0.6);
+  --text-primary: #1a1a1a;
+  --text-secondary: #3a3a3a;
+  --text-tertiary: #6b6b6b;
+  --accent: #5b8a9e;
+  --accent-hover: #6e9db2;
+  --accent-dim: #3f6778;
+  --accent-glow: rgba(91, 138, 158, 0.2);
+  --metal: #b0b0b0;
+  --metal-bright: #d0d0d0;
+  --success: #3f7f60;
+  --warning: #8a6a1e;
+  --danger: #a03c3c;
+  --wait: #5f52a0;
+  --editor-bg: #3f3f3f;
+  --is-dark: 1;
+}
+
+html[data-theme='midnight'] {
+  --bg-void: #0d1422;
+  --bg-ink: #131c2e;
+  --bg-raised: #1a2744;
+  --bg-overlay: rgba(13, 20, 34, 0.8);
+  --border-subtle: rgba(148, 163, 184, 0.08);
+  --border-default: rgba(148, 163, 184, 0.15);
+  --border-accent: rgba(59, 130, 246, 0.5);
+  --text-primary: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #7d8da6;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-dim: #1e40af;
+  --accent-glow: rgba(59, 130, 246, 0.22);
+  --metal: #94a3b8;
+  --metal-bright: #cbd5e1;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --wait: #8b5cf6;
+  --editor-bg: #0a1020;
+  --is-dark: 1;
+}
+
+html[data-theme='paper'] {
+  --bg-void: #ede6d9;
+  --bg-ink: #f5f0e8;
+  --bg-raised: #faf7f2;
+  --bg-overlay: rgba(220, 210, 195, 0.85);
+  --border-subtle: rgba(60, 50, 35, 0.08);
+  --border-default: rgba(60, 50, 35, 0.18);
+  --border-accent: rgba(42, 122, 111, 0.5);
+  --text-primary: #2b2318;
+  --text-secondary: #5c4f3d;
+  --text-tertiary: #6f6250;
+  --accent: #2a7a6f;
+  --accent-hover: #379487;
+  --accent-dim: #1b554d;
+  --accent-glow: transparent;
+  --metal: #8a7c66;
+  --metal-bright: #b5a890;
+  --success: #3f7a4a;
+  --warning: #8a6418;
+  --danger: #a03f38;
+  --wait: #6b5b98;
+  --editor-bg: #fbf8f2;
+  --is-dark: 0;
+}
+
+html[data-theme='arctic'] {
+  --bg-void: #ffffff;
+  --bg-ink: #f8fafc;
+  --bg-raised: #f1f5f9;
+  --bg-overlay: rgba(255, 255, 255, 0.78);
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --border-default: rgba(15, 23, 42, 0.12);
+  --border-accent: rgba(6, 182, 212, 0.5);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --accent: #06b6d4;
+  --accent-hover: #0891b2;
+  --accent-dim: #0e7490;
+  --accent-glow: transparent;
+  --metal: #64748b;
+  --metal-bright: #334155;
+  --success: #047857;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --wait: #6d28d9;
+  --editor-bg: #ffffff;
+  --is-dark: 0;
+}
+
+/* ------------------------------------------------------------------ base --- */
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  /* Dynamic Type: scale with the OS, but cap at 200% so layout never breaks. */
+  font-size: clamp(16px, 100%, 32px);
+  background: var(--bg-void);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  /* iOS: allow the rubber-band, but never let the page itself scroll. */
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Thin, quiet scroll areas. No visible scrollbars (iOS/Android convention). */
+.scroll-quiet {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+.scroll-quiet::-webkit-scrollbar {
+  display: none;
+}
+.scroll-x-quiet {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-x-quiet::-webkit-scrollbar {
+  display: none;
+}
+
+/* -------------------------------------------------------- safe-area utils --- */
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+@utility mt-safe {
+  margin-top: env(safe-area-inset-top, 0px);
+}
+@utility mb-safe {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility px-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Apple HIG / Material: nothing interactive is smaller than 44px. */
+@utility tap {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+@utility glass {
+  background: color-mix(in srgb, var(--bg-overlay) 92%, transparent);
+  backdrop-filter: var(--tabbar-blur);
+  -webkit-backdrop-filter: var(--tabbar-blur);
+}
+
+/* ------------------------------------------------------------- animation --- */
+
+@keyframes xr-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes xr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes xr-ring {
+  0% {
+    transform: scale(0.86);
+    opacity: 0.65;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+@keyframes xr-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.caret::after {
+  content: '';
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: xr-caret 1s steps(1) infinite;
+}
+
+.spinner {
+  animation: xr-spin 0.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .caret::after {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* Screen-reader-only, kept in the a11y tree */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --border-default: rgba(183, 194, 207, 0.4);
+    --text-secondary: #cdd6e1;
+  }
+}
+
+/* ------------------------------------------------- syntax tokens (mobile) ---
+   Mapped to theme variables so light + dark themes both pass contrast.
+   ------------------------------------------------------------------------- */
+.hl-k { color: var(--wait); }
+.hl-b { color: var(--accent); }
+.hl-f { color: var(--accent); }
+.hl-s { color: var(--success); }
+.hl-n { color: var(--warning); }
+.hl-c { color: var(--text-tertiary); font-style: italic; }
+.hl-p { color: var(--text-secondary); }
+.hl-add { color: var(--success); }
+.hl-del { color: var(--danger); }
+.hl-meta { color: var(--accent); }
+
+/* Markdown bodies inside chat bubbles */
+.md > * + * { margin-top: 0.6em; }
+.md p { line-height: 1.55; }
+.md ul, .md ol { padding-left: 1.25rem; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md li { margin-top: 0.2em; }
+.md a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.md strong { font-weight: 600; color: var(--text-primary); }
+.md h1, .md h2, .md h3 { font-weight: 600; font-size: 1.02em; letter-spacing: -0.01em; }
+.md blockquote {
+  border-left: 2px solid var(--border-accent);
+  padding-left: 0.7rem;
+  color: var(--text-secondary);
+}
+.md table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.md th, .md td { border: 1px solid var(--border-subtle); padding: 4px 8px; text-align: left; }
+.md code:not(pre code) {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  color: var(--accent);
+  padding: 0.1em 0.35em;
+  border-radius: 5px;
+}

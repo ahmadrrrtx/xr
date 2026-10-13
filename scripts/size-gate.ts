@@ -128,7 +128,24 @@ export const THRESHOLD = 800;
 // number gets raised again deliberately rather than folded in as an estimate. The
 // alternative that returns core to the ceiling is moving the chat surfaces to a
 // satellite package; that stays the recorded follow-up.
-export const TREE_CEILING = 168_000; // Phase 26 · PR 3 (WhatsApp) · 164,000 → 168,000 (2026-10-12):
+export const TREE_CEILING = 169_000; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
+// the mobile companion's LAN half: the opt-in `--lan` transport (self-signed
+// P-256 certificate generation, SANs, SHA-256 fingerprint, PEM under ~/.xr/certs),
+// the device registry (hashed session tokens, revocation, mobile-kind tag),
+// on-demand 6-digit pairing (10-minute TTL, single-use, per-source rate limit,
+// HttpOnly cookie sessions, and the gate that answers 403 for mobile sessions on
+// /files, /terminal, /git and /mcp), and browser-native Web Push (VAPID +
+// RFC 8291/8188 outer layer + a device-key AES-GCM inner layer, so the push
+// service relays ciphertext). Net src growth is +1,470 LOC (measured 168,611 at
+// PR head against 167,141 on main — main had 859 LOC of headroom, so the ceiling
+// had to move or the surface could not land). Pairing codes, device credentials
+// and push keys are consent-plane data held by the daemon beside the existing
+// approval store, so the runtime stays in core — the same call Phases 24 and 26
+// made for the chat surfaces. The PWA itself is a separate npm project under
+// mobile/ and is not counted here. The alternative that returns core to the
+// ceiling is moving the mobile surfaces to a satellite package; that stays the
+// recorded follow-up. Waived giants did not grow. Needs maintainer sign-off.
+// Phase 26 · PR 3 (WhatsApp) · 164,000 → 168,000 (2026-10-12):
 // the WhatsApp surface — the linked-device client (Baileys, imported lazily so
 // a user who never links it never loads it), the sealed credential store, the
 // 1:1 gate and outbox whitelist, the numbered-approval vocabulary, the task turn,
