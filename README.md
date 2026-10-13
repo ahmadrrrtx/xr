@@ -59,6 +59,7 @@ The difference is **what surrounds that loop**:
 | 💸 **It cannot overspend** | Every task carries a USD and token ceiling, checked during the loop, not after the bill. |
 | 🔗 **It writes down what it did** | Every event is SHA-256-linked into a local chain you can verify offline with one command. |
 | 💻 **It runs on your machine** | One SQLite database, no telemetry, no mandatory network. Ten local model runtimes are first-class. |
+| 🆓 **Every local feature is free** | Voice, memory, themes, CLI, bots, the editor surface, research, agents, skills and MCP are on the free tier permanently — [no paywall, by test](#pricing). |
 
 ```bash
 xr "summarize the open TODOs in this repo and draft a cleanup plan"
@@ -84,7 +85,9 @@ actions to be reviewable after the fact; anyone who wants an agent that runs ful
 
 - **not certified** against SOC 2, ISO 27001, HIPAA, PCI-DSS or FedRAMP — no external audit exists;
 - **not a sandbox** — in-process policy enforcement, not kernel or VM isolation;
-- **not a hosted product** — there is no XR cloud;
+- **not a service you have to use** — the whole product runs from this repository with local models
+  and your own API keys, and a team account is an optional add-on with no say over what this
+  machine may do (see [Pricing](#pricing));
 - **not a substitute** for a human reviewing consequential actions;
 - **not finished** — the [known-limitations register](docs/release/1.0.0/known-limitations.md) is a
   first-class release artifact, and the release docs state precisely what the current release
@@ -831,9 +834,52 @@ Found an inaccurate claim in this README or the docs? That is a bug with its own
 
 ---
 
+## Pricing
+
+**XR Personal is free, forever, with every feature in this repository included.** Voice, local
+memory, themes, the CLI, bots, the VS Code surface, the mobile PWA, multi-window, research, agents,
+skills and MCP are free, unlimited, and identical whether you are signed in or not. There is no seat
+count, no time limit, no watermark, no nag screen, no telemetry, and no feature that a licence can
+turn off — because the entire list of what a licence gates is eight *hosted* services
+(`BUSINESS_FEATURES` in [`src/cloud/license.ts`](src/cloud/license.ts)) and not one of them runs on
+your machine.
+
+**XR Business is $15 per user per month**, or $144 per user per year ($12 per month equivalent), and
+it buys the things a hosted service can do that a local install cannot:
+
+| Included with Business | |
+| --- | --- |
+| Team members, roles, invitations | Owner / admin / member, re-checked per request |
+| Shared team workspaces | A new memory scope that sits beside local memory and never replaces it |
+| SSO administration | OIDC (Google, Okta, Azure AD, generic) and SAML 2.0 as a service provider |
+| Pooled managed models | OpenAI, Anthropic and Google, metered per user with a $20/user/month included quota by default |
+| Team memory sync | Sensitivity-scanned locally before anything is uploaded |
+| Audit log and signed CSV export | Hash-chained, with a verify endpoint |
+| Admin console | Role-gated; a member gets a 403 from the API, not a hidden link |
+| Cloud relay | WebSocket routing only, opt-in, off unless an organization turns it on |
+
+A **30-day trial** needs no card and covers up to 5 seats. **Enterprise** is quoted per contract and
+invoiced manually (NET 30) for buyers who cannot pay by card; there is no self-serve checkout for it,
+and no support SLA is offered on any tier.
+
+Two rules are not negotiable and are enforced by tests, not by copy:
+
+1. **No local feature is paywalled, ever.** `test/cloud/license.test.ts` fails the build if a local
+   capability appears in the licence's feature list.
+2. **BYOK stays free and direct.** Your own provider key goes from your machine to the provider;
+   XR neither proxies nor meters it. An organization can *choose* to disable BYOK for its own
+   members, and that is the only way managed models become mandatory.
+
+Cancelling leaves every local install untouched — permanently — and hosted data stays exportable for
+30 days. Self-hosting the control plane is documented in
+[`docs/business/SELF-HOST.md`](docs/business/SELF-HOST.md), and billing can be left unconfigured
+entirely, in which case everything except payment works.
+
 ## License
 
-MIT — see [LICENSE](LICENSE). XR is free software: no paid tier, no telemetry, no lock-in.
+MIT — see [LICENSE](LICENSE). The software is free, there is no telemetry, and there is no lock-in:
+the hosted team tier costs money, the code does not, and nothing in the paid tier can switch off a
+feature of the program you already have.
 
 <div align="center">
 <br>

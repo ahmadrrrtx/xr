@@ -2,6 +2,108 @@
 
 ## Unreleased
 
+### Business tier — Phase 30 (the final v1.0.0 feature phase)
+
+**The one-line version.** XR can now be used by a team: shared workspaces, shared memory, SSO, an
+admin console, pooled cloud models and an audit log — served by a new, separately deployable
+service under `cloud/`, with a paid Business tier at **$15 per user / month** on top of a Personal
+tier that stays free forever. Personal is not reduced, gated or nagged by any of it, and that is
+enforced by tests rather than asserted in a README.
+
+**Cloud service — `cloud/` (new deployable).** Bun + Hono 4 + Drizzle on Postgres, Redis for
+rate-limit buckets, `Dockerfile` + `docker-compose.yml` (postgres 16, redis 7, a one-shot `migrate`
+gated on `service_completed_successfully`, then `api`). 21 tables / 10 enums, all money in integer
+micro-USD, timestamps `timestamptz`. Zod validation on every mutating endpoint, `jose` JWTs, an
+Ed25519 licence minter, Stripe 23, `openid-client` (OIDC: Google, Okta, Azure AD, generic),
+`samlify` (SAML 2.0 SP, 667-byte metadata with an entity ID derived from `API_URL` at request time),
+`@node-rs/argon2`, nodemailer, `rate-limiter-flexible`, `@aws-sdk/client-s3` (R2-compatible audit
+exports) and `pino`. Env-only configuration, fail-closed at boot: a missing or malformed
+`JWT_SECRET`/`XR_KEY_ENCRYPTION_KEY` refuses to start rather than booting half-configured.
+
+- **Auth:** signup, password login, magic link (SHA-256 at rest, single-use, 10 minutes), 15-minute
+  access JWT + httpOnly `SameSite=Lax` refresh cookie rotated on use, family-wide revocation on
+  refresh reuse, invite acceptance (14 days) that returns a session for new *and* existing members.
+- **Teams:** members, roles (`owner`/`admin`/`member`, re-read per request), invitations, per-member
+  cap overrides, team workspaces, policies, API keys (hashed, shown once, scoped, never able to
+  administer the team), team memory with a review queue and plaintext export.
+- **Billing:** per-seat Stripe subscriptions, 30-day trial with no card and a 5-seat cap, hosted
+  Checkout and Customer Portal (**no card data on our servers**), proration through Stripe, and seven
+  webhook events consumed raw-body-HMAC verified and deduped by `(source, event_id)`. A handler
+  failure returns 200 so Stripe stops retrying a bug instead of amplifying it.
+- **Metering:** per-user daily and monthly budgets, an organization ceiling, an approval threshold,
+  and a provider allowlist — evaluated subscription → BYOK → allowlist → daily → monthly → team →
+  approval. Token counts come from the provider's `usage` when it sends one and are otherwise
+  estimated at `characters / 4` and flagged `x-xr-usage-estimated`, so an estimate is never
+  presented as a measurement.
+- **Relay:** a real WSS hub at `GET /relay/ws` — device-scoped registration, no persistence, opaque
+  frames, Business-only, opt-in, off for Personal.
+- **Encryption:** a deployment KEK wraps a per-organization key (AES-256-GCM) which is HKDF-derived
+  per workspace to encrypt each fact. **Not** end-to-end: the keys are ours, and both the trust page
+  and `docs/business/TEAM-MEMORY.md` say so, including what an operator with the KEK and the database
+  can read.
+- **Audit:** hash-chained (`seq`/`prev_hash`/`entry_hash`) with a verify endpoint, plus POST → 202
+  jobId → poll → download CSV export (UTF-8 BOM, CRLF) written to S3/R2 with a short-lived link.
+- **Compliance surface:** `/.well-known/security.txt` and `/.well-known/xr-license-pubkey` on both
+  the API and the website, `GET /healthz` and `GET /readyz` (per-dependency `ready`/`disabled`/
+  `misconfigured`, with only the database driving the status code), OWASP hardening (CSRF on
+  cookie-auth mutations, parameterised queries, Zod everywhere, 10/min on auth), and 30-day
+  soft-delete retention.
+- **Verified in this environment:** `bunx tsc --noEmit` clean, `bun test test/auth.test.ts` 28/28,
+  migrations idempotent (applied twice, `--status` reports nothing pending), boot smoke 7/7, SAML
+  runtime-verified (a junk certificate is rejected, metadata generated). **Not** run here, and listed
+  as operator steps in `docs/business/SELF-HOST.md` instead of claimed: the Docker compose stack, the
+  Stripe CLI flow, a real identity provider, and a real S3/R2 bucket — this build environment has no
+  Docker, no `stripe` binary and no outbound network.
+
+**Daemon — `src/cloud/`, `src/daemon/routes/cloud.routes.ts`.** Licence verification is **offline and
+dependency-free**: `src/cloud/license.ts` verifies an Ed25519 JWT with `node:crypto` against a key
+compiled into the binary — no check-in, no heartbeat, no remote disable, and no new runtime
+dependency in the file that decides what a customer is entitled to. The client routes every request
+through the existing egress proxy (`guardedFetch`), so cloud traffic inherits the allowlist, the
+private-range refusal and the size/time caps. Team memory is a bridge, not a store
+(`src/context/memory/team.ts`): the Phase 21 sensitivity scanner runs locally *before* upload, an
+agent-suggested fact lands in a review queue rather than in shared memory, and a fact awaiting review
+or marked private is excluded from recall on both sides. Every cloud route answers usefully with no
+network — `available: false` with a reason and a repair, never a 5xx — and `test/cloud/routes.test.ts`
+proves it by trapping `node:net` and failing the suite on any connection attempt.
+
+**Desktop.** Settings gains **Billing & Account** between General and About (account group, all four
+locales): the free state is a statement of what you have plus exactly **one** card mentioning the
+paid tier — no popup, no badge, no "upgrade to use" — and the paid state replaces it with the team's
+real rows. Workspaces gains a **Team workspaces** section that renders only when the tier is active,
+kept visually and structurally separate from local workspaces because local and shared are different
+things and the layout should not flirt with the idea that they are the same.
+
+**Website.** New `/pricing` (three plans, honest comparison), `/security` (trust page, sub-processor
+list, SOC 2 status stated as roadmap), `/download`, `/legal/{,privacy,terms}` (with `/privacy` and
+`/terms` kept live and canonical to `/legal/*`), `/auth/*` (magic-link-first sign-in, signup,
+handoff, and a reason→repair error table that never distinguishes a wrong password from a
+non-existent account) and nine admin console routes at `/dashboard/*` — Overview, Members, SSO,
+Policies, Workspaces, Team memory, Billing, Audit log, Compliance and API keys — at 13px with mono
+identifiers, small status dots and **no cinematic styling and no orbs in the console**. `/legal`,
+`/download` and the console extend `sitemap.xml`; the footer links the canonical URLs. When no cloud
+service is reachable the console renders read-only example data behind a visible `DemoBanner` instead
+of pretending to be live. **No third-party analytics, no advertising pixel, no tracking script** —
+server logs are the only telemetry, and they are not person-linked.
+
+**Honesty machinery, extended rather than bypassed.** Five prohibitions in `release.manifest.json`
+asserted that a hosted, paid, SSO-bearing product does not exist ("no hosted or per-seat pricing",
+"contact sales", "SSO/SAML", "Enterprise SSO", "start a trial"). Phase 30 makes those statements
+false, so they were replaced — in a diff, with reasons — by narrower rules that keep the invariants
+that still matter: no local feature may be described as requiring Business or an upgrade, nothing
+local may be said to require an account, no watermarks or nag screens, no telemetry claim, and
+SOC 2/ISO/HIPAA/PCI/FedRAMP stay prohibited as *held* certifications while a roadmap statement is
+permitted. Nine new evidenced claims were added (pricing, the trial, SSO, offline licensing,
+retention, no analytics, no DRM) and `docs/business/**/*.md` joined the scanned surfaces, so the
+business docs are subject to the same linter as the marketing site. The offline-licence design is
+also a constitutional tripwire in `test/cloud/license.test.ts`: if a local capability ever appears in
+the licence's feature list, the build fails.
+
+**Deliberately not built:** SOC 2 Type II, native mobile apps, an Electron migration, on-prem/k8s/
+Helm tooling, VoIP or screen sharing, per-message E2EE chat, SCIM/HRIS, cloud fine-tuning, a plugin
+marketplace, any analytics, DRM, and — the one that mattered most — **no paywalling of an existing
+local feature and no requirement for the local daemon to reach the cloud.**
+
 ### Desktop · Phase 12 — Shield / Trust Center (`/shield`)
 
 - **Status tab**: hero state (protected / needs attention / compromised /
