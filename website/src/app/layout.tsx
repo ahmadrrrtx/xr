@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { Nav } from "@/components/Nav";
-import { Footer } from "@/components/Footer";
+import { Chrome } from "@/components/Chrome";
 import { site } from "@/lib/site";
 
 const inter = Inter({
@@ -51,9 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
       <body className="min-h-screen bg-bg antialiased text-text">
         <div className="mesh-bg" aria-hidden />
-        <Nav />
-        <main>{children}</main>
-        <Footer />
+        <Chrome>{children}</Chrome>
       </body>
     </html>
   );

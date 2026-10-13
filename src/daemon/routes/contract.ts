@@ -11,6 +11,7 @@
  */
 
 import type { z } from "zod/v4";
+import { CLOUD_CONTRACT } from "./contract-cloud.ts";
 import {
   ApiError,
   BusinessApprovalDecisionRequest,
@@ -561,6 +562,8 @@ export const API_CONTRACT: Record<string, ApiOperationMeta> = {
     request: ContextUndoRequest,
     response: ContextUndoOutcome,
   },
+
+  ...CLOUD_CONTRACT,
 
   // ── business (Business OS extension; SEC-05 — gated identically to the
   //    registry: OFF by default, XR_BUSINESS_ROUTES=on re-enables) ──────────

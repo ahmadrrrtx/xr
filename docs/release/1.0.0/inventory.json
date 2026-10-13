@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-13T15:46:24.086Z",
+  "generatedAt": "2026-10-13T20:55:42.685Z",
   "version": {
     "name": "@rrrtx/xr",
     "version": "1.0.0",
@@ -54,10 +54,10 @@
     ]
   },
   "counts": {
-    "sourceFiles": 730,
-    "testFiles": 382,
+    "sourceFiles": 734,
+    "testFiles": 384,
     "cliCommands": 43,
-    "daemonRoutes": 283,
+    "daemonRoutes": 290,
     "providers": 26,
     "localRuntimes": 11,
     "plugins": 2,
@@ -150,7 +150,7 @@
     },
     {
       "path": "release.manifest.json",
-      "bytes": 10694
+      "bytes": 14961
     },
     {
       "path": "tsconfig.json",
@@ -217,6 +217,8 @@
     "src/cli/router.ts",
     "src/cli/serve-lan.ts",
     "src/clients/daemon-client.generated.ts",
+    "src/cloud/client.ts",
+    "src/cloud/license.ts",
     "src/commands/agents.ts",
     "src/commands/ask-plan.ts",
     "src/commands/attacks.ts",
@@ -405,9 +407,11 @@
     "src/daemon/routes/business.routes.ts",
     "src/daemon/routes/capabilities.routes.ts",
     "src/daemon/routes/chat.routes.ts",
+    "src/daemon/routes/cloud.routes.ts",
     "src/daemon/routes/context.routes.ts",
     "src/daemon/routes/contract-agents.ts",
     "src/daemon/routes/contract-builder.ts",
+    "src/daemon/routes/contract-cloud.ts",
     "src/daemon/routes/contract-discord.ts",
     "src/daemon/routes/contract-integrations.ts",
     "src/daemon/routes/contract-memory.ts",
@@ -936,6 +940,8 @@
     "test/cli/coder/routing-and-events.test.ts",
     "test/cli/coder/session-guard.test.ts",
     "test/cli/coder/workspace.test.ts",
+    "test/cloud/license.test.ts",
+    "test/cloud/routes.test.ts",
     "test/config/cache.test.ts",
     "test/config/env-overrides.test.ts",
     "test/config/injection-mode-deprecation.test.ts",
@@ -2138,6 +2144,48 @@
       "id": "chat.stream.post",
       "method": "POST",
       "path": "/api/chat",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/cloud.routes.ts",
+      "id": "cloud.license.get",
+      "method": "GET",
+      "path": "/api/cloud/license",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/cloud.routes.ts",
+      "id": "cloud.license.verify",
+      "method": "POST",
+      "path": "/api/cloud/license/verify",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/cloud.routes.ts",
+      "id": "cloud.session.get",
+      "method": "GET",
+      "path": "/api/cloud/session",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/cloud.routes.ts",
+      "id": "cloud.session.delete",
+      "method": "DELETE",
+      "path": "/api/cloud/session",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/cloud.routes.ts",
+      "id": "cloud.teams.get",
+      "method": "GET",
+      "path": "/api/cloud/teams",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/cloud.routes.ts",
+      "id": "cloud.usage.get",
+      "method": "GET",
+      "path": "/api/cloud/usage",
       "auth": "local bearer token or dashboard query token"
     },
     {
@@ -3466,6 +3514,12 @@
       "id": "dashboard.alias.get",
       "method": "GET",
       "path": "/dashboard",
+      "auth": "local bearer token or dashboard query token"
+    },
+    {
+      "file": "src/daemon/routes/cloud.routes.ts",
+      "id": "cloud.license.feature",
+      "method": "GET",
       "auth": "local bearer token or dashboard query token"
     },
     {

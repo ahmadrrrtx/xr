@@ -62,13 +62,12 @@ export function MobileCard({
   const [dialogOpen, setDialogOpen] = useState(false);
   const timer = useRef<number | null>(null);
 
-  const refreshDevices = useCallback(async () => {
-    try {
-      const data = await fetchJson<{ devices: DeviceSummary[] }>('/api/mobile/devices');
-      setDevices(data.devices ?? []);
-    } catch {
-      /* offline or not in LAN mode */
-    }
+  const refreshDevices = useCallback((): Promise<void> => {
+    return fetchJson<{ devices: DeviceSummary[] }>('/api/mobile/devices')
+      .then((data) => setDevices(data.devices ?? []))
+      .catch(() => {
+        /* offline or not in LAN mode */
+      });
   }, [fetchJson]);
 
   useEffect(() => {

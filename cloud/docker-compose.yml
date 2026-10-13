@@ -1,0 +1,106 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# XR Cloud — self-host stack.
+#
+# Three services, one ordering, and it is enforced rather than documented:
+#
+#   migrate  one-shot. Applies `drizzle/` and exits non-zero on failure, so a bad
+#            migration stops the deploy instead of producing an API that boots
+#            against a schema it does not match.
+#   api      starts only after migrate exits 0 (`service_completed_successfully`).
+#   postgres 16 with a healthcheck, because "container started" is not "database
+#            accepting connections" and the migrate race is real.
+#
+# Redis is optional. Without it the rate limiter falls back to per-process memory,
+# which is correct for exactly one replica. `/readyz` reports which one is live,
+# so this is observable rather than assumed.
+#
+# This file is a DEV/SELF-HOST stack. It is not a production deployment guide —
+# see docs/business/SELF-HOST.md for TLS, secrets and backups, and note the brief
+# explicitly puts k8s/Helm tooling out of scope for v1.0.0.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: xr-cloud
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-xr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-xr}
+      POSTGRES_DB: ${POSTGRES_DB:-xr_cloud}
+      # Deterministic collation: an audit export sorted on one machine must sort
+      # the same on the next.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - xr-cloud-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-xr} -d ${POSTGRES_DB:-xr_cloud}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Append-only persistence: rate-limit counters are cheap to lose, but a
+    # restart loop that resets every limit is a security control quietly failing.
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - xr-cloud-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      target: runtime
+    command: ["bun", "run", "src/db/migrate.ts"]
+    env_file: [.env]
+    environment:
+      DATABASE_DRIVER: postgres
+      DATABASE_URL: postgres://${POSTGRES_USER:-xr}:${POSTGRES_PASSWORD:-xr}@postgres:5432/${POSTGRES_DB:-xr_cloud}
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      DATABASE_DRIVER: postgres
+      DATABASE_URL: postgres://${POSTGRES_USER:-xr}:${POSTGRES_PASSWORD:-xr}@postgres:5432/${POSTGRES_DB:-xr_cloud}
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+      PORT: "8787"
+      HOST: 0.0.0.0
+      # A reverse proxy terminates TLS in every supported topology, so the
+      # forwarded headers are trustworthy here and only here.
+      TRUST_PROXY: "1"
+    ports:
+      - "${API_PORT:-8787}:8787"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  xr-cloud-pgdata:
+  xr-cloud-redisdata:

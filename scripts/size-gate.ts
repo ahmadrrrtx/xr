@@ -128,7 +128,25 @@ export const THRESHOLD = 800;
 // number gets raised again deliberately rather than folded in as an estimate. The
 // alternative that returns core to the ceiling is moving the chat surfaces to a
 // satellite package; that stays the recorded follow-up.
-export const TREE_CEILING = 169_000; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
+// Phase 30 (Business tier) · 169,000 → 172,000 (2026-10-14):
+// the daemon-side half of the paid tier, which is deliberately thin because the
+// point of Phase 30 is that the LOCAL product is unchanged. What lands in core is
+// src/cloud/{license,client}.ts and src/daemon/routes/cloud.routes.ts: offline
+// licence verification (node:crypto Ed25519 — no new dependency, because the file
+// that decides what a customer is entitled to should be readable in one sitting),
+// the typed cloud client that routes every request through the existing egress
+// proxy, and the routes themselves, whose entire contract is that they answer
+// usefully with no network at all. Consent plane again: licence state and session
+// state sit beside the SecretBroker and the approval store and cannot move to a
+// satellite without splitting them. The cloud SERVICE is a new top-level
+// `cloud/` package and is not counted here (walk() reads src/ only); neither is
+// the website. Phase 30 also does not grow any waived giant. Measured 169,373 at
+// the first green build against 168,611 on main, so ~760 net for the daemon half
+// plus room for the team-memory bridge (src/context/memory/team.ts) still to
+// land. Headroom is deliberate and small (~2,600). Returns core toward the
+// ceiling by moving the chat surfaces to a satellite; that stays the recorded
+// follow-up and 110k stays the direction of travel. Needs maintainer sign-off.
+export const TREE_CEILING = 172_000; // Phase 28 · mobile companion · 168,000 → 169,000 (2026-10-13):
 // the mobile companion's LAN half: the opt-in `--lan` transport (self-signed
 // P-256 certificate generation, SANs, SHA-256 fingerprint, PEM under ~/.xr/certs),
 // the device registry (hashed session tokens, revocation, mobile-kind tag),

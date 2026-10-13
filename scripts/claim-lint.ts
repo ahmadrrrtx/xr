@@ -54,6 +54,12 @@ const DISCLAIMER_MARKERS = [
   /\bdoes not\b/i,
   /\bnever claimed\b/i,
   /\bwithout\b[^.]{0,30}\bcertification\b/i,
+  // Phase 30 — roadmap language. A trust page that says "SOC 2 Type I is in
+  // progress; Type II is not attempted" is doing exactly what Article XIX asks
+  // for, and before Phase 30 there was no such page to write. These markers
+  // admit the honest non-claim while leaving the prohibition above intact for the
+  // sentence that matters: "XR is SOC 2 Type II certified".
+  /\b(in progress|not attempted|not yet|roadmap|on the roadmap|planned for|target(ing|ed)?)\b/i,
   /xr-claim-lint-allow/i,
 ];
 
@@ -76,10 +82,30 @@ const ACTION_COMPLETION = [
   /\b(bootstrap|install(ation)?|setup|migration|download|upload|sync|scan|build|run|task|backup|restore|import|export|update|upgrade)\s+(is\s+)?complete\b/i,
   /\bcomplete[ds]?\s+in\s+\d/i,
   /\bmarked\s+complete\b/i,
+  // Phase 30 — reporting that an action did NOT finish is the opposite of a
+  // completion claim, and Commandment 2 requires exactly this sentence to exist
+  // when a sign-in fails. Exempting it keeps the rule aimed at product claims.
+  /\b(cannot|can not|could not|did not|didn't|unable to|failed to|never)\s+complete\b/i,
+];
+
+/**
+ * Phase 30 — a path segment is an identifier, not a claim.
+ *
+ * `/auth/complete` is the URL a magic link lands on, and `onComplete` is a prop
+ * name. Neither asserts anything about XR. Flagging them taught the linter to
+ * fire on code rather than prose, which is the failure mode the note above warns
+ * about, so the exemption is narrow: the term must be part of a slash-delimited
+ * path or a camelCase identifier.
+ */
+const IDENTIFIER_PATTERNS = [
+  /\/[\w-]*complete\b/i,
+  /\b[a-z]+Complete[A-Z]\w*\b/,
+  /\bonComplete\b/i,
 ];
 
 function isActionCompletion(line: string, term: string): boolean {
   if (term.toLowerCase() !== "complete") return false;
+  if (IDENTIFIER_PATTERNS.some((re) => re.test(line))) return true;
   return ACTION_COMPLETION.some((re) => re.test(line));
 }
 

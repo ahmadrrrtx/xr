@@ -23,6 +23,13 @@ const ROUTES = [
   "/careers",
   "/privacy",
   "/terms",
+  // Phase 30 additions. `/download` is an alias for `/downloads` rather than a
+  // replacement — both URLs resolve, and both are listed, because a URL that was
+  // already in the footer and in people's bookmarks keeps its own weight.
+  "/download",
+  "/legal",
+  "/legal/privacy",
+  "/legal/terms",
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
