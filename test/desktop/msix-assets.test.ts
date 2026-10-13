@@ -145,39 +145,56 @@ describe('MSIX packaging script', () => {
     expect(manifest).toContain('Windows.FullTrustApplication');
   });
 
-  test('every extension category is one the MSIX schema actually allows', () => {
-    // Comments are stripped first: this manifest documents the removed category
-    // by name, and that prose must not be mistaken for a declaration.
+  test('each extension category is valid for the namespace declaring it', () => {
+    // Comments are stripped first: this manifest documents the rejected
+    // categories by name, and that prose must not read as a declaration.
     const xml = readFileSync(MANIFEST, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
     /*
-     * `Category` is a closed enumeration, not free text. MakeAppx fails the
-     * whole package over one bad value — "Package creation failed", with the
-     * real cause reduced to a schema line reference, so it reads like a bundler
-     * bug rather than a typo. `windows.appUserModelId` was shipped here and is
-     * not a member of the enumeration; a Windows.FullTrustApplication derives
-     * its AppUserModelID from the package family name and Application Id
-     * instead, so nothing is lost by leaving it out.
+     * `Category` is a closed enumeration — and a *different* one per namespace.
+     * That two-namespace rule is the whole trap, and it cost two CI round trips:
+     *
+     *   · `windows.appUserModelId` was declared under desktop: and is in
+     *     neither enumeration.
+     *   · `windows.toastNotificationActivation` was then declared under uap:,
+     *     where it is not a member — it belongs to desktop:.
+     *
+     * Both fail identically from the outside: MakeAppx prints "Package creation
+     * failed" and a schema line reference, with the real cause reduced to one
+     * clause of one sentence. Neither is reachable by unit test on Linux, so
+     * both enumerations are transcribed here from the MakeAppx errors verbatim.
      */
-    const allowed = new Set([
-      // desktop:Extension — the closed set MakeAppx names in its error.
+    const UAP = new Set([
+      'windows.fileTypeAssociation', 'windows.protocol', 'windows.autoPlayContent',
+      'windows.autoPlayDevice', 'windows.shareTarget', 'windows.search',
+      'windows.fileOpenPicker', 'windows.fileSavePicker', 'windows.cachedFileUpdater',
+      'windows.contactPicker', 'windows.cameraSettings', 'windows.accountPictureProvider',
+      'windows.printTaskSettings', 'windows.lockScreenCall', 'windows.contact',
+      'windows.appointmentsProvider', 'windows.alarm', 'windows.webAccountProvider',
+      'windows.dialProtocol', 'windows.appService', 'windows.mediaPlayback',
+      'windows.print3DWorkflow', 'windows.lockScreen', 'windows.aboveLockScreen',
+      'windows.personalAssistantLaunch', 'windows.voipCall',
+    ]);
+    const DESKTOP = new Set([
       'windows.fullTrustProcess',
       'windows.startupTask',
       'windows.toastNotificationActivation',
       'windows.searchProtocolHandler',
-      // uap:Extension categories a desktop package legitimately uses.
-      'windows.protocol',
-      'windows.fileTypeAssociation',
-      'windows.appExecutionAlias',
-      'windows.appService',
-      'windows.backgroundTasks',
-      'windows.updateTask',
-      'windows.preInstalledConfigTask',
     ]);
-    const categories = [...xml.matchAll(/Category="([^"]+)"/g)].map((m) => m[1]);
-    expect(categories).toContain('windows.protocol');
-    expect(categories).toContain('windows.toastNotificationActivation');
-    for (const category of categories) {
-      expect(allowed).toContain(category);
+
+    const found = new Map<string, string[]>();
+    for (const [, ns, category] of xml.matchAll(/<(\w+):Extension\s+Category="([^"]+)"/g)) {
+      if (!found.has(ns)) found.set(ns, []);
+      found.get(ns)!.push(category);
+    }
+
+    // Something must actually be declared, or this test passes by saying nothing.
+    expect(found.get('uap')).toContain('windows.protocol');
+    expect(found.get('desktop')).toContain('windows.toastNotificationActivation');
+
+    for (const [ns, categories] of found) {
+      const allowed = ns === 'uap' ? UAP : ns === 'desktop' ? DESKTOP : null;
+      expect(allowed).not.toBeNull();
+      for (const category of categories) expect(allowed!).toContain(category);
     }
   });
 
