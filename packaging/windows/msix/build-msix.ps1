@@ -25,6 +25,7 @@ param(
   [string]$OutDir = "dist/msix",
   [string]$Manifest = "packaging/windows/msix/AppxManifest.xml",
   [string]$AssetsDir = "packaging/windows/msix/Assets",
+  [string]$BinariesDir = "desktop/src-tauri/binaries",
   [switch]$Sign,
   [string]$CertPath,
   [System.Security.SecureString]$CertPassword
@@ -73,9 +74,16 @@ Require-Path $AssetsDir "The MSIX icon assets (see the README in that folder)"
 $exe = Join-Path $AppDir "xr-desktop.exe"
 Require-Path $exe "The built XR executable"
 
-$sidecar = Get-ChildItem -Path $AppDir -Filter "xr-engine-*.exe" | Select-Object -First 1
+# The sidecar does NOT land in the app directory. Tauri resolves externalBin
+# from src-tauri/binaries/ and copies it into the *bundle*, so target/release
+# only ever holds the shell itself. Look in both instead of assuming one
+# layout — on a Windows runner only $BinariesDir has it.
+$sidecar = @($AppDir, $BinariesDir) |
+  Where-Object { Test-Path -LiteralPath $_ } |
+  ForEach-Object { Get-ChildItem -LiteralPath $_ -Filter "xr-engine-*.exe" } |
+  Select-Object -First 1
 if (-not $sidecar) {
-  throw "The engine sidecar (xr-engine-<triple>.exe) is missing from $AppDir — build with scripts/compile-sidecar.ts first. XR without its engine is not shippable."
+  throw "The engine sidecar (xr-engine-<triple>.exe) is missing from $AppDir and $BinariesDir — build with scripts/compile-sidecar.ts first. XR without its engine is not shippable."
 }
 
 # ── Layout ──────────────────────────────────────────────────────────────────
