@@ -37,11 +37,19 @@ on:
     branches: [main]
     paths:
       - "desktop/**"
+      # Phase 27: the shell's packaging artefacts (flatpak manifest, AppStream
+      # metadata, MSIX tiles) and the tests that pin them live outside desktop/.
+      # Without these two lines a PR that only edits the Flatpak manifest would
+      # change shipped packaging with no CI at all.
+      - "packaging/**"
+      - "test/desktop/**"
       - ".github/workflows/desktop-app.yml"
   push:
     branches: [main]
     paths:
       - "desktop/**"
+      - "packaging/**"
+      - "test/desktop/**"
       - ".github/workflows/desktop-app.yml"
     tags: ["v*"]
   workflow_dispatch:
@@ -95,6 +103,22 @@ jobs:
       # tail, probe-cache expiry) had never actually RUN in CI.
       - name: cargo test (shell unit tests)
         run: cargo test --manifest-path desktop/src-tauri/Cargo.toml --lib -- --nocapture
+      - name: Install desktop (renderer) dependencies
+        working-directory: desktop
+        run: bun install --frozen-lockfile
+      # Phase 27 — the shell's own surface: tray/menu/lifecycle values, the
+      # generated tray + MSIX artefacts, and the crash-report redaction rules.
+      # `--inspect` also prints the master-icon geometry, so a master whose
+      # artwork moved shows up in the log instead of only in a test diff.
+      - name: Tray icon geometry (master icon derivation)
+        run: bun run scripts/generate-tray-icons.ts --inspect
+      - name: Shell tests (tray artefacts, MSIX tiles, IPC contracts)
+        run: bun test test/desktop/
+      - name: Renderer typecheck + lint
+        working-directory: desktop
+        run: |
+          bunx tsc --noEmit
+          bunx eslint .
 
   # ── Windows runtime proof ────────────────────────────────────────────────────
   # Everything under `#[cfg(windows)]` (W-1 CREATE_NO_WINDOW, W-2 job-object
@@ -196,12 +220,6 @@ jobs:
       - name: List produced bundles
         shell: bash
         run: find desktop/src-tauri/target/release/bundle -maxdepth 3 -type f | sort
-      # ── Phase 27 §J · symmetric bundle assertions ────────────────────────
-      # The Windows flavour assertion below predates this; until now Linux and
-      # macOS had none, so a run could go green having produced only *some* of
-      # the formats `bundle.targets` promises. `if-no-files-found: error` on the
-      # upload only fires when NOTHING matches, so a missing .rpm or .dmg was
-      # invisible. Fail loudly per format instead.
       - name: Assert Linux bundles (deb + rpm + AppImage)
         if: matrix.runsOn == 'ubuntu-22.04'
         shell: bash
@@ -220,7 +238,10 @@ jobs:
         run: |
           set -e
           dmg=$(find desktop/src-tauri/target/release/bundle/dmg -name '*.dmg' | wc -l)
-          app=$(find desktop/src-tauri/target/release/bundle/macos -name '*.app' -maxdepth 2 -type d | wc -l)
+          # Tauri leaves ONLY the tarball here (XR.app.tar.gz) — the unpacked
+          # .app is not written to disk. Assert what actually ships, or this
+          # check fails on a healthy build.
+          app=$(find desktop/src-tauri/target/release/bundle/macos -maxdepth 2 \( -name '*.app' -type d -o -name '*.app.tar.gz' -type f \) | wc -l)
           echo "dmg=${dmg} app=${app}"
           test "$dmg" -ge 1 || { echo "::error::no .dmg produced"; exit 1; }
           test "$app" -ge 1 || { echo "::error::no .app produced"; exit 1; }
@@ -265,6 +286,54 @@ jobs:
           echo "msi=${msi} nsis=${nsis}"
           test "$msi" -ge 1 || { echo "::error::no .msi produced"; exit 1; }
           test "$nsis" -ge 1 || { echo "::error::no NSIS *-setup.exe produced"; exit 1; }
+      # Phase 27 — MSIX. Tauri 2.12 has no `msix` bundle target, so the built
+      # app directory is wrapped by packaging/windows/msix/build-msix.ps1. The
+      # script fails loudly when the engine sidecar is missing (an installable
+      # package with no engine is worse than no package), and the artifact is
+      # signed with a self-signed test certificate so the .cer can be trusted
+      # explicitly by a tester. Store submission is out of scope.
+      - name: Package MSIX (test-signed)
+        if: matrix.runsOn == 'windows-latest'
+        shell: pwsh
+        run: |
+          # The version comes from tauri.conf.json, never from github.ref_name:
+          # on a pull request the ref is `175/merge`, and an MSIX Identity
+          # Version must be dotted numerics — that mismatch is a failed package,
+          # not a warning.
+          $conf = Get-Content desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $version = $conf.version
+          Write-Host "packaging MSIX for XR $version"
+          $cert = New-SelfSignedCertificate `
+            -Type Custom `
+            -Subject 'CN=Muhammad Ahmad, O=Muhammad Ahmad, C=PK' `
+            -KeyUsage DigitalSignature `
+            -FriendlyName 'XR local test signing' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3') `
+            -CertStoreLocation Cert:\CurrentUser\My
+          # Not `$pwd`: that is PowerShell's automatic working-directory
+          # variable, and assigning to it leaves the password parameter holding
+          # a path (SecureString conversion then fails at signing time).
+          $certPassword = ConvertTo-SecureString -String 'xr-msix-test' -Force -AsPlainText
+          $pfx = Join-Path $env:RUNNER_TEMP 'xr-test.pfx'
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $certPassword | Out-Null
+          Export-Certificate -Cert $cert -FilePath (Join-Path $env:RUNNER_TEMP 'xr-test.cer') | Out-Null
+          pwsh packaging/windows/msix/build-msix.ps1 `
+            -AppDir desktop/src-tauri/target/release `
+            -Version $version `
+            -OutDir desktop/src-tauri/target/release/bundle/msix `
+            -Sign -CertPath $pfx -CertPassword $certPassword
+          $out = 'desktop/src-tauri/target/release/bundle/msix'
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          Copy-Item (Join-Path $env:RUNNER_TEMP 'xr-test.cer') $out -Force
+          Get-ChildItem $out | Format-Table Name,Length
+      - name: Upload MSIX
+        if: matrix.runsOn == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr-msix-windows-latest
+          if-no-files-found: error
+          path: desktop/src-tauri/target/release/bundle/msix/*
+
       # Portable, no-install flavour: exe + engine sidecar side by side
       # (sidecar_path() resolves the triple-suffixed name next to the exe).
       # For users whose machines refuse installers — and for first-launch
@@ -341,6 +410,90 @@ jobs:
             desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
 
   # ── Phase 5 · signed-updater manifest (guarded: needs the operator secret) ──
+  # ── Flatpak (Phase 27) ───────────────────────────────────────────────────────
+  # Two different questions, two different answers:
+  #
+  #   · Is the metadata valid?  REQUIRED on every PR. `desktop-file-validate`
+  #     and `appstreamcli validate` are federated specifications, not opinions —
+  #     and they are the only thing that caught `Categories=...;AI;...` (AI is
+  #     not a registered category) and a `--` inside an XML comment, which made
+  #     the metainfo unparseable. Both are now pinned by
+  #     test/desktop/flatpak-metainfo.test.ts as well.
+  #   · Does it BUILD? A from-source flatpak-builder run needs the GNOME runtime
+  #     and a vendored cargo/npm source set, and it takes tens of minutes. It runs
+  #     on workflow_dispatch, where it is expected to answer, not to decorate the
+  #     job list. On a PR it is skipped rather than left red for reasons no PR
+  #     author can act on.
+  flatpak:
+    name: Linux — Flatpak metadata (required) + build (workflow_dispatch)
+    # 24.04, not 22.04, for one specific reason: the AppStream CLI on 22.04 is
+    # from 2022 and does not know the modern tags this metadata uses — it reports
+    # `<developer>` as an unknown tag and `url type="vcs-browser"` as invalid,
+    # and its "warning" exit code fails the job on metadata that Flathub's
+    # current validator accepts. Validating with a decade-old parser would push
+    # us to write 2015-shaped metadata. Flathub runs a current appstreamcli; so
+    # does this job, and it prints the version it used.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install desktop-entry + AppStream validators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y desktop-file-utils appstream
+          appstreamcli --version
+          desktop-file-validate --version
+
+      - name: Validate the desktop entry (registered categories only)
+        run: desktop-file-validate packaging/flatpak/ai.rrrtx.xr-desktop.desktop
+
+      - name: Validate the AppStream metadata (offline, deterministic)
+        run: appstreamcli validate --no-net packaging/flatpak/ai.rrrtx.xr-desktop.metainfo.xml
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      # The manifest is checked by the same test that runs locally, so CI and
+      # `bun test test/desktop/` can never disagree about what is required:
+      # GNOME runtime (webkit2gtk-4.1), home but never host, checksummed sources
+      # pinned to .bun-version, no reintroduced `npm ci`, sidecar next to the
+      # shell under /app/bin.
+      - name: Validate the manifest (shared with the unit suite)
+        run: bun test test/desktop/flatpak-metainfo.test.ts
+
+      - name: Install flatpak + builder + the GNOME runtime
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder elfutils
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.gnome.Platform//46 org.gnome.Sdk//46 \
+            org.freedesktop.Sdk.Extension.rust-stable//46 \
+            org.freedesktop.Sdk.Extension.node22//46
+
+      # Report-only is deliberately NOT set: dispatching this workflow is a
+      # request for the answer, so a failure here is red on purpose.
+      - name: Build the Flatpak from source
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          flatpak-builder --user --force-clean --repo=flatpak-repo \
+            flatpak-build packaging/flatpak/ai.rrrtx.xr-desktop.yml
+          flatpak --user remote-add --if-not-exists xr-local flatpak-repo --no-gpg-verify
+          flatpak --user install -y xr-local ai.rrrtx.xr-desktop
+          flatpak run --command=sh ai.rrrtx.xr-desktop -c 'test -x /app/bin/xr-desktop'
+
+      - name: Upload the Flatpak repo
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xr-flatpak
+          if-no-files-found: error
+          path: flatpak-repo
+
   updater-manifest:
     name: Assemble + publish latest.json (only when updater keys provisioned)
     if: github.ref_type == 'tag'
