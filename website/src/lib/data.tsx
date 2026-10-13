@@ -171,48 +171,91 @@ export const models = [
 // MIT-licensed, self-hosted product honestly: what individuals get, and what
 // the optional, opt-in enterprise deployment profile adds (all operated
 // locally — there is no XR cloud and no control plane to depend on).
+/**
+ * The plans, as of v1.0.0.
+ *
+ * Rewritten in Phase 30. The previous version carried two entries — a free tier
+ * and a "For teams & organizations · Self-hosted" one — and its FAQ said outright
+ * that "there is no commercial tier and no cloud-only product". That was true when
+ * it was written and became false the moment the Business tier shipped, so it is
+ * replaced rather than appended to. Leaving the old claim in place under a new
+ * pricing table would have been the single most misleading thing on the site.
+ *
+ * Two things are load-bearing about the wording:
+ *
+ *   1. The free tier is described by what it *includes*, never by what it lacks.
+ *      It is not a trial and the copy must never imply one.
+ *   2. Every Business bullet is a hosted service — a thing XR runs for a team.
+ *      None of them is "unlock <feature you already have>".
+ */
 export const pricingPlans = [
   {
-    name: "XR",
+    name: "Personal",
     price: "$0",
     cadence: "forever · MIT-licensed",
-    description: "Free and open source. XR is self-hosted software you run yourself.",
-    cta: "Get XR",
-    href: "/downloads",
+    description:
+      "The whole product, running on your machine. Not a trial, not a limited build — the same software, with your own keys or a local model.",
+    cta: "Download XR",
+    href: "/download",
     featured: true,
+    badge: "Free forever",
     features: [
-      "CLI + dashboard",
-      "Local-first — no mandatory cloud",
-      "BYOK, or local models (Ollama, llama.cpp, vLLM)",
-      "Per-task spend caps",
-      "Tamper-evident audit log",
-      "Plugins, MCP, skills",
-      "Community support",
+      "Every model, BYOK or local (Ollama, llama.cpp, vLLM)",
+      "Local memory, workspaces and the knowledge store",
+      "Voice, CLI, desktop, editors, mobile PWA",
+      "Agents, skills, plugins, MCP, marketplace",
+      "Research, multi-window, themes",
+      "Per-task spend caps + local audit log",
+      "Unlimited seats — no seat concept at all",
     ],
+    footnote: "No account needed. No phone-home. Nothing is disabled if you never sign in.",
   },
   {
-    name: "For teams & organizations",
-    price: "Self-hosted",
-    cadence: "you run it",
-    description: "Deploy XR on your own infrastructure. Enterprise controls are operated locally and opt-in per deployment.",
-    cta: "Deployment docs",
-    href: "/enterprise",
+    name: "Business",
+    price: "$15",
+    cadence: "per user / month",
+    description:
+      "The same local XR, plus the things a team actually cannot run itself: shared administration, a hosted control plane, and an audit trail someone can hand to an auditor.",
+    cta: "Start 30-day trial",
+    href: "/auth/signup?intent=business",
     featured: false,
+    badge: "30-day trial · no card",
     features: [
-      "Layered org/workspace policy (most-restrictive-wins)",
-      "Hash-chained audit export with retention schedules & legal hold",
-      "Incident workflow with evidence-bound states",
-      "SLO definitions with honest measurability",
-      "Backup verification and restore drills",
-      "No hosted control plane required",
+      "Team workspaces with roles and per-member caps",
+      "Managed models — no API keys to hand out",
+      "Cloud relay for devices off your network",
+      "SSO: Google, Okta, Azure, or your own OIDC/SAML",
+      "Team memory, reviewed before it spreads",
+      "Audit log + signed export",
+      "Billed per seat · $144/user/year (save 20%)",
     ],
+    footnote: "Cancel any time. Your local data and every Personal feature stay exactly as they are.",
+  },
+  {
+    name: "Enterprise",
+    price: "Custom",
+    cadence: "talk to us",
+    description:
+      "For organizations that need a contract rather than a checkout page: procurement, a DPA of their own, invoicing on their terms.",
+    cta: "Contact sales",
+    href: "/enterprise#contact",
+    featured: false,
+    badge: "Manual invoicing",
+    features: [
+      "Everything in Business",
+      "Custom DPA and security questionnaire support",
+      "Invoicing with NET 30 terms",
+      "Named contact for onboarding",
+      "Self-hosted control plane on your infrastructure",
+    ],
+    footnote: "We will tell you honestly which Enterprise asks are not built yet rather than selling around them.",
   },
 ];
 
 export const faqs = [
   {
     q: "Is XR open-source?",
-    a: "Yes. XR is fully MIT-licensed. There is no commercial tier and no cloud-only product — the same software runs for individuals and organizations.",
+    a: "Yes — MIT-licensed, all of it, including this release. XR sells a hosted service for teams, not a different build of the software. Nothing that runs on your machine is behind a licence check, and the source for every feature you already use stays open.",
   },
   {
     q: "Which editors are supported?",

@@ -32,6 +32,7 @@ export const site = {
     { label: "Models", href: "/models" },
     { label: "Enterprise", href: "/enterprise" },
     { label: "Pricing", href: "/pricing" },
+    { label: "Download", href: "/download" },
     { label: "Docs", href: "/docs" },
     { label: "Blog", href: "/blog" },
   ],
@@ -64,8 +65,12 @@ export const site = {
       { label: "Partners", href: "/enterprise#partners" },
     ],
     legal: [
-      { label: "Privacy", href: "/privacy" },
-      { label: "Terms", href: "/terms" },
+      // Canonical legal URLs as of v1.0.0. `/privacy` and `/terms` remain live
+      // because they were already linked from contracts and older emails.
+      { label: "Privacy", href: "/legal/privacy" },
+      { label: "Terms", href: "/legal/terms" },
+      { label: "Security & trust", href: "/security" },
+      { label: "Download XR", href: "/download" },
     ],
   },
 } as const;

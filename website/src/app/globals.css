@@ -1,5 +1,90 @@
 @import "tailwindcss";
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Phase 30 — XR Native tokens.
+
+   Additive on purpose. The violet accent above stays where it is so nothing
+   existing shifts; the surfaces introduced with the Business tier opt in by
+   using these names. See src/lib/native.ts for the reasoning.
+   ─────────────────────────────────────────────────────────────────────────── */
+@theme {
+  --color-native-bg: #03070d;
+  --color-native-bg-elevated: #070d16;
+  --color-native-bg-subtle: #0b141f;
+  --color-native-border: #152232;
+  --color-native-border-strong: #22323f;
+  --color-native-text: #e8f1f8;
+  --color-native-text-muted: #9fb3c4;
+  --color-native-text-dim: #6b7f92;
+  --color-native-cyan: #00e5ff;
+  --color-native-cyan-soft: #7df3ff;
+  --color-native-cyan-deep: #00a8bf;
+  --color-native-ok: #3dd68c;
+  --color-native-warn: #ffb224;
+  --color-native-danger: #ff6369;
+}
+
+@layer base {
+  /* Marketing surfaces: the cinematic treatment. */
+  .native-bg {
+    background:
+      radial-gradient(900px 480px at 50% -20%, rgba(0, 229, 255, 0.14), transparent 62%),
+      radial-gradient(600px 400px at 12% 8%, rgba(0, 168, 191, 0.08), transparent 60%),
+      #03070d;
+  }
+
+  /* The sentinel. Restrained: a ring and a slow breath, not a lava lamp. */
+  .orb {
+    position: relative;
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.9) 0%, rgba(125, 243, 255, 0.5) 18%, rgba(0, 229, 255, 0.16) 44%, transparent 68%),
+      radial-gradient(circle at 70% 72%, rgba(0, 168, 191, 0.5), transparent 62%),
+      #06121c;
+    box-shadow:
+      0 0 0 1px rgba(0, 229, 255, 0.28),
+      0 0 60px -8px rgba(0, 229, 255, 0.4),
+      inset 0 0 40px -12px rgba(0, 229, 255, 0.5);
+  }
+  .orb::after {
+    content: "";
+    position: absolute;
+    inset: -14%;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 229, 255, 0.12);
+  }
+
+  .native-ring {
+    box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.22), 0 0 44px -14px rgba(0, 229, 255, 0.5);
+  }
+
+  /* Console surfaces: flat, quiet, legible at 13px for hours. */
+  .console-shell {
+    background: #05090f;
+    color: #e8f1f8;
+  }
+  .console-panel {
+    background: #070d16;
+    border: 1px solid #152232;
+    border-radius: 10px;
+  }
+  .console-row {
+    border-bottom: 1px solid rgba(21, 34, 50, 0.7);
+  }
+  .console-row:last-child {
+    border-bottom: 0;
+  }
+  .console-mono {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+  }
+  .console-focus:focus-visible {
+    outline: 1.5px solid #00e5ff;
+    outline-offset: 1px;
+  }
+}
+
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
