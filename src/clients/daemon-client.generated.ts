@@ -1341,6 +1341,61 @@ export class XRDaemonClient {
     return await this.call("POST", `/api/v1/context/revoke/${encodeURIComponent(id)}`);
   }
 
+  /** Business licence state, verified offline against the built-in key. */
+  async cloudLicenseGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/cloud/license");
+  }
+
+  /** Verify a submitted licence token without storing it. */
+  async cloudLicenseVerify(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/cloud/license/verify");
+  }
+
+  /** Whether one Business feature is available (?feature=…). */
+  async cloudLicenseFeature(feature: string): Promise<Record<string, unknown>> {
+    return await this.call("GET", `/api/v1/cloud/license/feature/${encodeURIComponent(feature)}`);
+  }
+
+  /** Whether XR is signed in to a team (never fails when it is not). */
+  async cloudSessionGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/cloud/session");
+  }
+
+  /** Sign out of the team; leaves all local data untouched. */
+  async cloudSessionDelete(): Promise<Record<string, unknown>> {
+    return await this.call("DELETE", "/api/v1/cloud/session");
+  }
+
+  /** Team memory facts for one shared workspace (?workspaceId=). */
+  async cloudTeammemoryGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/cloud/team-memory");
+  }
+
+  /** Promote a fact to a team workspace (sensitivity-vetted locally first). */
+  async cloudTeammemoryPost(): Promise<Record<string, unknown>> {
+    return await this.call("POST", "/api/v1/cloud/team-memory");
+  }
+
+  /** Delete a team fact (administrative on the server). */
+  async cloudTeammemoryDelete(factId: string): Promise<Record<string, unknown>> {
+    return await this.call("DELETE", `/api/v1/cloud/team-memory/${encodeURIComponent(factId)}`);
+  }
+
+  /** Teams this installation belongs to (degrades to available:false offline). */
+  async cloudTeamsGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/cloud/teams");
+  }
+
+  /** Shared team workspaces (degrades to available:false without a team). */
+  async cloudTeamworkspacesGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/cloud/team-workspaces");
+  }
+
+  /** Managed-model usage for the current organization. */
+  async cloudUsageGet(): Promise<Record<string, unknown>> {
+    return await this.call("GET", "/api/v1/cloud/usage");
+  }
+
   /** API index: version, operation catalogue link, OpenAPI location. */
   async metaApiRootGet(): Promise<Record<string, unknown>> {
     return await this.call("GET", "/api/v1");

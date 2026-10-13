@@ -18,6 +18,7 @@ import { controlRoutes } from "./control.routes.ts";
 import { environmentRoutes } from "./environment.routes.ts";
 import { extensionRoutes } from "./extensions.routes.ts";
 import { businessRoutes } from "./business.routes.ts";
+import { cloudRoutes } from "./cloud.routes.ts";
 import { memoryRoutes } from "./memory.routes.ts";
 import { integrationRoutes } from "./integrations.routes.ts"; // Phase 22
 import { contextRoutes } from "./context.routes.ts";
@@ -97,6 +98,12 @@ export function listBaseRoutes(): DaemonRoute[] {
     // the trusted surface matches the documented product. Operators re-enable
     // explicitly with XR_BUSINESS_ROUTES=on until the migration finishes.
     ...(process.env.XR_BUSINESS_ROUTES === "on" ? businessRoutes() : []),
+    // Phase 30 — cloud account routes. Registered unconditionally and ON by
+    // default, unlike the business routes above: every handler here answers
+    // without a network call (licence state is verified offline, and an
+    // unconfigured client short-circuits), so there is nothing to gate behind a
+    // flag. A machine with no team simply gets `{ configured: false }`.
+    ...cloudRoutes(),
   ];
 }
 
