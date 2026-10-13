@@ -1,0 +1,9 @@
+# Cloud service — local state and secrets
+.env
+.env.*
+!.env.example
+.xr-cloud-pglite/
+.xr-cloud-mail/
+.xr-cloud-exports/
+node_modules/
+*.tsbuildinfo
