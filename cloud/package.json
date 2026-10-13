@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "XR Cloud — the Business-tier account, team, SSO, billing, team-memory and audit service. Separate deployable; never a dependency of the local XR runtime.",
+  "description": "XR Cloud \u2014 the Business-tier account, team, SSO, billing, team-memory and audit service. Separate deployable; never a dependency of the local XR runtime.",
   "license": "SEE LICENSE IN ../LICENSE",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
@@ -42,5 +42,10 @@
   },
   "engines": {
     "bun": ">=1.3.0"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.4"
+    }
   }
 }
