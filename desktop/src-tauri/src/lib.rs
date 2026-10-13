@@ -85,6 +85,11 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
+            // Phase 27 §E — per-OS window chrome. Runs FIRST: macOS keeps its
+            // decorations (real traffic lights), Windows and Linux drop them
+            // because they draw their own caption buttons.
+            apply_platform_chrome(app.handle());
+
             // Phase 27 — recovery gate. Read the dirty flag BEFORE touching
             // the engine: "start without the local engine" has to be honoured
             // from the first moment, otherwise a crash-looping engine gets one
@@ -492,6 +497,35 @@ pub fn run() {
 
 /// One line per engine-state observation, in the shell log. Kept here (not in
 /// `engine.rs`) so the engine module stays free of file I/O.
+/// Per-OS window chrome (Phase 27 §E).
+///
+/// `tauri.conf.json` builds the main window DECORATED so macOS gets real
+/// traffic lights via `titleBarStyle: "Overlay"`. Windows and Linux have no
+/// equivalent native overlay for a custom title bar, so they strip decorations
+/// here and keep the drawn caption buttons in `WindowControls.tsx`.
+///
+/// Doing this in code rather than in `tauri.{windows,linux}.conf.json` is
+/// deliberate, and safe: Tauri's `setup()` builds every `create: true` window
+/// from config BEFORE running this closure, and shows them after it returns —
+/// so `set_decorations(false)` cannot flash a native title bar, and no window
+/// definition has to be duplicated per platform.
+fn apply_platform_chrome(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        // macOS keeps the system chrome. Nothing to do.
+        let _ = app;
+        return;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(window) = app.get_webview_window("main") {
+            if let Err(e) = window.set_decorations(false) {
+                eprintln!("[xr] could not remove window decorations: {e}");
+            }
+        }
+    }
+}
+
 fn app_log_engine_state(snapshot: &engine::EngineSnapshot) {
     let home = crash::xr_home();
     if snapshot.is_up() {

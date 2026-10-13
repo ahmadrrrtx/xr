@@ -22,9 +22,11 @@
         "minHeight": 600,
         "resizable": true,
         "center": true,
-        "decorations": false,
-        "transparent": false,
-        "theme": "Dark"
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 20, "y": 20 },
+        "transparent": false
       },
       {
         "label": "hud",

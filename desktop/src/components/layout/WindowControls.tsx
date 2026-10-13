@@ -1,11 +1,33 @@
 /*
- * Custom window controls for the frameless main window.
+ * Custom window controls for the main window.
  *
- *  - macOS: traffic-light dots (12px, 8px apart, 20px from the left edge),
- *    vertically centered in the 52px topbar (docs/SCREEN-BRIEFS.md).
- *  - Windows/Linux: 46px-tall caption buttons flush to the right edge
- *    (minimize / maximize / close, Windows style — Phase 1 brief §5.3).
+ *  - macOS: NOTHING. XR uses the native traffic lights.
+ *
+ *    This is a deliberate reversal (Phase 27 §E). Phase 1 shipped fake
+ *    traffic-light dots in a frameless window; research says that is the one
+ *    thing Mac users reliably hate. Apple's own guidance is blunt — "Don't
+ *    draw your own chrome… don't try to replicate the system-provided
+ *    appearance. Doing so without perfectly matching the system's look and
+ *    behavior can make your app feel broken" — and the Human Interface
+ *    Guidelines are explicit that the close/minimize/zoom buttons "must remain
+ *    in the top-left corner" and must never be hidden or repositioned.
+ *
+ *    So `tauri.conf.json` now sets `decorations: true` +
+ *    `titleBarStyle: "Overlay"` + `hiddenTitle: true` and a
+ *    `trafficLightPosition` of (20, 20). The lights are real: correct colours,
+ *    correct hover glyphs, correct ⌥/⌘ modifiers, correct fullscreen
+ *    behaviour, and they work when the window is unfocused. The topbar adds
+ *    left padding (see AppShell) so content never slides under them.
+ *
+ *  - Windows/Linux: 46px-tall caption buttons flush to the right edge. These
+ *    platforms have no equivalent native overlay for a custom title bar, and
+ *    the window is genuinely frameless there (set at runtime in
+ *    `apply_platform_chrome`, not in the config, so the macOS window is built
+ *    decorated and never flashes).
+ *
  *  - Browser preview: not rendered (nothing to control).
+ *
+ * Research notes: docs/macos/WINDOW-CHROME.md.
  */
 import { Minus, Square, X } from 'lucide-react';
 
@@ -20,52 +42,8 @@ import { cn } from '@/lib/utils';
 
 export function WindowControls({ platform }: { platform: Platform }) {
   if (!isTauri()) return null;
-  return platform === 'macos' ? <MacTrafficLights /> : <WindowsControls />;
-}
-
-function MacTrafficLights() {
-  return (
-    <div
-      data-tauri-drag-region
-      className="absolute top-0 left-5 z-10 flex h-[52px] items-center gap-2"
-    >
-      <TrafficLight
-        color="bg-traffic-red hover:bg-traffic-red-hover"
-        label="Close window"
-        onClick={() => void closeWindow()}
-      />
-      <TrafficLight
-        color="bg-traffic-yellow hover:bg-traffic-yellow-hover"
-        label="Minimize window"
-        onClick={() => void minimizeWindow()}
-      />
-      <TrafficLight
-        color="bg-traffic-green hover:bg-traffic-green-hover"
-        label="Toggle maximize"
-        onClick={() => void toggleMaximize()}
-      />
-    </div>
-  );
-}
-
-function TrafficLight({
-  color,
-  label,
-  onClick,
-}: {
-  color: string;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      className={cn('h-3 w-3 rounded-full', color)}
-    />
-  );
+  // macOS keeps the system's own traffic lights — see the header comment.
+  return platform === 'macos' ? null : <WindowsControls />;
 }
 
 function WindowsControls() {
