@@ -70,6 +70,11 @@ jobs:
           name: xr-desktop-${{ matrix.runner }}
           path: rdm-bundles
           run-id: ${{ steps.src.outputs.run }}
+          # v4 needs these three together to read out of a *different* run;
+          # without an explicit token it only looks inside the current run and
+          # reports the artifact as missing even though it is there.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
 
       - name: Optional previous-release bundles (real upgrade when present)
         if: vars.RDM_PREV_URL != ''
