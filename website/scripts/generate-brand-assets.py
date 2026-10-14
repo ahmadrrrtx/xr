@@ -1,98 +1,78 @@
 #!/usr/bin/env python3
-"""Generate the website brand assets (Phase 31 · Bucket C · C1).
+"""Regenerate website/public brand assets from the v2 Drive pack.
 
-    python3 scripts/generate-brand-assets.py
+Phase 31 · Bucket F v2 — the website no longer draws its own mark. Every
+file in website/public/ derives from Ahmad's delivered pack, staged at
+../../assets/v2/ by ../../scripts/fetch-v2-assets.sh (gitignored except
+MANIFEST.json). Run fetch-v2-assets.sh first, then:
 
-Writes into website/public/:
-  favicon.ico          16/32/48 multi-resolution ICO (PNG payloads)
-  apple-touch-icon.png 180x180
-  icon-192.png         192x192 (PWA)
-  icon-512.png         512x512 (PWA + maskable)
-  og-image.png         1200x630 social card
+    python3 website/scripts/generate-brand-assets.py
 
-The sigil per the bucket spec: solid black rounded square, centered cyan
-dot. The OG card: #03070D background, XR wordmark, the tagline, one small
-cyan accent. Drawn with Pillow so the assets are reproducible anywhere;
-re-run after a brand change, never edit by hand.
+Only cropping/resizing/compositing — the delivered geometry is never
+redrawn. SVG favicons get a coordinate-precision pass (0.1 unit on a
+512 grid) to keep the traced files shippable; PNG/WebP derivatives come
+from the 4x masters.
 """
-from io import BytesIO
-from pathlib import Path
+import os
+import re
+import shutil
+import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent
-PUBLIC = ROOT / "public"
-PUBLIC.mkdir(exist_ok=True)
-
-BLACK = (3, 7, 13, 255)        # #03070D
-CYAN = (0, 229, 255, 255)      # #00E5FF
-WHITE = (237, 237, 239, 255)   # site text
-MUTED = (161, 161, 170, 255)   # zinc-400
-
-FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_BOOK = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
+V2 = os.path.join(ROOT, "assets", "v2")
+PUB = os.path.join(ROOT, "website", "public")
 
 
-def sigil(size: int) -> Image.Image:
-    """Black rounded square with a centered cyan dot, on transparency."""
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    radius = int(size * 0.22)
-    d.rounded_rectangle([0, 0, size - 1, size - 1], radius=radius, fill=BLACK)
-    dot = int(size * 0.30)
-    c = size // 2
-    d.ellipse([c - dot // 2, c - dot // 2, c + dot // 2, c + dot // 2], fill=CYAN)
-    return img
+def main() -> int:
+    if not os.path.isdir(V2):
+        print("assets/v2/ missing — run scripts/fetch-v2-assets.sh first", file=sys.stderr)
+        return 1
+    os.makedirs(PUB, exist_ok=True)
 
+    for src, dst in (
+        ("icon-family/ico/favicon.ico", "favicon.ico"),
+        ("icon-family/png/app-icon/apple-touch-icon.png", "apple-touch-icon.png"),
+        ("icon-family/png/app-icon/icon-192.png", "icon-192.png"),
+        ("icon-family/png/app-icon/icon-512.png", "icon-512.png"),
+        ("icon-family/png/app-icon/icon-maskable-512.png", "icon-maskable-512.png"),
+        ("icon-family/png/emblem/XR-Emblem-512.png", "xr-emblem.png"),
+    ):
+        shutil.copy(os.path.join(V2, src), os.path.join(PUB, dst))
 
-def save(img: Image.Image, name: str) -> None:
-    img.save(PUBLIC / name)
-    print(f"  {name}: {(PUBLIC / name).stat().st_size // 1024} KB")
+    front = Image.open(os.path.join(V2, "masters/png4x/XR-Avatar-Front-4x.png")).convert("RGBA")
+    front.resize((512, round(512 * front.height / front.width)), Image.LANCZOS).save(
+        os.path.join(PUB, "xr-avatar-front.webp"), "WEBP", quality=88, method=6
+    )
+    logo = Image.open(os.path.join(V2, "masters/png4x/XR-Logo-Transparent-4x.png")).convert("RGBA")
+    logo.resize((640, round(640 * logo.height / logo.width)), Image.LANCZOS).save(
+        os.path.join(PUB, "xr-wordmark.png"), optimize=True
+    )
 
+    # OG 1200x630 on XR navy: lockup left, avatar right (tagline in lockup).
+    og = Image.new("RGBA", (1200, 630), (3, 7, 13, 255))
+    lockup = logo.resize((540, round(540 * logo.height / logo.width)), Image.LANCZOS)
+    og.alpha_composite(lockup, (44, (630 - lockup.height) // 2))
+    avatar = front.resize((round(590 * front.width / front.height), 590), Image.LANCZOS)
+    og.alpha_composite(avatar, (1200 - avatar.width - 16, 630 - 590))
+    og.convert("RGB").save(os.path.join(PUB, "og.png"), optimize=True)
 
-def main() -> None:
-    print(f"writing to {PUBLIC}")
-    save(sigil(192), "icon-192.png")
-    save(sigil(512), "icon-512.png")
-    save(sigil(180), "apple-touch-icon.png")
+    def optimise_svg(src: str, dst: str) -> None:
+        svg = open(os.path.join(V2, src), encoding="utf-8").read()
+        svg = re.sub(r"(-?\d+\.\d{2,})", lambda m: str(round(float(m.group(1)), 1)), svg)
+        open(os.path.join(PUB, dst), "w", encoding="utf-8").write(svg)
 
-    # favicon.ico — ICO container holding PNG payloads at 16/32/48.
-    pngs = []
-    for s in (16, 32, 48):
-        buf = BytesIO()
-        sigil(s).save(buf, format="PNG")
-        pngs.append(buf.getvalue())
-    header = b"\x00\x00\x01\x00" + len(pngs).to_bytes(2, "little")
-    offset = 6 + 16 * len(pngs)
-    entries = b""
-    payload = b""
-    for s, data in zip((16, 32, 48), pngs):
-        entries += (
-            bytes([s, s, 0, 0])
-            + (1).to_bytes(2, "little")
-            + (32).to_bytes(2, "little")
-            + len(data).to_bytes(4, "little")
-            + offset.to_bytes(4, "little")
-        )
-        payload += data
-        offset += len(data)
-    (PUBLIC / "favicon.ico").write_bytes(header + entries + payload)
-    print(f"  favicon.ico: {(PUBLIC / 'favicon.ico').stat().st_size // 1024} KB")
+    optimise_svg("icon-family/svg/XR-Favicon.svg", "icon.svg")
+    optimise_svg("icon-family/svg/XR-Favicon-Micro.svg", "icon-micro.svg")
 
-    # og-image.png — 1200x630 social card.
-    og = Image.new("RGB", (1200, 630), BLACK[:3])
-    d = ImageDraw.Draw(og)
-    mark = sigil(120)
-    og.paste(mark, (90, 90), mark)
-    d.text((90, 260), "XR", font=ImageFont.truetype(FONT_BOLD, 150), fill=WHITE[:3])
-    d.text((94, 445), "The AI Agent You Can Actually Trust",
-           font=ImageFont.truetype(FONT_BOLD, 52), fill=WHITE[:3])
-    d.text((94, 520), "Local-first · BYOK · Secure",
-           font=ImageFont.truetype(FONT_BOOK, 40), fill=MUTED[:3])
-    d.rectangle([94, 585, 294, 591], fill=CYAN[:3])
-    og.save(PUBLIC / "og-image.png", optimize=True)
-    print(f"  og-image.png: {(PUBLIC / 'og-image.png').stat().st_size // 1024} KB")
+    Image.open(os.path.join(V2, "icon-family/png/app-icon/XR-App-Icon-1024.png")).convert("RGBA").resize(
+        (2048, 2048), Image.LANCZOS
+    ).save(os.path.join(PUB, "splash-2048.png"), optimize=True)
+
+    print("website/public regenerated from assets/v2/")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

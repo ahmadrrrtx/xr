@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Metadata } from "next";
 import { ArrowRight, Star, Check, Terminal as TermIcon, BookOpen, Package, Cpu, ShieldCheck, Zap } from "lucide-react";
 import { GithubIcon } from "@/components/icons";
-import { Avatar3D } from "@/components/Avatar3D";
+import Image from "next/image";
 import { Terminal } from "@/components/Terminal";
 import { DashboardPreview } from "@/components/DashboardPreview";
 import { features, stats, logos, faqs } from "@/lib/data";
@@ -79,8 +79,20 @@ function Hero() {
             </div>
           </div>
 
-          <div className="relative h-[420px] lg:h-[520px]">
-            <Avatar3D />
+          <div className="relative flex h-[420px] items-center justify-center lg:h-[520px]">
+            {/* Phase 31 · Bucket F v2 — delivered sentinel front render. */}
+            <div
+              aria-hidden
+              className="absolute h-[70%] w-[70%] rounded-full bg-cyan-400/10 blur-3xl"
+            />
+            <Image
+              src="/xr-avatar-front.webp"
+              alt="XR — the sentinel avatar"
+              width={512}
+              height={448}
+              priority
+              className="relative h-full w-auto object-contain drop-shadow-[0_0_48px_rgba(0,229,255,0.25)]"
+            />
           </div>
         </div>
 
