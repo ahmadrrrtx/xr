@@ -43,7 +43,7 @@ export function Footer() {
                 support@xr.rrrtx.ai
               </a>
             </div>
-            <div className="mt-2 text-[11px] leading-relaxed text-zinc-600">
+            <div className="mt-2 text-[11px] leading-relaxed text-zinc-500">
               [TO FILL: Registered office — street address, city, India]
             </div>
           </div>
@@ -85,9 +85,9 @@ function FooterCol({
 }) {
   return (
     <div>
-      <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-4">
+      <p className="text-xs font-semibold uppercase tracking-wider text-zinc-300 mb-4">
         {title}
-      </h4>
+      </p>
       <ul className="space-y-2.5 text-sm">
         {links.map((l) => (
           <li key={l.href}>
