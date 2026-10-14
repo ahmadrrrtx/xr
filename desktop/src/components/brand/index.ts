@@ -1,12 +1,15 @@
 /**
- * Official XR brand components (Phase 2) — Ahmad's original avatar and logo,
- * auto-vectorized from his uploads (art.ts). Pure inline SVG + theme CSS
- * vars + Framer Motion — no images, no hex outside themes.css.
+ * Official XR brand components (Phase 31 · Bucket F v2) — Ahmad's
+ * delivered final artwork: curved-blade logo lockup, front/side sentinel
+ * renders, Orb v2 animation pack, avatar state GIFs. See ./assets.ts for
+ * the file map back to the Drive masters (assets/v2/).
  */
-export { Avatar } from '@/components/brand/Avatar';
+export { AnimatedAvatar, Avatar } from '@/components/brand/Avatar';
+export { AvatarBust, bustCorePx, type Levels } from '@/components/brand/AvatarBust';
 export { CompanionOrb } from '@/components/brand/CompanionOrb';
-export { Logo } from '@/components/brand/Logo';
-export { brandGlow, useBrandId } from '@/components/brand/defs';
+export { Logo, XrEmblem } from '@/components/brand/Logo';
+export { VoiceOrb, type OrbTheme, type VoiceOrbState } from '@/components/brand/VoiceOrb';
+export { brandGlow } from '@/components/brand/defs';
 export {
   AVATAR_SIZES,
   AVATAR_STATES,

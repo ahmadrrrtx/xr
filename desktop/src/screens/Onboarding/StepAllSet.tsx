@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { Avatar } from '@/components/brand/Avatar';
+import { AnimatedAvatar } from '@/components/brand/Avatar';
 import { useOnboardingStore } from '@/stores/onboarding';
 import { Reveal } from './parts';
 
@@ -29,7 +29,7 @@ export function StepAllSet({
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
       <Reveal>
-        <Avatar size="lg" state={greeting ? 'speaking' : 'idle'} />
+        <AnimatedAvatar size={160} state={greeting ? 'speaking' : 'idle'} decorative />
       </Reveal>
       <Reveal delay={0.7}>
         <h2 className="text-text-primary mt-6 text-[24px] font-semibold tracking-[-0.01em]">

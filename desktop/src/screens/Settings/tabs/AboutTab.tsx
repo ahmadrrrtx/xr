@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 
-import { Logo } from '@/components/brand/Logo';
+import { AnimatedAvatar, Logo } from '@/components/brand';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -54,7 +54,10 @@ export function AboutTab() {
     <div>
       {/* ── Identity ── */}
       <div className="mb-8 flex flex-col items-center pt-4 pb-2 text-center">
-        <Logo variant="full" size={120} decorative={false} />
+        <AnimatedAvatar state="idle" size={150} decorative />
+        <div className="mt-3">
+          <Logo variant="large" size={72} decorative={false} />
+        </div>
         <p className="text-text-tertiary mt-4 text-xs">
           Version {APP_VERSION} · ai.rrrtx.xr
         </p>

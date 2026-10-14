@@ -1,31 +1,37 @@
 /*
  * Canonical navigation map — the 14 primary screens in fixed order
  * (docs/SCREEN-BRIEFS.md · GLOBAL APPLICATION SHELL).
- * Icons: Lucide @ 1.5px stroke. Order is part of the product spec.
+ * Icons: the delivered Bucket F v2 app-icon set (components/icons/nav-*),
+ * currentColor strokes — Sidebar colors active items with --xr-accent.
+ * Order is part of the product spec.
  */
+import type { ComponentType } from 'react';
+
 import {
-  Activity,
-  Brain,
-  Database,
-  Hammer,
-  LayoutGrid,
-  MessageCircle,
-  Mic,
-  Plug,
-  Rocket,
-  Search,
-  Settings,
-  ShieldCheck,
-  ShoppingBag,
-  Wallet,
-  type LucideIcon,
-} from 'lucide-react';
+  NavAgents,
+  NavBrain,
+  NavBudget,
+  NavBuilder,
+  NavChat,
+  NavIntegrations,
+  NavMemory,
+  NavResearch,
+  NavRuns,
+  NavSettings,
+  NavShield,
+  NavSkills,
+  NavVoice,
+  NavWorkspaces,
+  type AppIconProps,
+} from '@/components/icons';
+
+export type NavIcon = ComponentType<AppIconProps>;
 
 export interface NavItem {
   id: string;
   label: string;
   path: string;
-  icon: LucideIcon;
+  icon: NavIcon;
   /** Phase (docs/IMPLEMENTATION-PLAN.md) in which this screen ships. */
   phase: number;
   description: string;
@@ -36,7 +42,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'chat',
     label: 'Chat',
     path: '/chat',
-    icon: MessageCircle,
+    icon: NavChat,
     phase: 4,
     description: 'Conversations with XR — the core experience.',
   },
@@ -44,7 +50,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'workspaces',
     label: 'Workspaces',
     path: '/workspaces',
-    icon: LayoutGrid,
+    icon: NavWorkspaces,
     phase: 10,
     description: 'Launch pad — create, organize and launch project folders.',
   },
@@ -52,7 +58,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'brain',
     label: 'Brain',
     path: '/brain',
-    icon: Brain,
+    icon: NavBrain,
     phase: 9,
     description: 'Live agent run trace — the proof-of-trust view.',
   },
@@ -60,7 +66,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'builder',
     label: 'Builder',
     path: '/builder',
-    icon: Hammer,
+    icon: NavBuilder,
     phase: 17,
     description: 'Three-pane build environment for code work.',
   },
@@ -68,7 +74,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'research',
     label: 'Research',
     path: '/research',
-    icon: Search,
+    icon: NavResearch,
     phase: 18,
     description: 'Deep research reports with citations.',
   },
@@ -76,7 +82,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'agents',
     label: 'Agents',
     path: '/agents',
-    icon: Rocket,
+    icon: NavAgents,
     phase: 19,
     description: 'Prebuilt, custom agents and workflows.',
   },
@@ -84,7 +90,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'skills',
     label: 'Skills Store',
     path: '/skills',
-    icon: ShoppingBag,
+    icon: NavSkills,
     phase: 20,
     description: 'Installable skills with quarantine review.',
   },
@@ -92,7 +98,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'shield',
     label: 'Shield',
     path: '/shield',
-    icon: ShieldCheck,
+    icon: NavShield,
     phase: 12,
     description: 'Trust center — approvals, audit chain, permissions.',
   },
@@ -100,7 +106,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'runs',
     label: 'Control Room',
     path: '/runs',
-    icon: Activity,
+    icon: NavRuns,
     phase: 11,
     description: 'Every agent run, live — stop, inspect, export.',
   },
@@ -108,7 +114,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'memory',
     label: 'Memory',
     path: '/memory',
-    icon: Database,
+    icon: NavMemory,
     phase: 21,
     description: 'Explore what XR remembers and forgets.',
   },
@@ -116,7 +122,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'budget',
     label: 'Budget',
     path: '/budget',
-    icon: Wallet,
+    icon: NavBudget,
     phase: 13,
     description: 'Spend governor, limits and cost breakdowns.',
   },
@@ -124,7 +130,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'integrations',
     label: 'Integrations',
     path: '/integrations',
-    icon: Plug,
+    icon: NavIntegrations,
     phase: 22,
     description: 'OAuth-connected apps and services.',
   },
@@ -132,7 +138,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'voice',
     label: 'Voice',
     path: '/voice',
-    icon: Mic,
+    icon: NavVoice,
     phase: 15,
     description: 'Voice setup, STT/TTS and the Theater.',
   },
@@ -140,7 +146,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     id: 'settings',
     label: 'Settings',
     path: '/settings',
-    icon: Settings,
+    icon: NavSettings,
     phase: 8,
     description: 'Appearance, models, security and preferences.',
   },

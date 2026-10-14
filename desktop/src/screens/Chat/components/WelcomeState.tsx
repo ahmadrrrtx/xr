@@ -6,7 +6,7 @@
 import { Code2, FolderOpen, Mail, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { Avatar } from '@/components/brand/Avatar';
+import { AnimatedAvatar } from '@/components/brand/Avatar';
 import { useChatStore } from '@/stores/chatStore';
 import { useSessionsStore } from '@/stores/sessionsStore';
 import { useUIStore } from '@/stores/ui';
@@ -33,7 +33,7 @@ export function WelcomeState() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-6">
-      <Avatar size="lg" state="idle" />
+      <AnimatedAvatar state="idle" size={160} decorative />
       <h1 className="text-text-primary mt-6 text-[22px] font-semibold tracking-[-0.01em]">
         Hey{first ? ` ${first}` : ''}. What are we building today?
       </h1>

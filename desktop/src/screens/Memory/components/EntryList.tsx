@@ -4,7 +4,8 @@
  * engine's search and are passed in, never computed here.
  */
 import { useState } from 'react';
-import { Ban, Brain, Folder, Lightbulb, Search, Star, Trash2, User, Workflow as WorkflowIcon, type LucideIcon } from 'lucide-react';
+import { Ban, Folder, Lightbulb, Search, Star, Trash2, User, Workflow as WorkflowIcon, type LucideIcon } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { useMemoryStore } from '@/stores/memoryStore';
 import {
@@ -135,12 +136,7 @@ export function EntryList(props: Props) {
       </p>
 
       <div className="mx-list" role="listbox" aria-label="Memories" aria-multiselectable={false}>
-        {emptyText && (
-          <div className="mx-empty">
-            <Brain size={26} aria-hidden />
-            <p style={{ margin: 0, maxWidth: '34ch' }}>{emptyText}</p>
-          </div>
-        )}
+        {emptyText && <EmptyState title={emptyText} className="py-8" />}
         {entries.map((e, i) => {
           const Icon: LucideIcon = isEntity(e) && e.category !== 'exclusion' ? User : ICON[e.category] ?? Lightbulb;
           const selected = e.id === selectedId;

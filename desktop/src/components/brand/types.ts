@@ -2,13 +2,18 @@
  * Shared brand-component types (docs/phases/02-brand-components.plan.md).
  */
 
-/** The 7 canonical avatar states (docs/DESIGN-SYSTEM.md §6.2). */
+/**
+ * The 9 canonical avatar/orb states — matches the delivered v2 asset pack
+ * 1:1 (Orb v2 WebP/GIF/poster + avatar state GIFs, Phase 31 Bucket F).
+ */
 export const AVATAR_STATES = [
   'idle',
   'listening',
   'thinking',
   'speaking',
   'waiting-approval',
+  'approved',
+  'denied',
   'error',
   'sleeping',
 ] as const;

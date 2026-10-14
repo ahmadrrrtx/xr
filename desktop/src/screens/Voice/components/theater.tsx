@@ -10,7 +10,7 @@ import { useReducedMotion } from 'framer-motion';
 import { ArrowRight, Check, Mic, MicOff, Minimize2, Square, X } from 'lucide-react';
 import { useEffect } from 'react';
 
-import { Avatar } from '@/components/brand/Avatar';
+import { AnimatedAvatar } from '@/components/brand';
 import { Button } from '@/components/ui/button';
 import { Kbd } from '@/components/ui/kbd';
 import { cn } from '@/lib/utils';
@@ -79,7 +79,7 @@ export function MiniTheater({ onStart }: { onStart: () => void }) {
         <div className="relative flex size-[160px] items-center justify-center">
           <span className="border-accent/15 absolute inset-0 rounded-full border" aria-hidden="true" />
           <span className="border-accent/10 absolute inset-[-18px] rounded-full border" aria-hidden="true" />
-          <Avatar size="xl" state={avatarStateFor(state)} className="scale-[0.6]" />
+          <AnimatedAvatar size={120} state={avatarStateFor(state)} />
         </div>
         <Waveform className="w-[280px]" bars={40} height={44} />
         <div className="min-h-[64px] w-full max-w-[320px] text-center">
@@ -154,6 +154,9 @@ export function SessionHero({ onDock, onStop }: { onDock: () => void; onStop: ()
   const error = useVoiceStore((s) => s.error);
   const reduceMotion = useReducedMotion();
   const setInlineSurface = useApprovalStore((s) => s.setInlineSurface);
+  /* Bucket F F5: Orb v2 by default; Sentinel (avatar GIF loops) on toggle. */
+  /* Bucket F: Voice Theater hero is the animated sentinel (state GIFs) —
+     the orb pack stays on the companion widget surfaces only. */
 
   // The voice bar is the approval surface while the hero is up (the modal
   // would cover the same request twice). Restored on unmount.
@@ -203,7 +206,7 @@ export function SessionHero({ onDock, onStop }: { onDock: () => void; onStop: ()
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6 px-6">
         <div className={cn('relative flex items-center justify-center', !reduceMotion && state === 'idle' && 'xr-voice-breathe')}>
-          <Avatar size="xl" state={avatarStateFor(state)} />
+          <AnimatedAvatar size={280} state={avatarStateFor(state)} />
         </div>
         <Waveform className="w-[min(520px,80%)]" bars={56} height={64} color="#00E5FF" />
         <div className="w-full max-w-[640px] rounded-xl px-5 py-4" style={{ backgroundColor: 'rgba(3,7,13,0.85)', backdropFilter: 'blur(12px)' }}>

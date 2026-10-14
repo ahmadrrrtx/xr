@@ -917,3 +917,7 @@ html[data-theme='midnight'] .budget-hero-glow {
 @media (prefers-reduced-motion: reduce) {
   .xr-voice-breathe, .xr-voice-ripple { animation: none; }
 }
+
+/* EmptyState sentinel float (Bucket F F6) — disabled under reduced motion
+   by the motion-safe: variant at the call site. */
+@keyframes xr-empty-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
