@@ -1,9 +1,30 @@
 # Phase 30 — Business tier (final v1.0.0 feature phase)
 
-**Branch:** `phase/30-business` · **Base:** `main` @ `4a255ac` (Phase 28 merge) · **10 commits**
-**Diff:** 155 files, +29,715 / −201 — `cloud/` 64 / +18,023 · `website/` 37 / +6,243 · `src/` 8 / +1,208 · `desktop/` 6 / +613 · `docs/` 13 / +2,514 · `tools/` 1 / +132 · 17 previews
+**Branch:** `phase/30-business` · **Base:** `main` @ `4a255ac` (Phase 28 merge)
+**Commits:** 14 — ten for the phase, then the four CI-fix commits described below
+**Diff:** 157 files, +29,769 / −208 — `cloud/` 64 / +18,017 · `website/` 37 / +6,243 · `src/` 8 / +1,208 · `desktop/` 7 / +630 · `docs/` 13 / +2,538 · `tools/` 1 / +132 · 17 previews · `.gitleaksignore`
 
 @ahmadrrrtx — this is the PR for review. **Not self-merged**, per the phase brief.
+
+---
+
+## CI follow-up — three checks failed on the first run, all fixed
+
+The first run on this branch failed three checks. The three commits after the
+phase commits fix them, and the job list is now entirely green.
+
+| Check | What was actually wrong | Fix |
+| --- | --- | --- |
+| **Rust shell — cargo check + clippy (Linux reference)** | Not Rust, and not clippy: cargo check, clippy and all 138 shell tests passed. The same job also runs `bunx eslint .` over the renderer, and that failed with three `react-hooks/set-state-in-effect` errors. | Each effect now starts its request and sets state only from a continuation, which is the shape the rule wants. **One of the three, `desktop/src/components/settings/MobileCard.tsx`, is not from this phase** — it arrived with the Phase 28 merge, and `main` @ `4a255ac` is red on this job for that single line. It is fixed here because a required check cannot otherwise go green. If you would rather not carry a Phase 28 fix inside a Phase 30 PR, say so and it moves to its own branch. |
+| **Supply Chain / Secret scan (gitleaks)** | Five findings, and four were real smells rather than scanner noise: one fixed 32-byte value was written into three files, one of them `.env.example` — which exists to be copied. `cp .env.example .env` would have deployed a key that is public in this repository, directly under a comment saying to generate your own. The fifth is a false positive: `private-key` matches the `-----BEGIN PRIVATE KEY-----` armour inside the regex that *strips* that armour. | `test/helpers.ts` and `scripts/smoke.ts` now derive their key material from a hash of a fixed label (same value every run, still exactly 32 bytes of base64); `.env.example` ships the key empty, and the service already refuses to boot without one. The PEM marker is named in `.gitleaksignore`. The four historical copies remain in the commit that added them, so they are listed there commit-scoped rather than left unexplained. |
+| **Supply Chain / Vulnerability scan (osv-scanner + bun audit)** | Exactly one finding: `esbuild@0.18.20`, reachable only as `drizzle-kit → @esbuild-kit/esm-loader → @esbuild-kit/core-utils → esbuild ~0.18.20`. Advisory is the dev-server CORS flaw fixed in 0.25.0; XR never runs `esbuild serve`. | Fixed rather than waived, because the Dockerfile runs a plain `bun install` in the builder and copies `node_modules` into the runtime image — the vulnerable package was in the shipped container, not just on a developer's machine. A bun override pins it to `^0.25.4`, de-duplicating onto the `0.25.12` drizzle-kit already pulled; the tree loses 22 packages and gains none. No newer drizzle-kit drops the deprecated `@esbuild-kit` chain (0.31.11 is current), so there was no supported upgrade out. |
+
+**Verification that the fixes are real rather than declared.** `drizzle-kit generate`
+still reports "No schema changes, nothing to migrate" and leaves `drizzle/`
+byte-identical, so the forced esbuild drives the schema tooling correctly. A
+control run of gitleaks 8.24.3 over the same first-parent range **with the ignore
+file removed still reports all five findings**, so the entries are demonstrably
+the ones doing the work and not a blanket exemption.
 
 ---
 
