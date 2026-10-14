@@ -4,7 +4,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { posts } from "@/lib/data";
 import { ArrowRight, Calendar, Clock } from "lucide-react";
 
-export const metadata: Metadata = { title: "Blog" };
+export const metadata: Metadata = {
+  title: "Blog",
+  description:
+    "Notes from the XR project: releases, engineering write-ups and research summaries.",
+};
 
 export default function BlogPage() {
   const [featured, ...rest] = posts;

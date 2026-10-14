@@ -4,7 +4,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { MessageCircle, Calendar, Users, BookOpen, ArrowRight } from "lucide-react";
 import { GithubIcon } from "@/components/icons";
 
-export const metadata: Metadata = { title: "Community" };
+export const metadata: Metadata = {
+  title: "Community",
+  description:
+    "Where XR users and contributors talk: GitHub, discussions and the open issue tracker.",
+};
 
 const places = [
   { icon: MessageCircle, title: "Discord", desc: "Chat with the core team and 80,000+ developers.", href: "#", cta: "Join Discord" },

@@ -12,9 +12,14 @@ export default function NotFound() {
         <p className="mt-4 text-zinc-400">
           The page you&rsquo;re looking for doesn&rsquo;t exist or has been moved.
         </p>
-        <Link href="/" className="btn btn-primary mt-8">
-          <ArrowLeft className="h-4 w-4" /> Back home
-        </Link>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <Link href="/" className="btn btn-primary">
+            <ArrowLeft className="h-4 w-4" /> Back home
+          </Link>
+          <a href="mailto:support@xr.rrrtx.ai?subject=Broken%20link%20on%20xr.rrrtx.ai" className="btn btn-ghost">
+            Report a broken link
+          </a>
+        </div>
       </div>
     </section>
   );

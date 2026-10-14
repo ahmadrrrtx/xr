@@ -3,7 +3,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { CheckCircle2, Circle, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const metadata: Metadata = { title: "Roadmap" };
+export const metadata: Metadata = {
+  title: "Roadmap",
+  description:
+    "What the XR project is building next, in the open — with no dates we cannot keep.",
+};
 
 const quarters = [
   {

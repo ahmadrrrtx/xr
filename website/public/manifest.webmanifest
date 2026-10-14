@@ -1,0 +1,14 @@
+{
+  "name": "XR",
+  "short_name": "XR",
+  "description": "The AI Agent You Can Actually Trust — BYOK, local-first, secure",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#03070D",
+  "theme_color": "#00E5FF",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

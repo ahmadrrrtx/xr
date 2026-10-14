@@ -3,7 +3,11 @@ import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { ArrowRight } from "lucide-react";
 
-export const metadata: Metadata = { title: "About" };
+export const metadata: Metadata = {
+  title: "About",
+  description:
+    "What XR is, why it is local-first and open source, and the principles it is built under.",
+};
 
 export default function AboutPage() {
   return (

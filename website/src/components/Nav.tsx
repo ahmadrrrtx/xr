@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, X, ArrowRight } from "lucide-react";
 import { GithubIcon } from "@/components/icons";
 import { site } from "@/lib/site";
@@ -12,6 +13,8 @@ export function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
+  const pathname = usePathname() ?? "/";
+  const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -23,8 +26,31 @@ export function Nav() {
   // Note: mobile menu is closed via onClick on each link (see below)
   // rather than an effect, to avoid cascading renders on route change.
 
+  // Phase 31 · C3 — while the mobile menu is open: Escape closes it, a tap
+  // outside the header closes it, and body scroll is locked so the page
+  // behind cannot drift. Cleaned up on close/unmount.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onPointer = (e: MouseEvent) => {
+      if (headerRef.current && !headerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open ]);
+
   return (
     <header
+      ref={headerRef}
       className={cn(
         "fixed top-0 inset-x-0 z-50 transition-all duration-300",
         scrolled ? "py-2" : "py-4"
@@ -87,6 +113,7 @@ export function Nav() {
                   <Link
                     href={n.href}
                     onClick={() => setOpen(false)}
+                    aria-current={pathname === n.href ? "page" : undefined}
                     className="px-3 py-1.5 rounded-full hover:text-white transition-colors"
                   >
                     {n.label}
@@ -115,9 +142,9 @@ export function Nav() {
           </div>
 
           <button
-            className="md:hidden p-2 rounded-lg text-zinc-200"
+            className="md:hidden flex min-h-11 min-w-11 items-center justify-center rounded-lg p-2 text-zinc-200"
             onClick={() => setOpen((o) => !o)}
-            aria-label="Toggle menu"
+            aria-label={open ? "Close navigation" : "Open navigation"}
             aria-expanded={open}
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -125,7 +152,7 @@ export function Nav() {
         </nav>
 
         {open && (
-          <div className="md:hidden mt-2 glass rounded-2xl p-3 shadow-2xl">
+          <div className="mobile-menu md:hidden mt-2 glass rounded-2xl p-3 shadow-2xl">
             <ul className="flex flex-col text-sm">
               {[
                 { href: "/features", label: "Features" },
@@ -136,12 +163,17 @@ export function Nav() {
                 { href: "/docs", label: "Docs" },
                 { href: "/blog", label: "Blog" },
                 { href: "/downloads", label: "Downloads" },
+                { href: "/security", label: "Security" },
+                { href: "/status", label: "Status" },
+                { href: "/support", label: "Support" },
+                { href: "/contact", label: "Contact" },
               ].map((n) => (
                 <li key={n.href}>
                   <Link
                     href={n.href}
                     onClick={() => setOpen(false)}
-                    className="block px-3 py-2.5 rounded-lg hover:bg-white/5 text-zinc-200"
+                    aria-current={pathname === n.href ? "page" : undefined}
+                    className="flex min-h-11 items-center rounded-lg px-3 hover:bg-white/5 text-zinc-200"
                   >
                     {n.label}
                   </Link>

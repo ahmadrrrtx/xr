@@ -3,13 +3,14 @@ import Link from "next/link";
 import { Check, ArrowRight, Minus } from "lucide-react";
 
 import { businessAdds, businessPricing, personalIncludes } from "@/lib/native";
+import { PricingPlans } from "@/components/PricingPlans";
 import { faqs, pricingPlans } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Pricing",
   description:
-    "XR is free forever, fully functional, with no account required. Business is $15 per user per month for team administration, managed models, SSO, relay, team memory and audit.",
+    "XR is free forever, fully functional, no account required. Business is $15/user/month for team admin, managed models, SSO, relay and audit export.",
 };
 
 /**
@@ -43,69 +44,8 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* ── plans ──────────────────────────────────────────────────────── */}
-        <div className="mt-16 grid gap-5 lg:grid-cols-3">
-          {pricingPlans.map((plan) => (
-            <div
-              key={plan.name}
-              className={cn(
-                "relative flex flex-col rounded-2xl border p-7",
-                plan.featured
-                  ? "border-native-cyan/35 bg-native-bg-elevated/80 native-ring"
-                  : "border-native-border bg-native-bg-elevated/50",
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-native-text">{plan.name}</span>
-                <span
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider",
-                    plan.featured ? "bg-native-cyan/15 text-native-cyan" : "bg-white/5 text-native-text-dim",
-                  )}
-                >
-                  {plan.badge}
-                </span>
-              </div>
-
-              <div className="mt-5 flex items-end gap-1.5">
-                <span className="text-4xl font-semibold tracking-tight text-native-text">{plan.price}</span>
-                <span className="pb-1.5 text-xs text-native-text-dim">{plan.cadence}</span>
-              </div>
-
-              <p className="mt-4 text-[13px] leading-relaxed text-native-text-muted">{plan.description}</p>
-
-              <Link
-                href={plan.href}
-                className={cn(
-                  "mt-6 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg text-[13px] font-medium transition",
-                  plan.featured
-                    ? "bg-native-cyan text-[#02222a] hover:bg-native-cyan-soft"
-                    : "border border-native-border-strong text-native-text hover:border-native-cyan/50 hover:text-native-cyan",
-                )}
-              >
-                {plan.cta}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-
-              <ul className="mt-6 space-y-2.5">
-                {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5 text-[13px] leading-snug text-native-text-muted">
-                    <Check
-                      className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", plan.featured ? "text-native-cyan" : "text-native-text-dim")}
-                    />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              {plan.footnote ? (
-                <p className="mt-6 border-t border-native-border pt-4 text-[12px] leading-relaxed text-native-text-dim">
-                  {plan.footnote}
-                </p>
-              ) : null}
-            </div>
-          ))}
-        </div>
+        {/* ── plans (client island: billing toggle, Phase 31 · C13) ─────────── */}
+        <PricingPlans />
 
         {/* ── the six things ─────────────────────────────────────────────── */}
         <div className="mt-24">
@@ -153,6 +93,49 @@ export default function PricingPage() {
               you pay, there is not one — a functional local XR that only worked while it could reach our
               servers would be worth less than the one you already have.
             </p>
+          </div>
+        </div>
+
+        {/* ── compare (Phase 31 · C13) ─────────────────────────────────────── */}
+        <div className="mt-20">
+          <h2 className="text-2xl font-semibold tracking-tight text-native-text">Compare plans</h2>
+          <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-native-text-muted">
+            The Personal column has no missing rows. Business adds team services; it never unlocks local
+            features.
+          </p>
+          <div className="mt-8 overflow-hidden rounded-xl border border-native-border">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="bg-native-bg-elevated/70">
+                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-native-text-dim">Feature</th>
+                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-native-text-dim">Personal</th>
+                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-wider text-native-text-dim">Business</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ["Every model — BYOK or local runtimes", "Included", "Included"],
+                  ["Memory, workspaces, knowledge store", "Included", "Included"],
+                  ["Voice, agents, skills, plugins, MCP", "Included", "Included"],
+                  ["Desktop, CLI, editors, mobile PWA", "Included", "Included"],
+                  ["Spend caps and audit log", "Local", "Local + team export"],
+                  ["Team workspaces, roles, member caps", "—", "Included"],
+                  ["Managed models (no keys to hand out)", "—", "Included"],
+                  ["SSO (Google, Okta, Azure, OIDC/SAML)", "—", "Included"],
+                  ["Cloud relay + team memory", "—", "Included"],
+                ].map(([feature, personal, business]) => (
+                  <tr key={feature} className="border-t border-native-border">
+                    <td className="px-4 py-3 text-[12.5px] text-native-text">{feature}</td>
+                    <td className="px-4 py-3 text-[12.5px] text-native-text-muted">
+                      {personal === "—" ? <Minus className="h-3.5 w-3.5 text-native-text-dim" aria-label="Not included" /> : personal}
+                    </td>
+                    <td className="px-4 py-3 text-[12.5px] text-native-text-muted">
+                      {business === "—" ? <Minus className="h-3.5 w-3.5 text-native-text-dim" aria-label="Not included" /> : business}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
