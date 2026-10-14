@@ -25,12 +25,17 @@ import {
 } from '@/lib/settingsApi';
 import { useSettingsStore } from '@/stores/settingsStore';
 
+// Phase 31 · Bucket B — the legal documents live on the website (the
+// canonical /legal/* URLs the footer and contracts link to), not in repo
+// anchors. XR Personal collects nothing; these pages say exactly that.
+const WEB = 'https://xr.rrrtx.ai';
+
 const LINKS: Array<{ label: string; url: string }> = [
-  { label: 'Website', url: `${APP_REPO_URL}#readme` },
+  { label: 'Website', url: WEB },
   { label: 'Source code (GitHub)', url: APP_REPO_URL },
   { label: 'Documentation', url: `${APP_REPO_URL}/tree/main/docs` },
-  { label: 'Privacy policy', url: `${APP_REPO_URL}#privacy` },
-  { label: 'Terms of service', url: `${APP_REPO_URL}#terms` },
+  { label: 'Privacy policy', url: `${WEB}/legal/privacy` },
+  { label: 'Terms of service', url: `${WEB}/legal/terms` },
   { label: 'Report a bug', url: `${APP_REPO_URL}/issues/new` },
 ];
 

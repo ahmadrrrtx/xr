@@ -262,7 +262,7 @@ export default function SecurityPage() {
 
         {/* ── sub-processors ────────────────────────────────────────────── */}
         <div className="mt-20">
-          <h2 className="text-xl font-semibold tracking-tight text-native-text">Sub-processors</h2>
+          <h2 id="subprocessors" className="scroll-mt-32 text-xl font-semibold tracking-tight text-native-text">Sub-processors</h2>
           <p className="mt-3 max-w-3xl text-[13.5px] leading-relaxed text-native-text-muted">
             Four, and each one is only reachable because a customer action calls it. If you never invite
             anyone, enable SSO, use managed models or export an audit log, three of these never see a byte

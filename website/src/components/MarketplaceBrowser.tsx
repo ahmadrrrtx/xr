@@ -164,7 +164,13 @@ function ItemCard({ item, onOpen }: { item: MarketplaceItem; onOpen: () => void 
           <>
             <span className="flex items-center gap-1">
               <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />
-              {item.rating} <span className="text-zinc-600">({formatNumber(item.reviews)})</span>
+              {item.reviews > 0 ? (
+                <>
+                  {item.rating} <span className="text-zinc-600">({formatNumber(item.reviews)})</span>
+                </>
+              ) : (
+                <span className="text-zinc-600">—</span>
+              )}
             </span>
             <span className="flex items-center gap-1">
               <Download className="h-3.5 w-3.5" /> {item.installs}
@@ -213,7 +219,8 @@ function ItemModal({ item, onClose }: { item: MarketplaceItem; onClose: () => vo
               {item.downloads > 0 ? (
                 <>
                   <span className="flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" /> {item.rating} ({formatNumber(item.reviews)} reviews)
+                    <Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" />{" "}
+                    {item.reviews > 0 ? `${item.rating} (${formatNumber(item.reviews)} reviews)` : "—"}
                   </span>
                   <span className="flex items-center gap-1">
                     <Download className="h-3.5 w-3.5" /> {item.installs} installs
