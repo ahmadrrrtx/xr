@@ -4,7 +4,7 @@
  * recent research.
  */
 import { useReducedMotion } from 'framer-motion';
-import { Brain, ChevronDown, ChevronRight, FileUp, Paperclip, RotateCcw, Save, Share2, X } from 'lucide-react';
+import { Brain, ChevronDown, ChevronRight, Copy, FileUp, Paperclip, RotateCcw, Save, Share2, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import TextareaAutosize from 'react-textarea-autosize';
@@ -253,6 +253,24 @@ export function QueryPanel({ textareaRef }: { textareaRef: React.MutableRefObjec
             <button type="button" className="xr-btn" onClick={() => toast('Shareable links coming in a future update')} data-testid="research-share">
               <Share2 size={14} strokeWidth={1.75} aria-hidden="true" />
               Share
+            </button>
+            <button
+              type="button"
+              className="xr-btn"
+              disabled={!st.report}
+              onClick={async () => {
+                if (!st.report) return;
+                try {
+                  await navigator.clipboard.writeText(st.report);
+                  toast('Report copied to clipboard');
+                } catch {
+                  toast('Copy failed — select the report text and press Ctrl+C');
+                }
+              }}
+              data-testid="research-copy"
+            >
+              <Copy size={14} strokeWidth={1.75} aria-hidden="true" />
+              Copy report
             </button>
             <button type="button" className="xr-btn" disabled={!st.report} onClick={() => void st.exportMd()} data-testid="research-export">
               Export .md

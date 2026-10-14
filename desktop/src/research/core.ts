@@ -607,3 +607,56 @@ export function uiDepthForEngine(d: EngineDepth, mode?: EngineMode): UiDepth {
   if (d === 'thorough') return 'deep';
   return 'standard';
 }
+
+// ─── Report outline (Phase 31 · E4) ─────────────────────────────────────────
+
+export interface OutlineEntry {
+  level: 1 | 2 | 3;
+  text: string;
+  /** URL-safe, de-duplicated within one report (`findings`, `findings-2`). */
+  slug: string;
+}
+
+/** Heading text with citation markers and emphasis stripped. */
+export function plainHeading(raw: string): string {
+  return raw
+    .replace(/\[(?:s\d+)\]/g, '')
+    .replace(/[*_`~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function headingSlug(text: string): string {
+  const slug = plainHeading(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'section';
+}
+
+/**
+ * Parse `#`/`##`/`###` headings out of a report, skipping fenced code
+ * blocks. Slugs match the `report-<slug>` ids ReportMarkdown stamps on
+ * the rendered headings, so the outline can scroll to them.
+ */
+export function reportOutline(report: string): OutlineEntry[] {
+  const out: OutlineEntry[] = [];
+  const seen = new Map<string, number>();
+  let inFence = false;
+  for (const line of report.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const m = /^(#{1,3})\s+(.+?)\s*#*\s*$/.exec(line);
+    if (!m) continue;
+    const text = plainHeading(m[2] ?? '');
+    if (!text) continue;
+    const base = headingSlug(text);
+    const count = (seen.get(base) ?? 0) + 1;
+    seen.set(base, count);
+    out.push({ level: (m[1] ?? '#').length as 1 | 2 | 3, text, slug: count === 1 ? base : `${base}-${count}` });
+  }
+  return out;
+}
