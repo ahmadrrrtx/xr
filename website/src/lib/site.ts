@@ -21,9 +21,9 @@ export const site = {
   github: "https://github.com/ahmadrrrtx/xr",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",
   installCmd: "npm i -g @rrrtx/xr && xr",
-  version: "1.0.0",
-  codename: "Truth",
-  displayVersion: "1.0.0 (Truth)",
+  version: "1.1.0",
+  codename: "Graphite",
+  displayVersion: "1.1.0 (Graphite)",
   /** Bundled skills, mechanically counted from skills/ at stamp time. */
   skillCount: 65,
   nav: [
@@ -69,6 +69,9 @@ export const site = {
       // because they were already linked from contracts and older emails.
       { label: "Privacy", href: "/legal/privacy" },
       { label: "Terms", href: "/legal/terms" },
+      { label: "Cookies", href: "/cookies" },
+      { label: "Refunds", href: "/refund" },
+      { label: "Notices", href: "/legal/notices" },
       { label: "Security & trust", href: "/security" },
       { label: "Download XR", href: "/download" },
     ],

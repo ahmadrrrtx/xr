@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "XR",
-  "version": "0.2.0",
+  "version": "1.1.0",
   "identifier": "ai.rrrtx.xr",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -25,7 +25,10 @@
         "decorations": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "trafficLightPosition": { "x": 20, "y": 20 },
+        "trafficLightPosition": {
+          "x": 20,
+          "y": 20
+        },
         "transparent": false
       },
       {
@@ -67,18 +70,30 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:*; frame-src http://localhost:* http://127.0.0.1:*",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:*; frame-src http://localhost:* http://127.0.0.1:*",
       "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:5173; frame-src http://localhost:* http://127.0.0.1:*"
     }
   },
   "bundle": {
     "active": true,
-    "externalBin": ["binaries/xr-engine"],
-    "targets": ["app", "dmg", "msi", "nsis", "appimage", "deb", "rpm"],
+    "externalBin": [
+      "binaries/xr-engine"
+    ],
+    "targets": [
+      "app",
+      "dmg",
+      "msi",
+      "nsis",
+      "appimage",
+      "deb",
+      "rpm"
+    ],
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "languages": ["English"]
+        "languages": [
+          "English"
+        ]
       },
       "webviewInstallMode": {
         "type": "offlineInstaller",
@@ -95,19 +110,23 @@
     "category": "DeveloperTool",
     "fileAssociations": [
       {
-        "ext": ["xr"],
+        "ext": [
+          "xr"
+        ],
         "name": "XR deep link",
         "description": "Open an xr:// link in XR",
         "role": "Viewer"
       }
     ],
-    "shortDescription": "XR — the AI agent you can actually trust",
+    "shortDescription": "XR \u2014 the AI agent you can actually trust",
     "longDescription": "XR is a local-first, provider-neutral AI agent with audited trust. This is the desktop shell."
   },
   "plugins": {
     "deep-link": {
       "desktop": {
-        "schemes": ["xr"]
+        "schemes": [
+          "xr"
+        ]
       }
     }
   }

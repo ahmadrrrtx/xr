@@ -74,7 +74,11 @@ import {
 // back through an inlined image).
 // Phase 5 re-pin: SEC-09 disclosure banner (class-based, CSP-clean) joined the
 // composition — identity intentionally changed, invariants unchanged.
-const POST_PHASE4_SHA256 = "79ccf88e3ac5ed17a3e1a90f49274c6e0bc0bbf80c660dfe5f61736741ad1eed";
+// Phase 31 re-pin (v1.1.0 "Graphite"): the ONLY delta is the substituted
+// version line ("1.1.0 (Graphite) — Control Center"), proven by re-hashing
+// the render with the version reverted to 1.0.0/Truth, which reproduces
+// the previous pin byte-for-byte.
+const POST_PHASE4_SHA256 = "c6b309a5539ae5a29a31a49c3c59378fe8adcb1f53a8744e98e3f997d58ef2d0";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {
