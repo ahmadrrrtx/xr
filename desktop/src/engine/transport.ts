@@ -64,12 +64,22 @@ export class EngineHttpError extends Error {
 
 const DEV_SESSION_KEY = 'xr.dev.session';
 
+/**
+ * Phase 31 · A14 — the dev-pairing session is a bearer-equivalent
+ * credential, so it lives ONLY in memory for this page session. It is
+ * never written to localStorage (any script on the origin could read it
+ * back later); a page reload simply re-pairs. Any copy an older build
+ * already stored is removed on sight.
+ */
+let devSessionMemory: string | null = null;
+
 function devSession(): string | null {
   try {
-    return window.localStorage.getItem(DEV_SESSION_KEY);
+    window.localStorage.removeItem(DEV_SESSION_KEY);
   } catch {
-    return null;
+    /* storage unavailable — memory-only either way */
   }
+  return devSessionMemory;
 }
 
 /** Exposed-dev pairing (vite.config.ts SEC-DEV-01): `#pair=<code>` once. */
@@ -82,7 +92,12 @@ export async function pairFromUrl(): Promise<boolean> {
     if (!res.ok) return false;
     const j = (await res.json()) as { session?: string | null };
     if (!j.session) return false;
-    window.localStorage.setItem(DEV_SESSION_KEY, j.session);
+    devSessionMemory = j.session;
+    try {
+      window.localStorage.removeItem(DEV_SESSION_KEY);
+    } catch {
+      /* see devSession() */
+    }
     history.replaceState(null, '', window.location.pathname + window.location.search);
     linkPromise = null;
     return true;

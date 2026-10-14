@@ -14,6 +14,7 @@ import type { Provider, ProviderCapabilitiesFlags } from "../core/types.ts";
 import type { XRConfig } from "../config/config.ts";
 import type { ProviderPreset } from "./presets.ts";
 import { CustomProvider } from "./custom.ts";
+import { validateProviderUrlSync } from "./provider-url-guard.ts";
 
 /** Map a preset's capability bag onto the transport flags the loop reads (Phase 1). */
 function capabilitiesFromPreset(preset: ProviderPreset): ProviderCapabilitiesFlags {
@@ -44,6 +45,12 @@ export class ProviderRegistry {
   private entries = new Map<string, RegistryEntry>();
   /** Phase 01 — bumped on every mutation; catalog cache fingerprints include it. */
   private _version = 0;
+  /**
+   * A5 — custom providers refused by the SSRF guard at the last syncCustom,
+   * with the reason. Surfaces (daemon boot, providers UI) read this to warn
+   * the operator instead of the registry logging on its own.
+   */
+  blockedCustomProviders: Array<{ id: string; reason: string }> = [];
 
   get version(): number {
     return this._version;
@@ -157,15 +164,32 @@ export class ProviderRegistry {
 
   /** Sync custom providers from config into the registry. */
   syncCustom(config: XRConfig): void {
-    // Remove stale custom entries that are no longer in config
+    // A5 — SSRF guard (sync half: protocol + host ranges; the add path in
+    // ProviderService additionally re-checks DNS). A blocked custom provider
+    // is NOT registered; it is recorded in `blockedCustomProviders` so the
+    // operator can be told why their provider vanished. Built-in presets —
+    // including local runtimes on loopback — never pass through here.
+    const blocked: Array<{ id: string; reason: string }> = [];
+    const blockedIds = new Set<string>();
+    for (const custom of config.providerEngine?.customProviders ?? []) {
+      const check = validateProviderUrlSync(String((custom as any).baseUrl ?? ""));
+      if (!check.ok) {
+        blocked.push({ id: String((custom as any).id), reason: check.reason ?? "blocked" });
+        blockedIds.add(String((custom as any).id));
+      }
+    }
+    this.blockedCustomProviders = blocked;
+
+    // Remove stale custom entries that are no longer in config (or are now blocked)
     for (const [id, entry] of this.entries) {
-      if (entry.preset.kind === "custom" && !config.providerEngine?.customProviders?.find((c: any) => c.id === id)) {
+      if (entry.preset.kind === "custom" && (!config.providerEngine?.customProviders?.find((c: any) => c.id === id) || blockedIds.has(id))) {
         this.unregister(id);
       }
     }
 
     // Register current custom providers
     for (const custom of config.providerEngine?.customProviders ?? []) {
+      if (blockedIds.has(custom.id)) continue;
       const preset: ProviderPreset = {
         id: custom.id,
         label: custom.label,

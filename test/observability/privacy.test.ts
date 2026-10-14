@@ -123,7 +123,6 @@ test("3 — redactor corpus: secrets/PII are removed from every pattern class", 
     [`token=supersecrettoken123`, "credential"],
     [`JWT eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJVadQssw5c`, "jwt"],
     [`aws AKIAIOSFODNN7EXAMPLE key`, "api_key"],
-    [`email me at dev@example.com`, "email"],
     [`card 5234 5678 9012 3456`, "card_number"],
     [`path /home/ahmadsecret/project/x`, "home"],
     [`host on 192.168.1.44 today`, "ip"],
@@ -133,6 +132,11 @@ test("3 — redactor corpus: secrets/PII are removed from every pattern class", 
     expect(out).toContain(`⟨redacted:${kind}⟩`);
     expect(out).not.toContain(input.slice(5, input.length - 1));
   }
+  // Phase 31 · A8: e-mails are partially masked (l***@domain), not tagged.
+  const emailOut = redactString("email me at dev@example.com");
+  expect(emailOut).toContain("d***@example.com");
+  expect(emailOut).not.toContain("dev@example.com");
+
   const attrs = redactAttributes({ a: `uses ${SECRET}`, n: 42, ok: true });
   expect(JSON.stringify(attrs)).toContain("⟨redacted:");
   expect(attrs.n).toBe(42);

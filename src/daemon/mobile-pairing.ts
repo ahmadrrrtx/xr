@@ -283,7 +283,8 @@ export async function handleMobileRoutes(
     // Rate limit before doing any work at all.
     const peer = peerKey(request);
     if (!rateLimit(`pair:${peer}`)) {
-      return json({ error: 'Too many attempts. Wait a minute.' }, { status: 429 });
+      // A10: 429s carry Retry-After so well-behaved clients back off.
+      return json({ error: 'Too many attempts. Wait a minute.' }, { status: 429, headers: { 'retry-after': '60' } });
     }
 
     let body: {

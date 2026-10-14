@@ -35,7 +35,29 @@ function getStore(): Promise<Store | null> {
   return storePromise;
 }
 
+/**
+ * Phase 31 · A14 — sensitive keys never touch localStorage. Provider API
+ * keys (the `xr.providerKeys` fallback used when the OS keychain is
+ * unavailable) and anything token/secret/password-shaped persist ONLY in
+ * the Tauri Store (settings.json in the app-private data dir); the browser
+ * fallback keeps them session-only rather than web-readable forever.
+ */
+const SENSITIVE_KEY = /providerkeys|api[-_]?key|token|secret|password|passwd|credential/i;
+
+export function isSensitiveSettingKey(key: string): boolean {
+  return SENSITIVE_KEY.test(key);
+}
+
 function writeLocalStorageRaw(key: string, raw: string): void {
+  if (isSensitiveSettingKey(key)) {
+    // Also evict any copy an older build already wrote.
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
   try {
     window.localStorage.setItem(key, raw);
   } catch {
@@ -78,6 +100,7 @@ export async function readSettingRaw(key: string): Promise<string | null> {
       /* fall through to localStorage */
     }
   }
+  if (isSensitiveSettingKey(key)) return null; // A14: never read secrets back from localStorage
   try {
     return window.localStorage.getItem(key);
   } catch {
@@ -96,6 +119,7 @@ export async function readSettingJSON<T>(key: string): Promise<T | null> {
       /* fall through to localStorage */
     }
   }
+  if (isSensitiveSettingKey(key)) return null; // A14: never read secrets back from localStorage
   try {
     const raw = window.localStorage.getItem(key);
     return raw === null ? null : (JSON.parse(raw) as T);

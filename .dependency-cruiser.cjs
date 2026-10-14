@@ -285,6 +285,9 @@ module.exports = {
           // (Art. XVIII); regenerated and checked by `bun run client:check`.
           // XR itself speaks to the daemon over plain fetch.
           "^src/clients/daemon-client\\.generated\\.ts$",
+          // Phase 31 · A3 — Stripe webhook placeholder (TODO(P30)). Phase 30
+          // owns cloud/billing; nothing may import this until that lands.
+          "^src/cloud/webhooks\\.ts$",
         ],
       },
       to: {},

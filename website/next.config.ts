@@ -1,7 +1,80 @@
 import type { NextConfig } from "next";
 
+import { site } from "./src/lib/site";
+
+const isProd = process.env.NODE_ENV === "production";
+
+/**
+ * Phase 31 · A9/A6/A7 — security headers for every response, plus a
+ * same-site-only CORS posture for any future API route.
+ *
+ * The CSP keeps Next's own runtime working — an inline bootstrap script
+ * and inline `<style>` tags are how the framework ships hydration — so
+ * `script-src`/`style-src` allow `'unsafe-inline'` on `'self'` only, and
+ * `'unsafe-eval'` exists solely outside production (the dev bundler
+ * needs it; a production build never evaluates). `img-src` permits
+ * remote `https:` images because `images.remotePatterns` below is an
+ * explicit, pre-existing product decision to render operator-supplied
+ * artwork; nothing is widened beyond what the site already loads.
+ * HSTS is production-only so local/LAN development over plain HTTP is
+ * never poisoned by a cached upgrade.
+ */
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  },
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+    ].join("; "),
+  },
+  ...(isProd
+    ? [
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=63072000; includeSubDomains; preload",
+        },
+      ]
+    : []),
+];
+
 const nextConfig: NextConfig = {
   output: "standalone",
+  // A7 — never ship browser source maps in production builds.
+  productionBrowserSourceMaps: false,
+  async headers() {
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      {
+        // A6 — if API routes are added they answer only to this site's
+        // own origin, never `*`. Inert while no `/api` route exists.
+        source: "/api/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Origin", value: site.url },
+          { key: "Access-Control-Allow-Methods", value: "GET, POST, OPTIONS" },
+          {
+            key: "Access-Control-Allow-Headers",
+            value: "Content-Type, Authorization",
+          },
+          { key: "Vary", value: "Origin" },
+        ],
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

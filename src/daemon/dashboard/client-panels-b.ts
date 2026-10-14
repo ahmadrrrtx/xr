@@ -82,7 +82,7 @@ function renderMarketplace() {
           <div class="mp-skill-icon">\${skillInitials(s.name)}</div>
           <div class="xr-s-93">
             <div class="mp-skill-name">\${escapeHtml(s.name)}</div>
-            <div class="mp-skill-id">\s\${s.id}</div>
+            <div class="mp-skill-id">\s\${escapeHtml(s.id)}</div>
           </div>
         </div>
         <div class="mp-desc">\${escapeHtml(s.description || "")}</div>
@@ -111,7 +111,7 @@ async function inspectMarketplaceSkill(id) {
         <div class="mp-skill-icon xr-s-95">\${skillInitials(s.name)}</div>
         <div>
           <h4 class="xr-s-96">\${escapeHtml(s.name)}</h4>
-          <div class="mp-inspector-sub">\${s.id} · v\${s.version}</div>
+          <div class="mp-inspector-sub">\${escapeHtml(s.id)} · v\${escapeHtml(s.version)}</div>
         </div>
       </div>
       <p class="muted xr-s-97">\${escapeHtml(s.description)}</p>
@@ -201,8 +201,8 @@ async function loadPlugins() {
     document.getElementById("plugins-list").innerHTML = list.length ? list.map(p => \`
       <div class="stat-row xr-s-101">
         <div>
-          <strong>\${escapeHtml(p.name)}</strong> <span class="mono text-cyan">\${p.id}</span>
-          <div class="muted xr-s-99">v\${p.version} · \${p.type}</div>
+          <strong>\${escapeHtml(p.name)}</strong> <span class="mono text-cyan">\${escapeHtml(p.id)}</span>
+          <div class="muted xr-s-99">v\${escapeHtml(p.version)} · \${escapeHtml(p.type)}</div>
         </div>
         <div class="xr-s-17">
           \s\${p.enabled ? \`<button class="btn btn-ghost" data-xr-action="\${act('pluginAction', p.id, 'disable')}">Disable</button>\` : \`<button class="btn" data-xr-action="\${act('pluginAction', p.id, 'enable')}">Enable</button>\`}
@@ -427,8 +427,8 @@ async function loadApprovalsPanel() {
           <span class="approval-risk-reason">requested \${new Date(a.requestedAt ?? 0).toLocaleTimeString()} · expires \${new Date(a.expiresAt ?? 0).toLocaleTimeString()}</span>
         </div>
         <div class="approval-btns">
-          <button class="btn btn-primary" data-xr-action="decideApproval('\${a.id}', true)">Allow</button>
-          <button class="btn btn-danger" data-xr-action="decideApproval('\${a.id}', false)">Deny</button>
+          <button class="btn btn-primary" data-xr-action="\${act('decideApproval', a.id, true)}">Allow</button>
+          <button class="btn btn-danger" data-xr-action="\${act('decideApproval', a.id, false)}">Deny</button>
         </div>
       </div>\`).join("") : "<div class='muted'>Nothing is waiting on you. Approvals raised by any surface (CLI, chat, triggers) appear here.</div>";
   } catch (e) {

@@ -33,6 +33,7 @@ import { ServiceRegistry } from "../core/service-registry.ts";
 import { LifecycleHook } from "../core/lifecycle.ts";
 import { Tokens } from "../core/tokens.ts";
 import { setSecret, getSecret } from "../security/secrets.ts";
+import { validateProviderUrl } from "../providers/provider-url-guard.ts";
 import { hydrateProviderEnv, secretBrokerSync } from "../security/secret-broker.ts";
 import type {
   RouteRequest,
@@ -277,6 +278,14 @@ export class ProviderService implements LifecycleHook {
     headers?: Record<string, string>;
     capabilities?: any;
   }): Promise<void> {
+    // A5 — SSRF guard, full form (protocol + host ranges + DNS-rebinding
+    // re-check), BEFORE the URL is persisted or fetched. Official provider
+    // hosts are allow-listed inside the guard; private/loopback targets
+    // need XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER=1.
+    const check = await validateProviderUrl(def.baseUrl);
+    if (!check.ok) {
+      throw new Error(`Custom provider URL refused: ${check.reason}`);
+    }
     const configService = this.registry.resolve(Tokens.Config);
     const config = configService.get();
 

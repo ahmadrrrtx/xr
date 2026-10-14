@@ -136,7 +136,7 @@ async function onbRenderCloud() {
       const st = statusMap[p.id] || {};
       const cls = "onb-provider" + (onb.provider === p.id ? " sel" : "") + (st.hasKey ? " haskey" : "") + (st.healthy ? " ready" : "");
       const title = st.hasKey ? "A key is already stored" : "No key yet";
-      return '<button type="button" class="' + cls + '" data-provider="' + escapeHtml(p.id) + '" data-xr-action="onbSelectProvider(\\'' + p.id + '\\')" title="' + title + '">' +
+      return '<button type="button" class="' + cls + '" data-provider="' + escapeHtml(p.id) + '" data-xr-action="' + act('onbSelectProvider', p.id) + '" title="' + title + '">' +
         '<span class="dot" aria-hidden="true"></span><span>' + escapeHtml(p.label) + '</span></button>';
     }).join("");
   } catch (e) {
@@ -207,10 +207,10 @@ async function onbRenderLocal() {
     }
     const actions = [];
     if (rec.runtimeModel && !healthy) {
-      actions.push('<button type="button" class="btn btn-primary" data-xr-action="onbSetLocal(\\'' + rec.runtimeModel + '\\')">Use ' + escapeHtml(rec.runtimeModel) + '</button>');
-      actions.push('<button type="button" class="btn btn-ghost" data-xr-action="copyText(\\'xr models install\\')">Copy install command</button>');
+      actions.push('<button type="button" class="btn btn-primary" data-xr-action="' + act('onbSetLocal', rec.runtimeModel) + '">Use ' + escapeHtml(rec.runtimeModel) + '</button>');
+      actions.push('<button type="button" class="btn btn-ghost" data-xr-action="' + act('copyText', 'xr models install') + '">Copy install command</button>');
     }
-    actions.push('<button type="button" class="btn btn-ghost" data-xr-action="onbGo(\\'models\\')">Open Models panel</button>');
+    actions.push('<button type="button" class="btn btn-ghost" data-xr-action="' + act('onbGo', 'models') + '">Open Models panel</button>');
     box.innerHTML = lines.join("") + '<div class="onb-actions">' + actions.join("") + '</div>';
   } catch (e) {
     box.innerHTML = '<div class="muted">Could not detect local models: ' + escapeHtml(e.message || e) + '</div>';
@@ -237,12 +237,12 @@ async function onbRenderSecurity() {
     const sec = config.security || {};
     const items = [];
     const approvals = sec.requireApproval || [];
-    if (approvals.length) items.push("XR will ask your permission before: <code>" + approvals.join("</code>, <code>") + "</code>.");
+    if (approvals.length) items.push("XR will ask your permission before: <code>" + approvals.map(escapeHtml).join("</code>, <code>") + "</code>.");
     else items.push("Approvals are currently off — consequential actions run without asking.");
     const egress = sec.egressAllowlist || [];
-    if (egress.length) items.push("Outbound network is limited to: <code>" + egress.join("</code>, <code>") + "</code>.");
+    if (egress.length) items.push("Outbound network is limited to: <code>" + egress.map(escapeHtml).join("</code>, <code>") + "</code>.");
     else items.push("No outbound network allow-list is configured.");
-    const backends = ((trust && trust.backends) || []).filter(function (b) { return b.available; }).map(function (b) { return b.placement; });
+    const backends = ((trust && trust.backends) || []).filter(function (b) { return b.available; }).map(function (b) { return escapeHtml(b.placement); });
     if (backends.length) items.push("Isolation: <code>" + backends.join("</code>, <code>") + "</code> available (tier-2 fail-closed).");
     box.innerHTML = "<ul>" + items.map(function (i) { return "<li>" + i + "</li>"; }).join("") + "</ul>";
   } catch (e) {
@@ -335,7 +335,7 @@ function act(fn) {
     if (i > 0) out += ', ';
     var a = args[i];
     if (typeof a === 'number' || typeof a === 'boolean') { out += String(a); continue; }
-    out += "'" + String(a).split(BS).join(BS + BS).split("'").join(BS + "'") + "'";
+    out += "'" + String(a).split("&").join("&amp;").split('"').join("&quot;").split(BS).join(BS + BS).split("'").join(BS + "'") + "'";
   }
   return out + ')';
 }
@@ -564,7 +564,7 @@ function execSpecial(s) {
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "sidebar-label area-toggle";
-        btn.innerHTML = label.textContent.trim() + ' <span class="area-caret" aria-hidden="true"></span>';
+        btn.innerHTML = escapeHtml(label.textContent.trim()) + ' <span class="area-caret" aria-hidden="true"></span>';
         sec.replaceChild(btn, label);
         label = btn;
       }

@@ -18,6 +18,8 @@
  *     (test/daemon/security tests pin both).
  */
 
+import { esc } from "../util/html-escape.ts";
+
 /** Accessible 401 sign-in page (no external assets; CSP allows inline style only). */
 export function authPageHtml(returnPath = "/"): string {
   // The form GETs the URL the user originally asked for, preserving deep links.
@@ -107,9 +109,9 @@ button.submit:hover { filter: brightness(1.1); }
 </html>`;
 }
 
-function escapeAttr(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-}
+// Phase 31 · A2 — attribute escaping uses the canonical esc() (it also
+// covers `>` and `'`, which the hand-rolled copy here used to miss).
+const escapeAttr = esc;
 
 /**
  * Show/hide-token behaviour for the sign-in page. Served as an EXTERNAL

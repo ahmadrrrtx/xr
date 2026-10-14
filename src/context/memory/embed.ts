@@ -11,6 +11,7 @@
  */
 import { loadConfig } from "../../config/config.ts";
 import { embedLimit } from "../../util/concurrency.ts";
+import { validateProviderUrlSync } from "../../providers/provider-url-guard.ts";
 
 const FALLBACK_DIM = 256;
 
@@ -33,7 +34,13 @@ function configuredEmbeddingTarget(): EmbedTarget {
   const providerId = local.provider ?? runtime;
   const runtimeUrl = local.runtimes?.[runtime]?.baseUrl;
   const providerUrl = (config.providers as any)?.[providerId]?.baseUrl;
-  const baseUrl = (process.env.XR_EMBED_URL ?? runtimeUrl ?? providerUrl ?? (runtime === "ollama" ? "http://localhost:11434" : "http://localhost:8000/v1")).replace(/\/$/, "");
+  // A5 — an explicitly custom embedding URL (XR_EMBED_URL) passes the SSRF
+  // guard like any custom provider URL; a refused URL is ignored and the
+  // local target below is used instead. Local runtime URLs and defaults
+  // are first-class local configuration and stay exempt.
+  const envUrl = process.env.XR_EMBED_URL;
+  const customUrl = envUrl && validateProviderUrlSync(envUrl).ok ? envUrl : undefined;
+  const baseUrl = (customUrl ?? runtimeUrl ?? providerUrl ?? (runtime === "ollama" ? "http://localhost:11434" : "http://localhost:8000/v1")).replace(/\/$/, "");
   const value = { runtime, baseUrl, model };
   targetCache = { value, at: Date.now() };
   return value;

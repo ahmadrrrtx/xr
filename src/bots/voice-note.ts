@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { commandExists } from "../util/process.ts";
+import { randomTempFileName } from "./attachment-guard.ts";
 import type { SpeechToText } from "../voice/stt.ts";
 
 export const NO_MODEL_REPLY =
@@ -39,8 +40,10 @@ export interface VoiceNoteDeps {
 const CLOUD = new Set(["groq", "openai"]);
 
 async function defaultConvert(ogg: Uint8Array, dir: string): Promise<Uint8Array> {
-  const inPath = join(dir, "voice.ogg");
-  const outPath = join(dir, "voice.wav");
+  // A4: random temp names inside the already-random private dir — a staged
+  // file's name never derives from anything a sender controls.
+  const inPath = join(dir, randomTempFileName("voice.ogg"));
+  const outPath = join(dir, randomTempFileName("voice.wav"));
   await writeFile(inPath, ogg, { mode: 0o600 });
   await new Promise<void>((resolve, reject) => {
     execFile(

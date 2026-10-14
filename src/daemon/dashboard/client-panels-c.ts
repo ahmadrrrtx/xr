@@ -94,7 +94,7 @@ function renderOverviewScan(threats, checks) {
     <div class="xr-s-103">
       <div class="xr-s-104">
         <span>\${escapeHtml(t.title)}</span>
-        <span class="badge badge-red">\${t.severity}</span>
+        <span class="badge badge-red">\${escapeHtml(t.severity)}</span>
       </div>
       <div class="muted xr-s-99">\${escapeHtml(t.details)}</div>
     </div>
@@ -128,11 +128,11 @@ async function loadShieldProcesses() {
     const list = data.processes ?? [];
     body.innerHTML = list.length ? list.map(p => \`
       <tr class="proc-row">
-        <td class="mono">\${p.pid}</td>
-        <td class="mono">\s\${p.ppid}</td>
+        <td class="mono">\${escapeHtml(p.pid)}</td>
+        <td class="mono">\s\${escapeHtml(p.ppid)}</td>
         <td class="xr-s-70">\${escapeHtml(p.name)}</td>
-        <td class="mono">\${p.cpu}%</td>
-        <td class="mono">\${p.memory} MB</td>
+        <td class="mono">\${escapeHtml(p.cpu)}%</td>
+        <td class="mono">\${escapeHtml(p.memory)} MB</td>
         <td><span class="badge \${p.unsigned ? "badge-amber" : "badge-green"}">\${p.unsigned ? "unsigned":"verified"}</span></td>
         <td><button class="btn btn-danger xr-s-67" data-xr-action="\${act('killProcess', p.pid, p.name)}">Kill</button></td>
       </tr>
@@ -159,7 +159,7 @@ async function loadShieldStartup() {
     body.innerHTML = list.length ? list.map(i => \`
       <tr>
         <td class="xr-s-70">\${escapeHtml(i.name)}</td>
-        <td><span class="badge badge-gray">\${i.type}</span></td>
+        <td><span class="badge badge-gray">\${escapeHtml(i.type)}</span></td>
         <td class="muted mono">\${escapeHtml(i.location)}</td>
         <td><span class="badge \${i.suspicious ? "badge-red":"badge-green"}">\s\${i.suspicious ? "suspicious":"clean"}</span></td>
       </tr>
@@ -200,7 +200,7 @@ async function loadShieldBrowser() {
     const info = data.browser?.[0] ?? {};
 
     metrics.innerHTML = \`
-      <div class="stat-row"><div class="stat-key">Browser target</div><div class="stat-val">\${info.browser || "Chrome"}</div></div>
+      <div class="stat-row"><div class="stat-key">Browser target</div><div class="stat-val">\${escapeHtml(info.browser || "Chrome")}</div></div>
       <div class="stat-row"><div class="stat-key">Cookies privacy check</div><div class="stat-val \${info.cookiesCheck?.secure ? "text-green":"text-amber"}">\${info.cookiesCheck?.secure ? "Secure secure-only":"warning cached"}</div></div>
     \`;
 
@@ -304,7 +304,7 @@ async function loadBudgetPanel() {
     // Charts/bars for top models
     document.getElementById("bud-models").innerHTML = (data.byModel ?? []).map(row => \`
       <div class="stat-row">
-        <span class="stat-key mono">\${row.model}</span>
+        <span class="stat-key mono">\${escapeHtml(row.model)}</span>
         <div class="xr-s-107">
           <div class="health-bar xr-s-108"><div class="health-bar-fill cyan xr-s-109"></div></div>
           <span class="stat-val text-cyan">$\${Number(row.usd ?? 0).toFixed(4)}</span>
@@ -314,7 +314,7 @@ async function loadBudgetPanel() {
 
     document.getElementById("bud-providers").innerHTML = (data.byProvider ?? []).map(row => \`
       <div class="stat-row">
-        <span class="stat-key">\${row.provider}</span>
+        <span class="stat-key">\${escapeHtml(row.provider)}</span>
         <span class="stat-val">$\${Number(row.usd ?? 0).toFixed(4)}</span>
       </div>
     \`).join("") || "<div class='muted'>No provider usage.</div>";
@@ -322,7 +322,7 @@ async function loadBudgetPanel() {
     document.getElementById("bud-recent").innerHTML = (data.recent ?? []).map(r => \`
       <div class="stat-row">
         <span class="stat-key mono">\${new Date(r.at).toLocaleTimeString()}</span>
-        <span class="stat-val">$\${Number(r.usd ?? 0).toFixed(4)} · \${r.tokens} tokens</span>
+        <span class="stat-val">$\${Number(r.usd ?? 0).toFixed(4)} · \${escapeHtml(r.tokens)} tokens</span>
       </div>
     \`).join("") || "<div class='muted'>No cost records.</div>";
   } catch {}
@@ -393,7 +393,7 @@ function normalizeMarketplaceSkill(s) {
     verification: s.verification ?? "community"
   };
 }
-function skillInitials(name) { return String(name || "XR").split(/\\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase(); }
+function skillInitials(name) { return escapeHtml(String(name || "XR").split(/\\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase()); }
 function categoryIcon(c) {
   const CAT = {
     developer:  '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="14" height="14"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
@@ -592,8 +592,8 @@ function renderPaletteResults(q) {
       <div class="palette-item-icon">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
-      <span>\${item.label}</span>
-      \${item.key ? \`<span class="palette-key">\${item.key}</span>\` : ""}
+      <span>\${escapeHtml(item.label)}</span>
+      \${item.key ? \`<span class="palette-key">\${escapeHtml(item.key)}</span>\` : ""}
     </div>
   \`).join("");
   // Combobox active descendant drives what Enter activates (4.1.2).

@@ -75,6 +75,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [profile.release]
+# Phase 31 · A7 — release builds strip symbols and never ship debug info
+# (`debug = false` is the release default; stated so it cannot drift).
+# Frontend source maps are a Vite concern: vite.config.ts enables them
+# only under TAURI_ENV_DEBUG, so production bundles carry no .map files.
 strip = true
+debug = false
 lto = true
 codegen-units = 1

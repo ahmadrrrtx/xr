@@ -15,6 +15,7 @@
  * so untrusted bytes are labelled with the channel they arrived on.
  */
 import { checkSize, classifyAttachment, extractAttachment } from "../bots/media.ts";
+import { CappedByteSink, MAX_ATTACHMENT_BYTES } from "../bots/attachment-guard.ts";
 import { transcribeVoiceNote } from "../bots/voice-note.ts";
 import type { SpeechToText } from "../voice/stt.ts";
 import type { DiscordAttachment } from "./types.ts";
@@ -55,7 +56,20 @@ export async function downloadAttachment(deps: AttachmentDeps, url: string): Pro
   }
   const res = await deps.fetchFn(url).catch(() => null);
   if (!res?.ok) return null;
-  return new Uint8Array(await res.arrayBuffer());
+  // A4: stream through a capped sink — an oversized transfer aborts while
+  // streaming instead of landing in memory first. The sender's declared
+  // size (already checked above) is never trusted on its own.
+  const sink = new CappedByteSink(Math.min(deps.cap(), MAX_ATTACHMENT_BYTES));
+  try {
+    if (res.body && typeof res.body.getReader === "function") {
+      return await sink.consume(res.body as ReadableStream<Uint8Array>);
+    }
+    const buf = new Uint8Array(await res.arrayBuffer());
+    sink.write(buf); // throws past the cap
+    return sink.concat();
+  } catch {
+    return null;
+  }
 }
 
 /**
