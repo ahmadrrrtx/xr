@@ -175,7 +175,9 @@ export function htmlResponse(body: string): Response {
        */
       "content-security-policy":
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; " +
-        "connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; " +
+        // Phase 31 · A1 — the dashboard may be served under a LAN hostname
+        // while the API lives on loopback: allow both loopback transports.
+        "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; " +
         "form-action 'self'; object-src 'none'; upgrade-insecure-requests",
     },
   });

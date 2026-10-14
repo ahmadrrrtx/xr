@@ -63,8 +63,11 @@ export default function TermsPage() {
             believe a session has been compromised, revoke it from Settings — the revoke is immediate.
           </p>
           <p>
-            You must be at least 16, or the age of digital consent where you live, whichever is higher. One
-            person, one account. Service accounts for automation are fine.
+            By creating an account you confirm that you are at least 13, and at least 18 where the law
+            sets the threshold there — in India under the DPDP Act, and everywhere for holding a Business
+            account in your own name — or that you have a guardian&rsquo;s consent. One person, one account.
+            Service accounts for automation are fine. The hosted service is not offered in jurisdictions
+            subject to comprehensive international sanctions.
           </p>
         </Section>
 
@@ -93,9 +96,14 @@ export default function TermsPage() {
               for and then it stops. There is no cancellation fee and no retention call.
             </li>
             <li>
-              <strong>Refunds.</strong> If we failed to provide the service, we refund the unused portion,
-              and we will do it without an argument. If you changed your mind after using it, we do not
-              refund the current period — but you can cancel and be charged nothing more.
+              <strong>Refunds.</strong> The{" "}
+              <Link href="/refund" className="text-native-cyan hover:underline">
+                refund policy
+              </Link>{" "}
+              is part of these terms. In short: a 14-day money-back guarantee on your first charge, and if
+              we failed to provide the service we refund the unused portion without an argument. Outside
+              those cases the current period is not refunded — but you can cancel and be charged nothing
+              more.
             </li>
             <li>
               <strong>Failed payments.</strong> Stripe retries automatically. Team features keep working
@@ -126,6 +134,19 @@ export default function TermsPage() {
               have never refused a genuinely small team a discount.
             </li>
           </ul>
+          <p>
+            <strong>Copyright.</strong> If your work appears in the hosted service without permission,
+            send a takedown notice under our{" "}
+            <Link href="/legal/dmca" className="text-native-cyan hover:underline">
+              DMCA policy
+            </Link>
+            . We act on valid notices and accept counter-notices. Designated agent: to be registered with
+            the US Copyright Office at launch; email{" "}
+            <a href="mailto:dmca@xr.rrrtx.ai" className="console-mono text-native-cyan hover:underline">
+              dmca@xr.rrrtx.ai
+            </a>
+            .
+          </p>
           <p>
             Security research is explicitly permitted and encouraged. Report it through{" "}
             <a href="mailto:security@xr.rrrtx.ai" className="console-mono text-native-cyan hover:underline">
@@ -171,6 +192,11 @@ export default function TermsPage() {
             you paid us in the twelve months before the claim. We are not liable for indirect or consequential
             loss. Nothing here limits liability that cannot be limited: death, personal injury, fraud, or
             anything else a jurisdiction refuses to let a contract waive.
+          </p>
+          <p>
+            <strong>Indemnification (Business).</strong> You will indemnify XR against claims, damages and
+            reasonable legal costs arising from your content, your users&rsquo; use of the service, or your
+            breach of these terms — except where the claim was caused by our own breach.
           </p>
         </Section>
 

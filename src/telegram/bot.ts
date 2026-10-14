@@ -30,6 +30,7 @@ import { BotRuntime } from "../bots/runtime.ts";
 import { startTypingPulse } from "../bots/typing.ts";
 import type { ApprovalRequest } from "../bots/approvals.ts";
 import { checkSize, extractAttachment, classifyAttachment } from "./attachments.ts";
+import { CappedByteSink, MAX_ATTACHMENT_BYTES } from "../bots/attachment-guard.ts";
 import { transcribeVoice } from "./voice.ts";
 import type { ChatSettings } from "./state.ts";
 import type { SpeechToText } from "../voice/stt.ts";
@@ -206,7 +207,21 @@ export class TelegramBot {
     if (!path) return null;
     const res = await this.f(`${FILE_API(this.deps.token)}/${path}`);
     if (!res.ok) return null;
-    return new Uint8Array(await res.arrayBuffer());
+    // A4: stream through a capped sink so an oversized file aborts while
+    // downloading; the metadata size checked by callers is never the only
+    // enforcement. (Telegram's getFile path implies ≤20 MB server-side;
+    // the sink is XR's own guarantee.)
+    const sink = new CappedByteSink(MAX_ATTACHMENT_BYTES);
+    try {
+      if (res.body && typeof res.body.getReader === "function") {
+        return await sink.consume(res.body as ReadableStream<Uint8Array>);
+      }
+      const buf = new Uint8Array(await res.arrayBuffer());
+      sink.write(buf);
+      return sink.concat();
+    } catch {
+      return null;
+    }
   }
 
   // ── approvals ────────────────────────────────────────────────────────────

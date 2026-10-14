@@ -18,6 +18,25 @@
  */
 import { wrapUntrusted } from "../context/injection.ts";
 import { extractPdfText } from "../research/pdf-text.ts";
+import {
+  extensionBlocked,
+  looksLikeExecutableScript,
+  sanitizeFileLabel,
+  validateAttachmentBytes,
+} from "./attachment-guard.ts";
+
+export {
+  BLOCKED_EXTENSIONS,
+  CappedByteSink,
+  CapExceededError,
+  MAX_ATTACHMENT_BYTES,
+  MAX_DOCUMENT_BYTES,
+  MAX_IMAGE_BYTES,
+  extensionBlocked,
+  randomTempFileName,
+  sanitizeFileLabel,
+  sniffKind,
+} from "./attachment-guard.ts";
 
 export const DOCUMENT_CAP_BYTES = 5 * 1024 * 1024;
 export const PHOTO_CAP_BYTES = 2 * 1024 * 1024;
@@ -33,6 +52,12 @@ const TEXT_EXT = new Set([
 
 export type AttachmentKind = "text" | "pdf" | "image" | "unsupported";
 
+/** Source extensions whose contents are expected to be code (A4 scan exemption). */
+const CODE_EXT = new Set([
+  "js", "jsx", "ts", "tsx", "mjs", "cjs", "py", "rb", "go", "rs", "java", "kt", "swift",
+  "c", "h", "cc", "cpp", "hpp", "cs", "php", "sql", "vue", "svelte", "gradle",
+]);
+
 /** What the platform metadata calls the file, which decides the cap. */
 export type AttachmentSizeKind = "document" | "photo" | "voice" | "audio" | "image";
 
@@ -40,6 +65,9 @@ export function classifyAttachment(name: string, mime?: string): AttachmentKind 
   const lower = (name || "").toLowerCase();
   const ext = lower.includes(".") ? lower.split(".").pop()! : lower;
   const m = (mime ?? "").toLowerCase();
+  // A4: executable/installer/script extensions are refused up front, before
+  // any download, whatever the declared MIME says.
+  if (extensionBlocked(lower)) return "unsupported";
   if (m === "application/pdf" || ext === "pdf") return "pdf";
   if (m.startsWith("image/") && !m.includes("svg")) return "image";
   if (m.startsWith("text/") || m === "application/json" || TEXT_EXT.has(ext)) return "text";
@@ -104,7 +132,13 @@ export async function extractAttachment(input: {
   quarantineKind: string;
 }): Promise<ExtractedAttachment> {
   const kind = classifyAttachment(input.name, input.mime);
-  const label = `attachment ${input.name}`;
+  const label = `attachment ${sanitizeFileLabel(input.name)}`;
+  // A4: the downloaded bytes get the final say — magic-byte sniffing, the
+  // executable blocklist and the actual byte count override filename/MIME.
+  if (kind !== "unsupported") {
+    const verdict = validateAttachmentBytes({ name: input.name, kind, bytes: input.bytes });
+    if (!verdict.ok) return { ok: false, note: verdict.reason };
+  }
   if (kind === "image") {
     return {
       ok: true,
@@ -126,6 +160,12 @@ export async function extractAttachment(input: {
   if (kind === "text") {
     const dec = decodeText(input.bytes);
     if (!dec.ok) return { ok: false, note: "That file looks binary, so I can't use it as text." };
+    // A4: a runnable script smuggled in under a document name is refused;
+    // genuine code files (known source extensions) stay welcome as data.
+    const ext = (input.name || "").toLowerCase().split(".").pop() ?? "";
+    if (!CODE_EXT.has(ext) && looksLikeExecutableScript(dec.text)) {
+      return { ok: false, note: "That file looks like a script, so I can't accept it as a document." };
+    }
     const suffix = dec.truncated ? "\n[truncated to 30 KB]" : "";
     return { ok: true, block: wrapUntrusted(dec.text + suffix, { kind: input.quarantineKind, label }, TEXT_CAP_CHARS + 64) };
   }

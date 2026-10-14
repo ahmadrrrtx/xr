@@ -67,6 +67,13 @@ process.env.TEMP = root; // Windows parity
 // the black-box CLI suites (which spawn the real CLI with keying enabled).
 process.env.XR_AUDIT_NO_AUTOKEY = "1";
 
+// Phase 31 · A5: the suite's stub providers are self-hosted OpenAI-compatible
+// servers on 127.0.0.1 — exactly what the SSRF escape hatch exists for. The
+// suite (and the CLI children it spawns, which inherit this env) opts in
+// explicitly; production never sets this. Guard unit tests pass their own
+// env/options and are unaffected.
+process.env.XR_DANGEROUS_ALLOW_PRIVATE_PROVIDER ??= "1";
+
 if (KEEP) {
   console.log(`[suite-tmp] XR_TEST_TMP_KEEP=1 — suite temp root kept at ${root}`);
 } else {

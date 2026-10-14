@@ -38,7 +38,7 @@ export default function LegalIndexPage() {
               href: "/legal/privacy",
               title: "Privacy policy",
               blurb:
-                "What the cloud service stores, why, for how long, and the list of things it never receives. Includes the four sub-processors and the retention windows.",
+                "What the cloud service stores, why, for how long, and the list of things it never receives. Retention windows, your rights, and where the sub-processor list lives.",
               also: "/privacy",
             },
             {
@@ -47,6 +47,34 @@ export default function LegalIndexPage() {
               blurb:
                 "What you may do with the hosted service, what we promise, what we do not, and how cancellation and refunds work. The licence for the local software is MIT and is not restated here.",
               also: "/terms",
+            },
+            {
+              href: "/cookies",
+              title: "Cookie policy",
+              blurb:
+                "Every cookie and browser-storage entry we use. Essential only — there is no analytics, advertising or session-replay inventory to confess to.",
+              also: "/cookies",
+            },
+            {
+              href: "/refund",
+              title: "Refund policy",
+              blurb:
+                "The 14-day money-back guarantee on a first Business charge, the trial rules, and how to ask. Referenced from section 3 of the terms.",
+              also: "/refund",
+            },
+            {
+              href: "/legal/dmca",
+              title: "Copyright & the DMCA",
+              blurb:
+                "How to send a takedown notice or a counter-notice for the hosted service, in the form the statute asks for.",
+              also: "/legal/dmca",
+            },
+            {
+              href: "/legal/notices",
+              title: "Third-party notices",
+              blurb:
+                "The fonts, icons and libraries XR is built on — Inter, JetBrains Mono, Orbitron, Lucide, Shiki — and their licences.",
+              also: "/legal/notices",
             },
           ].map((doc) => (
             <Link
@@ -59,7 +87,9 @@ export default function LegalIndexPage() {
                   {doc.title}
                 </div>
                 <p className="mt-2 max-w-xl text-[12.5px] leading-relaxed text-native-text-muted">{doc.blurb}</p>
-                <p className="console-mono mt-3 text-[11px] text-native-text-dim">also at {doc.also}</p>
+                {doc.also !== doc.href && (
+                  <p className="console-mono mt-3 text-[11px] text-native-text-dim">also at {doc.also}</p>
+                )}
               </div>
               <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-native-text-dim transition group-hover:translate-x-0.5 group-hover:text-native-cyan" />
             </Link>

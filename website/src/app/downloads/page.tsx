@@ -2,24 +2,27 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { PageHeader } from "@/components/PageHeader";
 import { InstallCmd } from "@/components/InstallCmd";
-import { Apple, Binary, Code2, Terminal as Term, ExternalLink, Package } from "lucide-react";
+import { Apple, Binary, Terminal as Term, ExternalLink, Package } from "lucide-react";
 import { WindowsIcon } from "@/components/icons";
 import { site } from "@/lib/site";
 
-export const metadata: Metadata = { title: "Downloads" };
+export const metadata: Metadata = {
+  title: "Downloads",
+  description:
+    "Download XR for macOS, Windows and Linux, or install the CLI with npm. Open-source and local-first; SHA-256 hashes are published with every GitHub release.",
+};
 
+const RELEASES = "https://github.com/ahmadrrrtx/xr/releases";
+
+// Phase 31 · C15 — before per-platform binaries are attached to a release,
+// every card goes to the GitHub releases page and says so. No dead links.
 const platforms = [
-  { icon: Apple, label: "macOS", note: "Universal · Apple Silicon & Intel", version: site.version, href: "#" },
-  { icon: WindowsIcon, label: "Windows", note: "Windows 10+ · WSL2 recommended", version: site.version, href: "#" },
-  { icon: Binary, label: "Linux", note: "x86_64 & arm64 · .deb / .rpm / .tar.gz", version: site.version, href: "#" },
-];
-
-const editors = [
-  { icon: Code2, label: "VS Code", note: "Extension pack", href: "#" },
-  { icon: Term, label: "Neovim", note: "Plugin", href: "#" },
-  { icon: Code2, label: "JetBrains", note: "IntelliJ / WebStorm / PyCharm", href: "#" },
-  { icon: Code2, label: "Zed", note: "Extension", href: "#" },
-  { icon: Code2, label: "Cursor", note: "Integration", href: "#" },
+  { icon: Apple, label: "macOS (Apple Silicon)", note: "macOS 13+ · ARM64 build", version: site.version, href: RELEASES },
+  { icon: Apple, label: "macOS (Intel)", note: "macOS 13+ · x86_64 build", version: site.version, href: RELEASES },
+  { icon: WindowsIcon, label: "Windows x64", note: "Windows 10+ · WSL2 recommended", version: site.version, href: RELEASES },
+  { icon: Binary, label: "Linux (AppImage)", note: "Ubuntu 22.04+ / Fedora 38+ · portable", version: site.version, href: RELEASES },
+  { icon: Binary, label: "Linux (.deb)", note: "Ubuntu 22.04+ / Debian · package install", version: site.version, href: RELEASES },
+  { icon: Term, label: "npm CLI", note: "Any platform with Node 20+ · `npm i -g @rrrtx/xr`", version: site.version, href: "#install" },
 ];
 
 export default function DownloadsPage() {
@@ -32,7 +35,7 @@ export default function DownloadsPage() {
       />
       <section>
         <div className="mx-auto max-w-5xl px-6">
-          <div className="card p-8 text-center">
+          <div id="install" className="card p-8 text-center scroll-mt-32">
             <div className="text-sm text-zinc-400">Quick install</div>
             <div className="mt-4 flex justify-center">
               <div className="w-full max-w-md">
@@ -45,27 +48,42 @@ export default function DownloadsPage() {
           <h2 className="mt-14 text-xl font-semibold text-white">Platforms</h2>
           <div className="mt-5 grid md:grid-cols-3 gap-5">
             {platforms.map((p) => (
-              <a key={p.label} href={p.href} className="card p-6 group flex flex-col">
+              <a
+                key={p.label}
+                href={p.href}
+                {...(p.href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
+                className="card p-6 group flex flex-col"
+              >
                 <p.icon className="h-7 w-7 text-zinc-300" />
                 <div className="mt-4 text-lg font-semibold text-white">{p.label}</div>
                 <div className="text-xs text-zinc-500 mt-1">v{p.version}</div>
                 <div className="text-sm text-zinc-400 mt-2 flex-1">{p.note}</div>
                 <div className="mt-4 btn btn-ghost w-full justify-center group-hover:text-white">
-                  <Package className="h-4 w-4" /> Download
+                  <Package className="h-4 w-4" /> {p.href === RELEASES ? "Download from GitHub" : "Install below"}
                 </div>
               </a>
             ))}
           </div>
 
-          <h2 className="mt-14 text-xl font-semibold text-white">Editor integrations</h2>
-          <div className="mt-5 grid md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {editors.map((e) => (
-              <a key={e.label} href={e.href} className="card p-5 group">
-                <e.icon className="h-5 w-5 text-zinc-400" />
-                <div className="mt-3 text-sm font-medium text-white">{e.label}</div>
-                <div className="text-xs text-zinc-500 mt-0.5">{e.note}</div>
-              </a>
-            ))}
+          <div className="mt-10 grid gap-3 text-sm text-zinc-400 md:grid-cols-2">
+            <div className="card p-5">
+              <div className="font-medium text-white">Requirements</div>
+              <p className="mt-1.5 leading-relaxed">
+                macOS 13 or later, Windows 10 or later, Ubuntu 22.04+ / Fedora 38+ on Linux. The npm CLI
+                needs Node 20+.
+              </p>
+            </div>
+            <div className="card p-5">
+              <div className="font-medium text-white">Checksums</div>
+              <p className="mt-1.5 leading-relaxed">
+                SHA-256 hashes are published with every GitHub release — verify your download against the
+                hash on the{" "}
+                <a href={RELEASES} target="_blank" rel="noreferrer" className="text-violet-300 hover:underline">
+                  releases page
+                </a>{" "}
+                before running it.
+              </p>
+            </div>
           </div>
 
           <div className="mt-14 card p-8">

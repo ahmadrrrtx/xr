@@ -21,12 +21,15 @@ describe("C-1 — the served client script is valid JavaScript", () => {
   });
 
   test("no broken escaped-quote attribute patterns remain (lost-backslash bug)", () => {
-    // the broken form was `('' + id + '')` inside a data-xr-action — a lost
-    // backslash from the template layer. The correct idiom is \'' + id + '\'.
+    // The broken form was `('' + id + '')` inside a data-xr-action \u2014 a lost
+    // backslash from the template layer. Phase 31 \u00b7 A2 replaced the old
+    // hand-quoted idiom (which broke out of the attribute when an id held a
+    // quote) with act(), the escaping serializer.
     expect(DASHBOARD_SCRIPT).not.toMatch(/data-xr-action="onbSelectProvider\(''/);
     expect(DASHBOARD_SCRIPT).not.toMatch(/data-xr-action="onbSetLocal\(''/);
-    expect(DASHBOARD_SCRIPT).toContain("data-xr-action=\"answerApproval(\\''+a.id+'\\',true)\"");
-    expect(DASHBOARD_SCRIPT).toContain("data-xr-action=\"onbSelectProvider(\\'' + p.id + '\\')\"");
+    expect(DASHBOARD_SCRIPT).not.toMatch(/data-xr-action="answerApproval\(/);
+    expect(DASHBOARD_SCRIPT).toContain("act('answerApproval', a.id, true)");
+    expect(DASHBOARD_SCRIPT).toContain("act('onbSelectProvider', p.id)");
   });
 });
 

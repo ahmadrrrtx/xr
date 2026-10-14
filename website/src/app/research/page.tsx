@@ -4,7 +4,11 @@ import { site } from "@/lib/site";
 import { research } from "@/lib/data";
 import { FileText, ExternalLink } from "lucide-react";
 
-export const metadata: Metadata = { title: "Research" };
+export const metadata: Metadata = {
+  title: "Research",
+  description:
+    "XR research notes and benchmarks, published with their methods so the numbers can be checked.",
+};
 
 export default function ResearchPage() {
   return (

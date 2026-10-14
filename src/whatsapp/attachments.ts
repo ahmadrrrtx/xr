@@ -100,6 +100,12 @@ export async function collectMediaBlocks(
       notes.push(`I couldn't download ${name}.`);
       continue;
     }
+    // A4: the protocol download is opaque (no stream to cap), so the bytes
+    // in hand are re-checked against the live cap — metadata can lie.
+    if (bytes.length > deps.cap()) {
+      notes.push(`That file is ${(bytes.length / 1048576).toFixed(1)} MB; the limit here is ${(deps.cap() / 1048576).toFixed(1)} MB.`);
+      continue;
+    }
     const res = await extractAttachment({ name, mime: item.mime, bytes, quarantineKind: "whatsapp_attachment" });
     if (res.ok && res.block) blocks.push(res.block);
     else if (res.note) notes.push(res.note);

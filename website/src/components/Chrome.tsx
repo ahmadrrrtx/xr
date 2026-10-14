@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 
+import { CookieBanner } from "@/components/CookieBanner";
 import { Footer } from "@/components/Footer";
 import { Nav } from "@/components/Nav";
 
@@ -31,13 +32,20 @@ export function Chrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
   const bare = pathname.startsWith("/dashboard") || pathname.startsWith("/auth");
 
-  if (bare) return <main className="min-h-screen">{children}</main>;
+  if (bare) return (
+    <main id="main-content" className="min-h-screen">
+      {children}
+    </main>
+  );
 
   return (
     <>
       <Nav />
-      <main>{children}</main>
+      <main id="main-content">{children}</main>
       <Footer />
+      {/* Phase 31 · B5 — essential-cookies acknowledgement. Marketing branch
+          only: the console and auth flows never see it. */}
+      <CookieBanner />
     </>
   );
 }

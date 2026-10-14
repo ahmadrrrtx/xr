@@ -41,7 +41,7 @@ $ErrorActionPreference = 'Stop'
 
 $XrRepo = 'ahmadrrrtx/xr'
 $XrBranch = 'main'
-$Version = '1.0.0'
+$Version = '1.1.0'
 
 function Write-XrStep { param([string]$Message) Write-Host "  > $Message" -ForegroundColor Cyan }
 function Write-XrOk { param([string]$Message) Write-Host "  [ok] $Message" -ForegroundColor Green }

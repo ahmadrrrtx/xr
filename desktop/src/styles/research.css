@@ -1044,3 +1044,42 @@
     opacity: 1;
   }
 }
+
+/* ─── Report outline (Phase 31 · E4) ─────────────────────────────────────── */
+.xr-outline {
+  margin: 18px 0 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--bg-raised);
+}
+.xr-outline-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.xr-outline ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.xr-outline li button {
+  display: block;
+  width: 100%;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.xr-outline li button:hover {
+  background: var(--bg-ink);
+  color: var(--text-primary);
+}

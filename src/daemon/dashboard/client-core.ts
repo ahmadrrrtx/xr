@@ -267,7 +267,7 @@ async function loadDashboard() {
       if (broken.length) {
         attention.push({
           label: broken.length + " run" + (broken.length > 1 ? "s" : "") + " failed or interrupted",
-          detail: escapeHtml(broken[0].title || broken[0].id),
+          detail: broken[0].title || broken[0].id,
           panel: "sessions"
         });
       }
@@ -280,9 +280,9 @@ async function loadDashboard() {
       attnEl.hidden = !attention.length;
       attnList.innerHTML = attention.map(a => \`
         <div class="stat-row">
-          <span class="stat-val">\${a.label}</span>
-          <span class="stat-key truncate">\${a.detail}</span>
-          <button class="btn btn-ghost xr-s-2" data-xr-action="navigateTo('\${a.panel}')">Open</button>
+          <span class="stat-val">\${escapeHtml(a.label)}</span>
+          <span class="stat-key truncate">\${escapeHtml(a.detail)}</span>
+          <button class="btn btn-ghost xr-s-2" data-xr-action="\${act('navigateTo', a.panel)}">Open</button>
         </div>\`).join("");
     }
 
@@ -302,7 +302,7 @@ async function loadDashboard() {
       document.getElementById("h-val-local").textContent = m.current?.healthy ? "Reachable" : "Offline";
       document.getElementById("h-cell-local").className = "matrix-cell-status " + (m.current?.healthy ? "green" : "red");
       document.getElementById("h-val-provider").textContent = selected.runtime ?? "—";
-      document.getElementById("dash-hardware-summary").innerHTML = "<h3>System Specs</h3>" + (m.hardware?.summary || "Local specs detected OK.");
+      document.getElementById("dash-hardware-summary").innerHTML = "<h3>System Specs</h3>" + escapeHtml(m.hardware?.summary || "Local specs detected OK.");
     }
     if (providers.status === "fulfilled" || models.status === "fulfilled") {
       const pr = providers.status === "fulfilled" ? providers.value : null;
@@ -340,8 +340,8 @@ async function loadDashboard() {
       ? entries.map(e => \`
           <div class="stat-row">
             <span class="stat-key">\${new Date(e.created_at).toLocaleTimeString()}</span>
-            <span class="stat-val mono truncate xr-s-54">\${e.event}</span>
-            <span class="stat-val mono">\${(e.hash ?? "").slice(0, 8)}</span>
+            <span class="stat-val mono truncate xr-s-54">\${escapeHtml(e.event)}</span>
+            <span class="stat-val mono">\${escapeHtml((e.hash ?? "").slice(0, 8))}</span>
           </div>\`).join("")
       : "<div class='muted'>No logs recorded yet.</div>";
 

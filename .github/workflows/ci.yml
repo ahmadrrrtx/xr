@@ -99,6 +99,15 @@ jobs:
       - name: Typecheck (root program + desktop program)
         run: bun run typecheck
 
+      # Phase 31 · A11 — production dependency vulnerability gate. Bun has
+      # no `--environment production` audit flag, so the script splits the
+      # production graph itself (BFS from package.json dependencies) and
+      # fails on HIGH/CRITICAL advisories reachable from it; dev-only
+      # advisories are reported but never block. Runs here so quality-gate
+      # (which needs this job) aggregates it without a new job.
+      - name: Audit production dependencies (A11)
+        run: bash scripts/audit-deps.sh
+
   # ── 2. Identity + claim invariants: one source of truth for both ───────────
   # Phase 0 · T1/T2. The previous job checked only 3 of 6 surfaces, which is why
   # README (3.1.6) and the installers (1.0.0) drifted from version.ts (7.0.0)

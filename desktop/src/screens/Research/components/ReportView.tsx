@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { CodeBlock } from '@/screens/Chat/components/CodeBlock';
+import { headingSlug, plainHeading, reportOutline } from '@/research/core';
 import { fmtAgo, fmtCost, isLocalSource, rewriteCitations, type CitationIndex, type Contradiction, type Stats, type UiDepth, type UiSource } from '@/research/core';
 import { useResearchStore } from '@/stores/researchStore';
 
@@ -45,6 +46,12 @@ function CitationLink({ href, children, numberFor, byId }: { href: string; child
 export const ReportMarkdown = memo(function ReportMarkdown({ report, index, sources }: { report: string; index: CitationIndex; sources: UiSource[] }) {
   const byId = useMemo(() => new Map(sources.map((s) => [s.id, s])), [sources]);
   const content = useMemo(() => rewriteCitations(report, index), [report, index]);
+  const headingId = (children: React.ReactNode): string => {
+    const text = React.Children.toArray(children)
+      .map((c) => (typeof c === 'string' ? c : ''))
+      .join('');
+    return `report-${headingSlug(plainHeading(text))}`;
+  };
   return (
     <div className="xr-prose">
       <ReactMarkdown
@@ -84,6 +91,9 @@ export const ReportMarkdown = memo(function ReportMarkdown({ report, index, sour
               <table {...p} />
             </div>
           ),
+          h1: (p) => <h1 id={headingId(p.children)}>{p.children}</h1>,
+          h2: (p) => <h2 id={headingId(p.children)}>{p.children}</h2>,
+          h3: (p) => <h3 id={headingId(p.children)}>{p.children}</h3>,
           input: (p) => (p.type === 'checkbox' ? <input {...p} disabled aria-label="task item" /> : null),
         }}
       >
@@ -170,6 +180,33 @@ interface Props {
   partialNote: string | null;
 }
 
+function ReportOutline({ body }: { body: string }) {
+  const reduced = useReducedMotion();
+  const outline = useMemo(() => reportOutline(body), [body]);
+  if (outline.length < 2) return null;
+  return (
+    <nav aria-label="Report outline" className="xr-outline" data-testid="report-outline">
+      <p className="xr-outline-title">Outline</p>
+      <ul>
+        {outline.map((entry) => (
+          <li key={entry.slug} style={{ paddingLeft: `${(entry.level - 1) * 12}px` }}>
+            <button
+              type="button"
+              onClick={() =>
+                document
+                  .getElementById(`report-${entry.slug}`)
+                  ?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
+              }
+            >
+              {entry.text}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
 export function ReportView({ topic, report, index, sources, contradictions, stats, endedAt, depth, provider, model, partialReason, partialNote }: Props) {
   const byId = useMemo(() => new Map(sources.map((s) => [s.id, s])), [sources]);
   // "Generated X ago" ticks once a minute (the only timer in the article).
@@ -185,6 +222,7 @@ export function ReportView({ topic, report, index, sources, contradictions, stat
   return (
     <article className="xr-article" data-testid="report" aria-labelledby="xr-report-title">
       <h1 id="xr-report-title">{topic}</h1>
+      <ReportOutline body={body} />
       <div className="meta">
         <span>Generated {endedAt ? fmtAgo(endedAt, now) : 'just now'}</span>
         <span aria-hidden="true">·</span>

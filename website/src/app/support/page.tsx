@@ -4,7 +4,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { BookOpen, MessageCircle, Mail, ArrowRight } from "lucide-react";
 import { GithubIcon } from "@/components/icons";
 
-export const metadata: Metadata = { title: "Support" };
+export const metadata: Metadata = {
+  title: "Support",
+  description:
+    "Get help with XR: documentation, the issue tracker, and how to report a bug with useful detail.",
+};
 
 const channels = [
   { icon: BookOpen, title: "Documentation", desc: "Guides, references, and tutorials for every XR feature.", cta: "Read docs", href: "/docs" },

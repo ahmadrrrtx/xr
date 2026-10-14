@@ -4,6 +4,7 @@
  */
 
 import { OpenAICompatProvider } from "./openai-compat.ts";
+import { validateProviderUrlSync } from "./provider-url-guard.ts";
 import type { ProviderCapabilitiesFlags } from "../core/types.ts";
 
 export interface CustomProviderOptions {
@@ -20,6 +21,14 @@ export interface CustomProviderOptions {
 
 export class CustomProvider extends OpenAICompatProvider {
   constructor(opts: CustomProviderOptions) {
+    // A5 — fail closed at construction, even if a caller bypassed the
+    // registry and the add path: a custom baseUrl that fails the SSRF
+    // guard never gets a transport. (Built-in local presets do not use
+    // this class and stay exempt.)
+    const check = validateProviderUrlSync(opts.baseUrl);
+    if (!check.ok) {
+      throw new Error(`Custom provider "${opts.id}" refused: ${check.reason}`);
+    }
     super({
       id: opts.id,
       label: opts.label,

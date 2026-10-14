@@ -7,7 +7,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { hydrateSecretsAsync, loadConfig } from "../config/config.ts";
 import { WorkspaceManager } from "../core/workspace.ts";
 import { XRShieldService } from "../hygiene/scanner.ts";
@@ -44,6 +44,9 @@ import {
 } from "../observability/index.ts";
 import { CORE_VERSION } from "../core/version.ts";
 import { AUTH_PAGE_CSP, authPageHtml } from "./auth-page.ts";
+import { applySecurityHeaders, SECURITY_TXT_URL } from "./security-headers.ts";
+import { installDevGlobal, isDevMode } from "../util/dev-mode.ts";
+import { PRIVATE_PROVIDER_WARNING, privateProviderAllowed } from "../providers/provider-url-guard.ts";
 import { TelegramManager } from "../telegram/manager.ts";
 import { DiscordManager } from "../discord/manager.ts";
 import { WhatsAppManager } from "../whatsapp/manager.ts";
@@ -211,6 +214,64 @@ export class RateLimiter {
   }
 }
 
+/**
+ * Phase 31 · A10 — pairing endpoints get a much stricter limiter than the
+ * general per-IP limiter: codes are 6 digits, so 10 attempts/minute/IP is
+ * already generous. Keyed by client IP only (not IP+path): an attacker
+ * rotating across the pairing endpoints still faces one budget.
+ */
+export const STRICT_PAIRING_PATHS: ReadonlySet<string> = new Set([
+  "/api/telegram/pair",
+  "/api/telegram/pair/open",
+  "/api/discord/pair/open",
+  "/api/whatsapp/pair",
+  "/api/mobile/pair",
+]);
+
+/**
+ * Phase 31 · A10 — exponential backoff after repeated pairing failures:
+ * the 5th consecutive failure blocks the IP for 1 minute, doubling on each
+ * further failure (2m → 4m → 8m cap). A success clears the counter.
+ */
+export class PairingFailureBackoff {
+  private state = new Map<string, { failures: number; blockedUntil: number }>();
+
+  check(key: string, now = Date.now()): { allowed: true } | { allowed: false; retryAfterSeconds: number } {
+    const entry = this.state.get(key);
+    if (!entry || now >= entry.blockedUntil) return { allowed: true };
+    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((entry.blockedUntil - now) / 1000)) };
+  }
+
+  recordFailure(key: string, now = Date.now()): void {
+    const entry = this.state.get(key) ?? { failures: 0, blockedUntil: 0 };
+    entry.failures += 1;
+    if (entry.failures >= 5) {
+      const steps = Math.min(entry.failures - 5, 3); // 1m, 2m, 4m, 8m cap
+      entry.blockedUntil = now + 60_000 * 2 ** steps;
+    }
+    this.state.set(key, entry);
+  }
+
+  recordSuccess(key: string): void {
+    this.state.delete(key);
+  }
+
+  /** Test seam: consecutive failures recorded for a key. */
+  failuresFor(key: string): number {
+    return this.state.get(key)?.failures ?? 0;
+  }
+}
+
+/** Signature-verified webhooks are exempt from per-IP rate limits (A10). */
+function isSignatureWebhook(path: string): boolean {
+  return path === "/api/telegram/webhook" || path === "/api/discord/webhook";
+}
+
+/** Phase 31 · A12 — production error mode (never in an XR_DEV shell). */
+function isProductionMode(): boolean {
+  return process.env.NODE_ENV === "production" && !isDevMode();
+}
+
 /** Phase 4 · T5 — request body size cap (route caps; fail closed). */
 export const MAX_REQUEST_BODY_BYTES = 2 * 1024 * 1024; // 2 MiB
 
@@ -276,11 +337,22 @@ export function makeHandler(
   const routes = createRouteHandler();
   // Phase 4 · T5 — rate limiting: generous default, but bounded (429).
   const limiter = new RateLimiter(opts.rateLimit ?? 600, 60_000);
+  // Phase 31 · A10 — strict pairing limiter (10/min/IP) + failure backoff.
+  const pairingLimiter = new RateLimiter(10, 60_000);
+  const pairingBackoff = new PairingFailureBackoff();
 
   async function dispatch(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
     const method = req.method.toUpperCase();
+    // Canonical (mount-free) path for policy checks: /api/v1/* ≡ /api/*.
+    const canonicalPath = path.startsWith("/api/v1/") ? `/api${path.slice(7)}` : path;
+
+    // Phase 31 · A13 — security.txt lives on the website; the daemon just
+    // redirects there. Open path: no bearer token needed for a redirect.
+    if (path === "/.well-known/security.txt" && (method === "GET" || method === "HEAD")) {
+      return new Response(null, { status: 308, headers: { location: SECURITY_TXT_URL } });
+    }
 
     // Health is intentionally open (both mounts); everything else requires the token.
     // Phase 8 · T3: the sign-in page's behaviour script is the one other open
@@ -339,8 +411,11 @@ export function makeHandler(
     }
 
     // Phase 4 · T5 — per-IP rate limit (fail closed with 429).
+    // Phase 31 · A10 — signature-verified webhooks are exempt: their
+    // authenticator is the signature, and a chatty Telegram/Discord
+    // delivery burst must not 429 legitimate updates.
     const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim() || "local";
-    if (!limiter.allow(`${ip}:${path}`)) {
+    if (!isSignatureWebhook(canonicalPath) && !limiter.allow(`${ip}:${path}`)) {
       return new Response(JSON.stringify({ error: "rate limit exceeded" }), {
         status: 429,
         headers: {
@@ -348,6 +423,28 @@ export function makeHandler(
           "retry-after": String(limiter.retryAfterSeconds(`${ip}:${path}`)),
         },
       });
+    }
+
+    // Phase 31 · A10 — strict pairing limits: failure backoff first (a
+    // blocked IP is refused even inside the rate window), then 10/min/IP.
+    const isPairing = method === "POST" && STRICT_PAIRING_PATHS.has(canonicalPath);
+    if (isPairing) {
+      const backoff = pairingBackoff.check(ip);
+      if (!backoff.allowed) {
+        return new Response(JSON.stringify({ error: "too many failed pairing attempts — try again later" }), {
+          status: 429,
+          headers: { "content-type": "application/json", "retry-after": String(backoff.retryAfterSeconds) },
+        });
+      }
+      if (!pairingLimiter.allow(ip)) {
+        return new Response(JSON.stringify({ error: "rate limit exceeded" }), {
+          status: 429,
+          headers: {
+            "content-type": "application/json",
+            "retry-after": String(pairingLimiter.retryAfterSeconds(ip)),
+          },
+        });
+      }
     }
 
     // Phase 4 · T5 — route caps: reject oversized bodies up front (413).
@@ -374,18 +471,25 @@ export function makeHandler(
     }
 
     const { config } = loadConfig();
-    const response = await routes({
-      ...responseHelpers,
-      req,
-      url,
-      path,
-      method,
-      token,
-      host: resolveBindHost(),
-      state,
-      config,
-    });
-    return response ?? safeJson({ error: "not found" }, 404);
+    const response =
+      (await routes({
+        ...responseHelpers,
+        req,
+        url,
+        path,
+        method,
+        token,
+        host: resolveBindHost(),
+        state,
+        config,
+      })) ?? safeJson({ error: "not found" }, 404);
+
+    // Phase 31 · A10 — pairing outcomes feed the failure backoff.
+    if (isPairing) {
+      if (response.status >= 200 && response.status < 300) pairingBackoff.recordSuccess(ip);
+      else pairingBackoff.recordFailure(ip);
+    }
+    return response;
   }
 
   /**
@@ -404,12 +508,31 @@ export function makeHandler(
     const started = Date.now();
     let status = 500;
     try {
-      const response = await dispatch(req);
+      // Phase 31 · A1 acceptance — HEAD is routed as GET (the route table
+      // is method-exact, so every HEAD used to 404, including `curl -I`
+      // health probes). Mutations stay unreachable: only GET routes can
+      // match. Bun.serve strips the body of HEAD responses itself.
+      const response = await dispatch(
+        method === "HEAD" ? new Request(req.url, { headers: req.headers }) : req,
+      );
       status = response.status;
-      return response;
+      // Phase 31 · A1/A6 — security headers + strict CORS on EVERY response.
+      return applySecurityHeaders(response, req);
     } catch (err) {
       span.setStatus("error", (err as Error)?.name ?? "Error");
-      throw err;
+      // Phase 31 · A12 — production clients get an opaque error + correlation
+      // id; the full error is logged server-side only. Dev shells keep the
+      // throw so failures surface loudly during development.
+      if (!isProductionMode()) throw err;
+      const id = randomUUID();
+      structuredLog("error", "http.unhandled", {
+        id,
+        route: routeId,
+        method,
+        error: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
+      });
+      status = 500;
+      return applySecurityHeaders(safeJson({ error: "internal error", id }, 500), req);
     } finally {
       endHttpServerSpan(span, status);
       const durationMs = Date.now() - started;
@@ -438,6 +561,14 @@ export function makeHandler(
 
 /** Start the local daemon. Prints token + URL once on startup. */
 export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
+  // Phase 31 · A12 — publish the dev-mode flag for surfaces that read
+  // globalThis.__XR_DEV__ (set only via XR_DEV=1; production never sets it).
+  installDevGlobal();
+  // Phase 31 · A5 — the SSRF escape hatch is loud at boot, by design.
+  if (privateProviderAllowed()) {
+    structuredLog("warn", "security.private_provider_allowed", { warning: PRIVATE_PROVIDER_WARNING });
+    console.warn(`\n  ⚠ ${PRIVATE_PROVIDER_WARNING}\n`);
+  }
   const port = opts.port ?? 3141;
   const token = opts.token ?? randomBytes(24).toString("hex");
   const workspaceManager = new WorkspaceManager();

@@ -35,6 +35,10 @@ export default function PrivacyPage() {
         <p className="console-mono mt-4 text-[11.5px] text-native-text-dim">
           Effective {EFFECTIVE} · applies to {site.url}
         </p>
+        <p className="console-mono mt-2 text-[11.5px] text-native-text-dim">
+          Published by Muhammad Ahmad · XR [TO FILL: registered entity name, registered address, city,
+          country] · privacy contact: privacy@xr.rrrtx.ai
+        </p>
 
         <div className="mt-10 rounded-xl border border-native-cyan/25 bg-native-bg-elevated/60 p-6">
           <p className="text-[13px] leading-relaxed text-native-text">
@@ -45,6 +49,12 @@ export default function PrivacyPage() {
             the relay and team memory. If you use XR alone, nothing on this page applies to you because
             there is nothing to apply it to.
           </p>
+          <ul className="mt-4 list-disc space-y-1.5 pl-5 text-[13px] leading-relaxed text-native-text">
+            <li>XR Personal is 100% local. We collect nothing.</li>
+            <li>XR Business collects only what billing, accounts and team sync need.</li>
+            <li>We do not sell data. No ads. No third-party trackers.</li>
+            <li>You can export or delete everything at any time.</li>
+          </ul>
         </div>
 
         <Section title="1. What the local software does with your data">
@@ -153,13 +163,82 @@ export default function PrivacyPage() {
               request rather than cached.
             </li>
             <li>
-              <strong>Refuse.</strong> Every non-essential cookie is one we set ourselves for session and CSRF
-              purposes. There is no consent banner because there is nothing to consent to.
+              <strong>Refuse.</strong> We set essential cookies only — the ones that keep you signed in —
+              and the banner on this site exists to tell you that, not to ask permission for tracking that
+              never happens. The full inventory is the{" "}
+              <Link href="/cookies" className="text-native-cyan hover:underline">
+                cookie policy
+              </Link>
+              .
             </li>
           </ul>
         </Section>
 
-        <Section title="8. Changes">
+        <Section title="8. Your rights, and how to exercise them">
+          <p>
+            Under the GDPR, the UK GDPR, India&rsquo;s DPDP Act and the CCPA/CPRA (whichever applies to
+            you), you can ask us to: show you what we hold, correct it, delete it, give it to you in a
+            portable format (JSON export), restrict or object to a use, and withdraw consent where consent
+            is the basis. Most of these are self-service in the console — export and delete need no ticket
+            at all.
+          </p>
+          <p>
+            For anything else, email{" "}
+            <a href="mailto:privacy@xr.rrrtx.ai" className="console-mono text-native-cyan hover:underline">
+              privacy@xr.rrrtx.ai
+            </a>{" "}
+            with the subject <strong>&ldquo;Data Rights Request&rdquo;</strong>. We respond within 30 days,
+            and sooner where the law asks for sooner. You may also complain to your local supervisory
+            authority; we would rather you emailed us first, but that is a preference, not a condition.
+          </p>
+          <p>
+            <strong>India (DPDP).</strong> Grievance officer: [TO FILL: name], [TO FILL: email], [TO FILL:
+            physical address], available [TO FILL: hours]. Grievances are acknowledged within 48 hours and
+            answered within 30 days.
+          </p>
+        </Section>
+
+        <Section title="9. On what basis we process it">
+          <ul>
+            <li>
+              <strong>Contract</strong> — providing the service you signed up for: accounts, teams, billing,
+              support.
+            </li>
+            <li>
+              <strong>Legitimate interest</strong> — abuse prevention, security, and keeping the service
+              running, balanced against your rights. Product feedback counts only when you opt in.
+            </li>
+            <li>
+              <strong>Consent</strong> — only where we ask first. There is no newsletter in v1; if one ever
+              exists, it will be opt-in and every message will carry an unsubscribe link.
+            </li>
+          </ul>
+        </Section>
+
+        <Section title="10. Children">
+          <p>
+            XR is not directed at children under 13, and we do not knowingly collect data from them.
+            Business accounts require you to be 18 or older, or to have guardian consent where the DPDP Act
+            sets the child threshold higher. If you believe a child has given us data, email the privacy
+            contact above and we will delete it.
+          </p>
+        </Section>
+
+        <Section title="11. International transfers and security">
+          <p>
+            Where data crosses a border, it does so under Standard Contractual Clauses or an equivalent
+            safeguard. The hosted service uses TLS 1.2 or better in transit, AES-256-GCM encryption at rest
+            for stored team data, role-based access control, tamper-evident audit logging, automatic
+            redaction of secrets in logs, and signed webhooks. The honest detail — what is finished, what
+            is not — lives on the{" "}
+            <Link href="/security" className="text-native-cyan hover:underline">
+              security and trust page
+            </Link>
+            .
+          </p>
+        </Section>
+
+        <Section title="12. Changes">
           <p>
             Material changes are announced in the changelog and by email to organization owners at least 30
             days before they take effect. The version history of this document is in the public repository, so

@@ -506,8 +506,8 @@ async function loadApprovals(){
         '<div class="approval-what">'+escapeHtml(approvalActionLabel(a))+'</div>' +
         '<div class="approval-why">'+escapeHtml(a.preview || 'This action needs your permission.')+'</div>' +
         '<div class="approval-risk"><span class="badge '+riskBadge+'">'+riskWord+'</span>'+(risk.reason?' <span class="approval-risk-reason">'+escapeHtml(risk.reason)+'</span>':'')+rev+'</div>' +
-        '<div class="approval-btns"><button class="btn btn-primary" data-xr-action="answerApproval(\\''+a.id+'\\',true)">Allow</button>' +
-        '<button class="btn btn-danger" data-xr-action="answerApproval(\\''+a.id+'\\',false)">Deny</button></div>' +
+        '<div class="approval-btns"><button class="btn btn-primary" data-xr-action="' + act('answerApproval', a.id, true) + '">Allow</button>' +
+        '<button class="btn btn-danger" data-xr-action="' + act('answerApproval', a.id, false) + '">Deny</button></div>' +
       '</div>';
     }).join(''):'<div class="muted">No pending authorizations.</div>';
   }catch{}
@@ -568,6 +568,14 @@ function formatReply(text) {
   safe = safe.replace(/^> (.*)$/gm,'<blockquote>$1</blockquote>');
   return safe.replace(/\\n/g,'<br>');
 }
-function escapeHtml(t) { return String(t ?? '').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+// Phase 31 · A2 — the one escaping helper for every interpolation that
+// reaches innerHTML in this composed client. Escapes & < > " and ' (as
+// &#39;) so values are safe in element text AND in single- or double-
+// quoted attributes. Mirrors src/util/html-escape.ts (the client is a
+// served string and cannot import). NEVER interpolate raw data into
+// innerHTML — route it through escapeHtml/esc; act() (client-runtime)
+// handles the data-xr-action attribute context.
+function escapeHtml(t) { return String(t ?? '').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
+function esc(t) { return escapeHtml(t); }
 
 `;

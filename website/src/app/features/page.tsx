@@ -18,7 +18,11 @@ import {
 } from "lucide-react";
 import { ArrowRight } from "lucide-react";
 
-export const metadata: Metadata = { title: "Features" };
+export const metadata: Metadata = {
+  title: "Features",
+  description:
+    "What XR does: local and cloud models, memory, voice, agents, skills, MCP, research and automation — approval-gated.",
+};
 
 const extraFeatures = [
   { icon: Brain, title: "Planning & reasoning", desc: "Multi-step planning with explicit reasoning traces you can inspect, replay, and diff." },

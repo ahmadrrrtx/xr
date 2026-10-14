@@ -12,8 +12,8 @@
 
 export const PKG = {
   name: "@rrrtx/xr",
-  version: "1.0.0",
-  codename: "Truth",
+  version: "1.1.0",
+  codename: "Graphite",
   repo: "https://github.com/ahmadrrrtx/xr",
   homepage: "https://xr-gules.vercel.app",
   npm: "https://www.npmjs.com/package/@rrrtx/xr",

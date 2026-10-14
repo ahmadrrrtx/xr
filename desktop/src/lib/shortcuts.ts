@@ -74,6 +74,17 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     combo: 'mod+shift+x',
     global: 'screenshot',
   },
+  // Phase 31 · E6 — ⌘1–⌘9 jump between the first nine primary areas, in
+  // the canonical NAV_ITEMS order (⌘4 is Builder in that order).
+  { id: 'nav-chat', label: 'Go to Chat', scope: 'app', combo: 'mod+1' },
+  { id: 'nav-workspaces', label: 'Go to Workspaces', scope: 'app', combo: 'mod+2' },
+  { id: 'nav-brain', label: 'Go to Brain', scope: 'app', combo: 'mod+3' },
+  { id: 'nav-builder', label: 'Go to Builder', scope: 'app', combo: 'mod+4' },
+  { id: 'nav-research', label: 'Go to Research', scope: 'app', combo: 'mod+5' },
+  { id: 'nav-agents', label: 'Go to Agents', scope: 'app', combo: 'mod+6' },
+  { id: 'nav-skills', label: 'Go to Skills', scope: 'app', combo: 'mod+7' },
+  { id: 'nav-shield', label: 'Go to Shield', scope: 'app', combo: 'mod+8' },
+  { id: 'nav-runs', label: 'Go to Runs', scope: 'app', combo: 'mod+9' },
 ] as const;
 
 export function shortcutById(id: string): ShortcutDef | undefined {

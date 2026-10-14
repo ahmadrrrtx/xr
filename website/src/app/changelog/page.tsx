@@ -2,7 +2,11 @@ import { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { changelog } from "@/lib/data";
 
-export const metadata: Metadata = { title: "Changelog" };
+export const metadata: Metadata = {
+  title: "Changelog",
+  description:
+    "Every XR release, what changed, and the version history of the local-first agent runtime.",
+};
 
 export default function ChangelogPage() {
   return (

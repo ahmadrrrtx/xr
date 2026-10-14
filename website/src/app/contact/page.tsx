@@ -20,9 +20,18 @@ export default function ContactPage() {
             A form that silently discards your message is worse than no form. XR is developed in the
             open, so every conversation happens where you can see it and reference it later.
           </p>
-          <a href={`${site.github}/issues/new`} target="_blank" rel="noreferrer" className="btn btn-primary mt-6">
-            Open an issue on GitHub
-          </a>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <a href={`${site.github}/issues/new`} target="_blank" rel="noreferrer" className="btn btn-primary">
+              Open an issue on GitHub
+            </a>
+            <a href="mailto:support@xr.rrrtx.ai" className="btn btn-ghost">
+              <Mail className="h-4 w-4" /> support@xr.rrrtx.ai
+            </a>
+          </div>
+          <p className="mt-4 text-xs leading-relaxed text-zinc-500">
+            Prefer email? Write to us directly — a human reads it. For security reports, use the
+            disclosure process in SECURITY.md instead of a public issue.
+          </p>
         </div>
       </section>
     </>

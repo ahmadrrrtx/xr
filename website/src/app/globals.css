@@ -25,6 +25,40 @@
 }
 
 @layer base {
+  /* Phase 31 · C4 — nothing may bleed horizontally, at any viewport. */
+  html,
+  body {
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Phase 31 · C7 — skip link: invisible until keyboard focus. */
+  .skip-link {
+    position: fixed;
+    top: -100px;
+    left: 16px;
+    z-index: 100;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: #ededef;
+    color: #0a0a0b;
+    font-size: 13px;
+    font-weight: 600;
+    transition: top 150ms ease-out;
+  }
+  .skip-link:focus-visible {
+    top: 12px;
+  }
+
+  /* Phase 31 · C3 — mobile menu entrance (200ms ease-out). */
+  @keyframes menu-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .mobile-menu {
+    animation: menu-in 200ms ease-out;
+  }
+
   /* Marketing surfaces: the cinematic treatment. */
   .native-bg {
     background:
@@ -96,7 +130,11 @@
   --color-border-strong: #2a2a30;
   --color-text: #ededef;
   --color-text-muted: #a1a1aa;
-  --color-text-dim: #71717a;
+  --color-text-dim: #8a8a93;
+  /* Phase 31 · C6 — zinc-500 (#71717a) is 4.09:1 on the site background,
+     below AA for the small text it is used for almost everywhere; remapped
+     to the AA-safe dim value. Single dark theme in v1. */
+  --color-zinc-500: #8a8a93;
   --color-accent: #ffffff;
   --color-xr: #7c5cff;
   --color-xr-soft: #a892ff;

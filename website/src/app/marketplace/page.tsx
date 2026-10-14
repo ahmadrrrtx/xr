@@ -2,7 +2,11 @@ import { Metadata } from "next";
 import { MarketplaceBrowser } from "@/components/MarketplaceBrowser";
 import { PageHeader } from "@/components/PageHeader";
 
-export const metadata: Metadata = { title: "Marketplace" };
+export const metadata: Metadata = {
+  title: "Marketplace",
+  description:
+    "Skills and extensions for XR. Bundled items ship with the app; community items are reviewed before they list.",
+};
 
 export default function MarketplacePage() {
   return (

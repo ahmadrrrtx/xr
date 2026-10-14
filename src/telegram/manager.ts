@@ -13,9 +13,10 @@
  *   XR_TELEGRAM_TOKEN   token used instead of the vault copy
  *   XR_TELEGRAM_ALLOWED extra paired user ids
  */
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { loadConfig, saveConfig, type XRConfig } from "../config/config.ts";
 import type { Store } from "../state/workspace-store.ts";
-import { getSecretAsync, setSecretAsync, removeSecretAsync } from "../security/secrets.ts";
+import { getSecret, getSecretAsync, setSecret, setSecretAsync, removeSecretAsync } from "../security/secrets.ts";
 import { sttFromSettings } from "../voice/stt.ts";
 import { getVoiceSettings } from "../voice/settings.ts";
 import { TelegramBot, type BotDeps } from "./bot.ts";
@@ -25,6 +26,20 @@ import { parseAllowedIds } from "./auth.ts";
 import { plain } from "./render.ts";
 
 export const TELEGRAM_TOKEN_SECRET = "XR_TELEGRAM_BOT_TOKEN";
+/** A3: the webhook secret_token lives in the SecretBroker, never in state.json. */
+export const TELEGRAM_WEBHOOK_SECRET = "XR_TELEGRAM_WEBHOOK_SECRET";
+
+/**
+ * Constant-time secret comparison. Both inputs are SHA-256 digested first
+ * so `timingSafeEqual` always sees equal-length buffers — the comparison
+ * leaks neither the secret's length nor a matching prefix.
+ */
+export function telegramSecretEquals(provided: string | null | undefined, expected: string | null | undefined): boolean {
+  if (!provided || !expected) return false;
+  const a = createHash("sha256").update(provided, "utf8").digest();
+  const b = createHash("sha256").update(expected, "utf8").digest();
+  return timingSafeEqual(a, b);
+}
 const TOKEN_RE = /^\d{5,}:[A-Za-z0-9_-]{30,}$/;
 const LOG_CAP = 200;
 
@@ -70,6 +85,48 @@ export class TelegramManager {
   constructor(private opts: TelegramManagerOptions) {
     this.f = opts.fetchFn ?? fetch;
     this.state = loadTelegramState(opts.statePath);
+    this.resolveWebhookSecretSync();
+  }
+
+  /**
+   * A3 — resolve the webhook secret from the SecretBroker, synchronously
+   * (the manager is constructed in sync contexts; the broker's sync path
+   * is env+memo+file and never spawns). A legacy secret found in the state
+   * file is migrated into the broker and scrubbed from disk by the next
+   * save; a missing secret is generated fresh (32 random bytes, hex).
+   */
+  private resolveWebhookSecretSync(): void {
+    try {
+      const legacy = this.state.webhookSecret || "";
+      const stored = getSecret(TELEGRAM_WEBHOOK_SECRET) || "";
+      const chosen = stored || legacy || randomBytes(32).toString("hex");
+      if (chosen !== stored) {
+        try { setSecret(TELEGRAM_WEBHOOK_SECRET, chosen); } catch { /* in-memory copy still protects the webhook */ }
+      }
+      this.state.webhookSecret = chosen;
+      if (legacy) this.persistState(); // scrub the migrated plaintext from state.json
+    } catch {
+      if (!this.state.webhookSecret) this.state.webhookSecret = randomBytes(32).toString("hex");
+    }
+  }
+
+  /** Async counterpart for paths that cleared the secret (disconnect → restart). */
+  private async ensureWebhookSecret(): Promise<string> {
+    if (this.state.webhookSecret) return this.state.webhookSecret;
+    try {
+      const stored = await getSecretAsync(TELEGRAM_WEBHOOK_SECRET);
+      if (stored) {
+        this.state.webhookSecret = stored;
+        return stored;
+      }
+      const fresh = randomBytes(32).toString("hex");
+      await setSecretAsync(TELEGRAM_WEBHOOK_SECRET, fresh).catch(() => {});
+      this.state.webhookSecret = fresh;
+      return fresh;
+    } catch {
+      this.state.webhookSecret = randomBytes(32).toString("hex");
+      return this.state.webhookSecret;
+    }
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────
@@ -176,12 +233,13 @@ export class TelegramManager {
     const cfg = this.config().telegram;
     try {
       if (cfg.webhookUrl) {
+        const webhookSecret = await this.ensureWebhookSecret();
         const res = await this.f(`https://api.telegram.org/bot${resolved.token}/setWebhook`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             url: `${cfg.webhookUrl.replace(/\/+$/, "")}/api/telegram/webhook`,
-            secret_token: this.state.webhookSecret,
+            secret_token: webhookSecret,
             allowed_updates: ["message", "callback_query"],
           }),
         });
@@ -251,6 +309,10 @@ export class TelegramManager {
       await this.f(`https://api.telegram.org/bot${resolved.token}/deleteWebhook`, { method: "POST" }).catch(() => {});
     }
     await removeSecretAsync(TELEGRAM_TOKEN_SECRET).catch(() => {});
+    // A3: rotate the webhook secret away too — the next connect/webhook
+    // registration generates a fresh one, so a leaked secret dies here.
+    await removeSecretAsync(TELEGRAM_WEBHOOK_SECRET).catch(() => {});
+    this.state.webhookSecret = "";
     this.pairing.closeWindow();
     this.botInfo = null;
     this.bot = null;
@@ -336,7 +398,8 @@ export class TelegramManager {
 
   /** Webhook entry point. Verifies Telegram's secret header before any processing. */
   async handleWebhook(secretHeader: string | null, update: unknown): Promise<{ ok: boolean }> {
-    if (!secretHeader || secretHeader !== this.state.webhookSecret) {
+    const expected = this.state.webhookSecret || (await this.ensureWebhookSecret());
+    if (!telegramSecretEquals(secretHeader, expected)) {
       this.opts.store.audit("telegram.webhook.rejected", {});
       return { ok: false };
     }

@@ -26,8 +26,8 @@ function renderSessionList() {
     // nested inside the role=button container (axe nested-interactive).
     return \`<div class="sess-row">
       <div class="stat-row xr-s-69 sess-open" role="button" tabindex="0" data-xr-action="\${act('loadSessionDetail', s.id)}" title="Open session steps">
-        <div><div class="xr-s-70">\${escapeHtml(s.title)}</div><div class="muted xr-s-71">\${s.id}</div></div>
-        <span class="badge \${bClass}">\${s.status}</span>
+        <div><div class="xr-s-70">\${escapeHtml(s.title)}</div><div class="muted xr-s-71">\${escapeHtml(s.id)}</div></div>
+        <span class="badge \${bClass}">\${escapeHtml(s.status)}</span>
       </div>
       <button type="button" class="btn btn-ghost sess-copy" data-xr-action="\${act('copyText', s.id)}" title="Copy session id">Copy id</button>
     </div>\`;
@@ -61,10 +61,10 @@ async function loadSessionDetail(id) {
     const s = data.session;
     const steps = data.steps ?? [];
     document.getElementById("sess-detail").innerHTML = \`
-      <div class="xr-s-72"><strong>\${escapeHtml(s.title)}</strong><br><span class="muted">\${s.id} · \${s.status}</span></div>
+      <div class="xr-s-72"><strong>\${escapeHtml(s.title)}</strong><br><span class="muted">\${escapeHtml(s.id)} · \${escapeHtml(s.status)}</span></div>
       <div class="xr-s-73">
         \${steps.map(st => \`<div class="xr-s-74">
-          <div class="mono xr-s-70">\${st.phase} \${st.tool ? '· ' + st.tool : ''}</div>
+          <div class="mono xr-s-70">\${escapeHtml(st.phase)} \${st.tool ? '· ' + escapeHtml(st.tool) : ''}</div>
           <div class="muted xr-s-75">\${escapeHtml(st.detail).slice(0, 160)}</div>
         </div>\`).join("")}
       </div>
@@ -117,16 +117,16 @@ async function loadProviders() {
   try {
     const [ov, data] = await Promise.all([api("/api/overview"), api("/api/providers")]);
     document.getElementById("prov-routing").innerHTML = \`
-      <div class="stat-row"><div class="stat-key">Primary default route</div><div class="stat-val val-cyan">\${data.primary} · \${data.model}</div></div>
-      <div class="stat-row"><div class="stat-key">Fallback route</div><div class="stat-val val-muted">\${data.fallback ? data.fallback + " · " + data.fallbackModel : "No fallback set"}</div></div>
+      <div class="stat-row"><div class="stat-key">Primary default route</div><div class="stat-val val-cyan">\${escapeHtml(data.primary)} · \${escapeHtml(data.model)}</div></div>
+      <div class="stat-row"><div class="stat-key">Fallback route</div><div class="stat-val val-muted">\${data.fallback ? escapeHtml(data.fallback) + " · " + escapeHtml(data.fallbackModel) : "No fallback set"}</div></div>
     \`;
 
     const grid = document.getElementById("prov-grid");
     const list = data.providers ?? [];
     grid.innerHTML = list.map(p => \`
       <div class="card \${p.id === data.primary ? "card-glow-cyan" : ""} xr-s-77">
-        <div class="xr-s-78">\${p.label}</div>
-        <div class="xr-s-79">\${p.id}</div>
+        <div class="xr-s-78">\${escapeHtml(p.label)}</div>
+        <div class="xr-s-79">\${escapeHtml(p.id)}</div>
         <div class="xr-s-80"><span class="badge \${p.healthy ? "badge-green" : (p.hasKey ? "badge-amber" : "badge-gray")}">\s
           \${p.healthy ? "online" : (p.hasKey ? "inactive" : "no key")}
         </span></div>
@@ -137,7 +137,7 @@ async function loadProviders() {
     selects.forEach(selId => {
       const el = document.getElementById(selId);
       if (el) {
-        el.innerHTML = list.map(p => \`<option value="\${p.id}">\${p.label} (\${p.id})</option>\`).join("");
+        el.innerHTML = list.map(p => \`<option value="\${escapeHtml(p.id)}">\${escapeHtml(p.label)} (\${escapeHtml(p.id)})</option>\`).join("");
       }
     });
     document.getElementById("prov-set-provider").value = data.primary ?? "";
@@ -216,16 +216,16 @@ async function loadModels() {
 
     // Hardware Specs
     document.getElementById("models-hardware").innerHTML = \`
-      <div class="stat-row"><div class="stat-key">CPU core units</div><div class="stat-val">\${specs.cores ?? "—"}</div></div>
+      <div class="stat-row"><div class="stat-key">CPU core units</div><div class="stat-val">\${escapeHtml(specs.cores ?? "—")}</div></div>
       <div class="stat-row"><div class="stat-key">Total RAM memory</div><div class="stat-val">\${specs.ramGb ? specs.ramGb.toFixed(1) + " GB" : "—"}</div></div>
       <div class="stat-row"><div class="stat-key">VRAM GPU indicators</div><div class="stat-val">\${specs.vramGb ? specs.vramGb.toFixed(1) + " GB" : "0.0 GB"}</div></div>
-      <div class="stat-row xr-s-81"><div class="stat-key">Confidence rec</div><div class="stat-val text-cyan">\${rec.confidence ?? "unsupported"}</div></div>
+      <div class="stat-row xr-s-81"><div class="stat-key">Confidence rec</div><div class="stat-val text-cyan">\${escapeHtml(rec.confidence ?? "unsupported")}</div></div>
     \`;
 
     // Local runtimes
     document.getElementById("models-local").innerHTML = (data.runtimes ?? []).map(r => \`
       <div class="stat-row">
-        <div><strong>\${r.label}</strong><br><span class="muted">\${r.baseUrl}</span></div>
+        <div><strong>\${escapeHtml(r.label)}</strong><br><span class="muted">\${escapeHtml(r.baseUrl)}</span></div>
         <span class="badge \${r.healthy ? "badge-green" : "badge-gray"}">\${r.healthy ? "healthy" : "offline"}</span>
       </div>
     \`).join("") || '<div class="muted">No runtimes detected. Install Ollama or enable a local API server.</div>';
@@ -235,8 +235,8 @@ async function loadModels() {
     document.getElementById("models-list").innerHTML = installed.length
       ? installed.map(m => \`
       <div class="stat-row xr-s-82" role="button" tabindex="0" data-xr-action="\${act('pickInstalledModel', String(m.runtime || ''), String(m.model || ''))}" title="Use this model">
-        <span class="stat-key mono">\${m.model}</span>
-        <span class="badge badge-gray">\${m.runtime}</span>
+        <span class="stat-key mono">\${escapeHtml(m.model)}</span>
+        <span class="badge badge-gray">\${escapeHtml(m.runtime)}</span>
       </div>
     \`).join("")
       : '<div class="muted">No downloaded models recorded. Use <span class="mono">xr models install</span> or pull via Ollama, then Refresh.</div>';
@@ -244,7 +244,7 @@ async function loadModels() {
     // Select defaults
     const select = document.getElementById("models-select-runtime");
     if (select) {
-      select.innerHTML = (data.runtimes ?? []).map(r => \`<option value="\${r.id}">\${r.label}</option>\`).join("");
+      select.innerHTML = (data.runtimes ?? []).map(r => \`<option value="\${escapeHtml(r.id)}">\${escapeHtml(r.label)}</option>\`).join("");
       select.value = selected.runtime ?? "ollama";
     }
     document.getElementById("models-select-model").value = selected.model ?? "";
@@ -407,7 +407,7 @@ async function doMemSearch() {
     const list = data.results ?? [];
     document.getElementById("mem-search-results").innerHTML = list.length ? list.map(e => \`
       <div class="stat-row xr-s-87">
-        <span class="badge badge-cyan xr-s-88">\${e.category}</span>
+        <span class="badge badge-cyan xr-s-88">\${escapeHtml(e.category)}</span>
         <span class="xr-s-84">\${escapeHtml(e.content)}</span>
       </div>
     \`).join("") : "<div class='muted'>No entries found.</div>";
@@ -451,8 +451,8 @@ async function loadResearchPanel() {
 
     document.getElementById("research-list").innerHTML = recent.length ? recent.map(r => \`
       <div class="stat-row xr-s-90" role="button" tabindex="0" data-xr-action="\${act('loadResearchDetail', r.id)}">
-        <div><strong>\${escapeHtml(r.topic)}</strong><br><span class="muted">\${r.id}</span></div>
-        <span class="badge \${r.status === "done" ? "badge-green" : "badge-gray"}">\${r.status}</span>
+        <div><strong>\${escapeHtml(r.topic)}</strong><br><span class="muted">\${escapeHtml(r.id)}</span></div>
+        <span class="badge \${r.status === "done" ? "badge-green" : "badge-gray"}">\${escapeHtml(r.status)}</span>
       </div>
     \`).join("") : "<div class='muted'>No previous research logs.</div>";
   } catch {}
@@ -463,7 +463,7 @@ async function loadResearchDetail(id) {
     const data = await api("/api/research/" + encodeURIComponent(id));
     const s = data.session;
     document.getElementById("research-latest").innerHTML = \`
-      <div class="xr-s-91"><strong>\${escapeHtml(s.topic)}</strong><br><span class="muted">\${s.id} · \${s.status}</span></div>
+      <div class="xr-s-91"><strong>\${escapeHtml(s.topic)}</strong><br><span class="muted">\${escapeHtml(s.id)} · \${escapeHtml(s.status)}</span></div>
       <p class="xr-s-92">\${escapeHtml(s.synthesis?.shortAnswer || s.summary || "Report verified intact.")}</p>
       <div class="stat-row"><div class="stat-key">Citations found</div><div class="stat-val">\${s.sources?.length ?? 0}</div></div>
       <div class="stat-row"><div class="stat-key">Cross-verifications</div><div class="stat-val">\${s.claims?.length ?? 0}</div></div>

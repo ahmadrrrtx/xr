@@ -1,12 +1,12 @@
 {
   "$schema": "./docs/release/release-manifest.schema.json",
   "manifestVersion": 2,
-  "comment": "XR RELEASE MANIFEST — the single source of truth for release identity and every public claim. Constitution Article XXII.1 ('One release manifest stamps version across version.ts, package.json, README, installers, website ... CI fails on drift') and Article XIX.1 ('no public claim without an evidence link'). Edit THIS file, then run `bun run release:stamp`. Never hand-edit a stamped surface. NOTE (2026-08-13): 1.0.0 is a DELIBERATE semver rebaseline of 7.1.0 (Truth) — the same codebase, re-identified as the first stable line. Historical 7.x artifacts remain under docs/ as frozen records.",
+  "comment": "XR RELEASE MANIFEST \u2014 the single source of truth for release identity and every public claim. Constitution Article XXII.1 ('One release manifest stamps version across version.ts, package.json, README, installers, website ... CI fails on drift') and Article XIX.1 ('no public claim without an evidence link'). Edit THIS file, then run `bun run release:stamp`. Never hand-edit a stamped surface. NOTE (2026-08-13): 1.0.0 is a DELIBERATE semver rebaseline of 7.1.0 (Truth) \u2014 the same codebase, re-identified as the first stable line. Historical 7.x artifacts remain under docs/ as frozen records.",
   "identity": {
     "name": "@rrrtx/xr",
-    "version": "1.0.0",
-    "codename": "Truth",
-    "description": "XR — a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
+    "version": "1.1.0",
+    "codename": "Graphite",
+    "description": "XR \u2014 a local-first, provider-neutral AI agent runtime. BYOK, spend-capped, tamper-evident audit, plugin/MCP extensibility.",
     "author": "Muhammad Ahmad (@ahmadrrrtx)",
     "license": "MIT",
     "repo": "https://github.com/ahmadrrrtx/xr",
@@ -50,12 +50,12 @@
     {
       "id": "local-first",
       "text": "Runs locally with local models; no mandatory cloud control plane.",
-      "evidence": "src/providers/presets.ts — local runtimes (ollama, lmstudio, llamacpp, jan, localai, vllm) are first-class provider presets; src/config/config.ts localModels.",
+      "evidence": "src/providers/presets.ts \u2014 local runtimes (ollama, lmstudio, llamacpp, jan, localai, vllm) are first-class provider presets; src/config/config.ts localModels.",
       "expires": "2027-07-31"
     },
     {
       "id": "byok",
-      "text": "Bring your own API key — provider credentials stay in your environment.",
+      "text": "Bring your own API key \u2014 provider credentials stay in your environment.",
       "evidence": "src/config/config.ts provider apiKeyEnv resolution; secrets redacted by src/baseline/status.ts:redactValue.",
       "expires": "2027-07-31"
     },
@@ -74,7 +74,7 @@
     {
       "id": "skills-count",
       "text": "65 bundled skills.",
-      "evidence": "Directory count of skills/ at release commit — verified mechanically by scripts/claim-lint.ts (countSkills).",
+      "evidence": "Directory count of skills/ at release commit \u2014 verified mechanically by scripts/claim-lint.ts (countSkills).",
       "expires": "2027-07-31",
       "mechanical": {
         "kind": "skill-count",
@@ -84,7 +84,7 @@
     {
       "id": "provider-neutral",
       "text": "Multiple model providers behind one interface; no vendor lock-in.",
-      "evidence": "src/providers/presets.ts and src/providers/registry.ts — provider-agnostic Provider interface.",
+      "evidence": "src/providers/presets.ts and src/providers/registry.ts \u2014 provider-agnostic Provider interface.",
       "expires": "2027-07-31"
     },
     {
@@ -102,7 +102,7 @@
     {
       "id": "signed-releases",
       "text": "Tagged releases ship cosign keyless signatures over SHA256SUMS, a CycloneDX SBOM and SLSA3 provenance for every per-target artifact.",
-      "evidence": ".github/workflows/release.yml (gates → 5-target matrix → SHA256SUMS → cosign sign-blob → SLSA generator_generic_slsa3 with wired outputs.digests); docs/release/VERIFYING_RELEASES.md. Verifiable from the public Rekor log after the first tagged release ≥ 1.0.0.",
+      "evidence": ".github/workflows/release.yml (gates \u2192 5-target matrix \u2192 SHA256SUMS \u2192 cosign sign-blob \u2192 SLSA generator_generic_slsa3 with wired outputs.digests); docs/release/VERIFYING_RELEASES.md. Verifiable from the public Rekor log after the first tagged release \u2265 1.0.0.",
       "expires": "2027-07-31"
     },
     {
@@ -114,25 +114,25 @@
     {
       "id": "pricing-personal-free",
       "text": "XR Personal is free forever, with every local feature included and no account required.",
-      "evidence": "website/src/app/pricing/page.tsx; docs/business/BILLING.md §1; src/cloud/license.ts BUSINESS_FEATURES contains only hosted surfaces.",
+      "evidence": "website/src/app/pricing/page.tsx; docs/business/BILLING.md \u00a71; src/cloud/license.ts BUSINESS_FEATURES contains only hosted surfaces.",
       "expires": "2027-10-14"
     },
     {
       "id": "pricing-business",
       "text": "XR Business is $15 per user per month, or $144 per user per year ($12 per month equivalent).",
-      "evidence": "website/src/lib/native.ts businessPricing; cloud/src/services/stripe.ts; docs/business/BILLING.md §2.",
+      "evidence": "website/src/lib/native.ts businessPricing; cloud/src/services/stripe.ts; docs/business/BILLING.md \u00a72.",
       "expires": "2027-10-14"
     },
     {
       "id": "pricing-trial",
       "text": "A 30-day Business trial needs no card and covers up to 5 seats.",
-      "evidence": "cloud/src/routes/billing.ts trial config; cloud/src/env.ts TRIAL_DAYS/TRIAL_MAX_SEATS; docs/business/BILLING.md §3.",
+      "evidence": "cloud/src/routes/billing.ts trial config; cloud/src/env.ts TRIAL_DAYS/TRIAL_MAX_SEATS; docs/business/BILLING.md \u00a73.",
       "expires": "2027-10-14"
     },
     {
       "id": "pricing-enterprise",
       "text": "Enterprise is quoted per contract and invoiced manually; there is no self-serve Enterprise checkout and no support SLA is offered.",
-      "evidence": "docs/business/BILLING.md §4 (NET 30 placeholder, contact sales only).",
+      "evidence": "docs/business/BILLING.md \u00a74 (NET 30 placeholder, contact sales only).",
       "expires": "2027-10-14"
     },
     {
@@ -144,7 +144,7 @@
     {
       "id": "managed-models",
       "text": "Managed cloud models are an optional Business feature; BYOK remains free and direct-to-provider on every plan.",
-      "evidence": "cloud/src/services/metering.ts; cloud/src/routes/models.routes.ts; src/cloud/client.ts; docs/business/BILLING.md §5.",
+      "evidence": "cloud/src/services/metering.ts; cloud/src/routes/models.routes.ts; src/cloud/client.ts; docs/business/BILLING.md \u00a75.",
       "expires": "2027-10-14"
     },
     {
@@ -156,7 +156,7 @@
     {
       "id": "retention",
       "text": "Cancelling leaves all local data intact; hosted team data stays exportable for 30 days and is then purged.",
-      "evidence": "cloud/src/services/subscriptions.ts cancellation path; website/src/app/legal/privacy/page.tsx; docs/business/BILLING.md §6.",
+      "evidence": "cloud/src/services/subscriptions.ts cancellation path; website/src/app/legal/privacy/page.tsx; docs/business/BILLING.md \u00a76.",
       "expires": "2027-10-14"
     },
     {
@@ -267,11 +267,11 @@
     },
     {
       "pattern": "AI\\s+OS\\s+Kernel",
-      "reason": "XR ships a runtime kernel (DI container, lifecycle, stores) — not an OS kernel. Framing it as one is misleading (launch finding A-3)."
+      "reason": "XR ships a runtime kernel (DI container, lifecycle, stores) \u2014 not an OS kernel. Framing it as one is misleading (launch finding A-3)."
     },
     {
       "pattern": "Provable\\s+Security",
-      "reason": "Absolute security claims are never evidenceable. XR ships verifiable evidence — hash-chained audit (xr verify-log) and signed attack-screen reports (xr attacks) — not proofs of security."
+      "reason": "Absolute security claims are never evidenceable. XR ships verifiable evidence \u2014 hash-chained audit (xr verify-log) and signed attack-screen reports (xr attacks) \u2014 not proofs of security."
     },
     {
       "pattern": "Business\\s+Operating\\s+System",
@@ -279,11 +279,11 @@
     },
     {
       "pattern": "\\b(Personal|free)\\s+(tier|plan)\\b[^.]{0,30}\\b(limited|trial|upgrade to use)\\b",
-      "reason": "Personal is free forever and fully functional. It is never 'limited', never a trial, and no local feature is gated behind an upgrade. Article XXIX/XXX; Phase 30 §L."
+      "reason": "Personal is free forever and fully functional. It is never 'limited', never a trial, and no local feature is gated behind an upgrade. Article XXIX/XXX; Phase 30 \u00a7L."
     },
     {
       "pattern": "\\b(voice|local memory|themes|CLI|bots?|VS Code|mobile PWA|multi-window|research|agents?|skills|MCP)\\b[^.]{0,25}\\b(requires?\\s+(a\\s+)?(Business|paid|subscription)|only\\s+(on|with)\\s+(Business|the paid|a subscription)|Business-only|upgrade\\s+to\\s+(use|unlock))\\b",
-      "reason": "Local features are free on every plan, signed in or not. Nothing may be described as requiring Business, subscription or an upgrade (Phase 30 §L: a constitutional bug, not a copywriting slip)."
+      "reason": "Local features are free on every plan, signed in or not. Nothing may be described as requiring Business, subscription or an upgrade (Phase 30 \u00a7L: a constitutional bug, not a copywriting slip)."
     },
     {
       "pattern": "\\b(free|local|offline)\\b[^.]{0,25}\\brequires?\\b[^.]{0,20}\\b(account|sign[- ]?in|subscription|licen[cs]e|cloud)\\b",
@@ -291,7 +291,7 @@
     },
     {
       "pattern": "\\b(with|adds?|includes?|contains?|shows?|applies|stamps?)\\s+(a\\s+|its\\s+)?(watermark|nag screen|upsell popup|feature gate)\\b",
-      "reason": "No watermarks, no nags, no popups and no feature gates exist in any tier (Phase 30 §L)."
+      "reason": "No watermarks, no nags, no popups and no feature gates exist in any tier (Phase 30 \u00a7L)."
     },
     {
       "pattern": "\\b(phone[ -]home|telemetry|analytics|tracking)\\b[^.]{0,20}\\b(enabled|required|on by default)\\b",

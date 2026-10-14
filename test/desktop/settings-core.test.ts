@@ -60,9 +60,9 @@ function settings(patch: {
 /* ── shortcuts ─────────────────────────────────────────────────────── */
 
 describe("Phase 8 · shortcut registry", () => {
-  test("harvests 12 shortcuts with unique ids (9 from Phases 1–7 + Control Room + Theater + Screenshot)", () => {
-    expect(SHORTCUTS).toHaveLength(12);
-    expect(new Set(SHORTCUTS.map((s) => s.id)).size).toBe(12);
+  test("harvests 21 shortcuts with unique ids (12 through Phase 27 + Phase 31 ⌘1–⌘9 area nav)", () => {
+    expect(SHORTCUTS).toHaveLength(21);
+    expect(new Set(SHORTCUTS.map((s) => s.id)).size).toBe(21);
     expect(shortcutById("control-room")?.combo).toBe("alt+mod+r");
     expect(shortcutById("theater")?.combo).toBe("alt+mod+v");
     // Phase 27: screenshot-and-ask is registered in Rust like the other OS-wide
@@ -93,7 +93,7 @@ describe("Phase 8 · shortcut registry", () => {
   test("inAppHotkeys excludes globals and applies overrides", () => {
     const rows = inAppHotkeys({ palette: "mod+shift+p" });
     expect(rows.map((r) => r.id)).not.toContain("hud");
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(16); // 7 pre-Phase-31 + 9 area-nav
     expect(rows.find((r) => r.id === "palette")?.combo).toBe("mod+shift+p");
   });
 });

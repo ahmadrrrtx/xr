@@ -238,7 +238,7 @@ export const pricingPlans = [
     description:
       "For organizations that need a contract rather than a checkout page: procurement, a DPA of their own, invoicing on their terms.",
     cta: "Contact sales",
-    href: "/enterprise#contact",
+    href: "mailto:sales@xr.rrrtx.ai",
     featured: false,
     badge: "Manual invoicing",
     features: [

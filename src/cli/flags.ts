@@ -98,6 +98,8 @@ function normalizeFlagName(raw: string): string {
   return raw;
 }
 
+import { isDevMode } from "../util/dev-mode.ts";
+
 /**
  * Parse global XR CLI flags from argv (after the binary name).
  * Does not consume the command name itself — caller decides head.
@@ -200,6 +202,18 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
   if (process.env.XR_QUIET === "1") out.quiet = true;
   if (process.env.XR_DEBUG === "1") out.debug = true;
   if (process.env.XR_WORKSPACE) out.workspace = process.env.XR_WORKSPACE;
+
+  // Phase 31 · A12 — verbose/debug detail is gated behind dev mode
+  // (XR_DEV=1): raw `--verbose`/`--debug` output can echo prompts, traces
+  // and raw engine payloads, so in a production build the flags parse as
+  // no-ops. Turn them on with `XR_DEV=1 xr --verbose …`.
+  if (!isDevMode()) {
+    out.verbose = false;
+    if (out.debug) {
+      out.debug = false;
+      delete process.env.XR_DEBUG;
+    }
+  }
 
   return out;
 }

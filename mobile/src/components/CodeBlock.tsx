@@ -60,6 +60,7 @@ export function CodeBlock({ code, lang, maxHeight, showCopy = true }: CodeBlockP
           className="min-w-full px-3 py-2.5 font-mono text-[12.5px] leading-[1.55]"
           style={{ color: 'var(--text-primary)' }}
         >
+          {/* sink-allow: lib/highlight.ts output only — every token passes through its escapeHtml before being wrapped in a classed span, so no raw or daemon-supplied HTML can reach this node (Phase 31 · A2 sweep). */}
           <code dangerouslySetInnerHTML={{ __html: html }} />
         </pre>
       </div>

@@ -34,7 +34,7 @@ export default function ModelsPage() {
                   <Chip label="Tag" value={m.tag} />
                   <Chip label="Available" value="All plans" />
                 </div>
-                <Link href="/docs/models" className="btn btn-ghost w-full mt-5">
+                <Link href="https://github.com/ahmadrrrtx/xr/blob/main/docs/CAPABILITIES.md" className="btn btn-ghost w-full mt-5">
                   Use this model <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
@@ -53,7 +53,7 @@ export default function ModelsPage() {
             handles routing, caching, and cost controls out of the box.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link href="/docs/models" className="btn btn-primary">
+            <Link href="https://github.com/ahmadrrrtx/xr/blob/main/docs/CAPABILITIES.md" className="btn btn-primary">
               <Check className="h-4 w-4" /> Self-hosting guide
             </Link>
             <Link href="/enterprise" className="btn btn-ghost">Enterprise models</Link>

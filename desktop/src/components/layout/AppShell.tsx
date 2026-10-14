@@ -32,6 +32,7 @@ import { PausedBanner } from '@/components/shield/PausedBanner';
 import { initBudget } from '@/budget/enforce';
 import { initShield } from '@/shield/enforce';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { NAV_ITEMS } from '@/lib/nav';
 import { useSidebarStore } from '@/stores/sidebar';
 import { useThemeStore, type ThemeId } from '@/stores/theme';
 import { hydrateUIState } from '@/stores/ui';
@@ -133,6 +134,11 @@ function useGlobalHotkeys(): void {
         document.getElementById('xr-composer')?.focus();
       },
     },
+    // Phase 31 · E6 — ⌘1–⌘9 area switching (canonical nav order).
+    ...NAV_ITEMS.slice(0, 9).map((item) => ({
+      combo: combo(`nav-${item.id}`),
+      handler: () => navigate(item.path),
+    })),
   ]);
 }
 
