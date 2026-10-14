@@ -68,17 +68,19 @@ import {
 // invariants the hash pins (no inline script/style/onclick, token never
 // embedded) are asserted separately above.
 // Re-pinned for D-05 (Phase 1): brand images are EXTERNAL assets
-// (/assets/brand/logo.png, /assets/brand/avatar.png — official renders) instead
+// (/assets/logo.png, /assets/avatar.png — official renders) instead
 // of inline data URIs of re-drawn SVG marks; the document is ~100 KB and
 // carries zero data:image URIs (asserted below, so the size can never creep
 // back through an inlined image).
+// Bucket F v2 re-pin: brand routes moved to the refreshed repo-root
+// assets (/assets/logo.png, /assets/avatar.png); document hash re-pinned.
 // Phase 5 re-pin: SEC-09 disclosure banner (class-based, CSP-clean) joined the
 // composition — identity intentionally changed, invariants unchanged.
 // Phase 31 re-pin (v1.1.0 "Graphite"): the ONLY delta is the substituted
 // version line ("1.1.0 (Graphite) — Control Center"), proven by re-hashing
 // the render with the version reverted to 1.0.0/Truth, which reproduces
 // the previous pin byte-for-byte.
-const POST_PHASE4_SHA256 = "c6b309a5539ae5a29a31a49c3c59378fe8adcb1f53a8744e98e3f997d58ef2d0";
+const POST_PHASE4_SHA256 = "b38f9903e3674ae254e5d9ab25d479316a0fc0f930110177fd19010b271f8c20";
 const PRE_SPLIT_LENGTH = -1;
 
 function sha256(s: string): string {
@@ -118,8 +120,8 @@ describe("T7 — dashboard split preserves behaviour exactly (Phase 4 hardened o
   test("brand images are external official renders — never data URIs (D-05, and the 1.3 MB-per-response trap)", () => {
     const html = dashboardHtml("t");
     expect(html).not.toContain("data:image");
-    expect(html).toContain('src="/assets/brand/logo.png"');
-    expect(html).toContain('src="/assets/brand/avatar.png"');
+    expect(html).toContain('src="/assets/logo.png"');
+    expect(html).toContain('src="/assets/avatar.png"');
     expect(html.length).toBeLessThan(200_000);
   });
 

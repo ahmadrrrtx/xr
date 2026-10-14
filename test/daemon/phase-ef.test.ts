@@ -114,11 +114,12 @@ describe("RELEASE — no unverified static state claims in the dashboard", () =>
   });
 });
 
-describe("E-3 — official variants curated into assets/brand/", () => {
+describe("E-3 — official variants curated (Bucket F v2 pack)", () => {
   test("the canonical kit exists", () => {
-    expect(existsSync("assets/brand/avatar-front.png")).toBe(true);
-    expect(existsSync("assets/brand/avatar-hero.png")).toBe(true);
-    expect(existsSync("assets/brand/palette-reference.png")).toBe(true);
+    expect(existsSync("assets/logo.png")).toBe(true);
+    expect(existsSync("assets/avatar.png")).toBe(true);
+    expect(existsSync("assets/v2/MANIFEST.json")).toBe(true);
+    expect(existsSync("desktop/src/assets/xr-avatar-512.webp")).toBe(true);
   });
 });
 
