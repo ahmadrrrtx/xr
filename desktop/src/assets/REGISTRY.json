@@ -1,0 +1,456 @@
+{
+  "$comment": "Phase 31 Bucket F v2 — shipped desktop brand surfaces. Regenerate: bun run scripts/desktop-brand-check.ts --write. Sources: assets/v2/MANIFEST.json (Drive pack).",
+  "generatedFrom": "assets/v2 (Drive pack)",
+  "files": [
+    {
+      "path": "desktop/src-tauri/icons/128x128.png",
+      "bytes": 11468,
+      "sha256": "17cc6bde014db3753a656574d715e5b3c05b4d6177c940eca0ee35f0cdaa43b2"
+    },
+    {
+      "path": "desktop/src-tauri/icons/128x128@2x.png",
+      "bytes": 32526,
+      "sha256": "6d70df1e5f626f8d79295d28864181cbf6ca4ae537daa04ee4b3f56a4fd443eb"
+    },
+    {
+      "path": "desktop/src-tauri/icons/32x32.png",
+      "bytes": 1609,
+      "sha256": "7f1862658f6383fb1f7ff2b4c829ef5d81a5984268ce54f23f45acc219ebd4bc"
+    },
+    {
+      "path": "desktop/src-tauri/icons/64x64.png",
+      "bytes": 4084,
+      "sha256": "851095aed596a3905841d5914f832deb7d3418c5562bf5202814604ebdf3dd8b"
+    },
+    {
+      "path": "desktop/src-tauri/icons/icon.icns",
+      "bytes": 250801,
+      "sha256": "9dd4fabe084b7278619de523a83deb92df7fa442393a0be4cef0fc3b8c315c8f"
+    },
+    {
+      "path": "desktop/src-tauri/icons/icon.ico",
+      "bytes": 56885,
+      "sha256": "8869f505aada1afe08e6d6638f6e0911f0886504c6497502c02accbf11abfd6d"
+    },
+    {
+      "path": "desktop/src-tauri/icons/icon.png",
+      "bytes": 94517,
+      "sha256": "f82a8316db61cd4bfede49fd7db670a1db51ba31b32fdfd6b3a8e2ccd85ffafc"
+    },
+    {
+      "path": "desktop/src-tauri/icons/Square107x107Logo.png",
+      "bytes": 11648,
+      "sha256": "879c0aeacc16404d5c7839d6258b79b2c3c70a736e0e7efdeadea914301a3fd5"
+    },
+    {
+      "path": "desktop/src-tauri/icons/Square142x142Logo.png",
+      "bytes": 17706,
+      "sha256": "75c46f30564d671354fa565ef2f8ad8513d843e473d52ccff5e89867a7ef6d0f"
+    },
+    {
+      "path": "desktop/src-tauri/icons/Square150x150Logo.png",
+      "bytes": 18812,
+      "sha256": "4704b6e3d9628f14c3dd03bebd241fee6e62136d08fd54f3f66ed3aefc0852cc"
+    },
+    {
+      "path": "desktop/src-tauri/icons/Square284x284Logo.png",
+      "bytes": 49447,
+      "sha256": "c11d42be7e61c065fdeb57777cef14b1b5993f24801621d9f5ea6dcdbc133b2a"
+    },
+    {
+      "path": "desktop/src-tauri/icons/Square30x30Logo.png",
+      "bytes": 1703,
+      "sha256": "d0167ffdd08451ddac14282c7fd363ffe60f0b77bf939325c88d44eb3ce2e0e6"
+    },
+    {
+      "path": "desktop/src-tauri/icons/Square310x310Logo.png",
+      "bytes": 56592,
+      "sha256": "4c5bf989a97e44c42155613c2c5de024e12d4cb49533f56910fbf8ca7a20bf7b"
+    },
+    {
+      "path": "desktop/src-tauri/icons/Square44x44Logo.png",
+      "bytes": 3461,
+      "sha256": "0ee4c9eb31815bbeb9d7df49899123f158dd13bb4b7c52cc38e3ffd706f3dfdf"
+    },
+    {
+      "path": "desktop/src-tauri/icons/Square71x71Logo.png",
+      "bytes": 6473,
+      "sha256": "aa8aad2700b274dae46ea8b6d8aedcb49fe47780f3a87430a877fc12467dbc36"
+    },
+    {
+      "path": "desktop/src-tauri/icons/Square89x89Logo.png",
+      "bytes": 9100,
+      "sha256": "a9ede7fe72eeb205ed638d731d441dbc1aa9ce34b6377ed48c116640bb4b0dd7"
+    },
+    {
+      "path": "desktop/src-tauri/icons/StoreLogo.png",
+      "bytes": 3637,
+      "sha256": "b139d8c6cde41de6b02b12c5d30ed066d3965e5b14715c08c0cb712dd67a859d"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-128-badge.png",
+      "bytes": 4132,
+      "sha256": "5a452b7cfbda3e4c00e0a0b4aa67eb62b99d7eeef9e8296e9ef8186edf4962b3"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-128.png",
+      "bytes": 4556,
+      "sha256": "43ed3aea9906cc08827a5452bad0bb031ea69993905a854161455694b6f6d9b9"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-22-badge.png",
+      "bytes": 438,
+      "sha256": "33214efc69dd5a50af76940326cb7d700fd5049749c2be412ccd149990ac9477"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-22.png",
+      "bytes": 464,
+      "sha256": "e8babcd1f22d47d32f55c73f753c2e24136790dfe84b71dfaf1cad2b3b79b818"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-24-badge.png",
+      "bytes": 488,
+      "sha256": "2a4aeeb160dd002583382aee48b7701b8e17c0911a798f1eed7cde915efcaf73"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-24.png",
+      "bytes": 526,
+      "sha256": "65ac93279281cf490bfc55ca9352da004741a7880c6e81e564c38bfeb0675de7"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-32-badge.png",
+      "bytes": 689,
+      "sha256": "92527b01fa8b2180b59396092f7887da2401da61f130d2ab39f2e96dad44f5ad"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-32.png",
+      "bytes": 728,
+      "sha256": "e60b3403a34a94468139b1c2a131efbe228ff8a2522759f45b3b167b43b5b2ad"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-48-badge.png",
+      "bytes": 1107,
+      "sha256": "57464ac369d985cca6da2f1be91d76e088883a412addf708b8ed7d22914e92ff"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-48.png",
+      "bytes": 1199,
+      "sha256": "0fd23c7d203991c2c33e4e987acee6d7b3628766eb1728b269d3adabe69543c8"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-64-badge.png",
+      "bytes": 1650,
+      "sha256": "1aae7e22b72de14b74456bdb1e80c884c6a3cc9fa55d98059c4088f1be9ccdac"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-linux-64.png",
+      "bytes": 1777,
+      "sha256": "377f7b1553b3815146aae98aacaebab6d14bb2ca38cd7ad49bd931b5e81f5e8e"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-mac-template.png",
+      "bytes": 443,
+      "sha256": "a4e4843531c7b1e82e716e14a9932f32b3a2778c606a19e42002e5d0a74457ba"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-mac-template@2x.png",
+      "bytes": 1056,
+      "sha256": "45bac9871679264387b1f409d1515d6f3ff7c425d1c1209278ba9666de852ce3"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-win-badge.ico",
+      "bytes": 1053,
+      "sha256": "576bdb46482e82a63160f1d81d901c2f277b38dd7602e761bd068916580becb0"
+    },
+    {
+      "path": "desktop/src-tauri/icons/tray/tray-win.ico",
+      "bytes": 1104,
+      "sha256": "d539a27832f0b648b6e700cd5c195e9454705ccf82a0ab4e69ff92320dd030de"
+    },
+    {
+      "path": "desktop/src/assets/avatar-states/xr-avatar-approved.gif",
+      "bytes": 1418162,
+      "sha256": "008382a814681ed47d6e8045425f72e38ca56df505e583cc459f6d2594ffb0b8"
+    },
+    {
+      "path": "desktop/src/assets/avatar-states/xr-avatar-denied.gif",
+      "bytes": 1247237,
+      "sha256": "d0df43fb07ec2c2ef779f875b852276040f6e617cdeeca5b3db2fdf1d7aeffe2"
+    },
+    {
+      "path": "desktop/src/assets/avatar-states/xr-avatar-error.gif",
+      "bytes": 1318107,
+      "sha256": "1fb2371fc9c4017ddf1e8dfca311eeef413f6d6242c3528d9d1a59b1420898c0"
+    },
+    {
+      "path": "desktop/src/assets/avatar-states/xr-avatar-idle.gif",
+      "bytes": 1166726,
+      "sha256": "3fc5217c7a22be71f886ac94f4e0576aae6d9ffc01ba2fcae8a1ca251100d773"
+    },
+    {
+      "path": "desktop/src/assets/avatar-states/xr-avatar-listening.gif",
+      "bytes": 1436877,
+      "sha256": "2f6c21e1ef90605081f6707bf0f3bb0389015b369dabfe5044158344a2fddd66"
+    },
+    {
+      "path": "desktop/src/assets/avatar-states/xr-avatar-sleeping.gif",
+      "bytes": 883939,
+      "sha256": "f1971ad58f6d0df876eee2620c2f5e5841927519da496e813e2604008d11c4a4"
+    },
+    {
+      "path": "desktop/src/assets/avatar-states/xr-avatar-speaking.gif",
+      "bytes": 1305703,
+      "sha256": "4a44cfc3d0b46c5bfb7aa30385dad3edfc22a6eb72158558a4165bbd8877e7eb"
+    },
+    {
+      "path": "desktop/src/assets/avatar-states/xr-avatar-thinking.gif",
+      "bytes": 1154547,
+      "sha256": "02fcf8cba1ff624f03d6daf08445f507760e9c0eccdf41c2548c72ec9aed53c4"
+    },
+    {
+      "path": "desktop/src/assets/avatar-states/xr-avatar-waiting-approval.gif",
+      "bytes": 1385258,
+      "sha256": "8d00041fb6f4b176ff67853abeea5db4dfd958abbd1ccfc4cebcc1e0bcdf2a76"
+    },
+    {
+      "path": "desktop/src/assets/orb/gif/orb-approved.gif",
+      "bytes": 275429,
+      "sha256": "146bf1cbfaa9c742754fd77a625c704d509fa3df0089e7a47cd148839f1a0011"
+    },
+    {
+      "path": "desktop/src/assets/orb/gif/orb-denied.gif",
+      "bytes": 274682,
+      "sha256": "cf7d56b3be13ef139aad52c5d0b74c2ceaab507f073f4acd0a29756e6c065b98"
+    },
+    {
+      "path": "desktop/src/assets/orb/gif/orb-error.gif",
+      "bytes": 281258,
+      "sha256": "1ecca0cdcfd41c1f7825bb0f9e25ebb0d1d90f83cc776b3cc7c56bc0e9eb53ae"
+    },
+    {
+      "path": "desktop/src/assets/orb/gif/orb-idle.gif",
+      "bytes": 273430,
+      "sha256": "305517415148c2689cdfe55e6fdb0eb9fd44dd8abb030c400ecf8ef53a36dc62"
+    },
+    {
+      "path": "desktop/src/assets/orb/gif/orb-listening.gif",
+      "bytes": 324826,
+      "sha256": "5ad6254ba0317eae49153b65ae9beee91d5579614891fe45b4bab14b0a7ecb72"
+    },
+    {
+      "path": "desktop/src/assets/orb/gif/orb-sleeping.gif",
+      "bytes": 206099,
+      "sha256": "16cd32be941645bfd6a124d5bf5908c7668c808e048c5453f0d213e83305301c"
+    },
+    {
+      "path": "desktop/src/assets/orb/gif/orb-speaking.gif",
+      "bytes": 343116,
+      "sha256": "79bea860b8dcd9a01c2f13e94cf775efa307e5d3bbc830cde2f9ca09f9c40463"
+    },
+    {
+      "path": "desktop/src/assets/orb/gif/orb-thinking.gif",
+      "bytes": 277524,
+      "sha256": "9b9c13addc4bdf542f8aaa48948f475aa36e816dc8f54af7ef80fc8ee36ac66a"
+    },
+    {
+      "path": "desktop/src/assets/orb/gif/orb-waiting-approval.gif",
+      "bytes": 281495,
+      "sha256": "360bb532c0930a509016673bad600ce6706ea2241811d5ab30b7bf1cd4b2d952"
+    },
+    {
+      "path": "desktop/src/assets/orb/orb-approved.webp",
+      "bytes": 210714,
+      "sha256": "8dc7cfb3a2c9a4ae5627107d61dba9efbce366228e90a36abe37dbbe5393d667"
+    },
+    {
+      "path": "desktop/src/assets/orb/orb-denied.webp",
+      "bytes": 214250,
+      "sha256": "c64ffc8ac87a3253d53c72c20ccdbed22585f4bfa5e5335a3055d9702de36b2f"
+    },
+    {
+      "path": "desktop/src/assets/orb/orb-error.webp",
+      "bytes": 238814,
+      "sha256": "8dafce7f55bad30317c0a12a94607d5bb8398f75abc33f255c4b055d1f492d0b"
+    },
+    {
+      "path": "desktop/src/assets/orb/orb-idle.webp",
+      "bytes": 221254,
+      "sha256": "339ef6202fb2067969c2a53e00fefe5c1307583ff1de93b14a9211ea7e6028a6"
+    },
+    {
+      "path": "desktop/src/assets/orb/orb-listening.webp",
+      "bytes": 345442,
+      "sha256": "9b4dbc67c1c7a43a124d5107e6ebdc27a4fd7366e50273a7a2273bbc88a33f30"
+    },
+    {
+      "path": "desktop/src/assets/orb/orb-sleeping.webp",
+      "bytes": 189222,
+      "sha256": "44aafa13e1344bf2e0b14b910abaaebc2dd832af27ec4e21a1573fe2b99dff24"
+    },
+    {
+      "path": "desktop/src/assets/orb/orb-speaking.webp",
+      "bytes": 319304,
+      "sha256": "76655d507a60f4617ddab37a14012af6b1270aa9d1732ffce6722e724dde3515"
+    },
+    {
+      "path": "desktop/src/assets/orb/orb-thinking.webp",
+      "bytes": 215914,
+      "sha256": "da7d195e18c49b12ee3a6b4b09e7b69cce551c65f660bbc9a2612725c1ddd1f1"
+    },
+    {
+      "path": "desktop/src/assets/orb/orb-waiting-approval.webp",
+      "bytes": 223504,
+      "sha256": "e0af65611247ad2499417e72370237bfe12847ad17798a6656ce99de7af445a2"
+    },
+    {
+      "path": "desktop/src/assets/orb/poster/orb-approved.png",
+      "bytes": 118640,
+      "sha256": "f986a6c6936aab864cdccc312b3e03ed59b0bc6846c24c16e59fe153085e2a0d"
+    },
+    {
+      "path": "desktop/src/assets/orb/poster/orb-denied.png",
+      "bytes": 117804,
+      "sha256": "50bab285ca3a08aabf0664885bc07cd10d3541981e4529ecd2481a6196054d39"
+    },
+    {
+      "path": "desktop/src/assets/orb/poster/orb-error.png",
+      "bytes": 117804,
+      "sha256": "50bab285ca3a08aabf0664885bc07cd10d3541981e4529ecd2481a6196054d39"
+    },
+    {
+      "path": "desktop/src/assets/orb/poster/orb-idle.png",
+      "bytes": 117641,
+      "sha256": "deb5f1e67ba34c8b6ab5432fef1a3189bef07030d73ae38dce8b8b15bb287866"
+    },
+    {
+      "path": "desktop/src/assets/orb/poster/orb-listening.png",
+      "bytes": 135102,
+      "sha256": "4307e7133fd618b1ba59e1c6ea490394c5efa4b06e5332e22b29339df9d36df0"
+    },
+    {
+      "path": "desktop/src/assets/orb/poster/orb-sleeping.png",
+      "bytes": 98609,
+      "sha256": "501beb25c81e8d3f4965d62ad1980272dc72e617d8d3bc81d527d186274b8784"
+    },
+    {
+      "path": "desktop/src/assets/orb/poster/orb-speaking.png",
+      "bytes": 138053,
+      "sha256": "c835b4a751124453594e4da9fccd413834f944c399693a1755d6bbbf2d0d22a6"
+    },
+    {
+      "path": "desktop/src/assets/orb/poster/orb-thinking.png",
+      "bytes": 120581,
+      "sha256": "50f99e5313ac709df8e9d417a012cceebbaae1b32cbc16eef643994f0a770e80"
+    },
+    {
+      "path": "desktop/src/assets/orb/poster/orb-waiting-approval.png",
+      "bytes": 119769,
+      "sha256": "c0bab358060c91ab7a5e5e1d86b1ad02909914159e192dca9a6560c77923ff3e"
+    },
+    {
+      "path": "desktop/src/assets/orb/themes/orb-idle-crimson.png",
+      "bytes": 117011,
+      "sha256": "9714e160c29eee78e71d597a1e04f42c95bdd463e94e2201a91e4697e6b72e51"
+    },
+    {
+      "path": "desktop/src/assets/orb/themes/orb-idle-crimson.webp",
+      "bytes": 214466,
+      "sha256": "130898465b2b24190fcf0012f4245da074891d3874b5dc698d78f0b3cf2698e6"
+    },
+    {
+      "path": "desktop/src/assets/orb/themes/orb-idle-emerald.png",
+      "bytes": 118204,
+      "sha256": "d533965f5d189c556d79aca74a51d8f419681d869ef09bd4a6af249274b0924d"
+    },
+    {
+      "path": "desktop/src/assets/orb/themes/orb-idle-emerald.webp",
+      "bytes": 211000,
+      "sha256": "1ac50af669c030be9b6ecb3d2d97a0520bece4854c672adc8526fa05086c647a"
+    },
+    {
+      "path": "desktop/src/assets/orb/themes/orb-idle-nebula.png",
+      "bytes": 119311,
+      "sha256": "06107223ce4a9714140b9edf722111de60828da381265bddf2d93d0f0cf4a6eb"
+    },
+    {
+      "path": "desktop/src/assets/orb/themes/orb-idle-nebula.webp",
+      "bytes": 207598,
+      "sha256": "e4916e634b7b18079b3b2cc08d675427e28ad746382d6f2ee0922ead3cd1b4b4"
+    },
+    {
+      "path": "desktop/src/assets/orb/themes/orb-idle-solar.png",
+      "bytes": 118781,
+      "sha256": "a4a0be852180a3062df8141ac6a0ec6b6e1172368e9d139eb5712cb61dec5b9b"
+    },
+    {
+      "path": "desktop/src/assets/orb/themes/orb-idle-solar.webp",
+      "bytes": 223870,
+      "sha256": "c60b36f1537ba37e087f9514b56d29da5c8fb1ce20c227127d79e2ffe56419b0"
+    },
+    {
+      "path": "desktop/src/assets/xr-avatar-128.webp",
+      "bytes": 7446,
+      "sha256": "bc80b67c04e29a64d387d384cd753cfafba4e9f64322a07b3a28fa1e1332d227"
+    },
+    {
+      "path": "desktop/src/assets/xr-avatar-256.webp",
+      "bytes": 22146,
+      "sha256": "6e7fcf5ea32481eae6ffdc072fc716a3144d337ca4798c7781df0b5f83bc0ab8"
+    },
+    {
+      "path": "desktop/src/assets/xr-avatar-512.webp",
+      "bytes": 67906,
+      "sha256": "40a5b874d9419c9f7901183cc90b8e6ef1e43acf3f407358dffba3052c9b030b"
+    },
+    {
+      "path": "desktop/src/assets/xr-avatar-side-2.webp",
+      "bytes": 51082,
+      "sha256": "d3977026e360d3da19860510045aeadf89d5345521aa789bd06a0ce6281249e0"
+    },
+    {
+      "path": "desktop/src/assets/xr-avatar-side.webp",
+      "bytes": 69740,
+      "sha256": "4e9f27ae8f87ecd68617269a182d9898f1af762302dd7949e850d376ef36a641"
+    },
+    {
+      "path": "desktop/src/assets/xr-avatar.png",
+      "bytes": 64173,
+      "sha256": "b3ca94a1699d33c4e8a02a1a02db03042c2d25532ef8a7846a3a84f52af02e07"
+    },
+    {
+      "path": "desktop/src/assets/xr-emblem-256.png",
+      "bytes": 33256,
+      "sha256": "ae9b9a79cc0ec794a82640023db4a39e3d129dcdfe915b8f2600d7fc3bc3ae41"
+    },
+    {
+      "path": "desktop/src/assets/xr-emblem-512.png",
+      "bytes": 91396,
+      "sha256": "4c6edc433ed48ca2c113f4908591ffd160d749c0f14bc5a3b2081f4bba6a430c"
+    },
+    {
+      "path": "desktop/src/assets/xr-hero.webp",
+      "bytes": 22888,
+      "sha256": "f146cddae72f4a5e7021141324e1d5f346f27f601a25f5d0900bd71fc3c57395"
+    },
+    {
+      "path": "desktop/src/assets/xr-logo-320.png",
+      "bytes": 47482,
+      "sha256": "70b60a68e606e13a9cdd25beee687d1edc1aef08d3cbbebfe658c359d1b7f800"
+    },
+    {
+      "path": "desktop/src/assets/xr-logo.png",
+      "bytes": 150389,
+      "sha256": "241a1e0f56c234448605b419b88d71bd12137b902862b3fa912a4bc7593b6091"
+    },
+    {
+      "path": "desktop/src/assets/xr-readme-hero.png",
+      "bytes": 328003,
+      "sha256": "97f984736b15348faabe9b9ccc87a2fd1a4661fcb7b7b1873e055f2b70a33d7a"
+    },
+    {
+      "path": "desktop/src/assets/xr-terminal-splash.png",
+      "bytes": 327328,
+      "sha256": "f816574ceb07f7a7f0bf2b963a31635ba84e906da8f245b2789db2ef1a716702"
+    }
+  ]
+}
