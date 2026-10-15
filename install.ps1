@@ -225,9 +225,24 @@ function Install-XrSource {
 function Install-XrDependencies {
   param([string]$TargetDirectory)
   Write-XrStep 'Installing XR package dependencies'
+  # Supply-chain hardening (matches CI): never run package lifecycle scripts
+  # during install. XR's runtime deps are audited, but `playwright` (an
+  # optionalDependency) and any transitive dep could otherwise run install
+  # scripts that touch the user's system. CI uses `bun install --ignore-scripts`
+  # for the same reason - see .github/workflows/* and CONTRIBUTING.md.
+  #
+  # Override with XR_INSTALL_ALLOW_SCRIPTS=1 only if you understand the risk
+  # and have a verified bun.lock.
+  $allowScripts = $env:XR_INSTALL_ALLOW_SCRIPTS -eq '1'
+  $installArgs = @('install')
+  if (-not $allowScripts) {
+    $installArgs += '--ignore-scripts'
+  } else {
+    Write-XrWarn 'XR_INSTALL_ALLOW_SCRIPTS=1 - package lifecycle scripts WILL run during install (supply-chain risk).'
+  }
   Push-Location $TargetDirectory
   try {
-    bun install
+    bun @installArgs
     if ($LASTEXITCODE -ne 0) { Stop-XrInstall "bun install failed (exit $LASTEXITCODE)." }
   } finally {
     Pop-Location
