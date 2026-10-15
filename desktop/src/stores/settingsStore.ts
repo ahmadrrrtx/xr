@@ -340,6 +340,16 @@ export function setPathImmutable<T>(
 interface SettingsStoreState {
   settings: XRSettings;
   hydrated: boolean;
+  /**
+   * #15 — epoch ms of the last local write (update / setPath / resetAll).
+   * `null` until the first write. Used by the Settings header to show a
+   * brief "Saved ✓" indicator after every change so users get feedback
+   * that their toggle landed (modern apps auto-save, but without a visual
+   * cue users can't tell if the change stuck). Remote applies
+   * (`applyRemote`) deliberately do NOT bump this — the indicator is for
+   * the user's own actions, not cross-window sync.
+   */
+  lastChangedAt: number | null;
   /** Boot hydration: durable store → defaults merge → apply effects. */
   load: () => Promise<void>;
   /** Group-level patch — the primary API for tab components. */
@@ -357,7 +367,8 @@ interface SettingsStoreState {
 
 function commit(
   next: XRSettings,
-  changedGroup: SettingsGroup | null
+  changedGroup: SettingsGroup | null,
+  isLocal: boolean
 ): Partial<SettingsStoreState> {
   writeSettingJSON(SETTINGS_KEY, next);
   if (changedGroup) {
@@ -370,12 +381,18 @@ function commit(
   ) {
     applyAppearanceEffects(next.appearance);
   }
-  return { settings: next };
+  // #15 — only local writes bump the save indicator. Remote applies are
+  // silent (the other window's indicator already fired when its user
+  // made the change).
+  return isLocal
+    ? { settings: next, lastChangedAt: Date.now() }
+    : { settings: next };
 }
 
 export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
   settings: structuredClone(DEFAULT_SETTINGS),
   hydrated: false,
+  lastChangedAt: null,
 
   load: async () => {
     const loaded = await readSettingJSON<unknown>(SETTINGS_KEY);
@@ -389,13 +406,13 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
       ...get().settings,
       [group]: { ...get().settings[group], ...patch },
     } as XRSettings;
-    set(commit(next, group));
+    set(commit(next, group, true));
   },
 
   setPath: (path, value) => {
     const group = path.split('.')[0] as SettingsGroup;
     const next = setPathImmutable(get().settings, path, value);
-    set(commit(next, group));
+    set(commit(next, group, true));
   },
 
   applyRemote: (key, value) => {
@@ -409,12 +426,12 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
         ...(value as Record<string, unknown>),
       }),
     } as XRSettings;
-    set(commit(next, null));
+    set(commit(next, null, false));
   },
 
   resetAll: () => {
     const next = structuredClone(DEFAULT_SETTINGS);
-    set(commit(next, null));
+    set(commit(next, null, true));
   },
 }));
 

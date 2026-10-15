@@ -109,6 +109,13 @@ function SidebarNavItem({
     <NavLink
       to={item.path}
       aria-label={item.label}
+      // #13 — native title attribute as an instant, no-delay fallback to the
+      // Radix Tooltip (which has a 200ms delay via the app-wide provider).
+      // Includes the description so users hovering an unfamiliar icon in
+      // expanded mode also get context, not just the label they can already
+      // see. The Radix Tooltip below remains the primary surface in collapsed
+      // mode (richer styling, consistent with the rest of the app).
+      title={`${item.label} — ${item.description}`}
       className={({ isActive }) =>
         cn(
           'group relative flex items-center rounded-md no-underline transition-colors duration-150 ease-out',
@@ -156,15 +163,21 @@ function SidebarNavItem({
   );
 
   // Collapsed: tooltip to the right (200ms via the app-wide TooltipProvider).
+  // #13 — the tooltip now carries the description as a second line so users
+  // learn what the icon means, not just its name. The native `title` attribute
+  // on the link itself is the instant fallback.
   if (collapsed) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
         <TooltipContent
           side="right"
-          className="border-none bg-[var(--tooltip-bg)] text-[var(--tooltip-fg)]"
+          className="max-w-[220px] border-none bg-[var(--tooltip-bg)] text-[var(--tooltip-fg)]"
         >
-          {item.label}
+          <div className="text-[12px] font-medium">{item.label}</div>
+          <div className="text-text-tertiary mt-0.5 text-[11px] leading-snug">
+            {item.description}
+          </div>
         </TooltipContent>
       </Tooltip>
     );

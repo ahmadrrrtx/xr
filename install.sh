@@ -183,7 +183,21 @@ fetch_repo(){
 
 install_deps(){
   log "Installing XR package dependencies"
-  (cd "$TARGET_DIR" && bun install) || die "Dependency install failed. Run: cd '$TARGET_DIR' && bun install"
+  # Supply-chain hardening (matches CI): never run package lifecycle scripts
+  # during install. XR's runtime deps are audited, but `playwright` (an
+  # optionalDependency) and any transitive dep could otherwise run install
+  # scripts that touch the user's system. CI uses `bun install --ignore-scripts`
+  # for the same reason — see .github/workflows/* and CONTRIBUTING.md.
+  #
+  # Override with XR_INSTALL_ALLOW_SCRIPTS=1 only if you understand the risk
+  # and have a verified bun.lock (e.g. `bun install --frozen-lockfile` first).
+  local install_args=(install)
+  if [ "${XR_INSTALL_ALLOW_SCRIPTS:-0}" != "1" ]; then
+    install_args+=(--ignore-scripts)
+  else
+    warn "XR_INSTALL_ALLOW_SCRIPTS=1 — package lifecycle scripts WILL run during install (supply-chain risk)."
+  fi
+  (cd "$TARGET_DIR" && bun "${install_args[@]}") || die "Dependency install failed. Run: cd '$TARGET_DIR' && bun install${XR_INSTALL_ALLOW_SCRIPTS:+ --ignore-scripts}"
   ok "Dependencies installed"
 }
 

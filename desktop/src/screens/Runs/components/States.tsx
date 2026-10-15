@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils';
 import { demoRunIsReal } from '@/brain/demo';
 import { useRunsStore } from '@/stores/runsStore';
 
-import { GRID, ROW_HEIGHT } from './RunsTable';
+import { GRID, ROW_HEIGHT, TableHeader } from './RunsTable';
+import { DEFAULT_SORT } from '@/runs/core';
 
 /** 12 shimmer rows laid out on the real grid so the swap is seamless. */
 export function RunsSkeleton() {
@@ -82,44 +83,56 @@ export function EmptyFiltered() {
 export function EmptyFresh() {
   const navigate = useNavigate();
   return (
-    <EmptyState
-      testId="runs-empty"
-      className="h-full min-h-[280px]"
-      title="No runs yet"
-      description="Runs will appear here once agents start working. Start a chat to see your first run."
-      actions={
-        <>
-          <button
-            type="button"
-            onClick={() => navigate('/chat')}
-            className="bg-accent text-accent-contrast flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-opacity hover:opacity-90"
-          >
-            <MessageCircle className="size-4" strokeWidth={1.5} aria-hidden="true" />
-            Go to Chat
-          </button>
-          <button
-            type="button"
-            data-testid="runs-demo"
-            onClick={() => {
-              const id = useRunsStore.getState().startDemoRun();
-              toast(demoRunIsReal() ? 'Run started' : 'Demo run started', {
-                description: demoRunIsReal()
-                  ? 'A real agent turn on the engine. Watch it live here, or open the trace.'
-                  : 'No model configured — this is a canned trace. Watch it live here, or open it.',
-                action: {
-                  label: 'View trace',
-                  onClick: () => navigate(`/brain/${id}`),
-                },
-              });
-            }}
-            className="border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-raised flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[13px] transition-colors"
-          >
-            <Play className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-            Start a demo run
-          </button>
-        </>
-      }
-    />
+    <div className="flex h-full min-h-0 flex-col" data-testid="runs-empty-wrap">
+      {/* #11 — ghosted table header so a fresh user can see the schema
+          (Status / ID / Title / Agent / Workspace / Model / Started /
+          Duration / Tokens / Cost / Actions) instead of just an alien
+          illustration with no context for what a "run" looks like. Uses
+          DEFAULT_SORT (startedAt desc) — the same sort the table will
+          apply when runs arrive — so the user sees the actual initial
+          sort indicator, not a fabricated 'no sort' state. */}
+      <TableHeader sort={DEFAULT_SORT} />
+      <div className="flex min-h-[280px] flex-1 items-center justify-center">
+        <EmptyState
+          testId="runs-empty"
+          className="h-full min-h-[280px]"
+          title="No runs yet"
+          description="Runs will appear here once agents start working. Start a chat to see your first run."
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={() => navigate('/chat')}
+                className="bg-accent text-accent-contrast flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-opacity hover:opacity-90"
+              >
+                <MessageCircle className="size-4" strokeWidth={1.5} aria-hidden="true" />
+                Go to Chat
+              </button>
+              <button
+                type="button"
+                data-testid="runs-demo"
+                onClick={() => {
+                  const id = useRunsStore.getState().startDemoRun();
+                  toast(demoRunIsReal() ? 'Run started' : 'Demo run started', {
+                    description: demoRunIsReal()
+                      ? 'A real agent turn on the engine. Watch it live here, or open the trace.'
+                      : 'No model configured — this is a canned trace. Watch it live here, or open it.',
+                    action: {
+                      label: 'View trace',
+                      onClick: () => navigate(`/brain/${id}`),
+                    },
+                  });
+                }}
+                className="border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-raised flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[13px] transition-colors"
+              >
+                <Play className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+                Start a demo run
+              </button>
+            </>
+          }
+        />
+      </div>
+    </div>
   );
 }
 

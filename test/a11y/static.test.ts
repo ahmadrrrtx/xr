@@ -12,7 +12,7 @@ import { describe, expect, test } from "bun:test";
 import { DASHBOARD_PAGE } from "../../src/daemon/dashboard/markup.ts";
 import { DASHBOARD_CSS } from "../../src/daemon/dashboard/styles.ts";
 import { DASHBOARD_SCRIPT } from "../../src/daemon/dashboard/client-script.ts";
-import { authPageHtml, AUTH_PAGE_CSP } from "../../src/daemon/auth-page.ts";
+import { authPageHtml, authPageCSP, AUTH_PAGE_CSP, generateCspNonce } from "../../src/daemon/auth-page.ts";
 
 describe("T3 static — landmarks & navigation", () => {
   test("exactly one <main> landmark, with an id the skip link targets", () => {
@@ -165,7 +165,8 @@ describe("T3 static — CSS layer", () => {
 
 describe("T3 static — accessible authentication (3.3.8)", () => {
   test("the sign-in page is a labelled, paste-friendly token form", () => {
-    const html = authPageHtml("/");
+    const nonce = generateCspNonce();
+    const html = authPageHtml("/", nonce);
     expect(html).toContain('<label for="token">Access token</label>');
     expect(html).toContain('type="password"');
     expect(html).toContain('role="alert"');
@@ -173,19 +174,47 @@ describe("T3 static — accessible authentication (3.3.8)", () => {
     expect(html).toContain("method=\"get\"");
     expect(html).toContain("paste is never blocked");
     expect(html).not.toContain("__TOKEN__");
+    // Phase 31 · Bucket A follow-up (#6): the inline <style> must carry the nonce.
+    expect(html).toContain(`<style nonce="${nonce}">`);
   });
 
   test("the sign-in page ships no inline scripts (CSP allows same-origin only)", () => {
-    const html = authPageHtml("/");
+    const nonce = generateCspNonce();
+    const html = authPageHtml("/", nonce);
     expect(html).not.toContain("<script>");
     expect(html).toContain('src="/assets/auth.js"');
+    // The CSP TEMPLATE (before nonce substitution) still pins the directives.
     expect(AUTH_PAGE_CSP).toContain("default-src 'none'");
     expect(AUTH_PAGE_CSP).toContain("script-src 'self'");
     expect(AUTH_PAGE_CSP).toContain("form-action 'self'");
+    // #6 — no 'unsafe-inline' anywhere in the template or the rendered CSP.
+    expect(AUTH_PAGE_CSP).not.toContain("unsafe-inline");
+    const csp = authPageCSP(nonce);
+    expect(csp).not.toContain("unsafe-inline");
+    expect(csp).toContain(`style-src 'nonce-${nonce}'`);
   });
 
   test("the action URL is attribute-escaped and rooted", () => {
-    expect(authPageHtml('//evil.example" onclick="x')).toContain('action="/"');
-    expect(authPageHtml("/settings?x=1&y=2")).toContain('action="/settings?x=1&amp;y=2"');
+    const nonce = generateCspNonce();
+    expect(authPageHtml('//evil.example" onclick="x', nonce)).toContain('action="/"');
+    expect(authPageHtml("/settings?x=1&y=2", nonce)).toContain('action="/settings?x=1&amp;y=2"');
+  });
+
+  test("#6 — authPageHtml refuses to render without a nonce (fail-closed)", () => {
+    expect(() => authPageHtml("/")).toThrow(/nonce/i);
+  });
+
+  test("#6 — authPageCSP rejects malformed nonces", () => {
+    expect(() => authPageCSP("")).toThrow();
+    expect(() => authPageCSP("contains space")).toThrow();
+    expect(() => authPageCSP("contains;semicolon")).toThrow();
+  });
+
+  test("#6 — generateCspNonce produces base64-only, ≥24-char, unique nonces", () => {
+    const a = generateCspNonce();
+    const b = generateCspNonce();
+    expect(a).toMatch(/^[A-Za-z0-9+/=_-]+$/);
+    expect(a.length).toBeGreaterThanOrEqual(24); // 18 bytes base64 ≈ 24 chars
+    expect(a).not.toBe(b);
   });
 });

@@ -20,8 +20,35 @@
 
 import { esc } from "../util/html-escape.ts";
 
-/** Accessible 401 sign-in page (no external assets; CSP allows inline style only). */
-export function authPageHtml(returnPath = "/"): string {
+/**
+ * Generate a fresh per-response CSP nonce. 18 bytes (144 bits) base64-encoded
+ * matches OWASP's recommendation (≥128 bits). Uses WebCrypto (Bun's
+ * `globalThis.crypto`), which is the same source as `xr SessionToken` etc.
+ * Each call returns a new nonce — never reuse a nonce across responses.
+ */
+export function generateCspNonce(): string {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  // Base64 without padding — CSP nonces tolerate either form, and trimming
+  // keeps the header smaller for the inline `<style nonce="…">` mirror.
+  return Buffer.from(bytes).toString("base64").replace(/=+$/, "");
+}
+
+/**
+ * Accessible 401 sign-in page.
+ *
+ * Phase 31 · Bucket A follow-up: the inline `<style>` block now carries a
+ * per-response `nonce` that the response's CSP also names — replacing the
+ * previous `style-src 'unsafe-inline'` carve-out. The page is still
+ * self-contained (no external stylesheet) and `script-src 'self'` remains
+ * the only script posture (the auth behaviour is the external `/assets/auth.js`).
+ *
+ * @param returnPath deep link the user originally asked for
+ * @param nonce      per-response CSP nonce (from `generateCspNonce()`);
+ *                   REQUIRED — calling without one throws (fail-closed).
+ */
+export function authPageHtml(returnPath = "/", nonce?: string): string {
+  if (!nonce) throw new Error("authPageHtml: a per-response CSP nonce is required");
   // The form GETs the URL the user originally asked for, preserving deep links.
   const action = returnPath.startsWith("/") && !returnPath.startsWith("//") ? returnPath : "/";
   return `<!DOCTYPE html>
@@ -31,7 +58,7 @@ export function authPageHtml(returnPath = "/"): string {
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="robots" content="noindex,nofollow"/>
 <title>Sign in — XR Control Center</title>
-<style>
+<style nonce="${nonce}">
 :root { color-scheme: dark; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -136,6 +163,31 @@ export const AUTH_PAGE_SCRIPT = `
 })();
 `;
 
-/** Content-Security-Policy for the sign-in page: no inline scripts, self-only assets. */
+/**
+ * Content-Security-Policy template for the sign-in page.
+ *
+ * `style-src 'nonce-{NONCE}'` allows the inline `<style nonce="…">` block
+ * and NOTHING else — no `unsafe-inline`, no `unsafe-hashes`. The placeholder
+ * is substituted per-response by `authPageCSP(nonce)`; never ship this string
+ * verbatim (a literal `{NONCE}` in a CSP header fails open in some browsers).
+ *
+ * No inline scripts (the auth behaviour is the external `/assets/auth.js`).
+ */
 export const AUTH_PAGE_CSP =
-  "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+  "default-src 'none'; script-src 'self'; style-src 'nonce-{NONCE}'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+
+/**
+ * Per-response CSP for the sign-in page. Substitutes the nonce into the
+ * template; the nonce MUST match the `<style nonce="…">` attribute on the
+ * rendered page (callers must use the same nonce for both).
+ */
+export function authPageCSP(nonce: string): string {
+  if (!nonce) throw new Error("authPageCSP: a per-response nonce is required");
+  // Reject any character that would break out of the CSP directive value.
+  // (generateCspNonce only ever emits base64[A-Za-z0-9+/], but this guard is
+  // cheap and protects against future callers that pass a hand-rolled nonce.)
+  if (!/^[A-Za-z0-9+/=_-]+$/.test(nonce)) {
+    throw new Error("authPageCSP: nonce contains invalid characters");
+  }
+  return AUTH_PAGE_CSP.replace("{NONCE}", nonce);
+}

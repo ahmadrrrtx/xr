@@ -265,13 +265,36 @@ function PickWorkspace({ workspaces, loaded }: { workspaces: Workspace[]; loaded
       <div className="xb-center-msg" data-testid="builder-pick">
         <h2>Open a project in Builder</h2>
         <p className="text-text-tertiary text-[13px]">Pick a workspace — the editor, preview and chat open on its folder.</p>
-        {loaded && recent.length === 0 ? (
-          <Link to="/workspaces" className="xb-ghost">
-            Create a workspace
-          </Link>
-        ) : (
-          <div className="xb-recents">
-            {recent.map((w) => (
+        {/* #12 — always show the "Recent Workspaces" section header so users
+            know the section exists, even before they have any workspaces.
+            The "Browse all workspaces" link is a permanent secondary CTA
+            (so the empty state isn't a dead end). When there are no
+            workspaces yet, a single ghosted row tells the user what a
+            recent entry will look like once they create one. */}
+        <div className="xb-recents">
+          <div className="xb-recents-header">
+            <span className="text-text-tertiary text-[11px] font-medium tracking-[0.08em] uppercase">
+              Recent workspaces
+            </span>
+            <Link to="/workspaces" className="xb-ghost xb-ghost-sm">
+              Browse all
+            </Link>
+          </div>
+          {loaded && recent.length === 0 ? (
+            <>
+              <div className="xb-recent xb-recent-empty" aria-hidden="true">
+                <span aria-hidden="true">▣</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-medium text-text-tertiary">No workspaces yet</span>
+                  <span className="path block text-text-tertiary">Create one to see it here</span>
+                </span>
+              </div>
+              <Link to="/workspaces" className="xb-ghost">
+                Create a workspace
+              </Link>
+            </>
+          ) : (
+            recent.map((w) => (
               <Link key={w.id} to={`/builder/${w.id}`} className="xb-recent">
                 <span aria-hidden="true">{w.icon ?? '▣'}</span>
                 <span className="min-w-0 flex-1">
@@ -279,9 +302,9 @@ function PickWorkspace({ workspaces, loaded }: { workspaces: Workspace[]; loaded
                   <span className="path block">{w.path}</span>
                 </span>
               </Link>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

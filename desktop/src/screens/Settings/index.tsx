@@ -13,6 +13,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Bell,
+  Check,
   Cpu,
   Info,
   Keyboard,
@@ -29,6 +30,7 @@ import {
 import { SearchInput } from '@/components/settings/controls';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 import { AboutTab } from './tabs/AboutTab';
 import { BillingTab } from './tabs/BillingTab';
@@ -130,6 +132,49 @@ function SidebarRow({
       <Icon size={16} strokeWidth={1.5} aria-hidden="true" className="shrink-0" />
       <span className="truncate">{label}</span>
     </button>
+  );
+}
+
+/**
+ * #15 — Brief "Saved ✓" indicator that appears for ~1.8s after every local
+ * settings write. Watches `lastChangedAt` from the settings store; the
+ * indicator fades in when the timestamp changes and auto-hides after the
+ * timeout. Uses AnimatePresence so the exit is smooth, not a hard cut.
+ *
+ * Why not a toast: toasts are for one-off actions (export, import, clear
+ * cache). Settings toggles fire too frequently for toasts to be useful —
+ * they'd spam the toast stack. A small inline indicator next to the
+ * title is the macOS / Linear / Vercel pattern.
+ */
+function SavedIndicator() {
+  const lastChangedAt = useSettingsStore((s) => s.lastChangedAt);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (lastChangedAt === null) return;
+    setVisible(true);
+    const t = setTimeout(() => setVisible(false), 1800);
+    return () => clearTimeout(t);
+  }, [lastChangedAt]);
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.span
+          key={lastChangedAt}
+          initial={{ opacity: 0, y: -2 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -2 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          className="text-success inline-flex items-center gap-1 text-[12px] font-medium"
+          data-testid="settings-saved-indicator"
+          aria-live="polite"
+        >
+          <Check size={13} strokeWidth={2.5} aria-hidden="true" />
+          Saved
+        </motion.span>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -241,14 +286,20 @@ export default function SettingsScreen() {
             >
               <header>
                 {active === 'general' ? (
-                  <h1 className="text-text-primary text-[24px] font-semibold">
-                    {t('tab.general') === 'General' ? 'Settings' : t('tab.general')}
-                  </h1>
+                  <div className="flex items-center gap-3">
+                    <h1 className="text-text-primary text-[24px] font-semibold">
+                      {t('tab.general') === 'General' ? 'Settings' : t('tab.general')}
+                    </h1>
+                    <SavedIndicator />
+                  </div>
                 ) : (
                   <>
-                    <h1 className="text-text-primary text-[24px] font-semibold">
-                      {t(activeDef.labelKey)}
-                    </h1>
+                    <div className="flex items-center gap-3">
+                      <h1 className="text-text-primary text-[24px] font-semibold">
+                        {t(activeDef.labelKey)}
+                      </h1>
+                      <SavedIndicator />
+                    </div>
                     <p className="text-text-tertiary mt-1 text-[13px]">
                       {activeDef.subtitle}
                     </p>

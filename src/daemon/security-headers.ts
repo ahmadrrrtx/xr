@@ -23,8 +23,21 @@
 
 export const API_CSP = "default-src 'none'; frame-ancestors 'none'";
 
+// Phase 31 · Bucket A follow-up (#6): the previous `style-src 'self'
+// 'unsafe-inline'` floor existed only because the pre-auth sign-in page
+// used an inline `<style>` block. That page now ships a per-response
+// nonce (`authPageCSP(nonce)` in `auth-page.ts`), so the floor no longer
+// needs `unsafe-inline` for `<style>` blocks.
+//
+// `style-src-attr 'unsafe-inline'` is retained deliberately: the dashboard
+// client-script inserts rows via `innerHTML` with inline `style="…"`
+// attributes (e.g. `style='text-align:center;'` in client-panels-c.ts).
+// `style-src-attr` scopes that allowance to attributes only — `<style>`
+// blocks and inline `<style>` elements remain blocked. Routes that serve
+// HTML set their own stricter CSP (router.ts:htmlResponse); this is only
+// the floor for routes that don't.
 export const DASHBOARD_CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+  "default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; " +
   "img-src 'self' data:; connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*; " +
   "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests";
 
