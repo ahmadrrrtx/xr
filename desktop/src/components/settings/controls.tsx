@@ -257,7 +257,14 @@ export function SearchInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="border-border-subtle bg-bg-raised text-text-primary placeholder:text-text-tertiary focus-visible:border-accent h-8 w-full rounded-md border pr-12 pl-8 text-[13px] outline-none"
+        // #16 — pr-12 was always applied, leaving only ~84px for text in the
+        // 180px Settings sidebar. The right padding only needs to clear the
+        // Kbd hint; when there's no hint, fall back to pr-3 so the placeholder
+        // ("Search settings") isn't visually truncated to "Search settin".
+        className={cn(
+          'border-border-subtle bg-bg-raised text-text-primary placeholder:text-text-tertiary focus-visible:border-accent h-8 w-full rounded-md border pl-8 text-[13px] outline-none',
+          hint ? 'pr-12' : 'pr-3',
+        )}
       />
       {hint ? (
         <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2">
