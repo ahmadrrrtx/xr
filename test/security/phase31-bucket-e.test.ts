@@ -117,10 +117,16 @@ describe("Phase 31 E2/E3/E5 — shipped screens stay shipped (no placeholder reg
   });
 
   test("the orb is one smooth sphere, reduced-motion aware", () => {
+    // Bucket F v2: CompanionOrb delegates to VoiceOrb (delivered Orb v2
+    // animation pack — one glass sphere, no drawn segments). The
+    // reduced-motion contract lives in VoiceOrb: poster stills under
+    // prefers-reduced-motion and at small sizes.
     const orb = read("src/components/brand/CompanionOrb.tsx");
-    expect(orb).toContain("Glossy black sphere");
-    expect(orb.toLowerCase()).not.toContain("segment");
-    expect(orb).toContain("useReducedMotion");
+    const voiceOrb = read("src/components/brand/VoiceOrb.tsx");
+    expect(orb).toContain("VoiceOrb");
+    expect(voiceOrb.toLowerCase()).not.toContain("segment");
+    expect(voiceOrb).toContain("useReducedMotion");
+    expect(voiceOrb).toContain("prefers-reduced-motion");
   });
 });
 

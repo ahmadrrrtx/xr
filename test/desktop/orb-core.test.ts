@@ -42,11 +42,12 @@ describe("Phase 15 · voice session → orb state", () => {
 });
 
 describe("Phase 6 · orb states", () => {
-  test("all 7 canonical states validate", () => {
+  test("all 9 canonical states validate", () => {
     for (const state of ORB_STATES) {
       expect(isOrbState(state)).toBe(true);
     }
-    expect(ORB_STATES).toHaveLength(7);
+    // Bucket F v2: the delivered pack adds approved/denied flash states.
+    expect(ORB_STATES).toHaveLength(9);
   });
 
   test("unknown states are rejected", () => {

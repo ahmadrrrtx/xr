@@ -211,22 +211,27 @@ describe('tray icons: the committed bytes are the generator output', () => {
 });
 
 describe('tray icons: the ink rule', () => {
-  test('dark artwork becomes ink and paper becomes transparent', () => {
-    expect(inkAlpha(10, 10, 10, 255)).toBe(1);
-    expect(inkAlpha(250, 250, 250, 255)).toBe(0);
-    // Mid-grey lands between: the softness band is what keeps the visor's
-    // gradient from turning into a hard posterised edge. Threshold 0.55 minus
-    // softness 0.35 puts the ramp between 0.20 and 0.55 luminance, so 0.42
-    // (≈107) is inside it and 0.75 (≈190) is past it.
+  test('bright artwork becomes ink and the badge face becomes transparent', () => {
+    // Bucket F v2 rule: coverage = brightness above the badge face × alpha.
+    // Blade silver (lum ≈ 0.98) is full coverage; the badge face (7,15,27,
+    // lum ≈ 0.06) and the badge rim (≤ 0.30) are none.
+    expect(inkAlpha(250, 250, 250, 255)).toBe(1);
+    expect(inkAlpha(7, 15, 27, 255)).toBe(0);
+    expect(inkAlpha(10, 20, 35, 255)).toBe(0);
+    // Mid-silver lands between: the ramp is what keeps the blades'
+    // gradient from turning into a hard posterised edge. The ramp runs
+    // 0.30 → 0.60 luminance, so 0.42 (≈107) is inside it.
     const mid = inkAlpha(107, 107, 107, 255);
     expect(mid).toBeGreaterThan(0);
     expect(mid).toBeLessThan(1);
-    expect(inkAlpha(190, 190, 190, 255)).toBe(0);
+    expect(inkAlpha(190, 190, 190, 255)).toBe(1);
   });
 
-  test('alpha already present in the master is never thresholded', () => {
-    // A future master with a real transparent background must pass through.
+  test('alpha in the master scales artwork coverage, never creates it', () => {
     expect(inkAlpha(250, 250, 250, 0)).toBe(0);
-    expect(inkAlpha(10, 10, 10, 128)).toBeCloseTo(128 / 255, 5);
+    // Bright art at half alpha is half coverage (anti-aliased edges) …
+    expect(inkAlpha(250, 250, 250, 128)).toBeCloseTo(128 / 255, 5);
+    // … but the badge's dark semi-transparent fringe (α≈239) is not art.
+    expect(inkAlpha(10, 20, 35, 239)).toBe(0);
   });
 });

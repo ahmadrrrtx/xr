@@ -11,7 +11,7 @@ import { AVATAR_STATES, type AvatarState } from '../components/brand/types';
 
 export type { AvatarState };
 
-/** The 7 canonical orb states — single source: brand/types (Phase 2). */
+/** The 9 canonical orb states — single source: brand/types (Phase 2; Bucket F v2 added approved/denied). */
 export const ORB_STATES = AVATAR_STATES;
 
 /** Narrow an unknown payload (IPC events arrive as plain JSON). */

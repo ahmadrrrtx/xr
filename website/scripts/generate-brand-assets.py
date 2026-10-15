@@ -59,6 +59,11 @@ def main() -> int:
     og.convert("RGB").save(os.path.join(PUB, "og.png"), optimize=True)
 
     def optimise_svg(src: str, dst: str) -> None:
+        # Precision pass first; the committed files then get an SVGO pass
+        # (multipass, floatPrecision 0, mergePaths — dev-machine step, not a
+        # project dependency) which brings the traced favicon from ~590 KB
+        # to ~170 KB, inside the C11 300 KB budget. Geometry is unchanged
+        # at favicon sizes.
         svg = open(os.path.join(V2, src), encoding="utf-8").read()
         svg = re.sub(r"(-?\d+\.\d{2,})", lambda m: str(round(float(m.group(1)), 1)), svg)
         open(os.path.join(PUB, dst), "w", encoding="utf-8").write(svg)
