@@ -15,25 +15,29 @@ const readRepo = (rel: string) => readFileSync(join(import.meta.dir, "..", "..",
 
 describe("Phase 31 C1 — brand assets exist and are wired", () => {
   test("public assets exist within the size budget (C11: ≤300KB, OG ≤500KB)", () => {
-    for (const f of ["favicon.ico", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "og-image.png", "manifest.webmanifest"]) {
+    // Bucket F v2: og-image.png became og.png; icon.svg is the delivered
+    // traced favicon after an SVGO pass (still the shipped artwork).
+    for (const f of ["favicon.ico", "icon.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png", "og.png", "manifest.webmanifest"]) {
       const p = join(WEB, "public", f);
       expect(existsSync(p), f).toBe(true);
-      expect(statSync(p).size, f).toBeLessThan(f === "og-image.png" ? 500_000 : 300_000);
+      expect(statSync(p).size, f).toBeLessThan(f === "og.png" ? 500_000 : 300_000);
     }
   });
 
   test("layout declares icons, manifest and the OG/Twitter images", () => {
     const layout = read("src/app/layout.tsx");
     expect(layout).toContain('manifest: "/manifest.webmanifest"');
-    expect(layout).toContain('"/og-image.png"');
+    expect(layout).toContain('"/og.png"');
     expect(layout).toContain("apple-touch-icon.png");
     expect(existsSync(join(WEB, "src/app/icon.tsx"))).toBe(false); // static assets, no runtime icon
   });
 
-  test("the manifest is installable and shares the cyan brand", () => {
+  test("the manifest is installable and carries the v2 brand identity", () => {
     const manifest = JSON.parse(read("public/manifest.webmanifest"));
-    expect(manifest.name).toBe("XR");
-    expect(manifest.theme_color).toBe("#00E5FF");
+    // Bucket F v2 manifest: full product name, XR navy theme.
+    expect(manifest.name).toBe("XR — The AI Agent You Can Actually Trust");
+    expect(manifest.short_name).toBe("XR");
+    expect(manifest.theme_color).toBe("#03070D");
     expect(manifest.icons.some((i: { sizes: string }) => i.sizes === "512x512")).toBe(true);
   });
 });

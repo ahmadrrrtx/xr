@@ -5,6 +5,7 @@ import { AlertTriangle, MessageCircle, Play, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { EmptyState } from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
 import { demoRunIsReal } from '@/brain/demo';
 import { useRunsStore } from '@/stores/runsStore';
@@ -81,85 +82,44 @@ export function EmptyFiltered() {
 export function EmptyFresh() {
   const navigate = useNavigate();
   return (
-    <div
-      className="flex h-full min-h-[280px] flex-col items-center justify-center gap-4 px-6 text-center"
-      data-testid="runs-empty"
-    >
-      <EmptyArt />
-      <div className="space-y-1">
-        <p className="text-text-primary text-[15px] font-medium">No runs yet</p>
-        <p className="text-text-tertiary max-w-[360px] text-[13px]">
-          Runs will appear here once agents start working. Start a chat to see
-          your first run.
-        </p>
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => navigate('/chat')}
-          className="bg-accent text-accent-contrast flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-opacity hover:opacity-90"
-        >
-          <MessageCircle
-            className="size-4"
-            strokeWidth={1.5}
-            aria-hidden="true"
-          />
-          Go to Chat
-        </button>
-        <button
-          type="button"
-          data-testid="runs-demo"
-          onClick={() => {
-            const id = useRunsStore.getState().startDemoRun();
-            toast(demoRunIsReal() ? 'Run started' : 'Demo run started', {
-              description: demoRunIsReal()
-                ? 'A real agent turn on the engine. Watch it live here, or open the trace.'
-                : 'No model configured — this is a canned trace. Watch it live here, or open it.',
-              action: {
-                label: 'View trace',
-                onClick: () => navigate(`/brain/${id}`),
-              },
-            });
-          }}
-          className="border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-raised flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[13px] transition-colors"
-        >
-          <Play className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
-          Start a demo run
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Three quiet grid lines + a dot: "nothing on the board yet". */
-function EmptyArt() {
-  return (
-    <svg
-      width="96"
-      height="56"
-      viewBox="0 0 96 56"
-      aria-hidden="true"
-      className="opacity-70"
-    >
-      {[12, 26, 40].map((y) => (
-        <rect
-          key={y}
-          x="8"
-          y={y}
-          width="80"
-          height="4"
-          rx="2"
-          fill="var(--border-default)"
-        />
-      ))}
-      <circle
-        cx="14"
-        cy="14"
-        r="3"
-        fill="var(--accent)"
-        className="xr-dot-pulse"
-      />
-    </svg>
+    <EmptyState
+      testId="runs-empty"
+      className="h-full min-h-[280px]"
+      title="No runs yet"
+      description="Runs will appear here once agents start working. Start a chat to see your first run."
+      actions={
+        <>
+          <button
+            type="button"
+            onClick={() => navigate('/chat')}
+            className="bg-accent text-accent-contrast flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-opacity hover:opacity-90"
+          >
+            <MessageCircle className="size-4" strokeWidth={1.5} aria-hidden="true" />
+            Go to Chat
+          </button>
+          <button
+            type="button"
+            data-testid="runs-demo"
+            onClick={() => {
+              const id = useRunsStore.getState().startDemoRun();
+              toast(demoRunIsReal() ? 'Run started' : 'Demo run started', {
+                description: demoRunIsReal()
+                  ? 'A real agent turn on the engine. Watch it live here, or open the trace.'
+                  : 'No model configured — this is a canned trace. Watch it live here, or open it.',
+                action: {
+                  label: 'View trace',
+                  onClick: () => navigate(`/brain/${id}`),
+                },
+              });
+            }}
+            className="border-border-subtle text-text-secondary hover:text-text-primary hover:bg-bg-raised flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-[13px] transition-colors"
+          >
+            <Play className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
+            Start a demo run
+          </button>
+        </>
+      }
+    />
   );
 }
 

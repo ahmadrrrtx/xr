@@ -22,18 +22,19 @@
    the geometry helpers (bustCorePx) ship with the bust they describe. */
 import { useEffect, useRef, type CSSProperties, type RefObject } from 'react';
 
-import { AVATAR_HALO, AVATAR_LAYERS, AVATAR_VIEWBOX } from '@/components/brand/art';
+import { XR_AVATAR_512 } from '@/components/brand/assets';
 import { showsMutedLook, type TheaterState } from '@/lib/theaterCore';
 
-/* ── Geometry (viewBox 38 28 455 458 — see docs/phases/16-theater-notes.md) ── */
+/* ── Geometry (Phase 31 Bucket F: measured on the delivered v2 front
+ * render, 2224×1948 px — helmet centre, eye slits, chest core) ── */
 
-const VIEW = { x: 38, y: 28, w: 455, h: 458 } as const;
+const VIEW = { x: 0, y: 0, w: 2224, h: 1948 } as const;
 export const BUST_EYES = [
-  { cx: 200, cy: 133, tilt: -9 },
-  { cx: 294, cy: 133, tilt: 9 },
+  { cx: 868, cy: 548, tilt: -9 },
+  { cx: 1338, cy: 548, tilt: 9 },
 ] as const;
-export const BUST_CORE = { cx: 264, cy: 333, r: 20 } as const;
-const HELMET = { cx: 252, cy: 110 } as const;
+export const BUST_CORE = { cx: 1112, cy: 1280, r: 150 } as const;
+const HELMET = { cx: 1112, cy: 540 } as const;
 
 /** Chest-core position in CSS px for a bust of `size` px height (sparks). */
 export function bustCorePx(size: number): { x: number; y: number; width: number } {
@@ -86,7 +87,7 @@ export function AvatarBust({ size = 280, state, muted = false, reduced = false, 
     if (!live || dimmed) {
       core?.setAttribute('transform', 'scale(1)');
       if (ring) {
-        ring.setAttribute('r', '64');
+        ring.setAttribute('r', '300');
         ring.style.opacity = state === 'listening' && !dimmed ? '0.25' : '0';
       }
       return;
@@ -100,7 +101,7 @@ export function AvatarBust({ size = 280, state, muted = false, reduced = false, 
       mic += (Math.min(1, lv.mic * 5) - mic) * 0.3;
       if (state === 'speaking') core?.setAttribute('transform', `scale(${(1 + out * 0.15).toFixed(3)})`);
       else if (ring) {
-        ring.setAttribute('r', (64 - mic * 30).toFixed(1));
+        ring.setAttribute('r', (300 - mic * 140).toFixed(1));
         ring.style.opacity = (0.2 + mic * 0.6).toFixed(2);
       }
       raf = requestAnimationFrame(tick);
@@ -117,7 +118,7 @@ export function AvatarBust({ size = 280, state, muted = false, reduced = false, 
       data-state={state}
       data-muted={dimmed || undefined}
       data-reduced={reduced || undefined}
-      viewBox={AVATAR_VIEWBOX.full}
+      viewBox={`0 0 ${VIEW.w} ${VIEW.h}`}
       width={width}
       height={size}
       role="img"
@@ -151,28 +152,22 @@ export function AvatarBust({ size = 280, state, muted = false, reduced = false, 
 
       <g className="xr-bust-breathe">
         <g className="xr-bust-shake">
-          {/* traced brand art — halo bands, ink layers, cyan energy */}
-          <g className="xr-bust-art">
-            {AVATAR_HALO.map((halo, i) => (
-              <g key={`h${i}`} fill={`var(${halo.var})`} opacity={halo.opacity}>
-                {halo.paths.map((p, j) => (
-                  <path key={j} d={p.d} transform={`translate(${p.t[0]},${p.t[1]})`} />
-                ))}
-              </g>
-            ))}
-            {AVATAR_LAYERS.map((layer, i) => (
-              <g key={`l${i}`} className={layer.cls === 'cy' ? 'xr-bust-energy' : undefined} fill={`var(${layer.var})`}>
-                {layer.paths.map((p, j) => (
-                  <path key={j} d={p.d} transform={`translate(${p.t[0]},${p.t[1]})`} />
-                ))}
-              </g>
-            ))}
-          </g>
+          {/* delivered v2 front render (Bucket F) — baked cyan energy;
+              state-driven brightness lives in theater.css (.xr-bust-art) */}
+          <image
+            className="xr-bust-art"
+            href={XR_AVATAR_512}
+            x={0}
+            y={0}
+            width={VIEW.w}
+            height={VIEW.h}
+            preserveAspectRatio="xMidYMid meet"
+          />
 
           {/* eyes */}
           <g className="xr-bust-eyes">
             {BUST_EYES.map((eye, i) => (
-              <g key={i} transform={`translate(${eye.cx},${eye.cy}) rotate(${eye.tilt})`}>
+              <g key={i} transform={`translate(${eye.cx},${eye.cy}) rotate(${eye.tilt}) scale(5.2)`}>
                 <ellipse className="xr-bust-eye-cover" rx="27" ry="12.5" filter={`url(#${uid}-soft)`} />
                 <g className="xr-bust-eye">
                   <path className="xr-bust-eye-bloom" d={EYE_PATH} filter={`url(#${uid}-bloom)`} />
@@ -191,7 +186,7 @@ export function AvatarBust({ size = 280, state, muted = false, reduced = false, 
                 <circle key={i} className="xr-bust-ring" r={BUST_CORE.r + 6} style={{ animationDelay: `${i * 200}ms` }} />
               ))}
             </g>
-            <circle ref={micRingRef} className="xr-bust-mic-ring" r="64" />
+            <circle ref={micRingRef} className="xr-bust-mic-ring" r="300" />
             <g className="xr-bust-core">
               <g ref={coreLevelRef}>
                 <circle className="xr-bust-core-glow" r={BUST_CORE.r + 34} fill={`url(#${uid}-glow)`} />
@@ -200,7 +195,7 @@ export function AvatarBust({ size = 280, state, muted = false, reduced = false, 
               </g>
             </g>
             {dimmed && (
-              <g className="xr-bust-mute" transform="translate(46,30) scale(1.5)" aria-hidden="true">
+              <g className="xr-bust-mute" transform="translate(235,150) scale(7.3)" aria-hidden="true">
                 <path d="M2 2l20 20" />
                 <path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2M5 10v2a7 7 0 0 0 12 5M15 9.34V5a3 3 0 0 0-5.68-1.33M9 9v3a3 3 0 0 0 5.12 2.12M12 19v3" />
               </g>
@@ -210,13 +205,13 @@ export function AvatarBust({ size = 280, state, muted = false, reduced = false, 
           {/* thinking — two dots on an orbit around the helmet */}
           <g className="xr-bust-orbit" transform={`translate(${HELMET.cx},${HELMET.cy}) scale(1,0.82)`} aria-hidden="true">
             <g className="xr-bust-orbit-spin">
-              <circle className="xr-bust-dot" cx="122" cy="0" r="3.2" />
-              <circle className="xr-bust-dot" cx="-122" cy="0" r="3.2" />
+              <circle className="xr-bust-dot" cx="640" cy="0" r="16" />
+              <circle className="xr-bust-dot" cx="-640" cy="0" r="16" />
             </g>
           </g>
 
           {/* approval — warning shield, top-right of the bust */}
-          <g className="xr-bust-shield" transform="translate(386,44) scale(1.9)" aria-hidden="true">
+          <g className="xr-bust-shield" transform="translate(1925,140) scale(9.2)" aria-hidden="true">
             <path d={SHIELD_PATH} />
           </g>
         </g>

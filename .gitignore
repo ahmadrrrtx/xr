@@ -74,3 +74,7 @@ p4shots.mjs
 # Phase 28 — reference-daemon + desktop-preview build output (generated, never committed)
 tools/.daemon-build/
 tools/desktop-preview/dist/
+
+# Phase 31 Bucket F: raw Drive brand pack staging (manifest stays tracked)
+assets/v2/*
+!assets/v2/MANIFEST.json

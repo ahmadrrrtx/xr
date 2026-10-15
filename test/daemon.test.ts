@@ -115,8 +115,8 @@ test("Phase 4 T5 — strict CSP: no unsafe-inline, external dashboard assets", a
   // image/png, cacheable for a day (they carry no session state).
   const { readFileSync } = await import("node:fs");
   for (const [route, file] of [
-    ["/assets/brand/logo.png", "assets/brand/logo-320.png"],
-    ["/assets/brand/avatar.png", "assets/brand/avatar-256.png"],
+    ["/assets/logo.png", "assets/logo.png"],
+    ["/assets/avatar.png", "assets/avatar.png"],
   ] as const) {
     const img = await h(new Request(`http://127.0.0.1:7842${route}`, { headers: { cookie: `xr_session=${TOKEN}` } }));
     expect(img.status).toBe(200);

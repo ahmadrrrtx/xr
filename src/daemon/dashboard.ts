@@ -28,16 +28,16 @@ import { fileURLToPath } from "node:url";
  *     diverged from the official logo (audit BUG-002) — decision D-05 retires
  *     every such mark.
  * The files served are pixel-only size conversions of the official renders
- * (assets/brand/, registered in desktop/src/assets/REGISTRY.json).
+ * (repo-root assets/, from the Bucket F v2 pack — assets/v2/MANIFEST.json).
  */
 export const BRAND_ASSET_ROUTES = {
-  logo: "/assets/brand/logo.png",
-  avatar: "/assets/brand/avatar.png",
+  logo: "/assets/logo.png",
+  avatar: "/assets/avatar.png",
 } as const;
 
 const BRAND_FILES: Record<keyof typeof BRAND_ASSET_ROUTES, string> = {
-  logo: "logo-320.png",
-  avatar: "avatar-256.png",
+  logo: "logo.png",
+  avatar: "avatar.png",
 };
 const brandCache = new Map<string, Uint8Array | null>();
 
@@ -46,7 +46,7 @@ export function brandAssetBytes(which: keyof typeof BRAND_ASSET_ROUTES): Uint8Ar
   const file = BRAND_FILES[which];
   if (!brandCache.has(file)) {
     try {
-      const path = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", "brand", file);
+      const path = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "assets", file);
       brandCache.set(file, existsSync(path) ? new Uint8Array(readFileSync(path)) : null);
     } catch {
       brandCache.set(file, null);

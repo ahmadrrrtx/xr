@@ -47,21 +47,25 @@ const INK_RGBA = { r: 11, g: 15, b: 20 };
 const ACCENT_RGBA = { r: 34, g: 211, b: 238 };
 
 /**
- * Luminance thresholds for the alpha mask. The master icon is a dark mark on a
- * near-white background, so "how dark" is "how opaque". These numbers come from
- * `--inspect` on the committed master (background ≈ 250+, ink ≈ 20–60).
+ * Coverage thresholds for the alpha mask (Bucket F v2 master). The master
+ * icon is now the delivered emblem badge: bright silver/cyan artwork on a
+ * dark navy face (luminance ≈ 0.06) inside a transparent rounded square.
+ * "How bright above the badge face" is "how much artwork", so coverage
+ * ramps from ART_FLOOR over ART_RAMP. Measured on the committed master
+ * with `--inspect` (badge face ≈ 0.05, badge rim ≤ 0.30, blade silver
+ * ≈ 0.55–0.95, core ≈ 1.0; the emblem's ≥0.45-luminance bounds are
+ * x 79–432, y 137–378 of 512).
  */
-const INK_THRESHOLD = 0.55;
-const INK_SOFTNESS = 0.35;
+const ART_FLOOR = 0.3;
+const ART_RAMP = 0.3;
 
-/** Ink coverage a pixel needs before it counts as subject (not shadow, not paper). */
+/** Artwork coverage a pixel needs before it counts as subject (not badge face). */
 const SUBJECT_COVERAGE = 0.5;
 /** Air around the mark, as a fraction of its own size.
  *
- *  Measured, not guessed: the master's head has a soft drop shadow to its right,
- *  and at 8% padding the 22 px render leaves that shadow 0–5% opacity along the
- *  right edge — enough that a 1 px threshold sees haze in the icon's last
- *  column. 12% clears it, and the head still fills 70% of the frame. */
+ *  Measured, not guessed: at 8% padding the 22 px render carried badge-face
+ *  haze along the edges — enough that a 1 px threshold sees it in the icon's
+ *  last column. 12% clears it, and the emblem still fills ~75% of the frame. */
 const CROP_PADDING = 0.12;
 
 interface Png {
@@ -306,15 +310,17 @@ function encodeIco(entries: Array<{ size: number; png: Buffer }>): Buffer {
 // ─── The mark ───────────────────────────────────────────────────────────────
 
 /**
- * Alpha for one master pixel: opaque where the artwork is dark, transparent on
- * the paper. Alpha carried by the PNG itself always wins (a future master with
- * a real transparent background must not be thresholded).
+ * Coverage for one master pixel: artwork brightness ramped above the
+ * badge face, scaled by the pixel's own alpha. Brightness alone would
+ * read the badge's bright core glow as solid; alpha alone would read
+ * the badge's anti-aliased dark fringe (α≈239 around the rounded
+ * square) as artwork — the product of the two is the emblem and
+ * nothing else.
  */
 export function inkAlpha(r: number, g: number, b: number, a: number): number {
-  if (a < 250) return a / 255;
   const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  const t = (INK_THRESHOLD - luminance) / INK_SOFTNESS;
-  return Math.max(0, Math.min(1, t));
+  const art = Math.max(0, Math.min(1, (luminance - ART_FLOOR) / ART_RAMP));
+  return art * (a / 255);
 }
 
 export interface Mask {
@@ -364,72 +370,16 @@ export function inkBounds(
 }
 
 /**
- * Where the subject is: the visor's region of the master, as fractions of the
- * image. This window is the only hand-set number in the derivation, and it is
- * deliberately generous — everything inside it is measured.
- *
- * Why a window at all: the master is head-and-shoulders with a flowing cape, and
- * a tray icon wants the head. Tracing the figure row by row cannot separate them
- * here — the artwork's bright eyes break the ink run into pieces and the
- * shoulders are wider than the head — so the crop is anchored instead: the head
- * lives in the top half of the artwork, the cape fills the rest.
- *
- * The numbers were placed with `--inspect`, which prints the bounds of the bright
- * eye pair inside the window. If a future master moves the face, the eyes leave
- * the crop and `--inspect` says so (see the eye check below) instead of shipping
- * a tray icon of a shoulder.
+ * Where the subject is: the delivered emblem itself (Bucket F v2). The old
+ * master needed a hand-placed window to find the avatar's head in a bust;
+ * the emblem master is one centred mark on a badge, so the subject is
+ * simply the measured bounds of the artwork coverage — no window, no
+ * anchor numbers to re-place when the artwork changes.
  */
-const SUBJECT_WINDOW = { x0: 0.27, y0: 0.09, x1: 0.73, y1: 0.52 };
 
-/** Bright-pixel bounds inside a box — the eye pair plus specular highlights. */
-export function brightBounds(
-  master: Png,
-  box: { x0: number; y0: number; x1: number; y1: number },
-  minLuminance = 0.8,
-): { x0: number; y0: number; x1: number; y1: number; count: number } {
-  let x0 = master.width;
-  let y0 = master.height;
-  let x1 = -1;
-  let y1 = -1;
-  let count = 0;
-  for (let y = box.y0; y < Math.min(master.height, box.y1); y++) {
-    for (let x = box.x0; x < Math.min(master.width, box.x1); x++) {
-      const at = (y * master.width + x) * 4;
-      const luminance =
-        (0.2126 * master.data[at]! + 0.7152 * master.data[at + 1]! + 0.0722 * master.data[at + 2]!) / 255;
-      if (luminance < minLuminance) continue;
-      count++;
-      if (x < x0) x0 = x;
-      if (y < y0) y0 = y;
-      if (x > x1) x1 = x;
-      if (y > y1) y1 = y;
-    }
-  }
-  return { x0, y0, x1, y1, count };
-}
-
-/** Ink bounds inside [`SUBJECT_WINDOW`], falling back to the whole image. */
+/** The emblem's measured bounds — the whole subject (Bucket F v2). */
 export function subjectBounds(mask: Mask, minCoverage = 0.5): { x0: number; y0: number; x1: number; y1: number } {
-  const x0 = Math.floor(mask.width * SUBJECT_WINDOW.x0);
-  const x1 = Math.ceil(mask.width * SUBJECT_WINDOW.x1);
-  const y0 = Math.floor(mask.height * SUBJECT_WINDOW.y0);
-  const y1 = Math.ceil(mask.height * SUBJECT_WINDOW.y1);
-
-  let minX = mask.width;
-  let minY = mask.height;
-  let maxX = -1;
-  let maxY = -1;
-  for (let y = y0; y < Math.min(mask.height, y1); y++) {
-    for (let x = x0; x < Math.min(mask.width, x1); x++) {
-      if (mask.coverage[y * mask.width + x]! < minCoverage) continue;
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-    }
-  }
-  if (maxX < 0) return inkBounds(mask);
-  return { x0: minX, y0: minY, x1: maxX, y1: maxY };
+  return inkBounds(mask, 0, mask.height, minCoverage);
 }
 
 /** The square crop the mark is taken from: the visor, padded, centred. */
@@ -581,29 +531,12 @@ export function generateAll(master: Png): GeneratedFile[] {
 
 function inspect(master: Png): void {
   const mask = buildMask(master);
-  const visor = subjectBounds(mask);
+  const mark = subjectBounds(mask);
   const whole = inkBounds(mask);
   console.log(`master: ${master.width}×${master.height}`);
-  console.log(`ink bbox (whole):  x ${whole.x0}–${whole.x1}, y ${whole.y0}–${whole.y1}`);
-  console.log(`mark bbox (head):   x ${visor.x0}–${visor.x1}, y ${visor.y0}–${visor.y1}`);
+  console.log(`artwork bbox (whole): x ${whole.x0}–${whole.x1}, y ${whole.y0}–${whole.y1}`);
+  console.log(`mark bbox (emblem):   x ${mark.x0}–${mark.x1}, y ${mark.y0}–${mark.y1}`);
   const crop = markCrop(mask);
-  const eyes = brightBounds(master, {
-    x0: Math.floor(master.width * 0.28),
-    y0: Math.floor(master.height * 0.16),
-    x1: Math.ceil(master.width * 0.72),
-    y1: Math.ceil(master.height * 0.45),
-  });
-  const eyeCentreX = (eyes.x0 + eyes.x1) / 2;
-  const cropCentreX = crop.x + crop.size / 2;
-  console.log(
-    `eye pair: x ${eyes.x0}–${eyes.x1} (centre ${eyeCentreX.toFixed(0)}, ${eyes.count} bright px)`,
-  );
-  const offset = Math.abs(eyeCentreX - cropCentreX) / crop.size;
-  console.log(
-    offset <= 0.06
-      ? `eye check: centred (offset ${(offset * 100).toFixed(1)}% of the crop)`
-      : `eye check: WARNING — the eye pair is ${(offset * 100).toFixed(1)}% off the crop centre; re-place SUBJECT_WINDOW`,
-  );
   console.log(`crop: x ${crop.x}, y ${crop.y}, size ${crop.size}`);
   let covered = 0;
   for (const value of mask.coverage) if (value >= 0.5) covered++;

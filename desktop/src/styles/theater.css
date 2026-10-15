@@ -325,24 +325,24 @@ body.theater :focus-visible {
   animation: th-shake 400ms ease-in-out 1;
 }
 
-/* plasma trails (and the rest of the baked cyan energy) breathe at 1.5 s */
-.xr-bust-energy {
+/* the delivered render's baked cyan energy breathes at 1.5 s */
+.xr-bust-art {
   --trail: 0.72;
   opacity: var(--trail);
   animation: th-trail 1.5s ease-in-out infinite alternate;
   transition: opacity 280ms ease;
 }
 
-.xr-bust[data-state='thinking'] .xr-bust-energy {
+.xr-bust[data-state='thinking'] .xr-bust-art {
   --trail: 0.55;
 }
 
-.xr-bust[data-state='speaking'] .xr-bust-energy,
-.xr-bust[data-state='listening'] .xr-bust-energy {
+.xr-bust[data-state='speaking'] .xr-bust-art,
+.xr-bust[data-state='listening'] .xr-bust-art {
   --trail: 0.9;
 }
 
-.xr-bust[data-muted] .xr-bust-energy {
+.xr-bust[data-muted] .xr-bust-art {
   --trail: 0.45;
 }
 
