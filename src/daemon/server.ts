@@ -45,6 +45,7 @@ import {
 import { CORE_VERSION } from "../core/version.ts";
 import { authPageCSP, authPageHtml, generateCspNonce } from "./auth-page.ts";
 import { applySecurityHeaders, SECURITY_TXT_URL } from "./security-headers.ts";
+import { envSecretCompatEnabled, setSecretReadAuditor } from "../security/secret-broker.ts";
 import { installDevGlobal, isDevMode } from "../util/dev-mode.ts";
 import { PRIVATE_PROVIDER_WARNING, privateProviderAllowed } from "../providers/provider-url-guard.ts";
 import { TelegramManager } from "../telegram/manager.ts";
@@ -576,6 +577,30 @@ export async function serve(opts: DaemonOptions = {}): Promise<DaemonHandle> {
     structuredLog("warn", "security.private_provider_allowed", { warning: PRIVATE_PROVIDER_WARNING });
     console.warn(`\n  ⚠ ${PRIVATE_PROVIDER_WARNING}\n`);
   }
+  // Review item #4 — XR_SECRETS_ENV_COMPAT is opt-in and default-OFF. When
+  // an operator turns it on, provider API keys hydrate into process.env
+  // (legacy 1.x behaviour). The flag is scheduled for removal in v2.0
+  // (KNOWN_LIMITATIONS #4); until then, make the posture visible at boot.
+  if (envSecretCompatEnabled()) {
+    const msg =
+      "XR_SECRETS_ENV_COMPAT is ON — provider API keys are hydrated into process.env. " +
+      "This is the legacy 1.x behaviour, scheduled for removal in v2.0. " +
+      "Turn it off to keep keys in the OS keychain / AES-GCM file store only.";
+    structuredLog("warn", "security.secrets_env_compat_on", { warning: msg });
+    console.warn(`\n  ⚠ ${msg}\n`);
+  }
+  // Review item #4 — wire the secret-broker audit hook. Every key read
+  // emits a `secret.read` structured-log line with the key NAME and source
+  // (never the value). This makes provider key access visible in the
+  // audit trail without leaking key material.
+  setSecretReadAuditor((event) => {
+    structuredLog("info", "secret.read", {
+      name: event.name,
+      context: event.context ?? null,
+      source: event.source,
+      path: event.path,
+    });
+  });
   const port = opts.port ?? 3141;
   const token = opts.token ?? randomBytes(24).toString("hex");
   const workspaceManager = new WorkspaceManager();
