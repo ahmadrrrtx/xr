@@ -43,7 +43,7 @@ import {
   xrMetrics,
 } from "../observability/index.ts";
 import { CORE_VERSION } from "../core/version.ts";
-import { AUTH_PAGE_CSP, authPageHtml } from "./auth-page.ts";
+import { authPageCSP, authPageHtml, generateCspNonce } from "./auth-page.ts";
 import { applySecurityHeaders, SECURITY_TXT_URL } from "./security-headers.ts";
 import { installDevGlobal, isDevMode } from "../util/dev-mode.ts";
 import { PRIVATE_PROVIDER_WARNING, privateProviderAllowed } from "../providers/provider-url-guard.ts";
@@ -389,11 +389,18 @@ export function makeHandler(
         // text/html Accept) keep the Phase-4 JSON contract unchanged.
         const accept = req.headers.get("accept") ?? "";
         if (method === "GET" && accept.includes("text/html")) {
-          return new Response(authPageHtml(path), {
+          // Phase 31 · Bucket A follow-up (#6): per-response CSP nonce —
+          // removes the previous `style-src 'unsafe-inline'` carve-out.
+          // The nonce is generated fresh for every 401, embedded in both the
+          // `<style nonce="…">` tag and the `style-src 'nonce-…'` directive,
+          // so a reflected-XSS attacker cannot inject a `<style>` block that
+          // the browser will honour.
+          const nonce = generateCspNonce();
+          return new Response(authPageHtml(path, nonce), {
             status: 401,
             headers: {
               "content-type": "text/html; charset=utf-8",
-              "content-security-policy": AUTH_PAGE_CSP,
+              "content-security-policy": authPageCSP(nonce),
               "cache-control": "no-store",
             },
           });
