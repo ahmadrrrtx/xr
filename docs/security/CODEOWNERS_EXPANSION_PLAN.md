@@ -13,9 +13,9 @@ Every line of `CODEOWNERS` currently resolves to `@ahmadrrrtx`. The
 "best-effort, not a contractual SLA." For a project whose entire thesis
 is *auditable, fail-closed security*, a single point of failure at the
 ownership layer is the largest unmitigated risk — larger than the
-`node:vm` escape (which is at least bounded by OS isolation) because
-there is **no** second reviewer who can catch a typo in a fail-closed
-file.
+V8-escape residual risk (which OS isolation bounds on validated Linux
+hosts) because there is **no** second reviewer who can catch a typo in
+a fail-closed file.
 
 This is not a code fix. It is a governance fix. The plan below is the
 smallest realistic sequence that gets the project from "1 owner" to "2+
