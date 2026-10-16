@@ -284,7 +284,9 @@ function winOpen(dir: number, name: string, flags: number, rootAcquisition: bool
       // ACL refuses write rights on an intermediate directory, traversal falls back to read-only.
       const access = last && !wantWrite ? NT.FILE_GENERIC_READ : NT.FILE_GENERIC_READ | NT.FILE_GENERIC_WRITE | NT.DELETE;
       const disposition = last && (flags & FD_FLAGS.CREATE) ? ((flags & FD_FLAGS.EXCLUSIVE) ? NT.FILE_CREATE : NT.FILE_OPEN_IF) : NT.FILE_OPEN;
-      const options = (last ? (isDir ? NT.FILE_DIRECTORY_FILE : NT.FILE_NON_DIRECTORY_FILE) : NT.FILE_DIRECTORY_FILE) | NT.FILE_SYNCHRONOUS_IO_NONALERT;
+      // Like O_PATH on Linux: the final object's type is not restricted unless the caller asks for a directory;
+      // the authority inspects the type itself (regular files only for content).
+      const options = (last ? (isDir ? NT.FILE_DIRECTORY_FILE : 0) : NT.FILE_DIRECTORY_FILE) | NT.FILE_SYNCHRONOUS_IO_NONALERT;
       let next: number;
       try {
         next = ntCreate(current, parts[i]!, access, disposition, options);
