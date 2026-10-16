@@ -593,6 +593,7 @@ export async function runAgentLoop(
           reason: req.reason,
           cwd,
           riskTier,
+          preparedPreview: req.preview,
         });
       } catch {
         // A preview failure must never block the approval flow itself.

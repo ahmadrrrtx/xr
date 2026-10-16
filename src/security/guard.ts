@@ -187,10 +187,10 @@ const SECRET_PATH_PATTERNS: RegExp[] = [
   /(^|[\\/])\.npmrc$/i,
   /(^|[\\/])\.pypirc$/i,
   // Generic secret material.
-  /(^|[\\/])\.env(\.[\w-]+)?$/i,
-  /(^|[\\/])(secrets?|credentials)(\.(json|ya?ml|toml|ini))?$/i,
+  /(^|[\\/])\.env(?!\.(?:example|sample|template)$)(?:\.[\w-]+)*$/i,
+  /(^|[\\/])(secrets?|credentials)(?:\.(?:json|ya?ml|toml|ini|txt|backup|bak)(?:\.[\w-]+)*)?$/i,
   /(^|[\\/])\.gnupg([\\/]|$)/i,
-  /\.(pem|pfx|p12|keystore|jks)$/i,
+  /\.(pem|key|pfx|p12|keystore|jks)$/i,
 ];
 
 export function isSecretPath(canonical: string): boolean {

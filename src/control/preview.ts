@@ -13,7 +13,7 @@
  * shown, in every renderer, on every surface.
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { FilesystemAuthority, FilesystemError } from "../security/filesystem.ts";
 import { basename, resolve } from "node:path";
 import { resolveShellCommandIdentity } from "../security/exec-integrity.ts";
 // Phase 2 · F-26 — the canonical preview types live in the kernel layer so
@@ -124,7 +124,7 @@ function extractContent(args: Record<string, unknown>): string | null {
 }
 
 function extractCommand(args: Record<string, unknown>): string | null {
-  const c = args.command ?? args.cmd ?? args.script ?? args.cmdline;
+  const c = args.cmd ?? args.command ?? args.script ?? args.cmdline;
   if (typeof c === "string") return c;
   if (Array.isArray(args.argv)) {
     try {
@@ -217,6 +217,7 @@ export function buildStructuredPreview(req: {
   reason: string;
   cwd: string;
   riskTier?: string;
+  preparedPreview?: string;
 }): StructuredPreview {
   const args = redactArgs(req.args ?? {});
   const base = {
@@ -225,6 +226,11 @@ export function buildStructuredPreview(req: {
     untrustedReason: redactPreviewText(req.reason),
   };
 
+  if (req.preparedPreview !== undefined && (WRITE_TOOLS.has(req.tool) || DELETE_TOOLS.has(req.tool))) {
+    return { kind: DELETE_TOOLS.has(req.tool) ? "file-delete" : "diff", ...base, sections: [
+      { title: "prepared operation (identity bound)", body: redactPreviewText(req.preparedPreview).slice(0, MAX_DIFF_CHARS), kind: "code" },
+    ] };
+  }
   if (WRITE_TOOLS.has(req.tool)) {
     const path = extractPath(args);
     const content = extractContent(args);
@@ -247,54 +253,41 @@ export function buildStructuredPreview(req: {
     }
     if (content === null) {
       sections.push({ title: "content", body: "(no content field — args redacted)", kind: "text" });
-    } else if (target && existsSync(target)) {
-      try {
-        const oldText = readFileSync(target, "utf8");
-        const oldLines = oldText.split("\n").slice(0, MAX_DIFF_LINES);
-        const newLines = content.split("\n").slice(0, MAX_DIFF_LINES);
-        const diff = unifiedDiffLines(oldLines, newLines);
-        const clamped = clampSection(diff.join("\n"), MAX_DIFF_LINES, MAX_DIFF_CHARS);
-        sections.push({
-          title: `unified diff (${basename(target)}, ${oldLines.length} → ${newLines.length} lines)`,
-          body: clamped.body,
-          kind: "code",
-          truncated: clamped.truncated,
-        });
-      } catch {
-        sections.push({ title: "content", body: "(existing file unreadable — diff unavailable)", kind: "text" });
-      }
-    } else {
-      const clamped = clampSection(content, 60, 6000);
-      sections.push({
-        title: "new file content (file does not exist yet)",
-        body: clamped.body,
-        kind: "code",
-        truncated: clamped.truncated,
-      });
+      return { kind: "diff", ...base, sections };
     }
-    return { kind: target && existsSync(target) ? "diff" : "new-file", ...base, sections };
+    let fs: FilesystemAuthority | undefined;
+    try {
+      fs = new FilesystemAuthority(req.cwd, "preview");
+      const oldText = path ? fs.read(path).content : "";
+      const oldLines = oldText.split("\n").slice(0, MAX_DIFF_LINES), newLines = content.split("\n").slice(0, MAX_DIFF_LINES);
+      const clamped = clampSection(redactPreviewText(unifiedDiffLines(oldLines, newLines).join("\n")), MAX_DIFF_LINES, MAX_DIFF_CHARS);
+      sections.push({ title: `unified diff (${basename(target ?? "")}, ${oldLines.length} → ${newLines.length} lines)`, body: clamped.body, kind: "code", truncated: clamped.truncated });
+      return { kind: "diff", ...base, sections };
+    } catch (e) {
+      if (e instanceof FilesystemError && e.code === "missing") {
+        const clamped = clampSection(content, 60, 6000);
+        sections.push({ title: "new file content (file does not exist yet)", body: clamped.body, kind: "code", truncated: clamped.truncated });
+        return { kind: "new-file", ...base, sections };
+      }
+      sections.push({ title: "content", body: "(existing content withheld — filesystem authority)", kind: "text" });
+      return { kind: "diff", ...base, sections };
+    } finally { fs?.close(); }
   }
 
   if (DELETE_TOOLS.has(req.tool)) {
-    const path = extractPath(args);
-    const paths = path ? [path] : (Array.isArray(args.paths) ? (args.paths as unknown[]).map(String) : []);
-    const target0 = paths.length > 0 ? resolve(req.cwd, paths[0]) : null;
-    const sections: PreviewSection[] = [];
-    sections.push({ title: "paths to delete", body: paths.map((p) => resolve(req.cwd, p)).join("\n") || "(none)", kind: "text" });
-    if (target0 && existsSync(target0)) {
-      try {
-        const st = statSync(target0);
-        const kind = st.isDirectory() ? "directory" : `file (${st.size} bytes)`;
-        sections.push({ title: "target", body: `${kind}`, kind: "text" });
-        if (!st.isDirectory()) {
-          const head = readFileSync(target0, "utf8").split("\n").slice(0, 20).join("\n");
-          const clamped = clampSection(head, 20, 3000);
-          sections.push({ title: "first lines of the file being deleted", body: clamped.body, kind: "code", truncated: clamped.truncated });
-        }
-      } catch {
-        /* stat failed — keep the paths section only */
+    const path = extractPath(args), paths = path ? [path] : (Array.isArray(args.paths) ? args.paths.map(String) : []);
+    const sections: PreviewSection[] = [{ title: "paths to delete", body: paths.map(p => resolve(req.cwd, p)).join("\n") || "(none)", kind: "text" }];
+    let fs: FilesystemAuthority | undefined;
+    try {
+      fs = new FilesystemAuthority(req.cwd, "preview");
+      if (paths[0]) {
+        const snapshot = fs.read(paths[0]);
+        sections.push({ title: "target", body: `file (${snapshot.size} bytes)`, kind: "text" });
+        const clamped = clampSection(redactPreviewText(snapshot.content), 20, 3000);
+        sections.push({ title: "first lines of the file being deleted", body: clamped.body, kind: "code", truncated: clamped.truncated });
       }
-    }
+    } catch { sections.push({ title: "content", body: "(content withheld — filesystem authority)", kind: "text" }); }
+    finally { fs?.close(); }
     return { kind: "file-delete", ...base, sections };
   }
 

@@ -23,6 +23,7 @@ import {
   type PlacementPolicyConfig,
 } from "./policy.ts";
 import { effectiveTier, mergePlacements } from "./lattice.ts";
+import { filesystemFromGrant, type FilesystemGrantUse } from "./filesystem.ts";
 import {
   TRUST_POLICY_VERSION,
   type AuthorityGrant,
@@ -83,6 +84,9 @@ export class TrustService {
   private readonly runPlacements = new Map<string, PlacementKind>();
 
   constructor(private readonly deps: TrustServiceDeps) {}
+
+  /** Registered, revocable content authority; not a renderer-supplied grant object. */
+  openFilesystem(use: FilesystemGrantUse) { return filesystemFromGrant(this.deps.registry, use); }
 
   /** True when hardened mode is active (fail-closed everywhere). */
   get hardened(): boolean {

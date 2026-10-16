@@ -221,18 +221,30 @@ describe("runEnvironmentAction — governed success paths (dry-run)", () => {
   });
 
   test("filesystem write is compensatable and a pre-image note is attached", async () => {
+    // The write is inside its own workspace root (tmp), so the authority may inspect it.
     const res = await svc.runEnvironmentAction(store, {
       environment: "filesystem",
       action: { type: "file", op: "write", path: join(tmp, "scratch.txt"), content: "hello" },
       target: { kind: "resource", path: join(tmp, "scratch.txt") },
       dryRun: true,
-    });
+    }, { workspaceId: tmp });
     expect(res.record.outcome).toBe("succeeded");
     expect(res.record.reversibility).toBe("compensatable");
     expect(res.record.cleanupNote).toContain("compensation available");
     // destructive-risk but compensatable → standard approval (existing flow),
     // not strong (strong is reserved for irreversible/unknown/sensitive-value).
     expect(res.record.approval.required).toBe("standard");
+  });
+
+  test("filesystem write outside the workspace claims no compensation (denied read is unknown, not absence)", async () => {
+    const res = await svc.runEnvironmentAction(store, {
+      environment: "filesystem",
+      action: { type: "file", op: "write", path: join(tmp, "scratch.txt"), content: "hello" },
+      target: { kind: "resource", path: join(tmp, "scratch.txt") },
+      dryRun: true,
+    }, { workspaceId: join(tmp, "elsewhere") });
+    expect(res.record.cleanupNote ?? "").not.toContain("compensation available");
+    expect(res.record.cleanupNote ?? "").not.toContain("did not exist");
   });
 
   test("extract actions are typed as untrusted_external evidence", async () => {

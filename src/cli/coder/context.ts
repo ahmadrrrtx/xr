@@ -7,8 +7,8 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { FilesystemAuthority, readWorkspaceText } from "../../security/filesystem.ts";
+import { relative, sep } from "node:path";
 
 export const RULES_CANDIDATES = [
   ".xr/rules.md",
@@ -33,11 +33,11 @@ export interface RulesFile {
 /** First rules file that exists wins (one only, to avoid conflicting instructions). */
 export function loadProjectRules(cwd: string): RulesFile | null {
   for (const candidate of RULES_CANDIDATES) {
-    const path = join(cwd, candidate);
-    if (!existsSync(path) || !statSync(path).isFile()) continue;
-    const raw = readFileSync(path, "utf8");
-    const truncated = raw.length > MAX_RULES_BYTES;
-    return { source: candidate, content: truncated ? raw.slice(0, MAX_RULES_BYTES) : raw, truncated };
+    try {
+      const raw = readWorkspaceText(cwd, candidate, "context", 5_000_000);
+      const truncated = raw.length > MAX_RULES_BYTES;
+      return { source: candidate, content: truncated ? raw.slice(0, MAX_RULES_BYTES) : raw, truncated };
+    } catch { /* absent, denied or unsafe rules never become context */ }
   }
   return null;
 }
@@ -52,11 +52,15 @@ export function detectProjectType(cwd: string): ProjectType {
   const kinds: string[] = [];
   let scripts: string[] = [];
   let name: string | undefined;
-  const has = (f: string) => existsSync(join(cwd, f));
+  const has = (f: string) => {
+    let fs: FilesystemAuthority | undefined;
+    try { fs = new FilesystemAuthority(cwd, "context"); return !fs.metadata(f).directory; }
+    catch { return false; } finally { fs?.close(); }
+  };
   if (has("package.json")) {
     kinds.push("node");
     try {
-      const pkg = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")) as {
+      const pkg = JSON.parse(readWorkspaceText(cwd, "package.json")) as {
         name?: string;
         scripts?: Record<string, string>;
       };
@@ -85,7 +89,7 @@ export interface GitState {
 }
 
 function git(cwd: string, args: string[]): string | null {
-  const res = spawnSync("git", args, { cwd, encoding: "utf8", timeout: 5000 });
+  const res = spawnSync("git", ["--no-pager", "-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", ...args], { cwd, encoding: "utf8", timeout: 5000, env: { PATH: process.env.PATH, HOME: process.env.HOME, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_TERMINAL_PROMPT: "0" } });
   if (res.status !== 0 || typeof res.stdout !== "string") return null;
   return res.stdout;
 }
@@ -124,44 +128,17 @@ export function compileIgnore(patterns: string[]): RegExp[] {
 }
 
 function readIgnoreFile(cwd: string, name: string): string[] {
-  const path = join(cwd, name);
-  if (!existsSync(path)) return [];
-  return readFileSync(path, "utf8").split("\n");
+  try { return readWorkspaceText(cwd, name, "context", 32_000).split("\n"); } catch { return []; }
 }
 
-/** Project files, honoring .gitignore (via git when available) and .xrignore. */
+/** Bounded authority-owned discovery. Ignore files are ergonomic, not grants. */
 export function listProjectFiles(cwd: string, limit = MAX_FILES): string[] {
-  const xrIgnore = compileIgnore(readIgnoreFile(cwd, ".xrignore"));
-  let files: string[];
-  const tracked = git(cwd, ["ls-files", "--cached", "--others", "--exclude-standard"]);
-  if (tracked !== null) {
-    files = tracked.split("\n").filter(Boolean);
-  } else {
-    const gitignore = compileIgnore(readIgnoreFile(cwd, ".gitignore"));
-    files = [];
-    walk(cwd, "", files, gitignore, limit);
-  }
-  return files.filter((f) => !xrIgnore.some((re) => re.test(f.split(sep).join("/")))).slice(0, limit);
-}
-
-function walk(root: string, rel: string, out: string[], ignore: RegExp[], limit: number): void {
-  if (out.length >= limit) return;
-  const dir = join(root, rel);
-  let entries: string[];
+  let fs: FilesystemAuthority | undefined;
   try {
-    entries = readdirSync(dir).sort();
-  } catch {
-    return;
-  }
-  for (const name of entries) {
-    if (out.length >= limit) return;
-    const childRel = rel ? `${rel}/${name}` : name;
-    if (ALWAYS_SKIP.has(name) || ignore.some((re) => re.test(childRel))) continue;
-    const full = join(root, childRel);
-    const st = statSync(full);
-    if (st.isDirectory()) walk(root, childRel, out, ignore, limit);
-    else out.push(childRel);
-  }
+    fs = new FilesystemAuthority(cwd, "context");
+    const ignore = compileIgnore([...readIgnoreFile(cwd, ".gitignore"), ...readIgnoreFile(cwd, ".xrignore")]);
+    return fs.walk(".", ALWAYS_SKIP, limit).map(e => e.path).filter(p => !ignore.some(r => r.test(p))).slice(0, limit);
+  } catch { return []; } finally { fs?.close(); }
 }
 
 /** Shallow repo map. Small repos get a tree; large ones get counts and top-level entries. */

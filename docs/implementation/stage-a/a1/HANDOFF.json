@@ -1,0 +1,55 @@
+{
+  "stage": "A",
+  "agent": "A1",
+  "status": "BLOCKED",
+  "accepted_implementation_sha": null,
+  "baseline_checkpoint_sha": "35d0a68ae5fa45be54dfe26ef7abb0f58c89a693",
+  "accepted_parent_sha": "945c457c2495a4a79d1ef6d85651d38054479fd9",
+  "branch": "Stage-1",
+  "implementation_commit": null,
+  "candidate_engineering_fingerprint_sha256": "ad6ed0849a8107ce7e04fc8ea9050f87701d6eeec48faa069d79f3fffce14126",
+  "remote_pushed": false,
+  "remote_sha": null,
+  "ci": {
+    "status": "NOT_DISPATCHED",
+    "workflows_supporting_dispatch": [
+      "ci.yml",
+      "desktop-app.yml",
+      "cross-platform.yml"
+    ],
+    "reason": "no push performed"
+  },
+  "blocking": [
+    "open authority inventory: builder, dev-server, plugin host/sandbox, control executor, repo raw git status, daemon git badges, legacy RAG retrieve() \u2014 not migrated",
+    "macOS and Windows native proof not run; CI not dispatched (no push performed)",
+    "A1 not pushed: user-provided token not used; push needs authorized credential"
+  ],
+  "platform_guarantees": {
+    "linux_x64_glibc_openat2": "candidate; partial proof (primitive + public tests)",
+    "macos": "NOT PROVEN",
+    "windows": "NOT PROVEN; fails closed in code",
+    "native_ipc_tauri": "NOT PROVEN"
+  },
+  "deliverables": {
+    "DESIGN.md": "docs/implementation/stage-a/a1/DESIGN.md (target design; reconciliation partial)",
+    "RESULTS.md": "docs/implementation/stage-a/a1/RESULTS.md",
+    "HANDOFF.json": "docs/implementation/stage-a/a1/HANDOFF.json",
+    "case_index": "docs/implementation/stage-a/a1/case-index.json"
+  },
+  "boundaries": {
+    "F09_F15": "not started; out of scope",
+    "A2_handoff": "not issued; requires accepted A1 SHA"
+  },
+  "resolved_this_session": [
+    "compensation pre-image regression (test workspace root corrected; outside-workspace no-claim assertion added)",
+    "desktop lint set-state-in-effect fixed",
+    "Linux native cargo check/clippy/test green (Rust 1.99, private GTK/WebKit libs)"
+  ],
+  "native": {
+    "linux_cargo_check": "exit 0",
+    "linux_clippy_D_warnings": "exit 0",
+    "linux_cargo_test_lib": "138 pass / 0 fail",
+    "macos": "NOT RUN",
+    "windows": "NOT RUN"
+  }
+}

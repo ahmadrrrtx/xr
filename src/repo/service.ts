@@ -5,8 +5,8 @@
  * wrap these calls so Policy / Approval / Audit still apply.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { withFilesystem } from "../security/filesystem.ts";
+import { sha256Bytes } from "./hash.ts";
 import type { WorkspaceStore } from "../state/workspace-store.ts";
 import { loadRepoConfig } from "./config.ts";
 import { readDiff, readGitSnapshot } from "./git.ts";
@@ -40,6 +40,22 @@ export class RepoIntelligence {
     return new RepoStore(this.handle.store, this.handle.workspaceId);
   }
 
+  /** Authorize current source snapshots BEFORE consulting cached symbols/snippets. */
+  private authorizedRepo(): RepoStore {
+    const repo = this.repo(), files = repo.listFiles();
+    try {
+      withFilesystem(this.handle.root, "index", fs => {
+        for (const file of files) {
+          try {
+            const snapshot = fs.read(file.relativePath, loadRepoConfig().maxFileBytes);
+            if (sha256Bytes(snapshot.bytes) !== file.contentHash) repo.deleteFile(file.relativePath);
+          } catch { repo.deleteFile(file.relativePath); }
+        }
+      });
+    } catch { for (const file of files) repo.deleteFile(file.relativePath); }
+    return repo;
+  }
+
   status(): IndexStats {
     return indexStatus(this.handle.store, this.handle.workspaceId);
   }
@@ -71,7 +87,7 @@ export class RepoIntelligence {
   }
 
   rank(query: string): RankedFile[] {
-    const repo = this.repo();
+    const repo = this.authorizedRepo();
     return rankFiles({
       query,
       files: repo.listFiles(),
@@ -81,15 +97,15 @@ export class RepoIntelligence {
   }
 
   search(query: string, limit = 24): RepoSearchHit[] {
-    return searchRepo(this.repo(), query, limit);
+    return searchRepo(this.authorizedRepo(), query, limit);
   }
 
   symbols(name: string): RepoSymbol[] {
-    return findSymbol(this.repo(), name);
+    return findSymbol(this.authorizedRepo(), name);
   }
 
   dependencies(file: string): { outbound: RepoEdge[]; inbound: RepoEdge[] } {
-    const repo = this.repo();
+    const repo = this.authorizedRepo();
     return {
       outbound: repo.listEdges({ from: file, limit: 200 }),
       inbound: repo.listEdges({ to: file, limit: 200 }),
@@ -97,7 +113,7 @@ export class RepoIntelligence {
   }
 
   fileContext(path: string, opts: { symbol?: string; around?: number } = {}): RepoFileContext | null {
-    const repo = this.repo();
+    const repo = this.authorizedRepo();
     const file = repo.getFile(path);
     if (!file) return null;
     const symbols = repo.listSymbols({ file: path, limit: 200 });
@@ -114,10 +130,9 @@ export class RepoIntelligence {
         reason = `symbol ${hit.name} (${hit.kind})`;
       }
     }
-    const abs = join(this.handle.root, path);
     let text = "";
     try {
-      const lines = readFileSync(abs, "utf8").split(/\r?\n/);
+      const lines = withFilesystem(this.handle.root, "index", fs => fs.read(path, cfg.maxFileBytes).content).split(/\r?\n/);
       end = Math.min(lines.length, end);
       text = lines.slice(start - 1, end).join("\n");
     } catch {

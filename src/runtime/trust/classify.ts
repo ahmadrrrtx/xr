@@ -56,6 +56,7 @@ function deriveFs(req: TrustRequest, tier: RiskTier): FilesystemPolicy {
     writableRoots: writable,
     readOnlyRoots: [],
     blockedPaths: sensitiveBlockedPaths(),
+    ...(req.filesystemAuthority ? { contentAuthority: req.filesystemAuthority } : {}),
     ephemeralScratch: tier !== "tier0_in_process",
   };
 }

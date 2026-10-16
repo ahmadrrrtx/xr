@@ -16,7 +16,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { withFilesystem, FilesystemError } from "../security/filesystem.ts";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   assertSpawnAllowed,
@@ -191,15 +191,18 @@ function hashFile(cwd: string, relPath: string): ArtifactEntry {
     return { path: relPath, exists: false, sizeBytes: null, sha256: null, note: "outside workspace — not inspected" };
   }
   try {
-    const st = statSync(abs);
-    if (!st.isFile()) return { path: relPath, exists: true, sizeBytes: null, sha256: null, note: "not a regular file" };
-    if (st.size > MAX_HASHED_FILE_BYTES) {
-      return { path: relPath, exists: true, sizeBytes: st.size, sha256: null, note: "too large to hash inline" };
-    }
-    const buf = readFileSync(abs);
-    return { path: relPath, exists: true, sizeBytes: st.size, sha256: createHash("sha256").update(buf).digest("hex").slice(0, 32) };
-  } catch {
-    return { path: relPath, exists: false, sizeBytes: null, sha256: null, note: "claimed but MISSING" };
+    return withFilesystem(cwd, "context", fs => {
+      const st = fs.metadata(relPath);
+      if (st.directory) return { path: relPath, exists: true, sizeBytes: null, sha256: null, note: "not a regular file" };
+      if (st.size > MAX_HASHED_FILE_BYTES) return { path: relPath, exists: true, sizeBytes: st.size, sha256: null, note: "too large to hash inline" };
+      const snapshot = fs.readBytes(relPath, MAX_HASHED_FILE_BYTES);
+      return { path: relPath, exists: true, sizeBytes: snapshot.size, sha256: createHash("sha256").update(snapshot.bytes).digest("hex").slice(0, 32) };
+    });
+  } catch (e) {
+    // A refused alias, sensitive read or unavailable backend is NOT evidence
+    // that the claimed artifact does not exist. Do not mislead the verifier.
+    const missing = e instanceof FilesystemError && e.code === "missing";
+    return { path: relPath, exists: false, sizeBytes: null, sha256: null, note: missing ? "claimed but MISSING" : "filesystem denied — not inspected" };
   }
 }
 

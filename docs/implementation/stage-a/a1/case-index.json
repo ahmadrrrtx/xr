@@ -1,0 +1,60 @@
+{
+  "evidence_root": "stage-a-results/a1 (outside repo; see RESULTS.md)",
+  "cases": [
+    {
+      "id": "FS14-metadata-list-grant",
+      "file": "test/security/filesystem-implicit.test.ts",
+      "result": "pass"
+    },
+    {
+      "id": "FS05-artifact-hash-denied-vs-missing",
+      "file": "test/security/filesystem-implicit.test.ts",
+      "result": "pass"
+    },
+    {
+      "id": "FS05-preimage-authorized-only",
+      "file": "test/security/filesystem-implicit.test.ts",
+      "result": "pass"
+    },
+    {
+      "id": "FS05-rag-index-real-local-embedding",
+      "file": "test/security/filesystem-implicit.test.ts",
+      "result": "pass"
+    },
+    {
+      "id": "FS14-shell-descriptor-not-mount",
+      "file": "test/security/filesystem-implicit.test.ts",
+      "result": "pass"
+    },
+    {
+      "id": "E10-print-mode-filtering",
+      "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+      "result": "pass"
+    },
+    {
+      "id": "E10-dangerous-quoted-decoy",
+      "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+      "result": "pass"
+    },
+    {
+      "id": "E08-E09-shell-decoy-process",
+      "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+      "result": "pass"
+    },
+    {
+      "id": "compensation-preimage-in-workspace-and-outside-no-claim",
+      "file": "test/environment/service.test.ts:223",
+      "result": "pass (test corrected: workspaceId set to write root; new outside assertion)"
+    },
+    {
+      "id": "G6-retrieval-p95-under-load",
+      "file": "test/context/performance.test.ts:299",
+      "result": "pass in final broad run; one earlier load-sensitive failure (134.5ms)"
+    },
+    {
+      "id": "desktop-lint-settings-effect",
+      "file": "desktop/src/screens/Settings/index.tsx:155",
+      "result": "FAIL (pre-existing at baseline)"
+    }
+  ]
+}

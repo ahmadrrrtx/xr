@@ -3,8 +3,7 @@
  * skills/ directory. Pre-built skills ship with XR; learned skills are added by
  * the engine (Phase 3). Loader is dependency-free (tiny frontmatter parser).
  */
-import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { FilesystemAuthority } from "../security/filesystem.ts";
 
 export interface LoadedSkill {
   id: string;
@@ -31,15 +30,14 @@ function parseFrontmatter(text: string): { meta: Record<string, string>; body: s
 }
 
 export function loadSkills(skillsDir: string): LoadedSkill[] {
-  if (!existsSync(skillsDir)) return [];
   const out: LoadedSkill[] = [];
-  for (const name of readdirSync(skillsDir)) {
-    const dir = join(skillsDir, name);
-    if (!statSync(dir).isDirectory()) continue;
-    const file = join(dir, "SKILL.md");
-    if (!existsSync(file)) continue;
+  let fs: FilesystemAuthority | undefined;
+  try { fs = new FilesystemAuthority(skillsDir, "context"); } catch { return []; }
+  try { for (const entry of fs.list(".", 2000)) {
+    if (!entry.directory) continue;
+    const name = entry.name;
     try {
-      const { meta, body } = parseFrontmatter(readFileSync(file, "utf8"));
+      const { meta, body } = parseFrontmatter(fs.read(`${entry.path}/SKILL.md`, 256_000).content);
       out.push({
         id: meta.id ?? name,
         version: Number(meta.version ?? 1),
@@ -55,6 +53,6 @@ export function loadSkills(skillsDir: string): LoadedSkill[] {
     } catch {
       /* skip malformed skill — never crash */
     }
-  }
+  } } finally { fs.close(); }
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
