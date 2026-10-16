@@ -30,7 +30,7 @@ describe("Phase 31 · B1–B4 legal pages exist with their mandated content", ()
     expect(privacy).toContain("XR Personal is 100% local. We collect nothing.");
     expect(privacy).toContain("We do not sell data. No ads. No third-party trackers.");
     expect(privacy).toContain("Data Rights Request");
-    expect(privacy).toContain("Grievance officer: [TO FILL:");
+    expect(privacy).toContain("Grievance officer: Muhammad Ahmad");
     expect(privacy).toContain("Standard Contractual Clauses");
     // The legacy /privacy URL renders the same document.
     expect(read("website/src/app/privacy/page.tsx")).toContain("../legal/privacy/page");
@@ -101,7 +101,7 @@ describe("Phase 31 · B6/B7 honesty surface", () => {
     const footer = read("website/src/components/Footer.tsx");
     expect(footer).toContain("https://x.com/ahmadrrrtx");
     expect(footer).toContain("new Date().getFullYear()");
-    expect(footer).toContain("[TO FILL: Registered Entity Name]");
+    expect(footer).toContain("XR RRRTX Labs");
     expect(footer).toContain("mailto:support@xr.rrrtx.ai");
     expect(footer).not.toContain("All systems normal");
     const site = read("website/src/lib/site.ts");

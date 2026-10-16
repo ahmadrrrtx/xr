@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **website,cloud:** deletion copy now describes the request-based erasure path (P0-2) — no automation promised that isn't shipped: console-delete, automatic-purge, purge-date and soft-delete claims replaced across privacy, terms, security, pricing and the dashboard, and in the customer-visible cancellation message. Export claims (backed by `memory.ts:381` / `audit.ts:114`) kept verbatim.
+- **test:** `test/website/legal-capability-alignment.test.ts` — P0-2 regression guard: forbidden automation claims fail the suite, the real request path must be stated, and console-deletion claims need a matching route.
+- **website:** filled the legal identity on the privacy policy and every page footer — entity RRRTX Labs, registered office Remote-first · Chiniot, Punjab, Pakistan, and a named India (DPDP) grievance officer (Muhammad Ahmad, ahmadrrrtx333@gmail.com, available 24 hr). Closes audit finding P0-1 (GDPR Art. 13 controller identity; DPDP named grievance officer).
+- **scripts:** `placeholder-lint` — fails the build (exit 1) on any `TO FILL` or `[[…]]` placeholder marker under `website/src`; runs in `bun run ci` immediately after `claim-lint`.
+- **test:** `test/website/legal-placeholders.test.ts` — P0-1 regression guard: no markers on the public surface, the real identity present, and the gate provably fails on an injected marker.
+
 ## 1.1.0 — 2026-10-15
 
 ### Features
