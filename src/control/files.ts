@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
-import { isAbsolute, relative, resolve } from "node:path";
-import { FilesystemAuthority, FilesystemError, filesystemMessage, withFilesystem } from "../security/filesystem.ts";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import { canonicalAbsolute, FilesystemAuthority, FilesystemError, filesystemMessage, withFilesystem } from "../security/filesystem.ts";
 import { AuthorityRegistry } from "../runtime/trust/authority.ts";
 import { filesystemFromGrant } from "../runtime/trust/filesystem.ts";
 import type { ActionResult } from "./types.ts";
@@ -48,9 +48,10 @@ function withDesktopFs<T>(path: string, grantId: string | undefined, fn: (fs: Fi
   const root = sandboxRoot();
   // Relative paths are root-relative (the same meaning the authority always gave them).
   const expanded = normalize(path);
-  const abs = isAbsolute(expanded) ? resolve(expanded) : resolve(root, expanded);
-  if (inside(resolve(root), abs)) {
-    return withFilesystem(root, "desktop", (fs) => fn(fs, relative(fs.root, abs) || "."));
+  const abs = canonicalAbsolute(isAbsolute(expanded) ? expanded : join(root, expanded));
+  if (inside(canonicalAbsolute(root), abs)) {
+    // The authority re-derives the root-relative form from the canonical absolute path.
+    return withFilesystem(root, "desktop", (fs) => fn(fs, abs));
   }
   if (!grantId || !grantRegistry) throw new FilesystemError("denied");
   const grant = grantRegistry.get(grantId);
@@ -66,7 +67,7 @@ function withDesktopFs<T>(path: string, grantId: string | undefined, fn: (fs: Fi
   });
   try {
     if (!inside(fs.root, abs)) throw new FilesystemError("denied");
-    return fn(fs, relative(fs.root, abs) || ".");
+    return fn(fs, abs);
   } finally {
     fs.close();
   }

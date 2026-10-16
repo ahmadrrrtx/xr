@@ -3,7 +3,27 @@
  */
 import { closeSync, fstatSync, ftruncateSync, readSync, realpathSync, writeSync, type Stats } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+
+/**
+ * Canonical absolute spelling: realpath of the deepest existing ancestor, plus the not-yet-existing tail.
+ * Handles macOS /var -> /private/var and Windows 8.3 short names (RUNNER~1) for absolute inputs. Only a
+ * path string is produced; every object is still re-checked by the anchored open.
+ */
+export function canonicalAbsolute(abs: string): string {
+  const full = resolve(abs);
+  let cur = full;
+  const rest: string[] = [];
+  for (;;) {
+    try { return rest.length ? join(realpathSync(cur), ...rest) : realpathSync(cur); }
+    catch {
+      const parent = dirname(cur);
+      if (parent === cur) return full;
+      rest.unshift(basename(cur));
+      cur = parent;
+    }
+  }
+}
 import { isSecretPath } from "./guard.ts";
 import { anchoredOpen, anchoredMkdir, anchoredRename, anchoredUnlink, descriptorIo, writableSameObject, listFd, FD_FLAGS, FilesystemError } from "./fs-native.ts";
 export { FilesystemError } from "./fs-native.ts";
@@ -68,8 +88,7 @@ export class FilesystemAuthority {
     const parts = input.split("/");
     if (parts.includes("..")) throw new FilesystemError("escape");
     if (parts.length > MAX_DEPTH) throw new FilesystemError("limit");
-    let p = isAbsolute(input) ? relative(this.root, input) : input;
-    if (isAbsolute(input) && (p === ".." || p.startsWith("../"))) p = relative(this.suppliedRoot, input);
+    let p = isAbsolute(input) ? relative(this.root, canonicalAbsolute(input)) : input;
     if (p === ".." || p.startsWith("../") || isAbsolute(p)) throw new FilesystemError("escape");
     return p.split("/").filter(x => x && x !== ".").join("/") || ".";
   }
