@@ -19,9 +19,10 @@
  * is unit-tested without fixtures on disk.
  */
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { withFilesystem } from "../security/filesystem.ts";
 import { createServer } from "node:net";
-import { extname, join, normalize, resolve, sep } from "node:path";
+import { extname, join, normalize, relative, resolve, sep } from "node:path";
 
 import { killTree, killTreeSync } from "./proc-tree";
 
@@ -47,12 +48,19 @@ export interface DetectFs {
   which(bin: string): boolean;
 }
 
+/** A1: detection reads go through the filesystem authority (daemon purpose, sensitive policy, no link following). */
 export function realDetectFs(root: string): DetectFs {
   return {
-    exists: (rel) => existsSync(join(root, rel)),
+    exists: (rel) => {
+      try {
+        return withFilesystem(root, "daemon", (fs) => { fs.metadata(rel); return true; });
+      } catch {
+        return false;
+      }
+    },
     readText: (rel) => {
       try {
-        return readFileSync(join(root, rel), "utf8");
+        return withFilesystem(root, "daemon", (fs) => fs.read(rel).content);
       } catch {
         return null;
       }
@@ -228,7 +236,13 @@ const MIME: Record<string, string> = {
   ".woff": "font/woff", ".woff2": "font/woff2", ".map": "application/json", ".wasm": "application/wasm",
 };
 
-/** Resolve a request path strictly inside root; directories fall back to index.html. */
+/**
+ * Resolve a preview request to an absolute path. A1: the candidate is authorized by the filesystem
+ * authority (preview purpose): traversal, symlinks, hardlinks, special files and sensitive names are
+ * refused. Bytes are read later through the same authority (see the static server below).
+ */
+const STATIC_READ_LIMIT = 10 * 1024 * 1024; // authority ceiling; larger preview files are not served (disclosed)
+
 export function staticFileFor(root: string, urlPath: string): string | null {
   let decoded: string;
   try {
@@ -236,15 +250,18 @@ export function staticFileFor(root: string, urlPath: string): string | null {
   } catch {
     return null;
   }
-  const target = resolve(root, "." + normalize("/" + decoded));
-  if (target !== root && !target.startsWith(root + sep)) return null;
+  const rel = normalize("/" + decoded).replace(/^[\\/]+/, "").split(sep).join("/");
+  if (rel.split("/").includes("..")) return null;
   try {
-    const st = statSync(target);
-    if (st.isDirectory()) {
-      const index = join(target, "index.html");
-      return existsSync(index) ? index : null;
-    }
-    return st.isFile() ? target : null;
+    return withFilesystem(root, "preview", (fs) => {
+      let candidate = rel === "" || rel === "." ? "index.html" : rel;
+      try {
+        if (fs.metadata(rel === "" ? "." : rel).directory) candidate = rel === "" ? "index.html" : `${rel}/index.html`;
+      } catch {
+        /* not a directory: use the candidate as-is */
+      }
+      return fs.canRead(candidate) ? join(root, candidate) : null;
+    });
   } catch {
     return null;
   }
@@ -373,8 +390,15 @@ export class DevServerRegistry {
         fetch: (req) => {
           const file = staticFileFor(root, new URL(req.url).pathname);
           if (!file) return new Response("Not found", { status: 404 });
+          let bytes: Uint8Array;
+          try {
+            // A1: bytes come from the authority, not a second path open.
+            bytes = withFilesystem(root, "preview", (fs) => fs.readBytes(relative(root, file), STATIC_READ_LIMIT).bytes);
+          } catch {
+            return new Response("Not found", { status: 404 });
+          }
           const type = MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
-          return new Response(Bun.file(file), { headers: { "content-type": type, "cache-control": "no-store" } });
+          return new Response(bytes, { headers: { "content-type": type, "cache-control": "no-store" } });
         },
       });
       m.staticServer = server;

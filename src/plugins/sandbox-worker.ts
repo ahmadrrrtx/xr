@@ -27,7 +27,8 @@
  */
 
 import { parentPort } from "node:worker_threads";
-import { existsSync, readFileSync, statSync, realpathSync, mkdirSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, statSync, realpathSync } from "node:fs";
+import { pluginFsList, pluginFsRead, pluginFsWrite } from "./fs-capability.ts";
 import { join, resolve, relative, isAbsolute, dirname } from "node:path";
 import { createContext, Script, compileFunction } from "node:vm";
 import type {
@@ -511,36 +512,12 @@ function buildHost(): any {
     const fsCap: any = Object.create(null);
     fsCap.path = ((rel: string) => safeJoin(dataDir, rel));
     if (grantedSet.has("fs:read")) {
-      fsCap.read = ((rel: string) => {
-        const p = safeJoin(dataDir, rel);
-        if (!existsSync(p)) return "";
-        const st = statSync(p);
-        if (!st.isFile()) throw new Error(`not a file: ${rel}`);
-        if (st.size > 10 * 1024 * 1024) throw new Error(`file too large: ${rel}`);
-        base.audit("fs.read", { path: rel, size: st.size });
-        return readFileSync(p, "utf8");
-      });
-      fsCap.list = ((rel = ".") => {
-        const p = safeJoin(dataDir, rel);
-        if (!existsSync(p)) return [];
-        const st = statSync(p);
-        if (!st.isDirectory()) throw new Error(`not a directory: ${rel}`);
-        base.audit("fs.list", { path: rel });
-        return readdirSync(p).filter((n: string) => !n.startsWith(".") && n !== "node_modules");
-      });
+      // A1: same authority-bound capability as the host (see fs-capability.ts).
+      fsCap.read = ((rel: string) => pluginFsRead(dataDir, rel, base.audit));
+      fsCap.list = ((rel = ".") => pluginFsList(dataDir, rel, base.audit));
     }
     if (grantedSet.has("fs:write")) {
-      fsCap.write = ((rel: string, content: string) => {
-        if (typeof rel !== "string" || !rel) throw new Error("invalid path");
-        if (typeof content !== "string") content = String(content);
-        if (content.length > 10 * 1024 * 1024) throw new Error("content too large");
-        if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
-        const p = safeJoin(dataDir, rel);
-        const parent = dirname(p);
-        if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
-        writeFileSync(p, content);
-        base.audit("fs.write", { path: rel, size: content.length });
-      });
+      fsCap.write = ((rel: string, content: string) => pluginFsWrite(dataDir, rel, content, base.audit));
     }
     base.fs = Object.freeze(fsCap);
   }

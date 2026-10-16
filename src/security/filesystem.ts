@@ -5,11 +5,11 @@ import { closeSync, fstatSync, ftruncateSync, readSync, readdirSync, realpathSyn
 import { createHash, randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve } from "node:path";
 import { isSecretPath } from "./guard.ts";
-import { anchoredOpen, anchoredMkdir, anchoredUnlink, descriptorIo, FD_FLAGS, FilesystemError } from "./fs-native.ts";
+import { anchoredOpen, anchoredMkdir, anchoredRename, anchoredUnlink, descriptorIo, FD_FLAGS, FilesystemError } from "./fs-native.ts";
 export { FilesystemError } from "./fs-native.ts";
 
-const MAX_BYTES = 5_000_000, MAX_DEPTH = 32, MAX_ENTRIES = 10_000;
-export type FilePurpose = "model-tool" | "context" | "preview" | "daemon" | "desktop" | "index";
+const MAX_BYTES = 10 * 1024 * 1024, MAX_DEPTH = 32, MAX_ENTRIES = 10_000; // aligned with the plugin fs cap (10 MB)
+export type FilePurpose = "model-tool" | "context" | "preview" | "daemon" | "desktop" | "index" | "plugin";
 /** Passed by the trusted Trust adapter only. It is never parsed from model/HTTP args. */
 export interface FilesystemLease {
   readonly grantId: string;
@@ -239,6 +239,184 @@ export class FilesystemAuthority {
       };
     } catch (e) { if (fd !== undefined) closeSync(fd); closeSync(parentFd); throw e; }
   }
+  /** Preflight only: would read() be authorized for this regular file? Performs no content I/O. */
+  canRead(input: string): boolean {
+    try {
+      const p = this.path(input), fd = this.open(p);
+      try {
+        const st = fstatSync(fd);
+        if (!st.isFile() || st.nlink !== 1) return false;
+        this.check(p, "read", objectId(st));
+        return true;
+      } finally { closeSync(fd); }
+    } catch { return false; }
+  }
+  /** Bounded preview read (first `limit` bytes). Same identity, sensitive and hardlink checks as read(). */
+  readPrefix(input: string, limit: number): { bytes: Buffer; size: number; mtimeMs: number; truncated: boolean } {
+    const p = this.path(input), fd = this.open(p);
+    try {
+      const st = fstatSync(fd);
+      if (!st.isFile() || st.nlink !== 1) throw new FilesystemError();
+      this.check(p, "read", objectId(st));
+      if (limit > MAX_BYTES) throw new FilesystemError("limit");
+      const want = Math.min(limit, st.size);
+      const io = descriptorIo(fd, false);
+      try {
+        const buffer = Buffer.alloc(want);
+        let n = 0;
+        while (n < want) { const c = readSync(io, buffer, n, want - n, n); if (!c) break; n += c; }
+        if (version(fstatSync(io)) !== version(st) || version(fstatSync(fd)) !== version(st)) throw new FilesystemError("stale");
+        return { bytes: buffer.subarray(0, n), size: st.size, mtimeMs: st.mtimeMs, truncated: st.size > limit };
+      } finally { closeSync(io); }
+    } finally { closeSync(fd); }
+  }
+  /** Approval-bound creation. Refuses existing targets, escaping ancestors and special files. */
+  prepareCreate(input: string, kind: "file" | "folder"): PreparedFileOperation & { existed: boolean } {
+    const p = this.path(input);
+    if (p === ".") throw new FilesystemError();
+    if (kind === "file") {
+      const op = this.prepare(p, "write");
+      if (op.existed) { op.close(); throw new FilesystemError("stale"); }
+      const innerCommit = op.commit;
+      // Capture the original commit BEFORE overriding it (a self-reference here recurses forever).
+      return Object.assign(op, { existed: false, commit: () => innerCommit("") });
+    }
+    this.assertAbsent(p);
+    const parent = splitParent(p).parent;
+    const pfd = this.open(parent, true);
+    const parentIdentity = objectId(fstatSync(pfd));
+    closeSync(pfd);
+    return {
+      path: p, identity: Object.freeze({ ...this.descriptor(), operation: "create-folder", path: p, parentIdentity }), oldContent: "",
+      existed: false, sensitive: false, mtimeMs: undefined, close: () => undefined,
+      validate: () => { this.assertAbsent(p); },
+      commit: () => { this.assertAbsent(p); this.mkdir(p); },
+    };
+  }
+  private assertAbsent(p: string): void {
+    let fd: number | undefined;
+    try { fd = this.open(p); } catch (e) {
+      if (e instanceof FilesystemError && e.code === "missing") return;
+      throw e;
+    }
+    closeSync(fd);
+    throw new FilesystemError("stale");
+  }
+  /**
+   * Approval-bound rename inside one root. Sensitive sources (or directories containing any
+   * sensitive entry) are refused: moving them would make protected bytes readable under a new name.
+   * The destination must be absent; missing destination parents are created component-relative.
+   * Residual: the moved object is re-verified after renameat; a mismatch is renamed back and reported stale.
+   */
+  prepareRename(from: string, to: string): PreparedFileOperation & { existed: boolean } {
+    const a = this.path(from), b = this.path(to);
+    if (a === "." || b === "." || a === b || b.startsWith(a + "/")) throw new FilesystemError();
+    const srcFd = this.open(a);
+    const srcSt = fstatSync(srcFd);
+    closeSync(srcFd);
+    const srcId = objectId(srcSt);
+    this.check(a, "write", srcId);
+    if (isSecretPath(a) || isSecretPath(resolve(this.root, a)) || (srcSt.isDirectory() && this.sensitiveDescendant(a, 0))) throw new FilesystemError();
+    this.assertAbsent(b);
+    const sp = splitParent(a), dp = splitParent(b);
+    const identity = Object.freeze({ ...this.descriptor(), operation: "rename", path: a, target: b, sourceObject: srcId });
+    return {
+      path: a, identity, oldContent: "", existed: true, sensitive: false, mtimeMs: undefined, close: () => undefined,
+      validate: () => { this.check(a, "write", srcId); this.assertAbsent(b); },
+      commit: () => {
+        this.active();
+        const again = this.open(a);
+        try { if (objectId(fstatSync(again)) !== srcId) throw new FilesystemError("stale"); } finally { closeSync(again); }
+        this.assertAbsent(b);
+        if (dp.parent !== ".") this.mkdir(dp.parent);
+        const srcParent = this.open(sp.parent, true), dstParent = this.open(dp.parent, true);
+        try { anchoredRename(srcParent, sp.leaf, dstParent, dp.leaf); }
+        finally { closeSync(srcParent); closeSync(dstParent); }
+        const moved = this.open(b);
+        let ok = false;
+        try { ok = objectId(fstatSync(moved)) === srcId; } finally { closeSync(moved); }
+        if (!ok) {
+          const d2 = this.open(dp.parent, true), s2 = this.open(sp.parent, true);
+          try { anchoredRename(d2, dp.leaf, s2, sp.leaf); } finally { closeSync(d2); closeSync(s2); }
+          throw new FilesystemError("stale");
+        }
+      },
+    };
+  }
+  private sensitiveDescendant(p: string, depth: number): boolean {
+    if (depth > MAX_DEPTH) throw new FilesystemError("limit");
+    const dfd = this.open(p, true);
+    let names: string[];
+    try { names = readdirSync(`/proc/self/fd/${dfd}`); } finally { closeSync(dfd); }
+    if (names.length > MAX_ENTRIES) throw new FilesystemError("limit");
+    for (const name of names) {
+      const child = `${p}/${name}`;
+      if (isSecretPath(child) || isSecretPath(resolve(this.root, child))) return true;
+      const cfd = this.open(child);
+      let directory = false;
+      try { directory = fstatSync(cfd).isDirectory(); } finally { closeSync(cfd); }
+      if (directory && this.sensitiveDescendant(child, depth + 1)) return true;
+    }
+    return false;
+  }
+  /** Every entry under `p` must be a regular file or directory (no links/special files). Throws before any deletion. */
+  private scanRemovable(p: string, depth: number, budget: { n: number; files: number }): void {
+    if (depth > MAX_DEPTH) throw new FilesystemError("limit");
+    const dfd = this.open(p, true);
+    let names: string[];
+    try { names = readdirSync(`/proc/self/fd/${dfd}`); } finally { closeSync(dfd); }
+    for (const name of names) {
+      if (++budget.n > MAX_ENTRIES) throw new FilesystemError("limit");
+      const child = `${p}/${name}`;
+      const cfd = this.open(child);
+      let directory = false;
+      try { directory = fstatSync(cfd).isDirectory(); } finally { closeSync(cfd); }
+      if (directory) this.scanRemovable(child, depth + 1, budget); else budget.files += 1;
+    }
+  }
+  private removeTree(p: string): void {
+    const dfd = this.open(p, true);
+    let names: string[];
+    try { names = readdirSync(`/proc/self/fd/${dfd}`); } finally { closeSync(dfd); }
+    for (const name of names) {
+      const child = `${p}/${name}`;
+      const cfd = this.open(child);
+      let directory = false;
+      try { directory = fstatSync(cfd).isDirectory(); } finally { closeSync(cfd); }
+      if (directory) this.removeTree(child);
+      const pfd = this.open(p, true);
+      try { anchoredUnlink(pfd, name, directory); } finally { closeSync(pfd); }
+    }
+  }
+  /** Approval-bound removal. Directories only when `recursive`; the whole tree is scanned before any unlink. */
+  prepareRemove(input: string, recursive: boolean): PreparedFileOperation & { existed: boolean; files: number } {
+    const p = this.path(input);
+    if (p === ".") throw new FilesystemError();
+    const fd = this.open(p);
+    const st = fstatSync(fd);
+    closeSync(fd);
+    if (st.isDirectory() && !recursive) throw new FilesystemError();
+    const id = objectId(st);
+    this.check(p, "write", id);
+    const sp = splitParent(p);
+    const assertSame = () => {
+      const again = this.open(p);
+      try { if (objectId(fstatSync(again)) !== id) throw new FilesystemError("stale"); } finally { closeSync(again); }
+    };
+    const scan = () => { const budget = { n: 0, files: 0 }; if (st.isDirectory()) this.scanRemovable(p, 0, budget); return budget.files; };
+    const files = scan() + (st.isDirectory() ? 0 : 1);
+    return {
+      path: p, identity: Object.freeze({ ...this.descriptor(), operation: "delete", path: p, target: id, recursive }),
+      oldContent: "", existed: true, sensitive: false, mtimeMs: st.mtimeMs, close: () => undefined, files,
+      validate: () => { assertSame(); scan(); },
+      commit: () => {
+        assertSame(); scan();
+        if (st.isDirectory()) this.removeTree(p);
+        const pfd = this.open(sp.parent, true);
+        try { anchoredUnlink(pfd, sp.leaf, st.isDirectory()); } finally { closeSync(pfd); }
+      },
+    };
+  }
   /** Directory creation is component-relative; unsafe aliases are never followed. */
   mkdir(input: string): void {
     const p = this.path(input), parts = p.split("/");
@@ -280,4 +458,10 @@ export interface PreparedFileOperation {
 export function readWorkspaceText(root: string, path: string, purpose: FilePurpose = "context", limit = 1_000_000): string {
   const fs = new FilesystemAuthority(root, purpose);
   try { return fs.read(path, limit).content; } finally { fs.close(); }
+}
+
+function splitParent(p: string): { parent: string; leaf: string } {
+  const pieces = p.split("/");
+  const leaf = pieces.pop()!;
+  return { parent: pieces.join("/") || ".", leaf };
 }

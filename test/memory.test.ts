@@ -55,7 +55,7 @@ test("index + retrieve finds the relevant file", async () => {
   const store = new Store(join(tmp, "r.db"));
   const n = await indexProject(store, tmp, "proj");
   expect(n).toBeGreaterThanOrEqual(2);
-  const results = await retrieve(store, "proj", "how does password login work", 2);
+  const results = await retrieve(store, "proj", tmp, "how does password login work", 2);
   expect(results.length).toBeGreaterThan(0);
   expect(results[0].path).toBe("auth.ts"); // most relevant
   store.close();

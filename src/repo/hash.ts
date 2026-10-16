@@ -6,19 +6,11 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
 
 export function sha256Bytes(buf: Uint8Array | string): string {
   return createHash("sha256").update(buf).digest("hex");
 }
 
-export function hashFile(absolutePath: string): string | null {
-  try {
-    return sha256Bytes(readFileSync(absolutePath));
-  } catch {
-    return null;
-  }
-}
 
 export function symbolId(file: string, name: string, kind: string, startLine: number): string {
   return sha256Bytes(`${file}|${kind}|${name}|${startLine}`).slice(0, 16);

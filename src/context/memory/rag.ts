@@ -5,6 +5,7 @@
  * All local, all private. (Block 4.)
  */
 import { withFilesystem, readWorkspaceText } from "../../security/filesystem.ts";
+import { isSecretPath } from "../../security/guard.ts";
 import { join, relative, extname } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Store } from "../../state/workspace-store.ts";
@@ -107,14 +108,27 @@ export interface RetrievedChunk {
   score: number;
 }
 
+/**
+ * A1 F03: persisted chunks are candidates, not authority. Each row is re-authorized
+ * against the project root at retrieval time (sensitive policy + current, in-root,
+ * non-escaping metadata), so a chunk indexed before a file became sensitive, moved,
+ * or was deleted is never returned.
+ */
+function reauthorizedChunk(root: string, path: string): boolean {
+  if (typeof path !== "string" || !path) return false;
+  if (isSecretPath(join(root, path))) return false;
+  try { return withFilesystem(root, "index", (fs) => !fs.metadata(path).directory); } catch { return false; }
+}
+
 /** Retrieve the top-k most relevant chunks for a query. */
 export async function retrieve(
   store: Store,
   project: string,
+  root: string,
   query: string,
   k = 5,
 ): Promise<RetrievedChunk[]> {
-  const rows = store.allChunks(project);
+  const rows = store.allChunks(project).filter((r) => reauthorizedChunk(root, r.path));
   if (rows.length === 0) return [];
   const qvec = await embed(query);
   const scored = rows.map((r) => {

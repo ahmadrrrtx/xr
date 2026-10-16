@@ -95,11 +95,14 @@ export interface GatedMutation {
   audit: string;
   /** Runs only after approval; whatever it returns is sent as `{type:"applied", …}`. */
   perform: () => Promise<Record<string, unknown>> | Record<string, unknown>;
+  /** A1: runs when the stream ends (applied, denied, timed out or failed); releases prepared authority. */
+  release?: () => void;
 }
 
 /** The consent plane for every Builder write: approval first, disk second. */
 export function gatedMutation(m: GatedMutation): Response {
   return sseResponse(async (send) => {
+    try {
     const approvalsCfg = m.ctx.config?.approvals;
     const store = getApprovalStore(m.ctx.state.store, { defaultTtlMs: approvalsCfg?.defaultTtlMs, perSurface: approvalsCfg?.perSurface });
     const args = { ...m.args, scope: scopeOf(m.project) };
@@ -122,5 +125,6 @@ export function gatedMutation(m: GatedMutation): Response {
       m.ctx.state.store.audit(`${m.audit}.failed`, { project: m.project.id, tool: m.tool, error: (e as Error).message });
       send({ type: "error", approvalId: handle.id, error: (e as Error).message });
     }
+    } finally { m.release?.(); }
   });
 }
