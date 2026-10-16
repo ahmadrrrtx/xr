@@ -1,23 +1,31 @@
 // TEMPORARY diagnostic (removed before merge)
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, linkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 const out = (...a: unknown[]) => console.log("[dbg]", ...a);
-const { FilesystemAuthority } = await import("../src/security/filesystem.ts");
-const base = mkdtempSync(join(tmpdir(), "dbg-")); const root = join(base, "root");
-mkdirSync(root); mkdirSync(join(root, "src")); writeFileSync(join(root, "src", "app.ts"), "A");
-writeFileSync(join(root, "ok.txt"), "HELLO");
-const step = <T,>(label: string, f: () => T): T | undefined => { try { const v = f(); out(label, "ok", typeof v === "string" ? v.slice(0, 120) : JSON.stringify(v)?.slice(0, 240)); return v; } catch (e) { const x = e as Error & { code?: string }; out(label, "FAILED", x.code, x.message, (x.stack ?? "").split("\n").slice(1, 3).join(" | ")); return undefined; } };
-const fs = new FilesystemAuthority(root);
-step("list .", () => fs.list("."));
-step("list src", () => fs.list("src"));
-step("walk .", () => fs.walk("."));
-step("read src/app.ts", () => fs.read("src/app.ts").content);
-step("metadata src", () => fs.metadata("src"));
-step("mkdir new", () => fs.mkdir("newdir"));
-step("prepare write new file", () => { const p = fs.prepare("newdir/x.txt", "write"); try { p.commit("X"); } finally { p.close(); } return "committed"; });
-step("prepare overwrite ok.txt", () => { const p = fs.prepare("ok.txt", "write"); try { p.commit("OVER"); } finally { p.close(); } return "committed"; });
-step("read ok.txt after", () => fs.read("ok.txt").content);
-step("prepare delete x", () => { const p = fs.prepare("newdir/x.txt", "delete"); try { p.commit(); } finally { p.close(); } return "deleted"; });
-step("prepareRename", () => { const p = fs.prepareRename("ok.txt", "moved.txt"); try { p.commit(); } finally { p.close(); } return "renamed"; });
+const { FilesystemAuthority, canonicalAbsolute } = await import("../src/security/filesystem.ts");
+const { classifyRisk } = await import("../src/runtime/trust/classify.ts");
+const { readTrustRequest } = await import("../src/runtime/trust/tool-support.ts");
+const { createGrant, AuthorityRegistry } = await import("../src/runtime/trust/authority.ts");
+const { filesystemFromGrant } = await import("../src/runtime/trust/filesystem.ts");
+const base0 = mkdtempSync(join(tmpdir(), "dbg-")); const root0 = join(base0, "workspace"); mkdirSync(root0);
+const { realpathSync } = await import("node:fs");
+const root = realpathSync(root0);
+writeFileSync(join(root, "allowed.txt"), "A"); writeFileSync(join(root, "blocked.txt"), "B");
+writeFileSync(join(root, ".env"), "S"); linkSync(join(root, ".env"), join(root, "alias.txt"));
+out("root", root, "root0", root0);
+const d = new FilesystemAuthority(root, "desktop"); const rootIdentity = d.descriptor().rootIdentity; d.close();
+const c = classifyRisk(readTrustRequest("read_file", root));
+const grant = createGrant({ actor: "synthetic-trusted-host", executionId: "test-execution", correlationId: "test-correlation", workspaceId: root, capability: "file:read" }, {
+  ...c, fs: { ...c.fs, readOnlyRoots: [root], writableRoots: [], blockedPaths: [join(root, "blocked.txt")], contentScope: { root, rootIdentity, purpose: "desktop", operations: ["read", "list"] } },
+});
+const registry = new AuthorityRegistry(); registry.register(grant);
+const fs = filesystemFromGrant(registry, { grantId: grant.grantId, actor: grant.actor, executionId: grant.executionId, workspaceId: root, purpose: "desktop" });
+out("fs.root", fs.root, "blocked", grant.fs.blockedPaths);
+const absB = resolve(fs.root, "blocked.txt");
+out("absB", absB, "permits read", (fs as any).lease.permits(absB, "read", "x"));
+try { out("metadata blocked", JSON.stringify(fs.metadata("blocked.txt"))); } catch (e) { out("metadata blocked THREW", (e as Error).message); }
+try { out("metadata allowed", JSON.stringify(fs.metadata("allowed.txt")).slice(0, 80)); } catch (e) { out("metadata allowed THREW", (e as Error).message); }
+try { out("read alias", fs.read("alias.txt").content); } catch (e) { out("read alias THREW", (e as Error).message); }
+try { out("prepare alias write", typeof fs.prepare("alias.txt", "write")); } catch (e) { out("prepare alias write THREW", (e as Error).message); }
 fs.close();
