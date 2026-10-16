@@ -7,7 +7,7 @@
  * evidence link"), Article XXII.4 ("No release label — complete/certified/
  * enterprise/supreme — without evidence") and ADR-10 (Evidence test).
  *
- * Four independent gates, each of which fails the build:
+ * Independent gates, each of which fails the build:
  *
  *   1. VERSION DRIFT      — every declared surface must match release.manifest.json.
  *   2. PROHIBITED CLAIMS  — fabricated certifications, scale and runtime claims.
@@ -16,6 +16,21 @@
  *                           by an evidenced claim, else they are marketing.
  *   5. CONSTITUTION       — every Article cited anywhere in the tree must exist
  *                           in docs/CONSTITUTION.md (Phase 5 · F-17).
+ *   6. NUMERIC CLAIMS     — published numbers that have a single source in the
+ *                           tree must carry it: every tree-ceiling figure equals
+ *                           TREE_CEILING (stamped via `bun run size-gate
+ *                           --stamp-docs`), the README test-count tuple equals
+ *                           docs/release/TEST-BASELINE.json, and RELEASING.md
+ *                           names every independent version surface
+ *                           (fix-program Phase 1.3).
+ *   7. DOC LINKS          — every relative link in the published docs resolves
+ *                           in this tree; a deliberately pending target carries
+ *                           an inline `xr:link-pending` reason (Phase 1.3).
+ *
+ * Gates 6–7 live in this scanner rather than as manifest claims: the manifest
+ * stamps file *identities*, while these rules police prose in hand-written
+ * docs — a direct scan is the honest mechanism (XR_FIX_TRACKER Phase 1.3
+ * decision row). Gates 1–5 are unchanged.
  *
  *   bun run scripts/claim-lint.ts            # lint the repository
  *   bun run scripts/claim-lint.ts --json     # machine-readable report
@@ -27,9 +42,10 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ROOT, loadManifest, evaluateSurfaces, countSkills, type ReleaseManifest } from "./release-manifest.ts";
+import { TREE_CEILING } from "./size-gate.ts";
 
 export interface Violation {
-  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical" | "constitution";
+  gate: "version-drift" | "prohibited-claim" | "evidence" | "supervised-term" | "mechanical" | "constitution" | "numeric-claim" | "doc-link";
   file: string;
   line: number;
   text: string;
@@ -365,6 +381,225 @@ export function lintConstitution(root: string = ROOT): Violation[] {
   return violations;
 }
 
+/* ── Phase 1.3 · docs integrity: numeric claims + relative links ──────────
+ * The numbers and links below are the ones real readers hit on the published
+ * pages — the README gates table, the canonical limitations register and the
+ * frozen release excerpts. Each has a single source of truth in this tree
+ * (`TREE_CEILING` in scripts/size-gate.ts, the measured
+ * `docs/release/TEST-BASELINE.json`, the filesystem itself) and these gates
+ * fail when the prose drifts from that source. Fenced code is skipped;
+ * history lines carry `<!-- xr:numeric-history -->` and are exempt from the
+ * prose ceiling scan (never from the marker-value check); a deliberately
+ * pending link carries `<!-- xr:link-pending: reason -->`.
+ */
+
+export interface TestBaseline {
+  pass: number;
+  skip: number;
+  fail: number;
+  files: number;
+  bunVersion: string;
+  lane: string;
+  commit: string;
+  measuredAt: string;
+}
+
+export const TEST_BASELINE_PATH = "docs/release/TEST-BASELINE.json";
+
+/** Docs scanned by the numeric + link gates (README, canonical register, frozen excerpts). */
+function docsIntegritySurfaces(root: string): string[] {
+  const out: string[] = [];
+  for (const rel of ["README.md", "docs/security/KNOWN_LIMITATIONS.md"]) {
+    const abs = join(root, rel);
+    if (existsSync(abs)) out.push(abs);
+  }
+  const relDir = join(root, "docs/release");
+  if (existsSync(relDir)) out.push(...collectFiles(relDir, "**/*.md"));
+  return out;
+}
+
+/** Blank fenced code blocks (``` or ~~~ runs), preserving line numbering. */
+export function stripFences(text: string): string {
+  return text.replace(/(`{3,}|~{3,})[^\n]*\n[\s\S]*?\1[^\n]*(?:\n|$)/g, (m) => m.replace(/[^\n]/g, " "));
+}
+
+const TREE_CEILING_MARKER = /<!-- XR:TREE-CEILING -->([^<]*)<!-- \/XR:TREE-CEILING -->/g;
+const HISTORY_EXEMPT = /<!-- xr:numeric-history -->/;
+const LINK_PENDING = /<!-- xr:link-pending:.*-->/;
+const HYPHEN_LOC = /(\d{1,3}(?:,\d{3})+)-LOC/g;
+
+function formattedCeiling(): string {
+  return TREE_CEILING.toLocaleString("en-US");
+}
+
+/**
+ * Scan one doc's text for numeric-claim violations. Exported so
+ * test/release/numeric-claims.test.ts can bite the same scanner in-memory.
+ */
+export function scanNumericClaims(
+  text: string,
+  file: string,
+  baseline: TestBaseline | null,
+): Violation[] {
+  const out: Violation[] = [];
+  const comma = formattedCeiling();
+  const k = `${Math.round(TREE_CEILING / 1000)}K`;
+  const rel = relative(ROOT, file);
+  // Marker values must equal TREE_CEILING even on history-exempt lines.
+  for (const m of text.matchAll(TREE_CEILING_MARKER)) {
+    if (m[1] !== comma) {
+      out.push({
+        gate: "numeric-claim",
+        file: rel,
+        line: text.slice(0, m.index).split("\n").length,
+        text: `<!-- XR:TREE-CEILING -->${m[1]}<!-- /XR:TREE-CEILING -->`,
+        reason: `stamped ceiling is ${m[1]}, but TREE_CEILING in scripts/size-gate.ts is ${comma} LOC — run \`bun run size-gate --stamp-docs\``,
+      });
+    }
+  }
+  // Prose ceiling claims: a hyphenated "N-LOC" figure and any bare re-mention
+  // of the formatted ceiling must equal the single source. The bare-value rule
+  // is intentionally scoped to the exact formatted value (and its K-form), so
+  // legitimate measurements ("23,376 LOC extracted") and unrelated counts are
+  // never flagged. History lines are exempt from the prose scan.
+  const lines = stripFences(text).split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    if (HISTORY_EXEMPT.test(line)) continue;
+    line = line.replace(TREE_CEILING_MARKER, ""); // marker contents checked above
+    for (const m of line.matchAll(HYPHEN_LOC)) {
+      if (m[1] !== comma) {
+        out.push({
+          gate: "numeric-claim",
+          file: rel,
+          line: i + 1,
+          text: m[0],
+          reason: `ceiling claim ${m[1]}-LOC does not match TREE_CEILING (${comma} LOC) in scripts/size-gate.ts`,
+        });
+      }
+    }
+    if (line.includes(comma)) {
+      out.push({
+        gate: "numeric-claim",
+        file: rel,
+        line: i + 1,
+        text: comma,
+        reason: `bare ${comma} outside an XR:TREE-CEILING marker — use the marker so the stamp keeps it truthful`,
+      });
+    }
+    if (new RegExp(`\\b${k}\\b`).test(line)) {
+      out.push({
+        gate: "numeric-claim",
+        file: rel,
+        line: i + 1,
+        text: k,
+        reason: `bare ${k} outside an XR:TREE-CEILING marker — use the marker`,
+      });
+    }
+  }
+  // README test-count tuple must equal the measured baseline (fail closed).
+  if (rel === "README.md") {
+    const tuple = text.match(/([\d,]+) pass \/ (\d+) skip \/ (\d+) fail across ([\d,]+) files/);
+    if (!tuple) {
+      out.push({
+        gate: "numeric-claim",
+        file: rel,
+        line: 0,
+        text: "(test-count tuple)",
+        reason: `README gates table must state the measured test tuple ('N pass / S skip / 0 fail across F files') from ${TEST_BASELINE_PATH}`,
+      });
+    } else if (!baseline) {
+      out.push({
+        gate: "numeric-claim",
+        file: rel,
+        line: 0,
+        text: tuple[0],
+        reason: `cannot verify the tuple: ${TEST_BASELINE_PATH} is missing or unparseable — re-measure (bun test), then update both`,
+      });
+    } else {
+      const mism: string[] = [];
+      if (parseInt(tuple[1].replace(/,/g, ""), 10) !== baseline.pass) mism.push(`pass ${tuple[1]} != ${baseline.pass}`);
+      if (parseInt(tuple[2], 10) !== baseline.skip) mism.push(`skip ${tuple[2]} != ${baseline.skip}`);
+      if (parseInt(tuple[3], 10) !== baseline.fail) mism.push(`fail ${tuple[3]} != ${baseline.fail}`);
+      if (parseInt(tuple[4].replace(/,/g, ""), 10) !== baseline.files) mism.push(`files ${tuple[4]} != ${baseline.files}`);
+      if (mism.length) {
+        out.push({
+          gate: "numeric-claim",
+          file: rel,
+          line: text.slice(0, tuple.index).split("\n").length,
+          text: tuple[0],
+          reason: `README tuple drifted from ${TEST_BASELINE_PATH}: ${mism.join(" · ")} — re-measure (bun test) and update both, per the RELEASING.md refresh step`,
+        });
+      }
+    }
+  }
+  // RELEASING.md must name every independent version surface. This is a
+  // completeness check: values are deliberately unconstrained because the
+  // surfaces are independent by evidence — the release can never stamp them.
+  if (rel === "docs/release/RELEASING.md") {
+    for (const surface of ["cloud/package.json", "mobile/package.json", "desktop/src-tauri/Cargo.toml", "extensions/vscode/package.json"]) {
+      if (!text.includes(surface)) {
+        out.push({
+          gate: "numeric-claim",
+          file: rel,
+          line: 0,
+          text: surface,
+          reason: "RELEASING.md must name this independent version surface so a release can never stamp it by accident (Phase 1.3 classification)",
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Scan one doc for relative markdown links whose target does not resolve on
+ * disk. External, anchor-only and mailto targets are skipped; a line-level
+ * `xr:link-pending` marker suppresses that line's links. Exported for tests.
+ */
+export function scanDocLinks(text: string, file: string): Violation[] {
+  const out: Violation[] = [];
+  const rel = relative(ROOT, file);
+  const lines = stripFences(text).split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (LINK_PENDING.test(line)) continue;
+    for (const m of line.matchAll(/\]\(([^)]+)\)/g)) {
+      let target = m[1].trim().split(/\s+/)[0]; // drop optional "title"
+      if (/^(https?:|mailto:|#)/i.test(target)) continue;
+      target = target.replace(/%20/g, " ").split("#")[0].split("?")[0];
+      if (!target) continue;
+      if (!existsSync(join(file, "..", target))) {
+        out.push({
+          gate: "doc-link",
+          file: rel,
+          line: i + 1,
+          text: `](${m[1]})`,
+          reason: `relative link target '${target}' does not exist in this tree (mark deliberately pending targets with <!-- xr:link-pending: reason -->)`,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** Gates 6 + 7 over every docs surface. Fails closed on an unreadable baseline. */
+export function lintDocsIntegrity(root: string = ROOT): Violation[] {
+  let baseline: TestBaseline | null = null;
+  try {
+    baseline = JSON.parse(readFileSync(join(root, TEST_BASELINE_PATH), "utf8")) as TestBaseline;
+  } catch {
+    baseline = null; // README tuple rule then fails closed with the pointer.
+  }
+  const out: Violation[] = [];
+  for (const abs of docsIntegritySurfaces(root)) {
+    const text = readFileSync(abs, "utf8");
+    out.push(...scanNumericClaims(text, abs, baseline));
+    out.push(...scanDocLinks(text, abs));
+  }
+  return out;
+}
+
 async function main(): Promise<void> {
   const json = process.argv.includes("--json");
   let manifest: ReleaseManifest;
@@ -375,7 +610,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const violations = [...lintRepository(manifest), ...lintConstitution()];
+  const violations = [...lintRepository(manifest), ...lintConstitution(), ...lintDocsIntegrity()];
 
   if (json) {
     console.log(JSON.stringify({ ok: violations.length === 0, count: violations.length, violations }, null, 2));
@@ -383,7 +618,7 @@ async function main(): Promise<void> {
   }
 
   if (violations.length === 0) {
-    console.log(`[claim-lint] ✓ no unsupported claims · ${manifest.claims.length} evidenced claims · every cited Article exists in ${CONSTITUTION_PATH} · v${manifest.identity.version}`);
+    console.log(`[claim-lint] ✓ no unsupported claims · ${manifest.claims.length} evidenced claims · every cited Article exists in ${CONSTITUTION_PATH} · published numbers and doc links single-sourced · v${manifest.identity.version}`);
     return;
   }
 

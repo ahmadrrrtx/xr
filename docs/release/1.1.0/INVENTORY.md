@@ -1,0 +1,470 @@
+# XR 1.1.0 Repository Inventory
+
+Generated: 2026-10-16T23:10:14.340Z
+
+## Summary
+
+| Area | Count |
+|---|---:|
+| Source files | 748 |
+| Test files | 407 |
+| CLI commands | 43 |
+| Daemon routes | 294 |
+| Providers | 26 |
+| Local runtimes | 11 |
+| Plugins | 2 |
+| Skills | 65 |
+
+## Entrypoints
+
+- Package bin: `./bin/xr`
+- Runtime CLI: `src/index.ts`
+- Daemon: `src/daemon/server.ts`
+- Docker entrypoint: `bun run src/index.ts serve --port 7842`
+
+## CLI commands
+
+- `shell` (start, stable) — xr [shell|--tui|tui]
+- `serve` (start, stable) — xr serve [--port <n>] [--parent-pid <pid>]
+- `onboarding` (start, supported) — xr onboarding
+- `help` (start, stable) — xr help [topic|command]
+- `version` (start, stable) — xr version | xr --version | xr -v
+- `run` (work, supported) — xr run "<task>" [--mode agent|plan|ask] [--model p/m] [--budget usd]
+- `ask` (work, supported) — xr ask "<question>" [--model p/m]
+- `plan` (work, supported) — xr plan "<task>" [--model p/m]
+- `research` (work, supported) — xr research "<topic>" [quick|deep|plan|status|setup]
+- `agents` (work, supported) — xr agents [list|plan|run|status|stop|resume|inspect]
+- `control` (work, supported) — xr control [status|start|stop|plan|setup|browser|…]
+- `env` (work, supported) — xr env [status|capabilities|sessions|close|close-all|history|observations|policy] [--json]
+- `voice` (work, supported) — xr voice [setup|status|start|stop|test|devices|config]
+- `speak` (work, supported) — xr speak <text>
+- `listen` (work, supported) — xr listen
+- `workspace` (context, supported) — xr workspace [list|create|use|switch|delete] …
+- `session` (context, supported) — xr session [list|show|export] [id]
+- `memory` (context, supported) — xr memory [list|add|search|recall|remove|conflicts|resolve|consolidate|forget|export|…]
+- `context` (context, supported) — xr context [list|inspect|explain|pending|approve|revoke|correct|export]
+- `config` (context, supported) — xr config [get|set|path|reset] [key] [value]
+- `providers` (intelligence, supported) — xr providers [list|set|add|remove|test|status|refresh]
+- `models` (intelligence, supported) — xr models [status|list|recommend|install|remove|set|test|runtimes]
+- `budget` (intelligence, supported) — xr budget [status|set|reset] [amount]
+- `triggers` (intelligence, supported) — xr triggers [list|create|pause-all|resume-all|enable|disable|delete]
+- `capabilities` (extensions, supported) — xr capabilities [list|discover|inspect|permissions|certify|enable|disable|quarantine|rollback]
+- `skills` (extensions, supported) — xr skills [list|search|install|enable|disable|inspect|doctor|…]
+- `plugins` (extensions, supported) — xr plugins [list|search|install|enable|disable|remove|status]
+- `mcp` (extensions, supported) — xr mcp [list|add|remove|enable|disable|tools|health|doctor]
+- `hygiene` (trust, supported) — xr hygiene [status|scan|processes|startup|privacy|doctor|…]
+- `trust` (trust, supported) — xr trust [status|classify <command...>] [--json]
+- `audit` (trust, supported) — xr audit [tail|verify|export] [--limit n]
+- `execution` (work, supported) — xr execution [--json] [--limit N] [--session SID] [--run RUNID] [--recovery] [--resume RUNID]
+- `attacks` (trust, supported) — xr attacks [--json]
+- `business` (work, supported) — xr business  ·  see: bun add -g @rrrtx/business-os
+- `evaluate` (trust, supported) — xr evaluate  ·  see: bun add -g @rrrtx/xr-enterprise
+- `enterprise` (trust, supported) — xr enterprise  ·  see: bun add -g @rrrtx/xr-enterprise
+- `doctor` (system, supported) — xr doctor [--network] [--json] [--perf]
+- `status` (system, supported) — xr status [--json] [--network]
+- `update` (system, supported) — xr update [--yes]
+- `repair` (system, supported) — xr repair [--yes] [--network]
+- `reset` (system, supported) — xr reset [--hard] [--yes]
+- `install` (system, supported) — xr install [--mode minimal|local|byok|hybrid|full] [--yes]
+- `logs` (system, supported) — xr logs [--limit n] [--json]
+
+## Daemon routes
+
+- GET `/` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api` — local bearer token or dashboard query token (src/daemon/routes/meta.routes.ts)
+- GET `/api/agents` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
+- GET `/api/agents/events` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
+- GET `/api/agents/templates` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
+- POST `/api/agents/workflows` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
+- GET `/api/agents/workflows/*` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
+- POST `/api/agents/workflows/*` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
+- POST `/api/agents/workflows/*` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
+- POST `/api/agents/workflows/*` — local bearer token or dashboard query token (src/daemon/routes/agents.routes.ts)
+- GET `/api/approvals` — local bearer token or dashboard query token (src/daemon/routes/approvals.routes.ts)
+- POST `/api/approvals/*` — local bearer token or dashboard query token (src/daemon/routes/approvals.routes.ts)
+- GET `/api/audit` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api/audit/export` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api/budget` — local bearer token or dashboard query token (src/daemon/routes/budget.routes.ts)
+- POST `/api/budget/set` — local bearer token or dashboard query token (src/daemon/routes/budget.routes.ts)
+- POST `/api/builder/projects` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- GET `/api/builder/projects` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder-dev.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder-dev.routes.ts)
+- GET `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder-dev.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder-dev.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder-dev.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder-dev.routes.ts)
+- GET `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder-dev.routes.ts)
+- GET `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- GET `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- GET `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- POST `/api/builder/projects/*` — local bearer token or dashboard query token (src/daemon/routes/builder.routes.ts)
+- GET `/api/business/approvals` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- POST `/api/business/approvals/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/artifacts` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/journeys` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- POST `/api/business/journeys/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/mutations` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/outcomes` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/outcomes/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/privacy/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/status` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/workers` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/business/workers/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- POST `/api/business/workers/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- POST `/api/business/workers/*` — local bearer token or dashboard query token (src/daemon/routes/business.routes.ts)
+- GET `/api/capabilities` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/certify` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/disable` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/enable` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- GET `/api/capabilities/health` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- GET `/api/capabilities/inspect` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- GET `/api/capabilities/permissions` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/quarantine` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/capabilities/rollback` — local bearer token or dashboard query token (src/daemon/routes/capabilities.routes.ts)
+- POST `/api/chat` — local bearer token or dashboard query token (src/daemon/routes/chat.routes.ts)
+- GET `/api/cloud/license` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- POST `/api/cloud/license/verify` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `/api/cloud/session` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- DELETE `/api/cloud/session` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `/api/cloud/team-memory` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- POST `/api/cloud/team-memory` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `/api/cloud/team-workspaces` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `/api/cloud/teams` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `/api/cloud/usage` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `/api/config` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api/context` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- POST `/api/context/approve/*` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/export` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/item/*` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/items` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/pending` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- GET `/api/context/policy` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- POST `/api/context/revoke/*` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- POST `/api/context/undo` — local bearer token or dashboard query token (src/daemon/routes/context.routes.ts)
+- POST `/api/control/approve` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- GET `/api/control/cockpit` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- GET `/api/control/events` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- GET `/api/control/history` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- GET `/api/control/memory` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- DELETE `/api/control/memory/*` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- POST `/api/control/pause` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- GET `/api/control/pending` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- GET `/api/control/permissions` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- POST `/api/control/permissions/grant` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- POST `/api/control/plan` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- GET `/api/control/status` — local bearer token or dashboard query token (src/daemon/routes/control.routes.ts)
+- GET `/api/cost` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api/discord/channels` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/channels/add` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/channels/remove` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/connect` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/disconnect` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- GET `/api/discord/guilds` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- GET `/api/discord/logs` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/pair/close` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/pair/open` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/settings` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/start` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- GET `/api/discord/status` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/stop` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/unpair` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- POST `/api/discord/webhook` — local bearer token or dashboard query token (src/daemon/routes/discord.routes.ts)
+- GET `/api/environment/capabilities` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- POST `/api/environment/close` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/history` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/observations` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/policy` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/sessions` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/environment/status` — local bearer token or dashboard query token (src/daemon/routes/environment.routes.ts)
+- GET `/api/files` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
+- GET `/api/files/diff` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
+- POST `/api/files/hunks/revert` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
+- GET `/api/files/read` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
+- POST `/api/files/write` — local bearer token or dashboard query token (src/daemon/routes/files.routes.ts)
+- POST `/api/git/commit` — local bearer token or dashboard query token (src/daemon/routes/git.routes.ts)
+- GET `/api/git/log` — local bearer token or dashboard query token (src/daemon/routes/git.routes.ts)
+- POST `/api/git/stage` — local bearer token or dashboard query token (src/daemon/routes/git.routes.ts)
+- GET `/api/git/status` — local bearer token or dashboard query token (src/daemon/routes/git.routes.ts)
+- GET `/api/health` — open (src/daemon/routes/system.routes.ts)
+- GET `/api/integrations` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
+- POST `/api/integrations/oauth/complete` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
+- GET `/api/mcp` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/add` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/disable` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/enable` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- GET `/api/mcp/health` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/pin` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- GET `/api/mcp/pins` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- GET `/api/mcp/pins/diff/*` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/remove` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- POST `/api/mcp/unpin` — local bearer token or dashboard query token (src/daemon/routes/mcp.routes.ts)
+- GET `/api/memory` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- POST `/api/memory` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- PATCH `/api/memory/*` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- DELETE `/api/memory/*` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- POST `/api/memory/consolidate` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- GET `/api/memory/export` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- GET `/api/memory/graph` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- GET `/api/memory/health` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- POST `/api/memory/import` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- POST `/api/memory/scan-sensitive` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- GET `/api/memory/search` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- GET `/api/memory/settings` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- PUT `/api/memory/settings` — local bearer token or dashboard query token (src/daemon/routes/memory.routes.ts)
+- GET `/api/metrics` — local bearer token or dashboard query token (src/daemon/routes/meta.routes.ts)
+- GET `/api/models` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- POST `/api/models/select` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- POST `/api/models/test` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- POST `/api/onboarding/complete` — local bearer token or dashboard query token (src/daemon/routes/onboarding.routes.ts)
+- POST `/api/onboarding/provider` — local bearer token or dashboard query token (src/daemon/routes/onboarding.routes.ts)
+- GET `/api/onboarding/status` — local bearer token or dashboard query token (src/daemon/routes/onboarding.routes.ts)
+- GET `/api/openapi.json` — local bearer token or dashboard query token (src/daemon/routes/meta.routes.ts)
+- GET `/api/overview` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- ANY `/api/plugins*` — local bearer token or dashboard query token (src/daemon/routes/extensions.routes.ts)
+- GET `/api/providers` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/providers/capabilities` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/providers/catalog` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/providers/fallback` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/providers/route` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- POST `/api/providers/set` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/providers/slo` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/api/recovery` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api/research` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- POST `/api/research/*` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
+- GET `/api/research/*` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- POST `/api/research/crawl` — local bearer token or dashboard query token (src/daemon/routes/research.routes.ts)
+- POST `/api/research/extract` — local bearer token or dashboard query token (src/daemon/routes/research.routes.ts)
+- GET `/api/research/jobs` — local bearer token or dashboard query token (src/daemon/routes/research.routes.ts)
+- GET `/api/research/jobs/*` — local bearer token or dashboard query token (src/daemon/routes/research.routes.ts)
+- POST `/api/research/jobs/*` — local bearer token or dashboard query token (src/daemon/routes/research.routes.ts)
+- POST `/api/research/map` — local bearer token or dashboard query token (src/daemon/routes/research.routes.ts)
+- POST `/api/research/run` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
+- POST `/api/research/scrape` — local bearer token or dashboard query token (src/daemon/routes/research.routes.ts)
+- POST `/api/research/search` — local bearer token or dashboard query token (src/daemon/routes/research.routes.ts)
+- GET `/api/research/settings` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
+- PATCH `/api/research/settings` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
+- GET `/api/research/stream/*` — local bearer token or dashboard query token (src/daemon/routes/research.routes.ts)
+- POST `/api/research/upload-pdf` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
+- GET `/api/security` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api/sessions` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/api/sessions/*` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- POST `/api/shield/adblock` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- GET `/api/shield/browser` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- GET `/api/shield/downloads` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- POST `/api/shield/explain` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- GET `/api/shield/privacy` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- GET `/api/shield/processes` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- POST `/api/shield/quarantine` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- GET `/api/shield/scan` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- GET `/api/shield/startup` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- GET `/api/shield/status` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- POST `/api/shield/whitelist` — local bearer token or dashboard query token (src/daemon/routes/shield.routes.ts)
+- ANY `/api/skills*` — local bearer token or dashboard query token (src/daemon/routes/extensions.routes.ts)
+- GET `/api/state/ui` — local bearer token or dashboard query token (src/daemon/routes/ui-state.routes.ts)
+- PUT `/api/state/ui` — local bearer token or dashboard query token (src/daemon/routes/ui-state.routes.ts)
+- POST `/api/telegram/connect` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- POST `/api/telegram/disconnect` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- GET `/api/telegram/logs` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- POST `/api/telegram/pair` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- POST `/api/telegram/pair/open` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- POST `/api/telegram/settings` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- POST `/api/telegram/start` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- GET `/api/telegram/status` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- POST `/api/telegram/stop` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- POST `/api/telegram/unpair` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- POST `/api/telegram/webhook` — local bearer token or dashboard query token (src/daemon/routes/telegram.routes.ts)
+- GET `/api/terminal/pty` — local bearer token or dashboard query token (src/daemon/routes/terminal.routes.ts)
+- POST `/api/terminal/pty` — local bearer token or dashboard query token (src/daemon/routes/terminal.routes.ts)
+- POST `/api/terminal/run` — local bearer token or dashboard query token (src/daemon/routes/terminal.routes.ts)
+- GET `/api/traces/recent` — local bearer token or dashboard query token (src/daemon/routes/meta.routes.ts)
+- GET `/api/triggers` — local bearer token or dashboard query token (src/daemon/routes/triggers.routes.ts)
+- POST `/api/triggers` — local bearer token or dashboard query token (src/daemon/routes/triggers.routes.ts)
+- GET `/api/triggers/*` — local bearer token or dashboard query token (src/daemon/routes/triggers.routes.ts)
+- POST `/api/triggers/pause` — local bearer token or dashboard query token (src/daemon/routes/triggers.routes.ts)
+- GET `/api/trust` — local bearer token or dashboard query token (src/daemon/routes/trust.routes.ts)
+- POST `/api/trust/classify` — local bearer token or dashboard query token (src/daemon/routes/trust.routes.ts)
+- POST `/api/trust/mode` — local bearer token or dashboard query token (src/daemon/routes/trust.routes.ts)
+- POST `/api/voice/audio` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/barge-in` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/cancel-download` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/clear-models` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/download` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- GET `/api/voice/events` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- GET `/api/voice/models` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/played` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/say` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/session` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- GET `/api/voice/settings` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/settings` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- GET `/api/voice/status` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/test-tts` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/voice/transcribe` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- GET `/api/voice/voices` — local bearer token or dashboard query token (src/daemon/routes/voice.routes.ts)
+- POST `/api/whatsapp/connect` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/contacts/add` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/contacts/remove` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/disconnect` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- GET `/api/whatsapp/logs` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/pair` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/pair/close` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- GET `/api/whatsapp/qr` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/settings` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/start` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- GET `/api/whatsapp/status` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/stop` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- POST `/api/whatsapp/unpair` — local bearer token or dashboard query token (src/daemon/routes/whatsapp.routes.ts)
+- GET `/api/workspaces` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- POST `/api/workspaces/create` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- POST `/api/workspaces/switch` — local bearer token or dashboard query token (src/daemon/routes/providers.routes.ts)
+- GET `/assets/auth.js` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/assets/dashboard.css` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/assets/dashboard.js` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/chat` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `/dashboard` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- DELETE `undefined*` — local bearer token or dashboard query token (src/daemon/routes/cloud.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
+- PATCH `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
+- DELETE `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/custom-agents.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
+- PUT `undefined*` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/integrations.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/research-run.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/system.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/terminal.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/terminal.routes.ts)
+- DELETE `undefined*` — local bearer token or dashboard query token (src/daemon/routes/terminal.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- PATCH `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- DELETE `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- POST `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+- GET `undefined*` — local bearer token or dashboard query token (src/daemon/routes/workflows.routes.ts)
+
+## Providers and runtimes
+
+- `ollama` — local, supported with local runtime
+- `lmstudio` — local, supported with local runtime
+- `jan` — local, supported with local runtime
+- `localai` — local, supported with local runtime
+- `vllm` — local, supported with local runtime
+- `llamacpp` — local, supported with local runtime
+- `gpt4all` — local, supported with local runtime
+- `koboldcpp` — local, supported with local runtime
+- `textgenwebui` — local, supported with local runtime
+- `sglang` — local, supported with local runtime
+- `groq` — hosted, supported with user-provided credentials
+- `google` — hosted, supported with user-provided credentials
+- `deepseek` — hosted, supported with user-provided credentials
+- `cerebras` — hosted, supported with user-provided credentials
+- `openrouter` — hosted, supported with user-provided credentials
+- `together` — hosted, supported with user-provided credentials
+- `mistral` — hosted, supported with user-provided credentials
+- `fireworks` — hosted, supported with user-provided credentials
+- `sambanova` — hosted, supported with user-provided credentials
+- `huggingface` — hosted, supported with user-provided credentials
+- `openai` — hosted, supported with user-provided credentials
+- `anthropic` — hosted, supported with user-provided credentials
+- `cohere` — hosted, supported with user-provided credentials
+- `xai` — hosted, supported with user-provided credentials
+- `perplexity` — hosted, supported with user-provided credentials
+- `bedrock` — hosted, supported with user-provided credentials
+
+## Plugins
+
+- `github` — experimental plugin package
+- `hello` — experimental plugin package
+
+## Skills
+
+- `academic_research` — supported content
+- `api_design` — supported content
+- `architecture_reviewer` — supported content
+- `brand_designer` — supported content
+- `code_auditor` — supported content
+- `competitive_intelligence` — supported content
+- `content_creator` — supported content
+- `copywriter` — supported content
+- `crm_assistant` — supported content
+- `customer_support` — supported content
+- `daily-brief` — supported content
+- `db_migrate` — supported content
+- `debug_error` — supported content
+- `debugging_expert` — supported content
+- `deep_research` — supported content
+- `devops_engineer` — supported content
+- `docker_expert` — supported content
+- `email_writer` — supported content
+- `explain_codebase` — supported content
+- `financial_analyst` — supported content
+- `full_stack_engineer` — supported content
+- `generate_readme` — supported content
+- `git_commit_message` — supported content
+- `git_expert` — supported content
+- `go_expert` — supported content
+- `incident_response` — supported content
+- `java_expert` — supported content
+- `kubernetes_expert` — supported content
+- `logo_designer` — supported content
+- `malware_analyst` — supported content
+- `market_research` — supported content
+- `marketing_strategist` — supported content
+- `negotiation_expert` — supported content
+- `nextjs_expert` — supported content
+- `node_expert` — supported content
+- `osint_researcher` — supported content
+- `paper_analyzer` — supported content
+- `patent_research` — supported content
+- `pentest_assistant` — supported content
+- `performance_optimizer` — supported content
+- `pr_description` — supported content
+- `presentation_builder` — supported content
+- `privacy_advisor` — supported content
+- `product_manager` — supported content
+- `project_manager` — supported content
+- `proposal_writer` — supported content
+- `python_expert` — supported content
+- `react_expert` — supported content
+- `refactor_clean` — supported content
+- `refactoring_expert` — supported content
+- `rust_expert` — supported content
+- `sales_agent` — supported content
+- `scientific_research` — supported content
+- `security_audit` — supported content
+- `seo_expert` — supported content
+- `soc_analyst` — supported content
+- `social_media_creator` — supported content
+- `startup_advisor` — supported content
+- `story_writer` — supported content
+- `testing_expert` — supported content
+- `threat_hunter` — supported content
+- `ui_designer` — supported content
+- `ux_designer` — supported content
+- `video_script_writer` — supported content
+- `write_tests` — supported content
+
+Machine-readable inventory: `inventory.json`.

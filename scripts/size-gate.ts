@@ -20,7 +20,7 @@
  * "green but not true" signal this project exists to eliminate.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -381,7 +381,55 @@ export function checkSizes(): SizeReport {
   };
 }
 
+/* ── fix-program Phase 1.3 · --stamp-docs ─────────────────────────────────
+ * TREE_CEILING above is the single source for the tree-size number. The two
+ * published locations that quote it (README gates table + canonical register
+ * row) and the frozen 1.1.0 excerpt carry it inside XR:TREE-CEILING markers,
+ * exactly like the README's release-identity block. `--stamp-docs` rewrites
+ * every marked value from this constant; `claim-lint` fails when any marked
+ * or prose ceiling claim drifts. The stamp touches marker contents only —
+ * never this file, never any other number. */
+export const DOCS_STAMP_TARGETS = [
+  "README.md",
+  "docs/security/KNOWN_LIMITATIONS.md",
+  "docs/release/1.1.0/known-limitations.md",
+] as const;
+
+export function stampDocs(root: string = ROOT): { changed: string[]; lines: string[] } {
+  const value = TREE_CEILING.toLocaleString("en-US");
+  const begin = "<!-- XR:TREE-CEILING -->";
+  const end = "<!-- /XR:TREE-CEILING -->";
+  const re = new RegExp(
+    begin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "[^<]*" + end.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+    "g",
+  );
+  const changed: string[] = [];
+  const lines: string[] = [];
+  for (const rel of DOCS_STAMP_TARGETS) {
+    const abs = join(root, rel);
+    if (!existsSync(abs)) throw new Error(`stamp target missing: ${rel}`);
+    const before = readFileSync(abs, "utf8");
+    const markerCount = (before.match(new RegExp(begin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) ?? []).length;
+    if (markerCount === 0) throw new Error(`${rel}: no XR:TREE-CEILING marker — restore the published ceiling marker before stamping`);
+    const after = before.replace(re, begin + value + end);
+    if (after !== before) {
+      writeFileSync(abs, after);
+      changed.push(rel);
+      lines.push(`stamped ${markerCount} marker(s) in ${rel}`);
+    } else {
+      lines.push(`${rel} already in sync (${markerCount} marker(s))`);
+    }
+  }
+  return { changed, lines };
+}
+
 if (import.meta.main) {
+  if (process.argv.includes("--stamp-docs")) {
+    const { changed, lines } = stampDocs();
+    for (const l of lines) console.log(`[size-gate --stamp-docs] ${l}`);
+    console.log(`[size-gate --stamp-docs] ${changed.length === 0 ? "✓ docs already in sync" : `✓ ${changed.length} file(s) re-stamped`} with ceiling ${TREE_CEILING.toLocaleString("en-US")} LOC`);
+    process.exit(0);
+  }
   const r = checkSizes();
   console.log(`[size-gate] threshold ${r.threshold} LOC · ${r.overThreshold.length} module(s) over, all waived unless listed below`);
 
