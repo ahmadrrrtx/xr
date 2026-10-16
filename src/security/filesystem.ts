@@ -3,7 +3,7 @@
  */
 import { realpathSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 /**
  * Canonical absolute spelling: realpath of the deepest existing ancestor, plus the not-yet-existing tail.
@@ -84,12 +84,19 @@ export class FilesystemAuthority {
   }
   private path(input: string): string {
     this.active();
-    if (typeof input !== "string" || !input || input.length > 4096 || /[\x00-\x1f\x7f\\]/.test(input) || /^[A-Za-z]:|^\/\//.test(input)) throw new FilesystemError();
-    const parts = input.split("/");
+    if (typeof input !== "string" || !input || input.length > 4096 || /[\x00-\x1f\x7f]/.test(input)) throw new FilesystemError();
+    let p: string;
+    if (isAbsolute(input)) {
+      // Absolute inputs (drive letters, backslashes, 8.3 names) are canonicalised first, then must land inside the root.
+      p = relative(this.root, canonicalAbsolute(input)).split(sep).join("/");
+    } else {
+      if (/\\/.test(input) || /^[A-Za-z]:/.test(input) || /^\/\//.test(input)) throw new FilesystemError();
+      p = input;
+    }
+    const parts = p.split("/");
     if (parts.includes("..")) throw new FilesystemError("escape");
     if (parts.length > MAX_DEPTH) throw new FilesystemError("limit");
-    let p = isAbsolute(input) ? relative(this.root, canonicalAbsolute(input)) : input;
-    if (p === ".." || p.startsWith("../") || isAbsolute(p)) throw new FilesystemError("escape");
+    if (isAbsolute(p)) throw new FilesystemError("escape");
     return p.split("/").filter(x => x && x !== ".").join("/") || ".";
   }
   private check(p: string, op: "read" | "write" | "list", id: string): void {
