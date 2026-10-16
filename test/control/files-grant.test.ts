@@ -1,6 +1,6 @@
 /** A1 F03 decision: outside-root desktop file access needs a trusted, registered, revocable grant. */
 import { beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuthorityRegistry, createGrant } from "../../src/runtime/trust/authority.ts";
@@ -20,7 +20,8 @@ let files: typeof import("../../src/control/files.ts");
 let registry: AuthorityRegistry;
 let grantId = "";
 
-function mint(root: string, purpose: "desktop" | "model-tool" = "desktop") {
+function mint(rootArg: string, purpose: "desktop" | "model-tool" = "desktop") {
+  const root = realpathSync(rootArg); // grants record the canonical root
   const classification = classifyRisk(readTrustRequest("read_file", root));
   const grant = createGrant({ actor: "trusted-desktop", executionId: "synthetic-desktop-run", correlationId: "synthetic-corr", workspaceId: root, capability: "file:read", approvalRef: "synthetic-approval" }, {
     ...classification,

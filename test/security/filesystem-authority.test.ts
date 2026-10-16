@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { closeSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -76,6 +76,8 @@ test("FS11 native retained read does not follow a parent swapped after acquisiti
 }));
 
 function grantFixture(root: string) {
+  // Grants record the canonical root (realpath); macOS temp dirs are /var -> /private/var aliases.
+  root = realpathSync(root);
   const fs = new FilesystemAuthority(root, "desktop"), descriptor = fs.descriptor(), exact = fs.metadata(".env"); fs.close();
   const classification = classifyRisk(readTrustRequest("read_file", root));
   const grant = createGrant({ actor: "trusted-desktop", executionId: "synthetic-run", correlationId: "synthetic-correlation", workspaceId: root, capability: "file:read", approvalRef: "synthetic-explicit-disclosure-consent" }, {
