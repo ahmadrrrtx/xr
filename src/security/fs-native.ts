@@ -333,8 +333,9 @@ function winStat(h: number): FdStat {
 
 function winRead(h: number, buffer: Buffer, offset: number, length: number, position: number): number {
   const ov = Buffer.alloc(32);
-  ov.writeUInt32LE(position % 2 ** 32, 8);
-  ov.writeUInt32LE(Math.floor(position / 2 ** 32), 12);
+  // OVERLAPPED (x64): Internal(8) InternalHigh(8) Offset(4)@16 OffsetHigh(4)@20 hEvent(8)
+  ov.writeUInt32LE(position % 2 ** 32, 16);
+  ov.writeUInt32LE(Math.floor(position / 2 ** 32), 20);
   const done = Buffer.alloc(4);
   if (!win().k32.ReadFile(h, ptr(buffer) + offset, length, ptr(done), ptr(ov))) {
     if (win().k32.GetLastError() === NT.ERROR_HANDLE_EOF) return 0;
@@ -345,8 +346,9 @@ function winRead(h: number, buffer: Buffer, offset: number, length: number, posi
 
 function winWrite(h: number, buffer: Buffer, offset: number, length: number, position: number): number {
   const ov = Buffer.alloc(32);
-  ov.writeUInt32LE(position % 2 ** 32, 8);
-  ov.writeUInt32LE(Math.floor(position / 2 ** 32), 12);
+  // OVERLAPPED (x64): Internal(8) InternalHigh(8) Offset(4)@16 OffsetHigh(4)@20 hEvent(8)
+  ov.writeUInt32LE(position % 2 ** 32, 16);
+  ov.writeUInt32LE(Math.floor(position / 2 ** 32), 20);
   const done = Buffer.alloc(4);
   if (!win().k32.WriteFile(h, ptr(buffer) + offset, length, ptr(done), ptr(ov))) throw new FilesystemError("denied");
   return done.readUInt32LE(0);
