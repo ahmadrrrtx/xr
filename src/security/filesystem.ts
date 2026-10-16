@@ -1,11 +1,11 @@
 /** Shared operation-owning file authority. See docs/implementation/stage-a/a1/DESIGN.md.
  * Paths are proposals, never capabilities. All content I/O is through retained FDs.
  */
-import { closeSync, fstatSync, ftruncateSync, readSync, readdirSync, realpathSync, writeSync, type Stats } from "node:fs";
+import { closeSync, fstatSync, ftruncateSync, readSync, realpathSync, writeSync, type Stats } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { isAbsolute, relative, resolve } from "node:path";
 import { isSecretPath } from "./guard.ts";
-import { anchoredOpen, anchoredMkdir, anchoredRename, anchoredUnlink, descriptorIo, FD_FLAGS, FilesystemError } from "./fs-native.ts";
+import { anchoredOpen, anchoredMkdir, anchoredRename, anchoredUnlink, descriptorIo, writableSameObject, listFd, FD_FLAGS, FilesystemError } from "./fs-native.ts";
 export { FilesystemError } from "./fs-native.ts";
 
 const MAX_BYTES = 10 * 1024 * 1024, MAX_DEPTH = 32, MAX_ENTRIES = 10_000; // aligned with the plugin fs cap (10 MB)
@@ -38,12 +38,15 @@ export class FilesystemAuthority {
   private readonly rootFd: number;
   private readonly suppliedRoot: string;
   private closed = false;
+  // Every object must live on the root's device: O_NOFOLLOW_ANY (darwin) does not stop mount crossings.
+  private readonly rootDev: number = -1;
   constructor(root: string, readonly purpose: FilePurpose = "model-tool", private readonly lease?: FilesystemLease) {
     try {
       this.suppliedRoot = resolve(root);
       this.root = realpathSync(this.suppliedRoot);
       this.rootFd = anchoredOpen(-100, this.root, FD_FLAGS.PATH | FD_FLAGS.DIRECTORY, 0, true);
       this.rootIdentity = objectId(fstatSync(this.rootFd));
+      this.rootDev = fstatSync(this.rootFd).dev;
     } catch (e) { throw e instanceof FilesystemError ? e : new FilesystemError(); }
   }
   close(): void { if (!this.closed) { this.closed = true; closeSync(this.rootFd); } }
@@ -80,6 +83,7 @@ export class FilesystemAuthority {
     this.active();
     const fd = anchoredOpen(this.rootFd, p, FD_FLAGS.PATH | (directory ? FD_FLAGS.DIRECTORY : 0));
     const st = fstatSync(fd);
+    if (st.dev !== this.rootDev) { closeSync(fd); throw new FilesystemError(); }
     // O_PATH inspects type/link count without opening devices/FIFOs for I/O.
     if ((!st.isDirectory() && !st.isFile()) || (st.isFile() && st.nlink !== 1)) { closeSync(fd); throw new FilesystemError(); }
     return fd;
@@ -128,7 +132,7 @@ export class FilesystemAuthority {
     try {
       this.check(p, "list", objectId(fstatSync(fd)));
       // The proc path names our own retained directory descriptor, not a user path.
-      const names = readdirSync(`/proc/self/fd/${fd}`).sort();
+      const names = listFd(fd);
       if (names.length > MAX_ENTRIES) throw new FilesystemError("limit");
       const entries: FileMetadata[] = [];
       for (const name of names) {
@@ -226,7 +230,7 @@ export class FilesystemAuthority {
               }
               io = anchoredOpen(destination, leaf, 1 | FD_FLAGS.CREATE | FD_FLAGS.EXCLUSIVE | FD_FLAGS.NONBLOCK, 0o600);
             } finally { for (const directory of made.reverse()) closeSync(directory); }
-          } else io = descriptorIo(fd, true); // approved inode, NOT lookup of the final pathname
+          } else io = writableSameObject(parentFd, leaf, fd, (f) => objectId(fstatSync(f))); // approved inode, identity-checked
           try {
             const now = fstatSync(io);
             if (!now.isFile() || now.nlink !== 1 || (fd !== undefined && version(now) !== stamp)) throw new FilesystemError("stale");
@@ -347,7 +351,7 @@ export class FilesystemAuthority {
     if (depth > MAX_DEPTH) throw new FilesystemError("limit");
     const dfd = this.open(p, true);
     let names: string[];
-    try { names = readdirSync(`/proc/self/fd/${dfd}`); } finally { closeSync(dfd); }
+    try { names = listFd(dfd); } finally { closeSync(dfd); }
     if (names.length > MAX_ENTRIES) throw new FilesystemError("limit");
     for (const name of names) {
       const child = `${p}/${name}`;
@@ -364,7 +368,7 @@ export class FilesystemAuthority {
     if (depth > MAX_DEPTH) throw new FilesystemError("limit");
     const dfd = this.open(p, true);
     let names: string[];
-    try { names = readdirSync(`/proc/self/fd/${dfd}`); } finally { closeSync(dfd); }
+    try { names = listFd(dfd); } finally { closeSync(dfd); }
     for (const name of names) {
       if (++budget.n > MAX_ENTRIES) throw new FilesystemError("limit");
       const child = `${p}/${name}`;
@@ -377,7 +381,7 @@ export class FilesystemAuthority {
   private removeTree(p: string): void {
     const dfd = this.open(p, true);
     let names: string[];
-    try { names = readdirSync(`/proc/self/fd/${dfd}`); } finally { closeSync(dfd); }
+    try { names = listFd(dfd); } finally { closeSync(dfd); }
     for (const name of names) {
       const child = `${p}/${name}`;
       const cfd = this.open(child);

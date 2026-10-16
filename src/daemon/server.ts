@@ -1,3 +1,4 @@
+import { setDesktopGrantRegistry } from "../control/files.ts";
 /**
  * XR — Local Daemon ("xr serve")
  *
@@ -296,6 +297,8 @@ export function bodyCapFor(path: string): number {
 function makeDaemonTrust(): TrustService {
   const broker = new CredentialBroker();
   const registry = new AuthorityRegistry();
+  // A1: desktop file grants are resolved against this same registry (trusted wiring only).
+  setDesktopGrantRegistry(registry);
   const manager = new EnvironmentManager(
     [
       new InProcessBackend(),

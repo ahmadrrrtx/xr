@@ -45,6 +45,8 @@ export const ActionSchema = z.discriminatedUnion("type", [
     path: z.string().min(1).max(2000),
     content: z.string().max(500_000).optional(),
     targetPath: z.string().max(2000).optional(),
+    /** Trusted registry grant id, required only for paths outside the default desktop root. */
+    grantId: z.string().max(200).optional(),
   }),
   // Editor
   z.object({

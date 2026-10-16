@@ -20,6 +20,7 @@
 
 import { existsSync } from "node:fs";
 import { basename, join, relative, sep } from "node:path";
+import { isSecretPath } from "../../security/guard.ts";
 import { FilesystemAuthority, FilesystemError, withFilesystem } from "../../security/filesystem.ts";
 import { route, type DaemonRoute } from "./router.ts";
 import { insideRoot } from "./files.routes.ts";
@@ -73,14 +74,15 @@ export function gitBadges(porcelain: string): Record<string, GitBadge> {
   return out;
 }
 
-async function gitInfo(root: string): Promise<{ branch: string | null; dirty: boolean; isRepo: boolean; files: Record<string, GitBadge> }> {
+export async function gitInfo(root: string): Promise<{ branch: string | null; dirty: boolean; isRepo: boolean; files: Record<string, GitBadge> }> {
   try {
     const [branch, status] = await Promise.all([
       runCommand("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: root, timeoutMs: 3_000 }),
       runCommand("git", ["status", "--porcelain", "--untracked-files=normal"], { cwd: root, timeoutMs: 5_000 }),
     ]);
     if (!status.ok) return { branch: null, dirty: false, isRepo: false, files: {} };
-    const files = gitBadges(status.stdout);
+    // Decision (A1): sensitive names (for example `.env`, keys) are not shown, even as names.
+    const files = Object.fromEntries(Object.entries(gitBadges(status.stdout)).filter(([rel]) => !isSecretPath(join(root, rel))));
     return { branch: branch.ok && branch.stdout.trim() ? branch.stdout.trim() : null, dirty: status.stdout.trim().length > 0, isRepo: true, files };
   } catch {
     return { branch: null, dirty: false, isRepo: false, files: {} };
@@ -151,28 +153,22 @@ function cleanRel(input: unknown): string | null {
   return rel;
 }
 
-/* ── TypeScript diagnostics via the PROJECT's own compiler ────────────── */
-
-interface TsLike {
-  transpileModule(input: string, opts: { reportDiagnostics: boolean; fileName: string; compilerOptions: Record<string, unknown> }): {
-    diagnostics?: Array<{ start?: number; length?: number; messageText: unknown; code: number; category: number }>;
-  };
-  flattenDiagnosticMessageText(msg: unknown, nl: string): string;
-}
-
-async function loadProjectTypescript(root: string): Promise<TsLike | null> {
-  const candidates = [join(root, "node_modules", "typescript", "lib", "typescript.js")];
-  for (const file of candidates) {
-    if (!existsSync(file)) continue;
-    try {
-      const mod = (await import(file)) as { default?: TsLike } & Partial<TsLike>;
-      const ts = (mod.default ?? mod) as TsLike;
-      if (typeof ts.transpileModule === "function") return ts;
-    } catch {
-      /* unloadable — report honestly below */
-    }
+/* ── Syntax diagnostics via XR's OWN transpiler ───────────────────────────
+ * Decision (A1): the builder never imports the project's node_modules/typescript.
+ * That would execute project-controlled code inside the daemon. Diagnostics are
+ * syntax-level (the same class transpileModule reports with isolatedModules), from
+ * Bun's trusted built-in parser. Semantic/type diagnostics are not offered.
+ */
+export function syntaxDiagnostics(content: string, rel: string): { available: true; diagnostics: Array<{ from: number; to: number; severity: "error"; message: string; code: number }> } | { available: false; reason: string } {
+  const loader = /\.(tsx|jsx)$/.test(rel) ? "tsx" : /\.(ts|mts|cts)$/.test(rel) ? "ts" : "jsx";
+  try {
+    new Bun.Transpiler({ loader: loader as "ts" | "tsx" | "jsx" }).transformSync(content);
+    return { available: true, diagnostics: [] };
+  } catch (e) {
+    const err = e as { message?: string; position?: { offset?: number; length?: number } };
+    const from = Math.max(0, err.position?.offset ?? 0);
+    return { available: true, diagnostics: [{ from, to: from + Math.max(1, err.position?.length ?? 1), severity: "error", message: err.message ?? "syntax error", code: 0 }] };
   }
-  return null;
 }
 
 export function builderRoutes(): DaemonRoute[] {
@@ -429,26 +425,8 @@ export function builderRoutes(): DaemonRoute[] {
         if (!rel || typeof body.content !== "string") return json({ error: "expected { path, content }" }, 400);
         if (!/\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(rel)) return json({ available: false, reason: "not a TypeScript/JavaScript file", diagnostics: [] });
         if (body.content.length > READ_LIMIT) return json({ available: false, reason: "file too large", diagnostics: [] });
-        const ts = await loadProjectTypescript(project.root);
-        if (!ts) return json({ available: false, reason: "typescript is not installed in this project (node_modules/typescript)", diagnostics: [] });
-        try {
-          const jsx = /\.(tsx|jsx)$/.test(rel) ? 4 /* ReactJSX */ : undefined;
-          const out = ts.transpileModule(body.content, {
-            reportDiagnostics: true,
-            fileName: basename(rel),
-            compilerOptions: { target: 99, module: 99, jsx, allowJs: true, isolatedModules: true },
-          });
-          const diagnostics = (out.diagnostics ?? []).slice(0, 200).map((d) => ({
-            from: d.start ?? 0,
-            to: (d.start ?? 0) + Math.max(1, d.length ?? 1),
-            severity: d.category === 1 ? ("error" as const) : d.category === 0 ? ("warning" as const) : ("info" as const),
-            message: ts.flattenDiagnosticMessageText(d.messageText, "\n"),
-            code: d.code,
-          }));
-          return json({ available: true, diagnostics });
-        } catch (e) {
-          return json({ available: false, reason: (e as Error).message, diagnostics: [] });
-        }
+        const result = syntaxDiagnostics(body.content, rel);
+        return json(result.available ? result : { ...result, diagnostics: [] });
       },
     }),
   ];
