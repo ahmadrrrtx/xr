@@ -167,6 +167,8 @@ function reinjectGlobalFlags(args: string[], flags: GlobalFlags): string[] {
   if (flags.model && !has("--model") && !has("-m")) {
     out.push("--model", flags.model);
   }
+  const mode = flags.commandMode ?? flags.mode;
+  if (mode !== undefined && !has("--mode")) out.push("--mode", mode);
   if (flags.format && flags.format !== "text" && !has("--format") && !has("--output") && !has("-o")) {
     out.push("--format", flags.format);
   }
@@ -273,6 +275,10 @@ export async function runCli(argv: string[]): Promise<number> {
       return EXIT.OK;
     }
 
+    if (flags.errors?.length) {
+      throw usageError(flags.errors.join("; "), "Run xr --help for supported options.");
+    }
+
     // ── Shell (fast, default) ─────────────────────────────────────────────
     if (route.kind === "shell") {
       const { runTUI } = await import("../interfaces/tui.ts"); // static literal
@@ -289,6 +295,9 @@ export async function runCli(argv: string[]): Promise<number> {
     // ── Registered command (lazy kernel boot, command-scoped profile) ────
     if (route.kind === "command" && route.command) {
       const regName = route.command;
+      if (regName === "run" && flags.commandMode !== undefined) {
+        throw usageError("--mode requires agent, plan, or ask for xr run.");
+      }
       // Special: audit verify-log legacy was a top-level command that maps
       // to audit verify.
       let commandArgs = reinjectGlobalFlags(rest, flags);
@@ -324,7 +333,9 @@ export async function runCli(argv: string[]): Promise<number> {
      * `--help` / `--version` never pay for it.
      */
     if (route.kind === "coder" || route.kind === "task") {
-      const { runCoder, readAllStdin } = await import("./coder/index.ts"); // static literal — compile-safe
+      const { runCoder, readAllStdin, coderRequestError } = await import("./coder/index.ts"); // static literal — compile-safe
+      const contractError = coderRequestError({ ...flags, mode: flags.commandMode ?? flags.mode });
+      if (contractError) throw usageError(contractError);
       const { Terminal } = await import("./coder/tty.ts"); // static literal — compile-safe
       const { Tokens } = await import("../core/tokens.ts"); // static literal — compile-safe
       const { resolve: resolvePath } = await import("node:path");
@@ -355,6 +366,11 @@ export async function runCli(argv: string[]): Promise<number> {
             ...(flags.print ? { printPrompt: flags.print } : {}),
             json: flags.json,
             diffOnly: flags.diffOnly,
+            dryRun: flags.dryRun,
+            ...(flags.budget !== undefined ? { budget: flags.budget } : {}),
+            // Unsupported resume/mode values are rejected above, never ignored.
+            ...(flags.resume !== undefined ? { resume: flags.resume } : {}),
+            ...(flags.mode ? { mode: flags.mode } : {}),
             approveAll: flags.approveAll,
             ...(flags.tools ? { tools: flags.tools } : {}),
             noHistory: flags.noHistory,
@@ -363,7 +379,7 @@ export async function runCli(argv: string[]): Promise<number> {
             ...(flags.model ? { model: flags.model } : {}),
             ...(flags.provider ? { provider: flags.provider } : {}),
             ...(flags.configPath ? { configPath: flags.configPath } : {}),
-            ...(flags.maxTokens ? { maxTokens: flags.maxTokens } : {}),
+            ...(flags.maxTokens !== undefined ? { maxTokens: flags.maxTokens } : {}),
             ...(stdinText !== undefined ? { stdinText } : {}),
           },
           { agent, term, consent },

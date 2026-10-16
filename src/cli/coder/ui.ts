@@ -20,7 +20,7 @@ export interface ApprovalInfo {
   tool: string;
   /** The command, path, or URL the action targets. */
   subject: string;
-  /** Unified diff for edits; empty otherwise. */
+  /** Unified diff for edits, canonical command for shell, empty otherwise. */
   preview: string;
   decision: Decision;
 }
@@ -35,6 +35,8 @@ export interface TurnSummary {
   inputTokens?: number;
   outputTokens?: number;
   meter?: string;
+  /** True only when this turn simulated writes/commands. */
+  dryRun?: boolean;
 }
 
 export interface CoderUI {
@@ -192,6 +194,7 @@ export class TtyUI implements CoderUI {
 
   summary(s: TurnSummary): void {
     const parts: string[] = [];
+    if (s.dryRun) parts.push("dry-run (simulated)");
     if (s.filesChanged.length) parts.push(`edited ${s.filesChanged.join(", ")}`);
     parts.push(`${s.filesChanged.length} file${s.filesChanged.length === 1 ? "" : "s"} changed`);
     parts.push(`${s.commands.length} command${s.commands.length === 1 ? "" : "s"} run`);
@@ -264,7 +267,8 @@ export class JsonUI implements CoderUI {
       kind: info.kind === "edit" ? "edit" : info.kind === "shell" ? "shell" : info.kind,
       tool: info.tool,
       target: info.subject,
-      ...(info.preview ? { diff: info.preview } : {}),
+      ...(info.kind === "edit" && info.preview ? { diff: info.preview } : {}),
+      ...(info.kind === "shell" ? { command: info.subject } : {}),
       decision: info.decision.action,
       reason: info.decision.reason,
     });
@@ -287,6 +291,7 @@ export class JsonUI implements CoderUI {
       commands_run: s.commands,
       denied: s.denied,
       auto_denied: s.autoDenied,
+      ...(s.dryRun ? { dry_run: true } : {}),
       ...(s.inputTokens != null ? { input_tokens: s.inputTokens } : {}),
       ...(s.outputTokens != null ? { output_tokens: s.outputTokens } : {}),
       ...(s.meter ? { meter: s.meter } : {}),

@@ -107,6 +107,10 @@ export const writeFileTool: Tool = {
       ctx.audit("write_file.denied", { path: String(args.path) });
       return { ok: false, output: "write denied by user" };
     }
+    if (ctx.dryRun) {
+      ctx.audit("write_file.dryrun", { path: rawPath, bytes: newContent.length });
+      return { ok: true, output: `[dry-run] would write ${rawPath} (${newContent.length} bytes)` };
+    }
     writeFileSync(p, newContent);
     ctx.audit("write_file.applied", { path: String(args.path), bytes: newContent.length });
     return { ok: true, output: `wrote ${args.path} (${newContent.length} bytes)` };

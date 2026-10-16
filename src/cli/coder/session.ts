@@ -16,7 +16,7 @@ import type { ApprovalRequest, ChatStreamEvent } from "../../core/types.ts";
 import type { AgentRunOverrides } from "../../services/agent-service.ts";
 import { unifiedDiff } from "./diff.ts";
 import type { ApproveFn, ConsentWrap } from "./consent.ts";
-import { classifyTool, decide, type ActionKind, type ApprovalMode, type PermissionRules } from "./permissions.ts";
+import { classifyTool, decide, shellCommandOf, type ActionKind, type ApprovalMode, type PermissionRules } from "./permissions.ts";
 import type { ApprovalInfo, CoderUI, TurnSummary } from "./ui.ts";
 
 /** The slice of AgentService the session needs (keeps this module easy to test). */
@@ -36,6 +36,8 @@ export interface SessionOptions {
   diffOnly: boolean;
   maxSteps: number;
   maxTokens?: number;
+  budget?: number;
+  dryRun?: boolean;
   /** Suspend/resume raw terminal mode around an external editor. */
   editorHooks?: { suspend(): void; resume(): void };
   onAbortTurn?: () => void;
@@ -57,7 +59,7 @@ export function subjectOf(req: ApprovalRequest): string {
   const args = (req.args ?? {}) as Record<string, unknown>;
   switch (req.tool) {
     case "shell":
-      return String(args.command ?? "");
+      return shellCommandOf(req.args) ?? "";
     case "write_file":
     case "delete_file":
     case "patch_file":
@@ -109,6 +111,7 @@ export class CoderSession {
   async turn(prompt: string, signal: AbortSignal): Promise<AgentResult> {
     this.files = new Set();
     this.commands = [];
+    this.diffs = [];
     this.denied = 0;
     this.autoDenied = 0;
     this.toolCalls.clear();
@@ -123,7 +126,9 @@ export class CoderSession {
       history: this.history(),
       signal,
       maxSteps: this.opts.maxSteps,
-      ...(this.opts.maxTokens ? { maxTokens: this.opts.maxTokens } : {}),
+      ...(this.opts.maxTokens !== undefined ? { maxTokens: this.opts.maxTokens } : {}),
+      ...(this.opts.budget !== undefined ? { budget: this.opts.budget } : {}),
+      dryRun: this.opts.dryRun ?? false,
       say: () => {},
       onStreamEvent: (e) => this.onEvent(e),
       approve: this.gate,
@@ -146,6 +151,7 @@ export class CoderSession {
       commands: [...this.commands],
       denied: this.denied,
       autoDenied: this.autoDenied,
+      ...(this.opts.dryRun ? { dryRun: true } : {}),
       ...(result.inputTokens != null ? { inputTokens: result.inputTokens } : {}),
       ...(result.outputTokens != null ? { outputTokens: result.outputTokens } : {}),
       // The engine meter carries pictographs, and says "local" when a model has
@@ -189,12 +195,15 @@ export class CoderSession {
       case "tool_result": {
         const call = this.toolCalls.get(e.id);
         const tool = e.tool;
-        if (tool === "write_file" && e.ok && call) {
+        if (tool === "write_file" && e.ok && call && !this.opts.dryRun) {
           const path = String(call.args.path ?? "");
           this.files.add(path);
           this.applyPendingEdit(path);
         }
-        if (tool === "shell" && call) this.commands.push(String(call.args.command ?? ""));
+        if (tool === "shell" && call && !this.opts.dryRun) {
+          const cmd = shellCommandOf(call.args);
+          if (cmd !== null) this.commands.push(cmd);
+        }
         if (e.ok) this.ui.toolResult(e.id, tool, true, e.result ?? "");
         else this.ui.toolResult(e.id, tool, false, e.error ?? "failed");
         return;
@@ -233,7 +242,8 @@ export class CoderSession {
     const kind = classifyTool(req.tool);
     const subject = subjectOf(req);
     const args = (req.args ?? {}) as Record<string, unknown>;
-    const preview = kind === "edit" && req.tool === "write_file" ? this.editPreview(subject, String(args.content ?? "")) : "";
+    const preview = kind === "shell" ? subject
+      : kind === "edit" && req.tool === "write_file" ? this.editPreview(subject, String(args.content ?? "")) : "";
 
     const decision = decide({
       kind,

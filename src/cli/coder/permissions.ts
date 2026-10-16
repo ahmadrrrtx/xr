@@ -7,9 +7,9 @@
  *
  * Precedence (first match wins):
  *   1. deny rules                      → deny   (never overridden)
- *   2. dangerous shell pattern         → ask    (never auto-approved, even in yolo)
- *   3. ask rules                       → ask
- *   4. read-only mode + mutating kind  → deny
+ *   2. malformed shell / read-only + mutating kind → deny
+ *   3. dangerous shell pattern         → ask    (never auto-approved, even in yolo)
+ *   4. ask rules                       → ask
  *   5. allow rules                     → allow
  *   6. session grant for the kind      → allow  (granted with `a`)
  *   7. mode: yolo → allow; auto-edit + edit → allow; read → allow
@@ -67,6 +67,13 @@ export function dangerousReason(command: string): string | null {
   return null;
 }
 
+/** The production shell schema is {cmd}; never approve a legacy/decoy command field. */
+export function shellCommandOf(args: unknown): string | null {
+  if (typeof args !== "object" || args === null || Array.isArray(args)) return null;
+  const cmd = (args as Record<string, unknown>).cmd;
+  return typeof cmd === "string" && cmd.trim() ? cmd : null;
+}
+
 export type RuleAction = "allow" | "ask" | "deny";
 
 /** Rule: `shell`, `shell:npm test*`, `edit:src/*`, `network:https://docs.*`. */
@@ -114,15 +121,20 @@ export function decide(input: DecideInput): Decision {
   const deny = (rules.deny ?? []).find((r) => ruleMatches(r, kind, subject));
   if (deny) return { action: "deny", reason: `deny rule "${deny}"` };
 
+  if (kind === "shell" && !subject.trim()) {
+    return { action: "deny", reason: "invalid shell request: expected a non-empty cmd string" };
+  }
+
+  // Read-only authority cannot be upgraded by a dangerous/ask prompt or grant.
+  if (mode === "plan" && MUTATING.has(kind)) {
+    return { action: "deny", reason: "read-only session: edits and commands are disabled" };
+  }
+
   const dangerous = kind === "shell" ? dangerousReason(subject) : null;
   if (dangerous) return { action: "ask", reason: `dangerous command: ${dangerous}`, dangerous };
 
   const ask = (rules.ask ?? []).find((r) => ruleMatches(r, kind, subject));
   if (ask) return { action: "ask", reason: `ask rule "${ask}"` };
-
-  if (mode === "plan" && MUTATING.has(kind)) {
-    return { action: "deny", reason: "read-only session: edits and commands are disabled" };
-  }
 
   const allow = (rules.allow ?? []).find((r) => ruleMatches(r, kind, subject));
   if (allow) return { action: "allow", reason: `allow rule "${allow}"` };

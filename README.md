@@ -56,7 +56,7 @@ The difference is **what surrounds that loop**:
 |---|---|
 | 🔑 **You bring the key** | XR ships no API key and no cloud account. It runs on *your* provider key or a model running on *your* machine. |
 | 🛑 **It asks before it acts** | Consequential actions stop and wait for your approval. Denial is enforced in the execution path, not suggested in a prompt. |
-| 💸 **It cannot overspend** | Every task carries a USD and token ceiling, checked during the loop, not after the bill. |
+| 💸 **It tracks spending and checks task limits** | USD/token limits are checked during the loop. USD costs are estimates: a response can exceed the requested limit, and unknown pricing cannot enforce a USD cap. |
 | 🔗 **It writes down what it did** | Every event is SHA-256-linked into a local chain you can verify offline with one command. |
 | 💻 **It runs on your machine** | One SQLite database, no telemetry, no mandatory network. Ten local model runtimes are first-class. |
 | 🆓 **Every local feature is free** | Voice, memory, themes, CLI, bots, the editor surface, research, agents, skills and MCP are on the free tier permanently — [no paywall, by test](#pricing). |
@@ -64,6 +64,14 @@ The difference is **what surrounds that loop**:
 ```bash
 xr "summarize the open TODOs in this repo and draft a cleanup plan"
 ```
+
+> **Development-preview safety limits:** the coding CLI simulates file writes and shell execution
+> under `--dry-run`, but model/read/network requests and audit/state updates can still occur.
+> Coder `--resume` and non-agent `--mode` requests are explicitly refused rather than ignored;
+> the legacy `xr run` checkpoint/mode paths remain available. Workspace symlink confinement,
+> strict USD-cap guarantees, and desktop-wide emergency pause remain release-blocking work.
+> Do not treat this snapshot as safe isolation for untrusted repositories or as an absolute billing cap.
+> See [coding CLI contracts and known limits](docs/cli/CODING_CONTRACTS.md).
 
 **Who it's for:** developers automating real work on real machines; teams that need an agent's
 actions to be reviewable after the fact; anyone who wants an agent that runs fully offline.

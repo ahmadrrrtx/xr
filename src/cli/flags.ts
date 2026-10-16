@@ -26,6 +26,8 @@ export interface GlobalFlags {
   dryRun: boolean;
   workspace?: string;
   mode?: "agent" | "plan" | "ask";
+  /** Non-engine mode retained for the owning command (e.g. install --mode minimal). */
+  commandMode?: string;
   model?: string;
   provider?: string;
   budget?: number;
@@ -45,6 +47,8 @@ export interface GlobalFlags {
   noHistory: boolean;
   /** Coding agent: `--config <file>` (alternative cli.json). */
   configPath?: string;
+  /** Invalid safety-critical options; rendered as usage errors before execution. */
+  errors?: string[];
   /** Raw original argv (for debugging). */
   raw: string[];
 }
@@ -175,7 +179,12 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
       if (isValueFlag(name)) {
         const next = argv[i + 1];
         if (next == null || next.startsWith("-")) {
-          // leave for command-local error handling
+          // Safety-critical options must never become prompt text or silently
+          // fall back to an uncapped/default run when their value is missing.
+          if (["budget", "max-tokens", "maxTokens", "resume", "mode"].includes(name)) {
+            (out.errors ??= []).push(`${token} requires a value`);
+          }
+          // Preserve other command-local handling.
           args.push(token);
           continue;
         }
@@ -220,6 +229,18 @@ export function parseGlobalFlags(argv: string[]): GlobalFlags {
 
 function applyValue(out: GlobalFlags, name: string, value: string): void {
   switch (name) {
+    case "dry-run":
+    case "dryRun":
+    case "diff":
+    case "d":
+      if (value !== "true" && value !== "false") {
+        (out.errors ??= []).push(`--${name} requires true or false (or use the bare flag)`);
+      } else if (name === "diff" || name === "d") {
+        out.diffOnly = value === "true";
+      } else {
+        out.dryRun = value === "true";
+      }
+      return;
     case "print":
     case "p":
       out.print = value;
@@ -253,7 +274,17 @@ function applyValue(out: GlobalFlags, name: string, value: string): void {
       break;
     case "mode": {
       const m = value.toLowerCase();
-      if (m === "agent" || m === "plan" || m === "ask") out.mode = m;
+      if (!value.trim()) {
+        (out.errors ??= []).push("--mode requires a non-empty value");
+      } else if (m === "agent" || m === "plan" || m === "ask") {
+        out.mode = m;
+        delete out.commandMode;
+      } else {
+        // The router, not this shared parser, knows whether this is an
+        // engine mode or a legitimate command-local mode. Never swallow it.
+        out.commandMode = value;
+        delete out.mode;
+      }
       break;
     }
     case "model":
@@ -264,17 +295,20 @@ function applyValue(out: GlobalFlags, name: string, value: string): void {
       break;
     case "budget": {
       const n = Number(value);
-      if (Number.isFinite(n)) out.budget = n;
+      if (Number.isFinite(n) && n > 0) out.budget = n;
+      else (out.errors ??= []).push("--budget requires a finite USD amount greater than zero");
       break;
     }
     case "max-tokens":
     case "maxTokens": {
-      const n = Number.parseInt(value, 10);
-      if (Number.isFinite(n)) out.maxTokens = n;
+      const n = Number(value);
+      if (Number.isSafeInteger(n) && n > 0) out.maxTokens = n;
+      else (out.errors ??= []).push("--max-tokens requires a positive safe integer");
       break;
     }
     case "resume":
-      out.resume = value;
+      if (value.trim()) out.resume = value;
+      else (out.errors ??= []).push("--resume requires a non-empty session/task ID");
       break;
     case "port":
       // leave for serve; also keep as passthrough
