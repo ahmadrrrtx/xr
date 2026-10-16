@@ -6,7 +6,7 @@
   "baseline_checkpoint_sha": "35d0a68ae5fa45be54dfe26ef7abb0f58c89a693",
   "accepted_parent_sha": "945c457c2495a4a79d1ef6d85651d38054479fd9",
   "branch": "Stage-1",
-  "implementation_commit": null,
+  "implementation_commit": "1d7c8f48a8611bb48927637d5285db7878aa5004",
   "candidate_engineering_fingerprint_sha256": "ad6ed0849a8107ce7e04fc8ea9050f87701d6eeec48faa069d79f3fffce14126",
   "remote_pushed": false,
   "remote_sha": null,
@@ -51,5 +51,6 @@
     "linux_cargo_test_lib": "138 pass / 0 fail",
     "macos": "NOT RUN",
     "windows": "NOT RUN"
-  }
+  },
+  "implementation_commit_note": "local commit on Stage-1; NOT pushed; NOT accepted"
 }

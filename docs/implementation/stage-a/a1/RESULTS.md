@@ -7,7 +7,7 @@ Not accepted. No implementation commit, no push, no accepted SHA. Local required
 - Baseline checkpoint (F01/F02, already committed on this branch): `35d0a68ae5fa45be54dfe26ef7abb0f58c89a693`
 - Accepted parent / public main fetched: `945c457c2495a4a79d1ef6d85651d38054479fd9`
 - Branch: `Stage-1` (the requested "Stage 1"; git branch names cannot contain spaces)
-- Implementation commit: none (candidate is an uncommitted worktree diff)
+- Implementation commit (local, not pushed, not accepted): `1d7c8f48a8611bb48927637d5285db7878aa5004`
 - Remote push: not performed
 - Engineering-input fingerprint of the candidate (identical before and after the final test runs): `ad6ed0849a8107ce7e04fc8ea9050f87701d6eeec48faa069d79f3fffce14126` (script: `stage-a-results/a1/source-state.py`)
 
