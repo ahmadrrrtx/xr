@@ -1,62 +1,156 @@
-# Stage A · A1 results (F03 filesystem authority) — STATUS: BLOCKED
+# Stage A · A1 results (F03 filesystem authority + F01/F02 checkpoint) — STATUS: BLOCKED
 
-Not accepted. No implementation commit, no push, no accepted SHA. Local required gates are not green.
+A1 is **not accepted and not complete**. It is a tested Linux x64 implementation with open required
+cases, an unimplemented macOS/Windows platform guarantee, and an unpushed branch. Nothing here
+claims PASS for a case that is PARTIAL, NOT_RUN or BLOCKED. Per-case status is in `case-index.json`.
+
+## Summary
+
+| Item | Result |
+|---|---|
+| Overall status | **BLOCKED** |
+| Blocking items | E07 not run (no PTY two-turn test); FS12 macOS/Windows not implemented or proven; Windows installer (E06) not proven (`pwsh` absent); E04/E06/E09 partial; desktop control outside-root grants not wired; several residual raw reads open (see DESIGN.md) |
+| Push | **NOT PERFORMED.** Local gates are not all green, and no authorised credential is available (see §Push) |
+| Case totals (24 matrix cases) | PASS 19 · PARTIAL 3 · NOT_RUN 1 · BLOCKED 1 |
+| CI dispatch | NOT DISPATCHED (no push) |
 
 ## Identity
-- Repository: https://github.com/ahmadrrrtx/xr.git
-- Baseline checkpoint (F01/F02, already committed on this branch): `35d0a68ae5fa45be54dfe26ef7abb0f58c89a693`
-- Accepted parent / public main fetched: `945c457c2495a4a79d1ef6d85651d38054479fd9`
-- Branch: `Stage-1` (the requested "Stage 1"; git branch names cannot contain spaces)
-- Implementation commit (local, not pushed, not accepted): `1d7c8f48a8611bb48927637d5285db7878aa5004`
-- Remote push: not performed
-- Engineering-input fingerprint of the candidate (identical before and after the final test runs): `ad6ed0849a8107ce7e04fc8ea9050f87701d6eeec48faa069d79f3fffce14126` (script: `stage-a-results/a1/source-state.py`)
 
-## Blocking failures (must be resolved before push)
-1. **RESOLVED — compensation regression.** Root cause: the test wrote to a temp directory but passed no `workspaceId`, so the workspace defaulted to `process.cwd()` and the write was genuinely outside it. The baseline reported "did not exist" without checking access; the candidate correctly refuses to inspect. Fix: the in-workspace case now passes `{ workspaceId: tmp }` (same assertion), and a new assertion requires that an outside-workspace write makes NO "compensation available"/"did not exist" claim. Test file: `test/environment/service.test.ts`. Result: 22/0 file-level; focused 846/0.
-2. **RESOLVED — Desktop lint.** `desktop/src/screens/Settings/index.tsx:155` (`react-hooks/set-state-in-effect`) was failing identically at baseline. Fixed by the React "adjust state during render" pattern (same visible behavior). `bun run lint` now exit 0; desktop tsc exit 0; desktop build exit 0.
-3. **Load-sensitive perf flake (observed once):** first broad run had `test/context/performance.test.ts` G6 p95 = 134.5 ms (limit 100 ms) under load; it passed in isolation at baseline (20.9 ms) and candidate (19.7 ms), and passed in the final broad run. Not waived; recorded.
-4. **Native/platform proof absent:** Rust `cargo` not installed; no macOS/Windows; no CI run. `cargo check/clippy/test` recorded as UNAVAILABLE (exit 127).
-5. **Push/CI:** Not pushed. The user-provided token was not used (credential pasted in chat). CI dispatch on `ci.yml`, `desktop-app.yml`, `cross-platform.yml` is possible once pushed; see HANDOFF.
+- Repository: `https://github.com/ahmadrrrtx/xr.git` (`origin`, HTTPS, no stored credential)
+- Baseline checkpoint F01/F02 (committed): `35d0a68ae5fa45be54dfe26ef7abb0f58c89a693`
+- Accepted audit parent / public `main` (fetched and verified): `945c457c2495a4a79d1ef6d85651d38054479fd9`
+- Candidate (superseded, kept): `1d7c8f48a8611bb48927637d5285db7878aa5004`; records `44b205a2`
+- **A1 implementation commit (tested): `e15a55002c9dd6bd6041af58f4252baaf9948a13`**
+- Remote SHA: none (not pushed)
+- Branch: `Stage-1` (the requested "Stage 1"; the suggested `stage-a/a1-filesystem-authority` remains at `35d0a68a`, untouched)
+- This document is a documentation-only successor of `e15a5500`. No code changed after the tested commit.
 
-## Passing evidence (candidate, this session)
-| Case | Result |
-|---|---|
-| Implicit RAG/artifact/preimage/shell policy (`test/security/filesystem-implicit.test.ts`) + authority/index/operations security tests | 20 pass / 0 fail (`iterations/implicit-policy-green`) |
-| Real CLI→coder→AgentService, production schemas, JSON-string tool args, ripgrep engine | 48 pass / 0 fail, rg engine confirmed (`iterations/cli-rg-final`) |
-| Same, JavaScript fallback (rg absent) | 48 pass / 0 fail (`iterations/cli-js-final`) |
-| E10 print-mode filtering + decoy/dangerous shell (new) | pass |
-| Native Linux: cargo check / clippy -D warnings / cargo test --lib (138) | exit 0 / exit 0 / 138 pass (`native-cargo-*.log`) |
-| Native PTY replay, 6 cases (dry-run, diff, four configured-deny/decoy/malformed shell) | exit 0 (`iterations/pty-final`) |
-| Public process suite `test/e2e-blackbox` | 97 pass / 0 fail (`iterations/broad-public-process-final`) |
-| Focused security/CLI/daemon/trust set (after fix) | 846 pass / 0 fail, 80 files (`iterations/focused-after-compensation-fix`) |
-| Authenticated daemon HTTP (earlier green, five cases) | pass (`iterations/http-daemon`) |
-| Root TypeScript | exit 0 (`iterations/root-typecheck-final`) |
-| Desktop TypeScript | exit 0 (`final-gates/desktop-typecheck`) |
-| Desktop frontend build | exit 0 (`final-gates/desktop-build`) |
-| Sidecar compile + Linux smoke | exit 0 (`iterations/linux-compile-sidecar`, `linux-sidecar-smoke`) |
-| 17 non-publishing gates | exit 0 each (`gates/summary.json`; re-run in `final-gates/`) |
-| Required live browser axe suite (private libs, LD_LIBRARY_PATH only) | 13 pass / 0 fail (`iterations/required-browser-with-private-libs`) |
-| Broad parity runner, sequential, 387 files (browser lane forced required, after fix) | 4246 pass / 0 fail / 6 skip (skips = PowerShell install.ps1, not Linux evidence) (`iterations/broad-parity-after-fix`) |
-| Root TypeScript after test fix | exit 0 (`final-gates/root-typecheck-after-fix`) |
+## Environment
 
-Parity counting: totals are the last Bun summary per parity segment; the segment count reflects the runner's own grouping.
+- Host: Linux 6.1.158 x86_64, glibc 2.41 (Debian). openat2 probe: descriptor returned.
+- Bun 1.3.14 (`/home/user/.cache/a1-tools/bun-linux-x64`). Not on PATH by default.
+- ripgrep 14.1.1 bundled at `/home/user/.cache/a1-tools/ripgrep-14.1.1-x86_64-unknown-linux-musl/rg`. `rg` is **not** on the default PATH.
+- Rust: stable via rustup; `cargo clippy` and `cargo test --lib` in `desktop/src-tauri`.
+- Not available: `pwsh` (PowerShell), Playwright Chromium, macOS, Windows, arm64 Linux.
 
-## Source-review concerns status
-- Metadata/list grant leak: FIXED in candidate (`FilesystemAuthority.metadata` now checks the lease); covered by FS14 test.
-- Artifact denied-vs-missing conflation: FIXED (denied → "not inspected"; missing → "MISSING"); covered by FS05 test.
-- Legacy RAG retrieval reauthorization: index/fingerprint migrated and tested; persisted `retrieve()` inventory still open.
-- Shell descriptor: records denied-path identity for A4; NOT mount enforcement.
-- Still open: full native race/platform guarantees (Linux/glibc openat2 only), real trusted consent/desktop/AgentService issuer wiring, builder/dev-server/plugin/control executor migration, raw coder git status, daemon git badges, reverse-hunk/no-newline compatibility.
+## Commands, counts, skips (final tested commit `e15a5500`)
 
-## Inventory
-`stage-a-results/a1/raw-fs-inventory.txt`: 470 raw matches in 119 files (original). Migrated paths are listed in DESIGN.md; the rest are the open items above and are NOT claimed closed.
+| Gate | Command | Result |
+|---|---|---|
+| Typecheck root + desktop | `bun run typecheck` | exit 0 |
+| Desktop build | `npm run build` in `desktop/` (`tsc --noEmit && vite build`) | exit 0; two existing `INEFFECTIVE_DYNAMIC_IMPORT` warnings (outside A1) |
+| **Sequential unit sweep** (every `test/**/*.test.ts`, one process per file, `timeout -k 5 600`, benchmark artifact restored after each) | `run-sequential-unit-v2.sh final-e15a5500` | **402 files, all exit 0; 4,365 pass, 0 fail, 19 skip** |
+| Skips (only 2 files) | — | `test/a11y/browser-axe.test.ts` 13 skipped (Playwright Chromium binary absent); `test/release/installer-powershell.test.ts` 6 of 12 skipped (`pwsh` absent). **Neither is A1 proof.** |
+| Real-rg black-box | `PATH=<rg>:$PATH A1_EXPECT_SEARCH_ENGINE=ripgrep bun test test/e2e-blackbox/filesystem-authority.test.ts` | 21 pass, 0 fail |
+| JS-fallback black-box | same file, rg absent (in the sweep) | 21 pass, 0 fail |
+| Builder focused, each file alone | `bun test` per file, `timeout -k 5` | authority 15/0; routes 18/0 (three consecutive runs); core 14/0 |
+| Plugin + host + security focused | `fs-authority`, `host`, `plugins`, `security` | 65 pass, 0 fail |
+| Repo-map (after `repo/hash.ts` removal) | `test/repo-map/*.test.ts` | 12 files, all exit 0 |
+| Ownership map test | `test/architecture/ownership.test.ts` | 6/0 |
+| Ownership generator | `scripts/ownership-map.ts --check` | in sync, 206 areas |
+| API schema / client / compat | `api:schema:check`, `client:check`, `api:compat` | exit 0 |
+| Boundaries (dependency-cruiser) | `bun run boundaries` | exit 0 |
+| Desktop sink lint | `desktop:sink-lint` | exit 0 |
+| Claim lint / platform parity / CI capability | `claim-lint`, `platform:parity:check`, `ci-capability-gate` | exit 0 |
+| Hot-path / size gates | `hot-path-lint`, `size-gate` | exit 0 |
+| Release / channel / changelog / inventory | `release:check`, `channel:check`, `changelog:check`, `baseline:inventory` | exit 0 (inventory writes `docs/release/1.1.0/`; removed afterwards as a generated byproduct, not committed) |
+| Website marketplace | `website:marketplace:check` | exit 0 |
+| Native clippy | `cargo clippy --all-targets -- -D warnings` (`native-env.sh`) | exit 0 (`native-cargo-clippy-final.log`) |
+| Native lib tests | `cargo test --lib` | 138 pass, 0 fail (`native-cargo-test-final.log`) |
 
-## Quarantined generated outputs (not candidate source)
-- `docs/release/1.1.0` (generated inventory) moved to `stage-a-results/a1/generated/final-gates/docs/release/1.1.0/` with hashes in its QUARANTINE.json.
-- `benchmarks/memory-recall/suite-latency.json` restored to HEAD; generated copy kept under `generated/final-parity/`.
+Rust sources are unchanged since the baseline (`git diff 35d0a68a..HEAD -- desktop/src-tauri` is empty), so the native results apply to the tested commit.
 
-## Sidecar artifact
-The 102 MB Linux sidecar binary was moved out of the repo to `/home/user/.cache/a1-tools/sidecar`; its hash is in `stage-a-results/a1/sidecar-artifact.json`. Not committed.
+Logs: `/home/user/stage-a-results/a1/` (outside the repo; not committed). Final sweep summary:
+`iterations/unit-sequential-v2-final-e15a5500/summary.tsv`, copied to `final/`.
 
-## Local gates
-All local required gates are green on this candidate (typecheck root+desktop, desktop lint/build, 17 gates, focused, public-process, broad parity, Linux native check/clippy/test, sidecar, required browser). Remaining: open authority inventory (item 3) and macOS/Windows/CI proof. Acceptance is therefore still BLOCKED; the local work is complete only for the scope listed above.
+### Earlier failures resolved in this round (for the record)
+
+- **Plugin fs positive read failed** ("fs.read denied" on valid 5–10 MB files). Root cause: the authority
+  byte ceiling (10,000,000) was below the plugin cap (10 × 1024 × 1024). Fixed by aligning the ceiling
+  to 10 MiB. Plugin tests now 65/0.
+- **Builder approval-decision hang** (create/rename/delete). Not reproduced: `dbg7` reaches `[DONE]`, and
+  builder-routes passed 18/0 in three consecutive runs. The earlier conflicting results are resolved in
+  favour of pass. The cause of the earlier hang was not isolated.
+- **Escape status.** Escape → **400** is the implemented mapping (`fsFailure`). Asserted by
+  `builder-routes.test.ts` ("escapes answer 400"). Denials → 403.
+- **Ownership-map check failed mid-sweep** (`test/architecture/ownership.test.ts`, row ~277). Cause: the new
+  file `test/memory-retrieve-authority.test.ts` was not in the map. `docs/OWNERSHIP.md` was regenerated with
+  the generator. The check now passes alone and in the final sweep.
+- **Benchmark artifact** `benchmarks/memory-recall/suite-latency.json` is restored after every test file and is never committed.
+
+## Case results
+
+See `case-index.json` for file-level evidence and notes. Summary:
+
+| Case | Status | Evidence / gap |
+|---|---|---|
+| E01 dry-run real turn, zero writes | PASS | coder-contract (2 provider calls, no write, `write_file.dryrun`) |
+| E02 shell dry-run, no executor | PASS | coder-contract |
+| E03 exact budget/token forwarding | PASS | e2e filesystem-authority; coder-contract |
+| E04 malformed flags refuse | **PARTIAL** | request-contract (parse-level, 37/0). No e2e assertion of zero boot/DB for malformed flags |
+| E05 unsupported resume/modes refuse | PASS | coder-contract; request-contract |
+| E06 installers and command-local modes | **PARTIAL** | POSIX install-minimal + installer-verify pass. Windows installer 6/12 skipped (`pwsh` absent) |
+| E07 interactive PTY two-turn reset | **NOT_RUN** | No PTY two-turn test exists in the tree. **Open blocker** |
+| E08 configured deny beats approve-all | PASS | e2e: `shell:printf*` grant with deny rule; `shell.denied`; no executor event |
+| E09 cmd vs decoy/malformed args | **PARTIAL** | Decoy never executes. Preview/execution identity agreement not asserted separately |
+| E10 deny precedence, classification | PASS | e2e (print-mode filtering; quoted force-push text classified from `cmd`) |
+| FS01 symlink escape read/write | PASS | e2e; control files-authority; plugin fs-authority |
+| FS02 linked/missing destination | PASS | e2e; security filesystem-authority |
+| FS03 root canonicalization / spellings | PASS (Linux) | security filesystem-authority |
+| FS04 dotenv/key/secret, trusted narrow consent | PASS | e2e; security; plugin fs-authority |
+| FS05 implicit rules/ignore/context | PASS | e2e; filesystem-implicit |
+| FS06 search_code with real rg | PASS | e2e run with real rg (engine asserted = ripgrep) and with JS |
+| FS07 search JS fallback | PASS | e2e (JS engine asserted) |
+| FS08 authenticated daemon HTTP | PASS | daemon filesystem-http |
+| FS09 daemon diff/hunk/write | PASS | filesystem-http; builder-authority; builder-routes |
+| FS10 approval binds identity | PASS | filesystem-operations; filesystem-authority; filesystem-http |
+| FS11 deterministic parent swap | PASS (Linux) | filesystem-operations; filesystem-authority |
+| FS12 Windows/macOS junction/reparse | **BLOCKED** | Not implemented. Fails closed as `unsupported`. Linux evidence cannot substitute |
+| FS13 special files / hardlinks | PASS (Linux) | filesystem-authority; filesystem-operations |
+| FS14 trusted config / scoped desktop | PASS | filesystem-authority; control files-authority; plugin fs-authority; memory-retrieve-authority |
+
+## Adversarial review (self-review; not independent)
+
+An independent reviewer was not available to this agent. The review below is a self-review performed
+after implementation and before commit. Its findings are open until a separate reviewer confirms them.
+
+Findings, in priority order:
+
+1. **Project TypeScript executes project code.** `loadProjectTypescript` does `import()` on
+   `<project>/node_modules/typescript/lib/typescript.js`. A repository can ship a hostile toolchain.
+   This is a trusted-toolchain decision, not a content leak. It needs an explicit user decision.
+2. **Desktop outside-root grants absent.** Desktop file actions now fail closed outside HOME or
+   `XR_FILES_ROOT`. Any legitimate outside-root desktop use is blocked until a trusted grant adapter exists.
+3. **Skill-body loaders not migrated and not verified.** `src/skills/*` reads were not inspected for
+   model-visible body disclosure. Open.
+4. **Git badges reveal sensitive file names.** `git status` in the builder project lists untracked names
+   such as `.env` in UI badges. Contents are not read. Names are.
+5. **Vision/OCR path.** `observeArtifact`/`observeOcr` read a raw path. The only caller passes an
+   XR-captured screenshot. Not reachable by the model today, but unguarded.
+6. **`repo/scope.ts` `scopedStat`** is a path-based `stat`. It is used only by tests. Open.
+7. **Plugin manifest read** uses path-following `statSync`/`readFileSync` on an untrusted plugin folder during install-time validation. Open.
+8. **Shell and host-git/terminal seam.** Shell processes are outside the authority, as the design states.
+   The configured guard decides whether a command runs. An allowed command can read anything the user can read.
+9. **Linux-only evidence.** One Linux x64 host. arm64, musl and older kernels are not run.
+
+No raw model-reachable read path was found in the migrated tools, search, daemon, builder, plugin, RAG or
+multi-agent paths. The inventory of the remaining raw paths is in `DESIGN.md`.
+
+## Push
+
+**Not performed.** Two reasons, both stated plainly:
+
+1. Local required gates are not green. E07 is not run, and E04/E06/E09 are partial. The packet rule is
+   that a push happens only after local required gates are green.
+2. No authorised credential is available to the agent. The packet rules say the agent must not collect
+   a token in chat. A token pasted into the conversation was **not** saved, stored, or used, and it
+   should be treated as exposed: rotate or revoke it.
+
+Recommended next step: configure a credential through a path the user controls (for example
+`GIT_ASKPASS`, a credential helper, or an SSH key) outside the chat. Then, once the open items are
+closed, push `stage-a/a1-filesystem-authority`, not `main`, and observe the existing CI at the actual SHA.
+
+## Stop-after-A1 boundary
+
+A1 does not implement A2 (spend), A3 (run control), or A4 (production profile). A2 needs the accepted A1 SHA and
+case-level proof, not the branch name. None exists yet.

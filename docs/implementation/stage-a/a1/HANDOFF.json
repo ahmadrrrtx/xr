@@ -1,56 +1,418 @@
 {
+  "template_version": 1,
+  "phase": "A1",
   "stage": "A",
-  "agent": "A1",
   "status": "BLOCKED",
-  "accepted_implementation_sha": null,
-  "baseline_checkpoint_sha": "35d0a68ae5fa45be54dfe26ef7abb0f58c89a693",
+  "status_reason": "Required cases E07 NOT_RUN, FS12 BLOCKED (macOS/Windows not implemented), E04/E06/E09 PARTIAL; push not performed (no authorised credential; local gates not all green). Not accepted. Not COMPLETE.",
+  "repository": "https://github.com/ahmadrrrtx/xr",
+  "audited_commit": "945c457c2495a4a79d1ef6d85651d38054479fd9",
   "accepted_parent_sha": "945c457c2495a4a79d1ef6d85651d38054479fd9",
+  "baseline_checkpoint_sha": "35d0a68ae5fa45be54dfe26ef7abb0f58c89a693",
+  "candidate_commit_superseded": "1d7c8f48a8611bb48927637d5285db7878aa5004",
+  "records_commit": "44b205a2",
+  "implementation_sha": "e15a55002c9dd6bd6041af58f4252baaf9948a13",
+  "documentation_successor": "the commit that adds this file and RESULTS.md (documentation only; no code change after implementation_sha)",
   "branch": "Stage-1",
-  "implementation_commit": "1d7c8f48a8611bb48927637d5285db7878aa5004",
-  "candidate_engineering_fingerprint_sha256": "ad6ed0849a8107ce7e04fc8ea9050f87701d6eeec48faa069d79f3fffce14126",
-  "remote_pushed": false,
-  "remote_sha": null,
-  "ci": {
-    "status": "NOT_DISPATCHED",
-    "workflows_supporting_dispatch": [
-      "ci.yml",
-      "desktop-app.yml",
-      "cross-platform.yml"
-    ],
-    "reason": "no push performed"
+  "suggested_feature_branch": "stage-a/a1-filesystem-authority (still at 35d0a68a; not updated)",
+  "pushed_remote_sha": null,
+  "push_verified": false,
+  "push_blocker": "No authorised credential available. Chat-pasted token deliberately not stored or used (packet rule: never collect a token in chat). Local required gates not all green.",
+  "source_fingerprint_before": "f3eade6b53650abe4fce768c1ac299423b724ec434f84bd9471d809281678018",
+  "source_fingerprint_after": "f3eade6b53650abe4fce768c1ac299423b724ec434f84bd9471d809281678018",
+  "source_fingerprint_note": "scripts: stage-a-results/a1/source-state.py; scope engineering inputs at e15a5500; the script's candidate_is_uncommitted flag is stale (predates the commit)",
+  "toolchain": {
+    "host": "Linux 6.1.158 x86_64, glibc 2.41",
+    "bun": "1.3.14 (/home/user/.cache/a1-tools/bun-linux-x64; not on PATH)",
+    "ripgrep": "14.1.1 bundled at /home/user/.cache/a1-tools/ripgrep-14.1.1-x86_64-unknown-linux-musl (not on PATH)",
+    "rust": "stable via rustup; cargo clippy + test in desktop/src-tauri",
+    "absent": [
+      "pwsh",
+      "playwright chromium",
+      "macOS",
+      "Windows",
+      "linux arm64"
+    ]
   },
-  "blocking": [
-    "open authority inventory: builder, dev-server, plugin host/sandbox, control executor, repo raw git status, daemon git badges, legacy RAG retrieve() \u2014 not migrated",
-    "macOS and Windows native proof not run; CI not dispatched (no push performed)",
-    "A1 not pushed: user-provided token not used; push needs authorized credential"
+  "authority_scope_and_decisions": [
+    "Linux x64/arm64 only; other platforms fail closed with 'unsupported'. macOS/Windows NOT implemented: FS12 BLOCKED.",
+    "Authority ceiling 10 MiB (was 5 MB); static preview >10 MB returns 404 (disclosed).",
+    "Desktop control file actions root-bound to HOME or XR_FILES_ROOT; outside-root grants not wired (fail closed); move refused as unsupported (disclosed).",
+    "RAG retrieve(store, project, root, query, k) re-authorises each persisted chunk (signature change; all callers updated).",
+    "Escape -> 400, denial -> 403 in builder routes.",
+    "Dead raw reader repo/hash.ts hashFile removed.",
+    "Sensitive reads require a registry-backed trusted grant; model text, yolo, edit approval and labels cannot mint it.",
+    "No command alias; tool schemas unchanged."
   ],
-  "platform_guarantees": {
-    "linux_x64_glibc_openat2": "candidate; partial proof (primitive + public tests)",
-    "macos": "NOT PROVEN",
-    "windows": "NOT PROVEN; fails closed in code",
-    "native_ipc_tauri": "NOT PROVEN"
-  },
-  "deliverables": {
-    "DESIGN.md": "docs/implementation/stage-a/a1/DESIGN.md (target design; reconciliation partial)",
-    "RESULTS.md": "docs/implementation/stage-a/a1/RESULTS.md",
-    "HANDOFF.json": "docs/implementation/stage-a/a1/HANDOFF.json",
-    "case_index": "docs/implementation/stage-a/a1/case-index.json"
-  },
-  "boundaries": {
-    "F09_F15": "not started; out of scope",
-    "A2_handoff": "not issued; requires accepted A1 SHA"
-  },
-  "resolved_this_session": [
-    "compensation pre-image regression (test workspace root corrected; outside-workspace no-claim assertion added)",
-    "desktop lint set-state-in-effect fixed",
-    "Linux native cargo check/clippy/test green (Rust 1.99, private GTK/WebKit libs)"
+  "changed_paths": [
+    "src/security/filesystem.ts",
+    "src/security/fs-native.ts",
+    "src/control/files.ts",
+    "src/context/memory/rag.ts",
+    "src/daemon/dev-servers.ts",
+    "src/daemon/routes/builder.routes.ts",
+    "src/daemon/routes/builder-dev.routes.ts",
+    "src/daemon/routes/builder-shared.ts",
+    "src/plugins/host.ts",
+    "src/plugins/sandbox-worker.ts",
+    "src/plugins/fs-capability.ts",
+    "src/repo/hash.ts",
+    "test/memory.test.ts",
+    "test/control/files-authority.test.ts",
+    "test/daemon/builder-authority.test.ts",
+    "test/memory-retrieve-authority.test.ts",
+    "test/plugins/fs-authority.test.ts",
+    "docs/OWNERSHIP.md",
+    "docs/implementation/stage-a/a1/*"
   ],
-  "native": {
-    "linux_cargo_check": "exit 0",
-    "linux_clippy_D_warnings": "exit 0",
-    "linux_cargo_test_lib": "138 pass / 0 fail",
-    "macos": "NOT RUN",
-    "windows": "NOT RUN"
-  },
-  "implementation_commit_note": "local commit on Stage-1; NOT pushed; NOT accepted"
+  "entry_or_terminal_path_inventory": "See docs/implementation/stage-a/a1/DESIGN.md 'Entry inventory' and 'Residual raw filesystem use'. Raw-read inventory retained at stage-a-results/a1/raw-fs-inventory.txt (outside repo).",
+  "cases": [
+    {
+      "id": "E01",
+      "status": "PASS",
+      "entry": "CLI coder --dry-run",
+      "files": [
+        "test/e2e-blackbox/coder-contract.test.ts"
+      ]
+    },
+    {
+      "id": "E02",
+      "status": "PASS",
+      "entry": "CLI shell --dry-run with cmd",
+      "files": [
+        "test/e2e-blackbox/coder-contract.test.ts"
+      ]
+    },
+    {
+      "id": "E03",
+      "status": "PASS",
+      "entry": "CLI --budget / token override",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts",
+        "test/e2e-blackbox/coder-contract.test.ts"
+      ]
+    },
+    {
+      "id": "E04",
+      "status": "PARTIAL",
+      "entry": "Malformed/missing/negative/non-finite flags",
+      "files": [
+        "test/cli/coder/request-contract.test.ts"
+      ]
+    },
+    {
+      "id": "E05",
+      "status": "PASS",
+      "entry": "Unsupported coder resume / modes",
+      "files": [
+        "test/e2e-blackbox/coder-contract.test.ts",
+        "test/cli/coder/request-contract.test.ts"
+      ]
+    },
+    {
+      "id": "E06",
+      "status": "PARTIAL",
+      "entry": "Installers and command-local modes",
+      "files": [
+        "test/e2e-blackbox/coder-contract.test.ts",
+        "test/release/installer-verify.test.ts",
+        "test/release/installer-powershell.test.ts"
+      ]
+    },
+    {
+      "id": "E07",
+      "status": "NOT_RUN",
+      "entry": "Interactive PTY two-turn diff/proposed-edit reset",
+      "files": []
+    },
+    {
+      "id": "E08",
+      "status": "PASS",
+      "entry": "Real-process configured shell deny beats approve-all",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts"
+      ]
+    },
+    {
+      "id": "E09",
+      "status": "PARTIAL",
+      "entry": "Actual cmd vs decoy command / malformed args",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts"
+      ]
+    },
+    {
+      "id": "E10",
+      "status": "PASS",
+      "entry": "Read-only/deny precedence and dangerous classification",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts"
+      ]
+    },
+    {
+      "id": "FS01",
+      "status": "PASS",
+      "entry": "Symlink escape read/write through real tools",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts",
+        "test/control/files-authority.test.ts",
+        "test/plugins/fs-authority.test.ts"
+      ]
+    },
+    {
+      "id": "FS02",
+      "status": "PASS",
+      "entry": "Linked/missing write destination",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts",
+        "test/security/filesystem-authority.test.ts"
+      ]
+    },
+    {
+      "id": "FS03",
+      "status": "PASS",
+      "entry": "Canonical root, alias, separators, hostile spellings",
+      "files": [
+        "test/security/filesystem-authority.test.ts"
+      ]
+    },
+    {
+      "id": "FS04",
+      "status": "PASS",
+      "entry": "Dotenv/key/secret and aliases; narrow consent",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts",
+        "test/security/filesystem-authority.test.ts",
+        "test/security/filesystem-operations.test.ts",
+        "test/plugins/fs-authority.test.ts"
+      ]
+    },
+    {
+      "id": "FS05",
+      "status": "PASS",
+      "entry": "Implicit rules/package/ignore/context",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts",
+        "test/security/filesystem-implicit.test.ts"
+      ]
+    },
+    {
+      "id": "FS06",
+      "status": "PASS",
+      "entry": "search_code with real ripgrep",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts"
+      ]
+    },
+    {
+      "id": "FS07",
+      "status": "PASS",
+      "entry": "search_code JS fallback, linked recursion",
+      "files": [
+        "test/e2e-blackbox/filesystem-authority.test.ts"
+      ]
+    },
+    {
+      "id": "FS08",
+      "status": "PASS",
+      "entry": "Authenticated daemon HTTP list/read",
+      "files": [
+        "test/daemon/filesystem-http.test.ts"
+      ]
+    },
+    {
+      "id": "FS09",
+      "status": "PASS",
+      "entry": "Daemon diff/hunk/write share authority",
+      "files": [
+        "test/daemon/filesystem-http.test.ts",
+        "test/daemon/builder-authority.test.ts",
+        "test/daemon/builder-routes.test.ts"
+      ]
+    },
+    {
+      "id": "FS10",
+      "status": "PASS",
+      "entry": "Approval binds identity; changed target invalidates",
+      "files": [
+        "test/security/filesystem-operations.test.ts",
+        "test/security/filesystem-authority.test.ts",
+        "test/daemon/filesystem-http.test.ts"
+      ]
+    },
+    {
+      "id": "FS11",
+      "status": "PASS",
+      "entry": "Deterministic parent/ancestor swap",
+      "files": [
+        "test/security/filesystem-operations.test.ts",
+        "test/security/filesystem-authority.test.ts"
+      ]
+    },
+    {
+      "id": "FS12",
+      "status": "BLOCKED",
+      "entry": "Windows/macOS junction/reparse/alias proof",
+      "files": []
+    },
+    {
+      "id": "FS13",
+      "status": "PASS",
+      "entry": "Special files, mount/hardlink aliases, bounded traversal",
+      "files": [
+        "test/security/filesystem-authority.test.ts",
+        "test/security/filesystem-operations.test.ts"
+      ]
+    },
+    {
+      "id": "FS14",
+      "status": "PASS",
+      "entry": "Legitimate trusted config / scoped desktop retained",
+      "files": [
+        "test/security/filesystem-authority.test.ts",
+        "test/control/files-authority.test.ts",
+        "test/plugins/fs-authority.test.ts",
+        "test/memory-retrieve-authority.test.ts"
+      ]
+    }
+  ],
+  "case_index": "docs/implementation/stage-a/a1/case-index.json",
+  "broad_gates": [
+    {
+      "gate": "sequential unit sweep (402 files)",
+      "command": "stage-a-results/a1/run-sequential-unit-v2.sh final-e15a5500",
+      "result": "exit 0 per file; 4365 pass / 0 fail / 19 skip",
+      "tested_sha": "e15a5500"
+    },
+    {
+      "gate": "typecheck root+desktop",
+      "command": "bun run typecheck",
+      "result": "exit 0"
+    },
+    {
+      "gate": "desktop build",
+      "command": "npm run build (desktop/)",
+      "result": "exit 0"
+    },
+    {
+      "gate": "ownership check",
+      "command": "bun run ownership:check",
+      "result": "exit 0"
+    },
+    {
+      "gate": "api schema / client / compat",
+      "command": "api:schema:check, client:check, api:compat",
+      "result": "exit 0"
+    },
+    {
+      "gate": "boundaries",
+      "command": "bun run boundaries",
+      "result": "exit 0"
+    },
+    {
+      "gate": "desktop sink lint",
+      "command": "bun run desktop:sink-lint",
+      "result": "exit 0"
+    },
+    {
+      "gate": "claim lint / platform parity / ci capability",
+      "command": "claim-lint, platform:parity:check, ci-capability-gate",
+      "result": "exit 0"
+    },
+    {
+      "gate": "hot-path / size",
+      "command": "hot-path-lint, size-gate",
+      "result": "exit 0"
+    },
+    {
+      "gate": "release / channel / changelog / baseline inventory",
+      "command": "release:check, channel:check, changelog:check, baseline:inventory",
+      "result": "exit 0; generated docs/release/1.1.0 removed, not committed"
+    },
+    {
+      "gate": "website marketplace",
+      "command": "website:marketplace:check",
+      "result": "exit 0"
+    }
+  ],
+  "native_and_platform_gates": [
+    {
+      "gate": "cargo clippy --all-targets -- -D warnings",
+      "result": "exit 0",
+      "log": "stage-a-results/a1/native-cargo-clippy-final.log"
+    },
+    {
+      "gate": "cargo test --lib",
+      "result": "138 pass / 0 fail",
+      "log": "stage-a-results/a1/native-cargo-test-final.log"
+    },
+    {
+      "gate": "Linux x64 openat2 primitive",
+      "result": "PASS on this host only (candidate)"
+    },
+    {
+      "gate": "Linux arm64 / musl / old kernel",
+      "result": "NOT RUN"
+    },
+    {
+      "gate": "macOS",
+      "result": "NOT IMPLEMENTED; fails closed (FS12 BLOCKED)"
+    },
+    {
+      "gate": "Windows",
+      "result": "NOT IMPLEMENTED; fails closed (FS12 BLOCKED); installer-powershell 6/12 skipped (pwsh absent)"
+    },
+    {
+      "gate": "native IPC / Tauri",
+      "result": "NOT RUN"
+    }
+  ],
+  "ci_runs": [],
+  "ci_record_shape": "NOT DISPATCHED: no push performed",
+  "skips_timeouts_failures_and_blockers": [
+    "SKIP test/a11y/browser-axe.test.ts 13 (Playwright chromium binary absent; environment)",
+    "SKIP test/release/installer-powershell.test.ts 6 (pwsh absent; environment; E06 Windows not proven)",
+    "NOT_RUN E07 interactive PTY two-turn reset (no test exists)",
+    "BLOCKED FS12 Windows/macOS proof",
+    "PARTIAL E04, E06, E09",
+    "No timeouts in the final sweep (every file exit 0)",
+    "Earlier: full single-process bun test OOM (exit 137); mitigated by per-file sequential runs",
+    "Earlier: builder-routes approval-decision hang not reproduced after fixes; cause not isolated"
+  ],
+  "independent_adversarial_review": [
+    {
+      "reviewer": "implementing agent (self-review; NOT independent)",
+      "findings": "see RESULTS.md 'Adversarial review' (9 items)",
+      "independent_review_status": "NOT DONE"
+    }
+  ],
+  "migration_backup_and_recovery": [
+    "No user-data migration. Persisted RAG chunks re-authorised at read time, not rewritten.",
+    "Builder backups (XR_HOME) unchanged.",
+    "Rollback: revert e15a5500 (and 1d7c8f48/44b205a2 if needed). Do not reset user work or erase ledgers. F01/F02 baseline 35d0a68a is independent."
+  ],
+  "remaining_open_findings": [
+    "F09",
+    "F10",
+    "F11",
+    "F12",
+    "F13",
+    "F14",
+    "F15",
+    "A1-OPEN: E07 PTY",
+    "A1-OPEN: FS12 macOS/Windows",
+    "A1-OPEN: project TypeScript import executes project code",
+    "A1-OPEN: desktop outside-root grants",
+    "A1-OPEN: skill body loaders unverified",
+    "A1-OPEN: git badge file names",
+    "A1-OPEN: vision/OCR raw path",
+    "A1-OPEN: repo/scope scopedStat",
+    "A1-OPEN: plugin manifest path-follow read"
+  ],
+  "successor_instructions": [
+    "A2 must receive the actual ACCEPTED A1 SHA and complete proof, not the branch name. A1 is NOT accepted; A2 must not start from this handoff until A1 is COMPLETE.",
+    "To complete A1: write a PTY two-turn test (E07); close E04/E09 assertions; run Windows installer tests with pwsh; decide macOS/Windows scope explicitly (implement native or narrow the product claim); add a desktop outside-root grant or document the fail-closed behaviour as accepted; verify skill body loaders; decide git-badge name disclosure; bind vision imagePath to the capture dir; get an independent adversarial review.",
+    "Push only with a credential the user configures outside chat (e.g. GIT_ASKPASS or a credential helper). Push stage-a/a1-filesystem-authority, not main. Then observe existing CI at the actual SHA."
+  ],
+  "completion_rule": "COMPLETE only after owned+predecessor cases and required broad/native/platform CI gates pass at actual implementation_sha, with ordinary feature-branch push verified. Otherwise IN_PROGRESS, LOCAL_COMPLETE_PUSH_BLOCKED, PENDING_CI or BLOCKED.",
+  "completion_status_by_rule": "BLOCKED"
 }

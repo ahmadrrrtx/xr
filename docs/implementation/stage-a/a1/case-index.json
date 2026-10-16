@@ -1,60 +1,498 @@
 {
-  "evidence_root": "stage-a-results/a1 (outside repo; see RESULTS.md)",
+  "stage": "A",
+  "agent": "A1",
+  "implementation_sha": "e15a55002c9dd6bd6041af58f4252baaf9948a13",
+  "evidence_root": "stage-a-results/a1 (outside repo; raw logs are not committed)",
+  "summary": {
+    "PASS": 19,
+    "PARTIAL": 3,
+    "NOT_RUN": 1,
+    "BLOCKED": 1
+  },
   "cases": [
     {
-      "id": "FS14-metadata-list-grant",
-      "file": "test/security/filesystem-implicit.test.ts",
-      "result": "pass"
+      "id": "E01",
+      "entry": "CLI coder --dry-run",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/coder-contract.test.ts",
+          "sweep_exit": 0,
+          "pass": 27,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Real tool turn (2 provider calls), zero writes, write_file.dryrun audited; ordinary approved write still applies."
     },
     {
-      "id": "FS05-artifact-hash-denied-vs-missing",
-      "file": "test/security/filesystem-implicit.test.ts",
-      "result": "pass"
+      "id": "E02",
+      "entry": "CLI shell --dry-run with cmd",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/coder-contract.test.ts",
+          "sweep_exit": 0,
+          "pass": 27,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "shell.dryrun audited; no isolation executor event; commands_run empty."
     },
     {
-      "id": "FS05-preimage-authorized-only",
-      "file": "test/security/filesystem-implicit.test.ts",
-      "result": "pass"
+      "id": "E03",
+      "entry": "CLI --budget / token override",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/e2e-blackbox/coder-contract.test.ts",
+          "sweep_exit": 0,
+          "pass": 27,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Exact override reaches downstream governor; configured default not used."
     },
     {
-      "id": "FS05-rag-index-real-local-embedding",
-      "file": "test/security/filesystem-implicit.test.ts",
-      "result": "pass"
+      "id": "E04",
+      "entry": "Malformed/missing/negative/non-finite flags",
+      "status": "PARTIAL",
+      "evidence": [
+        {
+          "file": "test/cli/coder/request-contract.test.ts",
+          "sweep_exit": 0,
+          "pass": 37,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Parse-level refusal and no silent default pass (37 tests). Assertion that malformed flags boot no model/DB is NOT separately proven in an e2e test."
     },
     {
-      "id": "FS14-shell-descriptor-not-mount",
-      "file": "test/security/filesystem-implicit.test.ts",
-      "result": "pass"
+      "id": "E05",
+      "entry": "Unsupported coder resume / modes",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/coder-contract.test.ts",
+          "sweep_exit": 0,
+          "pass": 27,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/cli/coder/request-contract.test.ts",
+          "sweep_exit": 0,
+          "pass": 37,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Resume refused before boot/model; legacy xr run refuses unknown execution modes before boot."
     },
     {
-      "id": "E10-print-mode-filtering",
-      "file": "test/e2e-blackbox/filesystem-authority.test.ts",
-      "result": "pass"
+      "id": "E06",
+      "entry": "Installers and command-local modes",
+      "status": "PARTIAL",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/coder-contract.test.ts",
+          "sweep_exit": 0,
+          "pass": 27,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/release/installer-verify.test.ts",
+          "sweep_exit": 0,
+          "pass": 12,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/release/installer-powershell.test.ts",
+          "sweep_exit": 0,
+          "pass": 12,
+          "fail": 0,
+          "skip": 6
+        }
+      ],
+      "note": "POSIX install --mode minimal and checksum verification pass. installer-powershell: 6 of 12 SKIPPED (no pwsh on this host). Windows installer NOT proven."
     },
     {
-      "id": "E10-dangerous-quoted-decoy",
-      "file": "test/e2e-blackbox/filesystem-authority.test.ts",
-      "result": "pass"
+      "id": "E07",
+      "entry": "Interactive PTY two-turn diff/proposed-edit reset",
+      "status": "NOT_RUN",
+      "evidence": [],
+      "note": "No real PTY two-turn test exists in the tree. Open acceptance blocker."
     },
     {
-      "id": "E08-E09-shell-decoy-process",
-      "file": "test/e2e-blackbox/filesystem-authority.test.ts",
-      "result": "pass"
+      "id": "E08",
+      "entry": "Real-process configured shell deny beats approve-all",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "shell:printf* grant with deny rule: shell.denied, no shell.run/run_isolated; decoy 'command' key and cmd:123 malformed case covered."
     },
     {
-      "id": "compensation-preimage-in-workspace-and-outside-no-claim",
-      "file": "test/environment/service.test.ts:223",
-      "result": "pass (test corrected: workspaceId set to write root; new outside assertion)"
+      "id": "E09",
+      "entry": "Actual cmd vs decoy command / malformed args",
+      "status": "PARTIAL",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Decoy never executes and decision is taken on cmd. Preview/execution normalized-identity agreement is not asserted separately."
     },
     {
-      "id": "G6-retrieval-p95-under-load",
-      "file": "test/context/performance.test.ts:299",
-      "result": "pass in final broad run; one earlier load-sensitive failure (134.5ms)"
+      "id": "E10",
+      "entry": "Read-only/deny precedence and dangerous classification",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Print-mode filtering cannot be upgraded by allow; quoted force-push text classified from actual cmd; no real dangerous execution."
     },
     {
-      "id": "desktop-lint-settings-effect",
-      "file": "desktop/src/screens/Settings/index.tsx:155",
-      "result": "FAIL (pre-existing at baseline)"
+      "id": "FS01",
+      "entry": "Symlink escape read/write through real tools",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/control/files-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 9,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/plugins/fs-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 4,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "No outside canary in provider/output/audit; in-root positive preserved."
+    },
+    {
+      "id": "FS02",
+      "entry": "Linked/missing write destination",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/security/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Zero outside effect; missing destinations approval-bound and created only on commit."
+    },
+    {
+      "id": "FS03",
+      "entry": "Canonical root, alias, separators, hostile spellings",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/security/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Linux spelling checks only; Windows/macOS spellings are fail-closed unsupported (see FS12)."
+    },
+    {
+      "id": "FS04",
+      "entry": "Dotenv/key/secret and aliases; narrow consent",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/security/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/security/filesystem-operations.test.ts",
+          "sweep_exit": 0,
+          "pass": 5,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/plugins/fs-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 4,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Exact dotenv templates ordinary; nested/keyed names sensitive; registry-backed grant only."
+    },
+    {
+      "id": "FS05",
+      "entry": "Implicit rules/package/ignore/context",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/security/filesystem-implicit.test.ts",
+          "sweep_exit": 0,
+          "pass": 5,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "AGENTS.md, package.json, .gitignore, .xrignore symlinks cannot reach provider."
+    },
+    {
+      "id": "FS06",
+      "entry": "search_code with real ripgrep",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Run twice: with bundled real rg 14.1.1 (engine asserted = ripgrep, 21/0) and with rg absent (JS engine asserted, 21/0). Ambient RIPGREP_CONFIG_PATH set."
+    },
+    {
+      "id": "FS07",
+      "entry": "search_code JS fallback, linked recursion",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/e2e-blackbox/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 21,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "JS engine path: secret never in output for roots '.', 'linked', '.env'."
+    },
+    {
+      "id": "FS08",
+      "entry": "Authenticated daemon HTTP list/read",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/daemon/filesystem-http.test.ts",
+          "sweep_exit": 0,
+          "pass": 5,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Real bootstrap token; symlink/secret list/read denied; valid read positive."
+    },
+    {
+      "id": "FS09",
+      "entry": "Daemon diff/hunk/write share authority",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/daemon/filesystem-http.test.ts",
+          "sweep_exit": 0,
+          "pass": 5,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/daemon/builder-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 15,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/daemon/builder-routes.test.ts",
+          "sweep_exit": 0,
+          "pass": 18,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "New destinations gated; diff/hunk revert on authorized snapshots; builder-dev apply-diff symlink/.env refused."
+    },
+    {
+      "id": "FS10",
+      "entry": "Approval binds identity; changed target invalidates",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/security/filesystem-operations.test.ts",
+          "sweep_exit": 0,
+          "pass": 5,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/security/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/daemon/filesystem-http.test.ts",
+          "sweep_exit": 0,
+          "pass": 5,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Pending approval binds ancestor and object; parent swapped at approval refused with zero outside effect."
+    },
+    {
+      "id": "FS11",
+      "entry": "Deterministic parent/ancestor swap",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/security/filesystem-operations.test.ts",
+          "sweep_exit": 0,
+          "pass": 5,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/security/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Native retained read does not follow a parent swapped after acquisition (Linux openat2 only)."
+    },
+    {
+      "id": "FS12",
+      "entry": "Windows/macOS junction/reparse/alias proof",
+      "status": "BLOCKED",
+      "evidence": [],
+      "note": "No native Windows or macOS implementation or proof. Authority fails closed with 'unsupported' off Linux x64/arm64. Linux evidence cannot substitute."
+    },
+    {
+      "id": "FS13",
+      "entry": "Special files, mount/hardlink aliases, bounded traversal",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/security/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/security/filesystem-operations.test.ts",
+          "sweep_exit": 0,
+          "pass": 5,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "FIFO, device alias and hardlinks refused before content I/O (Linux). Mount crossing is denied by openat2 NO_XDEV."
+    },
+    {
+      "id": "FS14",
+      "entry": "Legitimate trusted config / scoped desktop retained",
+      "status": "PASS",
+      "evidence": [
+        {
+          "file": "test/security/filesystem-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 8,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/control/files-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 9,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/plugins/fs-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 4,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "file": "test/memory-retrieve-authority.test.ts",
+          "sweep_exit": 0,
+          "pass": 1,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "note": "Registry-backed grant only; yolo/labels cannot mint it. Desktop control is root-bound (HOME or XR_FILES_ROOT); outside-root grants NOT wired (fail closed)."
     }
   ]
 }
