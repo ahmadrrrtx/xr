@@ -68,6 +68,15 @@ test("FS08 actual token bootstrap: valid read positive, symlink/secret list/read
   } finally { await f.close(); }
 }, 30_000);
 
+// Windows refuses to rename a directory while a handle bound by a pending approval is open.
+// That refusal is the stronger guarantee; the swap then never happens.
+function trySwapDir(from: string, to: string): boolean {
+  try { renameSync(from, to); return true; } catch (e) {
+    if (process.platform === "win32" && (e as NodeJS.ErrnoException).code === "EPERM") return false;
+    throw e;
+  }
+}
+
 test("FS09/FS10 authenticated save approval->parent-link swap refuses with zero outside effect", async () => {
   const f = await fixture();
   try {
@@ -83,16 +92,21 @@ test("FS09/FS10 authenticated save approval->parent-link swap refuses with zero 
     }
     expect(typeof id).toBe("string");
     // Deterministic: production request is blocked on its durable approval now.
-    renameSync(join(f.cwd, "target"), join(f.cwd, "retained"));
-    symlinkSync(f.outside, join(f.cwd, "target"), "dir");
+    const swapped = trySwapDir(join(f.cwd, "target"), join(f.cwd, "retained"));
+    if (swapped) symlinkSync(f.outside, join(f.cwd, "target"), "dir");
     const decision = await f.request(`/api/v1/approvals/${id}/decision`, "POST", { approved: true });
     expect(decision.ok).toBe(true);
     const result = await save;
     const body = await result.text();
     expect(existsSync(join(f.outside, "safe.txt"))).toBe(false);
-    expect(readFileSync(join(f.cwd, "retained", "safe.txt"), "utf8")).toBe("HTTP_APPROVED_OLD");
     expect(f.leaked(body)).toBe(false);
-    expect(result.status).not.toBe(200);
+    if (swapped) {
+      expect(readFileSync(join(f.cwd, "retained", "safe.txt"), "utf8")).toBe("HTTP_APPROVED_OLD");
+      expect(result.status).not.toBe(200);
+    } else {
+      // OS refused the swap while the approval held the directory; the write lands in the bound object.
+      expect(readFileSync(join(f.cwd, "target", "safe.txt"), "utf8")).toBe("HTTP_APPROVED_NEW");
+    }
   } finally { await f.close(); }
 }, 30_000);
 
@@ -154,10 +168,17 @@ test("FS09/FS10 actual authenticated hunk revert rejects a parent swapped at pen
     const diff = await (await f.request("/api/v1/files/diff?path=target/marker.txt")).json() as {hunks: Array<{id: string}>}; expect(diff.hunks.length).toBe(1);
     const reverting = f.request("/api/v1/files/hunks/revert", "POST", { path: "target/marker.txt", hunkIds: [diff.hunks[0]!.id] });
     const approval = await pendingApproval(f, "patch");
-    renameSync(join(f.cwd, "target"), join(f.cwd, "retained")); symlinkSync(f.outside, join(f.cwd, "target"), "dir");
+    const swapped = trySwapDir(join(f.cwd, "target"), join(f.cwd, "retained")); if (swapped) symlinkSync(f.outside, join(f.cwd, "target"), "dir");
     expect((await f.request(`/api/v1/approvals/${approval.id}/decision`, "POST", { approved: true })).ok).toBe(true);
-    const refused = await reverting; expect(refused.status).not.toBe(200); expect(f.leaked(await refused.text())).toBe(false);
+    const refused = await reverting; expect(f.leaked(await refused.text())).toBe(false);
     expect(readFileSync(join(f.outside, "marker.txt"), "utf8") === f.secret).toBe(true);
-    expect(readFileSync(join(f.cwd, "retained/marker.txt"), "utf8")).toBe("HTTP_REVIEWED\n");
+    if (swapped) {
+      expect(refused.status).not.toBe(200);
+      expect(readFileSync(join(f.cwd, "retained/marker.txt"), "utf8")).toBe("HTTP_REVIEWED\n");
+    } else {
+      // OS refused the swap; the approved revert acts on the bound in-root file.
+      expect(refused.status).toBe(200);
+      expect(readFileSync(join(f.cwd, "target/marker.txt"), "utf8")).toBe("HTTP_BEFORE\n");
+    }
   } finally { await f.close(); }
 }, 30_000);
