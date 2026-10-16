@@ -63,3 +63,20 @@ try {
   const f = native.anchoredOpen(rootFd, "ok.txt", native.FD_FLAGS.PATH);
   out("module file fd", f);
 } catch (e) { out("module FAILED", String(e), (e as Error).message); }
+
+// Authority-level read, with device identities of the root and the file.
+try {
+  const { FilesystemAuthority } = await import("../src/security/filesystem.ts");
+  const { fstatSync, closeSync } = await import("node:fs");
+  const native = await import("../src/security/fs-native.ts");
+  const rfd = native.anchoredOpen(-100, root, native.FD_FLAGS.PATH | native.FD_FLAGS.DIRECTORY, 0, true);
+  const ffd = native.anchoredOpen(rfd, "ok.txt", native.FD_FLAGS.PATH);
+  const sr = fstatSync(rfd), sf = fstatSync(ffd);
+  out("dev root", sr.dev, "dev file", sf.dev, "ino", sr.ino, sf.ino, "isFile", sf.isFile(), "nlink", sf.nlink);
+  closeSync(ffd); closeSync(rfd);
+  const fs = new FilesystemAuthority(root);
+  out("authority root", fs.root);
+  try { out("authority read content", JSON.stringify(fs.read("ok.txt").content)); }
+  catch (e) { out("authority read FAILED code", (e as { code?: string }).code, String(e)); }
+  fs.close();
+} catch (e) { out("authority section FAILED", String(e)); }
