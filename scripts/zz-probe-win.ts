@@ -21,3 +21,17 @@ if (rfd !== undefined) {
 const { FilesystemAuthority } = await import("../src/security/filesystem.ts");
 const fs = step("authority", () => new FilesystemAuthority(root))!;
 if (fs) { step("authority read", () => fs.read("ok.txt").content); fs.close(); }
+const { canonicalAbsolute } = await import("../src/security/filesystem.ts");
+const { relative } = await import("node:path");
+const abs = join(root, "ok.txt");
+out("abs", abs, "canon", canonicalAbsolute(abs), "canonRoot", canonicalAbsolute(root));
+const fs2 = new FilesystemAuthority(root);
+out("fs2.root", fs2.root, "rel", relative(fs2.root, canonicalAbsolute(abs)));
+step("authority read abs", () => fs2.read(canonicalAbsolute(abs)).content);
+fs2.close();
+process.env.XR_FILES_ROOT = root;
+const files = await import("../src/control/files.ts");
+const r = await files.fileRead("ok.txt");
+out("fileRead rel", JSON.stringify(r).slice(0, 300));
+const r2 = await files.fileRead(abs);
+out("fileRead abs", JSON.stringify(r2).slice(0, 300));
