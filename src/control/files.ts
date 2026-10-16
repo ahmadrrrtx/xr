@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { canonicalAbsolute, FilesystemAuthority, FilesystemError, filesystemMessage, withFilesystem } from "../security/filesystem.ts";
 import { AuthorityRegistry } from "../runtime/trust/authority.ts";
 import { filesystemFromGrant } from "../runtime/trust/filesystem.ts";
@@ -37,7 +37,7 @@ function normalize(p: string): string {
 
 const inside = (root: string, abs: string) => {
   const rel = relative(root, abs);
-  return rel === "" || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith("../"));
+  return rel === "" || (!isAbsolute(rel) && rel.split(sep)[0] !== "..");
 };
 
 /**

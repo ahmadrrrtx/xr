@@ -1,5 +1,5 @@
 /** Registry-backed adapter. A serialized grant is not an in-process capability. */
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { FilesystemAuthority, FilesystemError, type FilePurpose, type FilesystemLease } from "../../security/filesystem.ts";
 import { AuthorityRegistry, validateGrant } from "./authority.ts";
 export interface FilesystemGrantUse {
@@ -11,7 +11,7 @@ export interface FilesystemGrantUse {
 }
 const contains = (root: string, path: string) => {
   const rel = relative(resolve(root), path);
-  return !isAbsolute(rel) && rel !== ".." && !rel.startsWith("../");
+  return !isAbsolute(rel) && rel.split(sep)[0] !== "..";
 };
 /** Only trusted host wiring calls this after its real approval/permission gate. */
 export function filesystemFromGrant(registry: AuthorityRegistry, use: FilesystemGrantUse): FilesystemAuthority {

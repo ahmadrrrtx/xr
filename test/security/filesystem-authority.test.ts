@@ -50,15 +50,23 @@ test("FS04 exact dotenv templates are ordinary context, nested suffixes and keys
   } finally { fs.close(); }
 }));
 test("FS13 FIFO, device alias and hardlinks refuse before content I/O", () => fixture(root => {
-  const made = spawnSync("mkfifo", [join(root, "pipe.txt")]); expect(made.status).toBe(0);
-  symlinkSync("/dev/zero", join(root, "device.txt"));
+  // FIFO and device-node cases are POSIX-only; the hardlink case runs everywhere.
+  const posix = process.platform !== "win32";
+  const special: string[] = [];
+  if (posix) {
+    const made = spawnSync("mkfifo", [join(root, "pipe.txt")]); expect(made.status).toBe(0);
+    special.push("pipe.txt");
+    symlinkSync("/dev/zero", join(root, "device.txt"));
+    special.push("device.txt");
+  }
   writeFileSync(join(root, ".env"), "SYNTHETIC_SECRET"); linkSync(join(root, ".env"), join(root, "alias.txt"));
+  const denied = [...special, "alias.txt"];
   const fs = new FilesystemAuthority(root);
   try {
-    for (const p of ["pipe.txt", "device.txt", "alias.txt"]) {
+    for (const p of denied) {
       expect(() => fs.read(p)).toThrow(); expect(() => fs.prepare(p, "write")).toThrow(); expect(() => fs.prepare(p, "delete")).toThrow();
     }
-    expect(fs.list().some(e => ["pipe.txt", "device.txt", "alias.txt"].includes(e.name))).toBe(false);
+    expect(fs.list().some(e => denied.includes(e.name))).toBe(false);
   } finally { fs.close(); }
 }));
 test("FS11 native retained read does not follow a parent swapped after acquisition", () => fixture(root => {
