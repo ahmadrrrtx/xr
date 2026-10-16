@@ -1,6 +1,6 @@
 /** A1 implicit-consumer positives and operation-policy regressions. No real credentials. */
 import { expect, test } from "bun:test";
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, realpathSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,8 +15,10 @@ import { readTrustRequest } from "../../src/runtime/trust/tool-support.ts";
 import { shellTool } from "../../src/tools/system.ts";
 
 async function fixture(run: (root: string, base: string) => void | Promise<void>) {
-  const base = mkdtempSync(join(tmpdir(), "a1-implicit-")), root = join(base, "workspace");
-  mkdirSync(root);
+  const base = mkdtempSync(join(tmpdir(), "a1-implicit-")), root0 = join(base, "workspace");
+  mkdirSync(root0);
+  // Grants record the canonical root (macOS /var -> /private/var).
+  const root = realpathSync(root0);
   try { await run(root, base); } finally { rmSync(base, { recursive: true, force: true }); }
 }
 function scoped(root: string) {
