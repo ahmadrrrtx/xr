@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FilesystemAuthority } from "../../src/security/filesystem.ts";
-import { anchoredOpen, descriptorIo, FD_FLAGS } from "../../src/security/fs-native.ts";
+import { anchoredOpen, descriptorIo, fdClose, fdReadAll, FD_FLAGS } from "../../src/security/fs-native.ts";
 import { AuthorityRegistry, createGrant } from "../../src/runtime/trust/authority.ts";
 import { filesystemFromGrant } from "../../src/runtime/trust/filesystem.ts";
 import { classifyRisk } from "../../src/runtime/trust/classify.ts";
@@ -69,10 +69,10 @@ test("FS11 native retained read does not follow a parent swapped after acquisiti
   try {
     renameSync(join(root, "workspace/parent"), join(root, "workspace/original")); symlinkSync(join(root, "outside"), join(root, "workspace/parent"));
     const io = descriptorIo(f, false);
-    try { expect(readFileSync(io, "utf8")).toBe("SAFE_INODE"); } finally { closeSync(io); }
+    try { expect(fdReadAll(io).toString("utf8")).toBe("SAFE_INODE"); } finally { fdClose(io); }
     expect(() => anchoredOpen(r, "parent/data.txt", FD_FLAGS.PATH)).toThrow();
     expect(readFileSync(join(root, "outside/data.txt"), "utf8")).toBe("SYNTHETIC_OUTSIDE");
-  } finally { closeSync(f); closeSync(r); }
+  } finally { fdClose(f); fdClose(r); }
 }));
 
 function grantFixture(root: string) {

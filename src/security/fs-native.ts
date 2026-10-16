@@ -2,22 +2,23 @@
  * Handle-relative filesystem primitives for the shared authority.
  *
  * One backend per platform, selected at load time. Every backend exposes the same anchored
- * operations: open one object relative to a retained directory handle, list a directory handle,
- * make/unlink/rename relative to retained parents. Paths are never re-resolved from the root for
- * the object itself.
+ * operations: open one object relative to a retained directory, list a directory, make/unlink/rename
+ * relative to retained parents, and do descriptor I/O (stat, read, write, truncate, close, dup).
+ * Object paths are never re-resolved from the root once an object has been anchored.
  *
  *   linux x64/arm64  openat2(RESOLVE_BENEATH|NO_SYMLINKS|NO_MAGICLINKS|NO_XDEV) in one kernel lookup;
- *                    content reopen through the authority's own /proc/self/fd entry.
- *   darwin 11+       openat(O_NOFOLLOW_ANY) per call (no symlink in ANY component); the object is
- *                    opened with the access it needs; directory listing via fdopendir/readdir.
- *   win32            ntdll NtCreateFile with a RootDirectory handle and OBJ_DONT_REPARSE, walked one
- *                    component at a time; rename/delete via NtSetInformationFile / delete-on-close.
+ *                    descriptors are ordinary Node fds; content reopen through /proc/self/fd.
+ *   darwin 11+       openat(O_NOFOLLOW_ANY) per call; descriptors are ordinary Node fds; listing
+ *                    through fdopendir/readdir.
+ *   win32 x64        ntdll NtCreateFile with a RootDirectory handle and OBJ_DONT_REPARSE, walked one
+ *                    component at a time. Descriptors are raw kernel32 HANDLEs (NOT CRT fds: Bun's own
+ *                    runtime cannot fstat or read a CRT fd minted through a separate ucrtbase). All I/O
+ *                    is GetFileInformationByHandle / ReadFile / WriteFile / SetEndOfFile / DuplicateHandle.
  *
  * Other platforms fail closed with `unsupported`. Nothing here is a realpath fallback.
- * These backends are verified only on their own platform's CI (see docs/implementation/stage-a/a1).
  */
 import { dlopen, FFIType, ptr, toArrayBuffer, CString, type Pointer } from "bun:ffi";
-import { readdirSync, closeSync } from "node:fs";
+import { readdirSync, closeSync, fstatSync, readSync, writeSync, ftruncateSync } from "node:fs";
 
 export class FilesystemError extends Error {
   constructor(readonly code: "denied" | "missing" | "stale" | "limit" | "unsupported" | "escape" | "binary" = "denied") {
@@ -28,6 +29,18 @@ export class FilesystemError extends Error {
 
 /** Logical open flags. Numeric values are the Linux ones; each backend translates them. */
 export const FD_FLAGS = { PATH: 0x200000, DIRECTORY: 0x10000, NOFOLLOW: 0x20000, CLOEXEC: 0x80000, NONBLOCK: 0x800, CREATE: 0x40, EXCLUSIVE: 0x80 } as const;
+
+/** The subset of fs.Stats the authority reads. Node's Stats satisfies it on Linux and macOS. */
+export interface FdStat {
+  readonly dev: number;
+  readonly ino: number;
+  readonly nlink: number;
+  readonly size: number;
+  readonly mtimeMs: number;
+  readonly ctimeMs: number;
+  isFile(): boolean;
+  isDirectory(): boolean;
+}
 
 const platform = process.platform;
 const arch = process.arch;
@@ -108,7 +121,7 @@ const AT_REMOVEDIR = 0x80;
 function darwinFailure(): never {
   const loc = darwin().symbols.__error();
   const errno = loc ? new DataView(toArrayBuffer(loc, 0, 4)).getInt32(0, true) : 0;
-  // ENOENT 2 → missing; ELOOP 62 / ENOTDIR 20 / EXDEV 18 / EACCES 13 / EPERM 1 → denied (links, mounts, perms).
+  // ENOENT 2 → missing; EEXIST 17 → stale; EINVAL/ENOSYS → unsupported; everything else (ELOOP, EXDEV, EACCES) → denied.
   throw new FilesystemError(errno === 2 ? "missing" : errno === 17 ? "stale" : errno === 22 || errno === 78 ? "unsupported" : "denied");
 }
 
@@ -153,6 +166,7 @@ function darwinList(fd: number): string[] {
 }
 
 // ───────────────────────────── Windows ────────────────────────────────────
+// Descriptors on win32 are raw HANDLE values. Bun's runtime cannot use CRT fds minted elsewhere.
 
 const NT = {
   OBJ_CASE_INSENSITIVE: 0x40, OBJ_DONT_REPARSE: 0x1000,
@@ -162,26 +176,33 @@ const NT = {
   FILE_SHARE_ALL: 7, FILE_ATTRIBUTE_NORMAL: 0x80,
   FILE_RENAME_INFORMATION: 10, FILE_ID_BOTH_DIR_INFORMATION: 37,
   STATUS_NO_MORE_FILES: 0x80000006,
+  ATTR_DIRECTORY: 0x10, ATTR_REPARSE: 0x400,
+  ERROR_HANDLE_EOF: 38,
+  DUPLICATE_SAME_ACCESS: 2,
+  OPEN_EXISTING: 3, FILE_FLAG_BACKUP_SEMANTICS: 0x02000000, FILE_BEGIN: 0,
 };
 let winLib: ReturnType<typeof loadWin> | undefined;
 function loadWin() {
   if (platform !== "win32" || arch !== "x64") unsupported();
   try {
-    const ntdll = dlopen("ntdll.dll", {
+    const nt = dlopen("ntdll.dll", {
       NtCreateFile: { args: [FFIType.ptr, FFIType.u32, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
       NtClose: { args: [FFIType.i64], returns: FFIType.i32 },
       NtQueryDirectoryFile: { args: [FFIType.i64, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
       NtSetInformationFile: { args: [FFIType.i64, FFIType.ptr, FFIType.ptr, FFIType.u32, FFIType.u32], returns: FFIType.i32 },
-    });
-    const crt = dlopen("ucrtbase.dll", {
-      _open_osfhandle: { args: [FFIType.i64, FFIType.i32], returns: FFIType.i32 },
-      _get_osfhandle: { args: [FFIType.i32], returns: FFIType.i64 },
-      _dup: { args: [FFIType.i32], returns: FFIType.i32 },
-    });
+    }).symbols;
     const k32 = dlopen("kernel32.dll", {
       CreateFileW: { args: [FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr, FFIType.u32, FFIType.u32, FFIType.ptr], returns: FFIType.i64 },
-    });
-    return { nt: ntdll.symbols, crt: crt.symbols, k32: k32.symbols };
+      GetFileInformationByHandle: { args: [FFIType.i64, FFIType.ptr], returns: FFIType.i32 },
+      ReadFile: { args: [FFIType.i64, FFIType.ptr, FFIType.u32, FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+      WriteFile: { args: [FFIType.i64, FFIType.ptr, FFIType.u32, FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
+      SetFilePointerEx: { args: [FFIType.i64, FFIType.i64, FFIType.ptr, FFIType.u32], returns: FFIType.i32 },
+      SetEndOfFile: { args: [FFIType.i64], returns: FFIType.i32 },
+      DuplicateHandle: { args: [FFIType.i64, FFIType.i64, FFIType.i64, FFIType.ptr, FFIType.u32, FFIType.i32, FFIType.u32], returns: FFIType.i32 },
+      GetCurrentProcess: { args: [], returns: FFIType.i64 },
+      GetLastError: { args: [], returns: FFIType.u32 },
+    }).symbols;
+    return { nt, k32 };
   } catch { unsupported(); }
 }
 const win = () => winLib ??= loadWin();
@@ -191,15 +212,12 @@ function ntError(status: number): FilesystemError {
   const s = status >>> 0;
   if (s === 0xc0000034 || s === 0xc000003a) return new FilesystemError("missing");           // OBJECT_NAME/PATH_NOT_FOUND
   if (s === 0xc0000035) return new FilesystemError("stale");                                  // NAME_COLLISION (exclusive create)
-  if (s === 0xc000050b) return new FilesystemError("denied");                                 // REPARSE_POINT_ENCOUNTERED (link)
-  if (s === 0xc0000101) return new FilesystemError("denied");                                 // DIRECTORY_NOT_EMPTY
-  if (s === 0xc0000022 || s === 0xc0000103 || s === 0xc00000ba) return new FilesystemError("denied");
-  return new FilesystemError("denied");
+  return new FilesystemError("denied");                                                       // reparse/link, access, non-empty dir, anything else
 }
 
 function ntStatus(r: number): void { if ((r >>> 0) !== 0) throw ntError(r); }
 
-/** UNICODE_STRING + backing buffer, kept alive by the caller for the duration of the call. */
+/** UNICODE_STRING + backing buffer. The caller keeps `data` alive across the call. */
 function unicode(name: string): { us: Buffer; data: Buffer } {
   const data = Buffer.from(name, "utf16le");
   const us = Buffer.alloc(16);
@@ -218,32 +236,33 @@ function objectAttributes(rootHandle: number, us: Buffer, attrs: number): Buffer
   return oa;
 }
 
-/** Create/open one component relative to `rootHandle` (0 = absolute, not used here). */
+/** Create/open one component relative to `rootHandle`. Returns a HANDLE. */
 function ntCreate(rootHandle: number, name: string, access: number, disposition: number, options: number): number {
   const { us, data } = unicode(name);
   const oa = objectAttributes(rootHandle, us, NT.OBJ_CASE_INSENSITIVE | NT.OBJ_DONT_REPARSE);
   const iosb = Buffer.alloc(16);
   const out = Buffer.alloc(8);
-  // `data` backs the UNICODE_STRING pointer and must stay alive across the call.
   const status = win().nt.NtCreateFile(ptr(out), access, ptr(oa), ptr(iosb), null, NT.FILE_ATTRIBUTE_NORMAL, NT.FILE_SHARE_ALL, disposition, options, null, 0);
   ntStatus(status);
   void data;
   return Number(out.readBigUInt64LE(0));
 }
 
-function winHandleOf(fd: number): number {
-  const h = Number(win().crt._get_osfhandle(fd));
-  if (h === -1 || h === 0) throw new FilesystemError("denied");
-  return h;
+function winClose(h: number): void { win().nt.NtClose(h); }
+
+function winFileInfo(h: number): Buffer {
+  const info = Buffer.alloc(52); // BY_HANDLE_FILE_INFORMATION
+  if (!win().k32.GetFileInformationByHandle(h, ptr(info))) throw new FilesystemError("denied");
+  return info;
 }
 
-function crtFdOf(handle: number, flags: number): number {
-  const fd = win().crt._open_osfhandle(handle, flags);
-  if (fd < 0) { win().nt.NtClose(handle); throw new FilesystemError("denied"); }
-  return fd;
+const FILETIME_EPOCH_MS = 11644473600000;
+function filetimeMs(buf: Buffer, off: number): number {
+  const t = buf.readBigUInt64LE(off);            // 100-ns intervals since 1601-01-01
+  return Number(t / 10000n) - FILETIME_EPOCH_MS;
 }
 
-/** Walk one component at a time from the retained handle. Intermediate reparse points are refused. */
+/** Walk one component at a time from the retained handle. Reparse points are refused by OBJ_DONT_REPARSE. */
 function winOpen(dir: number, name: string, flags: number, rootAcquisition: boolean): number {
   const parts = name.split(/[\\/]+/).filter((p) => p !== "" && p !== ".");
   if (parts.some((p) => p === "..")) throw new FilesystemError("escape");
@@ -251,49 +270,97 @@ function winOpen(dir: number, name: string, flags: number, rootAcquisition: bool
   const isDir = (flags & FD_FLAGS.DIRECTORY) !== 0;
   if (rootAcquisition) {
     const path = Buffer.from(name + "\0", "utf16le");
-    // FILE_SHARE_ALL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS (directories) — root only.
-    const h = Number(win().k32.CreateFileW(ptr(path), NT.FILE_GENERIC_READ, NT.FILE_SHARE_ALL, null, 3, 0x02000000, null));
+    const h = Number(win().k32.CreateFileW(ptr(path), NT.FILE_GENERIC_READ, NT.FILE_SHARE_ALL, null, NT.OPEN_EXISTING, NT.FILE_FLAG_BACKUP_SEMANTICS, null));
     if (h === -1 || h === 0) throw new FilesystemError("denied");
-    return crtFdOf(h, 0);
+    return h;
   }
-  if (parts.length === 0) { const d = win().crt._dup(dir); if (d < 0) throw new FilesystemError("denied"); return d; }
-  let current = winHandleOf(dir);
+  if (parts.length === 0) return winDup(dir);
+  let current = dir;
   let owned = false;
   try {
     for (let i = 0; i < parts.length; i++) {
       const last = i === parts.length - 1;
-      const access = last && !wantWrite ? NT.FILE_GENERIC_READ : NT.FILE_GENERIC_READ | (wantWrite || !last ? NT.FILE_GENERIC_WRITE : 0) | NT.DELETE;
+      // Directories are opened with write rights too, so creation and deletion below them work; if the
+      // ACL refuses write rights on an intermediate directory, traversal falls back to read-only.
+      const access = last && !wantWrite ? NT.FILE_GENERIC_READ : NT.FILE_GENERIC_READ | NT.FILE_GENERIC_WRITE | NT.DELETE;
       const disposition = last && (flags & FD_FLAGS.CREATE) ? ((flags & FD_FLAGS.EXCLUSIVE) ? NT.FILE_CREATE : NT.FILE_OPEN_IF) : NT.FILE_OPEN;
       const options = (last ? (isDir ? NT.FILE_DIRECTORY_FILE : NT.FILE_NON_DIRECTORY_FILE) : NT.FILE_DIRECTORY_FILE) | NT.FILE_SYNCHRONOUS_IO_NONALERT;
       let next: number;
       try {
         next = ntCreate(current, parts[i]!, access, disposition, options);
       } catch (e) {
-        // Directories opened read-only when write rights are not granted: retry read-only for traversal.
         if (!last && e instanceof FilesystemError && e.code === "denied") next = ntCreate(current, parts[i]!, NT.FILE_GENERIC_READ, disposition, options);
         else throw e;
       }
-      if (owned) win().nt.NtClose(current);
+      if (owned) winClose(current);
       current = next;
       owned = true;
     }
-    const finalHandle = current;
-    owned = false; // ownership transfers to the CRT fd below
-    return crtFdOf(finalHandle, wantWrite ? 2 : 0);
+    owned = false; // the final handle is the result
+    return current;
   } catch (e) {
-    if (owned) win().nt.NtClose(current);
+    if (owned) winClose(current);
     throw e;
   }
 }
 
-function winList(fd: number): string[] {
-  const handle = winHandleOf(fd);
+function winDup(h: number): number {
+  const out = Buffer.alloc(8);
+  const self = win().k32.GetCurrentProcess();
+  if (!win().k32.DuplicateHandle(self, h, self, ptr(out), 0, 0, NT.DUPLICATE_SAME_ACCESS)) throw new FilesystemError("denied");
+  return Number(out.readBigUInt64LE(0));
+}
+
+function winStat(h: number): FdStat {
+  const info = winFileInfo(h);
+  const attrs = info.readUInt32LE(0);
+  const mtime = filetimeMs(info, 20);
+  const size = info.readUInt32LE(36) + info.readUInt32LE(32) * 2 ** 32;
+  const ino = info.readUInt32LE(48) + info.readUInt32LE(44) * 2 ** 32;
+  return {
+    dev: info.readUInt32LE(28),
+    ino,
+    nlink: info.readUInt32LE(40),
+    size,
+    mtimeMs: mtime,
+    ctimeMs: mtime,
+    isDirectory: () => (attrs & NT.ATTR_DIRECTORY) !== 0,
+    isFile: () => (attrs & NT.ATTR_DIRECTORY) === 0 && (attrs & NT.ATTR_REPARSE) === 0,
+  };
+}
+
+function winRead(h: number, buffer: Buffer, offset: number, length: number, position: number): number {
+  const ov = Buffer.alloc(32);
+  ov.writeUInt32LE(position % 2 ** 32, 8);
+  ov.writeUInt32LE(Math.floor(position / 2 ** 32), 12);
+  const done = Buffer.alloc(4);
+  if (!win().k32.ReadFile(h, ptr(buffer) + offset, length, ptr(done), ptr(ov))) {
+    if (win().k32.GetLastError() === NT.ERROR_HANDLE_EOF) return 0;
+    throw new FilesystemError("denied");
+  }
+  return done.readUInt32LE(0);
+}
+
+function winWrite(h: number, buffer: Buffer, offset: number, length: number, position: number): number {
+  const ov = Buffer.alloc(32);
+  ov.writeUInt32LE(position % 2 ** 32, 8);
+  ov.writeUInt32LE(Math.floor(position / 2 ** 32), 12);
+  const done = Buffer.alloc(4);
+  if (!win().k32.WriteFile(h, ptr(buffer) + offset, length, ptr(done), ptr(ov))) throw new FilesystemError("denied");
+  return done.readUInt32LE(0);
+}
+
+function winTruncate(h: number, length: number): void {
+  if (!win().k32.SetFilePointerEx(h, length, null, NT.FILE_BEGIN) || !win().k32.SetEndOfFile(h)) throw new FilesystemError("denied");
+}
+
+function winList(h: number): string[] {
   const names: string[] = [];
   const buf = Buffer.alloc(64 * 1024);
   const iosb = Buffer.alloc(16);
   let restart = 1;
   for (;;) {
-    const status = win().nt.NtQueryDirectoryFile(handle, null, null, null, ptr(iosb), ptr(buf), buf.length, NT.FILE_ID_BOTH_DIR_INFORMATION, 0, null, restart);
+    const status = win().nt.NtQueryDirectoryFile(h, null, null, null, ptr(iosb), ptr(buf), buf.length, NT.FILE_ID_BOTH_DIR_INFORMATION, 0, null, restart);
     restart = 0;
     if ((status >>> 0) === NT.STATUS_NO_MORE_FILES) break;
     ntStatus(status);
@@ -311,37 +378,36 @@ function winList(fd: number): string[] {
 }
 
 function winUnlink(dir: number, name: string, directory: boolean): void {
-  const parent = winHandleOf(dir);
   const access = NT.DELETE | NT.SYNCHRONIZE | NT.READ_ATTRIBUTES;
   const options = NT.FILE_OPEN_REPARSE_POINT | NT.FILE_SYNCHRONOUS_IO_NONALERT | NT.FILE_DELETE_ON_CLOSE | (directory ? NT.FILE_DIRECTORY_FILE : NT.FILE_NON_DIRECTORY_FILE);
-  const h = ntCreate(parent, name, access, NT.FILE_OPEN, options);
-  win().nt.NtClose(h); // delete-on-close fires here
+  const h = ntCreate(dir, name, access, NT.FILE_OPEN, options);
+  winClose(h); // delete-on-close fires here
 }
 
 function winRename(fromDir: number, fromName: string, toDir: number, toName: string): void {
-  const src = ntCreate(winHandleOf(fromDir), fromName, NT.DELETE | NT.SYNCHRONIZE | NT.READ_ATTRIBUTES, NT.FILE_OPEN, NT.FILE_OPEN_REPARSE_POINT | NT.FILE_SYNCHRONOUS_IO_NONALERT);
+  const src = ntCreate(fromDir, fromName, NT.DELETE | NT.SYNCHRONIZE | NT.READ_ATTRIBUTES, NT.FILE_OPEN, NT.FILE_OPEN_REPARSE_POINT | NT.FILE_SYNCHRONOUS_IO_NONALERT);
   try {
     const data = Buffer.from(toName, "utf16le");
-    const info = Buffer.alloc(20 + data.length);
-    info.writeUInt8(0, 0);                                          // ReplaceIfExists = FALSE (exclusive)
-    info.writeBigUInt64LE(BigInt(winHandleOf(toDir)), 8);            // RootDirectory
-    info.writeUInt32LE(data.length, 16);                             // FileNameLength
+    const info = Buffer.alloc(20 + data.length);   // FILE_RENAME_INFORMATION
+    info.writeUInt8(0, 0);                          // ReplaceIfExists = FALSE (exclusive)
+    info.writeBigUInt64LE(BigInt(toDir), 8);        // RootDirectory
+    info.writeUInt32LE(data.length, 16);            // FileNameLength
     data.copy(info, 20);
     const iosb = Buffer.alloc(16);
     ntStatus(win().nt.NtSetInformationFile(src, ptr(iosb), ptr(info), info.length, NT.FILE_RENAME_INFORMATION));
   } finally {
-    win().nt.NtClose(src);
+    winClose(src);
   }
 }
 
 function winMkdir(dir: number, name: string): void {
-  const h = ntCreate(winHandleOf(dir), name, NT.FILE_GENERIC_READ | NT.FILE_GENERIC_WRITE, NT.FILE_CREATE, NT.FILE_DIRECTORY_FILE | NT.FILE_SYNCHRONOUS_IO_NONALERT);
-  win().nt.NtClose(h);
+  const h = ntCreate(dir, name, NT.FILE_GENERIC_READ | NT.FILE_GENERIC_WRITE, NT.FILE_CREATE, NT.FILE_DIRECTORY_FILE | NT.FILE_SYNCHRONOUS_IO_NONALERT);
+  winClose(h);
 }
 
 // ───────────────────────────── Dispatch ───────────────────────────────────
 
-/** Open one anchored object. Returns an fd usable for fstat and (when opened writable) for I/O. */
+/** Open one anchored object. Returns a descriptor usable for the fd helpers below. */
 export function anchoredOpen(dir: number, name: string, flags: number, mode = 0, rootAcquisition = false): number {
   if (platform === "linux") return linuxOpen(dir, name, flags, mode, rootAcquisition);
   if (platform === "darwin") return darwinOpen(dir, name, flags, mode, rootAcquisition);
@@ -349,11 +415,7 @@ export function anchoredOpen(dir: number, name: string, flags: number, mode = 0,
   return unsupported();
 }
 
-/**
- * A descriptor for reading/writing the SAME object the classification fd refers to.
- * Linux reopens the authority's own fd through /proc. Darwin and Windows duplicate the fd
- * (reads) or reopen anchored (writes, see `writableSameObject`).
- */
+/** A second descriptor for the same object (reads). */
 export function descriptorIo(fd: number, writable: boolean): number {
   if (platform === "linux") return linuxReopen(fd, writable);
   if (writable) throw new FilesystemError("denied"); // callers use writableSameObject on these platforms
@@ -362,34 +424,67 @@ export function descriptorIo(fd: number, writable: boolean): number {
     if (d < 0) darwinFailure();
     return d;
   }
-  if (platform === "win32") {
-    const d = win().crt._dup(fd);
-    if (d < 0) throw new FilesystemError("denied");
-    return d;
-  }
+  if (platform === "win32") return winDup(fd);
   return unsupported();
 }
 
 /**
  * Writable descriptor for an EXISTING object the authority classified as `fd` under `parentFd/leaf`.
  * Linux: reopen the approved fd. Darwin/Windows: reopen anchored at the same parent, then require the
- * object identity (dev/ino) to match the classified fd, so a swapped object is refused.
+ * object identity to match the classified fd, so a swapped object is refused.
  */
 export function writableSameObject(parentFd: number, leaf: string, fd: number, objectIdOf: (f: number) => string): number {
   if (platform === "linux") return linuxReopen(fd, true);
   const io = anchoredOpen(parentFd, leaf, 1 | FD_FLAGS.NONBLOCK, 0);
   try {
     if (objectIdOf(io) !== objectIdOf(fd)) throw new FilesystemError("stale");
-  } catch (e) { closeSync(io); throw e; }
+  } catch (e) { fdClose(io); throw e; }
   return io;
 }
 
-/** Entry names of a directory handle (sorted, without "." and ".."). */
+/** Entry names of a directory descriptor (sorted, without "." and ".."). */
 export function listFd(fd: number): string[] {
   if (platform === "linux") return readdirSync(`/proc/self/fd/${fd}`).sort();
   if (platform === "darwin") return darwinList(fd);
   if (platform === "win32") return winList(fd);
   return unsupported();
+}
+
+/** Stat a descriptor (the object it refers to, not a path). */
+export function fdStat(fd: number): FdStat {
+  if (platform === "win32") return winStat(fd);
+  return fstatSync(fd);
+}
+
+/** Positional read, like fs.readSync(fd, buffer, offset, length, position). */
+export function fdRead(fd: number, buffer: Buffer, offset: number, length: number, position: number): number {
+  if (platform === "win32") return winRead(fd, buffer, offset, length, position);
+  return readSync(fd, buffer, offset, length, position);
+}
+
+/** Positional write, like fs.writeSync(fd, buffer, offset, length, position). */
+export function fdWrite(fd: number, buffer: Buffer, offset: number, length: number, position: number): number {
+  if (platform === "win32") return winWrite(fd, buffer, offset, length, position);
+  return writeSync(fd, buffer, offset, length, position);
+}
+
+export function fdTruncate(fd: number, length: number): void {
+  if (platform === "win32") return winTruncate(fd, length);
+  ftruncateSync(fd, length);
+}
+
+export function fdClose(fd: number): void {
+  if (platform === "win32") return winClose(fd);
+  closeSync(fd);
+}
+
+/** Whole-object read through a descriptor (tests and small helpers). */
+export function fdReadAll(fd: number): Buffer {
+  const size = fdStat(fd).size;
+  const buf = Buffer.alloc(size);
+  let n = 0;
+  while (n < size) { const c = fdRead(fd, buf, n, size - n, n); if (!c) break; n += c; }
+  return buf.subarray(0, n);
 }
 
 export function anchoredMkdir(dir: number, name: string): void {

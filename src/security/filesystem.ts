@@ -1,7 +1,7 @@
 /** Shared operation-owning file authority. See docs/implementation/stage-a/a1/DESIGN.md.
  * Paths are proposals, never capabilities. All content I/O is through retained FDs.
  */
-import { closeSync, fstatSync, ftruncateSync, readSync, realpathSync, writeSync, type Stats } from "node:fs";
+import { realpathSync } from "node:fs";
 import { createHash, randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
@@ -25,7 +25,7 @@ export function canonicalAbsolute(abs: string): string {
   }
 }
 import { isSecretPath } from "./guard.ts";
-import { anchoredOpen, anchoredMkdir, anchoredRename, anchoredUnlink, descriptorIo, writableSameObject, listFd, FD_FLAGS, FilesystemError } from "./fs-native.ts";
+import { anchoredOpen, anchoredMkdir, anchoredRename, anchoredUnlink, descriptorIo, writableSameObject, listFd, fdStat, fdRead, fdWrite, fdTruncate, fdClose, type FdStat, FD_FLAGS, FilesystemError } from "./fs-native.ts";
 export { FilesystemError } from "./fs-native.ts";
 
 const MAX_BYTES = 10 * 1024 * 1024, MAX_DEPTH = 32, MAX_ENTRIES = 10_000; // aligned with the plugin fs cap (10 MB)
@@ -45,8 +45,8 @@ export interface FileMetadata {
   path: string; name: string; directory: boolean; size: number; mtimeMs: number; objectId: string;
 }
 export interface FileSnapshot { content: string; bytes: Buffer; size: number; mtimeMs: number; identity: string; path: string; }
-const objectId = (st: Stats) => `${st.dev}:${st.ino}`;
-const version = (st: Stats) => `${objectId(st)}:${st.ctimeMs}:${st.mtimeMs}:${st.size}:${st.nlink}`;
+const objectId = (st: FdStat) => `${st.dev}:${st.ino}`;
+const version = (st: FdStat) => `${objectId(st)}:${st.ctimeMs}:${st.mtimeMs}:${st.size}:${st.nlink}`;
 export function filesystemMessage(e: unknown): string {
   return e instanceof FilesystemError ? e.message : "filesystem denied";
 }
@@ -65,11 +65,11 @@ export class FilesystemAuthority {
       this.suppliedRoot = resolve(root);
       this.root = realpathSync(this.suppliedRoot);
       this.rootFd = anchoredOpen(-100, this.root, FD_FLAGS.PATH | FD_FLAGS.DIRECTORY, 0, true);
-      this.rootIdentity = objectId(fstatSync(this.rootFd));
-      this.rootDev = fstatSync(this.rootFd).dev;
+      this.rootIdentity = objectId(fdStat(this.rootFd));
+      this.rootDev = fdStat(this.rootFd).dev;
     } catch (e) { throw e instanceof FilesystemError ? e : new FilesystemError(); }
   }
-  close(): void { if (!this.closed) { this.closed = true; closeSync(this.rootFd); } }
+  close(): void { if (!this.closed) { this.closed = true; fdClose(this.rootFd); } }
   private active(): void {
     if (this.closed || (this.lease && (this.lease.purpose !== this.purpose || !this.lease.current()))) throw new FilesystemError("stale");
   }
@@ -101,55 +101,55 @@ export class FilesystemAuthority {
   private open(p: string, directory = false): number {
     this.active();
     const fd = anchoredOpen(this.rootFd, p, FD_FLAGS.PATH | (directory ? FD_FLAGS.DIRECTORY : 0));
-    const st = fstatSync(fd);
-    if (st.dev !== this.rootDev) { closeSync(fd); throw new FilesystemError(); }
+    const st = fdStat(fd);
+    if (st.dev !== this.rootDev) { fdClose(fd); throw new FilesystemError(); }
     // O_PATH inspects type/link count without opening devices/FIFOs for I/O.
-    if ((!st.isDirectory() && !st.isFile()) || (st.isFile() && st.nlink !== 1)) { closeSync(fd); throw new FilesystemError(); }
+    if ((!st.isDirectory() && !st.isFile()) || (st.isFile() && st.nlink !== 1)) { fdClose(fd); throw new FilesystemError(); }
     return fd;
   }
   private snapshotFd(fd: number, p: string, limit: number, binary = false): FileSnapshot {
-    const st = fstatSync(fd);
+    const st = fdStat(fd);
     if (!st.isFile() || st.nlink !== 1) throw new FilesystemError();
     this.check(p, "read", objectId(st));
     if (st.size > limit || limit > MAX_BYTES) throw new FilesystemError("limit");
     const io = descriptorIo(fd, false);
     try {
-      if (version(fstatSync(io)) !== version(st)) throw new FilesystemError("stale");
+      if (version(fdStat(io)) !== version(st)) throw new FilesystemError("stale");
       const buffer = Buffer.alloc(Math.min(limit + 1, st.size + 1));
       let n = 0;
-      while (n < buffer.length) { const count = readSync(io, buffer, n, buffer.length - n, n); if (!count) break; n += count; }
+      while (n < buffer.length) { const count = fdRead(io, buffer, n, buffer.length - n, n); if (!count) break; n += count; }
       if (n > limit) throw new FilesystemError("limit");
-      if (version(fstatSync(io)) !== version(st) || version(fstatSync(fd)) !== version(st)) throw new FilesystemError("stale");
+      if (version(fdStat(io)) !== version(st) || version(fdStat(fd)) !== version(st)) throw new FilesystemError("stale");
       const bytes = buffer.subarray(0, n);
       if (!binary && bytes.includes(0)) throw new FilesystemError("binary");
       return { content: binary ? "" : bytes.toString("utf8"), bytes, size: n, mtimeMs: st.mtimeMs, path: p,
         identity: `${version(st)}:${createHash("sha256").update(bytes).digest("hex")}` };
-    } finally { closeSync(io); }
+    } finally { fdClose(io); }
   }
   read(input: string, limit = 1_000_000): FileSnapshot {
     const p = this.path(input), fd = this.open(p);
-    try { return this.snapshotFd(fd, p, limit); } finally { closeSync(fd); }
+    try { return this.snapshotFd(fd, p, limit); } finally { fdClose(fd); }
   }
   readBytes(input: string, limit = 1_000_000): Omit<FileSnapshot, "content"> {
     const p = this.path(input), fd = this.open(p);
     try { const { content: _, ...snapshot } = this.snapshotFd(fd, p, limit, true); return snapshot; }
-    finally { closeSync(fd); }
+    finally { fdClose(fd); }
   }
   metadata(input: string): FileMetadata {
     const p = this.path(input), fd = this.open(p);
     try {
-      const st = fstatSync(fd);
+      const st = fdStat(fd);
       // Metadata is also a grant-controlled candidate: a permitted directory
       // listing must not reveal entries that the same lease explicitly blocks.
       if (this.lease) this.check(p, st.isDirectory() ? "list" : "read", objectId(st));
       return { path: p, name: p.split("/").pop()!, directory: st.isDirectory(), size: st.size, mtimeMs: st.mtimeMs, objectId: objectId(st) };
     }
-    finally { closeSync(fd); }
+    finally { fdClose(fd); }
   }
   list(input = ".", cap = 600): FileMetadata[] {
     const p = this.path(input), fd = this.open(p, true);
     try {
-      this.check(p, "list", objectId(fstatSync(fd)));
+      this.check(p, "list", objectId(fdStat(fd)));
       // The proc path names our own retained directory descriptor, not a user path.
       const names = listFd(fd);
       if (names.length > MAX_ENTRIES) throw new FilesystemError("limit");
@@ -161,7 +161,7 @@ export class FilesystemAuthority {
         try { entries.push(this.metadata(child)); } catch { /* unsafe entries are not candidates */ }
       }
       return entries;
-    } finally { closeSync(fd); }
+    } finally { fdClose(fd); }
   }
   walk(input = ".", skip = new Set<string>(), cap = MAX_ENTRIES): FileMetadata[] {
     const first = this.metadata(input);
@@ -195,11 +195,11 @@ export class FilesystemAuthority {
         parent = pieces.join("/") || ".";
       }
     }
-    const parentIdentity = objectId(fstatSync(parentFd));
+    const parentIdentity = objectId(fdStat(parentFd));
     let fd: number | undefined;
     try {
       try { fd = this.open(p); } catch (e) { if (!(e instanceof FilesystemError && e.code === "missing" && operation === "write")) throw e; }
-      const st = fd === undefined ? undefined : fstatSync(fd);
+      const st = fd === undefined ? undefined : fdStat(fd);
       if (st && !st.isFile()) throw new FilesystemError();
       this.check(p, "write", st ? objectId(st) : "missing");
       const sensitive = isSecretPath(p) || isSecretPath(resolve(this.root, p));
@@ -208,27 +208,27 @@ export class FilesystemAuthority {
       const stamp = st ? version(st) : "missing";
       const identity = Object.freeze({ ...this.descriptor(), operation, path: p, parentIdentity, missingParents: [...missing], target: stamp, sensitive });
       let finished = false;
-      const close = () => { if (!finished) { finished = true; if (fd !== undefined) closeSync(fd); closeSync(parentFd); } };
+      const close = () => { if (!finished) { finished = true; if (fd !== undefined) fdClose(fd); fdClose(parentFd); } };
       const validate = () => {
         this.active();
         this.check(p, "write", st ? objectId(st) : "missing");
         if (finished) throw new FilesystemError("stale");
         const currentParent = this.open(parent, true);
-        try { if (objectId(fstatSync(currentParent)) !== parentIdentity) throw new FilesystemError("stale"); } finally { closeSync(currentParent); }
+        try { if (objectId(fdStat(currentParent)) !== parentIdentity) throw new FilesystemError("stale"); } finally { fdClose(currentParent); }
         if (missing.length) {
           let appeared: number | undefined;
           try { appeared = this.open(parent === "." ? missing[0]! : `${parent}/${missing[0]}`, true); }
           catch (e) { if (!(e instanceof FilesystemError && e.code === "missing")) throw new FilesystemError("stale"); }
-          finally { if (appeared !== undefined) closeSync(appeared); }
+          finally { if (appeared !== undefined) fdClose(appeared); }
           if (appeared !== undefined) throw new FilesystemError("stale");
         }
         let current: number | undefined;
         try { current = this.open(p); }
         catch (e) { if (!(e instanceof FilesystemError && e.code === "missing" && fd === undefined)) throw new FilesystemError("stale"); }
         if (current !== undefined) {
-          try { if (version(fstatSync(current)) !== stamp) throw new FilesystemError("stale"); } finally { closeSync(current); }
+          try { if (version(fdStat(current)) !== stamp) throw new FilesystemError("stale"); } finally { fdClose(current); }
         }
-        if (fd !== undefined && version(fstatSync(fd)) !== stamp) throw new FilesystemError("stale");
+        if (fd !== undefined && version(fdStat(fd)) !== stamp) throw new FilesystemError("stale");
       };
       return {
         path: p, identity, oldContent: snapshot?.content ?? "", existed: fd !== undefined, sensitive,
@@ -248,37 +248,37 @@ export class FilesystemAuthority {
                 made.push(destination);
               }
               io = anchoredOpen(destination, leaf, 1 | FD_FLAGS.CREATE | FD_FLAGS.EXCLUSIVE | FD_FLAGS.NONBLOCK, 0o600);
-            } finally { for (const directory of made.reverse()) closeSync(directory); }
-          } else io = writableSameObject(parentFd, leaf, fd, (f) => objectId(fstatSync(f))); // approved inode, identity-checked
+            } finally { for (const directory of made.reverse()) fdClose(directory); }
+          } else io = writableSameObject(parentFd, leaf, fd, (f) => objectId(fdStat(f))); // approved inode, identity-checked
           try {
-            const now = fstatSync(io);
+            const now = fdStat(io);
             if (!now.isFile() || now.nlink !== 1 || (fd !== undefined && version(now) !== stamp)) throw new FilesystemError("stale");
             const b = Buffer.from(content);
             let written = 0;
-            while (written < b.length) { const n = writeSync(io, b, written, b.length - written, written); if (!n) throw new FilesystemError(); written += n; }
-            ftruncateSync(io, b.length);
-          } finally { closeSync(io); }
+            while (written < b.length) { const n = fdWrite(io, b, written, b.length - written, written); if (!n) throw new FilesystemError(); written += n; }
+            fdTruncate(io, b.length);
+          } finally { fdClose(io); }
         },
       };
-    } catch (e) { if (fd !== undefined) closeSync(fd); closeSync(parentFd); throw e; }
+    } catch (e) { if (fd !== undefined) fdClose(fd); fdClose(parentFd); throw e; }
   }
   /** Preflight only: would read() be authorized for this regular file? Performs no content I/O. */
   canRead(input: string): boolean {
     try {
       const p = this.path(input), fd = this.open(p);
       try {
-        const st = fstatSync(fd);
+        const st = fdStat(fd);
         if (!st.isFile() || st.nlink !== 1) return false;
         this.check(p, "read", objectId(st));
         return true;
-      } finally { closeSync(fd); }
+      } finally { fdClose(fd); }
     } catch { return false; }
   }
   /** Bounded preview read (first `limit` bytes). Same identity, sensitive and hardlink checks as read(). */
   readPrefix(input: string, limit: number): { bytes: Buffer; size: number; mtimeMs: number; truncated: boolean } {
     const p = this.path(input), fd = this.open(p);
     try {
-      const st = fstatSync(fd);
+      const st = fdStat(fd);
       if (!st.isFile() || st.nlink !== 1) throw new FilesystemError();
       this.check(p, "read", objectId(st));
       if (limit > MAX_BYTES) throw new FilesystemError("limit");
@@ -287,11 +287,11 @@ export class FilesystemAuthority {
       try {
         const buffer = Buffer.alloc(want);
         let n = 0;
-        while (n < want) { const c = readSync(io, buffer, n, want - n, n); if (!c) break; n += c; }
-        if (version(fstatSync(io)) !== version(st) || version(fstatSync(fd)) !== version(st)) throw new FilesystemError("stale");
+        while (n < want) { const c = fdRead(io, buffer, n, want - n, n); if (!c) break; n += c; }
+        if (version(fdStat(io)) !== version(st) || version(fdStat(fd)) !== version(st)) throw new FilesystemError("stale");
         return { bytes: buffer.subarray(0, n), size: st.size, mtimeMs: st.mtimeMs, truncated: st.size > limit };
-      } finally { closeSync(io); }
-    } finally { closeSync(fd); }
+      } finally { fdClose(io); }
+    } finally { fdClose(fd); }
   }
   /** Approval-bound creation. Refuses existing targets, escaping ancestors and special files. */
   prepareCreate(input: string, kind: "file" | "folder"): PreparedFileOperation & { existed: boolean } {
@@ -307,8 +307,8 @@ export class FilesystemAuthority {
     this.assertAbsent(p);
     const parent = splitParent(p).parent;
     const pfd = this.open(parent, true);
-    const parentIdentity = objectId(fstatSync(pfd));
-    closeSync(pfd);
+    const parentIdentity = objectId(fdStat(pfd));
+    fdClose(pfd);
     return {
       path: p, identity: Object.freeze({ ...this.descriptor(), operation: "create-folder", path: p, parentIdentity }), oldContent: "",
       existed: false, sensitive: false, mtimeMs: undefined, close: () => undefined,
@@ -322,7 +322,7 @@ export class FilesystemAuthority {
       if (e instanceof FilesystemError && e.code === "missing") return;
       throw e;
     }
-    closeSync(fd);
+    fdClose(fd);
     throw new FilesystemError("stale");
   }
   /**
@@ -335,8 +335,8 @@ export class FilesystemAuthority {
     const a = this.path(from), b = this.path(to);
     if (a === "." || b === "." || a === b || b.startsWith(a + "/")) throw new FilesystemError();
     const srcFd = this.open(a);
-    const srcSt = fstatSync(srcFd);
-    closeSync(srcFd);
+    const srcSt = fdStat(srcFd);
+    fdClose(srcFd);
     const srcId = objectId(srcSt);
     this.check(a, "write", srcId);
     if (isSecretPath(a) || isSecretPath(resolve(this.root, a)) || (srcSt.isDirectory() && this.sensitiveDescendant(a, 0))) throw new FilesystemError();
@@ -349,18 +349,18 @@ export class FilesystemAuthority {
       commit: () => {
         this.active();
         const again = this.open(a);
-        try { if (objectId(fstatSync(again)) !== srcId) throw new FilesystemError("stale"); } finally { closeSync(again); }
+        try { if (objectId(fdStat(again)) !== srcId) throw new FilesystemError("stale"); } finally { fdClose(again); }
         this.assertAbsent(b);
         if (dp.parent !== ".") this.mkdir(dp.parent);
         const srcParent = this.open(sp.parent, true), dstParent = this.open(dp.parent, true);
         try { anchoredRename(srcParent, sp.leaf, dstParent, dp.leaf); }
-        finally { closeSync(srcParent); closeSync(dstParent); }
+        finally { fdClose(srcParent); fdClose(dstParent); }
         const moved = this.open(b);
         let ok = false;
-        try { ok = objectId(fstatSync(moved)) === srcId; } finally { closeSync(moved); }
+        try { ok = objectId(fdStat(moved)) === srcId; } finally { fdClose(moved); }
         if (!ok) {
           const d2 = this.open(dp.parent, true), s2 = this.open(sp.parent, true);
-          try { anchoredRename(d2, dp.leaf, s2, sp.leaf); } finally { closeSync(d2); closeSync(s2); }
+          try { anchoredRename(d2, dp.leaf, s2, sp.leaf); } finally { fdClose(d2); fdClose(s2); }
           throw new FilesystemError("stale");
         }
       },
@@ -370,14 +370,14 @@ export class FilesystemAuthority {
     if (depth > MAX_DEPTH) throw new FilesystemError("limit");
     const dfd = this.open(p, true);
     let names: string[];
-    try { names = listFd(dfd); } finally { closeSync(dfd); }
+    try { names = listFd(dfd); } finally { fdClose(dfd); }
     if (names.length > MAX_ENTRIES) throw new FilesystemError("limit");
     for (const name of names) {
       const child = `${p}/${name}`;
       if (isSecretPath(child) || isSecretPath(resolve(this.root, child))) return true;
       const cfd = this.open(child);
       let directory = false;
-      try { directory = fstatSync(cfd).isDirectory(); } finally { closeSync(cfd); }
+      try { directory = fdStat(cfd).isDirectory(); } finally { fdClose(cfd); }
       if (directory && this.sensitiveDescendant(child, depth + 1)) return true;
     }
     return false;
@@ -387,28 +387,28 @@ export class FilesystemAuthority {
     if (depth > MAX_DEPTH) throw new FilesystemError("limit");
     const dfd = this.open(p, true);
     let names: string[];
-    try { names = listFd(dfd); } finally { closeSync(dfd); }
+    try { names = listFd(dfd); } finally { fdClose(dfd); }
     for (const name of names) {
       if (++budget.n > MAX_ENTRIES) throw new FilesystemError("limit");
       const child = `${p}/${name}`;
       const cfd = this.open(child);
       let directory = false;
-      try { directory = fstatSync(cfd).isDirectory(); } finally { closeSync(cfd); }
+      try { directory = fdStat(cfd).isDirectory(); } finally { fdClose(cfd); }
       if (directory) this.scanRemovable(child, depth + 1, budget); else budget.files += 1;
     }
   }
   private removeTree(p: string): void {
     const dfd = this.open(p, true);
     let names: string[];
-    try { names = listFd(dfd); } finally { closeSync(dfd); }
+    try { names = listFd(dfd); } finally { fdClose(dfd); }
     for (const name of names) {
       const child = `${p}/${name}`;
       const cfd = this.open(child);
       let directory = false;
-      try { directory = fstatSync(cfd).isDirectory(); } finally { closeSync(cfd); }
+      try { directory = fdStat(cfd).isDirectory(); } finally { fdClose(cfd); }
       if (directory) this.removeTree(child);
       const pfd = this.open(p, true);
-      try { anchoredUnlink(pfd, name, directory); } finally { closeSync(pfd); }
+      try { anchoredUnlink(pfd, name, directory); } finally { fdClose(pfd); }
     }
   }
   /** Approval-bound removal. Directories only when `recursive`; the whole tree is scanned before any unlink. */
@@ -416,15 +416,15 @@ export class FilesystemAuthority {
     const p = this.path(input);
     if (p === ".") throw new FilesystemError();
     const fd = this.open(p);
-    const st = fstatSync(fd);
-    closeSync(fd);
+    const st = fdStat(fd);
+    fdClose(fd);
     if (st.isDirectory() && !recursive) throw new FilesystemError();
     const id = objectId(st);
     this.check(p, "write", id);
     const sp = splitParent(p);
     const assertSame = () => {
       const again = this.open(p);
-      try { if (objectId(fstatSync(again)) !== id) throw new FilesystemError("stale"); } finally { closeSync(again); }
+      try { if (objectId(fdStat(again)) !== id) throw new FilesystemError("stale"); } finally { fdClose(again); }
     };
     const scan = () => { const budget = { n: 0, files: 0 }; if (st.isDirectory()) this.scanRemovable(p, 0, budget); return budget.files; };
     const files = scan() + (st.isDirectory() ? 0 : 1);
@@ -436,7 +436,7 @@ export class FilesystemAuthority {
         assertSame(); scan();
         if (st.isDirectory()) this.removeTree(p);
         const pfd = this.open(sp.parent, true);
-        try { anchoredUnlink(pfd, sp.leaf, st.isDirectory()); } finally { closeSync(pfd); }
+        try { anchoredUnlink(pfd, sp.leaf, st.isDirectory()); } finally { fdClose(pfd); }
       },
     };
   }
@@ -452,8 +452,8 @@ export class FilesystemAuthority {
         let found: number | undefined;
         try { found = this.open(next, true); }
         catch (e) { if (!(e instanceof FilesystemError && e.code === "missing")) throw e; anchoredMkdir(parent, name); }
-        finally { if (found !== undefined) closeSync(found); }
-      } finally { closeSync(parent); }
+        finally { if (found !== undefined) fdClose(found); }
+      } finally { fdClose(parent); }
       rel = next;
     }
   }
