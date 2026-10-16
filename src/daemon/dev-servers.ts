@@ -393,7 +393,7 @@ export class DevServerRegistry {
           let bytes: Uint8Array;
           try {
             // A1: bytes come from the authority, not a second path open.
-            bytes = withFilesystem(root, "preview", (fs) => fs.readBytes(relative(root, file), STATIC_READ_LIMIT).bytes);
+            bytes = withFilesystem(root, "preview", (fs) => fs.readBytes(relative(root, file).split(sep).join("/"), STATIC_READ_LIMIT).bytes);
           } catch {
             return new Response("Not found", { status: 404 });
           }

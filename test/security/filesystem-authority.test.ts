@@ -75,13 +75,23 @@ test("FS11 native retained read does not follow a parent swapped after acquisiti
   const r = anchoredOpen(-100, join(root, "workspace"), FD_FLAGS.PATH | FD_FLAGS.DIRECTORY, 0, true);
   const f = anchoredOpen(r, "parent/data.txt", FD_FLAGS.PATH);
   try {
-    renameSync(join(root, "workspace/parent"), join(root, "workspace/original")); symlinkSync(join(root, "outside"), join(root, "workspace/parent"));
+    const swapped = trySwapDir(join(root, "workspace/parent"), join(root, "workspace/original"));
+    if (swapped) symlinkSync(join(root, "outside"), join(root, "workspace/parent"));
     const io = descriptorIo(f, false);
     try { expect(fdReadAll(io).toString("utf8")).toBe("SAFE_INODE"); } finally { fdClose(io); }
-    expect(() => anchoredOpen(r, "parent/data.txt", FD_FLAGS.PATH)).toThrow();
+    if (swapped) expect(() => anchoredOpen(r, "parent/data.txt", FD_FLAGS.PATH)).toThrow();
     expect(readFileSync(join(root, "outside/data.txt"), "utf8")).toBe("SYNTHETIC_OUTSIDE");
   } finally { fdClose(f); fdClose(r); }
 }));
+
+// Windows refuses to rename a directory while a handle bound by a pending approval or
+// retained read is open. That refusal is the stronger guarantee; the swap then never happens.
+function trySwapDir(from: string, to: string): boolean {
+  try { renameSync(from, to); return true; } catch (e) {
+    if (process.platform === "win32" && (e as NodeJS.ErrnoException).code === "EPERM") return false;
+    throw e;
+  }
+}
 
 function grantFixture(root: string) {
   // Grants record the canonical root (realpath); macOS temp dirs are /var -> /private/var aliases.

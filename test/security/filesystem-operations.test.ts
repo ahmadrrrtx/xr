@@ -8,6 +8,15 @@ import { deleteFileTool } from "../../src/tools/system.ts";
 import { buildStructuredPreview } from "../../src/control/preview.ts";
 import type { ToolContext } from "../../src/core/types.ts";
 
+// Windows refuses to rename a directory while a handle bound by a pending approval or
+// retained read is open. That refusal is the stronger guarantee; the swap then never happens.
+function trySwapDir(from: string, to: string): boolean {
+  try { renameSync(from, to); return true; } catch (e) {
+    if (process.platform === "win32" && (e as NodeJS.ErrnoException).code === "EPERM") return false;
+    throw e;
+  }
+}
+
 for (const op of ["create", "replace", "delete"] as const) {
   test(`FS10/FS11 ${op}: pending approval binds ancestor and object, not path spelling`, async () => {
     const root = mkdtempSync(join(tmpdir(), "a1-swap-"));
@@ -15,19 +24,26 @@ for (const op of ["create", "replace", "delete"] as const) {
     mkdirSync(cwd); mkdirSync(outside); mkdirSync(join(cwd, "parent"));
     if (op !== "create") writeFileSync(join(cwd, "parent", "target.txt"), "APPROVED_ORIGINAL");
     writeFileSync(join(outside, "target.txt"), "OUTSIDE_MUST_NOT_CHANGE");
-    let approved = false;
+    let approved = false, swapped = false;
     const ctx: ToolContext = { cwd, audit() {}, async approve() {
       approved = true;
-      renameSync(join(cwd, "parent"), join(cwd, "original"));
-      symlinkSync(outside, join(cwd, "parent"), "dir");
+      swapped = trySwapDir(join(cwd, "parent"), join(cwd, "original"));
+      if (swapped) symlinkSync(outside, join(cwd, "parent"), "dir");
       return true;
     } };
     try {
       const result = await (op === "delete" ? deleteFileTool : writeFileTool).run({ path: "parent/target.txt", content: "NEW_CONTENT" }, ctx);
       expect(approved).toBe(true);
       expect(readFileSync(join(outside, "target.txt"), "utf8")).toBe("OUTSIDE_MUST_NOT_CHANGE");
-      expect(result.ok).toBe(false);
-      if (op !== "create") expect(readFileSync(join(cwd, "original", "target.txt"), "utf8")).toBe("APPROVED_ORIGINAL");
+      if (swapped) {
+        expect(result.ok).toBe(false);
+        if (op !== "create") expect(readFileSync(join(cwd, "original", "target.txt"), "utf8")).toBe("APPROVED_ORIGINAL");
+      } else {
+        // OS refused the swap; the approved op must act on the bound in-root object, not the outside file.
+        expect(result.ok).toBe(true);
+        if (op === "delete") expect(existsSync(join(cwd, "parent", "target.txt"))).toBe(false);
+        else expect(readFileSync(join(cwd, "parent", "target.txt"), "utf8")).toBe("NEW_CONTENT");
+      }
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 }

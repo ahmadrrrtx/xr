@@ -60,6 +60,15 @@ async function pendingFor(tool: string, pathFragment: string, timeoutMs = 10_000
 const decide = (id: string, approved: boolean) => h(req(`/api/v1/approvals/${encodeURIComponent(id)}/decision`, { method: "POST", body: { approved } }));
 const frames = (text: string) => text.split("\n\n").map((l) => l.replace(/^data: /, "").trim()).filter((l) => l && l !== "[DONE]").map((l) => JSON.parse(l) as Record<string, unknown>);
 
+// Windows refuses to rename a directory while a handle bound by a pending approval or
+// retained read is open. That refusal is the stronger guarantee; the swap then never happens.
+function trySwapDir(from: string, to: string): boolean {
+  try { renameSync(from, to); return true; } catch (e) {
+    if (process.platform === "win32" && (e as NodeJS.ErrnoException).code === "EPERM") return false;
+    throw e;
+  }
+}
+
 describe("A1 builder filesystem authority", () => {
   test("FS08 builder read positive: in-root file returns content", async () => {
     const id = await openProject();
@@ -126,15 +135,23 @@ describe("A1 builder filesystem authority", () => {
     const pendingWrite = pendingFor("write_file", "sub/file.txt");
     // Deterministic swap between approval request and commit.
     const approval = await pendingWrite;
-    renameSync(join(ws, "sub"), join(ws, "sub-original"));
-    symlinkSync(outside, join(ws, "sub"), "dir");
+    const swapped = trySwapDir(join(ws, "sub"), join(ws, "sub-original"));
+    if (swapped) symlinkSync(outside, join(ws, "sub"), "dir");
     await decide(approval.id, true);
     const text = await res.text();
-    expect(frames(text).at(-1)?.type).not.toBe("applied");
     expect(existsSync(join(outside, "file.txt"))).toBe(false);
-    expect(readFileSync(join(ws, "sub-original", "file.txt"), "utf8")).toBe("IN_ROOT_ORIGINAL");
-    rmSync(join(ws, "sub"), { force: true });
-    renameSync(join(ws, "sub-original"), join(ws, "sub"));
+    if (swapped) {
+      expect(frames(text).at(-1)?.type).not.toBe("applied");
+      expect(readFileSync(join(ws, "sub-original", "file.txt"), "utf8")).toBe("IN_ROOT_ORIGINAL");
+    } else {
+      // OS refused the swap; the approved write must land in the bound in-root directory.
+      expect(frames(text).at(-1)?.type).toBe("applied");
+      expect(readFileSync(join(ws, "sub", "file.txt"), "utf8")).toBe("APPROVED_NEW");
+    }
+    if (swapped) {
+      rmSync(join(ws, "sub"), { force: true });
+      renameSync(join(ws, "sub-original"), join(ws, "sub"));
+    } else rmSync(join(ws, "sub", "file.txt"), { force: true });
   });
 
   test("FS04/FS09 apply-diff: protected .env cannot be patched (no read, no approval, no secret echo)", async () => {
