@@ -80,3 +80,17 @@ try {
   catch (e) { out("authority read FAILED code", (e as { code?: string }).code, String(e)); }
   fs.close();
 } catch (e) { out("authority section FAILED", String(e)); }
+
+// Per-descriptor fstat diagnosis (Windows CRT fd from _open_osfhandle).
+try {
+  const { fstatSync } = await import("node:fs");
+  const native = await import("../src/security/fs-native.ts");
+  const rfd = native.anchoredOpen(-100, root, native.FD_FLAGS.PATH | native.FD_FLAGS.DIRECTORY, 0, true);
+  const ffd = native.anchoredOpen(rfd, "ok.txt", native.FD_FLAGS.PATH);
+  out("fds", rfd, ffd);
+  for (const [label, fd] of [["root", rfd], ["file", ffd]] as const) {
+    try { const s = fstatSync(fd); out("fstat", label, "ok dev", s.dev, "ino", s.ino, "size", s.size); }
+    catch (e) { out("fstat", label, "FAILED", String(e)); }
+  }
+  try { out("readSync file", (await import("node:fs")).readFileSync("ok.txt", "utf8").length); } catch (e) { out("readFileSync probe", String(e)); }
+} catch (e) { out("fstat section FAILED", String(e)); }
